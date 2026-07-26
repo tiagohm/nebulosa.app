@@ -285,10 +285,10 @@ describe('camera capture session failures', () => {
 			})
 			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('unavailable')
 
-			harness.arbiter.markAvailable({ key: resourceKey(harness.camera), device: harness.camera })
 			const next = harness.capturer.start(harness.camera, request())
 			expect(await next.result).toMatchObject({ ok: false, reason: 'busy' })
 
+			// Discarding the stale payload clears only the quarantine; the camera is still not quiescent.
 			harness.capturer.blobReceived(harness.camera, Buffer.from('stale frame'), 'raw')
 			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('unavailable')
 		} finally {
@@ -411,8 +411,10 @@ describe('camera capture session cancellation', () => {
 			expect((await active.started).ok).toBeTrue()
 			await active.cancel()
 
+			// Lifecycle observed external activity while the payload was still outstanding.
 			harness.camera.exposuring = true
 			harness.camera.exposure.state = 'Busy'
+			harness.arbiter.markUnavailable({ key, device: harness.camera })
 			harness.capturer.blobReceived(harness.camera, Buffer.from('stale frame'), 'raw')
 
 			expect(harness.arbiter.availability(key)).toBe('unavailable')

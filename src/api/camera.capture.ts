@@ -178,7 +178,6 @@ export class CameraCapturer {
 		const listener = capture.listener ?? (() => {})
 		const rejectedListener = capture.rejectedListener ?? listener
 		const key = resourceKey(camera)
-		if (this.#quarantined.has(key)) this.coordinator.arbiter.markUnavailable({ key, device: camera })
 		const started = Promise.withResolvers<OperationResult<void>>()
 		let session: CameraCaptureSession | undefined
 
@@ -201,10 +200,7 @@ export class CameraCapturer {
 				settleStarted,
 				availability: {
 					markUnavailable: () => this.coordinator.arbiter.markUnavailable({ key, device: camera }),
-					quarantine: () => {
-						this.#quarantined.add(key)
-						this.coordinator.arbiter.markUnavailable({ key, device: camera })
-					},
+					quarantine: () => this.#quarantine(camera, key),
 				},
 			})
 
@@ -253,18 +249,14 @@ export class CameraCapturer {
 	updated(camera: Camera, property: keyof Camera & string, state?: PropertyState) {
 		const key = resourceKey(camera)
 		this.#sessions.get(key)?.updated(camera, property, state)
-		if (property === 'connected') {
-			if (!camera.connected) this.#quarantined.delete(key)
-		}
+		// A disconnected camera cannot deliver the pending payload, and lifecycle owns its availability from here.
+		if (property === 'connected' && !camera.connected) this.#endQuarantine(camera, key)
 	}
 
 	// Discards a quarantined stale BLOB before allowing a connected camera to capture again.
 	blobReceived(camera: Camera, data: Buffer, encoding: BlobEncoding) {
 		const key = resourceKey(camera)
-		if (this.#quarantined.delete(key)) {
-			if (camera.connected && !camera.exposuring && camera.exposure.state !== 'Busy') this.coordinator.arbiter.markAvailable({ key, device: camera })
-			return
-		}
+		if (this.#quarantined.has(key)) return this.#endQuarantine(camera, key)
 		this.#sessions.get(key)?.blobReceived(data, encoding)
 	}
 
@@ -272,7 +264,19 @@ export class CameraCapturer {
 	removed(camera: Camera) {
 		const key = resourceKey(camera)
 		this.#sessions.get(key)?.deviceUnavailable('removed')
-		this.#quarantined.delete(key)
+		this.#endQuarantine(camera, key)
+	}
+
+	// Blocks the camera until the payload left behind by a terminated exposure has been observed.
+	#quarantine(camera: Camera, key: string) {
+		this.#quarantined.add(key)
+		this.coordinator.arbiter.markUnavailable({ key, device: camera }, 'quarantine')
+	}
+
+	// Releases the quarantine cause; any lifecycle cause keeps the camera blocked on its own.
+	#endQuarantine(camera: Camera, key: string) {
+		if (!this.#quarantined.delete(key)) return
+		this.coordinator.arbiter.markAvailable({ key, device: camera }, 'quarantine')
 	}
 }
 

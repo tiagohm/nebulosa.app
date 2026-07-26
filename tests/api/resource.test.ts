@@ -118,6 +118,20 @@ describe('resource arbiter', () => {
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
 
+	test('keeps a resource unavailable until every cause is cleared', () => {
+		const arbiter = new ResourceArbiter()
+
+		arbiter.markUnavailable(CAMERA, 'lifecycle')
+		arbiter.markUnavailable(CAMERA, 'quarantine')
+		expect(arbiter.availability(CAMERA)).toBe('unavailable')
+
+		arbiter.markAvailable(CAMERA, 'quarantine')
+		expect(arbiter.availability(CAMERA)).toBe('unavailable')
+
+		arbiter.markAvailable(CAMERA, 'lifecycle')
+		expect(arbiter.availability(CAMERA)).toBe('available')
+	})
+
 	test('seeds availability when a device is associated after logical use', () => {
 		const arbiter = new ResourceArbiter()
 		const logical = arbiter.acquire(owner('owner-1'), [{ key: CAMERA }])

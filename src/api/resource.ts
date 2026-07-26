@@ -7,6 +7,12 @@ export type ResourceKey = string
 // Observable arbitration state; unavailable takes precedence over an existing lease.
 export type ResourceAvailability = 'available' | 'leased' | 'unavailable'
 
+// Independent cause blocking acquisition. Each writer clears only its own cause, so a resource
+// becomes acquirable again only after every cause has been resolved.
+// - lifecycle: device connectivity and physical quiescence, owned by DeviceLifecycle.
+// - quarantine: an outstanding driver payload that must be discarded before the device is safe.
+export type ResourceUnavailableCause = 'lifecycle' | 'quarantine'
+
 // One resource requested atomically by an operation.
 export interface ResourceRequest {
 	// Canonical identity used for ordering, conflict checks, and ownership.
@@ -48,8 +54,8 @@ export interface ResourceLease {
 
 // Mutable arbitration record retained across disconnect and reconnect transitions.
 interface ResourceRecord {
-	// Whether lifecycle currently permits new acquisitions.
-	available: boolean
+	// Active causes blocking new acquisitions; empty means no writer is blocking the resource.
+	readonly causes: Set<ResourceUnavailableCause>
 	// Client index used to cancel every affected owner on client shutdown.
 	clientId?: string
 	// Latest physical device instance associated with the key.
@@ -87,29 +93,23 @@ export class ResourceArbiter {
 		const resource = this.#resources.get(key)
 
 		if (resource === undefined) return 'available'
-		if (!resource.available) return 'unavailable'
+		if (!this.#available(resource)) return 'unavailable'
 		return resource.owner === undefined ? 'available' : 'leased'
 	}
 
-	// Allows new acquisitions while retaining any existing owner until its lease is released.
-	markAvailable(request: ResourceRequest | ResourceKey) {
-		const resource = this.#resource(request)
-		resource.available = resource.clientId === undefined || !this.#unavailableClients.has(resource.clientId)
+	// Clears one cause while retaining any other cause and any existing owner.
+	markAvailable(request: ResourceRequest | ResourceKey, cause: ResourceUnavailableCause = 'lifecycle') {
+		this.#resource(request).causes.delete(cause)
 	}
 
-	// Blocks new acquisitions without releasing or replacing an existing owner.
-	markUnavailable(request: ResourceRequest | ResourceKey) {
-		const resource = this.#resource(request)
-		resource.available = false
+	// Records one cause blocking acquisition without releasing or replacing an existing owner.
+	markUnavailable(request: ResourceRequest | ResourceKey, cause: ResourceUnavailableCause = 'lifecycle') {
+		this.#resource(request).causes.add(cause)
 	}
 
 	// Blocks existing and future physical resources for a client without disturbing retained owners.
 	markClientUnavailable(clientId: string) {
 		this.#unavailableClients.add(clientId)
-
-		for (const resource of this.#resources.values()) {
-			if (resource.clientId === clientId) resource.available = false
-		}
 	}
 
 	// Allows lifecycle validation to make resources from a newly connected client available.
@@ -136,7 +136,7 @@ export class ResourceArbiter {
 		for (const request of normalized) {
 			const resource = this.#resource(request)
 
-			if (!resource.available) {
+			if (!this.#available(resource)) {
 				conflicts.push(conflict(request.key, UNAVAILABLE_OWNER))
 			} else if (resource.owner !== undefined && resource.owner !== owner) {
 				conflicts.push(conflict(request.key, resource.owner))
@@ -205,6 +205,11 @@ export class ResourceArbiter {
 		return this.#ownerResources.get(owner)?.keys().toArray().sort() ?? []
 	}
 
+	// Reports whether every cause has been cleared and the owning client still accepts acquisitions.
+	#available(resource: ResourceRecord) {
+		return resource.causes.size === 0 && (resource.clientId === undefined || !this.#unavailableClients.has(resource.clientId))
+	}
+
 	// Finds or creates the persistent record, seeding availability only on its first physical association.
 	#resource(request: ResourceRequest | ResourceKey) {
 		const key = typeof request === 'string' ? request : request.key
@@ -213,10 +218,9 @@ export class ResourceArbiter {
 		if (resource === undefined) {
 			const requestedDevice = typeof request === 'string' ? undefined : request.device
 			const device = requestedDevice === undefined ? undefined : resourceDevice(requestedDevice)
-			const clientId = device?.[CLIENT]?.id ?? device?.client.id
 			resource = {
-				available: (device?.connected ?? true) && (clientId === undefined || !this.#unavailableClients.has(clientId)),
-				clientId,
+				causes: new Set(device !== undefined && !device.connected ? (['lifecycle'] as const) : undefined),
+				clientId: device?.[CLIENT]?.id ?? device?.client.id,
 				device,
 				depth: 0,
 			}
@@ -224,10 +228,8 @@ export class ResourceArbiter {
 		} else if (typeof request !== 'string' && request.device !== undefined) {
 			const device = resourceDevice(request.device)
 
-			if (resource.device === undefined) {
-				const clientId = device[CLIENT]?.id ?? device.client.id
-				resource.available = device.connected && !this.#unavailableClients.has(clientId)
-			}
+			// A first physical association seeds connectivity; later ones keep the causes already recorded.
+			if (resource.device === undefined && !device.connected) resource.causes.add('lifecycle')
 			resource.device = device
 			resource.clientId = device[CLIENT]?.id ?? device.client.id
 		}

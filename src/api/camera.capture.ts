@@ -209,7 +209,6 @@ export class CameraCapturer {
 		this.#sessions.get(key)?.updated(camera, property, state)
 		if (property === 'connected') {
 			if (!camera.connected) this.#quarantined.delete(key)
-			else if (!this.#quarantined.has(key)) this.coordinator.arbiter.markAvailable({ key, device: camera })
 		}
 	}
 

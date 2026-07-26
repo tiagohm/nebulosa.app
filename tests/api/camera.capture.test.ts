@@ -212,6 +212,23 @@ describe('camera capture session failures', () => {
 		}
 	})
 
+	test('does not override an external busy-state availability verdict', () => {
+		const harness = createHarness()
+
+		try {
+			const key = resourceKey(harness.camera)
+			harness.camera.exposuring = true
+			harness.camera.exposure.state = 'Busy'
+			harness.arbiter.markUnavailable({ key, device: harness.camera })
+
+			harness.capturer.updated(harness.camera, 'connected')
+
+			expect(harness.arbiter.availability(key)).toBe('unavailable')
+		} finally {
+			harness.restore()
+		}
+	})
+
 	test('blocks future captures when stop never reaches quiescence', async () => {
 		const harness = createHarness({ stopQuiesces: false, capture: { quiesceTimeout: 5 } })
 

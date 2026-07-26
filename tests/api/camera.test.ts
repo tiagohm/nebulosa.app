@@ -19,6 +19,7 @@ import { deg, hour } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { camera as cameraEndpoints, CameraHandler, cameraBus } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
+import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { guiderBus } from 'src/api/guider'
 import type { GuiderHandler } from 'src/api/guider'
 import { ImageProcessor } from 'src/api/image'
@@ -52,8 +53,12 @@ const mountManager = new MountManager()
 const wheelManager = new WheelManager()
 const focuserManager = new FocuserManager()
 const rotatorManager = new RotatorManager()
-const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, new OperationCoordinator(new ResourceArbiter()))
+const resourceArbiter = new ResourceArbiter()
+const operationCoordinator = new OperationCoordinator(resourceArbiter)
+const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, operationCoordinator)
 const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer)
+const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
+deviceLifecycle.observe(cameraManager)
 const endpoints = cameraEndpoints(cameraHandler)
 
 const handler = new IndiClientHandlerSet([cameraManager, mountManager, wheelManager, focuserManager, rotatorManager])
@@ -72,6 +77,7 @@ const socket = new SocketMessager()
 Bun.env.capturesDir = await mkdtemp(tmpdir() + sep)
 
 afterAll(async () => {
+	deviceLifecycle.dispose()
 	for (const simulator of simulators) simulator.dispose()
 
 	wsm.close(socket, 1000, 'done')
@@ -362,8 +368,8 @@ describe('camera capture start request', () => {
 		const disconnected = cameraHandler.capture(camera, captureStartRequest({ exposureTime: 1, exposureTimeUnit: 'second' }), (event) => disconnectedEvents.push(structuredClone(event)))
 		const started = await disconnected.started
 		const result = await disconnected.result
-		expect(started).toEqual({ ok: false, reason: 'disconnected' })
-		expect(result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(started).toMatchObject({ ok: false, reason: 'busy' })
+		expect(result).toMatchObject({ ok: false, reason: 'busy' })
 		expect(zeroExposureEvents.map((event) => event.state)).toEqual(['error', 'idle'])
 		expect(disconnectedEvents.map((event) => event.state)).toEqual(['error', 'idle'])
 	})

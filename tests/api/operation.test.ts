@@ -566,6 +566,73 @@ describe('operation coordinator', () => {
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
 
+	test('refuses a resource a sibling scope is already holding', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const conflicted = Promise.withResolvers<OperationResult<void>>()
+		let invoked = false
+		let holderId = ''
+		const parent = coordinator.start('composite', [{ key: CAMERA }], (context) => {
+			const first = context.start('capture', [{ key: CAMERA }], waitForAbort)
+			holderId = first.id
+
+			conflicted.resolve(
+				context.start<void>('capture', [{ key: CAMERA }], () => {
+					invoked = true
+					return { ok: true, value: undefined }
+				}).result,
+			)
+
+			return first.result
+		})
+
+		expect(await conflicted.promise).toEqual({ ok: false, reason: 'busy', error: `${CAMERA} is owned by capture ${holderId}` })
+		expect(invoked).toBeFalse()
+
+		// The refused scope never acquired anything, so the sibling keeps the camera.
+		expect(arbiter.availability(CAMERA)).toBe('leased')
+
+		await parent.cancel()
+	})
+
+	test('reports ownership only for the scope holding a resource and its ancestors', async () => {
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const answers = Promise.withResolvers<Record<string, readonly boolean[]>>()
+		const parent = coordinator.start('composite', [{ key: CAMERA }], async (context) => {
+			const nested = context.start('slew', [{ key: MOUNT }], (child) => {
+				answers.resolve({
+					// The nested scope inherits the camera from its parent and holds the mount itself.
+					child: [child.owns(CAMERA), child.owns(MOUNT)],
+					// The parent never acquired the mount, so a resource held only below it is not its own.
+					parent: [context.owns(CAMERA), context.owns(MOUNT)],
+				})
+				return waitForAbort(child)
+			})
+
+			await nested.cancel()
+			return { ok: true, value: context.owns(MOUNT) }
+		})
+
+		expect(await answers.promise).toEqual({ child: [true, true], parent: [true, false] })
+
+		// The nested lease ended, so nothing in the tree claims the mount anymore.
+		expect(await parent.result).toEqual({ ok: true, value: false })
+	})
+
+	test('restores the enclosing holder after a nested scope releases', async () => {
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const parent = coordinator.start('composite', [{ key: CAMERA }], async (context) => {
+			const nested = context.start('capture', [{ key: CAMERA }], () => ({ ok: true, value: undefined }))
+			await nested.result
+
+			// A sibling started after the first one released is no longer blocked by it.
+			const sibling = context.start('capture', [{ key: CAMERA }], (child) => ({ ok: true, value: child.owns(CAMERA) }))
+			return await sibling.result
+		})
+
+		expect(await parent.result).toEqual({ ok: true, value: true })
+	})
+
 	test('cancels a busy operation without disturbing the active owner', async () => {
 		const arbiter = new ResourceArbiter()
 		const coordinator = new OperationCoordinator(arbiter)

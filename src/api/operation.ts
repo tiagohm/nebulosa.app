@@ -66,6 +66,9 @@ interface ActiveOperation<T> {
 	readonly parent?: ActiveOperation<unknown>
 	// Nested scopes that must stop before this one undoes its own work.
 	readonly children: Set<ActiveOperation<unknown>>
+	// Holder stack per resource, meaningful only on the root. Because a scope that does not enclose the
+	// current holder is refused, each stack is an ancestor chain whose top is the innermost holder.
+	readonly holders: Map<ResourceKey, ActiveOperation<unknown>[]>
 	// Sole abort source for the operation tree.
 	readonly controller: AbortController
 	// Public handle returned to callers.
@@ -124,7 +127,10 @@ export class OperationCoordinator {
 			kind,
 			signal: controller.signal,
 			start: <R>(childKind: string, childResources: readonly ResourceRequest[], childExecutor: OperationExecutor<R>) => this.#start(node, childKind, childResources, childExecutor),
-			owns: (resource: ResourceKey) => this.arbiter.owns(rootOf(node).context, resource),
+			owns: (resource: ResourceKey) => {
+				const holder = holders.get(resource)?.at(-1)
+				return holder !== undefined && isSelfOrAncestor(holder, node)
+			},
 			onCleanup: (cleanup: Cleanup) => {
 				// Registration loses to a cancellation that already began finalizing. An executor that starts
 				// physical work before registering its cleanup can hit this legitimately, so it is reported
@@ -159,6 +165,7 @@ export class OperationCoordinator {
 			context,
 			parent,
 			children: new Set(),
+			holders: new Map(),
 			controller,
 			handle,
 			result,
@@ -170,9 +177,16 @@ export class OperationCoordinator {
 
 		// The result resolver is contravariant in T, so the tree is traversed through this erased view.
 		const node = operation as ActiveOperation<unknown>
+		const holders = (root ?? node).holders
 
-		// Every scope of a tree acquires under the root's context, so the arbiter sees one owner per operation
-		// tree. A nested scope requesting a resource an ancestor already holds enters reentrantly.
+		// The arbiter only separates trees, so a sibling scope holding the resource has to be refused here.
+		// Inheriting an ancestor's hold instead of conflicting with it is what makes nesting reentrant, and
+		// it is also what keeps two concurrent captures off the same camera inside one feature.
+		const siblingConflicts = treeConflicts(holders, parent, resources)
+
+		if (siblingConflicts.length > 0) return rejected({ ok: false, reason: 'busy', error: formatConflicts(siblingConflicts) })
+
+		// Every scope of a tree acquires under the root's context, so the arbiter sees one owner per operation.
 		const acquired = this.arbiter.acquire(root?.context ?? context, resources)
 
 		if (!acquired.ok) return rejected({ ok: false, reason: 'busy', error: formatConflicts(acquired.conflicts) })
@@ -180,6 +194,12 @@ export class OperationCoordinator {
 		operation.lease = acquired.lease
 		this.#operations.set(id, node)
 		parent?.children.add(node)
+
+		for (const key of acquired.lease.resources) {
+			const stack = holders.get(key)
+			if (stack === undefined) holders.set(key, [node])
+			else stack.push(node)
+		}
 
 		// Only the root context is an arbiter owner, so it is the only one lifecycle cancellation resolves.
 		if (parent === undefined) this.#operationsByOwner.set(context, node)
@@ -251,6 +271,25 @@ export class OperationCoordinator {
 		return operation.completion.promise
 	}
 
+	// Removes this scope from the tree's holder stacks so an ancestor becomes the innermost holder again.
+	#releaseHolders<T>(operation: ActiveOperation<T>) {
+		if (operation.lease === undefined) return
+
+		const node = operation as ActiveOperation<unknown>
+		const holders = rootOf(node).holders
+
+		for (const key of operation.lease.resources) {
+			const stack = holders.get(key)
+
+			if (stack === undefined) continue
+
+			const index = stack.lastIndexOf(node)
+
+			if (index >= 0) stack.splice(index, 1)
+			if (stack.length === 0) holders.delete(key)
+		}
+	}
+
 	// Runs cleanup exactly once in reverse order, releases the lease, and settles the result.
 	async #finalize<T>(operation: ActiveOperation<T>, terminal: Terminal<T>) {
 		if (operation.terminalStarted) return operation.completion.promise
@@ -283,6 +322,7 @@ export class OperationCoordinator {
 				}
 			}
 		} finally {
+			this.#releaseHolders(operation)
 			operation.lease?.release()
 			this.#operations.delete(operation.context.id)
 			operation.parent?.children.delete(operation as ActiveOperation<unknown>)
@@ -318,6 +358,40 @@ function rootOf(operation: ActiveOperation<unknown>) {
 	let current = operation
 	while (current.parent !== undefined) current = current.parent
 	return current
+}
+
+// Reports whether candidate is the operation itself or one of its enclosing scopes.
+function isSelfOrAncestor(candidate: ActiveOperation<unknown>, operation: ActiveOperation<unknown>) {
+	let current: ActiveOperation<unknown> | undefined = operation
+
+	while (current !== undefined) {
+		if (current === candidate) return true
+		current = current.parent
+	}
+
+	return false
+}
+
+// Detects resources held by a scope of the same tree that does not enclose the one being started.
+function treeConflicts(holders: Map<ResourceKey, ActiveOperation<unknown>[]>, parent: ActiveOperation<unknown> | undefined, requests: readonly ResourceRequest[]) {
+	// A new tree has no holders of its own, so only a nested scope can conflict with its own operation.
+	if (parent === undefined) return []
+
+	const conflicts: ResourceConflict[] = []
+	const reported = new Set<ResourceKey>()
+
+	for (const request of requests) {
+		if (reported.has(request.key)) continue
+
+		const holder = holders.get(request.key)?.at(-1)
+
+		if (holder !== undefined && !isSelfOrAncestor(holder, parent)) {
+			reported.add(request.key)
+			conflicts.push({ key: request.key, ownerId: holder.context.id, ownerKind: holder.context.kind, causes: [] })
+		}
+	}
+
+	return conflicts
 }
 
 // Builds the terminal result of a canceled operation, keeping whatever detail the executor reported.

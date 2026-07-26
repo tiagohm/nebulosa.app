@@ -12,6 +12,7 @@ import type { Camera, ClientInfo, Cover, Device, DeviceProperties, DevicePropert
 import type { Message, NewVector } from 'nebulosa/src/devices/indi/types'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import type { Angle } from 'nebulosa/src/math/units/angle'
+import type { OperationResult } from 'src/api/operation'
 import type { AlpacaServerStatus } from '#/alpaca'
 import type { SearchMinorPlanet, MinorPlanet, FindCloseApproaches, CloseApproach } from '#/asteroid'
 import type { BodyPosition, ChartOfBody, LocationAndTime, PositionOfBody } from '#/atlas'
@@ -203,7 +204,7 @@ export namespace Api {
 		}
 
 		export function start(camera: Camera, req: CameraCaptureStart) {
-			return res(`/cameras/${camera.name}/start?client=${camera.client.id}`, 'post', req)
+			return json<Readonly<{ id: string; started: OperationResult<void> }>>(`/cameras/${camera.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(camera: Camera) {

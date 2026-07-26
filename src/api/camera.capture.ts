@@ -211,11 +211,8 @@ export class CameraCapturer {
 			return current.run()
 		})
 
-		// Cleanup-time failures are folded into the session result so this handle never rejects.
-		const result = operation.result.then(
-			(value): OperationResult<CameraCaptureResult> => session?.resultAfterCleanup(value) ?? value,
-			(error): OperationResult<CameraCaptureResult> => ({ ok: false, reason: 'commandFailed', error: errorMessage(error) }),
-		)
+		// The session records its own expected cleanup failures, which the coordinator cannot see.
+		const result = operation.result.then((value): OperationResult<CameraCaptureResult> => session?.resultAfterCleanup(value) ?? value)
 
 		void result.then((result) => {
 			if (!startedSettled) settleStarted(result.ok ? { ok: false, reason: 'unexpectedState', error: 'capture completed before exposure became busy' } : result)

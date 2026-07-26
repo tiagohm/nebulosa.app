@@ -30,7 +30,7 @@ export interface OperationHandle<T> {
 	readonly kind: string
 	// Signal aborted synchronously when cancellation begins.
 	readonly signal: AbortSignal
-	// Terminal result resolved only after cleanup and lease release.
+	// Terminal result resolved only after cleanup and lease release; never rejects.
 	readonly result: Promise<OperationResult<T>>
 	// Requests idempotent cancellation and waits for cleanup completion.
 	readonly cancel: (reason?: OperationFailureReason) => Promise<void>
@@ -90,13 +90,19 @@ export class OperationCoordinator {
 		const result = Promise.withResolvers<OperationResult<T>>()
 		const completion = Promise.withResolvers<void>()
 
-		const context = Object.freeze({
+		const context: OperationContext = Object.freeze({
 			id,
 			kind,
 			signal: controller.signal,
-			owns: (resource) => this.arbiter.owns(context, resource),
-			onCleanup: (cleanup) => {
-				if (operation.cleanupStarted) return () => {}
+			owns: (resource: ResourceKey) => this.arbiter.owns(context, resource),
+			onCleanup: (cleanup: Cleanup) => {
+				// Registration loses to a cancellation that already began finalizing. An executor that starts
+				// physical work before registering its cleanup can hit this legitimately, so it is reported
+				// rather than thrown: the work it wanted to undo is now nobody's responsibility.
+				if (operation.cleanupStarted) {
+					console.error('cleanup registered after finalization started:', kind, id)
+					return () => {}
+				}
 
 				const registration = { cleanup }
 				operation.cleanups.push(registration)
@@ -109,15 +115,15 @@ export class OperationCoordinator {
 					if (index >= 0) operation.cleanups.splice(index, 1)
 				}
 			},
-		} as OperationContext)
+		})
 
-		const handle = Object.freeze({
+		const handle: OperationHandle<T> = Object.freeze({
 			id,
 			kind,
 			signal: controller.signal,
 			result: result.promise,
-			cancel: (reason = 'aborted') => this.#cancel(operation, reason),
-		} as OperationHandle<T>)
+			cancel: (reason: OperationFailureReason = 'aborted') => this.#cancel(operation, reason),
+		})
 
 		const operation: ActiveOperation<T> = {
 			context,
@@ -147,10 +153,10 @@ export class OperationCoordinator {
 		void (async () => {
 			try {
 				const operationResult = await executor(context)
-				const terminal: Terminal<T> = operation.cancelReason === undefined ? { result: operationResult } : { result: { ok: false, reason: operation.cancelReason } }
+				const terminal: Terminal<T> = operation.cancelReason === undefined ? { result: operationResult } : { result: canceled(operation.cancelReason, detailOf(operationResult)) }
 				await this.#finalize(operation, terminal)
 			} catch (error) {
-				const terminal: Terminal<T> = operation.cancelReason === undefined ? { error } : { result: { ok: false, reason: operation.cancelReason } }
+				const terminal: Terminal<T> = operation.cancelReason === undefined ? { error } : { result: canceled(operation.cancelReason, errorMessage(error)) }
 				await this.#finalize(operation, terminal)
 			}
 		})()
@@ -236,32 +242,38 @@ export class OperationCoordinator {
 			this.#operationsByOwner.delete(operation.context)
 		}
 
-		try {
-			if ('error' in terminal) {
-				throw cleanupErrors.length > 0 ? new AggregateError([terminal.error, ...cleanupErrors], 'operation and cleanup failed') : terminal.error
-			}
-
-			if (cleanupErrors.length > 0) {
-				if (terminal.result.ok) {
-					throw new AggregateError(cleanupErrors, 'operation cleanup failed')
-				}
-
-				const cleanupError = cleanupErrors.map(errorMessage).join('; ')
-				terminal = {
-					result: {
-						...terminal.result,
-						error: terminal.result.error ? `${terminal.result.error}; cleanup failed: ${cleanupError}` : `cleanup failed: ${cleanupError}`,
-					},
-				}
-			}
-
-			operation.result.resolve(terminal.result)
-		} catch (error) {
-			operation.result.reject(error)
-		} finally {
-			operation.completion.resolve()
+		// An exception is a defect rather than an operational outcome, so the raw value is logged here and
+		// reported as commandFailed. Callers get a total result and never have to handle a rejection.
+		if ('error' in terminal) {
+			console.error('operation failed unexpectedly:', operation.context.kind, operation.context.id, terminal.error)
+			terminal = { result: { ok: false, reason: 'commandFailed', error: errorMessage(terminal.error) } }
 		}
+
+		if (cleanupErrors.length > 0) {
+			for (const error of cleanupErrors) console.error('operation cleanup failed:', operation.context.kind, operation.context.id, error)
+
+			const detail = `cleanup failed: ${cleanupErrors.map(errorMessage).join('; ')}`
+
+			// A failed cleanup means the devices may not be quiescent, so success cannot stand. An existing
+			// failure keeps its cause and only gains the detail.
+			terminal = {
+				result: terminal.result.ok ? { ok: false, reason: 'commandFailed', error: detail } : { ...terminal.result, error: terminal.result.error ? `${terminal.result.error}; ${detail}` : detail },
+			}
+		}
+
+		operation.result.resolve(terminal.result)
+		operation.completion.resolve()
 	}
+}
+
+// Builds the terminal result of a canceled operation, keeping whatever detail the executor reported.
+function canceled<T>(reason: OperationFailureReason, error?: string): OperationResult<T> {
+	return error === undefined ? { ok: false, reason } : { ok: false, reason, error }
+}
+
+// Extracts the diagnostic detail of an executor result, if it carried one.
+function detailOf<T>(result: OperationResult<T>) {
+	return result.ok ? undefined : result.error
 }
 
 // Produces a compact diagnostic for an atomic busy result.

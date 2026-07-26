@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_CAMERA, DEFAULT_MOUNT } from 'nebulosa/src/devices/indi/device'
 import { OperationCoordinator } from 'src/api/operation'
@@ -193,19 +193,59 @@ describe('operation coordinator', () => {
 	test('aborts the operation scope after an unexpected executor failure', async () => {
 		const arbiter = new ResourceArbiter()
 		const coordinator = new OperationCoordinator(arbiter)
+		const error = spyOn(console, 'error').mockImplementation(() => {})
 		const cleanupStarted = Promise.withResolvers<AbortSignal>()
-		const handle = coordinator.start('unexpected', [{ key: CAMERA }], (context) => {
-			context.onCleanup(async () => {
-				cleanupStarted.resolve(context.signal)
-				await waitForSignal(context.signal)
+
+		try {
+			const handle = coordinator.start('unexpected', [{ key: CAMERA }], (context) => {
+				context.onCleanup(async () => {
+					cleanupStarted.resolve(context.signal)
+					await waitForSignal(context.signal)
+				})
+				throw new Error('unexpected failure')
 			})
-			throw new Error('unexpected failure')
+
+			const signal = await cleanupStarted.promise
+			expect(signal.aborted).toBeTrue()
+			expect(await handle.result).toEqual({ ok: false, reason: 'commandFailed', error: 'unexpected failure' })
+			expect(arbiter.availability(CAMERA)).toBe('available')
+			expect(error).toHaveBeenCalled()
+		} finally {
+			error.mockRestore()
+		}
+	})
+
+	test('degrades a successful operation whose cleanup failed unexpectedly', async () => {
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const error = spyOn(console, 'error').mockImplementation(() => {})
+
+		try {
+			const handle = coordinator.start('cleanup-defect', [{ key: CAMERA }], (context) => {
+				context.onCleanup(() => {
+					throw new Error('device did not release')
+				})
+				return { ok: true, value: 'done' }
+			})
+
+			expect(await handle.result).toEqual({ ok: false, reason: 'commandFailed', error: 'cleanup failed: device did not release' })
+		} finally {
+			error.mockRestore()
+		}
+	})
+
+	test('keeps the executor detail when cancellation wins', async () => {
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const running = Promise.withResolvers<void>()
+		const handle = coordinator.start<void>('canceled-detail', [{ key: CAMERA }], async (context) => {
+			running.resolve()
+			await waitForSignal(context.signal)
+			return { ok: false, reason: 'alert', error: 'device reported alert' }
 		})
 
-		const signal = await cleanupStarted.promise
-		expect(signal.aborted).toBeTrue()
-		expect(handle.result).rejects.toThrow('unexpected failure')
-		expect(arbiter.availability(CAMERA)).toBe('available')
+		await running.promise
+		await handle.cancel('disconnected')
+
+		expect(await handle.result).toEqual({ ok: false, reason: 'disconnected', error: 'device reported alert' })
 	})
 
 	test('cancels every owner associated with a client', async () => {

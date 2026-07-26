@@ -15,6 +15,7 @@ import { waitUntil } from './util'
 interface HarnessOptions {
 	readonly capture?: CameraCaptureOptions
 	readonly io?: CameraCaptureIO
+	readonly notifyStartState?: boolean
 	readonly startState?: 'Busy' | 'Alert'
 	readonly stopQuiesces?: boolean
 }
@@ -62,7 +63,7 @@ function createHarness(options: HarnessOptions = {}) {
 		const state = options.startState ?? 'Busy'
 		camera.exposuring = state === 'Busy'
 		camera.exposure.state = state
-		queueMicrotask(() => capturer.updated(camera, 'exposure', state))
+		if (options.notifyStartState !== false) queueMicrotask(() => capturer.updated(camera, 'exposure', state))
 	})
 	const stopExposure = spyOn(cameraManager, 'stopExposure').mockImplementation(() => {
 		if (options.stopQuiesces === false) return
@@ -117,6 +118,28 @@ describe('camera capture session failures', () => {
 			expect(events.filter((event) => event.state === 'idle')).toHaveLength(1)
 			expect(harness.stopExposure).toHaveBeenCalledTimes(1)
 			expect(harness.disableBlob).toHaveBeenCalledTimes(1)
+		} finally {
+			harness.restore()
+		}
+	})
+
+	test('quarantines a dispatched exposure when Busy was not observed', async () => {
+		const harness = createHarness({ notifyStartState: false })
+
+		try {
+			const key = resourceKey(harness.camera)
+			const handle = harness.capturer.start(harness.camera, request())
+
+			expect(await handle.started).toEqual({ ok: false, reason: 'timeout' })
+			expect(await handle.result).toEqual({ ok: false, reason: 'timeout' })
+			expect(harness.arbiter.availability(key)).toBe('unavailable')
+
+			harness.arbiter.markAvailable({ key, device: harness.camera })
+			const blocked = harness.capturer.start(harness.camera, request())
+			expect(await blocked.result).toMatchObject({ ok: false, reason: 'busy' })
+
+			harness.capturer.blobReceived(harness.camera, Buffer.from('stale frame'), 'raw')
+			expect(harness.arbiter.availability(key)).toBe('available')
 		} finally {
 			harness.restore()
 		}

@@ -100,6 +100,8 @@ interface FrameAttempt {
 	exposureState?: PropertyState
 	// Whether this attempt no longer accepts device callbacks.
 	terminal: boolean
+	// Whether the exposure command returned successfully, even if Busy was never observed.
+	dispatched: boolean
 	// Whether physical Busy was observed after command dispatch.
 	started: boolean
 }
@@ -360,7 +362,7 @@ class CameraCaptureSession {
 	blobReceived(data: Buffer, encoding: BlobEncoding) {
 		const attempt = this.#attempt
 		if (this.#terminal) {
-			if (attempt?.started && attempt.blob === undefined) {
+			if (attempt?.dispatched && attempt.blob === undefined) {
 				this.#lateBlobObserved = true
 				this.#lateBlob.resolve()
 			}
@@ -383,7 +385,7 @@ class CameraCaptureSession {
 	async cleanup() {
 		if (this.#cleaned) return
 		this.#cleaned = true
-		const pendingBlob = this.#attempt?.started === true && this.#attempt.blob === undefined
+		const pendingBlob = this.#attempt?.dispatched === true && this.#attempt.blob === undefined
 		this.#terminal = true
 		this.#state = 'stopping'
 		if (this.#attempt !== undefined) this.#attempt.terminal = true
@@ -434,6 +436,7 @@ class CameraCaptureSession {
 			exposureCompleted: Promise.withResolvers<PropertyState>(),
 			blobReceived: Promise.withResolvers<CameraBlob>(),
 			terminal: false,
+			dispatched: false,
 			started: false,
 		}
 
@@ -450,6 +453,7 @@ class CameraCaptureSession {
 
 		try {
 			this.#startExposure()
+			attempt.dispatched = true
 		} catch (error) {
 			return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
 		}

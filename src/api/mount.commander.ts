@@ -155,8 +155,10 @@ export class MountCommander implements DeviceHandler<Mount> {
 			if (!slewed.ok) return slewed
 
 			// A driver without pier side can still perform the movement, but nothing it publishes proves the
-			// mount changed sides, so the flip is reported as unverified instead of being failed.
-			const pierSideVerified = mount.hasPierSide && mount.pierSide !== 'NEITHER' && mount.pierSide !== initialPierSide
+			// mount changed sides, so the flip is reported as unverified instead of being failed. The side
+			// before the flip has to be known as well: going from NEITHER to WEST may only be the driver
+			// reporting a side for the first time, which is not evidence that anything changed.
+			const pierSideVerified = mount.hasPierSide && initialPierSide !== 'NEITHER' && mount.pierSide !== 'NEITHER' && mount.pierSide !== initialPierSide
 
 			return { ok: true, value: { ...slewResult(mount), initialPierSide, pierSideVerified } }
 		}).result

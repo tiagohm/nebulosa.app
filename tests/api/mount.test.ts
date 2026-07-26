@@ -8,7 +8,7 @@ import type { Mount, MountTargetCoordinate } from 'nebulosa/src/devices/indi/dev
 import { MountManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
-import { deg, hour, normalizeAngle } from 'nebulosa/src/math/units/angle'
+import { deg, formatAngle, hour, normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'
@@ -552,7 +552,7 @@ describe('mount commander', () => {
 	}, 10000)
 })
 
-test('coordinateInfo computes correctly all the coordinates passing the flag', () => {
+describe('coordinateInfo computes correctly all the coordinates passing the flag', () => {
 	const time = timeNow(true)
 	time.location = { latitude: 0, longitude: 0, elevation: 0, ellipsoid: 3 }
 	const lst = localSiderealTime(time, undefined, true)
@@ -573,27 +573,33 @@ test('coordinateInfo computes correctly all the coordinates passing the flag', (
 		[{ galactic: true }, galactic, 'GALACTIC'],
 	] as const
 
-	for (const [, coordinate, type] of flags) {
-		const target = { type, [type]: { x: coordinate[0], y: coordinate[1] } } as const
+	for (const angleType of ['string', 'number'] as const) {
+		for (const [, coordinate, type] of flags) {
+			const x = angleType === 'string' ? formatAngle(coordinate[0], { isHour: type === 'J2000' || type === 'JNOW', noSign: true, separators: ' ', fractionDigits: 8 }) : coordinate[0]
+			const y = angleType === 'string' ? formatAngle(coordinate[1], { isHour: false, noSign: false, separators: ' ', fractionDigits: 8 }) : coordinate[1]
+			const target = { type, [type]: { x, y } } as const
 
-		for (const [flag] of flags) {
-			const info = coordinateInfo(time, 0, target, flag)
+			for (const [flag] of flags) {
+				const info = coordinateInfo(time, 0, target, flag)
 
-			if ('equatorial' in flag) {
-				expect(info.equatorial[0]).toBeCloseTo(equatorial[0], 11)
-				expect(info.equatorial[1]).toBeCloseTo(equatorial[1], 11)
-			} else if ('equatorialJ2000' in flag) {
-				expect(info.equatorialJ2000[0]).toBeCloseTo(equatorialJ2000[0], 11)
-				expect(info.equatorialJ2000[1]).toBeCloseTo(equatorialJ2000[1], 11)
-			} else if ('horizontal' in flag) {
-				expect(info.horizontal[0]).toBeCloseTo(horizontal[0], 11)
-				expect(info.horizontal[1]).toBeCloseTo(horizontal[1], 11)
-			} else if ('ecliptic' in flag) {
-				expect(info.ecliptic[0]).toBeCloseTo(ecliptic[0], 11)
-				expect(info.ecliptic[1]).toBeCloseTo(ecliptic[1], 11)
-			} else if ('galactic' in flag) {
-				expect(info.galactic[0]).toBeCloseTo(galactic[0], 11)
-				expect(info.galactic[1]).toBeCloseTo(galactic[1], 11)
+				test(`${angleType}, ${type}, ${Object.keys(flag)[0]}`, () => {
+					if ('equatorial' in flag) {
+						expect(info.equatorial[0]).toBeCloseTo(equatorial[0], 11)
+						expect(info.equatorial[1]).toBeCloseTo(equatorial[1], 11)
+					} else if ('equatorialJ2000' in flag) {
+						expect(info.equatorialJ2000[0]).toBeCloseTo(equatorialJ2000[0], 11)
+						expect(info.equatorialJ2000[1]).toBeCloseTo(equatorialJ2000[1], 11)
+					} else if ('horizontal' in flag) {
+						expect(info.horizontal[0]).toBeCloseTo(horizontal[0], 11)
+						expect(info.horizontal[1]).toBeCloseTo(horizontal[1], 11)
+					} else if ('ecliptic' in flag) {
+						expect(info.ecliptic[0]).toBeCloseTo(ecliptic[0], 11)
+						expect(info.ecliptic[1]).toBeCloseTo(ecliptic[1], 11)
+					} else if ('galactic' in flag) {
+						expect(info.galactic[0]).toBeCloseTo(galactic[0], 11)
+						expect(info.galactic[1]).toBeCloseTo(galactic[1], 11)
+					}
+				})
 			}
 		}
 	}

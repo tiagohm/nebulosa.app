@@ -1,4 +1,4 @@
-import type { Camera, Cover, Device, Focuser, GuideOutput, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Cover, Device, DeviceType, Focuser, GuideOutput, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager'
 import type { OperationFailureReason } from './operation'
 import { OperationCoordinator } from './operation'
@@ -17,6 +17,17 @@ export interface DeviceLifecycleManager<D extends Device> {
 
 // Verifies whether a connected device is physically quiescent and safe to acquire.
 export type DeviceAvailabilityVerifier<D extends Device> = (device: D) => boolean | Promise<boolean>
+
+// Reports whether a property change can alter the verdict, so unrelated updates skip verification.
+export type DeviceQuiescenceFilter<D extends Device> = (device: D, property: keyof D & string) => boolean
+
+// Per-manager observation behaviour; both entries default to the built-in quiescence rules.
+export interface DeviceObserveOptions<D extends Device> {
+	// Decides whether a connected device is safe to acquire.
+	readonly verify?: DeviceAvailabilityVerifier<D>
+	// Narrows which property updates trigger verification; must cover every field verify reads.
+	readonly affects?: DeviceQuiescenceFilter<D>
+}
 
 // Idempotent manager-observer registration retained for lifecycle disposal.
 interface Registration {
@@ -45,10 +56,12 @@ export class DeviceLifecycle {
 	) {}
 
 	// Observes existing and future devices from one manager and returns an idempotent disposer.
-	observe<D extends Device>(manager: DeviceLifecycleManager<D>, verify: DeviceAvailabilityVerifier<D> = isDeviceQuiescent): VoidFunction {
+	observe<D extends Device>(manager: DeviceLifecycleManager<D>, options: DeviceObserveOptions<D> = {}): VoidFunction {
+		const verify = options.verify ?? isDeviceQuiescent
+		const affects = options.affects ?? affectsDeviceQuiescence
 		const handler: DeviceHandler<D> = {
 			added: (device) => this.#added(device, verify),
-			updated: (device, property) => this.#updated(device, property, verify),
+			updated: (device, property) => this.#updated(device, property, verify, affects),
 			removed: (device) => this.#removed(device),
 		}
 
@@ -90,8 +103,8 @@ export class DeviceLifecycle {
 		this.#validate(key)
 	}
 
-	// Cancels on disconnect and revalidates every connected update so external activity gates acquisition.
-	#updated<D extends Device>(device: D, property: keyof D & string, verify: DeviceAvailabilityVerifier<D>) {
+	// Cancels on disconnect and revalidates only the updates that can change quiescence.
+	#updated<D extends Device>(device: D, property: keyof D & string, verify: DeviceAvailabilityVerifier<D>, affects: DeviceQuiescenceFilter<D>) {
 		const key = resourceKey(device)
 		const devices = this.#devices.get(key)
 
@@ -101,7 +114,9 @@ export class DeviceLifecycle {
 
 		if (property === 'connected' && !device.connected) {
 			this.#invalidate(key, resourceDevice(device), 'disconnected')
-		} else if (device.connected) {
+		} else if (device.connected && affects(device, property)) {
+			// Revalidating on unrelated traffic such as temperature would also advance the generation and
+			// discard any verification still in flight, which an asynchronous verifier could never survive.
 			this.#validate(key)
 		}
 	}
@@ -210,6 +225,22 @@ export class DeviceLifecycle {
 		this.#validationGeneration.set(key, generation)
 		return generation
 	}
+}
+
+// Properties read by isDeviceQuiescent for each device type; every other update leaves its verdict intact.
+const QUIESCENCE_PROPERTIES: Partial<Record<DeviceType, ReadonlySet<string>>> = {
+	camera: new Set(['exposuring', 'exposure']),
+	mount: new Set(['slewing', 'homing', 'parking', 'pulsing']),
+	focuser: new Set(['moving']),
+	wheel: new Set(['moving']),
+	rotator: new Set(['moving']),
+	guideOutput: new Set(['pulsing']),
+	cover: new Set(['parking']),
+}
+
+// Reports whether a property change can alter the default quiescence verdict for the device.
+export function affectsDeviceQuiescence(device: Device, property: string) {
+	return property === 'connected' || (QUIESCENCE_PROPERTIES[device.type]?.has(property) ?? false)
 }
 
 // Checks type-specific motion/exposure flags before a connected device can be acquired.

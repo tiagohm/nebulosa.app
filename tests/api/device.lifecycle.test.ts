@@ -306,7 +306,7 @@ describe('device lifecycle', () => {
 		const key = resourceKey(parent)
 
 		lifecycle.observe(mountManager)
-		lifecycle.observe(guideOutputManager, () => verified.promise)
+		lifecycle.observe(guideOutputManager, { verify: () => verified.promise })
 		mountManager.add(parent)
 		guideOutputManager.add(proxy)
 		expect(arbiter.availability(key)).toBe('unavailable')
@@ -332,7 +332,7 @@ describe('device lifecycle', () => {
 		const device = camera()
 		const key = resourceKey(device)
 
-		lifecycle.observe(manager, () => verified.promise)
+		lifecycle.observe(manager, { verify: () => verified.promise })
 		manager.add(device)
 		manager.remove(device)
 		verified.resolve(true)
@@ -340,6 +340,41 @@ describe('device lifecycle', () => {
 		await Promise.resolve()
 
 		expect(arbiter.availability(key)).toBe('unavailable')
+
+		lifecycle.dispose()
+	})
+
+	test('skips verification for updates that cannot change quiescence', async () => {
+		const manager = new TestDeviceManager<Camera>()
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const lifecycle = new DeviceLifecycle(arbiter, coordinator)
+		const verified = Promise.withResolvers<boolean>()
+		const device = camera()
+		const key = resourceKey(device)
+		let checks = 0
+
+		lifecycle.observe(manager, {
+			verify: () => {
+				checks++
+				return verified.promise
+			},
+		})
+		manager.add(device)
+		expect(checks).toBe(1)
+
+		manager.update(device, 'temperature')
+		manager.update(device, 'coolerPower')
+		expect(checks).toBe(1)
+
+		// The in-flight verification survives unrelated traffic and still applies its verdict.
+		verified.resolve(true)
+		await verified.promise
+		await Bun.sleep(1)
+		expect(arbiter.availability(key)).toBe('available')
+
+		manager.update(device, 'exposuring')
+		expect(checks).toBe(2)
 
 		lifecycle.dispose()
 	})
@@ -354,8 +389,10 @@ describe('device lifecycle', () => {
 		const key = resourceKey(device)
 
 		try {
-			lifecycle.observe(manager, () => {
-				throw new Error('cannot read device state')
+			lifecycle.observe(manager, {
+				verify: () => {
+					throw new Error('cannot read device state')
+				},
 			})
 			manager.add(device)
 
@@ -363,7 +400,7 @@ describe('device lifecycle', () => {
 			expect(error).toHaveBeenCalled()
 
 			error.mockClear()
-			lifecycle.observe(manager, () => Promise.reject(new Error('transport lost')))
+			lifecycle.observe(manager, { verify: () => Promise.reject(new Error('transport lost')) })
 			manager.add(device)
 			await Bun.sleep(1)
 

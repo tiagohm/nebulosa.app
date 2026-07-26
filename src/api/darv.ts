@@ -74,7 +74,6 @@ export class DarvTask {
 
 	private readonly handleDarvEvent: (state: DarvState, message?: string) => void
 	private stopped = false
-	// Operation ID of the capture started by this DARV task.
 	private captureOperation?: string
 
 	constructor(

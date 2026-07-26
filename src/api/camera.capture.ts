@@ -179,6 +179,7 @@ export class CameraCapturer {
 		void operation.result.then(
 			(result) => {
 				if (!startedSettled) settleStarted(result.ok ? { ok: false, reason: 'unexpectedState', error: 'capture completed before exposure became busy' } : result)
+
 				if (!sessionCreated && !result.ok) {
 					const event = structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT)
 					event.operation = operation.id

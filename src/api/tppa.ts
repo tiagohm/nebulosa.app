@@ -78,7 +78,6 @@ export class TppaTask {
 	private readonly polarAlignment: ThreePointPolarAlignment
 	private readonly handleTppaEvent: (state: TppaState, message?: string) => void
 	private stopped = false
-	// Operation ID of the capture started by this TPPA task.
 	private captureOperation?: string
 
 	constructor(
@@ -117,6 +116,7 @@ export class TppaTask {
 	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
 		this.captureOperation = event.operation
 		const captureReleased = this.tppa.cameraHandler.waitForCapture(event.operation)
+
 		if (path && !this.stopped) {
 			this.handleTppaEvent('solving')
 

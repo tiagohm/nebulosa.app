@@ -82,7 +82,6 @@ export class AutoFocusTask {
 	private readonly handleAutoFocusEvent: (state: AutoFocusState, message?: string) => void
 	private readonly unsubscribers: VoidFunction[] = []
 	private stopped = false
-	// Operation ID of the capture started by this autofocus task.
 	private captureOperation?: string
 
 	constructor(
@@ -111,6 +110,7 @@ export class AutoFocusTask {
 	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
 		this.captureOperation = event.operation
 		const captureReleased = this.autoFocusHandler.cameraHandler.waitForCapture(event.operation)
+
 		try {
 			await this.processCameraCapture(event, path, captureReleased)
 		} catch (error) {

@@ -5,7 +5,7 @@ import type { CameraManager, DeviceHandler, FocuserManager, MountManager, Rotato
 import type { BlobEncoding, PropertyState } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
 import type { CameraFrameEvent, CameraCaptureEvent, CameraCaptureStart, CameraAdded, CameraRemoved, CameraUpdated } from '#/camera'
-import type { CameraCaptureHandle } from './camera.capture'
+import type { CameraCaptureHandle, CameraCaptureListener } from './camera.capture'
 import { CameraCapturer } from './camera.capture'
 import { query, response } from './http'
 import type { Endpoints } from './http'
@@ -96,7 +96,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 
 	// Starts a coordinated capture and returns its operation-backed milestones.
-	capture(camera: Camera, request: CameraCaptureStart, onCameraCaptureEvent?: (event: CameraCaptureEvent, path?: string) => void) {
+	capture(camera: Camera, request: CameraCaptureStart, onCameraCaptureEvent?: CameraCaptureListener, rejectedListener: CameraCaptureListener | undefined = onCameraCaptureEvent) {
 		const client = camera[CLIENT]!
 		const mount = request.mount ? this.mountManager.get(client, request.mount) : undefined
 		const wheel = request.wheel ? this.wheelManager.get(client, request.wheel) : undefined
@@ -111,7 +111,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 				onCameraCaptureEvent?.(event, path)
 			},
 			() => this.cameraManager.snoop(camera, mount, focuser, wheel, rotator),
-			onCameraCaptureEvent,
+			rejectedListener,
 		)
 
 		this.captures.set(handle.id, handle)
@@ -128,7 +128,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 
 	// Transitional feature entrypoint that maps the coordinated result to the legacy boolean.
-	start(camera: Camera, req: CameraCaptureStart, onCameraCaptureEvent?: (event: CameraCaptureEvent, path?: string) => void) {
+	start(camera: Camera, req: CameraCaptureStart, onCameraCaptureEvent?: CameraCaptureListener) {
 		return this.capture(camera, req, onCameraCaptureEvent).result.then((result) => result.ok)
 	}
 

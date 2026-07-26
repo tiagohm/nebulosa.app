@@ -117,8 +117,12 @@ export class OperationCoordinator {
 			return Object.freeze({ id, kind, signal: controller.signal, result: result.promise, cancel: () => completion.promise })
 		}
 
-		// A scope registered after its parent began finalizing would never be awaited by that parent.
-		if (parent?.terminalStarted === true) return rejected({ ok: false, reason: parent.cancelReason ?? 'aborted', error: 'parent operation is already terminal' })
+		// A cancelled scope must not gain new work: a nested scope owns a fresh controller, so it would not
+		// inherit the abort and would command devices the tree is about to release. A scope started after
+		// finalization began would also never be awaited by its parent.
+		if (parent !== undefined && (parent.terminalStarted || parent.controller.signal.aborted)) {
+			return rejected({ ok: false, reason: parent.cancelReason ?? 'aborted', error: 'parent operation is no longer running' })
+		}
 
 		const root = parent === undefined ? undefined : rootOf(parent)
 

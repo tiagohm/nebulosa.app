@@ -512,6 +512,37 @@ describe('operation coordinator', () => {
 		expect(arbiter.availability(MOUNT)).toBe('available')
 	})
 
+	test('refuses a nested scope started after its parent was canceled', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const running = Promise.withResolvers<void>()
+		const gate = Promise.withResolvers<void>()
+		let invoked = false
+
+		const parent = coordinator.start<OperationResult<void>>('composite', [{ key: CAMERA }], async (context) => {
+			running.resolve()
+			await gate.promise
+
+			// A feature loop that starts its next step without re-reading the signal must still be stopped:
+			// a nested scope owns a fresh controller and would not inherit the abort.
+			const late = context.start<void>('capture', [{ key: CAMERA }], () => {
+				invoked = true
+				return { ok: true, value: undefined }
+			})
+
+			return { ok: true, value: await late.result }
+		})
+
+		await running.promise
+		const cancellation = parent.cancel('disconnected')
+		gate.resolve()
+		await cancellation
+
+		expect(invoked).toBeFalse()
+		expect(await parent.result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(arbiter.availability(CAMERA)).toBe('available')
+	})
+
 	test('refuses a nested scope started after its parent began finalizing', async () => {
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const cleanupStarted = Promise.withResolvers<OperationContext>()
@@ -532,7 +563,7 @@ describe('operation coordinator', () => {
 			return { ok: true, value: undefined }
 		})
 
-		expect(await late.result).toEqual({ ok: false, reason: 'aborted', error: 'parent operation is already terminal' })
+		expect(await late.result).toEqual({ ok: false, reason: 'aborted', error: 'parent operation is no longer running' })
 		expect(invoked).toBeFalse()
 
 		gate.resolve()

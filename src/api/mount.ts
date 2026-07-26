@@ -207,7 +207,8 @@ export class MountRemoteControlHandler {
 		readonly coordinator: OperationCoordinator,
 	) {}
 
-	// Stellarium remote control handler, equinox of date.
+	// Stellarium remote control handler. Stellarium must be configured to send JNOW because its wire
+	// protocol carries no coordinate epoch, so converting an unlabelled target here would be ambiguous.
 	private readonly stellariumHandler: StellariumProtocolHandler = {
 		goto: (server, rightAscension, declination) => {
 			this.#detach('go to a target', this.get(server), (mount) => this.commander.goTo(this.coordinator, mount, jnow(rightAscension, declination)))

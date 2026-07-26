@@ -314,6 +314,40 @@ describe('mount handler', () => {
 		expect(status).toEqual({ lx200: false, stellarium: false })
 	})
 
+	test('treats Stellarium goto coordinates as JNOW', async () => {
+		const device = getMount()
+		const goTo = spyOn(mountCommander, 'goTo').mockResolvedValue({ ok: true, value: undefined })
+		const rightAscension = hour(5)
+		const declination = deg(-30)
+		const message = Buffer.alloc(20)
+		message.writeUInt32LE(Math.trunc((rightAscension / Math.PI) * 0x80000000), 12)
+		message.writeInt32LE(Math.trunc((declination / Math.PI) * 0x80000000), 16)
+
+		try {
+			mountRemoteControlHandler.start(device, { protocol: 'stellarium', host: '127.0.0.1', port: 0 })
+			const status = mountRemoteControlHandler.status(device)
+			expect(status.stellarium).not.toBeFalse()
+
+			const client = await Bun.connect({
+				hostname: '127.0.0.1',
+				port: status.stellarium && status.stellarium.port,
+				socket: { data() {} },
+			})
+			client.write(message)
+			client.flush()
+
+			expect(await waitUntil(() => goTo.mock.calls.length > 0)).toBeTrue()
+			const target = goTo.mock.calls[0][2]
+			expect(target.type).toBe('JNOW')
+			expect(target.JNOW?.x).toBeCloseTo(rightAscension, 8)
+			expect(target.JNOW?.y).toBeCloseTo(declination, 8)
+			client.end()
+		} finally {
+			mountRemoteControlHandler.stop(device, 'stellarium')
+			goTo.mockRestore()
+		}
+	})
+
 	test('emits remove event when the simulator is disposed', () => {
 		const wsm = new WebSocketMessageHandler()
 		const mountManager = new MountManager()

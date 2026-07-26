@@ -48,13 +48,34 @@ export const DEFAULT_COORDINATE_INFO: CoordinateInfo = {
 	pierSide: 'NEITHER',
 }
 
-export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialCoordinate | MountTargetCoordinate<string | Angle>) {
+export interface CoordinateInfoFlags {
+	readonly equatorial?: boolean
+	readonly equatorialJ2000?: boolean
+	readonly horizontal?: boolean
+	readonly ecliptic?: boolean
+	readonly galactic?: boolean
+	readonly constellation?: boolean
+	readonly lst?: boolean
+}
+
+const DEFAULT_COORDINATE_INFO_FLAGS: Required<CoordinateInfoFlags> = {
+	equatorial: true,
+	equatorialJ2000: true,
+	horizontal: true,
+	ecliptic: true,
+	galactic: true,
+	constellation: true,
+	lst: true,
+}
+
+export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialCoordinate | MountTargetCoordinate<string | Angle>, flags: CoordinateInfoFlags = DEFAULT_COORDINATE_INFO_FLAGS) {
 	const equatorial: Writable<CoordinateInfo['equatorial']> = [0, 0]
 	const equatorialJ2000: Writable<CoordinateInfo['equatorialJ2000']> = [0, 0]
 	const horizontal: Writable<CoordinateInfo['horizontal']> = [0, 0]
 	const ecliptic: Writable<CoordinateInfo['ecliptic']> = [0, 0]
 	const galactic: Writable<CoordinateInfo['galactic']> = [0, 0]
 	let observed: ReturnType<typeof cirsToObserved> | undefined
+	let hasEquatorial = flags.equatorial === true
 
 	const type = 'type' in target ? target.type : 'JNOW'
 	const x = 'type' in target ? parseAngle(target[type]!.x, type === 'JNOW' || type === 'J2000' ? true : undefined)! : target.rightAscension
@@ -64,59 +85,60 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 	if (type === 'JNOW') {
 		equatorial[0] = x
 		equatorial[1] = y
+		hasEquatorial = true
 
-		observed = cirsToObserved(equatorial, time)
-		Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
-		Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
-		Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
+		if (flags.horizontal) observed = cirsToObserved(equatorial, time)
+		if (flags.equatorialJ2000) Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
+		if (flags.ecliptic) Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
+		if (flags.galactic) Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
 	}
 	// J2000 equatorial coordinate
 	else if (type === 'J2000') {
 		equatorialJ2000[0] = x
 		equatorialJ2000[1] = y
 
-		Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
-		Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
-		Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
-		observed = cirsToObserved(equatorial, time)
+		if (flags.equatorial) Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
+		if (flags.ecliptic) Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
+		if (flags.galactic) Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
+		if (flags.horizontal) observed = cirsToObserved(equatorial, time)
 	}
 	// Local horizontal coordinate
 	else if (type === 'ALTAZ') {
 		horizontal[0] = x
 		horizontal[1] = y
 
-		Object.assign(equatorial, observedToCirs(...horizontal, time))
-		Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
-		Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
-		Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
+		if (flags.equatorial) Object.assign(equatorial, observedToCirs(...horizontal, time))
+		if (flags.equatorialJ2000) Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
+		if (flags.ecliptic) Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
+		if (flags.galactic) Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
 	}
 	// Ecliptic (at date) coordinate
 	else if (type === 'ECLIPTIC') {
 		ecliptic[0] = x
 		ecliptic[1] = y
 
-		Object.assign(equatorial, eclipticToEquatorial(...ecliptic, time))
-		Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
-		Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
-		observed = cirsToObserved(equatorial, time)
+		if (flags.equatorial) Object.assign(equatorial, eclipticToEquatorial(...ecliptic, time))
+		if (flags.equatorialJ2000) Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
+		if (flags.galactic) Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
+		if (flags.horizontal) observed = cirsToObserved(equatorial, time)
 	}
 	// Galactic coordinate
 	else if (type === 'GALACTIC') {
 		galactic[0] = x
 		galactic[1] = y
 
-		Object.assign(equatorialJ2000, galacticToEquatorial(...galactic))
-		Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
-		Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
-		observed = cirsToObserved(equatorial, time)
+		if (flags.equatorialJ2000) Object.assign(equatorialJ2000, galacticToEquatorial(...galactic))
+		if (flags.equatorial) Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
+		if (flags.ecliptic) Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
+		if (flags.horizontal) observed = cirsToObserved(equatorial, time)
 	}
 
-	if (observed) {
+	if (observed !== undefined) {
 		horizontal[0] = observed.azimuth
 		horizontal[1] = observed.altitude
 	}
 
-	const lst = localSiderealTime(time, longitude, true)
+	const lst = flags.lst ? localSiderealTime(time, longitude, true) : 0
 
 	return {
 		equatorial,
@@ -124,9 +146,11 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 		horizontal,
 		ecliptic,
 		galactic,
-		constellation: constellation(...equatorial, time),
+		// Use default constellation when disabled
+		constellation: flags.constellation && hasEquatorial ? constellation(equatorial[0], equatorial[1], time) : 'AND',
 		lst,
-		meridianTimeIn: meridianTimeIn(equatorial[0], lst),
-		pierSide: expectedPierSide(...equatorial, lst),
+		meridianTimeIn: flags.lst && hasEquatorial ? meridianTimeIn(equatorial[0], lst) : 0,
+		// Use NEITHER pier side when disabled
+		pierSide: flags.lst && hasEquatorial ? expectedPierSide(equatorial[0], equatorial[1], lst) : 'NEITHER',
 	} as CoordinateInfo
 }

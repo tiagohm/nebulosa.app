@@ -221,8 +221,9 @@ describe('operation waits', () => {
 
 		expect(await result).toEqual({ ok: false, reason: 'alert' })
 		expect(listeners.size).toBe(0)
-		// A failure reported by the device is not an abort, so no physical stop is issued for it.
-		expect(aborts).toBe(0)
+		// The command failed while the device may still be working, so the physical stop runs before the
+		// result settles: an Alert during a slew must not release a mount that is still moving.
+		expect(aborts).toBe(1)
 	})
 
 	test('reports an evaluate that throws as an unexpected state', async () => {

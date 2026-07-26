@@ -13,6 +13,7 @@ import { GuideOutputHandler } from 'src/api/guideoutput'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler } from 'src/api/mount'
+import { MountCommander } from 'src/api/mount.commander'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_EVENT } from '#/camera'
@@ -40,7 +41,7 @@ const guideOutputManager = new GuideOutputManager({
 const operationCoordinator = new OperationCoordinator(new ResourceArbiter())
 const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, operationCoordinator.arbiter)
 const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
-const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm))
+const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm), new MountCommander(mountManager), operationCoordinator)
 const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager)
 const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutputHandler)
 const endpoints = darvEndpoints(darvHandler)

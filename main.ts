@@ -26,6 +26,7 @@ import { GuiderHandler, guider } from 'src/api/guider'
 import { IndiDevicePropertyHandler, IndiHandler, IndiServerHandler, indi } from 'src/api/indi'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler, MountRemoteControlHandler, mount } from 'src/api/mount'
+import { MountCommander } from 'src/api/mount.commander'
 import { NotificationHandler } from 'src/api/notification'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter } from 'src/api/resource'
@@ -217,8 +218,11 @@ const guiderHandler = new GuiderHandler(wsm, notificationHandler)
 // Coordinated camera service owns physical sessions independently from HTTP and WebSocket transport.
 const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourceArbiter, guiderHandler)
 const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
-const mountHandler = new MountHandler(wsm, mountManager, confirmationHandler)
-const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager)
+// Coordinated mount service owns every mutation, so HTTP, protocol adapters, and composite features
+// compete for the mount under the same ownership rules.
+const mountCommander = new MountCommander(mountManager)
+const mountHandler = new MountHandler(wsm, mountManager, confirmationHandler, mountCommander, operationCoordinator)
+const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager, mountCommander, operationCoordinator)
 const focuserHandler = new FocuserHandler(wsm, focuserManager)
 const wheelHandler = new WheelHandler(wsm, wheelManager)
 const thermometerHandler = new ThermometerHandler(wsm, thermometerManager)

@@ -7,9 +7,14 @@ import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { deg, hour } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { ConfirmationHandler } from 'src/api/confirmation'
+import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { mountBus, mount as mountEndpoints, MountHandler, MountRemoteControlHandler } from 'src/api/mount'
-import type { CoordinateInfo, MountAdded, MountRemoved, MountUpdated } from '#/mount'
+import { MountCommander } from 'src/api/mount.commander'
+import { OperationCoordinator } from 'src/api/operation'
+import type { OperationResult } from 'src/api/operation'
+import { resourceKey, ResourceArbiter } from 'src/api/resource'
+import type { CoordinateInfo, MountAdded, MountRemoteControlStatus, MountRemoved, MountUpdated } from '#/mount'
 import { SocketMessager } from './util'
 
 mountBus.forceSync = true
@@ -17,8 +22,13 @@ mountBus.forceSync = true
 const wsm = new WebSocketMessageHandler()
 const mountManager = new MountManager()
 const confirmation = new ConfirmationHandler(wsm)
-const mountHandler = new MountHandler(wsm, mountManager, confirmation)
-const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager)
+const resourceArbiter = new ResourceArbiter()
+const operationCoordinator = new OperationCoordinator(resourceArbiter)
+const mountCommander = new MountCommander(mountManager)
+const mountHandler = new MountHandler(wsm, mountManager, confirmation, mountCommander, operationCoordinator)
+const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager, mountCommander, operationCoordinator)
+const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
+deviceLifecycle.observe(mountManager)
 const endpoints = mountEndpoints(mountHandler, mountRemoteControlHandler)
 const handler = new IndiClientHandlerSet([mountManager])
 const client = new ClientSimulator('Client Simulator', handler)
@@ -62,6 +72,15 @@ async function json<T>(response: Response) {
 async function noContent(response: Response) {
 	expect(response.status).toBe(200)
 	expect(await response.text()).toBe('')
+}
+
+async function succeeded(response: Response) {
+	expect(response.status).toBe(200)
+	expect(await response.json()).toEqual({ ok: true })
+}
+
+function free(mount: Mount) {
+	return resourceArbiter.availability(resourceKey(mount)) === 'available'
 }
 
 async function waitUntil(condition: () => boolean, timeout = 1500) {
@@ -161,11 +180,11 @@ describe('mount handler', () => {
 		mountManager.connect(device)
 		socket.clear()
 
-		await noContent(await endpoints['/mounts/:id/tracking'].POST(request(device.id, true)))
-		await noContent(await endpoints['/mounts/:id/trackmode'].POST(request(device.id, 'SOLAR')))
-		await noContent(await endpoints['/mounts/:id/slewrate'].POST(request(device.id, device.slewRates.at(-1)!.name)))
-		await noContent(await endpoints['/mounts/:id/location'].POST(request(device.id, location)))
-		await noContent(await endpoints['/mounts/:id/time'].POST(request(device.id, time)))
+		await succeeded(await endpoints['/mounts/:id/tracking'].POST(request(device.id, true)))
+		await succeeded(await endpoints['/mounts/:id/trackmode'].POST(request(device.id, 'SOLAR')))
+		await succeeded(await endpoints['/mounts/:id/slewrate'].POST(request(device.id, device.slewRates.at(-1)!.name)))
+		await succeeded(await endpoints['/mounts/:id/location'].POST(request(device.id, location)))
+		await succeeded(await endpoints['/mounts/:id/time'].POST(request(device.id, time)))
 
 		expect(device.tracking).toBeTrue()
 		expect(device.trackMode).toBe('SOLAR')
@@ -189,15 +208,16 @@ describe('mount handler', () => {
 		mountManager.connect(device)
 		socket.clear()
 
-		await noContent(await endpoints['/mounts/:id/movenorth'].POST(request(device.id, true)))
+		await succeeded(await endpoints['/mounts/:id/movenorth'].POST(request(device.id, true)))
 
 		expect(await waitUntil(() => device.slewing)).toBeTrue()
 		expect(mountUpdates('slewing').at(-1)?.body.device.slewing).toBeTrue()
 
-		await noContent(endpoints['/mounts/:id/stop'].POST(request(device.id)))
+		await succeeded(await endpoints['/mounts/:id/stop'].POST(request(device.id)))
 
 		expect(device.slewing).toBeFalse()
 		expect(mountUpdates('slewing').at(-1)?.body.device.slewing).toBeFalse()
+		expect(await waitUntil(() => free(device))).toBeTrue()
 
 		await noContent(endpoints['/mounts/:id/park'].POST(request(device.id)))
 
@@ -205,11 +225,13 @@ describe('mount handler', () => {
 		expect(mountUpdates('parking').at(-1)?.body.device.parking).toBeTrue()
 		expect(await waitUntil(() => device.parked && !device.parking, 3000)).toBeTrue()
 		expect(mountUpdates('parked').at(-1)?.body.device.parked).toBeTrue()
+		expect(await waitUntil(() => free(device))).toBeTrue()
 
 		await noContent(endpoints['/mounts/:id/unpark'].POST(request(device.id)))
 
-		expect(device.parked).toBeFalse()
+		expect(await waitUntil(() => !device.parked)).toBeTrue()
 		expect(mountUpdates('parked').at(-1)?.body.device.parked).toBeFalse()
+		expect(await waitUntil(() => free(device))).toBeTrue()
 
 		socket.clear()
 
@@ -237,9 +259,9 @@ describe('mount handler', () => {
 		expect(target.equatorial[1]).toBeCloseTo(deg(-30), 6)
 	})
 
-	test('confirms goto before delegating to the mount manager', async () => {
+	test('confirms goto before commanding the mount', async () => {
 		const device = getMount()
-		const moveTo = spyOn(mountManager, 'moveTo')
+		const goTo = spyOn(mountManager, 'goTo')
 		const target = targetCoordinate()
 
 		try {
@@ -252,91 +274,51 @@ describe('mount handler', () => {
 
 			expect(message).toBeDefined()
 			expect(message!.body).toEqual({ key: `mount.${device.id}.move`, message: `Are you sure you want to slew the mount '${device.name}'?` })
-			expect(moveTo).not.toHaveBeenCalled()
+			expect(goTo).not.toHaveBeenCalled()
 
 			confirmation.confirm({ key: `mount.${device.id}.move`, accepted: true })
-			expect(await waitUntil(() => moveTo.mock.calls.length > 0)).toBeTrue()
-			expect(moveTo).toHaveBeenCalledWith(device, 'goto', target)
+			expect(await waitUntil(() => goTo.mock.calls.length > 0)).toBeTrue()
+			expect(goTo).toHaveBeenCalledWith(device, hour(5), deg(-30))
+
+			await endpoints['/mounts/:id/stop'].POST(request(device.id))
 		} finally {
-			moveTo.mockRestore()
+			goTo.mockRestore()
 		}
 	})
 
-	test('delegates direct endpoints to the mount manager and remote control handler', async () => {
+	test('refuses coordinated commands while the mount is disconnected', async () => {
 		const device = getMount()
-		const park = spyOn(mountManager, 'park')
-		const unpark = spyOn(mountManager, 'unpark')
-		const home = spyOn(mountManager, 'home')
-		const findHome = spyOn(mountManager, 'findHome')
 		const tracking = spyOn(mountManager, 'tracking')
-		const trackMode = spyOn(mountManager, 'trackMode')
-		const slewRate = spyOn(mountManager, 'slewRate')
 		const moveNorth = spyOn(mountManager, 'moveNorth')
-		const moveSouth = spyOn(mountManager, 'moveSouth')
-		const moveEast = spyOn(mountManager, 'moveEast')
-		const moveWest = spyOn(mountManager, 'moveWest')
-		const geographicCoordinate = spyOn(mountManager, 'geographicCoordinate')
-		const time = spyOn(mountManager, 'time')
-		const stop = spyOn(mountManager, 'stop')
-		const status = spyOn(mountRemoteControlHandler, 'status')
-		const location = { latitude: deg(1), longitude: deg(2), elevation: meter(3) }
-		const utc = { utc: Date.UTC(2026, 0, 1), offset: -180 }
 
 		try {
-			await noContent(endpoints['/mounts/:id/park'].POST(request(device.id)))
-			await noContent(endpoints['/mounts/:id/unpark'].POST(request(device.id)))
-			await noContent(endpoints['/mounts/:id/home'].POST(request(device.id)))
-			await noContent(endpoints['/mounts/:id/findhome'].POST(request(device.id)))
-			await noContent(await endpoints['/mounts/:id/tracking'].POST(request(device.id, true)))
-			await noContent(await endpoints['/mounts/:id/trackmode'].POST(request(device.id, 'LUNAR')))
-			await noContent(await endpoints['/mounts/:id/slewrate'].POST(request(device.id, 'SPEED_1')))
-			await noContent(await endpoints['/mounts/:id/movenorth'].POST(request(device.id, true)))
-			await noContent(await endpoints['/mounts/:id/movesouth'].POST(request(device.id, false)))
-			await noContent(await endpoints['/mounts/:id/moveeast'].POST(request(device.id, true)))
-			await noContent(await endpoints['/mounts/:id/movewest'].POST(request(device.id, false)))
-			await noContent(await endpoints['/mounts/:id/location'].POST(request(device.id, location)))
-			await noContent(await endpoints['/mounts/:id/time'].POST(request(device.id, utc)))
-			await noContent(endpoints['/mounts/:id/stop'].POST(request(device.id)))
-			await json(endpoints['/mounts/:id/remotecontrol'].GET(request(device.id)))
+			const trackingResult = await json<OperationResult<void>>(await endpoints['/mounts/:id/tracking'].POST(request(device.id, true)))
+			const moveResult = await json<OperationResult<void>>(await endpoints['/mounts/:id/movenorth'].POST(request(device.id, true)))
+			const stopResult = await json<OperationResult<void>>(await endpoints['/mounts/:id/stop'].POST(request(device.id)))
 
-			expect(park).toHaveBeenCalledWith(device)
-			expect(unpark).toHaveBeenCalledWith(device)
-			expect(home).toHaveBeenCalledWith(device)
-			expect(findHome).toHaveBeenCalledWith(device)
-			expect(tracking).toHaveBeenCalledWith(device, true)
-			expect(trackMode).toHaveBeenCalledWith(device, 'LUNAR')
-			expect(slewRate).toHaveBeenCalledWith(device, 'SPEED_1')
-			expect(moveNorth).toHaveBeenCalledWith(device, true)
-			expect(moveSouth).toHaveBeenCalledWith(device, false)
-			expect(moveEast).toHaveBeenCalledWith(device, true)
-			expect(moveWest).toHaveBeenCalledWith(device, false)
-			expect(geographicCoordinate).toHaveBeenCalledWith(device, location)
-			expect(time).toHaveBeenCalledWith(device, utc)
-			expect(stop).toHaveBeenCalledWith(device)
-			expect(status).toHaveBeenCalledWith(device)
+			expect(trackingResult).toMatchObject({ ok: false, reason: 'busy' })
+			expect(moveResult).toMatchObject({ ok: false, reason: 'disconnected' })
+			expect(stopResult).toMatchObject({ ok: false, reason: 'disconnected' })
+			expect(tracking).not.toHaveBeenCalled()
+			expect(moveNorth).not.toHaveBeenCalled()
 		} finally {
-			status.mockRestore()
-			stop.mockRestore()
-			time.mockRestore()
-			geographicCoordinate.mockRestore()
-			moveWest.mockRestore()
-			moveEast.mockRestore()
-			moveSouth.mockRestore()
 			moveNorth.mockRestore()
-			slewRate.mockRestore()
-			trackMode.mockRestore()
 			tracking.mockRestore()
-			findHome.mockRestore()
-			home.mockRestore()
-			unpark.mockRestore()
-			park.mockRestore()
 		}
+	})
+
+	test('reports remote control status through endpoints', async () => {
+		const device = getMount()
+		const status = await json<MountRemoteControlStatus>(endpoints['/mounts/:id/remotecontrol'].GET(request(device.id)))
+
+		expect(status).toEqual({ lx200: false, stellarium: false })
 	})
 
 	test('emits remove event when the simulator is disposed', () => {
 		const wsm = new WebSocketMessageHandler()
 		const mountManager = new MountManager()
-		const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm))
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm), new MountCommander(mountManager), coordinator)
 		const handler = new IndiClientHandlerSet([mountManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const mountSimulator = new MountSimulator('Mount Simulator', client)
@@ -353,4 +335,111 @@ describe('mount handler', () => {
 
 		wsm.close(socket, 1000, 'done')
 	})
+})
+
+describe('mount commander', () => {
+	function connected() {
+		const device = getMount()
+		mountManager.connect(device)
+		expect(device.connected).toBeTrue()
+		mountManager.syncTo(device, hour(5), deg(-30))
+		return device
+	}
+
+	test('slews to a target and reports where the mount stopped', async () => {
+		const device = connected()
+		const result = await mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '-28:00:00' } })
+
+		expect(result.ok).toBeTrue()
+
+		if (result.ok) {
+			expect(result.value.rightAscension).toBeCloseTo(hour(5), 3)
+			expect(result.value.declination).toBeCloseTo(deg(-28), 3)
+		}
+
+		expect(device.slewing).toBeFalse()
+		expect(await waitUntil(() => free(device))).toBeTrue()
+	}, 10000)
+
+	test('completes immediately when the mount already points at the target', async () => {
+		const device = connected()
+		const goTo = spyOn(mountManager, 'goTo')
+
+		try {
+			const result = await mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '-30:00:00' } })
+
+			expect(result.ok).toBeTrue()
+			expect(goTo).toHaveBeenCalledTimes(1)
+			expect(device.slewing).toBeFalse()
+		} finally {
+			goTo.mockRestore()
+		}
+	}, 10000)
+
+	test('stopping by device cancels the slew and leaves the mount stopped', async () => {
+		const device = connected()
+		const slewing = mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '30:00:00' } })
+
+		expect(await waitUntil(() => device.slewing)).toBeTrue()
+
+		const stopped = await mountHandler.stop(device)
+
+		expect(stopped).toMatchObject({ ok: true })
+		expect(await slewing).toMatchObject({ ok: false, reason: 'aborted' })
+		expect(device.slewing).toBeFalse()
+		expect(await waitUntil(() => free(device))).toBeTrue()
+	}, 10000)
+
+	test('refuses a second command while another operation owns the mount', async () => {
+		const device = connected()
+		const slewing = mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '30:00:00' } })
+
+		expect(await waitUntil(() => device.slewing)).toBeTrue()
+		expect(await mountCommander.setTracking(operationCoordinator, device, true)).toMatchObject({ ok: false, reason: 'busy' })
+
+		await mountHandler.stop(device)
+		await slewing
+	}, 10000)
+
+	test('holds the mount through a manual move until every axis is stopped', async () => {
+		const device = connected()
+		const started = await mountCommander.startManualMove(operationCoordinator, device, 'NORTH')
+
+		expect(started.ok).toBeTrue()
+
+		if (!started.ok) return
+
+		const handle = started.value
+
+		expect(await waitUntil(() => device.slewing)).toBeTrue()
+		expect(handle.directions()).toEqual(['NORTH'])
+		expect(await mountCommander.goTo(operationCoordinator, device, targetCoordinate())).toMatchObject({ ok: false, reason: 'busy' })
+
+		const joined = await mountCommander.startManualMove(operationCoordinator, device, 'WEST')
+
+		expect(joined).toMatchObject({ ok: true })
+		expect(handle.directions()).toEqual(['NORTH', 'WEST'])
+		expect(await handle.move('NORTH', false)).toMatchObject({ ok: true })
+		expect(handle.directions()).toEqual(['WEST'])
+		expect(device.slewing).toBeTrue()
+		expect(await handle.stop()).toMatchObject({ ok: true })
+		expect(device.slewing).toBeFalse()
+		expect(mountCommander.manualMoveOf(device)).toBeUndefined()
+		expect(await waitUntil(() => free(device))).toBeTrue()
+	}, 10000)
+
+	test('waits for tracking to be observed before completing', async () => {
+		const device = connected()
+
+		expect(device.tracking).toBeFalse()
+		expect(await mountCommander.setTracking(operationCoordinator, device, true)).toMatchObject({ ok: true })
+		expect(device.tracking).toBeTrue()
+	}, 10000)
+
+	test('reports a flip the driver cannot perform', async () => {
+		const device = connected()
+
+		expect(device.canFlip).toBeFalse()
+		expect(await mountCommander.flip(operationCoordinator, device, targetCoordinate())).toMatchObject({ ok: false, reason: 'unexpectedState' })
+	}, 10000)
 })

@@ -5,7 +5,7 @@ import type { GPS, Mount, MountTargetCoordinate, NameAndLabel, PierSide, TrackMo
 import type { DeviceHandler, MountManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-import { makeTime } from 'src/api/util'
+import { errorMessage, makeTime } from 'src/api/util'
 import { coordinateInfo } from '#/mount'
 import { isDeviceQuiescent } from './device.lifecycle'
 import type { OperationContext, OperationResult, OperationScope } from './operation'
@@ -354,7 +354,18 @@ export class MountCommander implements DeviceHandler<Mount> {
 				if (!mount.connected) return { ok: false, reason: 'disconnected' }
 				if (directions.has(direction) === enabled) return { ok: true, value: undefined }
 
-				this.#commandMove(mount, direction, enabled)
+				try {
+					this.#commandMove(mount, direction, enabled)
+				} catch (error) {
+					// A transport that cannot send leaves the axis in an unknown state, and no later request
+					// would end a motion the caller never learned had started. Ending the operation here is
+					// what keeps a failed send from holding the mount for the rest of the process, and it
+					// also keeps the failure inside the result contract instead of rejecting the caller.
+					const failure = { ok: false, reason: 'commandFailed', error: errorMessage(error) } as const
+					stopped.resolve(failure)
+					await operation.result
+					return failure
+				}
 
 				if (enabled) {
 					// The axis now moves the other way, so the direction it replaced is no longer commanded.

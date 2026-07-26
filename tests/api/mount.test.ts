@@ -482,6 +482,22 @@ describe('mount commander', () => {
 		expect(await waitUntil(() => free(device))).toBeTrue()
 	}, 10000)
 
+	test('ends the manual move when the motion command cannot be sent', async () => {
+		const device = connected()
+		const moveNorth = spyOn(mountManager, 'moveNorth').mockImplementation(() => {
+			throw new Error('transport closed')
+		})
+
+		try {
+			expect(await mountCommander.startManualMove(operationCoordinator, device, 'NORTH')).toMatchObject({ ok: false, reason: 'commandFailed', error: 'transport closed' })
+		} finally {
+			moveNorth.mockRestore()
+		}
+
+		expect(mountCommander.manualMoveOf(device)).toBeUndefined()
+		expect(await waitUntil(() => free(device))).toBeTrue()
+	}, 10000)
+
 	test('replaces the opposite direction when an axis reverses', async () => {
 		const device = connected()
 		const started = await mountCommander.startManualMove(operationCoordinator, device, 'NORTH')

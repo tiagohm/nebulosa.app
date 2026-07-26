@@ -339,13 +339,13 @@ class CameraCaptureSession {
 		}
 
 		while (this.#event.remainingCount > 0 && !this.context.signal.aborted) {
+			// A device failure recorded outside a rendezvous, such as during the inter-frame delay, only surfaces here.
 			if (this.#failureResult !== undefined) return this.#finish(this.#failureResult)
 			const dither = await this.#dither()
 			if (!dither.ok) return this.#finish(dither)
 
 			const frame = await this.#captureFrame()
 			if (!frame.ok) return this.#finish(frame)
-			if (this.#failureResult !== undefined) return this.#finish(this.#failureResult)
 
 			if (this.#event.remainingCount > 0) {
 				const delayed = await this.#delay()
@@ -693,7 +693,8 @@ class CameraCaptureSession {
 
 	// Finalizes the session exactly once and emits one terminal presentation event.
 	#finish(result: OperationResult<unknown>): OperationResult<CameraCaptureResult> {
-		if (this.#terminal) return { ok: false, reason: 'aborted' }
+		// run() is the only caller and stops at the first terminal result, so this only guards cleanup racing a late frame.
+		if (this.#terminal) return this.#failureResult ?? { ok: false, reason: 'aborted' }
 		this.#terminal = true
 		this.#state = result.ok ? 'succeeded' : result.reason === 'aborted' ? 'cancelled' : 'failed'
 		if (!result.ok) this.deps.settleStarted(result)

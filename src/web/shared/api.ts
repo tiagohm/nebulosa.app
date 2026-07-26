@@ -16,7 +16,7 @@ import type { AlpacaServerStatus } from '#/alpaca'
 import type { SearchMinorPlanet, MinorPlanet, FindCloseApproaches, CloseApproach } from '#/asteroid'
 import type { BodyPosition, ChartOfBody, LocationAndTime, PositionOfBody } from '#/atlas'
 import type { AutoFocusStart } from '#/autofocus'
-import type { CameraCaptureStart } from '#/camera'
+import type { CameraCaptureStart, CameraCaptureStarted } from '#/camera'
 import type { Confirm } from '#/confirmation'
 import type { ConnectionStatus, Connect } from '#/connection'
 import type { DarvStart } from '#/darv'
@@ -203,7 +203,7 @@ export namespace Api {
 		}
 
 		export function start(camera: Camera, req: CameraCaptureStart) {
-			return json<Readonly<{ id: string; started: { ok: boolean } }>>(`/cameras/${camera.name}/start?client=${camera.client.id}`, 'post', req)
+			return json<CameraCaptureStarted>(`/cameras/${camera.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(camera: Camera) {

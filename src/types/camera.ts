@@ -75,6 +75,14 @@ export interface CameraCaptureEvent {
 	stopped: boolean
 }
 
+// Transport response of a capture start request.
+export interface CameraCaptureStarted {
+	// Operation id used to stop this exact capture.
+	readonly id: string
+	// Exposure-start milestone; failures carry the discriminated cause and its detail.
+	readonly started: { readonly ok: true } | { readonly ok: false; readonly reason: string; readonly error?: string }
+}
+
 export interface CameraFrameEvent {
 	// Top-level operation that produced the frame.
 	readonly operation: string

@@ -91,7 +91,8 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		if (path) {
 			cameraBus.emit('frame', { operation: event.operation, session: event.session, generation: event.generation, camera: event.camera, path })
 		} else {
-			cameraBus.emit('capture', structuredClone(event))
+			// Sessions emit a fresh snapshot per event and never mutate it afterwards, so no further copy is needed.
+			cameraBus.emit('capture', event)
 		}
 	}
 

@@ -68,6 +68,7 @@ afterEach(() => {
 	autoFocusHandler.stop('autofocus-error')
 	autoFocusHandler.stop('autofocus-nostars')
 	autoFocusHandler.stop('autofocus-moving')
+	autoFocusHandler.stop('autofocus-release')
 	cameraManager.disconnect(getCamera())
 	focuserManager.disconnect(getFocuser())
 })
@@ -356,6 +357,48 @@ describe('auto focus handler', () => {
 		} finally {
 			moveTo.mockRestore()
 			detect.mockRestore()
+			start.mockRestore()
+		}
+	})
+
+	test('fails when capture cleanup rejects after focuser movement', async () => {
+		const { camera, focuser } = connectDevices()
+		const releaseFailure = Promise.withResolvers<void>()
+		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
+		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+			captureEvent = handleCameraCaptureEvent
+			return Promise.resolve(true)
+		})
+		const waitForCapture = spyOn(cameraHandler, 'waitForCapture').mockImplementation(async () => {
+			await releaseFailure.promise
+			throw new Error('capture cleanup failed')
+		})
+		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(() => Promise.resolve([star(4), star(2), star(6)]))
+		const moveTo = spyOn(focuserHandler, 'moveTo').mockImplementation(() => {})
+		const error = spyOn(console, 'error').mockImplementation(() => {})
+		const request = autoFocusStartRequest({ id: 'autofocus-release', initialOffsetSteps: 2, stepSize: 25 })
+
+		try {
+			wsm.open(socket)
+			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
+
+			captureEvent!(cameraCaptureEvent({ operation: 'autofocus-release-capture', camera: camera.id, state: 'idle' }), 'focus.fit')
+			expect(await waitForAutoFocusState('moving', request.id)).toBeTrue()
+
+			focuser.position.value += 50
+			focuser.moving = false
+			focuserHandler.updated(focuser, 'position')
+			await Bun.sleep(10)
+			releaseFailure.resolve()
+
+			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
+			expect(autoFocusEvents().at(-1)?.message).toBe('autofocus failed')
+			expect(error).toHaveBeenCalled()
+		} finally {
+			error.mockRestore()
+			moveTo.mockRestore()
+			detect.mockRestore()
+			waitForCapture.mockRestore()
 			start.mockRestore()
 		}
 	})

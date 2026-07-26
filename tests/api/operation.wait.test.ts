@@ -175,4 +175,146 @@ describe('operation waits', () => {
 		expect(aborts).toBe(1)
 		expect(listeners.size).toBe(0)
 	})
+
+	test('completes a delay that is never aborted', async () => {
+		expect(await abortableDelay(1, new AbortController().signal)).toEqual({ ok: true, value: undefined })
+	})
+
+	test('resolves from the state read after the command when no event follows', async () => {
+		let reads = 0
+		const result = waitForDeviceState({
+			signal: new AbortController().signal,
+			timeout: 1000,
+			subscribe: () => () => {},
+			// The device was already at the target, so the driver has no transition to report.
+			current: () => {
+				reads++
+				return 'ready'
+			},
+			evaluate: (update) => (update === 'ready' ? 'success' : 'pending'),
+			command: () => {},
+		})
+
+		expect(await result).toEqual({ ok: true, value: 'ready' })
+		expect(reads).toBe(1)
+	})
+
+	test('fails with the reason the evaluation reported for an observed state', async () => {
+		const listeners = new Set<(state: string) => void>()
+		let aborts = 0
+		const result = waitForDeviceState({
+			signal: new AbortController().signal,
+			timeout: 1000,
+			subscribe: (listener) => {
+				listeners.add(listener)
+				return () => listeners.delete(listener)
+			},
+			current: () => 'slewing',
+			evaluate: (update) => (update === 'alert' ? 'alert' : 'pending'),
+			command: () => {
+				for (const listener of listeners) listener('alert')
+			},
+			abort: () => {
+				aborts++
+			},
+		})
+
+		expect(await result).toEqual({ ok: false, reason: 'alert' })
+		expect(listeners.size).toBe(0)
+		// A failure reported by the device is not an abort, so no physical stop is issued for it.
+		expect(aborts).toBe(0)
+	})
+
+	test('reports an evaluate that throws as an unexpected state', async () => {
+		const result = waitForDeviceState({
+			signal: new AbortController().signal,
+			timeout: 1000,
+			subscribe: () => () => {},
+			current: () => 'ready',
+			evaluate: () => {
+				throw new Error('unreadable property')
+			},
+			command: () => {},
+		})
+
+		expect(await result).toEqual({ ok: false, reason: 'unexpectedState', error: 'unreadable property' })
+	})
+
+	test('reports a current state that cannot be read as an unexpected state', async () => {
+		const result = waitForDeviceState({
+			signal: new AbortController().signal,
+			timeout: 1000,
+			subscribe: () => () => {},
+			current: () => {
+				throw new Error('device vanished')
+			},
+			evaluate: () => 'pending',
+			command: () => {},
+		})
+
+		expect(await result).toEqual({ ok: false, reason: 'unexpectedState', error: 'device vanished' })
+	})
+
+	test('never sends the command when the subscription fails', async () => {
+		let commanded = false
+		const result = waitForDeviceState({
+			signal: new AbortController().signal,
+			timeout: 1000,
+			subscribe: () => {
+				throw new Error('bus unavailable')
+			},
+			current: () => 'idle',
+			evaluate: () => 'pending',
+			command: () => {
+				commanded = true
+			},
+		})
+
+		expect(await result).toEqual({ ok: false, reason: 'commandFailed', error: 'bus unavailable' })
+		expect(commanded).toBeFalse()
+	})
+
+	test('unsubscribes and skips the command when the signal aborts during setup', async () => {
+		const controller = new AbortController()
+		let commanded = false
+		let unsubscribed = false
+		const result = waitForDeviceState({
+			signal: controller.signal,
+			timeout: 1000,
+			subscribe: () => {
+				controller.abort('disconnected')
+				return () => {
+					unsubscribed = true
+				}
+			},
+			current: () => 'idle',
+			evaluate: () => 'pending',
+			command: () => {
+				commanded = true
+			},
+		})
+
+		expect(await result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(commanded).toBeFalse()
+		expect(unsubscribed).toBeTrue()
+	})
+
+	test('reports a physical abort that fails while cancelling', async () => {
+		const controller = new AbortController()
+		const result = waitForDeviceState({
+			signal: controller.signal,
+			timeout: 1000,
+			subscribe: () => () => {},
+			current: () => 'busy',
+			evaluate: () => 'pending',
+			command: () => {},
+			abort: () => {
+				throw new Error('stop rejected')
+			},
+		})
+
+		controller.abort('aborted')
+
+		expect(await result).toEqual({ ok: false, reason: 'aborted', error: 'abort failed: stop rejected' })
+	})
 })

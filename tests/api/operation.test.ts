@@ -268,4 +268,126 @@ describe('operation coordinator', () => {
 		expect(arbiter.availability(resourceKey(camera))).toBe('available')
 		expect(arbiter.availability(resourceKey(mount))).toBe('available')
 	})
+
+	test('answers ownership questions from inside the operation', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const owned = Promise.withResolvers<readonly boolean[]>()
+		const handle = coordinator.start('composite', [{ key: CAMERA }], (context) => {
+			owned.resolve([context.owns(CAMERA), context.owns(MOUNT)])
+			return waitForAbort(context)
+		})
+
+		expect(await owned.promise).toEqual([true, false])
+
+		await handle.cancel()
+
+		// Ownership ends with the lease, so a released resource is no longer claimed.
+		expect(arbiter.owns(handle, CAMERA)).toBeFalse()
+	})
+
+	test('reports a cleanup registered after finalization began', async () => {
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const error = spyOn(console, 'error').mockImplementation(() => {})
+		const cleanupStarted = Promise.withResolvers<OperationContext>()
+		const gate = Promise.withResolvers<void>()
+		let late = false
+
+		try {
+			const handle = coordinator.start('late-cleanup', [{ key: CAMERA }], (context) => {
+				context.onCleanup(async () => {
+					cleanupStarted.resolve(context)
+					await gate.promise
+				})
+				return { ok: true, value: undefined }
+			})
+
+			const context = await cleanupStarted.promise
+			const unregister = context.onCleanup(() => {
+				late = true
+			})
+			unregister()
+			gate.resolve()
+
+			expect(await handle.result).toEqual({ ok: true, value: undefined })
+			expect(late).toBeFalse()
+			expect(error).toHaveBeenCalled()
+		} finally {
+			error.mockRestore()
+		}
+	})
+
+	test('cancels the owner holding one affected resource', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const handle = coordinator.start('composite', [{ key: CAMERA }, { key: MOUNT }], waitForAbort)
+
+		const cancellation = coordinator.cancelByResource(MOUNT, 'removed')
+
+		expect(handle.signal.aborted).toBeTrue()
+		await cancellation
+
+		expect(await handle.result).toEqual({ ok: false, reason: 'removed' })
+		expect(arbiter.availability(CAMERA)).toBe('available')
+		expect(arbiter.availability(MOUNT)).toBe('available')
+		await coordinator.cancelByResource(MOUNT)
+	})
+
+	test('cancels every active operation during shutdown', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const cleaned: string[] = []
+		const start = (kind: string, key: ResourceKey) =>
+			coordinator.start(kind, [{ key }], (context) => {
+				context.onCleanup(() => {
+					cleaned.push(kind)
+				})
+				return waitForAbort(context)
+			})
+
+		const capture = start('capture', CAMERA)
+		const slew = start('slew', MOUNT)
+
+		await coordinator.cancelAll('disconnected')
+
+		expect(await capture.result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(await slew.result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(cleaned.toSorted()).toEqual(['capture', 'slew'])
+		expect(arbiter.availability(CAMERA)).toBe('available')
+		expect(arbiter.availability(MOUNT)).toBe('available')
+
+		// Shutdown is idempotent once nothing is left to cancel.
+		await coordinator.cancelAll()
+	})
+
+	test('resolves and cancels an operation by id while it is retained', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const handle = coordinator.start('capture', [{ key: CAMERA }], waitForAbort)
+
+		expect(coordinator.get(handle.id)).toBe(handle)
+		await coordinator.cancel('unknown-operation')
+
+		await coordinator.cancel(handle.id, 'removed')
+
+		expect(await handle.result).toEqual({ ok: false, reason: 'removed' })
+		expect(coordinator.get(handle.id)).toBeUndefined()
+		expect(arbiter.availability(CAMERA)).toBe('available')
+	})
+
+	test('cancels a busy operation without disturbing the active owner', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const active = coordinator.start('active', [{ key: CAMERA }], waitForAbort)
+		const busy = coordinator.start('busy', [{ key: CAMERA }], () => ({ ok: true, value: undefined }))
+
+		await busy.cancel()
+
+		expect(await busy.result).toMatchObject({ ok: false, reason: 'busy' })
+		expect(coordinator.get(busy.id)).toBeUndefined()
+		expect(active.signal.aborted).toBeFalse()
+		expect(arbiter.availability(CAMERA)).toBe('leased')
+
+		await active.cancel()
+	})
 })

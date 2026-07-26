@@ -344,6 +344,59 @@ describe('device lifecycle', () => {
 		lifecycle.dispose()
 	})
 
+	test('stops observing a manager through its own registration', () => {
+		const manager = new TestDeviceManager<Camera>()
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const lifecycle = new DeviceLifecycle(arbiter, coordinator)
+		const device = camera()
+		const key = resourceKey(device)
+
+		const stop = lifecycle.observe(manager)
+		manager.add(device)
+		expect(arbiter.availability(key)).toBe('available')
+
+		stop()
+		stop()
+
+		device.exposuring = true
+		device.exposure.state = 'Busy'
+		manager.update(device, 'exposuring')
+
+		expect(arbiter.availability(key)).toBe('available')
+
+		lifecycle.dispose()
+	})
+
+	test('forgets device views when the lifecycle is disposed', () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const lifecycle = new DeviceLifecycle(arbiter, coordinator)
+		const stale = camera()
+		const key = resourceKey(stale)
+		const manager = new TestDeviceManager<Camera>()
+
+		lifecycle.observe(manager)
+		manager.add(stale)
+		stale.exposuring = true
+		stale.exposure.state = 'Busy'
+		manager.update(stale, 'exposuring')
+		expect(arbiter.availability(key)).toBe('unavailable')
+
+		lifecycle.dispose()
+
+		// A later observation of a quiescent instance must not aggregate the busy view left behind.
+		const replacement = camera()
+		const next = new TestDeviceManager<Camera>()
+
+		lifecycle.observe(next)
+		next.add(replacement)
+
+		expect(arbiter.availability(key)).toBe('available')
+
+		lifecycle.dispose()
+	})
+
 	test('skips verification for updates that cannot change quiescence', async () => {
 		const manager = new TestDeviceManager<Camera>()
 		const arbiter = new ResourceArbiter()

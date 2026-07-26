@@ -132,6 +132,26 @@ describe('resource arbiter', () => {
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
 
+	test('lists the sorted resources held by a context across reentrant leases', () => {
+		const arbiter = new ResourceArbiter()
+		const context = owner('owner-1')
+		const outer = arbiter.acquire(context, [{ key: MOUNT }, { key: CAMERA }])
+		const inner = arbiter.acquire(context, [{ key: CAMERA }])
+
+		expect(outer.ok).toBeTrue()
+		expect(inner.ok).toBeTrue()
+		expect(arbiter.resourcesOf(context)).toEqual([CAMERA, MOUNT])
+		expect(arbiter.resourcesOf(owner('owner-2'))).toEqual([])
+
+		if (!outer.ok || !inner.ok) return
+
+		inner.lease.release()
+		expect(arbiter.resourcesOf(context)).toEqual([CAMERA, MOUNT])
+
+		outer.lease.release()
+		expect(arbiter.resourcesOf(context)).toEqual([])
+	})
+
 	test('keeps an active cause after the physical device is disassociated', () => {
 		const arbiter = new ResourceArbiter()
 		const device = camera(true)

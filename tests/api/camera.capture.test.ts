@@ -244,8 +244,12 @@ describe('camera capture session failures', () => {
 			})
 			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('unavailable')
 
+			harness.arbiter.markAvailable({ key: resourceKey(harness.camera), device: harness.camera })
 			const next = harness.capturer.start(harness.camera, request())
 			expect(await next.result).toMatchObject({ ok: false, reason: 'busy' })
+
+			harness.capturer.blobReceived(harness.camera, Buffer.from('stale frame'), 'raw')
+			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('available')
 		} finally {
 			harness.restore()
 		}

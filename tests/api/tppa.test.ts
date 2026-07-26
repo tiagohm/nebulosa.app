@@ -7,12 +7,15 @@ import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { cameraBus, CameraHandler } from 'src/api/camera'
+import { CameraCapturer } from 'src/api/camera.capture'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler } from 'src/api/mount'
 import { NotificationHandler } from 'src/api/notification'
+import { OperationCoordinator } from 'src/api/operation'
 import { PlateSolverHandler } from 'src/api/platesolver'
+import { ResourceArbiter } from 'src/api/resource'
 import { tppaBus, tppa as tppaEndpoints, TppaHandler } from 'src/api/tppa'
 import { DEFAULT_CAMERA_CAPTURE_EVENT } from '#/camera'
 import type { CameraCaptureEvent } from '#/camera'
@@ -36,7 +39,8 @@ const mountManager = new MountManager()
 const wheelManager = new WheelManager()
 const focuserManager = new FocuserManager()
 const rotatorManager = new RotatorManager()
-const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
+const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, new OperationCoordinator(new ResourceArbiter()))
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer)
 const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm))
 const solver = new PlateSolverHandler(new NotificationHandler(wsm), imageProcessor)
 const tppaHandler = new TppaHandler(wsm, cameraHandler, mountHandler, solver)
@@ -67,6 +71,7 @@ afterEach(() => {
 	tppaHandler.stop('tppa-error')
 	tppaHandler.stop('tppa-solving')
 	tppaHandler.stop('tppa-moving')
+	tppaHandler.stop('tppa-release-error')
 	cameraManager.disconnect(getCamera())
 	mountManager.disconnect(getMount())
 })
@@ -214,7 +219,10 @@ describe('tppa handler', () => {
 
 	test('stops active task through endpoint and emits idle event', async () => {
 		const { camera, mount } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation(() => Promise.resolve(true))
+		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, ___, handleCaptureCreated) => {
+			handleCaptureCreated?.('tppa-stop-capture')
+			return Promise.resolve(true)
+		})
 		const cameraStop = spyOn(cameraHandler, 'stop')
 		const mountStop = spyOn(mountManager, 'stop')
 		const solverStop = spyOn(solver, 'stop')
@@ -231,7 +239,7 @@ describe('tppa handler', () => {
 
 			expect(await waitForTppaState('idle', request.id)).toBeTrue()
 			expect(tppaEvents().map((event) => event.state)).toEqual(['capturing', 'idle'])
-			expect(cameraStop).toHaveBeenCalledWith(camera)
+			expect(cameraStop).toHaveBeenCalledWith('tppa-stop-capture')
 			expect(mountStop).toHaveBeenCalledWith(mount)
 			expect(solverStop).toHaveBeenCalledWith(request.id)
 		} finally {
@@ -343,6 +351,65 @@ describe('tppa handler', () => {
 			expect(tppaEvents().at(-1)?.message).toBe('solving failed')
 		} finally {
 			solve.mockRestore()
+			start.mockRestore()
+		}
+	})
+
+	test('waits for camera lease release before retrying a capture', async () => {
+		const { camera, mount } = connectDevices()
+		const released = Promise.withResolvers<void>()
+		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
+		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+			captureEvent = handleCameraCaptureEvent
+			return Promise.resolve(true)
+		})
+		const waitForCapture = spyOn(cameraHandler, 'waitForCapture').mockImplementation(() => released.promise)
+		const solve = spyOn(solver, 'start').mockImplementation(() => Promise.resolve(undefined))
+		const request = tppaStartRequest({ id: 'tppa-retry', maxAttempts: 2 })
+
+		try {
+			wsm.open(socket)
+			await noContent(await endpoints['/tppa/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+
+			captureEvent!(cameraCaptureEvent({ operation: 'tppa-retry-capture', camera: camera.id, state: 'idle' }), 'plate.fit')
+			expect(await waitUntil(() => solve.mock.calls.length === 1)).toBeTrue()
+			expect(start).toHaveBeenCalledTimes(1)
+			expect(waitForCapture).toHaveBeenCalledWith('tppa-retry-capture')
+
+			released.resolve()
+			expect(await waitUntil(() => start.mock.calls.length === 2)).toBeTrue()
+		} finally {
+			tppaHandler.stop(request.id)
+			solve.mockRestore()
+			waitForCapture.mockRestore()
+			start.mockRestore()
+		}
+	})
+
+	test('handles capture release rejection from a progress callback', async () => {
+		const { camera, mount } = connectDevices()
+		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
+		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+			captureEvent = handleCameraCaptureEvent
+			return Promise.resolve(true)
+		})
+		const waitForCapture = spyOn(cameraHandler, 'waitForCapture').mockImplementation(() => Promise.reject(new Error('capture cleanup failed')))
+		const error = spyOn(console, 'error').mockImplementation(() => {})
+		const request = tppaStartRequest({ id: 'tppa-release-error' })
+
+		try {
+			wsm.open(socket)
+			await noContent(await endpoints['/tppa/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+
+			captureEvent!(cameraCaptureEvent({ operation: 'tppa-release-capture', camera: camera.id, state: 'exposing' }))
+
+			expect(await waitForTppaState('idle', request.id)).toBeTrue()
+			expect(waitForCapture).toHaveBeenCalledWith('tppa-release-capture')
+			expect(tppaEvents().at(-1)?.message).toBe('tppa failed')
+			expect(error).toHaveBeenCalled()
+		} finally {
+			error.mockRestore()
+			waitForCapture.mockRestore()
 			start.mockRestore()
 		}
 	})

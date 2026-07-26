@@ -56,6 +56,12 @@ export interface CameraCaptureTime {
 }
 
 export interface CameraCaptureEvent {
+	// Top-level operation that owns the camera lease.
+	operation: string
+	// Immutable capture-session identifier.
+	session: string
+	// Monotonic frame attempt within the session; zero means no exposure was dispatched.
+	generation: number
 	camera: string // id
 	count: number
 	loop: boolean
@@ -70,6 +76,12 @@ export interface CameraCaptureEvent {
 }
 
 export interface CameraFrameEvent {
+	// Top-level operation that produced the frame.
+	readonly operation: string
+	// Immutable capture session that accepted the BLOB.
+	readonly session: string
+	// Frame generation that completed exposure+BLOB processing.
+	readonly generation: number
 	readonly camera: string // id
 	readonly path: string
 }
@@ -104,6 +116,9 @@ export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 }
 
 export const DEFAULT_CAMERA_CAPTURE_EVENT: CameraCaptureEvent = {
+	operation: '',
+	session: '',
+	generation: 0,
 	camera: '',
 	state: 'idle',
 	count: 0,

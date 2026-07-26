@@ -203,7 +203,7 @@ export namespace Api {
 		}
 
 		export function start(camera: Camera, req: CameraCaptureStart) {
-			return res(`/cameras/${camera.name}/start?client=${camera.client.id}`, 'post', req)
+			return json<Readonly<{ id: string; started: { ok: boolean } }>>(`/cameras/${camera.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(camera: Camera) {

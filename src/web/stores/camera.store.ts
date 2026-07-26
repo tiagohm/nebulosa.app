@@ -166,7 +166,7 @@ export function cameraStore(camera: Camera) {
 		try {
 			const request: CameraCaptureStart = { ...state.request, mount: state.equipment.mount?.id, wheel: state.equipment.wheel?.id, focuser: state.equipment.focuser?.id, rotator: state.equipment.rotator?.id }
 			const response = await Api.Cameras.start(camera, request)
-			if (!response?.ok) state.capturing = false
+			if (!response?.started.ok) state.capturing = false
 		} catch {
 			state.capturing = false
 		}

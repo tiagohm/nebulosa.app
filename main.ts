@@ -12,6 +12,7 @@ import { AlpacaHandler, alpaca } from 'src/api/alpaca'
 import { AtlasHandler, atlas } from 'src/api/atlas'
 import { AutoFocusHandler, autoFocus } from 'src/api/autofocus'
 import { CameraHandler, camera } from 'src/api/camera'
+import { CameraCapturer } from 'src/api/camera.capture'
 import { ConnectionHandler, connection } from 'src/api/connection'
 import { CoverHandler, cover } from 'src/api/cover'
 import { DarvHandler, darv } from 'src/api/darv'
@@ -213,7 +214,9 @@ const notificationHandler = new NotificationHandler(wsm)
 const connectionHandler = new ConnectionHandler(wsm, notificationHandler, operationCoordinator)
 const confirmationHandler = new ConfirmationHandler(wsm)
 const guiderHandler = new GuiderHandler(wsm, notificationHandler)
-const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, guiderHandler)
+// Coordinated camera service owns physical sessions independently from HTTP and WebSocket transport.
+const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, operationCoordinator, guiderHandler)
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer)
 const mountHandler = new MountHandler(wsm, mountManager, confirmationHandler)
 const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager)
 const focuserHandler = new FocuserHandler(wsm, focuserManager)

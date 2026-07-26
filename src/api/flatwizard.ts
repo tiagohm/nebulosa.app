@@ -79,6 +79,7 @@ export class FlatWizardTask {
 	private readonly exposure: MinMaxValueProperty = { min: 0, max: 0, value: 0, step: 1 }
 	private readonly mean: MinMaxValueProperty = { min: 0, max: 0, value: 0, step: 1 }
 	private stopped = false
+	private captureOperation?: string
 
 	constructor(
 		readonly flatWizardHandler: FlatWizardHandler,
@@ -107,6 +108,15 @@ export class FlatWizardTask {
 	}
 
 	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
+		this.captureOperation = event.operation
+		const captureReleased = this.flatWizardHandler.cameraHandler.waitForCapture(event.operation).then(
+			() => true,
+			(error) => {
+				this.fail(error)
+				return false
+			},
+		)
+
 		if (path && !this.stopped) {
 			if (this.stopped) {
 				return this.handleFlatWizardEvent('idle', 'stopped')
@@ -158,7 +168,7 @@ export class FlatWizardTask {
 				return this.handleFlatWizardEvent('idle', 'unable to find an optimal exposure time')
 			}
 
-			await this.start()
+			if (await captureReleased) await this.start()
 		} else if (event.state === 'error') {
 			this.fail('camera capture failed')
 		} else if (event.stopped) {
@@ -180,9 +190,16 @@ export class FlatWizardTask {
 
 		this.handleFlatWizardEvent('capturing', `exposure of ${this.request.capture.exposureTime.toFixed(0)} ms`)
 
-		await this.flatWizardHandler.cameraHandler.start(this.camera, this.request.capture, (event, path) => {
-			void this.cameraCaptured(event, path).catch((error) => this.fail(error))
-		})
+		await this.flatWizardHandler.cameraHandler.start(
+			this.camera,
+			this.request.capture,
+			(event, path) => {
+				void this.cameraCaptured(event, path).catch((error) => this.fail(error))
+			},
+			(operation) => {
+				this.captureOperation = operation
+			},
+		)
 	}
 
 	stop() {
@@ -204,7 +221,7 @@ export class FlatWizardTask {
 		if (this.stopped) return
 
 		this.stopped = true
-		this.flatWizardHandler.cameraHandler.stop(this.camera)
+		if (this.captureOperation) void this.flatWizardHandler.cameraHandler.stop(this.captureOperation)
 	}
 }
 

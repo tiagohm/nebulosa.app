@@ -104,6 +104,15 @@ const DEFAULT_ARRIVAL_TOLERANCE = DEG2RAD
 // such as the site time, must not fail a slew that is otherwise progressing.
 const SLEW_PROPERTIES = new Set<string>(['equatorialCoordinate', 'slewing', 'parked', 'parking'])
 
+// Direction that shares an axis with each one. TELESCOPE_MOTION_NS and TELESCOPE_MOTION_WE are AtMostOne
+// switches, so commanding one direction is what turns its opposite off at the driver.
+const OPPOSITE_DIRECTION: Record<MountMoveDirection, MountMoveDirection> = {
+	NORTH: 'SOUTH',
+	SOUTH: 'NORTH',
+	WEST: 'EAST',
+	EAST: 'WEST',
+}
+
 // Signal for physical stops issued while the owning operation is already being canceled. Cleanup cannot
 // inherit the operation signal, which is aborted by then, and would never send the command it exists for.
 const UNCANCELABLE = new AbortController().signal
@@ -348,6 +357,10 @@ export class MountCommander implements DeviceHandler<Mount> {
 				this.#commandMove(mount, direction, enabled)
 
 				if (enabled) {
+					// The axis now moves the other way, so the direction it replaced is no longer commanded.
+					// Keeping it would leave an entry nothing will ever turn off, and the motion would go on
+					// holding the mount waiting for a request that has no reason to arrive.
+					directions.delete(OPPOSITE_DIRECTION[direction])
 					directions.add(direction)
 					return { ok: true, value: undefined }
 				}

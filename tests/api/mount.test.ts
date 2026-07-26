@@ -482,6 +482,24 @@ describe('mount commander', () => {
 		expect(await waitUntil(() => free(device))).toBeTrue()
 	}, 10000)
 
+	test('replaces the opposite direction when an axis reverses', async () => {
+		const device = connected()
+		const started = await mountCommander.startManualMove(operationCoordinator, device, 'NORTH')
+
+		expect(started.ok).toBeTrue()
+
+		if (!started.ok) return
+
+		const handle = started.value
+
+		expect(await mountCommander.startManualMove(operationCoordinator, device, 'SOUTH')).toMatchObject({ ok: true })
+		expect(handle.directions()).toEqual(['SOUTH'])
+		expect(await handle.move('SOUTH', false)).toMatchObject({ ok: true })
+		expect(device.slewing).toBeFalse()
+		expect(mountCommander.manualMoveOf(device)).toBeUndefined()
+		expect(await waitUntil(() => free(device))).toBeTrue()
+	}, 10000)
+
 	test('waits for tracking to be observed before completing', async () => {
 		const device = connected()
 

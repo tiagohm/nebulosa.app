@@ -193,8 +193,8 @@ describe('auto focus handler', () => {
 
 	test('stops active task through endpoint and emits idle event', async () => {
 		const { camera, focuser } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
-			handleCameraCaptureEvent?.(cameraCaptureEvent({ operation: 'autofocus-stop-capture', camera: camera.id, state: 'exposureStarted' }))
+		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, ___, handleCaptureCreated) => {
+			handleCaptureCreated?.('autofocus-stop-capture')
 			return Promise.resolve(true)
 		})
 		const cameraStop = spyOn(cameraHandler, 'stop')

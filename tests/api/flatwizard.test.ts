@@ -166,8 +166,8 @@ describe('flat wizard handler', () => {
 
 	test('stops active task through endpoint and emits idle event', async () => {
 		const camera = connectCamera()
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
-			handleCameraCaptureEvent?.(cameraCaptureEvent({ operation: 'flatwizard-stop-capture', camera: camera.id, state: 'exposureStarted' }))
+		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, ___, handleCaptureCreated) => {
+			handleCaptureCreated?.('flatwizard-stop-capture')
 			return Promise.resolve(true)
 		})
 		const stop = spyOn(cameraHandler, 'stop')

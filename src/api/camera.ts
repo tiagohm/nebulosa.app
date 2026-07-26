@@ -127,9 +127,11 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		return handle
 	}
 
-	// Transitional feature entrypoint that maps the coordinated result to the legacy boolean.
-	start(camera: Camera, req: CameraCaptureStart, onCameraCaptureEvent?: CameraCaptureListener) {
-		return this.capture(camera, req, onCameraCaptureEvent).result.then((result) => result.ok)
+	// Starts a legacy feature capture, exposing its operation synchronously before mapping the terminal result to boolean.
+	start(camera: Camera, req: CameraCaptureStart, onCameraCaptureEvent?: CameraCaptureListener, onCaptureCreated?: (operation: string) => void) {
+		const handle = this.capture(camera, req, onCameraCaptureEvent)
+		onCaptureCreated?.(handle.id)
+		return handle.result.then((result) => result.ok)
 	}
 
 	// Waits until one capture has completed cleanup and released its physical camera lease.

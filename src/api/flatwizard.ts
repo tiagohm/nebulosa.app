@@ -185,9 +185,16 @@ export class FlatWizardTask {
 
 		this.handleFlatWizardEvent('capturing', `exposure of ${this.request.capture.exposureTime.toFixed(0)} ms`)
 
-		await this.flatWizardHandler.cameraHandler.start(this.camera, this.request.capture, (event, path) => {
-			void this.cameraCaptured(event, path).catch((error) => this.fail(error))
-		})
+		await this.flatWizardHandler.cameraHandler.start(
+			this.camera,
+			this.request.capture,
+			(event, path) => {
+				void this.cameraCaptured(event, path).catch((error) => this.fail(error))
+			},
+			(operation) => {
+				this.captureOperation = operation
+			},
+		)
 	}
 
 	stop() {

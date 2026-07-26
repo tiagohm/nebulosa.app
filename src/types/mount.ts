@@ -109,7 +109,7 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 		if (typeof x === 'string') coordinate[0] = parseAngle(x, type === 'JNOW' || type === 'J2000' ? true : undefined)!
 		else coordinate[0] = x
 
-		if (typeof y === 'string') coordinate[0] = parseAngle(y)!
+		if (typeof y === 'string') coordinate[1] = parseAngle(y)!
 		else coordinate[1] = y
 	} else {
 		coordinate[0] = target.rightAscension

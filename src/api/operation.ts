@@ -8,15 +8,22 @@ export type OperationFailureReason = 'busy' | 'aborted' | 'disconnected' | 'remo
 // Discriminated terminal outcome for expected success and operational failure.
 export type OperationResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: OperationFailureReason; readonly error?: string }
 
-// Shared ownership, cancellation, and cleanup scope passed through an operation tree.
-export interface OperationContext {
+// Anything able to start an operation. The coordinator opens a new tree; a context nests inside its own,
+// so a service takes one scope parameter and behaves identically whether it runs top-level or composed.
+export interface OperationScope {
+	// Acquires the requested resources and runs the executor, returning a busy handle on conflict.
+	readonly start: <T>(kind: string, resources: readonly ResourceRequest[], executor: OperationExecutor<T>) => OperationHandle<T>
+}
+
+// Ownership, cancellation, and cleanup scope of one operation within a tree.
+export interface OperationContext extends OperationScope {
 	// Stable operation identifier.
 	readonly id: string
 	// Human-readable operation category.
 	readonly kind: string
-	// Single cancellation signal shared by every child step.
+	// Cancellation signal of this scope; aborting an ancestor aborts it too.
 	readonly signal: AbortSignal
-	// Checks whether this exact context owns the resource.
+	// Checks whether this scope or one of its ancestors holds the resource.
 	readonly owns: (resource: ResourceKey) => boolean
 	// Registers cleanup in LIFO order and returns an idempotent unregister function.
 	readonly onCleanup: (cleanup: () => void | Promise<void>) => VoidFunction
@@ -37,7 +44,7 @@ export interface OperationHandle<T> {
 }
 
 // Work invoked after acquisition that reports expected success or failure without routine exceptions.
-type OperationExecutor<T> = (context: OperationContext) => OperationResult<T> | Promise<OperationResult<T>>
+export type OperationExecutor<T> = (context: OperationContext) => OperationResult<T> | Promise<OperationResult<T>>
 
 // Cleanup step that may quiesce a device asynchronously.
 type Cleanup = () => void | Promise<void>
@@ -53,8 +60,12 @@ interface CleanupRegistration {
 
 // Mutable state retained until cleanup and lease release complete.
 interface ActiveOperation<T> {
-	// Exact context used as the arbiter owner token.
+	// Context of this scope; only the root's context is used as the arbiter owner token.
 	readonly context: OperationContext
+	// Enclosing scope, absent on the root of an operation tree.
+	readonly parent?: ActiveOperation<unknown>
+	// Nested scopes that must stop before this one undoes its own work.
+	readonly children: Set<ActiveOperation<unknown>>
 	// Sole abort source for the operation tree.
 	readonly controller: AbortController
 	// Public handle returned to callers.
@@ -83,18 +94,37 @@ export class OperationCoordinator {
 	// Creates a coordinator over the process-wide resource arbiter.
 	constructor(readonly arbiter: ResourceArbiter) {}
 
-	// Acquires all resources and starts the executor, returning an immediate busy handle on conflict.
+	// Acquires all resources and starts a new operation tree, returning an immediate busy handle on conflict.
 	start<T>(kind: string, resources: readonly ResourceRequest[], executor: OperationExecutor<T>): OperationHandle<T> {
+		return this.#start(undefined, kind, resources, executor)
+	}
+
+	// Opens one scope, nested when a parent is given, and runs its executor after atomic acquisition.
+	#start<T>(parent: ActiveOperation<unknown> | undefined, kind: string, resources: readonly ResourceRequest[], executor: OperationExecutor<T>): OperationHandle<T> {
 		const id = Bun.randomUUIDv7()
 		const controller = new AbortController()
 		const result = Promise.withResolvers<OperationResult<T>>()
 		const completion = Promise.withResolvers<void>()
 
+		// Settles a scope that never ran, so a rejected start still produces a total, awaited handle.
+		const rejected = (failure: Extract<OperationResult<T>, { readonly ok: false }>): OperationHandle<T> => {
+			controller.abort(failure.reason)
+			result.resolve(failure)
+			completion.resolve()
+			return Object.freeze({ id, kind, signal: controller.signal, result: result.promise, cancel: () => completion.promise })
+		}
+
+		// A scope registered after its parent began finalizing would never be awaited by that parent.
+		if (parent?.terminalStarted === true) return rejected({ ok: false, reason: parent.cancelReason ?? 'aborted', error: 'parent operation is already terminal' })
+
+		const root = parent === undefined ? undefined : rootOf(parent)
+
 		const context: OperationContext = Object.freeze({
 			id,
 			kind,
 			signal: controller.signal,
-			owns: (resource: ResourceKey) => this.arbiter.owns(context, resource),
+			start: <R>(childKind: string, childResources: readonly ResourceRequest[], childExecutor: OperationExecutor<R>) => this.#start(node, childKind, childResources, childExecutor),
+			owns: (resource: ResourceKey) => this.arbiter.owns(rootOf(node).context, resource),
 			onCleanup: (cleanup: Cleanup) => {
 				// Registration loses to a cancellation that already began finalizing. An executor that starts
 				// physical work before registering its cleanup can hit this legitimately, so it is reported
@@ -127,6 +157,8 @@ export class OperationCoordinator {
 
 		const operation: ActiveOperation<T> = {
 			context,
+			parent,
+			children: new Set(),
 			controller,
 			handle,
 			result,
@@ -136,19 +168,21 @@ export class OperationCoordinator {
 			terminalStarted: false,
 		}
 
-		const acquired = this.arbiter.acquire(context, resources)
+		// The result resolver is contravariant in T, so the tree is traversed through this erased view.
+		const node = operation as ActiveOperation<unknown>
 
-		if (!acquired.ok) {
-			controller.abort('busy')
-			operation.terminalStarted = true
-			result.resolve({ ok: false, reason: 'busy', error: formatConflicts(acquired.conflicts) })
-			completion.resolve()
-			return handle
-		}
+		// Every scope of a tree acquires under the root's context, so the arbiter sees one owner per operation
+		// tree. A nested scope requesting a resource an ancestor already holds enters reentrantly.
+		const acquired = this.arbiter.acquire(root?.context ?? context, resources)
+
+		if (!acquired.ok) return rejected({ ok: false, reason: 'busy', error: formatConflicts(acquired.conflicts) })
 
 		operation.lease = acquired.lease
-		this.#operations.set(id, operation as ActiveOperation<unknown>)
-		this.#operationsByOwner.set(context, operation as ActiveOperation<unknown>)
+		this.#operations.set(id, node)
+		parent?.children.add(node)
+
+		// Only the root context is an arbiter owner, so it is the only one lifecycle cancellation resolves.
+		if (parent === undefined) this.#operationsByOwner.set(context, node)
 
 		void (async () => {
 			try {
@@ -185,10 +219,10 @@ export class OperationCoordinator {
 		return this.#cancelOwners(this.arbiter.ownersOfClient(clientId), reason)
 	}
 
-	// Aborts all active operations synchronously and waits for every cleanup.
+	// Aborts every operation tree synchronously and waits for all cleanup; roots cascade to their scopes.
 	async cancelAll(reason: OperationFailureReason = 'aborted') {
-		const operations = [...this.#operations.values()]
-		await Promise.all(operations.map((operation) => this.#cancel(operation, reason)))
+		const roots = [...this.#operations.values()].filter((operation) => operation.parent === undefined)
+		await Promise.all(roots.map((operation) => this.#cancel(operation, reason)))
 	}
 
 	// Resolves arbiter owner tokens to active operations without relying on caller-visible ids.
@@ -203,10 +237,16 @@ export class OperationCoordinator {
 		await Promise.all(cancellations)
 	}
 
-	// Aborts the scope immediately and returns completion after the executor stops and cleanup releases its lease.
+	// Aborts the scope and its nested scopes immediately, returning completion after every cleanup has released.
 	#cancel<T>(operation: ActiveOperation<T>, reason: OperationFailureReason) {
 		if (!operation.terminalStarted) operation.cancelReason ??= reason
-		if (!operation.controller.signal.aborted) operation.controller.abort(operation.cancelReason ?? reason)
+		const effective = operation.cancelReason ?? reason
+		if (!operation.controller.signal.aborted) operation.controller.abort(effective)
+
+		// Propagation must be synchronous: a parent awaiting a child's result would otherwise never observe
+		// its own cancellation. Children leave the set only in their own finalization, which cannot run
+		// before this loop ends, and they are awaited there rather than here.
+		for (const child of operation.children) void this.#cancel(child, effective)
 
 		return operation.completion.promise
 	}
@@ -225,6 +265,12 @@ export class OperationCoordinator {
 			}
 		}
 
+		// Nested scopes command the same devices, so none may still be running while this scope undoes its
+		// own work. They unwind first because they are the innermost frames of the operation tree.
+		if (operation.children.size > 0) {
+			await Promise.all([...operation.children].map((child) => this.#cancel(child, operation.cancelReason ?? 'aborted')))
+		}
+
 		operation.cleanupStarted = true
 		const cleanupErrors: unknown[] = []
 
@@ -239,7 +285,8 @@ export class OperationCoordinator {
 		} finally {
 			operation.lease?.release()
 			this.#operations.delete(operation.context.id)
-			this.#operationsByOwner.delete(operation.context)
+			operation.parent?.children.delete(operation as ActiveOperation<unknown>)
+			if (operation.parent === undefined) this.#operationsByOwner.delete(operation.context)
 		}
 
 		// An exception is a defect rather than an operational outcome, so the raw value is logged here and
@@ -264,6 +311,13 @@ export class OperationCoordinator {
 		operation.result.resolve(terminal.result)
 		operation.completion.resolve()
 	}
+}
+
+// Walks up to the root of an operation tree, which owns the arbiter lease and the holder stacks.
+function rootOf(operation: ActiveOperation<unknown>) {
+	let current = operation
+	while (current.parent !== undefined) current = current.parent
+	return current
 }
 
 // Builds the terminal result of a canceled operation, keeping whatever detail the executor reported.

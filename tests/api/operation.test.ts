@@ -375,6 +375,197 @@ describe('operation coordinator', () => {
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
 
+	test('reuses the tree ownership when a nested scope requests the same resource', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const child = Promise.withResolvers<OperationResult<string>>()
+		const parent = coordinator.start('composite', [{ key: CAMERA }, { key: MOUNT }], async (context) => {
+			const nested = context.start('capture', [{ key: CAMERA }], () => ({ ok: true, value: 'frame' }))
+			child.resolve(await nested.result)
+			return waitForAbort(context)
+		})
+
+		expect(await child.promise).toEqual({ ok: true, value: 'frame' })
+
+		// The nested lease ended, but the tree still owns the camera through the enclosing scope.
+		expect(arbiter.availability(CAMERA)).toBe('leased')
+
+		await parent.cancel()
+
+		expect(arbiter.availability(CAMERA)).toBe('available')
+		expect(arbiter.availability(MOUNT)).toBe('available')
+	})
+
+	test('releases a resource acquired only by a nested scope when it ends', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const nested = Promise.withResolvers<void>()
+		const parent = coordinator.start('composite', [{ key: CAMERA }], async (context) => {
+			const child = context.start('slew', [{ key: MOUNT }], () => ({ ok: true, value: undefined }))
+			await child.result
+			nested.resolve()
+			return waitForAbort(context)
+		})
+
+		await nested.promise
+
+		expect(arbiter.availability(MOUNT)).toBe('available')
+		expect(arbiter.availability(CAMERA)).toBe('leased')
+
+		await parent.cancel()
+	})
+
+	test('cancels a nested scope without disturbing its parent', async () => {
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const started = Promise.withResolvers<ReturnType<OperationContext['start']>>()
+		const parent = coordinator.start('composite', [{ key: CAMERA }], (context) => {
+			started.resolve(context.start('capture', [{ key: CAMERA }], waitForAbort))
+			return waitForAbort(context)
+		})
+
+		const child = await started.promise
+		await child.cancel('removed')
+
+		expect(await child.result).toEqual({ ok: false, reason: 'removed' })
+		expect(parent.signal.aborted).toBeFalse()
+
+		await parent.cancel()
+	})
+
+	test('aborts nested scopes synchronously when an ancestor is canceled', async () => {
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const started = Promise.withResolvers<AbortSignal>()
+		const parent = coordinator.start<void>('composite', [{ key: CAMERA }], async (context) => {
+			const child = context.start<void>('capture', [{ key: CAMERA }], (nested) => {
+				started.resolve(nested.start('frame', [], waitForAbort).signal)
+				return waitForAbort(nested)
+			})
+			return await child.result
+		})
+
+		const grandchildSignal = await started.promise
+		const cancellation = parent.cancel('disconnected')
+
+		// A parent blocked on a nested result must abort the whole subtree before anything is awaited.
+		expect(grandchildSignal.aborted).toBeTrue()
+
+		await cancellation
+		expect(await parent.result).toEqual({ ok: false, reason: 'disconnected' })
+	})
+
+	test('waits for a detached nested scope before releasing the tree lease', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const events: string[] = []
+		const cleanupGate = Promise.withResolvers<void>()
+		const nested = Promise.withResolvers<void>()
+		const parent = coordinator.start('composite', [{ key: CAMERA }], (context) => {
+			context.onCleanup(() => {
+				events.push('parent')
+			})
+
+			// A nested scope the executor never awaits still has to stop before the tree releases the camera.
+			context.start('capture', [{ key: CAMERA }], (child) => {
+				child.onCleanup(async () => {
+					events.push('child:start')
+					await cleanupGate.promise
+					events.push('child:end')
+				})
+				nested.resolve()
+				return waitForAbort(child)
+			})
+
+			return { ok: true, value: undefined }
+		})
+
+		await nested.promise
+		await Bun.sleep(1)
+
+		expect(events).toEqual(['child:start'])
+		expect(arbiter.availability(CAMERA)).toBe('leased')
+
+		cleanupGate.resolve()
+		await parent.result
+
+		expect(events).toEqual(['child:start', 'child:end', 'parent'])
+		expect(arbiter.availability(CAMERA)).toBe('available')
+	})
+
+	test('cancels the whole tree from a resource a nested scope acquired', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const started = Promise.withResolvers<void>()
+		const parent = coordinator.start('composite', [{ key: CAMERA }], (context) => {
+			context.start('slew', [{ key: MOUNT }], (child) => {
+				started.resolve()
+				return waitForAbort(child)
+			})
+			return waitForAbort(context)
+		})
+
+		await started.promise
+		await coordinator.cancelByResource(MOUNT, 'removed')
+
+		// Lifecycle knows only the root owner, so a disconnect anywhere in the tree ends the whole operation.
+		expect(await parent.result).toEqual({ ok: false, reason: 'removed' })
+		expect(arbiter.availability(CAMERA)).toBe('available')
+		expect(arbiter.availability(MOUNT)).toBe('available')
+	})
+
+	test('refuses a nested scope started after its parent began finalizing', async () => {
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const cleanupStarted = Promise.withResolvers<OperationContext>()
+		const gate = Promise.withResolvers<void>()
+
+		const parent = coordinator.start('composite', [{ key: CAMERA }], (context) => {
+			context.onCleanup(async () => {
+				cleanupStarted.resolve(context)
+				await gate.promise
+			})
+			return { ok: false, reason: 'alert', error: 'device reported alert' }
+		})
+
+		const context = await cleanupStarted.promise
+		let invoked = false
+		const late = context.start('capture', [{ key: CAMERA }], () => {
+			invoked = true
+			return { ok: true, value: undefined }
+		})
+
+		expect(await late.result).toEqual({ ok: false, reason: 'aborted', error: 'parent operation is already terminal' })
+		expect(invoked).toBeFalse()
+
+		gate.resolve()
+		expect(await parent.result).toEqual({ ok: false, reason: 'alert', error: 'device reported alert' })
+	})
+
+	test('cancels only roots during shutdown and still unwinds nested scopes', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const cleaned: string[] = []
+		const started = Promise.withResolvers<void>()
+		const parent = coordinator.start('composite', [{ key: CAMERA }], (context) => {
+			context.onCleanup(() => {
+				cleaned.push('parent')
+			})
+			context.start('capture', [{ key: CAMERA }], (child) => {
+				child.onCleanup(() => {
+					cleaned.push('child')
+				})
+				started.resolve()
+				return waitForAbort(child)
+			})
+			return waitForAbort(context)
+		})
+
+		await started.promise
+		await coordinator.cancelAll('disconnected')
+
+		expect(await parent.result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(cleaned).toEqual(['child', 'parent'])
+		expect(arbiter.availability(CAMERA)).toBe('available')
+	})
+
 	test('cancels a busy operation without disturbing the active owner', async () => {
 		const arbiter = new ResourceArbiter()
 		const coordinator = new OperationCoordinator(arbiter)

@@ -68,26 +68,24 @@ export interface CameraCaptureOptions {
 }
 
 // Asynchronous payload boundary whose completion controls camera lease retention.
-export interface CameraCaptureIO {
+export interface CameraCaptureDecodeAndWrite {
 	// Decodes a base64 transport payload into its binary camera frame.
 	readonly decode: (data: Buffer) => Promise<Buffer>
 	// Persists an auto-save frame and resolves only after the write has completed.
-	readonly write: (path: string, data: Buffer) => Promise<void>
+	readonly write: (path: Bun.BunFile | Bun.PathLike, data: Buffer) => Promise<number>
 }
 
 // Production payload I/O backed by the streaming decoder and Bun filesystem writer.
-const DEFAULT_CAMERA_CAPTURE_IO: CameraCaptureIO = {
+const DEFAULT_CAMERA_CAPTURE_DECODE_AND_WRITE: CameraCaptureDecodeAndWrite = {
 	decode: decodeCameraBlobFromBase64,
-	async write(path, data) {
-		await Bun.write(path, data)
-	},
+	write: Bun.write,
 }
 
 // Callback receiving presentation-state updates and processed frame paths.
 export type CameraCaptureListener = (event: CameraCaptureEvent, path?: string) => void
 
 // Optional collaborators supplied per capture by the transport that started it.
-export interface CameraCaptureRequest {
+export interface CameraCaptureListeners {
 	// Receives presentation events emitted by the accepted session.
 	readonly listener?: CameraCaptureListener
 	// Runs inside the operation once the camera has been acquired and before the first exposure.
@@ -105,7 +103,7 @@ interface CameraAvailability {
 }
 
 // Collaborators a session needs beyond its context, camera, and request.
-interface CameraCaptureSessionDeps {
+interface CameraCaptureSessionContext {
 	// Issues the physical camera commands.
 	readonly cameraManager: CameraManager
 	// Buffers and persists processed frames.
@@ -115,7 +113,7 @@ interface CameraCaptureSessionDeps {
 	// Physical timeouts governing rendezvous and quiescence.
 	readonly options: CameraCaptureOptions
 	// Payload decoding and auto-save boundary.
-	readonly io: CameraCaptureIO
+	readonly io: CameraCaptureDecodeAndWrite
 	// Receives presentation events.
 	readonly listener: CameraCaptureListener
 	// Runs once before the first exposure.
@@ -170,13 +168,11 @@ export class CameraCapturer {
 		readonly coordinator: OperationCoordinator,
 		readonly ditherer?: CameraDitherer,
 		readonly options: CameraCaptureOptions = {},
-		readonly io: CameraCaptureIO = DEFAULT_CAMERA_CAPTURE_IO,
+		readonly io: CameraCaptureDecodeAndWrite = DEFAULT_CAMERA_CAPTURE_DECODE_AND_WRITE,
 	) {}
 
 	// Starts one capture, routes accepted-session events to its listener, and reports pre-session rejection separately.
-	start(camera: Camera, request: CameraCaptureStart, capture: CameraCaptureRequest = {}): CameraCaptureHandle {
-		const listener = capture.listener ?? (() => {})
-		const rejectedListener = capture.rejectedListener ?? listener
+	start(camera: Camera, request: CameraCaptureStart, { listener = () => {}, rejectedListener = listener, prepare }: CameraCaptureListeners = {}): CameraCaptureHandle {
 		const key = resourceKey(camera)
 		const started = Promise.withResolvers<OperationResult<void>>()
 		let session: CameraCaptureSession | undefined
@@ -196,7 +192,7 @@ export class CameraCapturer {
 				options: this.options,
 				io: this.io,
 				listener,
-				prepare: capture.prepare,
+				prepare,
 				settleStarted,
 				availability: {
 					markUnavailable: () => this.coordinator.arbiter.markUnavailable({ key, device: camera }),
@@ -309,13 +305,13 @@ class CameraCaptureSession {
 
 	// Creates an immutable request session bound to one operation context and physical camera.
 	constructor(
-		readonly context: OperationContext,
+		readonly operationContext: OperationContext,
 		readonly camera: Camera,
 		request: CameraCaptureStart,
-		readonly deps: CameraCaptureSessionDeps,
+		readonly sessionContext: CameraCaptureSessionContext,
 	) {
 		this.#request = request
-		this.#event.operation = context.id
+		this.#event.operation = operationContext.id
 		this.#event.session = Bun.randomUUIDv7()
 		this.#event.loop = request.exposureMode === 'loop'
 		this.#event.camera = camera.id
@@ -333,12 +329,12 @@ class CameraCaptureSession {
 		if (!this.camera.connected) return this.#finishFailure('disconnected')
 		if (this.#request.exposureTime <= 0 || this.#event.remainingCount <= 0) return this.#finishFailure('commandFailed', 'exposure time and frame count must be positive')
 		try {
-			this.deps.prepare?.()
+			this.sessionContext.prepare?.()
 		} catch (error) {
 			return this.#finishFailure('commandFailed', errorMessage(error))
 		}
 
-		while (this.#event.remainingCount > 0 && !this.context.signal.aborted) {
+		while (this.#event.remainingCount > 0 && !this.operationContext.signal.aborted) {
 			// A device failure recorded outside a rendezvous, such as during the inter-frame delay, only surfaces here.
 			if (this.#failureResult !== undefined) return this.#finish(this.#failureResult)
 			const dither = await this.#dither()
@@ -353,7 +349,9 @@ class CameraCaptureSession {
 			}
 		}
 
-		if (this.context.signal.aborted) return this.#finish({ ok: false, reason: abortReason(this.context.signal) })
+		if (this.operationContext.signal.aborted) {
+			return this.#finish({ ok: false, reason: abortReason(this.operationContext.signal) })
+		}
 
 		return this.#finish({ ok: true, value: undefined })
 	}
@@ -363,7 +361,7 @@ class CameraCaptureSession {
 		if (camera !== this.camera) return
 
 		if (property === 'exposure' && state !== 'Busy') {
-			if (state === 'Idle' && this.context.signal.aborted) this.#abortIdleObserved = true
+			if (state === 'Idle' && this.operationContext.signal.aborted) this.#abortIdleObserved = true
 			for (const waiter of this.#quiescenceWaiters) waiter()
 		}
 
@@ -383,7 +381,7 @@ class CameraCaptureSession {
 		if (state === 'Busy') {
 			attempt.started = true
 			this.#state = 'exposing'
-			this.deps.settleStarted({ ok: true, value: undefined })
+			this.sessionContext.settleStarted({ ok: true, value: undefined })
 			this.#event.state = 'exposing'
 			this.#updateProgress(remainingTime, elapsedTime)
 			this.#emit()
@@ -424,7 +422,7 @@ class CameraCaptureSession {
 	// Fails pending milestones when the physical device disconnects or is removed.
 	deviceUnavailable(reason: Extract<OperationFailureReason, 'disconnected' | 'removed'>) {
 		this.#deviceUnavailableReason = reason
-		this.deps.availability.markUnavailable()
+		this.sessionContext.availability.markUnavailable()
 		this.#fail(reason)
 	}
 
@@ -452,17 +450,17 @@ class CameraCaptureSession {
 
 		try {
 			if (canCommand && (exposureMayBeActive || this.camera.exposuring || this.camera.exposure.state === 'Busy')) {
-				this.deps.cameraManager.stopExposure(this.camera)
+				this.sessionContext.cameraManager.stopExposure(this.camera)
 				quiescent = await this.#waitForQuiescence()
 			}
 
-			const drainTime = Math.max(0, this.deps.options.lateBlobDrainTime ?? DEFAULT_LATE_BLOB_DRAIN_TIME)
+			const drainTime = Math.max(0, this.sessionContext.options.lateBlobDrainTime ?? DEFAULT_LATE_BLOB_DRAIN_TIME)
 			if (requiresBlobBoundary && !this.#lateBlobObserved && drainTime > 0) await Promise.race([this.#lateBlob.promise, Bun.sleep(drainTime)])
-			if (canCommand) this.deps.cameraManager.disableBlob(this.camera)
+			if (canCommand) this.sessionContext.cameraManager.disableBlob(this.camera)
 		} finally {
-			if (canCommand && requiresBlobBoundary && !this.#lateBlobObserved && !this.#abortIdleObserved) this.deps.availability.quarantine()
+			if (canCommand && requiresBlobBoundary && !this.#lateBlobObserved && !this.#abortIdleObserved) this.sessionContext.availability.quarantine()
 			if (!quiescent) {
-				this.deps.availability.markUnavailable()
+				this.sessionContext.availability.markUnavailable()
 				this.#cleanupFailure = { ok: false, reason: 'timeout', error: 'cleanup failed: camera exposure did not quiesce before cleanup timeout' }
 			}
 		}
@@ -470,7 +468,7 @@ class CameraCaptureSession {
 
 	// Dithers before a frame only when requested and a guider session is actively guiding.
 	async #dither(): Promise<OperationResult<void>> {
-		if (!this.#request.dither.enabled || !this.deps.ditherer?.running) return { ok: true, value: undefined }
+		if (!this.#request.dither.enabled || !this.sessionContext.ditherer?.running) return { ok: true, value: undefined }
 
 		this.#state = 'dithering'
 		this.#event.state = 'dithering'
@@ -478,9 +476,9 @@ class CameraCaptureSession {
 		const unsubscribe = guiderBus.subscribe('dither', this.#guiderDithered)
 
 		try {
-			const result = await this.deps.ditherer.dither(this.#request.dither, this.context.signal)
+			const result = await this.sessionContext.ditherer.dither(this.#request.dither, this.operationContext.signal)
 			if (result.ok) return { ok: true, value: undefined }
-			return { ok: false, reason: result.reason === 'aborted' ? abortReason(this.context.signal) : 'commandFailed', error: result.error ?? result.reason }
+			return { ok: false, reason: result.reason === 'aborted' ? abortReason(this.operationContext.signal) : 'commandFailed', error: result.error ?? result.reason }
 		} catch (error) {
 			return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
 		} finally {
@@ -490,7 +488,7 @@ class CameraCaptureSession {
 
 	// Creates the frame attempt before dispatch and awaits exposure+BLOB rendezvous before processing.
 	async #captureFrame(): Promise<OperationResult<string>> {
-		if (this.context.signal.aborted) return { ok: false, reason: abortReason(this.context.signal) }
+		if (this.operationContext.signal.aborted) return { ok: false, reason: abortReason(this.operationContext.signal) }
 
 		const attempt: FrameAttempt = {
 			generation: ++this.#generation,
@@ -520,7 +518,7 @@ class CameraCaptureSession {
 		}
 
 		this.#state = 'awaitingFrame'
-		const timeout = exposureTimeInSeconds(this.#request.exposureTime, this.#request.exposureTimeUnit) * 1000 + Math.max(0, this.deps.options.frameGraceTime ?? DEFAULT_FRAME_GRACE_TIME)
+		const timeout = exposureTimeInSeconds(this.#request.exposureTime, this.#request.exposureTimeUnit) * 1000 + Math.max(0, this.sessionContext.options.frameGraceTime ?? DEFAULT_FRAME_GRACE_TIME)
 		const rendezvous = await this.#awaitRendezvous(attempt, timeout)
 
 		if (!rendezvous.ok) {
@@ -542,56 +540,56 @@ class CameraCaptureSession {
 		this.#totalExposureProgress[0] -= this.#event.frameExposureTime
 		this.#totalExposureProgress[1] += this.#event.frameExposureTime
 		this.#paths.push(processed.value)
-		this.deps.listener(this.#event, processed.value)
+		this.sessionContext.listener(this.#event, processed.value)
 		return this.#failureResult ?? processed
 	}
 
 	// Applies immutable request options and dispatches one exposure after the attempt exists.
 	#startExposure() {
 		const request = this.#request
-		this.deps.cameraManager.enableBlob(this.camera)
-		if (request.width > 0 && request.height > 0 && request.subframe) this.deps.cameraManager.frame(this.camera, request.x, request.y, request.width, request.height)
-		else if (this.camera.frame.width.max > 0 && this.camera.frame.height.max > 0) this.deps.cameraManager.frame(this.camera, 0, 0, this.camera.frame.width.max, this.camera.frame.height.max)
-		this.deps.cameraManager.frameType(this.camera, request.frameType)
-		if (request.frameFormat) this.deps.cameraManager.frameFormat(this.camera, request.frameFormat)
-		this.deps.cameraManager.bin(this.camera, request.binX, request.binY)
-		this.deps.cameraManager.gain(this.camera, request.gain)
-		this.deps.cameraManager.offset(this.camera, request.offset)
-		this.deps.cameraManager.transferFormat(this.camera, request.transferFormat)
-		this.deps.cameraManager.compression(this.camera, request.compressed)
-		this.deps.cameraManager.startExposure(this.camera, exposureTimeInSeconds(request.exposureTime, request.exposureTimeUnit))
+		this.sessionContext.cameraManager.enableBlob(this.camera)
+		if (request.width > 0 && request.height > 0 && request.subframe) this.sessionContext.cameraManager.frame(this.camera, request.x, request.y, request.width, request.height)
+		else if (this.camera.frame.width.max > 0 && this.camera.frame.height.max > 0) this.sessionContext.cameraManager.frame(this.camera, 0, 0, this.camera.frame.width.max, this.camera.frame.height.max)
+		this.sessionContext.cameraManager.frameType(this.camera, request.frameType)
+		if (request.frameFormat) this.sessionContext.cameraManager.frameFormat(this.camera, request.frameFormat)
+		this.sessionContext.cameraManager.bin(this.camera, request.binX, request.binY)
+		this.sessionContext.cameraManager.gain(this.camera, request.gain)
+		this.sessionContext.cameraManager.offset(this.camera, request.offset)
+		this.sessionContext.cameraManager.transferFormat(this.camera, request.transferFormat)
+		this.sessionContext.cameraManager.compression(this.camera, request.compressed)
+		this.sessionContext.cameraManager.startExposure(this.camera, exposureTimeInSeconds(request.exposureTime, request.exposureTimeUnit))
 	}
 
 	// Waits for both physical completion and one BLOB, or the first terminal failure/abort/timeout.
 	async #awaitRendezvous(attempt: FrameAttempt, timeout: number): Promise<OperationResult<CameraBlob>> {
 		const completed = Promise.all([attempt.exposureCompleted.promise, attempt.blobReceived.promise]).then(([state, blob]): OperationResult<CameraBlob> => (state === 'Ok' ? { ok: true, value: blob } : { ok: false, reason: state === 'Alert' ? 'alert' : 'unexpectedState' }))
 		const aborted = Promise.withResolvers<OperationResult<CameraBlob>>()
-		const onAbort = () => aborted.resolve({ ok: false, reason: abortReason(this.context.signal) })
+		const onAbort = () => aborted.resolve({ ok: false, reason: abortReason(this.operationContext.signal) })
 		const timer = setTimeout(() => aborted.resolve({ ok: false, reason: 'timeout' }), Math.max(0, timeout))
-		this.context.signal.addEventListener('abort', onAbort, { once: true })
+		this.operationContext.signal.addEventListener('abort', onAbort, { once: true })
 
 		try {
 			return await Promise.race([completed, this.#terminalFailure.promise, aborted.promise])
 		} finally {
 			clearTimeout(timer)
-			this.context.signal.removeEventListener('abort', onAbort)
+			this.operationContext.signal.removeEventListener('abort', onAbort)
 		}
 	}
 
 	// Decodes, buffers, and optionally writes one BLOB while retaining the camera lease.
 	async #processBlob(blob: CameraBlob): Promise<OperationResult<string>> {
 		try {
-			const buffer = blob.encoding === 'raw' ? blob.data : await this.deps.io.decode(blob.data)
-			if (this.context.signal.aborted) return { ok: false, reason: abortReason(this.context.signal) }
+			const buffer = blob.encoding === 'raw' ? blob.data : await this.sessionContext.io.decode(blob.data)
+			if (this.operationContext.signal.aborted) return { ok: false, reason: abortReason(this.operationContext.signal) }
 
 			const name = this.#request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : this.camera.name
 			const extension = this.#request.transferFormat === 'XISF' ? 'xisf' : 'fit'
 			const path = join(await makePathFor(this.#request), `${name}.${extension}`)
-			if (this.context.signal.aborted) return { ok: false, reason: abortReason(this.context.signal) }
+			if (this.operationContext.signal.aborted) return { ok: false, reason: abortReason(this.operationContext.signal) }
 
-			this.deps.imageProcessor.save(buffer, path, this.camera)
-			if (this.#request.autoSave) await this.deps.io.write(path, buffer)
-			if (this.context.signal.aborted) return { ok: false, reason: abortReason(this.context.signal) }
+			this.sessionContext.imageProcessor.save(buffer, path, this.camera)
+			if (this.#request.autoSave) await this.sessionContext.io.write(path, buffer)
+			if (this.operationContext.signal.aborted) return { ok: false, reason: abortReason(this.operationContext.signal) }
 			return { ok: true, value: path }
 		} catch (error) {
 			return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
@@ -615,7 +613,7 @@ class CameraCaptureSession {
 			this.#emit()
 
 			const step = Math.min(250_000, remaining)
-			const delayed = await abortableDelay(step / 1000, this.context.signal)
+			const delayed = await abortableDelay(step / 1000, this.operationContext.signal)
 			if (!delayed.ok) return delayed
 			remaining -= step
 		}
@@ -638,7 +636,7 @@ class CameraCaptureSession {
 
 		let timer: Timer | undefined
 		const timeout = new Promise<boolean>((resolve) => {
-			timer = setTimeout(() => resolve(false), Math.max(0, this.deps.options.quiesceTimeout ?? DEFAULT_QUIESCE_TIMEOUT))
+			timer = setTimeout(() => resolve(false), Math.max(0, this.sessionContext.options.quiesceTimeout ?? DEFAULT_QUIESCE_TIMEOUT))
 		})
 
 		try {
@@ -681,13 +679,13 @@ class CameraCaptureSession {
 		const result = error === undefined ? ({ ok: false, reason } as const) : ({ ok: false, reason, error } as const)
 		this.#failureResult = result
 		this.#terminalFailure.resolve(result)
-		this.deps.settleStarted(result)
+		this.sessionContext.settleStarted(result)
 	}
 
 	// Converts an early validation failure into the shared terminal presentation and result.
 	#finishFailure(reason: OperationFailureReason, error?: string): OperationResult<CameraCaptureResult> {
 		const result = error === undefined ? ({ ok: false, reason } as const) : ({ ok: false, reason, error } as const)
-		this.deps.settleStarted(result)
+		this.sessionContext.settleStarted(result)
 		return this.#finish(result)
 	}
 
@@ -697,14 +695,14 @@ class CameraCaptureSession {
 		if (this.#terminal) return this.#failureResult ?? { ok: false, reason: 'aborted' }
 		this.#terminal = true
 		this.#state = result.ok ? 'succeeded' : result.reason === 'aborted' ? 'cancelled' : 'failed'
-		if (!result.ok) this.deps.settleStarted(result)
+		if (!result.ok) this.sessionContext.settleStarted(result)
 		this.#emitTerminal(!result.ok)
 		return result.ok ? { ok: true, value: { paths: this.#paths, frameCount: this.#paths.length } } : result
 	}
 
 	// Emits a cloned presentation snapshot so transport listeners cannot mutate session state.
 	#emit() {
-		this.deps.listener(structuredClone(this.#event))
+		this.sessionContext.listener(structuredClone(this.#event))
 	}
 
 	// Emits one final idle presentation while preserving terminal state internally.

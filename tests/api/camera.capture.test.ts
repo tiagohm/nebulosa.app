@@ -4,7 +4,7 @@ import { CLIENT } from 'nebulosa/src/devices/indi/device'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { CameraManager } from 'nebulosa/src/devices/indi/manager'
 import { CameraCapturer } from 'src/api/camera.capture'
-import type { CameraCaptureIO, CameraCaptureOptions } from 'src/api/camera.capture'
+import type { CameraCaptureDecodeAndWrite, CameraCaptureOptions } from 'src/api/camera.capture'
 import type { ImageProcessor } from 'src/api/image'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
@@ -14,7 +14,7 @@ import { waitUntil } from './util'
 
 interface HarnessOptions {
 	readonly capture?: CameraCaptureOptions
-	readonly io?: CameraCaptureIO
+	readonly io?: CameraCaptureDecodeAndWrite
 	readonly notifyStartState?: boolean
 	readonly startState?: 'Idle' | 'Busy' | 'Alert'
 	readonly stopState?: 'Idle' | 'Ok'
@@ -297,7 +297,7 @@ describe('camera capture session failures', () => {
 	})
 
 	test('degrades a completed capture whose camera never reaches quiescence', async () => {
-		const io: CameraCaptureIO = { decode: (data) => Promise.resolve(data), write: () => Promise.resolve() }
+		const io: CameraCaptureDecodeAndWrite = { decode: (data) => Promise.resolve(data), write: (path, data) => Promise.resolve(data.byteLength) }
 		const harness = createHarness({ stopQuiesces: false, capture: { quiesceTimeout: 5 }, io })
 
 		try {
@@ -455,12 +455,12 @@ describe('camera capture session cancellation', () => {
 	test('retains ownership until a canceled decode settles', async () => {
 		const decoding = Promise.withResolvers<Buffer>()
 		let decodeStarted = false
-		const io: CameraCaptureIO = {
+		const io: CameraCaptureDecodeAndWrite = {
 			decode() {
 				decodeStarted = true
 				return decoding.promise
 			},
-			write: () => Promise.resolve(),
+			write: (path, data) => Promise.resolve(data.byteLength),
 		}
 		const harness = createHarness({ io })
 		const paths: string[] = []
@@ -493,9 +493,9 @@ describe('camera capture session cancellation', () => {
 	})
 
 	test('retains ownership until a canceled auto-save write settles', async () => {
-		const writing = Promise.withResolvers<void>()
+		const writing = Promise.withResolvers<number>()
 		let writeStarted = false
-		const io: CameraCaptureIO = {
+		const io: CameraCaptureDecodeAndWrite = {
 			decode: (data) => Promise.resolve(data),
 			write() {
 				writeStarted = true
@@ -518,7 +518,7 @@ describe('camera capture session cancellation', () => {
 			expect(canceled).toBeFalse()
 			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('leased')
 
-			writing.resolve()
+			writing.resolve(1)
 			await cancellation
 			expect(await handle.result).toEqual({ ok: false, reason: 'aborted' })
 			expect(paths).toHaveLength(0)
@@ -531,7 +531,7 @@ describe('camera capture session cancellation', () => {
 		const harness = createHarness({
 			io: {
 				decode: (data) => Promise.resolve(data),
-				write: () => Promise.resolve(),
+				write: () => Promise.resolve(1),
 			},
 		})
 		const events: CameraCaptureEvent[] = []

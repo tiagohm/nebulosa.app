@@ -20,7 +20,6 @@ import type { CatalogSource, CatalogSourceStar, DeviceSimulatorOptions } from 'n
 import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
 import type { AstronomicalImageStar } from 'nebulosa/src/imaging/synthetic/generator'
 import { clamp } from 'nebulosa/src/math/numerical/math'
-import { normalizeAngle, toDeg } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { EventBus } from 'src/shared/bus'
 import type { ConnectionEvent, Connect, ConnectionStatus } from '#/connection'
@@ -113,25 +112,6 @@ async function vizierCatalogSource(centerRightAscension: Angle, centerDeclinatio
 	}
 
 	return stars
-}
-
-// Builds the Gaia DR3 cone search used by the VizieR-backed camera catalog.
-function makeVizierCatalogQuery(rightAscension: Angle, declination: Angle, radius: Angle, limit: number) {
-	return `
-		SELECT TOP ${Math.trunc(limit)}
-			RA_ICRS AS ra,
-			DE_ICRS AS dec,
-			Gmag AS mag,
-			"BP-RP" AS ci
-		FROM "I/355/gaiadr3"
-		WHERE Gmag IS NOT NULL
-		    AND Gmag <= 14
-			AND 1 = CONTAINS(
-				POINT('ICRS', RA_ICRS, DE_ICRS),
-				CIRCLE('ICRS', ${toDeg(normalizeAngle(rightAscension))}, ${toDeg(declination)}, ${toDeg(radius)})
-			)
-		ORDER BY Gmag ASC
-	`
 }
 
 // Owns client transports and coordinates their operational cleanup before disposal.

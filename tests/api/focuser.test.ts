@@ -4,7 +4,8 @@ import type { Focuser } from 'nebulosa/src/devices/indi/device'
 import { FocuserManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
-import { FocuserHandler, focuserBus, focuser as focuserEndpoints } from 'src/api/focuser'
+import { FocuserHandler, focuserBus, focuser as focuserEndpoints, waitForFocuser } from 'src/api/focuser'
+import type { WaitForFocuserAction } from 'src/api/focuser'
 import { WebSocketMessageHandler } from 'src/api/message'
 import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from '#/focuser'
 import { json, noContent, SocketMessager, waitUntil } from './util'
@@ -182,6 +183,27 @@ describe('focuser handler', () => {
 			moveOut.mockRestore()
 			moveIn.mockRestore()
 			moveTo.mockRestore()
+		}
+	})
+
+	test('completes a pending wait when the focuser reaches the position', async () => {
+		const device = getFocuser()
+		const actions: WaitForFocuserAction[] = []
+		const target = device.position.value + 25
+
+		const cancel = waitForFocuser(device, target, (action) => actions.push(action), 1000)
+
+		try {
+			expect(actions).toHaveLength(0)
+
+			device.position.value = target
+			device.moving = false
+			focuserHandler.updated(device, 'position')
+
+			expect(await waitUntil(() => actions.length > 0)).toBeTrue()
+			expect(actions).toEqual(['reach'])
+		} finally {
+			cancel()
 		}
 	})
 

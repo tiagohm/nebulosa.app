@@ -120,7 +120,8 @@ export function waitForFocuser(focuser: Focuser, expectedPosition: number, onCom
 
 	// Wait the focuser reach the position
 	unsubscriber = focuserBus.subscribe('update', (event) => {
-		if (event.device === focuser && (event.property === 'moving' || event.property === 'position') && hasReachedPosition()) complete('reach')
+		// Update events carry a projection of the device, so identity must be compared by id.
+		if (event.device.id === focuser.id && (event.property === 'moving' || event.property === 'position') && hasReachedPosition()) complete('reach')
 	})
 
 	timer = setTimeout(() => complete('timeout'), delay)

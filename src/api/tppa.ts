@@ -115,7 +115,13 @@ export class TppaTask {
 
 	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
 		this.captureOperation = event.operation
-		const captureReleased = this.tppa.cameraHandler.waitForCapture(event.operation)
+		const captureReleased = this.tppa.cameraHandler.waitForCapture(event.operation).then(
+			() => true,
+			(error) => {
+				this.fail(error)
+				return false
+			},
+		)
 
 		if (path && !this.stopped) {
 			this.handleTppaEvent('solving')
@@ -186,8 +192,7 @@ export class TppaTask {
 
 			// Capture next image
 			if (!this.stopped) {
-				await captureReleased
-				this.start()
+				if ((await captureReleased) && !this.stopped) this.start()
 			}
 		} else if (event.state === 'error') {
 			this.fail('camera capture failed')

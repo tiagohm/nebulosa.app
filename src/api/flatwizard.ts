@@ -109,7 +109,13 @@ export class FlatWizardTask {
 
 	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
 		this.captureOperation = event.operation
-		const captureReleased = this.flatWizardHandler.cameraHandler.waitForCapture(event.operation)
+		const captureReleased = this.flatWizardHandler.cameraHandler.waitForCapture(event.operation).then(
+			() => true,
+			(error) => {
+				this.fail(error)
+				return false
+			},
+		)
 
 		if (path && !this.stopped) {
 			if (this.stopped) {
@@ -162,8 +168,7 @@ export class FlatWizardTask {
 				return this.handleFlatWizardEvent('idle', 'unable to find an optimal exposure time')
 			}
 
-			await captureReleased
-			await this.start()
+			if (await captureReleased) await this.start()
 		} else if (event.state === 'error') {
 			this.fail('camera capture failed')
 		} else if (event.stopped) {

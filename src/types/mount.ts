@@ -8,7 +8,7 @@ import type { Time } from 'nebulosa/src/astronomy/time/time'
 import type { Writable } from 'nebulosa/src/core/types'
 import { expectedPierSide, meridianTimeIn } from 'nebulosa/src/devices/indi/device'
 import type { Mount, MountTargetCoordinate, PierSide } from 'nebulosa/src/devices/indi/device'
-import { parseAngle } from 'nebulosa/src/math/units/angle'
+import { normalizeAngle, parseAngle } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { HostAndPort } from '#/connection'
 import type { DeviceAdded, DeviceUpdated, DeviceRemoved } from '#/device'
@@ -77,58 +77,75 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 	let observed: ReturnType<typeof cirsToObserved> | undefined
 	let hasEquatorial = flags.equatorial === true
 
-	const type = 'type' in target ? target.type : 'JNOW'
-	const x = 'type' in target ? parseAngle(target[type]!.x, type === 'JNOW' || type === 'J2000' ? true : undefined)! : target.rightAscension
-	const y = 'type' in target ? parseAngle(target[type]!.y)! : target.declination
+	const coordinate: [number, number] = [0, 0]
+	let type: MountTargetCoordinate['type'] = 'JNOW'
+
+	if ('type' in target) {
+		type = target.type
+		const { x, y } = target[type]!
+
+		if (typeof x === 'string') coordinate[0] = parseAngle(x, type === 'JNOW' || type === 'J2000' ? true : undefined)!
+		else coordinate[0] = x
+
+		if (typeof y === 'string') coordinate[0] = parseAngle(y)!
+		else coordinate[1] = y
+	} else {
+		coordinate[0] = target.rightAscension
+		coordinate[1] = target.declination
+	}
 
 	// JNOW equatorial coordinate
 	if (type === 'JNOW') {
-		equatorial[0] = x
-		equatorial[1] = y
+		Object.assign(equatorial, coordinate)
+
 		hasEquatorial = true
 
 		if (flags.horizontal) observed = cirsToObserved(equatorial, time)
-		if (flags.equatorialJ2000) Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
+		if (flags.equatorialJ2000 || flags.galactic) Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
 		if (flags.ecliptic) Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
 		if (flags.galactic) Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
 	}
 	// J2000 equatorial coordinate
 	else if (type === 'J2000') {
-		equatorialJ2000[0] = x
-		equatorialJ2000[1] = y
+		Object.assign(equatorialJ2000, coordinate)
 
-		if (flags.equatorial) Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
+		hasEquatorial ||= flags.ecliptic === true || flags.horizontal === true
+
+		if (hasEquatorial) Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
 		if (flags.ecliptic) Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
 		if (flags.galactic) Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
 		if (flags.horizontal) observed = cirsToObserved(equatorial, time)
 	}
 	// Local horizontal coordinate
 	else if (type === 'ALTAZ') {
-		horizontal[0] = x
-		horizontal[1] = y
+		Object.assign(horizontal, coordinate)
 
-		if (flags.equatorial) Object.assign(equatorial, observedToCirs(...horizontal, time))
-		if (flags.equatorialJ2000) Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
+		hasEquatorial ||= flags.equatorialJ2000 === true || flags.ecliptic === true || flags.galactic === true
+
+		if (hasEquatorial) Object.assign(equatorial, observedToCirs(...horizontal, time))
+		if (flags.equatorialJ2000 || flags.galactic) Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
 		if (flags.ecliptic) Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
 		if (flags.galactic) Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
 	}
 	// Ecliptic (at date) coordinate
 	else if (type === 'ECLIPTIC') {
-		ecliptic[0] = x
-		ecliptic[1] = y
+		Object.assign(ecliptic, coordinate)
 
-		if (flags.equatorial) Object.assign(equatorial, eclipticToEquatorial(...ecliptic, time))
-		if (flags.equatorialJ2000) Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
+		hasEquatorial ||= flags.equatorialJ2000 === true || flags.horizontal === true || flags.galactic === true
+
+		if (hasEquatorial) Object.assign(equatorial, eclipticToEquatorial(...ecliptic, time))
+		if (flags.equatorialJ2000 || flags.galactic) Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
 		if (flags.galactic) Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
 		if (flags.horizontal) observed = cirsToObserved(equatorial, time)
 	}
 	// Galactic coordinate
 	else if (type === 'GALACTIC') {
-		galactic[0] = x
-		galactic[1] = y
+		Object.assign(galactic, coordinate)
 
-		if (flags.equatorialJ2000) Object.assign(equatorialJ2000, galacticToEquatorial(...galactic))
-		if (flags.equatorial) Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
+		hasEquatorial ||= flags.ecliptic === true || flags.horizontal === true
+
+		if (flags.equatorialJ2000 || hasEquatorial) Object.assign(equatorialJ2000, galacticToEquatorial(...galactic))
+		if (hasEquatorial) Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
 		if (flags.ecliptic) Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
 		if (flags.horizontal) observed = cirsToObserved(equatorial, time)
 	}
@@ -137,6 +154,9 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 		horizontal[0] = observed.azimuth
 		horizontal[1] = observed.altitude
 	}
+
+	if (hasEquatorial) equatorial[0] = normalizeAngle(equatorial[0])
+	if (flags.equatorialJ2000) equatorialJ2000[0] = normalizeAngle(equatorialJ2000[0])
 
 	const lst = flags.lst ? localSiderealTime(time, longitude, true) : 0
 

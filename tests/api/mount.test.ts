@@ -1,10 +1,14 @@
 import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
+import { cirsToObserved } from 'nebulosa/src/astronomy/coordinates/astrometry'
+import { equatorialToEcliptic, equatorialToGalatic, equatorialToJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
+import { timeNow } from 'nebulosa/src/astronomy/time/time'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Mount, MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import { MountManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
-import { deg, hour } from 'nebulosa/src/math/units/angle'
+import { deg, hour, normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'
@@ -14,6 +18,7 @@ import { MountCommander } from 'src/api/mount.commander'
 import { OperationCoordinator } from 'src/api/operation'
 import type { OperationResult } from 'src/api/operation'
 import { resourceKey, ResourceArbiter } from 'src/api/resource'
+import { coordinateInfo } from '#/mount'
 import type { CoordinateInfo, MountAdded, MountRemoteControlStatus, MountRemoved, MountUpdated } from '#/mount'
 import { SocketMessager } from './util'
 
@@ -316,9 +321,9 @@ describe('mount handler', () => {
 
 	test('treats Stellarium goto coordinates as JNOW', async () => {
 		const device = getMount()
-		const goTo = spyOn(mountCommander, 'goTo').mockResolvedValue({ ok: true, value: undefined })
 		const rightAscension = hour(5)
 		const declination = deg(-30)
+		const goTo = spyOn(mountCommander, 'goTo').mockResolvedValue({ ok: true, value: { rightAscension, declination, pierSide: 'NEITHER' } })
 		const message = Buffer.alloc(20)
 		message.writeUInt32LE(Math.trunc((rightAscension / Math.PI) * 0x80000000), 12)
 		message.writeInt32LE(Math.trunc((declination / Math.PI) * 0x80000000), 16)
@@ -330,7 +335,7 @@ describe('mount handler', () => {
 
 			const client = await Bun.connect({
 				hostname: '127.0.0.1',
-				port: status.stellarium && status.stellarium.port,
+				port: status.stellarium ? status.stellarium.port : 0,
 				socket: { data() {} },
 			})
 			client.write(message)
@@ -476,4 +481,51 @@ describe('mount commander', () => {
 		expect(device.canFlip).toBeFalse()
 		expect(await mountCommander.flip(operationCoordinator, device, targetCoordinate())).toMatchObject({ ok: false, reason: 'unexpectedState' })
 	}, 10000)
+})
+
+test('coordinateInfo computes correctly all the coordinates passing the flag', () => {
+	const time = timeNow(true)
+	time.location = { latitude: 0, longitude: 0, elevation: 0, ellipsoid: 3 }
+	const lst = localSiderealTime(time, undefined, true)
+	const equatorial = [lst, deg(-30)] as const
+	const equatorialJ2000 = equatorialToJ2000(...equatorial, time)
+	const galactic = equatorialToGalatic(...equatorialJ2000)
+	const ecliptic = equatorialToEcliptic(...equatorial, time)
+	const observed = cirsToObserved(equatorial, time)
+	const horizontal = [observed.azimuth, observed.altitude] as const
+
+	equatorialJ2000[0] = normalizeAngle(equatorialJ2000[0])
+
+	const flags = [
+		[{ equatorial: true }, equatorial, 'JNOW'],
+		[{ equatorialJ2000: true }, equatorialJ2000, 'J2000'],
+		[{ horizontal: true }, horizontal, 'ALTAZ'],
+		[{ ecliptic: true }, ecliptic, 'ECLIPTIC'],
+		[{ galactic: true }, galactic, 'GALACTIC'],
+	] as const
+
+	for (const [, coordinate, type] of flags) {
+		const target = { type, [type]: { x: coordinate[0], y: coordinate[1] } } as const
+
+		for (const [flag] of flags) {
+			const info = coordinateInfo(time, 0, target, flag)
+
+			if ('equatorial' in flag) {
+				expect(info.equatorial[0]).toBeCloseTo(equatorial[0], 11)
+				expect(info.equatorial[1]).toBeCloseTo(equatorial[1], 11)
+			} else if ('equatorialJ2000' in flag) {
+				expect(info.equatorialJ2000[0]).toBeCloseTo(equatorialJ2000[0], 11)
+				expect(info.equatorialJ2000[1]).toBeCloseTo(equatorialJ2000[1], 11)
+			} else if ('horizontal' in flag) {
+				expect(info.horizontal[0]).toBeCloseTo(horizontal[0], 11)
+				expect(info.horizontal[1]).toBeCloseTo(horizontal[1], 11)
+			} else if ('ecliptic' in flag) {
+				expect(info.ecliptic[0]).toBeCloseTo(ecliptic[0], 11)
+				expect(info.ecliptic[1]).toBeCloseTo(ecliptic[1], 11)
+			} else if ('galactic' in flag) {
+				expect(info.galactic[0]).toBeCloseTo(galactic[0], 11)
+				expect(info.galactic[1]).toBeCloseTo(galactic[1], 11)
+			}
+		}
+	}
 })

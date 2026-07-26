@@ -367,6 +367,26 @@ describe('camera capture start request', () => {
 		expect(disconnectedEvents.map((event) => event.state)).toEqual(['error', 'idle'])
 	})
 
+	test('does not publish rejected capture state over an active camera session', async () => {
+		const camera = getCamera()
+		const rejectedEvents: CameraCaptureEvent[] = []
+		wsm.open(socket)
+		cameraManager.connect(camera)
+
+		const active = cameraHandler.capture(camera, captureStartRequest({ exposureMode: 'loop', exposureTime: 10, exposureTimeUnit: 'second' }))
+		expect((await active.started).ok).toBeTrue()
+
+		const rejected = cameraHandler.capture(camera, captureStartRequest({ exposureTime: 1, exposureTimeUnit: 'second' }), (event) => rejectedEvents.push(structuredClone(event)))
+		expect((await rejected.result).ok).toBeFalse()
+		expect(rejectedEvents.map((event) => event.state)).toEqual(['error', 'idle'])
+
+		const publishedEvents = socketMessagesOf<CameraCaptureEvent>('camera:capture')
+		expect(publishedEvents.length).toBeGreaterThan(0)
+		expect(publishedEvents.every((message) => message.body.operation === active.id)).toBeTrue()
+
+		await active.cancel()
+	})
+
 	test('applies frame options only when subframe is enabled', async () => {
 		const camera = getCamera()
 		const frame = spyOn(cameraManager, 'frame')

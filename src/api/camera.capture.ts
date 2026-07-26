@@ -129,8 +129,8 @@ export class CameraCapturer {
 		readonly io: CameraCaptureIO = DEFAULT_CAMERA_CAPTURE_IO,
 	) {}
 
-	// Starts one capture and runs optional device preparation only after acquiring the camera.
-	start(camera: Camera, request: CameraCaptureStart, listener: CameraCaptureListener = () => {}, prepare?: VoidFunction): CameraCaptureHandle {
+	// Starts one capture, routes accepted-session events to listener, and reports pre-session rejection separately when requested.
+	start(camera: Camera, request: CameraCaptureStart, listener: CameraCaptureListener = () => {}, prepare?: VoidFunction, rejectedListener: CameraCaptureListener = listener): CameraCaptureHandle {
 		const key = resourceKey(camera)
 		const started = Promise.withResolvers<OperationResult<void>>()
 		let sessionCreated = false
@@ -165,10 +165,10 @@ export class CameraCapturer {
 					event.session = Bun.randomUUIDv7()
 					event.camera = camera.id
 					event.state = 'error'
-					listener(structuredClone(event))
+					rejectedListener(structuredClone(event))
 					event.state = 'idle'
 					event.stopped = true
-					listener(event)
+					rejectedListener(event)
 				}
 			},
 			(error) => settleStarted({ ok: false, reason: 'commandFailed', error: errorMessage(error) }),

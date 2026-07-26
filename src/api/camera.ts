@@ -111,6 +111,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 				onCameraCaptureEvent?.(event, path)
 			},
 			() => this.cameraManager.snoop(camera, mount, focuser, wheel, rotator),
+			onCameraCaptureEvent,
 		)
 
 		this.captures.set(handle.id, handle)

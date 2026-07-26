@@ -83,9 +83,13 @@ export class DeviceLifecycle {
 		return dispose
 	}
 
-	// Detaches every manager observer registered by this lifecycle instance.
+	// Detaches every manager observer and forgets the devices they contributed.
 	dispose() {
 		for (const registration of this.#registrations) registration.dispose()
+		// Views outlive their observer otherwise, and a later observe() would aggregate stale devices
+		// that no manager can ever update or remove again.
+		this.#devices.clear()
+		this.#validationGeneration.clear()
 	}
 
 	// Registers a new instance as unavailable until its quiescence check succeeds.
@@ -143,7 +147,9 @@ export class DeviceLifecycle {
 	#invalidate(key: ResourceKey, device: Device, reason: OperationFailureReason) {
 		this.#nextValidation(key)
 		this.arbiter.markUnavailable({ key, device })
-		void this.coordinator.cancelByResource(key, reason)
+		// Cancellation aborts owners synchronously; only its cleanup is awaited, and a manager callback is
+		// the wrong place to block. The resource stays unavailable either way, so a failure is reported.
+		void this.coordinator.cancelByResource(key, reason).catch((error: unknown) => console.error('failed to cancel owners of:', key, error))
 	}
 
 	// Blocks acquisition while aggregating every live view under one generation guard.

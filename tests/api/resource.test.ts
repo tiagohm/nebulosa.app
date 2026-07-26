@@ -132,6 +132,19 @@ describe('resource arbiter', () => {
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
 
+	test('keeps an active cause after the physical device is disassociated', () => {
+		const arbiter = new ResourceArbiter()
+		const device = camera(true)
+
+		arbiter.markUnavailable({ key: CAMERA, device }, 'quarantine')
+
+		expect(arbiter.disassociate(CAMERA, device)).toBeTrue()
+		expect(arbiter.availability(CAMERA)).toBe('unavailable')
+
+		arbiter.markAvailable(CAMERA, 'quarantine')
+		expect(arbiter.availability(CAMERA)).toBe('available')
+	})
+
 	test('reports every active cause on a conflict', () => {
 		const arbiter = new ResourceArbiter()
 		const device = camera(true)

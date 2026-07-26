@@ -1,7 +1,9 @@
 import { CLIENT } from 'nebulosa/src/devices/indi/device'
 import type { Device, SubDevice } from 'nebulosa/src/devices/indi/device'
 
-// Opaque stable identity of one physical or logical resource.
+// Opaque stable identity of one physical or logical resource. A physical key is the device id, an MD5
+// digest of client, type, and name, so it is unique across clients. A resource with no device behind it,
+// such as a remote guider session, must use a `logical:` prefix to stay outside that key space.
 export type ResourceKey = string
 
 // Observable arbitration state; unavailable takes precedence over an existing lease.
@@ -127,6 +129,11 @@ export class ResourceArbiter {
 
 		resource.device = undefined
 		resource.clientId = undefined
+
+		// A record with nothing left to remember carries no state a future acquisition could not rebuild,
+		// so removing it keeps device churn from growing the map for the life of the process.
+		if (resource.owner === undefined && resource.causes.size === 0) this.#resources.delete(key)
+
 		return true
 	}
 

@@ -339,6 +339,7 @@ describe('camera capture start request', () => {
 			const handle = cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event)))
 			expect(await waitUntil(() => events.length > 0)).toBeTrue()
 			await handle.cancel()
+			cameraCapturer.blobReceived(camera, Buffer.from('late frame'), 'raw')
 
 			expect(events[0].count).toBe(count)
 			expect(events[0].remainingCount).toBe(count - 1)

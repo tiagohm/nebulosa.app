@@ -26,7 +26,7 @@ const DEFAULT_FRAME_GRACE_TIME = 30000
 // Default time allowed for a canceled exposure to become physically idle, in milliseconds.
 const DEFAULT_QUIESCE_TIMEOUT = 5000
 
-// Default window retained after quiescence so a late BLOB is consumed by the old session, in milliseconds.
+// Default window retained after quiescence before a missing BLOB quarantines the camera, in milliseconds.
 const DEFAULT_LATE_BLOB_DRAIN_TIME = 100
 
 // Result of a camera capture after every requested frame has been processed.
@@ -63,7 +63,7 @@ export interface CameraCaptureOptions {
 	readonly frameGraceTime?: number
 	// Maximum milliseconds to wait for exposure quiescence during cleanup.
 	readonly quiesceTimeout?: number
-	// Milliseconds retained after idle to consume and discard a late BLOB.
+	// Milliseconds retained after idle before a missing BLOB requires an explicit safety boundary.
 	readonly lateBlobDrainTime?: number
 }
 
@@ -118,6 +118,8 @@ type CameraCaptureSessionState = 'created' | 'dithering' | 'startingExposure' | 
 // Starts and routes serialized camera sessions through the process-wide coordinator.
 export class CameraCapturer {
 	readonly #sessions = new Map<string, CameraCaptureSession>()
+	// Camera keys blocked until a stale BLOB is discarded or the transport resets.
+	readonly #quarantined = new Set<string>()
 
 	// Creates a capturer over camera commands, image processing, and shared operation ownership.
 	constructor(
@@ -132,6 +134,7 @@ export class CameraCapturer {
 	// Starts one capture, routes accepted-session events to listener, and reports pre-session rejection separately when requested.
 	start(camera: Camera, request: CameraCaptureStart, listener: CameraCaptureListener = () => {}, prepare?: VoidFunction, rejectedListener: CameraCaptureListener = listener): CameraCaptureHandle {
 		const key = resourceKey(camera)
+		if (this.#quarantined.has(key)) this.coordinator.arbiter.markUnavailable({ key, device: camera })
 		const started = Promise.withResolvers<OperationResult<void>>()
 		let sessionCreated = false
 
@@ -144,7 +147,24 @@ export class CameraCapturer {
 
 		const operation = this.coordinator.start<CameraCaptureResult>('cameraCapture', [{ key, device: camera }], (context) => {
 			sessionCreated = true
-			const session = new CameraCaptureSession(context, camera, structuredClone(request), this.cameraManager, this.imageProcessor, this.ditherer, this.options, this.io, listener, prepare, settleStarted, () => this.coordinator.arbiter.markUnavailable({ key, device: camera }))
+			const session = new CameraCaptureSession(
+				context,
+				camera,
+				structuredClone(request),
+				this.cameraManager,
+				this.imageProcessor,
+				this.ditherer,
+				this.options,
+				this.io,
+				listener,
+				prepare,
+				settleStarted,
+				() => this.coordinator.arbiter.markUnavailable({ key, device: camera }),
+				() => {
+					this.#quarantined.add(key)
+					this.coordinator.arbiter.markUnavailable({ key, device: camera })
+				},
+			)
 
 			this.#sessions.set(key, session)
 
@@ -184,17 +204,29 @@ export class CameraCapturer {
 
 	// Routes a camera property update only to the session currently owning its physical key.
 	updated(camera: Camera, property: keyof Camera & string, state?: PropertyState) {
-		this.#sessions.get(resourceKey(camera))?.updated(camera, property, state)
+		const key = resourceKey(camera)
+		this.#sessions.get(key)?.updated(camera, property, state)
+		if (property === 'connected') {
+			if (!camera.connected) this.#quarantined.delete(key)
+			else if (!this.#quarantined.has(key)) this.coordinator.arbiter.markAvailable({ key, device: camera })
+		}
 	}
 
-	// Routes a BLOB only to the current session; terminal sessions consume and discard it.
+	// Discards a quarantined stale BLOB before allowing a connected camera to capture again.
 	blobReceived(camera: Camera, data: Buffer, encoding: BlobEncoding) {
-		this.#sessions.get(resourceKey(camera))?.blobReceived(data, encoding)
+		const key = resourceKey(camera)
+		if (this.#quarantined.delete(key)) {
+			if (camera.connected) this.coordinator.arbiter.markAvailable({ key, device: camera })
+			return
+		}
+		this.#sessions.get(key)?.blobReceived(data, encoding)
 	}
 
 	// Reports device removal to the current session before lifecycle cleanup removes the device.
 	removed(camera: Camera) {
-		this.#sessions.get(resourceKey(camera))?.deviceUnavailable('removed')
+		const key = resourceKey(camera)
+		this.#sessions.get(key)?.deviceUnavailable('removed')
+		this.#quarantined.delete(key)
 	}
 }
 
@@ -214,6 +246,10 @@ class CameraCaptureSession {
 	#failureResult?: OperationResult<never>
 	#cleaned = false
 	readonly #quiescenceWaiters = new Set<VoidFunction>()
+	// Resolves when the canceled generation's outstanding BLOB is observed and discarded.
+	readonly #lateBlob = Promise.withResolvers<void>()
+	// Whether cleanup has observed the BLOB expected from a physically started exposure.
+	#lateBlobObserved = false
 
 	// Creates an immutable request session bound to one operation context and physical camera.
 	constructor(
@@ -229,6 +265,7 @@ class CameraCaptureSession {
 		readonly prepare: VoidFunction | undefined,
 		readonly settleStarted: (result: OperationResult<void>) => void,
 		readonly markUnavailable: VoidFunction,
+		readonly quarantine: VoidFunction,
 	) {
 		this.#request = request
 		this.#event.operation = context.id
@@ -319,10 +356,17 @@ class CameraCaptureSession {
 		}
 	}
 
-	// Accepts at most one BLOB for the active generation and discards terminal or duplicate payloads.
+	// Accepts one active-generation BLOB and records terminal BLOBs as the cleanup safety boundary.
 	blobReceived(data: Buffer, encoding: BlobEncoding) {
 		const attempt = this.#attempt
-		if (this.#terminal || attempt === undefined || attempt.terminal || attempt.blob !== undefined) return
+		if (this.#terminal) {
+			if (attempt?.started && attempt.blob === undefined) {
+				this.#lateBlobObserved = true
+				this.#lateBlob.resolve()
+			}
+			return
+		}
+		if (attempt === undefined || attempt.terminal || attempt.blob !== undefined) return
 
 		const blob = { data, encoding }
 		attempt.blob = blob
@@ -335,10 +379,11 @@ class CameraCaptureSession {
 		this.#fail(reason)
 	}
 
-	// Stops physical exposure, waits for idle, drains late BLOBs, and disables delivery exactly once.
+	// Stops physical exposure and quarantines the camera when no boundary consumes its outstanding BLOB.
 	async cleanup() {
 		if (this.#cleaned) return
 		this.#cleaned = true
+		const pendingBlob = this.#attempt?.started === true && this.#attempt.blob === undefined
 		this.#terminal = true
 		this.#state = 'stopping'
 		if (this.#attempt !== undefined) this.#attempt.terminal = true
@@ -351,8 +396,9 @@ class CameraCaptureSession {
 		}
 
 		const drainTime = Math.max(0, this.options.lateBlobDrainTime ?? DEFAULT_LATE_BLOB_DRAIN_TIME)
-		if (drainTime > 0) await Bun.sleep(drainTime)
+		if (pendingBlob && !this.#lateBlobObserved && drainTime > 0) await Promise.race([this.#lateBlob.promise, Bun.sleep(drainTime)])
 		if (canCommand) this.cameraManager.disableBlob(this.camera)
+		if (pendingBlob && !this.#lateBlobObserved && quiescent) this.quarantine()
 		if (!quiescent) {
 			this.markUnavailable()
 			throw new Error('camera exposure did not quiesce before cleanup timeout')

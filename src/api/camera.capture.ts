@@ -394,8 +394,9 @@ class CameraCaptureSession {
 		if (this.#attempt !== undefined) this.#attempt.terminal = true
 
 		const canCommand = this.camera.connected
+		const exposureMayBeActive = this.#attempt?.dispatched === true && this.#attempt.exposureState === undefined
 		let quiescent = true
-		if (canCommand && (this.camera.exposuring || this.camera.exposure.state === 'Busy')) {
+		if (canCommand && (exposureMayBeActive || this.camera.exposuring || this.camera.exposure.state === 'Busy')) {
 			this.cameraManager.stopExposure(this.camera)
 			quiescent = await this.#waitForQuiescence()
 		}

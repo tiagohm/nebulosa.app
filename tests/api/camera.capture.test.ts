@@ -16,7 +16,7 @@ interface HarnessOptions {
 	readonly capture?: CameraCaptureOptions
 	readonly io?: CameraCaptureIO
 	readonly notifyStartState?: boolean
-	readonly startState?: 'Busy' | 'Alert'
+	readonly startState?: 'Idle' | 'Busy' | 'Alert'
 	readonly stopState?: 'Idle' | 'Ok'
 	readonly stopQuiesces?: boolean
 }
@@ -303,6 +303,21 @@ describe('camera capture session failures', () => {
 })
 
 describe('camera capture session cancellation', () => {
+	test('aborts a dispatched exposure before Busy is observed', async () => {
+		const harness = createHarness({ notifyStartState: false, startState: 'Idle' })
+
+		try {
+			const active = harness.capturer.start(harness.camera, request())
+			expect(await waitUntil(() => harness.startExposure.mock.calls.length === 1)).toBeTrue()
+			await active.cancel()
+
+			expect(await active.result).toEqual({ ok: false, reason: 'aborted' })
+			expect(harness.stopExposure).toHaveBeenCalledTimes(1)
+		} finally {
+			harness.restore()
+		}
+	})
+
 	test('allows another capture after an explicit abort-to-Idle boundary', async () => {
 		const harness = createHarness({ stopState: 'Idle' })
 

@@ -48,16 +48,31 @@ export const DEFAULT_COORDINATE_INFO: CoordinateInfo = {
 	pierSide: 'NEITHER',
 }
 
+// Selects which fields of a CoordinateInfo are worth computing, so a caller that only needs to command a
+// mount does not pay for the frames a full UI panel shows. An unrequested field keeps its zero value and
+// must not be read.
+//
+// A flag only asks for an output. Frames the requested outputs depend on are still computed as
+// intermediates: asking for galactic from a JNOW target computes the J2000 equatorial it is derived from,
+// whether or not equatorialJ2000 itself was requested. Only the fields listed here are contractual.
 export interface CoordinateInfoFlags {
+	// Equatorial coordinate in the equinox of date, the frame every mount command is expressed in.
 	readonly equatorial?: boolean
+	// Equatorial coordinate in J2000, also the intermediate frame of every galactic conversion.
 	readonly equatorialJ2000?: boolean
+	// Local horizontal coordinate; requires the site and clock carried by the time.
 	readonly horizontal?: boolean
+	// Ecliptic coordinate at date.
 	readonly ecliptic?: boolean
+	// Galactic coordinate.
 	readonly galactic?: boolean
+	// Constellation the equatorial position falls in.
 	readonly constellation?: boolean
+	// Local sidereal time, which meridianTimeIn and the expected pier side are derived from.
 	readonly lst?: boolean
 }
 
+// Everything computed, the behaviour of a caller that passes no flags at all.
 const DEFAULT_COORDINATE_INFO_FLAGS: Required<CoordinateInfoFlags> = {
 	equatorial: true,
 	equatorialJ2000: true,
@@ -68,6 +83,13 @@ const DEFAULT_COORDINATE_INFO_FLAGS: Required<CoordinateInfoFlags> = {
 	lst: true,
 }
 
+// Projects one target into every requested coordinate frame.
+//
+// - time: instant the conversions are referred to, carrying the observing site for horizontal output.
+// - longitude: site longitude in radians, used for the local sidereal time.
+// - target: an equatorial coordinate at date, or a mount target tagged with the frame it is given in.
+//   Angles may be numbers in radians or the sexagesimal strings the transport sends.
+// - flags: which outputs to compute; fields not requested stay zero. See CoordinateInfoFlags.
 export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialCoordinate | MountTargetCoordinate<string | Angle>, flags: CoordinateInfoFlags = DEFAULT_COORDINATE_INFO_FLAGS) {
 	const equatorial: Writable<CoordinateInfo['equatorial']> = [0, 0]
 	const equatorialJ2000: Writable<CoordinateInfo['equatorialJ2000']> = [0, 0]

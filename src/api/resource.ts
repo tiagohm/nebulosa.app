@@ -88,8 +88,13 @@ export function resourceDevice(device: Device): Device {
 
 // Arbitrates physical and logical resources atomically without waiting or preemption.
 export class ResourceArbiter {
+	// Arbitration record per resource. Records outlive both leases and device instances, because a
+	// disconnect must keep its unavailability while nothing owns the resource.
 	readonly #resources = new Map<ResourceKey, ResourceRecord>()
+	// Reentrancy depth per owner and resource, mirroring the per-record depth so each lease releases
+	// exactly the acquisitions it made and a nested one cannot release its ancestor's hold.
 	readonly #ownerResources = new Map<ResourceOwner, Map<ResourceKey, number>>()
+	// Clients whose devices refuse acquisition wholesale, set before a disconnect starts cancelling.
 	readonly #unavailableClients = new Set<string>()
 
 	// Returns the effective state for a key; unknown logical resources start available.

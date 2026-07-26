@@ -1,6 +1,8 @@
 import { errorMessage, settlesWithin } from 'src/api/util'
 import type { OperationFailureReason, OperationResult } from './operation'
 
+// Everything needed to command a device and wait for the physical state that proves the command took
+// effect. The device itself is not a field: subscribe, current, and command already close over it.
 export interface WaitForDeviceOptions<U> {
 	// Operation signal that cancels the wait and its optional physical abort.
 	readonly signal: AbortSignal

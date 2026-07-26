@@ -91,7 +91,11 @@ interface ActiveOperation<T> {
 
 // Owns operation lifetimes and releases resources after LIFO cleanup.
 export class OperationCoordinator {
+	// Every live scope of every tree, by operation id. Entries are removed during finalization, so a
+	// completed operation is no longer reachable and cannot be canceled twice.
 	readonly #operations = new Map<string, ActiveOperation<unknown>>()
+	// Roots only, keyed by the context the arbiter holds as owner token. This is what turns an arbiter
+	// answer such as "who owns this camera" back into an operation the coordinator can cancel.
 	readonly #operationsByOwner = new Map<ResourceOwner, ActiveOperation<unknown>>()
 
 	// Creates a coordinator over the process-wide resource arbiter.

@@ -45,8 +45,12 @@ interface DeviceView {
 
 // Bridges manager add/update/remove events into availability and operation cancellation.
 export class DeviceLifecycle {
+	// Live views per physical resource. One key can carry several instances, since a camera and the guide
+	// output it exposes are separate manager objects that share a single physical device.
 	readonly #devices = new Map<ResourceKey, Map<Device, DeviceView>>()
+	// Per-resource token discarding readiness results from a verification a newer transition superseded.
 	readonly #validationGeneration = new Map<ResourceKey, number>()
+	// Manager observers to detach on disposal.
 	readonly #registrations = new Set<Registration>()
 
 	// Creates the lifecycle bridge over the process-wide arbiter and coordinator.

@@ -156,6 +156,8 @@ type CameraCaptureSessionState = 'created' | 'dithering' | 'startingExposure' | 
 
 // Starts and routes serialized camera sessions through the process-wide coordinator.
 export class CameraCapturer {
+	// Accepted session per physical camera key. Device callbacks carry no operation id, so this is what
+	// routes an update or a BLOB to the one session entitled to it.
 	readonly #sessions = new Map<string, CameraCaptureSession>()
 	// Camera keys blocked until a stale BLOB is discarded or the transport resets.
 	readonly #quarantined = new Set<string>()
@@ -281,21 +283,35 @@ export class CameraCapturer {
 
 // Owns frame generations, device rendezvous, processing, and terminal quiescence for one capture.
 class CameraCaptureSession {
+	// Mutable presentation snapshot; every emission clones it so listeners cannot retain a live reference.
 	readonly #event = structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT)
+	// Caller request copied at construction, so a mutation by the transport cannot alter a running capture.
 	readonly #request: CameraCaptureStart
+	// Inter-frame delay in microseconds.
 	readonly #waitingTime: number
+	// Aggregate exposure progress in microseconds as [remaining, elapsed].
 	readonly #totalExposureProgress = [0, 0]
+	// Paths of fully processed frames, in capture order.
 	readonly #paths: string[] = []
+	// Losing racer that releases a pending rendezvous when a device failure arrives outside it.
 	readonly #terminalFailure = Promise.withResolvers<OperationResult<never>>()
+	// Internal lifecycle position; terminal values never transition back into active work.
 	#state: CameraCaptureSessionState = 'created'
+	// Rendezvous of the exposure currently in flight, absent before the first frame.
 	#attempt?: FrameAttempt
+	// Monotonic frame counter used to discard callbacks belonging to a superseded exposure.
 	#generation = 0
+	// Whether the session stopped accepting device callbacks and frame emissions.
 	#terminal = false
+	// Exactly-once guard for #fail, so the first cause is the one reported.
 	#failureSettled = false
+	// First recorded failure, replayed by run() when it was detected outside a rendezvous.
 	#failureResult?: OperationResult<never>
+	// Exactly-once guard for cleanup, which the coordinator and a terminal path can both reach.
 	#cleaned = false
 	// Transport loss that makes the session's camera instance unsafe to command or quarantine.
 	#deviceUnavailableReason?: Extract<OperationFailureReason, 'disconnected' | 'removed'>
+	// Callbacks woken by any non-Busy exposure update, so cleanup can observe quiescence without polling.
 	readonly #quiescenceWaiters = new Set<VoidFunction>()
 	// Resolves when the canceled generation's outstanding BLOB is observed and discarded.
 	readonly #lateBlob = Promise.withResolvers<void>()
@@ -441,6 +457,8 @@ class CameraCaptureSession {
 	async cleanup() {
 		if (this.#cleaned) return
 		this.#cleaned = true
+		// A payload is owed only when the exposure was actually dispatched and nothing arrived for it. Alert
+		// and Idle are the driver stating the exposure produced no frame, so those states settle the debt.
 		const pendingBlob = this.#attempt?.dispatched === true && this.#attempt.blob === undefined
 		const requiresBlobBoundary = pendingBlob && this.#attempt?.exposureState !== 'Alert' && this.#attempt?.exposureState !== 'Idle'
 		this.#terminal = true
@@ -457,10 +475,14 @@ class CameraCaptureSession {
 				quiescent = await this.#waitForQuiescence()
 			}
 
+			// A driver that already queued the payload usually delivers it right after the stop, so a short
+			// race here consumes it in the common case and avoids quarantining a camera that is in fact fine.
 			const drainTime = Math.max(0, this.sessionContext.options.lateBlobDrainTime ?? DEFAULT_LATE_BLOB_DRAIN_TIME)
 			if (requiresBlobBoundary && !this.#lateBlobObserved && drainTime > 0) await Promise.race([this.#lateBlob.promise, Bun.sleep(drainTime)])
 			if (canCommand) this.sessionContext.cameraManager.disableBlob(this.camera)
 		} finally {
+			// The payload may still arrive after the lease is gone, and BLOBs carry no operation id, so the
+			// next session would read this one's frame. Quarantine blocks the camera until it is discarded.
 			if (canCommand && requiresBlobBoundary && !this.#lateBlobObserved && !this.#abortIdleObserved) this.sessionContext.availability.quarantine()
 			if (!quiescent) {
 				this.sessionContext.availability.markUnavailable()

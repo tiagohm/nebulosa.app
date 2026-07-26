@@ -14,14 +14,22 @@ import type { WebSocketMessageHandler } from './message'
 import type { OperationCoordinator } from './operation'
 import { resourceKey } from './resource'
 
+// Presentation events fanned out to WebSocket subscribers. These publish state and never participate in
+// the correctness of a capture: dropping one loses a UI update, not a frame or a device command.
 export interface CameraBusEvents {
+	// A camera became known to its manager.
 	readonly add: CameraAdded
+	// One camera property changed, carrying only the changed field and its INDI state.
 	readonly update: CameraUpdated
+	// A camera disappeared from its manager.
 	readonly remove: CameraRemoved
+	// One frame finished processing, naming the path it was written to.
 	readonly frame: CameraFrameEvent
+	// Capture progress or a terminal snapshot for one session.
 	readonly capture: CameraCaptureEvent
 }
 
+// Process-wide fanout of camera presentation events.
 export const cameraBus = new EventBus<CameraBusEvents>()
 
 // Publishes camera transport events and delegates capture ownership to CameraCapturer.
@@ -99,6 +107,10 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	// Starts a capture as a new top-level operation and returns its operation-backed milestones.
 	capture(camera: Camera, request: CameraCaptureStart, onCameraCaptureEvent?: CameraCaptureListener, rejectedListener: CameraCaptureListener | undefined = onCameraCaptureEvent) {
 		const client = camera[CLIENT]!
+
+		// Snoop devices are resolved but deliberately not acquired: the driver only reads them to stamp FITS
+		// headers, so requiring ownership would make a capture conflict with whoever is actually slewing the
+		// mount or moving the focuser. Only the camera is exclusive here.
 		const mount = request.mount ? this.mountManager.get(client, request.mount) : undefined
 		const wheel = request.wheel ? this.wheelManager.get(client, request.wheel) : undefined
 		const focuser = request.focuser ? this.focuserManager.get(client, request.focuser) : undefined

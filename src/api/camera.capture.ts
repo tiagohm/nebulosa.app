@@ -245,8 +245,13 @@ export class CameraCapturer {
 	updated(camera: Camera, property: keyof Camera & string, state?: PropertyState) {
 		const key = resourceKey(camera)
 		this.#sessions.get(key)?.updated(camera, property, state)
+
 		// A disconnected camera cannot deliver the pending payload, and lifecycle owns its availability from here.
 		if (property === 'connected' && !camera.connected) this.#endQuarantine(camera, key)
+		// Alert and Idle are the driver reporting an exposure that produced no frame, which can arrive long
+		// after the session gave up on it. Only Ok promises a payload, so any other terminal state ends the
+		// quarantine instead of blocking the camera until it is reconnected.
+		else if (property === 'exposure' && (state === 'Alert' || state === 'Idle')) this.#endQuarantine(camera, key)
 	}
 
 	// Discards a quarantined stale BLOB before allowing a connected camera to capture again.

@@ -402,6 +402,31 @@ describe('camera capture session cancellation', () => {
 		}
 	})
 
+	test('releases a quarantine when the driver ends the exposure without a payload', async () => {
+		const harness = createHarness()
+
+		try {
+			const key = resourceKey(harness.camera)
+			const handle = harness.capturer.start(harness.camera, request())
+			expect((await handle.started).ok).toBeTrue()
+			expect(await handle.result).toEqual({ ok: false, reason: 'timeout' })
+			expect(harness.arbiter.availability(key)).toBe('unavailable')
+
+			// The driver reports a failed frame long after the session gave up, so no BLOB will ever arrive.
+			harness.camera.exposuring = false
+			harness.camera.exposure.state = 'Alert'
+			harness.capturer.updated(harness.camera, 'exposure', 'Alert')
+
+			expect(harness.arbiter.availability(key)).toBe('available')
+
+			const next = harness.capturer.start(harness.camera, request())
+			expect((await next.started).ok).toBeTrue()
+			await next.cancel()
+		} finally {
+			harness.restore()
+		}
+	})
+
 	test('keeps an externally exposing camera unavailable after discarding a stale BLOB', async () => {
 		const harness = createHarness()
 

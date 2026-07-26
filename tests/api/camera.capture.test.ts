@@ -296,6 +296,28 @@ describe('camera capture session failures', () => {
 		}
 	})
 
+	test('degrades a completed capture whose camera never reaches quiescence', async () => {
+		const io: CameraCaptureIO = { decode: (data) => Promise.resolve(data), write: () => Promise.resolve() }
+		const harness = createHarness({ stopQuiesces: false, capture: { quiesceTimeout: 5 }, io })
+
+		try {
+			const handle = harness.capturer.start(harness.camera, request({ autoSave: true, savePath: tmpdir(), autoSubFolderMode: 'off' }))
+			expect((await handle.started).ok).toBeTrue()
+
+			harness.capturer.updated(harness.camera, 'exposure', 'Ok')
+			harness.capturer.blobReceived(harness.camera, Buffer.from('frame'), 'raw')
+
+			expect(await handle.result).toEqual({
+				ok: false,
+				reason: 'timeout',
+				error: 'cleanup failed: camera exposure did not quiesce before cleanup timeout',
+			})
+			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('unavailable')
+		} finally {
+			harness.restore()
+		}
+	})
+
 	test('emits terminal callbacks when a conflicting capture is rejected', async () => {
 		const harness = createHarness()
 		const events: CameraCaptureEvent[] = []

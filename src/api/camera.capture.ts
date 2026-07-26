@@ -43,7 +43,7 @@ export interface CameraCaptureHandle {
 	readonly id: string
 	// Resolves after the first exposure is physically observed as Busy, or with the start failure.
 	readonly started: Promise<OperationResult<void>>
-	// Resolves after terminal cleanup and camera lease release.
+	// Resolves after terminal cleanup and camera lease release; never rejects.
 	readonly result: Promise<OperationResult<CameraCaptureResult>>
 	// Cancels this exact capture and waits for quiescence and lease release.
 	readonly cancel: () => Promise<void>
@@ -138,7 +138,7 @@ export class CameraCapturer {
 		const key = resourceKey(camera)
 		if (this.#quarantined.has(key)) this.coordinator.arbiter.markUnavailable({ key, device: camera })
 		const started = Promise.withResolvers<OperationResult<void>>()
-		let sessionCreated = false
+		let session: CameraCaptureSession | undefined
 
 		let startedSettled = false
 		const settleStarted = (result: OperationResult<void>) => {
@@ -148,8 +148,7 @@ export class CameraCapturer {
 		}
 
 		const operation = this.coordinator.start<CameraCaptureResult>('cameraCapture', [{ key, device: camera }], (context) => {
-			sessionCreated = true
-			const session = new CameraCaptureSession(
+			const current = new CameraCaptureSession(
 				context,
 				camera,
 				structuredClone(request),
@@ -168,39 +167,43 @@ export class CameraCapturer {
 				},
 			)
 
-			this.#sessions.set(key, session)
+			session = current
+			this.#sessions.set(key, current)
 
 			context.onCleanup(async () => {
-				await session.cleanup()
-				if (this.#sessions.get(key) === session) this.#sessions.delete(key)
+				await current.cleanup()
+				if (this.#sessions.get(key) === current) this.#sessions.delete(key)
 			})
 
-			return session.run()
+			return current.run()
 		})
 
-		void operation.result.then(
-			(result) => {
-				if (!startedSettled) settleStarted(result.ok ? { ok: false, reason: 'unexpectedState', error: 'capture completed before exposure became busy' } : result)
-
-				if (!sessionCreated && !result.ok) {
-					const event = structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT)
-					event.operation = operation.id
-					event.session = Bun.randomUUIDv7()
-					event.camera = camera.id
-					event.state = 'error'
-					rejectedListener(structuredClone(event))
-					event.state = 'idle'
-					event.stopped = true
-					rejectedListener(event)
-				}
-			},
-			(error) => settleStarted({ ok: false, reason: 'commandFailed', error: errorMessage(error) }),
+		// Cleanup-time failures are folded into the session result so this handle never rejects.
+		const result = operation.result.then(
+			(value): OperationResult<CameraCaptureResult> => session?.resultAfterCleanup(value) ?? value,
+			(error): OperationResult<CameraCaptureResult> => ({ ok: false, reason: 'commandFailed', error: errorMessage(error) }),
 		)
+
+		void result.then((result) => {
+			if (!startedSettled) settleStarted(result.ok ? { ok: false, reason: 'unexpectedState', error: 'capture completed before exposure became busy' } : result)
+
+			if (session === undefined && !result.ok) {
+				const event = structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT)
+				event.operation = operation.id
+				event.session = Bun.randomUUIDv7()
+				event.camera = camera.id
+				event.state = 'error'
+				rejectedListener(structuredClone(event))
+				event.state = 'idle'
+				event.stopped = true
+				rejectedListener(event)
+			}
+		})
 
 		return Object.freeze({
 			id: operation.id,
 			started: started.promise,
-			result: operation.result,
+			result,
 			cancel: () => operation.cancel('aborted'),
 		})
 	}
@@ -256,6 +259,8 @@ class CameraCaptureSession {
 	#lateBlobObserved = false
 	// Whether cancellation observed the driver's explicit abort-to-Idle boundary.
 	#abortIdleObserved = false
+	// Expected cleanup failure folded into the session result instead of thrown.
+	#cleanupFailure?: Extract<OperationResult<never>, { readonly ok: false }>
 
 	// Creates an immutable request session bound to one operation context and physical camera.
 	constructor(
@@ -387,6 +392,14 @@ class CameraCaptureSession {
 		this.#fail(reason)
 	}
 
+	// Applies a cleanup-time failure without replacing an earlier terminal cause.
+	resultAfterCleanup(result: OperationResult<CameraCaptureResult>): OperationResult<CameraCaptureResult> {
+		const failure = this.#cleanupFailure
+		if (failure === undefined) return result
+		if (result.ok) return failure
+		return { ...result, error: result.error ? `${result.error}; ${failure.error}` : failure.error }
+	}
+
 	// Stops physical exposure and quarantines the camera when no boundary consumes its outstanding BLOB.
 	async cleanup() {
 		if (this.#cleaned) return
@@ -412,11 +425,10 @@ class CameraCaptureSession {
 			if (canCommand) this.cameraManager.disableBlob(this.camera)
 		} finally {
 			if (canCommand && requiresBlobBoundary && !this.#lateBlobObserved && !this.#abortIdleObserved) this.quarantine()
-			if (!quiescent) this.markUnavailable()
-		}
-
-		if (!quiescent) {
-			throw new Error('camera exposure did not quiesce before cleanup timeout')
+			if (!quiescent) {
+				this.markUnavailable()
+				this.#cleanupFailure = { ok: false, reason: 'timeout', error: 'cleanup failed: camera exposure did not quiesce before cleanup timeout' }
+			}
 		}
 	}
 

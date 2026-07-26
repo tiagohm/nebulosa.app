@@ -183,6 +183,15 @@ describe('camera capture session failures', () => {
 			expect(await handle.result).toEqual({ ok: false, reason: 'disconnected' })
 			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('unavailable')
 			expect(harness.disableBlob).not.toHaveBeenCalled()
+
+			harness.camera.connected = true
+			harness.camera.exposure.state = 'Idle'
+			harness.camera.exposuring = false
+			harness.arbiter.markAvailable({ key: resourceKey(harness.camera), device: harness.camera })
+
+			const next = harness.capturer.start(harness.camera, request())
+			expect((await next.started).ok).toBeTrue()
+			await next.cancel()
 		} finally {
 			harness.restore()
 		}

@@ -399,7 +399,7 @@ class CameraCaptureSession {
 		const drainTime = Math.max(0, this.options.lateBlobDrainTime ?? DEFAULT_LATE_BLOB_DRAIN_TIME)
 		if (pendingBlob && !this.#lateBlobObserved && drainTime > 0) await Promise.race([this.#lateBlob.promise, Bun.sleep(drainTime)])
 		if (canCommand) this.cameraManager.disableBlob(this.camera)
-		if (pendingBlob && !this.#lateBlobObserved && quiescent) this.quarantine()
+		if (canCommand && pendingBlob && !this.#lateBlobObserved && quiescent) this.quarantine()
 		if (!quiescent) {
 			this.markUnavailable()
 			throw new Error('camera exposure did not quiesce before cleanup timeout')

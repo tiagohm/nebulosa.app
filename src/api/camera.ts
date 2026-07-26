@@ -132,6 +132,11 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		return this.capture(camera, req, onCameraCaptureEvent).result.then((result) => result.ok)
 	}
 
+	// Waits until one capture has completed cleanup and released its physical camera lease.
+	async waitForCapture(operation: string) {
+		await this.captures.get(operation)?.result
+	}
+
 	// Cancels one operation id, or the current camera capture for feature adapters pending Phase 5.
 	async stop(target: string | Camera) {
 		const handle = typeof target === 'string' ? this.captures.get(target) : this.capturesByCamera.get(target.id)

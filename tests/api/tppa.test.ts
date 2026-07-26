@@ -354,6 +354,37 @@ describe('tppa handler', () => {
 		}
 	})
 
+	test('waits for camera lease release before retrying a capture', async () => {
+		const { camera, mount } = connectDevices()
+		const released = Promise.withResolvers<void>()
+		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
+		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+			captureEvent = handleCameraCaptureEvent
+			return Promise.resolve(true)
+		})
+		const waitForCapture = spyOn(cameraHandler, 'waitForCapture').mockImplementation(() => released.promise)
+		const solve = spyOn(solver, 'start').mockImplementation(() => Promise.resolve(undefined))
+		const request = tppaStartRequest({ id: 'tppa-retry', maxAttempts: 2 })
+
+		try {
+			wsm.open(socket)
+			await noContent(await endpoints['/tppa/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+
+			captureEvent!(cameraCaptureEvent({ operation: 'tppa-retry-capture', camera: camera.id, state: 'idle' }), 'plate.fit')
+			expect(await waitUntil(() => solve.mock.calls.length === 1)).toBeTrue()
+			expect(start).toHaveBeenCalledTimes(1)
+			expect(waitForCapture).toHaveBeenCalledWith('tppa-retry-capture')
+
+			released.resolve()
+			expect(await waitUntil(() => start.mock.calls.length === 2)).toBeTrue()
+		} finally {
+			tppaHandler.stop(request.id)
+			solve.mockRestore()
+			waitForCapture.mockRestore()
+			start.mockRestore()
+		}
+	})
+
 	test('solves first frame and starts mount movement', async () => {
 		const { camera, mount } = connectDevices()
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined

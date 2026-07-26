@@ -110,14 +110,15 @@ export class AutoFocusTask {
 
 	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
 		this.captureOperation = event.operation
+		const captureReleased = this.autoFocusHandler.cameraHandler.waitForCapture(event.operation)
 		try {
-			await this.processCameraCapture(event, path)
+			await this.processCameraCapture(event, path, captureReleased)
 		} catch (error) {
 			this.fail(error)
 		}
 	}
 
-	private async processCameraCapture(event: CameraCaptureEvent, path?: string) {
+	private async processCameraCapture(event: CameraCaptureEvent, path: string | undefined, captureReleased: Promise<void>) {
 		if (path && !this.stopped) {
 			if (this.stopped) {
 				return this.handleAutoFocusEvent('idle', 'stopped')
@@ -151,9 +152,10 @@ export class AutoFocusTask {
 				this.computeChart()
 
 				// Wait for focuser reach position
-				this.waitForFocuser(position, (event) => {
+				this.waitForFocuser(position, async (event) => {
 					if (event === 'reach') {
-						this.start()
+						await captureReleased
+						if (!this.stopped) this.start()
 					} else if (event === 'cancel') {
 						this.handleAutoFocusEvent('idle', 'stopped')
 					} else {

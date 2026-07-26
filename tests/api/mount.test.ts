@@ -429,6 +429,21 @@ describe('mount commander', () => {
 		expect(await waitUntil(() => free(device))).toBeTrue()
 	}, 10000)
 
+	test('fails a slew that stops short of its target', async () => {
+		const device = connected()
+		const slewing = mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '30:00:00' } })
+
+		expect(await waitUntil(() => device.slewing)).toBeTrue()
+
+		simulator.stop()
+
+		const result = await slewing
+
+		expect(result).toMatchObject({ ok: false, reason: 'unexpectedState' })
+		expect(result.ok ? '' : result.error).toContain('short of the target')
+		expect(await waitUntil(() => free(device))).toBeTrue()
+	}, 10000)
+
 	test('refuses a second command while another operation owns the mount', async () => {
 		const device = connected()
 		const slewing = mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '30:00:00' } })

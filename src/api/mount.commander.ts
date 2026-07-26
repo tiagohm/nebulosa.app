@@ -22,6 +22,11 @@ export interface MountCommandOptions {
 	readonly timeout?: number
 	// Angular distance, in radians, under which the mount already counts as pointing at the target.
 	readonly tolerance?: Angle
+	// Angular distance, in radians, within which a slew that has stopped counts as having arrived. This is
+	// not a pointing-accuracy budget: the comparison is against the coordinate the mount itself reports,
+	// which matches the commanded target once it believes it arrived. It exists to catch a slew that
+	// stopped somewhere else entirely, so it is deliberately loose enough never to fail a normal arrival.
+	readonly arrivalTolerance?: Angle
 	// Maximum time a physical stop has to bring the mount back to quiescence.
 	readonly settleTimeout?: number
 }
@@ -90,6 +95,9 @@ const DEFAULT_SETTLE_TIMEOUT = 30000
 
 // Default angular tolerance for treating the mount as already pointing at the target.
 const DEFAULT_TOLERANCE = (1 / 60) * DEG2RAD
+
+// Default angular tolerance for accepting that a slew which stopped actually reached its target.
+const DEFAULT_ARRIVAL_TOLERANCE = DEG2RAD
 
 // Properties whose Alert state means the commanded motion itself failed. An Alert on an unrelated vector,
 // such as the site time, must not fail a slew that is otherwise progressing.
@@ -446,9 +454,10 @@ export class MountCommander implements DeviceHandler<Mount> {
 		if (mount.parked) return { ok: false, reason: 'unexpectedState', error: `mount ${mount.name} is parked` } as const
 
 		const tolerance = options.tolerance ?? DEFAULT_TOLERANCE
+		const arrivalTolerance = options.arrivalTolerance ?? DEFAULT_ARRIVAL_TOLERANCE
 		let moving = false
 
-		return await waitForDeviceState<MountUpdate>({
+		const slewed = await waitForDeviceState<MountUpdate>({
 			signal: context.signal,
 			timeout: options.timeout ?? DEFAULT_SLEW_TIMEOUT,
 			subscribe: (listener) => this.#subscribe(mount, listener),
@@ -464,6 +473,9 @@ export class MountCommander implements DeviceHandler<Mount> {
 					return 'pending'
 				}
 
+				// Movement ended. Whether it ended at the target is decided after the wait, not here: the
+				// driver publishes the coordinate and the busy state in one vector, and the manager applies
+				// the state first, so the position read at this instant can still be the previous one.
 				if (moving) return 'success'
 
 				// A mount that never moved is only done if it was already pointing at the target; anything
@@ -476,6 +488,18 @@ export class MountCommander implements DeviceHandler<Mount> {
 			},
 			abort: () => this.#abortMotion(mount, options),
 		})
+
+		if (!slewed.ok || !moving) return slewed
+
+		// A mount that moved and stopped has not necessarily arrived: a limit, a park, or an abort issued
+		// outside this operation also stops it, and no driver is required to publish an Alert for any of
+		// them. Only the final position tells the difference, and it is reliable here because the rest of
+		// the update that ended the movement has been applied before this continuation runs.
+		const separated = separation(mount, rightAscension, declination)
+
+		if (separated <= arrivalTolerance) return slewed
+
+		return { ok: false, reason: 'unexpectedState', error: `mount ${mount.name} stopped ${(separated / DEG2RAD).toFixed(3)}° short of the target` } as const
 	}
 
 	// Commands parking or unparking and waits for the parked flag to settle.

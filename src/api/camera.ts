@@ -103,16 +103,14 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		const focuser = request.focuser ? this.focuserManager.get(client, request.focuser) : undefined
 		const rotator = request.rotator ? this.rotatorManager.get(client, request.rotator) : undefined
 
-		const handle = this.capturer.start(
-			camera,
-			request,
-			(event, path) => {
+		const handle = this.capturer.start(camera, request, {
+			listener: (event, path) => {
 				this.sendEvent(event, path)
 				onCameraCaptureEvent?.(event, path)
 			},
-			() => this.cameraManager.snoop(camera, mount, focuser, wheel, rotator),
+			prepare: () => this.cameraManager.snoop(camera, mount, focuser, wheel, rotator),
 			rejectedListener,
-		)
+		})
 
 		this.captures.set(handle.id, handle)
 		// A conflicting capture still produces a handle, so the camera index keeps the owner that actually holds the lease.

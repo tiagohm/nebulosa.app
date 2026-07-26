@@ -86,6 +86,46 @@ const DEFAULT_CAMERA_CAPTURE_IO: CameraCaptureIO = {
 // Callback receiving presentation-state updates and processed frame paths.
 export type CameraCaptureListener = (event: CameraCaptureEvent, path?: string) => void
 
+// Optional collaborators supplied per capture by the transport that started it.
+export interface CameraCaptureRequest {
+	// Receives presentation events emitted by the accepted session.
+	readonly listener?: CameraCaptureListener
+	// Runs inside the operation once the camera has been acquired and before the first exposure.
+	readonly prepare?: VoidFunction
+	// Receives the terminal events of a capture rejected before a session exists; defaults to listener.
+	readonly rejectedListener?: CameraCaptureListener
+}
+
+// Availability transitions a session applies to the camera resource it owns.
+interface CameraAvailability {
+	// Blocks new acquisitions without releasing the current owner.
+	readonly markUnavailable: VoidFunction
+	// Blocks the camera until its outstanding BLOB is observed and discarded.
+	readonly quarantine: VoidFunction
+}
+
+// Collaborators a session needs beyond its context, camera, and request.
+interface CameraCaptureSessionDeps {
+	// Issues the physical camera commands.
+	readonly cameraManager: CameraManager
+	// Buffers and persists processed frames.
+	readonly imageProcessor: ImageProcessor
+	// Dithers before a frame when the guider is guiding.
+	readonly ditherer?: CameraDitherer
+	// Physical timeouts governing rendezvous and quiescence.
+	readonly options: CameraCaptureOptions
+	// Payload decoding and auto-save boundary.
+	readonly io: CameraCaptureIO
+	// Receives presentation events.
+	readonly listener: CameraCaptureListener
+	// Runs once before the first exposure.
+	readonly prepare?: VoidFunction
+	// Settles the exposure-start milestone exactly once.
+	readonly settleStarted: (result: OperationResult<void>) => void
+	// Applies availability transitions to the owned camera.
+	readonly availability: CameraAvailability
+}
+
 // Independent rendezvous for one exposure generation.
 interface FrameAttempt {
 	// Monotonic generation within the session.
@@ -133,8 +173,10 @@ export class CameraCapturer {
 		readonly io: CameraCaptureIO = DEFAULT_CAMERA_CAPTURE_IO,
 	) {}
 
-	// Starts one capture, routes accepted-session events to listener, and reports pre-session rejection separately when requested.
-	start(camera: Camera, request: CameraCaptureStart, listener: CameraCaptureListener = () => {}, prepare?: VoidFunction, rejectedListener: CameraCaptureListener = listener): CameraCaptureHandle {
+	// Starts one capture, routes accepted-session events to its listener, and reports pre-session rejection separately.
+	start(camera: Camera, request: CameraCaptureStart, capture: CameraCaptureRequest = {}): CameraCaptureHandle {
+		const listener = capture.listener ?? (() => {})
+		const rejectedListener = capture.rejectedListener ?? listener
 		const key = resourceKey(camera)
 		if (this.#quarantined.has(key)) this.coordinator.arbiter.markUnavailable({ key, device: camera })
 		const started = Promise.withResolvers<OperationResult<void>>()
@@ -148,24 +190,23 @@ export class CameraCapturer {
 		}
 
 		const operation = this.coordinator.start<CameraCaptureResult>('cameraCapture', [{ key, device: camera }], (context) => {
-			const current = new CameraCaptureSession(
-				context,
-				camera,
-				structuredClone(request),
-				this.cameraManager,
-				this.imageProcessor,
-				this.ditherer,
-				this.options,
-				this.io,
+			const current = new CameraCaptureSession(context, camera, structuredClone(request), {
+				cameraManager: this.cameraManager,
+				imageProcessor: this.imageProcessor,
+				ditherer: this.ditherer,
+				options: this.options,
+				io: this.io,
 				listener,
-				prepare,
+				prepare: capture.prepare,
 				settleStarted,
-				() => this.coordinator.arbiter.markUnavailable({ key, device: camera }),
-				() => {
-					this.#quarantined.add(key)
-					this.coordinator.arbiter.markUnavailable({ key, device: camera })
+				availability: {
+					markUnavailable: () => this.coordinator.arbiter.markUnavailable({ key, device: camera }),
+					quarantine: () => {
+						this.#quarantined.add(key)
+						this.coordinator.arbiter.markUnavailable({ key, device: camera })
+					},
 				},
-			)
+			})
 
 			session = current
 			this.#sessions.set(key, current)
@@ -267,16 +308,7 @@ class CameraCaptureSession {
 		readonly context: OperationContext,
 		readonly camera: Camera,
 		request: CameraCaptureStart,
-		readonly cameraManager: CameraManager,
-		readonly imageProcessor: ImageProcessor,
-		readonly ditherer: CameraDitherer | undefined,
-		readonly options: CameraCaptureOptions,
-		readonly io: CameraCaptureIO,
-		readonly listener: CameraCaptureListener,
-		readonly prepare: VoidFunction | undefined,
-		readonly settleStarted: (result: OperationResult<void>) => void,
-		readonly markUnavailable: VoidFunction,
-		readonly quarantine: VoidFunction,
+		readonly deps: CameraCaptureSessionDeps,
 	) {
 		this.#request = request
 		this.#event.operation = context.id
@@ -297,7 +329,7 @@ class CameraCaptureSession {
 		if (!this.camera.connected) return this.#finishFailure('disconnected')
 		if (this.#request.exposureTime <= 0 || this.#event.remainingCount <= 0) return this.#finishFailure('commandFailed', 'exposure time and frame count must be positive')
 		try {
-			this.prepare?.()
+			this.deps.prepare?.()
 		} catch (error) {
 			return this.#finishFailure('commandFailed', errorMessage(error))
 		}
@@ -347,7 +379,7 @@ class CameraCaptureSession {
 		if (state === 'Busy') {
 			attempt.started = true
 			this.#state = 'exposing'
-			this.settleStarted({ ok: true, value: undefined })
+			this.deps.settleStarted({ ok: true, value: undefined })
 			this.#event.state = 'exposing'
 			this.#updateProgress(remainingTime, elapsedTime)
 			this.#emit()
@@ -388,7 +420,7 @@ class CameraCaptureSession {
 	// Fails pending milestones when the physical device disconnects or is removed.
 	deviceUnavailable(reason: Extract<OperationFailureReason, 'disconnected' | 'removed'>) {
 		this.#deviceUnavailableReason = reason
-		this.markUnavailable()
+		this.deps.availability.markUnavailable()
 		this.#fail(reason)
 	}
 
@@ -416,17 +448,17 @@ class CameraCaptureSession {
 
 		try {
 			if (canCommand && (exposureMayBeActive || this.camera.exposuring || this.camera.exposure.state === 'Busy')) {
-				this.cameraManager.stopExposure(this.camera)
+				this.deps.cameraManager.stopExposure(this.camera)
 				quiescent = await this.#waitForQuiescence()
 			}
 
-			const drainTime = Math.max(0, this.options.lateBlobDrainTime ?? DEFAULT_LATE_BLOB_DRAIN_TIME)
+			const drainTime = Math.max(0, this.deps.options.lateBlobDrainTime ?? DEFAULT_LATE_BLOB_DRAIN_TIME)
 			if (requiresBlobBoundary && !this.#lateBlobObserved && drainTime > 0) await Promise.race([this.#lateBlob.promise, Bun.sleep(drainTime)])
-			if (canCommand) this.cameraManager.disableBlob(this.camera)
+			if (canCommand) this.deps.cameraManager.disableBlob(this.camera)
 		} finally {
-			if (canCommand && requiresBlobBoundary && !this.#lateBlobObserved && !this.#abortIdleObserved) this.quarantine()
+			if (canCommand && requiresBlobBoundary && !this.#lateBlobObserved && !this.#abortIdleObserved) this.deps.availability.quarantine()
 			if (!quiescent) {
-				this.markUnavailable()
+				this.deps.availability.markUnavailable()
 				this.#cleanupFailure = { ok: false, reason: 'timeout', error: 'cleanup failed: camera exposure did not quiesce before cleanup timeout' }
 			}
 		}
@@ -434,7 +466,7 @@ class CameraCaptureSession {
 
 	// Dithers before a frame only when requested and a guider session is actively guiding.
 	async #dither(): Promise<OperationResult<void>> {
-		if (!this.#request.dither.enabled || !this.ditherer?.running) return { ok: true, value: undefined }
+		if (!this.#request.dither.enabled || !this.deps.ditherer?.running) return { ok: true, value: undefined }
 
 		this.#state = 'dithering'
 		this.#event.state = 'dithering'
@@ -442,7 +474,7 @@ class CameraCaptureSession {
 		const unsubscribe = guiderBus.subscribe('dither', this.#guiderDithered)
 
 		try {
-			const result = await this.ditherer.dither(this.#request.dither, this.context.signal)
+			const result = await this.deps.ditherer.dither(this.#request.dither, this.context.signal)
 			if (result.ok) return { ok: true, value: undefined }
 			return { ok: false, reason: result.reason === 'aborted' ? abortReason(this.context.signal) : 'commandFailed', error: result.error ?? result.reason }
 		} catch (error) {
@@ -484,7 +516,7 @@ class CameraCaptureSession {
 		}
 
 		this.#state = 'awaitingFrame'
-		const timeout = exposureTimeInSeconds(this.#request.exposureTime, this.#request.exposureTimeUnit) * 1000 + Math.max(0, this.options.frameGraceTime ?? DEFAULT_FRAME_GRACE_TIME)
+		const timeout = exposureTimeInSeconds(this.#request.exposureTime, this.#request.exposureTimeUnit) * 1000 + Math.max(0, this.deps.options.frameGraceTime ?? DEFAULT_FRAME_GRACE_TIME)
 		const rendezvous = await this.#awaitRendezvous(attempt, timeout)
 
 		if (!rendezvous.ok) {
@@ -506,24 +538,24 @@ class CameraCaptureSession {
 		this.#totalExposureProgress[0] -= this.#event.frameExposureTime
 		this.#totalExposureProgress[1] += this.#event.frameExposureTime
 		this.#paths.push(processed.value)
-		this.listener(this.#event, processed.value)
+		this.deps.listener(this.#event, processed.value)
 		return this.#failureResult ?? processed
 	}
 
 	// Applies immutable request options and dispatches one exposure after the attempt exists.
 	#startExposure() {
 		const request = this.#request
-		this.cameraManager.enableBlob(this.camera)
-		if (request.width > 0 && request.height > 0 && request.subframe) this.cameraManager.frame(this.camera, request.x, request.y, request.width, request.height)
-		else if (this.camera.frame.width.max > 0 && this.camera.frame.height.max > 0) this.cameraManager.frame(this.camera, 0, 0, this.camera.frame.width.max, this.camera.frame.height.max)
-		this.cameraManager.frameType(this.camera, request.frameType)
-		if (request.frameFormat) this.cameraManager.frameFormat(this.camera, request.frameFormat)
-		this.cameraManager.bin(this.camera, request.binX, request.binY)
-		this.cameraManager.gain(this.camera, request.gain)
-		this.cameraManager.offset(this.camera, request.offset)
-		this.cameraManager.transferFormat(this.camera, request.transferFormat)
-		this.cameraManager.compression(this.camera, request.compressed)
-		this.cameraManager.startExposure(this.camera, exposureTimeInSeconds(request.exposureTime, request.exposureTimeUnit))
+		this.deps.cameraManager.enableBlob(this.camera)
+		if (request.width > 0 && request.height > 0 && request.subframe) this.deps.cameraManager.frame(this.camera, request.x, request.y, request.width, request.height)
+		else if (this.camera.frame.width.max > 0 && this.camera.frame.height.max > 0) this.deps.cameraManager.frame(this.camera, 0, 0, this.camera.frame.width.max, this.camera.frame.height.max)
+		this.deps.cameraManager.frameType(this.camera, request.frameType)
+		if (request.frameFormat) this.deps.cameraManager.frameFormat(this.camera, request.frameFormat)
+		this.deps.cameraManager.bin(this.camera, request.binX, request.binY)
+		this.deps.cameraManager.gain(this.camera, request.gain)
+		this.deps.cameraManager.offset(this.camera, request.offset)
+		this.deps.cameraManager.transferFormat(this.camera, request.transferFormat)
+		this.deps.cameraManager.compression(this.camera, request.compressed)
+		this.deps.cameraManager.startExposure(this.camera, exposureTimeInSeconds(request.exposureTime, request.exposureTimeUnit))
 	}
 
 	// Waits for both physical completion and one BLOB, or the first terminal failure/abort/timeout.
@@ -545,7 +577,7 @@ class CameraCaptureSession {
 	// Decodes, buffers, and optionally writes one BLOB while retaining the camera lease.
 	async #processBlob(blob: CameraBlob): Promise<OperationResult<string>> {
 		try {
-			const buffer = blob.encoding === 'raw' ? blob.data : await this.io.decode(blob.data)
+			const buffer = blob.encoding === 'raw' ? blob.data : await this.deps.io.decode(blob.data)
 			if (this.context.signal.aborted) return { ok: false, reason: abortReason(this.context.signal) }
 
 			const name = this.#request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : this.camera.name
@@ -553,8 +585,8 @@ class CameraCaptureSession {
 			const path = join(await makePathFor(this.#request), `${name}.${extension}`)
 			if (this.context.signal.aborted) return { ok: false, reason: abortReason(this.context.signal) }
 
-			this.imageProcessor.save(buffer, path, this.camera)
-			if (this.#request.autoSave) await this.io.write(path, buffer)
+			this.deps.imageProcessor.save(buffer, path, this.camera)
+			if (this.#request.autoSave) await this.deps.io.write(path, buffer)
 			if (this.context.signal.aborted) return { ok: false, reason: abortReason(this.context.signal) }
 			return { ok: true, value: path }
 		} catch (error) {
@@ -602,7 +634,7 @@ class CameraCaptureSession {
 
 		let timer: Timer | undefined
 		const timeout = new Promise<boolean>((resolve) => {
-			timer = setTimeout(() => resolve(false), Math.max(0, this.options.quiesceTimeout ?? DEFAULT_QUIESCE_TIMEOUT))
+			timer = setTimeout(() => resolve(false), Math.max(0, this.deps.options.quiesceTimeout ?? DEFAULT_QUIESCE_TIMEOUT))
 		})
 
 		try {
@@ -645,13 +677,13 @@ class CameraCaptureSession {
 		const result = error === undefined ? ({ ok: false, reason } as const) : ({ ok: false, reason, error } as const)
 		this.#failureResult = result
 		this.#terminalFailure.resolve(result)
-		this.settleStarted(result)
+		this.deps.settleStarted(result)
 	}
 
 	// Converts an early validation failure into the shared terminal presentation and result.
 	#finishFailure(reason: OperationFailureReason, error?: string): OperationResult<CameraCaptureResult> {
 		const result = error === undefined ? ({ ok: false, reason } as const) : ({ ok: false, reason, error } as const)
-		this.settleStarted(result)
+		this.deps.settleStarted(result)
 		return this.#finish(result)
 	}
 
@@ -660,14 +692,14 @@ class CameraCaptureSession {
 		if (this.#terminal) return { ok: false, reason: 'aborted' }
 		this.#terminal = true
 		this.#state = result.ok ? 'succeeded' : result.reason === 'aborted' ? 'cancelled' : 'failed'
-		if (!result.ok) this.settleStarted(result)
+		if (!result.ok) this.deps.settleStarted(result)
 		this.#emitTerminal(!result.ok)
 		return result.ok ? { ok: true, value: { paths: this.#paths, frameCount: this.#paths.length } } : result
 	}
 
 	// Emits a cloned presentation snapshot so transport listeners cannot mutate session state.
 	#emit() {
-		this.listener(structuredClone(this.#event))
+		this.deps.listener(structuredClone(this.#event))
 	}
 
 	// Emits one final idle presentation while preserving terminal state internally.

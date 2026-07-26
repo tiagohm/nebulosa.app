@@ -112,7 +112,7 @@ describe('camera capture session failures', () => {
 		const events: CameraCaptureEvent[] = []
 
 		try {
-			const handle = harness.capturer.start(harness.camera, request(), (event) => events.push(event))
+			const handle = harness.capturer.start(harness.camera, request(), { listener: (event) => events.push(event) })
 			expect(await handle.started).toEqual({ ok: true, value: undefined })
 			expect(await handle.result).toEqual({ ok: false, reason: 'timeout' })
 			expect(events.map((event) => event.state).slice(-2)).toEqual(['error', 'idle'])
@@ -326,7 +326,7 @@ describe('camera capture session failures', () => {
 			const active = harness.capturer.start(harness.camera, request())
 			expect((await active.started).ok).toBeTrue()
 
-			const conflicting = harness.capturer.start(harness.camera, request(), (event) => events.push(event))
+			const conflicting = harness.capturer.start(harness.camera, request(), { listener: (event) => events.push(event) })
 			expect(await conflicting.result).toMatchObject({ ok: false, reason: 'busy' })
 			expect(events.map((event) => event.state)).toEqual(['error', 'idle'])
 			expect(events.every((event) => event.operation === conflicting.id)).toBeTrue()
@@ -464,7 +464,7 @@ describe('camera capture session cancellation', () => {
 		const paths: string[] = []
 
 		try {
-			const handle = harness.capturer.start(harness.camera, request(), (_, path) => path && paths.push(path))
+			const handle = harness.capturer.start(harness.camera, request(), { listener: (_, path) => path && paths.push(path) })
 			expect((await handle.started).ok).toBeTrue()
 			harness.camera.exposuring = false
 			harness.camera.exposure.state = 'Ok'
@@ -503,7 +503,7 @@ describe('camera capture session cancellation', () => {
 		const harness = createHarness({ io })
 		const paths: string[] = []
 		try {
-			const handle = harness.capturer.start(harness.camera, request({ autoSave: true, savePath: tmpdir() }), (_, path) => path && paths.push(path))
+			const handle = harness.capturer.start(harness.camera, request({ autoSave: true, savePath: tmpdir() }), { listener: (_, path) => path && paths.push(path) })
 			expect((await handle.started).ok).toBeTrue()
 			finishExposure(harness)
 			expect(await waitUntil(() => writeStarted)).toBeTrue()
@@ -536,9 +536,11 @@ describe('camera capture session cancellation', () => {
 		const waiting = Promise.withResolvers<void>()
 
 		try {
-			const handle = harness.capturer.start(harness.camera, request({ exposureMode: 'fixed', count: 2, delay: 1, autoSave: true, autoSubFolderMode: 'off', savePath: tmpdir() }), (event) => {
-				events.push(event)
-				if (event.state === 'waiting') waiting.resolve()
+			const handle = harness.capturer.start(harness.camera, request({ exposureMode: 'fixed', count: 2, delay: 1, autoSave: true, autoSubFolderMode: 'off', savePath: tmpdir() }), {
+				listener: (event) => {
+					events.push(event)
+					if (event.state === 'waiting') waiting.resolve()
+				},
 			})
 			expect((await handle.started).ok).toBeTrue()
 			finishExposure(harness)

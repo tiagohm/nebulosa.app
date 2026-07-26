@@ -399,17 +399,22 @@ class CameraCaptureSession {
 		const canCommand = this.#deviceUnavailableReason === undefined && this.camera.connected
 		const exposureMayBeActive = this.#attempt?.dispatched === true && this.#attempt.exposureState === undefined
 		let quiescent = true
-		if (canCommand && (exposureMayBeActive || this.camera.exposuring || this.camera.exposure.state === 'Busy')) {
-			this.cameraManager.stopExposure(this.camera)
-			quiescent = await this.#waitForQuiescence()
+
+		try {
+			if (canCommand && (exposureMayBeActive || this.camera.exposuring || this.camera.exposure.state === 'Busy')) {
+				this.cameraManager.stopExposure(this.camera)
+				quiescent = await this.#waitForQuiescence()
+			}
+
+			const drainTime = Math.max(0, this.options.lateBlobDrainTime ?? DEFAULT_LATE_BLOB_DRAIN_TIME)
+			if (pendingBlob && !this.#lateBlobObserved && drainTime > 0) await Promise.race([this.#lateBlob.promise, Bun.sleep(drainTime)])
+			if (canCommand) this.cameraManager.disableBlob(this.camera)
+		} finally {
+			if (canCommand && pendingBlob && !this.#lateBlobObserved && !this.#abortIdleObserved) this.quarantine()
+			if (!quiescent) this.markUnavailable()
 		}
 
-		const drainTime = Math.max(0, this.options.lateBlobDrainTime ?? DEFAULT_LATE_BLOB_DRAIN_TIME)
-		if (pendingBlob && !this.#lateBlobObserved && drainTime > 0) await Promise.race([this.#lateBlob.promise, Bun.sleep(drainTime)])
-		if (canCommand) this.cameraManager.disableBlob(this.camera)
-		if (canCommand && pendingBlob && !this.#lateBlobObserved && !this.#abortIdleObserved) this.quarantine()
 		if (!quiescent) {
-			this.markUnavailable()
 			throw new Error('camera exposure did not quiesce before cleanup timeout')
 		}
 	}

@@ -399,6 +399,33 @@ describe('camera capture session cancellation', () => {
 		}
 	})
 
+	test('quarantines a pending BLOB when disabling delivery fails', async () => {
+		const harness = createHarness()
+		harness.disableBlob.mockImplementation(() => {
+			throw new Error('disable BLOB failed')
+		})
+
+		try {
+			const key = resourceKey(harness.camera)
+			const active = harness.capturer.start(harness.camera, request())
+			expect((await active.started).ok).toBeTrue()
+			await active.cancel()
+
+			expect(await active.result).toEqual({
+				ok: false,
+				reason: 'aborted',
+				error: 'cleanup failed: disable BLOB failed',
+			})
+			expect(harness.arbiter.availability(key)).toBe('unavailable')
+
+			harness.arbiter.markAvailable({ key, device: harness.camera })
+			const blocked = harness.capturer.start(harness.camera, request())
+			expect(await blocked.result).toMatchObject({ ok: false, reason: 'busy' })
+		} finally {
+			harness.restore()
+		}
+	})
+
 	test('retains ownership until a canceled decode settles', async () => {
 		const decoding = Promise.withResolvers<Buffer>()
 		let decodeStarted = false

@@ -155,6 +155,7 @@ describe('camera capture session failures', () => {
 			expect(await handle.started).toEqual({ ok: false, reason: 'alert' })
 			expect(await handle.result).toEqual({ ok: false, reason: 'alert' })
 			expect(harness.saved).toHaveLength(0)
+			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('available')
 		} finally {
 			harness.restore()
 		}
@@ -191,6 +192,7 @@ describe('camera capture session failures', () => {
 				error: 'exposure became idle before completion',
 			})
 			expect(harness.stopExposure).not.toHaveBeenCalled()
+			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('available')
 		} finally {
 			harness.restore()
 		}

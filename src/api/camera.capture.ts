@@ -392,6 +392,7 @@ class CameraCaptureSession {
 		if (this.#cleaned) return
 		this.#cleaned = true
 		const pendingBlob = this.#attempt?.dispatched === true && this.#attempt.blob === undefined
+		const requiresBlobBoundary = pendingBlob && this.#attempt?.exposureState !== 'Alert' && this.#attempt?.exposureState !== 'Idle'
 		this.#terminal = true
 		this.#state = 'stopping'
 		if (this.#attempt !== undefined) this.#attempt.terminal = true
@@ -407,10 +408,10 @@ class CameraCaptureSession {
 			}
 
 			const drainTime = Math.max(0, this.options.lateBlobDrainTime ?? DEFAULT_LATE_BLOB_DRAIN_TIME)
-			if (pendingBlob && !this.#lateBlobObserved && drainTime > 0) await Promise.race([this.#lateBlob.promise, Bun.sleep(drainTime)])
+			if (requiresBlobBoundary && !this.#lateBlobObserved && drainTime > 0) await Promise.race([this.#lateBlob.promise, Bun.sleep(drainTime)])
 			if (canCommand) this.cameraManager.disableBlob(this.camera)
 		} finally {
-			if (canCommand && pendingBlob && !this.#lateBlobObserved && !this.#abortIdleObserved) this.quarantine()
+			if (canCommand && requiresBlobBoundary && !this.#lateBlobObserved && !this.#abortIdleObserved) this.quarantine()
 			if (!quiescent) this.markUnavailable()
 		}
 

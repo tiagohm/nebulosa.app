@@ -218,7 +218,7 @@ export class CameraCapturer {
 	blobReceived(camera: Camera, data: Buffer, encoding: BlobEncoding) {
 		const key = resourceKey(camera)
 		if (this.#quarantined.delete(key)) {
-			if (camera.connected) this.coordinator.arbiter.markAvailable({ key, device: camera })
+			if (camera.connected && !camera.exposuring && camera.exposure.state !== 'Busy') this.coordinator.arbiter.markAvailable({ key, device: camera })
 			return
 		}
 		this.#sessions.get(key)?.blobReceived(data, encoding)

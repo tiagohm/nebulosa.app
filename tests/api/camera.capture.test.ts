@@ -288,7 +288,7 @@ describe('camera capture session failures', () => {
 			expect(await next.result).toMatchObject({ ok: false, reason: 'busy' })
 
 			harness.capturer.blobReceived(harness.camera, Buffer.from('stale frame'), 'raw')
-			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('available')
+			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('unavailable')
 		} finally {
 			harness.restore()
 		}
@@ -373,6 +373,27 @@ describe('camera capture session cancellation', () => {
 			expect((await next.started).ok).toBeTrue()
 			await next.cancel()
 			expect(await next.result).toEqual({ ok: false, reason: 'aborted' })
+		} finally {
+			harness.restore()
+		}
+	})
+
+	test('keeps an externally exposing camera unavailable after discarding a stale BLOB', async () => {
+		const harness = createHarness()
+
+		try {
+			const key = resourceKey(harness.camera)
+			const active = harness.capturer.start(harness.camera, request())
+			expect((await active.started).ok).toBeTrue()
+			await active.cancel()
+
+			harness.camera.exposuring = true
+			harness.camera.exposure.state = 'Busy'
+			harness.capturer.blobReceived(harness.camera, Buffer.from('stale frame'), 'raw')
+
+			expect(harness.arbiter.availability(key)).toBe('unavailable')
+			const blocked = harness.capturer.start(harness.camera, request())
+			expect(await blocked.result).toMatchObject({ ok: false, reason: 'busy' })
 		} finally {
 			harness.restore()
 		}

@@ -269,6 +269,16 @@ export class MountRemoteControlHandler {
 		move: (server: Lx200ProtocolServer, direction: MoveDirection, enabled: boolean) => {
 			this.#detach('move manually', this.get(server), (mount) => this.commander.manualMove(this.coordinator, mount, direction, enabled))
 		},
+		// A jog lives between the press and the release of a key, so a connection that drops in between
+		// leaves an axis moving and its operation holding the mount for a halt that will never arrive.
+		// Whatever motion is open is stopped: only one exists per mount, the client that started it is
+		// gone, and stopping a mount is never the dangerous direction to be wrong in.
+		disconnect: (server: Lx200ProtocolServer) => {
+			const device = this.find(server)
+			if (device === undefined) return
+			const active = this.commander.manualMoveOf(device)
+			if (active !== undefined) this.#detach('stop the manual move', device, () => active.stop())
+		},
 		// Abort is the protocol's safety command, so it stops whatever owns the mount instead of competing
 		// with it for ownership.
 		abort: (server: Lx200ProtocolServer) => {
@@ -333,13 +343,22 @@ export class MountRemoteControlHandler {
 	}
 
 	private get(server: Lx200ProtocolServer | StellariumProtocolServer) {
+		const mount = this.find(server)
+		if (mount === undefined) throw new Error('mount not found!')
+		return mount
+	}
+
+	// Resolves the mount a protocol server was started for, or nothing when the server is already gone.
+	// Lifecycle callbacks such as disconnect can run while the server is being torn down, and they have no
+	// caller left to receive an exception.
+	private find(server: Lx200ProtocolServer | StellariumProtocolServer) {
 		if (server instanceof Lx200ProtocolServer) {
 			for (const [m, s] of this.lx200) if (s === server) return m
 		} else {
 			for (const [m, s] of this.stellarium) if (s === server) return m
 		}
 
-		throw new Error('mount not found!')
+		return undefined
 	}
 }
 

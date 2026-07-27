@@ -381,6 +381,38 @@ describe('mount handler', () => {
 		}
 	})
 
+	test('stops a manual jog when the LX200 client disconnects', async () => {
+		const device = getMount()
+
+		mountManager.connect(device)
+
+		try {
+			mountRemoteControlHandler.start(device, { protocol: 'lx200', host: '127.0.0.1', port: 0 })
+
+			const status = mountRemoteControlHandler.status(device)
+
+			expect(status.lx200).not.toBeFalse()
+
+			const lx200 = await Bun.connect({
+				hostname: '127.0.0.1',
+				port: status.lx200 ? status.lx200.port : 0,
+				socket: { data() {} },
+			})
+
+			lx200.write('#:Mn#')
+			lx200.flush()
+
+			expect(await waitUntil(() => mountCommander.manualMoveOf(device) !== undefined)).toBeTrue()
+
+			lx200.end()
+
+			expect(await waitUntil(() => mountCommander.manualMoveOf(device) === undefined)).toBeTrue()
+			expect(await waitUntil(() => !device.slewing && free(device))).toBeTrue()
+		} finally {
+			mountRemoteControlHandler.stop(device, 'lx200')
+		}
+	}, 10000)
+
 	test('emits remove event when the simulator is disposed', () => {
 		const wsm = new WebSocketMessageHandler()
 		const mountManager = new MountManager()

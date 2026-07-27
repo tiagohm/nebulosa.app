@@ -13,6 +13,7 @@ import { ConfirmationHandler } from 'src/api/confirmation'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler } from 'src/api/mount'
+import { MountCommander } from 'src/api/mount.commander'
 import { NotificationHandler } from 'src/api/notification'
 import { OperationCoordinator } from 'src/api/operation'
 import type { OperationResult } from 'src/api/operation'
@@ -44,7 +45,7 @@ const rotatorManager = new RotatorManager()
 const operationCoordinator = new OperationCoordinator(new ResourceArbiter())
 const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, operationCoordinator.arbiter)
 const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
-const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm))
+const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm), new NotificationHandler(wsm), new MountCommander(mountManager), operationCoordinator)
 const solver = new PlateSolverHandler(new NotificationHandler(wsm), imageProcessor)
 const tppaHandler = new TppaHandler(wsm, cameraHandler, mountHandler, solver)
 const endpoints = tppaEndpoints(tppaHandler)

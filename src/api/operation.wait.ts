@@ -18,7 +18,9 @@ export interface WaitForDeviceOptions<U> {
 	readonly command: (signal: AbortSignal) => void | Promise<void>
 	// Maximum milliseconds to wait for a canceled command before forcing physical abort cleanup.
 	readonly commandAbortTimeout?: number
-	// Stops or quiesces physical work on abort or timeout before the result settles.
+	// Stops or quiesces physical work before any non-successful result settles, whether the cause was an
+	// abort, a timeout, a failed command, or a failure verdict the device itself reported. Only a wait
+	// whose command was never dispatched skips it.
 	readonly abort?: () => void | Promise<void>
 }
 
@@ -101,6 +103,14 @@ export function waitForDeviceState<U>(options: WaitForDeviceOptions<U>): Promise
 			resolve(error === undefined ? { ok: false, reason } : { ok: false, reason, error })
 		}
 
+		// Concludes through the physical abort path whenever the device did not reach the intended state.
+		// A verdict such as Alert in the middle of a slew means the command failed while the device may
+		// still be moving, so resolving without stopping it would release the resource on a live axis.
+		const settle = (result: OperationResult<U>) => {
+			if (result.ok) finish(result)
+			else void finishAfterAbort(result.reason, result.error)
+		}
+
 		const evaluate = (update: U): OperationResult<U> | undefined => {
 			let evaluation: ReturnType<typeof options.evaluate>
 
@@ -121,7 +131,7 @@ export function waitForDeviceState<U>(options: WaitForDeviceOptions<U>): Promise
 			const result = evaluate(update)
 
 			if (result !== undefined) {
-				if (commandCompleted) finish(result)
+				if (commandCompleted) settle(result)
 				else pendingResult ??= result
 			}
 		}
@@ -149,7 +159,9 @@ export function waitForDeviceState<U>(options: WaitForDeviceOptions<U>): Promise
 			try {
 				await options.command(commandController.signal)
 			} catch (error) {
-				finish({ ok: false, reason: 'commandFailed', error: errorMessage(error) })
+				// The device may have accepted part of the command before failing, so this settles through the
+				// abort path too; the completion promise it awaits resolves in the finally block below.
+				settle({ ok: false, reason: 'commandFailed', error: errorMessage(error) })
 				return
 			} finally {
 				commandCompletion.resolve()
@@ -159,15 +171,15 @@ export function waitForDeviceState<U>(options: WaitForDeviceOptions<U>): Promise
 			commandCompleted = true
 
 			if (pendingResult !== undefined) {
-				finish(pendingResult)
+				settle(pendingResult)
 				return
 			}
 
 			try {
 				const result = evaluate(options.current())
-				if (result !== undefined) finish(result)
+				if (result !== undefined) settle(result)
 			} catch (error) {
-				finish({ ok: false, reason: 'unexpectedState', error: errorMessage(error) })
+				settle({ ok: false, reason: 'unexpectedState', error: errorMessage(error) })
 			}
 		})()
 	})

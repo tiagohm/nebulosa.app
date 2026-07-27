@@ -723,3 +723,32 @@ describe('coordinateInfo computes correctly the constellation for all coordinate
 		})
 	}
 })
+
+describe('coordinateInfo computes correctly the lst, meridian time and pier side', () => {
+	const time = timeNormalize(2461248, 0.5)
+	time.location = { latitude: 0, longitude: 0, elevation: 0, ellipsoid: 3 }
+	const equatorial = [hour(20), deg(-30)] as const
+	const equatorialJ2000 = equatorialToJ2000(...equatorial, time)
+	const galactic = equatorialToGalatic(...equatorialJ2000)
+	const ecliptic = equatorialToEcliptic(...equatorial, time)
+	const observed = cirsToObserved(equatorial, time)
+	const horizontal = [observed.azimuth, observed.altitude] as const
+
+	const flags = [
+		[equatorial, 'JNOW'],
+		[equatorialJ2000, 'J2000'],
+		[horizontal, 'ALTAZ'],
+		[ecliptic, 'ECLIPTIC'],
+		[galactic, 'GALACTIC'],
+	] as const
+
+	for (const [coordinate, type] of flags) {
+		const info = coordinateInfo(time, 0, { type, [type]: { x: coordinate[0], y: coordinate[1] } }, { lst: true })
+
+		test(type, () => {
+			expect(info.lst).toBeCloseTo(equatorial[0], 0)
+			expect(info.meridianTimeIn).not.toBe(0)
+			expect(info.pierSide).not.toBe('NEITHER')
+		})
+	}
+})

@@ -8,8 +8,8 @@ import { base64Source, bufferSource } from 'nebulosa/src/io/io'
 import { DEFAULT_CAMERA_CAPTURE_EVENT, exposureTimeInMicroseconds, exposureTimeInSeconds } from '#/camera'
 import type { CameraCaptureEvent, CameraCaptureStart } from '#/camera'
 import type { GuiderDither } from '#/guider'
-import { guiderBus } from './guider'
-import type { GuiderDitherEvent, GuiderDitherResult } from './guider'
+import { guiderBus } from './guider.session'
+import type { GuiderDitherEvent } from './guider.session'
 import type { ImageProcessor } from './image'
 import type { OperationContext, OperationFailureReason, OperationResult, OperationScope } from './operation'
 import { abortableDelay, abortReason } from './operation.wait'
@@ -48,12 +48,14 @@ export interface CameraCaptureHandle {
 	readonly cancel: () => Promise<void>
 }
 
-// Optional integration used to dither before frames without coupling capture to HTTP transport.
+// Optional integration used to dither before frames without coupling capture to HTTP transport. The
+// capture only passes its signal: the guider session stays the owner of its own devices and serializes
+// the command, so cancelling a dither never disconnects the session that ran it.
 export interface CameraDitherer {
 	// Whether the guider is currently able to dither.
 	readonly running: boolean
 	// Requests dither and settles only after the guider reports its terminal result.
-	readonly dither: (request: GuiderDither, signal?: AbortSignal) => Promise<GuiderDitherResult>
+	readonly dither: (request: GuiderDither, options?: { readonly signal?: AbortSignal }) => Promise<OperationResult<void>>
 }
 
 // Tunable physical timeouts used by deterministic tests and device-specific integration.
@@ -501,7 +503,7 @@ class CameraCaptureSession {
 		const unsubscribe = guiderBus.subscribe('dither', this.#guiderDithered)
 
 		try {
-			const result = await this.sessionContext.ditherer.dither(this.#request.dither, this.operationContext.signal)
+			const result = await this.sessionContext.ditherer.dither(this.#request.dither, { signal: this.operationContext.signal })
 			if (result.ok) return { ok: true, value: undefined }
 			return { ok: false, reason: result.reason === 'aborted' ? abortReason(this.operationContext.signal) : 'commandFailed', error: result.error ?? result.reason }
 		} catch (error) {

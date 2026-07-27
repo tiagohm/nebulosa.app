@@ -19,14 +19,14 @@ import { deg, hour } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { camera as cameraEndpoints, CameraHandler, cameraBus } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
-import type { CameraCaptureHandle } from 'src/api/camera.capture'
+import type { CameraCaptureHandle, CameraDitherer } from 'src/api/camera.capture'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'
-import { guiderBus } from 'src/api/guider'
-import type { GuiderHandler } from 'src/api/guider'
+import { guiderBus } from 'src/api/guider.session'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import type { Messager } from 'src/api/message'
 import { OperationCoordinator } from 'src/api/operation'
+import type { OperationResult } from 'src/api/operation'
 import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraAdded, CameraRemoved, CameraUpdated, CameraCaptureEvent, CameraCaptureStart, CameraDither, CameraFrameEvent } from '#/camera'
@@ -843,15 +843,15 @@ describe('camera capture start request', () => {
 
 		const guiderHandler = {
 			running: true,
-			dither: (request: GuiderDither, s?: AbortSignal) => {
+			dither: (request: GuiderDither, options?: { readonly signal?: AbortSignal }) => {
 				dithered = request
-				signal = s
+				signal = options?.signal
 				guiderBus.emit('dither', { phase: 'dithered', guider: structuredClone(DEFAULT_GUIDER_EVENT), dx: 1.5, dy: -2 })
 				guiderBus.emit('dither', { phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
 				guiderBus.emit('dither', { phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'guiding' }, ok: true })
-				return Promise.resolve({ ok: true } as const)
+				return Promise.resolve({ ok: true, value: undefined } as const)
 			},
-		} as unknown as GuiderHandler
+		} satisfies CameraDitherer
 
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
@@ -882,12 +882,12 @@ describe('camera capture start request', () => {
 		const error = spyOn(console, 'error').mockImplementation(() => {})
 		const guiderHandler = {
 			running: true,
-			dither: (request: GuiderDither, s?: AbortSignal) => {
+			dither: () => {
 				guiderBus.emit('dither', { phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
-				guiderBus.emit('dither', { phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' }, ok: false, reason: 'settle-timeout' })
-				return Promise.resolve({ ok: false, reason: 'settle-timeout' } as const)
+				guiderBus.emit('dither', { phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' }, ok: false, reason: 'timeout' })
+				return Promise.resolve({ ok: false, reason: 'timeout' } as const)
 			},
-		} as unknown as GuiderHandler
+		} satisfies CameraDitherer
 
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
@@ -912,17 +912,17 @@ describe('camera capture start request', () => {
 
 	test('aborts guider dither when capture stops', async () => {
 		let signal: AbortSignal | undefined
-		let resolveDither: ((value: Awaited<ReturnType<GuiderHandler['dither']>>) => void) | undefined
+		let resolveDither: ((value: OperationResult<void>) => void) | undefined
 		const guiderHandler = {
 			running: true,
-			dither: (request: GuiderDither, s?: AbortSignal, id?: string) => {
-				signal = s
-				return new Promise<Awaited<ReturnType<GuiderHandler['dither']>>>((resolve) => {
+			dither: (request: GuiderDither, options?: { readonly signal?: AbortSignal }) => {
+				signal = options?.signal
+				return new Promise<OperationResult<void>>((resolve) => {
 					resolveDither = resolve
-					s?.addEventListener('abort', () => resolve({ ok: false, reason: 'aborted' }), { once: true })
+					options?.signal?.addEventListener('abort', () => resolve({ ok: false, reason: 'aborted' }), { once: true })
 				})
 			},
-		} as unknown as GuiderHandler
+		} satisfies CameraDitherer
 
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)

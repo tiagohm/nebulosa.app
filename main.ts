@@ -196,9 +196,9 @@ function shutdown() {
 	})())
 }
 
-process.once('beforeExit', () => void shutdown())
-process.once('SIGINT', () => void shutdown())
-process.once('SIGTERM', () => void shutdown())
+process.once('beforeExit', shutdown)
+process.once('SIGINT', shutdown)
+process.once('SIGTERM', shutdown)
 
 deviceLifecycle.observe(cameraManager)
 deviceLifecycle.observe(mountManager)

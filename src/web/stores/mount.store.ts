@@ -95,6 +95,7 @@ export function mountStore(mount: Mount) {
 		u[0] = initProxy(state.target, `mount.${mount.id}.targetcoordinate`, ['o:coordinate'])
 		u[1] = subscribeKey(state.mount, 'slewing', updateCoordinatePosition)
 		u[2] = subscribeKey(state.mount, 'connected', updateCoordinatePosition)
+		u[3] = subscribeKey(state.mount, 'moving', updateCoordinatePosition)
 
 		timer = window.setInterval(updateCoordinatePosition, 5000)
 

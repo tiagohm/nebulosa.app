@@ -349,8 +349,19 @@ export class MountCommander implements DeviceHandler<Mount> {
 		const started = Promise.withResolvers<OperationResult<ManualMoveHandle>>()
 
 		const operation = scope.start<void>('mountManualMove', [{ key, device: mount }], (context) => {
+			// The motion is over as soon as anything decides to end it. A normal stop does not abort the
+			// scope, so the signal alone cannot tell a live handle from a spent one, and a caller holding
+			// the handle could otherwise command an axis after cleanup released the mount, leaving motion
+			// nothing tracks and another operation free to acquire a device that is still moving.
+			let closed = false
+
+			const close = (result: OperationResult<void>) => {
+				closed = true
+				stopped.resolve(result)
+			}
+
 			const move = async (direction: MountMoveDirection, enabled: boolean): Promise<OperationResult<void>> => {
-				if (context.signal.aborted) return { ok: false, reason: 'aborted', error: 'manual move is no longer running' }
+				if (closed || context.signal.aborted) return { ok: false, reason: 'aborted', error: 'manual move is no longer running' }
 				if (!mount.connected) return { ok: false, reason: 'disconnected' }
 				if (directions.has(direction) === enabled) return { ok: true, value: undefined }
 
@@ -362,7 +373,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 					// what keeps a failed send from holding the mount for the rest of the process, and it
 					// also keeps the failure inside the result contract instead of rejecting the caller.
 					const failure = { ok: false, reason: 'commandFailed', error: errorMessage(error) } as const
-					stopped.resolve(failure)
+					close(failure)
 					await operation.result
 					return failure
 				}
@@ -382,7 +393,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 				// mount to stop, so the caller only learns the axis stopped once the lease is gone.
 				if (directions.size > 0) return { ok: true, value: undefined }
 
-				stopped.resolve({ ok: true, value: undefined })
+				close({ ok: true, value: undefined })
 				return await operation.result
 			}
 
@@ -391,7 +402,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 				directions: () => [...directions],
 				move,
 				stop: async () => {
-					stopped.resolve({ ok: true, value: undefined })
+					close({ ok: true, value: undefined })
 					return await operation.result
 				},
 			})
@@ -405,7 +416,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 
 			// Cancellation aborts the signal but still waits for the executor to return, so the motion has to
 			// end itself here; nothing else would ever resolve the promise below.
-			context.signal.addEventListener('abort', () => stopped.resolve({ ok: false, reason: abortReason(context.signal) }), { once: true })
+			context.signal.addEventListener('abort', () => close({ ok: false, reason: abortReason(context.signal) }), { once: true })
 
 			started.resolve({ ok: true, value: handle })
 

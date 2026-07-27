@@ -501,6 +501,28 @@ describe('mount commander', () => {
 		expect(await waitUntil(() => free(device))).toBeTrue()
 	}, 10000)
 
+	test('refuses to move through a handle whose motion already ended', async () => {
+		const device = connected()
+		const started = await mountCommander.startManualMove(operationCoordinator, device, 'NORTH')
+
+		expect(started.ok).toBeTrue()
+
+		if (!started.ok) return
+
+		const handle = started.value
+		const moveSouth = spyOn(mountManager, 'moveSouth')
+
+		try {
+			expect(await handle.stop()).toMatchObject({ ok: true })
+			expect(await handle.move('SOUTH', true)).toMatchObject({ ok: false, reason: 'aborted' })
+			expect(moveSouth).not.toHaveBeenCalled()
+			expect(device.slewing).toBeFalse()
+			expect(await waitUntil(() => free(device))).toBeTrue()
+		} finally {
+			moveSouth.mockRestore()
+		}
+	}, 10000)
+
 	test('ends the manual move when the motion command cannot be sent', async () => {
 		const device = connected()
 		const moveNorth = spyOn(mountManager, 'moveNorth').mockImplementation(() => {

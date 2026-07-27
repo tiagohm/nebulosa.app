@@ -499,6 +499,15 @@ export class MountCommander implements DeviceHandler<Mount> {
 		const arrivalTolerance = options.arrivalTolerance ?? DEFAULT_ARRIVAL_TOLERANCE
 		let moving = false
 
+		// A goto whose target the mount already holds is answered without commanding anything. Sending it
+		// and then accepting the position read back afterwards would report success against a state from
+		// before the command: a driver that acknowledges asynchronously would still be starting its short
+		// slew when the lease was released, leaving that movement owned by nobody. A flip is excluded on
+		// purpose, since it ends where it began and the position can never say whether it happened.
+		if (mode === 'goto' && !mount.slewing && separation(mount, rightAscension, declination) <= tolerance) {
+			return { ok: true, value: { mount } } as const
+		}
+
 		const slewed = await waitForDeviceState<MountUpdate>({
 			signal: context.signal,
 			timeout: options.timeout ?? DEFAULT_SLEW_TIMEOUT,
@@ -520,15 +529,9 @@ export class MountCommander implements DeviceHandler<Mount> {
 				// the state first, so the position read at this instant can still be the previous one.
 				if (moving) return 'success'
 
-				// A flip ends at the same sky position it started from, only on the other side of the pier,
-				// so a target the mount already points at is the normal case and proves nothing. Accepting
-				// it would report success, sample the pier side, and release the mount before a driver that
-				// acknowledges asynchronously had even begun to move.
-				if (mode === 'flip') return 'pending'
-
-				// A mount that never moved is only done if it was already pointing at the target; anything
-				// else means the driver has not started yet.
-				return separation(mount, rightAscension, declination) <= tolerance ? 'success' : 'pending'
+				// The command was dispatched because the mount was not on target, so a mount still standing
+				// where it was means the driver has not started yet, whatever the position says.
+				return 'pending'
 			},
 			command: () => {
 				if (mode === 'flip') this.mountManager.flipTo(mount, rightAscension, declination)

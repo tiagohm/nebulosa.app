@@ -280,6 +280,9 @@ describe('mount handler', () => {
 		try {
 			wsm.open(socket)
 			mountManager.connect(device)
+			mountManager.syncTo(device, hour(0), deg(0))
+
+			expect(await waitUntil(() => Math.abs(device.equatorialCoordinate.declination) < deg(0.01))).toBeTrue()
 
 			await noContent(await endpoints['/mounts/:id/goto'].POST(request(device.id, target)))
 
@@ -402,16 +405,19 @@ describe('mount handler', () => {
 })
 
 describe('mount commander', () => {
-	function connected() {
+	async function connected() {
 		const device = getMount()
 		mountManager.connect(device)
 		expect(device.connected).toBeTrue()
 		mountManager.syncTo(device, hour(5), deg(-30))
+		// The sync is a round trip through the driver, so the reported coordinate only matches the request
+		// once its notification has been applied.
+		expect(await waitUntil(() => Math.abs(device.equatorialCoordinate.declination - deg(-30)) < deg(0.01))).toBeTrue()
 		return device
 	}
 
 	test('slews to a target and reports where the mount stopped', async () => {
-		const device = connected()
+		const device = await connected()
 		const result = await mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '-28:00:00' } })
 
 		expect(result.ok).toBeTrue()
@@ -426,14 +432,14 @@ describe('mount commander', () => {
 	}, 10000)
 
 	test('completes immediately when the mount already points at the target', async () => {
-		const device = connected()
+		const device = await connected()
 		const goTo = spyOn(mountManager, 'goTo')
 
 		try {
 			const result = await mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '-30:00:00' } })
 
 			expect(result.ok).toBeTrue()
-			expect(goTo).toHaveBeenCalledTimes(1)
+			expect(goTo).not.toHaveBeenCalled()
 			expect(device.slewing).toBeFalse()
 		} finally {
 			goTo.mockRestore()
@@ -441,7 +447,7 @@ describe('mount commander', () => {
 	}, 10000)
 
 	test('stopping by device cancels the slew and leaves the mount stopped', async () => {
-		const device = connected()
+		const device = await connected()
 		const slewing = mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '30:00:00' } })
 
 		expect(await waitUntil(() => device.slewing)).toBeTrue()
@@ -455,7 +461,7 @@ describe('mount commander', () => {
 	}, 10000)
 
 	test('fails a slew that stops short of its target', async () => {
-		const device = connected()
+		const device = await connected()
 		const slewing = mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '30:00:00' } })
 
 		expect(await waitUntil(() => device.slewing)).toBeTrue()
@@ -470,7 +476,7 @@ describe('mount commander', () => {
 	}, 10000)
 
 	test('refuses a second command while another operation owns the mount', async () => {
-		const device = connected()
+		const device = await connected()
 		const slewing = mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '30:00:00' } })
 
 		expect(await waitUntil(() => device.slewing)).toBeTrue()
@@ -481,7 +487,7 @@ describe('mount commander', () => {
 	}, 10000)
 
 	test('holds the mount through a manual move until every axis is stopped', async () => {
-		const device = connected()
+		const device = await connected()
 		const started = await mountCommander.startManualMove(operationCoordinator, device, 'NORTH')
 
 		expect(started.ok).toBeTrue()
@@ -508,7 +514,7 @@ describe('mount commander', () => {
 	}, 10000)
 
 	test('waits for the axis motion vector before releasing a manual move', async () => {
-		const device = connected()
+		const device = await connected()
 		const started = await mountCommander.startManualMove(operationCoordinator, device, 'NORTH')
 
 		expect(started.ok).toBeTrue()
@@ -541,7 +547,7 @@ describe('mount commander', () => {
 	}, 10000)
 
 	test('blocks acquisition while an axis moves outside any operation', async () => {
-		const device = connected()
+		const device = await connected()
 
 		expect(await waitUntil(() => free(device))).toBeTrue()
 
@@ -556,7 +562,7 @@ describe('mount commander', () => {
 	}, 10000)
 
 	test('stops a manual move halted in the same tick it was started', async () => {
-		const device = connected()
+		const device = await connected()
 		const starting = mountCommander.manualMove(operationCoordinator, device, 'NORTH', true)
 		const halting = mountCommander.manualMove(operationCoordinator, device, 'NORTH', false)
 
@@ -568,7 +574,7 @@ describe('mount commander', () => {
 	}, 10000)
 
 	test('refuses to move through a handle whose motion already ended', async () => {
-		const device = connected()
+		const device = await connected()
 		const started = await mountCommander.startManualMove(operationCoordinator, device, 'NORTH')
 
 		expect(started.ok).toBeTrue()
@@ -590,7 +596,7 @@ describe('mount commander', () => {
 	}, 10000)
 
 	test('ends the manual move when the motion command cannot be sent', async () => {
-		const device = connected()
+		const device = await connected()
 		const moveNorth = spyOn(mountManager, 'moveNorth').mockImplementation(() => {
 			throw new Error('transport closed')
 		})
@@ -606,7 +612,7 @@ describe('mount commander', () => {
 	}, 10000)
 
 	test('replaces the opposite direction when an axis reverses', async () => {
-		const device = connected()
+		const device = await connected()
 		const started = await mountCommander.startManualMove(operationCoordinator, device, 'NORTH')
 
 		expect(started.ok).toBeTrue()
@@ -624,7 +630,7 @@ describe('mount commander', () => {
 	}, 10000)
 
 	test('waits for tracking to be observed before completing', async () => {
-		const device = connected()
+		const device = await connected()
 
 		expect(device.tracking).toBeFalse()
 		expect(await mountCommander.setTracking(operationCoordinator, device, true)).toMatchObject({ ok: true })
@@ -632,14 +638,14 @@ describe('mount commander', () => {
 	}, 10000)
 
 	test('reports a flip the driver cannot perform', async () => {
-		const device = connected()
+		const device = await connected()
 
 		expect(device.canFlip).toBeFalse()
 		expect(await mountCommander.flip(operationCoordinator, device, targetCoordinate())).toMatchObject({ ok: false, reason: 'unexpectedState' })
 	}, 10000)
 
 	test('does not complete a flip the mount never started', async () => {
-		const device = connected()
+		const device = await connected()
 		const flipTo = spyOn(mountManager, 'flipTo').mockImplementation(() => {})
 
 		device.canFlip = true

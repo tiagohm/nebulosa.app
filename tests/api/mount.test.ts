@@ -571,6 +571,24 @@ describe('mount commander', () => {
 		expect(device.canFlip).toBeFalse()
 		expect(await mountCommander.flip(operationCoordinator, device, targetCoordinate())).toMatchObject({ ok: false, reason: 'unexpectedState' })
 	}, 10000)
+
+	test('does not complete a flip the mount never started', async () => {
+		const device = connected()
+		const flipTo = spyOn(mountManager, 'flipTo').mockImplementation(() => {})
+
+		device.canFlip = true
+		mountManager.syncTo(device, hour(5), deg(-30))
+
+		try {
+			const result = await mountCommander.flip(operationCoordinator, device, targetCoordinate(), { timeout: 300 })
+
+			expect(result).toMatchObject({ ok: false, reason: 'timeout' })
+			expect(flipTo).toHaveBeenCalledTimes(1)
+		} finally {
+			flipTo.mockRestore()
+			device.canFlip = false
+		}
+	}, 10000)
 })
 
 describe('coordinateInfo computes correctly all the coordinates passing the flag', () => {

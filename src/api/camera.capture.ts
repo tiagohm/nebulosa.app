@@ -52,10 +52,10 @@ export interface CameraCaptureHandle {
 // capture only passes its signal: the guider session stays the owner of its own devices and serializes
 // the command, so cancelling a dither never disconnects the session that ran it.
 export interface CameraDitherer {
-	// Whether the guider is currently able to dither.
-	readonly running: boolean
-	// Requests dither and settles only after the guider reports its terminal result.
-	readonly dither: (request: GuiderDither, options?: { readonly signal?: AbortSignal }) => Promise<OperationResult<void>>
+	// Whether the named guider session is currently able to dither.
+	readonly running: (guider: string) => boolean
+	// Requests dither on one session and settles only after it reports its terminal result.
+	readonly dither: (guider: string, request: GuiderDither, options?: { readonly signal?: AbortSignal }) => Promise<OperationResult<void>>
 }
 
 // Tunable physical timeouts used by deterministic tests and device-specific integration.
@@ -495,7 +495,15 @@ class CameraCaptureSession {
 
 	// Dithers before a frame only when requested and a guider session is actively guiding.
 	async #dither(): Promise<OperationResult<void>> {
-		if (!this.#request.dither.enabled || !this.sessionContext.ditherer?.running) return { ok: true, value: undefined }
+		const ditherer = this.sessionContext.ditherer
+		const guider = this.#request.dither.guider
+
+		// No guider named means none was chosen, which is a request not to dither rather than a failure.
+		if (!this.#request.dither.enabled || guider.length === 0 || ditherer === undefined) return { ok: true, value: undefined }
+
+		// A named session that is gone or not guiding is a different matter: the capture asked for this
+		// exact guider, so exposing without it would be pretending a dither happened.
+		if (!ditherer.running(guider)) return { ok: false, reason: 'unexpectedState', error: `guider ${guider} is not guiding` }
 
 		this.#state = 'dithering'
 		this.#event.state = 'dithering'
@@ -503,7 +511,7 @@ class CameraCaptureSession {
 		const unsubscribe = guiderBus.subscribe('dither', this.#guiderDithered)
 
 		try {
-			const result = await this.sessionContext.ditherer.dither(this.#request.dither, { signal: this.operationContext.signal })
+			const result = await ditherer.dither(guider, this.#request.dither, { signal: this.operationContext.signal })
 			if (result.ok) return { ok: true, value: undefined }
 			return { ok: false, reason: result.reason === 'aborted' ? abortReason(this.operationContext.signal) : 'commandFailed', error: result.error ?? result.reason }
 		} catch (error) {

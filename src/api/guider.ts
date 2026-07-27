@@ -1,16 +1,18 @@
-import type { GuiderConnect, GuiderDither } from '#/guider'
+import type { GuiderConnect, GuiderDither, GuiderSessionInfo } from '#/guider'
 import { guiderBus, GuiderCommander } from './guider.session'
 import type { GuiderCommandOptions, GuiderFindStarResult } from './guider.session'
 import { response } from './http'
 import type { Endpoints } from './http'
+import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
 import type { OperationResult } from './operation'
 
-// Transport adapter over the coordinated guider session.
+// Transport adapter over the coordinated guider sessions.
 //
-// It owns nothing about guiding: every command is delegated to GuiderCommander, which holds the transport,
-// its devices, and the serialization between commands. What lives here is HTTP shape and WebSocket fanout.
+// It owns nothing about guiding: every command is delegated to GuiderCommander, which holds the
+// transports, their devices, and the serialization between commands. What lives here is HTTP shape and
+// WebSocket fanout. Several sessions may be open at once, so every route and every event names one.
 export class GuiderHandler {
 	// Wires presentation fanout over the guider bus.
 	constructor(
@@ -18,17 +20,35 @@ export class GuiderHandler {
 		readonly notification: NotificationHandler,
 		readonly commander: GuiderCommander,
 	) {
-		guiderBus.subscribe('close', () => wsm.send('guider:close', undefined))
+		// A socket that connects mid-run has no other way to learn which sessions already exist.
+		webSocketBus.subscribe('open', (socket) => {
+			for (const session of commander.list()) {
+				wsm.send<GuiderSessionInfo>('guider:add', session, socket)
+			}
+		})
+
+		guiderBus.subscribe('add', (event) => wsm.send('guider:add', event))
 		guiderBus.subscribe('update', (event) => wsm.send('guider:update', event))
+		guiderBus.subscribe('remove', (event) => wsm.send('guider:remove', event))
 	}
 
-	// Latest presentation snapshot published by the live session.
-	get event() {
-		return this.commander.event
+	// Lists the open sessions.
+	list() {
+		return this.commander.list()
 	}
 
-	// Opens a session and notifies the user when the transport could not be attached, because the HTTP
-	// answer is a boolean the UI turns into a connection state and carries no room for a cause.
+	// Describes one session.
+	session(guider: string) {
+		return this.commander.info(guider)
+	}
+
+	// Latest presentation snapshot of one session.
+	event(guider: string) {
+		return this.commander.event(guider)
+	}
+
+	// Opens a session and notifies the user when the transport could not be attached, since a rejected
+	// connection produces no further event the UI could react to.
 	async connect(request: GuiderConnect) {
 		const result = await this.commander.connect(request)
 
@@ -37,68 +57,70 @@ export class GuiderHandler {
 			this.notification.send({ title: 'CONNECTION', description: result.error ?? `failed to connect to the guider: ${result.reason}`, color: 'danger' })
 		}
 
-		return result.ok
+		return result
 	}
 
-	// Ends the session and resolves after its devices have been released.
-	disconnect() {
-		return this.commander.disconnect()
+	// Ends one session and resolves after its devices have been released.
+	disconnect(guider: string) {
+		return this.commander.disconnect(guider)
 	}
 
 	// Starts looping exposures without guide output.
-	loop(options?: GuiderCommandOptions) {
-		return this.commander.loop(options)
+	loop(guider: string, options?: GuiderCommandOptions) {
+		return this.commander.loop(guider, options)
 	}
 
 	// Locks onto the best star of the latest frame.
-	findStar(options?: GuiderCommandOptions) {
-		return this.commander.findStar(options)
+	findStar(guider: string, options?: GuiderCommandOptions) {
+		return this.commander.findStar(guider, options)
 	}
 
 	// Starts guiding, calibrating first when no solution exists yet.
-	start(options?: GuiderCommandOptions) {
-		return this.commander.startGuiding(options)
+	start(guider: string, options?: GuiderCommandOptions) {
+		return this.commander.startGuiding(guider, options)
 	}
 
 	// Stops capture and releases the guide camera and guide output.
-	stop(options?: GuiderCommandOptions) {
-		return this.commander.stopGuiding(options)
+	stop(guider: string, options?: GuiderCommandOptions) {
+		return this.commander.stopGuiding(guider, options)
 	}
 
 	// Forces a new calibration.
-	calibrate(options?: GuiderCommandOptions) {
-		return this.commander.calibrate(options)
+	calibrate(guider: string, options?: GuiderCommandOptions) {
+		return this.commander.calibrate(guider, options)
 	}
 
 	// Dithers and resolves only after the guider settles.
-	dither(request?: Partial<GuiderDither>, options?: GuiderCommandOptions) {
-		return this.commander.dither(request, options)
+	dither(guider: string, request?: Partial<GuiderDither>, options?: GuiderCommandOptions) {
+		return this.commander.dither(guider, request, options)
 	}
 
-	// Reports connection and activity.
-	status() {
-		return this.commander.status()
+	// Reports connection and activity of one session.
+	status(guider: string) {
+		return this.commander.status(guider)
 	}
 
-	// Drops the accumulated guide-error statistics.
-	clear() {
-		this.commander.clear()
+	// Drops the accumulated guide-error statistics of one session.
+	clear(guider: string) {
+		this.commander.clear(guider)
 	}
 }
 
-// Builds guider HTTP routes over the coordinated session service.
+// Builds guider HTTP routes over the coordinated session commander.
 export function guider(guiderHandler: GuiderHandler) {
 	return {
-		'/guider/connect': { POST: async (req) => response(await guiderHandler.connect(await req.json())) },
-		'/guider/dither': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.dither(await req.json())) },
-		'/guider/disconnect': { POST: async () => response<OperationResult<void>>(await guiderHandler.disconnect()) },
-		'/guider/status': { GET: async () => response(await guiderHandler.status()) },
-		'/guider/event': { GET: () => response(guiderHandler.event) },
-		'/guider/clear': { POST: () => response(guiderHandler.clear()) },
-		'/guider/start': { POST: async () => response<OperationResult<void>>(await guiderHandler.start()) },
-		'/guider/stop': { POST: async () => response<OperationResult<void>>(await guiderHandler.stop()) },
-		'/guider/loop': { POST: async () => response<OperationResult<void>>(await guiderHandler.loop()) },
-		'/guider/findstar': { POST: async () => response<OperationResult<GuiderFindStarResult>>(await guiderHandler.findStar()) },
-		'/guider/calibrate': { POST: async () => response<OperationResult<void>>(await guiderHandler.calibrate()) },
+		'/guiders': { GET: () => response(guiderHandler.list()) },
+		'/guiders/connect': { POST: async (req) => response<OperationResult<GuiderSessionInfo>>(await guiderHandler.connect(await req.json())) },
+		'/guiders/:id': { GET: (req) => response(guiderHandler.session(req.params.id)) },
+		'/guiders/:id/status': { GET: async (req) => response(await guiderHandler.status(req.params.id)) },
+		'/guiders/:id/event': { GET: (req) => response(guiderHandler.event(req.params.id)) },
+		'/guiders/:id/clear': { POST: (req) => response(guiderHandler.clear(req.params.id)) },
+		'/guiders/:id/disconnect': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.disconnect(req.params.id)) },
+		'/guiders/:id/loop': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.loop(req.params.id)) },
+		'/guiders/:id/findstar': { POST: async (req) => response<OperationResult<GuiderFindStarResult>>(await guiderHandler.findStar(req.params.id)) },
+		'/guiders/:id/start': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.start(req.params.id)) },
+		'/guiders/:id/stop': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.stop(req.params.id)) },
+		'/guiders/:id/calibrate': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.calibrate(req.params.id)) },
+		'/guiders/:id/dither': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.dither(req.params.id, await req.json())) },
 	} as const satisfies Endpoints
 }

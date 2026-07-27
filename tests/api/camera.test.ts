@@ -839,12 +839,14 @@ describe('camera capture start request', () => {
 
 	test('dithers before exposure when guiding is running', async () => {
 		let dithered: GuiderDither | undefined
+		let ditheredGuider: string | undefined
 		let signal: AbortSignal | undefined
 
 		const guiderHandler = {
-			running: true,
-			dither: (request: GuiderDither, options?: { readonly signal?: AbortSignal }) => {
+			running: () => true,
+			dither: (guider: string, request: GuiderDither, options?: { readonly signal?: AbortSignal }) => {
 				dithered = request
+				ditheredGuider = guider
 				signal = options?.signal
 				guiderBus.emit('dither', { phase: 'dithered', guider: structuredClone(DEFAULT_GUIDER_EVENT), dx: 1.5, dy: -2 })
 				guiderBus.emit('dither', { phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
@@ -862,7 +864,7 @@ describe('camera capture start request', () => {
 		const request = captureStartRequest({
 			exposureTime: 10,
 			exposureTimeUnit: 'millisecond',
-			dither: { enabled: true, amount: 3, raOnly: true },
+			dither: { enabled: true, guider: 'guider-1', amount: 3, raOnly: true },
 		})
 
 		cameraManager.connect(camera)
@@ -872,6 +874,7 @@ describe('camera capture start request', () => {
 		expect(success).toBeTrue()
 
 		expect(dithered).toEqual(request.dither)
+		expect(ditheredGuider).toBe('guider-1')
 		expect(signal).toBeInstanceOf(AbortSignal)
 		expect(events[0].state).toBe('dithering')
 		expect(events.some((event) => event.state === 'settling')).toBeTrue()
@@ -881,7 +884,7 @@ describe('camera capture start request', () => {
 	test('does not start exposure when guider dither fails', async () => {
 		const error = spyOn(console, 'error').mockImplementation(() => {})
 		const guiderHandler = {
-			running: true,
+			running: () => true,
 			dither: () => {
 				guiderBus.emit('dither', { phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
 				guiderBus.emit('dither', { phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' }, ok: false, reason: 'timeout' })
@@ -894,7 +897,7 @@ describe('camera capture start request', () => {
 		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
-		const request = captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', dither: { enabled: true } })
+		const request = captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', dither: { enabled: true, guider: 'guider-1' } })
 
 		try {
 			cameraManager.connect(camera)
@@ -914,8 +917,8 @@ describe('camera capture start request', () => {
 		let signal: AbortSignal | undefined
 		let resolveDither: ((value: OperationResult<void>) => void) | undefined
 		const guiderHandler = {
-			running: true,
-			dither: (request: GuiderDither, options?: { readonly signal?: AbortSignal }) => {
+			running: () => true,
+			dither: (guider: string, request: GuiderDither, options?: { readonly signal?: AbortSignal }) => {
 				signal = options?.signal
 				return new Promise<OperationResult<void>>((resolve) => {
 					resolveDither = resolve
@@ -929,7 +932,7 @@ describe('camera capture start request', () => {
 		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
-		const request = captureStartRequest({ exposureTime: 100, exposureTimeUnit: 'millisecond', dither: { enabled: true } })
+		const request = captureStartRequest({ exposureTime: 100, exposureTimeUnit: 'millisecond', dither: { enabled: true, guider: 'guider-1' } })
 
 		cameraManager.connect(camera)
 

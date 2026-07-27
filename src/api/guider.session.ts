@@ -6,11 +6,11 @@ import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
 import { EventBus } from 'src/shared/bus'
 import { exposureTimeInSeconds } from '#/camera'
 import { DEFAULT_GUIDER_DITHER, DEFAULT_GUIDER_EVENT } from '#/guider'
-import type { GuiderConnect, GuiderDither, GuiderEvent, GuiderState, GuiderStatus } from '#/guider'
+import type { GuiderClientMode, GuiderConnect, GuiderDither, GuiderEvent, GuiderSessionInfo, GuiderState, GuiderStatus } from '#/guider'
 import type { OperationContext, OperationCoordinator, OperationFailureReason, OperationHandle, OperationResult } from './operation'
 import { abortReason, waitForDeviceState } from './operation.wait'
 import { resourceKey } from './resource'
-import type { ResourceRequest } from './resource'
+import type { ResourceKey } from './resource'
 import { errorMessage } from './util'
 
 // Either transport driving a guider: a remote PHD2 server or the in-process client over INDI devices.
@@ -42,21 +42,54 @@ export type GuiderDitherEvent =
 	| Readonly<{ phase: 'settled'; guider: GuiderEvent; ok: boolean; reason?: OperationFailureReason; error?: string }>
 
 // Presentation events fanned out by the transport handler; they never take part in command correctness.
+// Every one of them names its session, because several may be open at once.
 export interface GuiderBusEvents {
+	// A session was opened and is ready to receive commands.
+	readonly add: GuiderSessionInfo
 	// The guider published new telemetry or changed state.
 	readonly update: GuiderEvent
 	// A dither advanced to a new phase.
 	readonly dither: GuiderDitherEvent
 	// The session ended, expectedly or not.
-	readonly close: { readonly client: GuiderTransport }
+	readonly remove: GuiderSessionInfo
 }
 
 // Process-wide fanout of guider presentation events.
 export const guiderBus = new EventBus<GuiderBusEvents>()
 
-// The one guider session the process may hold. A remote PHD2 server owns its camera and guide output
-// outside this process, so there is no physical device to arbitrate and the resource is logical.
-export const GUIDER_RESOURCE: ResourceRequest = { key: 'logical:guider' }
+// Prefix keeping guider resources outside the device key space.
+const GUIDER_RESOURCE_PREFIX = 'logical:guider'
+
+// What one session occupies. A guider always holds a logical resource, because a remote server drives its
+// camera and output outside this process and a local session that is merely connected still has to reserve
+// its devices while holding no lease on them.
+//
+// The key describes the target rather than the service, so several guiders coexist while a duplicate is
+// refused by the arbiter itself instead of by a check in the commander.
+export interface GuiderTarget {
+	// Logical resource identifying what is occupied.
+	readonly key: ResourceKey
+	// Whether the target is a local device pair or a remote server.
+	readonly mode: GuiderClientMode
+	// Human-readable description used in listings and diagnostics.
+	readonly label: string
+	// Guide camera of a local target.
+	readonly camera?: Camera
+	// Guide output of a local target.
+	readonly guideOutput?: GuideOutput
+}
+
+// Builds the logical key of a remote server. Host is lowercased so two spellings of the same address are
+// one resource and the second connection to it is refused.
+export function remoteGuiderKey(host: string, port: number): ResourceKey {
+	return `${GUIDER_RESOURCE_PREFIX}:remote:${host.trim().toLowerCase()}:${port}`
+}
+
+// Builds the logical key of a local guider from the physical devices it drives, which is what refuses a
+// second session over the same pair even while the first one is idle and owns no device lease.
+export function localGuiderKey(camera: Camera, guideOutput: GuideOutput): ResourceKey {
+	return `${GUIDER_RESOURCE_PREFIX}:local:${resourceKey(camera)}:${resourceKey(guideOutput)}`
+}
 
 // Timing overrides, exposed so tests can drive the same code paths without real device latency.
 export interface GuiderSessionOptions {
@@ -111,6 +144,14 @@ interface GuiderObserveOptions {
 	readonly abort?: () => void | Promise<void>
 }
 
+// One open session and the operation holding its logical resource.
+interface GuiderSessionEntry {
+	// Connection, its state, and its serialized commands.
+	readonly session: GuiderSession
+	// Operation whose result settles after every lease of the session has been released.
+	readonly operation: OperationHandle<void>
+}
+
 // Open activity holding the guide camera and guide output while the guider is capturing.
 interface GuiderActivity {
 	// Ends the activity and resolves after the guider is idle and both devices have been released.
@@ -137,14 +178,11 @@ const UNCANCELABLE = new AbortController().signal
 // command. A command requested by another operation, such as the dither of a capture, only passes its
 // signal; the session stays the owner of its devices and serializes the command itself.
 export class GuiderCommander {
-	// Live session, absent while disconnected.
-	#session?: GuiderSession
-	// Operation holding the logical guider resource for the live session.
-	#operation?: OperationHandle<void>
-	// Guards the window between accepting a connect and the session becoming reachable.
-	#connecting = false
+	// Open sessions by id. Nothing else indexes them: the arbiter is what knows which targets are taken,
+	// and this map only exists so a transport can reach a session by the id it published.
+	readonly #sessions = new Map<string, GuiderSessionEntry>()
 
-	// Creates the service over the coordinator and the managers a local guider drives.
+	// Creates the commander over the coordinator and the managers a local guider drives.
 	constructor(
 		readonly coordinator: OperationCoordinator,
 		readonly cameraManager: CameraManager,
@@ -152,146 +190,176 @@ export class GuiderCommander {
 		readonly options: GuiderSessionOptions = {},
 	) {}
 
-	// Whether a transport is currently attached.
-	get connected() {
-		return this.#session !== undefined
+	// Lists every open session, in the order they were opened.
+	list(): readonly GuiderSessionInfo[] {
+		return [...this.#sessions.values()].map((entry) => entry.session.info)
 	}
 
-	// Whether the guider is actively guiding, which is what makes a dither meaningful.
-	get running() {
-		return this.#session?.event.state === 'guiding'
+	// Describes one session, or nothing when the id is unknown.
+	info(guider: string) {
+		return this.#sessions.get(guider)?.session.info
 	}
 
-	// Whether the guider is looping exposures without guiding.
-	get looping() {
-		return this.#session?.event.state === 'looping'
+	// Latest presentation snapshot of one session, or nothing when the id is unknown.
+	event(guider: string) {
+		return this.#sessions.get(guider)?.session.event
 	}
 
-	// Latest presentation snapshot, or the neutral one while disconnected.
-	get event(): GuiderEvent {
-		return this.#session?.event ?? structuredClone(DEFAULT_GUIDER_EVENT)
+	// Whether the named session is actively guiding, which is what makes a dither meaningful.
+	running(guider: string) {
+		return this.#sessions.get(guider)?.session.event.state === 'guiding'
+	}
+
+	// Whether the named session is looping exposures without guiding.
+	looping(guider: string) {
+		return this.#sessions.get(guider)?.session.event.state === 'looping'
 	}
 
 	// Opens a session and resolves only after the transport is attached and configured.
-	async connect(request: GuiderConnect): Promise<OperationResult<void>> {
-		if (this.#session !== undefined || this.#connecting) return { ok: false, reason: 'busy', error: 'a guider session is already open' }
+	//
+	// The target is resolved before the operation starts, because its logical key is what the arbiter needs
+	// to refuse a second connection to the same server or to the same pair of devices.
+	async connect(request: GuiderConnect): Promise<OperationResult<GuiderSessionInfo>> {
+		const target = this.#resolveTarget(request)
 
-		this.#connecting = true
+		if (!target.ok) return target
 
-		const started = Promise.withResolvers<OperationResult<void>>()
+		const started = Promise.withResolvers<OperationResult<GuiderSessionInfo>>()
 		const ended = Promise.withResolvers<OperationResult<void>>()
 
-		try {
-			const operation = this.coordinator.start<void>('guiderSession', [GUIDER_RESOURCE], async (context) => {
-				const session = new GuiderSession(context, request, ended, {
-					cameraManager: this.cameraManager,
-					guideOutputManager: this.guideOutputManager,
-					options: this.options,
-				})
-
-				const opened = await session.open()
-
-				if (!opened.ok) {
-					started.resolve(opened)
-					return opened
-				}
-
-				this.#session = session
-				this.#operation = operation
-
-				// Registered before the teardown below so it runs last: the session is only forgotten once
-				// its devices are idle and the transport is gone.
-				context.onCleanup(() => {
-					if (this.#session === session) {
-						this.#session = undefined
-						this.#operation = undefined
-					}
-				})
-
-				context.onCleanup(() => session.shutdown())
-				started.resolve({ ok: true, value: undefined })
-
-				// The executor stays pending on purpose: the session holds the logical resource until the
-				// transport goes away or a disconnect is requested.
-				return await ended.promise
+		const operation = this.coordinator.start<void>('guiderSession', [{ key: target.value.key }], async (context) => {
+			const session = new GuiderSession(context, request, target.value, ended, {
+				cameraManager: this.cameraManager,
+				guideOutputManager: this.guideOutputManager,
+				options: this.options,
 			})
 
-			// A refused scope never runs its executor, so the failure has to be taken from the operation.
-			void operation.result.then((result) => {
-				if (!result.ok) started.resolve(result)
+			const opened = await session.open()
+
+			if (!opened.ok) {
+				started.resolve(opened)
+				return opened
+			}
+
+			// Registered before the teardown below so it runs last: the session is only forgotten once its
+			// devices are idle and the transport is gone.
+			context.onCleanup(() => {
+				if (this.#sessions.get(context.id)?.session === session) this.#sessions.delete(context.id)
 			})
 
-			return await started.promise
-		} finally {
-			this.#connecting = false
-		}
+			context.onCleanup(() => session.shutdown())
+
+			// Cancellation aborts the signal but still waits for the executor to return, and the executor is
+			// parked on the promise below. Nothing else would ever resolve it, so a cancel from outside the
+			// commander, such as the cancelAll of a shutdown, has to end the session here.
+			if (context.signal.aborted) session.end({ ok: false, reason: abortReason(context.signal) })
+			else context.signal.addEventListener('abort', () => session.end({ ok: false, reason: abortReason(context.signal) }), { once: true })
+
+			this.#sessions.set(context.id, { session, operation })
+			guiderBus.emit('add', session.info)
+			started.resolve({ ok: true, value: session.info })
+
+			// The executor stays pending on purpose: the session holds its logical resource until the
+			// transport goes away or a disconnect is requested.
+			return await ended.promise
+		})
+
+		// A refused scope never runs its executor, so the failure has to be taken from the operation.
+		void operation.result.then((result) => {
+			if (!result.ok) started.resolve(result)
+		})
+
+		return await started.promise
 	}
 
-	// Ends the session gracefully: the command in flight is aborted, then the nested activity unwinds and
+	// Ends one session gracefully: the command in flight is aborted, then the nested activity unwinds and
 	// only after it reports the guider idle is the transport closed and every lease released.
 	//
 	// A remote session owns no local device, so nothing is stopped on its behalf: the PHD2 server is an
 	// independent application and closing our socket is not a reason to end a run someone else is watching.
-	async disconnect(): Promise<OperationResult<void>> {
-		const session = this.#session
-		const operation = this.#operation
+	async disconnect(guider: string): Promise<OperationResult<void>> {
+		const entry = this.#sessions.get(guider)
 
-		if (session === undefined || operation === undefined) return { ok: false, reason: 'unexpectedState', error: 'no guider session is open' }
+		if (entry === undefined) return { ok: false, reason: 'unexpectedState', error: `guider session ${guider} is not open` }
 
-		session.end({ ok: true, value: undefined })
+		entry.session.end({ ok: true, value: undefined })
 
-		return await operation.result
+		return await entry.operation.result
 	}
 
 	// Starts continuous exposures without guide output.
-	async loop(options: GuiderCommandOptions = {}) {
-		return await this.#command((session) => session.loop(options))
+	async loop(guider: string, options: GuiderCommandOptions = {}) {
+		return await this.#command(guider, (session) => session.loop(options))
 	}
 
 	// Selects the best star of the latest frame as the lock position.
-	async findStar(options: GuiderCommandOptions = {}) {
-		return await this.#command((session) => session.findStar(options))
+	async findStar(guider: string, options: GuiderCommandOptions = {}) {
+		return await this.#command(guider, (session) => session.findStar(options))
 	}
 
 	// Starts guiding, calibrating first when no solution exists yet.
-	async startGuiding(options: GuiderCommandOptions = {}) {
-		return await this.#command((session) => session.startGuiding(false, options))
+	async startGuiding(guider: string, options: GuiderCommandOptions = {}) {
+		return await this.#command(guider, (session) => session.startGuiding(false, options))
 	}
 
 	// Forces a new calibration and succeeds only when it ends in guiding.
-	async calibrate(options: GuiderCommandOptions = {}) {
-		return await this.#command((session) => session.startGuiding(true, options))
+	async calibrate(guider: string, options: GuiderCommandOptions = {}) {
+		return await this.#command(guider, (session) => session.startGuiding(true, options))
 	}
 
 	// Stops capture and releases the guide camera and guide output once the guider reports itself idle.
-	async stopGuiding(options: GuiderCommandOptions = {}) {
-		return await this.#command((session) => session.stopGuiding(options))
+	async stopGuiding(guider: string, options: GuiderCommandOptions = {}) {
+		return await this.#command(guider, (session) => session.stopGuiding(options))
 	}
 
-	// Dithers and resolves only after the guider settles, so a capture never exposes mid-move.
-	async dither(request?: Partial<GuiderDither>, options: GuiderCommandOptions = {}) {
-		return await this.#command((session) => session.dither(request, options))
+	// Dithers on one session and resolves only after it settles, so a capture never exposes mid-move.
+	async dither(guider: string, request?: Partial<GuiderDither>, options: GuiderCommandOptions = {}) {
+		return await this.#command(guider, (session) => session.dither(request, options))
 	}
 
-	// Clears the accumulated RMS statistics.
-	clear() {
-		this.#session?.clear()
+	// Clears the accumulated RMS statistics of one session.
+	clear(guider: string) {
+		this.#sessions.get(guider)?.session.clear()
 	}
 
-	// Reports connection and activity for the transport layer.
-	async status(): Promise<GuiderStatus> {
+	// Reports connection and activity of one session.
+	async status(guider: string): Promise<GuiderStatus> {
+		const session = this.#sessions.get(guider)?.session
+
+		if (session === undefined) return { connected: false, looping: false, running: false }
+
 		return {
-			connected: this.connected,
-			looping: this.looping,
-			running: this.running,
-			profile: await this.#session?.profile(),
+			connected: session.connected,
+			looping: session.event.state === 'looping',
+			running: session.event.state === 'guiding',
+			profile: await session.profile(),
 		}
 	}
 
-	// Routes a command to the live session, reporting the absence of one as an expected failure.
-	async #command<T>(run: (session: GuiderSession) => Promise<OperationResult<T>>): Promise<OperationResult<T>> {
-		const session = this.#session
-		if (session === undefined) return { ok: false, reason: 'disconnected', error: 'no guider session is open' }
+	// Resolves what a connect request occupies, refusing a request whose devices are unusable before any
+	// resource is taken.
+	#resolveTarget(request: GuiderConnect): OperationResult<GuiderTarget> {
+		if (request.mode === 'remote') {
+			const host = request.host.trim()
+
+			if (host.length === 0) return { ok: false, reason: 'unexpectedState', error: 'the guider host is empty' }
+
+			return { ok: true, value: { key: remoteGuiderKey(host, request.port), mode: 'remote', label: `${host}:${request.port}` } }
+		}
+
+		const camera = this.cameraManager.get(undefined, request.camera)
+		const guideOutput = this.guideOutputManager.get(undefined, request.guideOutput)
+
+		if (camera === undefined || !camera.connected) return { ok: false, reason: 'disconnected', error: 'the guide camera is not connected' }
+		if (guideOutput === undefined || !guideOutput.connected) return { ok: false, reason: 'disconnected', error: 'the guide output is not connected' }
+
+		return { ok: true, value: { key: localGuiderKey(camera, guideOutput), mode: 'local', label: `${camera.name} + ${guideOutput.name}`, camera, guideOutput } }
+	}
+
+	// Routes a command to one session, reporting an unknown id as an expected failure.
+	async #command<T>(guider: string, run: (session: GuiderSession) => Promise<OperationResult<T>>): Promise<OperationResult<T>> {
+		const session = this.#sessions.get(guider)?.session
+		if (session === undefined) return { ok: false, reason: 'disconnected', error: `guider session ${guider} is not open` }
 		return await run(session)
 	}
 }
@@ -308,10 +376,6 @@ class GuiderSession {
 	readonly #listeners = new Set<(update: GuiderUpdate) => void>()
 	// Attached transport, absent before open and after the session closed.
 	#client?: GuiderTransport
-	// Guide camera of a local session, absent for a remote one.
-	#camera?: Camera
-	// Guide output of a local session, absent for a remote one.
-	#guideOutput?: GuideOutput
 	// Latest application state mapped from the transport events.
 	#state: PHD2AppState = 'Stopped'
 	// Arcsec per pixel used to report guide errors in angular units.
@@ -331,13 +395,37 @@ class GuiderSession {
 	constructor(
 		readonly context: OperationContext,
 		readonly request: GuiderConnect,
+		readonly target: GuiderTarget,
 		readonly ended: PromiseWithResolvers<OperationResult<void>>,
 		readonly sessionContext: {
 			readonly cameraManager: CameraManager
 			readonly guideOutputManager: GuideOutputManager
 			readonly options: GuiderSessionOptions
 		},
-	) {}
+	) {
+		// Every event this session publishes carries its id, so a listener watching several guiders can tell
+		// whose telemetry it just received.
+		this.event.id = context.id
+	}
+
+	// Whether the transport is still attached.
+	get connected() {
+		return !this.#closed && this.#client !== undefined
+	}
+
+	// Snapshot describing this session to transports and listings.
+	get info(): GuiderSessionInfo {
+		return {
+			id: this.context.id,
+			mode: this.target.mode,
+			key: this.target.key,
+			target: this.target.label,
+			state: this.event.state,
+			connected: this.connected,
+			looping: this.event.state === 'looping',
+			running: this.event.state === 'guiding',
+		}
+	}
 
 	// Attaches the transport and, for a local guider, configures its devices under a scope that owns them.
 	async open(): Promise<OperationResult<void>> {
@@ -519,7 +607,7 @@ class GuiderSession {
 
 		// Wakes anything still waiting so it settles as disconnected instead of running to its timeout.
 		this.#emit({ state: this.#state, closed: true })
-		guiderBus.emit('close', { client })
+		guiderBus.emit('remove', this.info)
 	}
 
 	// Attaches a remote PHD2 client. The client is stored before the handshake because the server may push
@@ -551,11 +639,12 @@ class GuiderSession {
 
 		const request = this.request
 		const { cameraManager, guideOutputManager } = this.sessionContext
-		const camera = cameraManager.get(undefined, request.camera)
-		const guideOutput = guideOutputManager.get(undefined, request.guideOutput)
+		const { camera, guideOutput } = this.target
 
-		if (camera === undefined || !camera.connected) return { ok: false, reason: 'disconnected', error: 'the guide camera is not connected' }
-		if (guideOutput === undefined || !guideOutput.connected) return { ok: false, reason: 'disconnected', error: 'the guide output is not connected' }
+		// The devices were resolved before the operation started, because their keys are what the arbiter
+		// used to decide this target was free.
+		if (camera === undefined || guideOutput === undefined) return { ok: false, reason: 'unexpectedState', error: 'the local guider target has no devices' }
+		if (!camera.connected || !guideOutput.connected) return { ok: false, reason: 'disconnected', error: 'the guide camera or the guide output disconnected' }
 
 		const configured = await this.context.start<GuiderClient>(
 			'guiderConfigure',
@@ -594,8 +683,6 @@ class GuiderSession {
 			return configured
 		}
 
-		this.#camera = camera
-		this.#guideOutput = guideOutput
 		Object.assign(this.#settings, request.dither)
 		this.#pixelScale = configured.value.getPixelScale() || 1
 		return { ok: true, value: undefined }
@@ -659,8 +746,7 @@ class GuiderSession {
 	async #acquireActivity(): Promise<OperationResult<void>> {
 		if (this.#activity !== undefined) return { ok: true, value: undefined }
 
-		const camera = this.#camera
-		const guideOutput = this.#guideOutput
+		const { camera, guideOutput } = this.target
 
 		if (camera === undefined || guideOutput === undefined) return { ok: true, value: undefined }
 

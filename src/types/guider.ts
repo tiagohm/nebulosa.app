@@ -25,6 +25,7 @@ export interface GuiderLocalConnect {
 export type GuiderConnect = GuiderRemoteConnect | GuiderLocalConnect
 
 export interface GuiderEvent {
+	id: string
 	state: GuiderState
 	rmsRA: number
 	rmsDEC: number
@@ -54,6 +55,27 @@ export interface GuiderStatus {
 	profile?: string
 }
 
+// One open guider session, as the transport enumerates and identifies it. Several may exist at once, so
+// every event and every command names one through its id.
+export interface GuiderSessionInfo {
+	// Stable identifier of the session, which is the id of the operation holding it.
+	readonly id: string
+	// Whether the session drives local devices or talks to a remote server.
+	readonly mode: GuiderClientMode
+	// Logical resource key of what the session occupies, which is what refuses a duplicate connection.
+	readonly key: string
+	// Human-readable description of the target, for listings and diagnostics.
+	readonly target: string
+	// Latest presentation state.
+	readonly state: GuiderState
+	// Whether the transport is still attached.
+	readonly connected: boolean
+	// Whether the guider is looping exposures without guiding.
+	readonly looping: boolean
+	// Whether the guider is actively guiding.
+	readonly running: boolean
+}
+
 export const DEFAULT_GUIDER_DITHER: Required<GuiderDither> = {
 	amount: 5,
 	raOnly: false,
@@ -61,6 +83,7 @@ export const DEFAULT_GUIDER_DITHER: Required<GuiderDither> = {
 }
 
 export const DEFAULT_GUIDER_EVENT: GuiderEvent = {
+	id: '',
 	state: 'idle',
 	rmsRA: 0,
 	rmsDEC: 0,

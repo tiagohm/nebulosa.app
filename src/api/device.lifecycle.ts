@@ -240,7 +240,7 @@ export class DeviceLifecycle {
 // Properties read by isDeviceQuiescent for each device type; every other update leaves its verdict intact.
 const QUIESCENCE_PROPERTIES: Partial<Record<DeviceType, ReadonlySet<string>>> = {
 	camera: new Set(['exposuring', 'exposure']),
-	mount: new Set(['slewing', 'homing', 'parking', 'pulsing']),
+	mount: new Set(['slewing', 'moving', 'homing', 'parking', 'pulsing']),
 	focuser: new Set(['moving']),
 	wheel: new Set(['moving']),
 	rotator: new Set(['moving']),
@@ -264,7 +264,10 @@ export function isDeviceQuiescent(device: Device) {
 		}
 		case 'mount': {
 			const mount = device as Mount
-			return !mount.slewing && !mount.homing && !mount.parking && !mount.pulsing
+			// Manual axis motion is reported apart from slewing: a driver drives an axis through its motion
+			// vectors without necessarily marking the coordinate busy, so a mount someone is moving by hand
+			// would otherwise look acquirable to any operation that asked for it.
+			return !mount.slewing && !mount.moving && !mount.homing && !mount.parking && !mount.pulsing
 		}
 		case 'focuser':
 			return !(device as Focuser).moving

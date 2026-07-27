@@ -7,6 +7,7 @@ import type { Mount, MountTargetCoordinate } from 'nebulosa/src/devices/indi/dev
 import { MountManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
+import type { PropertyState, SetSwitchVector } from 'nebulosa/src/devices/indi/types'
 import { deg, formatAngle, hour, normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { ConfirmationHandler } from 'src/api/confirmation'
@@ -103,6 +104,11 @@ async function waitUntil(condition: () => boolean, timeout = 1500) {
 
 function mountUpdates(property: keyof Mount & string) {
 	return socket.filter<MountUpdated>((message) => message.type === 'mount:update' && message.body.property === property)
+}
+
+function motionVector(mount: Mount, state: PropertyState, moving: boolean) {
+	const message = { device: mount.name, name: 'TELESCOPE_MOTION_NS', state, elements: { MOTION_NORTH: { name: 'MOTION_NORTH', value: moving } } } as unknown as SetSwitchVector
+	mountManager.switchVector(client, message, 'setSwitchVector')
 }
 
 function targetCoordinate(): MountTargetCoordinate {
@@ -498,6 +504,54 @@ describe('mount commander', () => {
 		expect(await handle.stop()).toMatchObject({ ok: true })
 		expect(device.slewing).toBeFalse()
 		expect(mountCommander.manualMoveOf(device)).toBeUndefined()
+		expect(await waitUntil(() => free(device))).toBeTrue()
+	}, 10000)
+
+	test('waits for the axis motion vector before releasing a manual move', async () => {
+		const device = connected()
+		const started = await mountCommander.startManualMove(operationCoordinator, device, 'NORTH')
+
+		expect(started.ok).toBeTrue()
+
+		if (!started.ok) return
+
+		const handle = started.value
+		const moveNorth = spyOn(mountManager, 'moveNorth').mockImplementation(() => {})
+
+		try {
+			simulator.stop()
+
+			expect(await waitUntil(() => !device.slewing)).toBeTrue()
+
+			motionVector(device, 'Busy', true)
+
+			const stopping = handle.stop()
+
+			await Bun.sleep(100)
+
+			expect(free(device)).toBeFalse()
+
+			motionVector(device, 'Ok', false)
+
+			expect(await stopping).toMatchObject({ ok: true })
+			expect(await waitUntil(() => free(device))).toBeTrue()
+		} finally {
+			moveNorth.mockRestore()
+		}
+	}, 10000)
+
+	test('blocks acquisition while an axis moves outside any operation', async () => {
+		const device = connected()
+
+		expect(await waitUntil(() => free(device))).toBeTrue()
+
+		motionVector(device, 'Busy', true)
+
+		expect(await waitUntil(() => !free(device))).toBeTrue()
+		expect(await mountCommander.setTracking(operationCoordinator, device, true)).toMatchObject({ ok: false, reason: 'busy' })
+
+		motionVector(device, 'Ok', false)
+
 		expect(await waitUntil(() => free(device))).toBeTrue()
 	}, 10000)
 

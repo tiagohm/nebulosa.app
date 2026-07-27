@@ -643,6 +643,8 @@ export class MountCommander implements DeviceHandler<Mount> {
 			current: () => ({ mount }),
 			// Quiescence is the same condition the arbiter uses to decide the mount is acquirable again, so
 			// it covers homing, parking, and pulse guiding, which drivers report independently of slewing.
+			// That includes manual axis motion, which a driver reports through its motion vectors without
+			// necessarily marking the coordinate busy, so a release cannot be judged by slewing alone.
 			// A disconnected mount is not moving under our command any more, and nothing further will ever
 			// be reported by a device that stopped talking.
 			evaluate: () => (!mount.connected || isDeviceQuiescent(mount) ? 'success' : 'pending'),

@@ -555,6 +555,18 @@ describe('mount commander', () => {
 		expect(await waitUntil(() => free(device))).toBeTrue()
 	}, 10000)
 
+	test('stops a manual move halted in the same tick it was started', async () => {
+		const device = connected()
+		const starting = mountCommander.manualMove(operationCoordinator, device, 'NORTH', true)
+		const halting = mountCommander.manualMove(operationCoordinator, device, 'NORTH', false)
+
+		expect(await starting).toMatchObject({ ok: true })
+		expect(await halting).toMatchObject({ ok: true })
+		expect(mountCommander.manualMoveOf(device)).toBeUndefined()
+		expect(device.slewing).toBeFalse()
+		expect(await waitUntil(() => free(device))).toBeTrue()
+	}, 10000)
+
 	test('refuses to move through a handle whose motion already ended', async () => {
 		const device = connected()
 		const started = await mountCommander.startManualMove(operationCoordinator, device, 'NORTH')

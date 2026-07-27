@@ -407,12 +407,25 @@ export class MountCommander implements DeviceHandler<Mount> {
 				},
 			})
 
-			this.#manualMoves.set(key, { handle, directions })
-
 			context.onCleanup(async () => {
 				if (this.#manualMoves.get(key)?.handle === handle) this.#manualMoves.delete(key)
 				await this.#stopManualMotion(mount, directions, options)
 			})
+
+			// The first direction is commanded here, before anything can reach the handle. A client that
+			// sends a start and a halt in one buffer has both callbacks dispatched synchronously, and LX200
+			// does not await the first: publishing an empty motion would let the halt find nothing to stop
+			// and report success, leaving the axis moving afterwards with no pending stop.
+			try {
+				this.#commandMove(mount, direction, true)
+			} catch (error) {
+				const failure = { ok: false, reason: 'commandFailed', error: errorMessage(error) } as const
+				started.resolve(failure)
+				return failure
+			}
+
+			directions.add(direction)
+			this.#manualMoves.set(key, { handle, directions })
 
 			// Cancellation aborts the signal but still waits for the executor to return, so the motion has to
 			// end itself here; nothing else would ever resolve the promise below.
@@ -431,14 +444,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 			if (!result.ok) started.resolve(result)
 		})
 
-		const moved = await started.promise
-
-		if (moved.ok) {
-			const first = await moved.value.move(direction, true)
-			if (!first.ok) return first
-		}
-
-		return moved
+		return await started.promise
 	}
 
 	// Applies the direct move endpoints, which carry only a device and a boolean, to the open motion.

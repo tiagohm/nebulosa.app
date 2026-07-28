@@ -364,6 +364,24 @@ describe('remote session', () => {
 		expect(commander.looping(id)).toBeTrue()
 	})
 
+	test('leaves a running guider alone when a new command is refused', async () => {
+		const id = await connected()
+
+		const guided = commander.startGuiding(id)
+		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		server.push({ Event: 'StartGuiding' })
+		expect((await guided).ok).toBeTrue()
+
+		server.refused.add('loop')
+
+		const looped = await commander.loop(id)
+
+		expect(looped.ok).toBeFalse()
+		expect(looped.ok || looped.reason).toBe('commandFailed')
+		expect(server.received('stop_capture')).toBeFalse()
+		expect(commander.running(id)).toBeTrue()
+	})
+
 	test('refuses a concurrent command instead of sharing the waiter of the running one', async () => {
 		const id = await connected()
 

@@ -494,13 +494,21 @@ class GuiderSession {
 			options,
 			async (signal) =>
 				await this.#withActivity(async () => {
+					// Whether the guider took the command. Only work this command started may be stopped when it
+					// fails: a refused command began nothing, and the guider may have been running something
+					// else all along that has nothing to do with it.
+					let accepted = false
+
 					const observed = await this.#observe(signal, await this.#loopTimeout(signal, options), {
 						evaluate: (update) => {
 							if (update.closed) return 'disconnected'
 							return this.#state === 'Looping' ? 'success' : 'pending'
 						},
-						command: () => this.#dispatch((client) => client.loop()),
-						abort: () => this.#abortCapture(),
+						command: async () => {
+							await this.#dispatch((client) => client.loop())
+							accepted = true
+						},
+						abort: () => (accepted ? this.#abortCapture() : undefined),
 					})
 
 					return observed.ok ? { ok: true, value: undefined } : observed
@@ -534,6 +542,7 @@ class GuiderSession {
 			async (signal) =>
 				await this.#withActivity(async () => {
 					let calibrating = false
+					let accepted = false
 
 					const observed = await this.#observe(signal, options.timeout ?? this.sessionContext.options.guidingTimeout ?? DEFAULT_GUIDING_TIMEOUT, {
 						evaluate: (update) => {
@@ -552,8 +561,11 @@ class GuiderSession {
 
 							return !recalibrate || calibrating ? 'success' : 'pending'
 						},
-						command: () => this.#dispatch((client) => client.guide(recalibrate, this.#settings.settle)),
-						abort: () => this.#abortCapture(),
+						command: async () => {
+							await this.#dispatch((client) => client.guide(recalibrate, this.#settings.settle))
+							accepted = true
+						},
+						abort: () => (accepted ? this.#abortCapture() : undefined),
 					})
 
 					return observed.ok ? { ok: true, value: undefined } : observed

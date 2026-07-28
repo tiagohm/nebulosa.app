@@ -400,6 +400,9 @@ class GuiderSession {
 	#dither?: GuiderDitherOperation
 	// Open activity holding the guide camera and guide output.
 	#activity?: GuiderActivity
+	// Aborted the moment the session begins ending, which is well before the transport is actually closed.
+	// It is what tells a command arriving during teardown that there is no session left to serve it.
+	readonly #ending = new AbortController()
 	// Whether the transport is gone; a closed session ignores every later callback.
 	#closed = false
 
@@ -596,7 +599,11 @@ class GuiderSession {
 	end(result: OperationResult<void>) {
 		// The cause is carried into the abort so a command in flight reports why it stopped: a session lost
 		// to a dropped socket must fail its wait as disconnected, not as an ordinary cancellation.
-		this.#commandController?.abort(result.ok ? 'aborted' : result.reason)
+		const reason = result.ok ? 'aborted' : result.reason
+		// Teardown is only finished once cleanup has run, and a command accepted in between would get a
+		// controller this method has already passed and command a device the session is about to hand back.
+		this.#ending.abort(reason)
+		this.#commandController?.abort(reason)
 		this.ended.resolve(result)
 	}
 
@@ -739,7 +746,7 @@ class GuiderSession {
 
 	// Runs one state-changing command, refusing a second one instead of letting it resolve another's waiter.
 	async #serialize<T>(kind: GuiderCommandKind, options: GuiderCommandOptions, run: (signal: AbortSignal) => Promise<OperationResult<T>>): Promise<OperationResult<T>> {
-		if (this.#closed) return { ok: false, reason: 'disconnected' }
+		if (this.#closed || this.#ending.signal.aborted) return { ok: false, reason: 'disconnected' }
 		if (this.#command !== undefined) return { ok: false, reason: 'busy', error: `the guider is running ${this.#command}` }
 
 		this.#command = kind

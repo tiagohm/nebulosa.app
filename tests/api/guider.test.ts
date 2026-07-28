@@ -247,6 +247,18 @@ describe('remote session', () => {
 		expect(server.received('stop_capture')).toBeFalse()
 	})
 
+	test('refuses a command issued after the session began ending', async () => {
+		const id = await connected()
+
+		const disconnected = commander.disconnect(id)
+		const looped = await commander.loop(id)
+
+		expect(looped.ok).toBeFalse()
+		expect(looped.ok || looped.reason).toBe('disconnected')
+		expect((await disconnected).ok).toBeTrue()
+		expect(server.received('loop')).toBeFalse()
+	})
+
 	test('reports an unknown session instead of guessing which one was meant', async () => {
 		await connected()
 

@@ -675,6 +675,22 @@ describe('dither', () => {
 		expect((await dithered).ok).toBeTrue()
 	})
 
+	test('retains the movement when a remote dither leaves its outcome unknown', async () => {
+		const id = await guiding()
+
+		server.refused.add('dither')
+
+		const dithered = await commander.dither(id)
+
+		expect(dithered.ok).toBeFalse()
+		expect(dithered.ok || dithered.reason).toBe('commandFailed')
+
+		const refused = await commander.dither(id)
+
+		expect(refused.ok).toBeFalse()
+		expect(refused.ok || refused.reason).toBe('busy')
+	})
+
 	test('survives the disconnect of another session', async () => {
 		const [, otherPort] = await startServer()
 		const guided = await guiding()

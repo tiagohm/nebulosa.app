@@ -619,8 +619,11 @@ class GuiderSession {
 				const dithered = client instanceof PHD2Client ? await client.send<number>('dither', { amount, raOnly, settle }, timeout) : client.dither(amount, raOnly, settle)
 
 				if (dithered === undefined || dithered === false) {
-					// A refused command moved nothing, so no movement is left outstanding.
-					this.#finishDither({ ok: false, reason: 'commandFailed', error: 'the dither command was rejected' }, false)
+					// PHD2 answers undefined both when it refuses the command and when its reply is merely lost,
+					// so a remote failure cannot prove the mount stayed still and the movement has to be retained
+					// as if it were under way. The local client returns false only for an outright refusal, which
+					// moved nothing.
+					this.#finishDither({ ok: false, reason: 'commandFailed', error: 'the dither command was rejected' }, client instanceof PHD2Client)
 				} else if (!operation.finished) {
 					await operation.settleStarted.promise
 				}

@@ -422,6 +422,23 @@ describe('remote session', () => {
 		expect(commander.running(id)).toBeFalse()
 	})
 
+	test('fails the stop when the server refuses it instead of waiting for a state it will never reach', async () => {
+		const id = await connected()
+
+		const guided = commander.startGuiding(id)
+		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		server.push({ Event: 'StartGuiding' })
+		expect((await guided).ok).toBeTrue()
+
+		server.refused.add('stop_capture')
+
+		const stopped = await commander.stopGuiding(id)
+
+		expect(stopped.ok).toBeFalse()
+		expect(stopped.ok || stopped.reason).toBe('commandFailed')
+		expect(stopped.ok || stopped.error).toContain('refused to stop')
+	})
+
 	test('fails the stop when the transport rejects it instead of waiting for a state it will never reach', async () => {
 		const id = await connected()
 

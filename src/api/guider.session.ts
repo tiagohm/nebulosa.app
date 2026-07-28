@@ -990,8 +990,19 @@ class GuiderSession {
 	// the wait itself, either through the timeout of the wait it commands or through #abortCapture.
 	async #stopCapture() {
 		const client = this.#client
+
 		if (client === undefined) return
-		await client.stopCapture()
+
+		// Only the remote transport answers a stop. PHD2 resolves undefined when it refuses the command or
+		// its reply times out, so a stop that never reached the server would otherwise pass for dispatched
+		// and leave the wait running to its own timeout. The local client returns nothing either way and
+		// reports a failure by throwing, so reading its result would report every stop as refused.
+		if (!(client instanceof PHD2Client)) {
+			client.stopCapture()
+			return
+		}
+
+		if ((await client.stopCapture()) === undefined) throw new Error('the guider refused to stop capturing')
 	}
 
 	// Commands a stop from an abort path, where the wait has already settled and only reaching the device

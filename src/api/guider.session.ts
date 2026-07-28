@@ -729,24 +729,20 @@ class GuiderSession {
 	// A local client stops the exposure and turns frame delivery off on its guide camera as it lets go. An
 	// idle session deliberately owns nothing physical, so doing that from cleanup would reach a camera some
 	// other operation had acquired meanwhile and kill an exposure that has nothing to do with the guider.
-	// The devices are taken back for the length of the close, which has to happen here rather than in
-	// cleanup because a finalizing scope can no longer open a nested one.
+	// The camera is taken back for the length of the close, which has to happen here rather than in cleanup
+	// because a finalizing scope can no longer open a nested one.
+	//
+	// Only the camera: closing commands nothing on the guide output, and holding it too would abandon the
+	// transport whenever the mount behind it is slewing, over a device the close never touches.
 	async #detachOwned(): Promise<OperationResult<void>> {
-		const { camera, guideOutput } = this.target
+		const { camera } = this.target
 
-		if (this.#client === undefined || camera === undefined || guideOutput === undefined) return { ok: true, value: undefined }
+		if (this.#client === undefined || camera === undefined) return { ok: true, value: undefined }
 
-		const owned = await this.context.start<void>(
-			'guiderDetach',
-			[
-				{ key: resourceKey(camera), device: camera },
-				{ key: resourceKey(guideOutput), device: guideOutput },
-			],
-			() => {
-				this.#detach()
-				return { ok: true, value: undefined }
-			},
-		).result
+		const owned = await this.context.start<void>('guiderDetach', [{ key: resourceKey(camera), device: camera }], () => {
+			this.#detach()
+			return { ok: true, value: undefined }
+		}).result
 
 		if (owned.ok) return owned
 

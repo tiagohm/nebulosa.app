@@ -997,6 +997,28 @@ describe('local session', () => {
 		}
 	})
 
+	test('closes normally when another operation owns only the guide output', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		const held = Promise.withResolvers<void>()
+		const owner = coordinator.start<void>('slew', [{ key: resourceKey(guideOutput), device: guideOutput }], async () => {
+			await held.promise
+			return { ok: true, value: undefined }
+		})
+
+		try {
+			expect((await commander.disconnect(connect.value.id)).ok).toBeTrue()
+			expect(commander.list()).toBeEmpty()
+		} finally {
+			held.resolve()
+			await owner.result
+		}
+	})
+
 	test('refuses to acquire the guide camera while another operation owns it', async () => {
 		const [camera, guideOutput] = await devices()
 		const connect = await commander.connect(local(camera, guideOutput))

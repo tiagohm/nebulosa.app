@@ -3,17 +3,18 @@ import { guiderBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import { cameraCaptureStore } from '@stores/camera.capture.store'
 import type { DeviceState } from '@stores/equipment.store'
+import type { DockviewPanelApi } from 'dockview-react'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { DEFAULT_GUIDER_EVENT, DEFAULT_GUIDER_INTERNAL_CONNECT, DEFAULT_GUIDER_REMOTE_CONNECT } from '#/guider'
-import type { GuiderClientMode, GuiderDither, GuiderEvent, GuiderLocalConnect, GuiderRemoteConnect, GuiderStatus } from '#/guider'
+import type { GuiderClientMode, GuiderEvent, GuiderLocalConnect, GuiderRemoteConnect, GuiderSessionInfo } from '#/guider'
 
-export type GuiderStore = typeof guiderStore
+export type GuiderStore = ReturnType<typeof guiderStore>
 
-export interface GuiderState extends GuiderStatus {
+export interface GuiderState {
 	readonly connection: Writable<Omit<GuiderRemoteConnect, 'mode'> & Omit<GuiderLocalConnect, 'mode'> & { mode: GuiderClientMode }>
 	camera?: DeviceState<Camera>
 	guideOutput?: DeviceState<GuideOutput>
@@ -21,160 +22,231 @@ export interface GuiderState extends GuiderStatus {
 	index: number
 	connecting: boolean
 	pendingCommand?: 'loop' | 'findStar' | 'start' | 'stop' | 'calibrate' | 'clear'
+	readonly session: Writable<GuiderSessionInfo>
+	readonly connected: boolean
 }
 
-const capture = cameraCaptureStore()
+export function guiderStore(api: DockviewPanelApi) {
+	const { id } = api
+	const capture = cameraCaptureStore()
 
-const state = proxy<GuiderState>({
-	connected: false,
-	looping: false,
-	running: false,
-	connection: {
-		...DEFAULT_GUIDER_REMOTE_CONNECT,
-		...DEFAULT_GUIDER_INTERNAL_CONNECT,
-		mode: 'remote',
-		capture: capture.state,
-	},
-	event: structuredClone(DEFAULT_GUIDER_EVENT),
-	index: 0,
-	connecting: false,
-	pendingCommand: undefined,
-})
-
-let mounted = false
-const u: VoidFunction[] = []
-
-function mount() {
-	if (mounted) return unmount
-
-	console.info('guider mounted')
-
-	mounted = true
-
-	u[0] = initProxy(state, 'guider', ['o:connection'])
-
-	u[1] = guiderBus.subscribe('update', (event) => {
-		if (!state.connected) return
-
-		Object.assign(state.event, event)
-
-		state.looping = state.event.state === 'looping'
-		state.running = state.event.state === 'guiding'
+	const state = proxy<GuiderState>({
+		connection: {
+			...DEFAULT_GUIDER_REMOTE_CONNECT,
+			...DEFAULT_GUIDER_INTERNAL_CONNECT,
+			mode: 'remote',
+			capture: capture.state,
+		},
+		event: structuredClone(DEFAULT_GUIDER_EVENT),
+		index: 0,
+		connecting: false,
+		pendingCommand: undefined,
+		session: {
+			id: '',
+			mode: 'remote',
+			key: '',
+			target: '',
+			state: 'idle',
+			connected: false,
+			looping: false,
+			running: false,
+		},
+		get connected() {
+			return this.event.state !== 'idle' || this.session?.connected === true
+		},
 	})
 
-	u[2] = guiderBus.subscribe('close', () => {
-		state.connected = false
-		state.looping = false
-		state.running = false
-		state.profile = undefined
-	})
+	let mounted = false
+	const u: VoidFunction[] = []
 
-	u[3] = subscribeKey(state, 'camera', (camera) => {
-		state.connection.camera = camera?.id ?? ''
-	})
+	console.info('guider created:', id)
 
-	u[4] = subscribeKey(state, 'guideOutput', (guideOutput) => {
-		state.connection.guideOutput = guideOutput?.id ?? ''
-	})
+	function mount() {
+		if (mounted) return unmount
 
-	return unmount
-}
+		console.info('guider mounted:', id)
 
-function unmount() {
-	if (!mounted) return
-	console.info('guider unmounted')
-	unsubscribe(u)
-	mounted = false
-}
+		mounted = true
 
-async function load() {
-	const status = await Api.Guider.status()
-	status && Object.assign(state, status)
+		u[0] = initProxy(state, id, ['o:connection', 'o:session'])
 
-	const event = await Api.Guider.event()
-	event && Object.assign(state.event, event)
-}
+		u[1] = guiderBus.subscribe('add', (event) => {
+			if (state.session?.id === event.id) {
+				Object.assign(state.session, event)
+				void loadEvent()
+			}
+		})
 
-function updateConnection<K extends keyof GuiderState['connection']>(key: K, value: GuiderState['connection'][K]) {
-	state.connection[key] = value
-}
+		u[2] = guiderBus.subscribe('update', (event) => {
+			if (state.session?.id === event.id) {
+				Object.assign(state.event, event)
+			}
+		})
 
-function updateDither<K extends keyof GuiderDither>(key: K, value: GuiderDither[K]) {
-	state.connection.dither[key] = value
-}
+		u[3] = guiderBus.subscribe('remove', (event) => {
+			if (state.session?.id === event.id) {
+				Object.assign(state.session, event)
+				Object.assign(state.event, structuredClone(DEFAULT_GUIDER_EVENT))
+			}
+		})
 
-function updateSettle<K extends keyof GuiderState['connection']['dither']['settle']>(key: K, value: GuiderState['connection']['dither']['settle'][K]) {
-	state.connection.dither.settle[key] = value
-}
+		u[4] = subscribeKey(state.session, 'target', updateTitle)
+		u[5] = subscribeKey(state.session, 'connected', updateTitle)
 
-async function connect() {
-	if (!state.connected) {
-		try {
-			if (state.connecting) return
+		void load()
 
-			state.connecting = true
-			await Api.Guider.connect(state.connection)
-			await load()
-		} finally {
-			state.connecting = false
+		return unmount
+	}
+
+	function unmount() {
+		if (!mounted) return
+		console.info('guider unmounted:', id)
+		unsubscribe(u)
+		mounted = false
+	}
+
+	function updateTitle() {
+		api.setTitle(state.session.connected && state.session.target ? `Guider - ${state.session.target}` : 'Guider')
+	}
+
+	async function loadSession() {
+		if (state.session?.id) {
+			const session = await Api.Guider.get(state.session.id)
+
+			if (session) {
+				Object.assign(state.session, session)
+			} else {
+				state.session.id = ''
+				state.session.connected = false
+			}
 		}
-	} else {
-		await Api.Guider.disconnect()
 	}
-}
 
-async function runCommand(command: NonNullable<GuiderState['pendingCommand']>) {
-	try {
-		if (state.pendingCommand !== undefined) return
-		state.pendingCommand = command
-		return await Api.Guider[command]()
-	} finally {
-		state.pendingCommand = undefined
+	async function loadEvent() {
+		if (state.session) {
+			const event = await Api.Guider.event(state.session)
+
+			if (event) {
+				Object.assign(state.event, event)
+			}
+		}
 	}
-}
 
-function clear() {
-	state.event.rmsRA = 0
-	state.event.rmsDEC = 0
-	state.index = 0
-	return runCommand('clear')
-}
+	async function load() {
+		await loadSession()
+		await loadEvent()
+		updateTitle()
+	}
 
-function loop() {
-	return runCommand('loop')
-}
+	function setConnectionMode(value: GuiderClientMode) {
+		state.connection.mode = value
+	}
 
-function findStar() {
-	return runCommand('findStar')
-}
+	function setConnectionHost(value: string) {
+		state.connection.host = value
+	}
 
-function start() {
-	return runCommand('start')
-}
+	function setConnectionPort(value: number) {
+		state.connection.port = value
+	}
 
-function stop() {
-	return runCommand('stop')
-}
+	function setDitherAmount(value: number) {
+		state.connection.dither.amount = value
+	}
 
-function calibrate() {
-	return runCommand('calibrate')
-}
+	function setDitherRaOnly(value: boolean) {
+		state.connection.dither.raOnly = value
+	}
 
-void load()
+	function setSettlePixels(value: number) {
+		state.connection.dither.settle.pixels = value
+	}
 
-export const guiderStore = {
-	state,
-	capture,
-	mount,
-	unmount,
-	updateConnection,
-	updateDither,
-	updateSettle,
-	connect,
-	clear,
-	loop,
-	findStar,
-	start,
-	stop,
-	calibrate,
+	function setSettleTime(value: number) {
+		state.connection.dither.settle.time = value
+	}
+
+	function setSettleTimeout(value: number) {
+		state.connection.dither.settle.timeout = value
+	}
+
+	async function connect() {
+		if (!state.session?.connected) {
+			try {
+				if (state.connecting) return
+
+				state.connecting = true
+				const connection = { ...state.connection, camera: state.camera?.id ?? '', guideOutput: state.guideOutput?.id ?? '' }
+
+				const result = await Api.Guider.connect(connection)
+
+				if (result?.ok) {
+					Object.assign(state.session, result.value)
+				}
+			} finally {
+				state.connecting = false
+			}
+		} else if (state.session) {
+			await Api.Guider.disconnect(state.session)
+		}
+	}
+
+	async function runCommand(command: NonNullable<GuiderState['pendingCommand']>) {
+		try {
+			if (state.pendingCommand !== undefined || !state.session) return
+			state.pendingCommand = command
+			return await Api.Guider[command](state.session)
+		} finally {
+			state.pendingCommand = undefined
+		}
+	}
+
+	function clear() {
+		state.event.rmsRA = 0
+		state.event.rmsDEC = 0
+		state.index = 0
+		return runCommand('clear')
+	}
+
+	function loop() {
+		return runCommand('loop')
+	}
+
+	function findStar() {
+		return runCommand('findStar')
+	}
+
+	function start() {
+		return runCommand('start')
+	}
+
+	function stop() {
+		return runCommand('stop')
+	}
+
+	function calibrate() {
+		return runCommand('calibrate')
+	}
+
+	return {
+		state,
+		capture,
+		mount,
+		unmount,
+		setConnectionMode,
+		setConnectionHost,
+		setConnectionPort,
+		setDitherAmount,
+		setDitherRaOnly,
+		setSettlePixels,
+		setSettleTime,
+		setSettleTimeout,
+		connect,
+		clear,
+		loop,
+		findStar,
+		start,
+		stop,
+		calibrate,
+	} as const
 }

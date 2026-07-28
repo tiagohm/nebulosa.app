@@ -24,7 +24,8 @@ export interface AutoFocusState {
 	readonly event: AutoFocusEvent
 }
 
-export function autoFocusStore(id: string, api: DockviewPanelApi) {
+export function autoFocusStore(api: DockviewPanelApi) {
+	const { id } = api
 	const capture = cameraCaptureStore()
 
 	const state = proxy<AutoFocusState>({
@@ -46,7 +47,7 @@ export function autoFocusStore(id: string, api: DockviewPanelApi) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `autofocus.${id}`, ['o:request'])
+		u[0] = initProxy(state, id, ['o:request'])
 
 		u[1] = autoFocusBus.subscribe('update', (event) => {
 			if (state.camera?.id === event.camera && state.focuser?.id === event.focuser) {

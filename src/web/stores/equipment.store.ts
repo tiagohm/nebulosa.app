@@ -1,14 +1,13 @@
 import { Api } from '@shared/api'
-import { cameraBus, coverBus, deviceBus, flatPanelBus, focuserBus, mountBus, rotatorBus, wheelBus } from '@shared/bus'
+import { cameraBus, coverBus, deviceBus, flatPanelBus, focuserBus, guiderBus, mountBus, rotatorBus, wheelBus } from '@shared/bus'
 import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, Thermometer, Wheel } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
-import type { ConnectionStatus } from '#/connection'
 import type { DeviceUpdated } from '#/device'
+import type { GuiderSessionInfo } from '#/guider'
 
 export type EquipmentStore = typeof equipmentStore
 
 export type DeviceState<D extends Device> = Omit<D, symbol> & {
-	show?: boolean
 	connecting?: boolean
 }
 
@@ -33,6 +32,7 @@ export interface EquipmentState {
 	readonly thermometer: DeviceState<Thermometer>[]
 	readonly dewHeater: DeviceState<DewHeater>[]
 	readonly power: DeviceState<Power>[]
+	readonly guider: GuiderSessionInfo[]
 }
 
 const state = proxy<EquipmentState>({
@@ -49,25 +49,8 @@ const state = proxy<EquipmentState>({
 	thermometer: [],
 	dewHeater: [],
 	power: [],
+	guider: [],
 })
-
-function list(connection: ConnectionStatus) {
-	const devices: DeviceState<Device>[] = []
-	for (const device of state.camera) device.client.id === connection.id && devices.push(device)
-	for (const device of state.mount) device.client.id === connection.id && devices.push(device)
-	for (const device of state.wheel) device.client.id === connection.id && devices.push(device)
-	for (const device of state.focuser) device.client.id === connection.id && devices.push(device)
-	for (const device of state.rotator) device.client.id === connection.id && devices.push(device)
-	for (const device of state.gps) device.client.id === connection.id && devices.push(device)
-	for (const device of state.dome) device.client.id === connection.id && devices.push(device)
-	for (const device of state.guideOutput) device.client.id === connection.id && devices.push(device)
-	for (const device of state.flatPanel) device.client.id === connection.id && devices.push(device)
-	for (const device of state.cover) device.client.id === connection.id && devices.push(device)
-	for (const device of state.thermometer) device.client.id === connection.id && devices.push(device)
-	for (const device of state.dewHeater) device.client.id === connection.id && devices.push(device)
-	for (const device of state.power) device.client.id === connection.id && devices.push(device)
-	return devices
-}
 
 function get<T extends DeviceType>(type: T, id: string) {
 	const devices = state[type]
@@ -114,19 +97,18 @@ function emitUpdate(device: DeviceState<Device>, property: string) {
 	bus.emit(action as never, device as never)
 }
 
-function add(type: DeviceType, device: Device) {
+function addDevice(type: DeviceType, device: Device) {
 	const devices = state[type]
 	const index = devices.findIndex((e) => e.id === device.id)
 
 	if (index < 0) {
 		devices.push(device as never)
-		// device.show = storageGet(`equipment.${device.id}.show`, false)
 		emitAddOrRemove(device, 'add')
 		console.info(device.type, 'added:', device.name, device.id)
 	}
 }
 
-function update<T extends DeviceType>(type: T, event: DeviceUpdated<EquipmentState[T][number]>) {
+function updateDevice<T extends DeviceType>(type: T, event: DeviceUpdated<EquipmentState[T][number]>) {
 	const device = get(type, event.device.id!)
 
 	if (device !== undefined) {
@@ -139,7 +121,7 @@ function update<T extends DeviceType>(type: T, event: DeviceUpdated<EquipmentSta
 	console.warn('device not found:', event.device.name, event.device.id)
 }
 
-function remove(type: DeviceType, device: Pick<Device, 'id'>) {
+function removeDevice(type: DeviceType, device: Pick<Device, 'id'>) {
 	const devices = state[type]
 	const n = devices.length
 	const id = device.id
@@ -152,6 +134,34 @@ function remove(type: DeviceType, device: Pick<Device, 'id'>) {
 
 			emitAddOrRemove(device, 'remove')
 			console.info(device.type, 'removed:', device.name, device.id)
+			break
+		}
+	}
+}
+
+function addGuider(guider: GuiderSessionInfo) {
+	const guiders = state.guider
+	const id = guider.id
+	const index = guiders.findIndex((e) => e.id === id)
+
+	if (index < 0) {
+		guiders.push(guider)
+		guiderBus.emit('add', guider)
+		console.info('guider added:', guider.target, id)
+	}
+}
+
+function removeGuider(guider: GuiderSessionInfo) {
+	const guiders = state.guider
+	const n = guiders.length
+	const id = guider.id
+
+	for (let i = 0; i < n; i++) {
+		if (guiders[i].id === id) {
+			guiders.splice(i, 1)
+
+			guiderBus.emit('remove', guider)
+			console.info('guider removed:', guider.target, guider.id)
 			break
 		}
 	}
@@ -175,30 +185,13 @@ async function connect(device: Device) {
 	}
 }
 
-function show(device: Device, type = device.type) {
-	const found = get(type, device.id)
-
-	if (found !== undefined) {
-		found.show = true
-	}
-}
-
-function hide(device: Device, type = device.type) {
-	const found = get(type, device.id)
-
-	if (found !== undefined) {
-		found.show = false
-	}
-}
-
 export const equipmentStore = {
 	state,
-	list,
 	get,
 	connect,
-	add,
-	update,
-	remove,
-	show,
-	hide,
+	addDevice,
+	updateDevice,
+	removeDevice,
+	addGuider,
+	removeGuider,
 } as const

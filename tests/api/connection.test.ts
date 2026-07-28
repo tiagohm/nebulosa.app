@@ -8,8 +8,8 @@ import { ConnectionHandler } from 'src/api/connection'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { NotificationHandler } from 'src/api/notification'
 import { OperationCoordinator } from 'src/api/operation'
-import type { OperationResult } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
+import type { OperationResult } from '#/orchestration'
 
 class TestIndiHandler extends IndiClientHandlerSet implements DeviceProvider<Device> {
 	get(): Device | undefined {

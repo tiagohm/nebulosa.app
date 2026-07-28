@@ -7,7 +7,8 @@ import { EventBus } from 'src/shared/bus'
 import { exposureTimeInSeconds } from '#/camera'
 import { DEFAULT_GUIDER_DITHER, DEFAULT_GUIDER_EVENT } from '#/guider'
 import type { GuiderClientMode, GuiderConnect, GuiderDither, GuiderDitherPhase, GuiderEvent, GuiderSessionInfo, GuiderState, GuiderStatus } from '#/guider'
-import type { OperationContext, OperationCoordinator, OperationFailureReason, OperationHandle, OperationResult } from './operation'
+import type { OperationFailureReason, OperationResult } from '#/orchestration'
+import type { OperationContext, OperationCoordinator, OperationHandle } from './operation'
 import { abortReason, waitForDeviceState } from './operation.wait'
 import { resourceKey } from './resource'
 import type { ResourceKey, ResourceRequest } from './resource'
@@ -256,7 +257,10 @@ export class GuiderCommander {
 
 	// Lists every open session, in the order they were opened.
 	list(): readonly GuiderSessionInfo[] {
-		return [...this.#sessions.values()].map((entry) => entry.session.info)
+		return this.#sessions
+			.values()
+			.map((entry) => entry.session.info)
+			.toArray()
 	}
 
 	// Describes one session, or nothing when the id is unknown.
@@ -280,7 +284,6 @@ export class GuiderCommander {
 	}
 
 	// Opens a session and resolves only after the transport is attached and configured.
-	//
 	// The target is resolved before the operation starts, because its logical key is what the arbiter needs
 	// to refuse a second connection to the same server or to the same pair of devices.
 	async connect(request: GuiderConnect): Promise<OperationResult<GuiderSessionInfo>> {
@@ -405,7 +408,6 @@ export class GuiderCommander {
 	#resolveTarget(request: GuiderConnect): OperationResult<GuiderTarget> {
 		if (request.mode === 'remote') {
 			const host = request.host.trim()
-
 			if (host.length === 0) return { ok: false, reason: 'unexpectedState', error: 'the guider host is empty' }
 
 			const key = remoteGuiderKey(host, request.port)

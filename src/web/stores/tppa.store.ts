@@ -24,7 +24,8 @@ export interface TppaState {
 	readonly event: TppaEvent
 }
 
-export function tppaStore(id: string, api: DockviewPanelApi) {
+export function tppaStore(api: DockviewPanelApi) {
+	const { id } = api
 	const capture = cameraCaptureStore()
 	const solver = plateSolverStore()
 
@@ -50,7 +51,7 @@ export function tppaStore(id: string, api: DockviewPanelApi) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `tppa.${id}`, ['o:request'])
+		u[0] = initProxy(state, id, ['o:request'])
 
 		u[1] = tppaBus.subscribe('update', (event) => {
 			if (state.camera?.id === event.camera && state.mount?.id === event.mount) {

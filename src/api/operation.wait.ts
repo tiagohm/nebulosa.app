@@ -1,5 +1,5 @@
 import { errorMessage, settlesWithin } from 'src/api/util'
-import type { OperationFailureReason, OperationResult } from './operation'
+import type { OperationFailureReason, OperationResult } from '#/orchestration'
 
 // Everything needed to command a device and wait for the physical state that proves the command took
 // effect. The device itself is not a field: subscribe, current, and command already close over it.

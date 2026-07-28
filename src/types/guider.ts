@@ -3,6 +3,7 @@ import type { PHD2Settle } from 'nebulosa/src/devices/guiding/phd2'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraCaptureStart } from '#/camera'
 import type { HostAndPort } from '#/connection'
+import type { OperationResult } from '#/orchestration'
 
 export type GuiderClientMode = 'local' | 'remote'
 
@@ -24,6 +25,8 @@ export interface GuiderLocalConnect {
 
 export type GuiderConnect = GuiderRemoteConnect | GuiderLocalConnect
 
+export type GuiderConnected = OperationResult<GuiderSessionInfo>
+
 export interface GuiderEvent {
 	id: string
 	state: GuiderState
@@ -43,8 +46,8 @@ export interface GuiderEvent {
 }
 
 export interface GuiderDither {
-	readonly amount: number
-	readonly raOnly: boolean
+	amount: number
+	raOnly: boolean
 	readonly settle: PHD2Settle
 }
 

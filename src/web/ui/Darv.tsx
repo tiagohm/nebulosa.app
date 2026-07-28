@@ -17,12 +17,8 @@ import { formatALT } from 'nebulosa/src/math/units/angle'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
-export interface DarvParams {
-	readonly id: string
-}
-
-export const Darv = memo(({ api, params }: IDockviewPanelProps<DarvParams>) => {
-	const darv = useStore(() => darvStore(params.id, api), [params.id])
+export const Darv = memo(({ api }: IDockviewPanelProps) => {
+	const darv = useStore(() => darvStore(api), [api.id])
 
 	return (
 		<DarvStoreContext value={darv}>

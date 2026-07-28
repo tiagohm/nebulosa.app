@@ -22,7 +22,7 @@ export interface CameraDither extends GuiderDither {
 	enabled: boolean
 	// Id of the guider session that must dither. Empty means no guider was chosen, and the capture then
 	// exposes without dithering: with several sessions open, picking one would be a guess.
-	guider: string
+	guider?: string
 }
 
 export interface CameraCaptureStart extends Size {
@@ -118,7 +118,6 @@ export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	autoSubFolderMode: 'off',
 	dither: {
 		enabled: false,
-		guider: '',
 		amount: 5,
 		raOnly: false,
 		settle: DEFAULT_PHD2_SETTLE,

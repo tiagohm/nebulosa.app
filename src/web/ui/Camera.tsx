@@ -1,6 +1,7 @@
 import { useDevice } from '@hooks/device.hook'
 import { CameraStoreContext } from '@shared/context'
 import { cameraStore } from '@stores/camera.store'
+import { equipmentStore } from '@stores/equipment.store'
 import { CameraAutoSaveButton } from '@ui/CameraAutoSaveButton'
 import { CameraAutoSubFolderModeButton } from '@ui/CameraAutoSubFolderButton'
 import { CameraExposureModeButtonGroup } from '@ui/CameraExposureModeButtonGroup'
@@ -19,6 +20,7 @@ import { FocuserDropdown, MountDropdown, RotatorDropdown, WheelDropdown } from '
 import { FilePickerInput } from '@ui/FilePickerInput'
 import { FrameFormatSelect } from '@ui/FrameFormatSelect'
 import { FrameTypeSelect } from '@ui/FrameTypeSelect'
+import { GuiderSessionInfoSelect } from '@ui/GuiderSessionInfoSelect'
 import { Icons } from '@ui/Icon'
 import { IndiPanelControl } from '@ui/IndiPanelControl'
 import type { IDockviewPanelProps } from 'dockview-react'
@@ -102,19 +104,31 @@ const Path = memo(() => {
 
 const Options = memo(() => {
 	const camera = useContext(CameraStoreContext)
-	const { transferFormat, compressed, dither } = useSnapshot(camera.state.request)
+	const { transferFormat, compressed } = useSnapshot(camera.state.request)
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-2">
 			<CameraTransferFormatSelect className="col-span-7" onValueChange={camera.capture.setTransferFormat} value={transferFormat} />
 			<Checkbox className="col-span-5" label="Compressed" onValueChange={camera.capture.setCompressed} value={compressed} />
-			<div className="col-span-full flex flex-row items-center gap-2 border-t border-dashed border-neutral-500 pt-2">
-				<span className="text-sm font-bold">DITHER</span>
-				<Switch onValueChange={(value) => camera.updateDither('enabled', value)} value={dither.enabled} />
-			</div>
-			<NumberInput className="col-span-8" disabled={!dither.enabled} fractionDigits={1} label="Dither pixels (px)" maxValue={25} minValue={1} onValueChange={(value) => camera.updateDither('amount', value)} placeholder="5" step={0.1} value={dither.amount} />
-			<Checkbox className="col-span-4" disabled={!dither.enabled} label="RA only" onValueChange={(value) => camera.updateDither('raOnly', value)} value={dither.raOnly} />
+			<Dither />
 		</div>
+	)
+})
+
+const Dither = memo(() => {
+	const camera = useContext(CameraStoreContext)
+	const { guider } = useSnapshot(equipmentStore.state)
+	const { enabled, raOnly, amount, guider: selected } = useSnapshot(camera.state.request.dither)
+	const value = guider.find((e) => e.id === selected || e.key === selected)
+
+	return (
+		<>
+			<span className="col-span-full text-sm font-bold">DITHER</span>
+			<Switch className="col-span-4" onValueChange={camera.setDitherEnabled} value={enabled} />
+			<GuiderSessionInfoSelect className="col-span-8" items={guider} disabled={!enabled} onValueChange={camera.setDitherGuider} value={value} endContent={<Icons.CloseCircle onClick={camera.removeDitherGuider} />} />
+			<NumberInput className="col-span-8" disabled={!enabled} fractionDigits={1} label="Dither pixels (px)" maxValue={25} minValue={1} onValueChange={camera.setDitherAmount} placeholder="5" step={0.1} value={amount} />
+			<Checkbox className="col-span-4" disabled={!enabled} label="RA only" onValueChange={camera.setDitherRaOnly} value={raOnly} />
+		</>
 	)
 })
 

@@ -27,7 +27,8 @@ export interface DarvState {
 	readonly exposureEstimation: DarvExposureInput & { presetMode: DarvExposurePresetMode | 'custom' }
 }
 
-export function darvStore(id: string, api: DockviewPanelApi) {
+export function darvStore(api: DockviewPanelApi) {
+	const { id } = api
 	const capture = cameraCaptureStore()
 
 	const state = proxy<DarvState>({
@@ -60,7 +61,7 @@ export function darvStore(id: string, api: DockviewPanelApi) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `darv.${id}`, ['o:request', 'o:exposureEstimation'])
+		u[0] = initProxy(state, id, ['o:request', 'o:exposureEstimation'])
 
 		u[1] = darvBus.subscribe('update', (event) => {
 			if (state.camera?.id === event.camera && state.mount?.id === event.mount) {

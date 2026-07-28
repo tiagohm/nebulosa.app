@@ -7,10 +7,10 @@ import { CameraCapturer } from 'src/api/camera.capture'
 import type { CameraCaptureDecodeAndWrite, CameraCaptureOptions, CameraCaptureResult } from 'src/api/camera.capture'
 import type { ImageProcessor } from 'src/api/image'
 import { OperationCoordinator } from 'src/api/operation'
-import type { OperationResult } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraCaptureEvent, CameraCaptureStart } from '#/camera'
+import type { OperationResult } from '#/orchestration'
 import { waitUntil } from './util'
 
 interface HarnessOptions {

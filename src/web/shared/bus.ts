@@ -9,7 +9,7 @@ import type { CameraFrameEvent, CameraCaptureEvent } from '#/camera'
 import type { ConnectionEvent } from '#/connection'
 import type { DarvEvent } from '#/darv'
 import type { FlatWizardEvent } from '#/flatwizard'
-import type { GuiderEvent } from '#/guider'
+import type { GuiderEvent, GuiderSessionInfo } from '#/guider'
 import type { Image, ImageLoaded } from '#/image'
 import type { ComputeRoi } from '#/image.roi'
 import type { IndiDevicePropertyEvent, IndiServerEvent } from '#/indi'
@@ -70,8 +70,9 @@ export interface ConnectionBusEvents {
 }
 
 export interface GuiderBusEvents {
+	readonly add: GuiderSessionInfo
 	readonly update: GuiderEvent
-	readonly close: unknown
+	readonly remove: GuiderSessionInfo
 }
 
 export interface IndiBusEvents {

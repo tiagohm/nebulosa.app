@@ -45,7 +45,6 @@ import { Wheel } from '@ui/Wheel'
 import { DockviewReact, themeGithubDark } from 'dockview-react'
 import type { IDockviewHeaderActionsProps, IDockviewPanelProps } from 'dockview-react'
 import { memo, useEffect } from 'react'
-import { wsStore } from 'src/web/stores/ws.store'
 
 const tabComponents = {
 	fixed: Tab,
@@ -96,7 +95,6 @@ const components = {
 
 export const Home = memo(() => {
 	// Mounts the store lifecycle once the home screen is active.
-	useEffect(wsStore.mount, [])
 	useEffect(settingsStore.mount, [])
 	useEffect(atlasStore.mount, [])
 	useEffect(homeStore.mount, [])

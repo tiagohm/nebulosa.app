@@ -2,9 +2,10 @@ import { describe, expect, spyOn, test } from 'bun:test'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_CAMERA, DEFAULT_MOUNT } from 'nebulosa/src/devices/indi/device'
 import { OperationCoordinator } from 'src/api/operation'
-import type { OperationContext, OperationResult } from 'src/api/operation'
+import type { OperationContext } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import type { ResourceKey } from 'src/api/resource'
+import type { OperationResult } from '#/orchestration'
 
 const CAMERA = 'client:camera:camera-1' as ResourceKey
 const MOUNT = 'client:mount:mount-1' as ResourceKey

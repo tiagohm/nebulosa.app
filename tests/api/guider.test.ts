@@ -863,6 +863,33 @@ describe('local session', () => {
 		}
 	})
 
+	test('reconfigures the guide camera after another operation had it', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		const held = Promise.withResolvers<void>()
+		const owner = coordinator.start<void>('test', [{ key: resourceKey(camera), device: camera }], async () => {
+			cameraManager.bin(camera, 2, 2)
+			cameraManager.gain(camera, 42)
+			cameraManager.disableBlob(camera)
+			await held.promise
+			return { ok: true, value: undefined }
+		})
+
+		held.resolve()
+		expect((await owner.result).ok).toBeTrue()
+		expect(await waitUntil(() => camera.bin.x.value === 2)).toBeTrue()
+
+		const looped = await commander.loop(connect.value.id, { timeout: 15000 })
+
+		expect(looped.ok).toBeTrue()
+		expect(camera.bin.x.value).toBe(1)
+		expect(camera.gain.value).toBe(0)
+	}, 20000)
+
 	test('refuses to acquire the guide camera while another operation owns it', async () => {
 		const [camera, guideOutput] = await devices()
 		const connect = await commander.connect(local(camera, guideOutput))

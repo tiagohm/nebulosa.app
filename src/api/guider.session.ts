@@ -764,19 +764,7 @@ class GuiderSession {
 				}
 
 				try {
-					const { capture } = request
-
-					if (capture.width > 0 && capture.height > 0 && capture.subframe) cameraManager.frame(camera, capture.x, capture.y, capture.width, capture.height)
-					else if (camera.frame.width.max > 0 && camera.frame.height.max > 0) cameraManager.frame(camera, 0, 0, camera.frame.width.max, camera.frame.height.max)
-					cameraManager.frameType(camera, capture.frameType)
-					if (capture.frameFormat) cameraManager.frameFormat(camera, capture.frameFormat)
-					cameraManager.bin(camera, capture.binX, capture.binY)
-					cameraManager.gain(camera, capture.gain)
-					cameraManager.offset(camera, capture.offset)
-					cameraManager.transferFormat(camera, capture.transferFormat)
-					cameraManager.compression(camera, capture.compressed)
-					client.setExposure(exposureTimeInSeconds(capture.exposureTime, capture.exposureTimeUnit))
-
+					this.#configure(camera, client)
 					return { ok: true, value: client }
 				} catch (error) {
 					// connect() already attached the client to the camera manager, so a configuration that fails
@@ -797,6 +785,31 @@ class GuiderSession {
 		Object.assign(this.#settings, request.dither)
 		this.#pixelScale = configured.value.getPixelScale() || 1
 		return { ok: true, value: undefined }
+	}
+
+	// Applies the capture configuration of a local guider to its camera and makes sure frames are delivered.
+	//
+	// This runs under every scope that owns the camera, not once at connection. An idle session releases the
+	// physical device on purpose, so another operation may crop, bin or re-gain it meanwhile, and a capture
+	// turns frame delivery off when it is done. A guide exposure taken on that configuration would be wrong,
+	// and one taken with delivery off would never produce the frame the session is waiting for.
+	#configure(camera: Camera, client: GuiderClient) {
+		if (this.request.mode !== 'local') return
+
+		const { cameraManager } = this.sessionContext
+		const { capture } = this.request
+
+		if (capture.width > 0 && capture.height > 0 && capture.subframe) cameraManager.frame(camera, capture.x, capture.y, capture.width, capture.height)
+		else if (camera.frame.width.max > 0 && camera.frame.height.max > 0) cameraManager.frame(camera, 0, 0, camera.frame.width.max, camera.frame.height.max)
+		cameraManager.frameType(camera, capture.frameType)
+		if (capture.frameFormat) cameraManager.frameFormat(camera, capture.frameFormat)
+		cameraManager.bin(camera, capture.binX, capture.binY)
+		cameraManager.gain(camera, capture.gain)
+		cameraManager.offset(camera, capture.offset)
+		cameraManager.transferFormat(camera, capture.transferFormat)
+		cameraManager.compression(camera, capture.compressed)
+		cameraManager.enableBlob(camera)
+		client.setExposure(exposureTimeInSeconds(capture.exposureTime, capture.exposureTimeUnit))
 	}
 
 	// Runs one state-changing command, refusing a second one instead of letting it resolve another's waiter.
@@ -945,6 +958,19 @@ class GuiderSession {
 				{ key: resourceKey(guideOutput), device: guideOutput },
 			],
 			(activityContext) => {
+				const client = this.#client
+
+				// The camera was acquirable for as long as the session sat idle, so whatever it was lent to may
+				// have reconfigured it and turned frame delivery off on its way out. It is reconfigured here,
+				// under the scope that owns it again, rather than trusting what connect left behind.
+				if (client instanceof GuiderClient) {
+					try {
+						this.#configure(camera, client)
+					} catch (error) {
+						return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
+					}
+				}
+
 				// Whatever ends the activity, the guider must not be left exposing while its devices go back
 				// to the arbiter: the next operation would acquire a camera another client still drives.
 				activityContext.onCleanup(() => this.#quiesce())

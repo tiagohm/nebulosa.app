@@ -17,11 +17,11 @@ import { mountBus, mount as mountEndpoints, MountHandler, MountRemoteControlHand
 import { MountCommander } from 'src/api/mount.commander'
 import { NotificationHandler } from 'src/api/notification'
 import { OperationCoordinator } from 'src/api/operation'
-import type { OperationResult } from 'src/api/operation'
 import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { coordinateInfo } from '#/mount'
 import type { CoordinateInfo, MountAdded, MountRemoteControlStatus, MountRemoved, MountUpdated } from '#/mount'
 import type { Notification } from '#/notification'
+import type { OperationResult } from '#/orchestration'
 import { SocketMessager } from './util'
 
 mountBus.forceSync = true

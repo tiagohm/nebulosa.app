@@ -12,12 +12,8 @@ import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
-export interface FlatWizardParams {
-	readonly id: string
-}
-
-export const FlatWizard = memo(({ api, params }: IDockviewPanelProps<FlatWizardParams>) => {
-	const flatWizard = useStore(() => flatWizardStore(params.id, api), [params.id])
+export const FlatWizard = memo(({ api }: IDockviewPanelProps) => {
+	const flatWizard = useStore(() => flatWizardStore(api), [api.id])
 
 	return (
 		<FlatWizardStoreContext value={flatWizard}>

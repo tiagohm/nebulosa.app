@@ -16,12 +16,8 @@ import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
-export interface TppaParams {
-	readonly id: string
-}
-
-export const Tppa = memo(({ api, params }: IDockviewPanelProps<TppaParams>) => {
-	const tppa = useStore(() => tppaStore(params.id, api), [params.id])
+export const Tppa = memo(({ api }: IDockviewPanelProps) => {
+	const tppa = useStore(() => tppaStore(api), [api.id])
 
 	return (
 		<TppaStoreContext value={tppa}>

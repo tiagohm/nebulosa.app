@@ -1,4 +1,5 @@
 import type { GuiderConnect, GuiderDither, GuiderSessionInfo } from '#/guider'
+import type { OperationResult } from '#/orchestration'
 import { guiderBus, GuiderCommander } from './guider.session'
 import type { GuiderCommandOptions, GuiderFindStarResult } from './guider.session'
 import { response } from './http'
@@ -6,7 +7,6 @@ import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
-import type { OperationResult } from './operation'
 
 // Transport adapter over the coordinated guider sessions.
 //

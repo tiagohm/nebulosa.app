@@ -9,6 +9,7 @@ import type { FlatPanelStore } from '@stores/flatpanel.store'
 import type { FlatWizardStore } from '@stores/flatwizard.store'
 import type { FocuserStore } from '@stores/focuser.store'
 import type { GuideOutputStore } from '@stores/guideoutput.store'
+import type { GuiderStore } from '@stores/guider.store'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { IndiPanelControlStore } from '@stores/indi.panelcontrol.store'
 import type { LocationStore } from '@stores/location.store'
@@ -50,6 +51,8 @@ export const FocuserStoreContext = createContext<FocuserStore>(null as never)
 
 export const GuideOutputDeviceContext = createContext<GuideOutput>(null as never)
 export const GuideOutputStoreContext = createContext<GuideOutputStore>(null as never)
+
+export const GuiderStoreContext = createContext<GuiderStore>(null as never)
 
 export const ImageContext = createContext<Image>(null as never)
 export const ImageViewerStoreContext = createContext<ImageViewerStore>(null as never)

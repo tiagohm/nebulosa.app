@@ -4,8 +4,9 @@ import { DEFAULT_CAMERA, DEFAULT_COVER, DEFAULT_GUIDE_OUTPUT, DEFAULT_MOUNT } fr
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager'
 import { DeviceLifecycle, isDeviceQuiescent } from 'src/api/device.lifecycle'
 import { OperationCoordinator } from 'src/api/operation'
-import type { OperationContext, OperationResult } from 'src/api/operation'
+import type { OperationContext } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
+import type { OperationResult } from '#/orchestration'
 
 class TestDeviceManager<D extends Device> {
 	readonly #devices = new Set<D>()

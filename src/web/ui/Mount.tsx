@@ -249,13 +249,12 @@ const ParkAndHome = memo(() => {
 const TrackModeAndRate = memo(() => {
 	const mount = useContext(MountStoreContext)
 	const { connected, parking, parked, slewing, moving, homing, trackModes, trackMode, slewRates, slewRate, guideRate } = useSnapshot(mount.state.mount)
-	const blocked = slewing || moving || parking || homing
-	const disabled = !connected || blocked || parked
+	const blocked = !connected || slewing || moving || parking || homing || parked
 
 	return (
 		<div className="col-span-8 flex flex-row items-center gap-2">
-			<TrackModeSelect className="w-13/24" disabled={disabled} modes={trackModes} onValueChange={mount.trackMode} value={trackMode} />
-			<SlewRateSelect className="w-11/24" disabled={disabled} onValueChange={mount.slewRate} rates={slewRates} value={slewRate ?? ''} />
+			<TrackModeSelect className="w-13/24" disabled={blocked} modes={trackModes} onValueChange={mount.trackMode} value={trackMode} />
+			<SlewRateSelect className="w-11/24" disabled={blocked} onValueChange={mount.slewRate} rates={slewRates} value={slewRate ?? ''} />
 		</div>
 	)
 })

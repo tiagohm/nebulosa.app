@@ -1,12 +1,7 @@
 import { errorMessage } from 'src/api/util'
+import type { OperationFailureReason, OperationResult } from '#/orchestration'
 import type { ResourceConflict, ResourceKey, ResourceLease, ResourceOwner, ResourceRequest } from './resource'
 import { ResourceArbiter } from './resource'
-
-// Expected operational terminal causes that callers can handle without exceptions.
-export type OperationFailureReason = 'busy' | 'aborted' | 'disconnected' | 'removed' | 'timeout' | 'alert' | 'commandFailed' | 'unexpectedState'
-
-// Discriminated terminal outcome for expected success and operational failure.
-export type OperationResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: OperationFailureReason; readonly error?: string }
 
 // Anything able to start an operation. The coordinator opens a new tree; a context nests inside its own,
 // so a service takes one scope parameter and behaves identically whether it runs top-level or composed.

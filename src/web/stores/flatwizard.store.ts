@@ -21,7 +21,8 @@ export interface FlatWizardState {
 	readonly event: FlatWizardEvent
 }
 
-export function flatWizardStore(id: string, api: DockviewPanelApi) {
+export function flatWizardStore(api: DockviewPanelApi) {
+	const { id } = api
 	const capture = cameraCaptureStore()
 
 	const state = proxy<FlatWizardState>({
@@ -45,7 +46,7 @@ export function flatWizardStore(id: string, api: DockviewPanelApi) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `flatwizard.${id}`, ['o:request'])
+		u[0] = initProxy(state, id, ['o:request'])
 
 		u[1] = flatWizardBus.subscribe('update', (event) => {
 			if (state.camera?.id === event.camera) {

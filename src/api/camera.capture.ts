@@ -8,10 +8,11 @@ import { base64Source, bufferSource } from 'nebulosa/src/io/io'
 import { DEFAULT_CAMERA_CAPTURE_EVENT, exposureTimeInMicroseconds, exposureTimeInSeconds } from '#/camera'
 import type { CameraCaptureEvent, CameraCaptureStart } from '#/camera'
 import type { GuiderDither } from '#/guider'
+import type { OperationFailureReason, OperationResult } from '#/orchestration'
 import { guiderBus } from './guider.session'
 import type { GuiderDitherEvent } from './guider.session'
 import type { ImageProcessor } from './image'
-import type { OperationContext, OperationFailureReason, OperationResult, OperationScope } from './operation'
+import type { OperationContext, OperationScope } from './operation'
 import { abortableDelay, abortReason } from './operation.wait'
 import { ResourceArbiter, resourceKey } from './resource'
 import { directoryExists, errorMessage } from './util'
@@ -499,7 +500,7 @@ class CameraCaptureSession {
 		const guider = this.#request.dither.guider
 
 		// No guider named means none was chosen, which is a request not to dither rather than a failure.
-		if (!this.#request.dither.enabled || guider.length === 0 || ditherer === undefined) return { ok: true, value: undefined }
+		if (!this.#request.dither.enabled || !guider || ditherer === undefined) return { ok: true, value: undefined }
 
 		// A named session that is gone or not guiding is a different matter: the capture asked for this
 		// exact guider, so exposing without it would be pretending a dither happened.

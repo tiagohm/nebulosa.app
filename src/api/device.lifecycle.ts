@@ -1,6 +1,6 @@
 import type { Camera, Cover, Device, DeviceType, Focuser, GuideOutput, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager'
-import type { OperationFailureReason } from './operation'
+import type { OperationFailureReason } from '#/orchestration'
 import { OperationCoordinator } from './operation'
 import { resourceDevice, resourceKey, ResourceArbiter } from './resource'
 import type { ResourceKey } from './resource'

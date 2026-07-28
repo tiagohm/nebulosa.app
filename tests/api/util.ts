@@ -1,7 +1,7 @@
 import { expect, spyOn } from 'bun:test'
 import type { CameraCaptureHandle, CameraCaptureResult } from 'src/api/camera.capture'
 import type { Messager } from 'src/api/message'
-import type { OperationResult } from 'src/api/operation'
+import type { OperationResult } from '#/orchestration'
 
 export type SocketMessage<T = unknown> = {
 	readonly type: string

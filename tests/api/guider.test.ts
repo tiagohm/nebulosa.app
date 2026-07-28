@@ -623,13 +623,13 @@ describe('connection loss', () => {
 })
 
 describe('local session', () => {
-	function local(camera: Camera, guideOutput: GuideOutput): GuiderConnect {
+	function local(camera: Camera, guideOutput: GuideOutput, exposureTime = 10): GuiderConnect {
 		return {
 			mode: 'local',
 			focalLength: 500,
 			camera: camera.id,
 			guideOutput: guideOutput.id,
-			capture: { ...structuredClone(DEFAULT_CAMERA_CAPTURE_START), exposureTime: 10, exposureTimeUnit: 'millisecond' },
+			capture: { ...structuredClone(DEFAULT_CAMERA_CAPTURE_START), exposureTime, exposureTimeUnit: 'millisecond' },
 			dither: structuredClone(DEFAULT_GUIDER_DITHER),
 		}
 	}
@@ -681,6 +681,19 @@ describe('local session', () => {
 		expect(second.ok || second.reason).toBe('busy')
 		expect(commander.list()).toHaveLength(1)
 	})
+
+	test('lets a guide exposure longer than the command timeout produce its first frame', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput, 2000))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		const looped = await commander.loop(connect.value.id)
+
+		expect(looped.ok).toBeTrue()
+		expect(commander.looping(connect.value.id)).toBeTrue()
+	}, 20000)
 
 	test('refuses a second session that shares only the guide camera of the first', async () => {
 		const [camera, guideOutput] = await devices()

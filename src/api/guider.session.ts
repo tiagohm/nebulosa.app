@@ -4,7 +4,7 @@ import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { CameraManager, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
 import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
 import { EventBus } from 'src/shared/bus'
-import { exposureTimeInSeconds } from '#/camera'
+import { exposureTimeInMilliseconds, exposureTimeInSeconds } from '#/camera'
 import { DEFAULT_GUIDER_DITHER, DEFAULT_GUIDER_EVENT } from '#/guider'
 import type { GuiderClientMode, GuiderConnect, GuiderDither, GuiderDitherPhase, GuiderEvent, GuiderSessionInfo, GuiderState, GuiderStatus } from '#/guider'
 import type { OperationContext, OperationCoordinator, OperationFailureReason, OperationHandle, OperationResult } from './operation'
@@ -488,7 +488,7 @@ class GuiderSession {
 			options,
 			async (signal) =>
 				await this.#withActivity(async () => {
-					const observed = await this.#observe(signal, options.timeout ?? this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT, {
+					const observed = await this.#observe(signal, this.#loopTimeout(options), {
 						evaluate: (update) => {
 							if (update.closed) return 'disconnected'
 							return this.#state === 'Looping' ? 'success' : 'pending'
@@ -812,6 +812,22 @@ class GuiderSession {
 			if (this.#commandController === controller) this.#commandController = undefined
 			this.#command = undefined
 		}
+	}
+
+	// Milliseconds a loop has to be observed, which for a local guider has to cover one whole exposure.
+	//
+	// A local guider that still holds a lock position from an earlier run reports Selected rather than
+	// Looping when told to loop, so the state proving it is looping only arrives once the first frame has
+	// been processed. A guide exposure longer than the ordinary command allowance would then time out and
+	// abort a loop that was working, which is why the exposure is added rather than left to fit inside it.
+	// A remote server publishes its own state without waiting for a frame and needs no allowance.
+	#loopTimeout(options: GuiderCommandOptions) {
+		const timeout = options.timeout ?? this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT
+
+		if (this.request.mode !== 'local') return timeout
+
+		const { exposureTime, exposureTimeUnit } = this.request.capture
+		return timeout + Math.max(0, exposureTimeInMilliseconds(exposureTime, exposureTimeUnit))
 	}
 
 	// Awaits one transport request under a bound the session controls, rather than one the transport owes.

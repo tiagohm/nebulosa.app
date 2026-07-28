@@ -937,6 +937,21 @@ describe('local session', () => {
 		}
 	})
 
+	test('restores the frame delivery its next activity depends on', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		cameraManager.disableBlob(camera)
+
+		const looped = await commander.loop(connect.value.id, { timeout: 15000 })
+
+		expect(looped.ok).toBeTrue()
+		expect(commander.looping(connect.value.id)).toBeTrue()
+	}, 20000)
+
 	test('reconfigures the guide camera after another operation had it', async () => {
 		const [camera, guideOutput] = await devices()
 		const connect = await commander.connect(local(camera, guideOutput))
@@ -966,34 +981,55 @@ describe('local session', () => {
 
 	test('leaves the guide camera alone when disconnecting while another operation owns it', async () => {
 		const [camera, guideOutput] = await devices()
-		const connect = await commander.connect(local(camera, guideOutput))
 
-		expect(connect.ok).toBeTrue()
-		if (!connect.ok) throw new Error(connect.error)
-
-		const held = Promise.withResolvers<void>()
-		const owner = coordinator.start<void>('capture', [{ key: resourceKey(camera), device: camera }], async () => {
-			await held.promise
-			return { ok: true, value: undefined }
-		})
-
+		const addHandler = cameraManager.addHandler.bind(cameraManager)
+		const removeHandler = cameraManager.removeHandler.bind(cameraManager)
 		const stopExposure = cameraManager.stopExposure.bind(cameraManager)
+		const handlers = new Set<unknown>()
 		let stopped = 0
 
-		cameraManager.stopExposure = () => {
-			stopped++
+		cameraManager.addHandler = (handler) => {
+			handlers.add(handler)
+			addHandler(handler)
+		}
+
+		cameraManager.removeHandler = (handler) => {
+			handlers.delete(handler)
+			removeHandler(handler)
 		}
 
 		try {
-			await commander.disconnect(connect.value.id)
+			const connect = await commander.connect(local(camera, guideOutput))
 
-			expect(stopped).toBe(0)
-			expect(commander.list()).toBeEmpty()
-			expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('available')
+			expect(connect.ok).toBeTrue()
+			if (!connect.ok) throw new Error(connect.error)
+			expect(handlers.size).toBe(1)
+
+			const held = Promise.withResolvers<void>()
+			const owner = coordinator.start<void>('capture', [{ key: resourceKey(camera), device: camera }], async () => {
+				await held.promise
+				return { ok: true, value: undefined }
+			})
+
+			cameraManager.stopExposure = () => {
+				stopped++
+			}
+
+			try {
+				await commander.disconnect(connect.value.id)
+
+				expect(stopped).toBe(0)
+				expect(handlers).toBeEmpty()
+				expect(commander.list()).toBeEmpty()
+				expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('available')
+			} finally {
+				held.resolve()
+				await owner.result
+			}
 		} finally {
+			cameraManager.addHandler = addHandler
+			cameraManager.removeHandler = removeHandler
 			cameraManager.stopExposure = stopExposure
-			held.resolve()
-			await owner.result
 		}
 	})
 

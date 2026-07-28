@@ -724,7 +724,7 @@ class GuiderSession {
 		}
 	}
 
-	// Closes a local transport while this session owns the devices that closing it commands.
+	// Closes a local transport while this session owns the camera that closing it commands.
 	//
 	// A local client stops the exposure and turns frame delivery off on its guide camera as it lets go. An
 	// idle session deliberately owns nothing physical, so doing that from cleanup would reach a camera some
@@ -732,8 +732,8 @@ class GuiderSession {
 	// The camera is taken back for the length of the close, which has to happen here rather than in cleanup
 	// because a finalizing scope can no longer open a nested one.
 	//
-	// Only the camera: closing commands nothing on the guide output, and holding it too would abandon the
-	// transport whenever the mount behind it is slewing, over a device the close never touches.
+	// Only the camera: closing commands nothing on the guide output, and holding it too would degrade the
+	// close whenever the mount behind it is slewing, over a device the close never touches.
 	async #detachOwned(): Promise<OperationResult<void>> {
 		const { camera } = this.target
 
@@ -746,7 +746,7 @@ class GuiderSession {
 
 		if (owned.ok) return owned
 
-		// Only an owner elsewhere makes commanding the devices unsafe. A scope refused for any other reason
+		// Only an owner elsewhere makes commanding the camera unsafe. A scope refused for any other reason
 		// means this operation is already unwinding, taking its devices with it, and closing normally is
 		// both safe and necessary.
 		if (owned.reason !== 'busy') {
@@ -754,10 +754,13 @@ class GuiderSession {
 			return owned
 		}
 
-		// The manager keeps a handler nobody reads, which wastes work on every frame the new owner takes.
-		// That is still better than stopping an exposure this session has no claim over.
-		console.error('abandoning the local guider transport: its devices are owned elsewhere')
+		// The camera belongs to someone else, so the transport gives up the only thing it holds without it:
+		// its handler on the manager. Nothing is commanded, so the new owner's exposure is untouched, and
+		// nothing is left behind to process frames that are no longer this session's business.
+		const client = this.#client
 		this.#client = undefined
+		if (client instanceof GuiderClient) client.detachHandler()
+
 		return owned
 	}
 

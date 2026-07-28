@@ -938,10 +938,20 @@ class GuiderSession {
 	}
 
 	// Runs a transport command; a missing transport throws so the wait settles as a failed command.
+	//
+	// Neither transport rejects when it refuses a command: PHD2 answers an error and its wrapper resolves
+	// undefined, and the local client returns false. Left unread, a refusal is indistinguishable from a
+	// command still on its way, and the wait would run to its full timeout before reporting one as the other
+	// while the guider was never going to move. Throwing turns the refusal into the failed command it is.
 	async #dispatch(command: (client: GuiderTransport) => unknown) {
 		const client = this.#client
+
 		if (client === undefined) throw new Error('the guider is not connected')
-		await command(client)
+
+		// A successful PHD2 command answers zero, so only these two values mean refusal.
+		const accepted = await command(client)
+
+		if (accepted === undefined || accepted === false) throw new Error('the guider refused the command')
 	}
 
 	// Registers a waiter and returns its idempotent unsubscriber.

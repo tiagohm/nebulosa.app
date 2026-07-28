@@ -32,6 +32,7 @@ const simulators = [new CameraSimulator('Camera Simulator', client, { mountManag
 class FakePhd2Server {
 	readonly commands: PHD2Command[] = []
 	readonly unanswered = new Set<string>()
+	readonly refused = new Set<string>()
 
 	private listener?: Bun.TCPSocketListener
 	private socket?: Bun.Socket<unknown>
@@ -57,7 +58,8 @@ class FakePhd2Server {
 						const command = JSON.parse(line) as PHD2Command
 						this.commands.push(command)
 						if (this.unanswered.has(command.method)) continue
-						socket.write(`${JSON.stringify({ jsonrpc: '2.0', result: 0, id: command.id })}\r\n`)
+						if (this.refused.has(command.method)) socket.write(`${JSON.stringify({ jsonrpc: '2.0', error: { code: 1, message: 'refused' }, id: command.id })}\r\n`)
+						else socket.write(`${JSON.stringify({ jsonrpc: '2.0', result: 0, id: command.id })}\r\n`)
 					}
 				},
 				close: () => {
@@ -307,6 +309,17 @@ describe('remote session', () => {
 
 		expect((await looped).ok).toBeTrue()
 		expect(commander.looping(id)).toBeTrue()
+	})
+
+	test('fails a refused command instead of waiting for a state the guider will never reach', async () => {
+		const id = await connected()
+		server.refused.add('loop')
+
+		const result = await commander.loop(id)
+
+		expect(result.ok).toBeFalse()
+		expect(result.ok || result.reason).toBe('commandFailed')
+		expect(commander.looping(id)).toBeFalse()
 	})
 
 	test('refuses a concurrent command instead of sharing the waiter of the running one', async () => {

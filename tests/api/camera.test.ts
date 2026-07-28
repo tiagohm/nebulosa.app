@@ -19,7 +19,7 @@ import { deg, hour } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { camera as cameraEndpoints, CameraHandler, cameraBus } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
-import type { CameraCaptureHandle, CameraDitherer } from 'src/api/camera.capture'
+import type { CameraDitherer } from 'src/api/camera.capture'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { guiderBus } from 'src/api/guider.session'
 import { ImageProcessor } from 'src/api/image'
@@ -911,6 +911,68 @@ describe('camera capture start request', () => {
 		} finally {
 			error.mockRestore()
 		}
+	}, 5000)
+
+	test('does not start exposure when the named guider is not guiding', async () => {
+		const error = spyOn(console, 'error').mockImplementation(() => {})
+		let dithered = false
+		const guiderHandler = {
+			running: () => false,
+			dither: () => {
+				dithered = true
+				return Promise.resolve({ ok: true, value: undefined } as const)
+			},
+		} satisfies CameraDitherer
+
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, coordinator)
+		const camera = getCamera()
+		const events: CameraCaptureEvent[] = []
+		const request = captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', dither: { enabled: true, guider: 'guider-1' } })
+
+		try {
+			cameraManager.connect(camera)
+
+			const result = await cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event))).result
+
+			expect(result.ok).toBeFalse()
+			expect(result.ok || result.reason).toBe('unexpectedState')
+			expect(dithered).toBeFalse()
+			expect(events.map((event) => event.state)).toContain('error')
+			expect(events.some((event) => event.state === 'exposureStarted')).toBeFalse()
+		} finally {
+			error.mockRestore()
+		}
+	}, 5000)
+
+	test('skips dither without failing when no guider was chosen', async () => {
+		let dithered = false
+		const guiderHandler = {
+			running: () => {
+				throw new Error('the capture must not ask about a guider it did not name')
+			},
+			dither: () => {
+				dithered = true
+				return Promise.resolve({ ok: true, value: undefined } as const)
+			},
+		} satisfies CameraDitherer
+
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, coordinator)
+		const camera = getCamera()
+		const events: CameraCaptureEvent[] = []
+		const request = captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', dither: { enabled: true } })
+
+		cameraManager.connect(camera)
+
+		const result = await cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event))).result
+
+		expect(result.ok).toBeTrue()
+		expect(dithered).toBeFalse()
+		expect(events.some((event) => event.state === 'dithering')).toBeFalse()
+		expect(events.some((event) => event.state === 'exposureStarted')).toBeTrue()
 	}, 5000)
 
 	test('aborts guider dither when capture stops', async () => {

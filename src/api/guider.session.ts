@@ -273,7 +273,7 @@ export class GuiderCommander {
 
 			// The executor stays pending on purpose: the session holds its logical resource until the
 			// transport goes away or a disconnect is requested.
-			return await ended.promise
+			return await session.finished()
 		})
 
 		// A refused scope never runs its executor, so the failure has to be taken from the operation.
@@ -598,6 +598,19 @@ class GuiderSession {
 		// to a dropped socket must fail its wait as disconnected, not as an ordinary cancellation.
 		this.#commandController?.abort(result.ok ? 'aborted' : result.reason)
 		this.ended.resolve(result)
+	}
+
+	// Terminal outcome of the session, once its activity has been released too.
+	//
+	// The activity is a nested scope, and the coordinator waits for a child without folding its result into
+	// the parent: a disconnect whose cleanup failed to stop the guider would otherwise report success while
+	// the camera is still exposing. Releasing it here is also the graceful order, because the scope ends on
+	// its own instead of being canceled while the session unwinds. A session that is already failing keeps
+	// its own cause, which is the one that explains why it ended.
+	async finished(): Promise<OperationResult<void>> {
+		const result = await this.ended.promise
+		const released = await this.#releaseActivity()
+		return result.ok && !released.ok ? released : result
 	}
 
 	// Closes the transport after every nested scope has released its devices.

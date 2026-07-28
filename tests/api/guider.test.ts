@@ -648,6 +648,37 @@ describe('local session', () => {
 		expect(arbiter.availability(localGuiderKey(camera, guideOutput))).toBe('leased')
 	}, 20000)
 
+	test('fails the disconnect when the activity could not stop the guider', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		const id = connect.value.id
+
+		expect((await commander.loop(id, { timeout: 15000 })).ok).toBeTrue()
+
+		const stopExposure = cameraManager.stopExposure.bind(cameraManager)
+
+		cameraManager.stopExposure = () => {
+			throw new Error('stop refused')
+		}
+
+		try {
+			const disconnected = await commander.disconnect(id)
+
+			expect(disconnected.ok).toBeFalse()
+			expect(disconnected.ok || disconnected.error).toContain('the guider did not stop')
+		} finally {
+			cameraManager.stopExposure = stopExposure
+		}
+
+		expect(commander.list()).toBeEmpty()
+		expect(arbiter.availability(resourceKey(camera))).toBe('available')
+		expect(arbiter.availability(localGuiderKey(camera, guideOutput))).toBe('available')
+	}, 20000)
+
 	test('detaches the local guider when its configuration fails', async () => {
 		const [camera, guideOutput] = await devices()
 

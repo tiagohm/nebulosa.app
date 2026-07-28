@@ -598,6 +598,39 @@ describe('dither', () => {
 		expect(commander.info(id)).toBeDefined()
 	})
 
+	test('refuses a new dither while the guider still moves for an abandoned one', async () => {
+		const id = await guiding()
+
+		const controller = new AbortController()
+		const abandoned = commander.dither(id, undefined, { signal: controller.signal })
+
+		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		controller.abort('aborted')
+		expect((await abandoned).ok).toBeFalse()
+
+		const refused = await commander.dither(id)
+
+		expect(refused.ok).toBeFalse()
+		expect(refused.ok || refused.reason).toBe('busy')
+
+		server.push({ Event: 'SettleBegin' })
+
+		expect(await waitUntil(() => commander.info(id)?.state === 'settling')).toBeTrue()
+
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+		server.push({ Event: 'GuideStep', Frame: 2, Time: 1, RADistanceRaw: 1, DECDistanceRaw: 1, RADuration: 1, RADirection: 'West', DECDuration: 1, DECDirection: 'North', StarMass: 1, SNR: 1, HFD: 1 })
+
+		expect(await waitUntil(() => commander.running(id))).toBeTrue()
+
+		const dithered = commander.dither(id)
+
+		expect(await waitUntil(() => server.commands.filter((command) => command.method === 'dither').length === 2)).toBeTrue()
+		server.push({ Event: 'SettleBegin' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+
+		expect((await dithered).ok).toBeTrue()
+	})
+
 	test('survives the disconnect of another session', async () => {
 		const [, otherPort] = await startServer()
 		const guided = await guiding()

@@ -432,6 +432,11 @@ class GuiderSession {
 	#commandController?: AbortController
 	// Dither in flight, absent otherwise.
 	#dither?: GuiderDitherOperation
+	// Timer held while the guider is still moving for a dither nobody waits for any more, such as one whose
+	// caller aborted. A dither event names neither the command that caused it nor anything else that could
+	// tell two of them apart, so a new dither started meanwhile would be settled by the terminal event of
+	// the old movement and a capture would expose before its own dither had finished.
+	#outstandingDither?: ReturnType<typeof setTimeout>
 	// Open activity holding the guide camera and guide output.
 	#activity?: GuiderActivity
 	// Aborted the moment the session begins ending, which is well before the transport is actually closed.
@@ -587,6 +592,7 @@ class GuiderSession {
 			if (client === undefined) return { ok: false, reason: 'disconnected' }
 			if (signal.aborted) return { ok: false, reason: abortReason(signal) }
 			if (this.event.state !== 'guiding') return { ok: false, reason: 'unexpectedState', error: 'the guider is not guiding' }
+			if (this.#outstandingDither !== undefined) return { ok: false, reason: 'busy', error: 'the guider is still moving for a previous dither' }
 
 			const settle = request?.settle ?? this.#settings.settle
 			const operation = this.#startDither(settle.timeout, signal, options.onPhase)
@@ -600,12 +606,15 @@ class GuiderSession {
 				const dithered = client instanceof PHD2Client ? await client.send<number>('dither', { amount, raOnly, settle }, timeout) : client.dither(amount, raOnly, settle)
 
 				if (dithered === undefined || dithered === false) {
-					this.#finishDither({ ok: false, reason: 'commandFailed', error: 'the dither command was rejected' })
+					// A refused command moved nothing, so no movement is left outstanding.
+					this.#finishDither({ ok: false, reason: 'commandFailed', error: 'the dither command was rejected' }, false)
 				} else if (!operation.finished) {
 					await operation.settleStarted.promise
 				}
 			})().catch((error: unknown) => {
-				this.#finishDither({ ok: false, reason: signal.aborted ? abortReason(signal) : 'commandFailed', error: errorMessage(error) })
+				// An abort may have interrupted a command the guider had already taken, which is the one case
+				// here where the mount can still be moving.
+				this.#finishDither({ ok: false, reason: signal.aborted ? abortReason(signal) : 'commandFailed', error: errorMessage(error) }, signal.aborted)
 			})
 
 			await Promise.race([command, operation.result.promise])
@@ -659,7 +668,9 @@ class GuiderSession {
 
 		this.#closed = true
 		this.#detach()
-		this.#finishDither({ ok: false, reason: 'disconnected' })
+		// The session is over, so there is nothing left that a stale dither event could reach.
+		this.#releaseDither()
+		this.#finishDither({ ok: false, reason: 'disconnected' }, false)
 
 		// Wakes anything still waiting so it settles as disconnected instead of running to its timeout.
 		this.#emit({ state: this.#state, closed: true })
@@ -1111,7 +1122,10 @@ class GuiderSession {
 				this.#beginDitherSettle()
 				break
 			case 'SettleDone':
-				this.#finishDither(event.Status === 0 ? { ok: true, value: undefined } : { ok: false, reason: 'alert', error: event.Error })
+				// The terminal event of a movement, whoever it belonged to: it either settles the dither in
+				// flight or releases the one the session was still tracking on nobody's behalf.
+				this.#releaseDither()
+				this.#finishDither(event.Status === 0 ? { ok: true, value: undefined } : { ok: false, reason: 'alert', error: event.Error }, false)
 				break
 			case 'Settling':
 				this.#publish('settling')
@@ -1161,6 +1175,8 @@ class GuiderSession {
 			case 'GuidingStopped':
 			case 'LoopingExposuresStopped':
 				this.#state = 'Stopped'
+				// A guider that stopped is not moving for anything any more.
+				this.#releaseDither()
 				this.#publish('idle')
 				break
 			default:
@@ -1197,7 +1213,7 @@ class GuiderSession {
 			finished: false,
 		}
 
-		const onAbort = () => this.#finishDither({ ok: false, reason: abortReason(signal) })
+		const onAbort = () => this.#finishDither({ ok: false, reason: abortReason(signal) }, true)
 		operation.onAbort = onAbort
 		signal.addEventListener('abort', onAbort, { once: true })
 
@@ -1205,7 +1221,7 @@ class GuiderSession {
 			() => {
 				if (operation.settleStartedAt === undefined) {
 					operation.settleStarted.resolve(false)
-					this.#finishDither({ ok: false, reason: 'timeout', error: 'the guider never began settling' })
+					this.#finishDither({ ok: false, reason: 'timeout', error: 'the guider never began settling' }, true)
 				}
 			},
 			Math.max(1, timeout) * 1000,
@@ -1214,6 +1230,29 @@ class GuiderSession {
 		this.#dither = operation
 
 		return operation
+	}
+
+	// Retains a movement whose caller has already been answered, refusing a new dither until it concludes.
+	//
+	// The bound matters because the release depends on an event that may never arrive: a guider that drops
+	// its settle would otherwise refuse every dither for the rest of the session. It is the settle timeout
+	// of the dither being retained, which is the longest the guider was ever given to finish this movement.
+	#retainDither(timeout: number) {
+		this.#releaseDither()
+
+		this.#outstandingDither = setTimeout(
+			() => {
+				this.#outstandingDither = undefined
+			},
+			Math.max(1, timeout) * 1000,
+		)
+	}
+
+	// Stops tracking a retained movement, once something proved the guider is no longer performing it.
+	#releaseDither() {
+		if (this.#outstandingDither === undefined) return
+		clearTimeout(this.#outstandingDither)
+		this.#outstandingDither = undefined
 	}
 
 	// Switches the dither from waiting for SettleBegin to waiting for its terminal SettleDone.
@@ -1234,19 +1273,25 @@ class GuiderSession {
 
 		operation.settleTimer = setTimeout(
 			() => {
-				this.#finishDither({ ok: false, reason: 'timeout', error: 'the guider did not settle in time' })
+				this.#finishDither({ ok: false, reason: 'timeout', error: 'the guider did not settle in time' }, true)
 			},
 			Math.max(1, operation.timeout) * 1000,
 		)
 	}
 
 	// Terminalizes the dither exactly once, releasing its timers, listener, and pending milestones.
-	#finishDither(result: OperationResult<void>) {
+	//
+	// Terminalizing is about the caller, not about the mount. When the two disagree — an abort or a timeout
+	// answers the caller while the guider carries on moving — the movement is retained so that nothing else
+	// can be settled by the events it has yet to publish.
+	#finishDither(result: OperationResult<void>, outstanding: boolean) {
 		const operation = this.#dither
 
 		if (!operation || operation.finished) return
 
 		operation.finished = true
+
+		if (outstanding) this.#retainDither(operation.timeout)
 
 		if (operation.startTimer) clearTimeout(operation.startTimer)
 		if (operation.settleTimer) clearTimeout(operation.settleTimer)

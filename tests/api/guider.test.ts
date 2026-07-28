@@ -741,6 +741,36 @@ describe('dither', () => {
 		expect(again.ok || again.reason).toBe('commandFailed')
 	})
 
+	test('allows the dither reply the whole settle rather than the default', async () => {
+		const id = await guiding()
+
+		type Send = (method: string, params?: Record<string, unknown> | unknown[], timeout?: number) => Promise<unknown>
+		const transport = PHD2Client.prototype as unknown as { send: Send }
+		const send = transport.send
+		let allowed: number | undefined
+
+		transport.send = function (method, params, timeout) {
+			if (method === 'dither') allowed = timeout
+			return send.call(this, method, params, timeout)
+		}
+
+		try {
+			const dithered = commander.dither(id)
+
+			expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+			server.push({ Event: 'SettleBegin' })
+			server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+
+			expect((await dithered).ok).toBeTrue()
+
+			// The settle of the default request already outlasts the transport's own default allowance.
+			const settle = DEFAULT_GUIDER_DITHER.settle
+			expect(allowed).toBe((settle.time + settle.timeout) * 1000 + 5000)
+		} finally {
+			transport.send = send
+		}
+	})
+
 	test('retains the movement when the reply to a dither is lost', async () => {
 		const id = await guiding()
 

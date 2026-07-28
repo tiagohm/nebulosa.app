@@ -4,7 +4,7 @@ import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { CameraManager, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
 import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
 import { EventBus } from 'src/shared/bus'
-import { exposureTimeInMilliseconds, exposureTimeInSeconds } from '#/camera'
+import { exposureTimeInSeconds } from '#/camera'
 import { DEFAULT_GUIDER_DITHER, DEFAULT_GUIDER_EVENT } from '#/guider'
 import type { GuiderClientMode, GuiderConnect, GuiderDither, GuiderDitherPhase, GuiderEvent, GuiderSessionInfo, GuiderState, GuiderStatus } from '#/guider'
 import type { OperationContext, OperationCoordinator, OperationFailureReason, OperationHandle, OperationResult } from './operation'
@@ -188,9 +188,9 @@ interface GuiderDitherOperation {
 	// Timestamp in milliseconds at which settling began, absent while the command is still in flight.
 	settleStartedAt?: number
 	// Timer bounding the wait for SettleBegin.
-	startTimer?: ReturnType<typeof setTimeout>
+	startTimer?: Timer
 	// Timer bounding the wait for SettleDone.
-	settleTimer?: ReturnType<typeof setTimeout>
+	settleTimer?: Timer
 	// Exactly-once guard so a late event cannot re-settle the dither.
 	finished: boolean
 }
@@ -469,7 +469,7 @@ class GuiderSession {
 	// caller aborted. A dither event names neither the command that caused it nor anything else that could
 	// tell two of them apart, so a new dither started meanwhile would be settled by the terminal event of
 	// the old movement and a capture would expose before its own dither had finished.
-	#outstandingDither?: ReturnType<typeof setTimeout>
+	#outstandingDither?: Timer
 	// Milliseconds the retention above lasts, kept so a movement that only begins settling later can have
 	// its clock restarted from that point.
 	#outstandingRetention = 0
@@ -559,14 +559,12 @@ class GuiderSession {
 			if (client === undefined) return { ok: false, reason: 'disconnected' }
 
 			const selected = await this.#request(signal, options.timeout ?? this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT, async () => {
-				if (!(client instanceof PHD2Client)) return client.findStar()
+				if (client instanceof GuiderClient) return client.findStar()
 
 				// A search the server refused is a failed command, not an empty answer: reporting it as no
 				// star found would blame the sky for something the guider never looked at.
 				const found = await client.findStar()
-
 				if (!found.success) throw new Error(commandError(found.error))
-
 				return found.result
 			})
 
@@ -676,12 +674,10 @@ class GuiderSession {
 			const command = (async () => {
 				const amount = request?.amount ?? this.#settings.amount
 				const raOnly = request?.raOnly ?? this.#settings.raOnly
-				// PHD2 answers the dither only once it has settled, so the reply has to be allowed the whole
-				// settle and then some. Its dither wrapper takes no timeout and would give up after the default
-				// fifteen seconds on any settle longer than that, which is why this one command is sent
-				// directly instead of through the wrapper.
+				// PHD2 answers the dither only once it has settled, so its reply is allowed the whole settle and
+				// then some. The default would give up on any settle longer than fifteen seconds.
 				const timeout = Math.max(15000, (Math.max(0, settle.time) + Math.max(1, settle.timeout)) * 1000 + 5000)
-				const dithered = client instanceof PHD2Client ? await client.send<number>('dither', { amount, raOnly, settle }, timeout) : client.dither(amount, raOnly, settle)
+				const dithered = client instanceof PHD2Client ? await client.dither(amount, raOnly, settle, timeout) : client.dither(amount, raOnly, settle)
 				const refusal = ditherRefusal(dithered)
 
 				if (refusal !== undefined) {
@@ -710,7 +706,7 @@ class GuiderSession {
 	async profile() {
 		const client = this.#client
 
-		if (!(client instanceof PHD2Client)) return undefined
+		if (client === undefined || client instanceof GuiderClient) return undefined
 
 		// Bounded like every other request, and for the same reason: a transport that closes drops the
 		// command still in flight without settling it. This one is not a command, so nothing else would ever
@@ -1002,7 +998,7 @@ class GuiderSession {
 		const client = this.#client
 
 		if (client === undefined) return 0
-		if (!(client instanceof PHD2Client)) return Math.max(0, client.getExposure())
+		if (client instanceof GuiderClient) return Math.max(0, client.getExposure())
 
 		const exposure = await this.#request(signal, timeout, async () => await client.getExposure())
 		return exposure.ok && exposure.value.success ? Math.max(0, exposure.value.result) : 0

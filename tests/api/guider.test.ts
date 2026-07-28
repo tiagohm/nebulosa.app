@@ -7,6 +7,7 @@ import { CameraManager, FocuserManager, GuideOutputManager, MountManager, Rotato
 import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
+import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
 import { guiderBus, GuiderCommander, localGuiderCameraKey, localGuiderKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
@@ -1054,6 +1055,34 @@ describe('local session', () => {
 			await owner.result
 		}
 	})
+
+	test('keeps a looping run alive when a later command is refused', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		const id = connect.value.id
+
+		expect((await commander.loop(id, { timeout: 15000 })).ok).toBeTrue()
+		expect(arbiter.availability(resourceKey(camera))).toBe('leased')
+
+		const transport: { guide: () => unknown } = GuiderClient.prototype
+		const guide = transport.guide
+		transport.guide = () => false
+
+		try {
+			const refused = await commander.startGuiding(id, { timeout: 1000 })
+
+			expect(refused.ok).toBeFalse()
+			expect(refused.ok || refused.reason).toBe('commandFailed')
+			expect(arbiter.availability(resourceKey(camera))).toBe('leased')
+			expect(commander.looping(id)).toBeTrue()
+		} finally {
+			transport.guide = guide
+		}
+	}, 20000)
 
 	test('refuses to acquire the guide camera while another operation owns it', async () => {
 		const [camera, guideOutput] = await devices()

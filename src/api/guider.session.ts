@@ -985,14 +985,19 @@ class GuiderSession {
 
 	// Acquires the guide camera and guide output for the duration of the activity, then runs the command.
 	// A command that fails hands them straight back, since nothing is capturing after it.
+	//
+	// Only what this command took, though: a guider that was already capturing has an activity of its own,
+	// and releasing that one would quiesce a run the failed command never started. That is the same reason
+	// its abort path stops nothing when the guider refused the command.
 	async #withActivity<T>(run: () => Promise<OperationResult<T>>): Promise<OperationResult<T>> {
+		const running = this.#activity !== undefined
 		const acquired = await this.#acquireActivity()
 
 		if (!acquired.ok) return acquired
 
 		const result = await run()
 
-		if (!result.ok) await this.#releaseActivity()
+		if (!result.ok && !running) await this.#releaseActivity()
 
 		return result
 	}

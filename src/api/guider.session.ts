@@ -642,6 +642,10 @@ class GuiderSession {
 			const command = (async () => {
 				const amount = request?.amount ?? this.#settings.amount
 				const raOnly = request?.raOnly ?? this.#settings.raOnly
+				// PHD2 answers the dither only once it has settled, so the reply has to be allowed the whole
+				// settle and then some. Its dither wrapper takes no timeout and would give up after the default
+				// fifteen seconds on any settle longer than that, which is why this one command is sent
+				// directly instead of through the wrapper.
 				const timeout = Math.max(15000, (Math.max(0, settle.time) + Math.max(1, settle.timeout)) * 1000 + 5000)
 				const dithered = client instanceof PHD2Client ? await client.send<number>('dither', { amount, raOnly, settle }, timeout) : client.dither(amount, raOnly, settle)
 
@@ -958,6 +962,10 @@ class GuiderSession {
 	// A remote exposure belongs to PHD2, which owns it and lets its own user change it at any time, so it is
 	// asked for each time rather than remembered from the handshake. A server that will not answer costs
 	// only the allowance it would have added, which is the same bound the loop had before.
+	//
+	// The local exposure is taken from the connect request rather than from the client's own getExposure,
+	// which reports seconds where the identically named PHD2 call reports milliseconds. Reading both through
+	// one call would silently be off by a thousand, so this stays split until those units agree.
 	async #guideExposure(signal: AbortSignal, timeout: number) {
 		if (this.request.mode === 'local') {
 			const { exposureTime, exposureTimeUnit } = this.request.capture
@@ -968,7 +976,6 @@ class GuiderSession {
 
 		if (!(client instanceof PHD2Client)) return 0
 
-		// PHD2 reports its exposure in milliseconds.
 		const exposure = await this.#request(signal, timeout, async () => await client.getExposure())
 		return exposure.ok && exposure.value !== undefined ? Math.max(0, exposure.value) : 0
 	}

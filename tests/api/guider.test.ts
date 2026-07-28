@@ -31,6 +31,7 @@ const simulators = [new CameraSimulator('Camera Simulator', client, { mountManag
 
 class FakePhd2Server {
 	readonly commands: PHD2Command[] = []
+	readonly unanswered = new Set<string>()
 
 	private listener?: Bun.TCPSocketListener
 	private socket?: Bun.Socket<unknown>
@@ -55,6 +56,7 @@ class FakePhd2Server {
 						if (line.length === 0) continue
 						const command = JSON.parse(line) as PHD2Command
 						this.commands.push(command)
+						if (this.unanswered.has(command.method)) continue
 						socket.write(`${JSON.stringify({ jsonrpc: '2.0', result: 0, id: command.id })}\r\n`)
 					}
 				},
@@ -224,6 +226,33 @@ describe('remote session', () => {
 		expect(commander.list()).toBeEmpty()
 		expect(arbiter.availability(remoteGuiderKey('127.0.0.1', port))).toBe('available')
 		expect(arbiter.availability(remoteGuiderKey('127.0.0.1', otherPort))).toBe('available')
+	})
+
+	test('gives up on the handshake when the server accepts the socket but never answers', async () => {
+		const [silent, silentPort] = await startServer()
+		silent.unanswered.add('get_pixel_scale')
+
+		const result = await commander.connect(remote(silentPort))
+
+		expect(result.ok).toBeFalse()
+		expect(result.ok || result.reason).toBe('timeout')
+		expect(commander.list()).toBeEmpty()
+		expect(arbiter.availability(remoteGuiderKey('127.0.0.1', silentPort))).toBe('available')
+	})
+
+	test('settles a request still in flight when the session goes away', async () => {
+		const id = await connected()
+		server.unanswered.add('find_star')
+
+		const found = commander.findStar(id)
+
+		expect(await waitUntil(() => server.received('find_star'))).toBeTrue()
+		expect((await commander.disconnect(id)).ok).toBeTrue()
+
+		const result = await found
+
+		expect(result.ok).toBeFalse()
+		expect(result.ok || result.reason).toBe('disconnected')
 	})
 
 	test('fails to connect when no server accepts the connection', async () => {

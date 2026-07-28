@@ -470,19 +470,18 @@ class GuiderSession {
 
 	// Asks the transport to lock onto the best star of the latest frame.
 	async findStar(options: GuiderCommandOptions): Promise<OperationResult<GuiderFindStarResult>> {
-		return await this.#serialize('findStar', options, async () => {
+		return await this.#serialize('findStar', options, async (signal) => {
 			const client = this.#client
 
 			if (client === undefined) return { ok: false, reason: 'disconnected' }
 
-			try {
-				const selected = await client.findStar()
-				// Neither transport publishes a terminal event for the search, so acceptance is all that can
-				// be reported; an empty answer means no star survived detection.
-				return selected === undefined ? { ok: false, reason: 'unexpectedState', error: 'no guide star was found' } : { ok: true, value: { accepted: true } }
-			} catch (error) {
-				return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
-			}
+			const selected = await this.#request(signal, options.timeout ?? this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT, async () => await client.findStar())
+
+			if (!selected.ok) return selected
+
+			// Neither transport publishes a terminal event for the search, so acceptance is all that can be
+			// reported; an empty answer means no star survived detection.
+			return selected.value === undefined ? { ok: false, reason: 'unexpectedState', error: 'no guide star was found' } : { ok: true, value: { accepted: true } }
 		})
 	}
 
@@ -670,7 +669,18 @@ class GuiderSession {
 			}
 
 			Object.assign(this.#settings, this.request.dither)
-			this.#pixelScale = (await client.getPixelScale()) || 1
+
+			// The handshake runs before any command exists, so it is bounded by the operation instead. A
+			// server that drops the socket right after accepting it would otherwise leave this pending and the
+			// executor with it, holding the logical resource against even a shutdown.
+			const scale = await this.#request(this.context.signal, this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT, async () => await client.getPixelScale())
+
+			if (!scale.ok) {
+				this.#detach()
+				return scale
+			}
+
+			this.#pixelScale = scale.value || 1
 			return { ok: true, value: undefined }
 		} catch (error) {
 			this.#detach()
@@ -767,6 +777,39 @@ class GuiderSession {
 			options.signal?.removeEventListener('abort', onAbort)
 			if (this.#commandController === controller) this.#commandController = undefined
 			this.#command = undefined
+		}
+	}
+
+	// Awaits one transport request under a bound the session controls, rather than one the transport owes.
+	//
+	// A PHD2 client that closes drops every command still in flight without settling it, and clears the
+	// reply timeout along with it, so a request outstanding when the transport goes away never resolves at
+	// all. Anything awaiting it would hang forever: a command would never reach the release of its
+	// serializer and its caller would never get an answer. Racing the request against the end of the session
+	// is what makes that impossible, whatever the transport does with what it was still owed.
+	async #request<T>(signal: AbortSignal, timeout: number, send: () => Promise<T>): Promise<OperationResult<T>> {
+		if (signal.aborted) return { ok: false, reason: abortReason(signal) }
+		if (this.#ending.signal.aborted) return { ok: false, reason: 'disconnected' }
+
+		const bounded = Promise.withResolvers<OperationResult<T>>()
+		const onAbort = () => bounded.resolve({ ok: false, reason: abortReason(signal) })
+		const onEnding = () => bounded.resolve({ ok: false, reason: 'disconnected' })
+		const timer = setTimeout(() => bounded.resolve({ ok: false, reason: 'timeout' }), Math.max(1, timeout))
+
+		signal.addEventListener('abort', onAbort, { once: true })
+		this.#ending.signal.addEventListener('abort', onEnding, { once: true })
+
+		try {
+			const requested = send().then(
+				(value) => ({ ok: true, value }) as const,
+				(error: unknown) => ({ ok: false, reason: 'commandFailed', error: errorMessage(error) }) as const,
+			)
+
+			return await Promise.race([requested, bounded.promise])
+		} finally {
+			clearTimeout(timer)
+			signal.removeEventListener('abort', onAbort)
+			this.#ending.signal.removeEventListener('abort', onEnding)
 		}
 	}
 

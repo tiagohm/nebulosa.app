@@ -25,6 +25,7 @@ export interface GuiderLocalConnect {
 export type GuiderConnect = GuiderRemoteConnect | GuiderLocalConnect
 
 export interface GuiderEvent {
+	id: string
 	state: GuiderState
 	rmsRA: number
 	rmsDEC: number
@@ -47,11 +48,38 @@ export interface GuiderDither {
 	readonly settle: PHD2Settle
 }
 
+// Progress of one dither, from the command until its terminal settle. It is reported back to whoever asked
+// for the dither through the call itself, so a caller never has to tell its own progress apart from the
+// progress of another session.
+export type GuiderDitherPhase = 'dithering' | 'dithered' | 'settling' | 'settled'
+
 export interface GuiderStatus {
 	connected: boolean
 	looping: boolean
 	running: boolean
 	profile?: string
+}
+
+// One open guider session, as the transport enumerates and identifies it. Several may exist at once, so
+// every event and every command names one through its id.
+export interface GuiderSessionInfo {
+	// Stable identifier of the session, which is the id of the operation holding it.
+	readonly id: string
+	// Whether the session drives local devices or talks to a remote server.
+	readonly mode: GuiderClientMode
+	// Logical key identifying what the session occupies. A local session reserves its camera and its guide
+	// output separately, so this names the pair for listings rather than being the single lease it holds.
+	readonly key: string
+	// Human-readable description of the target, for listings and diagnostics.
+	readonly target: string
+	// Latest presentation state.
+	readonly state: GuiderState
+	// Whether the transport is still attached.
+	readonly connected: boolean
+	// Whether the guider is looping exposures without guiding.
+	readonly looping: boolean
+	// Whether the guider is actively guiding.
+	readonly running: boolean
 }
 
 export const DEFAULT_GUIDER_DITHER: Required<GuiderDither> = {
@@ -61,6 +89,7 @@ export const DEFAULT_GUIDER_DITHER: Required<GuiderDither> = {
 }
 
 export const DEFAULT_GUIDER_EVENT: GuiderEvent = {
+	id: '',
 	state: 'idle',
 	rmsRA: 0,
 	rmsDEC: 0,

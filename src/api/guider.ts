@@ -1,491 +1,126 @@
-import { PHD2Client } from 'nebulosa/src/devices/guiding/phd2'
-import type { PHD2AppState, PHD2Command, PHD2Events } from 'nebulosa/src/devices/guiding/phd2'
-import type { CameraManager, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
-import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
-import { EventBus } from 'src/shared/bus'
-import { exposureTimeInSeconds } from '#/camera'
-import { DEFAULT_GUIDER_DITHER, DEFAULT_GUIDER_EVENT } from '#/guider'
-import type { GuiderConnect, GuiderDither, GuiderEvent, GuiderState, GuiderStatus } from '#/guider'
+import type { GuiderConnect, GuiderDither, GuiderSessionInfo } from '#/guider'
+import { guiderBus, GuiderCommander } from './guider.session'
+import type { GuiderCommandOptions, GuiderFindStarResult } from './guider.session'
 import { response } from './http'
 import type { Endpoints } from './http'
+import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
+import type { OperationResult } from './operation'
 
-export type GuiderDitherFailureReason = 'not-guiding' | 'aborted' | 'busy' | 'command-failed' | 'settle-timeout' | 'settle-failed'
-
-export type GuiderDitherResult = { readonly ok: true } | { readonly ok: false; readonly reason: GuiderDitherFailureReason; readonly error?: string }
-
-export type GuiderDitherEvent =
-	| Readonly<{ phase: 'dithering'; guider: GuiderEvent }>
-	| Readonly<{ phase: 'dithered'; guider: GuiderEvent; dx: number; dy: number }>
-	| Readonly<{ phase: 'settling'; guider: GuiderEvent }>
-	| Readonly<{ phase: 'settled'; guider: GuiderEvent; ok: boolean; reason?: GuiderDitherFailureReason; error?: string }>
-
-interface GuiderDitherOperation {
-	readonly result: PromiseWithResolvers<GuiderDitherResult>
-	readonly settleStarted: PromiseWithResolvers<boolean>
-	readonly signal?: AbortSignal
-	readonly timeout: number
-	onAbort?: VoidFunction
-	settleStartedAt?: number
-	startTimer?: ReturnType<typeof setTimeout>
-	settleTimer?: ReturnType<typeof setTimeout>
-	finished: boolean
-}
-
-export interface GuiderBusEvents {
-	readonly update: GuiderEvent
-	readonly dither: GuiderDitherEvent
-	readonly close: { readonly client: PHD2Client | GuiderClient }
-}
-
-export const guiderBus = new EventBus<GuiderBusEvents>()
-
+// Transport adapter over the coordinated guider sessions.
+//
+// It owns nothing about guiding: every command is delegated to GuiderCommander, which holds the
+// transports, their devices, and the serialization between commands. What lives here is HTTP shape and
+// WebSocket fanout. Several sessions may be open at once, so every route and every event names one.
 export class GuiderHandler {
-	private client?: PHD2Client | GuiderClient
-	private state: PHD2AppState = 'Stopped'
-	private pixelScale = 1
-	private connecting = false
-	private settleTimer?: ReturnType<typeof setTimeout>
-	private ditherOperation?: GuiderDitherOperation
-	private readonly settings = structuredClone(DEFAULT_GUIDER_DITHER)
-	private readonly rms = new RMS()
-
-	readonly event = structuredClone(DEFAULT_GUIDER_EVENT)
-
+	// Wires presentation fanout over the guider bus.
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
-		readonly notificationHandler: NotificationHandler,
+		readonly notification: NotificationHandler,
+		readonly commander: GuiderCommander,
 	) {
-		guiderBus.subscribe('close', () => wsm.send('guider:close', undefined))
+		// A socket that connects mid-run has no other way to learn which sessions already exist.
+		webSocketBus.subscribe('open', (socket) => {
+			for (const session of commander.list()) {
+				wsm.send<GuiderSessionInfo>('guider:add', session, socket)
+			}
+		})
+
+		guiderBus.subscribe('add', (event) => wsm.send('guider:add', event))
 		guiderBus.subscribe('update', (event) => wsm.send('guider:update', event))
+		guiderBus.subscribe('remove', (event) => wsm.send('guider:remove', event))
 	}
 
-	private readonly handler = {
-		event: (client: PHD2Client | GuiderClient, event: PHD2Events) => {
-			if (client !== this.client) return
-
-			switch (event.Event) {
-				case 'AppState':
-					this.state = event.State
-
-					switch (this.state) {
-						case 'Calibrating':
-							this.handleGuiderEvent('calibrating')
-							break
-						case 'Guiding':
-							this.handleGuiderEvent('guiding')
-							break
-						case 'Looping':
-							this.handleGuiderEvent('looping')
-							break
-						case 'LostLock':
-							this.handleGuiderEvent('starLost')
-							break
-						default:
-							this.handleGuiderEvent('idle')
-							break
-					}
-
-					break
-				case 'StartCalibration':
-					this.state = 'Calibrating'
-					this.handleGuiderEvent('calibrating')
-					break
-				case 'LoopingExposures':
-					this.state = 'Looping'
-					this.event.starMass = event.StarMass
-					this.event.snr = event.SNR
-					this.event.hfd = event.HFD
-					this.handleGuiderEvent('looping')
-					break
-				case 'SettleBegin':
-					this.handleGuiderEvent('settling')
-					this.beginDitherSettle()
-					break
-				case 'SettleDone':
-					this.finishDitherOperation(event.Status === 0 ? { ok: true } : { ok: false, reason: 'settle-failed', error: event.Error })
-					break
-				case 'Settling':
-					this.handleGuiderEvent('settling')
-					this.emitDitherEvent({ phase: 'settling', guider: structuredClone(this.event) })
-					break
-				case 'GuideStep': {
-					this.state = 'Guiding'
-					const { RADistanceRaw, DECDistanceRaw, RADuration, RADirection, DECDuration, DECDirection } = event
-					const { rightAscension, declination } = this.rms.addDataPoint(RADistanceRaw, DECDistanceRaw)
-					this.event.starMass = event.StarMass
-					this.event.snr = event.SNR
-					this.event.hfd = event.HFD
-					this.event.rmsRA = rightAscension * this.pixelScale
-					this.event.rmsDEC = declination * this.pixelScale
-					this.event.step.ra = RADistanceRaw * this.pixelScale
-					this.event.step.dec = DECDistanceRaw * this.pixelScale
-					this.event.step.raCorrection = RADirection === 'West' ? RADuration : -RADuration
-					this.event.step.decCorrection = DECDirection === 'North' ? DECDuration : -DECDuration
-					this.event.step.dx = null
-					this.event.step.dy = null
-					this.handleGuiderEvent('guiding')
-					break
-				}
-				case 'GuidingDithered': {
-					this.state = 'Guiding'
-					this.event.step.ra = null
-					this.event.step.dec = null
-					this.event.step.raCorrection = null
-					this.event.step.decCorrection = null
-					this.event.step.dx = event.dx
-					this.event.step.dy = event.dy
-					this.handleGuiderEvent('guiding')
-					this.emitDitherEvent({ phase: 'dithered', guider: structuredClone(this.event), dx: event.dx, dy: event.dy })
-					break
-				}
-				case 'StarLost':
-					this.state = 'LostLock'
-					this.handleGuiderEvent('starLost')
-					break
-				case 'Paused':
-					this.state = 'Paused'
-					this.handleGuiderEvent('paused')
-					break
-				case 'StartGuiding':
-					this.state = 'Guiding'
-					this.handleGuiderEvent('guiding')
-					break
-				case 'GuidingStopped':
-				case 'LoopingExposuresStopped':
-					this.state = 'Stopped'
-					this.handleGuiderEvent('idle')
-					break
-			}
-
-			// console.info('event: %j', event)
-		},
-		command: (client: PHD2Client, command: PHD2Command, success: boolean, result: unknown) => {
-			if (client !== this.client) return
-			console.info(command.method, 'received:', success, JSON.stringify(result))
-		},
-		close: (client: PHD2Client | GuiderClient) => {
-			if (client !== this.client) return
-			this.client = undefined
-			this.reset()
-			guiderBus.emit('close', { client })
-		},
-	} as const
-
-	get connected() {
-		return !!this.client
+	// Lists the open sessions.
+	list() {
+		return this.commander.list()
 	}
 
-	get running() {
-		return this.event.state === 'guiding'
+	// Describes one session.
+	session(guider: string) {
+		return this.commander.info(guider)
 	}
 
-	get looping() {
-		return this.event.state === 'looping'
+	// Latest presentation snapshot of one session.
+	event(guider: string) {
+		return this.commander.event(guider)
 	}
 
-	sendEvent(event: GuiderEvent) {
-		guiderBus.emit('update', structuredClone(event))
-	}
+	// Opens a session and notifies the user when the transport could not be attached, since a rejected
+	// connection produces no further event the UI could react to.
+	async connect(request: GuiderConnect) {
+		const result = await this.commander.connect(request)
 
-	private handleGuiderEvent(state?: GuiderState) {
-		if (state !== undefined) this.event.state = state
-		this.sendEvent(this.event)
-	}
-
-	async connect(req: GuiderConnect, cameraManager: CameraManager, guideOutputManager: GuideOutputManager) {
-		if (this.client || this.connecting) return false
-
-		this.connecting = true
-
-		try {
-			if (req.mode === 'remote') {
-				const client = new PHD2Client({ handler: this.handler })
-
-				if (await client.connect(req.host, req.port)) {
-					this.client = client
-					Object.assign(this.settings, req.dither)
-					this.reset()
-					this.pixelScale = (await client.getPixelScale()) || 1
-					return true
-				}
-			} else {
-				const camera = cameraManager.get(undefined, req.camera)
-				const guideOutput = guideOutputManager.get(undefined, req.guideOutput)
-
-				if (!camera?.connected || !guideOutput?.connected) return false
-
-				const client = new GuiderClient(cameraManager, guideOutputManager, { handler: this.handler })
-
-				if (client.connect(camera, guideOutput, req)) {
-					this.client = client
-
-					const { capture } = req
-
-					if (capture.width > 0 && capture.height > 0 && capture.subframe) cameraManager.frame(camera, capture.x, capture.y, capture.width, capture.height)
-					else if (camera.frame.width.max > 0 && camera.frame.height.max > 0) cameraManager.frame(camera, 0, 0, camera.frame.width.max, camera.frame.height.max)
-					cameraManager.frameType(camera, capture.frameType)
-					if (capture.frameFormat) cameraManager.frameFormat(camera, capture.frameFormat)
-					cameraManager.bin(camera, capture.binX, capture.binY)
-					cameraManager.gain(camera, capture.gain)
-					cameraManager.offset(camera, capture.offset)
-					cameraManager.transferFormat(camera, capture.transferFormat)
-					cameraManager.compression(camera, capture.compressed)
-					client.setExposure(exposureTimeInSeconds(capture.exposureTime, capture.exposureTimeUnit))
-
-					Object.assign(this.settings, req.dither)
-					this.reset()
-					this.pixelScale = client.getPixelScale() || 1
-					return true
-				}
-			}
-
-			this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to PHD2 server', color: 'danger' })
-		} catch (e) {
-			console.error(e)
-			this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to PHD2 server', color: 'danger' })
-		} finally {
-			this.connecting = false
+		if (!result.ok) {
+			console.error('guider failed to connect:', result.reason, result.error ?? '')
+			this.notification.send({ title: 'CONNECTION', description: result.error ?? `failed to connect to the guider: ${result.reason}`, color: 'danger' })
 		}
 
-		return false
+		return result
 	}
 
-	async dither(req?: Partial<GuiderDither>, signal?: AbortSignal): Promise<GuiderDitherResult> {
-		const client = this.client
-
-		if (!client || signal?.aborted || !this.running) return { ok: false, reason: signal?.aborted ? 'aborted' : 'not-guiding' }
-		if (this.ditherOperation) return { ok: false, reason: 'busy' }
-
-		if (this.state === 'Guiding' || this.event.state === 'guiding') {
-			const settle = req?.settle ?? this.settings.settle
-			const operation = this.startDitherOperation(settle.timeout, signal)
-
-			this.emitDitherEvent({ phase: 'dithering', guider: structuredClone(this.event) })
-
-			const command = (async () => {
-				const amount = req?.amount ?? this.settings.amount
-				const raOnly = req?.raOnly ?? this.settings.raOnly
-				const timeout = Math.max(15000, (Math.max(0, settle.time) + Math.max(1, settle.timeout)) * 1000 + 5000)
-				const dithered = client instanceof PHD2Client ? await client.send<number>('dither', { amount, raOnly, settle }, timeout) : client.dither(amount, raOnly, settle)
-
-				if (dithered === undefined || dithered === false) {
-					this.finishDitherOperation({ ok: false, reason: 'command-failed' })
-				} else if (operation.finished) {
-					// The settle event may arrive before a remote JSON-RPC command resolves.
-				} else if (await operation.settleStarted.promise) {
-					// Wait for the matching SettleDone or timeout.
-				}
-			})().catch((error) => {
-				this.finishDitherOperation({ ok: false, reason: signal?.aborted ? 'aborted' : 'command-failed', error: error instanceof Error ? error.message : String(error) })
-			})
-
-			await Promise.race([command, operation.result.promise])
-
-			return await operation.result.promise
-		}
-
-		return { ok: false, reason: 'not-guiding' }
+	// Ends one session and resolves after its devices have been released.
+	disconnect(guider: string) {
+		return this.commander.disconnect(guider)
 	}
 
-	loop() {
-		void this.client?.loop()
+	// Starts looping exposures without guide output.
+	loop(guider: string, options?: GuiderCommandOptions) {
+		return this.commander.loop(guider, options)
 	}
 
-	findStar() {
-		void this.client?.findStar()
+	// Locks onto the best star of the latest frame.
+	findStar(guider: string, options?: GuiderCommandOptions) {
+		return this.commander.findStar(guider, options)
 	}
 
-	start() {
-		void this.client?.guide(false, this.settings.settle)
+	// Starts guiding, calibrating first when no solution exists yet.
+	start(guider: string, options?: GuiderCommandOptions) {
+		return this.commander.startGuiding(guider, options)
 	}
 
-	stop() {
-		void this.client?.stopCapture()
+	// Stops capture and releases the guide camera and guide output.
+	stop(guider: string, options?: GuiderCommandOptions) {
+		return this.commander.stopGuiding(guider, options)
 	}
 
-	calibrate() {
-		void this.client?.guide(true, this.settings.settle)
+	// Forces a new calibration.
+	calibrate(guider: string, options?: GuiderCommandOptions) {
+		return this.commander.calibrate(guider, options)
 	}
 
-	disconnect() {
-		const client = this.client
-
-		if (!client) return
-
-		this.client = undefined
-
-		if (client instanceof PHD2Client) client.close()
-		else client.disconnect()
-
-		this.reset()
-		guiderBus.emit('close', { client })
+	// Dithers and resolves only after the guider settles.
+	dither(guider: string, request?: Partial<GuiderDither>, options?: GuiderCommandOptions) {
+		return this.commander.dither(guider, request, options)
 	}
 
-	async status() {
-		const profile = this.client instanceof GuiderClient ? undefined : (await this.client?.getProfile())?.name
-		return { connected: this.connected, looping: this.looping, running: this.running, profile } satisfies GuiderStatus
+	// Reports connection and activity of one session.
+	status(guider: string) {
+		return this.commander.status(guider)
 	}
 
-	clear() {
-		this.rms.clear()
-	}
-
-	private startDitherOperation(timeout: number, signal?: AbortSignal) {
-		const operation: GuiderDitherOperation = {
-			result: Promise.withResolvers(),
-			settleStarted: Promise.withResolvers(),
-			signal,
-			timeout,
-			finished: false,
-		}
-
-		if (signal) {
-			const onAbort = () => this.finishDitherOperation({ ok: false, reason: 'aborted' })
-			operation.onAbort = onAbort
-			signal.addEventListener('abort', onAbort, { once: true })
-		}
-
-		operation.startTimer = setTimeout(
-			() => {
-				if (operation.settleStartedAt === undefined) {
-					operation.settleStarted.resolve(false)
-					this.finishDitherOperation({ ok: false, reason: 'settle-timeout' })
-				}
-			},
-			Math.max(1, timeout) * 1000,
-		)
-
-		this.ditherOperation = operation
-
-		return operation
-	}
-
-	private beginDitherSettle() {
-		const operation = this.ditherOperation
-
-		if (!operation || operation.finished || operation.settleStartedAt) return
-
-		operation.settleStartedAt = performance.now()
-		if (operation.startTimer) {
-			clearTimeout(operation.startTimer)
-			operation.startTimer = undefined
-		}
-
-		operation.settleStarted.resolve(true)
-		this.emitDitherEvent({ phase: 'settling', guider: structuredClone(this.event) })
-
-		operation.settleTimer = setTimeout(
-			() => {
-				this.finishDitherOperation({ ok: false, reason: 'settle-timeout' })
-			},
-			Math.max(1, operation.timeout) * 1000,
-		)
-	}
-
-	private emitDitherEvent(event: GuiderDitherEvent) {
-		guiderBus.emit('dither', event)
-	}
-
-	private finishDitherOperation(result: GuiderDitherResult) {
-		const operation = this.ditherOperation
-
-		if (!operation || operation.finished) return
-
-		operation.finished = true
-
-		if (operation.startTimer) clearTimeout(operation.startTimer)
-		if (operation.settleTimer) clearTimeout(operation.settleTimer)
-		if (operation.signal && operation.onAbort) operation.signal.removeEventListener('abort', operation.onAbort)
-
-		operation.settleStarted.resolve(operation.settleStartedAt !== undefined)
-
-		if (result.ok) this.emitDitherEvent({ phase: 'settled', guider: structuredClone(this.event), ok: true })
-		else this.emitDitherEvent({ phase: 'settled', guider: structuredClone(this.event), ok: false, reason: result.reason, error: result.error })
-
-		operation.result.resolve(result)
-		this.ditherOperation = undefined
-	}
-
-	private reset() {
-		this.state = 'Stopped'
-		this.pixelScale = 1
-		this.finishDitherOperation({ ok: false, reason: 'aborted' })
-		this.clear()
-		Object.assign(this.event, structuredClone(DEFAULT_GUIDER_EVENT))
-	}
-
-	private clearSettleTimer() {
-		if (this.settleTimer) {
-			clearTimeout(this.settleTimer)
-			this.settleTimer = undefined
-		}
+	// Drops the accumulated guide-error statistics of one session.
+	clear(guider: string) {
+		this.commander.clear(guider)
 	}
 }
 
-class RMS {
-	private size = 0
-	private sumRA = 0
-	private sumRASquared = 0
-	private sumDEC = 0
-	private sumDECSquared = 0
-
-	addDataPoint(raDistance: number, decDistance: number) {
-		this.size++
-
-		this.sumRA += raDistance
-		this.sumRASquared += raDistance * raDistance
-		this.sumDEC += decDistance
-		this.sumDECSquared += decDistance * decDistance
-
-		// this.peakRA = Math.max(peakRA, Math.abs(raDistance))
-		// this.peakDEC = Math.max(peakDEC, Math.abs(decDistance))
-
-		return this.compute()
-	}
-
-	removeDataPoint(raDistance: number, decDistance: number) {
-		this.size--
-
-		this.sumRA -= raDistance
-		this.sumRASquared -= raDistance * raDistance
-		this.sumDEC -= decDistance
-		this.sumDECSquared -= decDistance * decDistance
-
-		return this.compute()
-	}
-
-	private compute() {
-		const { size, sumRA, sumDEC } = this
-		if (size <= 0) return { rightAscension: 0, declination: 0 } as const
-
-		const rightAscension = Math.sqrt(Math.max(0, size * this.sumRASquared - sumRA * sumRA)) / size
-		const declination = Math.sqrt(Math.max(0, size * this.sumDECSquared - sumDEC * sumDEC)) / size
-		return { rightAscension, declination } as const
-	}
-
-	clear() {
-		this.size = 0
-		this.sumRA = 0
-		this.sumRASquared = 0
-		this.sumDEC = 0
-		this.sumDECSquared = 0
-	}
-}
-
-export function guider(guiderHandler: GuiderHandler, cameraManager: CameraManager, guideOutputManager: GuideOutputManager) {
+// Builds guider HTTP routes over the coordinated session commander.
+export function guider(guiderHandler: GuiderHandler) {
 	return {
-		'/guider/connect': { POST: async (req) => response(await guiderHandler.connect(await req.json(), cameraManager, guideOutputManager)) },
-		'/guider/dither': { POST: async (req) => response((await guiderHandler.dither(await req.json())).ok) },
-		'/guider/disconnect': { POST: () => response(guiderHandler.disconnect()) },
-		'/guider/status': { GET: async () => response(await guiderHandler.status()) },
-		'/guider/event': { GET: () => response(guiderHandler.event) },
-		'/guider/clear': { POST: () => response(guiderHandler.clear()) },
-		'/guider/start': { POST: () => response(guiderHandler.start()) },
-		'/guider/stop': { POST: () => response(guiderHandler.stop()) },
-		'/guider/loop': { POST: () => response(guiderHandler.loop()) },
-		'/guider/findstar': { POST: () => response(guiderHandler.findStar()) },
-		'/guider/calibrate': { POST: () => response(guiderHandler.calibrate()) },
+		'/guiders': { GET: () => response(guiderHandler.list()) },
+		'/guiders/connect': { POST: async (req) => response<OperationResult<GuiderSessionInfo>>(await guiderHandler.connect(await req.json())) },
+		'/guiders/:id': { GET: (req) => response(guiderHandler.session(req.params.id)) },
+		'/guiders/:id/status': { GET: async (req) => response(await guiderHandler.status(req.params.id)) },
+		'/guiders/:id/event': { GET: (req) => response(guiderHandler.event(req.params.id)) },
+		'/guiders/:id/clear': { POST: (req) => response(guiderHandler.clear(req.params.id)) },
+		'/guiders/:id/disconnect': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.disconnect(req.params.id)) },
+		'/guiders/:id/loop': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.loop(req.params.id)) },
+		'/guiders/:id/findstar': { POST: async (req) => response<OperationResult<GuiderFindStarResult>>(await guiderHandler.findStar(req.params.id)) },
+		'/guiders/:id/start': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.start(req.params.id)) },
+		'/guiders/:id/stop': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.stop(req.params.id)) },
+		'/guiders/:id/calibrate': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.calibrate(req.params.id)) },
+		'/guiders/:id/dither': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.dither(req.params.id, await req.json())) },
 	} as const satisfies Endpoints
 }

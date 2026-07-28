@@ -19,9 +19,8 @@ import { deg, hour } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { camera as cameraEndpoints, CameraHandler, cameraBus } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
-import type { CameraDitherer } from 'src/api/camera.capture'
+import type { CameraDitherer, CameraDitherOptions } from 'src/api/camera.capture'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'
-import { guiderBus } from 'src/api/guider.session'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import type { Messager } from 'src/api/message'
@@ -29,7 +28,6 @@ import { OperationCoordinator } from 'src/api/operation'
 import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraAdded, CameraRemoved, CameraUpdated, CameraCaptureEvent, CameraCaptureStart, CameraDither, CameraFrameEvent } from '#/camera'
-import { DEFAULT_GUIDER_EVENT } from '#/guider'
 import type { GuiderDither } from '#/guider'
 import type { OperationResult } from '#/orchestration'
 import { json, noContent, SocketMessager, waitUntil } from './util'
@@ -45,7 +43,6 @@ type CameraCaptureEventRecord = {
 }
 
 cameraBus.forceSync = true
-guiderBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const imageProcessor = new ImageProcessor()
@@ -844,13 +841,13 @@ describe('camera capture start request', () => {
 
 		const guiderHandler = {
 			running: () => true,
-			dither: (guider: string, request: GuiderDither, options?: { readonly signal?: AbortSignal }) => {
+			dither: (guider: string, request: GuiderDither, options?: CameraDitherOptions) => {
 				dithered = request
 				ditheredGuider = guider
 				signal = options?.signal
-				guiderBus.emit('dither', { phase: 'dithered', guider: structuredClone(DEFAULT_GUIDER_EVENT), dx: 1.5, dy: -2 })
-				guiderBus.emit('dither', { phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
-				guiderBus.emit('dither', { phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'guiding' }, ok: true })
+				options?.onPhase?.('dithered')
+				options?.onPhase?.('settling')
+				options?.onPhase?.('settled')
 				return Promise.resolve({ ok: true, value: undefined } as const)
 			},
 		} satisfies CameraDitherer
@@ -885,9 +882,9 @@ describe('camera capture start request', () => {
 		const error = spyOn(console, 'error').mockImplementation(() => {})
 		const guiderHandler = {
 			running: () => true,
-			dither: () => {
-				guiderBus.emit('dither', { phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
-				guiderBus.emit('dither', { phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' }, ok: false, reason: 'timeout' })
+			dither: (guider: string, request: GuiderDither, options?: CameraDitherOptions) => {
+				options?.onPhase?.('settling')
+				options?.onPhase?.('settled')
 				return Promise.resolve({ ok: false, reason: 'timeout' } as const)
 			},
 		} satisfies CameraDitherer

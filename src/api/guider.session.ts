@@ -1,17 +1,17 @@
 import { PHD2Client } from 'nebulosa/src/devices/guiding/phd2'
-import type { PHD2AppState, PHD2Command, PHD2Events } from 'nebulosa/src/devices/guiding/phd2'
+import type { PHD2AppState, PHD2Command, PHD2CommandResult, PHD2Events } from 'nebulosa/src/devices/guiding/phd2'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { CameraManager, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
 import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
 import { EventBus } from 'src/shared/bus'
 import { exposureTimeInSeconds } from '#/camera'
 import { DEFAULT_GUIDER_DITHER, DEFAULT_GUIDER_EVENT } from '#/guider'
-import type { GuiderClientMode, GuiderConnect, GuiderDither, GuiderEvent, GuiderSessionInfo, GuiderState, GuiderStatus } from '#/guider'
+import type { GuiderClientMode, GuiderConnect, GuiderDither, GuiderDitherPhase, GuiderEvent, GuiderSessionInfo, GuiderState, GuiderStatus } from '#/guider'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
 import type { OperationContext, OperationCoordinator, OperationHandle } from './operation'
 import { abortReason, waitForDeviceState } from './operation.wait'
 import { resourceKey } from './resource'
-import type { ResourceKey } from './resource'
+import type { ResourceKey, ResourceRequest } from './resource'
 import { errorMessage } from './util'
 
 // Either transport driving a guider: a remote PHD2 server or the in-process client over INDI devices.
@@ -26,6 +26,13 @@ export interface GuiderCommandOptions {
 	readonly signal?: AbortSignal
 	// Maximum milliseconds the commanded state may take to be observed.
 	readonly timeout?: number
+}
+
+// Overrides for one dither, which is the only command with progress between the request and its result.
+export interface GuiderDitherOptions extends GuiderCommandOptions {
+	// Receives the phases of this dither, and only of this one. The caller already holds the promise of the
+	// command, so its progress belongs to the same call rather than to a bus carrying every session.
+	readonly onPhase?: (phase: GuiderDitherPhase) => void
 }
 
 // Outcome of a star search. Neither transport publishes a terminal event for it, so acceptance of the
@@ -68,8 +75,13 @@ const GUIDER_RESOURCE_PREFIX = 'logical:guider'
 // The key describes the target rather than the service, so several guiders coexist while a duplicate is
 // refused by the arbiter itself instead of by a check in the commander.
 export interface GuiderTarget {
-	// Logical resource identifying what is occupied.
+	// Logical resource identifying the target as a whole, for listings and diagnostics. It is not what is
+	// acquired: a local target is reserved device by device, so no single key describes what it holds.
 	readonly key: ResourceKey
+	// Logical resources acquired atomically, and what refuses an overlapping session. A local one names the
+	// device it stands for, so the arbiter can still index it by client and reach it on a lifecycle event
+	// even though the device itself is left acquirable.
+	readonly resources: readonly ResourceRequest[]
 	// Whether the target is a local device pair or a remote server.
 	readonly mode: GuiderClientMode
 	// Human-readable description used in listings and diagnostics.
@@ -86,10 +98,49 @@ export function remoteGuiderKey(host: string, port: number): ResourceKey {
 	return `${GUIDER_RESOURCE_PREFIX}:remote:${host.trim().toLowerCase()}:${port}`
 }
 
-// Builds the logical key of a local guider from the physical devices it drives, which is what refuses a
-// second session over the same pair even while the first one is idle and owns no device lease.
+// Builds the key identifying a local guider by the pair of devices it drives. It names the target in
+// listings; what the session actually reserves are the two keys below.
 export function localGuiderKey(camera: Camera, guideOutput: GuideOutput): ResourceKey {
 	return `${GUIDER_RESOURCE_PREFIX}:local:${resourceKey(camera)}:${resourceKey(guideOutput)}`
+}
+
+// Builds the logical key reserving a guide camera, which is what refuses a second session over it even
+// while the first one is idle and owns no lease on the device itself.
+//
+// The pair is reserved one device at a time rather than as a whole, because a key naming both would differ
+// for every combination: two sessions sharing only the camera would each get their own key and both be
+// accepted, and then both would configure that camera and both would receive its frames.
+export function localGuiderCameraKey(camera: Camera): ResourceKey {
+	return `${GUIDER_RESOURCE_PREFIX}:local:camera:${resourceKey(camera)}`
+}
+
+// Builds the logical key reserving a guide output, for the same reason as the camera above.
+export function localGuiderOutputKey(guideOutput: GuideOutput): ResourceKey {
+	return `${GUIDER_RESOURCE_PREFIX}:local:output:${resourceKey(guideOutput)}`
+}
+
+// What a transport answers when told to do something: the local client reports acceptance directly, the
+// remote one reports the outcome of the JSON-RPC call that carried the command.
+type GuiderCommandAnswer = boolean | PHD2CommandResult<unknown>
+
+// Why a remote command did not succeed: a plain tag for a lost reply or a broken socket, and the server's
+// own error object for a refusal.
+type GuiderCommandFailure = Extract<PHD2CommandResult<unknown>, { success: false }>['error']
+
+// Renders one of those causes for a diagnostic message.
+function commandError(error: GuiderCommandFailure) {
+	return typeof error === 'string' ? error : `${error.code} ${error.message}`
+}
+
+// Reads whether a transport took a dither, and when it did not, whether the mount may still be moving.
+//
+// Only a reply that never arrived leaves that unknown: a server that answered an error decided against the
+// move, and a command that never left the socket moved nothing either, so neither leaves a movement to
+// retain. The local client refuses just as plainly.
+function ditherRefusal(answer: GuiderCommandAnswer) {
+	if (typeof answer === 'boolean') return answer ? undefined : { outstanding: false, error: 'the dither command was rejected' }
+	if (answer.success) return undefined
+	return { outstanding: answer.error === 'timeout', error: `the dither command was rejected: ${commandError(answer.error)}` }
 }
 
 // Timing overrides, exposed so tests can drive the same code paths without real device latency.
@@ -121,16 +172,26 @@ interface GuiderDitherOperation {
 	readonly settleStarted: PromiseWithResolvers<boolean>
 	// Caller signal that cancels the dither without ending the session.
 	readonly signal?: AbortSignal
-	// Settle timeout in seconds, as configured by the dither request.
+	// Receives each phase of this dither, so the caller does not observe anyone else's.
+	readonly onPhase?: (phase: GuiderDitherPhase) => void
+	// Milliseconds the caller waits for this dither, which its own timeout may shorten.
 	readonly timeout: number
+	// Monotonic instant, from performance.now, past which the caller has waited its whole timeout. Both
+	// waits of a dither share it, so waiting for the settle to begin and then for it to finish cannot add
+	// up to twice what the caller asked for.
+	readonly deadline: number
+	// Milliseconds the movement stays retained once the caller has been answered without a terminal event.
+	// It follows the settle timeout of the request rather than the caller's bound, because it describes how
+	// long the guider itself may still be moving and not how long anyone is willing to wait.
+	readonly retention: number
 	// Abort listener removed on terminalization.
 	onAbort?: VoidFunction
 	// Timestamp in milliseconds at which settling began, absent while the command is still in flight.
 	settleStartedAt?: number
 	// Timer bounding the wait for SettleBegin.
-	startTimer?: ReturnType<typeof setTimeout>
+	startTimer?: Timer
 	// Timer bounding the wait for SettleDone.
-	settleTimer?: ReturnType<typeof setTimeout>
+	settleTimer?: Timer
 	// Exactly-once guard so a late event cannot re-settle the dither.
 	finished: boolean
 }
@@ -167,6 +228,9 @@ const DEFAULT_GUIDING_TIMEOUT = 600000
 
 // Default milliseconds the guider has to become idle before its devices are released regardless.
 const DEFAULT_RELEASE_TIMEOUT = 30000
+
+// Milliseconds an abort path waits for its stop to complete before giving up on the answer.
+const ABORT_STOP_TIMEOUT = 1000
 
 // Signal for waits that must still run while the session is being torn down. Cleanup cannot inherit the
 // operation signal, which is aborted by then, and would never send the stop it exists for.
@@ -230,7 +294,7 @@ export class GuiderCommander {
 		const started = Promise.withResolvers<OperationResult<GuiderSessionInfo>>()
 		const ended = Promise.withResolvers<OperationResult<void>>()
 
-		const operation = this.coordinator.start<void>('guiderSession', [{ key: target.value.key }], async (context) => {
+		const operation = this.coordinator.start<void>('guiderSession', target.value.resources, async (context) => {
 			const session = new GuiderSession(context, request, target.value, ended, {
 				cameraManager: this.cameraManager,
 				guideOutputManager: this.guideOutputManager,
@@ -264,7 +328,7 @@ export class GuiderCommander {
 
 			// The executor stays pending on purpose: the session holds its logical resource until the
 			// transport goes away or a disconnect is requested.
-			return await ended.promise
+			return await session.finished()
 		})
 
 		// A refused scope never runs its executor, so the failure has to be taken from the operation.
@@ -316,7 +380,7 @@ export class GuiderCommander {
 	}
 
 	// Dithers on one session and resolves only after it settles, so a capture never exposes mid-move.
-	async dither(guider: string, request?: Partial<GuiderDither>, options: GuiderCommandOptions = {}) {
+	async dither(guider: string, request?: Partial<GuiderDither>, options: GuiderDitherOptions = {}) {
 		return await this.#command(guider, (session) => session.dither(request, options))
 	}
 
@@ -345,7 +409,10 @@ export class GuiderCommander {
 		if (request.mode === 'remote') {
 			const host = request.host.trim()
 			if (host.length === 0) return { ok: false, reason: 'unexpectedState', error: 'the guider host is empty' }
-			return { ok: true, value: { key: remoteGuiderKey(host, request.port), mode: 'remote', label: `${host}:${request.port}` } }
+
+			const key = remoteGuiderKey(host, request.port)
+
+			return { ok: true, value: { key, resources: [{ key }], mode: 'remote', label: `${host}:${request.port}` } }
 		}
 
 		const camera = this.cameraManager.get(undefined, request.camera)
@@ -354,7 +421,20 @@ export class GuiderCommander {
 		if (camera === undefined || !camera.connected) return { ok: false, reason: 'disconnected', error: 'the guide camera is not connected' }
 		if (guideOutput === undefined || !guideOutput.connected) return { ok: false, reason: 'disconnected', error: 'the guide output is not connected' }
 
-		return { ok: true, value: { key: localGuiderKey(camera, guideOutput), mode: 'local', label: `${camera.name} + ${guideOutput.name}`, camera, guideOutput } }
+		return {
+			ok: true,
+			value: {
+				key: localGuiderKey(camera, guideOutput),
+				resources: [
+					{ key: localGuiderCameraKey(camera), device: camera },
+					{ key: localGuiderOutputKey(guideOutput), device: guideOutput },
+				],
+				mode: 'local',
+				label: `${camera.name} + ${guideOutput.name}`,
+				camera,
+				guideOutput,
+			},
+		}
 	}
 
 	// Routes a command to one session, reporting an unknown id as an expected failure.
@@ -387,8 +467,19 @@ class GuiderSession {
 	#commandController?: AbortController
 	// Dither in flight, absent otherwise.
 	#dither?: GuiderDitherOperation
+	// Timer held while the guider is still moving for a dither nobody waits for any more, such as one whose
+	// caller aborted. A dither event names neither the command that caused it nor anything else that could
+	// tell two of them apart, so a new dither started meanwhile would be settled by the terminal event of
+	// the old movement and a capture would expose before its own dither had finished.
+	#outstandingDither?: Timer
+	// Milliseconds the retention above lasts, kept so a movement that only begins settling later can have
+	// its clock restarted from that point.
+	#outstandingRetention = 0
 	// Open activity holding the guide camera and guide output.
 	#activity?: GuiderActivity
+	// Aborted the moment the session begins ending, which is well before the transport is actually closed.
+	// It is what tells a command arriving during teardown that there is no session left to serve it.
+	readonly #ending = new AbortController()
 	// Whether the transport is gone; a closed session ignores every later callback.
 	#closed = false
 
@@ -440,13 +531,21 @@ class GuiderSession {
 			options,
 			async (signal) =>
 				await this.#withActivity(async () => {
-					const observed = await this.#observe(signal, options.timeout ?? this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT, {
+					// Whether the guider took the command. Only work this command started may be stopped when it
+					// fails: a refused command began nothing, and the guider may have been running something
+					// else all along that has nothing to do with it.
+					let accepted = false
+
+					const observed = await this.#observe(signal, await this.#loopTimeout(signal, options), {
 						evaluate: (update) => {
 							if (update.closed) return 'disconnected'
 							return this.#state === 'Looping' ? 'success' : 'pending'
 						},
-						command: () => this.#dispatch((client) => client.loop()),
-						abort: () => this.#stopCapture(),
+						command: async () => {
+							await this.#dispatch((client) => client.loop())
+							accepted = true
+						},
+						abort: () => (accepted ? this.#abortCapture() : undefined),
 					})
 
 					return observed.ok ? { ok: true, value: undefined } : observed
@@ -456,19 +555,26 @@ class GuiderSession {
 
 	// Asks the transport to lock onto the best star of the latest frame.
 	async findStar(options: GuiderCommandOptions): Promise<OperationResult<GuiderFindStarResult>> {
-		return await this.#serialize('findStar', options, async () => {
+		return await this.#serialize('findStar', options, async (signal) => {
 			const client = this.#client
 
 			if (client === undefined) return { ok: false, reason: 'disconnected' }
 
-			try {
-				const selected = await client.findStar()
-				// Neither transport publishes a terminal event for the search, so acceptance is all that can
-				// be reported; an empty answer means no star survived detection.
-				return selected === undefined ? { ok: false, reason: 'unexpectedState', error: 'no guide star was found' } : { ok: true, value: { accepted: true } }
-			} catch (error) {
-				return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
-			}
+			const selected = await this.#request(signal, options.timeout ?? this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT, async () => {
+				if (client instanceof GuiderClient) return client.findStar()
+
+				// A search the server refused is a failed command, not an empty answer: reporting it as no
+				// star found would blame the sky for something the guider never looked at.
+				const found = await client.findStar()
+				if (!found.success) throw new Error(commandError(found.error))
+				return found.result
+			})
+
+			if (!selected.ok) return selected
+
+			// Neither transport publishes a terminal event for the search, so acceptance is all that can be
+			// reported; an empty answer means no star survived detection.
+			return selected.value === undefined ? { ok: false, reason: 'unexpectedState', error: 'no guide star was found' } : { ok: true, value: { accepted: true } }
 		})
 	}
 
@@ -481,6 +587,8 @@ class GuiderSession {
 			async (signal) =>
 				await this.#withActivity(async () => {
 					let calibrating = false
+					let accepted = false
+					let announced = false
 
 					const observed = await this.#observe(signal, options.timeout ?? this.sessionContext.options.guidingTimeout ?? DEFAULT_GUIDING_TIMEOUT, {
 						evaluate: (update) => {
@@ -492,15 +600,30 @@ class GuiderSession {
 								return 'pending'
 							}
 
-							// Losing the star before guiding was ever reached means the run failed; losing it later
-							// is a transient condition of an already successful command.
-							if (this.#state === 'LostLock') return 'unexpectedState'
-							if (this.#state !== 'Guiding') return 'pending'
+							if (this.#state === 'Guiding') announced = true
 
-							return !recalibrate || calibrating ? 'success' : 'pending'
+							// Losing the star before the guider ever announced guiding means the run never started.
+							// Losing it afterwards is for the settle to judge: dropped frames are what a settle
+							// exists to tolerate, and it reports the outcome either way within its own timeout.
+							if (this.#state === 'LostLock' && !announced) return 'unexpectedState'
+
+							// The guide command opens a settle of its own, and its terminal event is what says the
+							// run is established. Both transports announce guiding before that: the local client
+							// says so before its loop has processed a frame, and refuses a dither until it has.
+							// Resolving on the announcement would hand a caller a guider that fails the dither it
+							// is about to ask for, which is exactly what a capture does next.
+							if (update.event?.Event === 'SettleDone') {
+								if (recalibrate && !calibrating) return 'pending'
+								return update.event.Status === 0 ? 'success' : 'alert'
+							}
+
+							return 'pending'
 						},
-						command: () => this.#dispatch((client) => client.guide(recalibrate, this.#settings.settle)),
-						abort: () => this.#stopCapture(),
+						command: async () => {
+							await this.#dispatch((client) => client.guide(recalibrate, this.#settings.settle))
+							accepted = true
+						},
+						abort: () => (accepted ? this.#abortCapture() : undefined),
 					})
 
 					return observed.ok ? { ok: true, value: undefined } : observed
@@ -533,32 +656,41 @@ class GuiderSession {
 
 	// Dithers and settles. The settle may begin before a remote JSON-RPC reply arrives, so the terminal
 	// event and the command reply race each other and only the first one to conclude settles the dither.
-	async dither(request: Partial<GuiderDither> | undefined, options: GuiderCommandOptions): Promise<OperationResult<void>> {
+	async dither(request: Partial<GuiderDither> | undefined, options: GuiderDitherOptions): Promise<OperationResult<void>> {
 		return await this.#serialize('dither', options, async (signal) => {
 			const client = this.#client
 
 			if (client === undefined) return { ok: false, reason: 'disconnected' }
 			if (signal.aborted) return { ok: false, reason: abortReason(signal) }
 			if (this.event.state !== 'guiding') return { ok: false, reason: 'unexpectedState', error: 'the guider is not guiding' }
+			if (this.#outstandingDither !== undefined) return { ok: false, reason: 'busy', error: 'the guider is still moving for a previous dither' }
 
 			const settle = request?.settle ?? this.#settings.settle
-			const operation = this.#startDither(settle.timeout, signal)
+			// The settle timeout is what the guider was given to finish moving; a caller may bound its own
+			// wait shorter than that, as it can for every other command, without shortening the movement.
+			const retention = Math.max(1, settle.timeout) * 1000
+			const operation = this.#startDither(options.timeout ?? retention, retention, signal, options.onPhase)
 
 			this.#publishDither({ phase: 'dithering', guider: structuredClone(this.event) })
 
 			const command = (async () => {
 				const amount = request?.amount ?? this.#settings.amount
 				const raOnly = request?.raOnly ?? this.#settings.raOnly
+				// PHD2 answers the dither only once it has settled, so its reply is allowed the whole settle and
+				// then some. The default would give up on any settle longer than fifteen seconds.
 				const timeout = Math.max(15000, (Math.max(0, settle.time) + Math.max(1, settle.timeout)) * 1000 + 5000)
-				const dithered = client instanceof PHD2Client ? await client.send<number>('dither', { amount, raOnly, settle }, timeout) : client.dither(amount, raOnly, settle)
+				const dithered = client instanceof PHD2Client ? await client.dither(amount, raOnly, settle, timeout) : client.dither(amount, raOnly, settle)
+				const refusal = ditherRefusal(dithered)
 
-				if (dithered === undefined || dithered === false) {
-					this.#finishDither({ ok: false, reason: 'commandFailed', error: 'the dither command was rejected' })
+				if (refusal !== undefined) {
+					this.#finishDither({ ok: false, reason: 'commandFailed', error: refusal.error }, refusal.outstanding)
 				} else if (!operation.finished) {
 					await operation.settleStarted.promise
 				}
 			})().catch((error: unknown) => {
-				this.#finishDither({ ok: false, reason: signal.aborted ? abortReason(signal) : 'commandFailed', error: errorMessage(error) })
+				// An abort may have interrupted a command the guider had already taken, which is the one case
+				// here where the mount can still be moving.
+				this.#finishDither({ ok: false, reason: signal.aborted ? abortReason(signal) : 'commandFailed', error: errorMessage(error) }, signal.aborted)
 			})
 
 			await Promise.race([command, operation.result.promise])
@@ -575,8 +707,14 @@ class GuiderSession {
 	// Reports the remote PHD2 profile name, which a local session does not have.
 	async profile() {
 		const client = this.#client
-		if (!(client instanceof PHD2Client)) return undefined
-		return (await client.getProfile())?.name
+
+		if (client === undefined || client instanceof GuiderClient) return undefined
+
+		// Bounded like every other request, and for the same reason: a transport that closes drops the
+		// command still in flight without settling it. This one is not a command, so nothing else would ever
+		// answer the status query that asked for it.
+		const profile = await this.#request(this.context.signal, this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT, async () => await client.getProfile())
+		return profile.ok && profile.value.success ? profile.value.result.name : undefined
 	}
 
 	// Ends the session with the given outcome, aborting the command in flight first so nothing is left
@@ -585,19 +723,57 @@ class GuiderSession {
 	end(result: OperationResult<void>) {
 		// The cause is carried into the abort so a command in flight reports why it stopped: a session lost
 		// to a dropped socket must fail its wait as disconnected, not as an ordinary cancellation.
-		this.#commandController?.abort(result.ok ? 'aborted' : result.reason)
+		const reason = result.ok ? 'aborted' : result.reason
+		// Teardown is only finished once cleanup has run, and a command accepted in between would get a
+		// controller this method has already passed and command a device the session is about to hand back.
+		this.#ending.abort(reason)
+		this.#commandController?.abort(reason)
 		this.ended.resolve(result)
+	}
+
+	// Terminal outcome of the session, once its activity has been released too.
+	//
+	// The activity is a nested scope, and the coordinator waits for a child without folding its result into
+	// the parent: a disconnect whose cleanup failed to stop the guider would otherwise report success while
+	// the camera is still exposing. Releasing it here is also the graceful order, because the scope ends on
+	// its own instead of being canceled while the session unwinds. A session that is already failing keeps
+	// its own cause, which is the one that explains why it ended.
+	async finished(): Promise<OperationResult<void>> {
+		const result = await this.ended.promise
+		// Released first, so the guider is quiesced gracefully before anything closes under it.
+		const released = await this.#releaseActivity()
+		const detached = await this.#detachOwned()
+		const failed = !released.ok ? released : detached
+		return result.ok && !failed.ok ? failed : result
 	}
 
 	// Closes the transport after every nested scope has released its devices.
 	shutdown() {
+		if (this.#closed) return
+
+		this.#closed = true
+		this.#detach()
+		// The session is over, so there is nothing left that a stale dither event could reach.
+		this.#releaseDither()
+		this.#finishDither({ ok: false, reason: 'disconnected' }, false)
+
+		// Wakes anything still waiting so it settles as disconnected instead of running to its timeout.
+		this.#emit({ state: this.#state, closed: true })
+		guiderBus.emit('remove', this.info)
+	}
+
+	// Drops the attached transport and tears it down, in that order so a callback fired by the teardown is
+	// already refused by client identity.
+	//
+	// Clearing the reference is not enough on its own: a local client that connected holds a handler on the
+	// camera manager and has blob delivery enabled, and a remote one holds an open socket. Left behind, they
+	// keep driving devices this session no longer owns and a retry attaches a second client over the first.
+	#detach() {
 		const client = this.#client
 
 		if (client === undefined) return
 
-		this.#closed = true
 		this.#client = undefined
-		this.#finishDither({ ok: false, reason: 'disconnected' })
 
 		try {
 			if (client instanceof PHD2Client) client.close()
@@ -605,31 +781,93 @@ class GuiderSession {
 		} catch (error) {
 			console.error('failed to close the guider transport:', error)
 		}
+	}
 
-		// Wakes anything still waiting so it settles as disconnected instead of running to its timeout.
-		this.#emit({ state: this.#state, closed: true })
-		guiderBus.emit('remove', this.info)
+	// Closes a local transport while this session owns the camera that closing it commands.
+	//
+	// A local client stops the exposure and turns frame delivery off on its guide camera as it lets go. An
+	// idle session deliberately owns nothing physical, so doing that from cleanup would reach a camera some
+	// other operation had acquired meanwhile and kill an exposure that has nothing to do with the guider.
+	// The camera is taken back for the length of the close, which has to happen here rather than in cleanup
+	// because a finalizing scope can no longer open a nested one.
+	//
+	// Only the camera: closing commands nothing on the guide output, and holding it too would degrade the
+	// close whenever the mount behind it is slewing, over a device the close never touches.
+	async #detachOwned(): Promise<OperationResult<void>> {
+		const { camera } = this.target
+
+		if (this.#client === undefined || camera === undefined) return { ok: true, value: undefined }
+
+		const owned = await this.context.start<void>('guiderDetach', [{ key: resourceKey(camera), device: camera }], () => {
+			this.#detach()
+			return { ok: true, value: undefined }
+		}).result
+
+		if (owned.ok) return owned
+
+		// Only an owner elsewhere makes commanding the camera unsafe. A scope refused for any other reason
+		// means this operation is already unwinding, taking its devices with it, and closing normally is
+		// both safe and necessary.
+		if (owned.reason !== 'busy') {
+			this.#detach()
+			return owned
+		}
+
+		// The camera belongs to someone else, so the transport gives up the only thing it holds without it:
+		// its handler on the manager. Nothing is commanded, so the new owner's exposure is untouched, and
+		// nothing is left behind to process frames that are no longer this session's business.
+		const client = this.#client
+		this.#client = undefined
+		if (client instanceof GuiderClient) client.detachHandler()
+
+		return owned
 	}
 
 	// Attaches a remote PHD2 client. The client is stored before the handshake because the server may push
 	// events as soon as the socket is up, and an event dropped there would be an app state never applied.
+	//
+	// Everything after the socket is up is inside the same guard: the session is only given a cleanup that
+	// closes its transport once open() has succeeded, so anything failing here has to close its own socket.
 	async #openRemote(host: string, port: number): Promise<OperationResult<void>> {
 		const client = new PHD2Client({ handler: this.#handler })
 		this.#client = client
 
 		try {
-			if (!(await client.connect(host, port))) {
-				this.#client = undefined
+			// The socket itself is bounded too. A host that accepts the connection attempt and then answers
+			// nothing would otherwise park the executor for however long the operating system takes to give
+			// up, holding the logical resource and delaying a shutdown against a server that never arrived.
+			const opened = await this.#request(this.context.signal, this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT, async () => await client.connect(host, port))
+
+			if (!opened.ok) {
+				this.#detach()
+				return opened
+			}
+
+			if (!opened.value) {
+				this.#detach()
 				return { ok: false, reason: 'commandFailed', error: 'failed to connect to the PHD2 server' }
 			}
+
+			Object.assign(this.#settings, this.request.dither)
+
+			// The handshake runs before any command exists, so it is bounded by the operation instead. A
+			// server that drops the socket right after accepting it would otherwise leave this pending and the
+			// executor with it, holding the logical resource against even a shutdown.
+			const scale = await this.#request(this.context.signal, this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT, async () => await client.getPixelScale())
+
+			if (!scale.ok) {
+				this.#detach()
+				return scale
+			}
+
+			// A server that will not report its scale is still usable; angular guide errors just fall back to
+			// being reported in pixels.
+			this.#pixelScale = (scale.value.success ? scale.value.result : 0) || 1
+			return { ok: true, value: undefined }
 		} catch (error) {
-			this.#client = undefined
+			this.#detach()
 			return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
 		}
-
-		Object.assign(this.#settings, this.request.dither)
-		this.#pixelScale = (await client.getPixelScale()) || 1
-		return { ok: true, value: undefined }
 	}
 
 	// Attaches the in-process guider and applies its capture configuration under a scope owning both
@@ -658,29 +896,26 @@ class GuiderSession {
 				this.#client = client
 
 				if (!client.connect(camera, guideOutput, request)) {
-					this.#client = undefined
+					this.#detach()
 					return { ok: false, reason: 'commandFailed', error: 'failed to start the local guider' }
 				}
 
-				const { capture } = request
-
-				if (capture.width > 0 && capture.height > 0 && capture.subframe) cameraManager.frame(camera, capture.x, capture.y, capture.width, capture.height)
-				else if (camera.frame.width.max > 0 && camera.frame.height.max > 0) cameraManager.frame(camera, 0, 0, camera.frame.width.max, camera.frame.height.max)
-				cameraManager.frameType(camera, capture.frameType)
-				if (capture.frameFormat) cameraManager.frameFormat(camera, capture.frameFormat)
-				cameraManager.bin(camera, capture.binX, capture.binY)
-				cameraManager.gain(camera, capture.gain)
-				cameraManager.offset(camera, capture.offset)
-				cameraManager.transferFormat(camera, capture.transferFormat)
-				cameraManager.compression(camera, capture.compressed)
-				client.setExposure(exposureTimeInSeconds(capture.exposureTime, capture.exposureTimeUnit))
-
-				return { ok: true, value: client }
+				try {
+					this.#configure(camera, client)
+					return { ok: true, value: client }
+				} catch (error) {
+					// connect() already attached the client to the camera manager, so a configuration that fails
+					// has to detach it here rather than leave it subscribed to a device the session gives back.
+					this.#detach()
+					return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
+				}
 			},
 		).result
 
+		// The scope may also fail without its executor ever reporting it, when it is refused or canceled after
+		// the client attached, so the transport is torn down on every failure and not only on a thrown one.
 		if (!configured.ok) {
-			this.#client = undefined
+			this.#detach()
 			return configured
 		}
 
@@ -689,9 +924,34 @@ class GuiderSession {
 		return { ok: true, value: undefined }
 	}
 
+	// Applies the capture configuration of a local guider to its camera and makes sure frames are delivered.
+	//
+	// This runs under every scope that owns the camera, not once at connection. An idle session releases the
+	// physical device on purpose, so another operation may crop, bin or re-gain it meanwhile, and a capture
+	// turns frame delivery off when it is done. A guide exposure taken on that configuration would be wrong,
+	// and one taken with delivery off would never produce the frame the session is waiting for.
+	#configure(camera: Camera, client: GuiderClient) {
+		if (this.request.mode !== 'local') return
+
+		const { cameraManager } = this.sessionContext
+		const { capture } = this.request
+
+		if (capture.width > 0 && capture.height > 0 && capture.subframe) cameraManager.frame(camera, capture.x, capture.y, capture.width, capture.height)
+		else if (camera.frame.width.max > 0 && camera.frame.height.max > 0) cameraManager.frame(camera, 0, 0, camera.frame.width.max, camera.frame.height.max)
+		cameraManager.frameType(camera, capture.frameType)
+		if (capture.frameFormat) cameraManager.frameFormat(camera, capture.frameFormat)
+		cameraManager.bin(camera, capture.binX, capture.binY)
+		cameraManager.gain(camera, capture.gain)
+		cameraManager.offset(camera, capture.offset)
+		cameraManager.transferFormat(camera, capture.transferFormat)
+		cameraManager.compression(camera, capture.compressed)
+		cameraManager.enableBlob(camera)
+		client.setExposure(exposureTimeInSeconds(capture.exposureTime, capture.exposureTimeUnit))
+	}
+
 	// Runs one state-changing command, refusing a second one instead of letting it resolve another's waiter.
 	async #serialize<T>(kind: GuiderCommandKind, options: GuiderCommandOptions, run: (signal: AbortSignal) => Promise<OperationResult<T>>): Promise<OperationResult<T>> {
-		if (this.#closed) return { ok: false, reason: 'disconnected' }
+		if (this.#closed || this.#ending.signal.aborted) return { ok: false, reason: 'disconnected' }
 		if (this.#command !== undefined) return { ok: false, reason: 'busy', error: `the guider is running ${this.#command}` }
 
 		this.#command = kind
@@ -715,6 +975,70 @@ class GuiderSession {
 		}
 	}
 
+	// Milliseconds a loop has to be observed, which has to cover one whole exposure on either transport.
+	//
+	// Neither transport announces that it started looping. PHD2 sends its application state only when a
+	// client first connects, and the local guider reproduces that on purpose, so on both the state proving
+	// the guider is looping is the per-frame event that arrives once the first exposure has been processed.
+	// The wait therefore lasts an exposure plus a readout, and a guide exposure longer than the ordinary
+	// command allowance would time out and abort a loop that was working. Adding the exposure leaves that
+	// allowance to cover the readout alone.
+	async #loopTimeout(signal: AbortSignal, options: GuiderCommandOptions) {
+		const timeout = options.timeout ?? this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT
+		return timeout + (await this.#guideExposure(signal, timeout))
+	}
+
+	// Milliseconds of one guide exposure, or zero when it cannot be established.
+	//
+	// A remote exposure belongs to PHD2, which owns it and lets its own user change it at any time, so it is
+	// asked for each time rather than remembered from the handshake. A server that will not answer costs
+	// only the allowance it would have added, which is the same bound the loop had before.
+	//
+	// Both transports report it in milliseconds, and both report what is actually configured now rather than
+	// what the session was opened with, so a guider re-exposed since then is bounded by its current cadence.
+	async #guideExposure(signal: AbortSignal, timeout: number) {
+		const client = this.#client
+
+		if (client === undefined) return 0
+		if (client instanceof GuiderClient) return Math.max(0, client.getExposure())
+
+		const exposure = await this.#request(signal, timeout, async () => await client.getExposure())
+		return exposure.ok && exposure.value.success ? Math.max(0, exposure.value.result) : 0
+	}
+
+	// Awaits one transport request under a bound the session controls, rather than one the transport owes.
+	//
+	// A PHD2 client that closes drops every command still in flight without settling it, and clears the
+	// reply timeout along with it, so a request outstanding when the transport goes away never resolves at
+	// all. Anything awaiting it would hang forever: a command would never reach the release of its
+	// serializer and its caller would never get an answer. Racing the request against the end of the session
+	// is what makes that impossible, whatever the transport does with what it was still owed.
+	async #request<T>(signal: AbortSignal, timeout: number, send: () => Promise<T>): Promise<OperationResult<T>> {
+		if (signal.aborted) return { ok: false, reason: abortReason(signal) }
+		if (this.#ending.signal.aborted) return { ok: false, reason: 'disconnected' }
+
+		const bounded = Promise.withResolvers<OperationResult<T>>()
+		const onAbort = () => bounded.resolve({ ok: false, reason: abortReason(signal) })
+		const onEnding = () => bounded.resolve({ ok: false, reason: 'disconnected' })
+		const timer = setTimeout(() => bounded.resolve({ ok: false, reason: 'timeout' }), Math.max(1, timeout))
+
+		signal.addEventListener('abort', onAbort, { once: true })
+		this.#ending.signal.addEventListener('abort', onEnding, { once: true })
+
+		try {
+			const requested = send().then(
+				(value) => ({ ok: true, value }) as const,
+				(error: unknown) => ({ ok: false, reason: 'commandFailed', error: errorMessage(error) }) as const,
+			)
+
+			return await Promise.race([requested, bounded.promise])
+		} finally {
+			clearTimeout(timer)
+			signal.removeEventListener('abort', onAbort)
+			this.#ending.signal.removeEventListener('abort', onEnding)
+		}
+	}
+
 	// Subscribes before commanding and settles on the first observed verdict.
 	#observe(signal: AbortSignal, timeout: number, options: GuiderObserveOptions) {
 		return waitForDeviceState<GuiderUpdate>({
@@ -730,14 +1054,19 @@ class GuiderSession {
 
 	// Acquires the guide camera and guide output for the duration of the activity, then runs the command.
 	// A command that fails hands them straight back, since nothing is capturing after it.
+	//
+	// Only what this command took, though: a guider that was already capturing has an activity of its own,
+	// and releasing that one would quiesce a run the failed command never started. That is the same reason
+	// its abort path stops nothing when the guider refused the command.
 	async #withActivity<T>(run: () => Promise<OperationResult<T>>): Promise<OperationResult<T>> {
+		const running = this.#activity !== undefined
 		const acquired = await this.#acquireActivity()
 
 		if (!acquired.ok) return acquired
 
 		const result = await run()
 
-		if (!result.ok) await this.#releaseActivity()
+		if (!result.ok && !running) await this.#releaseActivity()
 
 		return result
 	}
@@ -769,6 +1098,19 @@ class GuiderSession {
 				{ key: resourceKey(guideOutput), device: guideOutput },
 			],
 			(activityContext) => {
+				const client = this.#client
+
+				// The camera was acquirable for as long as the session sat idle, so whatever it was lent to may
+				// have reconfigured it and turned frame delivery off on its way out. It is reconfigured here,
+				// under the scope that owns it again, rather than trusting what connect left behind.
+				if (client instanceof GuiderClient) {
+					try {
+						this.#configure(camera, client)
+					} catch (error) {
+						return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
+					}
+				}
+
 				// Whatever ends the activity, the guider must not be left exposing while its devices go back
 				// to the arbiter: the next operation would acquire a camera another client still drives.
 				activityContext.onCleanup(() => this.#quiesce())
@@ -819,17 +1161,53 @@ class GuiderSession {
 
 	// Stops capture on whichever transport is attached. A session with no transport left has nothing to
 	// stop, so this is a no-op rather than a failure: it also runs from abort and cleanup paths.
-	#stopCapture() {
-		const client = this.#client
-		if (client === undefined) return
-		void client.stopCapture()
+	//
+	// The outcome is read rather than discarded, so a stop the transport refuses fails its wait as a failed
+	// command instead of running to timeout. Every caller of this bounds the wait itself, either through the
+	// timeout of the wait it commands or through #abortCapture.
+	async #stopCapture() {
+		if (this.#client === undefined) return
+		await this.#dispatch((client) => client.stopCapture())
+	}
+
+	// Commands a stop from an abort path, where the wait has already settled and only reaching the device
+	// still matters.
+	//
+	// The bound is what makes awaiting the stop safe here: a remote stop awaits an RPC reply, and the very
+	// reason a wait is being aborted may be the transport that will never answer it. A refusal still
+	// propagates, because it means the device was not told to stop and the caller has to hear that.
+	async #abortCapture() {
+		// A session on its way out must not stop the guider through this path. Disconnecting aborts the
+		// command in flight, and for a remote session that would send a stop to a PHD2 server which is an
+		// independent application: a calibration someone is watching there would die because a client of it
+		// closed its socket. A local session is stopped by the cleanup of its activity instead, which owns
+		// the devices until they are handed back and runs even while the operation is being cancelled.
+		if (this.#ending.signal.aborted) return
+
+		await Promise.race([this.#stopCapture(), Bun.sleep(ABORT_STOP_TIMEOUT)])
 	}
 
 	// Runs a transport command; a missing transport throws so the wait settles as a failed command.
-	async #dispatch(command: (client: GuiderTransport) => unknown) {
+	//
+	// Neither transport rejects when it refuses a command: the local client answers false and the remote one
+	// a JSON-RPC result that failed. Left unread, a refusal is indistinguishable from a command still on its
+	// way, and the wait would run to its full timeout before reporting one as the other while the guider was
+	// never going to move. Throwing turns the refusal into the failed command it is.
+	//
+	// The answer is typed rather than unknown on purpose: it is the only thing standing between a refusal and
+	// a wait that ignores it, so a transport whose answers change has to stop compiling here.
+	async #dispatch(command: (client: GuiderTransport) => GuiderCommandAnswer | Promise<GuiderCommandAnswer>) {
 		const client = this.#client
+
 		if (client === undefined) throw new Error('the guider is not connected')
-		await command(client)
+
+		const accepted = await command(client)
+
+		if (typeof accepted === 'boolean') {
+			if (!accepted) throw new Error('the guider refused the command')
+		} else if (!accepted.success) {
+			throw new Error(`the guider refused the command: ${commandError(accepted.error)}`)
+		}
 	}
 
 	// Registers a waiter and returns its idempotent unsubscriber.
@@ -911,7 +1289,14 @@ class GuiderSession {
 				this.#beginDitherSettle()
 				break
 			case 'SettleDone':
-				this.#finishDither(event.Status === 0 ? { ok: true, value: undefined } : { ok: false, reason: 'alert', error: event.Error })
+				// The terminal event of a movement, whoever it belonged to: it either settles the dither in
+				// flight or releases the one the session was still tracking on nobody's behalf.
+				this.#releaseDither()
+				this.#finishDither(event.Status === 0 ? { ok: true, value: undefined } : { ok: false, reason: 'alert', error: event.Error }, false)
+				// A settle that succeeded leaves the guider guiding again. Saying so here rather than waiting
+				// for the next frame keeps the reported state from lagging behind a command that just
+				// completed on this very event.
+				if (event.Status === 0 && this.#state === 'Guiding') this.#publish('guiding')
 				break
 			case 'Settling':
 				this.#publish('settling')
@@ -961,6 +1346,8 @@ class GuiderSession {
 			case 'GuidingStopped':
 			case 'LoopingExposuresStopped':
 				this.#state = 'Stopped'
+				// A guider that stopped is not moving for anything any more.
+				this.#releaseDither()
 				this.#publish('idle')
 				break
 			default:
@@ -976,22 +1363,41 @@ class GuiderSession {
 		guiderBus.emit('update', structuredClone(this.event))
 	}
 
-	// Fans out one dither phase.
+	// Fans out one dither phase for presentation, and hands it to whoever asked for this dither.
+	//
+	// The bus is a broadcast of every session, so nothing that depends on the progress being its own may
+	// read it. The caller gets the phase through the call it already made instead, which is why no consumer
+	// has to filter the bus by session.
 	#publishDither(event: GuiderDitherEvent) {
 		guiderBus.emit('dither', event)
+
+		// The callback belongs to the caller and may throw. It must not escape into the state machine: on
+		// the first phase it would reject the command instead of answering it, leaving the operation and its
+		// timers installed, and on the terminal phase it would run before the result is resolved and leave
+		// the command pending forever.
+		try {
+			this.#dither?.onPhase?.(event.phase)
+		} catch (error) {
+			console.error('guider dither phase callback failed:', error)
+		}
 	}
 
-	// Creates the dither bookkeeping and arms the timer bounding the wait for SettleBegin.
-	#startDither(timeout: number, signal: AbortSignal) {
+	// Creates the dither bookkeeping and arms the timer bounding the wait for SettleBegin. Both durations
+	// are in milliseconds: the timeout bounds what the caller waits, the retention what the guider may
+	// still be doing afterwards.
+	#startDither(timeout: number, retention: number, signal: AbortSignal, onPhase?: (phase: GuiderDitherPhase) => void) {
 		const operation: GuiderDitherOperation = {
 			result: Promise.withResolvers(),
 			settleStarted: Promise.withResolvers(),
 			signal,
+			onPhase,
 			timeout,
+			deadline: performance.now() + Math.max(1, timeout),
+			retention,
 			finished: false,
 		}
 
-		const onAbort = () => this.#finishDither({ ok: false, reason: abortReason(signal) })
+		const onAbort = () => this.#finishDither({ ok: false, reason: abortReason(signal) }, true)
 		operation.onAbort = onAbort
 		signal.addEventListener('abort', onAbort, { once: true })
 
@@ -999,10 +1405,10 @@ class GuiderSession {
 			() => {
 				if (operation.settleStartedAt === undefined) {
 					operation.settleStarted.resolve(false)
-					this.#finishDither({ ok: false, reason: 'timeout', error: 'the guider never began settling' })
+					this.#finishDither({ ok: false, reason: 'timeout', error: 'the guider never began settling' }, true)
 				}
 			},
-			Math.max(1, timeout) * 1000,
+			Math.max(1, timeout),
 		)
 
 		this.#dither = operation
@@ -1010,11 +1416,43 @@ class GuiderSession {
 		return operation
 	}
 
+	// Retains a movement whose caller has already been answered, refusing a new dither until it concludes.
+	//
+	// The bound matters because the release depends on an event that may never arrive: a guider that drops
+	// its settle would otherwise refuse every dither for the rest of the session. It is the settle timeout
+	// of the dither being retained, which is the longest the guider was ever given to finish this movement.
+	#retainDither(retention: number) {
+		this.#releaseDither()
+		this.#outstandingRetention = retention
+
+		this.#outstandingDither = setTimeout(
+			() => {
+				this.#outstandingDither = undefined
+			},
+			Math.max(1, retention),
+		)
+	}
+
+	// Stops tracking a retained movement, once something proved the guider is no longer performing it.
+	#releaseDither() {
+		if (this.#outstandingDither === undefined) return
+		clearTimeout(this.#outstandingDither)
+		this.#outstandingDither = undefined
+	}
+
 	// Switches the dither from waiting for SettleBegin to waiting for its terminal SettleDone.
 	#beginDitherSettle() {
 		const operation = this.#dither
 
-		if (!operation || operation.finished || operation.settleStartedAt) return
+		// A retained movement has just begun settling, so it will be under way for another settle timeout
+		// from now. Without restarting the clock, one armed before the settle even began could expire
+		// mid-settle and let a new dither in, which the old movement would then terminalize.
+		if (operation === undefined || operation.finished) {
+			if (this.#outstandingDither !== undefined) this.#retainDither(this.#outstandingRetention)
+			return
+		}
+
+		if (operation.settleStartedAt) return
 
 		operation.settleStartedAt = performance.now()
 
@@ -1026,21 +1464,30 @@ class GuiderSession {
 		operation.settleStarted.resolve(true)
 		this.#publishDither({ phase: 'settling', guider: structuredClone(this.event) })
 
+		// What is left of the caller's timeout, not a fresh one: the wait for the settle to begin already
+		// spent part of it, and a full second timer here would let the call last close to twice what was
+		// asked for.
 		operation.settleTimer = setTimeout(
 			() => {
-				this.#finishDither({ ok: false, reason: 'timeout', error: 'the guider did not settle in time' })
+				this.#finishDither({ ok: false, reason: 'timeout', error: 'the guider did not settle in time' }, true)
 			},
-			Math.max(1, operation.timeout) * 1000,
+			Math.max(1, operation.deadline - performance.now()),
 		)
 	}
 
 	// Terminalizes the dither exactly once, releasing its timers, listener, and pending milestones.
-	#finishDither(result: OperationResult<void>) {
+	//
+	// Terminalizing is about the caller, not about the mount. When the two disagree — an abort or a timeout
+	// answers the caller while the guider carries on moving — the movement is retained so that nothing else
+	// can be settled by the events it has yet to publish.
+	#finishDither(result: OperationResult<void>, outstanding: boolean) {
 		const operation = this.#dither
 
 		if (!operation || operation.finished) return
 
 		operation.finished = true
+
+		if (outstanding) this.#retainDither(operation.retention)
 
 		if (operation.startTimer) clearTimeout(operation.startTimer)
 		if (operation.settleTimer) clearTimeout(operation.settleTimer)

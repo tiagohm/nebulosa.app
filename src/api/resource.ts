@@ -201,6 +201,23 @@ export class ResourceArbiter {
 		return owner === undefined ? [] : [owner]
 	}
 
+	// Returns each distinct owner holding any resource associated with one physical device key.
+	//
+	// A device is arbitrated under its own key, but an operation may hold it under another name: a logical
+	// resource standing for the device reserves it without leasing the device itself. Looking the device up
+	// by key alone would miss those holders, and a lifecycle event has to reach every one of them.
+	ownersOfDevice(key: ResourceKey): readonly ResourceOwner[] {
+		const owners = new Set<ResourceOwner>()
+
+		for (const resource of this.#resources.values()) {
+			if (resource.owner !== undefined && resource.device !== undefined && resourceKey(resource.device) === key) {
+				owners.add(resource.owner)
+			}
+		}
+
+		return [...owners]
+	}
+
 	// Returns each distinct owner holding any physical resource associated with the client id.
 	ownersOfClient(clientId: string): readonly ResourceOwner[] {
 		const owners = new Set<ResourceOwner>()

@@ -101,7 +101,7 @@ export type WaitForFocuserAction = 'reach' | 'timeout' | 'cancel'
 
 export function waitForFocuser(focuser: Focuser, expectedPosition: number, onCompleted: (action: WaitForFocuserAction) => void, delay: number = 30000) {
 	// oxlint-disable-next-line prefer-const
-	let timer: ReturnType<typeof setTimeout> | undefined
+	let timer: Timer | undefined
 	let unsubscriber: VoidFunction = () => undefined
 	let finished = false
 

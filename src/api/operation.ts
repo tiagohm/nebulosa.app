@@ -237,6 +237,13 @@ export class OperationCoordinator {
 		return this.#cancelOwners(this.arbiter.ownersOf(resource), reason)
 	}
 
+	// Aborts every owner holding one physical device, under its own key or under a logical resource that
+	// stands for it, then waits for all cleanup. This is what a lifecycle event has to use: an operation may
+	// reserve a device without leasing it, and a disconnect must still reach it.
+	cancelByDevice(resource: ResourceKey, reason: OperationFailureReason = 'aborted') {
+		return this.#cancelOwners(this.arbiter.ownersOfDevice(resource), reason)
+	}
+
 	// Aborts every distinct owner associated with a client, then waits for all cleanup.
 	cancelByClient(clientId: string, reason: OperationFailureReason = 'aborted') {
 		return this.#cancelOwners(this.arbiter.ownersOfClient(clientId), reason)

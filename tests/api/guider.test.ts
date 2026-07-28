@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { PHD2Client } from 'nebulosa/src/devices/guiding/phd2'
 import type { PHD2Command } from 'nebulosa/src/devices/guiding/phd2'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
@@ -6,12 +7,13 @@ import { CameraManager, FocuserManager, GuideOutputManager, MountManager, Rotato
 import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
-import { guiderBus, GuiderCommander, localGuiderKey, remoteGuiderKey } from 'src/api/guider.session'
+import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
+import { guiderBus, GuiderCommander, localGuiderCameraKey, localGuiderKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import { DEFAULT_GUIDER_DITHER } from '#/guider'
-import type { GuiderConnect, GuiderEvent, GuiderSessionInfo } from '#/guider'
+import type { GuiderConnect, GuiderDitherPhase, GuiderEvent, GuiderSessionInfo } from '#/guider'
 import { waitUntil } from './util'
 
 guiderBus.forceSync = true
@@ -30,6 +32,9 @@ const simulators = [new CameraSimulator('Camera Simulator', client, { mountManag
 
 class FakePhd2Server {
 	readonly commands: PHD2Command[] = []
+	readonly unanswered = new Set<string>()
+	readonly refused = new Set<string>()
+	readonly results = new Map<string, unknown>()
 
 	private listener?: Bun.TCPSocketListener
 	private socket?: Bun.Socket<unknown>
@@ -54,7 +59,9 @@ class FakePhd2Server {
 						if (line.length === 0) continue
 						const command = JSON.parse(line) as PHD2Command
 						this.commands.push(command)
-						socket.write(`${JSON.stringify({ jsonrpc: '2.0', result: 0, id: command.id })}\r\n`)
+						if (this.unanswered.has(command.method)) continue
+						if (this.refused.has(command.method)) socket.write(`${JSON.stringify({ jsonrpc: '2.0', error: { code: 1, message: 'refused' }, id: command.id })}\r\n`)
+						else socket.write(`${JSON.stringify({ jsonrpc: '2.0', result: this.results.get(command.method) ?? 0, id: command.id })}\r\n`)
 					}
 				},
 				close: () => {
@@ -191,6 +198,32 @@ describe('remote session', () => {
 		expect(arbiter.availability(remoteGuiderKey('127.0.0.1', otherPort))).toBe('leased')
 	})
 
+	test('leaves a remote run alone when the session is disconnected mid-command', async () => {
+		const id = await connected()
+
+		const calibrated = commander.calibrate(id)
+
+		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		server.push({ Event: 'StartCalibration', Mount: 'Mount Simulator' })
+
+		const transport: { stopCapture: () => unknown } = PHD2Client.prototype
+		const stopCapture = transport.stopCapture
+		let stops = 0
+
+		transport.stopCapture = () => {
+			stops++
+			return Promise.resolve(0)
+		}
+
+		try {
+			expect((await commander.disconnect(id)).ok).toBeTrue()
+			expect((await calibrated).ok).toBeFalse()
+			expect(stops).toBe(0)
+		} finally {
+			transport.stopCapture = stopCapture
+		}
+	})
+
 	test('publishes add and remove for every session', async () => {
 		const added: GuiderSessionInfo[] = []
 		const removed: GuiderSessionInfo[] = []
@@ -225,6 +258,50 @@ describe('remote session', () => {
 		expect(arbiter.availability(remoteGuiderKey('127.0.0.1', otherPort))).toBe('available')
 	})
 
+	test('gives up on the handshake when the server accepts the socket but never answers', async () => {
+		const [silent, silentPort] = await startServer()
+		silent.unanswered.add('get_pixel_scale')
+
+		const result = await commander.connect(remote(silentPort))
+
+		expect(result.ok).toBeFalse()
+		expect(result.ok || result.reason).toBe('timeout')
+		expect(commander.list()).toBeEmpty()
+		expect(arbiter.availability(remoteGuiderKey('127.0.0.1', silentPort))).toBe('available')
+	})
+
+	test('settles a request still in flight when the session goes away', async () => {
+		const id = await connected()
+		server.unanswered.add('find_star')
+
+		const found = commander.findStar(id)
+
+		expect(await waitUntil(() => server.received('find_star'))).toBeTrue()
+		expect((await commander.disconnect(id)).ok).toBeTrue()
+
+		const result = await found
+
+		expect(result.ok).toBeFalse()
+		expect(result.ok || result.reason).toBe('disconnected')
+	})
+
+	test('gives up when the connection attempt itself never completes', async () => {
+		const transport: { connect: (hostname: string, port?: number) => Promise<boolean> } = PHD2Client.prototype
+		const connect = transport.connect
+		transport.connect = () => new Promise<boolean>(() => {})
+
+		try {
+			const result = await commander.connect(remote())
+
+			expect(result.ok).toBeFalse()
+			expect(result.ok || result.reason).toBe('timeout')
+			expect(commander.list()).toBeEmpty()
+			expect(arbiter.availability(remoteGuiderKey('127.0.0.1', port))).toBe('available')
+		} finally {
+			transport.connect = connect
+		}
+	})
+
 	test('fails to connect when no server accepts the connection', async () => {
 		server.stop()
 
@@ -244,6 +321,28 @@ describe('remote session', () => {
 		expect(commander.list()).toBeEmpty()
 		expect(arbiter.availability(remoteGuiderKey('127.0.0.1', port))).toBe('available')
 		expect(server.received('stop_capture')).toBeFalse()
+	})
+
+	test('refuses a command issued after the session began ending', async () => {
+		const id = await connected()
+
+		const disconnected = commander.disconnect(id)
+		const looped = await commander.loop(id)
+
+		expect(looped.ok).toBeFalse()
+		expect(looped.ok || looped.reason).toBe('disconnected')
+		expect((await disconnected).ok).toBeTrue()
+		expect(server.received('loop')).toBeFalse()
+	})
+
+	test('answers a status query even when the server never replies to it', async () => {
+		const id = await connected()
+		server.unanswered.add('get_profile')
+
+		const status = await commander.status(id)
+
+		expect(status.connected).toBeTrue()
+		expect(status.profile).toBeUndefined()
 	})
 
 	test('reports an unknown session instead of guessing which one was meant', async () => {
@@ -267,6 +366,51 @@ describe('remote session', () => {
 		expect(commander.looping(id)).toBeTrue()
 	})
 
+	test('fails a refused command instead of waiting for a state the guider will never reach', async () => {
+		const id = await connected()
+		server.refused.add('loop')
+
+		const result = await commander.loop(id)
+
+		expect(result.ok).toBeFalse()
+		expect(result.ok || result.reason).toBe('commandFailed')
+		expect(commander.looping(id)).toBeFalse()
+	})
+
+	test('lets a guide exposure longer than the command timeout produce its first frame', async () => {
+		server.results.set('get_exposure', 2000)
+
+		const id = await connected()
+		const looped = commander.loop(id)
+
+		expect(await waitUntil(() => server.received('loop'))).toBeTrue()
+
+		await Bun.sleep(1500)
+		server.push({ Event: 'LoopingExposures', Frame: 1, StarMass: 100, SNR: 20, HFD: 3 })
+
+		expect((await looped).ok).toBeTrue()
+		expect(commander.looping(id)).toBeTrue()
+	})
+
+	test('leaves a running guider alone when a new command is refused', async () => {
+		const id = await connected()
+
+		const guided = commander.startGuiding(id)
+		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+		expect((await guided).ok).toBeTrue()
+
+		server.refused.add('loop')
+
+		const looped = await commander.loop(id)
+
+		expect(looped.ok).toBeFalse()
+		expect(looped.ok || looped.reason).toBe('commandFailed')
+		expect(server.received('stop_capture')).toBeFalse()
+		expect(commander.running(id)).toBeTrue()
+	})
+
 	test('refuses a concurrent command instead of sharing the waiter of the running one', async () => {
 		const id = await connected()
 
@@ -288,9 +432,24 @@ describe('remote session', () => {
 
 		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
 		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 
 		expect((await guided).ok).toBeTrue()
 		expect(commander.running(id)).toBeTrue()
+	})
+
+	test('lets the settle judge a star lost after guiding was announced', async () => {
+		const id = await connected()
+
+		const guided = commander.startGuiding(id, { timeout: 5000 })
+
+		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'StarLost', Frame: 1, Time: 1, StarMass: 0, SNR: 0, HFD: 0, AvgDist: 0, Status: 1 })
+		server.push({ Event: 'GuideStep', Frame: 2, Time: 1, RADistanceRaw: 1, DECDistanceRaw: 1, RADuration: 1, RADirection: 'West', DECDuration: 1, DECDirection: 'North', StarMass: 1, SNR: 1, HFD: 1 })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 1 })
+
+		expect((await guided).ok).toBeTrue()
 	})
 
 	test('fails to start guiding when the star is lost before guiding begins', async () => {
@@ -315,6 +474,7 @@ describe('remote session', () => {
 		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
 		server.push({ Event: 'StartCalibration', Mount: 'Mount Simulator' })
 		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 
 		expect((await calibrated).ok).toBeTrue()
 	})
@@ -341,6 +501,7 @@ describe('remote session', () => {
 		const guided = commander.startGuiding(id)
 		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
 		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 		expect((await guided).ok).toBeTrue()
 
 		const stopped = commander.stopGuiding(id)
@@ -349,6 +510,48 @@ describe('remote session', () => {
 
 		expect((await stopped).ok).toBeTrue()
 		expect(commander.running(id)).toBeFalse()
+	})
+
+	test('fails the stop when the server refuses it instead of waiting for a state it will never reach', async () => {
+		const id = await connected()
+
+		const guided = commander.startGuiding(id)
+		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+		expect((await guided).ok).toBeTrue()
+
+		server.refused.add('stop_capture')
+
+		const stopped = await commander.stopGuiding(id)
+
+		expect(stopped.ok).toBeFalse()
+		expect(stopped.ok || stopped.reason).toBe('commandFailed')
+		expect(stopped.ok || stopped.error).toContain('refused the command')
+	})
+
+	test('fails the stop when the transport rejects it instead of waiting for a state it will never reach', async () => {
+		const id = await connected()
+
+		const guided = commander.startGuiding(id)
+		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+		expect((await guided).ok).toBeTrue()
+
+		const transport: { stopCapture: () => unknown } = PHD2Client.prototype
+		const stopCapture = transport.stopCapture
+		transport.stopCapture = () => Promise.reject(new Error('stop refused'))
+
+		try {
+			const stopped = await commander.stopGuiding(id)
+
+			expect(stopped.ok).toBeFalse()
+			expect(stopped.ok || stopped.reason).toBe('commandFailed')
+			expect(stopped.ok || stopped.error).toContain('stop refused')
+		} finally {
+			transport.stopCapture = stopCapture
+		}
 	})
 
 	test('finds a star and reports acceptance', async () => {
@@ -368,6 +571,7 @@ describe('dither', () => {
 		const guided = commander.startGuiding(id)
 		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
 		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 		expect((await guided).ok).toBeTrue()
 
 		return id
@@ -410,6 +614,28 @@ describe('dither', () => {
 		} finally {
 			unsubscribe()
 		}
+	})
+
+	test('reports the phases of a dither to the caller that asked for it, and no others', async () => {
+		const id = await guiding()
+
+		const phases: GuiderDitherPhase[] = []
+		const dithered = commander.dither(id, undefined, { onPhase: (phase) => phases.push(phase) })
+
+		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		server.push({ Event: 'SettleBegin' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+
+		expect((await dithered).ok).toBeTrue()
+		expect(phases).toEqual(['dithering', 'settling', 'settled'])
+
+		// The session keeps settling after other commands, and the caller of a finished dither must not
+		// keep receiving those phases.
+		server.push({ Event: 'SettleBegin' })
+		server.push({ Event: 'Settling', Distance: 1, Time: 1, SettleTime: 10, StarLocked: true })
+		await Bun.sleep(50)
+
+		expect(phases).toEqual(['dithering', 'settling', 'settled'])
 	})
 
 	test('fails when the guider reports a failed settle', async () => {
@@ -463,6 +689,201 @@ describe('dither', () => {
 		expect(result.ok).toBeFalse()
 		expect(result.ok || result.reason).toBe('aborted')
 		expect(commander.info(id)).toBeDefined()
+	})
+
+	test('refuses a new dither while the guider still moves for an abandoned one', async () => {
+		const id = await guiding()
+
+		const controller = new AbortController()
+		const abandoned = commander.dither(id, undefined, { signal: controller.signal })
+
+		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		controller.abort('aborted')
+		expect((await abandoned).ok).toBeFalse()
+
+		const refused = await commander.dither(id)
+
+		expect(refused.ok).toBeFalse()
+		expect(refused.ok || refused.reason).toBe('busy')
+
+		server.push({ Event: 'SettleBegin' })
+
+		expect(await waitUntil(() => commander.info(id)?.state === 'settling')).toBeTrue()
+
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+		server.push({ Event: 'GuideStep', Frame: 2, Time: 1, RADistanceRaw: 1, DECDistanceRaw: 1, RADuration: 1, RADirection: 'West', DECDuration: 1, DECDirection: 'North', StarMass: 1, SNR: 1, HFD: 1 })
+
+		expect(await waitUntil(() => commander.running(id))).toBeTrue()
+
+		const dithered = commander.dither(id)
+
+		expect(await waitUntil(() => server.commands.filter((command) => command.method === 'dither').length === 2)).toBeTrue()
+		server.push({ Event: 'SettleBegin' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+
+		expect((await dithered).ok).toBeTrue()
+	})
+
+	test('releases the session when the server refuses a dither outright', async () => {
+		const id = await guiding()
+
+		server.refused.add('dither')
+
+		const dithered = await commander.dither(id)
+
+		expect(dithered.ok).toBeFalse()
+		expect(dithered.ok || dithered.reason).toBe('commandFailed')
+
+		// The server decided against the move, so there is no movement to wait out.
+		const again = await commander.dither(id)
+
+		expect(again.ok).toBeFalse()
+		expect(again.ok || again.reason).toBe('commandFailed')
+	})
+
+	test('allows the dither reply the whole settle rather than the default', async () => {
+		const id = await guiding()
+
+		type Send = (method: string, params?: Record<string, unknown> | unknown[], timeout?: number) => Promise<unknown>
+		const transport = PHD2Client.prototype as unknown as { send: Send }
+		const send = transport.send
+		let allowed: number | undefined
+
+		transport.send = function (method, params, timeout) {
+			if (method === 'dither') allowed = timeout
+			return send.call(this, method, params, timeout)
+		}
+
+		try {
+			const dithered = commander.dither(id)
+
+			expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+			server.push({ Event: 'SettleBegin' })
+			server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+
+			expect((await dithered).ok).toBeTrue()
+
+			// The settle of the default request already outlasts the transport's own default allowance.
+			const settle = DEFAULT_GUIDER_DITHER.settle
+			expect(allowed).toBe((settle.time + settle.timeout) * 1000 + 5000)
+		} finally {
+			transport.send = send
+		}
+	})
+
+	test('retains the movement when the reply to a dither is lost', async () => {
+		const id = await guiding()
+
+		type Send = (method: string, params?: Record<string, unknown> | unknown[], timeout?: number) => Promise<unknown>
+		const transport = PHD2Client.prototype as unknown as { send: Send }
+		const send = transport.send
+
+		// The command reached the guider; only its answer did not, so the mount may well be moving.
+		transport.send = function (method, params, timeout) {
+			if (method === 'dither') return Promise.resolve({ success: false, error: 'timeout' })
+			return send.call(this, method, params, timeout)
+		}
+
+		try {
+			const dithered = await commander.dither(id)
+
+			expect(dithered.ok).toBeFalse()
+			expect(dithered.ok || dithered.reason).toBe('commandFailed')
+		} finally {
+			transport.send = send
+		}
+
+		const refused = await commander.dither(id)
+
+		expect(refused.ok).toBeFalse()
+		expect(refused.ok || refused.reason).toBe('busy')
+	})
+
+	test('bounds the wait by the timeout its caller asked for', async () => {
+		const id = await guiding()
+
+		const started = performance.now()
+		const dithered = await commander.dither(id, undefined, { timeout: 200 })
+		const elapsed = performance.now() - started
+
+		expect(dithered.ok).toBeFalse()
+		expect(dithered.ok || dithered.reason).toBe('timeout')
+		expect(elapsed).toBeLessThan(2000)
+	})
+
+	test('settles even when the phase callback of its caller throws', async () => {
+		const id = await guiding()
+
+		const dithered = commander.dither(id, undefined, {
+			onPhase: () => {
+				throw new Error('callback failed')
+			},
+		})
+
+		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		server.push({ Event: 'SettleBegin' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+
+		expect((await dithered).ok).toBeTrue()
+
+		server.push({ Event: 'GuideStep', Frame: 2, Time: 1, RADistanceRaw: 1, DECDistanceRaw: 1, RADuration: 1, RADirection: 'West', DECDuration: 1, DECDirection: 'North', StarMass: 1, SNR: 1, HFD: 1 })
+		expect(await waitUntil(() => commander.running(id))).toBeTrue()
+
+		// The session is left usable, rather than stuck on a command that never terminalized.
+		const again = commander.dither(id)
+
+		expect(await waitUntil(() => server.commands.filter((command) => command.method === 'dither').length === 2)).toBeTrue()
+		server.push({ Event: 'SettleBegin' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+
+		expect((await again).ok).toBeTrue()
+	})
+
+	test('spends the caller timeout across both of its waits, not once each', async () => {
+		const id = await guiding()
+
+		const started = performance.now()
+		const dithered = commander.dither(id, undefined, { timeout: 400 })
+
+		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+
+		// Settling begins late, leaving only the rest of the timeout for the settle itself.
+		await Bun.sleep(300)
+		server.push({ Event: 'SettleBegin' })
+
+		const result = await dithered
+		const elapsed = performance.now() - started
+
+		expect(result.ok).toBeFalse()
+		expect(result.ok || result.reason).toBe('timeout')
+		expect(elapsed).toBeLessThan(700)
+	})
+
+	test('extends the retention of a movement that only begins settling later', async () => {
+		const id = await guiding()
+
+		const controller = new AbortController()
+		const settle = { ...DEFAULT_GUIDER_DITHER.settle, timeout: 1 }
+		const abandoned = commander.dither(id, { settle }, { signal: controller.signal })
+
+		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		controller.abort('aborted')
+		expect((await abandoned).ok).toBeFalse()
+
+		// Settling begins just before the original retention would lapse, so the movement runs on from there
+		// and the guider reports itself guiding again while it is still under way.
+		await Bun.sleep(900)
+		server.push({ Event: 'SettleBegin' })
+		server.push({ Event: 'GuideStep', Frame: 2, Time: 1, RADistanceRaw: 1, DECDistanceRaw: 1, RADuration: 1, RADirection: 'West', DECDuration: 1, DECDirection: 'North', StarMass: 1, SNR: 1, HFD: 1 })
+
+		expect(await waitUntil(() => commander.running(id))).toBeTrue()
+
+		await Bun.sleep(250)
+
+		const refused = await commander.dither(id)
+
+		expect(refused.ok).toBeFalse()
+		expect(refused.ok || refused.reason).toBe('busy')
 	})
 
 	test('survives the disconnect of another session', async () => {
@@ -523,13 +944,13 @@ describe('connection loss', () => {
 })
 
 describe('local session', () => {
-	function local(camera: Camera, guideOutput: GuideOutput): GuiderConnect {
+	function local(camera: Camera, guideOutput: GuideOutput, exposureTime = 10): GuiderConnect {
 		return {
 			mode: 'local',
 			focalLength: 500,
 			camera: camera.id,
 			guideOutput: guideOutput.id,
-			capture: { ...structuredClone(DEFAULT_CAMERA_CAPTURE_START), exposureTime: 10, exposureTimeUnit: 'millisecond' },
+			capture: { ...structuredClone(DEFAULT_CAMERA_CAPTURE_START), exposureTime, exposureTimeUnit: 'millisecond' },
 			dither: structuredClone(DEFAULT_GUIDER_DITHER),
 		}
 	}
@@ -563,9 +984,13 @@ describe('local session', () => {
 
 		expect(result.ok).toBeTrue()
 		expect(result.ok && result.value.mode).toBe('local')
-		expect(arbiter.availability(localGuiderKey(camera, guideOutput))).toBe('leased')
+		expect(result.ok && result.value.key).toBe(localGuiderKey(camera, guideOutput))
+		expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('leased')
+		expect(arbiter.availability(localGuiderOutputKey(guideOutput))).toBe('leased')
 		expect(arbiter.availability(resourceKey(camera))).toBe('available')
 		expect(arbiter.availability(resourceKey(guideOutput))).toBe('available')
+		expect(arbiter.ownersOfDevice(resourceKey(camera))).not.toBeEmpty()
+		expect(arbiter.ownersOfDevice(resourceKey(guideOutput))).not.toBeEmpty()
 	})
 
 	test('refuses a second session over the same devices even while the first is idle', async () => {
@@ -574,6 +999,34 @@ describe('local session', () => {
 		expect((await commander.connect(local(camera, guideOutput))).ok).toBeTrue()
 
 		const second = await commander.connect(local(camera, guideOutput))
+
+		expect(second.ok).toBeFalse()
+		expect(second.ok || second.reason).toBe('busy')
+		expect(commander.list()).toHaveLength(1)
+	})
+
+	test('lets a guide exposure longer than the command timeout produce its first frame', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput, 2000))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		const looped = await commander.loop(connect.value.id)
+
+		expect(looped.ok).toBeTrue()
+		expect(commander.looping(connect.value.id)).toBeTrue()
+	}, 20000)
+
+	test('refuses a second session that shares only the guide camera of the first', async () => {
+		const [camera, guideOutput] = await devices()
+		const shared = guideOutputManager.get(client, 'Camera Simulator')!
+
+		expect(shared).toBeDefined()
+		expect(shared.id).not.toBe(guideOutput.id)
+		expect((await commander.connect(local(camera, guideOutput))).ok).toBeTrue()
+
+		const second = await commander.connect(local(camera, shared))
 
 		expect(second.ok).toBeFalse()
 		expect(second.ok || second.reason).toBe('busy')
@@ -599,7 +1052,257 @@ describe('local session', () => {
 		expect(stopped.ok).toBeTrue()
 		expect(arbiter.availability(resourceKey(camera))).toBe('available')
 		expect(arbiter.availability(resourceKey(guideOutput))).toBe('available')
-		expect(arbiter.availability(localGuiderKey(camera, guideOutput))).toBe('leased')
+		expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('leased')
+		expect(arbiter.availability(localGuiderOutputKey(guideOutput))).toBe('leased')
+	}, 20000)
+
+	test('fails the disconnect when the activity could not stop the guider', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		const id = connect.value.id
+
+		expect((await commander.loop(id, { timeout: 15000 })).ok).toBeTrue()
+
+		const stopExposure = cameraManager.stopExposure.bind(cameraManager)
+
+		cameraManager.stopExposure = () => {
+			throw new Error('stop refused')
+		}
+
+		try {
+			const disconnected = await commander.disconnect(id)
+
+			expect(disconnected.ok).toBeFalse()
+			expect(disconnected.ok || disconnected.error).toContain('the guider did not stop')
+		} finally {
+			cameraManager.stopExposure = stopExposure
+		}
+
+		expect(commander.list()).toBeEmpty()
+		expect(arbiter.availability(resourceKey(camera))).toBe('available')
+		expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('available')
+		expect(arbiter.availability(localGuiderOutputKey(guideOutput))).toBe('available')
+	}, 20000)
+
+	test('detaches the local guider when its configuration fails', async () => {
+		const [camera, guideOutput] = await devices()
+
+		const gain = cameraManager.gain.bind(cameraManager)
+		const disableBlob = cameraManager.disableBlob.bind(cameraManager)
+		const disabled: string[] = []
+
+		cameraManager.gain = () => {
+			throw new Error('gain failed')
+		}
+
+		cameraManager.disableBlob = (device) => {
+			disabled.push(device.id)
+			disableBlob(device)
+		}
+
+		try {
+			const result = await commander.connect(local(camera, guideOutput))
+
+			expect(result.ok).toBeFalse()
+			expect(result.ok || result.error).toContain('gain failed')
+			expect(disabled).toEqual([camera.id])
+			expect(commander.list()).toBeEmpty()
+			expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('available')
+			expect(arbiter.availability(localGuiderOutputKey(guideOutput))).toBe('available')
+			expect(arbiter.availability(resourceKey(camera))).toBe('available')
+		} finally {
+			cameraManager.gain = gain
+			cameraManager.disableBlob = disableBlob
+		}
+	})
+
+	test('restores the frame delivery its next activity depends on', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		cameraManager.disableBlob(camera)
+
+		const looped = await commander.loop(connect.value.id, { timeout: 15000 })
+
+		expect(looped.ok).toBeTrue()
+		expect(commander.looping(connect.value.id)).toBeTrue()
+	}, 20000)
+
+	test('reconfigures the guide camera after another operation had it', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		const held = Promise.withResolvers<void>()
+		const owner = coordinator.start<void>('test', [{ key: resourceKey(camera), device: camera }], async () => {
+			cameraManager.bin(camera, 2, 2)
+			cameraManager.gain(camera, 42)
+			cameraManager.disableBlob(camera)
+			await held.promise
+			return { ok: true, value: undefined }
+		})
+
+		held.resolve()
+		expect((await owner.result).ok).toBeTrue()
+		expect(await waitUntil(() => camera.bin.x.value === 2)).toBeTrue()
+
+		const looped = await commander.loop(connect.value.id, { timeout: 15000 })
+
+		expect(looped.ok).toBeTrue()
+		expect(camera.bin.x.value).toBe(1)
+		expect(camera.gain.value).toBe(0)
+	}, 20000)
+
+	test('leaves the guide camera alone when disconnecting while another operation owns it', async () => {
+		const [camera, guideOutput] = await devices()
+
+		const addHandler = cameraManager.addHandler.bind(cameraManager)
+		const removeHandler = cameraManager.removeHandler.bind(cameraManager)
+		const stopExposure = cameraManager.stopExposure.bind(cameraManager)
+		const handlers = new Set<unknown>()
+		let stopped = 0
+
+		cameraManager.addHandler = (handler) => {
+			handlers.add(handler)
+			addHandler(handler)
+		}
+
+		cameraManager.removeHandler = (handler) => {
+			handlers.delete(handler)
+			removeHandler(handler)
+		}
+
+		try {
+			const connect = await commander.connect(local(camera, guideOutput))
+
+			expect(connect.ok).toBeTrue()
+			if (!connect.ok) throw new Error(connect.error)
+			expect(handlers.size).toBe(1)
+
+			const held = Promise.withResolvers<void>()
+			const owner = coordinator.start<void>('capture', [{ key: resourceKey(camera), device: camera }], async () => {
+				await held.promise
+				return { ok: true, value: undefined }
+			})
+
+			cameraManager.stopExposure = () => {
+				stopped++
+			}
+
+			try {
+				await commander.disconnect(connect.value.id)
+
+				expect(stopped).toBe(0)
+				expect(handlers).toBeEmpty()
+				expect(commander.list()).toBeEmpty()
+				expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('available')
+			} finally {
+				held.resolve()
+				await owner.result
+			}
+		} finally {
+			cameraManager.addHandler = addHandler
+			cameraManager.removeHandler = removeHandler
+			cameraManager.stopExposure = stopExposure
+		}
+	})
+
+	test('closes normally when another operation owns only the guide output', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		const held = Promise.withResolvers<void>()
+		const owner = coordinator.start<void>('slew', [{ key: resourceKey(guideOutput), device: guideOutput }], async () => {
+			await held.promise
+			return { ok: true, value: undefined }
+		})
+
+		try {
+			expect((await commander.disconnect(connect.value.id)).ok).toBeTrue()
+			expect(commander.list()).toBeEmpty()
+		} finally {
+			held.resolve()
+			await owner.result
+		}
+	})
+
+	test('keeps a looping run alive when a later command is refused', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		const id = connect.value.id
+
+		expect((await commander.loop(id, { timeout: 15000 })).ok).toBeTrue()
+		expect(arbiter.availability(resourceKey(camera))).toBe('leased')
+
+		const transport: { guide: () => unknown } = GuiderClient.prototype
+		const guide = transport.guide
+		transport.guide = () => false
+
+		try {
+			const refused = await commander.startGuiding(id, { timeout: 1000 })
+
+			expect(refused.ok).toBeFalse()
+			expect(refused.ok || refused.reason).toBe('commandFailed')
+			expect(arbiter.availability(resourceKey(camera))).toBe('leased')
+			expect(commander.looping(id)).toBeTrue()
+		} finally {
+			transport.guide = guide
+		}
+	}, 20000)
+
+	test('waits for the settle of the guide command before reporting a local guider as guiding', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		const id = connect.value.id
+		const transport = GuiderClient.prototype as unknown as { guide: () => unknown; emitEvent: (event: string, data?: Record<string, unknown>) => void }
+		const guide = transport.guide
+		const clients: { emitEvent: (event: string, data?: Record<string, unknown>) => void }[] = []
+
+		// The local client announces guiding as soon as it is commanded, before its loop has processed a
+		// frame, and only settles once frames start arriving.
+		transport.guide = function (this: (typeof clients)[number]) {
+			clients.push(this)
+			this.emitEvent('SettleBegin')
+			this.emitEvent('StartGuiding')
+			return true
+		}
+
+		try {
+			const announced = await commander.startGuiding(id, { timeout: 500 })
+
+			expect(announced.ok).toBeFalse()
+			expect(announced.ok || announced.reason).toBe('timeout')
+
+			const guided = commander.startGuiding(id, { timeout: 5000 })
+
+			expect(await waitUntil(() => clients.length === 2)).toBeTrue()
+			clients[1].emitEvent('SettleDone', { Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+
+			expect((await guided).ok).toBeTrue()
+			expect(commander.running(id)).toBeTrue()
+		} finally {
+			transport.guide = guide
+		}
 	}, 20000)
 
 	test('refuses to acquire the guide camera while another operation owns it', async () => {

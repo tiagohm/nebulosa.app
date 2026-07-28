@@ -964,6 +964,39 @@ describe('local session', () => {
 		expect(camera.gain.value).toBe(0)
 	}, 20000)
 
+	test('leaves the guide camera alone when disconnecting while another operation owns it', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		const held = Promise.withResolvers<void>()
+		const owner = coordinator.start<void>('capture', [{ key: resourceKey(camera), device: camera }], async () => {
+			await held.promise
+			return { ok: true, value: undefined }
+		})
+
+		const stopExposure = cameraManager.stopExposure.bind(cameraManager)
+		let stopped = 0
+
+		cameraManager.stopExposure = () => {
+			stopped++
+		}
+
+		try {
+			await commander.disconnect(connect.value.id)
+
+			expect(stopped).toBe(0)
+			expect(commander.list()).toBeEmpty()
+			expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('available')
+		} finally {
+			cameraManager.stopExposure = stopExposure
+			held.resolve()
+			await owner.result
+		}
+	})
+
 	test('refuses to acquire the guide camera while another operation owns it', async () => {
 		const [camera, guideOutput] = await devices()
 		const connect = await commander.connect(local(camera, guideOutput))

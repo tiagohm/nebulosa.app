@@ -681,13 +681,16 @@ class GuiderSession {
 	// its own cause, which is the one that explains why it ended.
 	async finished(): Promise<OperationResult<void>> {
 		const result = await this.ended.promise
+		// Released first, so the guider is quiesced gracefully before anything closes under it.
 		const released = await this.#releaseActivity()
-		return result.ok && !released.ok ? released : result
+		const detached = await this.#detachOwned()
+		const failed = !released.ok ? released : detached
+		return result.ok && !failed.ok ? failed : result
 	}
 
 	// Closes the transport after every nested scope has released its devices.
 	shutdown() {
-		if (this.#client === undefined) return
+		if (this.#closed) return
 
 		this.#closed = true
 		this.#detach()
@@ -719,6 +722,47 @@ class GuiderSession {
 		} catch (error) {
 			console.error('failed to close the guider transport:', error)
 		}
+	}
+
+	// Closes a local transport while this session owns the devices that closing it commands.
+	//
+	// A local client stops the exposure and turns frame delivery off on its guide camera as it lets go. An
+	// idle session deliberately owns nothing physical, so doing that from cleanup would reach a camera some
+	// other operation had acquired meanwhile and kill an exposure that has nothing to do with the guider.
+	// The devices are taken back for the length of the close, which has to happen here rather than in
+	// cleanup because a finalizing scope can no longer open a nested one.
+	async #detachOwned(): Promise<OperationResult<void>> {
+		const { camera, guideOutput } = this.target
+
+		if (this.#client === undefined || camera === undefined || guideOutput === undefined) return { ok: true, value: undefined }
+
+		const owned = await this.context.start<void>(
+			'guiderDetach',
+			[
+				{ key: resourceKey(camera), device: camera },
+				{ key: resourceKey(guideOutput), device: guideOutput },
+			],
+			() => {
+				this.#detach()
+				return { ok: true, value: undefined }
+			},
+		).result
+
+		if (owned.ok) return owned
+
+		// Only an owner elsewhere makes commanding the devices unsafe. A scope refused for any other reason
+		// means this operation is already unwinding, taking its devices with it, and closing normally is
+		// both safe and necessary.
+		if (owned.reason !== 'busy') {
+			this.#detach()
+			return owned
+		}
+
+		// The manager keeps a handler nobody reads, which wastes work on every frame the new owner takes.
+		// That is still better than stopping an exposure this session has no claim over.
+		console.error('abandoning the local guider transport: its devices are owned elsewhere')
+		this.#client = undefined
+		return owned
 	}
 
 	// Attaches a remote PHD2 client. The client is stored before the handshake because the server may push

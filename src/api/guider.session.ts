@@ -10,7 +10,7 @@ import type { GuiderClientMode, GuiderConnect, GuiderDither, GuiderDitherPhase, 
 import type { OperationContext, OperationCoordinator, OperationFailureReason, OperationHandle, OperationResult } from './operation'
 import { abortReason, waitForDeviceState } from './operation.wait'
 import { resourceKey } from './resource'
-import type { ResourceKey } from './resource'
+import type { ResourceKey, ResourceRequest } from './resource'
 import { errorMessage } from './util'
 
 // Either transport driving a guider: a remote PHD2 server or the in-process client over INDI devices.
@@ -77,8 +77,10 @@ export interface GuiderTarget {
 	// Logical resource identifying the target as a whole, for listings and diagnostics. It is not what is
 	// acquired: a local target is reserved device by device, so no single key describes what it holds.
 	readonly key: ResourceKey
-	// Logical resources acquired atomically, and what refuses an overlapping session.
-	readonly resources: readonly ResourceKey[]
+	// Logical resources acquired atomically, and what refuses an overlapping session. A local one names the
+	// device it stands for, so the arbiter can still index it by client and reach it on a lifecycle event
+	// even though the device itself is left acquirable.
+	readonly resources: readonly ResourceRequest[]
 	// Whether the target is a local device pair or a remote server.
 	readonly mode: GuiderClientMode
 	// Human-readable description used in listings and diagnostics.
@@ -257,46 +259,42 @@ export class GuiderCommander {
 		const started = Promise.withResolvers<OperationResult<GuiderSessionInfo>>()
 		const ended = Promise.withResolvers<OperationResult<void>>()
 
-		const operation = this.coordinator.start<void>(
-			'guiderSession',
-			target.value.resources.map((key) => ({ key })),
-			async (context) => {
-				const session = new GuiderSession(context, request, target.value, ended, {
-					cameraManager: this.cameraManager,
-					guideOutputManager: this.guideOutputManager,
-					options: this.options,
-				})
+		const operation = this.coordinator.start<void>('guiderSession', target.value.resources, async (context) => {
+			const session = new GuiderSession(context, request, target.value, ended, {
+				cameraManager: this.cameraManager,
+				guideOutputManager: this.guideOutputManager,
+				options: this.options,
+			})
 
-				const opened = await session.open()
+			const opened = await session.open()
 
-				if (!opened.ok) {
-					started.resolve(opened)
-					return opened
-				}
+			if (!opened.ok) {
+				started.resolve(opened)
+				return opened
+			}
 
-				// Registered before the teardown below so it runs last: the session is only forgotten once its
-				// devices are idle and the transport is gone.
-				context.onCleanup(() => {
-					if (this.#sessions.get(context.id)?.session === session) this.#sessions.delete(context.id)
-				})
+			// Registered before the teardown below so it runs last: the session is only forgotten once its
+			// devices are idle and the transport is gone.
+			context.onCleanup(() => {
+				if (this.#sessions.get(context.id)?.session === session) this.#sessions.delete(context.id)
+			})
 
-				context.onCleanup(() => session.shutdown())
+			context.onCleanup(() => session.shutdown())
 
-				// Cancellation aborts the signal but still waits for the executor to return, and the executor is
-				// parked on the promise below. Nothing else would ever resolve it, so a cancel from outside the
-				// commander, such as the cancelAll of a shutdown, has to end the session here.
-				if (context.signal.aborted) session.end({ ok: false, reason: abortReason(context.signal) })
-				else context.signal.addEventListener('abort', () => session.end({ ok: false, reason: abortReason(context.signal) }), { once: true })
+			// Cancellation aborts the signal but still waits for the executor to return, and the executor is
+			// parked on the promise below. Nothing else would ever resolve it, so a cancel from outside the
+			// commander, such as the cancelAll of a shutdown, has to end the session here.
+			if (context.signal.aborted) session.end({ ok: false, reason: abortReason(context.signal) })
+			else context.signal.addEventListener('abort', () => session.end({ ok: false, reason: abortReason(context.signal) }), { once: true })
 
-				this.#sessions.set(context.id, { session, operation })
-				guiderBus.emit('add', session.info)
-				started.resolve({ ok: true, value: session.info })
+			this.#sessions.set(context.id, { session, operation })
+			guiderBus.emit('add', session.info)
+			started.resolve({ ok: true, value: session.info })
 
-				// The executor stays pending on purpose: the session holds its logical resource until the
-				// transport goes away or a disconnect is requested.
-				return await session.finished()
-			},
-		)
+			// The executor stays pending on purpose: the session holds its logical resource until the
+			// transport goes away or a disconnect is requested.
+			return await session.finished()
+		})
 
 		// A refused scope never runs its executor, so the failure has to be taken from the operation.
 		void operation.result.then((result) => {
@@ -380,7 +378,7 @@ export class GuiderCommander {
 
 			const key = remoteGuiderKey(host, request.port)
 
-			return { ok: true, value: { key, resources: [key], mode: 'remote', label: `${host}:${request.port}` } }
+			return { ok: true, value: { key, resources: [{ key }], mode: 'remote', label: `${host}:${request.port}` } }
 		}
 
 		const camera = this.cameraManager.get(undefined, request.camera)
@@ -393,7 +391,10 @@ export class GuiderCommander {
 			ok: true,
 			value: {
 				key: localGuiderKey(camera, guideOutput),
-				resources: [localGuiderCameraKey(camera), localGuiderOutputKey(guideOutput)],
+				resources: [
+					{ key: localGuiderCameraKey(camera), device: camera },
+					{ key: localGuiderOutputKey(guideOutput), device: guideOutput },
+				],
 				mode: 'local',
 				label: `${camera.name} + ${guideOutput.name}`,
 				camera,

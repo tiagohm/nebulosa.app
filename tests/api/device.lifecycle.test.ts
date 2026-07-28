@@ -121,6 +121,30 @@ describe('device lifecycle', () => {
 		lifecycle.dispose()
 	})
 
+	test('cancels an owner that reserved the device under a logical resource', async () => {
+		const manager = new TestDeviceManager<Camera>()
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const lifecycle = new DeviceLifecycle(arbiter, coordinator)
+		const device = camera()
+		const key = resourceKey(device)
+
+		lifecycle.observe(manager)
+		manager.add(device)
+
+		const handle = coordinator.start('guiderSession', [{ key: `logical:guider:local:camera:${key}`, device }], waitForAbort)
+
+		expect(arbiter.availability(key)).toBe('available')
+
+		device.connected = false
+		manager.update(device, 'connected')
+
+		expect(handle.signal.aborted).toBeTrue()
+		expect(await handle.result).toEqual({ ok: false, reason: 'disconnected' })
+
+		lifecycle.dispose()
+	})
+
 	test('keeps reconnecting devices unavailable until they are quiescent', () => {
 		const manager = new TestDeviceManager<Camera>()
 		const arbiter = new ResourceArbiter()

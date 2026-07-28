@@ -760,6 +760,8 @@ describe('local session', () => {
 		expect(arbiter.availability(localGuiderOutputKey(guideOutput))).toBe('leased')
 		expect(arbiter.availability(resourceKey(camera))).toBe('available')
 		expect(arbiter.availability(resourceKey(guideOutput))).toBe('available')
+		expect(arbiter.ownersOfDevice(resourceKey(camera))).not.toBeEmpty()
+		expect(arbiter.ownersOfDevice(resourceKey(guideOutput))).not.toBeEmpty()
 	})
 
 	test('refuses a second session over the same devices even while the first is idle', async () => {

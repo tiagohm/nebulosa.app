@@ -153,7 +153,11 @@ export class DeviceLifecycle {
 		this.arbiter.markUnavailable({ key, device })
 		// Cancellation aborts owners synchronously; only its cleanup is awaited, and a manager callback is
 		// the wrong place to block. The resource stays unavailable either way, so a failure is reported.
-		void this.coordinator.cancelByResource(key, reason).catch((error: unknown) => console.error('failed to cancel owners of:', key, error))
+		//
+		// Owners are looked up by device rather than by key, because a device can be held under a logical
+		// resource that reserves it without leasing it, and such an owner would otherwise survive the
+		// disappearance of the very device it stands for.
+		void this.coordinator.cancelByDevice(key, reason).catch((error: unknown) => console.error('failed to cancel owners of:', key, error))
 	}
 
 	// Blocks acquisition while aggregating every live view under one generation guard.

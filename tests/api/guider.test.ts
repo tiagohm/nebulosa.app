@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { PHD2Client } from 'nebulosa/src/devices/guiding/phd2'
 import type { PHD2Command } from 'nebulosa/src/devices/guiding/phd2'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
@@ -349,6 +350,29 @@ describe('remote session', () => {
 
 		expect((await stopped).ok).toBeTrue()
 		expect(commander.running(id)).toBeFalse()
+	})
+
+	test('fails the stop when the transport rejects it instead of waiting for a state it will never reach', async () => {
+		const id = await connected()
+
+		const guided = commander.startGuiding(id)
+		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		server.push({ Event: 'StartGuiding' })
+		expect((await guided).ok).toBeTrue()
+
+		const transport: { stopCapture: () => unknown } = PHD2Client.prototype
+		const stopCapture = transport.stopCapture
+		transport.stopCapture = () => Promise.reject(new Error('stop refused'))
+
+		try {
+			const stopped = await commander.stopGuiding(id)
+
+			expect(stopped.ok).toBeFalse()
+			expect(stopped.ok || stopped.reason).toBe('commandFailed')
+			expect(stopped.ok || stopped.error).toContain('stop refused')
+		} finally {
+			transport.stopCapture = stopCapture
+		}
 	})
 
 	test('finds a star and reports acceptance', async () => {

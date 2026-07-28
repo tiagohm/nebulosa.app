@@ -176,6 +176,9 @@ const DEFAULT_GUIDING_TIMEOUT = 600000
 // Default milliseconds the guider has to become idle before its devices are released regardless.
 const DEFAULT_RELEASE_TIMEOUT = 30000
 
+// Milliseconds an abort path waits for its stop to complete before giving up on the answer.
+const ABORT_STOP_TIMEOUT = 1000
+
 // Signal for waits that must still run while the session is being torn down. Cleanup cannot inherit the
 // operation signal, which is aborted by then, and would never send the stop it exists for.
 const UNCANCELABLE = new AbortController().signal
@@ -454,7 +457,7 @@ class GuiderSession {
 							return this.#state === 'Looping' ? 'success' : 'pending'
 						},
 						command: () => this.#dispatch((client) => client.loop()),
-						abort: () => this.#stopCapture(),
+						abort: () => this.#abortCapture(),
 					})
 
 					return observed.ok ? { ok: true, value: undefined } : observed
@@ -508,7 +511,7 @@ class GuiderSession {
 							return !recalibrate || calibrating ? 'success' : 'pending'
 						},
 						command: () => this.#dispatch((client) => client.guide(recalibrate, this.#settings.settle)),
-						abort: () => this.#stopCapture(),
+						abort: () => this.#abortCapture(),
 					})
 
 					return observed.ok ? { ok: true, value: undefined } : observed
@@ -851,10 +854,24 @@ class GuiderSession {
 
 	// Stops capture on whichever transport is attached. A session with no transport left has nothing to
 	// stop, so this is a no-op rather than a failure: it also runs from abort and cleanup paths.
-	#stopCapture() {
+	//
+	// The outcome is awaited rather than discarded, so a stop the transport refuses fails its wait as a
+	// failed command instead of running to timeout with the rejection unhandled. Every caller of this bounds
+	// the wait itself, either through the timeout of the wait it commands or through #abortCapture.
+	async #stopCapture() {
 		const client = this.#client
 		if (client === undefined) return
-		void client.stopCapture()
+		await client.stopCapture()
+	}
+
+	// Commands a stop from an abort path, where the wait has already settled and only reaching the device
+	// still matters.
+	//
+	// The bound is what makes awaiting the stop safe here: a remote stop awaits an RPC reply, and the very
+	// reason a wait is being aborted may be the transport that will never answer it. A refusal still
+	// propagates, because it means the device was not told to stop and the caller has to hear that.
+	async #abortCapture() {
+		await Promise.race([this.#stopCapture(), Bun.sleep(ABORT_STOP_TIMEOUT)])
 	}
 
 	// Runs a transport command; a missing transport throws so the wait settles as a failed command.

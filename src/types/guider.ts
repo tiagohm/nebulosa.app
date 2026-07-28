@@ -48,6 +48,11 @@ export interface GuiderDither {
 	readonly settle: PHD2Settle
 }
 
+// Progress of one dither, from the command until its terminal settle. It is reported back to whoever asked
+// for the dither through the call itself, so a caller never has to tell its own progress apart from the
+// progress of another session.
+export type GuiderDitherPhase = 'dithering' | 'dithered' | 'settling' | 'settled'
+
 export interface GuiderStatus {
 	connected: boolean
 	looping: boolean

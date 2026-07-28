@@ -11,7 +11,7 @@ import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import { DEFAULT_GUIDER_DITHER } from '#/guider'
-import type { GuiderConnect, GuiderEvent, GuiderSessionInfo } from '#/guider'
+import type { GuiderConnect, GuiderDitherPhase, GuiderEvent, GuiderSessionInfo } from '#/guider'
 import { waitUntil } from './util'
 
 guiderBus.forceSync = true
@@ -410,6 +410,28 @@ describe('dither', () => {
 		} finally {
 			unsubscribe()
 		}
+	})
+
+	test('reports the phases of a dither to the caller that asked for it, and no others', async () => {
+		const id = await guiding()
+
+		const phases: GuiderDitherPhase[] = []
+		const dithered = commander.dither(id, undefined, { onPhase: (phase) => phases.push(phase) })
+
+		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		server.push({ Event: 'SettleBegin' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+
+		expect((await dithered).ok).toBeTrue()
+		expect(phases).toEqual(['dithering', 'settling', 'settled'])
+
+		// The session keeps settling after other commands, and the caller of a finished dither must not
+		// keep receiving those phases.
+		server.push({ Event: 'SettleBegin' })
+		server.push({ Event: 'Settling', Distance: 1, Time: 1, SettleTime: 10, StarLocked: true })
+		await Bun.sleep(50)
+
+		expect(phases).toEqual(['dithering', 'settling', 'settled'])
 	})
 
 	test('fails when the guider reports a failed settle', async () => {

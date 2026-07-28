@@ -6,7 +6,7 @@ import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
 import { EventBus } from 'src/shared/bus'
 import { exposureTimeInSeconds } from '#/camera'
 import { DEFAULT_GUIDER_DITHER, DEFAULT_GUIDER_EVENT } from '#/guider'
-import type { GuiderClientMode, GuiderConnect, GuiderDither, GuiderEvent, GuiderSessionInfo, GuiderState, GuiderStatus } from '#/guider'
+import type { GuiderClientMode, GuiderConnect, GuiderDither, GuiderDitherPhase, GuiderEvent, GuiderSessionInfo, GuiderState, GuiderStatus } from '#/guider'
 import type { OperationContext, OperationCoordinator, OperationFailureReason, OperationHandle, OperationResult } from './operation'
 import { abortReason, waitForDeviceState } from './operation.wait'
 import { resourceKey } from './resource'
@@ -25,6 +25,13 @@ export interface GuiderCommandOptions {
 	readonly signal?: AbortSignal
 	// Maximum milliseconds the commanded state may take to be observed.
 	readonly timeout?: number
+}
+
+// Overrides for one dither, which is the only command with progress between the request and its result.
+export interface GuiderDitherOptions extends GuiderCommandOptions {
+	// Receives the phases of this dither, and only of this one. The caller already holds the promise of the
+	// command, so its progress belongs to the same call rather than to a bus carrying every session.
+	readonly onPhase?: (phase: GuiderDitherPhase) => void
 }
 
 // Outcome of a star search. Neither transport publishes a terminal event for it, so acceptance of the
@@ -120,6 +127,8 @@ interface GuiderDitherOperation {
 	readonly settleStarted: PromiseWithResolvers<boolean>
 	// Caller signal that cancels the dither without ending the session.
 	readonly signal?: AbortSignal
+	// Receives each phase of this dither, so the caller does not observe anyone else's.
+	readonly onPhase?: (phase: GuiderDitherPhase) => void
 	// Settle timeout in seconds, as configured by the dither request.
 	readonly timeout: number
 	// Abort listener removed on terminalization.
@@ -313,7 +322,7 @@ export class GuiderCommander {
 	}
 
 	// Dithers on one session and resolves only after it settles, so a capture never exposes mid-move.
-	async dither(guider: string, request?: Partial<GuiderDither>, options: GuiderCommandOptions = {}) {
+	async dither(guider: string, request?: Partial<GuiderDither>, options: GuiderDitherOptions = {}) {
 		return await this.#command(guider, (session) => session.dither(request, options))
 	}
 
@@ -532,7 +541,7 @@ class GuiderSession {
 
 	// Dithers and settles. The settle may begin before a remote JSON-RPC reply arrives, so the terminal
 	// event and the command reply race each other and only the first one to conclude settles the dither.
-	async dither(request: Partial<GuiderDither> | undefined, options: GuiderCommandOptions): Promise<OperationResult<void>> {
+	async dither(request: Partial<GuiderDither> | undefined, options: GuiderDitherOptions): Promise<OperationResult<void>> {
 		return await this.#serialize('dither', options, async (signal) => {
 			const client = this.#client
 
@@ -541,7 +550,7 @@ class GuiderSession {
 			if (this.event.state !== 'guiding') return { ok: false, reason: 'unexpectedState', error: 'the guider is not guiding' }
 
 			const settle = request?.settle ?? this.#settings.settle
-			const operation = this.#startDither(settle.timeout, signal)
+			const operation = this.#startDither(settle.timeout, signal, options.onPhase)
 
 			this.#publishDither({ phase: 'dithering', guider: structuredClone(this.event) })
 
@@ -975,17 +984,23 @@ class GuiderSession {
 		guiderBus.emit('update', structuredClone(this.event))
 	}
 
-	// Fans out one dither phase.
+	// Fans out one dither phase for presentation, and hands it to whoever asked for this dither.
+	//
+	// The bus is a broadcast of every session, so nothing that depends on the progress being its own may
+	// read it. The caller gets the phase through the call it already made instead, which is why no consumer
+	// has to filter the bus by session.
 	#publishDither(event: GuiderDitherEvent) {
 		guiderBus.emit('dither', event)
+		this.#dither?.onPhase?.(event.phase)
 	}
 
 	// Creates the dither bookkeeping and arms the timer bounding the wait for SettleBegin.
-	#startDither(timeout: number, signal: AbortSignal) {
+	#startDither(timeout: number, signal: AbortSignal, onPhase?: (phase: GuiderDitherPhase) => void) {
 		const operation: GuiderDitherOperation = {
 			result: Promise.withResolvers(),
 			settleStarted: Promise.withResolvers(),
 			signal,
+			onPhase,
 			timeout,
 			finished: false,
 		}

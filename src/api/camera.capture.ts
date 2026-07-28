@@ -7,9 +7,7 @@ import type { BlobEncoding, PropertyState } from 'nebulosa/src/devices/indi/type
 import { base64Source, bufferSource } from 'nebulosa/src/io/io'
 import { DEFAULT_CAMERA_CAPTURE_EVENT, exposureTimeInMicroseconds, exposureTimeInSeconds } from '#/camera'
 import type { CameraCaptureEvent, CameraCaptureStart } from '#/camera'
-import type { GuiderDither } from '#/guider'
-import { guiderBus } from './guider.session'
-import type { GuiderDitherEvent } from './guider.session'
+import type { GuiderDither, GuiderDitherPhase } from '#/guider'
 import type { ImageProcessor } from './image'
 import type { OperationContext, OperationFailureReason, OperationResult, OperationScope } from './operation'
 import { abortableDelay, abortReason } from './operation.wait'
@@ -54,8 +52,17 @@ export interface CameraCaptureHandle {
 export interface CameraDitherer {
 	// Whether the named guider session is currently able to dither.
 	readonly running: (guider: string) => boolean
-	// Requests dither on one session and settles only after it reports its terminal result.
-	readonly dither: (guider: string, request: GuiderDither, options?: { readonly signal?: AbortSignal }) => Promise<OperationResult<void>>
+	// Requests dither on one session and settles only after it reports its terminal result. Progress comes
+	// back through this call, so the capture never observes the dither of a session it did not ask for.
+	readonly dither: (guider: string, request: GuiderDither, options?: CameraDitherOptions) => Promise<OperationResult<void>>
+}
+
+// Per-call collaborators handed to the guider when a capture dithers.
+export interface CameraDitherOptions {
+	// Cancels the dither when the capture stops, without ending the guider session that runs it.
+	readonly signal?: AbortSignal
+	// Receives the phases of this dither only.
+	readonly onPhase?: (phase: GuiderDitherPhase) => void
 }
 
 // Tunable physical timeouts used by deterministic tests and device-specific integration.
@@ -508,16 +515,13 @@ class CameraCaptureSession {
 		this.#state = 'dithering'
 		this.#event.state = 'dithering'
 		this.#emit()
-		const unsubscribe = guiderBus.subscribe('dither', this.#guiderDithered)
 
 		try {
-			const result = await ditherer.dither(guider, this.#request.dither, { signal: this.operationContext.signal })
+			const result = await ditherer.dither(guider, this.#request.dither, { signal: this.operationContext.signal, onPhase: this.#guiderDithered })
 			if (result.ok) return { ok: true, value: undefined }
 			return { ok: false, reason: result.reason === 'aborted' ? abortReason(this.operationContext.signal) : 'commandFailed', error: result.error ?? result.reason }
 		} catch (error) {
 			return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
-		} finally {
-			unsubscribe()
 		}
 	}
 
@@ -700,10 +704,13 @@ class CameraCaptureSession {
 		this.#event.totalProgress.elapsedTime = this.#totalExposureProgress[1] + elapsedTime
 	}
 
-	// Mirrors guider progress only while this session is actively awaiting its own dither call.
-	readonly #guiderDithered = (event: GuiderDitherEvent) => {
+	// Mirrors the progress of the dither this capture asked for.
+	//
+	// The guider hands each phase back through the call itself, so there is no channel through which
+	// another session could reach this one and nothing here has to be matched against a session id.
+	readonly #guiderDithered = (phase: GuiderDitherPhase) => {
 		if (this.#terminal || this.#state !== 'dithering') return
-		this.#event.state = event.phase === 'settling' || event.phase === 'settled' ? 'settling' : 'dithering'
+		this.#event.state = phase === 'settling' || phase === 'settled' ? 'settling' : 'dithering'
 		this.#emit()
 	}
 

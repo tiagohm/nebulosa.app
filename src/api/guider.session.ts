@@ -554,6 +554,7 @@ class GuiderSession {
 				await this.#withActivity(async () => {
 					let calibrating = false
 					let accepted = false
+					let announced = false
 
 					const observed = await this.#observe(signal, options.timeout ?? this.sessionContext.options.guidingTimeout ?? DEFAULT_GUIDING_TIMEOUT, {
 						evaluate: (update) => {
@@ -565,9 +566,12 @@ class GuiderSession {
 								return 'pending'
 							}
 
-							// Losing the star before guiding was ever reached means the run failed; losing it later
-							// is a transient condition of an already successful command.
-							if (this.#state === 'LostLock') return 'unexpectedState'
+							if (this.#state === 'Guiding') announced = true
+
+							// Losing the star before the guider ever announced guiding means the run never started.
+							// Losing it afterwards is for the settle to judge: dropped frames are what a settle
+							// exists to tolerate, and it reports the outcome either way within its own timeout.
+							if (this.#state === 'LostLock' && !announced) return 'unexpectedState'
 
 							// The guide command opens a settle of its own, and its terminal event is what says the
 							// run is established. Both transports announce guiding before that: the local client
@@ -670,8 +674,14 @@ class GuiderSession {
 	// Reports the remote PHD2 profile name, which a local session does not have.
 	async profile() {
 		const client = this.#client
+
 		if (!(client instanceof PHD2Client)) return undefined
-		return (await client.getProfile())?.name
+
+		// Bounded like every other request, and for the same reason: a transport that closes drops the
+		// command still in flight without settling it. This one is not a command, so nothing else would ever
+		// answer the status query that asked for it.
+		const profile = await this.#request(this.context.signal, this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT, async () => await client.getProfile())
+		return profile.ok ? profile.value?.name : undefined
 	}
 
 	// Ends the session with the given outcome, aborting the command in flight first so nothing is left
@@ -790,7 +800,17 @@ class GuiderSession {
 		this.#client = client
 
 		try {
-			if (!(await client.connect(host, port))) {
+			// The socket itself is bounded too. A host that accepts the connection attempt and then answers
+			// nothing would otherwise park the executor for however long the operating system takes to give
+			// up, holding the logical resource and delaying a shutdown against a server that never arrived.
+			const opened = await this.#request(this.context.signal, this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT, async () => await client.connect(host, port))
+
+			if (!opened.ok) {
+				this.#detach()
+				return opened
+			}
+
+			if (!opened.value) {
 				this.#detach()
 				return { ok: false, reason: 'commandFailed', error: 'failed to connect to the PHD2 server' }
 			}

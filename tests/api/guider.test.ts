@@ -285,6 +285,23 @@ describe('remote session', () => {
 		expect(result.ok || result.reason).toBe('disconnected')
 	})
 
+	test('gives up when the connection attempt itself never completes', async () => {
+		const transport: { connect: (hostname: string, port?: number) => Promise<boolean> } = PHD2Client.prototype
+		const connect = transport.connect
+		transport.connect = () => new Promise<boolean>(() => {})
+
+		try {
+			const result = await commander.connect(remote())
+
+			expect(result.ok).toBeFalse()
+			expect(result.ok || result.reason).toBe('timeout')
+			expect(commander.list()).toBeEmpty()
+			expect(arbiter.availability(remoteGuiderKey('127.0.0.1', port))).toBe('available')
+		} finally {
+			transport.connect = connect
+		}
+	})
+
 	test('fails to connect when no server accepts the connection', async () => {
 		server.stop()
 
@@ -316,6 +333,16 @@ describe('remote session', () => {
 		expect(looped.ok || looped.reason).toBe('disconnected')
 		expect((await disconnected).ok).toBeTrue()
 		expect(server.received('loop')).toBeFalse()
+	})
+
+	test('answers a status query even when the server never replies to it', async () => {
+		const id = await connected()
+		server.unanswered.add('get_profile')
+
+		const status = await commander.status(id)
+
+		expect(status.connected).toBeTrue()
+		expect(status.profile).toBeUndefined()
 	})
 
 	test('reports an unknown session instead of guessing which one was meant', async () => {
@@ -409,6 +436,20 @@ describe('remote session', () => {
 
 		expect((await guided).ok).toBeTrue()
 		expect(commander.running(id)).toBeTrue()
+	})
+
+	test('lets the settle judge a star lost after guiding was announced', async () => {
+		const id = await connected()
+
+		const guided = commander.startGuiding(id, { timeout: 5000 })
+
+		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'StarLost', Frame: 1, Time: 1, StarMass: 0, SNR: 0, HFD: 0, AvgDist: 0, Status: 1 })
+		server.push({ Event: 'GuideStep', Frame: 2, Time: 1, RADistanceRaw: 1, DECDistanceRaw: 1, RADuration: 1, RADirection: 'West', DECDuration: 1, DECDirection: 'North', StarMass: 1, SNR: 1, HFD: 1 })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 1 })
+
+		expect((await guided).ok).toBeTrue()
 	})
 
 	test('fails to start guiding when the star is lost before guiding begins', async () => {

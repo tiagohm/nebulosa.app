@@ -197,6 +197,32 @@ describe('remote session', () => {
 		expect(arbiter.availability(remoteGuiderKey('127.0.0.1', otherPort))).toBe('leased')
 	})
 
+	test('leaves a remote run alone when the session is disconnected mid-command', async () => {
+		const id = await connected()
+
+		const calibrated = commander.calibrate(id)
+
+		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		server.push({ Event: 'StartCalibration', Mount: 'Mount Simulator' })
+
+		const transport: { stopCapture: () => unknown } = PHD2Client.prototype
+		const stopCapture = transport.stopCapture
+		let stops = 0
+
+		transport.stopCapture = () => {
+			stops++
+			return Promise.resolve(0)
+		}
+
+		try {
+			expect((await commander.disconnect(id)).ok).toBeTrue()
+			expect((await calibrated).ok).toBeFalse()
+			expect(stops).toBe(0)
+		} finally {
+			transport.stopCapture = stopCapture
+		}
+	})
+
 	test('publishes add and remove for every session', async () => {
 		const added: GuiderSessionInfo[] = []
 		const removed: GuiderSessionInfo[] = []

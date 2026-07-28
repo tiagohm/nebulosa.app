@@ -1049,6 +1049,13 @@ class GuiderSession {
 	// reason a wait is being aborted may be the transport that will never answer it. A refusal still
 	// propagates, because it means the device was not told to stop and the caller has to hear that.
 	async #abortCapture() {
+		// A session on its way out must not stop the guider through this path. Disconnecting aborts the
+		// command in flight, and for a remote session that would send a stop to a PHD2 server which is an
+		// independent application: a calibration someone is watching there would die because a client of it
+		// closed its socket. A local session is stopped by the cleanup of its activity instead, which owns
+		// the devices until they are handed back and runs even while the operation is being cancelled.
+		if (this.#ending.signal.aborted) return
+
 		await Promise.race([this.#stopCapture(), Bun.sleep(ABORT_STOP_TIMEOUT)])
 	}
 

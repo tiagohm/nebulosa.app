@@ -624,6 +624,37 @@ describe('local session', () => {
 		expect(arbiter.availability(localGuiderKey(camera, guideOutput))).toBe('leased')
 	}, 20000)
 
+	test('detaches the local guider when its configuration fails', async () => {
+		const [camera, guideOutput] = await devices()
+
+		const gain = cameraManager.gain.bind(cameraManager)
+		const disableBlob = cameraManager.disableBlob.bind(cameraManager)
+		const disabled: string[] = []
+
+		cameraManager.gain = () => {
+			throw new Error('gain failed')
+		}
+
+		cameraManager.disableBlob = (device) => {
+			disabled.push(device.id)
+			disableBlob(device)
+		}
+
+		try {
+			const result = await commander.connect(local(camera, guideOutput))
+
+			expect(result.ok).toBeFalse()
+			expect(result.ok || result.error).toContain('gain failed')
+			expect(disabled).toEqual([camera.id])
+			expect(commander.list()).toBeEmpty()
+			expect(arbiter.availability(localGuiderKey(camera, guideOutput))).toBe('available')
+			expect(arbiter.availability(resourceKey(camera))).toBe('available')
+		} finally {
+			cameraManager.gain = gain
+			cameraManager.disableBlob = disableBlob
+		}
+	})
+
 	test('refuses to acquire the guide camera while another operation owns it', async () => {
 		const [camera, guideOutput] = await devices()
 		const connect = await commander.connect(local(camera, guideOutput))

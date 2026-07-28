@@ -599,13 +599,29 @@ class GuiderSession {
 
 	// Closes the transport after every nested scope has released its devices.
 	shutdown() {
+		if (this.#client === undefined) return
+
+		this.#closed = true
+		this.#detach()
+		this.#finishDither({ ok: false, reason: 'disconnected' })
+
+		// Wakes anything still waiting so it settles as disconnected instead of running to its timeout.
+		this.#emit({ state: this.#state, closed: true })
+		guiderBus.emit('remove', this.info)
+	}
+
+	// Drops the attached transport and tears it down, in that order so a callback fired by the teardown is
+	// already refused by client identity.
+	//
+	// Clearing the reference is not enough on its own: a local client that connected holds a handler on the
+	// camera manager and has blob delivery enabled, and a remote one holds an open socket. Left behind, they
+	// keep driving devices this session no longer owns and a retry attaches a second client over the first.
+	#detach() {
 		const client = this.#client
 
 		if (client === undefined) return
 
-		this.#closed = true
 		this.#client = undefined
-		this.#finishDither({ ok: false, reason: 'disconnected' })
 
 		try {
 			if (client instanceof PHD2Client) client.close()
@@ -613,31 +629,30 @@ class GuiderSession {
 		} catch (error) {
 			console.error('failed to close the guider transport:', error)
 		}
-
-		// Wakes anything still waiting so it settles as disconnected instead of running to its timeout.
-		this.#emit({ state: this.#state, closed: true })
-		guiderBus.emit('remove', this.info)
 	}
 
 	// Attaches a remote PHD2 client. The client is stored before the handshake because the server may push
 	// events as soon as the socket is up, and an event dropped there would be an app state never applied.
+	//
+	// Everything after the socket is up is inside the same guard: the session is only given a cleanup that
+	// closes its transport once open() has succeeded, so anything failing here has to close its own socket.
 	async #openRemote(host: string, port: number): Promise<OperationResult<void>> {
 		const client = new PHD2Client({ handler: this.#handler })
 		this.#client = client
 
 		try {
 			if (!(await client.connect(host, port))) {
-				this.#client = undefined
+				this.#detach()
 				return { ok: false, reason: 'commandFailed', error: 'failed to connect to the PHD2 server' }
 			}
+
+			Object.assign(this.#settings, this.request.dither)
+			this.#pixelScale = (await client.getPixelScale()) || 1
+			return { ok: true, value: undefined }
 		} catch (error) {
-			this.#client = undefined
+			this.#detach()
 			return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
 		}
-
-		Object.assign(this.#settings, this.request.dither)
-		this.#pixelScale = (await client.getPixelScale()) || 1
-		return { ok: true, value: undefined }
 	}
 
 	// Attaches the in-process guider and applies its capture configuration under a scope owning both
@@ -666,29 +681,38 @@ class GuiderSession {
 				this.#client = client
 
 				if (!client.connect(camera, guideOutput, request)) {
-					this.#client = undefined
+					this.#detach()
 					return { ok: false, reason: 'commandFailed', error: 'failed to start the local guider' }
 				}
 
-				const { capture } = request
+				try {
+					const { capture } = request
 
-				if (capture.width > 0 && capture.height > 0 && capture.subframe) cameraManager.frame(camera, capture.x, capture.y, capture.width, capture.height)
-				else if (camera.frame.width.max > 0 && camera.frame.height.max > 0) cameraManager.frame(camera, 0, 0, camera.frame.width.max, camera.frame.height.max)
-				cameraManager.frameType(camera, capture.frameType)
-				if (capture.frameFormat) cameraManager.frameFormat(camera, capture.frameFormat)
-				cameraManager.bin(camera, capture.binX, capture.binY)
-				cameraManager.gain(camera, capture.gain)
-				cameraManager.offset(camera, capture.offset)
-				cameraManager.transferFormat(camera, capture.transferFormat)
-				cameraManager.compression(camera, capture.compressed)
-				client.setExposure(exposureTimeInSeconds(capture.exposureTime, capture.exposureTimeUnit))
+					if (capture.width > 0 && capture.height > 0 && capture.subframe) cameraManager.frame(camera, capture.x, capture.y, capture.width, capture.height)
+					else if (camera.frame.width.max > 0 && camera.frame.height.max > 0) cameraManager.frame(camera, 0, 0, camera.frame.width.max, camera.frame.height.max)
+					cameraManager.frameType(camera, capture.frameType)
+					if (capture.frameFormat) cameraManager.frameFormat(camera, capture.frameFormat)
+					cameraManager.bin(camera, capture.binX, capture.binY)
+					cameraManager.gain(camera, capture.gain)
+					cameraManager.offset(camera, capture.offset)
+					cameraManager.transferFormat(camera, capture.transferFormat)
+					cameraManager.compression(camera, capture.compressed)
+					client.setExposure(exposureTimeInSeconds(capture.exposureTime, capture.exposureTimeUnit))
 
-				return { ok: true, value: client }
+					return { ok: true, value: client }
+				} catch (error) {
+					// connect() already attached the client to the camera manager, so a configuration that fails
+					// has to detach it here rather than leave it subscribed to a device the session gives back.
+					this.#detach()
+					return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
+				}
 			},
 		).result
 
+		// The scope may also fail without its executor ever reporting it, when it is refused or canceled after
+		// the client attached, so the transport is torn down on every failure and not only on a thrown one.
 		if (!configured.ok) {
-			this.#client = undefined
+			this.#detach()
 			return configured
 		}
 

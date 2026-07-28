@@ -527,7 +527,7 @@ describe('remote session', () => {
 
 		expect(stopped.ok).toBeFalse()
 		expect(stopped.ok || stopped.reason).toBe('commandFailed')
-		expect(stopped.ok || stopped.error).toContain('refused to stop')
+		expect(stopped.ok || stopped.error).toContain('refused the command')
 	})
 
 	test('fails the stop when the transport rejects it instead of waiting for a state it will never reach', async () => {
@@ -724,7 +724,7 @@ describe('dither', () => {
 		expect((await dithered).ok).toBeTrue()
 	})
 
-	test('retains the movement when a remote dither leaves its outcome unknown', async () => {
+	test('releases the session when the server refuses a dither outright', async () => {
 		const id = await guiding()
 
 		server.refused.add('dither')
@@ -733,6 +733,35 @@ describe('dither', () => {
 
 		expect(dithered.ok).toBeFalse()
 		expect(dithered.ok || dithered.reason).toBe('commandFailed')
+
+		// The server decided against the move, so there is no movement to wait out.
+		const again = await commander.dither(id)
+
+		expect(again.ok).toBeFalse()
+		expect(again.ok || again.reason).toBe('commandFailed')
+	})
+
+	test('retains the movement when the reply to a dither is lost', async () => {
+		const id = await guiding()
+
+		type Send = (method: string, params?: Record<string, unknown> | unknown[], timeout?: number) => Promise<unknown>
+		const transport = PHD2Client.prototype as unknown as { send: Send }
+		const send = transport.send
+
+		// The command reached the guider; only its answer did not, so the mount may well be moving.
+		transport.send = function (method, params, timeout) {
+			if (method === 'dither') return Promise.resolve({ success: false, error: 'timeout' })
+			return send.call(this, method, params, timeout)
+		}
+
+		try {
+			const dithered = await commander.dither(id)
+
+			expect(dithered.ok).toBeFalse()
+			expect(dithered.ok || dithered.reason).toBe('commandFailed')
+		} finally {
+			transport.send = send
+		}
 
 		const refused = await commander.dither(id)
 

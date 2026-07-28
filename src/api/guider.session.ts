@@ -1,5 +1,5 @@
 import { PHD2Client } from 'nebulosa/src/devices/guiding/phd2'
-import type { PHD2AppState, PHD2Command, PHD2Events } from 'nebulosa/src/devices/guiding/phd2'
+import type { PHD2AppState, PHD2Command, PHD2CommandResult, PHD2Events } from 'nebulosa/src/devices/guiding/phd2'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { CameraManager, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
 import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
@@ -116,6 +116,30 @@ export function localGuiderCameraKey(camera: Camera): ResourceKey {
 // Builds the logical key reserving a guide output, for the same reason as the camera above.
 export function localGuiderOutputKey(guideOutput: GuideOutput): ResourceKey {
 	return `${GUIDER_RESOURCE_PREFIX}:local:output:${resourceKey(guideOutput)}`
+}
+
+// What a transport answers when told to do something: the local client reports acceptance directly, the
+// remote one reports the outcome of the JSON-RPC call that carried the command.
+type GuiderCommandAnswer = boolean | PHD2CommandResult<unknown>
+
+// Why a remote command did not succeed: a plain tag for a lost reply or a broken socket, and the server's
+// own error object for a refusal.
+type GuiderCommandFailure = Extract<PHD2CommandResult<unknown>, { success: false }>['error']
+
+// Renders one of those causes for a diagnostic message.
+function commandError(error: GuiderCommandFailure) {
+	return typeof error === 'string' ? error : `${error.code} ${error.message}`
+}
+
+// Reads whether a transport took a dither, and when it did not, whether the mount may still be moving.
+//
+// Only a reply that never arrived leaves that unknown: a server that answered an error decided against the
+// move, and a command that never left the socket moved nothing either, so neither leaves a movement to
+// retain. The local client refuses just as plainly.
+function ditherRefusal(answer: GuiderCommandAnswer) {
+	if (typeof answer === 'boolean') return answer ? undefined : { outstanding: false, error: 'the dither command was rejected' }
+	if (answer.success) return undefined
+	return { outstanding: answer.error === 'timeout', error: `the dither command was rejected: ${commandError(answer.error)}` }
 }
 
 // Timing overrides, exposed so tests can drive the same code paths without real device latency.
@@ -534,7 +558,17 @@ class GuiderSession {
 
 			if (client === undefined) return { ok: false, reason: 'disconnected' }
 
-			const selected = await this.#request(signal, options.timeout ?? this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT, async () => await client.findStar())
+			const selected = await this.#request(signal, options.timeout ?? this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT, async () => {
+				if (!(client instanceof PHD2Client)) return client.findStar()
+
+				// A search the server refused is a failed command, not an empty answer: reporting it as no
+				// star found would blame the sky for something the guider never looked at.
+				const found = await client.findStar()
+
+				if (!found.success) throw new Error(commandError(found.error))
+
+				return found.result
+			})
 
 			if (!selected.ok) return selected
 
@@ -648,13 +682,10 @@ class GuiderSession {
 				// directly instead of through the wrapper.
 				const timeout = Math.max(15000, (Math.max(0, settle.time) + Math.max(1, settle.timeout)) * 1000 + 5000)
 				const dithered = client instanceof PHD2Client ? await client.send<number>('dither', { amount, raOnly, settle }, timeout) : client.dither(amount, raOnly, settle)
+				const refusal = ditherRefusal(dithered)
 
-				if (dithered === undefined || dithered === false) {
-					// PHD2 answers undefined both when it refuses the command and when its reply is merely lost,
-					// so a remote failure cannot prove the mount stayed still and the movement has to be retained
-					// as if it were under way. The local client returns false only for an outright refusal, which
-					// moved nothing.
-					this.#finishDither({ ok: false, reason: 'commandFailed', error: 'the dither command was rejected' }, client instanceof PHD2Client)
+				if (refusal !== undefined) {
+					this.#finishDither({ ok: false, reason: 'commandFailed', error: refusal.error }, refusal.outstanding)
 				} else if (!operation.finished) {
 					await operation.settleStarted.promise
 				}
@@ -685,7 +716,7 @@ class GuiderSession {
 		// command still in flight without settling it. This one is not a command, so nothing else would ever
 		// answer the status query that asked for it.
 		const profile = await this.#request(this.context.signal, this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT, async () => await client.getProfile())
-		return profile.ok ? profile.value?.name : undefined
+		return profile.ok && profile.value.success ? profile.value.result.name : undefined
 	}
 
 	// Ends the session with the given outcome, aborting the command in flight first so nothing is left
@@ -831,7 +862,9 @@ class GuiderSession {
 				return scale
 			}
 
-			this.#pixelScale = scale.value || 1
+			// A server that will not report its scale is still usable; angular guide errors just fall back to
+			// being reported in pixels.
+			this.#pixelScale = (scale.value.success ? scale.value.result : 0) || 1
 			return { ok: true, value: undefined }
 		} catch (error) {
 			this.#detach()
@@ -963,21 +996,16 @@ class GuiderSession {
 	// asked for each time rather than remembered from the handshake. A server that will not answer costs
 	// only the allowance it would have added, which is the same bound the loop had before.
 	//
-	// The local exposure is taken from the connect request rather than from the client's own getExposure,
-	// which reports seconds where the identically named PHD2 call reports milliseconds. Reading both through
-	// one call would silently be off by a thousand, so this stays split until those units agree.
+	// Both transports report it in milliseconds, and both report what is actually configured now rather than
+	// what the session was opened with, so a guider re-exposed since then is bounded by its current cadence.
 	async #guideExposure(signal: AbortSignal, timeout: number) {
-		if (this.request.mode === 'local') {
-			const { exposureTime, exposureTimeUnit } = this.request.capture
-			return Math.max(0, exposureTimeInMilliseconds(exposureTime, exposureTimeUnit))
-		}
-
 		const client = this.#client
 
-		if (!(client instanceof PHD2Client)) return 0
+		if (client === undefined) return 0
+		if (!(client instanceof PHD2Client)) return Math.max(0, client.getExposure())
 
 		const exposure = await this.#request(signal, timeout, async () => await client.getExposure())
-		return exposure.ok && exposure.value !== undefined ? Math.max(0, exposure.value) : 0
+		return exposure.ok && exposure.value.success ? Math.max(0, exposure.value.result) : 0
 	}
 
 	// Awaits one transport request under a bound the session controls, rather than one the transport owes.
@@ -1136,24 +1164,12 @@ class GuiderSession {
 	// Stops capture on whichever transport is attached. A session with no transport left has nothing to
 	// stop, so this is a no-op rather than a failure: it also runs from abort and cleanup paths.
 	//
-	// The outcome is awaited rather than discarded, so a stop the transport refuses fails its wait as a
-	// failed command instead of running to timeout with the rejection unhandled. Every caller of this bounds
-	// the wait itself, either through the timeout of the wait it commands or through #abortCapture.
+	// The outcome is read rather than discarded, so a stop the transport refuses fails its wait as a failed
+	// command instead of running to timeout. Every caller of this bounds the wait itself, either through the
+	// timeout of the wait it commands or through #abortCapture.
 	async #stopCapture() {
-		const client = this.#client
-
-		if (client === undefined) return
-
-		// Only the remote transport answers a stop. PHD2 resolves undefined when it refuses the command or
-		// its reply times out, so a stop that never reached the server would otherwise pass for dispatched
-		// and leave the wait running to its own timeout. The local client returns nothing either way and
-		// reports a failure by throwing, so reading its result would report every stop as refused.
-		if (!(client instanceof PHD2Client)) {
-			client.stopCapture()
-			return
-		}
-
-		if ((await client.stopCapture()) === undefined) throw new Error('the guider refused to stop capturing')
+		if (this.#client === undefined) return
+		await this.#dispatch((client) => client.stopCapture())
 	}
 
 	// Commands a stop from an abort path, where the wait has already settled and only reaching the device
@@ -1175,19 +1191,25 @@ class GuiderSession {
 
 	// Runs a transport command; a missing transport throws so the wait settles as a failed command.
 	//
-	// Neither transport rejects when it refuses a command: PHD2 answers an error and its wrapper resolves
-	// undefined, and the local client returns false. Left unread, a refusal is indistinguishable from a
-	// command still on its way, and the wait would run to its full timeout before reporting one as the other
-	// while the guider was never going to move. Throwing turns the refusal into the failed command it is.
-	async #dispatch(command: (client: GuiderTransport) => unknown) {
+	// Neither transport rejects when it refuses a command: the local client answers false and the remote one
+	// a JSON-RPC result that failed. Left unread, a refusal is indistinguishable from a command still on its
+	// way, and the wait would run to its full timeout before reporting one as the other while the guider was
+	// never going to move. Throwing turns the refusal into the failed command it is.
+	//
+	// The answer is typed rather than unknown on purpose: it is the only thing standing between a refusal and
+	// a wait that ignores it, so a transport whose answers change has to stop compiling here.
+	async #dispatch(command: (client: GuiderTransport) => GuiderCommandAnswer | Promise<GuiderCommandAnswer>) {
 		const client = this.#client
 
 		if (client === undefined) throw new Error('the guider is not connected')
 
-		// A successful PHD2 command answers zero, so only these two values mean refusal.
 		const accepted = await command(client)
 
-		if (accepted === undefined || accepted === false) throw new Error('the guider refused the command')
+		if (typeof accepted === 'boolean') {
+			if (!accepted) throw new Error('the guider refused the command')
+		} else if (!accepted.success) {
+			throw new Error(`the guider refused the command: ${commandError(accepted.error)}`)
+		}
 	}
 
 	// Registers a waiter and returns its idempotent unsubscriber.

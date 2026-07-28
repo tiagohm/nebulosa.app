@@ -74,8 +74,11 @@ const GUIDER_RESOURCE_PREFIX = 'logical:guider'
 // The key describes the target rather than the service, so several guiders coexist while a duplicate is
 // refused by the arbiter itself instead of by a check in the commander.
 export interface GuiderTarget {
-	// Logical resource identifying what is occupied.
+	// Logical resource identifying the target as a whole, for listings and diagnostics. It is not what is
+	// acquired: a local target is reserved device by device, so no single key describes what it holds.
 	readonly key: ResourceKey
+	// Logical resources acquired atomically, and what refuses an overlapping session.
+	readonly resources: readonly ResourceKey[]
 	// Whether the target is a local device pair or a remote server.
 	readonly mode: GuiderClientMode
 	// Human-readable description used in listings and diagnostics.
@@ -92,10 +95,25 @@ export function remoteGuiderKey(host: string, port: number): ResourceKey {
 	return `${GUIDER_RESOURCE_PREFIX}:remote:${host.trim().toLowerCase()}:${port}`
 }
 
-// Builds the logical key of a local guider from the physical devices it drives, which is what refuses a
-// second session over the same pair even while the first one is idle and owns no device lease.
+// Builds the key identifying a local guider by the pair of devices it drives. It names the target in
+// listings; what the session actually reserves are the two keys below.
 export function localGuiderKey(camera: Camera, guideOutput: GuideOutput): ResourceKey {
 	return `${GUIDER_RESOURCE_PREFIX}:local:${resourceKey(camera)}:${resourceKey(guideOutput)}`
+}
+
+// Builds the logical key reserving a guide camera, which is what refuses a second session over it even
+// while the first one is idle and owns no lease on the device itself.
+//
+// The pair is reserved one device at a time rather than as a whole, because a key naming both would differ
+// for every combination: two sessions sharing only the camera would each get their own key and both be
+// accepted, and then both would configure that camera and both would receive its frames.
+export function localGuiderCameraKey(camera: Camera): ResourceKey {
+	return `${GUIDER_RESOURCE_PREFIX}:local:camera:${resourceKey(camera)}`
+}
+
+// Builds the logical key reserving a guide output, for the same reason as the camera above.
+export function localGuiderOutputKey(guideOutput: GuideOutput): ResourceKey {
+	return `${GUIDER_RESOURCE_PREFIX}:local:output:${resourceKey(guideOutput)}`
 }
 
 // Timing overrides, exposed so tests can drive the same code paths without real device latency.
@@ -239,42 +257,46 @@ export class GuiderCommander {
 		const started = Promise.withResolvers<OperationResult<GuiderSessionInfo>>()
 		const ended = Promise.withResolvers<OperationResult<void>>()
 
-		const operation = this.coordinator.start<void>('guiderSession', [{ key: target.value.key }], async (context) => {
-			const session = new GuiderSession(context, request, target.value, ended, {
-				cameraManager: this.cameraManager,
-				guideOutputManager: this.guideOutputManager,
-				options: this.options,
-			})
+		const operation = this.coordinator.start<void>(
+			'guiderSession',
+			target.value.resources.map((key) => ({ key })),
+			async (context) => {
+				const session = new GuiderSession(context, request, target.value, ended, {
+					cameraManager: this.cameraManager,
+					guideOutputManager: this.guideOutputManager,
+					options: this.options,
+				})
 
-			const opened = await session.open()
+				const opened = await session.open()
 
-			if (!opened.ok) {
-				started.resolve(opened)
-				return opened
-			}
+				if (!opened.ok) {
+					started.resolve(opened)
+					return opened
+				}
 
-			// Registered before the teardown below so it runs last: the session is only forgotten once its
-			// devices are idle and the transport is gone.
-			context.onCleanup(() => {
-				if (this.#sessions.get(context.id)?.session === session) this.#sessions.delete(context.id)
-			})
+				// Registered before the teardown below so it runs last: the session is only forgotten once its
+				// devices are idle and the transport is gone.
+				context.onCleanup(() => {
+					if (this.#sessions.get(context.id)?.session === session) this.#sessions.delete(context.id)
+				})
 
-			context.onCleanup(() => session.shutdown())
+				context.onCleanup(() => session.shutdown())
 
-			// Cancellation aborts the signal but still waits for the executor to return, and the executor is
-			// parked on the promise below. Nothing else would ever resolve it, so a cancel from outside the
-			// commander, such as the cancelAll of a shutdown, has to end the session here.
-			if (context.signal.aborted) session.end({ ok: false, reason: abortReason(context.signal) })
-			else context.signal.addEventListener('abort', () => session.end({ ok: false, reason: abortReason(context.signal) }), { once: true })
+				// Cancellation aborts the signal but still waits for the executor to return, and the executor is
+				// parked on the promise below. Nothing else would ever resolve it, so a cancel from outside the
+				// commander, such as the cancelAll of a shutdown, has to end the session here.
+				if (context.signal.aborted) session.end({ ok: false, reason: abortReason(context.signal) })
+				else context.signal.addEventListener('abort', () => session.end({ ok: false, reason: abortReason(context.signal) }), { once: true })
 
-			this.#sessions.set(context.id, { session, operation })
-			guiderBus.emit('add', session.info)
-			started.resolve({ ok: true, value: session.info })
+				this.#sessions.set(context.id, { session, operation })
+				guiderBus.emit('add', session.info)
+				started.resolve({ ok: true, value: session.info })
 
-			// The executor stays pending on purpose: the session holds its logical resource until the
-			// transport goes away or a disconnect is requested.
-			return await session.finished()
-		})
+				// The executor stays pending on purpose: the session holds its logical resource until the
+				// transport goes away or a disconnect is requested.
+				return await session.finished()
+			},
+		)
 
 		// A refused scope never runs its executor, so the failure has to be taken from the operation.
 		void operation.result.then((result) => {
@@ -356,7 +378,9 @@ export class GuiderCommander {
 
 			if (host.length === 0) return { ok: false, reason: 'unexpectedState', error: 'the guider host is empty' }
 
-			return { ok: true, value: { key: remoteGuiderKey(host, request.port), mode: 'remote', label: `${host}:${request.port}` } }
+			const key = remoteGuiderKey(host, request.port)
+
+			return { ok: true, value: { key, resources: [key], mode: 'remote', label: `${host}:${request.port}` } }
 		}
 
 		const camera = this.cameraManager.get(undefined, request.camera)
@@ -365,7 +389,17 @@ export class GuiderCommander {
 		if (camera === undefined || !camera.connected) return { ok: false, reason: 'disconnected', error: 'the guide camera is not connected' }
 		if (guideOutput === undefined || !guideOutput.connected) return { ok: false, reason: 'disconnected', error: 'the guide output is not connected' }
 
-		return { ok: true, value: { key: localGuiderKey(camera, guideOutput), mode: 'local', label: `${camera.name} + ${guideOutput.name}`, camera, guideOutput } }
+		return {
+			ok: true,
+			value: {
+				key: localGuiderKey(camera, guideOutput),
+				resources: [localGuiderCameraKey(camera), localGuiderOutputKey(guideOutput)],
+				mode: 'local',
+				label: `${camera.name} + ${guideOutput.name}`,
+				camera,
+				guideOutput,
+			},
+		}
 	}
 
 	// Routes a command to one session, reporting an unknown id as an expected failure.

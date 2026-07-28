@@ -67,7 +67,8 @@ export interface GuiderSessionInfo {
 	readonly id: string
 	// Whether the session drives local devices or talks to a remote server.
 	readonly mode: GuiderClientMode
-	// Logical resource key of what the session occupies, which is what refuses a duplicate connection.
+	// Logical key identifying what the session occupies. A local session reserves its camera and its guide
+	// output separately, so this names the pair for listings rather than being the single lease it holds.
 	readonly key: string
 	// Human-readable description of the target, for listings and diagnostics.
 	readonly target: string

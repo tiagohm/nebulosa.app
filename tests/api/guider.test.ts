@@ -7,7 +7,7 @@ import { CameraManager, FocuserManager, GuideOutputManager, MountManager, Rotato
 import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
-import { guiderBus, GuiderCommander, localGuiderKey, remoteGuiderKey } from 'src/api/guider.session'
+import { guiderBus, GuiderCommander, localGuiderCameraKey, localGuiderKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
@@ -663,7 +663,9 @@ describe('local session', () => {
 
 		expect(result.ok).toBeTrue()
 		expect(result.ok && result.value.mode).toBe('local')
-		expect(arbiter.availability(localGuiderKey(camera, guideOutput))).toBe('leased')
+		expect(result.ok && result.value.key).toBe(localGuiderKey(camera, guideOutput))
+		expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('leased')
+		expect(arbiter.availability(localGuiderOutputKey(guideOutput))).toBe('leased')
 		expect(arbiter.availability(resourceKey(camera))).toBe('available')
 		expect(arbiter.availability(resourceKey(guideOutput))).toBe('available')
 	})
@@ -674,6 +676,21 @@ describe('local session', () => {
 		expect((await commander.connect(local(camera, guideOutput))).ok).toBeTrue()
 
 		const second = await commander.connect(local(camera, guideOutput))
+
+		expect(second.ok).toBeFalse()
+		expect(second.ok || second.reason).toBe('busy')
+		expect(commander.list()).toHaveLength(1)
+	})
+
+	test('refuses a second session that shares only the guide camera of the first', async () => {
+		const [camera, guideOutput] = await devices()
+		const shared = guideOutputManager.get(client, 'Camera Simulator')!
+
+		expect(shared).toBeDefined()
+		expect(shared.id).not.toBe(guideOutput.id)
+		expect((await commander.connect(local(camera, guideOutput))).ok).toBeTrue()
+
+		const second = await commander.connect(local(camera, shared))
 
 		expect(second.ok).toBeFalse()
 		expect(second.ok || second.reason).toBe('busy')
@@ -699,7 +716,8 @@ describe('local session', () => {
 		expect(stopped.ok).toBeTrue()
 		expect(arbiter.availability(resourceKey(camera))).toBe('available')
 		expect(arbiter.availability(resourceKey(guideOutput))).toBe('available')
-		expect(arbiter.availability(localGuiderKey(camera, guideOutput))).toBe('leased')
+		expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('leased')
+		expect(arbiter.availability(localGuiderOutputKey(guideOutput))).toBe('leased')
 	}, 20000)
 
 	test('fails the disconnect when the activity could not stop the guider', async () => {
@@ -730,7 +748,8 @@ describe('local session', () => {
 
 		expect(commander.list()).toBeEmpty()
 		expect(arbiter.availability(resourceKey(camera))).toBe('available')
-		expect(arbiter.availability(localGuiderKey(camera, guideOutput))).toBe('available')
+		expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('available')
+		expect(arbiter.availability(localGuiderOutputKey(guideOutput))).toBe('available')
 	}, 20000)
 
 	test('detaches the local guider when its configuration fails', async () => {
@@ -756,7 +775,8 @@ describe('local session', () => {
 			expect(result.ok || result.error).toContain('gain failed')
 			expect(disabled).toEqual([camera.id])
 			expect(commander.list()).toBeEmpty()
-			expect(arbiter.availability(localGuiderKey(camera, guideOutput))).toBe('available')
+			expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('available')
+			expect(arbiter.availability(localGuiderOutputKey(guideOutput))).toBe('available')
 			expect(arbiter.availability(resourceKey(camera))).toBe('available')
 		} finally {
 			cameraManager.gain = gain

@@ -149,8 +149,12 @@ interface GuiderDitherOperation {
 	readonly signal?: AbortSignal
 	// Receives each phase of this dither, so the caller does not observe anyone else's.
 	readonly onPhase?: (phase: GuiderDitherPhase) => void
-	// Settle timeout in seconds, as configured by the dither request.
+	// Milliseconds the caller waits for this dither, which its own timeout may shorten.
 	readonly timeout: number
+	// Milliseconds the movement stays retained once the caller has been answered without a terminal event.
+	// It follows the settle timeout of the request rather than the caller's bound, because it describes how
+	// long the guider itself may still be moving and not how long anyone is willing to wait.
+	readonly retention: number
 	// Abort listener removed on terminalization.
 	onAbort?: VoidFunction
 	// Timestamp in milliseconds at which settling began, absent while the command is still in flight.
@@ -608,7 +612,10 @@ class GuiderSession {
 			if (this.#outstandingDither !== undefined) return { ok: false, reason: 'busy', error: 'the guider is still moving for a previous dither' }
 
 			const settle = request?.settle ?? this.#settings.settle
-			const operation = this.#startDither(settle.timeout, signal, options.onPhase)
+			// The settle timeout is what the guider was given to finish moving; a caller may bound its own
+			// wait shorter than that, as it can for every other command, without shortening the movement.
+			const retention = Math.max(1, settle.timeout) * 1000
+			const operation = this.#startDither(options.timeout ?? retention, retention, signal, options.onPhase)
 
 			this.#publishDither({ phase: 'dithering', guider: structuredClone(this.event) })
 
@@ -1251,14 +1258,17 @@ class GuiderSession {
 		this.#dither?.onPhase?.(event.phase)
 	}
 
-	// Creates the dither bookkeeping and arms the timer bounding the wait for SettleBegin.
-	#startDither(timeout: number, signal: AbortSignal, onPhase?: (phase: GuiderDitherPhase) => void) {
+	// Creates the dither bookkeeping and arms the timer bounding the wait for SettleBegin. Both durations
+	// are in milliseconds: the timeout bounds what the caller waits, the retention what the guider may
+	// still be doing afterwards.
+	#startDither(timeout: number, retention: number, signal: AbortSignal, onPhase?: (phase: GuiderDitherPhase) => void) {
 		const operation: GuiderDitherOperation = {
 			result: Promise.withResolvers(),
 			settleStarted: Promise.withResolvers(),
 			signal,
 			onPhase,
 			timeout,
+			retention,
 			finished: false,
 		}
 
@@ -1273,7 +1283,7 @@ class GuiderSession {
 					this.#finishDither({ ok: false, reason: 'timeout', error: 'the guider never began settling' }, true)
 				}
 			},
-			Math.max(1, timeout) * 1000,
+			Math.max(1, timeout),
 		)
 
 		this.#dither = operation
@@ -1286,14 +1296,14 @@ class GuiderSession {
 	// The bound matters because the release depends on an event that may never arrive: a guider that drops
 	// its settle would otherwise refuse every dither for the rest of the session. It is the settle timeout
 	// of the dither being retained, which is the longest the guider was ever given to finish this movement.
-	#retainDither(timeout: number) {
+	#retainDither(retention: number) {
 		this.#releaseDither()
 
 		this.#outstandingDither = setTimeout(
 			() => {
 				this.#outstandingDither = undefined
 			},
-			Math.max(1, timeout) * 1000,
+			Math.max(1, retention),
 		)
 	}
 
@@ -1324,7 +1334,7 @@ class GuiderSession {
 			() => {
 				this.#finishDither({ ok: false, reason: 'timeout', error: 'the guider did not settle in time' }, true)
 			},
-			Math.max(1, operation.timeout) * 1000,
+			Math.max(1, operation.timeout),
 		)
 	}
 
@@ -1340,7 +1350,7 @@ class GuiderSession {
 
 		operation.finished = true
 
-		if (outstanding) this.#retainDither(operation.timeout)
+		if (outstanding) this.#retainDither(operation.retention)
 
 		if (operation.startTimer) clearTimeout(operation.startTimer)
 		if (operation.settleTimer) clearTimeout(operation.settleTimer)

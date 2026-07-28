@@ -691,6 +691,18 @@ describe('dither', () => {
 		expect(refused.ok || refused.reason).toBe('busy')
 	})
 
+	test('bounds the wait by the timeout its caller asked for', async () => {
+		const id = await guiding()
+
+		const started = performance.now()
+		const dithered = await commander.dither(id, undefined, { timeout: 200 })
+		const elapsed = performance.now() - started
+
+		expect(dithered.ok).toBeFalse()
+		expect(dithered.ok || dithered.reason).toBe('timeout')
+		expect(elapsed).toBeLessThan(2000)
+	})
+
 	test('survives the disconnect of another session', async () => {
 		const [, otherPort] = await startServer()
 		const guided = await guiding()

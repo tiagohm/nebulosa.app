@@ -33,6 +33,7 @@ class FakePhd2Server {
 	readonly commands: PHD2Command[] = []
 	readonly unanswered = new Set<string>()
 	readonly refused = new Set<string>()
+	readonly results = new Map<string, unknown>()
 
 	private listener?: Bun.TCPSocketListener
 	private socket?: Bun.Socket<unknown>
@@ -59,7 +60,7 @@ class FakePhd2Server {
 						this.commands.push(command)
 						if (this.unanswered.has(command.method)) continue
 						if (this.refused.has(command.method)) socket.write(`${JSON.stringify({ jsonrpc: '2.0', error: { code: 1, message: 'refused' }, id: command.id })}\r\n`)
-						else socket.write(`${JSON.stringify({ jsonrpc: '2.0', result: 0, id: command.id })}\r\n`)
+						else socket.write(`${JSON.stringify({ jsonrpc: '2.0', result: this.results.get(command.method) ?? 0, id: command.id })}\r\n`)
 					}
 				},
 				close: () => {
@@ -320,6 +321,21 @@ describe('remote session', () => {
 		expect(result.ok).toBeFalse()
 		expect(result.ok || result.reason).toBe('commandFailed')
 		expect(commander.looping(id)).toBeFalse()
+	})
+
+	test('lets a guide exposure longer than the command timeout produce its first frame', async () => {
+		server.results.set('get_exposure', 2000)
+
+		const id = await connected()
+		const looped = commander.loop(id)
+
+		expect(await waitUntil(() => server.received('loop'))).toBeTrue()
+
+		await Bun.sleep(1500)
+		server.push({ Event: 'LoopingExposures', Frame: 1, StarMass: 100, SNR: 20, HFD: 3 })
+
+		expect((await looped).ok).toBeTrue()
+		expect(commander.looping(id)).toBeTrue()
 	})
 
 	test('refuses a concurrent command instead of sharing the waiter of the running one', async () => {

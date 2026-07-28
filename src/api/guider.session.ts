@@ -488,7 +488,7 @@ class GuiderSession {
 			options,
 			async (signal) =>
 				await this.#withActivity(async () => {
-					const observed = await this.#observe(signal, this.#loopTimeout(options), {
+					const observed = await this.#observe(signal, await this.#loopTimeout(signal, options), {
 						evaluate: (update) => {
 							if (update.closed) return 'disconnected'
 							return this.#state === 'Looping' ? 'success' : 'pending'
@@ -814,20 +814,37 @@ class GuiderSession {
 		}
 	}
 
-	// Milliseconds a loop has to be observed, which for a local guider has to cover one whole exposure.
+	// Milliseconds a loop has to be observed, which has to cover one whole exposure on either transport.
 	//
-	// A local guider that still holds a lock position from an earlier run reports Selected rather than
-	// Looping when told to loop, so the state proving it is looping only arrives once the first frame has
-	// been processed. A guide exposure longer than the ordinary command allowance would then time out and
-	// abort a loop that was working, which is why the exposure is added rather than left to fit inside it.
-	// A remote server publishes its own state without waiting for a frame and needs no allowance.
-	#loopTimeout(options: GuiderCommandOptions) {
+	// Neither transport announces that it started looping. PHD2 sends its application state only when a
+	// client first connects, and the local guider reproduces that on purpose, so on both the state proving
+	// the guider is looping is the per-frame event that arrives once the first exposure has been processed.
+	// The wait therefore lasts an exposure plus a readout, and a guide exposure longer than the ordinary
+	// command allowance would time out and abort a loop that was working. Adding the exposure leaves that
+	// allowance to cover the readout alone.
+	async #loopTimeout(signal: AbortSignal, options: GuiderCommandOptions) {
 		const timeout = options.timeout ?? this.sessionContext.options.commandTimeout ?? DEFAULT_COMMAND_TIMEOUT
+		return timeout + (await this.#guideExposure(signal, timeout))
+	}
 
-		if (this.request.mode !== 'local') return timeout
+	// Milliseconds of one guide exposure, or zero when it cannot be established.
+	//
+	// A remote exposure belongs to PHD2, which owns it and lets its own user change it at any time, so it is
+	// asked for each time rather than remembered from the handshake. A server that will not answer costs
+	// only the allowance it would have added, which is the same bound the loop had before.
+	async #guideExposure(signal: AbortSignal, timeout: number) {
+		if (this.request.mode === 'local') {
+			const { exposureTime, exposureTimeUnit } = this.request.capture
+			return Math.max(0, exposureTimeInMilliseconds(exposureTime, exposureTimeUnit))
+		}
 
-		const { exposureTime, exposureTimeUnit } = this.request.capture
-		return timeout + Math.max(0, exposureTimeInMilliseconds(exposureTime, exposureTimeUnit))
+		const client = this.#client
+
+		if (!(client instanceof PHD2Client)) return 0
+
+		// PHD2 reports its exposure in milliseconds.
+		const exposure = await this.#request(signal, timeout, async () => await client.getExposure())
+		return exposure.ok && exposure.value !== undefined ? Math.max(0, exposure.value) : 0
 	}
 
 	// Awaits one transport request under a bound the session controls, rather than one the transport owes.

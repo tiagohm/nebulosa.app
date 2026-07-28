@@ -371,6 +371,7 @@ describe('remote session', () => {
 		const guided = commander.startGuiding(id)
 		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
 		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 		expect((await guided).ok).toBeTrue()
 
 		server.refused.add('loop')
@@ -404,6 +405,7 @@ describe('remote session', () => {
 
 		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
 		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 
 		expect((await guided).ok).toBeTrue()
 		expect(commander.running(id)).toBeTrue()
@@ -431,6 +433,7 @@ describe('remote session', () => {
 		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
 		server.push({ Event: 'StartCalibration', Mount: 'Mount Simulator' })
 		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 
 		expect((await calibrated).ok).toBeTrue()
 	})
@@ -457,6 +460,7 @@ describe('remote session', () => {
 		const guided = commander.startGuiding(id)
 		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
 		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 		expect((await guided).ok).toBeTrue()
 
 		const stopped = commander.stopGuiding(id)
@@ -473,6 +477,7 @@ describe('remote session', () => {
 		const guided = commander.startGuiding(id)
 		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
 		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 		expect((await guided).ok).toBeTrue()
 
 		server.refused.add('stop_capture')
@@ -490,6 +495,7 @@ describe('remote session', () => {
 		const guided = commander.startGuiding(id)
 		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
 		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 		expect((await guided).ok).toBeTrue()
 
 		const transport: { stopCapture: () => unknown } = PHD2Client.prototype
@@ -524,6 +530,7 @@ describe('dither', () => {
 		const guided = commander.startGuiding(id)
 		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
 		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 		expect((await guided).ok).toBeTrue()
 
 		return id
@@ -1154,6 +1161,45 @@ describe('local session', () => {
 			expect(refused.ok || refused.reason).toBe('commandFailed')
 			expect(arbiter.availability(resourceKey(camera))).toBe('leased')
 			expect(commander.looping(id)).toBeTrue()
+		} finally {
+			transport.guide = guide
+		}
+	}, 20000)
+
+	test('waits for the settle of the guide command before reporting a local guider as guiding', async () => {
+		const [camera, guideOutput] = await devices()
+		const connect = await commander.connect(local(camera, guideOutput))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		const id = connect.value.id
+		const transport = GuiderClient.prototype as unknown as { guide: () => unknown; emitEvent: (event: string, data?: Record<string, unknown>) => void }
+		const guide = transport.guide
+		const clients: { emitEvent: (event: string, data?: Record<string, unknown>) => void }[] = []
+
+		// The local client announces guiding as soon as it is commanded, before its loop has processed a
+		// frame, and only settles once frames start arriving.
+		transport.guide = function (this: (typeof clients)[number]) {
+			clients.push(this)
+			this.emitEvent('SettleBegin')
+			this.emitEvent('StartGuiding')
+			return true
+		}
+
+		try {
+			const announced = await commander.startGuiding(id, { timeout: 500 })
+
+			expect(announced.ok).toBeFalse()
+			expect(announced.ok || announced.reason).toBe('timeout')
+
+			const guided = commander.startGuiding(id, { timeout: 5000 })
+
+			expect(await waitUntil(() => clients.length === 2)).toBeTrue()
+			clients[1].emitEvent('SettleDone', { Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+
+			expect((await guided).ok).toBeTrue()
+			expect(commander.running(id)).toBeTrue()
 		} finally {
 			transport.guide = guide
 		}

@@ -568,9 +568,18 @@ class GuiderSession {
 							// Losing the star before guiding was ever reached means the run failed; losing it later
 							// is a transient condition of an already successful command.
 							if (this.#state === 'LostLock') return 'unexpectedState'
-							if (this.#state !== 'Guiding') return 'pending'
 
-							return !recalibrate || calibrating ? 'success' : 'pending'
+							// The guide command opens a settle of its own, and its terminal event is what says the
+							// run is established. Both transports announce guiding before that: the local client
+							// says so before its loop has processed a frame, and refuses a dither until it has.
+							// Resolving on the announcement would hand a caller a guider that fails the dither it
+							// is about to ask for, which is exactly what a capture does next.
+							if (update.event?.Event === 'SettleDone') {
+								if (recalibrate && !calibrating) return 'pending'
+								return update.event.Status === 0 ? 'success' : 'alert'
+							}
+
+							return 'pending'
 						},
 						command: async () => {
 							await this.#dispatch((client) => client.guide(recalibrate, this.#settings.settle))
@@ -1237,6 +1246,10 @@ class GuiderSession {
 				// flight or releases the one the session was still tracking on nobody's behalf.
 				this.#releaseDither()
 				this.#finishDither(event.Status === 0 ? { ok: true, value: undefined } : { ok: false, reason: 'alert', error: event.Error }, false)
+				// A settle that succeeded leaves the guider guiding again. Saying so here rather than waiting
+				// for the next frame keeps the reported state from lagging behind a command that just
+				// completed on this very event.
+				if (event.Status === 0 && this.#state === 'Guiding') this.#publish('guiding')
 				break
 			case 'Settling':
 				this.#publish('settling')

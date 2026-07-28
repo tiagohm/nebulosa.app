@@ -151,6 +151,10 @@ interface GuiderDitherOperation {
 	readonly onPhase?: (phase: GuiderDitherPhase) => void
 	// Milliseconds the caller waits for this dither, which its own timeout may shorten.
 	readonly timeout: number
+	// Monotonic instant, from performance.now, past which the caller has waited its whole timeout. Both
+	// waits of a dither share it, so waiting for the settle to begin and then for it to finish cannot add
+	// up to twice what the caller asked for.
+	readonly deadline: number
 	// Milliseconds the movement stays retained once the caller has been answered without a terminal event.
 	// It follows the settle timeout of the request rather than the caller's bound, because it describes how
 	// long the guider itself may still be moving and not how long anyone is willing to wait.
@@ -442,6 +446,9 @@ class GuiderSession {
 	// tell two of them apart, so a new dither started meanwhile would be settled by the terminal event of
 	// the old movement and a capture would expose before its own dither had finished.
 	#outstandingDither?: ReturnType<typeof setTimeout>
+	// Milliseconds the retention above lasts, kept so a movement that only begins settling later can have
+	// its clock restarted from that point.
+	#outstandingRetention = 0
 	// Open activity holding the guide camera and guide output.
 	#activity?: GuiderActivity
 	// Aborted the moment the session begins ending, which is well before the transport is actually closed.
@@ -1303,7 +1310,16 @@ class GuiderSession {
 	// has to filter the bus by session.
 	#publishDither(event: GuiderDitherEvent) {
 		guiderBus.emit('dither', event)
-		this.#dither?.onPhase?.(event.phase)
+
+		// The callback belongs to the caller and may throw. It must not escape into the state machine: on
+		// the first phase it would reject the command instead of answering it, leaving the operation and its
+		// timers installed, and on the terminal phase it would run before the result is resolved and leave
+		// the command pending forever.
+		try {
+			this.#dither?.onPhase?.(event.phase)
+		} catch (error) {
+			console.error('guider dither phase callback failed:', error)
+		}
 	}
 
 	// Creates the dither bookkeeping and arms the timer bounding the wait for SettleBegin. Both durations
@@ -1316,6 +1332,7 @@ class GuiderSession {
 			signal,
 			onPhase,
 			timeout,
+			deadline: performance.now() + Math.max(1, timeout),
 			retention,
 			finished: false,
 		}
@@ -1346,6 +1363,7 @@ class GuiderSession {
 	// of the dither being retained, which is the longest the guider was ever given to finish this movement.
 	#retainDither(retention: number) {
 		this.#releaseDither()
+		this.#outstandingRetention = retention
 
 		this.#outstandingDither = setTimeout(
 			() => {
@@ -1366,7 +1384,15 @@ class GuiderSession {
 	#beginDitherSettle() {
 		const operation = this.#dither
 
-		if (!operation || operation.finished || operation.settleStartedAt) return
+		// A retained movement has just begun settling, so it will be under way for another settle timeout
+		// from now. Without restarting the clock, one armed before the settle even began could expire
+		// mid-settle and let a new dither in, which the old movement would then terminalize.
+		if (operation === undefined || operation.finished) {
+			if (this.#outstandingDither !== undefined) this.#retainDither(this.#outstandingRetention)
+			return
+		}
+
+		if (operation.settleStartedAt) return
 
 		operation.settleStartedAt = performance.now()
 
@@ -1378,11 +1404,14 @@ class GuiderSession {
 		operation.settleStarted.resolve(true)
 		this.#publishDither({ phase: 'settling', guider: structuredClone(this.event) })
 
+		// What is left of the caller's timeout, not a fresh one: the wait for the settle to begin already
+		// spent part of it, and a full second timer here would let the call last close to twice what was
+		// asked for.
 		operation.settleTimer = setTimeout(
 			() => {
 				this.#finishDither({ ok: false, reason: 'timeout', error: 'the guider did not settle in time' }, true)
 			},
-			Math.max(1, operation.timeout),
+			Math.max(1, operation.deadline - performance.now()),
 		)
 	}
 

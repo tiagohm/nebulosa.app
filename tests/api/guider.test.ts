@@ -704,6 +704,81 @@ describe('dither', () => {
 		expect(elapsed).toBeLessThan(2000)
 	})
 
+	test('settles even when the phase callback of its caller throws', async () => {
+		const id = await guiding()
+
+		const dithered = commander.dither(id, undefined, {
+			onPhase: () => {
+				throw new Error('callback failed')
+			},
+		})
+
+		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		server.push({ Event: 'SettleBegin' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+
+		expect((await dithered).ok).toBeTrue()
+
+		server.push({ Event: 'GuideStep', Frame: 2, Time: 1, RADistanceRaw: 1, DECDistanceRaw: 1, RADuration: 1, RADirection: 'West', DECDuration: 1, DECDirection: 'North', StarMass: 1, SNR: 1, HFD: 1 })
+		expect(await waitUntil(() => commander.running(id))).toBeTrue()
+
+		// The session is left usable, rather than stuck on a command that never terminalized.
+		const again = commander.dither(id)
+
+		expect(await waitUntil(() => server.commands.filter((command) => command.method === 'dither').length === 2)).toBeTrue()
+		server.push({ Event: 'SettleBegin' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+
+		expect((await again).ok).toBeTrue()
+	})
+
+	test('spends the caller timeout across both of its waits, not once each', async () => {
+		const id = await guiding()
+
+		const started = performance.now()
+		const dithered = commander.dither(id, undefined, { timeout: 400 })
+
+		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+
+		// Settling begins late, leaving only the rest of the timeout for the settle itself.
+		await Bun.sleep(300)
+		server.push({ Event: 'SettleBegin' })
+
+		const result = await dithered
+		const elapsed = performance.now() - started
+
+		expect(result.ok).toBeFalse()
+		expect(result.ok || result.reason).toBe('timeout')
+		expect(elapsed).toBeLessThan(700)
+	})
+
+	test('extends the retention of a movement that only begins settling later', async () => {
+		const id = await guiding()
+
+		const controller = new AbortController()
+		const settle = { ...DEFAULT_GUIDER_DITHER.settle, timeout: 1 }
+		const abandoned = commander.dither(id, { settle }, { signal: controller.signal })
+
+		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		controller.abort('aborted')
+		expect((await abandoned).ok).toBeFalse()
+
+		// Settling begins just before the original retention would lapse, so the movement runs on from there
+		// and the guider reports itself guiding again while it is still under way.
+		await Bun.sleep(900)
+		server.push({ Event: 'SettleBegin' })
+		server.push({ Event: 'GuideStep', Frame: 2, Time: 1, RADistanceRaw: 1, DECDistanceRaw: 1, RADuration: 1, RADirection: 'West', DECDuration: 1, DECDirection: 'North', StarMass: 1, SNR: 1, HFD: 1 })
+
+		expect(await waitUntil(() => commander.running(id))).toBeTrue()
+
+		await Bun.sleep(250)
+
+		const refused = await commander.dither(id)
+
+		expect(refused.ok).toBeFalse()
+		expect(refused.ok || refused.reason).toBe('busy')
+	})
+
 	test('survives the disconnect of another session', async () => {
 		const [, otherPort] = await startServer()
 		const guided = await guiding()

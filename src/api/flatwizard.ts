@@ -14,6 +14,7 @@ import type { WebSocketMessageHandler } from './message'
 import type { OperationContext, OperationCoordinator, OperationHandle } from './operation'
 import { abortReason } from './operation.wait'
 import { resourceKey } from './resource'
+import type { ResourceAvailability } from './resource'
 
 // Presentation events of the flat wizard, fanned out to WebSocket subscribers.
 export interface FlatWizardBusEvents {
@@ -25,11 +26,15 @@ export interface FlatWizardBusEvents {
 export const flatWizardBus = new EventBus<FlatWizardBusEvents>()
 
 // Renders the terminal cause of a run for the message its last event carries.
-// The two causes that are not defects get a message of their own: a stop is what the user just asked for,
-// and a refusal carries the arbiter's internal ids, which say nothing to whoever is looking at the screen.
-function terminalMessage(reason: OperationFailureReason, error?: string) {
+//
+// A stop is what the user just asked for, so it says so. A refusal is reported without the detail the
+// coordinator formats: that detail names a resource key and an operation id, which are stable enough for a
+// log and meaningless on a screen. The coordinator also reports an active owner and an unusable device
+// alike as busy, and only the arbiter separates them, so the availability it observed decides which of the
+// two happened — a camera someone else is using is a different problem from one that cannot be used at all.
+function terminalMessage(reason: OperationFailureReason, error: string | undefined, availability: ResourceAvailability) {
 	if (reason === 'aborted') return 'stopped'
-	if (reason === 'busy') return error ?? 'the camera is in use by another operation'
+	if (reason === 'busy') return availability === 'unavailable' ? 'the camera is not available' : 'the camera is in use by another operation'
 	return error ?? `flat wizard failed: ${reason}`
 }
 
@@ -74,7 +79,9 @@ export class FlatWizardHandler {
 		// executor at all. That is what makes a busy camera report itself instead of failing silently.
 		void handle.result.then((result) => {
 			if (this.#runs.get(request.id) === handle) this.#runs.delete(request.id)
-			run.finish(result)
+			// The availability is read here rather than inside the run because a refused start never reaches
+			// the executor at all, and that refusal is exactly the case the message has to explain.
+			run.finish(result, this.coordinator.arbiter.availability(resourceKey(camera)))
 		})
 	}
 
@@ -176,9 +183,10 @@ class FlatWizardRun {
 		}
 	}
 
-	// Publishes the single idle event that ends this run, whatever terminated it.
-	finish(result: OperationResult<string>) {
-		this.#publish('idle', result.ok ? result.value : terminalMessage(result.reason, result.error))
+	// Publishes the single idle event that ends this run, whatever terminated it. The availability is the
+	// camera's as of that moment, and only a refused start reads it.
+	finish(result: OperationResult<string>, availability: ResourceAvailability) {
+		this.#publish('idle', result.ok ? result.value : terminalMessage(result.reason, result.error, availability))
 	}
 
 	// Publishes a transition, skipping one that would repeat the state and message already sent.

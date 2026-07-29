@@ -262,6 +262,27 @@ describe('flat wizard handler', () => {
 		}
 	})
 
+	test('tells a camera that cannot be used apart from one someone else is using', async () => {
+		const camera = connectCamera()
+		const request = flatWizardStartRequest({ id: 'flatwizard-unavailable', minExposure: 100, maxExposure: 300 })
+
+		wsm.open(socket)
+		expect(await waitUntil(() => camera.connected)).toBeTrue()
+
+		// Nobody owns the camera here; it is the device itself that is not in a state to be acquired, which
+		// the coordinator reports under the same busy reason as an active owner.
+		resourceArbiter.markUnavailable({ key: resourceKey(camera), device: camera })
+
+		try {
+			await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
+
+			expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
+			expect(flatWizardEvents().at(-1)?.message).toBe('the camera is not available')
+		} finally {
+			resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
+		}
+	})
+
 	test('ends the run with the cause when the capture never produces a frame', async () => {
 		const camera = connectCamera()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())

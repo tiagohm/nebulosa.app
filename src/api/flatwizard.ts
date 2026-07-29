@@ -151,6 +151,7 @@ class FlatWizardRun {
 
 			const transformed = await this.handler.imageProcessor.transform(path, false, this.camera.name)
 
+			if (context.signal.aborted) return { ok: false, reason: abortReason(context.signal) }
 			if (transformed === undefined) return { ok: false, reason: 'commandFailed', error: 'failed to load captured flat frame' }
 
 			const { median } = histogram(transformed.image)

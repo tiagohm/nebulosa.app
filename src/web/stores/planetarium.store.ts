@@ -248,6 +248,20 @@ const MOVING_BODIES: MovingBody[] = [
 		visible: false,
 	},
 	{
+		id: '199',
+		type: 'mercury',
+		name: 'Mercury',
+		position: { rightAscension: 0, declination: 0 },
+		visible: false,
+	},
+	{
+		id: '299',
+		type: 'venus',
+		name: 'Venus',
+		position: { rightAscension: 0, declination: 0 },
+		visible: false,
+	},
+	{
 		id: '301',
 		type: 'moon',
 		name: 'Moon',

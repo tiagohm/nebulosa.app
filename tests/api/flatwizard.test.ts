@@ -1,4 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
+import { mkdtemp, rm } from 'fs/promises'
+import { tmpdir } from 'os'
+import { sep } from 'path'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { CameraManager, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
@@ -6,15 +9,16 @@ import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { cameraBus, CameraHandler } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
+import type { CameraCaptureResult } from 'src/api/camera.capture'
 import { flatWizardBus, flatWizard as flatWizardEndpoints, FlatWizardHandler } from 'src/api/flatwizard'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { OperationCoordinator } from 'src/api/operation'
 import { resourceKey, ResourceArbiter } from 'src/api/resource'
-import { DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
-import type { CameraCaptureEvent } from '#/camera'
+import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import { DEFAULT_FLAT_WIZARD_START } from '#/flatwizard'
 import type { FlatWizardEvent, FlatWizardStart } from '#/flatwizard'
+import type { OperationResult } from '#/orchestration'
 import { captureHandle, noContent, SocketMessager, waitUntil } from './util'
 
 type FlatWizardStartOverrides = Omit<Partial<FlatWizardStart>, 'capture'> & {
@@ -35,16 +39,19 @@ const resourceArbiter = new ResourceArbiter()
 const operationCoordinator = new OperationCoordinator(resourceArbiter)
 const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourceArbiter)
 const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
-const flatWizardHandler = new FlatWizardHandler(wsm, cameraHandler)
+const flatWizardHandler = new FlatWizardHandler(wsm, cameraHandler, imageProcessor, operationCoordinator)
 const endpoints = flatWizardEndpoints(flatWizardHandler)
 const handler = new IndiClientHandlerSet([cameraManager])
 const client = new ClientSimulator('Client Simulator', handler)
 const simulator = new CameraSimulator('Camera Simulator', client, { mountManager, focuserManager, rotatorManager, wheelManager })
+Bun.env.capturesDir = await mkdtemp(tmpdir() + sep)
+
 const socket = new SocketMessager()
 
-afterAll(() => {
+afterAll(async () => {
 	simulator.dispose()
 	wsm.close(socket, 1000, 'done')
+	await rm(Bun.env.capturesDir, { recursive: true, force: true })
 })
 
 beforeEach(() => {
@@ -53,15 +60,8 @@ beforeEach(() => {
 	cameraManager.disconnect(getCamera())
 })
 
-afterEach(() => {
-	flatWizardHandler.stop('flatwizard-start')
-	flatWizardHandler.stop('flatwizard-stop')
-	flatWizardHandler.stop('flatwizard-duplicate')
-	flatWizardHandler.stop('flatwizard-stopped')
-	flatWizardHandler.stop('flatwizard-error')
-	flatWizardHandler.stop('flatwizard-frame')
-	flatWizardHandler.stop('flatwizard-busy')
-	flatWizardHandler.stop('flatwizard-release-error')
+afterEach(async () => {
+	await operationCoordinator.cancelAll('aborted')
 	cameraManager.disconnect(getCamera())
 })
 
@@ -111,12 +111,8 @@ function waitForFlatWizardState(state: FlatWizardEvent['state'], id: string) {
 	return waitUntil(() => flatWizardEvents().some((event) => event.id === id && event.state === state))
 }
 
-function cameraCaptureEvent(overrides: Partial<CameraCaptureEvent>) {
-	return Object.assign(structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT), overrides)
-}
-
 describe('flat wizard handler', () => {
-	test('starts through endpoint and emits capturing event through wsm', async () => {
+	test('normalizes the capture into a single flat exposure without rewriting the caller request', async () => {
 		const camera = connectCamera()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
 		const request = flatWizardStartRequest({
@@ -143,170 +139,150 @@ describe('flat wizard handler', () => {
 			expect(await waitForFlatWizardState('capturing', request.id)).toBeTrue()
 			expect(capture).toHaveBeenCalledTimes(1)
 			expect(capture.mock.calls[0][1]).toBe(camera)
-			expect(capture.mock.calls[0][2]).toBe(request.capture)
-			expect(request.capture.delay).toBe(0)
-			expect(request.capture.count).toBe(1)
-			expect(request.capture.autoSave).toBeFalse()
-			expect(request.capture.savePath).toBeUndefined()
-			expect(request.capture.exposureTime).toBe(200)
-			expect(request.capture.exposureTimeUnit).toBe('millisecond')
-			expect(request.capture.frameType).toBe('FLAT')
-			expect(request.capture.exposureMode).toBe('single')
-			expect(flatWizardEvents()).toEqual([
-				{
-					id: request.id,
-					camera: camera.id,
-					state: 'capturing',
-					median: 0,
-					message: 'exposure of 200 ms',
-				},
-			])
+
+			const normalized = capture.mock.calls[0][2]
+
+			expect(normalized.delay).toBe(0)
+			expect(normalized.count).toBe(1)
+			expect(normalized.autoSave).toBeFalse()
+			expect(normalized.savePath).toBeUndefined()
+			expect(normalized.exposureTime).toBe(200)
+			expect(normalized.exposureTimeUnit).toBe('millisecond')
+			expect(normalized.frameType).toBe('FLAT')
+			expect(normalized.exposureMode).toBe('single')
+
+			// The caller's own request is left as it was handed in.
+			expect(request.capture.count).toBe(10)
+			expect(request.capture.frameType).toBe('DARK')
+
+			expect(flatWizardEvents()[0]).toEqual({ id: request.id, camera: camera.id, state: 'capturing', median: 0, message: 'exposure of 200 ms' })
 		} finally {
 			capture.mockRestore()
 		}
 	})
 
-	test('stops active task through endpoint and emits idle event', async () => {
+	test('captures inside its own operation, holding the camera across the search', async () => {
 		const camera = connectCamera()
-		let canceled = false
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ cancel: () => ((canceled = true), Promise.resolve()) }))
-		const request = flatWizardStartRequest({ id: 'flatwizard-stop', minExposure: 100, maxExposure: 300 })
+		const request = flatWizardStartRequest({ id: 'flatwizard-owns', minExposure: 100, maxExposure: 300, meanTarget: 0, meanTolerance: 0 })
 
-		try {
-			wsm.open(socket)
-
-			await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
-
-			expect(await waitForFlatWizardState('capturing', request.id)).toBeTrue()
-
-			await noContent(endpoints['/flatwizard/:id/stop'].POST(stopRequest(request.id)))
-
-			expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
-			expect(flatWizardEvents().map((event) => event.state)).toEqual(['capturing', 'idle'])
-			expect(flatWizardEvents().at(-1)?.message).toBe('stopped')
-		} finally {
-			capture.mockRestore()
-		}
-	})
-
-	test('ignores duplicate active task for same id or camera', async () => {
-		const camera = connectCamera()
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
-		const request = flatWizardStartRequest({ id: 'flatwizard-duplicate', minExposure: 100, maxExposure: 300 })
-		const duplicate = flatWizardStartRequest({ id: 'flatwizard-other', minExposure: 1, maxExposure: 2 })
-
-		try {
-			wsm.open(socket)
-
-			await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
-			await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, duplicate)))
-
-			expect(capture).toHaveBeenCalledTimes(1)
-
-			await noContent(endpoints['/flatwizard/:id/stop'].POST(stopRequest(request.id)))
-
-			expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
-			expect(flatWizardEvents().filter((event) => event.id === duplicate.id)).toHaveLength(0)
-		} finally {
-			capture.mockRestore()
-		}
-	})
-
-	test('stop endpoint is idempotent for unknown task id', async () => {
+		expect(await waitUntil(() => camera.connected)).toBeTrue()
+		resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
 		wsm.open(socket)
 
-		await noContent(endpoints['/flatwizard/:id/stop'].POST(stopRequest('missing')))
+		await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
+		expect(await waitForFlatWizardState('capturing', request.id)).toBeTrue()
+
+		// The run owns the camera for its whole search, so an unrelated capture is refused rather than
+		// slipping between two exposures of the bisection.
+		const intruder = cameraHandler.capture(operationCoordinator, camera, structuredClone(DEFAULT_CAMERA_CAPTURE_START))
+		const started = await intruder.started
+
+		expect(started.ok).toBeFalse()
+		expect(started.ok || started.reason).toBe('busy')
+
+		await noContent(await endpoints['/flatwizard/:id/stop'].POST(stopRequest(request.id)))
+		expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
+	}, 20000)
+
+	test('stops an active run through the endpoint and reports it once', async () => {
+		const camera = connectCamera()
+		const request = flatWizardStartRequest({ id: 'flatwizard-stop', minExposure: 100, maxExposure: 300, meanTarget: 0, meanTolerance: 0 })
+
+		expect(await waitUntil(() => camera.connected)).toBeTrue()
+		resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
+		wsm.open(socket)
+
+		await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
+		expect(await waitForFlatWizardState('capturing', request.id)).toBeTrue()
+
+		await noContent(await endpoints['/flatwizard/:id/stop'].POST(stopRequest(request.id)))
+
+		expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
+		expect(flatWizardEvents().filter((event) => event.state === 'idle')).toHaveLength(1)
+		expect(flatWizardEvents().at(-1)?.message).toBe('stopped')
+	}, 20000)
+
+	test('ignores a duplicate run for the same request id', async () => {
+		const camera = connectCamera()
+		// The first run stays in flight until this settles, so the duplicate meets a live run.
+		const inFlight = Promise.withResolvers<OperationResult<CameraCaptureResult>>()
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: inFlight.promise }))
+		const request = flatWizardStartRequest({ id: 'flatwizard-duplicate', minExposure: 100, maxExposure: 300 })
+
+		try {
+			wsm.open(socket)
+
+			await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
+			await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
+
+			expect(capture).toHaveBeenCalledTimes(1)
+		} finally {
+			inFlight.resolve({ ok: true, value: { paths: [], frameCount: 0 } })
+			await flatWizardHandler.stop(request.id)
+			capture.mockRestore()
+		}
+	})
+
+	test('stop is idempotent for an unknown run id', async () => {
+		wsm.open(socket)
+
+		await noContent(await endpoints['/flatwizard/:id/stop'].POST(stopRequest('missing')))
 
 		expect(flatWizardMessages()).toHaveLength(0)
 	})
 
-	test('emits idle stopped event when camera capture stops', async () => {
-		const camera = connectCamera()
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
-			handleCameraCaptureEvent?.(cameraCaptureEvent({ operation: 'flatwizard-stopped-capture', camera: camera.id, state: 'idle', stopped: true }))
-			return captureHandle()
-		})
-		const request = flatWizardStartRequest({ id: 'flatwizard-stopped', minExposure: 100, maxExposure: 300 })
-
-		try {
-			wsm.open(socket)
-
-			await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
-
-			expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
-			expect(flatWizardEvents().map((event) => event.state)).toEqual(['capturing', 'idle'])
-			expect(flatWizardEvents().at(-1)?.message).toBe('stopped')
-		} finally {
-			capture.mockRestore()
-		}
-	})
-
-	test('emits idle error event when camera capture fails', async () => {
-		const camera = connectCamera()
-		const error = spyOn(console, 'error').mockImplementation(() => {})
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
-			handleCameraCaptureEvent?.(cameraCaptureEvent({ operation: 'flatwizard-error-capture', camera: camera.id, state: 'error' }))
-			return captureHandle()
-		})
-		const request = flatWizardStartRequest({ id: 'flatwizard-error', minExposure: 100, maxExposure: 300 })
-
-		try {
-			wsm.open(socket)
-
-			await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
-
-			expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
-
-			const event = flatWizardEvents().find((event) => event.id === request.id && event.state === 'idle')
-
-			expect(event).toBeDefined()
-			expect(event!.message).toBe('flat wizard failed')
-			expect(error).toHaveBeenCalled()
-		} finally {
-			capture.mockRestore()
-			error.mockRestore()
-		}
-	})
-
-	test('does not stop the active camera owner when its capture is rejected', async () => {
+	test('reports a camera already owned by another operation instead of failing silently', async () => {
 		const camera = connectCamera()
 		const manualRequest = { ...structuredClone(DEFAULT_CAMERA_CAPTURE_START), exposureMode: 'loop' as const, exposureTime: 200, exposureTimeUnit: 'millisecond' as const }
 		const request = flatWizardStartRequest({ id: 'flatwizard-busy', minExposure: 100, maxExposure: 300 })
 
+		wsm.open(socket)
+		expect(await waitUntil(() => camera.connected)).toBeTrue()
+		resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
+
+		const manual = cameraHandler.capture(operationCoordinator, camera, manualRequest)
+
+		expect((await manual.started).ok).toBeTrue()
+
 		try {
-			wsm.open(socket)
-			expect(await waitUntil(() => camera.connected)).toBeTrue()
-			resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
-
-			const manual = cameraHandler.capture(operationCoordinator, camera, manualRequest)
-			const started = await manual.started
-			expect(started.ok).toBeTrue()
-
 			await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
-			expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
 
+			expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
+			expect(flatWizardEvents().at(-1)?.message).toBe('the camera is in use by another operation')
+
+			// The refused run leaves the owner of the camera running.
 			let manualSettled = false
 			void manual.result.then(() => {
 				manualSettled = true
 			})
 			await Bun.sleep(10)
 			expect(manualSettled).toBeFalse()
-
-			await manual.cancel()
 		} finally {
-			flatWizardHandler.stop(request.id)
+			await manual.cancel()
 		}
 	})
 
-	test('processes captured frame path from camera callback', async () => {
+	test('ends the run with the cause when the capture never produces a frame', async () => {
 		const camera = connectCamera()
-		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
-			captureEvent = handleCameraCaptureEvent
-			return captureHandle()
-		})
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
+		const request = flatWizardStartRequest({ id: 'flatwizard-noframe', minExposure: 100, maxExposure: 300 })
+
+		try {
+			wsm.open(socket)
+
+			await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
+
+			expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
+			expect(flatWizardEvents().at(-1)?.message).toBe('the capture produced no frame')
+		} finally {
+			capture.mockRestore()
+		}
+	})
+
+	test('ends the run when the captured frame cannot be loaded', async () => {
+		const camera = connectCamera()
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve({ ok: true, value: { paths: ['flat.fit'], frameCount: 1 } }) }))
 		const transform = spyOn(imageProcessor, 'transform').mockImplementation(() => Promise.resolve(undefined))
-		const error = spyOn(console, 'error').mockImplementation(() => {})
 		const request = flatWizardStartRequest({ id: 'flatwizard-frame', minExposure: 100, maxExposure: 300 })
 
 		try {
@@ -314,18 +290,54 @@ describe('flat wizard handler', () => {
 
 			await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
 
-			expect(captureEvent).toBeDefined()
-			socket.clear()
-			captureEvent!(cameraCaptureEvent({ camera: camera.id, state: 'idle' }), 'flat.fit')
-
 			expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
 			expect(transform).toHaveBeenCalledWith('flat.fit', false, camera.name)
-			expect(flatWizardEvents().map((event) => event.state)).toEqual(['computing', 'idle'])
-			expect(flatWizardEvents().at(-1)?.message).toBe('flat wizard failed')
+			expect(flatWizardEvents().map((event) => event.state)).toEqual(['capturing', 'computing', 'idle'])
+			expect(flatWizardEvents().at(-1)?.message).toBe('failed to load captured flat frame')
 		} finally {
-			error.mockRestore()
 			transform.mockRestore()
 			capture.mockRestore()
 		}
 	})
+
+	test('gives up once the exposure interval is finer than a millisecond', async () => {
+		const camera = connectCamera()
+		const request = flatWizardStartRequest({ id: 'flatwizard-collapse', minExposure: 100, maxExposure: 101, meanTarget: 0, meanTolerance: 0 })
+
+		expect(await waitUntil(() => camera.connected)).toBeTrue()
+		resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
+		wsm.open(socket)
+
+		await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
+
+		expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
+		expect(flatWizardEvents().at(-1)?.message).toBe('unable to find an optimal exposure time')
+	}, 20000)
+
+	test('exports the captured frame when its median lands inside the window', async () => {
+		const camera = connectCamera()
+		const request = flatWizardStartRequest({ id: 'flatwizard-saved', minExposure: 100, maxExposure: 300, meanTarget: 32768, meanTolerance: 100 })
+
+		expect(await waitUntil(() => camera.connected)).toBeTrue()
+		resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
+		wsm.open(socket)
+
+		const exported = spyOn(imageProcessor, 'export')
+
+		try {
+			await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
+
+			expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
+			expect(flatWizardEvents().at(-1)?.message).toStartWith('saved at ')
+			expect(exported).toHaveBeenCalledTimes(1)
+
+			// The frame that was captured is the source of the export; the timestamped path is the destination.
+			const [source, , , saveAt] = exported.mock.calls[0]
+
+			expect(source).not.toBe(saveAt)
+			expect(saveAt).toStartWith(Bun.env.capturesDir)
+		} finally {
+			exported.mockRestore()
+		}
+	}, 20000)
 })

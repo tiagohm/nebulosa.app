@@ -215,7 +215,7 @@ export class TppaTask {
 		this.event.count++
 		this.handleTppaEvent('capturing')
 
-		this.capture = this.tppa.cameraHandler.capture(this.camera, this.request.capture, (event, path) => {
+		this.capture = this.tppa.cameraHandler.capture(this.tppa.cameraHandler.coordinator, this.camera, this.request.capture, (event, path) => {
 			void this.cameraCaptured(event, path).catch((error) => this.fail(error))
 		})
 	}

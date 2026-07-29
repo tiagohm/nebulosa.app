@@ -187,8 +187,8 @@ describe('tppa handler', () => {
 
 			expect(await waitForTppaState('capturing', request.id)).toBeTrue()
 			expect(capture).toHaveBeenCalledTimes(1)
-			expect(capture.mock.calls[0][0]).toBe(camera)
-			expect(capture.mock.calls[0][1]).toBe(request.capture)
+			expect(capture.mock.calls[0][1]).toBe(camera)
+			expect(capture.mock.calls[0][2]).toBe(request.capture)
 			expect(tracking).toHaveBeenCalledWith(mount, true)
 			expect(request.capture.autoSave).toBeFalse()
 			expect(request.capture.count).toBe(1)
@@ -283,7 +283,7 @@ describe('tppa handler', () => {
 
 	test('emits idle event when camera capture stops', async () => {
 		const { camera, mount } = connectDevices()
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			handleCameraCaptureEvent?.(cameraCaptureEvent({ camera: camera.id, state: 'idle', stopped: true }))
 			return captureHandle()
 		})
@@ -304,7 +304,7 @@ describe('tppa handler', () => {
 	test('emits idle error event when camera capture fails', async () => {
 		const { camera, mount } = connectDevices()
 		const error = spyOn(console, 'error').mockImplementation(() => {})
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			handleCameraCaptureEvent?.(cameraCaptureEvent({ camera: camera.id, state: 'error' }))
 			return captureHandle()
 		})
@@ -328,7 +328,7 @@ describe('tppa handler', () => {
 	test('emits solving failure after max attempts', async () => {
 		const { camera, mount } = connectDevices()
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
 			return captureHandle()
 		})
@@ -360,7 +360,7 @@ describe('tppa handler', () => {
 		const released = Promise.withResolvers<OperationResult<CameraCaptureResult>>()
 		let captures = 0
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
 			return captureHandle(++captures === 1 ? { result: released.promise } : {})
 		})
@@ -387,7 +387,7 @@ describe('tppa handler', () => {
 	test('fails when the capture result reports a cleanup failure', async () => {
 		const { camera, mount } = connectDevices()
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
 			return captureHandle({ result: Promise.resolve({ ok: false, reason: 'timeout', error: 'capture cleanup failed' }) })
 		})
@@ -414,7 +414,7 @@ describe('tppa handler', () => {
 	test('solves first frame and starts mount movement', async () => {
 		const { camera, mount } = connectDevices()
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
 			return captureHandle()
 		})

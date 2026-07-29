@@ -142,8 +142,8 @@ describe('flat wizard handler', () => {
 
 			expect(await waitForFlatWizardState('capturing', request.id)).toBeTrue()
 			expect(capture).toHaveBeenCalledTimes(1)
-			expect(capture.mock.calls[0][0]).toBe(camera)
-			expect(capture.mock.calls[0][1]).toBe(request.capture)
+			expect(capture.mock.calls[0][1]).toBe(camera)
+			expect(capture.mock.calls[0][2]).toBe(request.capture)
 			expect(request.capture.delay).toBe(0)
 			expect(request.capture.count).toBe(1)
 			expect(request.capture.autoSave).toBeFalse()
@@ -222,7 +222,7 @@ describe('flat wizard handler', () => {
 
 	test('emits idle stopped event when camera capture stops', async () => {
 		const camera = connectCamera()
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			handleCameraCaptureEvent?.(cameraCaptureEvent({ operation: 'flatwizard-stopped-capture', camera: camera.id, state: 'idle', stopped: true }))
 			return captureHandle()
 		})
@@ -244,7 +244,7 @@ describe('flat wizard handler', () => {
 	test('emits idle error event when camera capture fails', async () => {
 		const camera = connectCamera()
 		const error = spyOn(console, 'error').mockImplementation(() => {})
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			handleCameraCaptureEvent?.(cameraCaptureEvent({ operation: 'flatwizard-error-capture', camera: camera.id, state: 'error' }))
 			return captureHandle()
 		})
@@ -278,7 +278,7 @@ describe('flat wizard handler', () => {
 			expect(await waitUntil(() => camera.connected)).toBeTrue()
 			resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
 
-			const manual = cameraHandler.capture(camera, manualRequest)
+			const manual = cameraHandler.capture(operationCoordinator, camera, manualRequest)
 			const started = await manual.started
 			expect(started.ok).toBeTrue()
 
@@ -301,7 +301,7 @@ describe('flat wizard handler', () => {
 	test('processes captured frame path from camera callback', async () => {
 		const camera = connectCamera()
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
 			return captureHandle()
 		})

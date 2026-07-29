@@ -133,7 +133,7 @@ describe('darv handler', () => {
 	test('starts through endpoint and emits lifecycle events through wsm', async () => {
 		const { camera, mount } = connectDevices()
 		let canceled = false
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			handleCameraCaptureEvent?.({ ...structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT), operation: 'darv-capture', camera: camera.id, state: 'exposureStarted' })
 			return captureHandle({ cancel: () => ((canceled = true), Promise.resolve()) })
 		})
@@ -168,8 +168,8 @@ describe('darv handler', () => {
 
 			expect(await waitForDarvState('idle', request.id)).toBeTrue()
 			expect(capture).toHaveBeenCalledTimes(1)
-			expect(capture.mock.calls[0][0]).toBe(camera)
-			expect(capture.mock.calls[0][1]).toBe(request.capture)
+			expect(capture.mock.calls[0][1]).toBe(camera)
+			expect(capture.mock.calls[0][2]).toBe(request.capture)
 			expect(request.capture.autoSave).toBeFalse()
 			expect(request.capture.count).toBe(1)
 			expect(request.capture.delay).toBe(0)

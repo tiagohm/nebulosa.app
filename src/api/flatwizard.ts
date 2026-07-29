@@ -194,7 +194,7 @@ export class FlatWizardTask {
 
 		this.handleFlatWizardEvent('capturing', `exposure of ${this.request.capture.exposureTime.toFixed(0)} ms`)
 
-		this.capture = this.flatWizardHandler.cameraHandler.capture(this.camera, this.request.capture, (event, path) => {
+		this.capture = this.flatWizardHandler.cameraHandler.capture(this.flatWizardHandler.cameraHandler.coordinator, this.camera, this.request.capture, (event, path) => {
 			void this.cameraCaptured(event, path).catch((error) => this.fail(error))
 		})
 	}

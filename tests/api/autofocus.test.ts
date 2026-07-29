@@ -166,8 +166,8 @@ describe('auto focus handler', () => {
 
 			expect(await waitForAutoFocusState('capturing', request.id)).toBeTrue()
 			expect(capture).toHaveBeenCalledTimes(1)
-			expect(capture.mock.calls[0][0]).toBe(camera)
-			expect(capture.mock.calls[0][1]).toBe(request.capture)
+			expect(capture.mock.calls[0][1]).toBe(camera)
+			expect(capture.mock.calls[0][2]).toBe(request.capture)
 			expect(request.maxPosition).toBe(focuser.position.max)
 			expect(request.capture.delay).toBe(0)
 			expect(request.capture.count).toBe(1)
@@ -254,7 +254,7 @@ describe('auto focus handler', () => {
 	test('emits idle stopped event when camera capture stops', async () => {
 		const { camera, focuser } = connectDevices()
 		const focuserStop = spyOn(focuserHandler, 'stop')
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			handleCameraCaptureEvent?.(cameraCaptureEvent({ operation: 'autofocus-stopped-capture', camera: camera.id, state: 'idle', stopped: true }))
 			return captureHandle()
 		})
@@ -277,7 +277,7 @@ describe('auto focus handler', () => {
 
 	test('emits idle stopped event when camera capture fails', async () => {
 		const { camera, focuser } = connectDevices()
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			handleCameraCaptureEvent?.(cameraCaptureEvent({ camera: camera.id, state: 'error' }))
 			return captureHandle()
 		})
@@ -299,7 +299,7 @@ describe('auto focus handler', () => {
 	test('detects no stars from captured frame and emits idle message', async () => {
 		const { camera, focuser } = connectDevices()
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
 			return captureHandle()
 		})
@@ -327,7 +327,7 @@ describe('auto focus handler', () => {
 	test('detects stars, updates HFD, and moves focuser', async () => {
 		const { camera, focuser } = connectDevices()
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
 			return captureHandle()
 		})
@@ -360,7 +360,7 @@ describe('auto focus handler', () => {
 		const { camera, focuser } = connectDevices()
 		const releaseFailure = Promise.withResolvers<OperationResult<CameraCaptureResult>>()
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, ___, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
 			return captureHandle({ result: releaseFailure.promise })
 		})

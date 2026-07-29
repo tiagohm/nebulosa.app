@@ -114,7 +114,7 @@ export class DarvTask {
 		if (this.stopped) return
 
 		// Start capture
-		this.capture = this.darv.cameraHandler.capture(this.camera, this.request.capture, (event) => {
+		this.capture = this.darv.cameraHandler.capture(this.darv.cameraHandler.coordinator, this.camera, this.request.capture, (event) => {
 			if (event.state === 'idle' || event.state === 'error' || event.stopped) this.stop()
 		})
 

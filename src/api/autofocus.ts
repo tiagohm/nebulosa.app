@@ -250,7 +250,7 @@ export class AutoFocusTask {
 
 		this.handleAutoFocusEvent('capturing', '')
 
-		this.capture = this.autoFocusHandler.cameraHandler.capture(this.camera, this.request.capture, this.cameraCaptured.bind(this))
+		this.capture = this.autoFocusHandler.cameraHandler.capture(this.autoFocusHandler.cameraHandler.coordinator, this.camera, this.request.capture, this.cameraCaptured.bind(this))
 	}
 
 	stop() {

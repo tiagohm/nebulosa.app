@@ -29,9 +29,8 @@ export const flatWizardBus = new EventBus<FlatWizardBusEvents>()
 // and a refusal carries the arbiter's internal ids, which say nothing to whoever is looking at the screen.
 function terminalMessage(reason: OperationFailureReason, error?: string) {
 	if (reason === 'aborted') return 'stopped'
-	if (reason === 'busy') return 'the camera is in use by another operation'
-	if (error !== undefined) return error
-	return `flat wizard failed: ${reason}`
+	if (reason === 'busy') return error ?? 'the camera is in use by another operation'
+	return error ?? `flat wizard failed: ${reason}`
 }
 
 // Runs flat wizard searches and exposes them to transport by request id.

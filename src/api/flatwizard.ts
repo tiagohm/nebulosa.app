@@ -5,8 +5,6 @@ import { histogram } from 'nebulosa/src/imaging/processing/computation'
 import { EventBus } from 'src/shared/bus'
 import { DEFAULT_FLAT_WIZARD_EVENT } from '#/flatwizard'
 import type { FlatWizardEvent, FlatWizardStart, FlatWizardState } from '#/flatwizard'
-import { DEFAULT_IMAGE_TRANSFORMATION } from '#/image'
-import type { ImageTransformation } from '#/image'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
 import type { CameraHandler } from './camera'
 import { query, response } from './http'
@@ -25,9 +23,6 @@ export interface FlatWizardBusEvents {
 
 // Process-wide fanout of flat wizard presentation events.
 export const flatWizardBus = new EventBus<FlatWizardBusEvents>()
-
-// Flats are measured on the raw frame, so every transformation is disabled and the payload stays FITS.
-const FLAT_WIZARD_IMAGE_TRANSFORMATION: ImageTransformation = { ...DEFAULT_IMAGE_TRANSFORMATION, enabled: false, format: { ...DEFAULT_IMAGE_TRANSFORMATION.format, type: 'fits' } }
 
 // Renders the terminal cause of a run for the message its last event carries.
 // The two causes that are not defects get a message of their own: a stop is what the user just asked for,
@@ -162,10 +157,10 @@ class FlatWizardRun {
 			this.#event.median = median
 
 			if (median >= this.#mean.min && median <= this.#mean.max) {
-				const extension = capture.transferFormat === 'XISF' ? 'xisf' : 'fit'
+				const extension = capture.transferFormat === 'XISF' ? 'xisf' : 'fits'
 				const saveAt = join(this.request.path || Bun.env.capturesDir, `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS')}.${extension}`)
 				// The frame just captured is the source; the timestamped path is only where it goes.
-				const exported = await this.handler.imageProcessor.export(path, FLAT_WIZARD_IMAGE_TRANSFORMATION, this.camera.name, saveAt)
+				const exported = await this.handler.imageProcessor.export(path, extension, this.camera.name, saveAt)
 
 				if (exported === undefined) return { ok: false, reason: 'commandFailed', error: 'failed to save flat frame' }
 

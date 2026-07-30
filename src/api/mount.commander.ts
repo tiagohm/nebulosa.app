@@ -400,7 +400,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 
 			const handle: ManualMoveHandle = Object.freeze({
 				id: context.id,
-				directions: () => [...directions],
+				directions: () => Array.from(directions),
 				move,
 				stop: async () => {
 					close({ ok: true, value: undefined })
@@ -624,7 +624,8 @@ export class MountCommander implements DeviceHandler<Mount> {
 	// Releases every commanded direction and waits for the mount to stop, escalating to the abort switch
 	// when clearing the motion vectors alone did not bring it to a stop.
 	async #stopManualMotion(mount: Mount, directions: Set<MountMoveDirection>, options: MountCommandOptions) {
-		const commanded = [...directions]
+		const commanded = Array.from(directions)
+
 		directions.clear()
 
 		if (!mount.connected) return

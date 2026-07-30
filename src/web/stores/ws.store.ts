@@ -100,8 +100,8 @@ function create() {
 			} else {
 				if (type === 'darv') darvBus.emit(action as never, data as never)
 				else if (type === 'tppa') tppaBus.emit(action as never, data as never)
-				else if (type === 'autoFocus') autoFocusBus.emit(action as never, data as never)
-				else if (type === 'flatWizard') flatWizardBus.emit(action as never, data as never)
+				else if (type === 'autofocus') autoFocusBus.emit(action as never, data as never)
+				else if (type === 'flatwizard') flatWizardBus.emit(action as never, data as never)
 				else if (type === 'alpaca') alpacaBus.emit(action as never, data as never)
 				else if (type === 'connection') connectionBus.emit(action as never, data as never)
 				else if (type === 'guider') {

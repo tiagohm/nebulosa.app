@@ -191,7 +191,7 @@ export class DeviceLifecycle {
 						return
 					}
 				} else {
-					pending.push(Promise.resolve(available))
+					pending.push(available)
 				}
 			} catch (error) {
 				// A verifier that cannot decide leaves the device blocked, never acquirable by mistake.
@@ -242,7 +242,7 @@ export class DeviceLifecycle {
 }
 
 // Properties read by isDeviceQuiescent for each device type; every other update leaves its verdict intact.
-const QUIESCENCE_PROPERTIES: Partial<Record<DeviceType, ReadonlySet<string>>> = {
+const QUIESCENCE_PROPERTIES: Readonly<Partial<Record<DeviceType, ReadonlySet<string>>>> = {
 	camera: new Set(['exposuring', 'exposure']),
 	mount: new Set(['slewing', 'moving', 'homing', 'parking', 'pulsing']),
 	focuser: new Set(['moving']),
@@ -254,7 +254,7 @@ const QUIESCENCE_PROPERTIES: Partial<Record<DeviceType, ReadonlySet<string>>> = 
 
 // Reports whether a property change can alter the default quiescence verdict for the device.
 export function affectsDeviceQuiescence(device: Device, property: string) {
-	return property === 'connected' || (QUIESCENCE_PROPERTIES[device.type]?.has(property) ?? false)
+	return property === 'connected' || QUIESCENCE_PROPERTIES[device.type]?.has(property) === true
 }
 
 // Checks type-specific motion/exposure flags before a connected device can be acquired.

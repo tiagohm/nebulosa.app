@@ -215,7 +215,7 @@ export class ResourceArbiter {
 			}
 		}
 
-		return [...owners]
+		return Array.from(owners)
 	}
 
 	// Returns each distinct owner holding any physical resource associated with the client id.
@@ -228,7 +228,7 @@ export class ResourceArbiter {
 			}
 		}
 
-		return [...owners]
+		return Array.from(owners)
 	}
 
 	// Lists the canonically sorted resources currently held by a context across reentrant leases.
@@ -243,7 +243,7 @@ export class ResourceArbiter {
 
 	// Lists why a resource is blocked, reporting a disconnected client as a lifecycle cause of its own.
 	#causesOf(resource: ResourceRecord): readonly ResourceUnavailableCause[] {
-		const causes = [...resource.causes]
+		const causes = Array.from(resource.causes)
 		if (resource.clientId !== undefined && this.#unavailableClients.has(resource.clientId) && !resource.causes.has('lifecycle')) causes.push('lifecycle')
 		return causes.sort()
 	}
@@ -314,10 +314,7 @@ function normalizeRequests(requests: readonly ResourceRequest[]) {
 		normalized.set(request.key, previous?.device === undefined && request.device !== undefined ? request : (previous ?? request))
 	}
 
-	return normalized
-		.values()
-		.toArray()
-		.sort((a, b) => a.key.localeCompare(b.key))
+	return Array.from(normalized.values()).sort((a, b) => a.key.localeCompare(b.key))
 }
 
 // Projects an owner into the transport-safe conflict contract.

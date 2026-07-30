@@ -251,7 +251,7 @@ export class OperationCoordinator {
 
 	// Aborts every operation tree synchronously and waits for all cleanup; roots cascade to their scopes.
 	async cancelAll(reason: OperationFailureReason = 'aborted') {
-		const roots = [...this.#operations.values()].filter((operation) => operation.parent === undefined)
+		const roots = this.#operations.values().filter((operation) => operation.parent === undefined)
 		await Promise.all(roots.map((operation) => this.#cancel(operation, reason)))
 	}
 
@@ -317,7 +317,7 @@ export class OperationCoordinator {
 		// Nested scopes command the same devices, so none may still be running while this scope undoes its
 		// own work. They unwind first because they are the innermost frames of the operation tree.
 		if (operation.children.size > 0) {
-			await Promise.all([...operation.children].map((child) => this.#cancel(child, operation.cancelReason ?? 'aborted')))
+			await Promise.all(operation.children.values().map((child) => this.#cancel(child, operation.cancelReason ?? 'aborted')))
 		}
 
 		operation.cleanupStarted = true

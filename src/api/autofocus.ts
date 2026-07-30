@@ -9,6 +9,7 @@ import type { AutoFocusEvent, AutoFocusStart, AutoFocusState } from '#/autofocus
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
 import type { CameraHandler } from './camera'
 import type { FocuserHandler } from './focuser'
+import { focuserPosition } from './focuser.commander'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import type { WebSocketMessageHandler } from './message'
@@ -145,9 +146,10 @@ class AutoFocusRun {
 
 		// A focuser left moving under a released lease would keep changing a position the next owner
 		// believes it commanded. A wait that fails stops it on its own, so this only covers a cancel that
-		// lands while the run is elsewhere.
-		context.onCleanup(() => {
-			if (this.focuser.connected && this.focuser.moving) this.handler.focuserHandler.stop(this.focuser)
+		// lands while the run is elsewhere. The commander is used directly because the handler's stop
+		// cancels the operation that owns the focuser, which here is this run being cleaned up.
+		context.onCleanup(async () => {
+			if (this.focuser.connected && this.focuser.moving) await this.handler.focuserHandler.commander.stopMotion(this.focuser)
 		})
 
 		while (true) {
@@ -236,16 +238,17 @@ class AutoFocusRun {
 		this.#publish('idle', result.ok ? result.value : terminalMessage(result.reason, result.error, unavailable))
 	}
 
-	// Moves the focuser and waits for it to stop at the target, under this run's own cancellation.
+	// Moves the focuser and waits for it to stop at the target. The move nests in this run, inheriting the
+	// focuser it already holds and this run's own cancellation.
 	#moveTo(context: OperationContext, position: number) {
-		return this.handler.focuserHandler.moveToAndWait(this.focuser, position, context.signal)
+		return this.handler.focuserHandler.commander.moveTo(context, this.focuser, position)
 	}
 
-	// Clamps and rounds a computed target to a position the focuser can be commanded to and will report
-	// back. The fitted focus point is fractional, and a target the driver never echoes exactly would leave
-	// the wait pending until it timed out.
+	// Resolves a computed target to the position the focuser will actually report back, which is what the
+	// published message has to name. The fitted focus point is fractional, and the commander normalizes the
+	// same way, so both agree on where the move ends.
 	#targetPosition(position: number) {
-		return Math.round(Math.max(this.focuser.position.min, Math.min(position, this.focuser.position.max)))
+		return focuserPosition(this.focuser, position)
 	}
 
 	// Snapshots the fitted curves into the presentation event so the chart follows the search.

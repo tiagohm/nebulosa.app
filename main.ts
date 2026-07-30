@@ -21,6 +21,7 @@ import { DewHeaterHandler, dewHeater } from 'src/api/dewheater'
 import { FlatPanelHandler, flatPanel } from 'src/api/flatpanel'
 import { FlatWizardHandler, flatWizard } from 'src/api/flatwizard'
 import { FocuserHandler, focuser } from 'src/api/focuser'
+import { FocuserCommander } from 'src/api/focuser.commander'
 import { GuideOutputHandler, guideOutput } from 'src/api/guideoutput'
 import { GuiderHandler, guider } from 'src/api/guider'
 import { GuiderCommander } from 'src/api/guider.session'
@@ -227,7 +228,10 @@ const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelM
 const mountCommander = new MountCommander(mountManager)
 const mountHandler = new MountHandler(wsm, mountManager, confirmationHandler, notificationHandler, mountCommander, operationCoordinator)
 const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager, mountCommander, operationCoordinator)
-const focuserHandler = new FocuserHandler(wsm, focuserManager)
+// Coordinated focuser service owns every mutation, so HTTP and composite features such as autofocus
+// compete for the focuser under the same ownership rules.
+const focuserCommander = new FocuserCommander(focuserManager)
+const focuserHandler = new FocuserHandler(wsm, focuserManager, notificationHandler, focuserCommander, operationCoordinator)
 const wheelHandler = new WheelHandler(wsm, wheelManager)
 const thermometerHandler = new ThermometerHandler(wsm, thermometerManager)
 const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager)

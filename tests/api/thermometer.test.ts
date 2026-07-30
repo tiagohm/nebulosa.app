@@ -5,7 +5,11 @@ import { FocuserManager, ThermometerManager } from 'nebulosa/src/devices/indi/ma
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import { FocuserHandler } from 'src/api/focuser'
+import { FocuserCommander } from 'src/api/focuser.commander'
 import { WebSocketMessageHandler } from 'src/api/message'
+import { NotificationHandler } from 'src/api/notification'
+import { OperationCoordinator } from 'src/api/operation'
+import { ResourceArbiter } from 'src/api/resource'
 import { thermometerBus, thermometer as thermometerEndpoints, ThermometerHandler } from 'src/api/thermometer'
 import type { ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from '#/thermometer'
 import { json, SocketMessager, waitUntil } from './util'
@@ -102,7 +106,8 @@ describe('thermometer handler', () => {
 		const focuserManager = new FocuserManager()
 		const thermometerManager = new ThermometerManager(focuserManager)
 		const thermometerHandler = new ThermometerHandler(wsm, thermometerManager)
-		const focuserHandler = new FocuserHandler(wsm, focuserManager)
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const focuserHandler = new FocuserHandler(wsm, focuserManager, new NotificationHandler(wsm), new FocuserCommander(focuserManager), coordinator)
 		const handler = new IndiClientHandlerSet([focuserManager, thermometerManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const focuserSimulator = new FocuserSimulator('Focuser Simulator', client)

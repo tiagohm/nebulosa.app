@@ -1,16 +1,18 @@
-import type { RequiredOnly } from 'nebulosa/src/core/types'
 import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { Focuser } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, FocuserManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
+import type { OperationCoordinator } from 'src/api/operation'
 import { EventBus } from 'src/shared/bus'
 import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from '#/focuser'
 import type { OperationResult } from '#/orchestration'
+import type { FocuserCommander } from './focuser.commander'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
-import { waitForDeviceState } from './operation.wait'
+import type { NotificationHandler } from './notification'
+import { resourceKey } from './resource'
 
 export interface FocuserBusEvents {
 	readonly add: FocuserAdded
@@ -20,13 +22,15 @@ export interface FocuserBusEvents {
 
 export const focuserBus = new EventBus<FocuserBusEvents>()
 
-// Default milliseconds allowed for a focuser to reach a commanded absolute position.
-const DEFAULT_MOVE_TIMEOUT = 30000
-
+// Publishes focuser transport events and delegates every mutation to FocuserCommander.
 export class FocuserHandler implements DeviceHandler<Focuser> {
+	// Registers the focuser transport adapter and its presentation-event fanout.
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
 		readonly focuserManager: FocuserManager,
+		readonly notification: NotificationHandler,
+		readonly commander: FocuserCommander,
+		readonly coordinator: OperationCoordinator,
 	) {
 		focuserManager.addHandler(this)
 
@@ -59,58 +63,56 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 		return Array.from(this.focuserManager.list(client))
 	}
 
+	// Moves to an absolute position as a whole operation tree owning the focuser. Reaching the position
+	// takes longer than the request that asked for it, so it reports through focuser events.
 	moveTo(focuser: Focuser, position: number) {
-		this.focuserManager.moveTo(focuser, position)
+		this.#detach(focuser, `move to position ${position}`, () => this.commander.moveTo(this.coordinator, focuser, position))
 	}
 
+	// Moves inward by a number of steps.
 	moveIn(focuser: Focuser, steps: number) {
-		this.focuserManager.moveIn(focuser, steps)
+		this.#detach(focuser, `move in ${steps} steps`, () => this.commander.moveIn(this.coordinator, focuser, steps))
 	}
 
+	// Moves outward by a number of steps.
 	moveOut(focuser: Focuser, steps: number) {
-		this.focuserManager.moveOut(focuser, steps)
+		this.#detach(focuser, `move out ${steps} steps`, () => this.commander.moveOut(this.coordinator, focuser, steps))
 	}
 
+	// Redefines the position the focuser reports, which the driver applies without any movement.
 	syncTo(focuser: Focuser, position: number) {
-		this.focuserManager.syncTo(focuser, position)
+		return this.commander.syncTo(this.coordinator, focuser, position)
 	}
 
+	// Inverts what inward and outward mean at the driver.
 	reverse(focuser: Focuser, enabled: boolean) {
-		this.focuserManager.reverse(focuser, enabled)
+		return this.commander.reverse(this.coordinator, focuser, enabled)
 	}
 
-	stop(focuser: Focuser) {
-		this.focuserManager.stop(focuser)
-	}
-
-	// Commands an absolute move and resolves only once the focuser has stopped at the target position,
-	// which must already be a whole step inside the device range because that is what the driver reports
-	// back. The signal is the caller's operation signal; the wait belongs to whoever owns the focuser.
+	// Stops the focuser: first by cancelling whatever operation owns it, so its own cleanup runs, and then
+	// by the physical abort, which also covers motion nobody here started.
 	//
-	// Subscription happens before the command, so a focuser that arrives while the command is still being
-	// dispatched cannot be missed, and a focuser already standing at the target settles on the state read
-	// after dispatch. Every unsuccessful outcome stops the focuser before settling, so no cancel, timeout,
-	// or driver Alert leaves it moving after the operation that commanded it has released the device.
-	async moveToAndWait(focuser: Focuser, position: number, signal: AbortSignal, timeout = DEFAULT_MOVE_TIMEOUT): Promise<OperationResult<void>> {
-		const observed = await waitForDeviceState<RequiredOnly<Partial<FocuserUpdated>, 'device'>>({
-			signal,
-			timeout,
-			subscribe: (listener) =>
-				focuserBus.subscribe('update', (event) => {
-					// Update events carry a projection of the device, so identity must be compared by id.
-					if (event.device.id === focuser.id) listener({ device: focuser, property: event.property, state: event.state })
-				}),
-			current: () => ({ device: focuser }),
-			evaluate: (update) => {
-				if (!focuser.connected) return 'disconnected'
-				if (update.state === 'Alert' && (update.property === 'position' || update.property === 'moving')) return 'alert'
-				return !focuser.moving && focuser.position.value === position ? 'success' : 'pending'
-			},
-			command: () => this.moveTo(focuser, position),
-			abort: () => this.stop(focuser),
-		})
+	// No local index of operations is kept: the arbiter already knows the owner, and stopping by device
+	// means stopping the whole tree, because a caller holding only a device id cannot name a scope and
+	// stopping the focuser of an autofocus run means stopping the autofocus run.
+	async stop(focuser: Focuser) {
+		await this.coordinator.cancelByResource(resourceKey(focuser))
+		return await this.commander.stopMotion(focuser)
+	}
 
-		return observed.ok ? { ok: true, value: undefined } : observed
+	// Runs a command whose physical completion outlasts the request that asked for it.
+	//
+	// The HTTP response is gone by the time the move settles, and a refused command moves nothing, so it
+	// emits no device update either: without a notification the user would see the action silently
+	// discarded. Failures are therefore pushed over the WebSocket, which is the same path every other
+	// asynchronous failure in the API already uses.
+	#detach(focuser: Focuser, action: string, command: () => Promise<OperationResult<unknown>>) {
+		void command().then((result) => {
+			if (result.ok) return
+
+			console.error('focuser failed to %s:', action, focuser.name, result.reason, result.error ?? '')
+			this.notification.send({ title: 'FOCUSER', description: `${focuser.name} failed to ${action}: ${result.error ?? result.reason}`, color: 'danger' })
+		})
 	}
 }
 
@@ -127,8 +129,8 @@ export function focuser(focuserHandler: FocuserHandler) {
 		'/focusers/:id/moveto': { POST: async (req) => response(focuserHandler.moveTo(focuserFromParams(req), await req.json())) },
 		'/focusers/:id/movein': { POST: async (req) => response(focuserHandler.moveIn(focuserFromParams(req), await req.json())) },
 		'/focusers/:id/moveout': { POST: async (req) => response(focuserHandler.moveOut(focuserFromParams(req), await req.json())) },
-		'/focusers/:id/sync': { POST: async (req) => response(focuserHandler.syncTo(focuserFromParams(req), await req.json())) },
-		'/focusers/:id/reverse': { POST: async (req) => response(focuserHandler.reverse(focuserFromParams(req), await req.json())) },
-		'/focusers/:id/stop': { POST: (req) => response(focuserHandler.stop(focuserFromParams(req))) },
+		'/focusers/:id/sync': { POST: async (req) => response<OperationResult<void>>(await focuserHandler.syncTo(focuserFromParams(req), await req.json())) },
+		'/focusers/:id/reverse': { POST: async (req) => response<OperationResult<void>>(await focuserHandler.reverse(focuserFromParams(req), await req.json())) },
+		'/focusers/:id/stop': { POST: async (req) => response<OperationResult<void>>(await focuserHandler.stop(focuserFromParams(req))) },
 	} as const satisfies Endpoints
 }

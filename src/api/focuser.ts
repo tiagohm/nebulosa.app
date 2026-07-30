@@ -1,13 +1,16 @@
+import type { RequiredOnly } from 'nebulosa/src/core/types'
 import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { Focuser } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, FocuserManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
 import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from '#/focuser'
+import type { OperationResult } from '#/orchestration'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
+import { waitForDeviceState } from './operation.wait'
 
 export interface FocuserBusEvents {
 	readonly add: FocuserAdded
@@ -16,6 +19,9 @@ export interface FocuserBusEvents {
 }
 
 export const focuserBus = new EventBus<FocuserBusEvents>()
+
+// Default milliseconds allowed for a focuser to reach a commanded absolute position.
+const DEFAULT_MOVE_TIMEOUT = 30000
 
 export class FocuserHandler implements DeviceHandler<Focuser> {
 	constructor(
@@ -76,6 +82,36 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 	stop(focuser: Focuser) {
 		this.focuserManager.stop(focuser)
 	}
+
+	// Commands an absolute move and resolves only once the focuser has stopped at the target position,
+	// which must already be a whole step inside the device range because that is what the driver reports
+	// back. The signal is the caller's operation signal; the wait belongs to whoever owns the focuser.
+	//
+	// Subscription happens before the command, so a focuser that arrives while the command is still being
+	// dispatched cannot be missed, and a focuser already standing at the target settles on the state read
+	// after dispatch. Every unsuccessful outcome stops the focuser before settling, so no cancel, timeout,
+	// or driver Alert leaves it moving after the operation that commanded it has released the device.
+	async moveToAndWait(focuser: Focuser, position: number, signal: AbortSignal, timeout = DEFAULT_MOVE_TIMEOUT): Promise<OperationResult<void>> {
+		const observed = await waitForDeviceState<RequiredOnly<Partial<FocuserUpdated>, 'device'>>({
+			signal,
+			timeout,
+			subscribe: (listener) =>
+				focuserBus.subscribe('update', (event) => {
+					// Update events carry a projection of the device, so identity must be compared by id.
+					if (event.device.id === focuser.id) listener({ device: focuser, property: event.property, state: event.state })
+				}),
+			current: () => ({ device: focuser }),
+			evaluate: (update) => {
+				if (!focuser.connected) return 'disconnected'
+				if (update.state === 'Alert' && (update.property === 'position' || update.property === 'moving')) return 'alert'
+				return !focuser.moving && focuser.position.value === position ? 'success' : 'pending'
+			},
+			command: () => this.moveTo(focuser, position),
+			abort: () => this.stop(focuser),
+		})
+
+		return observed.ok ? { ok: true, value: undefined } : observed
+	}
 }
 
 export function focuser(focuserHandler: FocuserHandler) {
@@ -95,43 +131,4 @@ export function focuser(focuserHandler: FocuserHandler) {
 		'/focusers/:id/reverse': { POST: async (req) => response(focuserHandler.reverse(focuserFromParams(req), await req.json())) },
 		'/focusers/:id/stop': { POST: (req) => response(focuserHandler.stop(focuserFromParams(req))) },
 	} as const satisfies Endpoints
-}
-
-export type WaitForFocuserAction = 'reach' | 'timeout' | 'cancel'
-
-export function waitForFocuser(focuser: Focuser, expectedPosition: number, onCompleted: (action: WaitForFocuserAction) => void, delay: number = 30000) {
-	// oxlint-disable-next-line prefer-const
-	let timer: Timer | undefined
-	let unsubscriber: VoidFunction = () => undefined
-	let finished = false
-
-	function complete(action: WaitForFocuserAction) {
-		if (!finished) {
-			finished = true
-			clearTimeout(timer)
-			unsubscriber()
-			onCompleted(action)
-		}
-	}
-
-	function hasReachedPosition() {
-		return !focuser.moving && focuser.position.value === expectedPosition
-	}
-
-	// Wait the focuser reach the position
-	unsubscriber = focuserBus.subscribe('update', (event) => {
-		// Update events carry a projection of the device, so identity must be compared by id.
-		if (event.device.id === focuser.id && (event.property === 'moving' || event.property === 'position') && hasReachedPosition()) complete('reach')
-	})
-
-	timer = setTimeout(() => complete('timeout'), delay)
-
-	if (hasReachedPosition()) {
-		// Let callers finish issuing the movement command before reporting an already-reached target.
-		queueMicrotask(() => complete('reach'))
-	}
-
-	return () => {
-		complete('cancel')
-	}
 }

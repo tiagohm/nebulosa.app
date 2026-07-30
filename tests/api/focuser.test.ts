@@ -4,8 +4,7 @@ import type { Focuser } from 'nebulosa/src/devices/indi/device'
 import { FocuserManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
-import { FocuserHandler, focuserBus, focuser as focuserEndpoints, waitForFocuser } from 'src/api/focuser'
-import type { WaitForFocuserAction } from 'src/api/focuser'
+import { FocuserHandler, focuserBus, focuser as focuserEndpoints } from 'src/api/focuser'
 import { WebSocketMessageHandler } from 'src/api/message'
 import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from '#/focuser'
 import { json, noContent, SocketMessager, waitUntil } from './util'
@@ -186,25 +185,65 @@ describe('focuser handler', () => {
 		}
 	})
 
-	test('completes a pending wait when the focuser reaches the position', async () => {
+	test('moves to a position and resolves after the focuser stops there', async () => {
 		const device = getFocuser()
-		const actions: WaitForFocuserAction[] = []
-		const target = device.position.value + 25
 
-		const cancel = waitForFocuser(device, target, (action) => actions.push(action), 1000)
+		focuserManager.connect(device)
+
+		expect(await waitUntil(() => device.connected)).toBeTrue()
+
+		const target = device.position.value + 500
+		const result = await focuserHandler.moveToAndWait(device, target, AbortSignal.timeout(5000), 5000)
+
+		expect(result.ok).toBeTrue()
+		expect(device.moving).toBeFalse()
+		expect(device.position.value).toBe(target)
+	})
+
+	test('resolves without waiting when the focuser already stands at the position', async () => {
+		const device = getFocuser()
+
+		focuserManager.connect(device)
+
+		expect(await waitUntil(() => device.connected)).toBeTrue()
+
+		const result = await focuserHandler.moveToAndWait(device, device.position.value, AbortSignal.timeout(5000), 5000)
+
+		expect(result.ok).toBeTrue()
+	})
+
+	test('stops the focuser and reports the abort when the wait is canceled', async () => {
+		const device = getFocuser()
+		const stop = spyOn(focuserManager, 'stop')
 
 		try {
-			expect(actions).toHaveLength(0)
+			focuserManager.connect(device)
 
-			device.position.value = target
-			device.moving = false
-			focuserHandler.updated(device, 'position')
+			expect(await waitUntil(() => device.connected)).toBeTrue()
 
-			expect(await waitUntil(() => actions.length > 0)).toBeTrue()
-			expect(actions).toEqual(['reach'])
+			const controller = new AbortController()
+			const moved = focuserHandler.moveToAndWait(device, device.position.value + 20000, controller.signal, 5000)
+
+			expect(await waitUntil(() => device.moving)).toBeTrue()
+
+			controller.abort()
+
+			const result = await moved
+
+			expect(result.ok).toBeFalse()
+			expect(result.ok || result.reason).toBe('aborted')
+			expect(stop).toHaveBeenCalledWith(device)
 		} finally {
-			cancel()
+			stop.mockRestore()
 		}
+	})
+
+	test('reports a disconnected focuser instead of waiting for a move it cannot make', async () => {
+		const device = getFocuser()
+		const result = await focuserHandler.moveToAndWait(device, device.position.value + 100, AbortSignal.timeout(5000), 5000)
+
+		expect(result.ok).toBeFalse()
+		expect(result.ok || result.reason).toBe('disconnected')
 	})
 
 	test('emits remove event when the simulator is disposed', () => {

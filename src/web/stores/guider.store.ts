@@ -2,6 +2,7 @@ import { Api } from '@shared/api'
 import { guiderBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import { cameraCaptureStore } from '@stores/camera.capture.store'
+import { subscribeToUpdateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
 import type { DockviewPanelApi } from 'dockview-react'
 import type { Writable } from 'nebulosa/src/core/types'
@@ -92,6 +93,15 @@ export function guiderStore(api: DockviewPanelApi) {
 
 		u[4] = subscribeKey(state.session, 'target', updateTitle)
 		u[5] = subscribeKey(state.session, 'connected', updateTitle)
+
+		u[7] = subscribeKey(state, 'camera', (camera) => {
+			if (camera !== undefined) {
+				updateCameraCaptureStartFromCamera(camera, state.connection.capture)
+
+				u[6]?.()
+				u[6] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.connection.capture)
+			}
+		})
 
 		void load()
 

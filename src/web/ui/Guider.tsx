@@ -1,10 +1,11 @@
 import { useStore } from '@hooks/store.hook'
 import { CameraCaptureStoreContext, GuiderStoreContext } from '@shared/context'
-import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
+import { CameraCaptureStartInput } from '@ui/CameraCaptureStartInput'
 import { Checkbox } from '@ui/components/Checkbox'
 import { Chip } from '@ui/components/Chip'
 import { IconButton } from '@ui/components/IconButton'
 import { NumberInput } from '@ui/components/NumberInput'
+import { TabPanel, Tabs, Tab } from '@ui/components/Tabs'
 import { TextInput } from '@ui/components/TextInput'
 import { ConnectButton } from '@ui/ConnectButton'
 import { CameraDropdown, GuideOutputDropdown } from '@ui/DeviceDropdown'
@@ -23,8 +24,6 @@ export const Guider = memo(({ api }: IDockviewPanelProps) => {
 		<GuiderStoreContext value={guider}>
 			<div className="grid grid-cols-12 items-center gap-2 p-3">
 				<Connection />
-				<Settle />
-				<Dither />
 				<Command />
 				<Status />
 				<Footer />
@@ -68,38 +67,46 @@ const LocalConnection = memo(() => {
 	const canConnect = camera !== undefined && guideOutput !== undefined
 
 	return (
-		<div className="flex flex-1 items-center gap-2">
-			<DeviceChooser />
-			<ConnectButton disabled={!canConnect || connecting} connected={connected} loading={connecting} onClick={guider.connect} />
+		<div className="flex w-full flex-col items-center gap-2">
+			<div className="flex flex-1 items-center gap-2">
+				<CameraAndGuideOutput />
+				<ConnectButton disabled={!canConnect || connecting} connected={connected} loading={connecting} onClick={guider.connect} />
+			</div>
+			<LocalConnectionSettings />
 		</div>
 	)
 })
 
-const DeviceChooser = memo(() => {
+const CameraAndGuideOutput = memo(() => {
 	const guider = useContext(GuiderStoreContext)
 	const { camera, guideOutput, connected, connecting } = useSnapshot(guider.state)
 	const blocked = connected || connecting
 
 	return (
-		<div className="col-span-10 flex flex-row items-center justify-center gap-2">
-			<CameraDropdown endContent={<CameraDropdownEndContent />} disabled={blocked} onValueChange={(value) => (guider.state.camera = value)} showLabel value={camera} />
+		<div className="flex flex-row items-center justify-center gap-2">
+			<CameraDropdown disabled={blocked} onValueChange={(value) => (guider.state.camera = value)} showLabel value={camera} />
 			<GuideOutputDropdown disabled={blocked} onValueChange={(value) => (guider.state.guideOutput = value)} showLabel value={guideOutput} />
 		</div>
 	)
 })
 
-const CameraDropdownEndContent = memo(() => {
-	const guider = useContext(GuiderStoreContext)
-	const { camera } = useSnapshot(guider.state)
+const LocalConnectionSettings = memo(() => (
+	<Tabs classNames={{ tabListContainer: 'justify-center' }}>
+		<Tab id="camera">Camera</Tab>
+		<Tab id="settle">Settle</Tab>
+		<Tab id="dither">Dither</Tab>
 
-	return (
-		camera && (
-			<CameraCaptureStoreContext value={guider.capture}>
-				<CameraCaptureStartPopover camera={camera} mode="guider" />
-			</CameraCaptureStoreContext>
-		)
-	)
-})
+		<TabPanel id="camera">
+			<Camera />
+		</TabPanel>
+		<TabPanel id="settle">
+			<Settle />
+		</TabPanel>
+		<TabPanel id="dither">
+			<Dither />
+		</TabPanel>
+	</Tabs>
+))
 
 const Settle = memo(() => {
 	const guider = useContext(GuiderStoreContext)
@@ -107,11 +114,11 @@ const Settle = memo(() => {
 	const { pixels, time, timeout } = useSnapshot(guider.state.connection.dither.settle)
 
 	return (
-		<>
-			<NumberInput className="col-span-6" disabled={connected} fractionDigits={1} label="Settle tolerance (px)" maxValue={25} minValue={1} onValueChange={guider.setSettlePixels} placeholder="1.5" step={0.1} value={pixels} />
-			<NumberInput className="col-span-6" disabled={connected} label="Min settle time (s)" maxValue={60} minValue={1} onValueChange={guider.setSettleTime} placeholder="10" value={time} />
-			<NumberInput className="col-span-5" disabled={connected} label="Settle timeout (s)" maxValue={60} minValue={1} onValueChange={guider.setSettleTimeout} placeholder="30" value={timeout} />
-		</>
+		<div className="flex items-center gap-2">
+			<NumberInput className="max-w-40 min-w-0" disabled={connected} fractionDigits={1} label="Settle tolerance (px)" maxValue={30} minValue={1} onValueChange={guider.setSettlePixels} placeholder="1.5" step={0.1} value={pixels} />
+			<NumberInput className="max-w-40 min-w-0" disabled={connected} label="Min settle time (s)" maxValue={60} minValue={1} onValueChange={guider.setSettleTime} placeholder="10" value={time} />
+			<NumberInput className="max-w-40 min-w-0" disabled={connected} label="Settle timeout (s)" maxValue={60} minValue={1} onValueChange={guider.setSettleTimeout} placeholder="30" value={timeout} />
+		</div>
 	)
 })
 
@@ -121,10 +128,23 @@ const Dither = memo(() => {
 	const { amount, raOnly } = useSnapshot(guider.state.connection.dither)
 
 	return (
-		<>
-			<NumberInput className="col-span-4" disabled={connected} fractionDigits={1} label="Dither pixels (px)" maxValue={25} minValue={1} onValueChange={guider.setDitherAmount} placeholder="5" step={0.1} value={amount} />
-			<Checkbox className="col-span-3" disabled={connected} label="RA only" onValueChange={guider.setDitherRaOnly} value={raOnly} />
-		</>
+		<div className="flex items-center gap-2">
+			<NumberInput className="max-w-40 min-w-0" disabled={connected} fractionDigits={1} label="Dither pixels (px)" maxValue={25} minValue={1} onValueChange={guider.setDitherAmount} placeholder="5" step={0.1} value={amount} />
+			<Checkbox disabled={connected} label="RA only" onValueChange={guider.setDitherRaOnly} value={raOnly} />
+		</div>
+	)
+})
+
+const Camera = memo(() => {
+	const guider = useContext(GuiderStoreContext)
+	const { camera } = useSnapshot(guider.state)
+
+	if (!camera) return <div className="flex h-full w-full items-center justify-center">Camera not selected</div>
+
+	return (
+		<CameraCaptureStoreContext value={guider.capture}>
+			<CameraCaptureStartInput mode="guider" camera={camera} disabled={!camera.connected} />
+		</CameraCaptureStoreContext>
 	)
 })
 

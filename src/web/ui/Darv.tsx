@@ -38,7 +38,7 @@ const CameraAndMount = memo(() => {
 
 	return (
 		<div className="col-span-full mt-2 flex flex-row items-center justify-center gap-2">
-			<CameraDropdown showLabel disabled={running} value={camera} onValueChange={(value) => (darv.state.camera = value)} startContent={<CameraDropdownEndContent />} />
+			<CameraDropdown showLabel disabled={running} value={camera} onValueChange={(value) => (darv.state.camera = value)} endContent={<CameraDropdownEndContent />} />
 			<MountDropdown showLabel disabled={running} value={mount} onValueChange={(value) => (darv.state.mount = value)} />
 		</div>
 	)

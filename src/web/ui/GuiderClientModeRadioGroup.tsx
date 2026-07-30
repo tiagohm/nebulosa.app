@@ -11,7 +11,7 @@ export interface GuiderClientModeRadioGroupProps extends React.ComponentProps<'d
 
 export function GuiderClientModeRadioGroup({ value, onValueChange, horizontal, disabled, className, ...props }: GuiderClientModeRadioGroupProps) {
 	return (
-		<div className={tw('flex gap-1', horizontal ? 'flex-row items-center justify-center' : 'flex-col items-start justify-center', className)} {...props}>
+		<div className={tw('flex gap-2', horizontal ? 'flex-row items-center justify-center' : 'flex-col items-start justify-center', className)} {...props}>
 			<Radio disabled={disabled} label="PHD2" onValueChange={(value) => value && onValueChange('remote')} value={value === 'remote'} />
 			<Radio disabled={disabled} label="Local" onValueChange={(value) => value && onValueChange('local')} value={value === 'local'} />
 		</div>

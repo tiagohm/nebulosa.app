@@ -78,7 +78,7 @@ export function cameraStore(camera: Camera) {
 		u[9] = subscribeKey(equipmentStore.state.rotator, 'length', refreshEquipment)
 
 		refreshEquipment()
-		updateCameraCaptureStartFromCamera(state.request, camera)
+		updateCameraCaptureStartFromCamera(camera, state.request)
 
 		return unmount
 	}
@@ -251,7 +251,7 @@ export function updateCameraSubframe(request: CameraCaptureStart, camera: Camera
 	return true
 }
 
-export function updateCameraFrame(request: CameraCaptureStart, frame: Camera['frame']) {
+export function updateCameraFrame(request: Pick<CameraCaptureStart, 'x' | 'y' | 'width' | 'height'>, frame: Camera['frame']) {
 	if (frame.x.max) request.x = Math.max(frame.x.min, Math.min(request.x, frame.x.max))
 	if (frame.y.max) request.y = Math.max(frame.y.min, Math.min(request.y, frame.y.max))
 
@@ -266,7 +266,7 @@ export function updateCameraFrame(request: CameraCaptureStart, frame: Camera['fr
 	}
 }
 
-export function updateCameraFrameFormat(request: CameraCaptureStart, frameFormats?: readonly NameAndLabel[]) {
+export function updateCameraFrameFormat(request: Pick<CameraCaptureStart, 'frameFormat'>, frameFormats?: readonly NameAndLabel[]) {
 	if (!frameFormats?.length) return
 
 	if (!request.frameFormat || !frameFormats.some((e) => e.name === request.frameFormat)) {
@@ -274,7 +274,7 @@ export function updateCameraFrameFormat(request: CameraCaptureStart, frameFormat
 	}
 }
 
-export function updateCameraExposureTime(request: CameraCaptureStart, exposure: MinMaxValueProperty) {
+export function updateCameraExposureTime(request: Pick<CameraCaptureStart, 'exposureTime' | 'exposureTimeUnit'>, exposure: MinMaxValueProperty) {
 	if (exposure.max > 0) {
 		const min = Math.max(1, exposureTimeIn(exposure.min, 'second', request.exposureTimeUnit))
 		const max = exposureTimeIn(exposure.max, 'second', request.exposureTimeUnit)
@@ -282,7 +282,7 @@ export function updateCameraExposureTime(request: CameraCaptureStart, exposure: 
 	}
 }
 
-export function updateCameraCaptureStartFromCamera(capture: CameraCaptureStart, camera: Camera) {
+export function updateCameraCaptureStartFromCamera(camera: Camera, capture: Pick<CameraCaptureStart, 'exposureTime' | 'exposureTimeUnit' | 'frameFormat' | 'x' | 'y' | 'width' | 'height'>) {
 	updateCameraFrameFormat(capture, camera.frameFormats)
 	updateCameraFrame(capture, camera.frame)
 	!camera.exposuring && updateCameraExposureTime(capture, camera.exposure)
@@ -300,7 +300,7 @@ export function updateCameraCaptureStartFromCameraUpdated(capture: CameraCapture
 	}
 }
 
-export function subscribeToUpdateCameraCaptureStartFromCamera(camera: Camera, request: CameraCaptureStart) {
+export function subscribeToUpdateCameraCaptureStartFromCamera(camera: Camera, request: Parameters<typeof updateCameraCaptureStartFromCamera>[1]) {
 	const u = new Array<VoidFunction>(3)
 	u[0] = subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(request, formats))
 	u[1] = subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(request, exposure))

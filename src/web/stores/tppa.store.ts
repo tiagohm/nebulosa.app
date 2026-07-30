@@ -2,7 +2,7 @@ import { Api } from '@shared/api'
 import { tppaBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import { cameraCaptureStore } from '@stores/camera.capture.store'
-import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
+import { subscribeToUpdateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
 import { plateSolverStore } from '@stores/plate.solver.store'
 import type { DockviewPanelApi } from 'dockview-react'
@@ -64,6 +64,8 @@ export function tppaStore(api: DockviewPanelApi) {
 			updateTitle()
 
 			if (camera !== undefined) {
+				updateCameraCaptureStartFromCamera(camera, state.request.capture)
+
 				u[3]?.()
 				u[3] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.request.capture)
 			}

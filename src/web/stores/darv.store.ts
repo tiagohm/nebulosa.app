@@ -3,7 +3,7 @@ import { darvBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import { toast } from '@shared/toast'
 import { cameraCaptureStore } from '@stores/camera.capture.store'
-import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
+import { subscribeToUpdateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
 import type { DockviewPanelApi } from 'dockview-react'
 import type { Writable } from 'nebulosa/src/core/types'
@@ -74,6 +74,8 @@ export function darvStore(api: DockviewPanelApi) {
 			updateTitle()
 
 			if (camera !== undefined) {
+				updateCameraCaptureStartFromCamera(camera, state.request.capture)
+
 				u[3]?.()
 				u[3] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.request.capture)
 			}

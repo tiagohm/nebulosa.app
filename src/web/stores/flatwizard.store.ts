@@ -2,7 +2,7 @@ import { Api } from '@shared/api'
 import { flatWizardBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import { cameraCaptureStore } from '@stores/camera.capture.store'
-import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
+import { subscribeToUpdateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
 import type { DockviewPanelApi } from 'dockview-react'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
@@ -59,6 +59,8 @@ export function flatWizardStore(api: DockviewPanelApi) {
 			updateTitle()
 
 			if (camera !== undefined) {
+				updateCameraCaptureStartFromCamera(camera, state.request.capture)
+
 				u[3]?.()
 				u[3] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.request.capture)
 			}

@@ -7,7 +7,7 @@ import type { ImageTransformation } from '#/image'
 import type { StarDetection } from '#/stardetection'
 import { response } from './http'
 import type { Endpoints } from './http'
-import type { ImageProcessor } from './image'
+import type { ImageProcessor } from './image.processor'
 
 const STAR_DETECTION_IMAGE_TRANSFORMATION: ImageTransformation = {
 	...DEFAULT_IMAGE_TRANSFORMATION,

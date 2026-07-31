@@ -9,7 +9,8 @@ import type { Image } from 'nebulosa/src/imaging/model/types'
 import { bufferSink } from 'nebulosa/src/io/io'
 import { sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
-import { ImageHandler, ImageProcessor, effectiveCrosshairAngularSpacing, image as imageEndpoints } from 'src/api/image'
+import { ImageHandler, effectiveCrosshairAngularSpacing, image as imageEndpoints } from 'src/api/image'
+import { ImageProcessor } from 'src/api/image.processor'
 import { DEFAULT_IMAGE_TRANSFORMATION, X_IMAGE_INFO_HEADER } from '#/image'
 import type { ImageInfo, ImageTransformation } from '#/image'
 import type { AnnotateImage } from '#/image.annotation'
@@ -268,7 +269,6 @@ describe('image handler', () => {
 		expect(info.mono).toBeTrue()
 		expect(info.metadata.width).toBe(8)
 		expect(info.headers.OBJECT).toBe('SYNTHETIC')
-		expect(info.hash).toBeString()
 	})
 
 	test('open endpoint propagates missing image read failures', () => {
@@ -436,12 +436,57 @@ describe('image handler', () => {
 		expect((await readImageFromPath(stored!, 32))?.metadata.width).toBe(8)
 
 		const opened = await endpoints['/image/open'].POST(request(imageRequest('buffered.fit')))
-		const info = imageInfo(opened)
 
-		await noContent(await endpoints['/image/ping'].POST(request({ path: 'buffered.fit', hash: info.hash })))
-		await noContent(await endpoints['/image/close'].POST(request({ path: 'buffered.fit', hash: info.hash })))
+		expect(imageInfo(opened).width).toBe(8)
+
+		await noContent(await endpoints['/image/ping'].POST(request({ path: 'buffered.fit' })))
 
 		expect(handler.imageProcessor.get('buffered.fit')?.byteLength).toBeGreaterThan(0)
+
+		// Closing releases the payload, which for a frame that only exists in memory means losing it
+		await noContent(await endpoints['/image/close'].POST(request({ path: 'buffered.fit' })))
+
+		expect(handler.imageProcessor.get('buffered.fit')).toBeUndefined()
+	})
+
+	test('processor reuses the transformed frame when the request echoes the computed stretch', async () => {
+		const processor = new ImageProcessor()
+		const transformation = structuredClone(DEFAULT_IMAGE_TRANSFORMATION)
+		const first = await processor.transform(fitsPath, transformation)
+
+		expect(first).toBeDefined()
+		expect(transformation.stretch.auto).toBeTrue()
+
+		// The browser sends back the levels the automatic stretch computed, so an equivalent request is
+		// never identical to the previous one
+		const echoed = structuredClone(transformation)
+		expect(await processor.transform(fitsPath, echoed)).toBe(first)
+
+		// A disabled transformation and no transformation at all produce the same frame
+		const untransformed = await processor.transform(fitsPath, false)
+
+		expect(untransformed).toBeDefined()
+		expect(untransformed).not.toBe(first!)
+		expect(await processor.transform(fitsPath, { ...echoed, enabled: false })).toBe(untransformed)
+
+		// A field that reaches the pipeline still separates them
+		expect(await processor.transform(fitsPath, { ...echoed, invert: true })).not.toBe(first!)
+	})
+
+	test('processor ignores fields the pipeline never reads', async () => {
+		const processor = new ImageProcessor()
+		const transformation = structuredClone(DEFAULT_IMAGE_TRANSFORMATION)
+		const first = await processor.transform(fitsPath, transformation)
+
+		expect(first).toBeDefined()
+		expect(transformation.filter.enabled).toBeFalse()
+
+		const ignored = structuredClone(transformation)
+		ignored.filter.blur.size = 9
+		ignored.calibration.dark.path = 'unused.fit'
+		ignored.format.jpeg.quality = 10
+
+		expect(await processor.transform(fitsPath, ignored)).toBe(first)
 	})
 
 	test('processor opens a frame its producer already decoded', async () => {

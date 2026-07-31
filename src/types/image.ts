@@ -29,7 +29,6 @@ export interface OpenImage {
 
 export interface CloseImage {
 	readonly path: string
-	readonly hash?: string
 	readonly camera?: string
 }
 
@@ -58,7 +57,6 @@ export interface ImageInfo extends Partial<EquatorialCoordinate>, Size {
 	readonly transformation: ImageTransformation
 	readonly headers: FitsHeader
 	readonly solution?: PlateSolution
-	readonly hash: string
 }
 
 export interface Image {

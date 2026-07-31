@@ -21,7 +21,7 @@ import { camera as cameraEndpoints, CameraHandler, cameraBus } from 'src/api/cam
 import { CameraCapturer } from 'src/api/camera.capture'
 import type { CameraDitherer, CameraDitherOptions } from 'src/api/camera.capture'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'
-import { ImageProcessor } from 'src/api/image'
+import { ImageProcessor } from 'src/api/image.processor'
 import { WebSocketMessageHandler } from 'src/api/message'
 import type { Messager } from 'src/api/message'
 import { OperationCoordinator } from 'src/api/operation'

@@ -1,8 +1,8 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
-import { ImageProcessor } from 'src/api/image'
-import type { TransformedImageItem } from 'src/api/image'
+import { ImageProcessor } from 'src/api/image.processor'
+import type { TransformedImage } from 'src/api/image.processor'
 import { starDetection as starDetectionEndpoints, StarDetectionHandler } from 'src/api/stardetection'
 import type { ImageTransformation } from '#/image'
 import { DEFAULT_STAR_DETECTION } from '#/stardetection'
@@ -30,12 +30,12 @@ function starDetection(overrides: Partial<StarDetection> = {}): StarDetection {
 	}
 }
 
-function transformedImage(path: string, image: Image, transformation: ImageTransformation | false): TransformedImageItem {
+function transformedImage(path: string, image: Image, transformation: ImageTransformation | false): TransformedImage {
 	return {
-		buffered: { path },
+		source: { path },
 		image,
 		transformation,
-		hash: 'synthetic-image',
+		key: false,
 	}
 }
 

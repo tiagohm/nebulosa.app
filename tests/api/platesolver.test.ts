@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
-import { ImageProcessor } from 'src/api/image'
+import { ImageProcessor } from 'src/api/image.processor'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { NotificationHandler } from 'src/api/notification'
 import { plateSolver as plateSolverEndpoints, PlateSolverHandler } from 'src/api/platesolver'

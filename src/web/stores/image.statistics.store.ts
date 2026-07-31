@@ -48,10 +48,6 @@ export function imageStatisticsStore(viewer: ImageViewerStore) {
 		u[4] = subscribeKey(viewer.roi.state, 'enabled', compute)
 		u[5] = subscribe(viewer.roi.state.roi, () => state.roi && computeDebounced())
 
-		if (state.histogram.length === 0) {
-			void compute()
-		}
-
 		return unmount
 	}
 

@@ -188,7 +188,7 @@ export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewe
 	}
 
 	function ping() {
-		return Api.Image.ping({ path: state.path, hash: state.info?.hash, camera: camera?.name })
+		return Api.Image.ping({ path: state.path, camera: camera?.name })
 	}
 
 	function toggleDebayer() {
@@ -325,7 +325,7 @@ export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewe
 	function remove() {}
 
 	function close() {
-		return Api.Image.close({ path: state.path, hash: state.info?.hash, camera: camera?.name })
+		return Api.Image.close({ path: state.path, camera: camera?.name })
 	}
 
 	const store = {

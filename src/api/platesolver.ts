@@ -5,7 +5,7 @@ import { deg, parseAngle } from 'nebulosa/src/math/units/angle'
 import type { PlateSolveStart } from '#/platesolver'
 import { response } from './http'
 import type { Endpoints } from './http'
-import type { ImageProcessor } from './image'
+import type { ImageProcessor } from './image.processor'
 import type { NotificationHandler } from './notification'
 
 export class PlateSolverHandler {

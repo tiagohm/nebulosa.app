@@ -7,7 +7,7 @@ import { normalizeTimeout } from 'src/shared/normalizer'
 import type { Framing } from '#/framing'
 import { response } from './http'
 import type { Endpoints } from './http'
-import type { ImageProcessor } from './image'
+import type { ImageProcessor } from './image.processor'
 
 const URLS = [HIPS2FITS_ALTERNATIVE_URL, HIPS2FITS_BASE_URL]
 

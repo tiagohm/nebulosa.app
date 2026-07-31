@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { tmpdir } from 'os'
 import { PHD2Client } from 'nebulosa/src/devices/guiding/phd2'
 import type { PHD2Command } from 'nebulosa/src/devices/guiding/phd2'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
@@ -8,15 +9,21 @@ import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
+import type { CameraDeviceWatcher } from 'src/api/camera.capture'
 import { guiderBus, GuiderCommander, localGuiderCameraKey, localGuiderKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
+import type { ImageProcessor } from 'src/api/image'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
+import type { CameraCaptureEvent } from '#/camera'
 import { DEFAULT_GUIDER_DITHER } from '#/guider'
 import type { GuiderConnect, GuiderDitherPhase, GuiderEvent, GuiderSessionInfo } from '#/guider'
 import { waitUntil } from './util'
 
 guiderBus.forceSync = true
+
+// Guide frames are only buffered under this directory, never written, so a temporary path is enough.
+Bun.env.capturesDir = tmpdir()
 
 const cameraManager = new CameraManager()
 const mountManager = new MountManager()
@@ -1119,6 +1126,69 @@ describe('local session', () => {
 			cameraManager.disableBlob = disableBlob
 		}
 	})
+
+	test('publishes the guide camera exposures and frames as camera capture events', async () => {
+		const [camera, guideOutput] = await devices()
+		const events: CameraCaptureEvent[] = []
+		const paths: string[] = []
+		const buffered: string[] = []
+		let watcher: CameraDeviceWatcher | undefined
+		let unwatched = false
+
+		commander.attachCameraPublisher({
+			watch: (device, watched) => {
+				expect(device.id).toBe(camera.id)
+				watcher = watched
+				return () => {
+					unwatched = true
+					watcher = undefined
+				}
+			},
+			imageProcessor: {
+				saveImage: (_: unknown, path: string) => {
+					buffered.push(path)
+				},
+			} as unknown as ImageProcessor,
+			listener: (event, path) => {
+				events.push(event)
+				if (path) paths.push(path)
+			},
+		})
+
+		const connect = await commander.connect(local(camera, guideOutput))
+
+		expect(connect.ok).toBeTrue()
+		if (!connect.ok) throw new Error(connect.error)
+
+		const id = connect.value.id
+
+		expect((await commander.loop(id, { timeout: 15000 })).ok).toBeTrue()
+		expect(watcher).toBeDefined()
+
+		// The guide loop dispatches its own exposures, so the first busy update is what opens a frame.
+		watcher!.updated(camera, 'exposure', 'Busy')
+		watcher!.updated(camera, 'exposure', 'Busy')
+		watcher!.updated(camera, 'exposure', 'Ok')
+
+		const states = events.map((event) => event.state)
+
+		expect(states).toContain('exposureStarted')
+		expect(states).toContain('exposing')
+		expect(states).toContain('exposureFinished')
+		expect(events[0].operation).toBe(id)
+		expect(events[0].camera).toBe(camera.id)
+		expect(events[0].loop).toBeTrue()
+
+		// A frame the client decoded is buffered under the camera name and published to the viewer.
+		expect(await waitUntil(() => paths.length > 0, 15000)).toBeTrue()
+		expect(paths[0]).toEndWith(`${camera.name}.fit`)
+		expect(buffered[0]).toBe(paths[0])
+
+		expect((await commander.stopGuiding(id)).ok).toBeTrue()
+		expect(await waitUntil(() => unwatched)).toBeTrue()
+		expect(events.at(-1)!.state).toBe('idle')
+		expect(events.at(-1)!.stopped).toBeFalse()
+	}, 30000)
 
 	test('restores the frame delivery its next activity depends on', async () => {
 		const [camera, guideOutput] = await devices()

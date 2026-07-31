@@ -24,6 +24,7 @@ import { FocuserHandler, focuser } from 'src/api/focuser'
 import { GuideOutputHandler, guideOutput } from 'src/api/guideoutput'
 import { GuiderHandler, guider } from 'src/api/guider'
 import { GuiderCommander } from 'src/api/guider.session'
+import type { GuiderCameraPublisher } from 'src/api/guider.session'
 import { IndiDevicePropertyHandler, IndiHandler, IndiServerHandler, indi } from 'src/api/indi'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler, MountRemoteControlHandler, mount } from 'src/api/mount'
@@ -222,6 +223,10 @@ const guiderHandler = new GuiderHandler(wsm, notificationHandler, guiderCommande
 // Coordinated camera service owns physical sessions independently from HTTP and WebSocket transport.
 const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourceArbiter, guiderCommander)
 const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
+// A local guider drives its guide camera itself, so it publishes that camera through the same events a
+// capture does. Attached here because the camera feature is built over the commander a capture dithers with.
+const guiderCameraPublisher: GuiderCameraPublisher = { watch: cameraCapturer.watch.bind(cameraCapturer), imageProcessor, listener: cameraHandler.sendEvent.bind(cameraHandler) }
+guiderCommander.attachCameraPublisher(guiderCameraPublisher)
 // Coordinated mount service owns every mutation, so HTTP, protocol adapters, and composite features
 // compete for the mount under the same ownership rules.
 const mountCommander = new MountCommander(mountManager)

@@ -444,6 +444,29 @@ describe('image handler', () => {
 		expect(handler.imageProcessor.get('buffered.fit')?.byteLength).toBeGreaterThan(0)
 	})
 
+	test('processor opens a frame its producer already decoded', async () => {
+		const handler = new ImageHandler(new ImageProcessor())
+		const endpoints = imageEndpoints(handler)
+		const decoded = (await readImageFromPath(fitsPath, 32))!
+		const path = join(root, 'decoded.fit')
+
+		handler.imageProcessor.saveImage(decoded, path)
+		// The producer keeps its own instance and may reuse it on the next frame, so the buffered copy must
+		// be independent of it.
+		decoded.raw.fill(0)
+
+		const opened = await endpoints['/image/open'].POST(request(imageRequest(path)))
+		const info = imageInfo(opened)
+
+		expect(info.width).toBe(8)
+		expect(info.height).toBe(6)
+		expect(await Bun.file(path).exists()).toBeFalse()
+
+		const stats = await json<ImageHistogram[]>(await endpoints['/image/statistics'].POST(request({ ...imageRequest(path), bits: 8, transformed: false })))
+
+		expect(stats[0].mean).toBeCloseTo(0.5, 1)
+	})
+
 	test('fov catalog endpoints return bundled camera and telescope data', async () => {
 		const endpoints = imageEndpoints(new ImageHandler(new ImageProcessor()))
 		const cameras = await json<unknown[]>(endpoints['/image/fovcameras'].GET)

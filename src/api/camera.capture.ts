@@ -6,9 +6,11 @@ import type { CameraManager } from 'nebulosa/src/devices/indi/manager'
 import type { BlobEncoding, PropertyState } from 'nebulosa/src/devices/indi/types'
 import { base64Source, bufferSource } from 'nebulosa/src/io/io'
 import { DEFAULT_CAMERA_CAPTURE_EVENT, exposureTimeInMicroseconds, exposureTimeInSeconds } from '#/camera'
-import type { CameraCaptureEvent, CameraCaptureStart } from '#/camera'
+import type { CameraCaptureStart } from '#/camera'
 import type { GuiderDither, GuiderDitherPhase } from '#/guider'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
+import { CameraCaptureReporter } from './camera.event'
+import type { CameraCaptureListener } from './camera.event'
 import type { ImageProcessor } from './image'
 import type { OperationContext, OperationScope } from './operation'
 import { abortableDelay, abortReason } from './operation.wait'
@@ -90,9 +92,6 @@ const DEFAULT_CAMERA_CAPTURE_DECODE_AND_WRITE: CameraCaptureDecodeAndWrite = {
 	write: Bun.write,
 }
 
-// Callback receiving presentation-state updates and processed frame paths.
-export type CameraCaptureListener = (event: CameraCaptureEvent, path?: string) => void
-
 // Optional collaborators supplied per capture by the transport that started it.
 export interface CameraCaptureListeners {
 	// Receives presentation events emitted by the accepted session.
@@ -101,6 +100,13 @@ export interface CameraCaptureListeners {
 	readonly prepare?: VoidFunction
 	// Receives the terminal events of a capture rejected before a session exists; defaults to listener.
 	readonly rejectedListener?: CameraCaptureListener
+}
+
+// Receives the device callbacks of a camera driven outside a capture session, such as the guide camera
+// of a local guider, whose exposures are commanded by its own client rather than by a capture.
+export interface CameraDeviceWatcher {
+	// One camera property changed, carrying the INDI state that produced it.
+	readonly updated: (camera: Camera, property: keyof Camera & string, state?: PropertyState) => void
 }
 
 // Availability transitions a session applies to the camera resource it owns.
@@ -171,6 +177,8 @@ export class CameraCapturer {
 	readonly #sessions = new Map<string, CameraCaptureSession>()
 	// Camera keys blocked until a stale BLOB is discarded or the transport resets.
 	readonly #quarantined = new Set<string>()
+	// Watchers of cameras driven outside a capture, per physical camera key.
+	readonly #watchers = new Map<string, CameraDeviceWatcher>()
 
 	// Creates a capturer over camera commands, image processing, and resource availability.
 	constructor(
@@ -251,10 +259,26 @@ export class CameraCapturer {
 		})
 	}
 
+	// Registers a watcher for a camera nobody captures with, and returns its idempotent unregistration.
+	//
+	// Device callbacks carry no operation id, so this stays the one place that routes them. A watcher is
+	// only fed while no session owns the key: an accepted capture is the entitled consumer of the camera
+	// it leased, and the arbiter is what keeps a watching feature from holding the device at the same time.
+	watch(camera: Camera, watcher: CameraDeviceWatcher) {
+		const key = resourceKey(camera)
+		this.#watchers.set(key, watcher)
+
+		return () => {
+			if (this.#watchers.get(key) === watcher) this.#watchers.delete(key)
+		}
+	}
+
 	// Routes a camera property update only to the session currently owning its physical key.
 	updated(camera: Camera, property: keyof Camera & string, state?: PropertyState) {
 		const key = resourceKey(camera)
-		this.#sessions.get(key)?.updated(camera, property, state)
+		const session = this.#sessions.get(key)
+		if (session === undefined) this.#watchers.get(key)?.updated(camera, property, state)
+		else session.updated(camera, property, state)
 
 		// A disconnected camera cannot deliver the pending payload, and lifecycle owns its availability from here.
 		if (property === 'connected' && !camera.connected) this.#endQuarantine(camera, key)
@@ -293,14 +317,12 @@ export class CameraCapturer {
 
 // Owns frame generations, device rendezvous, processing, and terminal quiescence for one capture.
 class CameraCaptureSession {
-	// Mutable presentation snapshot; every emission clones it so listeners cannot retain a live reference.
-	readonly #event = structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT)
+	// Presentation snapshot and progress arithmetic shared with every other camera-driving feature.
+	readonly #reporter: CameraCaptureReporter
 	// Caller request copied at construction, so a mutation by the transport cannot alter a running capture.
 	readonly #request: CameraCaptureStart
 	// Inter-frame delay in microseconds.
 	readonly #waitingTime: number
-	// Aggregate exposure progress in microseconds as [remaining, elapsed].
-	readonly #totalExposureProgress = [0, 0]
 	// Paths of fully processed frames, in capture order.
 	readonly #paths: string[] = []
 	// Losing racer that releases a pending rendezvous when a device failure arrives outside it.
@@ -309,8 +331,6 @@ class CameraCaptureSession {
 	#state: CameraCaptureSessionState = 'created'
 	// Rendezvous of the exposure currently in flight, absent before the first frame.
 	#attempt?: FrameAttempt
-	// Monotonic frame counter used to discard callbacks belonging to a superseded exposure.
-	#generation = 0
 	// Whether the session stopped accepting device callbacks and frame emissions.
 	#terminal = false
 	// Exactly-once guard for #fail, so the first cause is the one reported.
@@ -340,30 +360,32 @@ class CameraCaptureSession {
 		readonly sessionContext: CameraCaptureSessionContext,
 	) {
 		this.#request = request
-		this.#event.operation = operationContext.id
-		this.#event.session = Bun.randomUUIDv7()
-		this.#event.loop = request.exposureMode === 'loop'
-		this.#event.camera = camera.id
-		this.#event.count = request.exposureMode === 'single' ? 1 : request.exposureMode === 'fixed' ? request.count : Number.MAX_SAFE_INTEGER
-		this.#event.remainingCount = this.#event.count
-		this.#event.frameExposureTime = exposureTimeInMicroseconds(request.exposureTime, request.exposureTimeUnit)
-		this.#event.totalExposureTime = this.#event.loop ? 0 : this.#event.frameExposureTime * this.#event.count + exposureTimeInMicroseconds(request.delay, 'second') * (this.#event.count - 1)
+		const loop = request.exposureMode === 'loop'
+		const count = request.exposureMode === 'single' ? 1 : request.exposureMode === 'fixed' ? request.count : Number.MAX_SAFE_INTEGER
+		const frameExposureTime = exposureTimeInMicroseconds(request.exposureTime, request.exposureTimeUnit)
 		this.#waitingTime = exposureTimeInMicroseconds(request.delay, 'second')
-		this.#totalExposureProgress[0] = this.#event.totalExposureTime
-		this.#event.totalProgress.remainingTime = this.#event.totalExposureTime
+		this.#reporter = new CameraCaptureReporter({
+			operation: operationContext.id,
+			camera,
+			listener: sessionContext.listener,
+			loop,
+			count,
+			frameExposureTime,
+			totalExposureTime: loop ? 0 : frameExposureTime * count + this.#waitingTime * (count - 1),
+		})
 	}
 
 	// Prepares acquired devices, then executes frames through exposure+BLOB processing.
 	async run(): Promise<OperationResult<CameraCaptureResult>> {
 		if (!this.camera.connected) return this.#finishFailure('disconnected')
-		if (this.#request.exposureTime <= 0 || this.#event.remainingCount <= 0) return this.#finishFailure('commandFailed', 'exposure time and frame count must be positive')
+		if (this.#request.exposureTime <= 0 || this.#reporter.remainingCount <= 0) return this.#finishFailure('commandFailed', 'exposure time and frame count must be positive')
 		try {
 			this.sessionContext.prepare?.()
 		} catch (error) {
 			return this.#finishFailure('commandFailed', errorMessage(error))
 		}
 
-		while (this.#event.remainingCount > 0 && !this.operationContext.signal.aborted) {
+		while (this.#reporter.remainingCount > 0 && !this.operationContext.signal.aborted) {
 			// A device failure recorded outside a rendezvous, such as during the inter-frame delay, only surfaces here.
 			if (this.#failureResult !== undefined) return this.#finish(this.#failureResult)
 			const dither = await this.#dither()
@@ -372,7 +394,7 @@ class CameraCaptureSession {
 			const frame = await this.#captureFrame()
 			if (!frame.ok) return this.#finish(frame)
 
-			if (this.#event.remainingCount > 0) {
+			if (this.#reporter.remainingCount > 0) {
 				const delayed = await this.#delay()
 				if (!delayed.ok) return this.#finish(delayed)
 			}
@@ -404,30 +426,27 @@ class CameraCaptureSession {
 		if (property !== 'exposure' || this.#attempt === undefined || this.#attempt.terminal) return
 
 		const attempt = this.#attempt
-		const remainingTime = exposureTimeInMicroseconds(camera.exposure.value, 'second')
-		const elapsedTime = Math.max(0, this.#event.frameExposureTime - remainingTime)
 
-		if (state === 'Busy') {
-			attempt.started = true
-			this.#state = 'exposing'
-			this.sessionContext.settleStarted({ ok: true, value: undefined })
-			this.#event.state = 'exposing'
-			this.#updateProgress(remainingTime, elapsedTime)
-			this.#emit()
-		} else if (state === 'Ok') {
-			attempt.exposureState = state
-			this.#event.state = 'exposureFinished'
-			this.#updateProgress(0, this.#event.frameExposureTime)
-			this.#emit()
-			attempt.exposureCompleted.resolve(state)
-		} else if (state === 'Alert') {
-			attempt.exposureState = state
-			attempt.exposureCompleted.resolve(state)
-			this.#fail('alert')
-		} else if (state === 'Idle') {
-			attempt.exposureState = state
-			attempt.exposureCompleted.resolve(state)
-			this.#fail('unexpectedState', 'exposure became idle before completion')
+		switch (this.#reporter.applyExposureUpdate(state)) {
+			case 'started':
+				attempt.started = true
+				this.#state = 'exposing'
+				this.sessionContext.settleStarted({ ok: true, value: undefined })
+				break
+			case 'finished':
+				attempt.exposureState = 'Ok'
+				attempt.exposureCompleted.resolve('Ok')
+				break
+			case 'alert':
+				attempt.exposureState = 'Alert'
+				attempt.exposureCompleted.resolve('Alert')
+				this.#fail('alert')
+				break
+			case 'idle':
+				attempt.exposureState = 'Idle'
+				attempt.exposureCompleted.resolve('Idle')
+				this.#fail('unexpectedState', 'exposure became idle before completion')
+				break
 		}
 	}
 
@@ -514,8 +533,7 @@ class CameraCaptureSession {
 		if (!ditherer.running(guider)) return { ok: false, reason: 'unexpectedState', error: `guider ${guider} is not guiding` }
 
 		this.#state = 'dithering'
-		this.#event.state = 'dithering'
-		this.#emit()
+		this.#reporter.setState('dithering')
 
 		try {
 			const result = await ditherer.dither(guider, this.#request.dither, { signal: this.operationContext.signal, onPhase: this.#guiderDithered })
@@ -531,7 +549,9 @@ class CameraCaptureSession {
 		if (this.operationContext.signal.aborted) return { ok: false, reason: abortReason(this.operationContext.signal) }
 
 		const attempt: FrameAttempt = {
-			generation: ++this.#generation,
+			// The rendezvous exists before the frame is opened, because the attempt has to be routable the
+			// moment the exposure is dispatched. Opening it below is what makes this the current generation.
+			generation: this.#reporter.generation + 1,
 			exposureCompleted: Promise.withResolvers<PropertyState>(),
 			blobReceived: Promise.withResolvers<CameraBlob>(),
 			terminal: false,
@@ -540,15 +560,8 @@ class CameraCaptureSession {
 		}
 
 		this.#attempt = attempt
-		this.#event.generation = attempt.generation
 		this.#state = 'startingExposure'
-		this.#event.state = 'exposureStarted'
-		this.#event.elapsedCount++
-		this.#event.remainingCount--
-		this.#event.frameProgress.remainingTime = this.#event.frameExposureTime
-		this.#event.frameProgress.elapsedTime = 0
-		this.#event.frameProgress.progress = 0
-		this.#emit()
+		this.#reporter.beginFrame()
 
 		try {
 			this.#startExposure()
@@ -577,10 +590,8 @@ class CameraCaptureSession {
 
 		if (!processed.ok) return processed
 
-		this.#totalExposureProgress[0] -= this.#event.frameExposureTime
-		this.#totalExposureProgress[1] += this.#event.frameExposureTime
 		this.#paths.push(processed.value)
-		this.sessionContext.listener(this.#event, processed.value)
+		this.#reporter.completeFrame(processed.value)
 		return this.#failureResult ?? processed
 	}
 
@@ -641,16 +652,10 @@ class CameraCaptureSession {
 		if (this.#waitingTime < MINIMUM_WAITING_TIME) return { ok: true, value: undefined }
 
 		this.#state = 'interFrameDelay'
-		this.#event.state = 'waiting'
 		let remaining = this.#waitingTime
 
 		while (remaining > 0) {
-			const elapsed = this.#waitingTime - remaining
-			this.#updateTotalProgress(elapsed)
-			this.#event.frameProgress.remainingTime = remaining
-			this.#event.frameProgress.elapsedTime = elapsed
-			this.#event.frameProgress.progress = Math.max(0, (elapsed / this.#waitingTime) * 100)
-			this.#emit()
+			this.#reporter.waiting(remaining, this.#waitingTime - remaining, this.#waitingTime)
 
 			const step = Math.min(250_000, remaining)
 			const delayed = await abortableDelay(step / 1000, this.operationContext.signal)
@@ -658,8 +663,7 @@ class CameraCaptureSession {
 			remaining -= step
 		}
 
-		this.#totalExposureProgress[0] -= this.#waitingTime
-		this.#totalExposureProgress[1] += this.#waitingTime
+		this.#reporter.completeDelay(this.#waitingTime)
 		return { ok: true, value: undefined }
 	}
 
@@ -688,31 +692,13 @@ class CameraCaptureSession {
 		}
 	}
 
-	// Updates frame and total progress using microseconds.
-	#updateProgress(remainingTime: number, elapsedTime: number) {
-		this.#updateTotalProgress(elapsedTime)
-		this.#event.frameProgress.remainingTime = remainingTime
-		this.#event.frameProgress.elapsedTime = elapsedTime
-		this.#event.frameProgress.progress = this.#event.frameExposureTime <= 0 ? 0 : Math.max(0, (1 - remainingTime / this.#event.frameExposureTime) * 100)
-	}
-
-	// Advances aggregate capture progress within the current exposure or delay.
-	#updateTotalProgress(elapsedTime: number) {
-		if (!this.#event.loop) {
-			this.#event.totalProgress.remainingTime = Math.max(0, this.#totalExposureProgress[0] - elapsedTime)
-			this.#event.totalProgress.progress = this.#event.totalExposureTime <= 0 ? 0 : Math.max(0, (1 - this.#event.totalProgress.remainingTime / this.#event.totalExposureTime) * 100)
-		}
-		this.#event.totalProgress.elapsedTime = this.#totalExposureProgress[1] + elapsedTime
-	}
-
 	// Mirrors the progress of the dither this capture asked for.
 	//
 	// The guider hands each phase back through the call itself, so there is no channel through which
 	// another session could reach this one and nothing here has to be matched against a session id.
 	readonly #guiderDithered = (phase: GuiderDitherPhase) => {
 		if (this.#terminal || this.#state !== 'dithering') return
-		this.#event.state = phase === 'settling' || phase === 'settled' ? 'settling' : 'dithering'
-		this.#emit()
+		this.#reporter.setState(phase === 'settling' || phase === 'settled' ? 'settling' : 'dithering')
 	}
 
 	// Records the first session failure and releases every pending rendezvous race.
@@ -739,24 +725,8 @@ class CameraCaptureSession {
 		this.#terminal = true
 		this.#state = result.ok ? 'succeeded' : result.reason === 'aborted' ? 'cancelled' : 'failed'
 		if (!result.ok) this.sessionContext.settleStarted(result)
-		this.#emitTerminal(!result.ok)
+		this.#reporter.terminal(!result.ok)
 		return result.ok ? { ok: true, value: { paths: this.#paths, frameCount: this.#paths.length } } : result
-	}
-
-	// Emits a cloned presentation snapshot so transport listeners cannot mutate session state.
-	#emit() {
-		this.sessionContext.listener(structuredClone(this.#event))
-	}
-
-	// Emits one final idle presentation while preserving terminal state internally.
-	#emitTerminal(stopped: boolean) {
-		if (stopped) {
-			this.#event.state = 'error'
-			this.#emit()
-		}
-		this.#event.state = 'idle'
-		this.#event.stopped = stopped
-		this.#emit()
 	}
 }
 

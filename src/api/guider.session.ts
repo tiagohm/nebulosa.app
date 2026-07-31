@@ -1,13 +1,20 @@
+import { join } from 'path'
 import { PHD2Client } from 'nebulosa/src/devices/guiding/phd2'
 import type { PHD2AppState, PHD2Command, PHD2CommandResult, PHD2Events } from 'nebulosa/src/devices/guiding/phd2'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { CameraManager, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
+import type { Image } from 'nebulosa/src/imaging/model/types'
 import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
+import type { GuideFrameImage } from 'nebulosa/src/observation/guiding/client'
 import { EventBus } from 'src/shared/bus'
 import { exposureTimeInSeconds } from '#/camera'
 import { DEFAULT_GUIDER_DITHER, DEFAULT_GUIDER_EVENT } from '#/guider'
 import type { GuiderClientMode, GuiderConnect, GuiderDither, GuiderDitherPhase, GuiderEvent, GuiderSessionInfo, GuiderState, GuiderStatus } from '#/guider'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
+import type { CameraDeviceWatcher } from './camera.capture'
+import { CameraCaptureReporter } from './camera.event'
+import type { CameraCaptureListener } from './camera.event'
+import type { ImageProcessor } from './image'
 import type { OperationContext, OperationCoordinator, OperationHandle } from './operation'
 import { abortReason, waitForDeviceState } from './operation.wait'
 import { resourceKey } from './resource'
@@ -143,6 +150,19 @@ function ditherRefusal(answer: GuiderCommandAnswer) {
 	return { outstanding: answer.error === 'timeout', error: `the dither command was rejected: ${commandError(answer.error)}` }
 }
 
+// Collaborators letting a local session publish its guide camera as an ordinary camera capture.
+//
+// They belong to the camera feature, which is built over this commander because a capture dithers
+// through it, so they are attached after construction instead of taken as a dependency.
+export interface GuiderCameraPublisher {
+	// Registers a watcher for the guide camera and returns its unregistration.
+	readonly watch: (camera: Camera, watcher: CameraDeviceWatcher) => VoidFunction
+	// Buffers the decoded guide frame so the image viewer can read it.
+	readonly imageProcessor: ImageProcessor
+	// Receives the capture snapshots and the frame paths of the guide camera.
+	readonly listener: CameraCaptureListener
+}
+
 // Timing overrides, exposed so tests can drive the same code paths without real device latency.
 export interface GuiderSessionOptions {
 	// Milliseconds a short command, such as loop or stop, has to be observed.
@@ -246,6 +266,8 @@ export class GuiderCommander {
 	// Open sessions by id. Nothing else indexes them: the arbiter is what knows which targets are taken,
 	// and this map only exists so a transport can reach a session by the id it published.
 	readonly #sessions = new Map<string, GuiderSessionEntry>()
+	// Publisher of guide-camera activity, absent until the camera feature attaches it.
+	#cameraPublisher?: GuiderCameraPublisher
 
 	// Creates the commander over the coordinator and the managers a local guider drives.
 	constructor(
@@ -254,6 +276,12 @@ export class GuiderCommander {
 		readonly guideOutputManager: GuideOutputManager,
 		readonly options: GuiderSessionOptions = {},
 	) {}
+
+	// Attaches the collaborators publishing guide-camera exposures as camera capture events. Sessions
+	// opened afterwards publish; one already open keeps guiding without publishing.
+	attachCameraPublisher(publisher: GuiderCameraPublisher) {
+		this.#cameraPublisher = publisher
+	}
 
 	// Lists every open session, in the order they were opened.
 	list(): readonly GuiderSessionInfo[] {
@@ -299,6 +327,7 @@ export class GuiderCommander {
 				cameraManager: this.cameraManager,
 				guideOutputManager: this.guideOutputManager,
 				options: this.options,
+				cameraPublisher: this.#cameraPublisher,
 			})
 
 			const opened = await session.open()
@@ -477,6 +506,8 @@ class GuiderSession {
 	#outstandingRetention = 0
 	// Open activity holding the guide camera and guide output.
 	#activity?: GuiderActivity
+	// Publication of the guide camera as a capture, open only while the activity owns the device.
+	#cameraFrames?: GuiderCameraFrames
 	// Aborted the moment the session begins ending, which is well before the transport is actually closed.
 	// It is what tells a command arriving during teardown that there is no session left to serve it.
 	readonly #ending = new AbortController()
@@ -493,6 +524,7 @@ class GuiderSession {
 			readonly cameraManager: CameraManager
 			readonly guideOutputManager: GuideOutputManager
 			readonly options: GuiderSessionOptions
+			readonly cameraPublisher?: GuiderCameraPublisher
 		},
 	) {
 		// Every event this session publishes carries its id, so a listener watching several guiders can tell
@@ -1109,6 +1141,18 @@ class GuiderSession {
 					} catch (error) {
 						return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
 					}
+
+					// The guide camera is published only while this scope owns it: an idle session gives the
+					// device back on purpose, and the exposures seen on it then belong to whoever took it.
+					//
+					// Registered before the quiesce below so LIFO runs it last, and the terminal snapshot that
+					// returns the camera to idle is only published once the guider has actually stopped exposing.
+					const publisher = this.sessionContext.cameraPublisher
+
+					if (publisher !== undefined) {
+						this.#cameraFrames = new GuiderCameraFrames(this.context.id, camera, publisher, Math.max(0, client.getExposure()) * 1000)
+						activityContext.onCleanup(() => this.#stopCameraFrames())
+					}
 				}
 
 				// Whatever ends the activity, the guider must not be left exposing while its devices go back
@@ -1140,6 +1184,12 @@ class GuiderSession {
 		const activity = this.#activity
 		if (activity === undefined) return { ok: true, value: undefined }
 		return await activity.release()
+	}
+
+	// Ends the publication of the guide camera, whatever ended the activity that opened it.
+	#stopCameraFrames() {
+		this.#cameraFrames?.stop()
+		this.#cameraFrames = undefined
 	}
 
 	// Stops capture and waits for the guider to report itself idle, on a signal of its own so it still runs
@@ -1232,6 +1282,11 @@ class GuiderSession {
 		event: (client: GuiderTransport, event: PHD2Events) => {
 			if (!this.#accepts(client)) return
 			this.#applyEvent(event)
+		},
+		// Only a local client decodes frames in this process; a remote server keeps its camera to itself.
+		frame: (client: GuiderTransport, frame: GuideFrameImage) => {
+			if (!this.#accepts(client)) return
+			this.#cameraFrames?.frame(frame.image)
 		},
 		command: (client: PHD2Client, command: PHD2Command, success: boolean, result: unknown) => {
 			if (!this.#accepts(client)) return
@@ -1500,6 +1555,65 @@ class GuiderSession {
 
 		operation.result.resolve(result)
 		this.#dither = undefined
+	}
+}
+
+// Publishes the exposures of a local guide camera as camera capture events, so the camera panel and the
+// image viewer follow the guide loop the same way they follow an ordinary capture.
+//
+// Nothing here commands the camera: the guide loop dispatches its own exposures, so there is no moment
+// at which a frame could be opened on dispatch. The reporter opens one when the driver reports the
+// exposure busy, and the frame the client already decoded for star detection closes it.
+class GuiderCameraFrames {
+	// Presentation state of the guide camera, shared with the capture feature.
+	readonly #reporter: CameraCaptureReporter
+	// Removes the watcher from the camera router.
+	readonly #unwatch: VoidFunction
+	// Whether the publication ended; a late device callback must not reopen it.
+	#stopped = false
+
+	// Publishes one guide camera under the operation of the session guiding with it. The exposure time is
+	// in microseconds and only seeds the first frame: each one afterwards reports what the driver accepted.
+	constructor(
+		operation: string,
+		readonly camera: Camera,
+		readonly publisher: GuiderCameraPublisher,
+		frameExposureTime: number,
+	) {
+		this.#reporter = new CameraCaptureReporter({
+			operation,
+			camera,
+			listener: publisher.listener,
+			loop: true,
+			count: Number.MAX_SAFE_INTEGER,
+			frameExposureTime,
+			autoFrame: true,
+		})
+
+		this.#unwatch = publisher.watch(camera, {
+			updated: (device, property, state) => {
+				if (this.#stopped || device !== this.camera || property !== 'exposure') return
+				this.#reporter.applyExposureUpdate(state)
+			},
+		})
+	}
+
+	// Buffers one decoded guide frame and publishes the path the viewer reads it from. Nothing reaches the
+	// filesystem: the path is the cache key of a frame the next exposure replaces, exactly as it is for a
+	// capture that does not auto-save.
+	frame(image: Image) {
+		if (this.#stopped) return
+		const path = join(Bun.env.capturesDir, `${this.camera.name}.fit`)
+		this.publisher.imageProcessor.saveImage(image, path, this.camera)
+		this.#reporter.completeFrame(path)
+	}
+
+	// Ends the publication and emits the terminal snapshot returning the camera to idle.
+	stop() {
+		if (this.#stopped) return
+		this.#stopped = true
+		this.#unwatch()
+		this.#reporter.terminal(false)
 	}
 }
 

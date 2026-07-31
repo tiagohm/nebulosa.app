@@ -49,6 +49,9 @@ import type { NotificationHandler } from './notification'
 
 export interface BufferedImageItem {
 	readonly buffer?: Buffer
+	// Already decoded frame, held by producers that decoded the payload for their own purposes. It spares
+	// the reader a second decode and is the only source when there is no serialized payload at all.
+	readonly image?: Image
 	readonly path: string
 	readonly camera?: string
 }
@@ -321,6 +324,12 @@ function normalizedDirection(center: readonly [number, number], point: readonly 
 	return length > 0 && Number.isFinite(length) ? { x: x / length, y: y / length } : undefined
 }
 
+// Copies a decoded frame, including its pixel buffer, so producer and consumer never share mutable
+// pixel data. Header and metadata are shallow-copied for the same reason; their values are plain.
+function cloneImage(image: Image): Image {
+	return { ...image, header: { ...image.header }, metadata: { ...image.metadata }, raw: image.raw.slice() }
+}
+
 export class ImageProcessor {
 	private readonly buffered = new Map<string, ImageProcessorItem<BufferedImageItem>>()
 	private readonly transformed = new Map<string, ImageProcessorItem<TransformedImageItem>>()
@@ -329,7 +338,35 @@ export class ImageProcessor {
 	save(buffer: Buffer, path: string, camera?: Camera) {
 		// Avoid double buffering
 		const canBuffer = !camera || process.platform !== 'linux' || !path.startsWith('/dev/shm/')
+		this.evict(path, camera)
 
+		// Store the buffer
+		const item: BufferedImageItem = { buffer: canBuffer ? buffer : undefined, path, camera: camera?.id }
+		this.buffered.set(path, { date: performance.now(), item })
+
+		console.info('image at', path, 'was buffered:', item.buffer?.byteLength)
+
+		return item
+	}
+
+	// Buffers a frame its producer already decoded, such as the one the guide loop detects stars on, so
+	// the viewer reuses that decode instead of parsing a payload again.
+	//
+	// The image is copied because the producer keeps its own instance and is free to reuse or replace it
+	// on the next frame, while this one is retained until the camera produces another.
+	saveImage(image: Image, path: string, camera?: Camera) {
+		this.evict(path, camera)
+
+		const item: BufferedImageItem = { image: cloneImage(image), path, camera: camera?.id }
+		this.buffered.set(path, { date: performance.now(), item })
+
+		console.info('image at', path, 'was buffered:', item.image?.raw.byteLength)
+
+		return item
+	}
+
+	// Drops every cached derivative of the camera, or of the path when there is no camera.
+	private evict(path: string, camera?: Camera) {
 		if (camera) {
 			// Delete existing image for the camera
 			for (const [key, item] of this.transformed) item.item.buffered.camera === camera.id && this.transformed.delete(key)
@@ -341,14 +378,6 @@ export class ImageProcessor {
 			for (const [key, item] of this.transformed) item.item.buffered.path === path && this.transformed.delete(key)
 			for (const [key, item] of this.exported) item.item.transformed.buffered.path === path && this.exported.delete(key)
 		}
-
-		// Store the buffer
-		const item: BufferedImageItem = { buffer: canBuffer ? buffer : undefined, path, camera: camera?.id }
-		this.buffered.set(path, { date: performance.now(), item })
-
-		console.info('image at', path, 'was buffered:', item.buffer?.byteLength)
-
-		return item
 	}
 
 	async transform(path: string, transformation: ImageTransformation | false, camera?: string) {
@@ -367,7 +396,11 @@ export class ImageProcessor {
 
 		let image: Image | undefined
 
-		if (buffered?.buffer?.byteLength) {
+		if (buffered?.image) {
+			// Copied because the transformation below may work in place, and the buffered frame has to stay
+			// pristine for the next transformation asked of the same path.
+			image = cloneImage(buffered.image)
+		} else if (buffered?.buffer?.byteLength) {
 			image = await readImageFromBuffer(buffered.buffer, 32)
 		} else {
 			image = await readImageFromPath(path, 32)

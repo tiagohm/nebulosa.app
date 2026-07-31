@@ -24,7 +24,7 @@ export function CameraCaptureStartInput({ mode, camera, color, disabled, classNa
 	const exposureTimeDisabled = !canExposureTime(mode)
 
 	return (
-		<div className={tw('flex flex-row flex-wrap items-center gap-2 p-2', className)} {...props}>
+		<div className={tw('flex flex-row flex-wrap items-center gap-2', className)} {...props}>
 			<CameraExposureTimeInput
 				className="min-w-0"
 				disabled={disabled || exposureTimeDisabled}

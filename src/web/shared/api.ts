@@ -25,7 +25,7 @@ import type { FlatWizardStart } from '#/flatwizard'
 import type { Framing } from '#/framing'
 import type { SearchSkyObject, SkyObjectSearchItem, SkyObject } from '#/galaxy'
 import type { GuidePulse } from '#/guideoutput'
-import type { GuiderConnect, GuiderConnected, GuiderEvent, GuiderSessionInfo, GuiderStatus } from '#/guider'
+import type { GuiderConnect, GuiderConnected, GuiderEvent, GuiderLoopStart, GuiderSessionInfo, GuiderStatus } from '#/guider'
 import { X_IMAGE_INFO_HEADER } from '#/image'
 import type { CloseImage, ImageInfo, OpenImage } from '#/image'
 import type { AnnotateImage, ImageAnnotation } from '#/image.annotation'
@@ -718,8 +718,8 @@ export namespace Api {
 			return res(`/guiders/${guider.id}/findstar`, 'post')
 		}
 
-		export function loop(guider: GuiderSessionInfo) {
-			return res(`/guiders/${guider.id}/loop`, 'post')
+		export function loop(guider: GuiderSessionInfo, request: GuiderLoopStart) {
+			return res(`/guiders/${guider.id}/loop`, 'post', request)
 		}
 
 		export function calibrate(guider: GuiderSessionInfo) {

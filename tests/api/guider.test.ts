@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { tmpdir } from 'os'
-import { PHD2Client } from 'nebulosa/src/devices/guiding/phd2'
+import { DEFAULT_PHD2_SETTLE, PHD2Client } from 'nebulosa/src/devices/guiding/phd2'
 import type { PHD2Command } from 'nebulosa/src/devices/guiding/phd2'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
@@ -16,8 +16,8 @@ import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraCaptureEvent } from '#/camera'
-import { DEFAULT_GUIDER_DITHER } from '#/guider'
-import type { GuiderConnect, GuiderDitherPhase, GuiderEvent, GuiderSessionInfo } from '#/guider'
+import { DEFAULT_GUIDER_LOOP_START } from '#/guider'
+import type { GuiderConnect, GuiderDitherPhase, GuiderEvent, GuiderLoopStart, GuiderSessionInfo } from '#/guider'
 import { waitUntil } from './util'
 
 guiderBus.forceSync = true
@@ -133,7 +133,7 @@ afterAll(() => {
 })
 
 function remote(remotePort = port): GuiderConnect {
-	return { mode: 'remote', host: '127.0.0.1', port: remotePort, dither: structuredClone(DEFAULT_GUIDER_DITHER) }
+	return { mode: 'remote', host: '127.0.0.1', port: remotePort }
 }
 
 async function connected(remotePort = port) {
@@ -334,7 +334,7 @@ describe('remote session', () => {
 		const id = await connected()
 
 		const disconnected = commander.disconnect(id)
-		const looped = await commander.loop(id)
+		const looped = await commander.loop(id, DEFAULT_GUIDER_LOOP_START)
 
 		expect(looped.ok).toBeFalse()
 		expect(looped.ok || looped.reason).toBe('disconnected')
@@ -355,7 +355,7 @@ describe('remote session', () => {
 	test('reports an unknown session instead of guessing which one was meant', async () => {
 		await connected()
 
-		const result = await commander.loop('nope')
+		const result = await commander.loop('nope', DEFAULT_GUIDER_LOOP_START)
 
 		expect(result.ok).toBeFalse()
 		expect(result.ok || result.reason).toBe('disconnected')
@@ -364,7 +364,7 @@ describe('remote session', () => {
 	test('loops after the guider reports looping exposures', async () => {
 		const id = await connected()
 
-		const looped = commander.loop(id)
+		const looped = commander.loop(id, DEFAULT_GUIDER_LOOP_START)
 
 		expect(await waitUntil(() => server.received('loop'))).toBeTrue()
 		server.push({ Event: 'LoopingExposures', Frame: 1, StarMass: 100, SNR: 20, HFD: 3 })
@@ -377,7 +377,7 @@ describe('remote session', () => {
 		const id = await connected()
 		server.refused.add('loop')
 
-		const result = await commander.loop(id)
+		const result = await commander.loop(id, DEFAULT_GUIDER_LOOP_START)
 
 		expect(result.ok).toBeFalse()
 		expect(result.ok || result.reason).toBe('commandFailed')
@@ -388,7 +388,7 @@ describe('remote session', () => {
 		server.results.set('get_exposure', 2000)
 
 		const id = await connected()
-		const looped = commander.loop(id)
+		const looped = commander.loop(id, DEFAULT_GUIDER_LOOP_START)
 
 		expect(await waitUntil(() => server.received('loop'))).toBeTrue()
 
@@ -410,7 +410,7 @@ describe('remote session', () => {
 
 		server.refused.add('loop')
 
-		const looped = await commander.loop(id)
+		const looped = await commander.loop(id, DEFAULT_GUIDER_LOOP_START)
 
 		expect(looped.ok).toBeFalse()
 		expect(looped.ok || looped.reason).toBe('commandFailed')
@@ -421,7 +421,7 @@ describe('remote session', () => {
 	test('refuses a concurrent command instead of sharing the waiter of the running one', async () => {
 		const id = await connected()
 
-		const looped = commander.loop(id)
+		const looped = commander.loop(id, DEFAULT_GUIDER_LOOP_START)
 		const guided = await commander.startGuiding(id)
 
 		expect(guided.ok).toBeFalse()
@@ -771,7 +771,7 @@ describe('dither', () => {
 			expect((await dithered).ok).toBeTrue()
 
 			// The settle of the default request already outlasts the transport's own default allowance.
-			const settle = DEFAULT_GUIDER_DITHER.settle
+			const settle = DEFAULT_PHD2_SETTLE
 			expect(allowed).toBe((settle.time + settle.timeout) * 1000 + 5000)
 		} finally {
 			transport.send = send
@@ -870,8 +870,7 @@ describe('dither', () => {
 		const id = await guiding()
 
 		const controller = new AbortController()
-		const settle = { ...DEFAULT_GUIDER_DITHER.settle, timeout: 1 }
-		const abandoned = commander.dither(id, { settle }, { signal: controller.signal })
+		const abandoned = commander.dither(id, undefined, { signal: controller.signal })
 
 		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
 		controller.abort('aborted')
@@ -951,14 +950,14 @@ describe('connection loss', () => {
 })
 
 describe('local session', () => {
-	function local(camera: Camera, guideOutput: GuideOutput, exposureTime = 10): GuiderConnect {
+	function local(camera: Camera, guideOutput: GuideOutput): GuiderConnect {
+		return { mode: 'local', focalLength: 500, camera: camera.id, guideOutput: guideOutput.id } as const
+	}
+
+	function loop(exposureTime = 10): GuiderLoopStart {
 		return {
-			mode: 'local',
-			focalLength: 500,
-			camera: camera.id,
-			guideOutput: guideOutput.id,
-			capture: { ...structuredClone(DEFAULT_CAMERA_CAPTURE_START), exposureTime, exposureTimeUnit: 'millisecond' },
-			dither: structuredClone(DEFAULT_GUIDER_DITHER),
+			capture: { ...DEFAULT_CAMERA_CAPTURE_START, exposureTime, exposureTimeUnit: 'millisecond' },
+			settle: DEFAULT_PHD2_SETTLE,
 		}
 	}
 
@@ -1014,12 +1013,12 @@ describe('local session', () => {
 
 	test('lets a guide exposure longer than the command timeout produce its first frame', async () => {
 		const [camera, guideOutput] = await devices()
-		const connect = await commander.connect(local(camera, guideOutput, 2000))
+		const connect = await commander.connect(local(camera, guideOutput))
 
 		expect(connect.ok).toBeTrue()
 		if (!connect.ok) throw new Error(connect.error)
 
-		const looped = await commander.loop(connect.value.id)
+		const looped = await commander.loop(connect.value.id, loop(2000))
 
 		expect(looped.ok).toBeTrue()
 		expect(commander.looping(connect.value.id)).toBeTrue()
@@ -1048,7 +1047,7 @@ describe('local session', () => {
 		if (!connect.ok) throw new Error(connect.error)
 
 		const id = connect.value.id
-		const looped = commander.loop(id, { timeout: 15000 })
+		const looped = commander.loop(id, loop(10), { timeout: 15000 })
 
 		expect(await waitUntil(() => arbiter.availability(resourceKey(camera)) === 'leased')).toBeTrue()
 		expect(arbiter.availability(resourceKey(guideOutput))).toBe('leased')
@@ -1072,7 +1071,7 @@ describe('local session', () => {
 
 		const id = connect.value.id
 
-		expect((await commander.loop(id, { timeout: 15000 })).ok).toBeTrue()
+		expect((await commander.loop(id, loop(10), { timeout: 15000 })).ok).toBeTrue()
 
 		const stopExposure = cameraManager.stopExposure.bind(cameraManager)
 
@@ -1094,38 +1093,6 @@ describe('local session', () => {
 		expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('available')
 		expect(arbiter.availability(localGuiderOutputKey(guideOutput))).toBe('available')
 	}, 20000)
-
-	test('detaches the local guider when its configuration fails', async () => {
-		const [camera, guideOutput] = await devices()
-
-		const gain = cameraManager.gain.bind(cameraManager)
-		const disableBlob = cameraManager.disableBlob.bind(cameraManager)
-		const disabled: string[] = []
-
-		cameraManager.gain = () => {
-			throw new Error('gain failed')
-		}
-
-		cameraManager.disableBlob = (device) => {
-			disabled.push(device.id)
-			disableBlob(device)
-		}
-
-		try {
-			const result = await commander.connect(local(camera, guideOutput))
-
-			expect(result.ok).toBeFalse()
-			expect(result.ok || result.error).toContain('gain failed')
-			expect(disabled).toEqual([camera.id])
-			expect(commander.list()).toBeEmpty()
-			expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('available')
-			expect(arbiter.availability(localGuiderOutputKey(guideOutput))).toBe('available')
-			expect(arbiter.availability(resourceKey(camera))).toBe('available')
-		} finally {
-			cameraManager.gain = gain
-			cameraManager.disableBlob = disableBlob
-		}
-	})
 
 	test('publishes the guide camera exposures and frames as camera capture events', async () => {
 		const [camera, guideOutput] = await devices()
@@ -1162,7 +1129,7 @@ describe('local session', () => {
 
 		const id = connect.value.id
 
-		expect((await commander.loop(id, { timeout: 15000 })).ok).toBeTrue()
+		expect((await commander.loop(id, loop(10), { timeout: 15000 })).ok).toBeTrue()
 		expect(watcher).toBeDefined()
 
 		// The guide loop dispatches its own exposures, so the first busy update is what opens a frame.
@@ -1199,7 +1166,7 @@ describe('local session', () => {
 
 		cameraManager.disableBlob(camera)
 
-		const looped = await commander.loop(connect.value.id, { timeout: 15000 })
+		const looped = await commander.loop(connect.value.id, loop(10), { timeout: 15000 })
 
 		expect(looped.ok).toBeTrue()
 		expect(commander.looping(connect.value.id)).toBeTrue()
@@ -1225,7 +1192,7 @@ describe('local session', () => {
 		expect((await owner.result).ok).toBeTrue()
 		expect(await waitUntil(() => camera.bin.x.value === 2)).toBeTrue()
 
-		const looped = await commander.loop(connect.value.id, { timeout: 15000 })
+		const looped = await commander.loop(connect.value.id, loop(10), { timeout: 15000 })
 
 		expect(looped.ok).toBeTrue()
 		expect(camera.bin.x.value).toBe(1)
@@ -1317,7 +1284,7 @@ describe('local session', () => {
 
 		const id = connect.value.id
 
-		expect((await commander.loop(id, { timeout: 15000 })).ok).toBeTrue()
+		expect((await commander.loop(id, loop(10), { timeout: 15000 })).ok).toBeTrue()
 		expect(arbiter.availability(resourceKey(camera))).toBe('leased')
 
 		const transport: { guide: () => unknown } = GuiderClient.prototype
@@ -1388,7 +1355,7 @@ describe('local session', () => {
 			return { ok: true, value: undefined }
 		})
 
-		const looped = await commander.loop(connect.value.id)
+		const looped = await commander.loop(connect.value.id, loop(10))
 
 		expect(looped.ok).toBeFalse()
 		expect(looped.ok || looped.reason).toBe('busy')

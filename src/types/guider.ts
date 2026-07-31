@@ -10,22 +10,24 @@ export type GuiderClientMode = 'local' | 'remote'
 export type GuiderState = 'idle' | 'calibrating' | 'settling' | 'guiding' | 'looping' | 'starLost' | 'paused'
 
 export interface GuiderRemoteConnect extends Readonly<HostAndPort> {
-	readonly dither: GuiderDither
 	readonly mode: 'remote'
 }
 
 export interface GuiderLocalConnect {
-	readonly dither: GuiderDither
 	readonly focalLength: number
 	readonly camera: string
 	readonly guideOutput: string
-	readonly capture: Omit<CameraCaptureStart, 'dither'>
 	readonly mode: 'local'
 }
 
 export type GuiderConnect = GuiderRemoteConnect | GuiderLocalConnect
 
 export type GuiderConnected = OperationResult<GuiderSessionInfo>
+
+export interface GuiderLoopStart {
+	readonly capture: CameraCaptureStart
+	readonly settle: PHD2Settle
+}
 
 export interface GuiderEvent {
 	id: string
@@ -48,7 +50,6 @@ export interface GuiderEvent {
 export interface GuiderDither {
 	amount: number
 	raOnly: boolean
-	readonly settle: PHD2Settle
 }
 
 // Progress of one dither, from the command until its terminal settle. It is reported back to whoever asked
@@ -88,7 +89,6 @@ export interface GuiderSessionInfo {
 export const DEFAULT_GUIDER_DITHER: Required<GuiderDither> = {
 	amount: 5,
 	raOnly: false,
-	settle: DEFAULT_PHD2_SETTLE,
 }
 
 export const DEFAULT_GUIDER_EVENT: GuiderEvent = {
@@ -113,7 +113,6 @@ export const DEFAULT_GUIDER_REMOTE_CONNECT: GuiderRemoteConnect = {
 	mode: 'remote',
 	host: 'localhost',
 	port: 4400,
-	dither: DEFAULT_GUIDER_DITHER,
 }
 
 export const DEFAULT_GUIDER_INTERNAL_CONNECT: GuiderLocalConnect = {
@@ -121,8 +120,11 @@ export const DEFAULT_GUIDER_INTERNAL_CONNECT: GuiderLocalConnect = {
 	focalLength: 0,
 	camera: '',
 	guideOutput: '',
-	capture: structuredClone(DEFAULT_CAMERA_CAPTURE_START),
-	dither: DEFAULT_GUIDER_DITHER,
+}
+
+export const DEFAULT_GUIDER_LOOP_START: GuiderLoopStart = {
+	capture: DEFAULT_CAMERA_CAPTURE_START,
+	settle: DEFAULT_PHD2_SETTLE,
 }
 
 export function canConnectRemote({ host, port }: HostAndPort) {

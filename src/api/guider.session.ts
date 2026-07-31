@@ -1,5 +1,5 @@
 import { join } from 'path'
-import { PHD2Client } from 'nebulosa/src/devices/guiding/phd2'
+import { DEFAULT_PHD2_SETTLE, PHD2Client } from 'nebulosa/src/devices/guiding/phd2'
 import type { PHD2AppState, PHD2Command, PHD2CommandResult, PHD2Events } from 'nebulosa/src/devices/guiding/phd2'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { CameraManager, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
@@ -7,9 +7,10 @@ import type { Image } from 'nebulosa/src/imaging/model/types'
 import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
 import type { GuideFrameImage } from 'nebulosa/src/observation/guiding/client'
 import { EventBus } from 'src/shared/bus'
-import { exposureTimeInSeconds } from '#/camera'
-import { DEFAULT_GUIDER_DITHER, DEFAULT_GUIDER_EVENT } from '#/guider'
-import type { GuiderClientMode, GuiderConnect, GuiderDither, GuiderDitherPhase, GuiderEvent, GuiderSessionInfo, GuiderState, GuiderStatus } from '#/guider'
+import { DEFAULT_CAMERA_CAPTURE_START, exposureTimeInMilliseconds } from '#/camera'
+import type { CameraCaptureStart } from '#/camera'
+import { DEFAULT_GUIDER_EVENT } from '#/guider'
+import type { GuiderClientMode, GuiderConnect, GuiderDither, GuiderDitherPhase, GuiderEvent, GuiderLoopStart, GuiderSessionInfo, GuiderState, GuiderStatus } from '#/guider'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
 import type { CameraDeviceWatcher } from './camera.capture'
 import { CameraCaptureReporter } from './camera.event'
@@ -384,8 +385,8 @@ export class GuiderCommander {
 	}
 
 	// Starts continuous exposures without guide output.
-	async loop(guider: string, options: GuiderCommandOptions = {}) {
-		return await this.#command(guider, (session) => session.loop(options))
+	async loop(guider: string, request: GuiderLoopStart, options: GuiderCommandOptions = {}) {
+		return await this.#command(guider, (session) => session.loop(request, options))
 	}
 
 	// Selects the best star of the latest frame as the lock position.
@@ -478,8 +479,10 @@ export class GuiderCommander {
 class GuiderSession {
 	// Mutable presentation snapshot; every publication clones it so listeners cannot retain a live reference.
 	readonly event = structuredClone(DEFAULT_GUIDER_EVENT)
-	// Dither defaults taken from the connect request and overridden per call.
-	readonly #settings = structuredClone(DEFAULT_GUIDER_DITHER)
+	// Camera capture defaults taken from the loop request and overridden per call.
+	readonly #capture = structuredClone(DEFAULT_CAMERA_CAPTURE_START)
+	// Settle defaults taken from the loop request and overridden per call.
+	readonly #settle = structuredClone(DEFAULT_PHD2_SETTLE)
 	// Rolling guide-error statistics, in pixels before the pixel scale is applied.
 	readonly #rms = new RMS()
 	// Waiters fed by transport events, which is how a command learns it reached its state.
@@ -557,7 +560,21 @@ class GuiderSession {
 	}
 
 	// Starts looping exposures and resolves once the guider reports it is looping.
-	async loop(options: GuiderCommandOptions) {
+	async loop(request: GuiderLoopStart, options: GuiderCommandOptions): Promise<OperationResult<undefined>> {
+		if (this.target.camera && this.#client instanceof GuiderClient) {
+			try {
+				this.#configure(this.target.camera, this.#client, request.capture)
+			} catch (error) {
+				// connect() already attached the client to the camera manager, so a configuration that fails
+				// has to detach it here rather than leave it subscribed to a device the session gives back.
+				this.#detach()
+				return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
+			}
+		}
+
+		Object.assign(this.#capture, structuredClone(request.capture))
+		Object.assign(this.#settle, request.settle)
+
 		return await this.#serialize(
 			'loop',
 			options,
@@ -652,7 +669,7 @@ class GuiderSession {
 							return 'pending'
 						},
 						command: async () => {
-							await this.#dispatch((client) => client.guide(recalibrate, this.#settings.settle))
+							await this.#dispatch((client) => client.guide(recalibrate, this.#settle))
 							accepted = true
 						},
 						abort: () => (accepted ? this.#abortCapture() : undefined),
@@ -697,7 +714,7 @@ class GuiderSession {
 			if (this.event.state !== 'guiding') return { ok: false, reason: 'unexpectedState', error: 'the guider is not guiding' }
 			if (this.#outstandingDither !== undefined) return { ok: false, reason: 'busy', error: 'the guider is still moving for a previous dither' }
 
-			const settle = request?.settle ?? this.#settings.settle
+			const settle = this.#settle
 			// The settle timeout is what the guider was given to finish moving; a caller may bound its own
 			// wait shorter than that, as it can for every other command, without shortening the movement.
 			const retention = Math.max(1, settle.timeout) * 1000
@@ -706,8 +723,8 @@ class GuiderSession {
 			this.#publishDither({ phase: 'dithering', guider: structuredClone(this.event) })
 
 			const command = (async () => {
-				const amount = request?.amount ?? this.#settings.amount
-				const raOnly = request?.raOnly ?? this.#settings.raOnly
+				const amount = request?.amount ?? this.#capture.dither.amount
+				const raOnly = request?.raOnly ?? this.#capture.dither.raOnly
 				// PHD2 answers the dither only once it has settled, so its reply is allowed the whole settle and
 				// then some. The default would give up on any settle longer than fifteen seconds.
 				const timeout = Math.max(15000, (Math.max(0, settle.time) + Math.max(1, settle.timeout)) * 1000 + 5000)
@@ -880,8 +897,6 @@ class GuiderSession {
 				return { ok: false, reason: 'commandFailed', error: 'failed to connect to the PHD2 server' }
 			}
 
-			Object.assign(this.#settings, this.request.dither)
-
 			// The handshake runs before any command exists, so it is bounded by the operation instead. A
 			// server that drops the socket right after accepting it would otherwise leave this pending and the
 			// executor with it, holding the logical resource against even a shutdown.
@@ -932,15 +947,7 @@ class GuiderSession {
 					return { ok: false, reason: 'commandFailed', error: 'failed to start the local guider' }
 				}
 
-				try {
-					this.#configure(camera, client)
-					return { ok: true, value: client }
-				} catch (error) {
-					// connect() already attached the client to the camera manager, so a configuration that fails
-					// has to detach it here rather than leave it subscribed to a device the session gives back.
-					this.#detach()
-					return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
-				}
+				return { ok: true, value: client }
 			},
 		).result
 
@@ -951,7 +958,6 @@ class GuiderSession {
 			return configured
 		}
 
-		Object.assign(this.#settings, request.dither)
 		this.#pixelScale = configured.value.getPixelScale() || 1
 		return { ok: true, value: undefined }
 	}
@@ -962,11 +968,10 @@ class GuiderSession {
 	// physical device on purpose, so another operation may crop, bin or re-gain it meanwhile, and a capture
 	// turns frame delivery off when it is done. A guide exposure taken on that configuration would be wrong,
 	// and one taken with delivery off would never produce the frame the session is waiting for.
-	#configure(camera: Camera, client: GuiderClient) {
+	#configure(camera: Camera, client: GuiderClient, capture: CameraCaptureStart) {
 		if (this.request.mode !== 'local') return
 
 		const { cameraManager } = this.sessionContext
-		const { capture } = this.request
 
 		if (capture.width > 0 && capture.height > 0 && capture.subframe) cameraManager.frame(camera, capture.x, capture.y, capture.width, capture.height)
 		else if (camera.frame.width.max > 0 && camera.frame.height.max > 0) cameraManager.frame(camera, 0, 0, camera.frame.width.max, camera.frame.height.max)
@@ -978,7 +983,7 @@ class GuiderSession {
 		cameraManager.transferFormat(camera, capture.transferFormat)
 		cameraManager.compression(camera, capture.compressed)
 		cameraManager.enableBlob(camera)
-		client.setExposure(exposureTimeInSeconds(capture.exposureTime, capture.exposureTimeUnit))
+		client.setExposure(exposureTimeInMilliseconds(capture.exposureTime, capture.exposureTimeUnit))
 	}
 
 	// Runs one state-changing command, refusing a second one instead of letting it resolve another's waiter.
@@ -1137,7 +1142,7 @@ class GuiderSession {
 				// under the scope that owns it again, rather than trusting what connect left behind.
 				if (client instanceof GuiderClient) {
 					try {
-						this.#configure(camera, client)
+						this.#configure(camera, client, this.#capture)
 					} catch (error) {
 						return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
 					}

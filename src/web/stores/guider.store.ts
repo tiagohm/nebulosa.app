@@ -11,7 +11,7 @@ import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { DEFAULT_GUIDER_EVENT, DEFAULT_GUIDER_INTERNAL_CONNECT, DEFAULT_GUIDER_REMOTE_CONNECT } from '#/guider'
-import type { GuiderClientMode, GuiderEvent, GuiderLocalConnect, GuiderRemoteConnect, GuiderSessionInfo } from '#/guider'
+import type { GuiderClientMode, GuiderEvent, GuiderLocalConnect, GuiderLoopStart, GuiderRemoteConnect, GuiderSessionInfo } from '#/guider'
 
 export type GuiderStore = ReturnType<typeof guiderStore>
 
@@ -19,6 +19,7 @@ export interface GuiderState {
 	readonly connection: Writable<Omit<GuiderRemoteConnect, 'mode'> & Omit<GuiderLocalConnect, 'mode'> & { mode: GuiderClientMode }>
 	camera?: DeviceState<Camera>
 	guideOutput?: DeviceState<GuideOutput>
+	readonly loop: GuiderLoopStart
 	readonly event: GuiderEvent
 	index: number
 	connecting: boolean
@@ -36,9 +37,16 @@ export function guiderStore(api: DockviewPanelApi) {
 			...DEFAULT_GUIDER_REMOTE_CONNECT,
 			...DEFAULT_GUIDER_INTERNAL_CONNECT,
 			mode: 'remote',
-			capture: capture.state,
 		},
 		event: structuredClone(DEFAULT_GUIDER_EVENT),
+		loop: {
+			capture: capture.state,
+			settle: {
+				pixels: 1.5,
+				time: 10,
+				timeout: 30,
+			},
+		},
 		index: 0,
 		connecting: false,
 		pendingCommand: undefined,
@@ -69,7 +77,7 @@ export function guiderStore(api: DockviewPanelApi) {
 
 		mounted = true
 
-		u[0] = initProxy(state, id, ['o:connection', 'o:session'])
+		u[0] = initProxy(state, id, ['o:connection', 'o:session', 'o:loop'])
 
 		u[1] = guiderBus.subscribe('add', (event) => {
 			if (state.session?.id === event.id) {
@@ -96,10 +104,10 @@ export function guiderStore(api: DockviewPanelApi) {
 
 		u[7] = subscribeKey(state, 'camera', (camera) => {
 			if (camera !== undefined) {
-				updateCameraCaptureStartFromCamera(camera, state.connection.capture)
+				updateCameraCaptureStartFromCamera(camera, state.loop.capture)
 
 				u[6]?.()
-				u[6] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.connection.capture)
+				u[6] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.loop.capture)
 			}
 		})
 
@@ -161,23 +169,23 @@ export function guiderStore(api: DockviewPanelApi) {
 	}
 
 	function setDitherAmount(value: number) {
-		state.connection.dither.amount = value
+		state.loop.capture.dither.amount = value
 	}
 
 	function setDitherRaOnly(value: boolean) {
-		state.connection.dither.raOnly = value
+		state.loop.capture.dither.raOnly = value
 	}
 
 	function setSettlePixels(value: number) {
-		state.connection.dither.settle.pixels = value
+		state.loop.settle.pixels = value
 	}
 
 	function setSettleTime(value: number) {
-		state.connection.dither.settle.time = value
+		state.loop.settle.time = value
 	}
 
 	function setSettleTimeout(value: number) {
-		state.connection.dither.settle.timeout = value
+		state.loop.settle.timeout = value
 	}
 
 	async function connect() {
@@ -201,11 +209,11 @@ export function guiderStore(api: DockviewPanelApi) {
 		}
 	}
 
-	async function runCommand(command: NonNullable<GuiderState['pendingCommand']>) {
+	async function runCommand(command: NonNullable<GuiderState['pendingCommand']>, ...params: unknown[]) {
 		try {
 			if (state.pendingCommand !== undefined || !state.session) return
 			state.pendingCommand = command
-			return await Api.Guider[command](state.session)
+			return await (Api.Guider[command] as (session: GuiderSessionInfo, ...params: unknown[]) => Promise<Response | undefined>)(state.session, ...params)
 		} finally {
 			state.pendingCommand = undefined
 		}
@@ -219,7 +227,7 @@ export function guiderStore(api: DockviewPanelApi) {
 	}
 
 	function loop() {
-		return runCommand('loop')
+		return runCommand('loop', state.loop)
 	}
 
 	function findStar() {

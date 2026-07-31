@@ -1,4 +1,3 @@
-import { DEFAULT_PHD2_SETTLE } from 'nebulosa/src/devices/guiding/phd2'
 import type { FrameType, CameraTransferFormat, Camera } from 'nebulosa/src/devices/indi/device'
 import type { Size } from 'recharts/types/util/types'
 import type { DeviceAdded, DeviceRemoved, DeviceUpdated } from '#/device'
@@ -120,7 +119,6 @@ export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 		enabled: false,
 		amount: 5,
 		raOnly: false,
-		settle: DEFAULT_PHD2_SETTLE,
 	},
 	transferFormat: 'FITS',
 	compressed: false,

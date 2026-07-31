@@ -110,40 +110,50 @@ const LocalConnectionSettings = memo(() => (
 
 const Settle = memo(() => {
 	const guider = useContext(GuiderStoreContext)
-	const { connected } = useSnapshot(guider.state)
-	const { pixels, time, timeout } = useSnapshot(guider.state.connection.dither.settle)
+	const { camera, pendingCommand } = useSnapshot(guider.state)
+	const { state } = useSnapshot(guider.state.event)
+	const { pixels, time, timeout } = useSnapshot(guider.state.loop.settle)
+	const busy = pendingCommand !== undefined
+	const blocked = !camera?.connected || busy || state !== 'idle'
 
 	return (
-		<div className="flex items-center gap-2">
-			<NumberInput className="max-w-40 min-w-0" disabled={connected} fractionDigits={1} label="Settle tolerance (px)" maxValue={30} minValue={1} onValueChange={guider.setSettlePixels} placeholder="1.5" step={0.1} value={pixels} />
-			<NumberInput className="max-w-40 min-w-0" disabled={connected} label="Min settle time (s)" maxValue={60} minValue={1} onValueChange={guider.setSettleTime} placeholder="10" value={time} />
-			<NumberInput className="max-w-40 min-w-0" disabled={connected} label="Settle timeout (s)" maxValue={60} minValue={1} onValueChange={guider.setSettleTimeout} placeholder="30" value={timeout} />
+		<div className="flex items-center gap-2 p-2">
+			<NumberInput className="max-w-40 min-w-0" disabled={blocked} fractionDigits={1} label="Settle tolerance (px)" maxValue={30} minValue={1} onValueChange={guider.setSettlePixels} placeholder="1.5" step={0.1} value={pixels} />
+			<NumberInput className="max-w-40 min-w-0" disabled={blocked} label="Min settle time (s)" maxValue={60} minValue={1} onValueChange={guider.setSettleTime} placeholder="10" value={time} />
+			<NumberInput className="max-w-40 min-w-0" disabled={blocked} label="Settle timeout (s)" maxValue={60} minValue={1} onValueChange={guider.setSettleTimeout} placeholder="30" value={timeout} />
 		</div>
 	)
 })
 
 const Dither = memo(() => {
 	const guider = useContext(GuiderStoreContext)
-	const { connected } = useSnapshot(guider.state)
-	const { amount, raOnly } = useSnapshot(guider.state.connection.dither)
+	const { camera, pendingCommand } = useSnapshot(guider.state)
+	const { state } = useSnapshot(guider.state.event)
+	const { amount, raOnly } = useSnapshot(guider.state.loop.capture.dither)
+	const busy = pendingCommand !== undefined
+	const blocked = !camera?.connected || busy || state !== 'idle'
 
 	return (
-		<div className="flex items-center gap-2">
-			<NumberInput className="max-w-40 min-w-0" disabled={connected} fractionDigits={1} label="Dither pixels (px)" maxValue={25} minValue={1} onValueChange={guider.setDitherAmount} placeholder="5" step={0.1} value={amount} />
-			<Checkbox disabled={connected} label="RA only" onValueChange={guider.setDitherRaOnly} value={raOnly} />
+		<div className="flex items-center gap-2 p-2">
+			<NumberInput className="max-w-40 min-w-0" disabled={blocked} fractionDigits={1} label="Dither pixels (px)" maxValue={25} minValue={1} onValueChange={guider.setDitherAmount} placeholder="5" step={0.1} value={amount} />
+			<Checkbox disabled={blocked} label="RA only" onValueChange={guider.setDitherRaOnly} value={raOnly} />
 		</div>
 	)
 })
 
 const Camera = memo(() => {
 	const guider = useContext(GuiderStoreContext)
-	const { camera } = useSnapshot(guider.state)
+	const { camera, pendingCommand } = useSnapshot(guider.state)
+	const { state } = useSnapshot(guider.state.event)
 
 	if (!camera) return <div className="flex h-full w-full items-center justify-center">Camera not selected</div>
 
+	const busy = pendingCommand !== undefined
+	const blocked = !camera.connected || busy || state !== 'idle'
+
 	return (
 		<CameraCaptureStoreContext value={guider.capture}>
-			<CameraCaptureStartInput mode="guider" camera={camera} disabled={!camera.connected} />
+			<CameraCaptureStartInput className="p-2" mode="guider" camera={camera} disabled={blocked} />
 		</CameraCaptureStoreContext>
 	)
 })
@@ -161,7 +171,7 @@ const Command = memo(() => {
 			<IconButton color="primary" disabled={blocked || state !== 'idle'} icon={Icons.Reload} loading={pendingCommand === 'loop'} onClick={guider.loop} tooltipContent="Loop exposures" />
 			<IconButton color="warning" disabled={blocked || !looping} icon={Icons.Star} loading={pendingCommand === 'findStar'} onClick={guider.findStar} tooltipContent="Find guide star" />
 			<IconButton color="success" disabled={blocked || (!looping && state !== 'starLost')} icon={Icons.Play} loading={pendingCommand === 'start'} onClick={guider.start} tooltipContent="Start guiding" />
-			<IconButton color="danger" disabled={blocked || state === 'idle'} icon={Icons.Stop} loading={pendingCommand === 'stop'} onClick={guider.stop} tooltipContent="Stop guiding" />
+			<IconButton color="danger" disabled={blocked || state === 'idle'} icon={Icons.Stop} loading={pendingCommand === 'stop'} onClick={guider.stop} tooltipContent="Stop" />
 		</div>
 	)
 })

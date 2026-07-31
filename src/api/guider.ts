@@ -1,4 +1,4 @@
-import type { GuiderConnect, GuiderDither, GuiderSessionInfo } from '#/guider'
+import type { GuiderConnect, GuiderDither, GuiderLoopStart, GuiderSessionInfo } from '#/guider'
 import type { OperationResult } from '#/orchestration'
 import { guiderBus, GuiderCommander } from './guider.session'
 import type { GuiderCommandOptions, GuiderFindStarResult } from './guider.session'
@@ -66,8 +66,8 @@ export class GuiderHandler {
 	}
 
 	// Starts looping exposures without guide output.
-	loop(guider: string, options?: GuiderCommandOptions) {
-		return this.commander.loop(guider, options)
+	loop(guider: string, request: GuiderLoopStart, options?: GuiderCommandOptions) {
+		return this.commander.loop(guider, request, options)
 	}
 
 	// Locks onto the best star of the latest frame.
@@ -116,7 +116,7 @@ export function guider(guiderHandler: GuiderHandler) {
 		'/guiders/:id/event': { GET: (req) => response(guiderHandler.event(req.params.id)) },
 		'/guiders/:id/clear': { POST: (req) => response(guiderHandler.clear(req.params.id)) },
 		'/guiders/:id/disconnect': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.disconnect(req.params.id)) },
-		'/guiders/:id/loop': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.loop(req.params.id)) },
+		'/guiders/:id/loop': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.loop(req.params.id, await req.json())) },
 		'/guiders/:id/findstar': { POST: async (req) => response<OperationResult<GuiderFindStarResult>>(await guiderHandler.findStar(req.params.id)) },
 		'/guiders/:id/start': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.start(req.params.id)) },
 		'/guiders/:id/stop': { POST: async (req) => response<OperationResult<void>>(await guiderHandler.stop(req.params.id)) },

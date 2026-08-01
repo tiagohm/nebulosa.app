@@ -4,16 +4,25 @@ import type { FlatPanel } from 'nebulosa/src/devices/indi/device'
 import { FlatPanelManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { FlatPanelSimulator } from 'nebulosa/src/devices/indi/simulator/flatpanel'
+import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { FlatPanelHandler, flatPanelBus, flatPanel as flatPanelEndpoints } from 'src/api/flatpanel'
+import { FlatPanelCommander } from 'src/api/flatpanel.commander'
 import { WebSocketMessageHandler } from 'src/api/message'
+import { OperationCoordinator } from 'src/api/operation'
+import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import type { FlatPanelAdded, FlatPanelRemoved, FlatPanelUpdated } from '#/flatpanel'
-import { json, noContent, SocketMessager, waitUntil } from './util'
+import { json, SocketMessager, waitUntil } from './util'
 
 flatPanelBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const flatPanelManager = new FlatPanelManager()
-const flatPanelHandler = new FlatPanelHandler(wsm, flatPanelManager)
+const resourceArbiter = new ResourceArbiter()
+const operationCoordinator = new OperationCoordinator(resourceArbiter)
+const flatPanelCommander = new FlatPanelCommander(flatPanelManager)
+const flatPanelHandler = new FlatPanelHandler(wsm, flatPanelManager, flatPanelCommander, operationCoordinator)
+const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
+deviceLifecycle.observe(flatPanelManager)
 const endpoints = flatPanelEndpoints(flatPanelHandler)
 const handler = new IndiClientHandlerSet([flatPanelManager])
 const client = new ClientSimulator('Client Simulator', handler)
@@ -31,7 +40,8 @@ beforeEach(() => {
 	flatPanelManager.disconnect(getFlatPanel())
 })
 
-afterEach(() => {
+afterEach(async () => {
+	await operationCoordinator.cancelAll('aborted')
 	flatPanelManager.disconnect(getFlatPanel())
 })
 
@@ -51,6 +61,26 @@ function request(id = 'Flat Panel Simulator', body?: unknown, search = '') {
 
 function flatPanelUpdates(property: keyof FlatPanel & string) {
 	return socket.filter<FlatPanelUpdated>((message) => message.type === 'flatPanel:update' && message.body.property === property)
+}
+
+async function succeeded(response: Response) {
+	expect(response.status).toBe(200)
+	expect(await response.json()).toEqual({ ok: true })
+}
+
+function free(device: FlatPanel) {
+	return resourceArbiter.availability(resourceKey(device)) === 'available'
+}
+
+async function connected() {
+	const device = getFlatPanel()
+
+	flatPanelManager.connect(device)
+
+	expect(device.connected).toBeTrue()
+	expect(await waitUntil(() => free(device))).toBeTrue()
+
+	return device
 }
 
 describe('flat panel handler', () => {
@@ -102,54 +132,58 @@ describe('flat panel handler', () => {
 	})
 
 	test('enables, disables, toggles, and changes intensity through endpoints', async () => {
-		const device = getFlatPanel()
-
 		wsm.open(socket)
-		flatPanelManager.connect(device)
+
+		const device = await connected()
+
 		socket.clear()
 
-		await noContent(endpoints['/flatpanels/:id/enable'].POST(request(device.id)))
+		await succeeded(await endpoints['/flatpanels/:id/enable'].POST(request(device.id)))
 
 		expect(await waitUntil(() => device.enabled)).toBeTrue()
 		expect(flatPanelUpdates('enabled').at(-1)?.body.device.enabled).toBeTrue()
 
-		await noContent(await endpoints['/flatpanels/:id/intensity'].POST(request(device.id, 42)))
+		await succeeded(await endpoints['/flatpanels/:id/intensity'].POST(request(device.id, 42)))
 
 		expect(device.intensity.value).toBe(42)
 		expect(flatPanelUpdates('intensity').at(-1)?.body.device.intensity!.value).toBe(42)
 
-		await noContent(endpoints['/flatpanels/:id/disable'].POST(request(device.id)))
+		await succeeded(await endpoints['/flatpanels/:id/disable'].POST(request(device.id)))
 
 		expect(device.enabled).toBeFalse()
 		expect(flatPanelUpdates('enabled').at(-1)?.body.device.enabled).toBeFalse()
 
-		await noContent(endpoints['/flatpanels/:id/toggle'].POST(request(device.id)))
+		await succeeded(await endpoints['/flatpanels/:id/toggle'].POST(request(device.id)))
 
 		expect(device.enabled).toBeTrue()
 		expect(flatPanelUpdates('enabled').at(-1)?.body.device.enabled).toBeTrue()
 	})
 
-	test('delegates endpoint actions to the flat panel manager', async () => {
-		const device = getFlatPanel()
-		const enable = spyOn(flatPanelManager, 'enable')
-		const disable = spyOn(flatPanelManager, 'disable')
-		const toggle = spyOn(flatPanelManager, 'toggle')
+	test('clamps an intensity outside the driver limits to a reachable one', async () => {
+		const device = await connected()
 		const intensity = spyOn(flatPanelManager, 'intensity')
 
 		try {
-			await noContent(endpoints['/flatpanels/:id/enable'].POST(request(device.id)))
-			await noContent(endpoints['/flatpanels/:id/disable'].POST(request(device.id)))
-			await noContent(endpoints['/flatpanels/:id/toggle'].POST(request(device.id)))
-			await noContent(await endpoints['/flatpanels/:id/intensity'].POST(request(device.id, 128)))
+			await succeeded(await endpoints['/flatpanels/:id/intensity'].POST(request(device.id, device.intensity.max + 100)))
 
-			expect(enable).toHaveBeenCalledWith(device)
-			expect(disable).toHaveBeenCalledWith(device)
-			expect(toggle).toHaveBeenCalledWith(device)
-			expect(intensity).toHaveBeenCalledWith(device, 128)
+			expect(intensity).toHaveBeenCalledWith(device, device.intensity.max)
+			expect(device.intensity.value).toBe(device.intensity.max)
 		} finally {
 			intensity.mockRestore()
-			toggle.mockRestore()
-			disable.mockRestore()
+		}
+	})
+
+	test('refuses to command a disconnected flat panel', async () => {
+		const device = getFlatPanel()
+		const enable = spyOn(flatPanelManager, 'enable')
+
+		try {
+			const response = await endpoints['/flatpanels/:id/enable'].POST(request(device.id))
+
+			expect(response.status).toBe(200)
+			expect(await response.json()).toMatchObject({ ok: false })
+			expect(enable).not.toHaveBeenCalled()
+		} finally {
 			enable.mockRestore()
 		}
 	})
@@ -157,7 +191,9 @@ describe('flat panel handler', () => {
 	test('emits remove event when the simulator is disposed', () => {
 		const wsm = new WebSocketMessageHandler()
 		const flatPanelManager = new FlatPanelManager()
-		const flatPanelHandler = new FlatPanelHandler(wsm, flatPanelManager)
+		const resourceArbiter = new ResourceArbiter()
+		const operationCoordinator = new OperationCoordinator(resourceArbiter)
+		const flatPanelHandler = new FlatPanelHandler(wsm, flatPanelManager, new FlatPanelCommander(flatPanelManager), operationCoordinator)
 		const handler = new IndiClientHandlerSet([flatPanelManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const flatPanelSimulator = new FlatPanelSimulator('Flat Panel Simulator', client)

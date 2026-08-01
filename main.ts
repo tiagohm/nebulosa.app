@@ -15,10 +15,13 @@ import { CameraHandler, camera } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
 import { ConnectionHandler, connection } from 'src/api/connection'
 import { CoverHandler, cover } from 'src/api/cover'
+import { CoverCommander } from 'src/api/cover.commander'
 import { DarvHandler, darv } from 'src/api/darv'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { DewHeaterHandler, dewHeater } from 'src/api/dewheater'
+import { DewHeaterCommander } from 'src/api/dewheater.commander'
 import { FlatPanelHandler, flatPanel } from 'src/api/flatpanel'
+import { FlatPanelCommander } from 'src/api/flatpanel.commander'
 import { FlatWizardHandler, flatWizard } from 'src/api/flatwizard'
 import { FocuserHandler, focuser } from 'src/api/focuser'
 import { FocuserCommander } from 'src/api/focuser.commander'
@@ -244,13 +247,22 @@ const thermometerHandler = new ThermometerHandler(wsm, thermometerManager)
 // ownership rules as any other operation commanding the device behind the guide output.
 const guideOutputCommander = new GuideOutputCommander(guideOutputManager)
 const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, notificationHandler, guideOutputCommander, operationCoordinator)
-const coverHandler = new CoverHandler(wsm, coverManager)
-const flatPanelHandler = new FlatPanelHandler(wsm, flatPanelManager)
+// Coordinated cover service owns both travel directions, so a cover closed by hand and one closed by a
+// calibration sequence compete for the device under the same ownership rules.
+const coverCommander = new CoverCommander(coverManager)
+const coverHandler = new CoverHandler(wsm, coverManager, notificationHandler, coverCommander, operationCoordinator)
+// Coordinated flat panel service owns the light state and the brightness, so nobody rescales the
+// illumination a flat sequence is already exposing against.
+const flatPanelCommander = new FlatPanelCommander(flatPanelManager)
+const flatPanelHandler = new FlatPanelHandler(wsm, flatPanelManager, flatPanelCommander, operationCoordinator)
 // Coordinated rotator service owns every mutation, so field rotation commanded from the UI competes with
 // any composite feature turning the same rotator.
 const rotatorCommander = new RotatorCommander(rotatorManager)
 const rotatorHandler = new RotatorHandler(wsm, rotatorManager, notificationHandler, rotatorCommander, operationCoordinator)
-const dewHeaterHandler = new DewHeaterHandler(wsm, dewHeaterManager)
+// Coordinated dew heater service arbitrates the heater under the device providing it, so raising the duty
+// cycle competes with whatever that camera or cover is doing.
+const dewHeaterCommander = new DewHeaterCommander(dewHeaterManager)
+const dewHeaterHandler = new DewHeaterHandler(wsm, dewHeaterManager, dewHeaterCommander, operationCoordinator)
 const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, rotatorManager, wsm)
 const indiDevicePropertyHandler = new IndiDevicePropertyHandler(wsm, notificationHandler, indiHandler)
 const indiServerHandler = new IndiServerHandler(wsm)

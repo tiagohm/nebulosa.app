@@ -192,6 +192,34 @@ describe('rotator handler', () => {
 		expect(rotatorUpdates('moving').at(-1)?.body.device.moving).toBeTrue()
 	})
 
+	test('holds the rotator until a home the driver reports late has finished', async () => {
+		const device = await connected(45)
+
+		const home = spyOn(rotatorManager, 'home').mockImplementation(() => {
+			setTimeout(() => {
+				device.moving = true
+				rotatorCommander.updated(device, 'moving', 'Busy')
+
+				setTimeout(() => {
+					device.moving = false
+					rotatorCommander.updated(device, 'moving', 'Idle')
+				}, 200)
+			}, 200)
+		})
+
+		try {
+			await noContent(endpoints['/rotators/:id/home'].POST(request(device.id)))
+
+			expect(await waitUntil(() => !free(device))).toBeTrue()
+			expect(await waitUntil(() => free(device), 100)).toBeFalse()
+			expect(await waitUntil(() => device.moving)).toBeTrue()
+			expect(await waitUntil(() => free(device), 3000)).toBeTrue()
+		} finally {
+			home.mockRestore()
+			device.moving = false
+		}
+	})
+
 	test('holds the rotator until the commanded angle is reached', async () => {
 		const device = await connected(45)
 

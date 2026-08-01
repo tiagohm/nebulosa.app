@@ -104,18 +104,26 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 	// Homes the rotator and resolves only after the motion it starts has finished.
 	//
 	// Homing ends wherever the driver defines its zero, which is not necessarily the angle it reports as
-	// zero, so completion is the standstill alone and not a target angle.
+	// zero, so completion is the standstill alone and not a target angle. What separates that standstill from
+	// the one the rotator is still standing in is the motion observed in between: the command is only
+	// dispatched, and a driver that publishes Busy after acknowledging it would otherwise be read as a
+	// rotator that already homed, ending the operation while it starts to turn and aborting it from cleanup.
 	async home(scope: OperationScope, rotator: Rotator, options: RotatorCommandOptions = {}): Promise<OperationResult<void>> {
 		return await scope.start<void>('rotatorHome', [{ key: resourceKey(rotator), device: rotator }], async (context) => {
 			if (!rotator.connected) return { ok: false, reason: 'disconnected' }
 			if (!rotator.canHome) return { ok: false, reason: 'unexpectedState', error: `rotator ${rotator.name} cannot home` }
+
+			let homing = false
 
 			return await this.#move(
 				context,
 				rotator,
 				options,
 				() => this.rotatorManager.home(rotator),
-				() => true,
+				() => {
+					if (rotator.moving) homing = true
+					return homing
+				},
 			)
 		}).result
 	}
@@ -160,6 +168,9 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 
 	// Commands a motion and waits for the rotator to stand still at a state the caller accepts, aborting it
 	// from the scope's own cleanup so a canceled operation never releases a rotator that is still turning.
+	//
+	// The acceptance predicate is consulted on every update and not only once the rotator stands still,
+	// because it may be the one latching the motion that has to be observed before a standstill counts.
 	async #move(context: OperationContext, rotator: Rotator, options: RotatorCommandOptions, command: VoidFunction, arrived: () => boolean): Promise<OperationResult<void>> {
 		// Registered before the command so a cancel arriving during dispatch still finds the stop it needs.
 		context.onCleanup(async () => {
@@ -178,7 +189,9 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 			evaluate: (update) => {
 				if (!rotator.connected) return 'disconnected'
 				if (update.state === 'Alert' && update.property !== undefined && MOTION_PROPERTIES.has(update.property)) return 'alert'
-				return !rotator.moving && arrived() ? 'success' : 'pending'
+				const reached = arrived()
+
+				return !rotator.moving && reached ? 'success' : 'pending'
 			},
 			command,
 		})

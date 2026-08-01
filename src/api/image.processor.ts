@@ -4,6 +4,7 @@ import { plateSolutionFrom } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/imaging/model/image'
 import type { Image } from 'nebulosa/src/imaging/model/types'
+import { clone } from 'nebulosa/src/imaging/processing/arithmetic'
 import { declinationKeyword, rightAscensionKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { fileHandleSink } from 'nebulosa/src/io/io'
 import type { ImageInfo, ImageTransformation } from '#/image'
@@ -13,8 +14,12 @@ import type { ImageFFT } from '#/image.fft'
 import type { ImageFilter } from '#/image.filter'
 import type { ImageScnr } from '#/image.scnr'
 import type { ImageStretch } from '#/image.stretch'
-import { runImagePipeline } from './image.pipeline'
 import type { ImagePipelineRequest, ImagePipelineResponse, ImagePipelineSource, ImageStretchLevels, TransformedFrame } from './image.pipeline'
+// Imported as a file rather than referenced through `new URL(specifier, import.meta.url)`: the compiled
+// executable does not resolve a worker specifier, but it does embed a file and hand its path over.
+// @ts-expect-error TypeScript resolves this as a module and has no notion of `type: 'file'` turning it
+// into the path of the emitted file, which is what Bun imports here.
+import pipelineWorkerPath from './image.pipeline.worker.ts' with { type: 'file' }
 
 // Payload a producer handed over for a path. It is the only source for frames that never reach the
 // filesystem, such as INDI blobs and hip2fits responses, so dropping an entry loses the image; frames
@@ -61,12 +66,6 @@ const DEFAULT_IMAGE_EXPIRES_IN = 60000
 // Transformed frames kept per path. Two is enough for the common overlap, where the viewer holds the
 // user's transformation and the statistics panel asks for the untransformed frame of the same path.
 const TRANSFORMED_PER_PATH = 2
-
-// Copies a decoded frame, including its pixel buffer, so producer and consumer never share mutable
-// pixel data. Header and metadata are shallow-copied for the same reason; their values are plain.
-function cloneImage(image: Image): Image {
-	return { ...image, header: { ...image.header }, metadata: { ...image.metadata }, raw: image.raw.slice() }
-}
 
 // Reduces a transformation to the fields that actually reach the pipeline, so two requests differing
 // only in ignored or derived fields resolve to the same cached frame. Automatic stretch is the case
@@ -183,88 +182,64 @@ function applyStretchLevels(transformation: ImageTransformation | false, levels?
 // Runs the transformation pipeline on a worker thread, so decoding, calibration, stretching, and
 // convolution never block the event loop that is serving requests. A single worker handles every run:
 // each one already saturates a core, and queueing them bounds how much pixel data is in flight.
-//
-// `bun build --compile` cannot yet resolve a worker entry point inside the standalone executable, so a
-// compiled binary falls back to running the pipeline in process, exactly as it did before. The fallback
-// is transparent to callers and should be removed once Bun bundles the worker.
 class ImagePipelineRunner {
 	private worker?: Worker
-	private unavailable = false
 	private id = 0
-	private readonly pending = new Map<number, { readonly request: ImagePipelineRequest; readonly resolvers: PromiseWithResolvers<TransformedFrame | undefined> }>()
+	private readonly pending = new Map<number, PromiseWithResolvers<TransformedFrame | undefined>>()
 
 	// Applies the transformation to the source. Rejects when the source cannot be read at all, and
 	// resolves to undefined when it was read but is not a decodable image.
 	run(source: ImagePipelineSource, transformation: ImageTransformation | false) {
-		const worker = this.start()
-		if (!worker) return this.runInProcess({ id: this.id++, source, transformation })
-
 		const request: ImagePipelineRequest = { id: this.id++, source, transformation }
 		const resolvers = Promise.withResolvers<TransformedFrame | undefined>()
-		this.pending.set(request.id, { request, resolvers })
+		this.pending.set(request.id, resolvers)
 
 		// Structure-cloned rather than transferred: the payload and the decoded frame it may carry belong
-		// to the retained source and have to survive the call.
-		worker.postMessage(request)
+		// to the retained source and have to survive the call. The clone is also what lets the pipeline
+		// work in place on the other side.
+		this.start().postMessage(request)
 
 		return resolvers.promise
 	}
 
-	// Starts the worker on first use. Returns undefined once the worker has proven unusable.
+	// Starts the worker on first use and keeps it for the lifetime of the process.
 	private start() {
-		if (this.unavailable) return undefined
 		if (this.worker) return this.worker
 
-		try {
-			const worker = new Worker(new URL('./image.pipeline.worker.ts', import.meta.url)) as Worker & { unref?: () => void }
-			worker.addEventListener('message', (event: MessageEvent<ImagePipelineResponse>) => this.settle(event.data))
-			// A worker that fails to load reports it here. Without this listener the pending requests would
-			// never settle and every image request would hang forever.
-			worker.addEventListener('error', (event) => this.fail(event.message))
-			// The worker is idle between requests and must not keep the process alive on its own. `unref` is
-			// a Bun extension to the web Worker and is missing from the DOM types.
-			worker.unref?.()
-			this.worker = worker
-			return worker
-		} catch (e) {
-			this.fail(e instanceof Error ? e.message : String(e))
-			return undefined
-		}
+		const worker = new Worker(pipelineWorkerPath) as Worker & { unref?: () => void }
+		worker.addEventListener('message', (event: MessageEvent<ImagePipelineResponse>) => this.settle(event.data))
+		// A worker that dies, or that fails to load at all, reports it here. Without this listener the
+		// requests it was carrying would never settle and every image would hang forever.
+		worker.addEventListener('error', (event) => this.fail(event.message))
+		// The worker is idle between requests and must not keep the process alive on its own. `unref` is a
+		// Bun extension to the web Worker and is missing from the DOM types.
+		worker.unref?.()
+		this.worker = worker
+		return worker
 	}
 
-	// Settles the request the response belongs to. An unknown id means the request was already settled by
-	// a worker failure and re-run in process.
+	// Settles the request the response belongs to.
 	private settle(response: ImagePipelineResponse) {
-		const pending = this.pending.get(response.id)
-		if (!pending) return
+		const resolvers = this.pending.get(response.id)
+		if (!resolvers) return
 		this.pending.delete(response.id)
 
-		if (response.status === 'transformed') pending.resolvers.resolve({ image: response.image, stretch: response.stretch })
-		else if (response.status === 'unreadable') pending.resolvers.resolve(undefined)
-		else pending.resolvers.reject(new Error(response.error))
+		if (response.status === 'transformed') resolvers.resolve({ image: response.image, stretch: response.stretch })
+		else if (response.status === 'unreadable') resolvers.resolve(undefined)
+		else resolvers.reject(new Error(response.error))
 	}
 
-	// Gives up on the worker and serves every request in process from now on, including the ones still
-	// waiting for an answer that will never arrive.
+	// Discards the worker and fails every request it was carrying. The next run starts a fresh one, since
+	// the failure may have been the frame being transformed rather than the worker itself.
 	private fail(reason: string) {
-		if (this.unavailable) return
-
-		console.warn('image pipeline worker is unavailable, transforming in process:', reason)
-		this.unavailable = true
+		console.error('image pipeline worker failed:', reason)
 		this.worker?.terminate()
 		this.worker = undefined
 
 		const pending = [...this.pending.values()]
 		this.pending.clear()
 
-		for (const { request, resolvers } of pending) resolvers.resolve(this.runInProcess(request))
-	}
-
-	// Runs the pipeline on this thread. The decoded frame of the source is copied first because the
-	// pipeline works in place and the retained source has to stay pristine, which crossing a thread would
-	// otherwise have taken care of.
-	private runInProcess({ source, transformation }: ImagePipelineRequest) {
-		return runImagePipeline(source.image ? { ...source, image: cloneImage(source.image) } : source, transformation)
+		for (const resolvers of pending) resolvers.reject(new Error(`image pipeline worker failed: ${reason}`))
 	}
 }
 
@@ -295,13 +270,12 @@ export class ImageProcessor {
 
 	// Retains a frame its producer already decoded, such as the one the guide loop detects stars on, so
 	// the viewer reuses that decode instead of parsing a payload again.
-	//
 	// The image is copied because the producer keeps its own instance and is free to reuse or replace it
 	// on the next frame, while this one is retained until the camera produces another.
 	saveImage(image: Image, path: string, camera?: Camera) {
 		this.evict(path, camera)
 
-		const item: SourceImage = { image: cloneImage(image), path, camera: camera?.id }
+		const item: SourceImage = { image: clone(image), path, camera: camera?.id }
 		this.sources.set(path, { date: performance.now(), item })
 
 		console.info('image at', path, 'was buffered:', item.image?.raw.byteLength)

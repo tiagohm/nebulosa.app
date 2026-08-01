@@ -176,7 +176,7 @@ class AutoFocusRun {
 
 			this.#publish('computing', '')
 
-			const stars = await this.handler.starDetectionHandler.detect({ ...this.request.starDetection, path })
+			const stars = await this.handler.starDetectionHandler.detect({ ...this.request.starDetection, path }, context.signal)
 
 			if (context.signal.aborted) return { ok: false, reason: abortReason(context.signal) }
 

@@ -372,6 +372,52 @@ describe('guide output handler', () => {
 		}
 	})
 
+	test('zeroes every axis of a canceled nudge before waiting for the standstill', async () => {
+		const device = connectAndGetGuideOutput()
+
+		resourceArbiter.markAvailable({ key: resourceKey(device), device })
+
+		const zeroed = new Set<string>()
+		let canceling = false
+
+		const pulse = spyOn(guideOutputManager, 'pulse').mockImplementation((_, direction, duration) => {
+			if (!canceling || duration !== 0) return
+
+			zeroed.add(direction)
+
+			if (zeroed.size < 4) return
+
+			device.pulsing = false
+			guideOutputCommander.updated(device, 'pulsing', 'Idle')
+		})
+
+		const pulses = [
+			{ direction: 'NORTH', duration: 5000 },
+			{ direction: 'WEST', duration: 5000 },
+		] satisfies GuidePulse[]
+
+		device.pulsing = true
+
+		const handle = operationCoordinator.start('darv', [{ key: resourceKey(device), device }], (context) => guideOutputCommander.pulseAxes(context, device, pulses))
+
+		try {
+			expect(await waitUntil(() => pulse.mock.calls.filter((call) => call[2] === 5000).length === 2)).toBeTrue()
+
+			canceling = true
+
+			await handle.cancel()
+
+			const result = await handle.result
+
+			expect(result.ok).toBeFalse()
+			expect(Array.from(zeroed).sort()).toEqual(['EAST', 'NORTH', 'SOUTH', 'WEST'])
+			expect(device.pulsing).toBeFalse()
+		} finally {
+			device.pulsing = false
+			pulse.mockRestore()
+		}
+	})
+
 	test('emits remove event when the parent simulator is disposed', () => {
 		const wsm = new WebSocketMessageHandler()
 		const mountManager = new MountManager()

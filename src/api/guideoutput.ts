@@ -85,13 +85,13 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 
 	// Stops any pulse: first by cancelling whatever operation owns the device, so its own cleanup runs, and
 	// then by zeroing both guide vectors, which also covers motion nobody here started.
+	//
+	// Both axes are zeroed before the standstill is awaited, since the device reports a single guiding flag
+	// and settling on one axis while the other keeps pulsing would only wait out the settle timeout.
 	async stop(device: GuideOutput) {
 		await this.coordinator.cancelByResource(resourceKey(device))
 
-		const northSouth = await this.commander.stopPulse(device, 'NORTH')
-		const westEast = await this.commander.stopPulse(device, 'WEST')
-
-		return northSouth.ok ? westEast : northSouth
+		return await this.commander.stopPulses(device, ['NORTH', 'WEST'])
 	}
 }
 

@@ -89,6 +89,8 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 			if (!device.connected) return { ok: false, reason: 'disconnected' }
 			if (!device.canPulseGuide) return { ok: false, reason: 'unexpectedState', error: `guide output ${device.name} cannot pulse guide` }
 
+			this.#stopOnCleanup(context, device, [direction])
+
 			return await this.#pulse(context, device, direction, duration, options)
 		}).result
 	}
@@ -104,6 +106,12 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 		return await scope.start<void>('guidePulse', [{ key: resourceKey(device), device }], async (context) => {
 			if (!device.connected) return { ok: false, reason: 'disconnected' }
 			if (!device.canPulseGuide) return { ok: false, reason: 'unexpectedState', error: `guide output ${device.name} cannot pulse guide` }
+
+			this.#stopOnCleanup(
+				context,
+				device,
+				pulses.map((pulse) => pulse.direction),
+			)
 
 			const results = await Promise.all(pulses.map((pulse) => this.#pulse(context, device, pulse.direction, pulse.duration, options)))
 
@@ -131,37 +139,57 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 	//
 	// This is the emergency stop of the commander: it does not acquire the device, precisely because it is
 	// used while the owning operation is being canceled and by cleanup running after the executor returned.
-	// The opposite direction is zeroed as well, since both share one INDI vector and only the pair proves
-	// the axis is idle.
 	async stopPulse(device: GuideOutput, direction: GuideDirection, options: GuidePulseOptions = {}): Promise<OperationResult<void>> {
+		return await this.stopPulses(device, [direction], options)
+	}
+
+	// Cancels the pulses of every given direction and waits once for the device to report a standstill.
+	//
+	// Both axes have to be zeroed before anything is awaited: the device publishes a single guiding flag, so
+	// stopping one axis and settling on it while the other is still counting down would only wait out the
+	// settle timeout on a device that is legitimately still pulsing. The opposite of each direction is zeroed
+	// as well, since both share one INDI vector and only the pair proves the axis is idle.
+	async stopPulses(device: GuideOutput, directions: readonly GuideDirection[], options: GuidePulseOptions = {}): Promise<OperationResult<void>> {
 		if (!device.connected) return { ok: false, reason: 'disconnected' }
 		if (!device.canPulseGuide) return { ok: true, value: undefined }
 
+		const zeroed = new Set<GuideDirection>()
+
+		for (const direction of directions) {
+			zeroed.add(direction)
+			zeroed.add(OPPOSITE_DIRECTION[direction])
+		}
+
 		return await this.#settle(device, options, () => {
-			this.guideOutputManager.pulse(device, direction, 0)
-			this.guideOutputManager.pulse(device, OPPOSITE_DIRECTION[direction], 0)
+			for (const direction of zeroed) this.guideOutputManager.pulse(device, direction, 0)
 		})
 	}
 
-	// Commands the pulse and waits out its duration, stopping the axis from the scope's own cleanup.
+	// Registers the stop that runs when the operation owning the pulses is canceled.
 	//
-	// The opposite direction is zeroed before the pulse starts because both directions live in one vector:
-	// a leg commanded while the previous one is still counting down would otherwise be added to a driver
-	// already guiding the other way.
-	async #pulse(context: OperationContext, device: GuideOutput, direction: GuideDirection, duration: number, options: GuidePulseOptions): Promise<OperationResult<void>> {
-		// Registered before the command so a cancel arriving during dispatch still finds the stop it needs.
-		//
-		// The caller's timing is deliberately not forwarded: a settle allowance shortened to fit a deadline
-		// bounds how long the leg may be waited for, not how long the axis is given to come to rest, and an
-		// emergency stop cut short would release the device while it is still moving.
+	// It is registered before any leg is commanded so a cancel arriving during dispatch still finds the stop
+	// it needs, and it covers every direction of the operation at once because a per-leg cleanup would settle
+	// on a flag the sibling leg still holds.
+	//
+	// The caller's timing is deliberately not forwarded: a settle allowance shortened to fit a deadline
+	// bounds how long a leg may be waited for, not how long the axis is given to come to rest, and an
+	// emergency stop cut short would release the device while it is still moving.
+	#stopOnCleanup(context: OperationContext, device: GuideOutput, directions: readonly GuideDirection[]) {
 		context.onCleanup(async () => {
-			const stopped = await this.stopPulse(device, direction)
+			const stopped = await this.stopPulses(device, directions)
 
 			// A device that went away is not pulsing under our command any more, so only one that stays in
 			// motion is reported as a cleanup failure.
 			if (!stopped.ok && stopped.reason !== 'disconnected') throw new Error(`guide output ${device.name} did not stop pulsing: ${stopped.reason}`)
 		})
+	}
 
+	// Commands the pulse and waits out its duration; the axis is stopped by the cleanup the caller registered.
+	//
+	// The opposite direction is zeroed before the pulse starts because both directions live in one vector:
+	// a leg commanded while the previous one is still counting down would otherwise be added to a driver
+	// already guiding the other way.
+	async #pulse(context: OperationContext, device: GuideOutput, direction: GuideDirection, duration: number, options: GuidePulseOptions): Promise<OperationResult<void>> {
 		// The driver times the pulse itself, so the delay is dispatched as part of the command and the wait
 		// around it observes the device for the whole leg instead of only after it. A pulse the driver
 		// refuses would otherwise be invisible: the Alert clears the flag as well, and by the time a

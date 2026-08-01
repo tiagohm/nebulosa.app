@@ -34,10 +34,12 @@ import { NotificationHandler } from 'src/api/notification'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter } from 'src/api/resource'
 import { RotatorHandler, rotator } from 'src/api/rotator'
+import { RotatorCommander } from 'src/api/rotator.commander'
 import { storage, StorageHandler } from 'src/api/storage'
 import { ThermometerHandler, thermometer } from 'src/api/thermometer'
 import { TppaHandler, tppa } from 'src/api/tppa'
 import { WheelHandler, wheel } from 'src/api/wheel'
+import { WheelCommander } from 'src/api/wheel.commander'
 import { speedUpTime } from 'src/shared/util'
 import { ConfirmationHandler, confirmation } from './src/api/confirmation'
 import { FileSystemHandler, fileSystem } from './src/api/filesystem'
@@ -233,7 +235,10 @@ const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager, mo
 // compete for the focuser under the same ownership rules.
 const focuserCommander = new FocuserCommander(focuserManager)
 const focuserHandler = new FocuserHandler(wsm, focuserManager, notificationHandler, focuserCommander, operationCoordinator)
-const wheelHandler = new WheelHandler(wsm, wheelManager)
+// Coordinated wheel service owns every mutation, so a slot change requested from the UI and one requested
+// by a running sequence compete for the wheel under the same ownership rules.
+const wheelCommander = new WheelCommander(wheelManager)
+const wheelHandler = new WheelHandler(wsm, wheelManager, notificationHandler, wheelCommander, operationCoordinator)
 const thermometerHandler = new ThermometerHandler(wsm, thermometerManager)
 // Coordinated guide output service owns every timed pulse, so DARV draws its trail under the same
 // ownership rules as any other operation commanding the device behind the guide output.
@@ -241,7 +246,10 @@ const guideOutputCommander = new GuideOutputCommander(guideOutputManager)
 const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, guideOutputCommander)
 const coverHandler = new CoverHandler(wsm, coverManager)
 const flatPanelHandler = new FlatPanelHandler(wsm, flatPanelManager)
-const rotatorHandler = new RotatorHandler(wsm, rotatorManager)
+// Coordinated rotator service owns every mutation, so field rotation commanded from the UI competes with
+// any composite feature turning the same rotator.
+const rotatorCommander = new RotatorCommander(rotatorManager)
+const rotatorHandler = new RotatorHandler(wsm, rotatorManager, notificationHandler, rotatorCommander, operationCoordinator)
 const dewHeaterHandler = new DewHeaterHandler(wsm, dewHeaterManager)
 const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, rotatorManager, wsm)
 const indiDevicePropertyHandler = new IndiDevicePropertyHandler(wsm, notificationHandler, indiHandler)

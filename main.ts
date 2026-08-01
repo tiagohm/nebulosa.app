@@ -25,6 +25,7 @@ import { GuideOutputHandler, guideOutput } from 'src/api/guideoutput'
 import { GuiderHandler, guider } from 'src/api/guider'
 import { GuiderCommander } from 'src/api/guider.session'
 import type { GuiderCameraPublisher } from 'src/api/guider.session'
+import { NOT_FOUND_RESPONSE } from 'src/api/http'
 import { IndiDevicePropertyHandler, IndiHandler, IndiServerHandler, indi } from 'src/api/indi'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler, MountRemoteControlHandler, mount } from 'src/api/mount'
@@ -277,6 +278,9 @@ const server = Bun.serve({
 	},
 	fetch: (req, server) => {
 		if (server.upgrade(req)) {
+		} else {
+			console.error(req.method, req.url)
+			return NOT_FOUND_RESPONSE
 		}
 	},
 	error: (error) => {

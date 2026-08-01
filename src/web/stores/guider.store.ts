@@ -141,7 +141,7 @@ export function guiderStore(api: DockviewPanelApi) {
 	}
 
 	async function loadEvent() {
-		if (state.session) {
+		if (state.session.id) {
 			const event = await Api.Guider.event(state.session)
 
 			if (event) {

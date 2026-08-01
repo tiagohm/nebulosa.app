@@ -13,6 +13,7 @@ export const JSON_DEFAULT_HEADERS = {
 
 export const NO_RESPONSE = new Response(undefined, { headers: DEFAULT_HEADERS })
 export const INTERNAL_SERVER_ERROR_RESPONSE = new Response('Internal Server Error', { status: 500 })
+export const NOT_FOUND_RESPONSE = new Response('Not Found', { status: 404 })
 
 export function query(req: Bun.BunRequest) {
 	for (const [key, value] of new URL(req.url).searchParams) req.params[key] = value

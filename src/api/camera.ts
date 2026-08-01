@@ -5,8 +5,10 @@ import type { CameraManager, DeviceHandler, FocuserManager, MountManager, Rotato
 import type { BlobEncoding, PropertyState } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
 import type { CameraFrameEvent, CameraCaptureEvent, CameraCaptureStart, CameraAdded, CameraRemoved, CameraUpdated } from '#/camera'
+import type { OperationResult } from '#/orchestration'
 import type { CameraCaptureListener } from './camera.capture'
 import { CameraCapturer } from './camera.capture'
+import type { CameraCommander } from './camera.commander'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import { webSocketBus } from './message'
@@ -43,6 +45,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		readonly focuserManager: FocuserManager,
 		readonly rotatorManager: RotatorManager,
 		readonly capturer: CameraCapturer,
+		readonly commander: CameraCommander,
 		readonly coordinator: OperationCoordinator,
 	) {
 		cameraManager.addHandler(this)
@@ -92,6 +95,16 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	// Lists cameras, optionally scoped to one INDI client.
 	list(client?: string | IndiClient) {
 		return Array.from(this.cameraManager.list(client))
+	}
+
+	// Switches the cooler on or off, which the driver applies without any exposure.
+	cooler(camera: Camera, enabled: boolean) {
+		return this.commander.cooler(this.coordinator, camera, enabled)
+	}
+
+	// Sets the cooling target, in degrees Celsius; reaching it is reported as a temperature update.
+	temperature(camera: Camera, value: number) {
+		return this.commander.temperature(this.coordinator, camera, value)
 	}
 
 	// Publishes either capture progress or one processed frame path.
@@ -155,8 +168,8 @@ export function camera(cameraHandler: CameraHandler) {
 	return {
 		'/cameras': { GET: (req) => response(cameraHandler.list(query(req).client)) },
 		'/cameras/:id': { GET: (req) => response(cameraFromParams(req)) },
-		'/cameras/:id/cooler': { POST: async (req) => response(cameraManager.cooler(cameraFromParams(req), await req.json())) },
-		'/cameras/:id/temperature': { POST: async (req) => response(cameraManager.temperature(cameraFromParams(req), await req.json())) },
+		'/cameras/:id/cooler': { POST: async (req) => response<OperationResult<void>>(await cameraHandler.cooler(cameraFromParams(req), await req.json())) },
+		'/cameras/:id/temperature': { POST: async (req) => response<OperationResult<void>>(await cameraHandler.temperature(cameraFromParams(req), await req.json())) },
 		'/cameras/:id/start': {
 			POST: async (req) => {
 				const handle = cameraHandler.capture(cameraHandler.coordinator, cameraFromParams(req), await req.json())

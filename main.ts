@@ -13,6 +13,7 @@ import { AtlasHandler, atlas } from 'src/api/atlas'
 import { AutoFocusHandler, autoFocus } from 'src/api/autofocus'
 import { CameraHandler, camera } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
+import { CameraCommander } from 'src/api/camera.commander'
 import { ConnectionHandler, connection } from 'src/api/connection'
 import { CoverHandler, cover } from 'src/api/cover'
 import { CoverCommander } from 'src/api/cover.commander'
@@ -228,7 +229,10 @@ const guiderCommander = new GuiderCommander(operationCoordinator, cameraManager,
 const guiderHandler = new GuiderHandler(wsm, notificationHandler, guiderCommander)
 // Coordinated camera service owns physical sessions independently from HTTP and WebSocket transport.
 const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourceArbiter, guiderCommander)
-const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
+// Coordinated camera service owns the cooling controls, so nothing changes the thermal state of a sensor
+// that is already integrating a frame.
+const cameraCommander = new CameraCommander(cameraManager)
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, cameraCommander, operationCoordinator)
 // Coordinated mount service owns every mutation, so HTTP, protocol adapters, and composite features
 // compete for the mount under the same ownership rules.
 const mountCommander = new MountCommander(mountManager)

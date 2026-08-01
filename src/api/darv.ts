@@ -23,6 +23,15 @@ export interface DarvBusEvents {
 // Process-wide fanout of DARV presentation events.
 export const darvBus = new EventBus<DarvBusEvents>()
 
+// Seconds of exposure added to the requested trajectory.
+//
+// None of the run's timers start where the shutter does: the initial pause begins only after the camera has
+// acknowledged the exposure, and each leg pays command dispatch plus the time the driver takes to report the
+// axis at a standstill. An exposure sized exactly to `initialPause + duration` therefore closes while the
+// return leg is still being drawn and truncates that arm. The extra seconds only prolong the vertex the
+// trail already ends on, which costs nothing to the measurement being made on the frame.
+const EXPOSURE_HEADROOM = 5
+
 // Renders the terminal cause of a run for the message its last event carries.
 //
 // A stop is what the user just asked for, so it says so. A refusal is reported without the detail the
@@ -149,9 +158,9 @@ class DarvRun {
 		capture.y = 0
 		capture.width = this.camera.frame.width.max
 		capture.height = this.camera.frame.height.max
-		// The exposure has to outlast both legs and the pause before them, rounded up because the driver
-		// takes whole seconds here.
-		capture.exposureTime = Math.ceil(Math.max(0, this.request.duration + this.request.initialPause))
+		// The exposure has to outlast both legs and the pause before them, rounded up because the driver takes
+		// whole seconds here, plus the headroom the trajectory spends outside its own timers.
+		capture.exposureTime = Math.ceil(Math.max(0, this.request.duration + this.request.initialPause)) + EXPOSURE_HEADROOM
 		capture.exposureTimeUnit = 'second'
 
 		// The capture nests in this run, inheriting the camera it already holds instead of asking the

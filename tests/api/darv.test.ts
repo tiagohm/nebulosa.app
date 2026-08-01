@@ -187,7 +187,7 @@ describe('darv handler', () => {
 			expect(normalized.y).toBe(0)
 			expect(normalized.width).toBe(camera.frame.width.max)
 			expect(normalized.height).toBe(camera.frame.height.max)
-			expect(normalized.exposureTime).toBe(1)
+			expect(normalized.exposureTime).toBe(6)
 			expect(normalized.exposureTimeUnit).toBe('second')
 
 			expect(request.capture.count).toBe(10)

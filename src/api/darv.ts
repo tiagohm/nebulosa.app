@@ -4,6 +4,7 @@ import { DEFAULT_DARV_EVENT } from '#/darv'
 import type { DarvEvent, DarvStart, DarvState } from '#/darv'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
 import type { CameraHandler } from './camera'
+import type { CameraCaptureHandle } from './camera.capture'
 import type { GuideOutputHandler } from './guideoutput'
 import { query, response } from './http'
 import type { Endpoints } from './http'
@@ -33,6 +34,18 @@ function terminalMessage(reason: OperationFailureReason, error: string | undefin
 	if (reason === 'aborted') return 'stopped'
 	if (reason === 'busy') return unavailable.length > 0 ? `the ${unavailable.join(' and the ')} ${unavailable.length > 1 ? 'are' : 'is'} not available` : 'the camera or the mount is in use by another operation'
 	return error ?? `darv failed: ${reason}`
+}
+
+// Mirrors a capture failure as a run failure, and never settles while the exposure is healthy.
+//
+// It is meant to be raced against each phase of the run, which is why a successful capture leaves it
+// pending: the frame arriving early is not a reason to stop drawing the trail into it.
+function captureFailure(handle: CameraCaptureHandle): Promise<OperationResult<void>> {
+	return new Promise((resolve) => {
+		void handle.result.then((result) => {
+			if (!result.ok) resolve(result)
+		})
+	})
 }
 
 // Runs DARV drift alignment sessions and exposes them to transport by request id.
@@ -150,10 +163,16 @@ class DarvRun {
 		// idle is simply not recorded, and the frame would show a single point.
 		if (!started.ok) return started
 
+		// An exposure that dies mid-run cannot be salvaged: the trail is being drawn into a frame that no
+		// longer exists. Every phase races this so the run ends at the failure instead of pulsing the mount
+		// for the rest of the session, and the phase it abandons is a child of this run, so returning here
+		// cancels and unwinds it before the devices are released.
+		const failed = captureFailure(handle)
+
 		this.#publish('waiting')
 
 		// The initial pause is what leaves the bright vertex at the start of the trail.
-		const paused = await abortableDelay(this.#initialPause, context.signal)
+		const paused = await Promise.race([abortableDelay(this.#initialPause, context.signal), failed])
 
 		if (!paused.ok) return paused
 
@@ -162,13 +181,13 @@ class DarvRun {
 
 		this.#publish('forwarding')
 
-		const forward = await this.#pulse(context, false, legDuration)
+		const forward = await Promise.race([this.#pulse(context, false, legDuration), failed])
 
 		if (!forward.ok) return forward
 
 		this.#publish('backwarding')
 
-		const backward = await this.#pulse(context, true, legDuration)
+		const backward = await Promise.race([this.#pulse(context, true, legDuration), failed])
 
 		if (!backward.ok) return backward
 

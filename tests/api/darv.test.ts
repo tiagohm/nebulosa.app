@@ -390,9 +390,39 @@ describe('darv handler', () => {
 			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
 
 			expect(await waitForDarvState('idle', request.id, 5000)).toBeTrue()
-			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'forwarding', 'backwarding', 'idle'])
+			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'idle'])
 			expect(darvEvents().at(-1)?.message).toBe('capture cleanup failed')
 		} finally {
+			capture.mockRestore()
+		}
+	}, 10000)
+
+	test('stops drawing the trail as soon as the exposure fails mid leg', async () => {
+		const { camera, mount } = await connectedDevices()
+		const failed = Promise.withResolvers<OperationResult<CameraCaptureResult>>()
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: failed.promise }))
+		const pulseEast = spyOn(guideOutputManager, 'pulseEast')
+		const pulseWest = spyOn(guideOutputManager, 'pulseWest')
+		const request = darvStartRequest({ id: 'darv-capture-mid-leg', initialPause: 0, duration: 4, hemisphere: 'northern' })
+
+		try {
+			wsm.open(socket)
+
+			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+
+			expect(await waitForDarvState('forwarding', request.id)).toBeTrue()
+
+			failed.resolve({ ok: false, reason: 'alert', error: 'the exposure was aborted by the driver' })
+
+			expect(await waitForDarvState('idle', request.id, 5000)).toBeTrue()
+			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'forwarding', 'idle'])
+			expect(darvEvents().at(-1)?.message).toBe('the exposure was aborted by the driver')
+			expect(pulseEast.mock.calls.filter((call) => call[1] > 0)).toHaveLength(0)
+			expect(mount.pulsing).toBeFalse()
+		} finally {
+			failed.resolve({ ok: false, reason: 'aborted' })
+			pulseWest.mockRestore()
+			pulseEast.mockRestore()
 			capture.mockRestore()
 		}
 	}, 10000)

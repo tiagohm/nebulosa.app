@@ -1,220 +1,235 @@
-import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
+import type { Camera, GuideDirection, Mount } from 'nebulosa/src/devices/indi/device'
 import { EventBus } from 'src/shared/bus'
 import { DEFAULT_DARV_EVENT } from '#/darv'
 import type { DarvEvent, DarvStart, DarvState } from '#/darv'
+import type { OperationFailureReason, OperationResult } from '#/orchestration'
 import type { CameraHandler } from './camera'
-import type { CameraCaptureHandle } from './camera.capture'
 import type { GuideOutputHandler } from './guideoutput'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { MountHandler } from './mount'
-import { waitFor } from './util'
+import type { OperationContext, OperationCoordinator, OperationHandle } from './operation'
+import { abortableDelay } from './operation.wait'
+import { resourceKey } from './resource'
 
+// Presentation events of the DARV drift alignment, fanned out to WebSocket subscribers.
 export interface DarvBusEvents {
+	// Progress or terminal snapshot of one run.
 	readonly update: DarvEvent
 }
 
+// Process-wide fanout of DARV presentation events.
 export const darvBus = new EventBus<DarvBusEvents>()
 
-export class DarvHandler {
-	private readonly tasks: DarvTask[] = []
+// Renders the terminal cause of a run for the message its last event carries.
+//
+// A stop is what the user just asked for, so it says so. A refusal is reported without the detail the
+// coordinator formats, which names resource keys and an operation id: stable enough for a log and
+// meaningless on a screen. The coordinator reports an active owner and an unusable device alike as busy,
+// and only the arbiter separates them, so the devices it observed as unusable decide which of the two
+// happened.
+function terminalMessage(reason: OperationFailureReason, error: string | undefined, unavailable: readonly string[]) {
+	if (reason === 'aborted') return 'stopped'
+	if (reason === 'busy') return unavailable.length > 0 ? `the ${unavailable.join(' and the ')} ${unavailable.length > 1 ? 'are' : 'is'} not available` : 'the camera or the mount is in use by another operation'
+	return error ?? `darv failed: ${reason}`
+}
 
+// Runs DARV drift alignment sessions and exposes them to transport by request id.
+export class DarvHandler {
+	// Live runs by request id, which is what a stop route names. This is the translation from a transport
+	// id to an operation, not an ownership index: who holds the camera and the mount is the arbiter's
+	// answer, and a local copy would only go stale.
+	readonly #runs = new Map<string, OperationHandle<void>>()
+
+	// Registers the DARV transport adapter and its presentation-event fanout.
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
 		readonly cameraHandler: CameraHandler,
 		readonly mountHandler: MountHandler,
 		readonly guideOutputHandler: GuideOutputHandler,
+		readonly coordinator: OperationCoordinator,
 	) {
 		darvBus.subscribe('update', (event) => wsm.send('darv:update', event))
 	}
 
+	// Publishes one snapshot, copied so a later mutation cannot rewrite an event already sent.
 	sendEvent(event: DarvEvent) {
 		darvBus.emit('update', structuredClone(event))
 	}
 
-	handleDarvEvent(event: DarvEvent, task: DarvTask) {
-		this.sendEvent(event)
-
-		if (event.state === 'idle') {
-			if (this.remove(task)) task.destroy()
-		}
-	}
-
+	// Starts one run, which owns the camera and the mount until the star trail is exposed or it is stopped.
+	//
+	// The mount is acquired as the physical device providing the guide output the pulses are sent to, which
+	// is the same resource under either name, so nothing else can slew it while the trail is being drawn.
+	// The duplicate-device guard the task list used to apply is gone with it: a second run over the same
+	// camera or mount is now refused by the arbiter.
 	start(request: DarvStart, camera: Camera, mount: Mount) {
-		if (this.tasks.some((e) => e.request.id === request.id || e.camera === camera || e.mount === mount)) return
-		const task = new DarvTask(this, request, camera, mount, this.handleDarvEvent.bind(this))
-		this.tasks.push(task)
-		void task.start().catch((error) => task.fail(error))
+		if (this.#runs.has(request.id)) return
+
+		// The request is copied because the run normalizes the capture, and the caller's object is not this
+		// feature's to rewrite.
+		const run = new DarvRun(camera, mount, structuredClone(request), this)
+		const resources = [
+			{ key: resourceKey(camera), device: camera },
+			{ key: resourceKey(mount), device: mount },
+		]
+		const handle = this.coordinator.start<void>('darv', resources, (context) => run.run(context))
+
+		this.#runs.set(request.id, handle)
+
+		// Every terminal path lands here, including a start the arbiter refused, which never runs the
+		// executor at all. That is what makes a busy device report itself instead of failing silently.
+		void handle.result.then((result) => {
+			if (this.#runs.get(request.id) === handle) this.#runs.delete(request.id)
+			// Availability is read here rather than inside the run because a refused start never reaches the
+			// executor, and that refusal is exactly the case the message has to explain.
+			run.finish(result, this.#unavailableDevices(camera, mount))
+		})
 	}
 
-	stop(id: string) {
-		const index = this.tasks.findIndex((e) => e.request.id === id)
-
-		if (index >= 0) {
-			const task = this.tasks[index]
-			this.tasks.splice(index, 1)
-			task.stop()
-		}
+	// Cancels one run and waits for its cleanup; an unknown id is a no-op.
+	async stop(id: string) {
+		await this.#runs.get(id)?.cancel()
 	}
 
-	private remove(task: DarvTask) {
-		const index = this.tasks.indexOf(task)
-
-		if (index >= 0) {
-			this.tasks.splice(index, 1)
-			return true
-		}
-
-		return false
+	// Names the acquired devices the arbiter currently reports as unusable, in acquisition order.
+	#unavailableDevices(camera: Camera, mount: Mount) {
+		const names: string[] = []
+		if (this.coordinator.arbiter.availability(resourceKey(camera)) === 'unavailable') names.push('camera')
+		if (this.coordinator.arbiter.availability(resourceKey(mount)) === 'unavailable') names.push('mount')
+		return names
 	}
 }
 
-export class DarvTask {
-	readonly event = structuredClone(DEFAULT_DARV_EVENT)
+// One DARV session: exposes a single frame while pulse-guiding the mount away from and back to its
+// starting point, so the frame records a V-shaped star trail whose opening reveals the polar misalignment.
+class DarvRun {
+	// Presentation snapshot of this run, republished on every transition.
+	readonly #event = structuredClone(DEFAULT_DARV_EVENT)
 
-	private readonly handleDarvEvent: (state: DarvState, message?: string) => void
-	private stopped = false
-	private capture?: CameraCaptureHandle
-
+	// Binds a run to its devices, its own copy of the request, and the handler publishing its events.
 	constructor(
-		readonly darv: DarvHandler,
-		readonly request: DarvStart,
 		readonly camera: Camera,
 		readonly mount: Mount,
-		handleDarvEvent: (event: DarvEvent, task: DarvTask) => void,
+		readonly request: DarvStart,
+		readonly handler: DarvHandler,
 	) {
-		request.capture.autoSave = false
-		request.capture.count = 1
-		request.capture.delay = 0
-		request.capture.frameType = 'LIGHT'
-		request.capture.exposureMode = 'single'
-		request.capture.mount = mount?.name
-		request.capture.x = 0
-		request.capture.y = 0
-		request.capture.width = camera.frame.width.max
-		request.capture.height = camera.frame.height.max
-		request.capture.exposureTime = Math.ceil(Math.max(0, request.duration + request.initialPause))
-		request.capture.exposureTimeUnit = 'second'
-
-		this.event.id = request.id
-		this.event.camera = camera.id
-		this.event.mount = mount.id
-
-		this.handleDarvEvent = (state, message) => {
-			if (state !== this.event.state || message !== this.event.message) {
-				this.event.state = state
-				this.event.message = message
-				handleDarvEvent(this.event, this)
-			}
-		}
+		this.#event.id = request.id
+		this.#event.camera = camera.id
+		this.#event.mount = mount.id
 	}
 
-	async start() {
-		if (this.stopped) return
+	// Exposes one frame and draws the trail into it, pulsing only once the exposure has really begun.
+	async run(context: OperationContext): Promise<OperationResult<void>> {
+		const { capture } = this.request
 
-		// Start capture
-		this.capture = this.darv.cameraHandler.capture(this.darv.cameraHandler.coordinator, this.camera, this.request.capture, (event) => {
-			if (event.state === 'idle' || event.state === 'error' || event.stopped) this.stop()
-		})
+		capture.autoSave = false
+		capture.count = 1
+		capture.delay = 0
+		capture.frameType = 'LIGHT'
+		capture.exposureMode = 'single'
+		capture.mount = this.mount.name
+		// The whole sensor is exposed: the trail is measured on the frame, and a subframe left over from a
+		// previous capture would crop it for no reason.
+		capture.x = 0
+		capture.y = 0
+		capture.width = this.camera.frame.width.max
+		capture.height = this.camera.frame.height.max
+		// The exposure has to outlast both legs and the pause before them, rounded up because the driver
+		// takes whole seconds here.
+		capture.exposureTime = Math.ceil(Math.max(0, this.request.duration + this.request.initialPause))
+		capture.exposureTimeUnit = 'second'
 
-		if (this.stopped) return
+		// The capture nests in this run, inheriting the camera it already holds instead of asking the
+		// arbiter for a device its own parent owns.
+		const handle = this.handler.cameraHandler.capture(context, this.camera, capture)
+		const started = await handle.started
 
-		// Wait for initial pause
-		this.handleDarvEvent('waiting')
+		// Nothing moves before the camera confirms it is exposing: a trail drawn while the sensor is still
+		// idle is simply not recorded, and the frame would show a single point.
+		if (!started.ok) return started
 
-		let success = await waitFor(this.initialPause, () => !this.stopped)
+		this.#publish('waiting')
 
-		if (success) {
-			// Move the mount forward
-			this.handleDarvEvent('forwarding')
+		// The initial pause is what leaves the bright vertex at the start of the trail.
+		const paused = await abortableDelay(this.#initialPause, context.signal)
 
-			const duration = this.duration / 2
+		if (!paused.ok) return paused
 
-			this.move(true, false, duration)
+		// Each leg draws one arm of the V, so together they take the requested duration.
+		const legDuration = this.#duration / 2
 
-			success = await waitFor(duration, () => !this.stopped)
+		this.#publish('forwarding')
 
-			if (success) {
-				// Move the mount backward
-				this.handleDarvEvent('backwarding')
+		const forward = await this.#pulse(context, false, legDuration)
 
-				this.move(true, true, duration)
+		if (!forward.ok) return forward
 
-				await waitFor(duration, () => !this.stopped)
-			}
-		}
+		this.#publish('backwarding')
 
-		// Done
-		this.destroy()
-		this.handleDarvEvent('idle')
+		const backward = await this.#pulse(context, true, legDuration)
+
+		if (!backward.ok) return backward
+
+		// The exposure runs slightly past the second leg because it was rounded up to whole seconds, and the
+		// frame is the only product of the run, so it is awaited instead of being cancelled at the vertex.
+		const captured = await handle.result
+
+		return captured.ok ? { ok: true, value: undefined } : captured
 	}
 
-	stop() {
-		if (!this.stopped) {
-			this.destroy()
-			if (this.event.state !== 'idle') {
-				this.handleDarvEvent('idle')
-			}
-		}
+	// Publishes the single idle event that ends this run, whatever terminated it. The device names are
+	// those the arbiter reported as unusable at that moment, and only a refused start reads them.
+	finish(result: OperationResult<void>, unavailable: readonly string[]) {
+		this.#publish('idle', result.ok ? undefined : terminalMessage(result.reason, result.error, unavailable))
 	}
 
-	fail(error: unknown) {
-		if (this.stopped) return
-
-		console.error('darv failed:', error)
-		this.destroy()
-		this.handleDarvEvent('idle', 'darv failed')
+	// Milliseconds of exposure before the first leg starts.
+	get #initialPause() {
+		return Math.max(0, this.request.initialPause) * 1000
 	}
 
-	destroy() {
-		if (this.stopped) return
-
-		this.stopped = true
-		this.move(false, false, 0)
-		void this.capture?.cancel()
+	// Milliseconds spent drawing both arms of the trail.
+	get #duration() {
+		return Math.max(0, this.request.duration) * 1000
 	}
 
-	private get initialPause() {
-		return Math.max(0, this.request.initialPause * 1000)
+	// Pulse-guides one leg in right ascension and resolves after it has run for its whole duration.
+	//
+	// The pulse nests in this run, so the mount it already holds is inherited, and its own cleanup stops
+	// the axis before the run releases the device. Which direction opens the trail depends on the
+	// hemisphere, and the return leg is always the opposite of the one that went out.
+	#pulse(context: OperationContext, reversed: boolean, duration: number): Promise<OperationResult<void>> {
+		const direction: GuideDirection = (this.request.hemisphere === 'northern') === reversed ? 'EAST' : 'WEST'
+		return this.handler.guideOutputHandler.commander.pulse(context, this.mount, direction, duration)
 	}
 
-	private get duration() {
-		return Math.max(0, this.request.duration * 1000)
-	}
-
-	private move(enabled: boolean, reversed: boolean, duration: number) {
-		const guideOutputManager = this.darv.guideOutputHandler.guideOutputManager
-
-		if (enabled) {
-			if ((this.request.hemisphere === 'northern') !== !reversed) {
-				guideOutputManager.pulseWest(this.mount, 0)
-				guideOutputManager.pulseEast(this.mount, duration)
-			} else {
-				guideOutputManager.pulseEast(this.mount, 0)
-				guideOutputManager.pulseWest(this.mount, duration)
-			}
-		} else {
-			guideOutputManager.pulseEast(this.mount, 0)
-			guideOutputManager.pulseWest(this.mount, 0)
-			this.darv.mountHandler.mountManager.stop(this.mount)
-		}
+	// Publishes a transition, skipping one that would repeat the state and message already sent.
+	#publish(state: DarvState, message?: string) {
+		if (state === this.#event.state && message === this.#event.message) return
+		this.#event.state = state
+		this.#event.message = message
+		this.handler.sendEvent(this.#event)
 	}
 }
 
+// Builds DARV HTTP routes over coordinated runs.
 export function darv(darvHandler: DarvHandler) {
 	const { cameraHandler, mountHandler } = darvHandler
 
+	// Resolves the camera named by route params and optional client query.
 	function cameraFromParams(req: Bun.BunRequest) {
 		return cameraHandler.cameraManager.get(query(req).client, req.params.camera)!
 	}
 
+	// Resolves the mount named by route params and optional client query.
 	function mountFromParams(req: Bun.BunRequest) {
 		return mountHandler.mountManager.get(query(req).client, req.params.mount)!
 	}
 
 	return {
 		'/darv/:camera/:mount/start': { POST: async (req) => response(darvHandler.start(await req.json(), cameraFromParams(req), mountFromParams(req))) },
-		'/darv/:id/stop': { POST: (req) => response(darvHandler.stop(req.params.id)) },
+		'/darv/:id/stop': { POST: async (req) => response(await darvHandler.stop(req.params.id)) },
 	} as const satisfies Endpoints
 }

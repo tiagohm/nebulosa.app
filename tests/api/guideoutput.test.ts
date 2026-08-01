@@ -6,6 +6,7 @@ import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { guideOutputBus, guideOutput as guideOutputEndpoints, GuideOutputHandler } from 'src/api/guideoutput'
+import { GuideOutputCommander } from 'src/api/guideoutput.commander'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler } from 'src/api/mount'
 import { MountCommander } from 'src/api/mount.commander'
@@ -20,7 +21,7 @@ guideOutputBus.forceSync = true
 const wsm = new WebSocketMessageHandler()
 const mountManager = new MountManager()
 const guideOutputManager = new GuideOutputManager(mountManager)
-const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager)
+const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, new GuideOutputCommander(guideOutputManager))
 const endpoints = guideOutputEndpoints(guideOutputHandler)
 const handler = new IndiClientHandlerSet([mountManager, guideOutputManager])
 const client = new ClientSimulator('Client Simulator', handler)
@@ -159,7 +160,7 @@ describe('guide output handler', () => {
 
 		const mountManager = new MountManager()
 		const guideOutputManager = new GuideOutputManager(mountManager)
-		const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager)
+		const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, new GuideOutputCommander(guideOutputManager))
 		const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(), new NotificationHandler(wsm), new MountCommander(mountManager), new OperationCoordinator(new ResourceArbiter()))
 		const handler = new IndiClientHandlerSet([mountManager, guideOutputManager])
 		const client = new ClientSimulator('Client Simulator', handler)
@@ -274,7 +275,7 @@ describe('guide output handler', () => {
 		const wsm = new WebSocketMessageHandler()
 		const mountManager = new MountManager()
 		const guideOutputManager = new GuideOutputManager(mountManager)
-		const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager)
+		const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, new GuideOutputCommander(guideOutputManager))
 		const handler = new IndiClientHandlerSet([mountManager, guideOutputManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const focuserSimulator = new MountSimulator('Mount Simulator', client)

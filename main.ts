@@ -23,6 +23,7 @@ import { FlatWizardHandler, flatWizard } from 'src/api/flatwizard'
 import { FocuserHandler, focuser } from 'src/api/focuser'
 import { FocuserCommander } from 'src/api/focuser.commander'
 import { GuideOutputHandler, guideOutput } from 'src/api/guideoutput'
+import { GuideOutputCommander } from 'src/api/guideoutput.commander'
 import { GuiderHandler, guider } from 'src/api/guider'
 import { GuiderCommander } from 'src/api/guider.session'
 import { IndiDevicePropertyHandler, IndiHandler, IndiServerHandler, indi } from 'src/api/indi'
@@ -234,7 +235,10 @@ const focuserCommander = new FocuserCommander(focuserManager)
 const focuserHandler = new FocuserHandler(wsm, focuserManager, notificationHandler, focuserCommander, operationCoordinator)
 const wheelHandler = new WheelHandler(wsm, wheelManager)
 const thermometerHandler = new ThermometerHandler(wsm, thermometerManager)
-const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager)
+// Coordinated guide output service owns every timed pulse, so DARV draws its trail under the same
+// ownership rules as any other operation commanding the device behind the guide output.
+const guideOutputCommander = new GuideOutputCommander(guideOutputManager)
+const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, guideOutputCommander)
 const coverHandler = new CoverHandler(wsm, coverManager)
 const flatPanelHandler = new FlatPanelHandler(wsm, flatPanelManager)
 const rotatorHandler = new RotatorHandler(wsm, rotatorManager)
@@ -249,7 +253,7 @@ const plateSolverHandler = new PlateSolverHandler(notificationHandler, imageProc
 const atlasHandler = new AtlasHandler(notificationHandler)
 const imageHandler = new ImageHandler(imageProcessor, notificationHandler)
 const tppaHandler = new TppaHandler(wsm, cameraHandler, mountHandler, plateSolverHandler, operationCoordinator)
-const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutputHandler)
+const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutputHandler, operationCoordinator)
 const autoFocusHandler = new AutoFocusHandler(wsm, cameraHandler, focuserHandler, starDetectionHandler, operationCoordinator)
 const flatWizardHandler = new FlatWizardHandler(wsm, cameraHandler, imageProcessor, operationCoordinator)
 const alpacaHandler = new AlpacaHandler(wsm, { camera: cameraManager, mount: mountManager, focuser: focuserManager, wheel: wheelManager, cover: coverManager, flatPanel: flatPanelManager, rotator: rotatorManager, guideOutput: guideOutputManager }, alpacaDiscoveryPort)

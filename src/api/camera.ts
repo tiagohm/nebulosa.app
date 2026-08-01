@@ -118,7 +118,6 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 
 	// Starts a capture under the given scope and returns its operation-backed milestones.
-	//
 	// The scope is what decides whether the capture is an operation of its own or a step of a larger one. A
 	// route passes the coordinator and gets a new tree; a composite feature passes its own context and the
 	// capture nests inside it, inheriting the camera the feature already holds instead of competing for it.
@@ -144,7 +143,6 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 
 	// Cancels one capture scope by operation id, or whatever operation currently owns the camera.
-	//
 	// The arbiter already knows the owner, so no local index is kept here: one would miss every capture a
 	// composite feature starts from its own context, since those never pass through this handler. Stopping
 	// by device cancels the whole owning tree, which is what stopping a camera means to the caller holding

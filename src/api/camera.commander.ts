@@ -5,7 +5,6 @@ import type { OperationScope } from './operation'
 import { resourceKey } from './resource'
 
 // Coordinated thermal mutations of a camera.
-//
 // Exposures are owned by CameraCapturer, so what is left here is the cooling control: switching the cooler
 // and setting its target. Neither waits for the sensor to reach the setpoint, which takes minutes and is
 // reported continuously as a device update; they only dispatch the command. Both acquire the camera all the
@@ -14,7 +13,6 @@ import { resourceKey } from './resource'
 // Temperatures are degrees Celsius.
 
 // Owns every thermal mutation of a camera.
-//
 // Each command opens its own nested scope holding the camera, so a direct endpoint runs it as a whole
 // operation tree while a composite feature, passing its own context, inherits the camera it already owns.
 export class CameraCommander {

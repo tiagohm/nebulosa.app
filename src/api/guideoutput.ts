@@ -69,7 +69,6 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 	}
 
 	// Issues one timed pulse per axis as a whole operation tree owning the device behind the guide output.
-	//
 	// Durations are in milliseconds and the driver times them, so the pulses outlast the request that asked
 	// for them and report their failures as a notification instead.
 	pulse(device: GuideOutput, pulses: readonly GuidePulse[]) {
@@ -85,7 +84,6 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 
 	// Stops any pulse: first by cancelling whatever operation owns the device, so its own cleanup runs, and
 	// then by zeroing both guide vectors, which also covers motion nobody here started.
-	//
 	// Both axes are zeroed before the standstill is awaited, since the device reports a single guiding flag
 	// and settling on one axis while the other keeps pulsing would only wait out the settle timeout.
 	async stop(device: GuideOutput) {

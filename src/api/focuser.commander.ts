@@ -50,7 +50,6 @@ const MOTION_PROPERTIES = new Set<string>(['position', 'moving'])
 const UNCANCELABLE = new AbortController().signal
 
 // Owns every mutation of a focuser and turns the ones with a physical effect into awaitable operations.
-//
 // Each command opens its own nested scope holding the focuser, so a direct endpoint runs it as a whole
 // operation tree while a composite feature, passing its own context, inherits the focuser it already owns
 // and gets cancellation and cleanup that do not disturb the feature around it.
@@ -125,7 +124,6 @@ export class FocuserCommander implements DeviceHandler<Focuser> {
 	}
 
 	// Stops any motion and waits for the focuser to report a standstill.
-	//
 	// This is the one command that does not acquire the focuser. It is the emergency stop, used both by the
 	// stop endpoint and by the abort path of every wait here, and it exists precisely for the states in
 	// which acquisition is impossible: a moving focuser is unavailable to the arbiter, and a focuser moving
@@ -161,7 +159,6 @@ export class FocuserCommander implements DeviceHandler<Focuser> {
 	}
 
 	// Runs a planned move under a scope owning the focuser and waits for it to stop at the target.
-	//
 	// Subscription happens before the command, so a focuser that arrives while the command is still being
 	// dispatched cannot be missed, and one already standing at the target settles on the state read after
 	// dispatch. Every unsuccessful outcome stops the focuser before settling, so no cancel, timeout, or

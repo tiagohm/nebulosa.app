@@ -25,18 +25,15 @@ export const darvBus = new EventBus<DarvBusEvents>()
 
 // Seconds of exposure added to the requested trajectory, and the whole overhead a run is allowed to spend
 // outside its own timers.
-//
 // None of the run's timers start where the shutter does: each leg pays command dispatch plus the time the
 // driver takes to report the axis at a standstill, and an exposure sized exactly to `initialPause + duration`
 // closes while the return leg is still being drawn. The extra seconds only prolong the vertex the trail
 // already ends on, which costs nothing to the measurement made on the frame.
-//
 // This is a budget and not a guess: each leg is given what is left of it as its settle allowance, so a driver
 // slower than the shutter ends the run instead of letting it report a truncated trail as a finished one.
 const EXPOSURE_HEADROOM = 5
 
 // Renders the terminal cause of a run for the message its last event carries.
-//
 // A stop is what the user just asked for, so it says so. A refusal is reported without the detail the
 // coordinator formats, which names resource keys and an operation id: stable enough for a log and
 // meaningless on a screen. The coordinator reports an active owner and an unusable device alike as busy,
@@ -49,7 +46,6 @@ function terminalMessage(reason: OperationFailureReason, error: string | undefin
 }
 
 // Mirrors a capture failure as a run failure, and never settles while the exposure is healthy.
-//
 // It is meant to be raced against each phase of the run, which is why a successful capture leaves it
 // pending: the frame arriving early is not a reason to stop drawing the trail into it.
 function captureFailure(handle: CameraCaptureHandle): Promise<OperationResult<void>> {
@@ -84,7 +80,6 @@ export class DarvHandler {
 	}
 
 	// Starts one run, which owns the camera and the mount until the star trail is exposed or it is stopped.
-	//
 	// The mount is acquired as the physical device providing the guide output the pulses are sent to, which
 	// is the same resource under either name, so nothing else can slew it while the trail is being drawn.
 	// The duplicate-device guard the task list used to apply is gone with it: a second run over the same
@@ -236,11 +231,9 @@ class DarvRun {
 	}
 
 	// Pulse-guides one leg in right ascension and resolves after it has run for its whole duration.
-	//
 	// The pulse nests in this run, so the mount it already holds is inherited, and its own cleanup stops
 	// the axis before the run releases the device. Which direction opens the trail depends on the
 	// hemisphere, and the return leg is always the opposite of the one that went out.
-	//
 	// `duration` is this leg in milliseconds and `remaining` the milliseconds of trajectory still owed after
 	// it, both measured against the shutter: what is left of the exposure once those two are subtracted is
 	// all the settle latency this leg may spend, and the commander is told so instead of falling back to its

@@ -38,7 +38,6 @@ const SOLVER_RADIUS = 8
 const SITE_ELLIPSOID = 3
 
 // Renders the terminal cause of a run for the message its last event carries.
-//
 // A stop is what the user just asked for, so it says so. A refusal is reported without the detail the
 // coordinator formats, which names resource keys and an operation id: stable enough for a log and
 // meaningless on a screen. The coordinator reports an active owner and an unusable device alike as busy,
@@ -75,7 +74,6 @@ export class TppaHandler {
 
 	// Starts one run, which owns the camera and the mount until the alignment error is known, the session
 	// gives up, or it is stopped.
-	//
 	// Both devices are acquired for the whole run on purpose: the three points only mean something as a
 	// sequence, so a slew or a capture interleaved by another operation would measure a geometry that no
 	// longer matches the points already collected. The duplicate-device guard the task list used to apply is
@@ -275,7 +273,6 @@ class TppaRun {
 	}
 
 	// Moves the mount in right ascension for the configured duration and waits for it to stop.
-	//
 	// The motion nests in this run, so the mount it already holds is inherited, and the handle keeps that
 	// nested scope open for as long as an axis is moving. Cancelling the run therefore stops the axis
 	// through the motion's own cleanup, which leaves tracking alone, instead of aborting the mount outright.

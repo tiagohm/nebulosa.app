@@ -7,7 +7,6 @@ import { waitForDeviceState } from './operation.wait'
 import { resourceKey } from './resource'
 
 // Coordinated mutations of a dust cover or flip-flat.
-//
 // Parking closes the cover and unparking opens it, which is the INDI CAP_PARK convention the device model
 // mirrors. Every duration is in milliseconds. Both motions acquire the cover; the emergency stop does not,
 // so it still runs while the operation that owns the device is being canceled.
@@ -49,7 +48,6 @@ const MOTION_PROPERTIES = new Set<string>(['parking', 'parked'])
 const UNCANCELABLE = new AbortController().signal
 
 // Owns every mutation of a cover and turns the ones with a physical effect into awaitable operations.
-//
 // Each command opens its own nested scope holding the cover, so a direct endpoint runs it as a whole
 // operation tree while a composite feature, passing its own context, inherits the cover it already owns.
 export class CoverCommander implements DeviceHandler<Cover> {
@@ -96,7 +94,6 @@ export class CoverCommander implements DeviceHandler<Cover> {
 	}
 
 	// Aborts any motion and waits for the cover to report a standstill.
-	//
 	// This is the emergency stop of the commander: it does not acquire the device, precisely because it is
 	// used while the owning operation is being canceled and by cleanup running after the executor returned.
 	// A cover left half way is not an error state here: only the motion is undone, not the position.

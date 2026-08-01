@@ -170,7 +170,6 @@ export class MountHandler implements DeviceHandler<Mount> {
 
 	// Stops the mount: first by cancelling whatever operation owns it, so its own cleanup runs, and then
 	// by the physical abort, which also covers motion nobody here started.
-	//
 	// No local index of operations is kept: the arbiter already knows the owner, and stopping by device
 	// means stopping the whole tree, because a caller holding only a device id cannot name a scope and
 	// stopping the mount of a TPPA run means stopping the TPPA run.
@@ -187,7 +186,6 @@ export class MountHandler implements DeviceHandler<Mount> {
 	}
 
 	// Runs a command whose physical completion outlasts the request that asked for it.
-	//
 	// The HTTP response is gone by the time the command settles, and a rejected command moves nothing, so
 	// it emits no device update either: without a notification the user would see the action silently
 	// discarded. Failures are therefore pushed over the WebSocket, which is the same path every other
@@ -203,7 +201,6 @@ export class MountHandler implements DeviceHandler<Mount> {
 }
 
 // Exposes mounts to external planetarium software over the Stellarium and LX200 protocols.
-//
 // Every mutation goes through MountCommander, so a remote client competes for the mount under the same
 // ownership rules as the UI: it cannot slew a mount an operation is already using.
 export class MountRemoteControlHandler {

@@ -26,7 +26,6 @@ export interface FlatWizardBusEvents {
 export const flatWizardBus = new EventBus<FlatWizardBusEvents>()
 
 // Renders the terminal cause of a run for the message its last event carries.
-//
 // A stop is what the user just asked for, so it says so. A refusal is reported without the detail the
 // coordinator formats: that detail names a resource key and an operation id, which are stable enough for a
 // log and meaningless on a screen. The coordinator also reports an active owner and an unusable device
@@ -61,7 +60,6 @@ export class FlatWizardHandler {
 	}
 
 	// Starts one run, which owns the camera until it finds an exposure, gives up, or is stopped.
-	//
 	// Holding the camera across the whole search is the point: the bisection is a sequence of exposures
 	// whose results only mean something together, and releasing it between two of them would let another
 	// operation expose in the middle of a search that is still converging.

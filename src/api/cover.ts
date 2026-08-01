@@ -82,7 +82,6 @@ export class CoverHandler implements DeviceHandler<Cover> {
 	}
 
 	// Runs a command whose physical completion outlasts the request that asked for it.
-	//
 	// The HTTP response is gone by the time the cover settles, and a refused command moves nothing, so it
 	// emits no device update either: without a notification the user would see the action silently
 	// discarded. Failures are therefore pushed over the WebSocket, which is the same path every other

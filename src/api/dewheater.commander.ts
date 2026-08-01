@@ -6,14 +6,12 @@ import type { OperationScope } from './operation'
 import { resourceKey } from './resource'
 
 // Coordinated mutations of a dew heater.
-//
 // Nothing here moves, so the command does not wait for the device: the driver applies the PWM level
 // immediately. It acquires the heater all the same, and a heater provided by a camera or a cover is
 // arbitrated under the key of that device, so raising the duty cycle competes with the exposure or the
 // cover motion it would otherwise disturb.
 
 // Owns every mutation of a dew heater.
-//
 // The command opens its own nested scope holding the device behind the heater, so a direct endpoint runs it
 // as a whole operation tree while a composite feature, passing its own context, inherits what it owns.
 export class DewHeaterCommander {

@@ -706,7 +706,6 @@ class CameraCaptureSession {
 	}
 
 	// Mirrors the progress of the dither this capture asked for.
-	//
 	// The guider hands each phase back through the call itself, so there is no channel through which
 	// another session could reach this one and nothing here has to be matched against a session id.
 	readonly #guiderDithered = (phase: GuiderDitherPhase) => {

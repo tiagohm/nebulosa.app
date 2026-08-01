@@ -28,7 +28,6 @@ export interface AutoFocusBusEvents {
 export const autoFocusBus = new EventBus<AutoFocusBusEvents>()
 
 // Renders the terminal cause of a run for the message its last event carries.
-//
 // A stop is what the user just asked for, so it says so. A refusal is reported without the detail the
 // coordinator formats: that detail names resource keys and an operation id, which are stable enough for a
 // log and meaningless on a screen. The coordinator also reports an active owner and an unusable device
@@ -66,7 +65,6 @@ export class AutoFocusHandler {
 
 	// Starts one run, which owns the camera and the focuser until the curve is fitted, the search gives up,
 	// or it is stopped.
-	//
 	// Both devices are acquired for the whole run on purpose: the samples of a V-curve only mean something
 	// together, so a capture or a focuser move interleaved by another operation would corrupt a search that
 	// is still converging, and every position already sampled would be measured against a different focus.

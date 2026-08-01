@@ -92,7 +92,6 @@ export class RotatorHandler implements DeviceHandler<Rotator> {
 	}
 
 	// Runs a command whose physical completion outlasts the request that asked for it.
-	//
 	// The HTTP response is gone by the time the rotator settles, and a refused command moves nothing, so it
 	// emits no device update either: without a notification the user would see the action silently
 	// discarded. Failures are therefore pushed over the WebSocket, which is the same path every other

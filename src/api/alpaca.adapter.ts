@@ -15,17 +15,14 @@ import type { ResourceKey } from './resource'
 import type { WheelCommander } from './wheel.commander'
 
 // Coordinated device managers handed to the Alpaca server.
-//
 // The Alpaca server is a second ingress into the same hardware: it writes to the INDI managers directly,
 // so a remote client could move a device the application is already using, or start an exposure over one
 // that is integrating. This module wraps each manager in a proxy whose mutating methods go through the
 // commanders instead, which makes every Alpaca request compete for the same resource keys as the HTTP
 // routes and the composite features. Reads, listings and handler registration pass straight through.
-//
 // Alpaca has no channel for reporting an asynchronous failure: its handlers answer before the device has
 // moved, and clients observe the outcome by polling state. A refused or failed command is therefore only
 // logged here, and the client sees the device simply not change.
-//
 // Exposure durations are seconds, matching the Alpaca and INDI camera contracts.
 
 // The managers the Alpaca server is given. The rotator is listed but never mutated by the server, so it
@@ -72,7 +69,6 @@ export interface AlpacaCommanders {
 type ManagerCommands<M extends object> = { [K in keyof M]?: M[K] extends (...args: infer A) => unknown ? (...args: A) => void : never }
 
 // Wraps a manager so the named methods are replaced and everything else reaches the real one.
-//
 // A proxy is the only workable wrapper: the managers keep their state in private class fields, so any
 // pass-through function has to run with the manager itself as receiver, which is what binding to the
 // target does here.
@@ -101,7 +97,6 @@ export function coordinatedAlpacaManagers(managers: AlpacaManagers, commanders: 
 
 	// Runs a coordinated command without making the Alpaca caller wait for the device, after everything
 	// already queued for that device.
-	//
 	// Each command holds the device for as long as it runs, and one Alpaca request routinely issues
 	// several in a row: the exposure handler sets the frame type before starting the exposure, and the
 	// calibrator handler switches the light on before setting its brightness. Dispatched concurrently,

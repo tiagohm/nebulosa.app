@@ -8,7 +8,6 @@ import { waitForDeviceState } from './operation.wait'
 import { resourceKey } from './resource'
 
 // Coordinated mutations of a filter wheel.
-//
 // A wheel has no abort vector, so a move is only ever waited for, never interrupted: the commands here
 // turn the driver's slot change into an awaitable operation and leave the physical motion to finish on its
 // own. Slots are 0-based, the same convention the device model publishes, and the INDI vector's 1-based
@@ -45,7 +44,6 @@ const MOTION_PROPERTIES = new Set<string>(['position', 'moving'])
 
 // Owns every mutation of a filter wheel and turns the ones with a physical effect into awaitable
 // operations.
-//
 // Each command opens its own nested scope holding the wheel, so a direct endpoint runs it as a whole
 // operation tree while a composite feature, passing its own context, inherits the wheel it already owns.
 export class WheelCommander implements DeviceHandler<Wheel> {
@@ -72,7 +70,6 @@ export class WheelCommander implements DeviceHandler<Wheel> {
 	}
 
 	// Selects a filter slot and resolves only after the wheel reports standing at it.
-	//
 	// The slot is 0-based and resolved against the carousel, so a target the driver would never echo
 	// cannot leave the wait pending until it times out. Nothing is stopped when the move fails: the wheel
 	// exposes no abort, so a canceled move is held instead of interrupted, and the device is only released
@@ -124,7 +121,6 @@ export class WheelCommander implements DeviceHandler<Wheel> {
 	}
 
 	// Renames the filter slots, which the driver applies without any movement.
-	//
 	// This acquires the wheel like a move: the names are what every later capture stamps into its frames,
 	// and rewriting them under a running sequence would relabel filters it has already used.
 	async setNames(scope: OperationScope, wheel: Wheel, names: readonly string[]): Promise<OperationResult<void>> {
@@ -140,7 +136,6 @@ export class WheelCommander implements DeviceHandler<Wheel> {
 
 	// Waits for the wheel to stand at the slot it was commanded to, on a signal of its own so it still runs
 	// while the operation that owns the device is being canceled. The target is the 1-based INDI position.
-	//
 	// Nothing is commanded here: there is no abort to send, so the wait only outlasts the travel the driver
 	// is already performing, bounded by the same allowance a move itself gets.
 	async #settle(wheel: Wheel, target: number): Promise<OperationResult<void>> {

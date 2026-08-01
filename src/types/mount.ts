@@ -51,7 +51,6 @@ export const DEFAULT_COORDINATE_INFO: CoordinateInfo = {
 // Selects which fields of a CoordinateInfo are worth computing, so a caller that only needs to command a
 // mount does not pay for the frames a full UI panel shows. An unrequested field keeps its zero value and
 // must not be read.
-//
 // A flag only asks for an output. Frames the requested outputs depend on are still computed as
 // intermediates: asking for galactic from a JNOW target computes the J2000 equatorial it is derived from,
 // whether or not equatorialJ2000 itself was requested. Only the fields listed here are contractual.
@@ -84,7 +83,6 @@ const DEFAULT_COORDINATE_INFO_FLAGS: Required<CoordinateInfoFlags> = {
 }
 
 // Projects one target into every requested coordinate frame.
-//
 // - time: instant the conversions are referred to, carrying the observing site for horizontal output.
 // - longitude: site longitude in radians, used for the local sidereal time.
 // - target: an equatorial coordinate at date, or a mount target tagged with the frame it is given in.

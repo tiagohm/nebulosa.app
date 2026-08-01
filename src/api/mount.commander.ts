@@ -119,7 +119,6 @@ const OPPOSITE_DIRECTION: Record<MountMoveDirection, MountMoveDirection> = {
 const UNCANCELABLE = new AbortController().signal
 
 // Owns every mutation of a mount and turns the ones with a physical effect into awaitable operations.
-//
 // Each command opens its own nested scope holding the mount, so a direct endpoint runs it as a whole
 // operation tree while a composite feature, passing its own context, inherits the mount it already owns
 // and gets cancellation and cleanup that do not disturb the feature around it.
@@ -326,7 +325,6 @@ export class MountCommander implements DeviceHandler<Mount> {
 	}
 
 	// Starts an open-ended motion in one direction, or joins the motion already holding the mount.
-	//
 	// Unlike every other command, the returned handle outlives this call: the scope stays open, and the
 	// mount stays leased, until the motion is stopped.
 	async startManualMove(scope: OperationScope, mount: Mount, direction: MountMoveDirection, options: MountCommandOptions = {}): Promise<OperationResult<ManualMoveHandle>> {
@@ -468,7 +466,6 @@ export class MountCommander implements DeviceHandler<Mount> {
 	}
 
 	// Stops every physical motion of a mount and waits for it to become quiescent.
-	//
 	// This is the one command that does not acquire the mount. It is the emergency stop, used both by the
 	// stop endpoint and by the abort path of every wait here, and it exists precisely for the states in
 	// which acquisition is impossible: a moving mount is unavailable to the arbiter, and a mount moving

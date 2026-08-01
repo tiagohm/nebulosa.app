@@ -8,7 +8,6 @@ import { waitForDeviceState } from './operation.wait'
 import { resourceKey } from './resource'
 
 // Coordinated mutations of a rotator.
-//
 // Angles are in degrees, the unit the INDI ABS_ROTATOR_ANGLE vector and the device model both publish, and
 // are resolved against the driver's own limits before being commanded. Every duration is in milliseconds.
 // Motion commands acquire the rotator; the emergency stop does not, so it still runs while the operation
@@ -56,7 +55,6 @@ const MOTION_PROPERTIES = new Set<string>(['angle', 'moving'])
 const UNCANCELABLE = new AbortController().signal
 
 // Owns every mutation of a rotator and turns the ones with a physical effect into awaitable operations.
-//
 // Each command opens its own nested scope holding the rotator, so a direct endpoint runs it as a whole
 // operation tree while a composite feature, passing its own context, inherits the rotator it already owns.
 export class RotatorCommander implements DeviceHandler<Rotator> {
@@ -102,7 +100,6 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 	}
 
 	// Homes the rotator and resolves only after the motion it starts has finished.
-	//
 	// Homing ends wherever the driver defines its zero, which is not necessarily the angle it reports as
 	// zero, so completion is the standstill alone and not a target angle. What separates that standstill from
 	// the one the rotator is still standing in is the motion observed in between: the command is only
@@ -141,7 +138,6 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 	}
 
 	// Inverts the direction the rotator turns for a given angle at the driver.
-	//
 	// This acquires the rotator even though nothing moves: the setting reinterprets every angle commanded
 	// after it, and flipping it under a running operation would send the next move the wrong way.
 	async reverse(scope: OperationScope, rotator: Rotator, enabled: boolean): Promise<OperationResult<void>> {
@@ -156,7 +152,6 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 	}
 
 	// Aborts any motion and waits for the rotator to report a standstill.
-	//
 	// This is the emergency stop of the commander: it does not acquire the device, precisely because it is
 	// used while the owning operation is being canceled and by cleanup running after the executor returned.
 	async stopMotion(rotator: Rotator, options: RotatorCommandOptions = {}): Promise<OperationResult<void>> {
@@ -168,7 +163,6 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 
 	// Commands a motion and waits for the rotator to stand still at a state the caller accepts, aborting it
 	// from the scope's own cleanup so a canceled operation never releases a rotator that is still turning.
-	//
 	// The acceptance predicate is consulted on every update and not only once the rotator stands still,
 	// because it may be the one latching the motion that has to be observed before a standstill counts.
 	async #move(context: OperationContext, rotator: Rotator, options: RotatorCommandOptions, command: VoidFunction, arrived: () => boolean): Promise<OperationResult<void>> {

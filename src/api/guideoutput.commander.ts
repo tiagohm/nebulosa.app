@@ -44,7 +44,6 @@ const OPPOSITE_DIRECTION: Record<GuideDirection, GuideDirection> = {
 }
 
 // Owns every timed pulse of a guide output and turns it into an awaitable operation.
-//
 // The pulse opens its own nested scope holding the physical device behind the guide output, so a
 // composite feature passing its own context inherits the device it already owns, and the axis is stopped
 // by the scope's cleanup whenever the pulse is canceled instead of being left running under a released
@@ -77,7 +76,6 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 
 	// Issues a timed pulse in one direction and resolves only after it has run for its whole duration and
 	// the device reports no guiding motion. Duration is in milliseconds.
-	//
 	// The driver times the pulse itself, so the delay is what the caller is waiting for and the device is
 	// observed throughout it: a driver that reports Alert fails the pulse at once instead of at the end of a
 	// leg that is no longer being drawn. A canceled pulse is stopped before the scope releases the device,
@@ -96,7 +94,6 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 	}
 
 	// Issues one timed pulse per axis inside a single operation and resolves after all of them finished.
-	//
 	// A diagonal nudge is two pulses on perpendicular axes at the same time, and two operations cannot both
 	// hold the device, so they share one scope instead. The legs run concurrently and the whole operation
 	// fails with the first failure reported, because a partially drawn correction is not a successful one.
@@ -107,11 +104,8 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 			if (!device.connected) return { ok: false, reason: 'disconnected' }
 			if (!device.canPulseGuide) return { ok: false, reason: 'unexpectedState', error: `guide output ${device.name} cannot pulse guide` }
 
-			this.#stopOnCleanup(
-				context,
-				device,
-				pulses.map((pulse) => pulse.direction),
-			)
+			const directions = pulses.map((pulse) => pulse.direction)
+			this.#stopOnCleanup(context, device, directions)
 
 			const results = await Promise.all(pulses.map((pulse) => this.#pulse(context, device, pulse.direction, pulse.duration, options)))
 
@@ -120,7 +114,6 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 	}
 
 	// Sets the guide rate of both axes, as a fraction of the sidereal rate.
-	//
 	// Nothing moves, so there is nothing to wait for, but the device is acquired all the same: the rate
 	// scales every pulse issued after it, and changing it under a running guider or a DARV leg would
 	// silently rescale a correction already in flight.
@@ -136,7 +129,6 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 	}
 
 	// Cancels any pulse in one direction and waits for the device to report a standstill.
-	//
 	// This is the emergency stop of the commander: it does not acquire the device, precisely because it is
 	// used while the owning operation is being canceled and by cleanup running after the executor returned.
 	async stopPulse(device: GuideOutput, direction: GuideDirection, options: GuidePulseOptions = {}): Promise<OperationResult<void>> {
@@ -144,7 +136,6 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 	}
 
 	// Cancels the pulses of every given direction and waits once for the device to report a standstill.
-	//
 	// Both axes have to be zeroed before anything is awaited: the device publishes a single guiding flag, so
 	// stopping one axis and settling on it while the other is still counting down would only wait out the
 	// settle timeout on a device that is legitimately still pulsing. The opposite of each direction is zeroed
@@ -166,11 +157,9 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 	}
 
 	// Registers the stop that runs when the operation owning the pulses is canceled.
-	//
 	// It is registered before any leg is commanded so a cancel arriving during dispatch still finds the stop
 	// it needs, and it covers every direction of the operation at once because a per-leg cleanup would settle
 	// on a flag the sibling leg still holds.
-	//
 	// The caller's timing is deliberately not forwarded: a settle allowance shortened to fit a deadline
 	// bounds how long a leg may be waited for, not how long the axis is given to come to rest, and an
 	// emergency stop cut short would release the device while it is still moving.
@@ -185,7 +174,6 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 	}
 
 	// Commands the pulse and waits out its duration; the axis is stopped by the cleanup the caller registered.
-	//
 	// The opposite direction is zeroed before the pulse starts because both directions live in one vector:
 	// a leg commanded while the previous one is still counting down would otherwise be added to a driver
 	// already guiding the other way.

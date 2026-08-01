@@ -71,7 +71,6 @@ const GUIDER_RESOURCE_PREFIX = 'logical:guider'
 // What one session occupies. A guider always holds a logical resource, because a remote server drives its
 // camera and output outside this process and a local session that is merely connected still has to reserve
 // its devices while holding no lease on them.
-//
 // The key describes the target rather than the service, so several guiders coexist while a duplicate is
 // refused by the arbiter itself instead of by a check in the commander.
 export interface GuiderTarget {
@@ -106,7 +105,6 @@ export function localGuiderKey(camera: Camera, guideOutput: GuideOutput): Resour
 
 // Builds the logical key reserving a guide camera, which is what refuses a second session over it even
 // while the first one is idle and owns no lease on the device itself.
-//
 // The pair is reserved one device at a time rather than as a whole, because a key naming both would differ
 // for every combination: two sessions sharing only the camera would each get their own key and both be
 // accepted, and then both would configure that camera and both would receive its frames.
@@ -133,7 +131,6 @@ function commandError(error: GuiderCommandFailure) {
 }
 
 // Reads whether a transport took a dither, and when it did not, whether the mount may still be moving.
-//
 // Only a reply that never arrived leaves that unknown: a server that answered an error decided against the
 // move, and a command that never left the socket moved nothing either, so neither leaves a movement to
 // retain. The local client refuses just as plainly.
@@ -237,7 +234,6 @@ const ABORT_STOP_TIMEOUT = 1000
 const UNCANCELABLE = new AbortController().signal
 
 // Owns the guider connection, its devices, and every state-changing command issued against it.
-//
 // The session is the one exception to the operation-tree model: it is a long operation owned by this
 // service rather than a scope nested in whoever asked for it, because a connection outlives every
 // command. A command requested by another operation, such as the dither of a capture, only passes its
@@ -341,7 +337,6 @@ export class GuiderCommander {
 
 	// Ends one session gracefully: the command in flight is aborted, then the nested activity unwinds and
 	// only after it reports the guider idle is the transport closed and every lease released.
-	//
 	// A remote session owns no local device, so nothing is stopped on its behalf: the PHD2 server is an
 	// independent application and closing our socket is not a reason to end a run someone else is watching.
 	async disconnect(guider: string): Promise<OperationResult<void>> {
@@ -732,7 +727,6 @@ class GuiderSession {
 	}
 
 	// Terminal outcome of the session, once its activity has been released too.
-	//
 	// The activity is a nested scope, and the coordinator waits for a child without folding its result into
 	// the parent: a disconnect whose cleanup failed to stop the guider would otherwise report success while
 	// the camera is still exposing. Releasing it here is also the graceful order, because the scope ends on
@@ -764,7 +758,6 @@ class GuiderSession {
 
 	// Drops the attached transport and tears it down, in that order so a callback fired by the teardown is
 	// already refused by client identity.
-	//
 	// Clearing the reference is not enough on its own: a local client that connected holds a handler on the
 	// camera manager and has blob delivery enabled, and a remote one holds an open socket. Left behind, they
 	// keep driving devices this session no longer owns and a retry attaches a second client over the first.
@@ -784,13 +777,11 @@ class GuiderSession {
 	}
 
 	// Closes a local transport while this session owns the camera that closing it commands.
-	//
 	// A local client stops the exposure and turns frame delivery off on its guide camera as it lets go. An
 	// idle session deliberately owns nothing physical, so doing that from cleanup would reach a camera some
 	// other operation had acquired meanwhile and kill an exposure that has nothing to do with the guider.
 	// The camera is taken back for the length of the close, which has to happen here rather than in cleanup
 	// because a finalizing scope can no longer open a nested one.
-	//
 	// Only the camera: closing commands nothing on the guide output, and holding it too would degrade the
 	// close whenever the mount behind it is slewing, over a device the close never touches.
 	async #detachOwned(): Promise<OperationResult<void>> {
@@ -825,7 +816,6 @@ class GuiderSession {
 
 	// Attaches a remote PHD2 client. The client is stored before the handshake because the server may push
 	// events as soon as the socket is up, and an event dropped there would be an app state never applied.
-	//
 	// Everything after the socket is up is inside the same guard: the session is only given a cleanup that
 	// closes its transport once open() has succeeded, so anything failing here has to close its own socket.
 	async #openRemote(host: string, port: number): Promise<OperationResult<void>> {
@@ -925,7 +915,6 @@ class GuiderSession {
 	}
 
 	// Applies the capture configuration of a local guider to its camera and makes sure frames are delivered.
-	//
 	// This runs under every scope that owns the camera, not once at connection. An idle session releases the
 	// physical device on purpose, so another operation may crop, bin or re-gain it meanwhile, and a capture
 	// turns frame delivery off when it is done. A guide exposure taken on that configuration would be wrong,
@@ -976,7 +965,6 @@ class GuiderSession {
 	}
 
 	// Milliseconds a loop has to be observed, which has to cover one whole exposure on either transport.
-	//
 	// Neither transport announces that it started looping. PHD2 sends its application state only when a
 	// client first connects, and the local guider reproduces that on purpose, so on both the state proving
 	// the guider is looping is the per-frame event that arrives once the first exposure has been processed.
@@ -989,11 +977,9 @@ class GuiderSession {
 	}
 
 	// Milliseconds of one guide exposure, or zero when it cannot be established.
-	//
 	// A remote exposure belongs to PHD2, which owns it and lets its own user change it at any time, so it is
 	// asked for each time rather than remembered from the handshake. A server that will not answer costs
 	// only the allowance it would have added, which is the same bound the loop had before.
-	//
 	// Both transports report it in milliseconds, and both report what is actually configured now rather than
 	// what the session was opened with, so a guider re-exposed since then is bounded by its current cadence.
 	async #guideExposure(signal: AbortSignal, timeout: number) {
@@ -1007,7 +993,6 @@ class GuiderSession {
 	}
 
 	// Awaits one transport request under a bound the session controls, rather than one the transport owes.
-	//
 	// A PHD2 client that closes drops every command still in flight without settling it, and clears the
 	// reply timeout along with it, so a request outstanding when the transport goes away never resolves at
 	// all. Anything awaiting it would hang forever: a command would never reach the release of its
@@ -1054,7 +1039,6 @@ class GuiderSession {
 
 	// Acquires the guide camera and guide output for the duration of the activity, then runs the command.
 	// A command that fails hands them straight back, since nothing is capturing after it.
-	//
 	// Only what this command took, though: a guider that was already capturing has an activity of its own,
 	// and releasing that one would quiesce a run the failed command never started. That is the same reason
 	// its abort path stops nothing when the guider refused the command.
@@ -1161,7 +1145,6 @@ class GuiderSession {
 
 	// Stops capture on whichever transport is attached. A session with no transport left has nothing to
 	// stop, so this is a no-op rather than a failure: it also runs from abort and cleanup paths.
-	//
 	// The outcome is read rather than discarded, so a stop the transport refuses fails its wait as a failed
 	// command instead of running to timeout. Every caller of this bounds the wait itself, either through the
 	// timeout of the wait it commands or through #abortCapture.
@@ -1172,7 +1155,6 @@ class GuiderSession {
 
 	// Commands a stop from an abort path, where the wait has already settled and only reaching the device
 	// still matters.
-	//
 	// The bound is what makes awaiting the stop safe here: a remote stop awaits an RPC reply, and the very
 	// reason a wait is being aborted may be the transport that will never answer it. A refusal still
 	// propagates, because it means the device was not told to stop and the caller has to hear that.
@@ -1188,12 +1170,10 @@ class GuiderSession {
 	}
 
 	// Runs a transport command; a missing transport throws so the wait settles as a failed command.
-	//
 	// Neither transport rejects when it refuses a command: the local client answers false and the remote one
 	// a JSON-RPC result that failed. Left unread, a refusal is indistinguishable from a command still on its
 	// way, and the wait would run to its full timeout before reporting one as the other while the guider was
 	// never going to move. Throwing turns the refusal into the failed command it is.
-	//
 	// The answer is typed rather than unknown on purpose: it is the only thing standing between a refusal and
 	// a wait that ignores it, so a transport whose answers change has to stop compiling here.
 	async #dispatch(command: (client: GuiderTransport) => GuiderCommandAnswer | Promise<GuiderCommandAnswer>) {
@@ -1364,7 +1344,6 @@ class GuiderSession {
 	}
 
 	// Fans out one dither phase for presentation, and hands it to whoever asked for this dither.
-	//
 	// The bus is a broadcast of every session, so nothing that depends on the progress being its own may
 	// read it. The caller gets the phase through the call it already made instead, which is why no consumer
 	// has to filter the bus by session.
@@ -1417,7 +1396,6 @@ class GuiderSession {
 	}
 
 	// Retains a movement whose caller has already been answered, refusing a new dither until it concludes.
-	//
 	// The bound matters because the release depends on an event that may never arrive: a guider that drops
 	// its settle would otherwise refuse every dither for the rest of the session. It is the settle timeout
 	// of the dither being retained, which is the longest the guider was ever given to finish this movement.
@@ -1476,7 +1454,6 @@ class GuiderSession {
 	}
 
 	// Terminalizes the dither exactly once, releasing its timers, listener, and pending milestones.
-	//
 	// Terminalizing is about the caller, not about the mount. When the two disagree — an abort or a timeout
 	// answers the caller while the guider carries on moving — the movement is retained so that nothing else
 	// can be settled by the events it has yet to publish.

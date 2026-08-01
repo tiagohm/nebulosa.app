@@ -91,7 +91,6 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 
 	// Stops the focuser: first by cancelling whatever operation owns it, so its own cleanup runs, and then
 	// by the physical abort, which also covers motion nobody here started.
-	//
 	// No local index of operations is kept: the arbiter already knows the owner, and stopping by device
 	// means stopping the whole tree, because a caller holding only a device id cannot name a scope and
 	// stopping the focuser of an autofocus run means stopping the autofocus run.
@@ -101,7 +100,6 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 	}
 
 	// Runs a command whose physical completion outlasts the request that asked for it.
-	//
 	// The HTTP response is gone by the time the move settles, and a refused command moves nothing, so it
 	// emits no device update either: without a notification the user would see the action silently
 	// discarded. Failures are therefore pushed over the WebSocket, which is the same path every other

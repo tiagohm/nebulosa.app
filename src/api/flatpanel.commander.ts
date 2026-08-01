@@ -6,13 +6,11 @@ import type { OperationScope } from './operation'
 import { resourceKey } from './resource'
 
 // Coordinated mutations of a flat panel.
-//
 // Nothing here moves, so no command waits for the device: the driver applies the light state and the
 // intensity immediately. They acquire the panel all the same, because a flat sequence exposing against a
 // commanded brightness would be silently invalidated by anyone changing it underneath.
 
 // Owns every mutation of a flat panel.
-//
 // Each command opens its own nested scope holding the panel, so a direct endpoint runs it as a whole
 // operation tree while a composite feature, passing its own context, inherits the panel it already owns.
 export class FlatPanelCommander {

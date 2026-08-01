@@ -12,7 +12,7 @@ import { MountHandler } from 'src/api/mount'
 import { MountCommander } from 'src/api/mount.commander'
 import { NotificationHandler } from 'src/api/notification'
 import { OperationCoordinator } from 'src/api/operation'
-import { ResourceArbiter } from 'src/api/resource'
+import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import type { GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from '#/guideoutput'
 import { json, noContent, SocketMessager, waitUntil } from './util'
 
@@ -21,7 +21,10 @@ guideOutputBus.forceSync = true
 const wsm = new WebSocketMessageHandler()
 const mountManager = new MountManager()
 const guideOutputManager = new GuideOutputManager(mountManager)
-const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, new GuideOutputCommander(guideOutputManager))
+const guideOutputCommander = new GuideOutputCommander(guideOutputManager)
+const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, guideOutputCommander)
+const resourceArbiter = new ResourceArbiter()
+const operationCoordinator = new OperationCoordinator(resourceArbiter)
 const endpoints = guideOutputEndpoints(guideOutputHandler)
 const handler = new IndiClientHandlerSet([mountManager, guideOutputManager])
 const client = new ClientSimulator('Client Simulator', handler)
@@ -39,7 +42,8 @@ beforeEach(() => {
 	mountManager.disconnect(getMount())
 })
 
-afterEach(() => {
+afterEach(async () => {
+	await operationCoordinator.cancelAll('aborted')
 	mountManager.disconnect(getMount())
 })
 
@@ -268,6 +272,56 @@ describe('guide output handler', () => {
 		} finally {
 			pulse.mockRestore()
 			guideRate.mockRestore()
+		}
+	})
+
+	test('fails the pulse when the driver reports an alert on the guide vector', async () => {
+		const device = connectAndGetGuideOutput()
+
+		resourceArbiter.markAvailable({ key: resourceKey(device), device })
+
+		const pulse = guideOutputCommander.pulse(operationCoordinator, device, 'NORTH', 300)
+
+		expect(await waitUntil(() => device.pulsing)).toBeTrue()
+
+		guideOutputCommander.updated(device, 'pulsing', 'Alert')
+
+		const result = await pulse
+
+		expect(result.ok).toBeFalse()
+		expect(result.ok || result.reason).toBe('alert')
+	})
+
+	test('lets a cancel interrupt a pulse the device has not confirmed stopping', async () => {
+		const device = connectAndGetGuideOutput()
+
+		resourceArbiter.markAvailable({ key: resourceKey(device), device })
+
+		const pulse = spyOn(guideOutputManager, 'pulse').mockImplementation(() => {})
+
+		device.pulsing = true
+
+		const handle = operationCoordinator.start('darv', [{ key: resourceKey(device), device }], (context) => guideOutputCommander.pulse(context, device, 'NORTH', 50))
+
+		try {
+			await Bun.sleep(150)
+
+			const canceled = handle.cancel()
+
+			setTimeout(() => {
+				device.pulsing = false
+				guideOutputCommander.updated(device, 'pulsing', 'Idle')
+			}, 20)
+
+			await canceled
+
+			const result = await handle.result
+
+			expect(result.ok).toBeFalse()
+			expect(result.ok || result.reason).toBe('aborted')
+		} finally {
+			device.pulsing = false
+			pulse.mockRestore()
 		}
 	})
 

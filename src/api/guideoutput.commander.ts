@@ -27,8 +27,10 @@ interface GuideOutputUpdate {
 // Default milliseconds a pulse that ended has to be reported as no longer pulsing.
 const DEFAULT_SETTLE_TIMEOUT = 15000
 
-// Signal for physical stops issued while the owning operation is already being canceled. Cleanup cannot
-// inherit the operation signal, which is aborted by then, and would never send the command it exists for.
+// Signal for physical stops issued while the owning operation is already being canceled. Only the
+// emergency stop uses it: cleanup cannot inherit the operation signal, which is aborted by then, and would
+// never send the command it exists for. The pulse itself waits on the operation signal, so a stop never has
+// to outlast a device that keeps reporting motion.
 const UNCANCELABLE = new AbortController().signal
 
 // Direction sharing an axis with each one. TELESCOPE_TIMED_GUIDE_NS and TELESCOPE_TIMED_GUIDE_WE are
@@ -75,9 +77,10 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 	// Issues a timed pulse in one direction and resolves only after it has run for its whole duration and
 	// the device reports no guiding motion. Duration is in milliseconds.
 	//
-	// The driver times the pulse itself, so the delay here is what the caller is waiting for and the settle
-	// that follows only confirms the device agrees. A canceled pulse is stopped before the scope releases
-	// the device, so no axis keeps drifting into the next operation.
+	// The driver times the pulse itself, so the delay is what the caller is waiting for and the device is
+	// observed throughout it: a driver that reports Alert fails the pulse at once instead of at the end of a
+	// leg that is no longer being drawn. A canceled pulse is stopped before the scope releases the device,
+	// so no axis keeps drifting into the next operation.
 	async pulse(scope: OperationScope, device: GuideOutput, direction: GuideDirection, duration: number, options: GuidePulseOptions = {}): Promise<OperationResult<void>> {
 		return await scope.start<void>('guidePulse', [{ key: resourceKey(device), device }], async (context) => {
 			// Capabilities are only published while the device is connected, so a disconnected guide output
@@ -120,16 +123,43 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 			if (!stopped.ok && stopped.reason !== 'disconnected') throw new Error(`guide output ${device.name} did not stop pulsing: ${stopped.reason}`)
 		})
 
-		this.guideOutputManager.pulse(device, OPPOSITE_DIRECTION[direction], 0)
-		this.guideOutputManager.pulse(device, direction, duration)
+		// The driver times the pulse itself, so the delay is dispatched as part of the command and the wait
+		// around it observes the device for the whole leg instead of only after it. A pulse the driver
+		// refuses would otherwise be invisible: the Alert clears the flag as well, and by the time a
+		// separate settle subscribed it would read a device at rest and call the leg a success.
+		const alerted = new AbortController()
+		let elapsed = false
 
-		const elapsed = await abortableDelay(duration, context.signal)
+		const pulsed = await waitForDeviceState<GuideOutputUpdate>({
+			signal: context.signal,
+			timeout: Math.max(0, duration) + (options.settleTimeout ?? DEFAULT_SETTLE_TIMEOUT),
+			subscribe: (listener) => this.#subscribe(device, listener),
+			current: () => ({ device }),
+			evaluate: (update) => {
+				// Cutting the delay short is what turns the verdict into an immediate failure; the command has
+				// to return before the wait can settle on it.
+				if (update.state === 'Alert' && update.property === 'pulsing') {
+					alerted.abort('alert')
+					return 'alert'
+				}
 
-		if (!elapsed.ok) return elapsed
+				// A device that went away cannot finish the leg, and nothing further will ever be reported by
+				// one that stopped talking.
+				if (!device.connected) return 'disconnected'
 
-		// The driver stops on its own when the duration is over, so this only observes that it did. A device
-		// that never publishes the flag settles on the state read right after the no-op command.
-		return await this.#settle(device, options, () => {})
+				// Before the requested duration is over, a device not reporting motion is one whose driver has
+				// not published the flag yet, not one that already finished the pulse.
+				return elapsed && !device.pulsing ? 'success' : 'pending'
+			},
+			command: async (signal) => {
+				this.guideOutputManager.pulse(device, OPPOSITE_DIRECTION[direction], 0)
+				this.guideOutputManager.pulse(device, direction, duration)
+
+				elapsed = (await abortableDelay(duration, AbortSignal.any([signal, alerted.signal]))).ok
+			},
+		})
+
+		return pulsed.ok ? { ok: true, value: undefined } : pulsed
 	}
 
 	// Waits for the device to report no guiding motion, on a signal of its own so it still runs while the

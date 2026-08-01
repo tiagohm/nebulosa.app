@@ -174,6 +174,40 @@ describe('wheel handler', () => {
 		}
 	})
 
+	test('holds a canceled move until the wheel reaches the commanded slot', async () => {
+		const device = await connected()
+		const moveTo = spyOn(wheelManager, 'moveTo').mockImplementation(() => {})
+
+		try {
+			const handle = operationCoordinator.start('wheelMoveTo', [{ key: resourceKey(device), device }], (context) => wheelCommander.moveTo(context, device, 2))
+
+			expect(await waitUntil(() => moveTo.mock.calls.length > 0)).toBeTrue()
+
+			const canceled = handle.cancel()
+
+			expect(await waitUntil(() => free(device), 200)).toBeFalse()
+
+			device.moving = true
+			wheelCommander.updated(device, 'moving', 'Busy')
+
+			expect(await waitUntil(() => free(device), 200)).toBeFalse()
+
+			device.moving = false
+			device.position = 2
+			wheelCommander.updated(device, 'position', 'Ok')
+
+			await canceled
+
+			const result = await handle.result
+
+			expect(result.ok).toBeFalse()
+			expect(await waitUntil(() => free(device))).toBeTrue()
+		} finally {
+			device.moving = false
+			moveTo.mockRestore()
+		}
+	})
+
 	test('refuses a command competing for a wheel already owned', async () => {
 		const device = await connected()
 

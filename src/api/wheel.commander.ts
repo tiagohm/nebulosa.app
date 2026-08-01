@@ -35,6 +35,10 @@ interface WheelUpdate {
 // in a few seconds, so this is generous even for the longest move a large wheel can be asked for.
 const DEFAULT_MOVE_TIMEOUT = 30000
 
+// Signal for the quarantine of a canceled move. The wait cannot inherit the operation signal, which is
+// aborted by the time cleanup runs, and would release the wheel on the very cancel it exists to outlast.
+const UNCANCELABLE = new AbortController().signal
+
 // Properties whose Alert state means the commanded move itself failed. An Alert on an unrelated vector,
 // such as the filter names, must not fail a move that is otherwise progressing.
 const MOTION_PROPERTIES = new Set<string>(['position', 'moving'])
@@ -71,7 +75,8 @@ export class WheelCommander implements DeviceHandler<Wheel> {
 	//
 	// The slot is 0-based and resolved against the carousel, so a target the driver would never echo
 	// cannot leave the wait pending until it times out. Nothing is stopped when the move fails: the wheel
-	// exposes no abort, and the lifecycle keeps the device unacquirable while it is still turning.
+	// exposes no abort, so a canceled move is held instead of interrupted, and the device is only released
+	// once it is observed standing at the commanded slot.
 	async moveTo(scope: OperationScope, wheel: Wheel, slot: number, options: WheelCommandOptions = {}): Promise<OperationResult<void>> {
 		return await scope.start<void>('wheelMoveTo', [{ key: resourceKey(wheel), device: wheel }], async (context) => {
 			// Capabilities are only published while the device is connected, so a disconnected wheel would
@@ -79,6 +84,24 @@ export class WheelCommander implements DeviceHandler<Wheel> {
 			if (!wheel.connected) return { ok: false, reason: 'disconnected' }
 
 			const target = wheelSlot(wheel, slot)
+
+			// Whether the slot was actually written, so a move canceled before dispatch is not quarantined
+			// over a carousel that never received a command.
+			let commanded = false
+
+			// The wheel keeps turning through a cancel, and the driver echoes the motion after acknowledging
+			// the write: releasing the lease on the state read at that moment would hand a wheel that is about
+			// to move to the next operation, which would command a competing slot before DeviceLifecycle ever
+			// saw the delayed Busy. Cleanup therefore holds the device until the commanded move is over.
+			context.onCleanup(async () => {
+				if (!commanded) return
+
+				const settled = await this.#settle(wheel, target)
+
+				// A device that went away is not turning under our command any more, so only one that never
+				// reaches the slot is reported as a cleanup failure.
+				if (!settled.ok && settled.reason !== 'disconnected') throw new Error(`wheel ${wheel.name} did not finish moving: ${settled.reason}`)
+			})
 
 			const observed = await waitForDeviceState<WheelUpdate>({
 				signal: context.signal,
@@ -90,7 +113,10 @@ export class WheelCommander implements DeviceHandler<Wheel> {
 					if (update.state === 'Alert' && update.property !== undefined && MOTION_PROPERTIES.has(update.property)) return 'alert'
 					return !wheel.moving && wheel.position === target ? 'success' : 'pending'
 				},
-				command: () => this.wheelManager.moveTo(wheel, target),
+				command: () => {
+					commanded = true
+					this.wheelManager.moveTo(wheel, target)
+				},
 			})
 
 			return observed.ok ? { ok: true, value: undefined } : observed
@@ -110,6 +136,26 @@ export class WheelCommander implements DeviceHandler<Wheel> {
 
 			return { ok: true, value: undefined }
 		}).result
+	}
+
+	// Waits for the wheel to stand at the slot it was commanded to, on a signal of its own so it still runs
+	// while the operation that owns the device is being canceled. The target is the 1-based INDI position.
+	//
+	// Nothing is commanded here: there is no abort to send, so the wait only outlasts the travel the driver
+	// is already performing, bounded by the same allowance a move itself gets.
+	async #settle(wheel: Wheel, target: number): Promise<OperationResult<void>> {
+		const settled = await waitForDeviceState<WheelUpdate>({
+			signal: UNCANCELABLE,
+			timeout: DEFAULT_MOVE_TIMEOUT,
+			subscribe: (listener) => this.#subscribe(wheel, listener),
+			current: () => ({ wheel }),
+			// A disconnected device is not turning under our command any more, and nothing further will ever
+			// be reported by a device that stopped talking.
+			evaluate: () => (!wheel.connected || (!wheel.moving && wheel.position === target) ? 'success' : 'pending'),
+			command: () => {},
+		})
+
+		return settled.ok ? { ok: true, value: undefined } : settled
 	}
 
 	// Registers a waiter for one device and returns its idempotent unsubscriber.

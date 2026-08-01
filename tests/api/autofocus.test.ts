@@ -377,7 +377,7 @@ describe('auto focus handler', () => {
 			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
 
 			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
-			expect(detect).toHaveBeenCalledWith({ ...request.starDetection, path: 'focus.fit' })
+			expect(detect).toHaveBeenCalledWith({ ...request.starDetection, path: 'focus.fit' }, AbortSignal.timeout(5000))
 			expect(autoFocusEvents().map((event) => event.state)).toEqual(['capturing', 'computing', 'idle'])
 			expect(autoFocusEvents().at(-1)?.message).toBe('no stars detected')
 		} finally {

@@ -426,4 +426,56 @@ describe('darv handler', () => {
 			capture.mockRestore()
 		}
 	}, 10000)
+
+	test('gives each leg only the settle latency the exposure still allows', async () => {
+		const { camera, mount } = await connectedDevices()
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
+		const pulse = spyOn(guideOutputCommander, 'pulse').mockImplementation(() => Promise.resolve({ ok: true, value: undefined }))
+		const request = darvStartRequest({ id: 'darv-settle-budget', initialPause: 0, duration: 0.02 })
+
+		try {
+			wsm.open(socket)
+
+			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+
+			expect(await waitForDarvState('idle', request.id, 5000)).toBeTrue()
+			expect(pulse).toHaveBeenCalledTimes(2)
+
+			const exposure = capture.mock.calls[0][2].exposureTime * 1000
+			const forward = pulse.mock.calls[0][4]!.settleTimeout!
+			const backward = pulse.mock.calls[1][4]!.settleTimeout!
+
+			expect(forward).toBeGreaterThan(0)
+			expect(forward + 10 + 10).toBeLessThanOrEqual(exposure)
+			expect(backward).toBeGreaterThan(0)
+			expect(backward + 10).toBeLessThanOrEqual(exposure)
+		} finally {
+			pulse.mockRestore()
+			capture.mockRestore()
+		}
+	}, 10000)
+
+	test('ends the run when a leg leaves no exposure for the one after it', async () => {
+		const { camera, mount } = await connectedDevices()
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
+		const pulse = spyOn(guideOutputCommander, 'pulse').mockImplementation(async () => {
+			await Bun.sleep(6100)
+			return { ok: true, value: undefined }
+		})
+		const request = darvStartRequest({ id: 'darv-settle-exhausted', initialPause: 0, duration: 0.02 })
+
+		try {
+			wsm.open(socket)
+
+			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+
+			expect(await waitForDarvState('idle', request.id, 10000)).toBeTrue()
+			expect(pulse).toHaveBeenCalledTimes(1)
+			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'forwarding', 'backwarding', 'idle'])
+			expect(darvEvents().at(-1)?.message).toBe('the exposure ends before the trail can be finished')
+		} finally {
+			pulse.mockRestore()
+			capture.mockRestore()
+		}
+	}, 20000)
 })

@@ -115,8 +115,12 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 	// already guiding the other way.
 	async #pulse(context: OperationContext, device: GuideOutput, direction: GuideDirection, duration: number, options: GuidePulseOptions): Promise<OperationResult<void>> {
 		// Registered before the command so a cancel arriving during dispatch still finds the stop it needs.
+		//
+		// The caller's timing is deliberately not forwarded: a settle allowance shortened to fit a deadline
+		// bounds how long the leg may be waited for, not how long the axis is given to come to rest, and an
+		// emergency stop cut short would release the device while it is still moving.
 		context.onCleanup(async () => {
-			const stopped = await this.stopPulse(device, direction, options)
+			const stopped = await this.stopPulse(device, direction)
 
 			// A device that went away is not pulsing under our command any more, so only one that stays in
 			// motion is reported as a cleanup failure.

@@ -23,13 +23,16 @@ export interface DarvBusEvents {
 // Process-wide fanout of DARV presentation events.
 export const darvBus = new EventBus<DarvBusEvents>()
 
-// Seconds of exposure added to the requested trajectory.
+// Seconds of exposure added to the requested trajectory, and the whole overhead a run is allowed to spend
+// outside its own timers.
 //
-// None of the run's timers start where the shutter does: the initial pause begins only after the camera has
-// acknowledged the exposure, and each leg pays command dispatch plus the time the driver takes to report the
-// axis at a standstill. An exposure sized exactly to `initialPause + duration` therefore closes while the
-// return leg is still being drawn and truncates that arm. The extra seconds only prolong the vertex the
-// trail already ends on, which costs nothing to the measurement being made on the frame.
+// None of the run's timers start where the shutter does: each leg pays command dispatch plus the time the
+// driver takes to report the axis at a standstill, and an exposure sized exactly to `initialPause + duration`
+// closes while the return leg is still being drawn. The extra seconds only prolong the vertex the trail
+// already ends on, which costs nothing to the measurement made on the frame.
+//
+// This is a budget and not a guess: each leg is given what is left of it as its settle allowance, so a driver
+// slower than the shutter ends the run instead of letting it report a truncated trail as a finished one.
 const EXPOSURE_HEADROOM = 5
 
 // Renders the terminal cause of a run for the message its last event carries.
@@ -130,6 +133,10 @@ class DarvRun {
 	// Presentation snapshot of this run, republished on every transition.
 	readonly #event = structuredClone(DEFAULT_DARV_EVENT)
 
+	// Monotonic milliseconds at which the shutter closes, set once the exposure is confirmed. Every phase
+	// measures its own allowance against it, which is what keeps the trail inside the frame recording it.
+	#deadline = 0
+
 	// Binds a run to its devices, its own copy of the request, and the handler publishing its events.
 	constructor(
 		readonly camera: Camera,
@@ -172,6 +179,11 @@ class DarvRun {
 		// idle is simply not recorded, and the frame would show a single point.
 		if (!started.ok) return started
 
+		// The shutter is open from here, so this is where the exposure the whole trajectory has to fit inside
+		// starts being counted. Measuring from the acknowledgement is optimistic by the round trip that
+		// delivered it, which is negligible against the headroom the budget carries.
+		this.#deadline = performance.now() + capture.exposureTime * 1000
+
 		// An exposure that dies mid-run cannot be salvaged: the trail is being drawn into a frame that no
 		// longer exists. Every phase races this so the run ends at the failure instead of pulsing the mount
 		// for the rest of the session, and the phase it abandons is a child of this run, so returning here
@@ -190,13 +202,13 @@ class DarvRun {
 
 		this.#publish('forwarding')
 
-		const forward = await Promise.race([this.#pulse(context, false, legDuration), failed])
+		const forward = await Promise.race([this.#pulse(context, false, legDuration, legDuration), failed])
 
 		if (!forward.ok) return forward
 
 		this.#publish('backwarding')
 
-		const backward = await Promise.race([this.#pulse(context, true, legDuration), failed])
+		const backward = await Promise.race([this.#pulse(context, true, legDuration, 0), failed])
 
 		if (!backward.ok) return backward
 
@@ -228,9 +240,20 @@ class DarvRun {
 	// The pulse nests in this run, so the mount it already holds is inherited, and its own cleanup stops
 	// the axis before the run releases the device. Which direction opens the trail depends on the
 	// hemisphere, and the return leg is always the opposite of the one that went out.
-	#pulse(context: OperationContext, reversed: boolean, duration: number): Promise<OperationResult<void>> {
+	//
+	// `duration` is this leg in milliseconds and `remaining` the milliseconds of trajectory still owed after
+	// it, both measured against the shutter: what is left of the exposure once those two are subtracted is
+	// all the settle latency this leg may spend, and the commander is told so instead of falling back to its
+	// own allowance. A leg that starts with no slack left cannot finish inside the frame, so the run ends on
+	// a timeout rather than drawing a trail the exposure will cut in half.
+	async #pulse(context: OperationContext, reversed: boolean, duration: number, remaining: number): Promise<OperationResult<void>> {
+		const settleTimeout = this.#deadline - performance.now() - duration - remaining
+
+		if (settleTimeout <= 0) return { ok: false, reason: 'timeout', error: 'the exposure ends before the trail can be finished' }
+
 		const direction: GuideDirection = (this.request.hemisphere === 'northern') === reversed ? 'EAST' : 'WEST'
-		return this.handler.guideOutputHandler.commander.pulse(context, this.mount, direction, duration)
+
+		return await this.handler.guideOutputHandler.commander.pulse(context, this.mount, direction, duration, { settleTimeout })
 	}
 
 	// Publishes a transition, skipping one that would repeat the state and message already sent.

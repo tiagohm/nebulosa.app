@@ -382,8 +382,12 @@ export namespace Api {
 			return res(`/guideoutputs/${guideOutput.name}/guiderate?client=${guideOutput.client.id}`, 'post', rate)
 		}
 
-		export function pulse(guideOutput: GuideOutput, req: GuidePulse) {
+		export function pulse(guideOutput: GuideOutput, req: readonly GuidePulse[]) {
 			return res(`/guideoutputs/${guideOutput.name}/pulse?client=${guideOutput.client.id}`, 'post', req)
+		}
+
+		export function stop(guideOutput: GuideOutput) {
+			return res(`/guideoutputs/${guideOutput.name}/stop?client=${guideOutput.client.id}`, 'post')
 		}
 	}
 

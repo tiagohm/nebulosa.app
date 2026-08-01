@@ -1,6 +1,7 @@
 import type { GuideDirection, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
+import type { GuidePulse } from '#/guideoutput'
 import type { OperationResult } from '#/orchestration'
 import type { OperationContext, OperationScope } from './operation'
 import { abortableDelay, waitForDeviceState } from './operation.wait'
@@ -89,6 +90,40 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 			if (!device.canPulseGuide) return { ok: false, reason: 'unexpectedState', error: `guide output ${device.name} cannot pulse guide` }
 
 			return await this.#pulse(context, device, direction, duration, options)
+		}).result
+	}
+
+	// Issues one timed pulse per axis inside a single operation and resolves after all of them finished.
+	//
+	// A diagonal nudge is two pulses on perpendicular axes at the same time, and two operations cannot both
+	// hold the device, so they share one scope instead. The legs run concurrently and the whole operation
+	// fails with the first failure reported, because a partially drawn correction is not a successful one.
+	// Durations are in milliseconds and may differ per axis: the device publishes a single guiding flag, so
+	// a shorter leg is only reported as finished once the longer one has also stopped.
+	async pulseAxes(scope: OperationScope, device: GuideOutput, pulses: readonly GuidePulse[], options: GuidePulseOptions = {}): Promise<OperationResult<void>> {
+		return await scope.start<void>('guidePulse', [{ key: resourceKey(device), device }], async (context) => {
+			if (!device.connected) return { ok: false, reason: 'disconnected' }
+			if (!device.canPulseGuide) return { ok: false, reason: 'unexpectedState', error: `guide output ${device.name} cannot pulse guide` }
+
+			const results = await Promise.all(pulses.map((pulse) => this.#pulse(context, device, pulse.direction, pulse.duration, options)))
+
+			return results.find((result) => !result.ok) ?? { ok: true, value: undefined }
+		}).result
+	}
+
+	// Sets the guide rate of both axes, as a fraction of the sidereal rate.
+	//
+	// Nothing moves, so there is nothing to wait for, but the device is acquired all the same: the rate
+	// scales every pulse issued after it, and changing it under a running guider or a DARV leg would
+	// silently rescale a correction already in flight.
+	async setGuideRate(scope: OperationScope, device: GuideOutput, rightAscension: number, declination: number): Promise<OperationResult<void>> {
+		return await scope.start<void>('guideRate', [{ key: resourceKey(device), device }], () => {
+			if (!device.connected) return { ok: false, reason: 'disconnected' }
+			if (!device.canSetGuideRate) return { ok: false, reason: 'unexpectedState', error: `guide output ${device.name} cannot set guide rate` }
+
+			this.guideOutputManager.guideRate(device, rightAscension, declination)
+
+			return { ok: true, value: undefined }
 		}).result
 	}
 

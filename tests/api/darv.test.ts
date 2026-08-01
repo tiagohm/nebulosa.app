@@ -48,7 +48,7 @@ const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourc
 const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
 const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm), new NotificationHandler(wsm), new MountCommander(mountManager), operationCoordinator)
 const guideOutputCommander = new GuideOutputCommander(guideOutputManager)
-const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, guideOutputCommander)
+const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, new NotificationHandler(wsm), guideOutputCommander, operationCoordinator)
 const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutputHandler, operationCoordinator)
 const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
 deviceLifecycle.observe(cameraManager)

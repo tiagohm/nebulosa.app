@@ -243,7 +243,7 @@ const thermometerHandler = new ThermometerHandler(wsm, thermometerManager)
 // Coordinated guide output service owns every timed pulse, so DARV draws its trail under the same
 // ownership rules as any other operation commanding the device behind the guide output.
 const guideOutputCommander = new GuideOutputCommander(guideOutputManager)
-const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, guideOutputCommander)
+const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, notificationHandler, guideOutputCommander, operationCoordinator)
 const coverHandler = new CoverHandler(wsm, coverManager)
 const flatPanelHandler = new FlatPanelHandler(wsm, flatPanelManager)
 // Coordinated rotator service owns every mutation, so field rotation commanded from the UI competes with

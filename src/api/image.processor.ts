@@ -2,18 +2,8 @@ import fs from 'fs/promises'
 import { basename, join } from 'path'
 import { plateSolutionFrom } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
-import { readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/imaging/model/image'
+import { writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/imaging/model/image'
 import type { Image } from 'nebulosa/src/imaging/model/types'
-import { calibrate } from 'nebulosa/src/imaging/processing/calibration'
-import { adf, sigmaClip } from 'nebulosa/src/imaging/processing/computation'
-import type { AdaptiveDisplayFunctionOptions } from 'nebulosa/src/imaging/processing/computation'
-import { blur, gaussianBlur, mean, sharpen } from 'nebulosa/src/imaging/processing/convolution'
-import { debayer } from 'nebulosa/src/imaging/processing/debayer'
-import { fft, FFTWorkspace } from 'nebulosa/src/imaging/processing/fft'
-import { horizontalFlip, invert, verticalFlip } from 'nebulosa/src/imaging/processing/geometry'
-import { scnr } from 'nebulosa/src/imaging/processing/scnr'
-import { stf } from 'nebulosa/src/imaging/processing/stf'
-import { brightness, contrast, gamma, saturation } from 'nebulosa/src/imaging/processing/tone'
 import { declinationKeyword, rightAscensionKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { fileHandleSink } from 'nebulosa/src/io/io'
 import type { ImageInfo, ImageTransformation } from '#/image'
@@ -23,6 +13,8 @@ import type { ImageFFT } from '#/image.fft'
 import type { ImageFilter } from '#/image.filter'
 import type { ImageScnr } from '#/image.scnr'
 import type { ImageStretch } from '#/image.stretch'
+import { runImagePipeline } from './image.pipeline'
+import type { ImagePipelineRequest, ImagePipelineResponse, ImagePipelineSource, ImageStretchLevels, TransformedFrame } from './image.pipeline'
 
 // Payload a producer handed over for a path. It is the only source for frames that never reach the
 // filesystem, such as INDI blobs and hip2fits responses, so dropping an entry loses the image; frames
@@ -41,11 +33,13 @@ export interface SourceImage {
 // Decoded frame with the whole transformation pipeline applied, ready to be exported or measured.
 export interface TransformedImage {
 	readonly source: SourceImage
-	readonly image: Image & { fftWorkspace?: FFTWorkspace }
-	// Transformation as requested, including the stretch values `applyTransformation` writes back.
+	readonly image: Image
+	// Transformation as requested, including the stretch levels written back into it.
 	readonly transformation: ImageTransformation | false
 	// Canonical form of `transformation`, used as the cache identity.
 	readonly key: NormalizedTransformation
+	// Levels the automatic stretch computed, retained so a cache hit reports them again.
+	readonly stretch?: ImageStretchLevels
 }
 
 // Result of encoding a transformed frame. `output` and `info` are absent when the frame was written
@@ -175,6 +169,105 @@ function normalizeCalibration(calibration: ImageCalibration) {
 	return { enabled, dark: path(dark), flat: path(flat), bias: path(bias), darkFlat: path(darkFlat) }
 }
 
+// Writes the levels the automatic stretch computed into the request, which is how the browser learns
+// them. Also applied on a cache hit, so reusing a frame reports the same levels the frame was built
+// with instead of whatever the request happened to carry.
+function applyStretchLevels(transformation: ImageTransformation | false, levels?: ImageStretchLevels) {
+	if (transformation === false || !levels) return
+	const [midtone, shadow, highlight] = levels
+	transformation.stretch.midtone = midtone
+	transformation.stretch.shadow = shadow
+	transformation.stretch.highlight = highlight
+}
+
+// Runs the transformation pipeline on a worker thread, so decoding, calibration, stretching, and
+// convolution never block the event loop that is serving requests. A single worker handles every run:
+// each one already saturates a core, and queueing them bounds how much pixel data is in flight.
+//
+// `bun build --compile` cannot yet resolve a worker entry point inside the standalone executable, so a
+// compiled binary falls back to running the pipeline in process, exactly as it did before. The fallback
+// is transparent to callers and should be removed once Bun bundles the worker.
+class ImagePipelineRunner {
+	private worker?: Worker
+	private unavailable = false
+	private id = 0
+	private readonly pending = new Map<number, { readonly request: ImagePipelineRequest; readonly resolvers: PromiseWithResolvers<TransformedFrame | undefined> }>()
+
+	// Applies the transformation to the source. Rejects when the source cannot be read at all, and
+	// resolves to undefined when it was read but is not a decodable image.
+	run(source: ImagePipelineSource, transformation: ImageTransformation | false) {
+		const worker = this.start()
+		if (!worker) return this.runInProcess({ id: this.id++, source, transformation })
+
+		const request: ImagePipelineRequest = { id: this.id++, source, transformation }
+		const resolvers = Promise.withResolvers<TransformedFrame | undefined>()
+		this.pending.set(request.id, { request, resolvers })
+
+		// Structure-cloned rather than transferred: the payload and the decoded frame it may carry belong
+		// to the retained source and have to survive the call.
+		worker.postMessage(request)
+
+		return resolvers.promise
+	}
+
+	// Starts the worker on first use. Returns undefined once the worker has proven unusable.
+	private start() {
+		if (this.unavailable) return undefined
+		if (this.worker) return this.worker
+
+		try {
+			const worker = new Worker(new URL('./image.pipeline.worker.ts', import.meta.url)) as Worker & { unref?: () => void }
+			worker.addEventListener('message', (event: MessageEvent<ImagePipelineResponse>) => this.settle(event.data))
+			// A worker that fails to load reports it here. Without this listener the pending requests would
+			// never settle and every image request would hang forever.
+			worker.addEventListener('error', (event) => this.fail(event.message))
+			// The worker is idle between requests and must not keep the process alive on its own. `unref` is
+			// a Bun extension to the web Worker and is missing from the DOM types.
+			worker.unref?.()
+			this.worker = worker
+			return worker
+		} catch (e) {
+			this.fail(e instanceof Error ? e.message : String(e))
+			return undefined
+		}
+	}
+
+	// Settles the request the response belongs to. An unknown id means the request was already settled by
+	// a worker failure and re-run in process.
+	private settle(response: ImagePipelineResponse) {
+		const pending = this.pending.get(response.id)
+		if (!pending) return
+		this.pending.delete(response.id)
+
+		if (response.status === 'transformed') pending.resolvers.resolve({ image: response.image, stretch: response.stretch })
+		else if (response.status === 'unreadable') pending.resolvers.resolve(undefined)
+		else pending.resolvers.reject(new Error(response.error))
+	}
+
+	// Gives up on the worker and serves every request in process from now on, including the ones still
+	// waiting for an answer that will never arrive.
+	private fail(reason: string) {
+		if (this.unavailable) return
+
+		console.warn('image pipeline worker is unavailable, transforming in process:', reason)
+		this.unavailable = true
+		this.worker?.terminate()
+		this.worker = undefined
+
+		const pending = [...this.pending.values()]
+		this.pending.clear()
+
+		for (const { request, resolvers } of pending) resolvers.resolve(this.runInProcess(request))
+	}
+
+	// Runs the pipeline on this thread. The decoded frame of the source is copied first because the
+	// pipeline works in place and the retained source has to stay pristine, which crossing a thread would
+	// otherwise have taken care of.
+	private runInProcess({ source, transformation }: ImagePipelineRequest) {
+		return runImagePipeline(source.image ? { ...source, image: cloneImage(source.image) } : source, transformation)
+	}
+}
+
 // Owns the frames the application has in memory and turns them into transformed and encoded images.
 //
 // Two layers with opposite lifetimes live here and must not be confused. Sources are authoritative:
@@ -183,6 +276,7 @@ function normalizeCalibration(calibration: ImageCalibration) {
 export class ImageProcessor {
 	private readonly sources = new Map<string, CacheEntry<SourceImage>>()
 	private readonly transformed = new Map<string, CacheEntry<TransformedImage>[]>()
+	private readonly pipeline = new ImagePipelineRunner()
 
 	// Retains the serialized payload of a frame, which is the only copy when the producer never wrote it
 	// to a readable path. Returns the stored source.
@@ -235,32 +329,24 @@ export class ImageProcessor {
 
 		if (cached) {
 			console.info('reusing transformed image at', path)
+			applyStretchLevels(transformation, cached.stretch)
 			return cached
 		}
 
 		const source = this.sources.get(path)?.item
-		let image = await this.decode(source, path)
+		const frame = await this.pipeline.run({ path, buffer: source?.buffer, image: source?.image }, transformation)
 
-		if (!image) {
+		if (!frame) {
 			console.warn('failed to open image at', path)
 			return undefined
 		}
 
-		image = await this.applyTransformation(image, transformation)
+		applyStretchLevels(transformation, frame.stretch)
 
-		const item: TransformedImage = { source: source ?? { path, camera }, image, transformation, key }
+		const item: TransformedImage = { source: source ?? { path, camera }, image: frame.image, transformation, key, stretch: frame.stretch }
 		this.cache(path, item)
 		console.info('image at', path, 'was transformed:', item.image.raw.byteLength)
 		return item
-	}
-
-	// Resolves the pixels of a source, falling back to the filesystem when nothing is retained for it.
-	private decode(source: SourceImage | undefined, path: string) {
-		// Copied because the pipeline may work in place, and the retained frame has to stay pristine for
-		// the next transformation asked of the same path.
-		if (source?.image) return Promise.resolve(cloneImage(source.image))
-		if (source?.buffer?.byteLength) return readImageFromBuffer(source.buffer, 32)
-		return readImageFromPath(path, 32)
 	}
 
 	// Returns the cached frame of the path whose transformation is equivalent to the requested one,
@@ -280,89 +366,6 @@ export class ImageProcessor {
 		entries.unshift({ date: performance.now(), item })
 		entries.length = Math.min(entries.length, TRANSFORMED_PER_PATH)
 		this.transformed.set(path, entries)
-	}
-
-	// Applies every enabled step of the transformation, in the order the pipeline expects. The image is
-	// reassigned at each step because the operations may either work in place or return a new frame.
-	private async applyTransformation(image: TransformedImage['image'], transformation: ImageTransformation | false) {
-		if (transformation === false || !transformation.enabled) return image
-
-		if (transformation.debayer) image = debayer(image, !transformation.cfaPattern || transformation.cfaPattern === 'AUTO' ? undefined : transformation.cfaPattern) ?? image
-		if (transformation.calibration.enabled) image = await this.calibrate(image, transformation.calibration)
-		if (transformation.horizontalMirror) image = horizontalFlip(image)
-		if (transformation.verticalMirror) image = verticalFlip(image)
-
-		if (transformation.scnr.channel) {
-			const { channel, amount, method } = transformation.scnr
-			image = scnr(image, channel, amount, method)
-		}
-
-		if (transformation.fft.enabled) {
-			const { type, cutoff, weight } = transformation.fft
-			image.fftWorkspace ??= new FFTWorkspace(image.metadata.width, image.metadata.height)
-			image = fft(image, image.fftWorkspace, type, cutoff, weight)
-		}
-
-		const { stretch, adjustment, filter } = transformation
-
-		if (stretch.auto) {
-			const options: Partial<AdaptiveDisplayFunctionOptions> = { meanBackground: stretch.meanBackground, clippingPoint: stretch.clippingPoint, bits: stretch.bits }
-
-			if (stretch.sigmaClip) {
-				options.bits = new Int32Array(1 << stretch.bits) // used by sigmaClip and adf methods
-				options.sigmaClip = sigmaClip(image, stretch)
-			}
-
-			const [midtone, shadow, highlight] = adf(image, options)
-			image = stf(image, midtone, shadow, highlight)
-
-			// Written back so the browser can show the computed levels. This is why the cache is keyed by
-			// the normalized transformation instead of the request itself.
-			stretch.midtone = Math.trunc(midtone * 65536)
-			stretch.shadow = Math.trunc(shadow * 65536)
-			stretch.highlight = Math.trunc(highlight * 65536)
-		} else {
-			const { midtone, shadow, highlight } = stretch
-			image = stf(image, midtone / 65536, shadow / 65536, highlight / 65536)
-		}
-
-		if (adjustment.enabled) {
-			if (adjustment.brightness.value !== 1) image = brightness(image, adjustment.brightness.value)
-			if (adjustment.contrast.value !== 1) image = contrast(image, adjustment.contrast.value)
-			if (adjustment.gamma.value > 1) image = gamma(image, adjustment.gamma.value)
-			if (adjustment.saturation.value !== 1) image = saturation(image, adjustment.saturation.value, adjustment.saturation.channel)
-		}
-
-		if (filter.enabled) {
-			if (filter.type === 'sharpen') image = sharpen(image)
-			else if (filter.type === 'blur') image = blur(image, filter.blur.size)
-			else if (filter.type === 'mean') image = mean(image, filter.mean.size)
-			else if (filter.type === 'gaussianBlur') image = gaussianBlur(image, filter.gaussianBlur)
-		}
-
-		if (transformation.invert) image = invert(image)
-
-		return image
-	}
-
-	// Subtracts and divides the calibration frames the request points to. A failure to read any of them
-	// is not fatal: the uncalibrated image is still worth showing.
-	private async calibrate(image: Image, calibration: ImageCalibration) {
-		if (!calibration.enabled) return image
-
-		try {
-			const [dark, flat, bias, darkFlat] = await Promise.all([
-				calibration.dark.enabled && calibration.dark.path ? readImageFromPath(calibration.dark.path, 32) : undefined,
-				calibration.flat.enabled && calibration.flat.path ? readImageFromPath(calibration.flat.path, 32) : undefined,
-				calibration.bias.enabled && calibration.bias.path ? readImageFromPath(calibration.bias.path, 32) : undefined,
-				calibration.darkFlat.enabled && calibration.darkFlat.path ? readImageFromPath(calibration.darkFlat.path, 32) : undefined,
-			])
-
-			return calibrate(image, { dark, flat, bias, darkFlat })
-		} catch (e) {
-			console.error('failed to calibrate', e)
-			return image
-		}
 	}
 
 	// Transforms the frame of the path and encodes it in the requested format. Writes it to `saveAt`

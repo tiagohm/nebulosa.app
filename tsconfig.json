@@ -18,6 +18,7 @@
 		"incremental": false,
 		"forceConsistentCasingInFileNames": true,
 		"allowSyntheticDefaultImports": true,
+		"types": ["bun", "react"],
 		"paths": {
 			"@assets/*": ["./src/web/assets/*"],
 			"@hooks/*": ["./src/web/hooks/*"],

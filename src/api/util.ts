@@ -4,8 +4,6 @@ import type { GeographicCoordinate, GeographicPosition } from 'nebulosa/src/astr
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import type { Writable } from 'nebulosa/src/core/types'
 
-const ONE_SECOND = 1000
-
 // Converts an unknown exception to diagnostic text; failed coercion returns a stable fallback instead of throwing.
 export function errorMessage(error: unknown) {
 	if (error instanceof Error) return error.message
@@ -53,26 +51,4 @@ export async function settlesWithin(promise: Promise<unknown>, timeout: number):
 	} finally {
 		clearTimeout(timer)
 	}
-}
-
-export async function waitFor(ms: number, callback: (remainingTime: number) => boolean) {
-	let remainingTime = Math.trunc(ms)
-
-	if (remainingTime >= ONE_SECOND) {
-		while (true) {
-			if (remainingTime <= 0) {
-				return callback(0)
-			} else if (!callback(remainingTime)) {
-				return false
-			}
-
-			// Sleep for until 1 second
-			await Bun.sleep(Math.min(ONE_SECOND, remainingTime))
-
-			// Subtract 1 second from remaining time
-			remainingTime -= ONE_SECOND
-		}
-	}
-
-	return true
 }

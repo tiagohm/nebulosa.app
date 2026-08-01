@@ -113,7 +113,7 @@ async function capture(request: CameraCaptureStart) {
 
 	cameraManager.connect(camera)
 
-	const handle = cameraHandler.capture(camera, request, (event, path) => {
+	const handle = cameraHandler.capture(operationCoordinator, camera, request, (event, path) => {
 		event = structuredClone(event)
 		events.push(event)
 		records.push({ event, path })
@@ -343,7 +343,7 @@ describe('camera capture start request', () => {
 		for (const [request, count, loop, frameExposureTime, totalRemainingTime] of requests) {
 			const events: CameraCaptureEvent[] = []
 			cameraManager.connect(camera)
-			const handle = cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event)))
+			const handle = cameraHandler.capture(operationCoordinator, camera, request, (event) => events.push(structuredClone(event)))
 			expect(await waitUntil(() => events.length > 0)).toBeTrue()
 			await handle.cancel()
 			cameraCapturer.blobReceived(camera, Buffer.from('late frame'), 'raw')
@@ -361,12 +361,12 @@ describe('camera capture start request', () => {
 		const zeroExposureEvents: CameraCaptureEvent[] = []
 		const disconnectedEvents: CameraCaptureEvent[] = []
 		cameraManager.connect(camera)
-		const zeroExposure = cameraHandler.capture(camera, captureStartRequest({ exposureTime: 0 }), (event) => zeroExposureEvents.push(structuredClone(event)))
+		const zeroExposure = cameraHandler.capture(operationCoordinator, camera, captureStartRequest({ exposureTime: 0 }), (event) => zeroExposureEvents.push(structuredClone(event)))
 		expect((await zeroExposure.started).ok).toBeFalse()
 		expect((await zeroExposure.result).ok).toBeFalse()
 
 		cameraManager.disconnect(camera)
-		const disconnected = cameraHandler.capture(camera, captureStartRequest({ exposureTime: 1, exposureTimeUnit: 'second' }), (event) => disconnectedEvents.push(structuredClone(event)))
+		const disconnected = cameraHandler.capture(operationCoordinator, camera, captureStartRequest({ exposureTime: 1, exposureTimeUnit: 'second' }), (event) => disconnectedEvents.push(structuredClone(event)))
 		const started = await disconnected.started
 		const result = await disconnected.result
 		expect(started).toMatchObject({ ok: false, reason: 'busy' })
@@ -381,10 +381,10 @@ describe('camera capture start request', () => {
 		wsm.open(socket)
 		cameraManager.connect(camera)
 
-		const active = cameraHandler.capture(camera, captureStartRequest({ exposureMode: 'loop', exposureTime: 10, exposureTimeUnit: 'second' }))
+		const active = cameraHandler.capture(operationCoordinator, camera, captureStartRequest({ exposureMode: 'loop', exposureTime: 10, exposureTimeUnit: 'second' }))
 		expect((await active.started).ok).toBeTrue()
 
-		const rejected = cameraHandler.capture(camera, captureStartRequest({ exposureTime: 1, exposureTimeUnit: 'second' }), (event) => rejectedEvents.push(structuredClone(event)))
+		const rejected = cameraHandler.capture(operationCoordinator, camera, captureStartRequest({ exposureTime: 1, exposureTimeUnit: 'second' }), (event) => rejectedEvents.push(structuredClone(event)))
 		expect((await rejected.result).ok).toBeFalse()
 		expect(rejectedEvents.map((event) => event.state)).toEqual(['error', 'idle'])
 
@@ -410,12 +410,12 @@ describe('camera capture start request', () => {
 
 		try {
 			cameraManager.connect(camera)
-			await cameraHandler.capture(camera, request).result
+			await cameraHandler.capture(operationCoordinator, camera, request).result
 
 			expect(frame).toHaveBeenCalledWith(camera, 0, 0, 1280, 1024)
 
 			request.subframe = true
-			await cameraHandler.capture(camera, request).result
+			await cameraHandler.capture(operationCoordinator, camera, request).result
 
 			expect(frame).toHaveBeenCalledWith(camera, request.x, request.y, request.width, request.height)
 		} finally {
@@ -658,7 +658,7 @@ describe('camera capture start request', () => {
 
 		try {
 			cameraManager.connect(camera)
-			const handle = cameraHandler.capture(camera, captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO' }), (event) => events.push(structuredClone(event)))
+			const handle = cameraHandler.capture(operationCoordinator, camera, captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO' }), (event) => events.push(structuredClone(event)))
 			expect((await handle.started).ok).toBeTrue()
 			expect(await waitUntil(() => pendingBlob !== undefined && events.some((event) => event.state === 'exposureFinished'))).toBeTrue()
 
@@ -695,7 +695,7 @@ describe('camera capture start request', () => {
 
 		try {
 			cameraManager.connect(camera)
-			const handle = cameraHandler.capture(camera, captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO' }), (event) => events.push(structuredClone(event)))
+			const handle = cameraHandler.capture(operationCoordinator, camera, captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO' }), (event) => events.push(structuredClone(event)))
 			expect((await handle.started).ok).toBeTrue()
 			expect(await waitUntil(() => pendingUpdate !== undefined && blobSeen)).toBeTrue()
 
@@ -751,7 +751,7 @@ describe('camera capture start request', () => {
 		cameraManager.connect(camera)
 
 		const promise = cameraHandler
-			.capture(camera, request, (event) => {
+			.capture(operationCoordinator, camera, request, (event) => {
 				events.push(structuredClone(event))
 			})
 			.result.then((result) => result.ok)
@@ -797,10 +797,10 @@ describe('camera capture start request', () => {
 		try {
 			cameraManager.connect(camera)
 
-			const active = cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event)))
+			const active = cameraHandler.capture(operationCoordinator, camera, request, (event) => events.push(structuredClone(event)))
 			expect((await active.started).ok).toBeTrue()
 
-			const conflicting = cameraHandler.capture(camera, { ...request, mount: 'Other Mount' })
+			const conflicting = cameraHandler.capture(operationCoordinator, camera, { ...request, mount: 'Other Mount' })
 			expect(await conflicting.started).toMatchObject({ ok: false, reason: 'busy' })
 			expect(await conflicting.result).toMatchObject({ ok: false, reason: 'busy' })
 			expect(snoop).toHaveBeenCalledTimes(1)
@@ -819,17 +819,17 @@ describe('camera capture start request', () => {
 		const request = captureStartRequest({ exposureMode: 'loop', exposureTime: 500, exposureTimeUnit: 'millisecond' })
 		cameraManager.connect(camera)
 
-		const active = cameraHandler.capture(camera, request, (_, path) => path && paths.push(path))
+		const active = cameraHandler.capture(operationCoordinator, camera, request, (_, path) => path && paths.push(path))
 		expect((await active.started).ok).toBeTrue()
 
 		const cancellation = active.cancel()
 		cameraCapturer.blobReceived(camera, Buffer.from('late frame'), 'raw')
-		const duringCleanup = cameraHandler.capture(camera, request)
+		const duringCleanup = cameraHandler.capture(operationCoordinator, camera, request)
 		expect(await duringCleanup.result).toMatchObject({ ok: false, reason: 'busy' })
 		await cancellation
 		expect(paths).toHaveLength(0)
 
-		const next = cameraHandler.capture(camera, captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO' }))
+		const next = cameraHandler.capture(operationCoordinator, camera, captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO' }))
 		expect((await next.started).ok).toBeTrue()
 		expect((await next.result).ok).toBeTrue()
 	}, 5000)
@@ -866,7 +866,7 @@ describe('camera capture start request', () => {
 
 		cameraManager.connect(camera)
 
-		const success = (await cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event))).result).ok
+		const success = (await cameraHandler.capture(operationCoordinator, camera, request, (event) => events.push(structuredClone(event))).result).ok
 
 		expect(success).toBeTrue()
 
@@ -899,7 +899,7 @@ describe('camera capture start request', () => {
 		try {
 			cameraManager.connect(camera)
 
-			const success = (await cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event))).result).ok
+			const success = (await cameraHandler.capture(operationCoordinator, camera, request, (event) => events.push(structuredClone(event))).result).ok
 
 			expect(success).toBeFalse()
 			expect(events.map((event) => event.state)).toContain('settling')
@@ -931,7 +931,7 @@ describe('camera capture start request', () => {
 		try {
 			cameraManager.connect(camera)
 
-			const result = await cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event))).result
+			const result = await cameraHandler.capture(operationCoordinator, camera, request, (event) => events.push(structuredClone(event))).result
 
 			expect(result.ok).toBeFalse()
 			expect(result.ok || result.reason).toBe('unexpectedState')
@@ -964,7 +964,7 @@ describe('camera capture start request', () => {
 
 		cameraManager.connect(camera)
 
-		const result = await cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event))).result
+		const result = await cameraHandler.capture(operationCoordinator, camera, request, (event) => events.push(structuredClone(event))).result
 
 		expect(result.ok).toBeTrue()
 		expect(dithered).toBeFalse()
@@ -995,7 +995,7 @@ describe('camera capture start request', () => {
 
 		cameraManager.connect(camera)
 
-		const promise = cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event))).result.then((result) => result.ok)
+		const promise = cameraHandler.capture(operationCoordinator, camera, request, (event) => events.push(structuredClone(event))).result.then((result) => result.ok)
 
 		expect(await waitUntil(() => events.some((event) => event.state === 'dithering'))).toBeTrue()
 

@@ -11,7 +11,7 @@ import { query, response } from './http'
 import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
-import type { OperationCoordinator } from './operation'
+import type { OperationCoordinator, OperationScope } from './operation'
 import { resourceKey } from './resource'
 
 // Presentation events fanned out to WebSocket subscribers. These publish state and never participate in
@@ -104,8 +104,12 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		}
 	}
 
-	// Starts a capture as a new top-level operation and returns its operation-backed milestones.
-	capture(camera: Camera, request: CameraCaptureStart, onCameraCaptureEvent?: CameraCaptureListener, rejectedListener: CameraCaptureListener | undefined = onCameraCaptureEvent) {
+	// Starts a capture under the given scope and returns its operation-backed milestones.
+	//
+	// The scope is what decides whether the capture is an operation of its own or a step of a larger one. A
+	// route passes the coordinator and gets a new tree; a composite feature passes its own context and the
+	// capture nests inside it, inheriting the camera the feature already holds instead of competing for it.
+	capture(scope: OperationScope, camera: Camera, request: CameraCaptureStart, onCameraCaptureEvent?: CameraCaptureListener, rejectedListener: CameraCaptureListener | undefined = onCameraCaptureEvent) {
 		const client = camera[CLIENT]!
 
 		// Snoop devices are resolved but deliberately not acquired: the driver only reads them to stamp FITS
@@ -116,7 +120,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		const focuser = request.focuser ? this.focuserManager.get(client, request.focuser) : undefined
 		const rotator = request.rotator ? this.rotatorManager.get(client, request.rotator) : undefined
 
-		return this.capturer.start(this.coordinator, camera, request, {
+		return this.capturer.start(scope, camera, request, {
 			listener: (event, path) => {
 				this.sendEvent(event, path)
 				onCameraCaptureEvent?.(event, path)
@@ -155,7 +159,7 @@ export function camera(cameraHandler: CameraHandler) {
 		'/cameras/:id/temperature': { POST: async (req) => response(cameraManager.temperature(cameraFromParams(req), await req.json())) },
 		'/cameras/:id/start': {
 			POST: async (req) => {
-				const handle = cameraHandler.capture(cameraFromParams(req), await req.json())
+				const handle = cameraHandler.capture(cameraHandler.coordinator, cameraFromParams(req), await req.json())
 				return response({ id: handle.id, started: await handle.started })
 			},
 		},

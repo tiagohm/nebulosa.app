@@ -29,7 +29,7 @@ import { deg, normalizeAngle, parseAngle } from 'nebulosa/src/math/units/angle'
 import fovCameras from 'src/data/astrobin.cameras.json'
 import fovTelescopes from 'src/data/astrobin.telescopes.json'
 import nebulosa from 'src/data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
-import { X_IMAGE_INFO_HEADER } from '#/image'
+import { DEFAULT_IMAGE_TRANSFORMATION, X_IMAGE_INFO_HEADER } from '#/image'
 import type { CloseImage, ImageInfo, ImageTransformation, OpenImage } from '#/image'
 import type { ImageAdjustment } from '#/image.adjustment'
 import type { AnnotateImage, AnnotatedSkyObject, ImageAnnotation } from '#/image.annotation'
@@ -79,6 +79,9 @@ const COORDINATE_GRID_BORDER_SAMPLES = 24
 const COORDINATE_GRID_LINE_SAMPLES = 96
 const COORDINATE_GRID_LABEL_MARGIN = 48
 const CROSSHAIR_CURVE_SAMPLES = 96
+
+const FITS_IMAGE_TRANSFORMATION: ImageTransformation = { ...DEFAULT_IMAGE_TRANSFORMATION, enabled: false, format: { ...DEFAULT_IMAGE_TRANSFORMATION.format, type: 'fits' } }
+const XISF_IMAGE_TRANSFORMATION: ImageTransformation = { ...DEFAULT_IMAGE_TRANSFORMATION, enabled: false, format: { ...DEFAULT_IMAGE_TRANSFORMATION.format, type: 'xisf' } }
 
 interface CoordinateGridBounds {
 	readonly rightAscension: readonly [number, number]
@@ -462,8 +465,8 @@ export class ImageProcessor {
 		}
 	}
 
-	async export(path: string, transformation: ImageTransformation, camera?: string, saveAt?: string): Promise<ExportedImageItem | undefined> {
-		const { format } = transformation
+	async export(path: string, transformation: ImageTransformation | false | 'fits' | 'xisf', camera?: string, saveAt?: string): Promise<ExportedImageItem | undefined> {
+		transformation = typeof transformation === 'object' ? transformation : transformation === 'fits' ? FITS_IMAGE_TRANSFORMATION : transformation === 'xisf' ? XISF_IMAGE_TRANSFORMATION : DEFAULT_IMAGE_TRANSFORMATION
 
 		const hash = this.computeExportHash(path, transformation)
 
@@ -489,6 +492,7 @@ export class ImageProcessor {
 
 		const { image, buffered } = transformed
 		const { width, height, channels } = image.metadata
+		const { format } = transformation
 
 		if (format.type === 'fits' || format.type === 'xisf') {
 			// Invalid path to save

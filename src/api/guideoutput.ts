@@ -4,6 +4,7 @@ import type { DeviceHandler, GuideOutputManager } from 'nebulosa/src/devices/ind
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
 import type { GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from '#/guideoutput'
+import type { GuideOutputCommander } from './guideoutput.commander'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import { webSocketBus } from './message'
@@ -21,6 +22,7 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
 		readonly guideOutputManager: GuideOutputManager,
+		readonly commander: GuideOutputCommander,
 	) {
 		guideOutputManager.addHandler(this)
 

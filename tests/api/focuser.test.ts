@@ -4,17 +4,27 @@ import type { Focuser } from 'nebulosa/src/devices/indi/device'
 import { FocuserManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
-import { FocuserHandler, focuserBus, focuser as focuserEndpoints, waitForFocuser } from 'src/api/focuser'
-import type { WaitForFocuserAction } from 'src/api/focuser'
+import { DeviceLifecycle } from 'src/api/device.lifecycle'
+import { FocuserHandler, focuserBus, focuser as focuserEndpoints } from 'src/api/focuser'
+import { FocuserCommander } from 'src/api/focuser.commander'
 import { WebSocketMessageHandler } from 'src/api/message'
+import { NotificationHandler } from 'src/api/notification'
+import { OperationCoordinator } from 'src/api/operation'
+import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from '#/focuser'
+import type { Notification } from '#/notification'
 import { json, noContent, SocketMessager, waitUntil } from './util'
 
 focuserBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const focuserManager = new FocuserManager()
-const focuserHandler = new FocuserHandler(wsm, focuserManager)
+const resourceArbiter = new ResourceArbiter()
+const operationCoordinator = new OperationCoordinator(resourceArbiter)
+const focuserCommander = new FocuserCommander(focuserManager)
+const focuserHandler = new FocuserHandler(wsm, focuserManager, new NotificationHandler(wsm), focuserCommander, operationCoordinator)
+const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
+deviceLifecycle.observe(focuserManager)
 const endpoints = focuserEndpoints(focuserHandler)
 const handler = new IndiClientHandlerSet([focuserManager])
 const client = new ClientSimulator('Client Simulator', handler)
@@ -50,8 +60,31 @@ function request(id = 'Focuser Simulator', body?: unknown, search = '') {
 	} as unknown as Bun.BunRequest
 }
 
+async function succeeded(response: Response) {
+	expect(response.status).toBe(200)
+	expect(await response.json()).toEqual({ ok: true })
+}
+
+function free(focuser: Focuser) {
+	return resourceArbiter.availability(resourceKey(focuser)) === 'available'
+}
+
 function focuserUpdates(property: keyof Focuser & string) {
 	return socket.filter<FocuserUpdated>((message) => message.type === 'focuser:update' && message.body.property === property)
+}
+
+async function connected() {
+	const device = getFocuser()
+
+	focuserManager.connect(device)
+
+	expect(device.connected).toBeTrue()
+
+	focuserManager.syncTo(device, 50000)
+
+	expect(await waitUntil(() => device.position.value === 50000 && free(device))).toBeTrue()
+
+	return device
 }
 
 describe('focuser handler', () => {
@@ -111,106 +144,80 @@ describe('focuser handler', () => {
 	})
 
 	test('syncs position and reverses motion through endpoints', async () => {
-		const device = getFocuser()
+		const device = await connected()
 
 		wsm.open(socket)
-		focuserManager.connect(device)
 		socket.clear()
 
-		await noContent(await endpoints['/focusers/:id/sync'].POST(request(device.id, 1234)))
+		await succeeded(await endpoints['/focusers/:id/sync'].POST(request(device.id, 1234)))
 
 		expect(device.position.value).toBe(1234)
 		expect(focuserUpdates('position').at(-1)?.body.device.position!.value).toBe(1234)
 
-		await noContent(await endpoints['/focusers/:id/reverse'].POST(request(device.id, true)))
+		await succeeded(await endpoints['/focusers/:id/reverse'].POST(request(device.id, true)))
 
 		expect(device.reversed).toBeTrue()
 		expect(focuserUpdates('reversed').at(-1)?.body.device.reversed).toBeTrue()
 
-		await noContent(await endpoints['/focusers/:id/reverse'].POST(request(device.id, false)))
+		await succeeded(await endpoints['/focusers/:id/reverse'].POST(request(device.id, false)))
 
 		expect(device.reversed).toBeFalse()
 		expect(focuserUpdates('reversed').at(-1)?.body.device.reversed).toBeFalse()
 	})
 
+	test('moves in and out through endpoints', async () => {
+		const device = await connected()
+
+		await noContent(await endpoints['/focusers/:id/movein'].POST(request(device.id, 500)))
+
+		expect(await waitUntil(() => device.position.value === 49500 && free(device))).toBeTrue()
+
+		await noContent(await endpoints['/focusers/:id/moveout'].POST(request(device.id, 500)))
+
+		expect(await waitUntil(() => device.position.value === 50000 && free(device))).toBeTrue()
+	})
+
 	test('moves and stops through endpoints', async () => {
-		const device = getFocuser()
+		const device = await connected()
 
 		wsm.open(socket)
-		focuserManager.connect(device)
-		focuserManager.syncTo(device, 2000)
 		socket.clear()
 
-		await noContent(await endpoints['/focusers/:id/moveto'].POST(request(device.id, 2100)))
+		await noContent(await endpoints['/focusers/:id/moveto'].POST(request(device.id, device.position.max)))
 
 		expect(await waitUntil(() => device.moving)).toBeTrue()
 		expect(focuserUpdates('moving').at(-1)?.body.device.moving).toBeTrue()
 
-		await noContent(endpoints['/focusers/:id/stop'].POST(request(device.id)))
+		await succeeded(await endpoints['/focusers/:id/stop'].POST(request(device.id)))
 
 		expect(device.moving).toBeFalse()
+		expect(device.position.value).toBeLessThan(device.position.max)
 		expect(focuserUpdates('moving').at(-1)?.body.device.moving).toBeFalse()
-		expect(focuserUpdates('moving').at(-1)?.body.state).toBe('Alert')
-	})
+		expect(await waitUntil(() => free(device))).toBeTrue()
+	}, 10000)
 
-	test('delegates endpoint actions to the focuser manager', async () => {
+	test('notifies a detached move that was rejected', async () => {
 		const device = getFocuser()
-		const moveTo = spyOn(focuserManager, 'moveTo')
-		const moveIn = spyOn(focuserManager, 'moveIn')
-		const moveOut = spyOn(focuserManager, 'moveOut')
-		const syncTo = spyOn(focuserManager, 'syncTo')
-		const reverse = spyOn(focuserManager, 'reverse')
-		const stop = spyOn(focuserManager, 'stop')
 
-		try {
-			await noContent(await endpoints['/focusers/:id/moveto'].POST(request(device.id, 1000)))
-			await noContent(await endpoints['/focusers/:id/movein'].POST(request(device.id, 10)))
-			await noContent(await endpoints['/focusers/:id/moveout'].POST(request(device.id, 20)))
-			await noContent(await endpoints['/focusers/:id/sync'].POST(request(device.id, 1200)))
-			await noContent(await endpoints['/focusers/:id/reverse'].POST(request(device.id, true)))
-			await noContent(endpoints['/focusers/:id/stop'].POST(request(device.id)))
+		wsm.open(socket)
+		socket.clear()
 
-			expect(moveTo).toHaveBeenCalledWith(device, 1000)
-			expect(moveIn).toHaveBeenCalledWith(device, 10)
-			expect(moveOut).toHaveBeenCalledWith(device, 20)
-			expect(syncTo).toHaveBeenCalledWith(device, 1200)
-			expect(reverse).toHaveBeenCalledWith(device, true)
-			expect(stop).toHaveBeenCalledWith(device)
-		} finally {
-			stop.mockRestore()
-			reverse.mockRestore()
-			syncTo.mockRestore()
-			moveOut.mockRestore()
-			moveIn.mockRestore()
-			moveTo.mockRestore()
-		}
-	})
+		await noContent(await endpoints['/focusers/:id/moveto'].POST(request(device.id, 1000)))
 
-	test('completes a pending wait when the focuser reaches the position', async () => {
-		const device = getFocuser()
-		const actions: WaitForFocuserAction[] = []
-		const target = device.position.value + 25
+		expect(await waitUntil(() => socket.some<Notification>((message) => message.type === 'notification'))).toBeTrue()
 
-		const cancel = waitForFocuser(device, target, (action) => actions.push(action), 1000)
+		const message = socket.find<Notification>((message) => message.type === 'notification')
 
-		try {
-			expect(actions).toHaveLength(0)
-
-			device.position.value = target
-			device.moving = false
-			focuserHandler.updated(device, 'position')
-
-			expect(await waitUntil(() => actions.length > 0)).toBeTrue()
-			expect(actions).toEqual(['reach'])
-		} finally {
-			cancel()
-		}
+		expect(message!.body.title).toBe('FOCUSER')
+		expect(message!.body.color).toBe('danger')
+		expect(message!.body.description).toContain('failed to move to position 1000')
 	})
 
 	test('emits remove event when the simulator is disposed', () => {
 		const wsm = new WebSocketMessageHandler()
 		const focuserManager = new FocuserManager()
-		const focuserHandler = new FocuserHandler(wsm, focuserManager)
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const focuserHandler = new FocuserHandler(wsm, focuserManager, new NotificationHandler(wsm), new FocuserCommander(focuserManager), coordinator)
 		const handler = new IndiClientHandlerSet([focuserManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const focuserSimulator = new FocuserSimulator('Focuser Simulator', client)
@@ -227,4 +234,108 @@ describe('focuser handler', () => {
 
 		wsm.close(socket, 1000, 'done')
 	})
+})
+
+describe('focuser commander', () => {
+	test('moves to a position and resolves after the focuser stops there', async () => {
+		const device = await connected()
+		const target = device.position.value + 500
+		const result = await focuserCommander.moveTo(operationCoordinator, device, target)
+
+		expect(result.ok).toBeTrue()
+		expect(device.moving).toBeFalse()
+		expect(device.position.value).toBe(target)
+		expect(await waitUntil(() => free(device))).toBeTrue()
+	})
+
+	test('resolves without waiting when the focuser already stands at the position', async () => {
+		const device = await connected()
+		const result = await focuserCommander.moveTo(operationCoordinator, device, device.position.value)
+
+		expect(result.ok).toBeTrue()
+		expect(device.moving).toBeFalse()
+	})
+
+	test('moves inward and outward by relative steps', async () => {
+		const device = await connected()
+
+		expect(await focuserCommander.moveIn(operationCoordinator, device, 500)).toMatchObject({ ok: true })
+		expect(device.position.value).toBe(49500)
+
+		expect(await focuserCommander.moveOut(operationCoordinator, device, 1500)).toMatchObject({ ok: true })
+		expect(device.position.value).toBe(51000)
+	})
+
+	test('inverts the relative direction while the focuser is reversed', async () => {
+		const device = await connected()
+
+		expect(await focuserCommander.reverse(operationCoordinator, device, true)).toMatchObject({ ok: true })
+
+		try {
+			expect(await focuserCommander.moveIn(operationCoordinator, device, 500)).toMatchObject({ ok: true })
+			expect(device.position.value).toBe(50500)
+		} finally {
+			await focuserCommander.reverse(operationCoordinator, device, false)
+		}
+	})
+
+	test('commands only the steps left before the range limit', async () => {
+		const device = await connected()
+
+		focuserManager.syncTo(device, device.position.min + 100)
+
+		expect(await waitUntil(() => device.position.value === device.position.min + 100)).toBeTrue()
+		expect(await focuserCommander.moveIn(operationCoordinator, device, 500)).toMatchObject({ ok: true })
+		expect(device.position.value).toBe(device.position.min)
+	})
+
+	test('rejects a relative move without a direction to express it', async () => {
+		const device = await connected()
+		const moveIn = spyOn(focuserManager, 'moveIn')
+
+		try {
+			expect(await focuserCommander.moveIn(operationCoordinator, device, 0)).toMatchObject({ ok: false, reason: 'unexpectedState' })
+			expect(moveIn).not.toHaveBeenCalled()
+		} finally {
+			moveIn.mockRestore()
+		}
+	})
+
+	test('refuses a move while the focuser is disconnected', async () => {
+		const device = getFocuser()
+		const moveTo = spyOn(focuserManager, 'moveTo')
+
+		try {
+			expect(await focuserCommander.moveTo(operationCoordinator, device, 1000)).toMatchObject({ ok: false, reason: 'busy' })
+			expect(await focuserCommander.stopMotion(device)).toMatchObject({ ok: false, reason: 'disconnected' })
+			expect(moveTo).not.toHaveBeenCalled()
+		} finally {
+			moveTo.mockRestore()
+		}
+	})
+
+	test('stopping by device cancels the move and leaves the focuser stopped', async () => {
+		const device = await connected()
+		const moving = focuserCommander.moveTo(operationCoordinator, device, device.position.max)
+
+		expect(await waitUntil(() => device.moving)).toBeTrue()
+
+		const stopped = await focuserHandler.stop(device)
+
+		expect(stopped).toMatchObject({ ok: true })
+		expect(await moving).toMatchObject({ ok: false, reason: 'aborted' })
+		expect(device.moving).toBeFalse()
+		expect(await waitUntil(() => free(device))).toBeTrue()
+	}, 10000)
+
+	test('refuses a second command while another operation owns the focuser', async () => {
+		const device = await connected()
+		const moving = focuserCommander.moveTo(operationCoordinator, device, device.position.max)
+
+		expect(await waitUntil(() => device.moving)).toBeTrue()
+		expect(await focuserCommander.syncTo(operationCoordinator, device, 1000)).toMatchObject({ ok: false, reason: 'busy' })
+
+		await focuserHandler.stop(device)
+		await moving
+	}, 10000)
 })

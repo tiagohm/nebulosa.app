@@ -8,6 +8,7 @@ import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { cameraBus, CameraHandler } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
 import type { CameraCaptureResult } from 'src/api/camera.capture'
+import { CameraCommander } from 'src/api/camera.commander'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { darvBus, darv as darvEndpoints, DarvHandler } from 'src/api/darv'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'
@@ -45,10 +46,10 @@ const guideOutputManager = new GuideOutputManager({
 const resourceArbiter = new ResourceArbiter()
 const operationCoordinator = new OperationCoordinator(resourceArbiter)
 const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourceArbiter)
-const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, new CameraCommander(cameraManager), operationCoordinator)
 const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm), new NotificationHandler(wsm), new MountCommander(mountManager), operationCoordinator)
 const guideOutputCommander = new GuideOutputCommander(guideOutputManager)
-const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, guideOutputCommander)
+const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, new NotificationHandler(wsm), guideOutputCommander, operationCoordinator)
 const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutputHandler, operationCoordinator)
 const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
 deviceLifecycle.observe(cameraManager)

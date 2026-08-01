@@ -9,6 +9,7 @@ import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { cameraBus, CameraHandler } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
 import type { CameraCaptureResult } from 'src/api/camera.capture'
+import { CameraCommander } from 'src/api/camera.commander'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { ImageProcessor } from 'src/api/image'
@@ -45,7 +46,7 @@ const rotatorManager = new RotatorManager()
 const resourceArbiter = new ResourceArbiter()
 const operationCoordinator = new OperationCoordinator(resourceArbiter)
 const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourceArbiter)
-const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, new CameraCommander(cameraManager), operationCoordinator)
 const mountCommander = new MountCommander(mountManager)
 const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm), new NotificationHandler(wsm), mountCommander, operationCoordinator)
 const solver = new PlateSolverHandler(new NotificationHandler(wsm), imageProcessor)

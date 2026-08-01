@@ -22,9 +22,9 @@ const wsm = new WebSocketMessageHandler()
 const mountManager = new MountManager()
 const guideOutputManager = new GuideOutputManager(mountManager)
 const guideOutputCommander = new GuideOutputCommander(guideOutputManager)
-const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, guideOutputCommander)
 const resourceArbiter = new ResourceArbiter()
 const operationCoordinator = new OperationCoordinator(resourceArbiter)
+const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, new NotificationHandler(wsm), guideOutputCommander, operationCoordinator)
 const endpoints = guideOutputEndpoints(guideOutputHandler)
 const handler = new IndiClientHandlerSet([mountManager, guideOutputManager])
 const client = new ClientSimulator('Client Simulator', handler)
@@ -143,18 +143,64 @@ describe('guide output handler', () => {
 		wsm.open(socket)
 		socket.clear()
 
-		await noContent(await endpoints['/guideoutputs/:id/pulse'].POST(request(device.id, pulse)))
+		await noContent(await endpoints['/guideoutputs/:id/pulse'].POST(request(device.id, [pulse])))
 
 		expect(await waitUntil(() => device.pulsing)).toBeTrue()
 		expect(guideOutputUpdates('pulsing').at(-1)?.body.device.pulsing).toBeTrue()
 		expect(await waitUntil(() => !device.pulsing, 3000)).toBeTrue()
 		expect(guideOutputUpdates('pulsing').at(-1)?.body.device.pulsing).toBeFalse()
 
-		await noContent(await endpoints['/guideoutputs/:id/guiderate'].POST(request(device.id, rate)))
+		const response = await endpoints['/guideoutputs/:id/guiderate'].POST(request(device.id, rate))
 
+		expect(response.status).toBe(200)
+		expect(await response.json()).toEqual({ ok: true })
 		expect(device.guideRate.rightAscension).toBe(rate.rightAscension)
 		expect(device.guideRate.declination).toBe(rate.declination)
 		expect(guideOutputUpdates('guideRate').at(-1)?.body.device.guideRate).toEqual(device.guideRate)
+	})
+
+	test('pulses both axes of a diagonal nudge in one operation', async () => {
+		const device = connectAndGetGuideOutput()
+		const pulse = spyOn(guideOutputManager, 'pulse')
+		const pulses = [
+			{ direction: 'NORTH', duration: 100 },
+			{ direction: 'WEST', duration: 100 },
+		] satisfies GuidePulse[]
+
+		try {
+			await noContent(await endpoints['/guideoutputs/:id/pulse'].POST(request(device.id, pulses)))
+
+			expect(await waitUntil(() => pulse.mock.calls.some((call) => call[1] === 'NORTH' && call[2] === 100))).toBeTrue()
+			expect(pulse.mock.calls.some((call) => call[1] === 'WEST' && call[2] === 100)).toBeTrue()
+			expect(await waitUntil(() => device.pulsing)).toBeTrue()
+			expect(await waitUntil(() => !device.pulsing && resourceArbiter.availability(resourceKey(device)) === 'available', 3000)).toBeTrue()
+		} finally {
+			pulse.mockRestore()
+		}
+	})
+
+	test('zeroes both guide vectors and releases the device when stopped', async () => {
+		const device = connectAndGetGuideOutput()
+		const pulse = spyOn(guideOutputManager, 'pulse')
+		const pulses = [{ direction: 'NORTH', duration: 400 }] satisfies GuidePulse[]
+
+		try {
+			await noContent(await endpoints['/guideoutputs/:id/pulse'].POST(request(device.id, pulses)))
+
+			expect(await waitUntil(() => device.pulsing)).toBeTrue()
+
+			const response = await endpoints['/guideoutputs/:id/stop'].POST(request(device.id))
+
+			expect(response.status).toBe(200)
+			expect(await response.json()).toEqual({ ok: true })
+			expect(pulse).toHaveBeenCalledWith(device, 'SOUTH', 0)
+			expect(pulse).toHaveBeenCalledWith(device, 'WEST', 0)
+			expect(pulse).toHaveBeenCalledWith(device, 'EAST', 0)
+			expect(device.pulsing).toBeFalse()
+			expect(resourceArbiter.availability(resourceKey(device))).toBe('available')
+		} finally {
+			pulse.mockRestore()
+		}
 	})
 
 	test('emits add and temperature updates when parent focuser connects', () => {
@@ -164,7 +210,7 @@ describe('guide output handler', () => {
 
 		const mountManager = new MountManager()
 		const guideOutputManager = new GuideOutputManager(mountManager)
-		const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, new GuideOutputCommander(guideOutputManager))
+		const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, new NotificationHandler(wsm), new GuideOutputCommander(guideOutputManager), new OperationCoordinator(new ResourceArbiter()))
 		const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(), new NotificationHandler(wsm), new MountCommander(mountManager), new OperationCoordinator(new ResourceArbiter()))
 		const handler = new IndiClientHandlerSet([mountManager, guideOutputManager])
 		const client = new ClientSimulator('Client Simulator', handler)
@@ -219,7 +265,7 @@ describe('guide output handler', () => {
 		mountManager.connect(mount)
 		const device = getGuideOutput()
 		wsm.open(socket)
-		await noContent(await endpoints['/guideoutputs/:id/pulse'].POST(request(device.id, pulse)))
+		await noContent(await endpoints['/guideoutputs/:id/pulse'].POST(request(device.id, [pulse])))
 		expect(await waitUntil(() => device.pulsing)).toBeTrue()
 		socket.clear()
 
@@ -264,9 +310,10 @@ describe('guide output handler', () => {
 		const guidePulse = { direction: 'WEST', duration: 75 } satisfies GuidePulse
 
 		try {
-			await noContent(await endpoints['/guideoutputs/:id/guiderate'].POST(request(device.id, rate)))
-			await noContent(await endpoints['/guideoutputs/:id/pulse'].POST(request(device.id, guidePulse)))
+			await endpoints['/guideoutputs/:id/guiderate'].POST(request(device.id, rate))
+			await noContent(await endpoints['/guideoutputs/:id/pulse'].POST(request(device.id, [guidePulse])))
 
+			expect(await waitUntil(() => pulse.mock.calls.some((call) => call[1] === guidePulse.direction))).toBeTrue()
 			expect(guideRate).toHaveBeenCalledWith(device, rate.rightAscension, rate.declination)
 			expect(pulse).toHaveBeenCalledWith(device, guidePulse.direction, guidePulse.duration)
 		} finally {
@@ -325,11 +372,57 @@ describe('guide output handler', () => {
 		}
 	})
 
+	test('zeroes every axis of a canceled nudge before waiting for the standstill', async () => {
+		const device = connectAndGetGuideOutput()
+
+		resourceArbiter.markAvailable({ key: resourceKey(device), device })
+
+		const zeroed = new Set<string>()
+		let canceling = false
+
+		const pulse = spyOn(guideOutputManager, 'pulse').mockImplementation((_, direction, duration) => {
+			if (!canceling || duration !== 0) return
+
+			zeroed.add(direction)
+
+			if (zeroed.size < 4) return
+
+			device.pulsing = false
+			guideOutputCommander.updated(device, 'pulsing', 'Idle')
+		})
+
+		const pulses = [
+			{ direction: 'NORTH', duration: 5000 },
+			{ direction: 'WEST', duration: 5000 },
+		] satisfies GuidePulse[]
+
+		device.pulsing = true
+
+		const handle = operationCoordinator.start('darv', [{ key: resourceKey(device), device }], (context) => guideOutputCommander.pulseAxes(context, device, pulses))
+
+		try {
+			expect(await waitUntil(() => pulse.mock.calls.filter((call) => call[2] === 5000).length === 2)).toBeTrue()
+
+			canceling = true
+
+			await handle.cancel()
+
+			const result = await handle.result
+
+			expect(result.ok).toBeFalse()
+			expect(Array.from(zeroed).sort()).toEqual(['EAST', 'NORTH', 'SOUTH', 'WEST'])
+			expect(device.pulsing).toBeFalse()
+		} finally {
+			device.pulsing = false
+			pulse.mockRestore()
+		}
+	})
+
 	test('emits remove event when the parent simulator is disposed', () => {
 		const wsm = new WebSocketMessageHandler()
 		const mountManager = new MountManager()
 		const guideOutputManager = new GuideOutputManager(mountManager)
-		const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, new GuideOutputCommander(guideOutputManager))
+		const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, new NotificationHandler(wsm), new GuideOutputCommander(guideOutputManager), new OperationCoordinator(new ResourceArbiter()))
 		const handler = new IndiClientHandlerSet([mountManager, guideOutputManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const focuserSimulator = new MountSimulator('Mount Simulator', client)

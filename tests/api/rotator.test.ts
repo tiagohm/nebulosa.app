@@ -4,8 +4,13 @@ import type { Rotator } from 'nebulosa/src/devices/indi/device'
 import { RotatorManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { RotatorSimulator } from 'nebulosa/src/devices/indi/simulator/rotator'
+import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { WebSocketMessageHandler } from 'src/api/message'
+import { NotificationHandler } from 'src/api/notification'
+import { OperationCoordinator } from 'src/api/operation'
+import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { RotatorHandler, rotatorBus, rotator as rotatorEndpoints } from 'src/api/rotator'
+import { RotatorCommander } from 'src/api/rotator.commander'
 import type { RotatorAdded, RotatorRemoved, RotatorUpdated } from '#/rotator'
 import { json, noContent, SocketMessager, waitUntil } from './util'
 
@@ -13,7 +18,12 @@ rotatorBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const rotatorManager = new RotatorManager()
-const rotatorHandler = new RotatorHandler(wsm, rotatorManager)
+const resourceArbiter = new ResourceArbiter()
+const operationCoordinator = new OperationCoordinator(resourceArbiter)
+const rotatorCommander = new RotatorCommander(rotatorManager)
+const rotatorHandler = new RotatorHandler(wsm, rotatorManager, new NotificationHandler(wsm), rotatorCommander, operationCoordinator)
+const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
+deviceLifecycle.observe(rotatorManager)
 const endpoints = rotatorEndpoints(rotatorHandler)
 const handler = new IndiClientHandlerSet([rotatorManager])
 const client = new ClientSimulator('Client Simulator', handler)
@@ -31,7 +41,8 @@ beforeEach(() => {
 	rotatorManager.disconnect(getRotator())
 })
 
-afterEach(() => {
+afterEach(async () => {
+	await operationCoordinator.cancelAll('aborted')
 	rotatorManager.disconnect(getRotator())
 })
 
@@ -49,8 +60,31 @@ function request(id = 'Rotator Simulator', body?: unknown, search = '') {
 	} as unknown as Bun.BunRequest
 }
 
+async function succeeded(response: Response) {
+	expect(response.status).toBe(200)
+	expect(await response.json()).toEqual({ ok: true })
+}
+
+function free(device: Rotator) {
+	return resourceArbiter.availability(resourceKey(device)) === 'available'
+}
+
 function rotatorUpdates(property: keyof Rotator & string) {
 	return socket.filter<RotatorUpdated>((message) => message.type === 'rotator:update' && message.body.property === property)
+}
+
+async function connected(angle?: number) {
+	const device = getRotator()
+
+	rotatorManager.connect(device)
+
+	expect(device.connected).toBeTrue()
+
+	if (angle !== undefined) rotatorManager.syncTo(device, angle)
+
+	expect(await waitUntil(() => free(device) && (angle === undefined || device.angle.value === angle))).toBeTrue()
+
+	return device
 }
 
 describe('rotator handler', () => {
@@ -108,34 +142,33 @@ describe('rotator handler', () => {
 	})
 
 	test('syncs angle and reverses direction through endpoints', async () => {
-		const device = getRotator()
-
 		wsm.open(socket)
-		rotatorManager.connect(device)
+
+		const device = await connected()
+
 		socket.clear()
 
-		await noContent(await endpoints['/rotators/:id/sync'].POST(request(device.id, 123.45)))
+		await succeeded(await endpoints['/rotators/:id/sync'].POST(request(device.id, 123.45)))
 
 		expect(device.angle.value).toBe(123.45)
 		expect(rotatorUpdates('angle').at(-1)?.body.device.angle!.value).toBe(123.45)
 
-		await noContent(await endpoints['/rotators/:id/reverse'].POST(request(device.id, true)))
+		await succeeded(await endpoints['/rotators/:id/reverse'].POST(request(device.id, true)))
 
 		expect(device.reversed).toBeTrue()
 		expect(rotatorUpdates('reversed').at(-1)?.body.device.reversed).toBeTrue()
 
-		await noContent(await endpoints['/rotators/:id/reverse'].POST(request(device.id, false)))
+		await succeeded(await endpoints['/rotators/:id/reverse'].POST(request(device.id, false)))
 
 		expect(device.reversed).toBeFalse()
 		expect(rotatorUpdates('reversed').at(-1)?.body.device.reversed).toBeFalse()
 	})
 
 	test('moves, homes, and stops through endpoints', async () => {
-		const device = getRotator()
-
 		wsm.open(socket)
-		rotatorManager.connect(device)
-		rotatorManager.syncTo(device, 45)
+
+		const device = await connected(45)
+
 		socket.clear()
 
 		await noContent(await endpoints['/rotators/:id/moveto'].POST(request(device.id, 90)))
@@ -143,11 +176,12 @@ describe('rotator handler', () => {
 		expect(await waitUntil(() => device.moving)).toBeTrue()
 		expect(rotatorUpdates('moving').at(-1)?.body.device.moving).toBeTrue()
 
-		await noContent(endpoints['/rotators/:id/stop'].POST(request(device.id)))
+		await succeeded(await endpoints['/rotators/:id/stop'].POST(request(device.id)))
 
 		expect(device.moving).toBeFalse()
 		expect(rotatorUpdates('moving').at(-1)?.body.device.moving).toBeFalse()
 		expect(rotatorUpdates('moving').at(-1)?.body.state).toBe('Alert')
+		expect(await waitUntil(() => free(device))).toBeTrue()
 
 		rotatorManager.syncTo(device, 10)
 		socket.clear()
@@ -158,39 +192,77 @@ describe('rotator handler', () => {
 		expect(rotatorUpdates('moving').at(-1)?.body.device.moving).toBeTrue()
 	})
 
-	test('delegates endpoint actions to the rotator manager', async () => {
-		const device = getRotator()
-		const moveTo = spyOn(rotatorManager, 'moveTo')
-		const syncTo = spyOn(rotatorManager, 'syncTo')
-		const home = spyOn(rotatorManager, 'home')
-		const reverse = spyOn(rotatorManager, 'reverse')
-		const stop = spyOn(rotatorManager, 'stop')
+	test('holds the rotator until a home the driver reports late has finished', async () => {
+		const device = await connected(45)
+
+		const home = spyOn(rotatorManager, 'home').mockImplementation(() => {
+			setTimeout(() => {
+				device.moving = true
+				rotatorCommander.updated(device, 'moving', 'Busy')
+
+				setTimeout(() => {
+					device.moving = false
+					rotatorCommander.updated(device, 'moving', 'Idle')
+				}, 200)
+			}, 200)
+		})
 
 		try {
-			await noContent(await endpoints['/rotators/:id/moveto'].POST(request(device.id, 100)))
-			await noContent(await endpoints['/rotators/:id/sync'].POST(request(device.id, 120)))
 			await noContent(endpoints['/rotators/:id/home'].POST(request(device.id)))
-			await noContent(await endpoints['/rotators/:id/reverse'].POST(request(device.id, true)))
-			await noContent(endpoints['/rotators/:id/stop'].POST(request(device.id)))
 
-			expect(moveTo).toHaveBeenCalledWith(device, 100)
-			expect(syncTo).toHaveBeenCalledWith(device, 120)
-			expect(home).toHaveBeenCalledWith(device)
-			expect(reverse).toHaveBeenCalledWith(device, true)
-			expect(stop).toHaveBeenCalledWith(device)
+			expect(await waitUntil(() => !free(device))).toBeTrue()
+			expect(await waitUntil(() => free(device), 100)).toBeFalse()
+			expect(await waitUntil(() => device.moving)).toBeTrue()
+			expect(await waitUntil(() => free(device), 3000)).toBeTrue()
 		} finally {
-			stop.mockRestore()
-			reverse.mockRestore()
 			home.mockRestore()
-			syncTo.mockRestore()
+			device.moving = false
+		}
+	})
+
+	test('holds the rotator until the commanded angle is reached', async () => {
+		const device = await connected(45)
+
+		await noContent(await endpoints['/rotators/:id/moveto'].POST(request(device.id, 60)))
+
+		expect(await waitUntil(() => !free(device))).toBeTrue()
+		expect(await waitUntil(() => device.angle.value === 60 && !device.moving, 10000)).toBeTrue()
+		expect(await waitUntil(() => free(device))).toBeTrue()
+	}, 15000)
+
+	test('clamps an angle outside the driver limits to a reachable one', async () => {
+		const device = await connected(45)
+		const moveTo = spyOn(rotatorManager, 'moveTo')
+
+		try {
+			await noContent(await endpoints['/rotators/:id/moveto'].POST(request(device.id, device.angle.max + 30)))
+
+			expect(await waitUntil(() => moveTo.mock.calls.length > 0)).toBeTrue()
+			expect(moveTo).toHaveBeenCalledWith(device, device.angle.max)
+		} finally {
 			moveTo.mockRestore()
 		}
+	})
+
+	test('refuses a command competing for a rotator already owned', async () => {
+		const device = await connected(45)
+
+		await noContent(await endpoints['/rotators/:id/moveto'].POST(request(device.id, 90)))
+
+		expect(await waitUntil(() => !free(device))).toBeTrue()
+
+		const response = await endpoints['/rotators/:id/sync'].POST(request(device.id, 10))
+
+		expect(response.status).toBe(200)
+		expect(await response.json()).toMatchObject({ ok: false, reason: 'busy' })
 	})
 
 	test('emits remove event when the simulator is disposed', () => {
 		const wsm = new WebSocketMessageHandler()
 		const rotatorManager = new RotatorManager()
-		const rotatorHandler = new RotatorHandler(wsm, rotatorManager)
+		const resourceArbiter = new ResourceArbiter()
+		const operationCoordinator = new OperationCoordinator(resourceArbiter)
+		const rotatorHandler = new RotatorHandler(wsm, rotatorManager, new NotificationHandler(wsm), new RotatorCommander(rotatorManager), operationCoordinator)
 		const handler = new IndiClientHandlerSet([rotatorManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const rotatorSimulator = new RotatorSimulator('Rotator Simulator', client)

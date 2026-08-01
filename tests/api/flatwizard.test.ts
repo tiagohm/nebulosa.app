@@ -10,6 +10,7 @@ import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { cameraBus, CameraHandler } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
 import type { CameraCaptureResult } from 'src/api/camera.capture'
+import { CameraCommander } from 'src/api/camera.commander'
 import { flatWizardBus, flatWizard as flatWizardEndpoints, FlatWizardHandler } from 'src/api/flatwizard'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
@@ -38,7 +39,7 @@ const rotatorManager = new RotatorManager()
 const resourceArbiter = new ResourceArbiter()
 const operationCoordinator = new OperationCoordinator(resourceArbiter)
 const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourceArbiter)
-const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, new CameraCommander(cameraManager), operationCoordinator)
 const flatWizardHandler = new FlatWizardHandler(wsm, cameraHandler, imageProcessor, operationCoordinator)
 const endpoints = flatWizardEndpoints(flatWizardHandler)
 const handler = new IndiClientHandlerSet([cameraManager])

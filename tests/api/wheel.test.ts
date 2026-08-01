@@ -4,8 +4,13 @@ import type { Wheel } from 'nebulosa/src/devices/indi/device'
 import { WheelManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
+import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { WebSocketMessageHandler } from 'src/api/message'
+import { NotificationHandler } from 'src/api/notification'
+import { OperationCoordinator } from 'src/api/operation'
+import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { WheelHandler, wheelBus, wheel as wheelEndpoints } from 'src/api/wheel'
+import { WheelCommander } from 'src/api/wheel.commander'
 import type { WheelAdded, WheelRemoved, WheelUpdated } from '#/wheel'
 import { json, noContent, SocketMessager, waitUntil } from './util'
 
@@ -13,7 +18,12 @@ wheelBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const wheelManager = new WheelManager()
-const wheelHandler = new WheelHandler(wsm, wheelManager)
+const resourceArbiter = new ResourceArbiter()
+const operationCoordinator = new OperationCoordinator(resourceArbiter)
+const wheelCommander = new WheelCommander(wheelManager)
+const wheelHandler = new WheelHandler(wsm, wheelManager, new NotificationHandler(wsm), wheelCommander, operationCoordinator)
+const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
+deviceLifecycle.observe(wheelManager)
 const endpoints = wheelEndpoints(wheelHandler)
 const handler = new IndiClientHandlerSet([wheelManager])
 const client = new ClientSimulator('Client Simulator', handler)
@@ -31,7 +41,8 @@ beforeEach(() => {
 	wheelManager.disconnect(getWheel())
 })
 
-afterEach(() => {
+afterEach(async () => {
+	await operationCoordinator.cancelAll('aborted')
 	wheelManager.disconnect(getWheel())
 })
 
@@ -49,8 +60,28 @@ function request(id = 'Wheel Simulator', body?: unknown, search = '') {
 	} as unknown as Bun.BunRequest
 }
 
+async function succeeded(response: Response) {
+	expect(response.status).toBe(200)
+	expect(await response.json()).toEqual({ ok: true })
+}
+
+function free(device: Wheel) {
+	return resourceArbiter.availability(resourceKey(device)) === 'available'
+}
+
 function wheelUpdates(property: keyof Wheel & string) {
 	return socket.filter<WheelUpdated>((message) => message.type === 'wheel:update' && message.body.property === property)
+}
+
+async function connected() {
+	const device = getWheel()
+
+	wheelManager.connect(device)
+
+	expect(device.connected).toBeTrue()
+	expect(await waitUntil(() => free(device))).toBeTrue()
+
+	return device
 }
 
 describe('wheel handler', () => {
@@ -104,11 +135,12 @@ describe('wheel handler', () => {
 	})
 
 	test('moves to a slot and updates slot names through endpoints', async () => {
-		const device = getWheel()
 		const names = ['Lum', 'Red', 'Green', 'Blue', 'Ha', 'OIII', 'SII', 'Dark']
 
 		wsm.open(socket)
-		wheelManager.connect(device)
+
+		const device = await connected()
+
 		socket.clear()
 
 		await noContent(await endpoints['/wheels/:id/moveto'].POST(request(device.id, 2)))
@@ -120,34 +152,96 @@ describe('wheel handler', () => {
 		expect(wheelUpdates('position').at(-1)?.body.device.position).toBe(2)
 		expect(wheelUpdates('moving').at(-1)?.body.device.moving).toBeFalse()
 
-		await noContent(await endpoints['/wheels/:id/names'].POST(request(device.id, names)))
+		expect(await waitUntil(() => free(device))).toBeTrue()
+
+		await succeeded(await endpoints['/wheels/:id/names'].POST(request(device.id, names)))
 
 		expect(device.names).toEqual(names)
 		expect(wheelUpdates('names').at(-1)?.body.device.names).toEqual(names)
 	})
 
-	test('delegates endpoint actions to the wheel manager', async () => {
-		const device = getWheel()
+	test('clamps a slot outside the carousel to one the wheel can reach', async () => {
+		const device = await connected()
 		const moveTo = spyOn(wheelManager, 'moveTo')
-		const slots = spyOn(wheelManager, 'slots')
-		const names = ['L', 'R', 'G', 'B']
 
 		try {
-			await noContent(await endpoints['/wheels/:id/moveto'].POST(request(device.id, 3)))
-			await noContent(await endpoints['/wheels/:id/names'].POST(request(device.id, names)))
+			await noContent(await endpoints['/wheels/:id/moveto'].POST(request(device.id, device.count + 4)))
 
-			expect(moveTo).toHaveBeenCalledWith(device, 3)
-			expect(slots).toHaveBeenCalledWith(device, names)
+			expect(await waitUntil(() => device.position === device.count - 1 && !device.moving, 3000)).toBeTrue()
+			expect(moveTo).toHaveBeenCalledWith(device, device.count - 1)
+		} finally {
+			moveTo.mockRestore()
+		}
+	})
+
+	test('holds a canceled move until the wheel reaches the commanded slot', async () => {
+		const device = await connected()
+		const moveTo = spyOn(wheelManager, 'moveTo').mockImplementation(() => {})
+
+		try {
+			const handle = operationCoordinator.start('wheelMoveTo', [{ key: resourceKey(device), device }], (context) => wheelCommander.moveTo(context, device, 2))
+
+			expect(await waitUntil(() => moveTo.mock.calls.length > 0)).toBeTrue()
+
+			const canceled = handle.cancel()
+
+			expect(await waitUntil(() => free(device), 200)).toBeFalse()
+
+			device.moving = true
+			wheelCommander.updated(device, 'moving', 'Busy')
+
+			expect(await waitUntil(() => free(device), 200)).toBeFalse()
+
+			device.moving = false
+			device.position = 2
+			wheelCommander.updated(device, 'position', 'Ok')
+
+			await canceled
+
+			const result = await handle.result
+
+			expect(result.ok).toBeFalse()
+			expect(await waitUntil(() => free(device))).toBeTrue()
+		} finally {
+			device.moving = false
+			moveTo.mockRestore()
+		}
+	})
+
+	test('refuses a command competing for a wheel already owned', async () => {
+		const device = await connected()
+
+		await noContent(await endpoints['/wheels/:id/moveto'].POST(request(device.id, 3)))
+
+		expect(await waitUntil(() => !free(device))).toBeTrue()
+
+		const response = await endpoints['/wheels/:id/names'].POST(request(device.id, ['L', 'R', 'G', 'B']))
+
+		expect(response.status).toBe(200)
+		expect(await response.json()).toMatchObject({ ok: false, reason: 'busy' })
+	})
+
+	test('refuses to rename the slots of a disconnected wheel', async () => {
+		const device = getWheel()
+		const slots = spyOn(wheelManager, 'slots')
+
+		try {
+			const response = await endpoints['/wheels/:id/names'].POST(request(device.id, ['L', 'R', 'G', 'B']))
+
+			expect(response.status).toBe(200)
+			expect(await response.json()).toMatchObject({ ok: false })
+			expect(slots).not.toHaveBeenCalled()
 		} finally {
 			slots.mockRestore()
-			moveTo.mockRestore()
 		}
 	})
 
 	test('emits remove event when the simulator is disposed', () => {
 		const wsm = new WebSocketMessageHandler()
 		const wheelManager = new WheelManager()
-		const wheelHandler = new WheelHandler(wsm, wheelManager)
+		const resourceArbiter = new ResourceArbiter()
+		const operationCoordinator = new OperationCoordinator(resourceArbiter)
+		const wheelHandler = new WheelHandler(wsm, wheelManager, new NotificationHandler(wsm), new WheelCommander(wheelManager), operationCoordinator)
 		const handler = new IndiClientHandlerSet([wheelManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const wheelSimulator = new WheelSimulator('Wheel Simulator', client)

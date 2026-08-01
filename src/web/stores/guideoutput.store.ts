@@ -77,23 +77,25 @@ export function guideOutputStore(guideOutput: GuideOutput) {
 		if (!down) {
 			const { north, south, west, east } = state.request
 
+			// Both axes of a diagonal nudge travel in one request: they are one operation on the device, and
+			// two competing requests would only see the second one refused.
 			switch (direction) {
 				case 'upLeft':
-					return Promise.all([Api.GuideOutputs.pulse(guideOutput, north), Api.GuideOutputs.pulse(guideOutput, west)])
+					return Api.GuideOutputs.pulse(guideOutput, [north, west])
 				case 'upRight':
-					return Promise.all([Api.GuideOutputs.pulse(guideOutput, north), Api.GuideOutputs.pulse(guideOutput, east)])
+					return Api.GuideOutputs.pulse(guideOutput, [north, east])
 				case 'downLeft':
-					return Promise.all([Api.GuideOutputs.pulse(guideOutput, south), Api.GuideOutputs.pulse(guideOutput, west)])
+					return Api.GuideOutputs.pulse(guideOutput, [south, west])
 				case 'downRight':
-					return Promise.all([Api.GuideOutputs.pulse(guideOutput, south), Api.GuideOutputs.pulse(guideOutput, east)])
+					return Api.GuideOutputs.pulse(guideOutput, [south, east])
 				case 'up':
-					return Api.GuideOutputs.pulse(guideOutput, north)
+					return Api.GuideOutputs.pulse(guideOutput, [north])
 				case 'down':
-					return Api.GuideOutputs.pulse(guideOutput, south)
+					return Api.GuideOutputs.pulse(guideOutput, [south])
 				case 'left':
-					return Api.GuideOutputs.pulse(guideOutput, west)
+					return Api.GuideOutputs.pulse(guideOutput, [west])
 				case 'right':
-					return Api.GuideOutputs.pulse(guideOutput, east)
+					return Api.GuideOutputs.pulse(guideOutput, [east])
 			}
 		}
 
@@ -101,7 +103,7 @@ export function guideOutputStore(guideOutput: GuideOutput) {
 	}
 
 	function stop() {
-		// Api.GuideOutputs.stop(guideOutput)
+		return Api.GuideOutputs.stop(guideOutput)
 	}
 
 	return {

@@ -20,6 +20,7 @@ import { meter } from 'nebulosa/src/math/units/distance'
 import { camera as cameraEndpoints, CameraHandler, cameraBus } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
 import type { CameraDitherer, CameraDitherOptions } from 'src/api/camera.capture'
+import { CameraCommander } from 'src/api/camera.commander'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
@@ -54,7 +55,7 @@ const rotatorManager = new RotatorManager()
 const resourceArbiter = new ResourceArbiter()
 const operationCoordinator = new OperationCoordinator(resourceArbiter)
 const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourceArbiter)
-const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, new CameraCommander(cameraManager), operationCoordinator)
 const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
 deviceLifecycle.observe(cameraManager)
 const endpoints = cameraEndpoints(cameraHandler)
@@ -196,13 +197,40 @@ describe('camera capture start request', () => {
 		try {
 			cameraManager.connect(camera)
 
-			await noContent(await endpoints['/cameras/:id/cooler'].POST(endpointRequest(camera.id, true)))
-			await noContent(await endpoints['/cameras/:id/temperature'].POST(endpointRequest(camera.id, -5)))
+			expect(await waitUntil(() => resourceArbiter.availability(resourceKey(camera)) === 'available')).toBeTrue()
 
+			const cooled = await endpoints['/cameras/:id/cooler'].POST(endpointRequest(camera.id, true))
+			const cooledTo = await endpoints['/cameras/:id/temperature'].POST(endpointRequest(camera.id, -5))
+
+			expect(await cooled.json()).toEqual({ ok: true })
+			expect(await cooledTo.json()).toEqual({ ok: true })
 			expect(cooler).toHaveBeenCalledWith(camera, true)
 			expect(temperature).toHaveBeenCalledWith(camera, -5)
 		} finally {
 			temperature.mockRestore()
+			cooler.mockRestore()
+		}
+	})
+
+	test('refuses to change the cooling of a camera already exposing', async () => {
+		const camera = getCamera()
+		const cooler = spyOn(cameraManager, 'cooler')
+
+		try {
+			cameraManager.connect(camera)
+
+			const handle = cameraHandler.capture(operationCoordinator, camera, captureStartRequest({ exposureMode: 'loop', exposureTime: 500, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO', autoSave: false }))
+
+			expect(await handle.started).toEqual({ ok: true, value: undefined })
+
+			const response = await endpoints['/cameras/:id/cooler'].POST(endpointRequest(camera.id, true))
+
+			expect(await response.json()).toMatchObject({ ok: false, reason: 'busy' })
+			expect(cooler).not.toHaveBeenCalled()
+
+			await cameraHandler.stop(camera)
+			await handle.result
+		} finally {
 			cooler.mockRestore()
 		}
 	})
@@ -276,7 +304,7 @@ describe('camera capture start request', () => {
 		const imageProcessor = new ImageProcessor()
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, coordinator)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, new CameraCommander(cameraManager), coordinator)
 		const handler = new IndiClientHandlerSet([cameraManager, mountManager, wheelManager, focuserManager, rotatorManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const cameraSimulator = new CameraSimulator('Camera Simulator', client)
@@ -854,7 +882,7 @@ describe('camera capture start request', () => {
 
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, coordinator)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, new CameraCommander(cameraManager), coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 
@@ -891,7 +919,7 @@ describe('camera capture start request', () => {
 
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, coordinator)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, new CameraCommander(cameraManager), coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 		const request = captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', dither: { enabled: true, guider: 'guider-1' } })
@@ -923,7 +951,7 @@ describe('camera capture start request', () => {
 
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, coordinator)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, new CameraCommander(cameraManager), coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 		const request = captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', dither: { enabled: true, guider: 'guider-1' } })
@@ -957,7 +985,7 @@ describe('camera capture start request', () => {
 
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, coordinator)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, new CameraCommander(cameraManager), coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 		const request = captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', dither: { enabled: true } })
@@ -988,7 +1016,7 @@ describe('camera capture start request', () => {
 
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, coordinator)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, new CameraCommander(cameraManager), coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 		const request = captureStartRequest({ exposureTime: 100, exposureTimeUnit: 'millisecond', dither: { enabled: true, guider: 'guider-1' } })

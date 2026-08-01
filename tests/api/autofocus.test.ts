@@ -13,6 +13,7 @@ import { autoFocusBus, autoFocus as autoFocusEndpoints, AutoFocusHandler } from 
 import { cameraBus, CameraHandler } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
 import type { CameraCaptureResult } from 'src/api/camera.capture'
+import { CameraCommander } from 'src/api/camera.commander'
 import { FocuserHandler } from 'src/api/focuser'
 import { FocuserCommander } from 'src/api/focuser.commander'
 import { ImageProcessor } from 'src/api/image'
@@ -45,7 +46,7 @@ const rotatorManager = new RotatorManager()
 const resourceArbiter = new ResourceArbiter()
 const operationCoordinator = new OperationCoordinator(resourceArbiter)
 const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourceArbiter)
-const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, new CameraCommander(cameraManager), operationCoordinator)
 const focuserCommander = new FocuserCommander(focuserManager)
 const focuserHandler = new FocuserHandler(wsm, focuserManager, new NotificationHandler(wsm), focuserCommander, operationCoordinator)
 const starDetectionHandler = new StarDetectionHandler(imageProcessor)

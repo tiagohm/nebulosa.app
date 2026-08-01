@@ -9,6 +9,7 @@ import { CameraManager, CoverManager, DewHeaterManager, FlatPanelManager, Focuse
 import type { DeviceProvider } from 'nebulosa/src/devices/indi/manager'
 import { default as openDefaultApp } from 'open'
 import { AlpacaHandler, alpaca } from 'src/api/alpaca'
+import { coordinatedAlpacaManagers } from 'src/api/alpaca.adapter'
 import { AtlasHandler, atlas } from 'src/api/atlas'
 import { AutoFocusHandler, autoFocus } from 'src/api/autofocus'
 import { CameraHandler, camera } from 'src/api/camera'
@@ -280,7 +281,14 @@ const tppaHandler = new TppaHandler(wsm, cameraHandler, mountHandler, plateSolve
 const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutputHandler, operationCoordinator)
 const autoFocusHandler = new AutoFocusHandler(wsm, cameraHandler, focuserHandler, starDetectionHandler, operationCoordinator)
 const flatWizardHandler = new FlatWizardHandler(wsm, cameraHandler, imageProcessor, operationCoordinator)
-const alpacaHandler = new AlpacaHandler(wsm, { camera: cameraManager, mount: mountManager, focuser: focuserManager, wheel: wheelManager, cover: coverManager, flatPanel: flatPanelManager, rotator: rotatorManager, guideOutput: guideOutputManager }, alpacaDiscoveryPort)
+// Alpaca is a second ingress into the same devices, so it writes through coordinated managers instead of
+// the raw ones and competes for the same resource keys as the routes and the composite features.
+const alpacaManagers = coordinatedAlpacaManagers(
+	{ camera: cameraManager, mount: mountManager, focuser: focuserManager, wheel: wheelManager, cover: coverManager, flatPanel: flatPanelManager, rotator: rotatorManager, guideOutput: guideOutputManager },
+	{ camera: cameraCommander, mount: mountCommander, focuser: focuserCommander, wheel: wheelCommander, cover: coverCommander, flatPanel: flatPanelCommander, guideOutput: guideOutputCommander },
+	operationCoordinator,
+)
+const alpacaHandler = new AlpacaHandler(wsm, alpacaManagers, alpacaDiscoveryPort)
 const storageHandler = new StorageHandler(false)
 
 void atlasHandler.refreshImageOfSun()

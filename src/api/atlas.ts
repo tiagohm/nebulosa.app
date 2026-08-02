@@ -13,7 +13,7 @@ import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astronomy/coordinat
 import type { PositionAndVelocity } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { constellation, CONSTELLATION_LIST } from 'nebulosa/src/astronomy/coordinates/constellation'
 import { equatorialFromJ2000, equatorialToEcliptic, equatorialToGalatic, equatorialToJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
-import { eraS2p } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
+import { eraS2p, eraStarpm } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { eraMoon98 } from 'nebulosa/src/astronomy/coordinates/erfa/moon'
 import * as elpmpp02 from 'nebulosa/src/astronomy/ephemeris/models/analytical/elpmpp02'
 import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
@@ -30,9 +30,9 @@ import { PlateCarree } from 'nebulosa/src/astronomy/projections/projection'
 import { iersb } from 'nebulosa/src/astronomy/time/iers'
 import { daysInMonth, formatTemporal, parseTemporal, temporalAdd, temporalFromTime, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/astronomy/time/temporal'
 import type { Temporal } from 'nebulosa/src/astronomy/time/temporal'
-import { Timescale, time, timeToUnixMillis, timeUnix, timeYMDHMS, toJulianDay, tt } from 'nebulosa/src/astronomy/time/time'
+import { Timescale, time, timeNow, timeToUnixMillis, timeUnix, timeYMDHMS, toJulianDay, tt } from 'nebulosa/src/astronomy/time/time'
 import type { Time } from 'nebulosa/src/astronomy/time/time'
-import { AU_KM, DAYSEC, DEG2RAD, MOON_SYNODIC_DAYS, ONE_KILOPARSEC, PIOVERTWO, SPEED_OF_LIGHT, TAU } from 'nebulosa/src/core/constants'
+import { AU_KM, DAYSEC, DEG2RAD, J2000, MOON_SYNODIC_DAYS, ONE_KILOPARSEC, PIOVERTWO, SPEED_OF_LIGHT, TAU } from 'nebulosa/src/core/constants'
 import type { Writable } from 'nebulosa/src/core/types'
 import { expectedPierSide, meridianTimeIn } from 'nebulosa/src/devices/indi/device'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
@@ -560,9 +560,21 @@ export class AtlasHandler {
 	}
 
 	planetarium(req: PlanetariumSearch) {
-		const q = `SELECT d.id, d.magnitude, d.rightAscension, d.declination, d.pmRA, d.pmDEC, d.type, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ORDER BY n.type LIMIT 1) as name FROM dsos d WHERE d.magnitude <= ${req.magnitudeLimit} AND d.type IN (${placeholders(req.types.length)})`
+		const q = `SELECT d.id, d.magnitude, d.rightAscension, d.declination, d.pmRA, d.pmDEC, d.distance, d.rv, d.type, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ORDER BY n.type LIMIT 1) as name FROM dsos d WHERE (d.magnitude <= ${req.magnitudeLimit} OR d.magnitude = 99) AND d.type IN (${placeholders(req.types.length)})`
+		const objects = nebulosa.query<Writable<SkyObject>, SQLQueryBindings[]>(q).all(...req.types)
+		const now = timeNow(true)
 
-		return nebulosa.query<SkyObject, SQLQueryBindings[]>(q).all(...req.types)
+		for (const o of objects) {
+			const ret = o.type === 29 && (o.pmRA !== 0 || o.pmDEC !== 0) && eraStarpm(o.rightAscension, o.declination, o.pmRA, o.pmDEC, o.distance === 0 ? 0 : 1 / o.distance, o.rv, J2000, 0, now.day, now.fraction)
+
+			if (ret !== false) {
+				;[o.rightAscension, o.declination] = equatorialFromJ2000(ret[0], ret[1], now)
+			} else {
+				;[o.rightAscension, o.declination] = equatorialFromJ2000(o.rightAscension, o.declination, now)
+			}
+		}
+
+		return objects
 	}
 
 	async refreshSatellites() {

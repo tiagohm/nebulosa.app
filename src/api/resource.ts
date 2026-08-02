@@ -1,9 +1,10 @@
 import { CLIENT } from 'nebulosa/src/devices/indi/device'
 import type { Device, SubDevice } from 'nebulosa/src/devices/indi/device'
 
-// Opaque stable identity of one physical or logical resource. A physical key is the device id, an MD5
-// digest of client, type, and name, so it is unique across clients. A resource with no device behind it,
-// such as a remote guider session, must use a `logical:` prefix to stay outside that key space.
+// Opaque stable identity of one physical or logical resource. A physical key is the device hardware id, an
+// MD5 digest of client and name, so it is unique across clients and shared by every interface the same
+// driver exposes for one piece of hardware. A resource with no device behind it, such as a remote guider
+// session, must use a `logical:` prefix to stay outside that key space.
 export type ResourceKey = string
 
 // Observable arbitration state; unavailable takes precedence over an existing lease.
@@ -76,9 +77,11 @@ const UNAVAILABLE_OWNER: ResourceOwner = {
 	kind: 'unavailable',
 }
 
-// Builds the canonical resource key from the physical parent id or the device's globally unique id.
+// Builds the canonical resource key from the hardware behind the device view. Every interface of one
+// physical device, whether a subdevice proxy or a second top-level device published by the same driver,
+// carries the same hardware id, so they are all arbitrated as the single resource they really are.
 export function resourceKey(device: Device): ResourceKey {
-	return device.parentId ?? device.id
+	return device.hardwareId
 }
 
 // Returns the live physical parent behind a subdevice proxy, or the original device otherwise.

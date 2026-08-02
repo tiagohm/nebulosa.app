@@ -35,6 +35,7 @@ function device<D extends Camera | Mount>(template: D, id: string): D {
 	return {
 		...structuredClone(template),
 		id,
+		hardwareId: id,
 		name: id,
 		connected: true,
 		client: { type: 'SIMULATOR', id: 'client-1' },

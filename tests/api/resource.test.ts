@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
-import type { Camera, GuideOutput, SubDevice } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_CAMERA, DEFAULT_GUIDE_OUTPUT } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Focuser, GuideOutput, Rotator, SubDevice } from 'nebulosa/src/devices/indi/device'
+import { DEFAULT_CAMERA, DEFAULT_FOCUSER, DEFAULT_GUIDE_OUTPUT, DEFAULT_ROTATOR } from 'nebulosa/src/devices/indi/device'
 import { GuideOutputManager, MountManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
@@ -19,8 +19,33 @@ function camera(connected: boolean): Camera {
 	return {
 		...structuredClone(DEFAULT_CAMERA),
 		id: 'camera-1',
+		hardwareId: 'hardware-1',
 		name: 'camera-1',
 		connected,
+		client: { type: 'SIMULATOR', id: 'client' },
+	}
+}
+
+function focuser(): Focuser {
+	return {
+		...structuredClone(DEFAULT_FOCUSER),
+		id: 'focuser-1',
+		hardwareId: 'hardware-2',
+		name: 'combo-1',
+		interfaces: ['focuser', 'rotator'],
+		connected: true,
+		client: { type: 'SIMULATOR', id: 'client' },
+	}
+}
+
+function rotator(): Rotator {
+	return {
+		...structuredClone(DEFAULT_ROTATOR),
+		id: 'rotator-1',
+		hardwareId: 'hardware-2',
+		name: 'combo-1',
+		interfaces: ['focuser', 'rotator'],
+		connected: true,
 		client: { type: 'SIMULATOR', id: 'client' },
 	}
 }
@@ -29,6 +54,7 @@ function guideOutputProxy(parent: Camera): SubDevice<GuideOutput, Camera> {
 	return {
 		...structuredClone(DEFAULT_GUIDE_OUTPUT),
 		id: 'guide-output-1',
+		hardwareId: parent.hardwareId,
 		parentId: parent.id,
 		parent,
 		name: parent.name,
@@ -248,12 +274,33 @@ describe('resource arbiter', () => {
 		const key = resourceKey(proxy)
 		const context = owner('owner-1')
 
-		expect(key).toBe(parent.id)
+		expect(key).toBe(parent.hardwareId)
 		expect(resourceDevice(proxy)).toBe(parent)
 		expect(arbiter.acquire(context, [{ key, device: proxy }]).ok).toBeTrue()
 		expect(arbiter.ownersOfClient(parent.client.id)).toEqual([context])
 		expect(arbiter.disassociate(key, parent)).toBeTrue()
 		expect(arbiter.ownersOfClient(parent.client.id)).toEqual([])
+	})
+
+	test('arbitrates two top-level interfaces of one physical device as a single resource', () => {
+		const arbiter = new ResourceArbiter()
+		const focusing = focuser()
+		const rotating = rotator()
+		const key = resourceKey(focusing)
+		const first = owner('owner-1')
+		const second = owner('owner-2')
+
+		expect(focusing.id).not.toBe(rotating.id)
+		expect(focusing.parentId).toBeUndefined()
+		expect(rotating.parentId).toBeUndefined()
+		expect(resourceKey(rotating)).toBe(key)
+
+		expect(arbiter.acquire(first, [{ key, device: focusing }]).ok).toBeTrue()
+
+		const contended = arbiter.acquire(second, [{ key: resourceKey(rotating), device: rotating }])
+
+		expect(contended.ok).toBeFalse()
+		expect(!contended.ok && contended.conflicts).toEqual([{ key, ownerId: 'owner-1', ownerKind: 'test', causes: [] }])
 	})
 
 	test('resolves the physical parent from a real manager proxy', () => {

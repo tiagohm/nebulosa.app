@@ -135,21 +135,21 @@ function handleReady(celestial: Celestial) {
 	})
 
 	u[3] = mountBus.subscribe('update:equatorialCoordinate', (event) => {
-		const shape = connectedMounts.get(event.id)
+		const mount = connectedMounts.get(event.id)
 
-		if (shape !== undefined) {
-			shape.visible = true
-			Object.assign(shape.coordinate, event.equatorialCoordinate)
-			celestial.markShapeChanged(shape.id)
+		if (mount !== undefined) {
+			mount.visible = true
+			Object.assign(mount.coordinate, event.equatorialCoordinate)
+			celestial.markShapeChanged(mount.id)
 		}
 	})
 
 	u[4] = mountBus.subscribe('update:connected', (event) => {
-		const shape = connectedMounts.get(event.id)
+		const mount = connectedMounts.get(event.id)
 
-		if (shape !== undefined) {
-			shape.visible = event.connected === true
-			celestial.markShapeChanged(shape.id)
+		if (mount !== undefined) {
+			mount.visible = event.connected === true
+			celestial.markShapeChanged(mount.id)
 		}
 	})
 
@@ -206,20 +206,20 @@ function handleReady(celestial: Celestial) {
 
 	void updateMovingBodies(celestial, Date.now())
 
-	void Api.Atlas.planetarium({ types: [29], magnitudeLimit: 16 }).then((response) => {
+	void Api.Atlas.planetarium({ types: [29], magnitudeLimit: 16 }).then((response: readonly Writable<SkyObject>[] | undefined) => {
 		if (response?.length) {
 			for (const star of response) {
-				;(star as Writable<SkyObject>).name = skyObjectName(star.name, star.constellation)!
+				star.name = skyObjectName(star.name, star.constellation)!
 			}
 
 			celestial.loadStars(response)
 		}
 	})
 
-	void Api.Atlas.planetarium({ types: [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19], magnitudeLimit: 12 }).then((response) => {
+	void Api.Atlas.planetarium({ types: [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19], magnitudeLimit: 12 }).then((response: readonly Writable<SkyObject>[] | undefined) => {
 		if (response?.length) {
 			for (const star of response) {
-				;(star as Writable<SkyObject>).name = skyObjectName(star.name, star.constellation)!
+				star.name = skyObjectName(star.name, star.constellation)!
 			}
 
 			celestial.loadDeepSkyObjects(response)

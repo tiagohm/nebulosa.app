@@ -80,6 +80,23 @@ const UNAVAILABLE_OWNER: ResourceOwner = {
 // Builds the canonical resource key from the hardware behind the device view. Every interface of one
 // physical device, whether a subdevice proxy or a second top-level device published by the same driver,
 // carries the same hardware id, so they are all arbitrated as the single resource they really are.
+//
+// The rule has no exception, and each co-resident pair the drivers actually produce earns it:
+// - camera and wheel, on an integrated filter camera, because a filter that turns during an exposure ruins
+//   the frame that is being read out;
+// - camera and focuser, because a focus move during an exposure trails every star in it;
+// - focuser and rotator, on a combined focus/rotation unit, because rotating the field during a focus scan
+//   moves the very stars the curve is measured from, and one controller usually drives one motor at a time;
+// - cover and flat panel, on a flip-flat, because the lamp level is only meaningful for a settled cap;
+// - camera or focuser and the guide output, thermometer, or dew heater they publish, which are channels of
+//   that same body rather than devices of their own.
+// A read-only interface such as a thermometer is never acquired, so sharing costs it nothing.
+//
+// The price is that two interfaces of one device cannot be commanded from two independent operation trees:
+// the second attempt is refused as busy rather than queued. That is the intent, and it is not a limit on
+// composite features, which pass their own context down and reacquire the same key reentrantly. It does
+// mean a feature cannot drive two interfaces of one device in parallel scopes, since sibling scopes of a
+// tree still conflict with each other: an integrated camera and wheel have to be commanded in sequence.
 export function resourceKey(device: Device): ResourceKey {
 	return device.hardwareId
 }

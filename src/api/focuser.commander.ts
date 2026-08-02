@@ -2,6 +2,7 @@ import type { Focuser } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, FocuserManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import { clamp } from 'nebulosa/src/math/numerical/math'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import { isDeviceQuiescent } from './device.lifecycle'
 import type { OperationScope } from './operation'
@@ -84,7 +85,7 @@ export class FocuserCommander implements DeviceHandler<Focuser> {
 
 			const target = focuserPosition(focuser, position)
 
-			return { ok: true, value: { target, command: () => this.focuserManager.moveTo(focuser, target) } }
+			return successfulOperationResult({ target, command: () => this.focuserManager.moveTo(focuser, target) })
 		})
 	}
 
@@ -130,7 +131,7 @@ export class FocuserCommander implements DeviceHandler<Focuser> {
 	// under someone else's operation is leased away. Refusing to stop it in either case would leave the
 	// only command that can make the device safe unreachable.
 	async stopMotion(focuser: Focuser, options: FocuserCommandOptions = {}): Promise<OperationResult<void>> {
-		if (!focuser.connected) return { ok: false, reason: 'disconnected' }
+		if (!focuser.connected) return failedOperationResult('disconnected')
 		if (!focuser.canAbort) return unsupported(focuser, 'abort motion')
 
 		return await this.#settle(focuser, () => this.focuserManager.stop(focuser), options)
@@ -144,7 +145,7 @@ export class FocuserCommander implements DeviceHandler<Focuser> {
 
 			// The relative vector carries an unsigned step count, and the direction comes from the motion
 			// switch, so a negative or zero amount has no command to express it.
-			if (!(steps > 0)) return { ok: false, reason: 'unexpectedState', error: `focuser ${focuser.name} cannot move ${steps} steps` }
+			if (!(steps > 0)) return failedOperationResult('unexpectedState', `focuser ${focuser.name} cannot move ${steps} steps`)
 
 			// Reverse mode inverts what the motion switch means at the driver, so the target has to be
 			// predicted with the same inversion the device is going to apply.
@@ -154,7 +155,7 @@ export class FocuserCommander implements DeviceHandler<Focuser> {
 			// driver stops where the wait expects it to.
 			const commanded = Math.abs(target - focuser.position.value)
 
-			return { ok: true, value: { target, command: () => (inward ? this.focuserManager.moveIn(focuser, commanded) : this.focuserManager.moveOut(focuser, commanded)) } }
+			return successfulOperationResult({ target, command: () => (inward ? this.focuserManager.moveIn(focuser, commanded) : this.focuserManager.moveOut(focuser, commanded)) })
 		})
 	}
 
@@ -167,7 +168,7 @@ export class FocuserCommander implements DeviceHandler<Focuser> {
 		return await scope.start<void>(kind, [{ key: resourceKey(focuser), device: focuser }], async (context) => {
 			// Capabilities are only published while the device is connected, so a disconnected focuser would
 			// otherwise be reported as one that cannot move at all.
-			if (!focuser.connected) return { ok: false, reason: 'disconnected' }
+			if (!focuser.connected) return failedOperationResult('disconnected')
 
 			const planned = plan()
 
@@ -189,7 +190,7 @@ export class FocuserCommander implements DeviceHandler<Focuser> {
 				abort: () => this.#abortMotion(focuser, options),
 			})
 
-			return observed.ok ? { ok: true, value: undefined } : observed
+			return observed.ok ? successfulOperationResult(undefined) : observed
 		}).result
 	}
 
@@ -197,12 +198,12 @@ export class FocuserCommander implements DeviceHandler<Focuser> {
 	// interleaved with a move or with any other operation already holding the device.
 	async #mutate(scope: OperationScope, kind: string, focuser: Focuser, supported: () => boolean, description: string, command: VoidFunction): Promise<OperationResult<void>> {
 		return await scope.start<void>(kind, [{ key: resourceKey(focuser), device: focuser }], () => {
-			if (!focuser.connected) return { ok: false, reason: 'disconnected' }
+			if (!focuser.connected) return failedOperationResult('disconnected')
 			if (!supported()) return unsupported(focuser, description)
 
 			command()
 
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		}).result
 	}
 
@@ -232,7 +233,7 @@ export class FocuserCommander implements DeviceHandler<Focuser> {
 			command,
 		})
 
-		return settled.ok ? { ok: true, value: undefined } : settled
+		return settled.ok ? successfulOperationResult(undefined) : settled
 	}
 
 	// Registers a waiter for one device and returns its idempotent unsubscriber.
@@ -270,5 +271,5 @@ export function focuserPosition(focuser: Focuser, position: number) {
 
 // Reports a capability the driver does not expose as an expected failure rather than an exception.
 function unsupported(focuser: Focuser, action: string) {
-	return { ok: false, reason: 'unexpectedState', error: `focuser ${focuser.name} cannot ${action}` } as const
+	return failedOperationResult('unexpectedState', `focuser ${focuser.name} cannot ${action}`)
 }

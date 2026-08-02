@@ -6,6 +6,7 @@ import { AutoFocus } from 'nebulosa/src/observation/focus/autofocus'
 import { EventBus } from 'src/shared/bus'
 import { DEFAULT_AUTO_FOCUS_EVENT } from '#/autofocus'
 import type { AutoFocusEvent, AutoFocusStart, AutoFocusState } from '#/autofocus'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
 import type { CameraHandler } from './camera'
 import type { FocuserHandler } from './focuser'
@@ -151,7 +152,7 @@ class AutoFocusRun {
 		})
 
 		while (true) {
-			if (context.signal.aborted) return { ok: false, reason: abortReason(context.signal) }
+			if (context.signal.aborted) return failedOperationResult(abortReason(context.signal))
 
 			this.#publish('capturing', '')
 
@@ -170,18 +171,18 @@ class AutoFocusRun {
 
 			const path = captured.value.paths.at(-1)
 
-			if (path === undefined) return { ok: false, reason: 'unexpectedState', error: 'the capture produced no frame' }
+			if (path === undefined) return failedOperationResult('unexpectedState', 'the capture produced no frame')
 
 			this.#publish('computing', '')
 
 			const stars = await this.handler.starDetectionHandler.detect({ ...this.request.starDetection, path }, context.signal)
 
-			if (context.signal.aborted) return { ok: false, reason: abortReason(context.signal) }
+			if (context.signal.aborted) return failedOperationResult(abortReason(context.signal))
 
 			// A frame with no stars carries no measurement, so the curve cannot be advanced. That is the
 			// search failing to find focus rather than a device failing, which is why it ends successfully
 			// with an explanation instead of as an operational failure.
-			if (stars.length === 0) return { ok: true, value: 'no stars detected' }
+			if (stars.length === 0) return successfulOperationResult('no stars detected')
 
 			// The median rejects the outliers a single misdetected star would otherwise contribute.
 			const hfd = medianOf(stars.map((e) => e.hfd).sort(NumberComparator))
@@ -215,7 +216,7 @@ class AutoFocusRun {
 
 				if (!moved.ok) return { ...moved, error: moved.error ?? `failed to move to best focus at position ${best}` }
 
-				return { ok: true, value: 'best focus!' }
+				return successfulOperationResult('best focus!')
 			}
 
 			// The state machine gave up and its step names the position the run started from, so the focuser
@@ -226,7 +227,7 @@ class AutoFocusRun {
 
 			if (!moved.ok) return { ...moved, error: moved.error ?? `failed to restore focus position ${position}` }
 
-			return { ok: true, value: 'restoring to initial focus position' }
+			return successfulOperationResult('restoring to initial focus position')
 		}
 	}
 

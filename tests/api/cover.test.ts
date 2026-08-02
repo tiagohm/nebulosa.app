@@ -12,6 +12,7 @@ import { NotificationHandler } from 'src/api/notification'
 import { OperationCoordinator } from 'src/api/operation'
 import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import type { CoverAdded, CoverRemoved, CoverUpdated } from '#/cover'
+import { successfulOperationResult, failedOperationResult } from '#/orchestration'
 import { json, SocketMessager, waitUntil } from './util'
 
 coverBus.forceSync = true
@@ -154,11 +155,11 @@ describe('cover handler', () => {
 		const parked = coverCommander.park(operationCoordinator, device)
 
 		expect(await waitUntil(() => device.parking)).toBeTrue()
-		expect(await parked).toEqual({ ok: true, value: undefined })
+		expect(await parked).toEqual(successfulOperationResult(undefined))
 		expect(device.parked).toBeTrue()
 		expect(device.parking).toBeFalse()
 
-		expect(await coverCommander.unpark(operationCoordinator, device)).toEqual({ ok: true, value: undefined })
+		expect(await coverCommander.unpark(operationCoordinator, device)).toEqual(successfulOperationResult(undefined))
 		expect(device.parked).toBeFalse()
 	})
 
@@ -172,7 +173,7 @@ describe('cover handler', () => {
 
 		expect(await waitUntil(() => device.parking)).toBeTrue()
 
-		expect(await coverHandler.stop(device)).toEqual({ ok: true, value: undefined })
+		expect(await coverHandler.stop(device)).toEqual(successfulOperationResult(undefined))
 		expect(device.parking).toBeFalse()
 		expect(device.parked).toBeFalse()
 		expect(coverUpdates('parking').at(-1)?.body.state).toBe('Alert')
@@ -188,7 +189,7 @@ describe('cover handler', () => {
 
 		const unparked = await coverCommander.unpark(operationCoordinator, device)
 
-		expect(unparked).toMatchObject({ ok: false, reason: 'busy' })
+		expect(unparked).toMatchObject(failedOperationResult('busy'))
 	})
 
 	test('refuses to move a disconnected cover', async () => {

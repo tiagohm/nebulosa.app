@@ -21,6 +21,7 @@ import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { coordinateInfo } from '#/mount'
 import type { CoordinateInfo, MountAdded, MountRemoteControlStatus, MountRemoved, MountUpdated } from '#/mount'
 import type { Notification } from '#/notification'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import { SocketMessager } from './util'
 
@@ -312,9 +313,9 @@ describe('mount handler', () => {
 			const moveResult = await json<OperationResult<void>>(await endpoints['/mounts/:id/movenorth'].POST(request(device.id, true)))
 			const stopResult = await json<OperationResult<void>>(await endpoints['/mounts/:id/stop'].POST(request(device.id)))
 
-			expect(trackingResult).toMatchObject({ ok: false, reason: 'busy' })
-			expect(moveResult).toMatchObject({ ok: false, reason: 'disconnected' })
-			expect(stopResult).toMatchObject({ ok: false, reason: 'disconnected' })
+			expect(trackingResult).toMatchObject(failedOperationResult('busy'))
+			expect(moveResult).toMatchObject(failedOperationResult('disconnected'))
+			expect(stopResult).toMatchObject(failedOperationResult('disconnected'))
 			expect(tracking).not.toHaveBeenCalled()
 			expect(moveNorth).not.toHaveBeenCalled()
 		} finally {
@@ -351,7 +352,7 @@ describe('mount handler', () => {
 		const device = getMount()
 		const rightAscension = hour(5)
 		const declination = deg(-30)
-		const goTo = spyOn(mountCommander, 'goTo').mockResolvedValue({ ok: true, value: { rightAscension, declination, pierSide: 'NEITHER' } })
+		const goTo = spyOn(mountCommander, 'goTo').mockResolvedValue(successfulOperationResult({ rightAscension, declination, pierSide: 'NEITHER' }))
 		const message = Buffer.alloc(20)
 		message.writeUInt32LE(Math.trunc((rightAscension / Math.PI) * 0x80000000), 12)
 		message.writeInt32LE(Math.trunc((declination / Math.PI) * 0x80000000), 16)
@@ -487,7 +488,7 @@ describe('mount commander', () => {
 		const stopped = await mountHandler.stop(device)
 
 		expect(stopped).toMatchObject({ ok: true })
-		expect(await slewing).toMatchObject({ ok: false, reason: 'aborted' })
+		expect(await slewing).toMatchObject(failedOperationResult('aborted'))
 		expect(device.slewing).toBeFalse()
 		expect(await waitUntil(() => free(device))).toBeTrue()
 	}, 10000)
@@ -502,7 +503,7 @@ describe('mount commander', () => {
 
 		const result = await slewing
 
-		expect(result).toMatchObject({ ok: false, reason: 'unexpectedState' })
+		expect(result).toMatchObject(failedOperationResult('unexpectedState'))
 		expect(result.ok ? '' : result.error).toContain('short of the target')
 		expect(await waitUntil(() => free(device))).toBeTrue()
 	}, 10000)
@@ -512,7 +513,7 @@ describe('mount commander', () => {
 		const slewing = mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '30:00:00' } })
 
 		expect(await waitUntil(() => device.slewing)).toBeTrue()
-		expect(await mountCommander.setTracking(operationCoordinator, device, true)).toMatchObject({ ok: false, reason: 'busy' })
+		expect(await mountCommander.setTracking(operationCoordinator, device, true)).toMatchObject(failedOperationResult('busy'))
 
 		await mountHandler.stop(device)
 		await slewing
@@ -530,7 +531,7 @@ describe('mount commander', () => {
 
 		expect(await waitUntil(() => device.slewing)).toBeTrue()
 		expect(handle.directions()).toEqual(['NORTH'])
-		expect(await mountCommander.goTo(operationCoordinator, device, targetCoordinate())).toMatchObject({ ok: false, reason: 'busy' })
+		expect(await mountCommander.goTo(operationCoordinator, device, targetCoordinate())).toMatchObject(failedOperationResult('busy'))
 
 		const joined = await mountCommander.startManualMove(operationCoordinator, device, 'WEST')
 
@@ -586,7 +587,7 @@ describe('mount commander', () => {
 		motionVector(device, 'Busy', true)
 
 		expect(await waitUntil(() => !free(device))).toBeTrue()
-		expect(await mountCommander.setTracking(operationCoordinator, device, true)).toMatchObject({ ok: false, reason: 'busy' })
+		expect(await mountCommander.setTracking(operationCoordinator, device, true)).toMatchObject(failedOperationResult('busy'))
 
 		motionVector(device, 'Ok', false)
 
@@ -618,7 +619,7 @@ describe('mount commander', () => {
 
 		try {
 			expect(await handle.stop()).toMatchObject({ ok: true })
-			expect(await handle.move('SOUTH', true)).toMatchObject({ ok: false, reason: 'aborted' })
+			expect(await handle.move('SOUTH', true)).toMatchObject(failedOperationResult('aborted'))
 			expect(moveSouth).not.toHaveBeenCalled()
 			expect(device.slewing).toBeFalse()
 			expect(await waitUntil(() => free(device))).toBeTrue()
@@ -634,7 +635,7 @@ describe('mount commander', () => {
 		})
 
 		try {
-			expect(await mountCommander.startManualMove(operationCoordinator, device, 'NORTH')).toMatchObject({ ok: false, reason: 'commandFailed', error: 'transport closed' })
+			expect(await mountCommander.startManualMove(operationCoordinator, device, 'NORTH')).toMatchObject(failedOperationResult('commandFailed', 'transport closed'))
 		} finally {
 			moveNorth.mockRestore()
 		}
@@ -673,7 +674,7 @@ describe('mount commander', () => {
 		const device = await connected()
 
 		expect(device.canFlip).toBeFalse()
-		expect(await mountCommander.flip(operationCoordinator, device, targetCoordinate())).toMatchObject({ ok: false, reason: 'unexpectedState' })
+		expect(await mountCommander.flip(operationCoordinator, device, targetCoordinate())).toMatchObject(failedOperationResult('unexpectedState'))
 	}, 10000)
 
 	test('does not complete a flip the mount never started', async () => {
@@ -686,7 +687,7 @@ describe('mount commander', () => {
 		try {
 			const result = await mountCommander.flip(operationCoordinator, device, targetCoordinate(), { timeout: 300 })
 
-			expect(result).toMatchObject({ ok: false, reason: 'timeout' })
+			expect(result).toMatchObject(failedOperationResult('timeout'))
 			expect(flipTo).toHaveBeenCalledTimes(1)
 		} finally {
 			flipTo.mockRestore()

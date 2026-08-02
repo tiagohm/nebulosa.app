@@ -2,6 +2,7 @@ import type { Wheel } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, WheelManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import { clamp } from 'nebulosa/src/math/numerical/math'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import type { OperationScope } from './operation'
 import { waitForDeviceState } from './operation.wait'
@@ -78,7 +79,7 @@ export class WheelCommander implements DeviceHandler<Wheel> {
 		return await scope.start<void>('wheelMoveTo', [{ key: resourceKey(wheel), device: wheel }], async (context) => {
 			// Capabilities are only published while the device is connected, so a disconnected wheel would
 			// otherwise be reported as one with a single slot.
-			if (!wheel.connected) return { ok: false, reason: 'disconnected' }
+			if (!wheel.connected) return failedOperationResult('disconnected')
 
 			const target = wheelSlot(wheel, slot)
 
@@ -116,7 +117,7 @@ export class WheelCommander implements DeviceHandler<Wheel> {
 				},
 			})
 
-			return observed.ok ? { ok: true, value: undefined } : observed
+			return observed.ok ? successfulOperationResult(undefined) : observed
 		}).result
 	}
 
@@ -125,12 +126,12 @@ export class WheelCommander implements DeviceHandler<Wheel> {
 	// and rewriting them under a running sequence would relabel filters it has already used.
 	async setNames(scope: OperationScope, wheel: Wheel, names: readonly string[]): Promise<OperationResult<void>> {
 		return await scope.start<void>('wheelNames', [{ key: resourceKey(wheel), device: wheel }], () => {
-			if (!wheel.connected) return { ok: false, reason: 'disconnected' }
-			if (!wheel.canSetNames) return { ok: false, reason: 'unexpectedState', error: `wheel ${wheel.name} cannot rename its slots` }
+			if (!wheel.connected) return failedOperationResult('disconnected')
+			if (!wheel.canSetNames) return failedOperationResult('unexpectedState', `wheel ${wheel.name} cannot rename its slots`)
 
 			this.wheelManager.slots(wheel, names)
 
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		}).result
 	}
 
@@ -150,7 +151,7 @@ export class WheelCommander implements DeviceHandler<Wheel> {
 			command: () => {},
 		})
 
-		return settled.ok ? { ok: true, value: undefined } : settled
+		return settled.ok ? successfulOperationResult(undefined) : settled
 	}
 
 	// Registers a waiter for one device and returns its idempotent unsubscriber.

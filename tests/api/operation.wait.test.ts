@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { abortableDelay, waitForDeviceState } from 'src/api/operation.wait'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 
 function rejectUnknown(value: unknown): Promise<never> {
 	const rejected = Promise.withResolvers<never>()
@@ -14,7 +15,7 @@ describe('operation waits', () => {
 
 		controller.abort('disconnected')
 
-		expect(await delayed).toEqual({ ok: false, reason: 'disconnected' })
+		expect(await delayed).toEqual(failedOperationResult('disconnected'))
 	})
 
 	test('subscribes before sending a command and resolves from observed state', async () => {
@@ -37,7 +38,7 @@ describe('operation waits', () => {
 			},
 		})
 
-		expect(await result).toEqual({ ok: true, value: 'ready' })
+		expect(await result).toEqual(successfulOperationResult('ready'))
 		expect(listeners.size).toBe(0)
 	})
 
@@ -58,7 +59,7 @@ describe('operation waits', () => {
 			},
 		})
 
-		expect(await result).toEqual({ ok: false, reason: 'commandFailed', error: 'send failed' })
+		expect(await result).toEqual(failedOperationResult('commandFailed', 'send failed'))
 		expect(listeners.size).toBe(0)
 	})
 
@@ -72,7 +73,7 @@ describe('operation waits', () => {
 			command: () => rejectUnknown(Symbol('send failed')),
 		})
 
-		expect(await result).toEqual({ ok: false, reason: 'commandFailed', error: 'Symbol(send failed)' })
+		expect(await result).toEqual(failedOperationResult('commandFailed', 'Symbol(send failed)'))
 	})
 
 	test('falls back when a rejected value cannot be converted to text', async () => {
@@ -90,7 +91,7 @@ describe('operation waits', () => {
 			command: () => rejectUnknown(failure),
 		})
 
-		expect(await result).toEqual({ ok: false, reason: 'commandFailed', error: 'Unknown error' })
+		expect(await result).toEqual(failedOperationResult('commandFailed', 'Unknown error'))
 	})
 
 	test('cancels and awaits an asynchronous command before physical abort', async () => {
@@ -122,7 +123,7 @@ describe('operation waits', () => {
 
 		commandGate.resolve()
 
-		expect(await result).toEqual({ ok: false, reason: 'timeout' })
+		expect(await result).toEqual(failedOperationResult('timeout'))
 		expect(events).toEqual(['command:stopped', 'abort'])
 	})
 
@@ -147,7 +148,7 @@ describe('operation waits', () => {
 
 		const commandSignal = await commandStarted.promise
 
-		expect(await result).toEqual({ ok: false, reason: 'timeout', error: 'command did not stop before abort cleanup' })
+		expect(await result).toEqual(failedOperationResult('timeout', 'command did not stop before abort cleanup'))
 		expect(commandSignal.aborted).toBeTrue()
 		expect(aborts).toBe(1)
 	})
@@ -171,13 +172,13 @@ describe('operation waits', () => {
 			},
 		})
 
-		expect(await result).toEqual({ ok: false, reason: 'timeout' })
+		expect(await result).toEqual(failedOperationResult('timeout'))
 		expect(aborts).toBe(1)
 		expect(listeners.size).toBe(0)
 	})
 
 	test('completes a delay that is never aborted', async () => {
-		expect(await abortableDelay(1, new AbortController().signal)).toEqual({ ok: true, value: undefined })
+		expect(await abortableDelay(1, new AbortController().signal)).toEqual(successfulOperationResult(undefined))
 	})
 
 	test('resolves from the state read after the command when no event follows', async () => {
@@ -195,7 +196,7 @@ describe('operation waits', () => {
 			command: () => {},
 		})
 
-		expect(await result).toEqual({ ok: true, value: 'ready' })
+		expect(await result).toEqual(successfulOperationResult('ready'))
 		expect(reads).toBe(1)
 	})
 
@@ -219,7 +220,7 @@ describe('operation waits', () => {
 			},
 		})
 
-		expect(await result).toEqual({ ok: false, reason: 'alert' })
+		expect(await result).toEqual(failedOperationResult('alert'))
 		expect(listeners.size).toBe(0)
 		// The command failed while the device may still be working, so the physical stop runs before the
 		// result settles: an Alert during a slew must not release a mount that is still moving.
@@ -238,7 +239,7 @@ describe('operation waits', () => {
 			command: () => {},
 		})
 
-		expect(await result).toEqual({ ok: false, reason: 'unexpectedState', error: 'unreadable property' })
+		expect(await result).toEqual(failedOperationResult('unexpectedState', 'unreadable property'))
 	})
 
 	test('reports a current state that cannot be read as an unexpected state', async () => {
@@ -253,7 +254,7 @@ describe('operation waits', () => {
 			command: () => {},
 		})
 
-		expect(await result).toEqual({ ok: false, reason: 'unexpectedState', error: 'device vanished' })
+		expect(await result).toEqual(failedOperationResult('unexpectedState', 'device vanished'))
 	})
 
 	test('never sends the command when the subscription fails', async () => {
@@ -271,7 +272,7 @@ describe('operation waits', () => {
 			},
 		})
 
-		expect(await result).toEqual({ ok: false, reason: 'commandFailed', error: 'bus unavailable' })
+		expect(await result).toEqual(failedOperationResult('commandFailed', 'bus unavailable'))
 		expect(commanded).toBeFalse()
 	})
 
@@ -295,7 +296,7 @@ describe('operation waits', () => {
 			},
 		})
 
-		expect(await result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(await result).toEqual(failedOperationResult('disconnected'))
 		expect(commanded).toBeFalse()
 		expect(unsubscribed).toBeTrue()
 	})
@@ -316,6 +317,6 @@ describe('operation waits', () => {
 
 		controller.abort('aborted')
 
-		expect(await result).toEqual({ ok: false, reason: 'aborted', error: 'abort failed: stop rejected' })
+		expect(await result).toEqual(failedOperationResult('aborted', 'abort failed: stop rejected'))
 	})
 })

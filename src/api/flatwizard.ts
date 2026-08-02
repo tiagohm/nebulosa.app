@@ -5,6 +5,7 @@ import { histogram } from 'nebulosa/src/imaging/processing/computation'
 import { EventBus } from 'src/shared/bus'
 import { DEFAULT_FLAT_WIZARD_EVENT } from '#/flatwizard'
 import type { FlatWizardEvent, FlatWizardStart, FlatWizardState } from '#/flatwizard'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
 import type { CameraHandler } from './camera'
 import { query, response } from './http'
@@ -121,7 +122,7 @@ class FlatWizardRun {
 		const { capture } = this.request
 
 		while (true) {
-			if (context.signal.aborted) return { ok: false, reason: abortReason(context.signal) }
+			if (context.signal.aborted) return failedOperationResult(abortReason(context.signal))
 
 			capture.delay = 0
 			capture.count = 1
@@ -149,14 +150,14 @@ class FlatWizardRun {
 
 			const path = captured.value.paths.at(-1)
 
-			if (path === undefined) return { ok: false, reason: 'unexpectedState', error: 'the capture produced no frame' }
+			if (path === undefined) return failedOperationResult('unexpectedState', 'the capture produced no frame')
 
 			this.#publish('computing', '')
 
 			const transformed = await this.handler.imageProcessor.transform(path, false, this.camera.name)
 
-			if (context.signal.aborted) return { ok: false, reason: abortReason(context.signal) }
-			if (transformed === undefined) return { ok: false, reason: 'commandFailed', error: 'failed to load captured flat frame' }
+			if (context.signal.aborted) return failedOperationResult(abortReason(context.signal))
+			if (transformed === undefined) return failedOperationResult('commandFailed', 'failed to load captured flat frame')
 
 			const { median } = histogram(transformed.image)
 			this.#event.median = median
@@ -167,9 +168,9 @@ class FlatWizardRun {
 				// The frame just captured is the source; the timestamped path is only where it goes.
 				const exported = await this.handler.imageProcessor.export(path, extension, this.camera.name, saveAt)
 
-				if (exported === undefined) return { ok: false, reason: 'commandFailed', error: 'failed to save flat frame' }
+				if (exported === undefined) return failedOperationResult('commandFailed', 'failed to save flat frame')
 
-				return { ok: true, value: `saved at ${saveAt}` }
+				return successfulOperationResult(`saved at ${saveAt}`)
 			}
 
 			if (median < this.#mean.min) this.#exposure.min = capture.exposureTime
@@ -177,7 +178,7 @@ class FlatWizardRun {
 
 			// Below a millisecond the interval is finer than the exposure the camera can be asked for, so
 			// bisecting further would keep requesting the same exposure forever.
-			if (this.#exposure.max - this.#exposure.min < 1) return { ok: true, value: 'unable to find an optimal exposure time' }
+			if (this.#exposure.max - this.#exposure.min < 1) return successfulOperationResult('unable to find an optimal exposure time')
 		}
 	}
 

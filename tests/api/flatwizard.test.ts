@@ -19,6 +19,7 @@ import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import { DEFAULT_FLAT_WIZARD_START } from '#/flatwizard'
 import type { FlatWizardEvent, FlatWizardStart } from '#/flatwizard'
+import { successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import { captureHandle, noContent, SocketMessager, waitUntil } from './util'
 
@@ -218,7 +219,7 @@ describe('flat wizard handler', () => {
 
 			expect(capture).toHaveBeenCalledTimes(1)
 		} finally {
-			inFlight.resolve({ ok: true, value: { paths: [], frameCount: 0 } })
+			inFlight.resolve(successfulOperationResult({ paths: [], frameCount: 0 }))
 			await flatWizardHandler.stop(request.id)
 			capture.mockRestore()
 		}
@@ -303,7 +304,7 @@ describe('flat wizard handler', () => {
 
 	test('ends the run when the captured frame cannot be loaded', async () => {
 		const camera = connectCamera()
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve({ ok: true, value: { paths: ['flat.fit'], frameCount: 1 } }) }))
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve(successfulOperationResult({ paths: ['flat.fit'], frameCount: 1 })) }))
 		const transform = spyOn(imageProcessor, 'transform').mockImplementation(() => Promise.resolve(undefined))
 		const request = flatWizardStartRequest({ id: 'flatwizard-frame', minExposure: 100, maxExposure: 300 })
 

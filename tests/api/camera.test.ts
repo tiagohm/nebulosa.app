@@ -30,6 +30,7 @@ import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraAdded, CameraRemoved, CameraUpdated, CameraCaptureEvent, CameraCaptureStart, CameraDither, CameraFrameEvent } from '#/camera'
 import type { GuiderDither } from '#/guider'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import { json, noContent, SocketMessager, waitUntil } from './util'
 import type { SocketMessage } from './util'
@@ -221,11 +222,11 @@ describe('camera capture start request', () => {
 
 			const handle = cameraHandler.capture(operationCoordinator, camera, captureStartRequest({ exposureMode: 'loop', exposureTime: 500, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO', autoSave: false }))
 
-			expect(await handle.started).toEqual({ ok: true, value: undefined })
+			expect(await handle.started).toEqual(successfulOperationResult(undefined))
 
 			const response = await endpoints['/cameras/:id/cooler'].POST(endpointRequest(camera.id, true))
 
-			expect(await response.json()).toMatchObject({ ok: false, reason: 'busy' })
+			expect(await response.json()).toMatchObject(failedOperationResult('busy'))
 			expect(cooler).not.toHaveBeenCalled()
 
 			await cameraHandler.stop(camera)
@@ -397,8 +398,8 @@ describe('camera capture start request', () => {
 		const disconnected = cameraHandler.capture(operationCoordinator, camera, captureStartRequest({ exposureTime: 1, exposureTimeUnit: 'second' }), (event) => disconnectedEvents.push(structuredClone(event)))
 		const started = await disconnected.started
 		const result = await disconnected.result
-		expect(started).toMatchObject({ ok: false, reason: 'busy' })
-		expect(result).toMatchObject({ ok: false, reason: 'busy' })
+		expect(started).toMatchObject(failedOperationResult('busy'))
+		expect(result).toMatchObject(failedOperationResult('busy'))
 		expect(zeroExposureEvents.map((event) => event.state)).toEqual(['error', 'idle'])
 		expect(disconnectedEvents.map((event) => event.state)).toEqual(['error', 'idle'])
 	})
@@ -812,7 +813,7 @@ describe('camera capture start request', () => {
 
 		await cameraHandler.stop(camera)
 
-		expect(await composite.result).toMatchObject({ ok: false, reason: 'aborted' })
+		expect(await composite.result).toMatchObject(failedOperationResult('aborted'))
 		expect(events.some((event) => event.state === 'idle' && event.stopped)).toBeTrue()
 	}, 5000)
 
@@ -829,12 +830,12 @@ describe('camera capture start request', () => {
 			expect((await active.started).ok).toBeTrue()
 
 			const conflicting = cameraHandler.capture(operationCoordinator, camera, { ...request, mount: 'Other Mount' })
-			expect(await conflicting.started).toMatchObject({ ok: false, reason: 'busy' })
-			expect(await conflicting.result).toMatchObject({ ok: false, reason: 'busy' })
+			expect(await conflicting.started).toMatchObject(failedOperationResult('busy'))
+			expect(await conflicting.result).toMatchObject(failedOperationResult('busy'))
 			expect(snoop).toHaveBeenCalledTimes(1)
 
 			await active.cancel()
-			expect(await active.result).toEqual({ ok: false, reason: 'aborted' })
+			expect(await active.result).toEqual(failedOperationResult('aborted'))
 			expect(events.some((event) => event.state === 'idle' && event.stopped)).toBeTrue()
 		} finally {
 			snoop.mockRestore()
@@ -853,7 +854,7 @@ describe('camera capture start request', () => {
 		const cancellation = active.cancel()
 		cameraCapturer.blobReceived(camera, Buffer.from('late frame'), 'raw')
 		const duringCleanup = cameraHandler.capture(operationCoordinator, camera, request)
-		expect(await duringCleanup.result).toMatchObject({ ok: false, reason: 'busy' })
+		expect(await duringCleanup.result).toMatchObject(failedOperationResult('busy'))
 		await cancellation
 		expect(paths).toHaveLength(0)
 
@@ -876,7 +877,7 @@ describe('camera capture start request', () => {
 				options?.onPhase?.('dithered')
 				options?.onPhase?.('settling')
 				options?.onPhase?.('settled')
-				return Promise.resolve({ ok: true, value: undefined } as const)
+				return Promise.resolve(successfulOperationResult(undefined))
 			},
 		} satisfies CameraDitherer
 
@@ -913,7 +914,7 @@ describe('camera capture start request', () => {
 			dither: (guider: string, request: GuiderDither, options?: CameraDitherOptions) => {
 				options?.onPhase?.('settling')
 				options?.onPhase?.('settled')
-				return Promise.resolve({ ok: false, reason: 'timeout' } as const)
+				return Promise.resolve(failedOperationResult('timeout'))
 			},
 		} satisfies CameraDitherer
 
@@ -945,7 +946,7 @@ describe('camera capture start request', () => {
 			running: () => false,
 			dither: () => {
 				dithered = true
-				return Promise.resolve({ ok: true, value: undefined } as const)
+				return Promise.resolve(successfulOperationResult(undefined))
 			},
 		} satisfies CameraDitherer
 
@@ -979,7 +980,7 @@ describe('camera capture start request', () => {
 			},
 			dither: () => {
 				dithered = true
-				return Promise.resolve({ ok: true, value: undefined } as const)
+				return Promise.resolve(successfulOperationResult(undefined))
 			},
 		} satisfies CameraDitherer
 
@@ -1009,7 +1010,7 @@ describe('camera capture start request', () => {
 				signal = options?.signal
 				return new Promise<OperationResult<void>>((resolve) => {
 					resolveDither = resolve
-					options?.signal?.addEventListener('abort', () => resolve({ ok: false, reason: 'aborted' }), { once: true })
+					options?.signal?.addEventListener('abort', () => resolve(failedOperationResult('aborted')), { once: true })
 				})
 			},
 		} satisfies CameraDitherer
@@ -1028,7 +1029,7 @@ describe('camera capture start request', () => {
 		expect(await waitUntil(() => events.some((event) => event.state === 'dithering'))).toBeTrue()
 
 		void cameraHandler.stop(camera)
-		resolveDither?.({ ok: false, reason: 'aborted' })
+		resolveDither?.(failedOperationResult('aborted'))
 
 		expect(await promise).toBeFalse()
 		expect(signal?.aborted).toBeTrue()

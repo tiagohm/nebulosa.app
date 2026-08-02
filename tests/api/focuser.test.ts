@@ -13,6 +13,7 @@ import { OperationCoordinator } from 'src/api/operation'
 import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from '#/focuser'
 import type { Notification } from '#/notification'
+import { failedOperationResult } from '#/orchestration'
 import { json, noContent, SocketMessager, waitUntil } from './util'
 
 focuserBus.forceSync = true
@@ -294,7 +295,7 @@ describe('focuser commander', () => {
 		const moveIn = spyOn(focuserManager, 'moveIn')
 
 		try {
-			expect(await focuserCommander.moveIn(operationCoordinator, device, 0)).toMatchObject({ ok: false, reason: 'unexpectedState' })
+			expect(await focuserCommander.moveIn(operationCoordinator, device, 0)).toMatchObject(failedOperationResult('unexpectedState'))
 			expect(moveIn).not.toHaveBeenCalled()
 		} finally {
 			moveIn.mockRestore()
@@ -306,8 +307,8 @@ describe('focuser commander', () => {
 		const moveTo = spyOn(focuserManager, 'moveTo')
 
 		try {
-			expect(await focuserCommander.moveTo(operationCoordinator, device, 1000)).toMatchObject({ ok: false, reason: 'busy' })
-			expect(await focuserCommander.stopMotion(device)).toMatchObject({ ok: false, reason: 'disconnected' })
+			expect(await focuserCommander.moveTo(operationCoordinator, device, 1000)).toMatchObject(failedOperationResult('busy'))
+			expect(await focuserCommander.stopMotion(device)).toMatchObject(failedOperationResult('disconnected'))
 			expect(moveTo).not.toHaveBeenCalled()
 		} finally {
 			moveTo.mockRestore()
@@ -323,7 +324,7 @@ describe('focuser commander', () => {
 		const stopped = await focuserHandler.stop(device)
 
 		expect(stopped).toMatchObject({ ok: true })
-		expect(await moving).toMatchObject({ ok: false, reason: 'aborted' })
+		expect(await moving).toMatchObject(failedOperationResult('aborted'))
 		expect(device.moving).toBeFalse()
 		expect(await waitUntil(() => free(device))).toBeTrue()
 	}, 10000)
@@ -333,7 +334,7 @@ describe('focuser commander', () => {
 		const moving = focuserCommander.moveTo(operationCoordinator, device, device.position.max)
 
 		expect(await waitUntil(() => device.moving)).toBeTrue()
-		expect(await focuserCommander.syncTo(operationCoordinator, device, 1000)).toMatchObject({ ok: false, reason: 'busy' })
+		expect(await focuserCommander.syncTo(operationCoordinator, device, 1000)).toMatchObject(failedOperationResult('busy'))
 
 		await focuserHandler.stop(device)
 		await moving

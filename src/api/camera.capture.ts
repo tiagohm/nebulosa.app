@@ -8,7 +8,8 @@ import { base64Source, bufferSource } from 'nebulosa/src/io/io'
 import { DEFAULT_CAMERA_CAPTURE_EVENT, exposureTimeInMicroseconds, exposureTimeInSeconds } from '#/camera'
 import type { CameraCaptureEvent, CameraCaptureStart } from '#/camera'
 import type { GuiderDither, GuiderDitherPhase } from '#/guider'
-import type { OperationFailureReason, OperationResult } from '#/orchestration'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
+import type { FailedOperationResult, OperationFailureReason, OperationResult } from '#/orchestration'
 import type { ImageProcessor } from './image'
 import type { OperationContext, OperationScope } from './operation'
 import { abortableDelay, abortReason } from './operation.wait'
@@ -228,7 +229,7 @@ export class CameraCapturer {
 		const result = operation.result.then((value): OperationResult<CameraCaptureResult> => session?.resultAfterCleanup(value) ?? value)
 
 		void result.then((result) => {
-			if (!startedSettled) settleStarted(result.ok ? { ok: false, reason: 'unexpectedState', error: 'capture completed before exposure became busy' } : result)
+			if (!startedSettled) settleStarted(result.ok ? failedOperationResult('unexpectedState', 'capture completed before exposure became busy') : result)
 
 			if (session === undefined && !result.ok) {
 				const event = structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT)
@@ -330,7 +331,7 @@ class CameraCaptureSession {
 	// Whether cancellation observed the driver's explicit abort-to-Idle boundary.
 	#abortIdleObserved = false
 	// Expected cleanup failure folded into the session result instead of thrown.
-	#cleanupFailure?: Extract<OperationResult<never>, { readonly ok: false }>
+	#cleanupFailure?: FailedOperationResult
 
 	// Creates an immutable request session bound to one operation context and physical camera.
 	constructor(
@@ -379,10 +380,10 @@ class CameraCaptureSession {
 		}
 
 		if (this.operationContext.signal.aborted) {
-			return this.#finish({ ok: false, reason: abortReason(this.operationContext.signal) })
+			return this.#finish(failedOperationResult(abortReason(this.operationContext.signal)))
 		}
 
-		return this.#finish({ ok: true, value: undefined })
+		return this.#finish(successfulOperationResult(undefined))
 	}
 
 	// Applies camera progress and terminal property updates to the current generation.
@@ -410,7 +411,7 @@ class CameraCaptureSession {
 		if (state === 'Busy') {
 			attempt.started = true
 			this.#state = 'exposing'
-			this.sessionContext.settleStarted({ ok: true, value: undefined })
+			this.sessionContext.settleStarted(successfulOperationResult(undefined))
 			this.#event.state = 'exposing'
 			this.#updateProgress(remainingTime, elapsedTime)
 			this.#emit()
@@ -496,7 +497,7 @@ class CameraCaptureSession {
 			if (canCommand && requiresBlobBoundary && !this.#lateBlobObserved && !this.#abortIdleObserved) this.sessionContext.availability.quarantine()
 			if (!quiescent) {
 				this.sessionContext.availability.markUnavailable()
-				this.#cleanupFailure = { ok: false, reason: 'timeout', error: 'cleanup failed: camera exposure did not quiesce before cleanup timeout' }
+				this.#cleanupFailure = failedOperationResult('timeout', 'cleanup failed: camera exposure did not quiesce before cleanup timeout')
 			}
 		}
 	}
@@ -507,11 +508,11 @@ class CameraCaptureSession {
 		const guider = this.#request.dither.guider
 
 		// No guider named means none was chosen, which is a request not to dither rather than a failure.
-		if (!this.#request.dither.enabled || !guider || ditherer === undefined) return { ok: true, value: undefined }
+		if (!this.#request.dither.enabled || !guider || ditherer === undefined) return successfulOperationResult(undefined)
 
 		// A named session that is gone or not guiding is a different matter: the capture asked for this
 		// exact guider, so exposing without it would be pretending a dither happened.
-		if (!ditherer.running(guider)) return { ok: false, reason: 'unexpectedState', error: `guider ${guider} is not guiding` }
+		if (!ditherer.running(guider)) return failedOperationResult('unexpectedState', `guider ${guider} is not guiding`)
 
 		this.#state = 'dithering'
 		this.#event.state = 'dithering'
@@ -519,16 +520,16 @@ class CameraCaptureSession {
 
 		try {
 			const result = await ditherer.dither(guider, this.#request.dither, { signal: this.operationContext.signal, onPhase: this.#guiderDithered })
-			if (result.ok) return { ok: true, value: undefined }
-			return { ok: false, reason: result.reason === 'aborted' ? abortReason(this.operationContext.signal) : 'commandFailed', error: result.error ?? result.reason }
+			if (result.ok) return successfulOperationResult(undefined)
+			return failedOperationResult(result.reason === 'aborted' ? abortReason(this.operationContext.signal) : 'commandFailed', result.error ?? result.reason)
 		} catch (error) {
-			return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
+			return failedOperationResult('commandFailed', errorMessage(error))
 		}
 	}
 
 	// Creates the frame attempt before dispatch and awaits exposure+BLOB rendezvous before processing.
 	async #captureFrame(): Promise<OperationResult<string>> {
-		if (this.operationContext.signal.aborted) return { ok: false, reason: abortReason(this.operationContext.signal) }
+		if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
 
 		const attempt: FrameAttempt = {
 			generation: ++this.#generation,
@@ -554,7 +555,7 @@ class CameraCaptureSession {
 			this.#startExposure()
 			attempt.dispatched = true
 		} catch (error) {
-			return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
+			return failedOperationResult('commandFailed', errorMessage(error))
 		}
 
 		this.#state = 'awaitingFrame'
@@ -568,7 +569,7 @@ class CameraCaptureSession {
 
 		if (!attempt.started) {
 			attempt.terminal = true
-			return { ok: false, reason: 'unexpectedState', error: 'exposure completed without a Busy state' }
+			return failedOperationResult('unexpectedState', 'exposure completed without a Busy state')
 		}
 
 		this.#state = 'processingFrame'
@@ -602,10 +603,10 @@ class CameraCaptureSession {
 
 	// Waits for both physical completion and one BLOB, or the first terminal failure/abort/timeout.
 	async #awaitRendezvous(attempt: FrameAttempt, timeout: number): Promise<OperationResult<CameraBlob>> {
-		const completed = Promise.all([attempt.exposureCompleted.promise, attempt.blobReceived.promise]).then(([state, blob]): OperationResult<CameraBlob> => (state === 'Ok' ? { ok: true, value: blob } : { ok: false, reason: state === 'Alert' ? 'alert' : 'unexpectedState' }))
+		const completed = Promise.all([attempt.exposureCompleted.promise, attempt.blobReceived.promise]).then(([state, blob]): OperationResult<CameraBlob> => (state === 'Ok' ? successfulOperationResult(blob) : failedOperationResult(state === 'Alert' ? 'alert' : 'unexpectedState')))
 		const aborted = Promise.withResolvers<OperationResult<CameraBlob>>()
-		const onAbort = () => aborted.resolve({ ok: false, reason: abortReason(this.operationContext.signal) })
-		const timer = setTimeout(() => aborted.resolve({ ok: false, reason: 'timeout' }), Math.max(0, timeout))
+		const onAbort = () => aborted.resolve(failedOperationResult(abortReason(this.operationContext.signal)))
+		const timer = setTimeout(() => aborted.resolve(failedOperationResult('timeout')), Math.max(0, timeout))
 		this.operationContext.signal.addEventListener('abort', onAbort, { once: true })
 
 		try {
@@ -620,25 +621,25 @@ class CameraCaptureSession {
 	async #processBlob(blob: CameraBlob): Promise<OperationResult<string>> {
 		try {
 			const buffer = blob.encoding === 'raw' ? blob.data : await this.sessionContext.io.decode(blob.data)
-			if (this.operationContext.signal.aborted) return { ok: false, reason: abortReason(this.operationContext.signal) }
+			if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
 
 			const name = this.#request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : this.camera.name
 			const extension = this.#request.transferFormat === 'XISF' ? 'xisf' : 'fit'
 			const path = join(await makePathFor(this.#request), `${name}.${extension}`)
-			if (this.operationContext.signal.aborted) return { ok: false, reason: abortReason(this.operationContext.signal) }
+			if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
 
 			this.sessionContext.imageProcessor.save(buffer, path, this.camera)
 			if (this.#request.autoSave) await this.sessionContext.io.write(path, buffer)
-			if (this.operationContext.signal.aborted) return { ok: false, reason: abortReason(this.operationContext.signal) }
-			return { ok: true, value: path }
+			if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
+			return successfulOperationResult(path)
 		} catch (error) {
-			return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
+			return failedOperationResult('commandFailed', errorMessage(error))
 		}
 	}
 
 	// Waits between frames with abort-aware progress updates.
 	async #delay(): Promise<OperationResult<void>> {
-		if (this.#waitingTime < MINIMUM_WAITING_TIME) return { ok: true, value: undefined }
+		if (this.#waitingTime < MINIMUM_WAITING_TIME) return successfulOperationResult(undefined)
 
 		this.#state = 'interFrameDelay'
 		this.#event.state = 'waiting'
@@ -660,7 +661,7 @@ class CameraCaptureSession {
 
 		this.#totalExposureProgress[0] -= this.#waitingTime
 		this.#totalExposureProgress[1] += this.#waitingTime
-		return { ok: true, value: undefined }
+		return successfulOperationResult(undefined)
 	}
 
 	// Waits for an observed non-Busy exposure update and removes its waiter after timeout.
@@ -718,7 +719,7 @@ class CameraCaptureSession {
 	#fail(reason: OperationFailureReason, error?: string) {
 		if (this.#failureSettled) return
 		this.#failureSettled = true
-		const result = error === undefined ? ({ ok: false, reason } as const) : ({ ok: false, reason, error } as const)
+		const result = failedOperationResult(reason, error)
 		this.#failureResult = result
 		this.#terminalFailure.resolve(result)
 		this.sessionContext.settleStarted(result)
@@ -726,7 +727,7 @@ class CameraCaptureSession {
 
 	// Converts an early validation failure into the shared terminal presentation and result.
 	#finishFailure(reason: OperationFailureReason, error?: string): OperationResult<CameraCaptureResult> {
-		const result = error === undefined ? ({ ok: false, reason } as const) : ({ ok: false, reason, error } as const)
+		const result = failedOperationResult(reason, error)
 		this.sessionContext.settleStarted(result)
 		return this.#finish(result)
 	}
@@ -734,12 +735,12 @@ class CameraCaptureSession {
 	// Finalizes the session exactly once and emits one terminal presentation event.
 	#finish(result: OperationResult<unknown>): OperationResult<CameraCaptureResult> {
 		// run() is the only caller and stops at the first terminal result, so this only guards cleanup racing a late frame.
-		if (this.#terminal) return this.#failureResult ?? { ok: false, reason: 'aborted' }
+		if (this.#terminal) return this.#failureResult ?? failedOperationResult('aborted')
 		this.#terminal = true
 		this.#state = result.ok ? 'succeeded' : result.reason === 'aborted' ? 'cancelled' : 'failed'
 		if (!result.ok) this.sessionContext.settleStarted(result)
 		this.#emitTerminal(!result.ok)
-		return result.ok ? { ok: true, value: { paths: this.#paths, frameCount: this.#paths.length } } : result
+		return result.ok ? successfulOperationResult({ paths: this.#paths, frameCount: this.#paths.length }) : result
 	}
 
 	// Emits a cloned presentation snapshot so transport listeners cannot mutate session state.

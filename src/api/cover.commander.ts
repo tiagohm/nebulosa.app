@@ -1,6 +1,7 @@
 import type { Cover } from 'nebulosa/src/devices/indi/device'
 import type { CoverManager, DeviceHandler } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import type { OperationContext, OperationScope } from './operation'
 import { waitForDeviceState } from './operation.wait'
@@ -98,8 +99,8 @@ export class CoverCommander implements DeviceHandler<Cover> {
 	// used while the owning operation is being canceled and by cleanup running after the executor returned.
 	// A cover left half way is not an error state here: only the motion is undone, not the position.
 	async stopMotion(cover: Cover, options: CoverCommandOptions = {}): Promise<OperationResult<void>> {
-		if (!cover.connected) return { ok: false, reason: 'disconnected' }
-		if (!cover.canAbort) return cover.parking ? { ok: false, reason: 'unexpectedState', error: `cover ${cover.name} cannot abort motion` } : { ok: true, value: undefined }
+		if (!cover.connected) return failedOperationResult('disconnected')
+		if (!cover.canAbort) return cover.parking ? failedOperationResult('unexpectedState', `cover ${cover.name} cannot abort motion`) : successfulOperationResult(undefined)
 
 		return await this.#settle(cover, options, () => this.coverManager.stop(cover))
 	}
@@ -129,7 +130,7 @@ export class CoverCommander implements DeviceHandler<Cover> {
 			command,
 		})
 
-		return observed.ok ? { ok: true, value: undefined } : observed
+		return observed.ok ? successfulOperationResult(undefined) : observed
 	}
 
 	// Waits for the cover to report no motion, on a signal of its own so it still runs while the operation
@@ -146,7 +147,7 @@ export class CoverCommander implements DeviceHandler<Cover> {
 			command,
 		})
 
-		return settled.ok ? { ok: true, value: undefined } : settled
+		return settled.ok ? successfulOperationResult(undefined) : settled
 	}
 
 	// Registers a waiter for one device and returns its idempotent unsubscriber.
@@ -179,7 +180,7 @@ export class CoverCommander implements DeviceHandler<Cover> {
 // only published while the device is connected, so a disconnected cover would otherwise be reported as one
 // that has no park control at all.
 function parkable(cover: Cover): OperationResult<void> | undefined {
-	if (!cover.connected) return { ok: false, reason: 'disconnected' }
-	if (!cover.canPark) return { ok: false, reason: 'unexpectedState', error: `cover ${cover.name} cannot park` }
+	if (!cover.connected) return failedOperationResult('disconnected')
+	if (!cover.canPark) return failedOperationResult('unexpectedState', `cover ${cover.name} cannot park`)
 	return undefined
 }

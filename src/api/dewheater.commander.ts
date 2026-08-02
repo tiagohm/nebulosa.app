@@ -1,6 +1,7 @@
 import type { DewHeater } from 'nebulosa/src/devices/indi/device'
 import type { DewHeaterManager } from 'nebulosa/src/devices/indi/manager'
 import { clamp } from 'nebulosa/src/math/numerical/math'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import type { OperationScope } from './operation'
 import { resourceKey } from './resource'
@@ -21,12 +22,12 @@ export class DewHeaterCommander {
 	// Sets the heating duty cycle, in the driver's own PWM units, resolved against the limits it published.
 	async dutyCycle(scope: OperationScope, heater: DewHeater, value: number): Promise<OperationResult<void>> {
 		return await scope.start<void>('dewHeaterDutyCycle', [{ key: resourceKey(heater), device: heater }], () => {
-			if (!heater.connected) return { ok: false, reason: 'disconnected' }
-			if (!heater.hasDewHeater) return { ok: false, reason: 'unexpectedState', error: `device ${heater.name} has no dew heater` }
+			if (!heater.connected) return failedOperationResult('disconnected')
+			if (!heater.hasDewHeater) return failedOperationResult('unexpectedState', `device ${heater.name} has no dew heater`)
 
 			this.dewHeaterManager.dutyCycle(heater, clamp(value, heater.dutyCycle.min, heater.dutyCycle.max))
 
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		}).result
 	}
 }

@@ -21,7 +21,7 @@ import { OperationCoordinator } from 'src/api/operation'
 import { PlateSolverHandler } from 'src/api/platesolver'
 import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { tppaBus, tppa as tppaEndpoints, TppaHandler } from 'src/api/tppa'
-import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import { DEFAULT_TPPA_START } from '#/tppa'
 import type { TppaStart, TppaEvent } from '#/tppa'
@@ -159,7 +159,7 @@ function plateSolution(overrides: Partial<PlateSolution> = {}): PlateSolution {
 }
 
 function solvedFrame(path = 'plate.fit'): Promise<OperationResult<CameraCaptureResult>> {
-	return Promise.resolve({ ok: true, value: { paths: [path], frameCount: 1 } })
+	return Promise.resolve(successfulOperationResult({ paths: [path], frameCount: 1 }))
 }
 
 describe('tppa handler', () => {
@@ -228,7 +228,7 @@ describe('tppa handler', () => {
 				},
 			])
 		} finally {
-			pending.resolve({ ok: true, value: { paths: [], frameCount: 0 } })
+			pending.resolve(successfulOperationResult({ paths: [], frameCount: 0 }))
 			await tppaHandler.stop(request.id)
 			capture.mockRestore()
 		}
@@ -246,13 +246,13 @@ describe('tppa handler', () => {
 			await noContent(await endpoints['/tppa/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
 			expect(await waitForTppaState('capturing', request.id)).toBeTrue()
 
-			const cameraIntruder = operationCoordinator.start('cameraCapture', [{ key: resourceKey(camera), device: camera }], () => ({ ok: true, value: undefined }))
-			const mountIntruder = operationCoordinator.start('mountGoTo', [{ key: resourceKey(mount), device: mount }], () => ({ ok: true, value: undefined }))
+			const cameraIntruder = operationCoordinator.start('cameraCapture', [{ key: resourceKey(camera), device: camera }], () => successfulOperationResult(undefined))
+			const mountIntruder = operationCoordinator.start('mountGoTo', [{ key: resourceKey(mount), device: mount }], () => successfulOperationResult(undefined))
 
 			expect((await cameraIntruder.result).ok).toBeFalse()
 			expect((await mountIntruder.result).ok).toBeFalse()
 		} finally {
-			pending.resolve({ ok: true, value: { paths: [], frameCount: 0 } })
+			pending.resolve(successfulOperationResult({ paths: [], frameCount: 0 }))
 			await tppaHandler.stop(request.id)
 			capture.mockRestore()
 		}
@@ -273,7 +273,7 @@ describe('tppa handler', () => {
 
 			const stopping = endpoints['/tppa/:id/stop'].POST(stopRequest(request.id))
 
-			pending.resolve({ ok: false, reason: 'aborted' })
+			pending.resolve(failedOperationResult('aborted'))
 
 			await noContent(await stopping)
 
@@ -283,7 +283,7 @@ describe('tppa handler', () => {
 			expect(tppaEvents().at(-1)?.message).toBe('stopped')
 			expect(mount.slewing).toBeFalse()
 		} finally {
-			pending.resolve({ ok: false, reason: 'aborted' })
+			pending.resolve(failedOperationResult('aborted'))
 			capture.mockRestore()
 		}
 	})
@@ -304,7 +304,7 @@ describe('tppa handler', () => {
 
 			expect(capture).toHaveBeenCalledTimes(1)
 		} finally {
-			pending.resolve({ ok: true, value: { paths: [], frameCount: 0 } })
+			pending.resolve(successfulOperationResult({ paths: [], frameCount: 0 }))
 			await tppaHandler.stop(request.id)
 			capture.mockRestore()
 		}
@@ -326,7 +326,7 @@ describe('tppa handler', () => {
 			[{ key: resourceKey(camera), device: camera }],
 			(context) =>
 				new Promise<OperationResult<void>>((resolve) => {
-					context.signal.addEventListener('abort', () => resolve({ ok: false, reason: 'aborted' }), { once: true })
+					context.signal.addEventListener('abort', () => resolve(failedOperationResult('aborted')), { once: true })
 				}),
 		)
 
@@ -381,7 +381,7 @@ describe('tppa handler', () => {
 
 	test('fails the session when the capture reports a terminal failure', async () => {
 		const { camera, mount } = await connectedDevices()
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve({ ok: false, reason: 'timeout', error: 'capture cleanup failed' }) }))
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve(failedOperationResult('timeout', 'capture cleanup failed')) }))
 		const request = tppaStartRequest({ id: 'tppa-capture-failure' })
 
 		try {

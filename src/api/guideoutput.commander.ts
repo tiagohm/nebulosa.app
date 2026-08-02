@@ -2,6 +2,7 @@ import type { GuideDirection, GuideOutput } from 'nebulosa/src/devices/indi/devi
 import type { DeviceHandler, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import type { GuidePulse } from '#/guideoutput'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import type { OperationContext, OperationScope } from './operation'
 import { abortableDelay, waitForDeviceState } from './operation.wait'
@@ -84,8 +85,8 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 		return await scope.start<void>('guidePulse', [{ key: resourceKey(device), device }], async (context) => {
 			// Capabilities are only published while the device is connected, so a disconnected guide output
 			// would otherwise be reported as one that cannot pulse at all.
-			if (!device.connected) return { ok: false, reason: 'disconnected' }
-			if (!device.canPulseGuide) return { ok: false, reason: 'unexpectedState', error: `guide output ${device.name} cannot pulse guide` }
+			if (!device.connected) return failedOperationResult('disconnected')
+			if (!device.canPulseGuide) return failedOperationResult('unexpectedState', `guide output ${device.name} cannot pulse guide`)
 
 			this.#stopOnCleanup(context, device, [direction])
 
@@ -101,15 +102,15 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 	// a shorter leg is only reported as finished once the longer one has also stopped.
 	async pulseAxes(scope: OperationScope, device: GuideOutput, pulses: readonly GuidePulse[], options: GuidePulseOptions = {}): Promise<OperationResult<void>> {
 		return await scope.start<void>('guidePulse', [{ key: resourceKey(device), device }], async (context) => {
-			if (!device.connected) return { ok: false, reason: 'disconnected' }
-			if (!device.canPulseGuide) return { ok: false, reason: 'unexpectedState', error: `guide output ${device.name} cannot pulse guide` }
+			if (!device.connected) return failedOperationResult('disconnected')
+			if (!device.canPulseGuide) return failedOperationResult('unexpectedState', `guide output ${device.name} cannot pulse guide`)
 
 			const directions = pulses.map((pulse) => pulse.direction)
 			this.#stopOnCleanup(context, device, directions)
 
 			const results = await Promise.all(pulses.map((pulse) => this.#pulse(context, device, pulse.direction, pulse.duration, options)))
 
-			return results.find((result) => !result.ok) ?? { ok: true, value: undefined }
+			return results.find((result) => !result.ok) ?? successfulOperationResult(undefined)
 		}).result
 	}
 
@@ -119,12 +120,12 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 	// silently rescale a correction already in flight.
 	async setGuideRate(scope: OperationScope, device: GuideOutput, rightAscension: number, declination: number): Promise<OperationResult<void>> {
 		return await scope.start<void>('guideRate', [{ key: resourceKey(device), device }], () => {
-			if (!device.connected) return { ok: false, reason: 'disconnected' }
-			if (!device.canSetGuideRate) return { ok: false, reason: 'unexpectedState', error: `guide output ${device.name} cannot set guide rate` }
+			if (!device.connected) return failedOperationResult('disconnected')
+			if (!device.canSetGuideRate) return failedOperationResult('unexpectedState', `guide output ${device.name} cannot set guide rate`)
 
 			this.guideOutputManager.guideRate(device, rightAscension, declination)
 
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		}).result
 	}
 
@@ -141,8 +142,8 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 	// settle timeout on a device that is legitimately still pulsing. The opposite of each direction is zeroed
 	// as well, since both share one INDI vector and only the pair proves the axis is idle.
 	async stopPulses(device: GuideOutput, directions: readonly GuideDirection[], options: GuidePulseOptions = {}): Promise<OperationResult<void>> {
-		if (!device.connected) return { ok: false, reason: 'disconnected' }
-		if (!device.canPulseGuide) return { ok: true, value: undefined }
+		if (!device.connected) return failedOperationResult('disconnected')
+		if (!device.canPulseGuide) return successfulOperationResult(undefined)
 
 		const zeroed = new Set<GuideDirection>()
 
@@ -214,7 +215,7 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 			},
 		})
 
-		return pulsed.ok ? { ok: true, value: undefined } : pulsed
+		return pulsed.ok ? successfulOperationResult(undefined) : pulsed
 	}
 
 	// Waits for the device to report no guiding motion, on a signal of its own so it still runs while the
@@ -231,7 +232,7 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 			command,
 		})
 
-		return settled.ok ? { ok: true, value: undefined } : settled
+		return settled.ok ? successfulOperationResult(undefined) : settled
 	}
 
 	// Registers a waiter for one physical resource and returns its idempotent unsubscriber.

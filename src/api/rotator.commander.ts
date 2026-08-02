@@ -2,6 +2,7 @@ import type { Rotator } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, RotatorManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import { clamp } from 'nebulosa/src/math/numerical/math'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import type { OperationContext, OperationScope } from './operation'
 import { waitForDeviceState } from './operation.wait'
@@ -85,7 +86,7 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 		return await scope.start<void>('rotatorMoveTo', [{ key: resourceKey(rotator), device: rotator }], async (context) => {
 			// Limits are only published while the device is connected, so a disconnected rotator would
 			// otherwise resolve every angle against a range of zero.
-			if (!rotator.connected) return { ok: false, reason: 'disconnected' }
+			if (!rotator.connected) return failedOperationResult('disconnected')
 
 			const target = rotatorAngle(rotator, angle)
 
@@ -107,8 +108,8 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 	// rotator that already homed, ending the operation while it starts to turn and aborting it from cleanup.
 	async home(scope: OperationScope, rotator: Rotator, options: RotatorCommandOptions = {}): Promise<OperationResult<void>> {
 		return await scope.start<void>('rotatorHome', [{ key: resourceKey(rotator), device: rotator }], async (context) => {
-			if (!rotator.connected) return { ok: false, reason: 'disconnected' }
-			if (!rotator.canHome) return { ok: false, reason: 'unexpectedState', error: `rotator ${rotator.name} cannot home` }
+			if (!rotator.connected) return failedOperationResult('disconnected')
+			if (!rotator.canHome) return failedOperationResult('unexpectedState', `rotator ${rotator.name} cannot home`)
 
 			let homing = false
 
@@ -128,12 +129,12 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 	// Redefines the angle the rotator reports, in degrees, which the driver applies without any movement.
 	async syncTo(scope: OperationScope, rotator: Rotator, angle: number): Promise<OperationResult<void>> {
 		return await scope.start<void>('rotatorSync', [{ key: resourceKey(rotator), device: rotator }], () => {
-			if (!rotator.connected) return { ok: false, reason: 'disconnected' }
-			if (!rotator.canSync) return { ok: false, reason: 'unexpectedState', error: `rotator ${rotator.name} cannot sync` }
+			if (!rotator.connected) return failedOperationResult('disconnected')
+			if (!rotator.canSync) return failedOperationResult('unexpectedState', `rotator ${rotator.name} cannot sync`)
 
 			this.rotatorManager.syncTo(rotator, rotatorAngle(rotator, angle))
 
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		}).result
 	}
 
@@ -142,12 +143,12 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 	// after it, and flipping it under a running operation would send the next move the wrong way.
 	async reverse(scope: OperationScope, rotator: Rotator, enabled: boolean): Promise<OperationResult<void>> {
 		return await scope.start<void>('rotatorReverse', [{ key: resourceKey(rotator), device: rotator }], () => {
-			if (!rotator.connected) return { ok: false, reason: 'disconnected' }
-			if (!rotator.canReverse) return { ok: false, reason: 'unexpectedState', error: `rotator ${rotator.name} cannot reverse` }
+			if (!rotator.connected) return failedOperationResult('disconnected')
+			if (!rotator.canReverse) return failedOperationResult('unexpectedState', `rotator ${rotator.name} cannot reverse`)
 
 			this.rotatorManager.reverse(rotator, enabled)
 
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		}).result
 	}
 
@@ -155,8 +156,8 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 	// This is the emergency stop of the commander: it does not acquire the device, precisely because it is
 	// used while the owning operation is being canceled and by cleanup running after the executor returned.
 	async stopMotion(rotator: Rotator, options: RotatorCommandOptions = {}): Promise<OperationResult<void>> {
-		if (!rotator.connected) return { ok: false, reason: 'disconnected' }
-		if (!rotator.canAbort) return rotator.moving ? { ok: false, reason: 'unexpectedState', error: `rotator ${rotator.name} cannot abort motion` } : { ok: true, value: undefined }
+		if (!rotator.connected) return failedOperationResult('disconnected')
+		if (!rotator.canAbort) return rotator.moving ? failedOperationResult('unexpectedState', `rotator ${rotator.name} cannot abort motion`) : successfulOperationResult(undefined)
 
 		return await this.#settle(rotator, options, () => this.rotatorManager.stop(rotator))
 	}
@@ -190,7 +191,7 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 			command,
 		})
 
-		return observed.ok ? { ok: true, value: undefined } : observed
+		return observed.ok ? successfulOperationResult(undefined) : observed
 	}
 
 	// Waits for the rotator to report no motion, on a signal of its own so it still runs while the
@@ -207,7 +208,7 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 			command,
 		})
 
-		return settled.ok ? { ok: true, value: undefined } : settled
+		return settled.ok ? successfulOperationResult(undefined) : settled
 	}
 
 	// Registers a waiter for one device and returns its idempotent unsubscriber.

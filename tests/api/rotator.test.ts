@@ -11,6 +11,7 @@ import { OperationCoordinator } from 'src/api/operation'
 import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { RotatorHandler, rotatorBus, rotator as rotatorEndpoints } from 'src/api/rotator'
 import { RotatorCommander } from 'src/api/rotator.commander'
+import { failedOperationResult } from '#/orchestration'
 import type { RotatorAdded, RotatorRemoved, RotatorUpdated } from '#/rotator'
 import { json, noContent, SocketMessager, waitUntil } from './util'
 
@@ -254,7 +255,7 @@ describe('rotator handler', () => {
 		const response = await endpoints['/rotators/:id/sync'].POST(request(device.id, 10))
 
 		expect(response.status).toBe(200)
-		expect(await response.json()).toMatchObject({ ok: false, reason: 'busy' })
+		expect(await response.json()).toMatchObject(failedOperationResult('busy'))
 	})
 
 	test('emits remove event when the simulator is disposed', () => {

@@ -1,6 +1,7 @@
 import type { Camera, Cover, Device, FlatPanel, Focuser, GuideOutput, Mount, MountTargetCoordinate, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { CameraManager, CoverManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
 import type { Angle } from 'nebulosa/src/math/units/angle'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import type { CameraCommander } from './camera.commander'
 import type { CoverCommander } from './cover.commander'
@@ -122,11 +123,11 @@ export function coordinatedAlpacaManagers(managers: AlpacaManagers, commanders: 
 			kind,
 			() =>
 				coordinator.start<void>(kind, [{ key: resourceKey(device), device }], () => {
-					if (!device.connected) return { ok: false, reason: 'disconnected' }
+					if (!device.connected) return failedOperationResult('disconnected')
 
 					command()
 
-					return { ok: true, value: undefined }
+					return successfulOperationResult(undefined)
 				}).result,
 		)
 	}
@@ -168,7 +169,7 @@ export function coordinatedAlpacaManagers(managers: AlpacaManagers, commanders: 
 				'expose',
 				() =>
 					coordinator.start<void>('alpacaExposure', [{ key: resourceKey(device), device }], async (context) => {
-						if (!device.connected) return { ok: false, reason: 'disconnected' }
+						if (!device.connected) return failedOperationResult('disconnected')
 
 						context.onCleanup(() => {
 							if (context.signal.aborted) managers.camera.stopExposure(device)
@@ -183,7 +184,7 @@ export function coordinatedAlpacaManagers(managers: AlpacaManagers, commanders: 
 		stopExposure: (device: Camera) =>
 			stop(device, () => {
 				managers.camera.stopExposure(device)
-				return { ok: true, value: undefined }
+				return successfulOperationResult(undefined)
 			}),
 	})
 

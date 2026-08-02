@@ -1,6 +1,7 @@
 import { expect, spyOn } from 'bun:test'
 import type { CameraCaptureHandle, CameraCaptureResult } from 'src/api/camera.capture'
 import type { Messager } from 'src/api/message'
+import { successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 
 export type SocketMessage<T = unknown> = {
@@ -65,8 +66,8 @@ export interface CaptureHandleOptions {
 export function captureHandle(options: CaptureHandleOptions = {}): CameraCaptureHandle {
 	return {
 		id: 'capture-handle',
-		started: options.started ?? Promise.resolve({ ok: true, value: undefined }),
-		result: options.result ?? Promise.resolve({ ok: true, value: { paths: [], frameCount: 0 } }),
+		started: options.started ?? Promise.resolve(successfulOperationResult(undefined)),
+		result: options.result ?? Promise.resolve(successfulOperationResult({ paths: [], frameCount: 0 })),
 		cancel: options.cancel ?? (() => Promise.resolve()),
 	}
 }

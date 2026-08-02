@@ -2,6 +2,7 @@ import type { Camera, GuideDirection, Mount } from 'nebulosa/src/devices/indi/de
 import { EventBus } from 'src/shared/bus'
 import { DEFAULT_DARV_EVENT } from '#/darv'
 import type { DarvEvent, DarvStart, DarvState } from '#/darv'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
 import type { CameraHandler } from './camera'
 import type { CameraCaptureHandle } from './camera.capture'
@@ -211,7 +212,7 @@ class DarvRun {
 		// frame is the only product of the run, so it is awaited instead of being cancelled at the vertex.
 		const captured = await handle.result
 
-		return captured.ok ? { ok: true, value: undefined } : captured
+		return captured.ok ? successfulOperationResult(undefined) : captured
 	}
 
 	// Publishes the single idle event that ends this run, whatever terminated it. The device names are
@@ -242,7 +243,7 @@ class DarvRun {
 	async #pulse(context: OperationContext, reversed: boolean, duration: number, remaining: number): Promise<OperationResult<void>> {
 		const settleTimeout = this.#deadline - performance.now() - duration - remaining
 
-		if (settleTimeout <= 0) return { ok: false, reason: 'timeout', error: 'the exposure ends before the trail can be finished' }
+		if (settleTimeout <= 0) return failedOperationResult('timeout', 'the exposure ends before the trail can be finished')
 
 		const direction: GuideDirection = (this.request.hemisphere === 'northern') === reversed ? 'EAST' : 'WEST'
 

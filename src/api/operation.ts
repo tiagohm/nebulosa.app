@@ -1,4 +1,5 @@
 import { errorMessage } from 'src/api/util'
+import { failedOperationResult } from '#/orchestration'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
 import type { ResourceConflict, ResourceKey, ResourceLease, ResourceOwner, ResourceRequest } from './resource'
 import { ResourceArbiter } from './resource'
@@ -120,7 +121,7 @@ export class OperationCoordinator {
 		// inherit the abort and would command devices the tree is about to release. A scope started after
 		// finalization began would also never be awaited by its parent.
 		if (parent !== undefined && (parent.terminalStarted || parent.controller.signal.aborted)) {
-			return rejected({ ok: false, reason: parent.cancelReason ?? 'aborted', error: 'parent operation is no longer running' })
+			return rejected(failedOperationResult(parent.cancelReason ?? 'aborted', 'parent operation is no longer running'))
 		}
 
 		const root = parent === undefined ? undefined : rootOf(parent)
@@ -187,12 +188,12 @@ export class OperationCoordinator {
 		// it is also what keeps two concurrent captures off the same camera inside one feature.
 		const siblingConflicts = treeConflicts(holders, parent, resources)
 
-		if (siblingConflicts.length > 0) return rejected({ ok: false, reason: 'busy', error: formatConflicts(siblingConflicts) })
+		if (siblingConflicts.length > 0) return rejected(failedOperationResult('busy', formatConflicts(siblingConflicts)))
 
 		// Every scope of a tree acquires under the root's context, so the arbiter sees one owner per operation.
 		const acquired = this.arbiter.acquire(root?.context ?? context, resources)
 
-		if (!acquired.ok) return rejected({ ok: false, reason: 'busy', error: formatConflicts(acquired.conflicts) })
+		if (!acquired.ok) return rejected(failedOperationResult('busy', formatConflicts(acquired.conflicts)))
 
 		operation.lease = acquired.lease
 		this.#operations.set(id, node)
@@ -210,10 +211,10 @@ export class OperationCoordinator {
 		void (async () => {
 			try {
 				const operationResult = await executor(context)
-				const terminal: Terminal<T> = operation.cancelReason === undefined ? { result: operationResult } : { result: canceled(operation.cancelReason, detailOf(operationResult)) }
+				const terminal: Terminal<T> = operation.cancelReason === undefined ? { result: operationResult } : { result: failedOperationResult(operation.cancelReason, detailOf(operationResult)) }
 				await this.#finalize(operation, terminal)
 			} catch (error) {
-				const terminal: Terminal<T> = operation.cancelReason === undefined ? { error } : { result: canceled(operation.cancelReason, errorMessage(error)) }
+				const terminal: Terminal<T> = operation.cancelReason === undefined ? { error } : { result: failedOperationResult(operation.cancelReason, errorMessage(error)) }
 				await this.#finalize(operation, terminal)
 			}
 		})()
@@ -343,7 +344,7 @@ export class OperationCoordinator {
 		// reported as commandFailed. Callers get a total result and never have to handle a rejection.
 		if ('error' in terminal) {
 			console.error('operation failed unexpectedly:', operation.context.kind, operation.context.id, terminal.error)
-			terminal = { result: { ok: false, reason: 'commandFailed', error: errorMessage(terminal.error) } }
+			terminal = { result: failedOperationResult('commandFailed', errorMessage(terminal.error)) }
 		}
 
 		if (cleanupErrors.length > 0) {
@@ -354,7 +355,7 @@ export class OperationCoordinator {
 			// A failed cleanup means the devices may not be quiescent, so success cannot stand. An existing
 			// failure keeps its cause and only gains the detail.
 			terminal = {
-				result: terminal.result.ok ? { ok: false, reason: 'commandFailed', error: detail } : { ...terminal.result, error: terminal.result.error ? `${terminal.result.error}; ${detail}` : detail },
+				result: terminal.result.ok ? failedOperationResult('commandFailed', detail) : { ...terminal.result, error: terminal.result.error ? `${terminal.result.error}; ${detail}` : detail },
 			}
 		}
 
@@ -402,11 +403,6 @@ function treeConflicts(holders: Map<ResourceKey, ActiveOperation<unknown>[]>, pa
 	}
 
 	return conflicts
-}
-
-// Builds the terminal result of a canceled operation, keeping whatever detail the executor reported.
-function canceled<T>(reason: OperationFailureReason, error?: string): OperationResult<T> {
-	return error === undefined ? { ok: false, reason } : { ok: false, reason, error }
 }
 
 // Extracts the diagnostic detail of an executor result, if it carried one.

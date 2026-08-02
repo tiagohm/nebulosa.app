@@ -11,6 +11,7 @@ import { OperationCoordinator } from 'src/api/operation'
 import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { WheelHandler, wheelBus, wheel as wheelEndpoints } from 'src/api/wheel'
 import { WheelCommander } from 'src/api/wheel.commander'
+import { failedOperationResult } from '#/orchestration'
 import type { WheelAdded, WheelRemoved, WheelUpdated } from '#/wheel'
 import { json, noContent, SocketMessager, waitUntil } from './util'
 
@@ -218,7 +219,7 @@ describe('wheel handler', () => {
 		const response = await endpoints['/wheels/:id/names'].POST(request(device.id, ['L', 'R', 'G', 'B']))
 
 		expect(response.status).toBe(200)
-		expect(await response.json()).toMatchObject({ ok: false, reason: 'busy' })
+		expect(await response.json()).toMatchObject(failedOperationResult('busy'))
 	})
 
 	test('refuses to rename the slots of a disconnected wheel', async () => {

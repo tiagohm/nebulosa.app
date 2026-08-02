@@ -23,6 +23,7 @@ import { OperationCoordinator } from 'src/api/operation'
 import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { DEFAULT_DARV_START } from '#/darv'
 import type { DarvStart, DarvEvent } from '#/darv'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import { captureHandle, noContent, SocketMessager, waitUntil } from './util'
 
@@ -246,7 +247,7 @@ describe('darv handler', () => {
 			expect(pulseEast).not.toHaveBeenCalled()
 			expect(pulseWest).not.toHaveBeenCalled()
 
-			started.resolve({ ok: false, reason: 'alert', error: 'the camera refused the exposure' })
+			started.resolve(failedOperationResult('alert', 'the camera refused the exposure'))
 
 			expect(await waitForDarvState('idle', request.id)).toBeTrue()
 			expect(darvEvents().map((event) => event.state)).toEqual(['idle'])
@@ -254,7 +255,7 @@ describe('darv handler', () => {
 			expect(pulseEast).not.toHaveBeenCalled()
 			expect(pulseWest).not.toHaveBeenCalled()
 		} finally {
-			started.resolve({ ok: false, reason: 'aborted' })
+			started.resolve(failedOperationResult('aborted'))
 			pulseWest.mockRestore()
 			pulseEast.mockRestore()
 			capture.mockRestore()
@@ -272,8 +273,8 @@ describe('darv handler', () => {
 			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
 			expect(await waitForDarvState('waiting', request.id)).toBeTrue()
 
-			const cameraIntruder = operationCoordinator.start('cameraCapture', [{ key: resourceKey(camera), device: camera }], () => ({ ok: true, value: undefined }))
-			const mountIntruder = operationCoordinator.start('mountGoTo', [{ key: resourceKey(mount), device: mount }], () => ({ ok: true, value: undefined }))
+			const cameraIntruder = operationCoordinator.start('cameraCapture', [{ key: resourceKey(camera), device: camera }], () => successfulOperationResult(undefined))
+			const mountIntruder = operationCoordinator.start('mountGoTo', [{ key: resourceKey(mount), device: mount }], () => successfulOperationResult(undefined))
 
 			expect((await cameraIntruder.result).ok).toBeFalse()
 			expect((await mountIntruder.result).ok).toBeFalse()
@@ -343,7 +344,7 @@ describe('darv handler', () => {
 			[{ key: resourceKey(camera), device: camera }],
 			(context) =>
 				new Promise<OperationResult<void>>((resolve) => {
-					context.signal.addEventListener('abort', () => resolve({ ok: false, reason: 'aborted' }), { once: true })
+					context.signal.addEventListener('abort', () => resolve(failedOperationResult('aborted')), { once: true })
 				}),
 		)
 
@@ -381,7 +382,7 @@ describe('darv handler', () => {
 
 	test('ends the run with the cause when the capture reports a terminal failure', async () => {
 		const { camera, mount } = await connectedDevices()
-		const failed: Promise<OperationResult<CameraCaptureResult>> = Promise.resolve({ ok: false, reason: 'timeout', error: 'capture cleanup failed' })
+		const failed: Promise<OperationResult<CameraCaptureResult>> = Promise.resolve(failedOperationResult('timeout', 'capture cleanup failed'))
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: failed }))
 		const request = darvStartRequest({ id: 'darv-capture-failure', initialPause: 0, duration: 0.02 })
 
@@ -413,7 +414,7 @@ describe('darv handler', () => {
 
 			expect(await waitForDarvState('forwarding', request.id)).toBeTrue()
 
-			failed.resolve({ ok: false, reason: 'alert', error: 'the exposure was aborted by the driver' })
+			failed.resolve(failedOperationResult('alert', 'the exposure was aborted by the driver'))
 
 			expect(await waitForDarvState('idle', request.id, 5000)).toBeTrue()
 			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'forwarding', 'idle'])
@@ -421,7 +422,7 @@ describe('darv handler', () => {
 			expect(pulseEast.mock.calls.filter((call) => call[1] > 0)).toHaveLength(0)
 			expect(mount.pulsing).toBeFalse()
 		} finally {
-			failed.resolve({ ok: false, reason: 'aborted' })
+			failed.resolve(failedOperationResult('aborted'))
 			pulseWest.mockRestore()
 			pulseEast.mockRestore()
 			capture.mockRestore()
@@ -431,7 +432,7 @@ describe('darv handler', () => {
 	test('gives each leg only the settle latency the exposure still allows', async () => {
 		const { camera, mount } = await connectedDevices()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
-		const pulse = spyOn(guideOutputCommander, 'pulse').mockImplementation(() => Promise.resolve({ ok: true, value: undefined }))
+		const pulse = spyOn(guideOutputCommander, 'pulse').mockImplementation(() => Promise.resolve(successfulOperationResult(undefined)))
 		const request = darvStartRequest({ id: 'darv-settle-budget', initialPause: 0, duration: 0.02 })
 
 		try {
@@ -461,7 +462,7 @@ describe('darv handler', () => {
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
 		const pulse = spyOn(guideOutputCommander, 'pulse').mockImplementation(async () => {
 			await Bun.sleep(6100)
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		})
 		const request = darvStartRequest({ id: 'darv-settle-exhausted', initialPause: 0, duration: 0.02 })
 

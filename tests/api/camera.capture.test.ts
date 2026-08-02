@@ -10,6 +10,7 @@ import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraCaptureEvent, CameraCaptureStart } from '#/camera'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import { waitUntil } from './util'
 
@@ -119,8 +120,8 @@ describe('camera capture session failures', () => {
 
 		try {
 			const handle = harness.capturer.start(harness.coordinator, harness.camera, request(), { listener: (event) => events.push(event) })
-			expect(await handle.started).toEqual({ ok: true, value: undefined })
-			expect(await handle.result).toEqual({ ok: false, reason: 'timeout' })
+			expect(await handle.started).toEqual(successfulOperationResult(undefined))
+			expect(await handle.result).toEqual(failedOperationResult('timeout'))
 			expect(events.map((event) => event.state).slice(-2)).toEqual(['error', 'idle'])
 			expect(events.filter((event) => event.state === 'error')).toHaveLength(1)
 			expect(events.filter((event) => event.state === 'idle')).toHaveLength(1)
@@ -138,13 +139,13 @@ describe('camera capture session failures', () => {
 			const key = resourceKey(harness.camera)
 			const handle = harness.capturer.start(harness.coordinator, harness.camera, request())
 
-			expect(await handle.started).toEqual({ ok: false, reason: 'timeout' })
-			expect(await handle.result).toEqual({ ok: false, reason: 'timeout' })
+			expect(await handle.started).toEqual(failedOperationResult('timeout'))
+			expect(await handle.result).toEqual(failedOperationResult('timeout'))
 			expect(harness.arbiter.availability(key)).toBe('unavailable')
 
 			harness.arbiter.markAvailable({ key, device: harness.camera })
 			const blocked = harness.capturer.start(harness.coordinator, harness.camera, request())
-			expect(await blocked.result).toMatchObject({ ok: false, reason: 'busy' })
+			expect(await blocked.result).toMatchObject(failedOperationResult('busy'))
 
 			harness.capturer.blobReceived(harness.camera, Buffer.from('stale frame'), 'raw')
 			expect(harness.arbiter.availability(key)).toBe('available')
@@ -158,8 +159,8 @@ describe('camera capture session failures', () => {
 
 		try {
 			const handle = harness.capturer.start(harness.coordinator, harness.camera, request())
-			expect(await handle.started).toEqual({ ok: false, reason: 'alert' })
-			expect(await handle.result).toEqual({ ok: false, reason: 'alert' })
+			expect(await handle.started).toEqual(failedOperationResult('alert'))
+			expect(await handle.result).toEqual(failedOperationResult('alert'))
 			expect(harness.saved).toHaveLength(0)
 			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('available')
 		} finally {
@@ -175,7 +176,7 @@ describe('camera capture session failures', () => {
 			expect((await handle.started).ok).toBeTrue()
 			finishExposure(harness, false)
 
-			expect(await handle.result).toEqual({ ok: false, reason: 'timeout' })
+			expect(await handle.result).toEqual(failedOperationResult('timeout'))
 			expect(harness.saved).toHaveLength(0)
 		} finally {
 			harness.restore()
@@ -213,7 +214,7 @@ describe('camera capture session failures', () => {
 			harness.camera.connected = false
 			harness.capturer.updated(harness.camera, 'connected')
 
-			expect(await handle.result).toEqual({ ok: false, reason: 'disconnected' })
+			expect(await handle.result).toEqual(failedOperationResult('disconnected'))
 			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('unavailable')
 			expect(harness.disableBlob).not.toHaveBeenCalled()
 
@@ -239,7 +240,7 @@ describe('camera capture session failures', () => {
 			expect((await handle.started).ok).toBeTrue()
 			harness.capturer.removed(harness.camera)
 
-			expect(await handle.result).toEqual({ ok: false, reason: 'removed' })
+			expect(await handle.result).toEqual(failedOperationResult('removed'))
 			expect(harness.arbiter.availability(key)).toBe('unavailable')
 			expect(harness.stopExposure).not.toHaveBeenCalled()
 			expect(harness.disableBlob).not.toHaveBeenCalled()
@@ -292,7 +293,7 @@ describe('camera capture session failures', () => {
 			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('unavailable')
 
 			const next = harness.capturer.start(harness.coordinator, harness.camera, request())
-			expect(await next.result).toMatchObject({ ok: false, reason: 'busy' })
+			expect(await next.result).toMatchObject(failedOperationResult('busy'))
 
 			// Discarding the stale payload clears only the quarantine; the camera is still not quiescent.
 			harness.capturer.blobReceived(harness.camera, Buffer.from('stale frame'), 'raw')
@@ -333,7 +334,7 @@ describe('camera capture session failures', () => {
 			expect((await active.started).ok).toBeTrue()
 
 			const conflicting = harness.capturer.start(harness.coordinator, harness.camera, request(), { listener: (event) => events.push(event) })
-			expect(await conflicting.result).toMatchObject({ ok: false, reason: 'busy' })
+			expect(await conflicting.result).toMatchObject(failedOperationResult('busy'))
 			expect(events.map((event) => event.state)).toEqual(['error', 'idle'])
 			expect(events.every((event) => event.operation === conflicting.id)).toBeTrue()
 			expect(events[0].session).not.toBeEmpty()
@@ -361,11 +362,11 @@ describe('camera capture session failures', () => {
 				// The nested capture released its own lease, but the feature still owns the camera.
 				expect(harness.arbiter.availability(key)).toBe('leased')
 				expect(context.owns(key)).toBeTrue()
-				return result.ok ? { ok: true, value: result.value.frameCount } : result
+				return result.ok ? successfulOperationResult(result.value.frameCount) : result
 			})
 
 			expect((await captured.promise).ok).toBeTrue()
-			expect(await feature.result).toEqual({ ok: true, value: 1 })
+			expect(await feature.result).toEqual(successfulOperationResult(1))
 			expect(harness.arbiter.availability(key)).toBe('available')
 		} finally {
 			harness.restore()
@@ -383,7 +384,7 @@ describe('camera capture session failures', () => {
 
 				// A sibling scope must not take a camera the tree is already exposing with.
 				const second = harness.capturer.start(context, harness.camera, savingRequest())
-				expect(await second.result).toMatchObject({ ok: false, reason: 'busy' })
+				expect(await second.result).toMatchObject(failedOperationResult('busy'))
 
 				finishExposure(harness)
 				return await first.result
@@ -406,7 +407,7 @@ describe('camera capture session cancellation', () => {
 			expect(await waitUntil(() => harness.startExposure.mock.calls.length === 1)).toBeTrue()
 			await active.cancel()
 
-			expect(await active.result).toEqual({ ok: false, reason: 'aborted' })
+			expect(await active.result).toEqual(failedOperationResult('aborted'))
 			expect(harness.stopExposure).toHaveBeenCalledTimes(1)
 		} finally {
 			harness.restore()
@@ -422,7 +423,7 @@ describe('camera capture session cancellation', () => {
 			expect((await active.started).ok).toBeTrue()
 			await active.cancel()
 
-			expect(await active.result).toEqual({ ok: false, reason: 'aborted' })
+			expect(await active.result).toEqual(failedOperationResult('aborted'))
 			expect(harness.arbiter.availability(key)).toBe('available')
 
 			const next = harness.capturer.start(harness.coordinator, harness.camera, request())
@@ -441,11 +442,11 @@ describe('camera capture session cancellation', () => {
 			expect((await active.started).ok).toBeTrue()
 			await active.cancel()
 
-			expect(await active.result).toEqual({ ok: false, reason: 'aborted' })
+			expect(await active.result).toEqual(failedOperationResult('aborted'))
 			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('unavailable')
 
 			const blocked = harness.capturer.start(harness.coordinator, harness.camera, request())
-			expect(await blocked.result).toMatchObject({ ok: false, reason: 'busy' })
+			expect(await blocked.result).toMatchObject(failedOperationResult('busy'))
 
 			harness.capturer.blobReceived(harness.camera, Buffer.from('stale frame'), 'raw')
 			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('available')
@@ -453,7 +454,7 @@ describe('camera capture session cancellation', () => {
 			const next = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await next.started).ok).toBeTrue()
 			await next.cancel()
-			expect(await next.result).toEqual({ ok: false, reason: 'aborted' })
+			expect(await next.result).toEqual(failedOperationResult('aborted'))
 		} finally {
 			harness.restore()
 		}
@@ -466,7 +467,7 @@ describe('camera capture session cancellation', () => {
 			const key = resourceKey(harness.camera)
 			const handle = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await handle.started).ok).toBeTrue()
-			expect(await handle.result).toEqual({ ok: false, reason: 'timeout' })
+			expect(await handle.result).toEqual(failedOperationResult('timeout'))
 			expect(harness.arbiter.availability(key)).toBe('unavailable')
 
 			// The driver reports a failed frame long after the session gave up, so no BLOB will ever arrive.
@@ -501,7 +502,7 @@ describe('camera capture session cancellation', () => {
 
 			expect(harness.arbiter.availability(key)).toBe('unavailable')
 			const blocked = harness.capturer.start(harness.coordinator, harness.camera, request())
-			expect(await blocked.result).toMatchObject({ ok: false, reason: 'busy' })
+			expect(await blocked.result).toMatchObject(failedOperationResult('busy'))
 		} finally {
 			harness.restore()
 		}
@@ -528,7 +529,7 @@ describe('camera capture session cancellation', () => {
 
 			harness.arbiter.markAvailable({ key, device: harness.camera })
 			const blocked = harness.capturer.start(harness.coordinator, harness.camera, request())
-			expect(await blocked.result).toMatchObject({ ok: false, reason: 'busy' })
+			expect(await blocked.result).toMatchObject(failedOperationResult('busy'))
 		} finally {
 			harness.restore()
 		}
@@ -566,7 +567,7 @@ describe('camera capture session cancellation', () => {
 
 			decoding.resolve(Buffer.from('frame'))
 			await cancellation
-			expect(await handle.result).toEqual({ ok: false, reason: 'aborted' })
+			expect(await handle.result).toEqual(failedOperationResult('aborted'))
 			expect(paths).toHaveLength(0)
 			expect(harness.saved).toHaveLength(0)
 		} finally {
@@ -602,7 +603,7 @@ describe('camera capture session cancellation', () => {
 
 			writing.resolve(1)
 			await cancellation
-			expect(await handle.result).toEqual({ ok: false, reason: 'aborted' })
+			expect(await handle.result).toEqual(failedOperationResult('aborted'))
 			expect(paths).toHaveLength(0)
 		} finally {
 			harness.restore()
@@ -631,7 +632,7 @@ describe('camera capture session cancellation', () => {
 			await waiting.promise
 
 			await handle.cancel()
-			expect(await handle.result).toEqual({ ok: false, reason: 'aborted' })
+			expect(await handle.result).toEqual(failedOperationResult('aborted'))
 			expect(harness.startExposure).toHaveBeenCalledTimes(1)
 			expect(events.map((event) => event.state).slice(-2)).toEqual(['error', 'idle'])
 		} finally {

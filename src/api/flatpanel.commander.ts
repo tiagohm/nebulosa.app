@@ -1,6 +1,7 @@
 import type { FlatPanel } from 'nebulosa/src/devices/indi/device'
 import type { FlatPanelManager } from 'nebulosa/src/devices/indi/manager'
 import { clamp } from 'nebulosa/src/math/numerical/math'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import type { OperationScope } from './operation'
 import { resourceKey } from './resource'
@@ -40,11 +41,11 @@ export class FlatPanelCommander {
 	// Acquires the panel and dispatches one command that takes effect immediately.
 	async #mutate(scope: OperationScope, kind: string, panel: FlatPanel, command: VoidFunction): Promise<OperationResult<void>> {
 		return await scope.start<void>(kind, [{ key: resourceKey(panel), device: panel }], () => {
-			if (!panel.connected) return { ok: false, reason: 'disconnected' }
+			if (!panel.connected) return failedOperationResult('disconnected')
 
 			command()
 
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		}).result
 	}
 }

@@ -1,5 +1,6 @@
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import type { CameraManager } from 'nebulosa/src/devices/indi/manager'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import type { OperationScope } from './operation'
 import { resourceKey } from './resource'
@@ -22,12 +23,12 @@ export class CameraCommander {
 	// Switches the cooler on or off.
 	async cooler(scope: OperationScope, camera: Camera, enabled: boolean): Promise<OperationResult<void>> {
 		return await scope.start<void>('cameraCooler', [{ key: resourceKey(camera), device: camera }], () => {
-			if (!camera.connected) return { ok: false, reason: 'disconnected' }
-			if (!camera.hasCoolerControl) return { ok: false, reason: 'unexpectedState', error: `camera ${camera.name} cannot switch its cooler` }
+			if (!camera.connected) return failedOperationResult('disconnected')
+			if (!camera.hasCoolerControl) return failedOperationResult('unexpectedState', `camera ${camera.name} cannot switch its cooler`)
 
 			this.cameraManager.cooler(camera, enabled)
 
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		}).result
 	}
 
@@ -35,12 +36,12 @@ export class CameraCommander {
 	// sensor cannot reach is simply one the cooler keeps working towards.
 	async temperature(scope: OperationScope, camera: Camera, value: number): Promise<OperationResult<void>> {
 		return await scope.start<void>('cameraTemperature', [{ key: resourceKey(camera), device: camera }], () => {
-			if (!camera.connected) return { ok: false, reason: 'disconnected' }
-			if (!camera.canSetTemperature) return { ok: false, reason: 'unexpectedState', error: `camera ${camera.name} cannot set its temperature` }
+			if (!camera.connected) return failedOperationResult('disconnected')
+			if (!camera.canSetTemperature) return failedOperationResult('unexpectedState', `camera ${camera.name} cannot set its temperature`)
 
 			this.cameraManager.temperature(camera, value)
 
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		}).result
 	}
 }

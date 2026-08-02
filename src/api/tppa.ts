@@ -2,6 +2,7 @@ import { timeNow } from 'nebulosa/src/astronomy/time/time'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { ThreePointPolarAlignment } from 'nebulosa/src/observation/alignment/polaralignment'
 import { EventBus } from 'src/shared/bus'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
 import { DEFAULT_TPPA_EVENT } from '#/tppa'
 import type { TppaEvent, TppaStart, TppaState } from '#/tppa'
@@ -166,7 +167,7 @@ class TppaRun {
 		}
 
 		while (true) {
-			if (context.signal.aborted) return { ok: false, reason: abortReason(context.signal) }
+			if (context.signal.aborted) return failedOperationResult(abortReason(context.signal))
 
 			this.#event.count++
 			this.#publish('capturing')
@@ -186,14 +187,14 @@ class TppaRun {
 
 			const path = captured.value.paths.at(-1)
 
-			if (path === undefined) return { ok: false, reason: 'unexpectedState', error: 'the capture produced no frame' }
+			if (path === undefined) return failedOperationResult('unexpectedState', 'the capture produced no frame')
 
 			this.#publish('solving')
 
 			// The solver is bound to this run, so cancelling the operation stops the solve in flight.
 			const solution = await this.handler.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: SOLVER_RADIUS, path, id: this.request.id, blind: false }, context.signal)
 
-			if (context.signal.aborted) return { ok: false, reason: abortReason(context.signal) }
+			if (context.signal.aborted) return failedOperationResult(abortReason(context.signal))
 
 			if (solution) {
 				this.#event.attempts = 0
@@ -218,7 +219,7 @@ class TppaRun {
 				} else if (this.#event.step >= ALIGNMENT_POINTS) {
 					// Every point was collected and the geometry still yields nothing, which is the alignment
 					// failing rather than a device failing, so it ends successfully with an explanation.
-					return { ok: true, value: 'alignment failed' }
+					return successfulOperationResult('alignment failed')
 				}
 			} else if (++this.#event.attempts < this.request.maxAttempts) {
 				// A frame that did not solve costs an attempt and nothing else: the mount stays where it is and
@@ -227,7 +228,7 @@ class TppaRun {
 				continue
 			} else {
 				this.#event.solved = false
-				return { ok: true, value: 'solving failed' }
+				return successfulOperationResult('solving failed')
 			}
 
 			this.#event.step++

@@ -50,9 +50,9 @@ function terminalMessage(reason: OperationFailureReason, error: string | undefin
 	return error ?? `tppa failed: ${reason}`
 }
 
-// Runs polar alignment sessions and exposes them to transport by request id.
+// Runs polar alignment sessions and exposes them to transport by operation id.
 export class TppaHandler {
-	// Live runs by request id, which is what a stop route names. This is the translation from a transport
+	// Live runs by operation id, which is what a stop route names. This is the translation from a transport
 	// id to an operation, not an ownership index: who holds the camera and the mount is the arbiter's
 	// answer, and a local copy would only go stale.
 	readonly #runs = new Map<string, OperationHandle<string>>()
@@ -79,9 +79,10 @@ export class TppaHandler {
 	// sequence, so a slew or a capture interleaved by another operation would measure a geometry that no
 	// longer matches the points already collected. The duplicate-device guard the task list used to apply is
 	// gone with it: a second run over the same camera or mount is now refused by the arbiter.
+	// Returns the operation id, which identifies the run in its events and is what stops it. A refused start
+	// returns an id too: the run is already over, so stopping it is a no-op, and the refusal reaches the
+	// caller through the terminal event rather than through this return.
 	start(request: TppaStart, camera: Camera, mount: Mount) {
-		if (this.#runs.has(request.id)) return
-
 		// The request is copied because the run normalizes the capture, and the caller's object is not this
 		// feature's to rewrite.
 		const run = new TppaRun(camera, mount, structuredClone(request), this)
@@ -91,19 +92,21 @@ export class TppaHandler {
 		]
 		const handle = this.coordinator.start<string>('tppa', resources, (context) => run.run(context))
 
-		this.#runs.set(request.id, handle)
+		this.#runs.set(handle.id, handle)
 
 		// Every terminal path lands here, including a start the arbiter refused, which never runs the
 		// executor at all. That is what makes a busy device report itself instead of failing silently.
 		void handle.result.then((result) => {
-			if (this.#runs.get(request.id) === handle) this.#runs.delete(request.id)
+			this.#runs.delete(handle.id)
 			// Availability is read here rather than inside the run because a refused start never reaches the
 			// executor, and that refusal is exactly the case the message has to explain.
-			run.finish(result, this.#unavailableDevices(camera, mount))
+			run.finish(handle.id, result, this.#unavailableDevices(camera, mount))
 		})
+
+		return handle.id
 	}
 
-	// Cancels one run and waits for its cleanup; an unknown id is a no-op.
+	// Cancels one run by operation id and waits for its cleanup; an unknown id is a no-op.
 	async stop(id: string) {
 		await this.#runs.get(id)?.cancel()
 	}
@@ -134,13 +137,16 @@ class TppaRun {
 	) {
 		this.#polarAlignment = new ThreePointPolarAlignment(request.compensateRefraction && request.refraction)
 
-		this.#event.id = request.id
 		this.#event.camera = camera.id
 		this.#event.mount = mount.id
 	}
 
 	// Captures, solves, aligns, and moves until the alignment concludes or the run is stopped.
 	async run(context: OperationContext): Promise<OperationResult<string>> {
+		// Every event of this run is keyed by the operation id, and the executor publishes the first one
+		// before the caller ever sees the handle, so the id is bound here rather than after the start returns.
+		this.#event.id = context.id
+
 		const { capture } = this.request
 
 		capture.autoSave = false
@@ -192,7 +198,7 @@ class TppaRun {
 			this.#publish('solving')
 
 			// The solver is bound to this run, so cancelling the operation stops the solve in flight.
-			const solution = await this.handler.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: SOLVER_RADIUS, path, id: this.request.id, blind: false }, context.signal)
+			const solution = await this.handler.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: SOLVER_RADIUS, path, id: context.id, blind: false }, context.signal)
 
 			if (context.signal.aborted) return failedOperationResult(abortReason(context.signal))
 
@@ -258,8 +264,10 @@ class TppaRun {
 	}
 
 	// Publishes the single idle event that ends this run, whatever terminated it. The device names are
-	// those the arbiter reported as unusable at that moment, and only a refused start reads them.
-	finish(result: OperationResult<string>, unavailable: readonly string[]) {
+	// those the arbiter reported as unusable at that moment, and only a refused start reads them. The id is
+	// taken from the handle because a refused start never reaches the executor that would have bound it.
+	finish(id: string, result: OperationResult<string>, unavailable: readonly string[]) {
+		this.#event.id = id
 		this.#publish('idle', result.ok ? result.value : terminalMessage(result.reason, result.error, unavailable))
 	}
 

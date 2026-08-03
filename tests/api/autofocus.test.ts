@@ -27,7 +27,7 @@ import type { AutoFocusEvent, AutoFocusStart } from '#/autofocus'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
-import { captureHandle, noContent, SocketMessager, waitUntil } from './util'
+import { captureHandle, json, noContent, SocketMessager, waitUntil } from './util'
 
 type AutoFocusStartOverrides = Omit<Partial<AutoFocusStart>, 'capture' | 'starDetection'> & {
 	readonly capture?: Partial<AutoFocusStart['capture']>
@@ -130,6 +130,10 @@ function startRequest(camera: Camera, focuser: Focuser, body: AutoFocusStart) {
 	} as unknown as Bun.BunRequest
 }
 
+function startRun(request: Bun.BunRequest) {
+	return endpoints['/autofocus/:camera/:focuser/start'].POST(request).then((response) => json<string>(response))
+}
+
 function stopRequest(id: string) {
 	return {
 		url: `http://localhost/autofocus/${encodeURIComponent(id)}/stop`,
@@ -163,7 +167,6 @@ describe('auto focus handler', () => {
 		const { camera, focuser } = await connectedDevices()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
 		const request = autoFocusStartRequest({
-			id: 'autofocus-start',
 			maxPosition: 0,
 			capture: {
 				autoSave: true,
@@ -179,9 +182,9 @@ describe('auto focus handler', () => {
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
+			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('capturing', request.id)).toBeTrue()
+			expect(await waitForAutoFocusState('capturing', id)).toBeTrue()
 			expect(capture).toHaveBeenCalledTimes(1)
 			expect(capture.mock.calls[0][1]).toBe(camera)
 
@@ -200,19 +203,17 @@ describe('auto focus handler', () => {
 			expect(request.capture.count).toBe(10)
 			expect(request.capture.frameType).toBe('DARK')
 
-			expect(autoFocusEvents()).toEqual([
-				{
-					id: request.id,
-					camera: camera.id,
-					focuser: focuser.id,
-					state: 'capturing',
-					starCount: 0,
-					hfd: 0,
-					x: [],
-					y: [],
-					message: '',
-				},
-			])
+			expect(autoFocusEvents()[0]).toEqual({
+				id,
+				camera: camera.id,
+				focuser: focuser.id,
+				state: 'capturing',
+				starCount: 0,
+				hfd: 0,
+				x: [],
+				y: [],
+				message: '',
+			})
 		} finally {
 			capture.mockRestore()
 		}
@@ -221,13 +222,13 @@ describe('auto focus handler', () => {
 	test('captures inside its own operation, holding both devices across the search', async () => {
 		const { camera, focuser } = await connectedDevices()
 		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(vCurve(focuser, 50000, 25))
-		const request = autoFocusStartRequest({ id: 'autofocus-owns', initialOffsetSteps: 2, stepSize: 25 })
+		const request = autoFocusStartRequest({ initialOffsetSteps: 2, stepSize: 25 })
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
-			expect(await waitForAutoFocusState('capturing', request.id)).toBeTrue()
+			const id = await startRun(startRequest(camera, focuser, request))
+			expect(await waitForAutoFocusState('capturing', id)).toBeTrue()
 
 			// The run owns both devices for its whole search, so neither an unrelated capture nor an unrelated
 			// focuser move can slip between two samples of the curve.
@@ -241,8 +242,8 @@ describe('auto focus handler', () => {
 
 			expect((await focuserIntruder.result).ok).toBeFalse()
 
-			await noContent(await endpoints['/autofocus/:id/stop'].POST(stopRequest(request.id)))
-			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
+			await noContent(await endpoints['/autofocus/:id/stop'].POST(stopRequest(id)))
+			expect(await waitForAutoFocusState('idle', id)).toBeTrue()
 		} finally {
 			detect.mockRestore()
 		}
@@ -251,17 +252,17 @@ describe('auto focus handler', () => {
 	test('stops an active run through the endpoint and reports it once', async () => {
 		const { camera, focuser } = await connectedDevices()
 		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(vCurve(focuser, 50000, 25))
-		const request = autoFocusStartRequest({ id: 'autofocus-stop', initialOffsetSteps: 2, stepSize: 25 })
+		const request = autoFocusStartRequest({ initialOffsetSteps: 2, stepSize: 25 })
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
-			expect(await waitForAutoFocusState('capturing', request.id)).toBeTrue()
+			const id = await startRun(startRequest(camera, focuser, request))
+			expect(await waitForAutoFocusState('capturing', id)).toBeTrue()
 
-			await noContent(await endpoints['/autofocus/:id/stop'].POST(stopRequest(request.id)))
+			await noContent(await endpoints['/autofocus/:id/stop'].POST(stopRequest(id)))
 
-			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
+			expect(await waitForAutoFocusState('idle', id)).toBeTrue()
 			expect(autoFocusEvents().filter((event) => event.state === 'idle')).toHaveLength(1)
 			expect(autoFocusEvents().at(-1)?.message).toBe('stopped')
 			expect(focuser.moving).toBeFalse()
@@ -270,23 +271,29 @@ describe('auto focus handler', () => {
 		}
 	}, 30000)
 
-	test('ignores a duplicate run for the same request id', async () => {
+	test('refuses a second run over the same devices without disturbing the live one', async () => {
 		const { camera, focuser } = await connectedDevices()
-		// The first run stays in flight until this settles, so the duplicate meets a live run.
+		// The first run stays in flight until this settles, so the second one meets a live run.
 		const inFlight = Promise.withResolvers<OperationResult<CameraCaptureResult>>()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: inFlight.promise }))
-		const request = autoFocusStartRequest({ id: 'autofocus-duplicate' })
+		const request = autoFocusStartRequest()
+		let id = ''
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
-			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
+			id = await startRun(startRequest(camera, focuser, request))
+			const refused = await startRun(startRequest(camera, focuser, request))
 
+			expect(refused).not.toBe(id)
 			expect(capture).toHaveBeenCalledTimes(1)
+
+			expect(await waitForAutoFocusState('idle', refused)).toBeTrue()
+			expect(autoFocusEvents().at(-1)?.message).toBe('the camera or the focuser is in use by another operation')
+			expect(autoFocusEvents().some((event) => event.id === id && event.state === 'idle')).toBeFalse()
 		} finally {
 			inFlight.resolve(successfulOperationResult({ paths: [], frameCount: 0 }))
-			await autoFocusHandler.stop(request.id)
+			await autoFocusHandler.stop(id)
 			capture.mockRestore()
 		}
 	})
@@ -302,7 +309,7 @@ describe('auto focus handler', () => {
 	test('reports devices already owned by another operation instead of failing silently', async () => {
 		const { camera, focuser } = await connectedDevices()
 		const manualRequest = { ...structuredClone(DEFAULT_CAMERA_CAPTURE_START), exposureMode: 'loop' as const, exposureTime: 200, exposureTimeUnit: 'millisecond' as const }
-		const request = autoFocusStartRequest({ id: 'autofocus-busy' })
+		const request = autoFocusStartRequest()
 
 		wsm.open(socket)
 
@@ -311,9 +318,9 @@ describe('auto focus handler', () => {
 		expect((await manual.started).ok).toBeTrue()
 
 		try {
-			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
+			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
+			expect(await waitForAutoFocusState('idle', id)).toBeTrue()
 			expect(autoFocusEvents().at(-1)?.message).toBe('the camera or the focuser is in use by another operation')
 
 			// The refused run leaves the owner of the camera running.
@@ -330,7 +337,7 @@ describe('auto focus handler', () => {
 
 	test('names each device that cannot be used apart from one someone else is using', async () => {
 		const { camera, focuser } = await connectedDevices()
-		const request = autoFocusStartRequest({ id: 'autofocus-unavailable' })
+		const request = autoFocusStartRequest()
 
 		wsm.open(socket)
 
@@ -340,9 +347,9 @@ describe('auto focus handler', () => {
 		resourceArbiter.markUnavailable({ key: resourceKey(focuser), device: focuser })
 
 		try {
-			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
+			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
+			expect(await waitForAutoFocusState('idle', id)).toBeTrue()
 			expect(autoFocusEvents().at(-1)?.message).toBe('the camera and the focuser are not available')
 		} finally {
 			resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
@@ -353,14 +360,14 @@ describe('auto focus handler', () => {
 	test('ends the run with the cause when the capture never produces a frame', async () => {
 		const { camera, focuser } = await connectedDevices()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
-		const request = autoFocusStartRequest({ id: 'autofocus-noframe' })
+		const request = autoFocusStartRequest()
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
+			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
+			expect(await waitForAutoFocusState('idle', id)).toBeTrue()
 			expect(autoFocusEvents().at(-1)?.message).toBe('the capture produced no frame')
 		} finally {
 			capture.mockRestore()
@@ -371,14 +378,14 @@ describe('auto focus handler', () => {
 		const { camera, focuser } = await connectedDevices()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve(successfulOperationResult({ paths: ['focus.fit'], frameCount: 1 })) }))
 		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(() => Promise.resolve([]))
-		const request = autoFocusStartRequest({ id: 'autofocus-nostars' })
+		const request = autoFocusStartRequest()
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
+			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
+			expect(await waitForAutoFocusState('idle', id)).toBeTrue()
 			expect(detect).toHaveBeenCalledWith({ ...request.starDetection, path: 'focus.fit' }, AbortSignal.timeout(5000))
 			expect(autoFocusEvents().map((event) => event.state)).toEqual(['capturing', 'computing', 'idle'])
 			expect(autoFocusEvents().at(-1)?.message).toBe('no stars detected')
@@ -392,15 +399,15 @@ describe('auto focus handler', () => {
 		const { camera, focuser } = await connectedDevices()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve(successfulOperationResult({ paths: ['focus.fit'], frameCount: 1 })) }))
 		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(() => Promise.resolve([star(4), star(2), star(6)]))
-		const request = autoFocusStartRequest({ id: 'autofocus-moving', initialOffsetSteps: 2, stepSize: 25 })
+		const request = autoFocusStartRequest({ initialOffsetSteps: 2, stepSize: 25 })
 		const target = focuser.position.value + 50
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
+			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('moving', request.id)).toBeTrue()
+			expect(await waitForAutoFocusState('moving', id)).toBeTrue()
 
 			const moving = autoFocusEvents().find((event) => event.state === 'moving')
 
@@ -421,14 +428,14 @@ describe('auto focus handler', () => {
 	test('fails the run when the capture reports a terminal failure', async () => {
 		const { camera, focuser } = await connectedDevices()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve(failedOperationResult('timeout', 'capture cleanup failed')) }))
-		const request = autoFocusStartRequest({ id: 'autofocus-release' })
+		const request = autoFocusStartRequest()
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
+			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
+			expect(await waitForAutoFocusState('idle', id)).toBeTrue()
 			expect(autoFocusEvents().at(-1)?.message).toBe('capture cleanup failed')
 		} finally {
 			capture.mockRestore()
@@ -440,14 +447,14 @@ describe('auto focus handler', () => {
 		const best = focuser.position.value
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve(successfulOperationResult({ paths: ['focus.fit'], frameCount: 1 })) }))
 		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(vCurve(focuser, best, 25))
-		const request = autoFocusStartRequest({ id: 'autofocus-best', initialOffsetSteps: 3, stepSize: 25, fittingMode: 'TRENDLINES' })
+		const request = autoFocusStartRequest({ initialOffsetSteps: 3, stepSize: 25, fittingMode: 'TRENDLINES' })
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
+			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('idle', request.id, 25000)).toBeTrue()
+			expect(await waitForAutoFocusState('idle', id, 25000)).toBeTrue()
 			expect(autoFocusEvents().at(-1)?.message).toBe('best focus!')
 			expect(autoFocusEvents().at(-1)?.focusPoint?.x).toBeCloseTo(best, 0)
 			expect(focuser.moving).toBeFalse()

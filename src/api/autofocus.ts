@@ -41,9 +41,9 @@ function terminalMessage(reason: OperationFailureReason, error: string | undefin
 	return error ?? `autofocus failed: ${reason}`
 }
 
-// Runs autofocus searches and exposes them to transport by request id.
+// Runs autofocus searches and exposes them to transport by operation id.
 export class AutoFocusHandler {
-	// Live runs by request id, which is what a stop route names. This is the translation from a transport
+	// Live runs by operation id, which is what a stop route names. This is the translation from a transport
 	// id to an operation, not an ownership index: who holds the camera and the focuser is the arbiter's
 	// answer, and a local copy would only go stale.
 	readonly #runs = new Map<string, OperationHandle<string>>()
@@ -69,9 +69,10 @@ export class AutoFocusHandler {
 	// Both devices are acquired for the whole run on purpose: the samples of a V-curve only mean something
 	// together, so a capture or a focuser move interleaved by another operation would corrupt a search that
 	// is still converging, and every position already sampled would be measured against a different focus.
+	// Returns the operation id, which identifies the run in its events and is what stops it. A refused start
+	// returns an id too: the run is already over, so stopping it is a no-op, and the refusal reaches the
+	// caller through the terminal event rather than through this return.
 	start(camera: Camera, focuser: Focuser, request: AutoFocusStart) {
-		if (this.#runs.has(request.id)) return
-
 		// The request is copied because the run normalizes both the capture and the focus range, and the
 		// caller's object is not this feature's to rewrite.
 		const run = new AutoFocusRun(camera, focuser, structuredClone(request), this)
@@ -81,19 +82,21 @@ export class AutoFocusHandler {
 		]
 		const handle = this.coordinator.start<string>('autoFocus', resources, (context) => run.run(context))
 
-		this.#runs.set(request.id, handle)
+		this.#runs.set(handle.id, handle)
 
 		// Every terminal path lands here, including a start the arbiter refused, which never runs the
 		// executor at all. That is what makes a busy device report itself instead of failing silently.
 		void handle.result.then((result) => {
-			if (this.#runs.get(request.id) === handle) this.#runs.delete(request.id)
+			this.#runs.delete(handle.id)
 			// Availability is read here rather than inside the run because a refused start never reaches the
 			// executor, and that refusal is exactly the case the message has to explain.
-			run.finish(result, this.#unavailableDevices(camera, focuser))
+			run.finish(handle.id, result, this.#unavailableDevices(camera, focuser))
 		})
+
+		return handle.id
 	}
 
-	// Cancels one run and waits for its cleanup; an unknown id is a no-op.
+	// Cancels one run by operation id and waits for its cleanup; an unknown id is a no-op.
 	async stop(id: string) {
 		await this.#runs.get(id)?.cancel()
 	}
@@ -126,13 +129,16 @@ class AutoFocusRun {
 		request.maxPosition ||= focuser.position.max
 		this.#autoFocus = new AutoFocus(request)
 
-		this.#event.id = request.id
 		this.#event.camera = camera.id
 		this.#event.focuser = focuser.id
 	}
 
 	// Captures, measures, and moves until the state machine terminates, reporting the terminal message.
 	async run(context: OperationContext): Promise<OperationResult<string>> {
+		// Every event of this run is keyed by the operation id, and the executor publishes the first one
+		// before the caller ever sees the handle, so the id is bound here rather than after the start returns.
+		this.#event.id = context.id
+
 		const { capture } = this.request
 
 		capture.delay = 0
@@ -232,8 +238,10 @@ class AutoFocusRun {
 	}
 
 	// Publishes the single idle event that ends this run, whatever terminated it. The device names are
-	// those the arbiter reported as unusable at that moment, and only a refused start reads them.
-	finish(result: OperationResult<string>, unavailable: readonly string[]) {
+	// those the arbiter reported as unusable at that moment, and only a refused start reads them. The id is
+	// taken from the handle because a refused start never reaches the executor that would have bound it.
+	finish(id: string, result: OperationResult<string>, unavailable: readonly string[]) {
+		this.#event.id = id
 		this.#publish('idle', result.ok ? result.value : terminalMessage(result.reason, result.error, unavailable))
 	}
 

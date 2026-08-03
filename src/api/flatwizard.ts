@@ -38,9 +38,9 @@ function terminalMessage(reason: OperationFailureReason, error: string | undefin
 	return error ?? `flat wizard failed: ${reason}`
 }
 
-// Runs flat wizard searches and exposes them to transport by request id.
+// Runs flat wizard searches and exposes them to transport by operation id.
 export class FlatWizardHandler {
-	// Live runs by request id, which is what a stop route names. This is the translation from a transport
+	// Live runs by operation id, which is what a stop route names. This is the translation from a transport
 	// id to an operation, the same role the session map has in the capturer — not an ownership index, since
 	// who holds the camera is the arbiter's answer and a local copy would only go stale.
 	readonly #runs = new Map<string, OperationHandle<string>>()
@@ -64,27 +64,30 @@ export class FlatWizardHandler {
 	// Holding the camera across the whole search is the point: the bisection is a sequence of exposures
 	// whose results only mean something together, and releasing it between two of them would let another
 	// operation expose in the middle of a search that is still converging.
+	// Returns the operation id, which identifies the run in its events and is what stops it. A refused start
+	// returns an id too: the run is already over, so stopping it is a no-op, and the refusal reaches the
+	// caller through the terminal event rather than through this return.
 	start(camera: Camera, request: FlatWizardStart) {
-		if (this.#runs.has(request.id)) return
-
 		// The request is copied because the run normalizes it into a single flat exposure, and the caller's
 		// object is not this feature's to rewrite.
 		const run = new FlatWizardRun(camera, structuredClone(request), this)
 		const handle = this.coordinator.start<string>('flatWizard', [{ key: resourceKey(camera), device: camera }], (context) => run.run(context))
 
-		this.#runs.set(request.id, handle)
+		this.#runs.set(handle.id, handle)
 
 		// Every terminal path lands here, including a start the arbiter refused, which never runs the
 		// executor at all. That is what makes a busy camera report itself instead of failing silently.
 		void handle.result.then((result) => {
-			if (this.#runs.get(request.id) === handle) this.#runs.delete(request.id)
+			this.#runs.delete(handle.id)
 			// The availability is read here rather than inside the run because a refused start never reaches
 			// the executor at all, and that refusal is exactly the case the message has to explain.
-			run.finish(result, this.coordinator.arbiter.availability(resourceKey(camera)))
+			run.finish(handle.id, result, this.coordinator.arbiter.availability(resourceKey(camera)))
 		})
+
+		return handle.id
 	}
 
-	// Cancels one run and waits for its cleanup; an unknown id is a no-op.
+	// Cancels one run by operation id and waits for its cleanup; an unknown id is a no-op.
 	async stop(id: string) {
 		await this.#runs.get(id)?.cancel()
 	}
@@ -105,7 +108,6 @@ class FlatWizardRun {
 		readonly request: FlatWizardStart,
 		readonly handler: FlatWizardHandler,
 	) {
-		this.#event.id = request.id
 		this.#event.camera = camera.id
 
 		this.#exposure.min = Math.min(request.minExposure, request.maxExposure)
@@ -119,6 +121,10 @@ class FlatWizardRun {
 
 	// Captures and measures until the median fits or the interval collapses, reporting the terminal message.
 	async run(context: OperationContext): Promise<OperationResult<string>> {
+		// Every event of this run is keyed by the operation id, and the executor publishes the first one
+		// before the caller ever sees the handle, so the id is bound here rather than after the start returns.
+		this.#event.id = context.id
+
 		const { capture } = this.request
 
 		while (true) {
@@ -183,8 +189,10 @@ class FlatWizardRun {
 	}
 
 	// Publishes the single idle event that ends this run, whatever terminated it. The availability is the
-	// camera's as of that moment, and only a refused start reads it.
-	finish(result: OperationResult<string>, availability: ResourceAvailability) {
+	// camera's as of that moment, and only a refused start reads it. The id is taken from the handle because
+	// a refused start never reaches the executor that would have bound it.
+	finish(id: string, result: OperationResult<string>, availability: ResourceAvailability) {
+		this.#event.id = id
 		this.#publish('idle', result.ok ? result.value : terminalMessage(result.reason, result.error, availability))
 	}
 

@@ -25,7 +25,7 @@ import { DEFAULT_DARV_START } from '#/darv'
 import type { DarvStart, DarvEvent } from '#/darv'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
-import { captureHandle, noContent, SocketMessager, waitUntil } from './util'
+import { captureHandle, json, noContent, SocketMessager, waitUntil } from './util'
 
 type DarvStartOverrides = Omit<Partial<DarvStart>, 'capture'> & {
 	readonly capture?: Partial<DarvStart['capture']>
@@ -121,6 +121,10 @@ function startRequest(camera: Camera, mount: Mount, body: DarvStart) {
 	} as unknown as Bun.BunRequest
 }
 
+function startRun(request: Bun.BunRequest) {
+	return endpoints['/darv/:camera/:mount/start'].POST(request).then((response) => json<string>(response))
+}
+
 function stopRequest(id: string) {
 	return {
 		url: `http://localhost/darv/${encodeURIComponent(id)}/stop`,
@@ -147,7 +151,6 @@ describe('darv handler', () => {
 		const pulseEast = spyOn(guideOutputManager, 'pulseEast')
 		const pulseWest = spyOn(guideOutputManager, 'pulseWest')
 		const request = darvStartRequest({
-			id: 'darv',
 			initialPause: 0,
 			duration: 0.02,
 			hemisphere: 'northern',
@@ -170,9 +173,9 @@ describe('darv handler', () => {
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('idle', request.id, 5000)).toBeTrue()
+			expect(await waitForDarvState('idle', id, 5000)).toBeTrue()
 			expect(capture).toHaveBeenCalledTimes(1)
 			expect(capture.mock.calls[0][0]).toHaveProperty('kind', 'darv')
 			expect(capture.mock.calls[0][1]).toBe(camera)
@@ -196,7 +199,7 @@ describe('darv handler', () => {
 			expect(request.capture.frameType).toBe('DARK')
 
 			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'forwarding', 'backwarding', 'idle'])
-			expect(darvEvents().every((event) => event.id === request.id && event.camera === camera.id && event.mount === mount.id)).toBeTrue()
+			expect(darvEvents().every((event) => event.id === id && event.camera === camera.id && event.mount === mount.id)).toBeTrue()
 			expect(darvEvents().at(-1)?.message).toBeUndefined()
 			expect(pulseWest.mock.calls.map((call) => call[1])).toEqual([10, 0, 0, 0])
 			expect(pulseEast.mock.calls.map((call) => call[1])).toEqual([0, 0, 10, 0])
@@ -212,14 +215,14 @@ describe('darv handler', () => {
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
 		const pulseEast = spyOn(guideOutputManager, 'pulseEast')
 		const pulseWest = spyOn(guideOutputManager, 'pulseWest')
-		const request = darvStartRequest({ id: 'darv-southern', initialPause: 0, duration: 0.02, hemisphere: 'southern' })
+		const request = darvStartRequest({ initialPause: 0, duration: 0.02, hemisphere: 'southern' })
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('idle', request.id, 5000)).toBeTrue()
+			expect(await waitForDarvState('idle', id, 5000)).toBeTrue()
 			expect(pulseEast.mock.calls.map((call) => call[1])).toEqual([10, 0, 0, 0])
 			expect(pulseWest.mock.calls.map((call) => call[1])).toEqual([0, 0, 10, 0])
 		} finally {
@@ -235,12 +238,12 @@ describe('darv handler', () => {
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ started: started.promise }))
 		const pulseEast = spyOn(guideOutputManager, 'pulseEast')
 		const pulseWest = spyOn(guideOutputManager, 'pulseWest')
-		const request = darvStartRequest({ id: 'darv-not-started', initialPause: 0, duration: 0.02 })
+		const request = darvStartRequest({ initialPause: 0, duration: 0.02 })
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+			const id = await startRun(startRequest(camera, mount, request))
 
 			expect(capture).toHaveBeenCalledTimes(1)
 			expect(darvMessages()).toHaveLength(0)
@@ -249,7 +252,7 @@ describe('darv handler', () => {
 
 			started.resolve(failedOperationResult('alert', 'the camera refused the exposure'))
 
-			expect(await waitForDarvState('idle', request.id)).toBeTrue()
+			expect(await waitForDarvState('idle', id)).toBeTrue()
 			expect(darvEvents().map((event) => event.state)).toEqual(['idle'])
 			expect(darvEvents().at(-1)?.message).toBe('the camera refused the exposure')
 			expect(pulseEast).not.toHaveBeenCalled()
@@ -265,13 +268,14 @@ describe('darv handler', () => {
 	test('holds the camera and the mount for the whole run', async () => {
 		const { camera, mount } = await connectedDevices()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
-		const request = darvStartRequest({ id: 'darv-owns', initialPause: 5, duration: 1 })
+		const request = darvStartRequest({ initialPause: 5, duration: 1 })
+		let id = ''
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
-			expect(await waitForDarvState('waiting', request.id)).toBeTrue()
+			id = await startRun(startRequest(camera, mount, request))
+			expect(await waitForDarvState('waiting', id)).toBeTrue()
 
 			const cameraIntruder = operationCoordinator.start('cameraCapture', [{ key: resourceKey(camera), device: camera }], () => successfulOperationResult(undefined))
 			const mountIntruder = operationCoordinator.start('mountGoTo', [{ key: resourceKey(mount), device: mount }], () => successfulOperationResult(undefined))
@@ -279,7 +283,7 @@ describe('darv handler', () => {
 			expect((await cameraIntruder.result).ok).toBeFalse()
 			expect((await mountIntruder.result).ok).toBeFalse()
 		} finally {
-			await darvHandler.stop(request.id)
+			await darvHandler.stop(id)
 			capture.mockRestore()
 		}
 	})
@@ -287,18 +291,18 @@ describe('darv handler', () => {
 	test('stops an active run through the endpoint and reports it once', async () => {
 		const { camera, mount } = await connectedDevices()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
-		const request = darvStartRequest({ id: 'darv-stop', initialPause: 5, duration: 1 })
+		const request = darvStartRequest({ initialPause: 5, duration: 1 })
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('waiting', request.id)).toBeTrue()
+			expect(await waitForDarvState('waiting', id)).toBeTrue()
 
-			await noContent(await endpoints['/darv/:id/stop'].POST(stopRequest(request.id)))
+			await noContent(await endpoints['/darv/:id/stop'].POST(stopRequest(id)))
 
-			expect(await waitForDarvState('idle', request.id)).toBeTrue()
+			expect(await waitForDarvState('idle', id)).toBeTrue()
 			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'idle'])
 			expect(darvEvents().filter((event) => event.state === 'idle')).toHaveLength(1)
 			expect(darvEvents().at(-1)?.message).toBe('stopped')
@@ -308,22 +312,27 @@ describe('darv handler', () => {
 		}
 	})
 
-	test('ignores a duplicate run for the same request id', async () => {
+	test('refuses a second run over the same devices without disturbing the live one', async () => {
 		const { camera, mount } = await connectedDevices()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
-		const request = darvStartRequest({ id: 'darv-duplicate', initialPause: 5, duration: 1 })
+		const request = darvStartRequest({ initialPause: 5, duration: 1 })
+		let id = ''
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
-			expect(await waitForDarvState('waiting', request.id)).toBeTrue()
+			id = await startRun(startRequest(camera, mount, request))
+			expect(await waitForDarvState('waiting', id)).toBeTrue()
 
-			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+			const refused = await startRun(startRequest(camera, mount, request))
 
+			expect(refused).not.toBe(id)
 			expect(capture).toHaveBeenCalledTimes(1)
+
+			expect(await waitForDarvState('idle', refused)).toBeTrue()
+			expect(darvEvents().some((event) => event.id === id && event.state === 'idle')).toBeFalse()
 		} finally {
-			await darvHandler.stop(request.id)
+			await darvHandler.stop(id)
 			capture.mockRestore()
 		}
 	})
@@ -338,7 +347,7 @@ describe('darv handler', () => {
 
 	test('reports devices already owned by another operation instead of failing silently', async () => {
 		const { camera, mount } = await connectedDevices()
-		const request = darvStartRequest({ id: 'darv-busy', initialPause: 0, duration: 0.02 })
+		const request = darvStartRequest({ initialPause: 0, duration: 0.02 })
 		const owner = operationCoordinator.start(
 			'cameraCapture',
 			[{ key: resourceKey(camera), device: camera }],
@@ -351,9 +360,9 @@ describe('darv handler', () => {
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('idle', request.id)).toBeTrue()
+			expect(await waitForDarvState('idle', id)).toBeTrue()
 			expect(darvEvents().at(-1)?.message).toBe('the camera or the mount is in use by another operation')
 		} finally {
 			await owner.cancel()
@@ -362,7 +371,7 @@ describe('darv handler', () => {
 
 	test('names each device that cannot be used apart from one someone else is using', async () => {
 		const { camera, mount } = await connectedDevices()
-		const request = darvStartRequest({ id: 'darv-unavailable', initialPause: 0, duration: 0.02 })
+		const request = darvStartRequest({ initialPause: 0, duration: 0.02 })
 
 		wsm.open(socket)
 
@@ -370,9 +379,9 @@ describe('darv handler', () => {
 		resourceArbiter.markUnavailable({ key: resourceKey(mount), device: mount })
 
 		try {
-			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('idle', request.id)).toBeTrue()
+			expect(await waitForDarvState('idle', id)).toBeTrue()
 			expect(darvEvents().at(-1)?.message).toBe('the camera and the mount are not available')
 		} finally {
 			resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
@@ -384,14 +393,14 @@ describe('darv handler', () => {
 		const { camera, mount } = await connectedDevices()
 		const failed: Promise<OperationResult<CameraCaptureResult>> = Promise.resolve(failedOperationResult('timeout', 'capture cleanup failed'))
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: failed }))
-		const request = darvStartRequest({ id: 'darv-capture-failure', initialPause: 0, duration: 0.02 })
+		const request = darvStartRequest({ initialPause: 0, duration: 0.02 })
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('idle', request.id, 5000)).toBeTrue()
+			expect(await waitForDarvState('idle', id, 5000)).toBeTrue()
 			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'idle'])
 			expect(darvEvents().at(-1)?.message).toBe('capture cleanup failed')
 		} finally {
@@ -405,18 +414,18 @@ describe('darv handler', () => {
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: failed.promise }))
 		const pulseEast = spyOn(guideOutputManager, 'pulseEast')
 		const pulseWest = spyOn(guideOutputManager, 'pulseWest')
-		const request = darvStartRequest({ id: 'darv-capture-mid-leg', initialPause: 0, duration: 4, hemisphere: 'northern' })
+		const request = darvStartRequest({ initialPause: 0, duration: 4, hemisphere: 'northern' })
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('forwarding', request.id)).toBeTrue()
+			expect(await waitForDarvState('forwarding', id)).toBeTrue()
 
 			failed.resolve(failedOperationResult('alert', 'the exposure was aborted by the driver'))
 
-			expect(await waitForDarvState('idle', request.id, 5000)).toBeTrue()
+			expect(await waitForDarvState('idle', id, 5000)).toBeTrue()
 			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'forwarding', 'idle'])
 			expect(darvEvents().at(-1)?.message).toBe('the exposure was aborted by the driver')
 			expect(pulseEast.mock.calls.filter((call) => call[1] > 0)).toHaveLength(0)
@@ -433,14 +442,14 @@ describe('darv handler', () => {
 		const { camera, mount } = await connectedDevices()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
 		const pulse = spyOn(guideOutputCommander, 'pulse').mockImplementation(() => Promise.resolve(successfulOperationResult(undefined)))
-		const request = darvStartRequest({ id: 'darv-settle-budget', initialPause: 0, duration: 0.02 })
+		const request = darvStartRequest({ initialPause: 0, duration: 0.02 })
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('idle', request.id, 5000)).toBeTrue()
+			expect(await waitForDarvState('idle', id, 5000)).toBeTrue()
 			expect(pulse).toHaveBeenCalledTimes(2)
 
 			const exposure = capture.mock.calls[0][2].exposureTime * 1000
@@ -464,14 +473,14 @@ describe('darv handler', () => {
 			await Bun.sleep(6100)
 			return successfulOperationResult(undefined)
 		})
-		const request = darvStartRequest({ id: 'darv-settle-exhausted', initialPause: 0, duration: 0.02 })
+		const request = darvStartRequest({ initialPause: 0, duration: 0.02 })
 
 		try {
 			wsm.open(socket)
 
-			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
+			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('idle', request.id, 10000)).toBeTrue()
+			expect(await waitForDarvState('idle', id, 10000)).toBeTrue()
 			expect(pulse).toHaveBeenCalledTimes(1)
 			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'forwarding', 'backwarding', 'idle'])
 			expect(darvEvents().at(-1)?.message).toBe('the exposure ends before the trail can be finished')

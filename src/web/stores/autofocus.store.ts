@@ -39,6 +39,7 @@ export function autoFocusStore(api: DockviewPanelApi) {
 
 	const u: VoidFunction[] = []
 	let mounted = false
+	let operationId: string | undefined
 
 	function mount() {
 		if (mounted) return unmount
@@ -68,8 +69,6 @@ export function autoFocusStore(api: DockviewPanelApi) {
 		u[4] = subscribeKey(state, 'focuser', updateTitle)
 
 		updateTitle()
-
-		state.request.id = id
 
 		return unmount
 	}
@@ -131,17 +130,17 @@ export function autoFocusStore(api: DockviewPanelApi) {
 
 		state.running = true
 
-		const response = await Api.AutoFocus.start(state.camera, state.focuser, state.request)
+		operationId = await Api.AutoFocus.start(state.camera, state.focuser, state.request)
 
-		if (!response?.ok) {
+		if (!operationId) {
 			reset()
 		}
 	}
 
 	async function stop() {
-		if (!state.running) return
+		if (!state.running || !operationId) return
 
-		const response = await Api.AutoFocus.stop(state.request.id)
+		const response = await Api.AutoFocus.stop(operationId)
 
 		if (response?.ok) {
 			reset()

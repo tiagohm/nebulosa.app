@@ -57,9 +57,9 @@ function captureFailure(handle: CameraCaptureHandle): Promise<OperationResult<vo
 	})
 }
 
-// Runs DARV drift alignment sessions and exposes them to transport by request id.
+// Runs DARV drift alignment sessions and exposes them to transport by operation id.
 export class DarvHandler {
-	// Live runs by request id, which is what a stop route names. This is the translation from a transport
+	// Live runs by operation id, which is what a stop route names. This is the translation from a transport
 	// id to an operation, not an ownership index: who holds the camera and the mount is the arbiter's
 	// answer, and a local copy would only go stale.
 	readonly #runs = new Map<string, OperationHandle<void>>()
@@ -85,9 +85,10 @@ export class DarvHandler {
 	// is the same resource under either name, so nothing else can slew it while the trail is being drawn.
 	// The duplicate-device guard the task list used to apply is gone with it: a second run over the same
 	// camera or mount is now refused by the arbiter.
+	// Returns the operation id, which identifies the run in its events and is what stops it. A refused start
+	// returns an id too: the run is already over, so stopping it is a no-op, and the refusal reaches the
+	// caller through the terminal event rather than through this return.
 	start(request: DarvStart, camera: Camera, mount: Mount) {
-		if (this.#runs.has(request.id)) return
-
 		// The request is copied because the run normalizes the capture, and the caller's object is not this
 		// feature's to rewrite.
 		const run = new DarvRun(camera, mount, structuredClone(request), this)
@@ -97,19 +98,21 @@ export class DarvHandler {
 		]
 		const handle = this.coordinator.start<void>('darv', resources, (context) => run.run(context))
 
-		this.#runs.set(request.id, handle)
+		this.#runs.set(handle.id, handle)
 
 		// Every terminal path lands here, including a start the arbiter refused, which never runs the
 		// executor at all. That is what makes a busy device report itself instead of failing silently.
 		void handle.result.then((result) => {
-			if (this.#runs.get(request.id) === handle) this.#runs.delete(request.id)
+			this.#runs.delete(handle.id)
 			// Availability is read here rather than inside the run because a refused start never reaches the
 			// executor, and that refusal is exactly the case the message has to explain.
-			run.finish(result, this.#unavailableDevices(camera, mount))
+			run.finish(handle.id, result, this.#unavailableDevices(camera, mount))
 		})
+
+		return handle.id
 	}
 
-	// Cancels one run and waits for its cleanup; an unknown id is a no-op.
+	// Cancels one run by operation id and waits for its cleanup; an unknown id is a no-op.
 	async stop(id: string) {
 		await this.#runs.get(id)?.cancel()
 	}
@@ -140,13 +143,16 @@ class DarvRun {
 		readonly request: DarvStart,
 		readonly handler: DarvHandler,
 	) {
-		this.#event.id = request.id
 		this.#event.camera = camera.id
 		this.#event.mount = mount.id
 	}
 
 	// Exposes one frame and draws the trail into it, pulsing only once the exposure has really begun.
 	async run(context: OperationContext): Promise<OperationResult<void>> {
+		// Every event of this run is keyed by the operation id, and the executor publishes the first one
+		// before the caller ever sees the handle, so the id is bound here rather than after the start returns.
+		this.#event.id = context.id
+
 		const { capture } = this.request
 
 		capture.autoSave = false
@@ -216,8 +222,10 @@ class DarvRun {
 	}
 
 	// Publishes the single idle event that ends this run, whatever terminated it. The device names are
-	// those the arbiter reported as unusable at that moment, and only a refused start reads them.
-	finish(result: OperationResult<void>, unavailable: readonly string[]) {
+	// those the arbiter reported as unusable at that moment, and only a refused start reads them. The id is
+	// taken from the handle because a refused start never reaches the executor that would have bound it.
+	finish(id: string, result: OperationResult<void>, unavailable: readonly string[]) {
+		this.#event.id = id
 		this.#publish('idle', result.ok ? undefined : terminalMessage(result.reason, result.error, unavailable))
 	}
 

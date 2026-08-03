@@ -8,7 +8,6 @@ import type { StarDetection } from '#/stardetection'
 export type AutoFocusState = 'idle' | 'moving' | 'capturing' | 'computing'
 
 export interface AutoFocusStart extends AutoFocusOptions {
-	id: string
 	readonly capture: CameraCaptureStart
 	readonly starDetection: StarDetection
 }
@@ -33,7 +32,6 @@ export interface AutoFocusEvent {
 }
 
 export const DEFAULT_AUTO_FOCUS_START: AutoFocusStart = {
-	id: '',
 	capture: DEFAULT_CAMERA_CAPTURE_START,
 	starDetection: DEFAULT_STAR_DETECTION,
 	initialOffsetSteps: 5,

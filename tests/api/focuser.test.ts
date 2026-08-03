@@ -210,8 +210,8 @@ describe('focuser handler', () => {
 		const message = socket.find<Notification>((message) => message.type === 'notification')
 
 		expect(message!.body.title).toBe('FOCUSER')
-		expect(message!.body.color).toBe('danger')
-		expect(message!.body.description).toContain('failed to move to position 1000')
+		expect(message!.body.color).toBe('warning')
+		expect(message!.body.description).toContain('could not move to position 1000')
 	})
 
 	test('emits remove event when the simulator is disposed', () => {

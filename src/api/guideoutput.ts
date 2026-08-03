@@ -12,6 +12,7 @@ import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
+import { detachOperation } from './operation.notify'
 import { resourceKey } from './resource'
 
 export interface GuideOutputBusEvents {
@@ -74,12 +75,7 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 	pulse(device: GuideOutput, pulses: readonly GuidePulse[]) {
 		const directions = pulses.map((pulse) => pulse.direction).join(' and ')
 
-		void this.commander.pulseAxes(this.coordinator, device, pulses).then((result) => {
-			if (result.ok) return
-
-			console.error('guide output failed to pulse %s:', directions, device.name, result.reason, result.error ?? '')
-			this.notification.send({ title: 'GUIDE OUTPUT', description: `${device.name} failed to pulse ${directions}: ${result.error ?? result.reason}`, color: 'danger' })
-		})
+		detachOperation(this.notification, 'GUIDE OUTPUT', device.name, `pulse ${directions}`, () => this.commander.pulseAxes(this.coordinator, device, pulses))
 	}
 
 	// Stops any pulse: first by cancelling whatever operation owns the device, so its own cleanup runs, and

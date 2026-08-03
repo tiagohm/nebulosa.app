@@ -11,6 +11,7 @@ import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
+import { detachOperation } from './operation.notify'
 import type { WheelCommander } from './wheel.commander'
 
 export interface WheelBusEvents {
@@ -73,18 +74,9 @@ export class WheelHandler implements DeviceHandler<Wheel> {
 		return this.commander.setNames(this.coordinator, wheel, names)
 	}
 
-	// Runs a command whose physical completion outlasts the request that asked for it.
-	// The HTTP response is gone by the time the wheel settles, and a refused command moves nothing, so it
-	// emits no device update either: without a notification the user would see the action silently
-	// discarded. Failures are therefore pushed over the WebSocket, which is the same path every other
-	// asynchronous failure in the API already uses.
+	// Runs a command whose physical completion outlasts the request that asked for it, notifying its failure.
 	#detach(wheel: Wheel, action: string, command: () => Promise<OperationResult<unknown>>) {
-		void command().then((result) => {
-			if (result.ok) return
-
-			console.error('wheel failed to %s:', action, wheel.name, result.reason, result.error ?? '')
-			this.notification.send({ title: 'FILTER WHEEL', description: `${wheel.name} failed to ${action}: ${result.error ?? result.reason}`, color: 'danger' })
-		})
+		detachOperation(this.notification, 'FILTER WHEEL', wheel.name, action, command)
 	}
 }
 

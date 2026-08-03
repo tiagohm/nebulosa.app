@@ -12,6 +12,7 @@ import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
+import { detachOperation } from './operation.notify'
 import { resourceKey } from './resource'
 
 export interface FocuserBusEvents {
@@ -99,18 +100,9 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 		return await this.commander.stopMotion(focuser)
 	}
 
-	// Runs a command whose physical completion outlasts the request that asked for it.
-	// The HTTP response is gone by the time the move settles, and a refused command moves nothing, so it
-	// emits no device update either: without a notification the user would see the action silently
-	// discarded. Failures are therefore pushed over the WebSocket, which is the same path every other
-	// asynchronous failure in the API already uses.
+	// Runs a command whose physical completion outlasts the request that asked for it, notifying its failure.
 	#detach(focuser: Focuser, action: string, command: () => Promise<OperationResult<unknown>>) {
-		void command().then((result) => {
-			if (result.ok) return
-
-			console.error('focuser failed to %s:', action, focuser.name, result.reason, result.error ?? '')
-			this.notification.send({ title: 'FOCUSER', description: `${focuser.name} failed to ${action}: ${result.error ?? result.reason}`, color: 'danger' })
-		})
+		detachOperation(this.notification, 'FOCUSER', focuser.name, action, command)
 	}
 }
 

@@ -35,7 +35,7 @@ const resourceArbiter = new ResourceArbiter()
 const operationCoordinator = new OperationCoordinator(resourceArbiter)
 const mountCommander = new MountCommander(mountManager)
 const mountHandler = new MountHandler(wsm, mountManager, confirmation, notification, mountCommander, operationCoordinator)
-const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager, mountCommander, operationCoordinator)
+const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager, notification, mountCommander, operationCoordinator)
 const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
 deviceLifecycle.observe(mountManager)
 const endpoints = mountEndpoints(mountHandler, mountRemoteControlHandler)
@@ -337,8 +337,8 @@ describe('mount handler', () => {
 		const message = socket.find<Notification>((message) => message.type === 'notification')
 
 		expect(message!.body.title).toBe('MOUNT')
-		expect(message!.body.color).toBe('danger')
-		expect(message!.body.description).toContain('failed to park')
+		expect(message!.body.color).toBe('warning')
+		expect(message!.body.description).toContain('could not park')
 	})
 
 	test('reports remote control status through endpoints', async () => {

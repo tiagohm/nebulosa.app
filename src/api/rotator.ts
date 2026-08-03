@@ -11,6 +11,7 @@ import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
+import { detachOperation } from './operation.notify'
 import { resourceKey } from './resource'
 import type { RotatorCommander } from './rotator.commander'
 
@@ -91,18 +92,9 @@ export class RotatorHandler implements DeviceHandler<Rotator> {
 		return await this.commander.stopMotion(rotator)
 	}
 
-	// Runs a command whose physical completion outlasts the request that asked for it.
-	// The HTTP response is gone by the time the rotator settles, and a refused command moves nothing, so it
-	// emits no device update either: without a notification the user would see the action silently
-	// discarded. Failures are therefore pushed over the WebSocket, which is the same path every other
-	// asynchronous failure in the API already uses.
+	// Runs a command whose physical completion outlasts the request that asked for it, notifying its failure.
 	#detach(rotator: Rotator, action: string, command: () => Promise<OperationResult<unknown>>) {
-		void command().then((result) => {
-			if (result.ok) return
-
-			console.error('rotator failed to %s:', action, rotator.name, result.reason, result.error ?? '')
-			this.notification.send({ title: 'ROTATOR', description: `${rotator.name} failed to ${action}: ${result.error ?? result.reason}`, color: 'danger' })
-		})
+		detachOperation(this.notification, 'ROTATOR', rotator.name, action, command)
 	}
 }
 

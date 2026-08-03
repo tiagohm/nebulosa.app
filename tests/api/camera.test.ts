@@ -25,11 +25,13 @@ import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import type { Messager } from 'src/api/message'
+import { NotificationHandler } from 'src/api/notification'
 import { OperationCoordinator } from 'src/api/operation'
 import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraAdded, CameraRemoved, CameraUpdated, CameraCaptureEvent, CameraCaptureStart, CameraDither, CameraFrameEvent } from '#/camera'
 import type { GuiderDither } from '#/guider'
+import type { Notification } from '#/notification'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import { json, noContent, SocketMessager, waitUntil } from './util'
@@ -56,7 +58,7 @@ const rotatorManager = new RotatorManager()
 const resourceArbiter = new ResourceArbiter()
 const operationCoordinator = new OperationCoordinator(resourceArbiter)
 const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourceArbiter)
-const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, new CameraCommander(cameraManager), operationCoordinator)
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, new NotificationHandler(wsm), cameraCapturer, new CameraCommander(cameraManager), operationCoordinator)
 const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
 deviceLifecycle.observe(cameraManager)
 const endpoints = cameraEndpoints(cameraHandler)
@@ -260,6 +262,32 @@ describe('camera capture start request', () => {
 		}
 	}, 5000)
 
+	test('notifies a capture refused because the camera is already exposing', async () => {
+		const camera = getCamera()
+
+		wsm.open(socket)
+		cameraManager.connect(camera)
+
+		const handle = cameraHandler.capture(operationCoordinator, camera, captureStartRequest({ exposureMode: 'loop', exposureTime: 500, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO', autoSave: false }))
+
+		expect(await handle.started).toEqual(successfulOperationResult(undefined))
+
+		socket.clear()
+
+		const refused = await json<{ started: { readonly ok: boolean } }>(await endpoints['/cameras/:id/start'].POST(endpointRequest(camera.id, captureStartRequest({ exposureTime: 200, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO', autoSave: false }))))
+
+		expect(refused.started.ok).toBeFalse()
+
+		const message = socket.find<Notification>((message) => message.type === 'notification')
+
+		expect(message!.body.title).toBe('CAMERA')
+		expect(message!.body.color).toBe('warning')
+		expect(message!.body.description).toContain('could not start the capture')
+
+		await cameraHandler.stop(camera)
+		await handle.result
+	})
+
 	test('sends add event to a socket opened after discovery', async () => {
 		const camera = getCamera()
 
@@ -305,7 +333,7 @@ describe('camera capture start request', () => {
 		const imageProcessor = new ImageProcessor()
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, new CameraCommander(cameraManager), coordinator)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, new NotificationHandler(wsm), cameraCapturer, new CameraCommander(cameraManager), coordinator)
 		const handler = new IndiClientHandlerSet([cameraManager, mountManager, wheelManager, focuserManager, rotatorManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const cameraSimulator = new CameraSimulator('Camera Simulator', client)
@@ -883,7 +911,7 @@ describe('camera capture start request', () => {
 
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, new CameraCommander(cameraManager), coordinator)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, new NotificationHandler(wsm), capturer, new CameraCommander(cameraManager), coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 
@@ -920,7 +948,7 @@ describe('camera capture start request', () => {
 
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, new CameraCommander(cameraManager), coordinator)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, new NotificationHandler(wsm), capturer, new CameraCommander(cameraManager), coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 		const request = captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', dither: { enabled: true, guider: 'guider-1' } })
@@ -952,7 +980,7 @@ describe('camera capture start request', () => {
 
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, new CameraCommander(cameraManager), coordinator)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, new NotificationHandler(wsm), capturer, new CameraCommander(cameraManager), coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 		const request = captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', dither: { enabled: true, guider: 'guider-1' } })
@@ -986,7 +1014,7 @@ describe('camera capture start request', () => {
 
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, new CameraCommander(cameraManager), coordinator)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, new NotificationHandler(wsm), capturer, new CameraCommander(cameraManager), coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 		const request = captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', dither: { enabled: true } })
@@ -1017,7 +1045,7 @@ describe('camera capture start request', () => {
 
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, new CameraCommander(cameraManager), coordinator)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, new NotificationHandler(wsm), capturer, new CameraCommander(cameraManager), coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 		const request = captureStartRequest({ exposureTime: 100, exposureTimeUnit: 'millisecond', dither: { enabled: true, guider: 'guider-1' } })

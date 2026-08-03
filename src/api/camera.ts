@@ -13,7 +13,9 @@ import { query, response } from './http'
 import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
+import type { NotificationHandler } from './notification'
 import type { OperationCoordinator, OperationScope } from './operation'
+import { notifyOperationFailure } from './operation.notify'
 import { resourceKey } from './resource'
 
 // Presentation events fanned out to WebSocket subscribers. These publish state and never participate in
@@ -44,6 +46,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		readonly wheelManager: WheelManager,
 		readonly focuserManager: FocuserManager,
 		readonly rotatorManager: RotatorManager,
+		readonly notification: NotificationHandler,
 		readonly capturer: CameraCapturer,
 		readonly commander: CameraCommander,
 		readonly coordinator: OperationCoordinator,
@@ -170,8 +173,13 @@ export function camera(cameraHandler: CameraHandler) {
 		'/cameras/:id/temperature': { POST: async (req) => response<OperationResult<void>>(await cameraHandler.temperature(cameraFromParams(req), await req.json())) },
 		'/cameras/:id/start': {
 			POST: async (req) => {
-				const handle = cameraHandler.capture(cameraHandler.coordinator, cameraFromParams(req), await req.json())
-				return response({ id: handle.id, started: await handle.started })
+				const camera = cameraFromParams(req)
+				const handle = cameraHandler.capture(cameraHandler.coordinator, camera, await req.json())
+				const started = await handle.started
+				// The button that started the capture cannot tell a refusal from a slow driver, since both
+				// leave the panel without any progress event, so the reason is pushed to the browser.
+				notifyOperationFailure(cameraHandler.notification, 'CAMERA', camera.name, 'start the capture', started)
+				return response({ id: handle.id, started })
 			},
 		},
 		'/cameras/:id/stop': { POST: async (req) => response(await cameraHandler.stop(query(req).operation || cameraFromParams(req))) },

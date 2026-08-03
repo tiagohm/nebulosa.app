@@ -233,12 +233,12 @@ const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourc
 // Coordinated camera service owns the cooling controls, so nothing changes the thermal state of a sensor
 // that is already integrating a frame.
 const cameraCommander = new CameraCommander(cameraManager)
-const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, cameraCommander, operationCoordinator)
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, notificationHandler, cameraCapturer, cameraCommander, operationCoordinator)
 // Coordinated mount service owns every mutation, so HTTP, protocol adapters, and composite features
 // compete for the mount under the same ownership rules.
 const mountCommander = new MountCommander(mountManager)
 const mountHandler = new MountHandler(wsm, mountManager, confirmationHandler, notificationHandler, mountCommander, operationCoordinator)
-const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager, mountCommander, operationCoordinator)
+const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager, notificationHandler, mountCommander, operationCoordinator)
 // Coordinated focuser service owns every mutation, so HTTP and composite features such as autofocus
 // compete for the focuser under the same ownership rules.
 const focuserCommander = new FocuserCommander(focuserManager)

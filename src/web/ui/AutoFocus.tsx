@@ -17,17 +17,13 @@ import { memo, useContext } from 'react'
 import { CartesianGrid, ComposedChart, Line, ReferenceDot, Scatter, XAxis, YAxis } from 'recharts'
 import { useSnapshot } from 'valtio'
 
-export interface AutoFocusParams {
-	readonly id: string
-}
-
 interface FocusChartPoint {
 	readonly position: number
 	readonly hfd: number
 }
 
-export const AutoFocus = memo(({ api, params }: IDockviewPanelProps<AutoFocusParams>) => {
-	const autoFocus = useStore(() => autoFocusStore(params.id, api), [params.id])
+export const AutoFocus = memo(({ api }: IDockviewPanelProps) => {
+	const autoFocus = useStore(() => autoFocusStore(api), [api.id])
 
 	return (
 		<AutoFocusStoreContext value={autoFocus}>

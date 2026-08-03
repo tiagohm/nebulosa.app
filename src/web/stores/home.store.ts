@@ -1,10 +1,7 @@
 import { cameraBus, imageBus } from '@shared/bus'
 import { dockviewStore } from '@stores/dockview.store'
 import { equipmentStore } from '@stores/equipment.store'
-import type { AutoFocusParams } from '@ui/AutoFocus'
-import type { DarvParams } from '@ui/Darv'
-import type { FlatWizardParams } from '@ui/FlatWizard'
-import type { TppaParams } from '@ui/Tppa'
+import { wsStore } from '@stores/ws.store'
 import type { DockviewApi, DockviewGroupPanel, DockviewGroupPanelApi, DockviewReadyEvent, IDockviewGroupPanel, IDockviewPanel } from 'dockview-react'
 import { nanoid } from 'nanoid'
 import type { Camera, Device } from 'nebulosa/src/devices/indi/device'
@@ -124,6 +121,7 @@ function unmount() {
 
 	save()
 	dockview.unregisterOnDidLayoutChange()
+	wsStore.unmount()
 
 	mounted = false
 }
@@ -179,6 +177,8 @@ function handleReady(event: DockviewReadyEvent) {
 	dockview.addSinglePanel(api, 'satellite', { title: 'Satellite' }, main, false)
 
 	dockview.registerOnDidLayoutChange(api)
+
+	wsStore.mount()
 }
 
 function load() {
@@ -233,8 +233,7 @@ function removeImage(image: Image) {
 }
 
 function addAutoFocus() {
-	const params: AutoFocusParams = { id: nanoid() }
-	return dockview.addMultiplePanel(api, 'autoFocus', { title: 'Auto Focus', params }, main)
+	return dockview.addMultiplePanel(api, 'autoFocus', { title: 'Auto Focus' }, main)
 }
 
 function addCalculator() {
@@ -242,13 +241,11 @@ function addCalculator() {
 }
 
 function addDarv() {
-	const params: DarvParams = { id: nanoid() }
-	return dockview.addMultiplePanel(api, 'darv', { title: 'DARV', params }, main)
+	return dockview.addMultiplePanel(api, 'darv', { title: 'DARV' }, main)
 }
 
 function addFlatWizard() {
-	const params: FlatWizardParams = { id: nanoid() }
-	return dockview.addMultiplePanel(api, 'flatWizard', { title: 'Flat Wizard', params }, main)
+	return dockview.addMultiplePanel(api, 'flatWizard', { title: 'Flat Wizard' }, main)
 }
 
 function addFraming() {
@@ -264,12 +261,11 @@ function addLunarEclipse() {
 }
 
 function addGuider() {
-	return dockview.addSinglePanel(api, 'guider', { title: 'Guider' }, main)
+	return dockview.addMultiplePanel(api, 'guider', { title: 'Guider' }, main)
 }
 
 function addTppa() {
-	const params: TppaParams = { id: nanoid() }
-	return dockview.addMultiplePanel(api, 'tppa', { title: 'TPPA', params }, main)
+	return dockview.addMultiplePanel(api, 'tppa', { title: 'TPPA' }, main)
 }
 
 function addPlanetarium() {

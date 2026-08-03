@@ -11,7 +11,6 @@ export type TppaState = 'idle' | 'waiting' | 'moving' | 'capturing' | 'solving' 
 export type TppaDirection = 'east' | 'west'
 
 export interface TppaStart {
-	id: string
 	readonly direction: TppaDirection
 	readonly moveDuration: number // seconds
 	readonly delayBeforeCapture: number // seconds
@@ -38,7 +37,6 @@ export interface TppaEvent {
 }
 
 export const DEFAULT_TPPA_START: TppaStart = {
-	id: '',
 	direction: 'east',
 	moveDuration: 5,
 	delayBeforeCapture: 5,

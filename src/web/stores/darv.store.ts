@@ -27,7 +27,8 @@ export interface DarvState {
 	readonly exposureEstimation: DarvExposureInput & { presetMode: DarvExposurePresetMode | 'custom' }
 }
 
-export function darvStore(id: string, api: DockviewPanelApi) {
+export function darvStore(api: DockviewPanelApi) {
+	const { id } = api
 	const capture = cameraCaptureStore()
 
 	const state = proxy<DarvState>({
@@ -52,6 +53,7 @@ export function darvStore(id: string, api: DockviewPanelApi) {
 
 	const u: VoidFunction[] = []
 	let mounted = false
+	let operationId: string | undefined
 
 	function _mount() {
 		if (mounted) return unmount
@@ -60,7 +62,7 @@ export function darvStore(id: string, api: DockviewPanelApi) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `darv.${id}`, ['o:request', 'o:exposureEstimation'])
+		u[0] = initProxy(state, id, ['o:request', 'o:exposureEstimation'])
 
 		u[1] = darvBus.subscribe('update', (event) => {
 			if (state.camera?.id === event.camera && state.mount?.id === event.mount) {
@@ -79,8 +81,6 @@ export function darvStore(id: string, api: DockviewPanelApi) {
 		})
 
 		u[4] = subscribeKey(state, 'mount', updateTitle)
-
-		state.request.id = id
 
 		return unmount
 	}
@@ -152,17 +152,17 @@ export function darvStore(id: string, api: DockviewPanelApi) {
 
 		state.running = true
 
-		const response = await Api.DARV.start(state.camera, state.mount, state.request)
+		operationId = await Api.DARV.start(state.camera, state.mount, state.request)
 
-		if (!response?.ok) {
+		if (!operationId) {
 			reset()
 		}
 	}
 
 	async function stop() {
-		if (!state.running) return
+		if (!state.running || !operationId) return
 
-		const response = await Api.DARV.stop(state.request.id)
+		const response = await Api.DARV.stop(operationId)
 
 		if (response?.ok) {
 			reset()

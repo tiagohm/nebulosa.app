@@ -2,12 +2,18 @@ import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/co
 import type { Client, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
+import type { OperationCoordinator } from 'src/api/operation'
 import { EventBus } from 'src/shared/bus'
 import type { GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from '#/guideoutput'
+import type { OperationResult } from '#/orchestration'
+import type { GuideOutputCommander } from './guideoutput.commander'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
+import type { NotificationHandler } from './notification'
+import { detachOperation } from './operation.notify'
+import { resourceKey } from './resource'
 
 export interface GuideOutputBusEvents {
 	readonly add: GuideOutputAdded
@@ -17,10 +23,15 @@ export interface GuideOutputBusEvents {
 
 export const guideOutputBus = new EventBus<GuideOutputBusEvents>()
 
+// Publishes guide output transport events and delegates every mutation to GuideOutputCommander.
 export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
+	// Registers the guide output transport adapter and its presentation-event fanout.
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
 		readonly guideOutputManager: GuideOutputManager,
+		readonly notification: NotificationHandler,
+		readonly commander: GuideOutputCommander,
+		readonly coordinator: OperationCoordinator,
 	) {
 		guideOutputManager.addHandler(this)
 
@@ -53,12 +64,28 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 		return Array.from(this.guideOutputManager.list(client))
 	}
 
+	// Sets the guide rate of both axes, as a fraction of the sidereal rate.
 	guideRate(device: GuideOutput, rate: EquatorialCoordinate) {
-		return this.guideOutputManager.guideRate(device, rate.rightAscension, rate.declination)
+		return this.commander.setGuideRate(this.coordinator, device, rate.rightAscension, rate.declination)
 	}
 
-	pulse(device: GuideOutput, pulse: GuidePulse) {
-		return this.guideOutputManager.pulse(device, pulse.direction, pulse.duration)
+	// Issues one timed pulse per axis as a whole operation tree owning the device behind the guide output.
+	// Durations are in milliseconds and the driver times them, so the pulses outlast the request that asked
+	// for them and report their failures as a notification instead.
+	pulse(device: GuideOutput, pulses: readonly GuidePulse[]) {
+		const directions = pulses.map((pulse) => pulse.direction).join(' and ')
+
+		detachOperation(this.notification, 'GUIDE OUTPUT', device.name, `pulse ${directions}`, () => this.commander.pulseAxes(this.coordinator, device, pulses))
+	}
+
+	// Stops any pulse: first by cancelling whatever operation owns the device, so its own cleanup runs, and
+	// then by zeroing both guide vectors, which also covers motion nobody here started.
+	// Both axes are zeroed before the standstill is awaited, since the device reports a single guiding flag
+	// and settling on one axis while the other keeps pulsing would only wait out the settle timeout.
+	async stop(device: GuideOutput) {
+		await this.coordinator.cancelByResource(resourceKey(device))
+
+		return await this.commander.stopPulses(device, ['NORTH', 'WEST'])
 	}
 }
 
@@ -72,7 +99,8 @@ export function guideOutput(guideOutputHandler: GuideOutputHandler) {
 	return {
 		'/guideoutputs': { GET: (req) => response(guideOutputHandler.list(query(req).client)) },
 		'/guideoutputs/:id': { GET: (req) => response(guideOutputFromParams(req)) },
-		'/guideoutputs/:id/guiderate': { POST: async (req) => response(guideOutputHandler.guideRate(guideOutputFromParams(req), await req.json())) },
+		'/guideoutputs/:id/guiderate': { POST: async (req) => response<OperationResult<void>>(await guideOutputHandler.guideRate(guideOutputFromParams(req), await req.json())) },
 		'/guideoutputs/:id/pulse': { POST: async (req) => response(guideOutputHandler.pulse(guideOutputFromParams(req), await req.json())) },
+		'/guideoutputs/:id/stop': { POST: async (req) => response<OperationResult<void>>(await guideOutputHandler.stop(guideOutputFromParams(req))) },
 	} as const satisfies Endpoints
 }

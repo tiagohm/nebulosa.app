@@ -24,7 +24,8 @@ export interface TppaState {
 	readonly event: TppaEvent
 }
 
-export function tppaStore(id: string, api: DockviewPanelApi) {
+export function tppaStore(api: DockviewPanelApi) {
+	const { id } = api
 	const capture = cameraCaptureStore()
 	const solver = plateSolverStore()
 
@@ -42,6 +43,7 @@ export function tppaStore(id: string, api: DockviewPanelApi) {
 
 	const u: VoidFunction[] = []
 	let mounted = false
+	let operationId: string | undefined
 
 	function _mount() {
 		if (mounted) return unmount
@@ -50,7 +52,7 @@ export function tppaStore(id: string, api: DockviewPanelApi) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `tppa.${id}`, ['o:request'])
+		u[0] = initProxy(state, id, ['o:request'])
 
 		u[1] = tppaBus.subscribe('update', (event) => {
 			if (state.camera?.id === event.camera && state.mount?.id === event.mount) {
@@ -71,8 +73,6 @@ export function tppaStore(id: string, api: DockviewPanelApi) {
 		u[4] = subscribeKey(state, 'mount', updateTitle)
 
 		updateTitle()
-
-		state.request.id = id
 
 		return unmount
 	}
@@ -122,17 +122,17 @@ export function tppaStore(id: string, api: DockviewPanelApi) {
 
 		state.running = true
 
-		const response = await Api.TPPA.start(state.camera, state.mount, state.request)
+		operationId = await Api.TPPA.start(state.camera, state.mount, state.request)
 
-		if (!response?.ok) {
+		if (!operationId) {
 			reset()
 		}
 	}
 
 	async function stop() {
-		if (!state.running) return
+		if (!state.running || !operationId) return
 
-		const response = await Api.TPPA.stop(state.request.id)
+		const response = await Api.TPPA.stop(operationId)
 
 		if (response?.ok) {
 			reset()

@@ -2,12 +2,17 @@ import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { Wheel } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, WheelManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
+import type { OperationCoordinator } from 'src/api/operation'
 import { EventBus } from 'src/shared/bus'
+import type { OperationResult } from '#/orchestration'
 import type { WheelAdded, WheelRemoved, WheelUpdated } from '#/wheel'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
+import type { NotificationHandler } from './notification'
+import { detachOperation } from './operation.notify'
+import type { WheelCommander } from './wheel.commander'
 
 export interface WheelBusEvents {
 	readonly add: WheelAdded
@@ -17,10 +22,15 @@ export interface WheelBusEvents {
 
 export const wheelBus = new EventBus<WheelBusEvents>()
 
+// Publishes wheel transport events and delegates every mutation to WheelCommander.
 export class WheelHandler implements DeviceHandler<Wheel> {
+	// Registers the wheel transport adapter and its presentation-event fanout.
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
 		readonly wheelManager: WheelManager,
+		readonly notification: NotificationHandler,
+		readonly commander: WheelCommander,
+		readonly coordinator: OperationCoordinator,
 	) {
 		wheelManager.addHandler(this)
 
@@ -53,8 +63,20 @@ export class WheelHandler implements DeviceHandler<Wheel> {
 		return Array.from(this.wheelManager.list(client))
 	}
 
-	moveTo(device: Wheel, slot: number) {
-		this.wheelManager.moveTo(device, slot)
+	// Selects a filter slot as a whole operation tree owning the wheel. Reaching the slot takes longer than
+	// the request that asked for it, so it reports through wheel events.
+	moveTo(wheel: Wheel, slot: number) {
+		this.#detach(wheel, `move to slot ${slot}`, () => this.commander.moveTo(this.coordinator, wheel, slot))
+	}
+
+	// Renames the filter slots, which the driver applies without any movement.
+	setNames(wheel: Wheel, names: readonly string[]) {
+		return this.commander.setNames(this.coordinator, wheel, names)
+	}
+
+	// Runs a command whose physical completion outlasts the request that asked for it, notifying its failure.
+	#detach(wheel: Wheel, action: string, command: () => Promise<OperationResult<unknown>>) {
+		detachOperation(this.notification, 'FILTER WHEEL', wheel.name, action, command)
 	}
 }
 
@@ -69,6 +91,6 @@ export function wheel(wheelHandler: WheelHandler) {
 		'/wheels': { GET: (req) => response(wheelHandler.list(query(req).client)) },
 		'/wheels/:id': { GET: (req) => response(wheelFromParams(req)) },
 		'/wheels/:id/moveto': { POST: async (req) => response(wheelHandler.moveTo(wheelFromParams(req), await req.json())) },
-		'/wheels/:id/names': { POST: async (req) => response(wheelManager.slots(wheelFromParams(req), await req.json())) },
+		'/wheels/:id/names': { POST: async (req) => response<OperationResult<void>>(await wheelHandler.setNames(wheelFromParams(req), await req.json())) },
 	} as const satisfies Endpoints
 }

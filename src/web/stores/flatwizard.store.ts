@@ -21,7 +21,8 @@ export interface FlatWizardState {
 	readonly event: FlatWizardEvent
 }
 
-export function flatWizardStore(id: string, api: DockviewPanelApi) {
+export function flatWizardStore(api: DockviewPanelApi) {
+	const { id } = api
 	const capture = cameraCaptureStore()
 
 	const state = proxy<FlatWizardState>({
@@ -35,6 +36,7 @@ export function flatWizardStore(id: string, api: DockviewPanelApi) {
 
 	const u: VoidFunction[] = []
 	let mounted = false
+	let operationId: string | undefined
 
 	console.info('flat wizard created', id)
 
@@ -45,7 +47,7 @@ export function flatWizardStore(id: string, api: DockviewPanelApi) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `flatwizard.${id}`, ['o:request'])
+		u[0] = initProxy(state, id, ['o:request'])
 
 		u[1] = flatWizardBus.subscribe('update', (event) => {
 			if (state.camera?.id === event.camera) {
@@ -64,8 +66,6 @@ export function flatWizardStore(id: string, api: DockviewPanelApi) {
 		})
 
 		updateTitle()
-
-		state.request.id = id
 
 		return unmount
 	}
@@ -111,17 +111,17 @@ export function flatWizardStore(id: string, api: DockviewPanelApi) {
 
 		state.running = true
 
-		const response = await Api.FlatWizard.start(state.camera, state.request)
+		operationId = await Api.FlatWizard.start(state.camera, state.request)
 
-		if (!response?.ok) {
+		if (!operationId) {
 			reset()
 		}
 	}
 
 	async function stop() {
-		if (!state.running) return
+		if (!state.running || !operationId) return
 
-		const response = await Api.FlatWizard.stop(state.request.id)
+		const response = await Api.FlatWizard.stop(operationId)
 
 		if (response?.ok) {
 			reset()

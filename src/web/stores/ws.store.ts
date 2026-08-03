@@ -1,4 +1,4 @@
-import { cameraBus, autoFocusBus, darvBus, flatWizardBus, tppaBus, alpacaBus, connectionBus, guiderBus, indiBus, webSocketBus } from '@shared/bus'
+import { cameraBus, autoFocusBus, darvBus, flatWizardBus, tppaBus, alpacaBus, connectionBus, indiBus, webSocketBus, guiderBus } from '@shared/bus'
 import { toast } from '@shared/toast'
 import { confirmationStore } from '@stores/confirmation.store'
 import { equipmentStore } from '@stores/equipment.store'
@@ -89,23 +89,26 @@ function create() {
 
 			if (isDeviceType(type)) {
 				if (action === 'update') {
-					equipmentStore.update(type, data)
+					equipmentStore.updateDevice(type, data)
 				} else if (action === 'add') {
-					equipmentStore.add(type, (data as DeviceAdded).device)
+					equipmentStore.addDevice(type, (data as DeviceAdded).device)
 				} else if (action === 'remove') {
-					equipmentStore.remove(type, (data as DeviceRemoved).device)
+					equipmentStore.removeDevice(type, (data as DeviceRemoved).device)
 				} else {
 					if (type === 'camera') cameraBus.emit(action as never, data as never)
 				}
 			} else {
 				if (type === 'darv') darvBus.emit(action as never, data as never)
 				else if (type === 'tppa') tppaBus.emit(action as never, data as never)
-				else if (type === 'autoFocus') autoFocusBus.emit(action as never, data as never)
-				else if (type === 'flatWizard') flatWizardBus.emit(action as never, data as never)
+				else if (type === 'autofocus') autoFocusBus.emit(action as never, data as never)
+				else if (type === 'flatwizard') flatWizardBus.emit(action as never, data as never)
 				else if (type === 'alpaca') alpacaBus.emit(action as never, data as never)
 				else if (type === 'connection') connectionBus.emit(action as never, data as never)
-				else if (type === 'guider') guiderBus.emit(action as never, data as never)
-				else if (type === 'indi') indiBus.emit(action as never, data as never)
+				else if (type === 'guider') {
+					if (action === 'add') equipmentStore.addGuider(data as never)
+					else if (action === 'remove') equipmentStore.removeGuider(data as never)
+					else guiderBus.emit(action as never, data as never)
+				} else if (type === 'indi') indiBus.emit(action as never, data as never)
 			}
 		}
 	})

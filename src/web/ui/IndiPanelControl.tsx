@@ -117,10 +117,10 @@ const Messages = memo(() => {
 
 	return (
 		<Activity mode={activityMode(tab === 'message')}>
-			<FilterableList className="col-span-full min-w-0" emptyContent="No messages" filter={FilterMessage} itemHeight={36} items={messages}>
+			<FilterableList className="col-span-full min-h-0 min-w-0" emptyContent="No messages" filter={FilterMessage} itemHeight={36} items={messages}>
 				{MessageItem}
 			</FilterableList>
-			<div className="col-span-full flex flex-row items-center justify-center gap-2">
+			<div className="col-span-full mt-2 flex flex-row items-center justify-center">
 				<Button color="danger" disabled={messages.length === 0} label="Clear" onClick={panel.clear} startContent={<Icons.Broom />} />
 			</div>
 		</Activity>

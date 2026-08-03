@@ -248,6 +248,20 @@ const MOVING_BODIES: MovingBody[] = [
 		visible: false,
 	},
 	{
+		id: '199',
+		type: 'mercury',
+		name: 'Mercury',
+		position: { rightAscension: 0, declination: 0 },
+		visible: false,
+	},
+	{
+		id: '299',
+		type: 'venus',
+		name: 'Venus',
+		position: { rightAscension: 0, declination: 0 },
+		visible: false,
+	},
+	{
 		id: '301',
 		type: 'moon',
 		name: 'Moon',
@@ -365,10 +379,10 @@ async function updateSelectedBodyPosition() {
 				task = Api.Atlas.positionOfPlanet(req, object.object.id)
 				break
 			case 'constellationLabel':
-				task = Api.Atlas.positionOfSkyPoint(req, formatRA(object.label.rightAscension), formatDEC(object.label.declination))
+				task = Api.Atlas.positionOfSkyPoint(req, object.label.rightAscension, object.label.declination)
 				break
 			case 'shape':
-				task = Api.Atlas.positionOfSkyPoint(req, formatRA(object.shape.coordinate.rightAscension), formatDEC(object.shape.coordinate.declination))
+				task = Api.Atlas.positionOfSkyPoint(req, object.shape.coordinate.rightAscension, object.shape.coordinate.declination)
 				break
 			default:
 				return

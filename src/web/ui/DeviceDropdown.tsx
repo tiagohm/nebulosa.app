@@ -1,5 +1,6 @@
 import { equipmentStore } from '@stores/equipment.store'
 import type { DeviceState } from '@stores/equipment.store'
+import { homeStore } from '@stores/home.store'
 import { Dropdown, DropdownItem } from '@ui/components/Dropdown'
 import type { DropdownProps } from '@ui/components/Dropdown'
 import { IconButton } from '@ui/components/IconButton'
@@ -86,7 +87,7 @@ interface DeviceDropdownEndContentProps {
 
 const DeviceDropdownEndContent = memo(({ device }: DeviceDropdownEndContentProps) => (
 	<div className="flex flex-row items-center gap-2">
-		<IconButton color="secondary" icon={Icons.OpenInNew} tooltipContent="Open" onClick={() => equipmentStore.show(device)} size="sm" />
+		<IconButton color="secondary" icon={Icons.OpenInNew} tooltipContent="Open" onClick={() => homeStore.addDevice(device)} size="sm" />
 		<ConnectButton connected={device.connected} loading={device.connecting} onClick={() => equipmentStore.connect(device)} size="sm" />
 	</div>
 ))

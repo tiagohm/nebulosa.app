@@ -12,6 +12,7 @@ import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { DEFAULT_CAMERA_CAPTURE_EVENT, exposureTimeIn } from '#/camera'
 import type { CameraCaptureEvent, CameraCaptureStart, CameraUpdated } from '#/camera'
+import type { GuiderSessionInfo } from '#/guider'
 import type { ComputeRoi, Roi } from '#/image.roi'
 
 export type CameraStore = ReturnType<typeof cameraStore>
@@ -22,7 +23,6 @@ export interface CameraState {
 	readonly progress: CameraCaptureEvent
 	capturing: boolean
 	targetTemperature: number
-	// image?: Image
 	readonly equipment: {
 		mount?: DeviceState<Mount>
 		wheel?: DeviceState<Wheel>
@@ -126,6 +126,27 @@ export function cameraStore(camera: Camera) {
 		return { x: state.request.x, y: state.request.y, width: state.request.width || camera.frame.width.max || 1, height: state.request.height || camera.frame.height.max || 1 }
 	}
 
+	function setDitherEnabled(value: boolean) {
+		state.request.dither.enabled = value
+	}
+
+	function setDitherRaOnly(value: boolean) {
+		state.request.dither.raOnly = value
+	}
+
+	function setDitherAmount(value: number) {
+		state.request.dither.amount = value
+	}
+
+	function setDitherGuider(guider?: GuiderSessionInfo) {
+		state.request.dither.guider = guider?.key
+	}
+
+	function removeDitherGuider(event?: React.MouseEvent) {
+		event?.stopPropagation()
+		state.request.dither.guider = undefined
+	}
+
 	function refreshEquipment() {
 		const mountId = storageGet(`camera.${camera.id}.equipment.mount`, '')
 		const wheelId = storageGet(`camera.${camera.id}.equipment.wheel`, '')
@@ -164,9 +185,10 @@ export function cameraStore(camera: Camera) {
 		state.capturing = true
 
 		try {
-			const request: CameraCaptureStart = { ...state.request, mount: state.equipment.mount?.id, wheel: state.equipment.wheel?.id, focuser: state.equipment.focuser?.id, rotator: state.equipment.rotator?.id }
+			const dither = { ...state.request.dither, guider: state.request.dither.guider ? equipmentStore.state.guider.find((e) => e.id === state.request.dither.guider || e.key === state.request.dither.guider)?.id : undefined }
+			const request: CameraCaptureStart = { ...state.request, mount: state.equipment.mount?.id, wheel: state.equipment.wheel?.id, focuser: state.equipment.focuser?.id, rotator: state.equipment.rotator?.id, dither }
 			const response = await Api.Cameras.start(camera, request)
-			if (!response?.ok) state.capturing = false
+			if (!response?.started.ok) state.capturing = false
 		} catch {
 			state.capturing = false
 		}
@@ -191,6 +213,11 @@ export function cameraStore(camera: Camera) {
 		updateWheel,
 		updateFocuser,
 		updateRotator,
+		setDitherEnabled,
+		setDitherRaOnly,
+		setDitherAmount,
+		setDitherGuider,
+		removeDitherGuider,
 		start,
 		stop,
 	} as const

@@ -24,7 +24,8 @@ export interface AutoFocusState {
 	readonly event: AutoFocusEvent
 }
 
-export function autoFocusStore(id: string, api: DockviewPanelApi) {
+export function autoFocusStore(api: DockviewPanelApi) {
+	const { id } = api
 	const capture = cameraCaptureStore()
 
 	const state = proxy<AutoFocusState>({
@@ -38,6 +39,7 @@ export function autoFocusStore(id: string, api: DockviewPanelApi) {
 
 	const u: VoidFunction[] = []
 	let mounted = false
+	let operationId: string | undefined
 
 	function mount() {
 		if (mounted) return unmount
@@ -46,7 +48,7 @@ export function autoFocusStore(id: string, api: DockviewPanelApi) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `autofocus.${id}`, ['o:request'])
+		u[0] = initProxy(state, id, ['o:request'])
 
 		u[1] = autoFocusBus.subscribe('update', (event) => {
 			if (state.camera?.id === event.camera && state.focuser?.id === event.focuser) {
@@ -67,8 +69,6 @@ export function autoFocusStore(id: string, api: DockviewPanelApi) {
 		u[4] = subscribeKey(state, 'focuser', updateTitle)
 
 		updateTitle()
-
-		state.request.id = id
 
 		return unmount
 	}
@@ -130,17 +130,17 @@ export function autoFocusStore(id: string, api: DockviewPanelApi) {
 
 		state.running = true
 
-		const response = await Api.AutoFocus.start(state.camera, state.focuser, state.request)
+		operationId = await Api.AutoFocus.start(state.camera, state.focuser, state.request)
 
-		if (!response?.ok) {
+		if (!operationId) {
 			reset()
 		}
 	}
 
 	async function stop() {
-		if (!state.running) return
+		if (!state.running || !operationId) return
 
-		const response = await Api.AutoFocus.stop(state.request.id)
+		const response = await Api.AutoFocus.stop(operationId)
 
 		if (response?.ok) {
 			reset()

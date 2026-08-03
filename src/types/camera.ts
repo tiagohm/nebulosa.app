@@ -20,6 +20,9 @@ export type CameraCaptureState = 'idle' | 'exposureStarted' | 'exposing' | 'wait
 
 export interface CameraDither extends GuiderDither {
 	enabled: boolean
+	// Id of the guider session that must dither. Empty means no guider was chosen, and the capture then
+	// exposes without dithering: with several sessions open, picking one would be a guess.
+	guider?: string
 }
 
 export interface CameraCaptureStart extends Size {
@@ -56,6 +59,12 @@ export interface CameraCaptureTime {
 }
 
 export interface CameraCaptureEvent {
+	// Top-level operation that owns the camera lease.
+	operation: string
+	// Immutable capture-session identifier.
+	session: string
+	// Monotonic frame attempt within the session; zero means no exposure was dispatched.
+	generation: number
 	camera: string // id
 	count: number
 	loop: boolean
@@ -69,7 +78,21 @@ export interface CameraCaptureEvent {
 	stopped: boolean
 }
 
+// Transport response of a capture start request.
+export interface CameraCaptureStarted {
+	// Operation id used to stop this exact capture.
+	readonly id: string
+	// Exposure-start milestone; failures carry the discriminated cause and its detail.
+	readonly started: { readonly ok: true } | { readonly ok: false; readonly reason: string; readonly error?: string }
+}
+
 export interface CameraFrameEvent {
+	// Top-level operation that produced the frame.
+	readonly operation: string
+	// Immutable capture session that accepted the BLOB.
+	readonly session: string
+	// Frame generation that completed exposure+BLOB processing.
+	readonly generation: number
 	readonly camera: string // id
 	readonly path: string
 }
@@ -104,6 +127,9 @@ export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 }
 
 export const DEFAULT_CAMERA_CAPTURE_EVENT: CameraCaptureEvent = {
+	operation: '',
+	session: '',
+	generation: 0,
 	camera: '',
 	state: 'idle',
 	count: 0,

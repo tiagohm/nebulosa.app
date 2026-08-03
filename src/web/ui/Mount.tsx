@@ -92,12 +92,12 @@ const TabStartContent = memo(() => {
 
 const Status = memo(() => {
 	const mount = useContext(MountStoreContext)
-	const { parking, parked, slewing, tracking, homing } = useSnapshot(mount.state.mount)
+	const { parking, parked, slewing, tracking, homing, moving } = useSnapshot(mount.state.mount)
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-between gap-2">
 			<Chip color="primary" size="sm">
-				{parking ? 'parking' : parked ? 'parked' : homing ? 'homing' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}
+				{parking ? 'parking' : parked ? 'parked' : homing ? 'homing' : moving ? 'moving' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}
 			</Chip>
 		</div>
 	)
@@ -128,25 +128,25 @@ const TargetPosition = memo(() => {
 
 const TargetCoordinateAndPosition = memo(() => {
 	const mount = useContext(MountStoreContext)
-	const { connected, slewing, parking, homing, parked } = useSnapshot(mount.state.mount)
+	const { connected, slewing, moving, parking, homing, parked } = useSnapshot(mount.state.mount)
 	const { type } = useSnapshot(mount.state.target.coordinate)
 	const coordinate = useSnapshot(mount.state.target.coordinate)
-	const disabled = !connected || slewing || parking || homing || parked
+	const blocked = !connected || slewing || moving || parking || homing || parked
 	const { x, y } = coordinate[type]!
 
 	return (
 		<div className="col-span-full">
 			<div className="grid w-full grid-cols-20 items-center gap-2">
 				<span className="col-span-4 text-sm font-bold">TARGET:</span>
-				<MountTargetCoordinateTypeRadioGroup className="col-span-16" disabled={disabled} onValueChange={mount.updateTargetCoordinateType} value={type} />
+				<MountTargetCoordinateTypeRadioGroup className="col-span-16" disabled={blocked} onValueChange={mount.updateTargetCoordinateType} value={type} />
 				<TargetPosition />
-				<TextInput className="col-span-5" disabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'RA' : type === 'ALTAZ' ? 'AZ' : 'LON'} onValueChange={mount.updateTargetCoordinateX} value={x} />
-				<TextInput className="col-span-5" disabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={mount.updateTargetCoordinateY} value={y} />
+				<TextInput className="col-span-5" disabled={blocked} label={type === 'JNOW' || type === 'J2000' ? 'RA' : type === 'ALTAZ' ? 'AZ' : 'LON'} onValueChange={mount.updateTargetCoordinateX} value={x} />
+				<TextInput className="col-span-5" disabled={blocked} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={mount.updateTargetCoordinateY} value={y} />
 				<div className="col-span-10 flex flex-row items-center justify-center gap-1">
 					<TargetCoordinatePopupButton />
-					<IconButton color="success" disabled={disabled} icon={Icons.Telescope} onClick={mount.goTo} tooltipContent="Slew" />
-					<IconButton color="primary" disabled={disabled} icon={Icons.Sync} onClick={mount.sync} tooltipContent="Sync" />
-					<IconButton color="secondary" disabled={disabled} icon={Icons.Image} onClick={mount.frame} tooltipContent="Frame" />
+					<IconButton color="success" disabled={blocked} icon={Icons.Telescope} onClick={mount.goTo} tooltipContent="Slew" />
+					<IconButton color="primary" disabled={blocked} icon={Icons.Sync} onClick={mount.sync} tooltipContent="Sync" />
+					<IconButton color="secondary" disabled={blocked} icon={Icons.Image} onClick={mount.frame} tooltipContent="Frame" />
 				</div>
 			</div>
 		</div>
@@ -218,44 +218,43 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 
 const HandControl = memo(() => {
 	const mount = useContext(MountStoreContext)
-	const { connected, parking, parked, slewing, homing, canAbort } = useSnapshot(mount.state.mount)
-	const moving = slewing || parking || homing
+	const { connected, parking, parked, slewing, moving, homing, canAbort } = useSnapshot(mount.state.mount)
+	const blocked = slewing || moving || parking || homing
 
-	return <Nudge className="col-span-4 row-span-2" disabled={!connected || parked} isCancelDisabled={!canAbort || parked || !moving} isNudgeDisabled={moving} onCancel={mount.stop} onNudge={mount.moveTo} />
+	return <Nudge className="col-span-4 row-span-2" disabled={!connected || parked} isCancelDisabled={!canAbort || parked || !blocked} isNudgeDisabled={blocked} onCancel={mount.stop} onNudge={mount.moveTo} />
 })
 
 const Tracking = memo(() => {
 	const mount = useContext(MountStoreContext)
 	const { connected, parking, parked, slewing, homing, tracking } = useSnapshot(mount.state.mount)
-	const moving = slewing || parking || homing
+	const blocked = slewing || parking || homing
 
-	return <Switch className="col-span-3" disabled={!connected || moving || parked} label="Tracking" onValueChange={mount.tracking} value={tracking} />
+	return <Switch className="col-span-3" disabled={!connected || blocked || parked} label="Tracking" onValueChange={mount.tracking} value={tracking} />
 })
 
 const ParkAndHome = memo(() => {
 	const mount = useContext(MountStoreContext)
-	const { connected, parking, parked, slewing, homing, canPark, canHome, canFindHome } = useSnapshot(mount.state.mount)
-	const moving = slewing || parking || homing
+	const { connected, parking, parked, slewing, moving, homing, canPark, canHome, canFindHome } = useSnapshot(mount.state.mount)
+	const blocked = slewing || moving || parking || homing
 
 	return (
 		<div className="col-span-5 flex flex-row items-center justify-center gap-2">
-			<IconButton color={parked ? 'success' : 'danger'} disabled={!connected || !canPark || moving} icon={parked ? Icons.Play : Icons.Stop} onClick={mount.togglePark} tooltipContent={parked ? 'Unpark' : 'Park'} />
-			<IconButton color="primary" disabled={!connected || !canHome || moving || parked} icon={Icons.Home} onClick={mount.home} tooltipContent="Home" />
-			<IconButton color="secondary" disabled={!connected || !canFindHome || moving || parked} icon={Icons.HomeSearch} onClick={mount.findHome} tooltipContent="Find Home" />
+			<IconButton color={parked ? 'success' : 'danger'} disabled={!connected || !canPark || blocked} icon={parked ? Icons.Play : Icons.Stop} onClick={mount.togglePark} tooltipContent={parked ? 'Unpark' : 'Park'} />
+			<IconButton color="primary" disabled={!connected || !canHome || blocked || parked} icon={Icons.Home} onClick={mount.home} tooltipContent="Home" />
+			<IconButton color="secondary" disabled={!connected || !canFindHome || blocked || parked} icon={Icons.HomeSearch} onClick={mount.findHome} tooltipContent="Find Home" />
 		</div>
 	)
 })
 
 const TrackModeAndRate = memo(() => {
 	const mount = useContext(MountStoreContext)
-	const { connected, parking, parked, slewing, homing, trackModes, trackMode, slewRates, slewRate, guideRate } = useSnapshot(mount.state.mount)
-	const moving = slewing || parking || homing
-	const disabled = !connected || moving || parked
+	const { connected, parking, parked, slewing, moving, homing, trackModes, trackMode, slewRates, slewRate, guideRate } = useSnapshot(mount.state.mount)
+	const blocked = !connected || slewing || moving || parking || homing || parked
 
 	return (
 		<div className="col-span-8 flex flex-row items-center gap-2">
-			<TrackModeSelect className="w-13/24" disabled={disabled} modes={trackModes} onValueChange={mount.trackMode} value={trackMode} />
-			<SlewRateSelect className="w-11/24" disabled={disabled} onValueChange={mount.slewRate} rates={slewRates} value={slewRate ?? ''} />
+			<TrackModeSelect className="w-13/24" disabled={blocked} modes={trackModes} onValueChange={mount.trackMode} value={trackMode} />
+			<SlewRateSelect className="w-11/24" disabled={blocked} onValueChange={mount.slewRate} rates={slewRates} value={slewRate ?? ''} />
 		</div>
 	)
 })

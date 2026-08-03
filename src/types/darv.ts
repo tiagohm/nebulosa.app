@@ -6,7 +6,6 @@ export type DarvHemisphere = 'northern' | 'southern'
 export type DarvState = 'idle' | 'waiting' | 'forwarding' | 'backwarding'
 
 export interface DarvStart {
-	id: string
 	readonly hemisphere: DarvHemisphere
 	readonly initialPause: number // seconds
 	readonly duration: number // seconds
@@ -22,7 +21,6 @@ export interface DarvEvent {
 }
 
 export const DEFAULT_DARV_START: DarvStart = {
-	id: '',
 	hemisphere: 'northern',
 	initialPause: 5,
 	duration: 30,

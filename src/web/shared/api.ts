@@ -16,7 +16,7 @@ import type { AlpacaServerStatus } from '#/alpaca'
 import type { SearchMinorPlanet, MinorPlanet, FindCloseApproaches, CloseApproach } from '#/asteroid'
 import type { BodyPosition, ChartOfBody, LocationAndTime, PositionOfBody } from '#/atlas'
 import type { AutoFocusStart } from '#/autofocus'
-import type { CameraCaptureStart } from '#/camera'
+import type { CameraCaptureStart, CameraCaptureStarted } from '#/camera'
 import type { Confirm } from '#/confirmation'
 import type { ConnectionStatus, Connect } from '#/connection'
 import type { DarvStart } from '#/darv'
@@ -25,7 +25,7 @@ import type { FlatWizardStart } from '#/flatwizard'
 import type { Framing } from '#/framing'
 import type { SearchSkyObject, SkyObjectSearchItem, SkyObject } from '#/galaxy'
 import type { GuidePulse } from '#/guideoutput'
-import type { GuiderConnect, GuiderEvent, GuiderStatus } from '#/guider'
+import type { GuiderConnect, GuiderConnected, GuiderEvent, GuiderSessionInfo, GuiderStatus } from '#/guider'
 import { X_IMAGE_INFO_HEADER } from '#/image'
 import type { CloseImage, ImageInfo, OpenImage } from '#/image'
 import type { AnnotateImage, ImageAnnotation } from '#/image.annotation'
@@ -203,7 +203,7 @@ export namespace Api {
 		}
 
 		export function start(camera: Camera, req: CameraCaptureStart) {
-			return res(`/cameras/${camera.name}/start?client=${camera.client.id}`, 'post', req)
+			return json<CameraCaptureStarted>(`/cameras/${camera.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(camera: Camera) {
@@ -382,8 +382,12 @@ export namespace Api {
 			return res(`/guideoutputs/${guideOutput.name}/guiderate?client=${guideOutput.client.id}`, 'post', rate)
 		}
 
-		export function pulse(guideOutput: GuideOutput, req: GuidePulse) {
+		export function pulse(guideOutput: GuideOutput, req: readonly GuidePulse[]) {
 			return res(`/guideoutputs/${guideOutput.name}/pulse?client=${guideOutput.client.id}`, 'post', req)
+		}
+
+		export function stop(guideOutput: GuideOutput) {
+			return res(`/guideoutputs/${guideOutput.name}/stop?client=${guideOutput.client.id}`, 'post')
 		}
 	}
 
@@ -621,7 +625,7 @@ export namespace Api {
 
 	export namespace TPPA {
 		export function start(camera: Camera, mount: Mount, req: TppaStart) {
-			return res(`/tppa/${camera.name}/${mount.name}/start?client=${camera.client.id}`, 'post', req)
+			return json<string>(`/tppa/${camera.name}/${mount.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(id: string) {
@@ -631,7 +635,7 @@ export namespace Api {
 
 	export namespace DARV {
 		export function start(camera: Camera, mount: Mount, req: DarvStart) {
-			return res(`/darv/${camera.name}/${mount.name}/start?client=${camera.client.id}`, 'post', req)
+			return json<string>(`/darv/${camera.name}/${mount.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(id: string) {
@@ -641,7 +645,7 @@ export namespace Api {
 
 	export namespace AutoFocus {
 		export function start(camera: Camera, focuser: Focuser, req: AutoFocusStart) {
-			return res(`/autofocus/${camera.name}/${focuser.name}/start?client=${camera.client.id}`, 'post', req)
+			return json<string>(`/autofocus/${camera.name}/${focuser.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(id: string) {
@@ -651,7 +655,7 @@ export namespace Api {
 
 	export namespace FlatWizard {
 		export function start(camera: Camera, req: FlatWizardStart) {
-			return res(`/flatwizard/${camera.name}/start?client=${camera.client.id}`, 'post', req)
+			return json<string>(`/flatwizard/${camera.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(id: string) {
@@ -678,44 +682,52 @@ export namespace Api {
 	}
 
 	export namespace Guider {
+		export function list() {
+			return json<GuiderSessionInfo[]>('/guiders', 'get')
+		}
+
+		export function get(id: string) {
+			return json<GuiderSessionInfo>(`/guiders/${id}`, 'get')
+		}
+
 		export function connect(req: GuiderConnect) {
-			return json<boolean>('/guider/connect', 'post', req)
+			return json<GuiderConnected>(`/guiders/connect`, 'post', req)
 		}
 
-		export function disconnect() {
-			return res('/guider/disconnect', 'post')
+		export function disconnect(guider: GuiderSessionInfo) {
+			return res(`/guiders/${guider.id}/disconnect`, 'post')
 		}
 
-		export function clear() {
-			return res('/guider/clear', 'post')
+		export function clear(guider: GuiderSessionInfo) {
+			return res(`/guiders/${guider.id}/clear`, 'post')
 		}
 
-		export function status() {
-			return json<GuiderStatus>('/guider/status', 'get')
+		export function status(guider: GuiderSessionInfo) {
+			return json<GuiderStatus>(`/guiders/${guider.id}/status`, 'get')
 		}
 
-		export function event() {
-			return json<GuiderEvent>('/guider/event', 'get')
+		export function event(guider: GuiderSessionInfo) {
+			return json<GuiderEvent>(`/guiders/${guider.id}/event`, 'get')
 		}
 
-		export function start() {
-			return res('/guider/start', 'post')
+		export function start(guider: GuiderSessionInfo) {
+			return res(`/guiders/${guider.id}/start`, 'post')
 		}
 
-		export function stop() {
-			return res('/guider/stop', 'post')
+		export function stop(guider: GuiderSessionInfo) {
+			return res(`/guiders/${guider.id}/stop`, 'post')
 		}
 
-		export function findStar() {
-			return res('/guider/findstar', 'post')
+		export function findStar(guider: GuiderSessionInfo) {
+			return res(`/guiders/${guider.id}/findstar`, 'post')
 		}
 
-		export function loop() {
-			return res('/guider/loop', 'post')
+		export function loop(guider: GuiderSessionInfo) {
+			return res(`/guiders/${guider.id}/loop`, 'post')
 		}
 
-		export function calibrate() {
-			return res('/guider/calibrate', 'post')
+		export function calibrate(guider: GuiderSessionInfo) {
+			return res(`/guiders/${guider.id}/calibrate`, 'post')
 		}
 	}
 

@@ -20,7 +20,6 @@ import type { CatalogSource, CatalogSourceStar, DeviceSimulatorOptions } from 'n
 import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
 import type { AstronomicalImageStar } from 'nebulosa/src/imaging/synthetic/generator'
 import { clamp } from 'nebulosa/src/math/numerical/math'
-import { normalizeAngle, toDeg } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { EventBus } from 'src/shared/bus'
 import type { ConnectionEvent, Connect, ConnectionStatus } from '#/connection'
@@ -29,6 +28,8 @@ import type { Endpoints } from './http'
 import { indiBus } from './indi'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
+import type { OperationCoordinator } from './operation'
+import { settlesWithin } from './util'
 
 export interface ConnectionBusEvents {
 	readonly open: ConnectionEvent
@@ -36,6 +37,9 @@ export interface ConnectionBusEvents {
 }
 
 export const connectionBus = new EventBus<ConnectionBusEvents>()
+
+// Maximum milliseconds an expected client disconnect waits for operational cleanup.
+const DEFAULT_DISCONNECT_CLEANUP_TIMEOUT = 5000
 
 function save(name: string, properties: unknown) {
 	const path = join(Bun.env.appDir, `${name}.config.json`)
@@ -111,35 +115,19 @@ async function vizierCatalogSource(centerRightAscension: Angle, centerDeclinatio
 	return stars
 }
 
-// Builds the Gaia DR3 cone search used by the VizieR-backed camera catalog.
-function makeVizierCatalogQuery(rightAscension: Angle, declination: Angle, radius: Angle, limit: number) {
-	return `
-		SELECT TOP ${Math.trunc(limit)}
-			RA_ICRS AS ra,
-			DE_ICRS AS dec,
-			Gmag AS mag,
-			"BP-RP" AS ci
-		FROM "I/355/gaiadr3"
-		WHERE Gmag IS NOT NULL
-		    AND Gmag <= 14
-			AND 1 = CONTAINS(
-				POINT('ICRS', RA_ICRS, DE_ICRS),
-				CIRCLE('ICRS', ${toDeg(normalizeAngle(rightAscension))}, ${toDeg(declination)}, ${toDeg(radius)})
-			)
-		ORDER BY Gmag ASC
-	`
-}
-
+// Owns client transports and coordinates their operational cleanup before disposal.
 export class ConnectionHandler {
 	private readonly clients = new Map<string, Client>()
 
+	// Subscribes to unexpected transport closes and retains the coordinator used during disconnect.
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
 		readonly notificationHandler: NotificationHandler,
+		readonly operationCoordinator: OperationCoordinator,
+		readonly disconnectCleanupTimeout = DEFAULT_DISCONNECT_CLEANUP_TIMEOUT,
 	) {
 		indiBus.subscribe('close', (client) => {
-			// Remove the client from the active connections
-			this.disconnect(client)
+			this.#unexpectedClose(client)
 		})
 
 		connectionBus.subscribe('open', (event) => wsm.send('connection:open', event))
@@ -163,6 +151,7 @@ export class ConnectionHandler {
 				(client instanceof AlpacaClient && client.remotePort === req.port && client.remoteHost === req.host)
 			) {
 				console.info('reusing existing connection:', client.id, client.description)
+				this.operationCoordinator.arbiter.markClientAvailable(client.id)
 				const status = this.status(client)!
 				connectionBus.emit('open', { status, reused: true })
 				return status
@@ -174,6 +163,7 @@ export class ConnectionHandler {
 
 			try {
 				if (await client.connect(req.host, req.port)) {
+					this.operationCoordinator.arbiter.markClientAvailable(client.id)
 					this.clients.set(client.id, client)
 
 					console.info('new connection to:', client.id, client.description)
@@ -189,6 +179,7 @@ export class ConnectionHandler {
 			}
 		} else if (req.type === 'ALPACA') {
 			const client = new AlpacaClient(`http${req.secured ? 's' : ''}://${req.host}:${req.port}`, { handler: indi }, indi)
+			this.operationCoordinator.arbiter.markClientAvailable(client.id)
 
 			try {
 				if (await client.start()) {
@@ -200,13 +191,16 @@ export class ConnectionHandler {
 					connectionBus.emit('open', { status, reused: false })
 					return status
 				} else {
+					this.operationCoordinator.arbiter.markClientUnavailable(client.id)
 					this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to Alpaca server', color: 'danger' })
 				}
 			} catch (e) {
+				this.operationCoordinator.arbiter.markClientUnavailable(client.id)
 				this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to Alpaca server', color: 'danger' })
 			}
 		} else {
 			const client = new ClientSimulator('client.simulator', indi)
+			this.operationCoordinator.arbiter.markClientAvailable(client.id)
 			this.clients.set(client.id, client)
 
 			const g14 = await loadHnskyDatabase('g14')
@@ -238,36 +232,54 @@ export class ConnectionHandler {
 		return undefined
 	}
 
-	disconnect(id: string | Client) {
+	// Blocks a client, waits bounded operational cleanup, then disposes its live transport.
+	async disconnect(id: string | Client) {
+		const entry = this.#entry(id)
+
+		if (entry === undefined) return
+
+		const [key, client] = entry
+		this.operationCoordinator.arbiter.markClientUnavailable(client.id)
+
+		const cleaned = await settlesWithin(this.operationCoordinator.cancelByClient(client.id, 'disconnected'), this.disconnectCleanupTimeout)
+
+		if (!cleaned) console.warn('timed out while cleaning operations for:', client.id, client.description)
+		if (this.clients.get(key) === client) this.#remove(key, client, true)
+	}
+
+	// Blocks and cancels operations after an unexpected close without waiting on an unavailable transport.
+	#unexpectedClose(client: Client) {
+		const entry = this.#entry(client)
+
+		if (entry === undefined) return
+
+		const [key] = entry
+		this.operationCoordinator.arbiter.markClientUnavailable(client.id)
+		void this.operationCoordinator.cancelByClient(client.id, 'disconnected').catch((error) => console.error(error))
+		this.#remove(key, client, false)
+	}
+
+	// Locates the canonical map entry for either a client id or exact client instance.
+	#entry(id: string | Client): readonly [string, Client] | undefined {
 		if (typeof id === 'string') {
 			const client = this.clients.get(id)
-
-			if (client) {
-				const status = this.status(client)!
-
-				this.clients.delete(id)
-				console.info('disconnected from:', client.id, client.description)
-
-				client[Symbol.dispose]()
-
-				connectionBus.emit('close', { status })
-			}
-		} else {
-			for (const [key, client] of this.clients) {
-				if (client === id) {
-					const status = this.status(client)!
-
-					this.clients.delete(key)
-					console.info('disconnected from:', client.id, client.description)
-
-					client[Symbol.dispose]()
-
-					connectionBus.emit('close', { status })
-
-					break
-				}
-			}
+			return client && [id, client]
 		}
+
+		for (const entry of this.clients) {
+			if (entry[1] === id) return entry
+		}
+	}
+
+	// Removes one exact client, optionally disposes it, and emits its final connection status once.
+	#remove(key: string, client: Client, dispose: boolean) {
+		if (this.clients.get(key) !== client) return
+
+		const status = this.status(client)!
+		this.clients.delete(key)
+		console.info('disconnected from:', client.id, client.description)
+		if (dispose) client[Symbol.dispose]()
+		connectionBus.emit('close', { status })
 	}
 
 	status(client?: string | Client): ConnectionStatus | undefined {
@@ -295,6 +307,6 @@ export class ConnectionHandler {
 export function connection(connectionHandler: ConnectionHandler, indi: IndiClientHandler & DeviceProvider<Device>, mountManager: MountManager, focuserManager: FocuserManager, rotatorManager: RotatorManager, guideOutputManager: GuideOutputManager) {
 	return {
 		'/connections': { GET: () => response(connectionHandler.list()), POST: async (req) => response(await connectionHandler.connect(await req.json(), indi, mountManager, focuserManager, rotatorManager, guideOutputManager)) },
-		'/connections/:id': { GET: (req) => response(connectionHandler.status(req.params.id)), DELETE: (req) => response(connectionHandler.disconnect(req.params.id)) },
+		'/connections/:id': { GET: (req) => response(connectionHandler.status(req.params.id)), DELETE: async (req) => response(await connectionHandler.disconnect(req.params.id)) },
 	} as const satisfies Endpoints
 }

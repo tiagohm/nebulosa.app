@@ -7,6 +7,7 @@ import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { errorMessage, makeTime } from 'src/api/util'
 import { coordinateInfo } from '#/mount'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import { isDeviceQuiescent } from './device.lifecycle'
 import type { OperationContext, OperationScope } from './operation'
@@ -119,7 +120,6 @@ const OPPOSITE_DIRECTION: Record<MountMoveDirection, MountMoveDirection> = {
 const UNCANCELABLE = new AbortController().signal
 
 // Owns every mutation of a mount and turns the ones with a physical effect into awaitable operations.
-//
 // Each command opens its own nested scope holding the mount, so a direct endpoint runs it as a whole
 // operation tree while a composite feature, passing its own context, inherits the mount it already owns
 // and gets cancellation and cleanup that do not disturb the feature around it.
@@ -158,7 +158,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 			const [rightAscension, declination] = resolveTarget(mount, target)
 			const slewed = await this.#slew(context, mount, rightAscension, declination, 'goto', options)
 
-			return slewed.ok ? { ok: true, value: slewResult(mount) } : slewed
+			return slewed.ok ? successfulOperationResult(slewResult(mount)) : slewed
 		}).result
 	}
 
@@ -179,7 +179,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 			// reporting a side for the first time, which is not evidence that anything changed.
 			const pierSideVerified = mount.hasPierSide && initialPierSide !== 'NEITHER' && mount.pierSide !== 'NEITHER' && mount.pierSide !== initialPierSide
 
-			return { ok: true, value: { ...slewResult(mount), initialPierSide, pierSideVerified } }
+			return successfulOperationResult({ ...slewResult(mount), initialPierSide, pierSideVerified })
 		}).result
 	}
 
@@ -192,7 +192,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 			const [rightAscension, declination] = resolveTarget(mount, target)
 			this.mountManager.syncTo(mount, rightAscension, declination)
 
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		}).result
 	}
 
@@ -215,7 +215,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 				command: () => this.mountManager.tracking(mount, enabled),
 			})
 
-			return observed.ok ? { ok: true, value: undefined } : observed
+			return observed.ok ? successfulOperationResult(undefined) : observed
 		}).result
 	}
 
@@ -326,13 +326,12 @@ export class MountCommander implements DeviceHandler<Mount> {
 	}
 
 	// Starts an open-ended motion in one direction, or joins the motion already holding the mount.
-	//
 	// Unlike every other command, the returned handle outlives this call: the scope stays open, and the
 	// mount stays leased, until the motion is stopped.
 	async startManualMove(scope: OperationScope, mount: Mount, direction: MountMoveDirection, options: MountCommandOptions = {}): Promise<OperationResult<ManualMoveHandle>> {
 		// Capabilities are only published while the device is connected, so a disconnected mount would
 		// otherwise be reported as one that cannot move at all.
-		if (!mount.connected) return { ok: false, reason: 'disconnected' } as const
+		if (!mount.connected) return failedOperationResult('disconnected')
 		if (!mount.canMove) return unsupported(mount, 'move manually')
 
 		const key = resourceKey(mount)
@@ -342,7 +341,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 		// second scope would only be refused by the lease the first one already holds.
 		if (active !== undefined) {
 			const moved = await active.handle.move(direction, true)
-			return moved.ok ? { ok: true, value: active.handle } : moved
+			return moved.ok ? successfulOperationResult(active.handle) : moved
 		}
 
 		const directions = new Set<MountMoveDirection>()
@@ -362,9 +361,9 @@ export class MountCommander implements DeviceHandler<Mount> {
 			}
 
 			const move = async (direction: MountMoveDirection, enabled: boolean): Promise<OperationResult<void>> => {
-				if (closed || context.signal.aborted) return { ok: false, reason: 'aborted', error: 'manual move is no longer running' }
-				if (!mount.connected) return { ok: false, reason: 'disconnected' }
-				if (directions.has(direction) === enabled) return { ok: true, value: undefined }
+				if (closed || context.signal.aborted) return failedOperationResult('aborted', 'manual move is no longer running')
+				if (!mount.connected) return failedOperationResult('disconnected')
+				if (directions.has(direction) === enabled) return successfulOperationResult(undefined)
 
 				try {
 					this.#commandMove(mount, direction, enabled)
@@ -373,7 +372,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 					// would end a motion the caller never learned had started. Ending the operation here is
 					// what keeps a failed send from holding the mount for the rest of the process, and it
 					// also keeps the failure inside the result contract instead of rejecting the caller.
-					const failure = { ok: false, reason: 'commandFailed', error: errorMessage(error) } as const
+					const failure = failedOperationResult('commandFailed', errorMessage(error))
 					close(failure)
 					await operation.result
 					return failure
@@ -385,16 +384,16 @@ export class MountCommander implements DeviceHandler<Mount> {
 					// holding the mount waiting for a request that has no reason to arrive.
 					directions.delete(OPPOSITE_DIRECTION[direction])
 					directions.add(direction)
-					return { ok: true, value: undefined }
+					return successfulOperationResult(undefined)
 				}
 
 				directions.delete(direction)
 
 				// The last direction ending ends the motion itself, and its cleanup is what waits for the
 				// mount to stop, so the caller only learns the axis stopped once the lease is gone.
-				if (directions.size > 0) return { ok: true, value: undefined }
+				if (directions.size > 0) return successfulOperationResult(undefined)
 
-				close({ ok: true, value: undefined })
+				close(successfulOperationResult(undefined))
 				return await operation.result
 			}
 
@@ -403,7 +402,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 				directions: () => Array.from(directions),
 				move,
 				stop: async () => {
-					close({ ok: true, value: undefined })
+					close(successfulOperationResult(undefined))
 					return await operation.result
 				},
 			})
@@ -420,7 +419,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 			try {
 				this.#commandMove(mount, direction, true)
 			} catch (error) {
-				const failure = { ok: false, reason: 'commandFailed', error: errorMessage(error) } as const
+				const failure = failedOperationResult('commandFailed', errorMessage(error))
 				started.resolve(failure)
 				return failure
 			}
@@ -430,9 +429,9 @@ export class MountCommander implements DeviceHandler<Mount> {
 
 			// Cancellation aborts the signal but still waits for the executor to return, so the motion has to
 			// end itself here; nothing else would ever resolve the promise below.
-			context.signal.addEventListener('abort', () => close({ ok: false, reason: abortReason(context.signal) }), { once: true })
+			context.signal.addEventListener('abort', () => close(failedOperationResult(abortReason(context.signal))), { once: true })
 
-			started.resolve({ ok: true, value: handle })
+			started.resolve(successfulOperationResult(handle))
 
 			// The executor stays pending on purpose: the scope must hold the mount for as long as any axis
 			// is moving, so it ends only when the motion is stopped or the operation is canceled.
@@ -452,14 +451,14 @@ export class MountCommander implements DeviceHandler<Mount> {
 	async manualMove(scope: OperationScope, mount: Mount, direction: MountMoveDirection, enabled: boolean, options: MountCommandOptions = {}): Promise<OperationResult<void>> {
 		if (enabled) {
 			const started = await this.startManualMove(scope, mount, direction, options)
-			return started.ok ? { ok: true, value: undefined } : started
+			return started.ok ? successfulOperationResult(undefined) : started
 		}
 
 		const active = this.#manualMoves.get(resourceKey(mount))
 
 		// Stopping a direction nobody started is what a client does when it releases a button after the
 		// motion has already ended, so it is not an error.
-		return active === undefined ? { ok: true, value: undefined } : await active.handle.move(direction, false)
+		return active === undefined ? successfulOperationResult(undefined) : await active.handle.move(direction, false)
 	}
 
 	// Returns the open manual motion of a mount, if any.
@@ -468,14 +467,13 @@ export class MountCommander implements DeviceHandler<Mount> {
 	}
 
 	// Stops every physical motion of a mount and waits for it to become quiescent.
-	//
 	// This is the one command that does not acquire the mount. It is the emergency stop, used both by the
 	// stop endpoint and by the abort path of every wait here, and it exists precisely for the states in
 	// which acquisition is impossible: a moving mount is unavailable to the arbiter, and a mount moving
 	// under someone else's operation is leased away. Refusing to stop it in either case would leave the
 	// only command that can make the device safe unreachable.
 	async stopMotion(mount: Mount, options: MountCommandOptions = {}): Promise<OperationResult<void>> {
-		if (!mount.connected) return { ok: false, reason: 'disconnected' }
+		if (!mount.connected) return failedOperationResult('disconnected')
 		if (!mount.canAbort) return unsupported(mount, 'abort motion')
 
 		return await this.#settle(mount, () => this.mountManager.stop(mount), options)
@@ -494,7 +492,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 
 	// Sends the goto or flip command and waits for the mount to reach the target and stop moving.
 	async #slew(context: OperationContext, mount: Mount, rightAscension: Angle, declination: Angle, mode: 'goto' | 'flip', options: MountCommandOptions) {
-		if (mount.parked) return { ok: false, reason: 'unexpectedState', error: `mount ${mount.name} is parked` } as const
+		if (mount.parked) return failedOperationResult('unexpectedState', `mount ${mount.name} is parked`)
 
 		const tolerance = options.tolerance ?? DEFAULT_TOLERANCE
 		const arrivalTolerance = options.arrivalTolerance ?? DEFAULT_ARRIVAL_TOLERANCE
@@ -506,7 +504,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 		// slew when the lease was released, leaving that movement owned by nobody. A flip is excluded on
 		// purpose, since it ends where it began and the position can never say whether it happened.
 		if (mode === 'goto' && !mount.slewing && separation(mount, rightAscension, declination) <= tolerance) {
-			return { ok: true, value: { mount } } as const
+			return successfulOperationResult({ mount })
 		}
 
 		const slewed = await waitForDeviceState<MountUpdate>({
@@ -551,7 +549,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 
 		if (separated <= arrivalTolerance) return slewed
 
-		return { ok: false, reason: 'unexpectedState', error: `mount ${mount.name} stopped ${(separated / DEG2RAD).toFixed(3)}° short of the target` } as const
+		return failedOperationResult('unexpectedState', `mount ${mount.name} stopped ${(separated / DEG2RAD).toFixed(3)}° short of the target`)
 	}
 
 	// Commands parking or unparking and waits for the parked flag to settle.
@@ -573,7 +571,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 				abort: () => this.#abortMotion(mount, options),
 			})
 
-			return observed.ok ? { ok: true, value: undefined } : observed
+			return observed.ok ? successfulOperationResult(undefined) : observed
 		}).result
 	}
 
@@ -581,7 +579,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 	async #homing(scope: OperationScope, kind: string, mount: Mount, command: (mount: Mount) => void, supported: () => boolean, options: MountCommandOptions) {
 		return await scope.start<void>(kind, [{ key: resourceKey(mount), device: mount }], async (context) => {
 			if (!supported()) return unsupported(mount, 'home')
-			if (mount.parked) return { ok: false, reason: 'unexpectedState', error: `mount ${mount.name} is parked` }
+			if (mount.parked) return failedOperationResult('unexpectedState', `mount ${mount.name} is parked`)
 
 			let homing = false
 
@@ -605,7 +603,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 				abort: () => this.#abortMotion(mount, options),
 			})
 
-			return observed.ok ? { ok: true, value: undefined } : observed
+			return observed.ok ? successfulOperationResult(undefined) : observed
 		}).result
 	}
 
@@ -617,7 +615,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 
 			command()
 
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		}).result
 	}
 
@@ -662,7 +660,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 			command,
 		})
 
-		return settled.ok ? { ok: true, value: undefined } : settled
+		return settled.ok ? successfulOperationResult(undefined) : settled
 	}
 
 	// Sends one axis-motion switch.
@@ -719,5 +717,5 @@ function slewResult(mount: Mount): MountSlewResult {
 
 // Reports a capability the driver does not expose as an expected failure rather than an exception.
 function unsupported(mount: Mount, action: string) {
-	return { ok: false, reason: 'unexpectedState', error: `mount ${mount.name} cannot ${action}` } as const
+	return failedOperationResult('unexpectedState', `mount ${mount.name} cannot ${action}`)
 }

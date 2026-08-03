@@ -18,6 +18,7 @@ import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraCaptureEvent } from '#/camera'
 import { DEFAULT_GUIDER_LOOP_START } from '#/guider'
 import type { GuiderConnect, GuiderDitherPhase, GuiderEvent, GuiderLoopStart, GuiderSessionInfo } from '#/guider'
+import { successfulOperationResult } from '#/orchestration'
 import { waitUntil } from './util'
 
 guiderBus.forceSync = true
@@ -1185,7 +1186,7 @@ describe('local session', () => {
 			cameraManager.gain(camera, 42)
 			cameraManager.disableBlob(camera)
 			await held.promise
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		})
 
 		held.resolve()
@@ -1228,7 +1229,7 @@ describe('local session', () => {
 			const held = Promise.withResolvers<void>()
 			const owner = coordinator.start<void>('capture', [{ key: resourceKey(camera), device: camera }], async () => {
 				await held.promise
-				return { ok: true, value: undefined }
+				return successfulOperationResult(undefined)
 			})
 
 			cameraManager.stopExposure = () => {
@@ -1263,7 +1264,7 @@ describe('local session', () => {
 		const held = Promise.withResolvers<void>()
 		const owner = coordinator.start<void>('slew', [{ key: resourceKey(guideOutput), device: guideOutput }], async () => {
 			await held.promise
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		})
 
 		try {
@@ -1352,7 +1353,7 @@ describe('local session', () => {
 		const held = Promise.withResolvers<void>()
 		const owner = coordinator.start<void>('test', [{ key: resourceKey(camera), device: camera }], async () => {
 			await held.promise
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		})
 
 		const looped = await commander.loop(connect.value.id, loop(10))

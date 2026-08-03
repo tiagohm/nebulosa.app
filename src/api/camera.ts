@@ -3,15 +3,19 @@ import { CLIENT } from 'nebulosa/src/devices/indi/device'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import type { CameraManager, DeviceHandler, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
 import type { BlobEncoding, PropertyState } from 'nebulosa/src/devices/indi/types'
+import type { CameraCaptureListener } from 'src/api/camera.event'
 import { EventBus } from 'src/shared/bus'
 import type { CameraFrameEvent, CameraCaptureEvent, CameraCaptureStart, CameraAdded, CameraRemoved, CameraUpdated } from '#/camera'
+import type { OperationResult } from '#/orchestration'
 import { CameraCapturer } from './camera.capture'
-import type { CameraCaptureListener } from './camera.event'
+import type { CameraCommander } from './camera.commander'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
-import type { OperationCoordinator } from './operation'
+import type { NotificationHandler } from './notification'
+import type { OperationCoordinator, OperationScope } from './operation'
+import { notifyOperationFailure } from './operation.notify'
 import { resourceKey } from './resource'
 
 // Presentation events fanned out to WebSocket subscribers. These publish state and never participate in
@@ -42,7 +46,9 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		readonly wheelManager: WheelManager,
 		readonly focuserManager: FocuserManager,
 		readonly rotatorManager: RotatorManager,
+		readonly notification: NotificationHandler,
 		readonly capturer: CameraCapturer,
+		readonly commander: CameraCommander,
 		readonly coordinator: OperationCoordinator,
 	) {
 		cameraManager.addHandler(this)
@@ -94,6 +100,16 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		return Array.from(this.cameraManager.list(client))
 	}
 
+	// Switches the cooler on or off, which the driver applies without any exposure.
+	cooler(camera: Camera, enabled: boolean) {
+		return this.commander.cooler(this.coordinator, camera, enabled)
+	}
+
+	// Sets the cooling target, in degrees Celsius; reaching it is reported as a temperature update.
+	temperature(camera: Camera, value: number) {
+		return this.commander.temperature(this.coordinator, camera, value)
+	}
+
 	// Publishes either capture progress or one processed frame path.
 	sendEvent(event: CameraCaptureEvent, path?: string) {
 		if (path) {
@@ -104,8 +120,11 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		}
 	}
 
-	// Starts a capture as a new top-level operation and returns its operation-backed milestones.
-	capture(camera: Camera, request: CameraCaptureStart, onCameraCaptureEvent?: CameraCaptureListener, rejectedListener: CameraCaptureListener | undefined = onCameraCaptureEvent) {
+	// Starts a capture under the given scope and returns its operation-backed milestones.
+	// The scope is what decides whether the capture is an operation of its own or a step of a larger one. A
+	// route passes the coordinator and gets a new tree; a composite feature passes its own context and the
+	// capture nests inside it, inheriting the camera the feature already holds instead of competing for it.
+	capture(scope: OperationScope, camera: Camera, request: CameraCaptureStart, onCameraCaptureEvent?: CameraCaptureListener, rejectedListener: CameraCaptureListener | undefined = onCameraCaptureEvent) {
 		const client = camera[CLIENT]!
 
 		// Snoop devices are resolved but deliberately not acquired: the driver only reads them to stamp FITS
@@ -116,7 +135,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		const focuser = request.focuser ? this.focuserManager.get(client, request.focuser) : undefined
 		const rotator = request.rotator ? this.rotatorManager.get(client, request.rotator) : undefined
 
-		return this.capturer.start(this.coordinator, camera, request, {
+		return this.capturer.start(scope, camera, request, {
 			listener: (event, path) => {
 				this.sendEvent(event, path)
 				onCameraCaptureEvent?.(event, path)
@@ -127,7 +146,6 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 
 	// Cancels one capture scope by operation id, or whatever operation currently owns the camera.
-	//
 	// The arbiter already knows the owner, so no local index is kept here: one would miss every capture a
 	// composite feature starts from its own context, since those never pass through this handler. Stopping
 	// by device cancels the whole owning tree, which is what stopping a camera means to the caller holding
@@ -151,12 +169,17 @@ export function camera(cameraHandler: CameraHandler) {
 	return {
 		'/cameras': { GET: (req) => response(cameraHandler.list(query(req).client)) },
 		'/cameras/:id': { GET: (req) => response(cameraFromParams(req)) },
-		'/cameras/:id/cooler': { POST: async (req) => response(cameraManager.cooler(cameraFromParams(req), await req.json())) },
-		'/cameras/:id/temperature': { POST: async (req) => response(cameraManager.temperature(cameraFromParams(req), await req.json())) },
+		'/cameras/:id/cooler': { POST: async (req) => response<OperationResult<void>>(await cameraHandler.cooler(cameraFromParams(req), await req.json())) },
+		'/cameras/:id/temperature': { POST: async (req) => response<OperationResult<void>>(await cameraHandler.temperature(cameraFromParams(req), await req.json())) },
 		'/cameras/:id/start': {
 			POST: async (req) => {
-				const handle = cameraHandler.capture(cameraFromParams(req), await req.json())
-				return response({ id: handle.id, started: await handle.started })
+				const camera = cameraFromParams(req)
+				const handle = cameraHandler.capture(cameraHandler.coordinator, camera, await req.json())
+				const started = await handle.started
+				// The button that started the capture cannot tell a refusal from a slow driver, since both
+				// leave the panel without any progress event, so the reason is pushed to the browser.
+				notifyOperationFailure(cameraHandler.notification, 'CAMERA', camera.name, 'start the capture', started)
+				return response({ id: handle.id, started })
 			},
 		},
 		'/cameras/:id/stop': { POST: async (req) => response(await cameraHandler.stop(query(req).operation || cameraFromParams(req))) },

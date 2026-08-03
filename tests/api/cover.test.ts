@@ -1,19 +1,30 @@
-import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test'
+import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Cover } from 'nebulosa/src/devices/indi/device'
 import { CoverManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { CoverSimulator } from 'nebulosa/src/devices/indi/simulator/cover'
 import { CoverHandler, coverBus, cover as coverEndpoints } from 'src/api/cover'
+import { CoverCommander } from 'src/api/cover.commander'
+import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { WebSocketMessageHandler } from 'src/api/message'
+import { NotificationHandler } from 'src/api/notification'
+import { OperationCoordinator } from 'src/api/operation'
+import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import type { CoverAdded, CoverRemoved, CoverUpdated } from '#/cover'
+import { successfulOperationResult, failedOperationResult } from '#/orchestration'
 import { json, SocketMessager, waitUntil } from './util'
 
 coverBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const coverManager = new CoverManager()
-const coverHandler = new CoverHandler(wsm, coverManager)
+const resourceArbiter = new ResourceArbiter()
+const operationCoordinator = new OperationCoordinator(resourceArbiter)
+const coverCommander = new CoverCommander(coverManager)
+const coverHandler = new CoverHandler(wsm, coverManager, new NotificationHandler(wsm), coverCommander, operationCoordinator)
+const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
+deviceLifecycle.observe(coverManager)
 const endpoints = coverEndpoints(coverHandler)
 const handler = new IndiClientHandlerSet([coverManager])
 const client = new ClientSimulator('Client Simulator', handler)
@@ -31,6 +42,11 @@ beforeEach(() => {
 	coverManager.disconnect(getCover())
 })
 
+afterEach(async () => {
+	await operationCoordinator.cancelAll('aborted')
+	coverManager.disconnect(getCover())
+})
+
 function getCover() {
 	const device = coverManager.get(client, 'Cover Simulator')!
 	expect(device).toBeDefined()
@@ -41,8 +57,23 @@ function request(id = 'Cover Simulator', search = '') {
 	return { url: `http://localhost/covers/${encodeURIComponent(id)}${search}`, params: { id } } as unknown as Bun.BunRequest
 }
 
+function free(device: Cover) {
+	return resourceArbiter.availability(resourceKey(device)) === 'available'
+}
+
 function coverUpdates(property: keyof Cover & string) {
 	return socket.filter<CoverUpdated>((message) => message.type === 'cover:update' && message.body.property === property)
+}
+
+async function connected() {
+	const device = getCover()
+
+	coverManager.connect(device)
+
+	expect(device.connected).toBeTrue()
+	expect(await waitUntil(() => free(device))).toBeTrue()
+
+	return device
 }
 
 describe('cover handler', () => {
@@ -92,73 +123,93 @@ describe('cover handler', () => {
 	})
 
 	test('parks and unparks through handler endpoints', async () => {
-		const device = getCover()
-
 		wsm.open(socket)
-		coverManager.connect(device)
+
+		const device = await connected()
+
 		socket.clear()
 
 		expect(endpoints['/covers/:id/park'].POST(request(device.id))).toBeDefined()
-		expect(device.parking).toBeTrue()
+
+		expect(await waitUntil(() => device.parking)).toBeTrue()
 		expect(coverUpdates('parking').at(-1)?.body.device.parking).toBeTrue()
 
-		expect(await waitUntil(() => device.parked && !device.parking)).toBeTrue()
-		expect(device.parked).toBeTrue()
+		expect(await waitUntil(() => device.parked && !device.parking, 3000)).toBeTrue()
 		expect(coverUpdates('parked').at(-1)?.body.device.parked).toBeTrue()
+		expect(await waitUntil(() => free(device))).toBeTrue()
 
 		socket.clear()
 
 		expect(endpoints['/covers/:id/unpark'].POST(request(device.id))).toBeDefined()
-		expect(device.parking).toBeTrue()
 
-		expect(await waitUntil(() => !device.parked && !device.parking)).toBeTrue()
-		expect(device.parked).toBeFalse()
+		expect(await waitUntil(() => device.parking)).toBeTrue()
+
+		expect(await waitUntil(() => !device.parked && !device.parking, 3000)).toBeTrue()
 		expect(coverUpdates('parked').at(-1)?.body.device.parked).toBeFalse()
+		expect(await waitUntil(() => free(device))).toBeTrue()
 	})
 
-	test('stops an active park transition', () => {
-		const device = getCover()
+	test('holds the cover until it stands at the commanded end', async () => {
+		const device = await connected()
 
+		const parked = coverCommander.park(operationCoordinator, device)
+
+		expect(await waitUntil(() => device.parking)).toBeTrue()
+		expect(await parked).toEqual(successfulOperationResult(undefined))
+		expect(device.parked).toBeTrue()
+		expect(device.parking).toBeFalse()
+
+		expect(await coverCommander.unpark(operationCoordinator, device)).toEqual(successfulOperationResult(undefined))
+		expect(device.parked).toBeFalse()
+	})
+
+	test('stops an active park transition and releases the cover', async () => {
 		wsm.open(socket)
-		coverManager.connect(device)
-		socket.clear()
 
+		const device = await connected()
+
+		socket.clear()
 		coverHandler.park(device)
 
-		expect(device.parking).toBeTrue()
+		expect(await waitUntil(() => device.parking)).toBeTrue()
 
-		coverHandler.stop(device)
-
+		expect(await coverHandler.stop(device)).toEqual(successfulOperationResult(undefined))
 		expect(device.parking).toBeFalse()
 		expect(device.parked).toBeFalse()
 		expect(coverUpdates('parking').at(-1)?.body.state).toBe('Alert')
+		expect(await waitUntil(() => free(device))).toBeTrue()
 	})
 
-	test('delegates handler actions to the cover manager', () => {
+	test('refuses a command competing for a cover already owned', async () => {
+		const device = await connected()
+
+		coverHandler.park(device)
+
+		expect(await waitUntil(() => !free(device))).toBeTrue()
+
+		const unparked = await coverCommander.unpark(operationCoordinator, device)
+
+		expect(unparked).toMatchObject(failedOperationResult('busy'))
+	})
+
+	test('refuses to move a disconnected cover', async () => {
 		const device = getCover()
 		const park = spyOn(coverManager, 'park')
-		const unpark = spyOn(coverManager, 'unpark')
-		const stop = spyOn(coverManager, 'stop')
 
 		try {
-			coverHandler.park(device)
-			coverHandler.unpark(device)
-			coverHandler.stop(device)
-
-			expect(park).toHaveBeenCalledWith(device)
-			expect(unpark).toHaveBeenCalledWith(device)
-			expect(stop).toHaveBeenCalledWith(device)
+			expect(await coverCommander.park(operationCoordinator, device)).toMatchObject({ ok: false })
+			expect(park).not.toHaveBeenCalled()
 		} finally {
 			park.mockRestore()
-			unpark.mockRestore()
-			stop.mockRestore()
 		}
 	})
 
 	test('emits remove event when the simulator is disposed', () => {
 		const wsm = new WebSocketMessageHandler()
 		const coverManager = new CoverManager()
-		const coverHandler = new CoverHandler(wsm, coverManager)
+		const resourceArbiter = new ResourceArbiter()
+		const operationCoordinator = new OperationCoordinator(resourceArbiter)
+		const coverHandler = new CoverHandler(wsm, coverManager, new NotificationHandler(wsm), new CoverCommander(coverManager), operationCoordinator)
 		const handler = new IndiClientHandlerSet([coverManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const coverSimulator = new CoverSimulator('Cover Simulator', client)

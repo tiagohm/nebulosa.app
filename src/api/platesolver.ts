@@ -16,11 +16,18 @@ export class PlateSolverHandler {
 		readonly imageProcessor: ImageProcessor,
 	) {}
 
-	async start(req: PlateSolveStart): Promise<PlateSolution | undefined> {
+	// Solves one frame, optionally bound to an owning operation through its signal, so a canceled operation
+	// stops the solver it started without having to reach for the task id afterwards.
+	async start(req: PlateSolveStart, signal?: AbortSignal): Promise<PlateSolution | undefined> {
 		this.stop(req.id)
 
 		const aborter = new AbortController()
 		this.tasks.set(req.id, aborter)
+
+		// An already aborted owner is honored immediately: a listener added to it would never fire.
+		const abort = () => aborter.abort()
+		if (signal?.aborted) abort()
+		else signal?.addEventListener('abort', abort, { once: true })
 
 		try {
 			const path = (await this.imageProcessor.store(req.path)) || req.path
@@ -70,6 +77,7 @@ export class PlateSolverHandler {
 				this.notification.send({ title: 'PLATE SOLVER', description: 'Failed to plate solve', color: 'danger' })
 			}
 		} finally {
+			signal?.removeEventListener('abort', abort)
 			aborter.abort()
 
 			if (this.tasks.get(req.id) === aborter) {

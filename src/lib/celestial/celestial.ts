@@ -3,7 +3,7 @@ import { zoom, zoomIdentity } from 'd3-zoom'
 import type { D3ZoomEvent, ZoomBehavior } from 'd3-zoom'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
-import { meanObliquity, timeNow, timeShift, timeUnix, toJulianDay, toJulianEpoch } from 'nebulosa/src/astronomy/time/time'
+import { meanObliquity, timeNow, timeShift, timeUnix, toJulianDay } from 'nebulosa/src/astronomy/time/time'
 import type { Time } from 'nebulosa/src/astronomy/time/time'
 import { DAYSEC, DEG2RAD, PI, PIOVERTWO, TAU } from 'nebulosa/src/core/constants'
 import type { Writable } from 'nebulosa/src/core/types'
@@ -38,9 +38,6 @@ export interface Star extends EquatorialCoordinate {
 	name?: string
 	magnitude?: number
 	bv?: number
-	pmRA?: number
-	pmDEC?: number
-	epoch?: number
 	flags?: number
 }
 
@@ -50,12 +47,9 @@ export interface StarCatalogInput {
 	dec: NumberArray
 	mag?: NumberArray
 	bv?: NumberArray
-	pmRA?: NumberArray
-	pmDEC?: NumberArray
 	flags?: NumberArray
 	names: readonly string[]
 	ids: readonly StarId[]
-	epoch?: number
 	count?: number
 }
 
@@ -1083,15 +1077,11 @@ export class StarCatalog {
 	readonly screenY: NumberArray
 	readonly visible: NumberArray
 	readonly labelVisible: NumberArray
-	readonly flags?: NumberArray
 	readonly names: readonly string[]
 	readonly ids: readonly StarId[]
 	readonly namedIndices?: Int32Array
 	readonly count: number
 
-	private readonly pmRA?: NumberArray
-	private readonly pmDEC?: NumberArray
-	private readonly epochs?: NumberArray
 	private readonly styleBucket: Uint16Array
 	private readonly visibleIndices: NumberArray
 	private readonly bucketedVisibleIndices: NumberArray
@@ -1099,7 +1089,6 @@ export class StarCatalog {
 	private readonly bucketCounts = new Int32Array(STAR_STYLE_BUCKETS)
 	private readonly bucketStarts = new Int32Array(STAR_STYLE_BUCKETS + 1)
 	private readonly bucketWriteOffsets = new Int32Array(STAR_STYLE_BUCKETS)
-	private preparedEpoch = Number.NaN
 
 	visibleCount = 0
 	labelVisibleCount = 0
@@ -1111,13 +1100,9 @@ export class StarCatalog {
 		this.dec = data.dec
 		this.mag = data.mag
 		this.bv = data.bv
-		this.flags = data.flags
 		this.names = data.names
 		this.ids = data.ids
 		this.namedIndices = data.names ? collectNamedIndices(data.names, data.count) : undefined
-		this.pmRA = data.pmRA
-		this.pmDEC = data.pmDEC
-		this.epochs = data.epochs
 		this.eqX = new Float32Array(this.count)
 		this.eqY = new Float32Array(this.count)
 		this.eqZ = new Float32Array(this.count)
@@ -1129,44 +1114,28 @@ export class StarCatalog {
 		this.visibleIndices = new Int32Array(this.count)
 		this.bucketedVisibleIndices = new Int32Array(this.count)
 		this.labelVisibleIndices = new Int32Array(this.count)
-		this.updateEquatorialVectors(J2000_EPOCH, true)
+		this.updateEquatorialVectors(true)
 	}
 
 	private static readonly EQUATORIAL_VECTOR = new Float32Array(3)
 
 	// Applies proper motion and refreshes equatorial unit vectors when needed.
-	updateEquatorialVectors(epochYear: number, force = false) {
-		if (!force && Math.abs(this.preparedEpoch - epochYear) < 1e-4) return
-
-		const pmRA = this.pmRA
-		const pmDEC = this.pmDEC
-
-		// Without proper-motion data the equatorial unit vectors are epoch-independent, so after the
-		// initial (forced) computation there is nothing to recompute regardless of the target epoch.
-		if (!force && !pmRA && !pmDEC) {
-			this.preparedEpoch = epochYear
-			return
-		}
+	updateEquatorialVectors(force = false) {
+		if (!force) return
 
 		const vector = StarCatalog.EQUATORIAL_VECTOR
 		const ras = this.ra
 		const decs = this.dec
-		const epochs = this.epochs
 		const eqX = this.eqX
 		const eqY = this.eqY
 		const eqZ = this.eqZ
 
 		for (let i = 0; i < this.count; i++) {
-			const dt = epochYear - (epochs?.[i] ?? J2000_EPOCH)
-			const ra = normalizeAngle(ras[i] + (pmRA?.[i] ?? 0) * dt)
-			const dec = clamp(decs[i] + (pmDEC?.[i] ?? 0) * dt, -PIOVERTWO, PIOVERTWO)
-			writeRaDecUnitVector(ra, dec, vector)
+			writeRaDecUnitVector(ras[i], decs[i], vector)
 			eqX[i] = vector[0]
 			eqY[i] = vector[1]
 			eqZ[i] = vector[2]
 		}
-
-		this.preparedEpoch = epochYear
 	}
 
 	// Refreshes cached style buckets outside the draw loop.
@@ -1360,22 +1329,14 @@ function normalizeStarInput(input: readonly Star[] | StarCatalogInput) {
 		const dec = copyFloat32(input.dec, count, 0, (value) => clamp(value, -PIOVERTWO, PIOVERTWO))
 		const mag = input.mag ? copyFloat32(input.mag, count, 99) : fillFloat32(count, 99)
 		const bv = input.bv?.length ? copyFloat32(input.bv, count, 0.65) : undefined
-		const pmRA = input.pmRA?.length ? copyFloat32(input.pmRA, count, 0) : undefined
-		const pmDEC = input.pmDEC?.length ? copyFloat32(input.pmDEC, count, 0) : undefined
-		const flags = input.flags?.length ? copyUint8(input.flags, count) : undefined
-		const epochs = pmRA || pmDEC ? fillFloat32(count, input.epoch ?? J2000_EPOCH) : undefined
 
-		return { count, ra, dec, mag, bv, pmRA, pmDEC, flags, epochs, names: input.names, ids: input.ids } as const
+		return { count, ra, dec, mag, bv, names: input.names, ids: input.ids } as const
 	} else {
 		const count = input.length
 		const ra = new Float32Array(count)
 		const dec = new Float32Array(count)
 		const mag = new Float32Array(count)
 		let bv: Float32Array | undefined
-		let pmRA: Float32Array | undefined
-		let pmDEC: Float32Array | undefined
-		let flags: Uint8ClampedArray | undefined
-		let epochs: Float32Array | undefined
 		const names: string[] = []
 		const ids: StarId[] = []
 		let hasNames = false
@@ -1391,20 +1352,6 @@ function normalizeStarInput(input: readonly Star[] | StarCatalogInput) {
 			if (isFiniteNumber(star.bv)) {
 				bv ??= new Float32Array(count)
 				bv[i] = star.bv
-			}
-
-			if (isFiniteNumber(star.pmRA) || isFiniteNumber(star.pmDEC)) {
-				pmRA ??= new Float32Array(count)
-				pmDEC ??= new Float32Array(count)
-				epochs ??= fillFloat32(count, J2000_EPOCH)
-				pmRA[i] = isFiniteNumber(star.pmRA) ? star.pmRA : 0
-				pmDEC[i] = isFiniteNumber(star.pmDEC) ? star.pmDEC : 0
-				epochs[i] = isFiniteNumber(star.epoch) ? star.epoch : J2000_EPOCH
-			}
-
-			if (isFiniteNumber(star.flags)) {
-				flags ??= new Uint8ClampedArray(count)
-				flags[i] = star.flags
 			}
 
 			if (star.name) {
@@ -1424,10 +1371,6 @@ function normalizeStarInput(input: readonly Star[] | StarCatalogInput) {
 			dec,
 			mag,
 			bv,
-			pmRA,
-			pmDEC,
-			flags,
-			epochs,
 			names: hasNames ? names : [],
 			ids: hasIds ? ids : [],
 		} as const
@@ -4223,11 +4166,6 @@ export class Celestial {
 		emitUpdateStart && this.#emitter.emit('updateStart', { time: this.#options.time })
 		writeEquatorialToHorizontalMatrix(this.#options.time, this.#options.observer, this.#eqToHorizontal)
 		this.invalidateProjectedGeometry()
-
-		if (this.#starCatalog) {
-			this.#starCatalog.updateEquatorialVectors(toJulianEpoch(this.#options.time))
-		}
-
 		this.projectStars()
 		this.projectDeepSkyObjects()
 		this.rebuildPickingIndex()

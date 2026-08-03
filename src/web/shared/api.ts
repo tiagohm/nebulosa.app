@@ -382,8 +382,12 @@ export namespace Api {
 			return res(`/guideoutputs/${guideOutput.name}/guiderate?client=${guideOutput.client.id}`, 'post', rate)
 		}
 
-		export function pulse(guideOutput: GuideOutput, req: GuidePulse) {
+		export function pulse(guideOutput: GuideOutput, req: readonly GuidePulse[]) {
 			return res(`/guideoutputs/${guideOutput.name}/pulse?client=${guideOutput.client.id}`, 'post', req)
+		}
+
+		export function stop(guideOutput: GuideOutput) {
+			return res(`/guideoutputs/${guideOutput.name}/stop?client=${guideOutput.client.id}`, 'post')
 		}
 	}
 
@@ -621,7 +625,7 @@ export namespace Api {
 
 	export namespace TPPA {
 		export function start(camera: Camera, mount: Mount, req: TppaStart) {
-			return res(`/tppa/${camera.name}/${mount.name}/start?client=${camera.client.id}`, 'post', req)
+			return json<string>(`/tppa/${camera.name}/${mount.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(id: string) {
@@ -631,7 +635,7 @@ export namespace Api {
 
 	export namespace DARV {
 		export function start(camera: Camera, mount: Mount, req: DarvStart) {
-			return res(`/darv/${camera.name}/${mount.name}/start?client=${camera.client.id}`, 'post', req)
+			return json<string>(`/darv/${camera.name}/${mount.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(id: string) {
@@ -641,7 +645,7 @@ export namespace Api {
 
 	export namespace AutoFocus {
 		export function start(camera: Camera, focuser: Focuser, req: AutoFocusStart) {
-			return res(`/autofocus/${camera.name}/${focuser.name}/start?client=${camera.client.id}`, 'post', req)
+			return json<string>(`/autofocus/${camera.name}/${focuser.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(id: string) {
@@ -651,7 +655,7 @@ export namespace Api {
 
 	export namespace FlatWizard {
 		export function start(camera: Camera, req: FlatWizardStart) {
-			return res(`/flatwizard/${camera.name}/start?client=${camera.client.id}`, 'post', req)
+			return json<string>(`/flatwizard/${camera.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(id: string) {

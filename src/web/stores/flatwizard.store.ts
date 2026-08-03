@@ -36,6 +36,7 @@ export function flatWizardStore(api: DockviewPanelApi) {
 
 	const u: VoidFunction[] = []
 	let mounted = false
+	let operationId: string | undefined
 
 	console.info('flat wizard created', id)
 
@@ -67,8 +68,6 @@ export function flatWizardStore(api: DockviewPanelApi) {
 		})
 
 		updateTitle()
-
-		state.request.id = id
 
 		return unmount
 	}
@@ -114,17 +113,17 @@ export function flatWizardStore(api: DockviewPanelApi) {
 
 		state.running = true
 
-		const response = await Api.FlatWizard.start(state.camera, state.request)
+		operationId = await Api.FlatWizard.start(state.camera, state.request)
 
-		if (!response?.ok) {
+		if (!operationId) {
 			reset()
 		}
 	}
 
 	async function stop() {
-		if (!state.running) return
+		if (!state.running || !operationId) return
 
-		const response = await Api.FlatWizard.stop(state.request.id)
+		const response = await Api.FlatWizard.stop(operationId)
 
 		if (response?.ok) {
 			reset()

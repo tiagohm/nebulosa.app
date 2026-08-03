@@ -5,6 +5,7 @@ import { OperationCoordinator } from 'src/api/operation'
 import type { OperationContext } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import type { ResourceKey } from 'src/api/resource'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 
 const CAMERA = 'client:camera:camera-1' as ResourceKey
@@ -12,7 +13,7 @@ const MOUNT = 'client:mount:mount-1' as ResourceKey
 
 function waitForAbort(context: OperationContext): Promise<OperationResult<void>> {
 	return new Promise((resolve) => {
-		context.signal.addEventListener('abort', () => resolve({ ok: false, reason: 'aborted' }), { once: true })
+		context.signal.addEventListener('abort', () => resolve(failedOperationResult('aborted')), { once: true })
 	})
 }
 
@@ -34,6 +35,7 @@ function device<D extends Camera | Mount>(template: D, id: string): D {
 	return {
 		...structuredClone(template),
 		id,
+		hardwareId: id,
 		name: id,
 		connected: true,
 		client: { type: 'SIMULATOR', id: 'client-1' },
@@ -48,10 +50,10 @@ describe('operation coordinator', () => {
 		let invoked = false
 		const busy = coordinator.start('busy', [{ key: CAMERA }, { key: MOUNT }], () => {
 			invoked = true
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		})
 
-		expect(await busy.result).toMatchObject({ ok: false, reason: 'busy' })
+		expect(await busy.result).toMatchObject(failedOperationResult('busy'))
 		expect(invoked).toBeFalse()
 		expect(arbiter.availability(MOUNT)).toBe('available')
 
@@ -90,7 +92,7 @@ describe('operation coordinator', () => {
 
 		expect(events).toEqual(['second:start', 'second:end', 'first'])
 		expect(arbiter.availability(CAMERA)).toBe('available')
-		expect(await handle.result).toEqual({ ok: false, reason: 'aborted' })
+		expect(await handle.result).toEqual(failedOperationResult('aborted'))
 	})
 
 	test('keeps the lease until a canceled executor settles', async () => {
@@ -102,7 +104,7 @@ describe('operation coordinator', () => {
 			await waitForSignal(context.signal)
 			abortObserved.resolve()
 			await executorGate.promise
-			return { ok: false, reason: 'aborted' }
+			return failedOperationResult('aborted')
 		})
 
 		const cancellation = handle.cancel()
@@ -110,12 +112,12 @@ describe('operation coordinator', () => {
 		await abortObserved.promise
 		expect(arbiter.availability(CAMERA)).toBe('leased')
 
-		const contender = coordinator.start('contender', [{ key: CAMERA }], () => ({ ok: true, value: undefined }))
-		expect(await contender.result).toMatchObject({ ok: false, reason: 'busy' })
+		const contender = coordinator.start('contender', [{ key: CAMERA }], () => successfulOperationResult(undefined))
+		expect(await contender.result).toMatchObject(failedOperationResult('busy'))
 
 		executorGate.resolve()
 		await cancellation
-		expect(await handle.result).toEqual({ ok: false, reason: 'aborted' })
+		expect(await handle.result).toEqual(failedOperationResult('aborted'))
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
 
@@ -128,7 +130,7 @@ describe('operation coordinator', () => {
 				cleanupStarted.resolve()
 				await waitForSignal(context.signal)
 			})
-			return { ok: true, value: 'captured' }
+			return successfulOperationResult('captured')
 		})
 
 		await cleanupStarted.promise
@@ -138,7 +140,7 @@ describe('operation coordinator', () => {
 
 		expect(handle.signal.aborted).toBeTrue()
 		await cancellation
-		expect(await handle.result).toEqual({ ok: true, value: 'captured' })
+		expect(await handle.result).toEqual(successfulOperationResult('captured'))
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
 
@@ -155,10 +157,10 @@ describe('operation coordinator', () => {
 			})
 			context.onCleanup(sharedCleanup)
 			unregisterFirst()
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		})
 
-		expect(await handle.result).toEqual({ ok: true, value: undefined })
+		expect(await handle.result).toEqual(successfulOperationResult(undefined))
 		expect(events).toEqual(['shared', 'middle'])
 	})
 
@@ -166,7 +168,7 @@ describe('operation coordinator', () => {
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const handle = coordinator.start('failing', [{ key: CAMERA }], (context) => {
 			context.onCleanup(() => rejectUnknown(Symbol('cleanup detail')))
-			return { ok: false, reason: 'timeout', error: 'primary failure' }
+			return failedOperationResult('timeout', 'primary failure')
 		})
 
 		expect(await handle.result).toEqual({
@@ -179,16 +181,16 @@ describe('operation coordinator', () => {
 	test('preserves successful payloads containing an ok field', async () => {
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const payload = { ok: true, settled: false }
-		const handle = coordinator.start('raw-payload', [], () => ({ ok: true, value: payload }))
+		const handle = coordinator.start('raw-payload', [], () => successfulOperationResult(payload))
 
-		expect(await handle.result).toEqual({ ok: true, value: payload })
+		expect(await handle.result).toEqual(successfulOperationResult(payload))
 	})
 
 	test('preserves an expected failure returned by the executor', async () => {
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
-		const handle = coordinator.start('timeout', [], () => ({ ok: false, reason: 'timeout', error: 'device did not settle' }))
+		const handle = coordinator.start('timeout', [], () => failedOperationResult('timeout', 'device did not settle'))
 
-		expect(await handle.result).toEqual({ ok: false, reason: 'timeout', error: 'device did not settle' })
+		expect(await handle.result).toEqual(failedOperationResult('timeout', 'device did not settle'))
 	})
 
 	test('aborts the operation scope after an unexpected executor failure', async () => {
@@ -208,7 +210,7 @@ describe('operation coordinator', () => {
 
 			const signal = await cleanupStarted.promise
 			expect(signal.aborted).toBeTrue()
-			expect(await handle.result).toEqual({ ok: false, reason: 'commandFailed', error: 'unexpected failure' })
+			expect(await handle.result).toEqual(failedOperationResult('commandFailed', 'unexpected failure'))
 			expect(arbiter.availability(CAMERA)).toBe('available')
 			expect(error).toHaveBeenCalled()
 		} finally {
@@ -225,10 +227,10 @@ describe('operation coordinator', () => {
 				context.onCleanup(() => {
 					throw new Error('device did not release')
 				})
-				return { ok: true, value: 'done' }
+				return successfulOperationResult('done')
 			})
 
-			expect(await handle.result).toEqual({ ok: false, reason: 'commandFailed', error: 'cleanup failed: device did not release' })
+			expect(await handle.result).toEqual(failedOperationResult('commandFailed', 'cleanup failed: device did not release'))
 		} finally {
 			error.mockRestore()
 		}
@@ -240,13 +242,13 @@ describe('operation coordinator', () => {
 		const handle = coordinator.start<void>('canceled-detail', [{ key: CAMERA }], async (context) => {
 			running.resolve()
 			await waitForSignal(context.signal)
-			return { ok: false, reason: 'alert', error: 'device reported alert' }
+			return failedOperationResult('alert', 'device reported alert')
 		})
 
 		await running.promise
 		await handle.cancel('disconnected')
 
-		expect(await handle.result).toEqual({ ok: false, reason: 'disconnected', error: 'device reported alert' })
+		expect(await handle.result).toEqual(failedOperationResult('disconnected', 'device reported alert'))
 	})
 
 	test('cancels every owner associated with a client', async () => {
@@ -264,8 +266,8 @@ describe('operation coordinator', () => {
 
 		await cancellation
 
-		expect(await cameraHandle.result).toEqual({ ok: false, reason: 'disconnected' })
-		expect(await mountHandle.result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(await cameraHandle.result).toEqual(failedOperationResult('disconnected'))
+		expect(await mountHandle.result).toEqual(failedOperationResult('disconnected'))
 		expect(arbiter.availability(resourceKey(camera))).toBe('available')
 		expect(arbiter.availability(resourceKey(mount))).toBe('available')
 	})
@@ -300,7 +302,7 @@ describe('operation coordinator', () => {
 					cleanupStarted.resolve(context)
 					await gate.promise
 				})
-				return { ok: true, value: undefined }
+				return successfulOperationResult(undefined)
 			})
 
 			const context = await cleanupStarted.promise
@@ -310,7 +312,7 @@ describe('operation coordinator', () => {
 			unregister()
 			gate.resolve()
 
-			expect(await handle.result).toEqual({ ok: true, value: undefined })
+			expect(await handle.result).toEqual(successfulOperationResult(undefined))
 			expect(late).toBeFalse()
 			expect(error).toHaveBeenCalled()
 		} finally {
@@ -328,7 +330,7 @@ describe('operation coordinator', () => {
 		expect(handle.signal.aborted).toBeTrue()
 		await cancellation
 
-		expect(await handle.result).toEqual({ ok: false, reason: 'removed' })
+		expect(await handle.result).toEqual(failedOperationResult('removed'))
 		expect(arbiter.availability(CAMERA)).toBe('available')
 		expect(arbiter.availability(MOUNT)).toBe('available')
 		await coordinator.cancelByResource(MOUNT)
@@ -351,8 +353,8 @@ describe('operation coordinator', () => {
 
 		await coordinator.cancelAll('disconnected')
 
-		expect(await capture.result).toEqual({ ok: false, reason: 'disconnected' })
-		expect(await slew.result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(await capture.result).toEqual(failedOperationResult('disconnected'))
+		expect(await slew.result).toEqual(failedOperationResult('disconnected'))
 		expect(cleaned.toSorted()).toEqual(['capture', 'slew'])
 		expect(arbiter.availability(CAMERA)).toBe('available')
 		expect(arbiter.availability(MOUNT)).toBe('available')
@@ -371,7 +373,7 @@ describe('operation coordinator', () => {
 
 		await coordinator.cancel(handle.id, 'removed')
 
-		expect(await handle.result).toEqual({ ok: false, reason: 'removed' })
+		expect(await handle.result).toEqual(failedOperationResult('removed'))
 		expect(coordinator.get(handle.id)).toBeUndefined()
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
@@ -381,12 +383,12 @@ describe('operation coordinator', () => {
 		const coordinator = new OperationCoordinator(arbiter)
 		const child = Promise.withResolvers<OperationResult<string>>()
 		const parent = coordinator.start('composite', [{ key: CAMERA }, { key: MOUNT }], async (context) => {
-			const nested = context.start('capture', [{ key: CAMERA }], () => ({ ok: true, value: 'frame' }))
+			const nested = context.start('capture', [{ key: CAMERA }], () => successfulOperationResult('frame'))
 			child.resolve(await nested.result)
 			return waitForAbort(context)
 		})
 
-		expect(await child.promise).toEqual({ ok: true, value: 'frame' })
+		expect(await child.promise).toEqual(successfulOperationResult('frame'))
 
 		// The nested lease ended, but the tree still owns the camera through the enclosing scope.
 		expect(arbiter.availability(CAMERA)).toBe('leased')
@@ -402,7 +404,7 @@ describe('operation coordinator', () => {
 		const coordinator = new OperationCoordinator(arbiter)
 		const nested = Promise.withResolvers<void>()
 		const parent = coordinator.start('composite', [{ key: CAMERA }], async (context) => {
-			const child = context.start('slew', [{ key: MOUNT }], () => ({ ok: true, value: undefined }))
+			const child = context.start('slew', [{ key: MOUNT }], () => successfulOperationResult(undefined))
 			await child.result
 			nested.resolve()
 			return waitForAbort(context)
@@ -427,7 +429,7 @@ describe('operation coordinator', () => {
 		const child = await started.promise
 		await child.cancel('removed')
 
-		expect(await child.result).toEqual({ ok: false, reason: 'removed' })
+		expect(await child.result).toEqual(failedOperationResult('removed'))
 		expect(parent.signal.aborted).toBeFalse()
 
 		await parent.cancel()
@@ -451,7 +453,7 @@ describe('operation coordinator', () => {
 		expect(grandchildSignal.aborted).toBeTrue()
 
 		await cancellation
-		expect(await parent.result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(await parent.result).toEqual(failedOperationResult('disconnected'))
 	})
 
 	test('waits for a detached nested scope before releasing the tree lease', async () => {
@@ -476,7 +478,7 @@ describe('operation coordinator', () => {
 				return waitForAbort(child)
 			})
 
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		})
 
 		await nested.promise
@@ -508,7 +510,7 @@ describe('operation coordinator', () => {
 		await coordinator.cancelByResource(MOUNT, 'removed')
 
 		// Lifecycle knows only the root owner, so a disconnect anywhere in the tree ends the whole operation.
-		expect(await parent.result).toEqual({ ok: false, reason: 'removed' })
+		expect(await parent.result).toEqual(failedOperationResult('removed'))
 		expect(arbiter.availability(CAMERA)).toBe('available')
 		expect(arbiter.availability(MOUNT)).toBe('available')
 	})
@@ -528,10 +530,10 @@ describe('operation coordinator', () => {
 			// a nested scope owns a fresh controller and would not inherit the abort.
 			const late = context.start<void>('capture', [{ key: CAMERA }], () => {
 				invoked = true
-				return { ok: true, value: undefined }
+				return successfulOperationResult(undefined)
 			})
 
-			return { ok: true, value: await late.result }
+			return successfulOperationResult(await late.result)
 		})
 
 		await running.promise
@@ -540,7 +542,7 @@ describe('operation coordinator', () => {
 		await cancellation
 
 		expect(invoked).toBeFalse()
-		expect(await parent.result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(await parent.result).toEqual(failedOperationResult('disconnected'))
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
 
@@ -554,21 +556,21 @@ describe('operation coordinator', () => {
 				cleanupStarted.resolve(context)
 				await gate.promise
 			})
-			return { ok: false, reason: 'alert', error: 'device reported alert' }
+			return failedOperationResult('alert', 'device reported alert')
 		})
 
 		const context = await cleanupStarted.promise
 		let invoked = false
 		const late = context.start('capture', [{ key: CAMERA }], () => {
 			invoked = true
-			return { ok: true, value: undefined }
+			return successfulOperationResult(undefined)
 		})
 
-		expect(await late.result).toEqual({ ok: false, reason: 'aborted', error: 'parent operation is no longer running' })
+		expect(await late.result).toEqual(failedOperationResult('aborted', 'parent operation is no longer running'))
 		expect(invoked).toBeFalse()
 
 		gate.resolve()
-		expect(await parent.result).toEqual({ ok: false, reason: 'alert', error: 'device reported alert' })
+		expect(await parent.result).toEqual(failedOperationResult('alert', 'device reported alert'))
 	})
 
 	test('cancels only roots during shutdown and still unwinds nested scopes', async () => {
@@ -593,7 +595,7 @@ describe('operation coordinator', () => {
 		await started.promise
 		await coordinator.cancelAll('disconnected')
 
-		expect(await parent.result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(await parent.result).toEqual(failedOperationResult('disconnected'))
 		expect(cleaned).toEqual(['child', 'parent'])
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
@@ -611,14 +613,14 @@ describe('operation coordinator', () => {
 			conflicted.resolve(
 				context.start<void>('capture', [{ key: CAMERA }], () => {
 					invoked = true
-					return { ok: true, value: undefined }
+					return successfulOperationResult(undefined)
 				}).result,
 			)
 
 			return first.result
 		})
 
-		expect(await conflicted.promise).toEqual({ ok: false, reason: 'busy', error: `${CAMERA} is owned by capture ${holderId}` })
+		expect(await conflicted.promise).toEqual(failedOperationResult('busy', `${CAMERA} is owned by capture ${holderId}`))
 		expect(invoked).toBeFalse()
 
 		// The refused scope never acquired anything, so the sibling keeps the camera.
@@ -642,38 +644,38 @@ describe('operation coordinator', () => {
 			})
 
 			await nested.cancel()
-			return { ok: true, value: context.owns(MOUNT) }
+			return successfulOperationResult(context.owns(MOUNT))
 		})
 
 		expect(await answers.promise).toEqual({ child: [true, true], parent: [true, false] })
 
 		// The nested lease ended, so nothing in the tree claims the mount anymore.
-		expect(await parent.result).toEqual({ ok: true, value: false })
+		expect(await parent.result).toEqual(successfulOperationResult(false))
 	})
 
 	test('restores the enclosing holder after a nested scope releases', async () => {
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const parent = coordinator.start('composite', [{ key: CAMERA }], async (context) => {
-			const nested = context.start('capture', [{ key: CAMERA }], () => ({ ok: true, value: undefined }))
+			const nested = context.start('capture', [{ key: CAMERA }], () => successfulOperationResult(undefined))
 			await nested.result
 
 			// A sibling started after the first one released is no longer blocked by it.
-			const sibling = context.start('capture', [{ key: CAMERA }], (child) => ({ ok: true, value: child.owns(CAMERA) }))
+			const sibling = context.start('capture', [{ key: CAMERA }], (child) => successfulOperationResult(child.owns(CAMERA)))
 			return await sibling.result
 		})
 
-		expect(await parent.result).toEqual({ ok: true, value: true })
+		expect(await parent.result).toEqual(successfulOperationResult(true))
 	})
 
 	test('cancels a busy operation without disturbing the active owner', async () => {
 		const arbiter = new ResourceArbiter()
 		const coordinator = new OperationCoordinator(arbiter)
 		const active = coordinator.start('active', [{ key: CAMERA }], waitForAbort)
-		const busy = coordinator.start('busy', [{ key: CAMERA }], () => ({ ok: true, value: undefined }))
+		const busy = coordinator.start('busy', [{ key: CAMERA }], () => successfulOperationResult(undefined))
 
 		await busy.cancel()
 
-		expect(await busy.result).toMatchObject({ ok: false, reason: 'busy' })
+		expect(await busy.result).toMatchObject(failedOperationResult('busy'))
 		expect(coordinator.get(busy.id)).toBeUndefined()
 		expect(active.signal.aborted).toBeFalse()
 		expect(arbiter.availability(CAMERA)).toBe('leased')

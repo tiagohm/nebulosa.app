@@ -24,6 +24,7 @@ import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
 import type { MountCommander, MountMoveDirection } from './mount.commander'
 import type { NotificationHandler } from './notification'
+import { detachOperation } from './operation.notify'
 import { resourceKey } from './resource'
 
 // Presentation events fanned out to WebSocket subscribers. They publish state and never take part in the
@@ -170,7 +171,6 @@ export class MountHandler implements DeviceHandler<Mount> {
 
 	// Stops the mount: first by cancelling whatever operation owns it, so its own cleanup runs, and then
 	// by the physical abort, which also covers motion nobody here started.
-	//
 	// No local index of operations is kept: the arbiter already knows the owner, and stopping by device
 	// means stopping the whole tree, because a caller holding only a device id cannot name a scope and
 	// stopping the mount of a TPPA run means stopping the TPPA run.
@@ -186,24 +186,13 @@ export class MountHandler implements DeviceHandler<Mount> {
 		})
 	}
 
-	// Runs a command whose physical completion outlasts the request that asked for it.
-	//
-	// The HTTP response is gone by the time the command settles, and a rejected command moves nothing, so
-	// it emits no device update either: without a notification the user would see the action silently
-	// discarded. Failures are therefore pushed over the WebSocket, which is the same path every other
-	// asynchronous failure in the API already uses.
+	// Runs a command whose physical completion outlasts the request that asked for it, notifying its failure.
 	#detach(mount: Mount, action: string, command: () => Promise<OperationResult<unknown>>) {
-		void command().then((result) => {
-			if (result.ok) return
-
-			console.error('mount failed to %s:', action, mount.name, result.reason, result.error ?? '')
-			this.notification.send({ title: 'MOUNT', description: `${mount.name} failed to ${action}: ${result.error ?? result.reason}`, color: 'danger' })
-		})
+		detachOperation(this.notification, 'MOUNT', mount.name, action, command)
 	}
 }
 
 // Exposes mounts to external planetarium software over the Stellarium and LX200 protocols.
-//
 // Every mutation goes through MountCommander, so a remote client competes for the mount under the same
 // ownership rules as the UI: it cannot slew a mount an operation is already using.
 export class MountRemoteControlHandler {
@@ -213,6 +202,7 @@ export class MountRemoteControlHandler {
 	// Creates the protocol adapter over coordinated mount commands.
 	constructor(
 		readonly mountManager: MountManager,
+		readonly notification: NotificationHandler,
 		readonly commander: MountCommander,
 		readonly coordinator: OperationCoordinator,
 	) {}
@@ -292,11 +282,10 @@ export class MountRemoteControlHandler {
 	}
 
 	// Runs a coordinated command for a protocol callback, which is synchronous and has no way to report a
-	// failure back to the remote client.
+	// failure back to the remote client. The browser is the only place left where the user can learn that a
+	// slew asked for from the planetarium was refused, so the failure is notified there too.
 	#detach(action: string, mount: Mount, command: (mount: Mount) => Promise<OperationResult<unknown>>) {
-		void command(mount).then((result) => {
-			if (!result.ok) console.error('mount failed to %s:', action, mount.name, result.reason, result.error ?? '')
-		})
+		detachOperation(this.notification, 'MOUNT', mount.name, action, () => command(mount))
 	}
 
 	start(mount: Mount, req: MountRemoteControlStart) {

@@ -4,7 +4,6 @@ import type { CameraCaptureStart } from '#/camera'
 export type FlatWizardState = 'idle' | 'capturing' | 'computing'
 
 export interface FlatWizardStart {
-	id: string
 	readonly capture: CameraCaptureStart
 	minExposure: number // ms
 	maxExposure: number // ms
@@ -22,7 +21,6 @@ export interface FlatWizardEvent {
 }
 
 export const DEFAULT_FLAT_WIZARD_START: FlatWizardStart = {
-	id: '',
 	capture: DEFAULT_CAMERA_CAPTURE_START,
 	minExposure: 1,
 	maxExposure: 2000,

@@ -43,6 +43,7 @@ export function tppaStore(api: DockviewPanelApi) {
 
 	const u: VoidFunction[] = []
 	let mounted = false
+	let operationId: string | undefined
 
 	function _mount() {
 		if (mounted) return unmount
@@ -74,8 +75,6 @@ export function tppaStore(api: DockviewPanelApi) {
 		u[4] = subscribeKey(state, 'mount', updateTitle)
 
 		updateTitle()
-
-		state.request.id = id
 
 		return unmount
 	}
@@ -125,17 +124,17 @@ export function tppaStore(api: DockviewPanelApi) {
 
 		state.running = true
 
-		const response = await Api.TPPA.start(state.camera, state.mount, state.request)
+		operationId = await Api.TPPA.start(state.camera, state.mount, state.request)
 
-		if (!response?.ok) {
+		if (!operationId) {
 			reset()
 		}
 	}
 
 	async function stop() {
-		if (!state.running) return
+		if (!state.running || !operationId) return
 
-		const response = await Api.TPPA.stop(state.request.id)
+		const response = await Api.TPPA.stop(operationId)
 
 		if (response?.ok) {
 			reset()

@@ -1,4 +1,5 @@
 import { errorMessage, settlesWithin } from 'src/api/util'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
 
 // Everything needed to command a device and wait for the physical state that proves the command took
@@ -45,7 +46,7 @@ export function abortableDelay(ms: number, signal: AbortSignal): Promise<Operati
 		finish(aborted(signal))
 	}
 
-	const timer = setTimeout(() => finish({ ok: true, value: undefined }), Math.max(0, ms))
+	const timer = setTimeout(() => finish(successfulOperationResult(undefined)), Math.max(0, ms))
 	signal.addEventListener('abort', onAbort, { once: true })
 	return delayed.promise
 }
@@ -100,7 +101,7 @@ export function waitForDeviceState<U>(options: WaitForDeviceOptions<U>): Promise
 				error = error ? `${error}; abort failed: ${detail}` : `abort failed: ${detail}`
 			}
 
-			resolve(error === undefined ? { ok: false, reason } : { ok: false, reason, error })
+			resolve(failedOperationResult(reason, error))
 		}
 
 		// Concludes through the physical abort path whenever the device did not reach the intended state.
@@ -117,13 +118,13 @@ export function waitForDeviceState<U>(options: WaitForDeviceOptions<U>): Promise
 			try {
 				evaluation = options.evaluate(update)
 			} catch (error) {
-				return { ok: false, reason: 'unexpectedState', error: errorMessage(error) }
+				return failedOperationResult('unexpectedState', errorMessage(error))
 			}
 
 			if (evaluation === 'success') {
-				return { ok: true, value: update }
+				return successfulOperationResult(update)
 			} else if (evaluation !== 'pending') {
-				return { ok: false, reason: evaluation }
+				return failedOperationResult(evaluation)
 			}
 		}
 
@@ -144,7 +145,7 @@ export function waitForDeviceState<U>(options: WaitForDeviceOptions<U>): Promise
 		try {
 			unsubscribe = options.subscribe(listener)
 		} catch (error) {
-			finish({ ok: false, reason: 'commandFailed', error: errorMessage(error) })
+			finish(failedOperationResult('commandFailed', errorMessage(error)))
 			return
 		}
 
@@ -161,7 +162,7 @@ export function waitForDeviceState<U>(options: WaitForDeviceOptions<U>): Promise
 			} catch (error) {
 				// The device may have accepted part of the command before failing, so this settles through the
 				// abort path too; the completion promise it awaits resolves in the finally block below.
-				settle({ ok: false, reason: 'commandFailed', error: errorMessage(error) })
+				settle(failedOperationResult('commandFailed', errorMessage(error)))
 				return
 			} finally {
 				commandCompletion.resolve()
@@ -179,7 +180,7 @@ export function waitForDeviceState<U>(options: WaitForDeviceOptions<U>): Promise
 				const result = evaluate(options.current())
 				if (result !== undefined) settle(result)
 			} catch (error) {
-				settle({ ok: false, reason: 'unexpectedState', error: errorMessage(error) })
+				settle(failedOperationResult('unexpectedState', errorMessage(error)))
 			}
 		})()
 	})
@@ -206,5 +207,5 @@ export function abortReason(signal: AbortSignal): OperationFailureReason {
 
 // Builds an aborted result using the signal's normalized operational reason.
 function aborted<T>(signal: AbortSignal): OperationResult<T> {
-	return { ok: false, reason: abortReason(signal) }
+	return failedOperationResult(abortReason(signal))
 }

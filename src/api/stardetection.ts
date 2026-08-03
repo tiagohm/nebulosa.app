@@ -20,7 +20,7 @@ const STAR_DETECTION_IMAGE_TRANSFORMATION: ImageTransformation = {
 export class StarDetectionHandler {
 	constructor(readonly imageProcessor: ImageProcessor) {}
 
-	async detect(req: StarDetection) {
+	async detect(req: StarDetection, signal?: AbortSignal) {
 		if (!req.path) return []
 
 		try {
@@ -28,7 +28,7 @@ export class StarDetectionHandler {
 			const request = { ...req, path }
 
 			if (request.type === 'astap') {
-				return await this.detectWithAstap(request)
+				return await this.detectWithAstap(request, signal)
 			} else if (request.type === 'nebulosa') {
 				const image = await this.imageProcessor.transform(path, STAR_DETECTION_IMAGE_TRANSFORMATION)
 				if (image) return detectStars(image.image, { ...request, maxStars: normalizeMaxStars(request.maxStars) })
@@ -40,11 +40,11 @@ export class StarDetectionHandler {
 		return []
 	}
 
-	private async detectWithAstap(req: StarDetection) {
+	private async detectWithAstap(req: StarDetection, signal?: AbortSignal) {
 		const outputDirectory = await mkdtemp(join(Bun.env.tmpDir, 'stardetection-'))
 
 		try {
-			return await astapDetectStars(req.path, { ...req, outputDirectory })
+			return await astapDetectStars(req.path, { ...req, outputDirectory }, signal)
 		} finally {
 			await rm(outputDirectory, { recursive: true, force: true })
 		}

@@ -6,6 +6,7 @@ import { DeviceLifecycle, isDeviceQuiescent } from 'src/api/device.lifecycle'
 import { OperationCoordinator } from 'src/api/operation'
 import type { OperationContext } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
+import { failedOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 
 class TestDeviceManager<D extends Device> {
@@ -93,7 +94,7 @@ function cover(): Cover {
 
 function waitForAbort(context: OperationContext): Promise<OperationResult<void>> {
 	return new Promise((resolve) => {
-		context.signal.addEventListener('abort', () => resolve({ ok: false, reason: 'aborted' }), { once: true })
+		context.signal.addEventListener('abort', () => resolve(failedOperationResult('aborted')), { once: true })
 	})
 }
 
@@ -117,7 +118,7 @@ describe('device lifecycle', () => {
 
 		expect(handle.signal.aborted).toBeTrue()
 		expect(arbiter.availability(key)).toBe('unavailable')
-		expect(await handle.result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(await handle.result).toEqual(failedOperationResult('disconnected'))
 
 		lifecycle.dispose()
 	})
@@ -141,7 +142,7 @@ describe('device lifecycle', () => {
 		manager.update(device, 'connected')
 
 		expect(handle.signal.aborted).toBeTrue()
-		expect(await handle.result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(await handle.result).toEqual(failedOperationResult('disconnected'))
 
 		lifecycle.dispose()
 	})
@@ -224,7 +225,7 @@ describe('device lifecycle', () => {
 		expect(arbiter.ownersOfClient('client-1')).toEqual([])
 
 		executorStopped.resolve()
-		expect(await handle.result).toEqual({ ok: false, reason: 'removed' })
+		expect(await handle.result).toEqual(failedOperationResult('removed'))
 
 		lifecycle.dispose()
 	})
@@ -245,7 +246,7 @@ describe('device lifecycle', () => {
 
 		expect(handle.signal.aborted).toBeTrue()
 		expect(arbiter.availability(key)).toBe('unavailable')
-		expect(await handle.result).toEqual({ ok: false, reason: 'removed' })
+		expect(await handle.result).toEqual(failedOperationResult('removed'))
 
 		lifecycle.dispose()
 	})
@@ -306,7 +307,7 @@ describe('device lifecycle', () => {
 		guideOutputManager.remove(proxy)
 
 		expect(handle.signal.aborted).toBeTrue()
-		expect(await handle.result).toEqual({ ok: false, reason: 'removed' })
+		expect(await handle.result).toEqual(failedOperationResult('removed'))
 		expect(arbiter.availability(key)).toBe('available')
 
 		parent.slewing = true

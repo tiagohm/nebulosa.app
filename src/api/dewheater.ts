@@ -2,8 +2,11 @@ import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { DewHeater } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, DewHeaterManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
+import type { OperationCoordinator } from 'src/api/operation'
 import { EventBus } from 'src/shared/bus'
 import type { DewHeaterAdded, DewHeaterRemoved, DewHeaterUpdated } from '#/dewheater'
+import type { OperationResult } from '#/orchestration'
+import type { DewHeaterCommander } from './dewheater.commander'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import { webSocketBus } from './message'
@@ -17,10 +20,14 @@ export interface DewHeaterBusEvents {
 
 export const dewHeaterBus = new EventBus<DewHeaterBusEvents>()
 
+// Publishes dew heater transport events and delegates every mutation to DewHeaterCommander.
 export class DewHeaterHandler implements DeviceHandler<DewHeater> {
+	// Registers the dew heater transport adapter and its presentation-event fanout.
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
 		readonly dewHeaterManager: DewHeaterManager,
+		readonly commander: DewHeaterCommander,
+		readonly coordinator: OperationCoordinator,
 	) {
 		dewHeaterManager.addHandler(this)
 
@@ -52,6 +59,11 @@ export class DewHeaterHandler implements DeviceHandler<DewHeater> {
 	list(client?: string | IndiClient) {
 		return Array.from(this.dewHeaterManager.list(client))
 	}
+
+	// Sets the heating duty cycle, in the driver's own PWM units, which takes effect without any motion.
+	dutyCycle(heater: DewHeater, value: number) {
+		return this.commander.dutyCycle(this.coordinator, heater, value)
+	}
 }
 
 export function dewHeater(dewHeaterHandler: DewHeaterHandler) {
@@ -64,6 +76,6 @@ export function dewHeater(dewHeaterHandler: DewHeaterHandler) {
 	return {
 		'/dewheaters': { GET: (req) => response(dewHeaterHandler.list(query(req).client)) },
 		'/dewheaters/:id': { GET: (req) => response(dewHeaterFromParams(req)) },
-		'/dewheaters/:id/dutycycle': { POST: async (req) => response(dewHeaterManager.dutyCycle(dewHeaterFromParams(req), await req.json())) },
+		'/dewheaters/:id/dutycycle': { POST: async (req) => response<OperationResult<void>>(await dewHeaterHandler.dutyCycle(dewHeaterFromParams(req), await req.json())) },
 	} as const satisfies Endpoints
 }

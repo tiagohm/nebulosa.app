@@ -9,7 +9,6 @@ import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
 
 // Transport adapter over the coordinated guider sessions.
-//
 // It owns nothing about guiding: every command is delegated to GuiderCommander, which holds the
 // transports, their devices, and the serialization between commands. What lives here is HTTP shape and
 // WebSocket fanout. Several sessions may be open at once, so every route and every event names one.

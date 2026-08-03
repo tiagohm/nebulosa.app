@@ -9,6 +9,7 @@ import { WebSocketMessageHandler } from 'src/api/message'
 import { NotificationHandler } from 'src/api/notification'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
+import { failedOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 
 class TestIndiHandler extends IndiClientHandlerSet implements DeviceProvider<Device> {
@@ -57,7 +58,7 @@ describe('connection handler', () => {
 			executorStarted.resolve()
 
 			return new Promise<OperationResult<void>>((resolve) => {
-				context.signal.addEventListener('abort', () => resolve({ ok: false, reason: 'disconnected' }), { once: true })
+				context.signal.addEventListener('abort', () => resolve(failedOperationResult('disconnected')), { once: true })
 			})
 		})
 
@@ -73,7 +74,7 @@ describe('connection handler', () => {
 		await disconnected
 
 		expect(handler.list()).toEqual([])
-		expect(await handle.result).toEqual({ ok: false, reason: 'disconnected' })
+		expect(await handle.result).toEqual(failedOperationResult('disconnected'))
 	})
 
 	test('bounds cleanup before disposing an unresponsive client operation', async () => {
@@ -87,7 +88,7 @@ describe('connection handler', () => {
 		expect(handle.signal.aborted).toBeTrue()
 		expect(handler.list()).toEqual([])
 
-		executor.resolve({ ok: false, reason: 'disconnected' })
-		expect(await handle.result).toEqual({ ok: false, reason: 'disconnected' })
+		executor.resolve(failedOperationResult('disconnected'))
+		expect(await handle.result).toEqual(failedOperationResult('disconnected'))
 	})
 })

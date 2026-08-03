@@ -53,6 +53,7 @@ export function darvStore(api: DockviewPanelApi) {
 
 	const u: VoidFunction[] = []
 	let mounted = false
+	let operationId: string | undefined
 
 	function _mount() {
 		if (mounted) return unmount
@@ -82,8 +83,6 @@ export function darvStore(api: DockviewPanelApi) {
 		})
 
 		u[4] = subscribeKey(state, 'mount', updateTitle)
-
-		state.request.id = id
 
 		return unmount
 	}
@@ -155,17 +154,17 @@ export function darvStore(api: DockviewPanelApi) {
 
 		state.running = true
 
-		const response = await Api.DARV.start(state.camera, state.mount, state.request)
+		operationId = await Api.DARV.start(state.camera, state.mount, state.request)
 
-		if (!response?.ok) {
+		if (!operationId) {
 			reset()
 		}
 	}
 
 	async function stop() {
-		if (!state.running) return
+		if (!state.running || !operationId) return
 
-		const response = await Api.DARV.stop(state.request.id)
+		const response = await Api.DARV.stop(operationId)
 
 		if (response?.ok) {
 			reset()

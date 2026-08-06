@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { abortableDelay, waitForDeviceState } from 'src/api/operation.wait'
+import { settlesWithin } from 'src/api/util'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 
 function rejectUnknown(value: unknown): Promise<never> {
@@ -9,6 +10,12 @@ function rejectUnknown(value: unknown): Promise<never> {
 }
 
 describe('operation waits', () => {
+	test('reports whether a promise settles before the deadline', async () => {
+		expect(await settlesWithin(Promise.resolve(), 1000)).toBeTrue()
+		expect(await settlesWithin(Promise.reject(new Error('rejected')), 1000)).toBeTrue()
+		expect(await settlesWithin(new Promise(() => {}), 0)).toBeFalse()
+	})
+
 	test('aborts a delay with the signal reason', async () => {
 		const controller = new AbortController()
 		const delayed = abortableDelay(1000, controller.signal)
@@ -16,6 +23,31 @@ describe('operation waits', () => {
 		controller.abort('disconnected')
 
 		expect(await delayed).toEqual(failedOperationResult('disconnected'))
+	})
+
+	test('does not subscribe or command when already aborted', async () => {
+		const controller = new AbortController()
+		let subscribed = false
+		let commanded = false
+		controller.abort('removed')
+
+		const result = waitForDeviceState({
+			signal: controller.signal,
+			timeout: 1000,
+			subscribe: () => {
+				subscribed = true
+				return () => {}
+			},
+			current: () => 'idle',
+			evaluate: () => 'pending',
+			command: () => {
+				commanded = true
+			},
+		})
+
+		expect(await result).toEqual(failedOperationResult('removed'))
+		expect(subscribed).toBeFalse()
+		expect(commanded).toBeFalse()
 	})
 
 	test('subscribes before sending a command and resolves from observed state', async () => {
@@ -73,7 +105,28 @@ describe('operation waits', () => {
 			command: () => rejectUnknown(Symbol('send failed')),
 		})
 
-		expect(await result).toEqual(failedOperationResult('commandFailed', 'Symbol(send failed)'))
+		expect(await result).toEqual(failedOperationResult('commandFailed', 'send failed'))
+	})
+
+	test('runs physical abort after a command failure settles', async () => {
+		const events: string[] = []
+		const result = waitForDeviceState({
+			signal: new AbortController().signal,
+			timeout: 1000,
+			subscribe: () => () => {},
+			current: () => 'idle',
+			evaluate: () => 'pending',
+			command: () => {
+				events.push('command')
+				throw new Error('send failed')
+			},
+			abort: () => {
+				events.push('abort')
+			},
+		})
+
+		expect(await result).toEqual(failedOperationResult('commandFailed', 'send failed'))
+		expect(events).toEqual(['command', 'abort'])
 	})
 
 	test('falls back when a rejected value cannot be converted to text', async () => {

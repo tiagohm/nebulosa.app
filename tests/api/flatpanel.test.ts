@@ -78,7 +78,7 @@ async function connected() {
 	flatPanelManager.connect(device)
 
 	expect(device.connected).toBeTrue()
-	expect(await waitUntil(() => free(device))).toBeTrue()
+	await waitUntil(() => free(device))
 
 	return device
 }
@@ -102,7 +102,7 @@ describe('flat panel handler', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socket.some((message) => message.type === 'flatPanel:add'))).toBeTrue()
+		await waitUntil(() => socket.some((message) => message.type === 'flatPanel:add'))
 
 		const message = socket.find<FlatPanelAdded>((message) => message.type === 'flatPanel:add')
 
@@ -140,7 +140,7 @@ describe('flat panel handler', () => {
 
 		await succeeded(await endpoints['/flatpanels/:id/enable'].POST(request(device.id)))
 
-		expect(await waitUntil(() => device.enabled)).toBeTrue()
+		await waitUntil(() => device.enabled)
 		expect(flatPanelUpdates('enabled').at(-1)?.body.device.enabled).toBeTrue()
 
 		await succeeded(await endpoints['/flatpanels/:id/intensity'].POST(request(device.id, 42)))

@@ -46,15 +46,19 @@ export async function noContent(response: Response, expectedStatus = 200) {
 	expect(await response.text()).toBe('')
 }
 
-export async function waitUntil(condition: () => boolean, timeout = 1500) {
+export async function waitUntil(condition: () => boolean, timeout = 1500, notThrow: boolean = false) {
 	const start = performance.now()
 
 	while (!condition()) {
-		if (performance.now() - start >= timeout) return false
+		if (performance.now() - start >= timeout) {
+			if (notThrow) return false
+			else throw new Error('timeout waiting for condition')
+		}
+
 		await Bun.sleep(10)
 	}
 
-	return true
+	return undefined
 }
 
 export interface CaptureHandleOptions {
@@ -74,4 +78,9 @@ export function captureHandle(options: CaptureHandleOptions = {}): CameraCapture
 
 export function spyFetch<I extends URL | RequestInfo>(fetch: (input: I, init?: RequestInit) => Promise<Response>) {
 	return spyOn(globalThis, 'fetch').mockImplementation(fetch as never)
+}
+
+export async function flushMicrotasks() {
+	await Promise.resolve()
+	await Promise.resolve()
 }

@@ -200,7 +200,7 @@ describe('camera capture start request', () => {
 		try {
 			cameraManager.connect(camera)
 
-			expect(await waitUntil(() => resourceArbiter.availability(resourceKey(camera)) === 'available')).toBeTrue()
+			await waitUntil(() => resourceArbiter.availability(resourceKey(camera)) === 'available')
 
 			const cooled = await endpoints['/cameras/:id/cooler'].POST(endpointRequest(camera.id, true))
 			const cooledTo = await endpoints['/cameras/:id/temperature'].POST(endpointRequest(camera.id, -5))
@@ -249,7 +249,7 @@ describe('camera capture start request', () => {
 
 			const startResponse = endpoints['/cameras/:id/start'].POST(endpointRequest(camera.id, request))
 
-			expect(await waitUntil(() => socketMessagesOf<CameraCaptureEvent>('camera:capture').some((message) => message.body.state === 'exposureStarted'))).toBeTrue()
+			await waitUntil(() => socketMessagesOf<CameraCaptureEvent>('camera:capture').some((message) => message.body.state === 'exposureStarted'))
 			const started = await json<{ id: string; started: { readonly ok: boolean } }>(await startResponse)
 
 			await noContent(await endpoints['/cameras/:id/stop'].POST(endpointRequest(camera.id, undefined, `?operation=${started.id}`)))
@@ -293,7 +293,7 @@ describe('camera capture start request', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socket.some((message) => message.type === 'camera:add'))).toBeTrue()
+		await waitUntil(() => socket.some((message) => message.type === 'camera:add'))
 
 		const message = socket.find<CameraAdded>((message) => message.type === 'camera:add')
 
@@ -401,7 +401,7 @@ describe('camera capture start request', () => {
 			const events: CameraCaptureEvent[] = []
 			cameraManager.connect(camera)
 			const handle = cameraHandler.capture(operationCoordinator, camera, request, (event) => events.push(structuredClone(event)))
-			expect(await waitUntil(() => events.length > 0)).toBeTrue()
+			await waitUntil(() => events.length > 0)
 			await handle.cancel()
 			cameraCapturer.blobReceived(camera, Buffer.from('late frame'), 'raw')
 
@@ -717,7 +717,7 @@ describe('camera capture start request', () => {
 			cameraManager.connect(camera)
 			const handle = cameraHandler.capture(operationCoordinator, camera, captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO' }), (event) => events.push(structuredClone(event)))
 			expect((await handle.started).ok).toBeTrue()
-			expect(await waitUntil(() => pendingBlob !== undefined && events.some((event) => event.state === 'exposureFinished'))).toBeTrue()
+			await waitUntil(() => pendingBlob !== undefined && events.some((event) => event.state === 'exposureFinished'))
 
 			let settled = false
 			void handle.result.then(() => {
@@ -754,7 +754,7 @@ describe('camera capture start request', () => {
 			cameraManager.connect(camera)
 			const handle = cameraHandler.capture(operationCoordinator, camera, captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO' }), (event) => events.push(structuredClone(event)))
 			expect((await handle.started).ok).toBeTrue()
-			expect(await waitUntil(() => pendingUpdate !== undefined && blobSeen)).toBeTrue()
+			await waitUntil(() => pendingUpdate !== undefined && blobSeen)
 
 			let settled = false
 			void handle.result.then(() => {
@@ -1054,7 +1054,7 @@ describe('camera capture start request', () => {
 
 		const promise = cameraHandler.capture(operationCoordinator, camera, request, (event) => events.push(structuredClone(event))).result.then((result) => result.ok)
 
-		expect(await waitUntil(() => events.some((event) => event.state === 'dithering'))).toBeTrue()
+		await waitUntil(() => events.some((event) => event.state === 'dithering'))
 
 		void cameraHandler.stop(camera)
 		resolveDither?.(failedOperationResult('aborted'))

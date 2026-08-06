@@ -83,7 +83,7 @@ async function connected() {
 
 	focuserManager.syncTo(device, 50000)
 
-	expect(await waitUntil(() => device.position.value === 50000 && free(device))).toBeTrue()
+	await waitUntil(() => device.position.value === 50000 && free(device))
 
 	return device
 }
@@ -107,7 +107,7 @@ describe('focuser handler', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socket.some((message) => message.type === 'focuser:add'))).toBeTrue()
+		await waitUntil(() => socket.some((message) => message.type === 'focuser:add'))
 
 		const message = socket.find<FocuserAdded>((message) => message.type === 'focuser:add')
 
@@ -171,11 +171,11 @@ describe('focuser handler', () => {
 
 		await noContent(await endpoints['/focusers/:id/movein'].POST(request(device.id, 500)))
 
-		expect(await waitUntil(() => device.position.value === 49500 && free(device))).toBeTrue()
+		await waitUntil(() => device.position.value === 49500 && free(device))
 
 		await noContent(await endpoints['/focusers/:id/moveout'].POST(request(device.id, 500)))
 
-		expect(await waitUntil(() => device.position.value === 50000 && free(device))).toBeTrue()
+		await waitUntil(() => device.position.value === 50000 && free(device))
 	})
 
 	test('moves and stops through endpoints', async () => {
@@ -186,7 +186,7 @@ describe('focuser handler', () => {
 
 		await noContent(await endpoints['/focusers/:id/moveto'].POST(request(device.id, device.position.max)))
 
-		expect(await waitUntil(() => device.moving)).toBeTrue()
+		await waitUntil(() => device.moving)
 		expect(focuserUpdates('moving').at(-1)?.body.device.moving).toBeTrue()
 
 		await succeeded(await endpoints['/focusers/:id/stop'].POST(request(device.id)))
@@ -194,7 +194,7 @@ describe('focuser handler', () => {
 		expect(device.moving).toBeFalse()
 		expect(device.position.value).toBeLessThan(device.position.max)
 		expect(focuserUpdates('moving').at(-1)?.body.device.moving).toBeFalse()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 	}, 10000)
 
 	test('notifies a detached move that was rejected', async () => {
@@ -205,7 +205,7 @@ describe('focuser handler', () => {
 
 		await noContent(await endpoints['/focusers/:id/moveto'].POST(request(device.id, 1000)))
 
-		expect(await waitUntil(() => socket.some<Notification>((message) => message.type === 'notification'))).toBeTrue()
+		await waitUntil(() => socket.some<Notification>((message) => message.type === 'notification'))
 
 		const message = socket.find<Notification>((message) => message.type === 'notification')
 
@@ -246,7 +246,7 @@ describe('focuser commander', () => {
 		expect(result.ok).toBeTrue()
 		expect(device.moving).toBeFalse()
 		expect(device.position.value).toBe(target)
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 	})
 
 	test('resolves without waiting when the focuser already stands at the position', async () => {
@@ -285,7 +285,7 @@ describe('focuser commander', () => {
 
 		focuserManager.syncTo(device, device.position.min + 100)
 
-		expect(await waitUntil(() => device.position.value === device.position.min + 100)).toBeTrue()
+		await waitUntil(() => device.position.value === device.position.min + 100)
 		expect(await focuserCommander.moveIn(operationCoordinator, device, 500)).toMatchObject({ ok: true })
 		expect(device.position.value).toBe(device.position.min)
 	})
@@ -319,21 +319,21 @@ describe('focuser commander', () => {
 		const device = await connected()
 		const moving = focuserCommander.moveTo(operationCoordinator, device, device.position.max)
 
-		expect(await waitUntil(() => device.moving)).toBeTrue()
+		await waitUntil(() => device.moving)
 
 		const stopped = await focuserHandler.stop(device)
 
 		expect(stopped).toMatchObject({ ok: true })
 		expect(await moving).toMatchObject(failedOperationResult('aborted'))
 		expect(device.moving).toBeFalse()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 	}, 10000)
 
 	test('refuses a second command while another operation owns the focuser', async () => {
 		const device = await connected()
 		const moving = focuserCommander.moveTo(operationCoordinator, device, device.position.max)
 
-		expect(await waitUntil(() => device.moving)).toBeTrue()
+		await waitUntil(() => device.moving)
 		expect(await focuserCommander.syncTo(operationCoordinator, device, 1000)).toMatchObject(failedOperationResult('busy'))
 
 		await focuserHandler.stop(device)

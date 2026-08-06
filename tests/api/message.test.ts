@@ -36,11 +36,11 @@ describe('websocket message handler', () => {
 		try {
 			wsm.open(socket)
 			wsm.open(socket)
-			expect(await waitUntil(() => opened.events.length === 1)).toBeTrue()
+			await waitUntil(() => opened.events.length === 1)
 
 			wsm.close(socket, 1000, 'done')
 			wsm.close(socket, 1000, 'done')
-			expect(await waitUntil(() => closed.events.length === 1)).toBeTrue()
+			await waitUntil(() => closed.events.length === 1)
 
 			expect(opened.events).toEqual([socket])
 			expect(closed.events).toEqual([socket])
@@ -123,7 +123,7 @@ describe('websocket message handler', () => {
 			wsm.open(failingSocket)
 			wsm.open(socket)
 			wsm.send('status', { value: 1 })
-			expect(await waitUntil(() => closed.events.length === 1)).toBeTrue()
+			await waitUntil(() => closed.events.length === 1)
 
 			socket.clear()
 			wsm.send('status', { value: 2 })
@@ -146,7 +146,7 @@ describe('websocket message handler', () => {
 			wsm.message(socket, 'indi:listen:camera-1')
 			wsm.message(socket, 'indi:unlisten:camera-1')
 
-			expect(await waitUntil(() => listens.events.length === 1 && unlistens.events.length === 1)).toBeTrue()
+			await waitUntil(() => listens.events.length === 1 && unlistens.events.length === 1)
 			expect(listens.events).toEqual([{ id: 'camera-1', socket }])
 			expect(unlistens.events).toEqual([{ id: 'camera-1', socket }])
 		} finally {

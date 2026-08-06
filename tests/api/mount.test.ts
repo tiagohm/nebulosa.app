@@ -135,7 +135,7 @@ describe('mount handler', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socket.some<MountAdded>((message) => message.type === 'mount:add'))).toBeTrue()
+		await waitUntil(() => socket.some<MountAdded>((message) => message.type === 'mount:add'))
 
 		const message = socket.find<MountAdded>((message) => message.type === 'mount:add')
 
@@ -224,34 +224,34 @@ describe('mount handler', () => {
 
 		await succeeded(await endpoints['/mounts/:id/movenorth'].POST(request(device.id, true)))
 
-		expect(await waitUntil(() => device.slewing)).toBeTrue()
+		await waitUntil(() => device.slewing)
 		expect(mountUpdates('slewing').at(-1)?.body.device.slewing).toBeTrue()
 
 		await succeeded(await endpoints['/mounts/:id/stop'].POST(request(device.id)))
 
 		expect(device.slewing).toBeFalse()
 		expect(mountUpdates('slewing').at(-1)?.body.device.slewing).toBeFalse()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 
 		await noContent(endpoints['/mounts/:id/park'].POST(request(device.id)))
 
-		expect(await waitUntil(() => device.parking)).toBeTrue()
+		await waitUntil(() => device.parking)
 		expect(mountUpdates('parking').at(-1)?.body.device.parking).toBeTrue()
-		expect(await waitUntil(() => device.parked && !device.parking, 3000)).toBeTrue()
+		await waitUntil(() => device.parked && !device.parking, 3000)
 		expect(mountUpdates('parked').at(-1)?.body.device.parked).toBeTrue()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 
 		await noContent(endpoints['/mounts/:id/unpark'].POST(request(device.id)))
 
-		expect(await waitUntil(() => !device.parked)).toBeTrue()
+		await waitUntil(() => !device.parked)
 		expect(mountUpdates('parked').at(-1)?.body.device.parked).toBeFalse()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 
 		socket.clear()
 
 		await noContent(endpoints['/mounts/:id/home'].POST(request(device.id)))
 
-		expect(await waitUntil(() => device.homing)).toBeTrue()
+		await waitUntil(() => device.homing)
 		expect(mountUpdates('homing').at(-1)?.body.device.homing).toBeTrue()
 	})
 
@@ -283,7 +283,7 @@ describe('mount handler', () => {
 			mountManager.connect(device)
 			mountManager.syncTo(device, hour(0), deg(0))
 
-			expect(await waitUntil(() => Math.abs(device.equatorialCoordinate.declination) < deg(0.01))).toBeTrue()
+			await waitUntil(() => Math.abs(device.equatorialCoordinate.declination) < deg(0.01))
 
 			await noContent(await endpoints['/mounts/:id/goto'].POST(request(device.id, target)))
 
@@ -294,7 +294,7 @@ describe('mount handler', () => {
 			expect(goTo).not.toHaveBeenCalled()
 
 			confirmation.confirm({ key: `mount.${device.id}.move`, accepted: true })
-			expect(await waitUntil(() => goTo.mock.calls.length > 0)).toBeTrue()
+			await waitUntil(() => goTo.mock.calls.length > 0)
 			expect(goTo).toHaveBeenCalledWith(device, hour(5), deg(-30))
 
 			await endpoints['/mounts/:id/stop'].POST(request(device.id))
@@ -332,7 +332,7 @@ describe('mount handler', () => {
 
 		await noContent(endpoints['/mounts/:id/park'].POST(request(device.id)))
 
-		expect(await waitUntil(() => socket.some<Notification>((message) => message.type === 'notification'))).toBeTrue()
+		await waitUntil(() => socket.some<Notification>((message) => message.type === 'notification'))
 
 		const message = socket.find<Notification>((message) => message.type === 'notification')
 
@@ -370,7 +370,7 @@ describe('mount handler', () => {
 			client.write(message)
 			client.flush()
 
-			expect(await waitUntil(() => goTo.mock.calls.length > 0)).toBeTrue()
+			await waitUntil(() => goTo.mock.calls.length > 0)
 			const target = goTo.mock.calls[0][2]
 			expect(target.type).toBe('JNOW')
 			expect(target.JNOW?.x).toBeCloseTo(rightAscension, 8)
@@ -403,12 +403,12 @@ describe('mount handler', () => {
 			lx200.write('#:Mn#')
 			lx200.flush()
 
-			expect(await waitUntil(() => mountCommander.manualMoveOf(device) !== undefined)).toBeTrue()
+			await waitUntil(() => mountCommander.manualMoveOf(device) !== undefined)
 
 			lx200.end()
 
-			expect(await waitUntil(() => mountCommander.manualMoveOf(device) === undefined)).toBeTrue()
-			expect(await waitUntil(() => !device.slewing && free(device))).toBeTrue()
+			await waitUntil(() => mountCommander.manualMoveOf(device) === undefined)
+			await waitUntil(() => !device.slewing && free(device))
 		} finally {
 			mountRemoteControlHandler.stop(device, 'lx200')
 		}
@@ -445,7 +445,7 @@ describe('mount commander', () => {
 		mountManager.syncTo(device, hour(5), deg(-30))
 		// The sync is a round trip through the driver, so the reported coordinate only matches the request
 		// once its notification has been applied.
-		expect(await waitUntil(() => Math.abs(device.equatorialCoordinate.declination - deg(-30)) < deg(0.01))).toBeTrue()
+		await waitUntil(() => Math.abs(device.equatorialCoordinate.declination - deg(-30)) < deg(0.01))
 		return device
 	}
 
@@ -461,7 +461,7 @@ describe('mount commander', () => {
 		}
 
 		expect(device.slewing).toBeFalse()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 	}, 10000)
 
 	test('completes immediately when the mount already points at the target', async () => {
@@ -483,21 +483,21 @@ describe('mount commander', () => {
 		const device = await connected()
 		const slewing = mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '30:00:00' } })
 
-		expect(await waitUntil(() => device.slewing)).toBeTrue()
+		await waitUntil(() => device.slewing)
 
 		const stopped = await mountHandler.stop(device)
 
 		expect(stopped).toMatchObject({ ok: true })
 		expect(await slewing).toMatchObject(failedOperationResult('aborted'))
 		expect(device.slewing).toBeFalse()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 	}, 10000)
 
 	test('fails a slew that stops short of its target', async () => {
 		const device = await connected()
 		const slewing = mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '30:00:00' } })
 
-		expect(await waitUntil(() => device.slewing)).toBeTrue()
+		await waitUntil(() => device.slewing)
 
 		simulator.stop()
 
@@ -505,14 +505,14 @@ describe('mount commander', () => {
 
 		expect(result).toMatchObject(failedOperationResult('unexpectedState'))
 		expect(result.ok ? '' : result.error).toContain('short of the target')
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 	}, 10000)
 
 	test('refuses a second command while another operation owns the mount', async () => {
 		const device = await connected()
 		const slewing = mountCommander.goTo(operationCoordinator, device, { type: 'JNOW', JNOW: { x: '05:00:00', y: '30:00:00' } })
 
-		expect(await waitUntil(() => device.slewing)).toBeTrue()
+		await waitUntil(() => device.slewing)
 		expect(await mountCommander.setTracking(operationCoordinator, device, true)).toMatchObject(failedOperationResult('busy'))
 
 		await mountHandler.stop(device)
@@ -529,7 +529,7 @@ describe('mount commander', () => {
 
 		const handle = started.value
 
-		expect(await waitUntil(() => device.slewing)).toBeTrue()
+		await waitUntil(() => device.slewing)
 		expect(handle.directions()).toEqual(['NORTH'])
 		expect(await mountCommander.goTo(operationCoordinator, device, targetCoordinate())).toMatchObject(failedOperationResult('busy'))
 
@@ -543,7 +543,7 @@ describe('mount commander', () => {
 		expect(await handle.stop()).toMatchObject({ ok: true })
 		expect(device.slewing).toBeFalse()
 		expect(mountCommander.manualMoveOf(device)).toBeUndefined()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 	}, 10000)
 
 	test('waits for the axis motion vector before releasing a manual move', async () => {
@@ -560,7 +560,7 @@ describe('mount commander', () => {
 		try {
 			simulator.stop()
 
-			expect(await waitUntil(() => !device.slewing)).toBeTrue()
+			await waitUntil(() => !device.slewing)
 
 			motionVector(device, 'Busy', true)
 
@@ -573,7 +573,7 @@ describe('mount commander', () => {
 			motionVector(device, 'Ok', false)
 
 			expect(await stopping).toMatchObject({ ok: true })
-			expect(await waitUntil(() => free(device))).toBeTrue()
+			await waitUntil(() => free(device))
 		} finally {
 			moveNorth.mockRestore()
 		}
@@ -582,16 +582,16 @@ describe('mount commander', () => {
 	test('blocks acquisition while an axis moves outside any operation', async () => {
 		const device = await connected()
 
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 
 		motionVector(device, 'Busy', true)
 
-		expect(await waitUntil(() => !free(device))).toBeTrue()
+		await waitUntil(() => !free(device))
 		expect(await mountCommander.setTracking(operationCoordinator, device, true)).toMatchObject(failedOperationResult('busy'))
 
 		motionVector(device, 'Ok', false)
 
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 	}, 10000)
 
 	test('stops a manual move halted in the same tick it was started', async () => {
@@ -603,7 +603,7 @@ describe('mount commander', () => {
 		expect(await halting).toMatchObject({ ok: true })
 		expect(mountCommander.manualMoveOf(device)).toBeUndefined()
 		expect(device.slewing).toBeFalse()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 	}, 10000)
 
 	test('refuses to move through a handle whose motion already ended', async () => {
@@ -622,7 +622,7 @@ describe('mount commander', () => {
 			expect(await handle.move('SOUTH', true)).toMatchObject(failedOperationResult('aborted'))
 			expect(moveSouth).not.toHaveBeenCalled()
 			expect(device.slewing).toBeFalse()
-			expect(await waitUntil(() => free(device))).toBeTrue()
+			await waitUntil(() => free(device))
 		} finally {
 			moveSouth.mockRestore()
 		}
@@ -641,7 +641,7 @@ describe('mount commander', () => {
 		}
 
 		expect(mountCommander.manualMoveOf(device)).toBeUndefined()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 	}, 10000)
 
 	test('replaces the opposite direction when an axis reverses', async () => {
@@ -659,7 +659,7 @@ describe('mount commander', () => {
 		expect(await handle.move('SOUTH', false)).toMatchObject({ ok: true })
 		expect(device.slewing).toBeFalse()
 		expect(mountCommander.manualMoveOf(device)).toBeUndefined()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 	}, 10000)
 
 	test('waits for tracking to be observed before completing', async () => {

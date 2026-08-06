@@ -8,8 +8,8 @@ import type { ResourceKey } from 'src/api/resource'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 
-const CAMERA = 'client:camera:camera-1' as ResourceKey
-const MOUNT = 'client:mount:mount-1' as ResourceKey
+const CAMERA = 'client:camera:camera-1'
+const MOUNT = 'client:mount:mount-1'
 
 function waitForAbort(context: OperationContext): Promise<OperationResult<void>> {
 	return new Promise((resolve) => {
@@ -174,7 +174,7 @@ describe('operation coordinator', () => {
 		expect(await handle.result).toEqual({
 			ok: false,
 			reason: 'timeout',
-			error: 'primary failure; cleanup failed: Symbol(cleanup detail)',
+			error: 'primary failure; cleanup failed: cleanup detail',
 		})
 	})
 
@@ -249,6 +249,43 @@ describe('operation coordinator', () => {
 		await handle.cancel('disconnected')
 
 		expect(await handle.result).toEqual(failedOperationResult('disconnected', 'device reported alert'))
+	})
+
+	test('keeps the first cancellation reason across repeated requests', async () => {
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const running = Promise.withResolvers<void>()
+		const executorGate = Promise.withResolvers<void>()
+		const handle = coordinator.start<void>('repeated-cancel', [], async (context) => {
+			running.resolve()
+			await waitForSignal(context.signal)
+			await executorGate.promise
+			return failedOperationResult('alert', 'device reported alert')
+		})
+
+		await running.promise
+		const first = handle.cancel('disconnected')
+		const second = handle.cancel('removed')
+
+		expect(handle.signal.reason).toBe('disconnected')
+
+		executorGate.resolve()
+		await Promise.all([first, second])
+		expect(await handle.result).toEqual(failedOperationResult('disconnected', 'device reported alert'))
+	})
+
+	test('keeps a thrown executor detail when cancellation wins', async () => {
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const running = Promise.withResolvers<void>()
+		const handle = coordinator.start('canceled-exception', [], async (context) => {
+			running.resolve()
+			await waitForSignal(context.signal)
+			throw new Error('late device failure')
+		})
+
+		await running.promise
+		await handle.cancel('removed')
+
+		expect(await handle.result).toEqual(failedOperationResult('removed', 'late device failure'))
 	})
 
 	test('cancels every owner associated with a client', async () => {

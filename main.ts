@@ -227,50 +227,29 @@ deviceLifecycle.observe(dewHeaterManager)
 const notificationHandler = new NotificationHandler(wsm)
 const connectionHandler = new ConnectionHandler(wsm, notificationHandler, operationCoordinator)
 const confirmationHandler = new ConfirmationHandler(wsm)
-// Coordinated guider service owns the transport, its devices, and the serialization between commands, so
-// a dither asked for by a capture competes for nothing and never disconnects the session.
 const guiderCommander = new GuiderCommander(operationCoordinator, cameraManager, guideOutputManager)
 const guiderHandler = new GuiderHandler(wsm, notificationHandler, guiderCommander)
-// Coordinated camera service owns physical sessions independently from HTTP and WebSocket transport.
 const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourceArbiter, guiderCommander)
-// Coordinated camera service owns the cooling controls, so nothing changes the thermal state of a sensor
-// that is already integrating a frame.
 const cameraCommander = new CameraCommander(cameraManager)
 const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, notificationHandler, cameraCapturer, cameraCommander, operationCoordinator)
 const guiderCameraPublisher: GuiderCameraPublisher = { watch: cameraCapturer.watch.bind(cameraCapturer), imageProcessor, listener: cameraHandler.sendEvent.bind(cameraHandler) }
 guiderCommander.attachCameraPublisher(guiderCameraPublisher)
-// Coordinated mount service owns every mutation, so HTTP, protocol adapters, and composite features
-// compete for the mount under the same ownership rules.
 const mountCommander = new MountCommander(mountManager)
 const mountHandler = new MountHandler(wsm, mountManager, confirmationHandler, notificationHandler, mountCommander, operationCoordinator)
 const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager, notificationHandler, mountCommander, operationCoordinator)
-// Coordinated focuser service owns every mutation, so HTTP and composite features such as autofocus
-// compete for the focuser under the same ownership rules.
 const focuserCommander = new FocuserCommander(focuserManager)
 const focuserHandler = new FocuserHandler(wsm, focuserManager, notificationHandler, focuserCommander, operationCoordinator)
-// Coordinated wheel service owns every mutation, so a slot change requested from the UI and one requested
-// by a running sequence compete for the wheel under the same ownership rules.
 const wheelCommander = new WheelCommander(wheelManager)
 const wheelHandler = new WheelHandler(wsm, wheelManager, notificationHandler, wheelCommander, operationCoordinator)
 const thermometerHandler = new ThermometerHandler(wsm, thermometerManager)
-// Coordinated guide output service owns every timed pulse, so DARV draws its trail under the same
-// ownership rules as any other operation commanding the device behind the guide output.
 const guideOutputCommander = new GuideOutputCommander(guideOutputManager)
 const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager, notificationHandler, guideOutputCommander, operationCoordinator)
-// Coordinated cover service owns both travel directions, so a cover closed by hand and one closed by a
-// calibration sequence compete for the device under the same ownership rules.
 const coverCommander = new CoverCommander(coverManager)
 const coverHandler = new CoverHandler(wsm, coverManager, notificationHandler, coverCommander, operationCoordinator)
-// Coordinated flat panel service owns the light state and the brightness, so nobody rescales the
-// illumination a flat sequence is already exposing against.
 const flatPanelCommander = new FlatPanelCommander(flatPanelManager)
 const flatPanelHandler = new FlatPanelHandler(wsm, flatPanelManager, flatPanelCommander, operationCoordinator)
-// Coordinated rotator service owns every mutation, so field rotation commanded from the UI competes with
-// any composite feature turning the same rotator.
 const rotatorCommander = new RotatorCommander(rotatorManager)
 const rotatorHandler = new RotatorHandler(wsm, rotatorManager, notificationHandler, rotatorCommander, operationCoordinator)
-// Coordinated dew heater service arbitrates the heater under the device providing it, so raising the duty
-// cycle competes with whatever that camera or cover is doing.
 const dewHeaterCommander = new DewHeaterCommander(dewHeaterManager)
 const dewHeaterHandler = new DewHeaterHandler(wsm, dewHeaterManager, dewHeaterCommander, operationCoordinator)
 const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, rotatorManager, wsm)

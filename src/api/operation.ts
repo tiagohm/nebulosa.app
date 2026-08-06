@@ -1,4 +1,4 @@
-import { errorMessage } from 'src/api/util'
+import { errorMessage } from 'nebulosa/src/core/util'
 import { failedOperationResult } from '#/orchestration'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
 import type { ResourceConflict, ResourceKey, ResourceLease, ResourceOwner, ResourceRequest } from './resource'
@@ -223,7 +223,7 @@ export class OperationCoordinator {
 	}
 
 	// Returns an active operation handle by id; completed operations are no longer retained.
-	get<T = unknown>(id: string): OperationHandle<T> | undefined {
+	get<T = unknown>(id: string) {
 		return this.#operations.get(id)?.handle as OperationHandle<T> | undefined
 	}
 

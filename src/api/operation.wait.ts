@@ -1,4 +1,5 @@
-import { errorMessage, settlesWithin } from 'src/api/util'
+import { errorMessage } from 'nebulosa/src/core/util'
+import { settlesWithin } from 'src/api/util'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
 

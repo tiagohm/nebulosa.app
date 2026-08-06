@@ -6,6 +6,8 @@ import { cameraCaptureStore } from '@stores/camera.capture.store'
 import { subscribeToUpdateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
 import type { DockviewPanelApi } from 'dockview-react'
+import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
+import { timeNow } from 'nebulosa/src/astronomy/time/time'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { COARSE_DARV_EXPOSURE_PRESET, DARV_EXPOSURE_PRESETS, estimateDarvExposure } from 'nebulosa/src/observation/alignment/polaralignment'
@@ -39,6 +41,7 @@ export function darvStore(api: DockviewPanelApi) {
 		running: false,
 		event: structuredClone(DEFAULT_DARV_EVENT),
 		exposureEstimation: {
+			hourAngle: 0,
 			focalLength: 400,
 			pixelSize: 2.8,
 			declination: 0,
@@ -138,6 +141,7 @@ export function darvStore(api: DockviewPanelApi) {
 		state.exposureEstimation.declination = mount.equatorialCoordinate.declination
 		if (mount.hasGuideRate) state.exposureEstimation.preset.guideRateSidereal = mount.guideRate.rightAscension
 		else state.exposureEstimation.preset.guideRateSidereal = 1
+		state.exposureEstimation.hourAngle = localSiderealTime(timeNow(true), mount.geographicCoordinate) - mount.equatorialCoordinate.rightAscension
 
 		try {
 			const { recommendedExposure } = estimateDarvExposure(state.exposureEstimation)

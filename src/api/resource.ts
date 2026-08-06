@@ -146,6 +146,21 @@ export class ResourceArbiter {
 		this.#unavailableClients.delete(clientId)
 	}
 
+	// Adds the lifecycle cause to every logical or physical resource associated with one physical device.
+	markDeviceUnavailable(key: ResourceKey) {
+		for (const resource of this.#resources.values()) {
+			if (resource.device !== undefined && resourceKey(resource.device) === key) resource.causes.add('lifecycle')
+		}
+	}
+
+	// Clears the lifecycle cause from every resource associated with one physical device after all its views
+	// pass validation.
+	markDeviceAvailable(key: ResourceKey) {
+		for (const resource of this.#resources.values()) {
+			if (resource.device !== undefined && resourceKey(resource.device) === key) resource.causes.delete('lifecycle')
+		}
+	}
+
 	// Clears an exact physical device/client association while retaining availability and ownership; returns whether it matched.
 	disassociate(key: ResourceKey, device: Device): boolean {
 		const resource = this.#resources.get(key)
@@ -168,7 +183,9 @@ export class ResourceArbiter {
 		const conflicts: ResourceConflict[] = []
 
 		for (const request of normalized) {
-			const resource = this.#resource(request)
+			// Conflict discovery must not replace the physical association of an existing record. A
+			// rejected contender must not make the current owner invisible to device lifecycle cancellation.
+			const resource = this.#resource(request, false)
 
 			if (!this.#available(resource)) {
 				conflicts.push(conflict(request.key, UNAVAILABLE_OWNER, this.#causesOf(resource)))
@@ -267,26 +284,30 @@ export class ResourceArbiter {
 		return causes.sort()
 	}
 
-	// Finds or creates the persistent record, seeding availability only on its first physical association.
-	#resource(request: ResourceRequest | ResourceKey) {
+	// Finds or creates the persistent record, optionally retaining an existing physical association while
+	// checking a prospective acquisition.
+	#resource(request: ResourceRequest | ResourceKey, associate: boolean = true) {
 		const key = typeof request === 'string' ? request : request.key
 		let resource = this.#resources.get(key)
 
 		if (resource === undefined) {
 			const requestedDevice = typeof request === 'string' ? undefined : request.device
 			const device = requestedDevice === undefined ? undefined : resourceDevice(requestedDevice)
+
 			resource = {
 				causes: new Set(device !== undefined && !device.connected ? (['lifecycle'] as const) : undefined),
 				clientId: device?.[CLIENT]?.id ?? device?.client.id,
 				device,
 				depth: 0,
 			}
+
 			this.#resources.set(key, resource)
-		} else if (typeof request !== 'string' && request.device !== undefined) {
+		} else if (typeof request !== 'string' && request.device !== undefined && (associate || resource.device === undefined)) {
 			const device = resourceDevice(request.device)
 
 			// A first physical association seeds connectivity; later ones keep the causes already recorded.
 			if (resource.device === undefined && !device.connected) resource.causes.add('lifecycle')
+
 			resource.device = device
 			resource.clientId = device[CLIENT]?.id ?? device.client.id
 		}
@@ -324,6 +345,11 @@ export class ResourceArbiter {
 	}
 }
 
+// Compares two ResourceRequest by key.
+function resourceRequestCompare(a: ResourceRequest, b: ResourceRequest) {
+	return a.key.localeCompare(b.key)
+}
+
 // Sorts and deduplicates an acquisition batch, retaining a provided device association.
 function normalizeRequests(requests: readonly ResourceRequest[]) {
 	const normalized = new Map<ResourceKey, ResourceRequest>()
@@ -333,7 +359,7 @@ function normalizeRequests(requests: readonly ResourceRequest[]) {
 		normalized.set(request.key, previous?.device === undefined && request.device !== undefined ? request : (previous ?? request))
 	}
 
-	return Array.from(normalized.values()).sort((a, b) => a.key.localeCompare(b.key))
+	return normalized.values().toArray().sort(resourceRequestCompare)
 }
 
 // Projects an owner into the transport-safe conflict contract.

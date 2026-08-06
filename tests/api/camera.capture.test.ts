@@ -404,7 +404,7 @@ describe('camera capture session cancellation', () => {
 
 		try {
 			const active = harness.capturer.start(harness.coordinator, harness.camera, request())
-			expect(await waitUntil(() => harness.startExposure.mock.calls.length === 1)).toBeTrue()
+			await waitUntil(() => harness.startExposure.mock.calls.length === 1)
 			await active.cancel()
 
 			expect(await active.result).toEqual(failedOperationResult('aborted'))
@@ -555,7 +555,7 @@ describe('camera capture session cancellation', () => {
 			harness.camera.exposure.state = 'Ok'
 			harness.capturer.blobReceived(harness.camera, Buffer.from('ZnJhbWU='), 'base64')
 			harness.capturer.updated(harness.camera, 'exposure', 'Ok')
-			expect(await waitUntil(() => decodeStarted)).toBeTrue()
+			await waitUntil(() => decodeStarted)
 
 			let canceled = false
 			const cancellation = handle.cancel().then(() => {
@@ -591,7 +591,7 @@ describe('camera capture session cancellation', () => {
 			const handle = harness.capturer.start(harness.coordinator, harness.camera, request({ autoSave: true, savePath: tmpdir() }), { listener: (_, path) => path && paths.push(path) })
 			expect((await handle.started).ok).toBeTrue()
 			finishExposure(harness)
-			expect(await waitUntil(() => writeStarted)).toBeTrue()
+			await waitUntil(() => writeStarted)
 
 			let canceled = false
 			const cancellation = handle.cancel().then(() => {

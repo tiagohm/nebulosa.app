@@ -87,14 +87,14 @@ function free(device: Device) {
 async function connectedCamera() {
 	const device = getCamera()
 	cameraManager.connect(device)
-	expect(await waitUntil(() => free(device))).toBeTrue()
+	await waitUntil(() => free(device))
 	return device
 }
 
 async function connectedCover() {
 	const device = getCover()
 	coverManager.connect(device)
-	expect(await waitUntil(() => free(device))).toBeTrue()
+	await waitUntil(() => free(device))
 	return device
 }
 
@@ -112,13 +112,13 @@ describe('coordinated alpaca managers', () => {
 
 		alpaca.cover.park(device)
 
-		expect(await waitUntil(() => device.parking)).toBeTrue()
-		expect(await waitUntil(() => device.parked && !device.parking, 3000)).toBeTrue()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => device.parking)
+		await waitUntil(() => device.parked && !device.parking, 3000)
+		await waitUntil(() => free(device))
 
 		alpaca.cover.unpark(device)
 
-		expect(await waitUntil(() => !device.parked && !device.parking, 3000)).toBeTrue()
+		await waitUntil(() => !device.parked && !device.parking, 3000)
 	})
 
 	test('refuses a cover command competing with another ingress holding it', async () => {
@@ -129,11 +129,11 @@ describe('coordinated alpaca managers', () => {
 		try {
 			void coverCommander.park(operationCoordinator, device)
 
-			expect(await waitUntil(() => !free(device))).toBeTrue()
+			await waitUntil(() => !free(device))
 
 			alpaca.cover.unpark(device)
 
-			expect(await waitUntil(() => unpark.mock.calls.length > 0, 500)).toBeFalse()
+			expect(await waitUntil(() => unpark.mock.calls.length > 0, 500, true)).toBeFalse()
 		} finally {
 			unpark.mockRestore()
 		}
@@ -148,8 +148,8 @@ describe('coordinated alpaca managers', () => {
 			alpaca.camera.gain(device, 10)
 			alpaca.camera.offset(device, 5)
 
-			expect(await waitUntil(() => gain.mock.calls.length > 0)).toBeTrue()
-			expect(await waitUntil(() => offset.mock.calls.length > 0)).toBeTrue()
+			await waitUntil(() => gain.mock.calls.length > 0)
+			await waitUntil(() => offset.mock.calls.length > 0)
 		} finally {
 			gain.mockRestore()
 			offset.mockRestore()
@@ -161,8 +161,8 @@ describe('coordinated alpaca managers', () => {
 
 		alpaca.camera.startExposure(device, 1)
 
-		expect(await waitUntil(() => !free(device))).toBeTrue()
-		expect(await waitUntil(() => free(device), 5000)).toBeTrue()
+		await waitUntil(() => !free(device))
+		await waitUntil(() => free(device), 5000)
 	})
 
 	test('stops an alpaca exposure and releases the camera', async () => {
@@ -172,12 +172,12 @@ describe('coordinated alpaca managers', () => {
 		try {
 			alpaca.camera.startExposure(device, 30)
 
-			expect(await waitUntil(() => !free(device))).toBeTrue()
+			await waitUntil(() => !free(device))
 
 			alpaca.camera.stopExposure(device)
 
-			expect(await waitUntil(() => stopExposure.mock.calls.length > 0)).toBeTrue()
-			expect(await waitUntil(() => free(device), 5000)).toBeTrue()
+			await waitUntil(() => stopExposure.mock.calls.length > 0)
+			await waitUntil(() => free(device), 5000)
 		} finally {
 			stopExposure.mockRestore()
 		}
@@ -190,11 +190,11 @@ describe('coordinated alpaca managers', () => {
 		try {
 			alpaca.camera.startExposure(device, 30)
 
-			expect(await waitUntil(() => !free(device))).toBeTrue()
+			await waitUntil(() => !free(device))
 
 			alpaca.camera.gain(device, 10)
 
-			expect(await waitUntil(() => gain.mock.calls.length > 0, 500)).toBeFalse()
+			expect(await waitUntil(() => gain.mock.calls.length > 0, 500, true)).toBeFalse()
 		} finally {
 			gain.mockRestore()
 		}

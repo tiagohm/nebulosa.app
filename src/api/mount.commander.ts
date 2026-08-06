@@ -1,11 +1,12 @@
 import { angularDistance } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
+import { timeNow } from 'nebulosa/src/astronomy/time/time'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
+import { errorMessage } from 'nebulosa/src/core/util'
 import type { GPS, Mount, MountTargetCoordinate, NameAndLabel, PierSide, TrackMode } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, MountManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-import { errorMessage, makeTime } from 'src/api/util'
 import { coordinateInfo } from '#/mount'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
@@ -416,6 +417,8 @@ export class MountCommander implements DeviceHandler<Mount> {
 			// sends a start and a halt in one buffer has both callbacks dispatched synchronously, and LX200
 			// does not await the first: publishing an empty motion would let the halt find nothing to stop
 			// and report success, leaving the axis moving afterwards with no pending stop.
+			directions.add(direction)
+
 			try {
 				this.#commandMove(mount, direction, true)
 			} catch (error) {
@@ -424,7 +427,6 @@ export class MountCommander implements DeviceHandler<Mount> {
 				return failure
 			}
 
-			directions.add(direction)
 			this.#manualMoves.set(key, { handle, directions })
 
 			// Cancellation aborts the signal but still waits for the executor to return, so the motion has to
@@ -701,7 +703,9 @@ export class MountCommander implements DeviceHandler<Mount> {
 // Converts a target expressed in any supported frame into the equinox-of-date coordinate the mount
 // commands take, using the site and clock the mount itself reports.
 function resolveTarget(mount: Mount, target: MountTargetCoordinate<string | Angle>) {
-	return coordinateInfo(makeTime('now', mount.geographicCoordinate), mount.geographicCoordinate.longitude, target, { equatorial: true, equatorialJ2000: true }).equatorial
+	const time = timeNow(true) // Use the current time, as not every mount reports its time up-to-date.
+	time.location = mount.geographicCoordinate
+	return coordinateInfo(time, mount.geographicCoordinate.longitude, target, { equatorial: true, equatorialJ2000: true }).equatorial
 }
 
 // Angular distance in radians between where the mount points and the requested target.

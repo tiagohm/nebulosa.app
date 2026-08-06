@@ -71,7 +71,7 @@ async function connected() {
 	coverManager.connect(device)
 
 	expect(device.connected).toBeTrue()
-	expect(await waitUntil(() => free(device))).toBeTrue()
+	await waitUntil(() => free(device))
 
 	return device
 }
@@ -95,7 +95,7 @@ describe('cover handler', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socket.some((message) => message.type === 'cover:add'))).toBeTrue()
+		await waitUntil(() => socket.some((message) => message.type === 'cover:add'))
 
 		const message = socket.find<CoverAdded>((message) => message.type === 'cover:add')
 
@@ -131,22 +131,22 @@ describe('cover handler', () => {
 
 		expect(endpoints['/covers/:id/park'].POST(request(device.id))).toBeDefined()
 
-		expect(await waitUntil(() => device.parking)).toBeTrue()
+		await waitUntil(() => device.parking)
 		expect(coverUpdates('parking').at(-1)?.body.device.parking).toBeTrue()
 
-		expect(await waitUntil(() => device.parked && !device.parking, 3000)).toBeTrue()
+		await waitUntil(() => device.parked && !device.parking, 3000)
 		expect(coverUpdates('parked').at(-1)?.body.device.parked).toBeTrue()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 
 		socket.clear()
 
 		expect(endpoints['/covers/:id/unpark'].POST(request(device.id))).toBeDefined()
 
-		expect(await waitUntil(() => device.parking)).toBeTrue()
+		await waitUntil(() => device.parking)
 
-		expect(await waitUntil(() => !device.parked && !device.parking, 3000)).toBeTrue()
+		await waitUntil(() => !device.parked && !device.parking, 3000)
 		expect(coverUpdates('parked').at(-1)?.body.device.parked).toBeFalse()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 	})
 
 	test('holds the cover until it stands at the commanded end', async () => {
@@ -154,7 +154,7 @@ describe('cover handler', () => {
 
 		const parked = coverCommander.park(operationCoordinator, device)
 
-		expect(await waitUntil(() => device.parking)).toBeTrue()
+		await waitUntil(() => device.parking)
 		expect(await parked).toEqual(successfulOperationResult(undefined))
 		expect(device.parked).toBeTrue()
 		expect(device.parking).toBeFalse()
@@ -171,13 +171,13 @@ describe('cover handler', () => {
 		socket.clear()
 		coverHandler.park(device)
 
-		expect(await waitUntil(() => device.parking)).toBeTrue()
+		await waitUntil(() => device.parking)
 
 		expect(await coverHandler.stop(device)).toEqual(successfulOperationResult(undefined))
 		expect(device.parking).toBeFalse()
 		expect(device.parked).toBeFalse()
 		expect(coverUpdates('parking').at(-1)?.body.state).toBe('Alert')
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 	})
 
 	test('refuses a command competing for a cover already owned', async () => {
@@ -185,7 +185,7 @@ describe('cover handler', () => {
 
 		coverHandler.park(device)
 
-		expect(await waitUntil(() => !free(device))).toBeTrue()
+		await waitUntil(() => !free(device))
 
 		const unparked = await coverCommander.unpark(operationCoordinator, device)
 

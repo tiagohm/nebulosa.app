@@ -83,7 +83,7 @@ async function connected(angle?: number) {
 
 	if (angle !== undefined) rotatorManager.syncTo(device, angle)
 
-	expect(await waitUntil(() => free(device) && (angle === undefined || device.angle.value === angle))).toBeTrue()
+	await waitUntil(() => free(device) && (angle === undefined || device.angle.value === angle))
 
 	return device
 }
@@ -107,7 +107,7 @@ describe('rotator handler', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socket.some<RotatorAdded>((message) => message.type === 'rotator:add'))).toBeTrue()
+		await waitUntil(() => socket.some<RotatorAdded>((message) => message.type === 'rotator:add'))
 
 		const message = socket.find<RotatorAdded>((message) => message.type === 'rotator:add')
 
@@ -174,7 +174,7 @@ describe('rotator handler', () => {
 
 		await noContent(await endpoints['/rotators/:id/moveto'].POST(request(device.id, 90)))
 
-		expect(await waitUntil(() => device.moving)).toBeTrue()
+		await waitUntil(() => device.moving)
 		expect(rotatorUpdates('moving').at(-1)?.body.device.moving).toBeTrue()
 
 		await succeeded(await endpoints['/rotators/:id/stop'].POST(request(device.id)))
@@ -182,14 +182,14 @@ describe('rotator handler', () => {
 		expect(device.moving).toBeFalse()
 		expect(rotatorUpdates('moving').at(-1)?.body.device.moving).toBeFalse()
 		expect(rotatorUpdates('moving').at(-1)?.body.state).toBe('Alert')
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 
 		rotatorManager.syncTo(device, 10)
 		socket.clear()
 
 		await noContent(endpoints['/rotators/:id/home'].POST(request(device.id)))
 
-		expect(await waitUntil(() => device.moving)).toBeTrue()
+		await waitUntil(() => device.moving)
 		expect(rotatorUpdates('moving').at(-1)?.body.device.moving).toBeTrue()
 	})
 
@@ -211,10 +211,10 @@ describe('rotator handler', () => {
 		try {
 			await noContent(endpoints['/rotators/:id/home'].POST(request(device.id)))
 
-			expect(await waitUntil(() => !free(device))).toBeTrue()
-			expect(await waitUntil(() => free(device), 100)).toBeFalse()
-			expect(await waitUntil(() => device.moving)).toBeTrue()
-			expect(await waitUntil(() => free(device), 3000)).toBeTrue()
+			await waitUntil(() => !free(device))
+			expect(await waitUntil(() => free(device), 100, true)).toBeFalse()
+			await waitUntil(() => device.moving)
+			await waitUntil(() => free(device), 3000)
 		} finally {
 			home.mockRestore()
 			device.moving = false
@@ -226,9 +226,9 @@ describe('rotator handler', () => {
 
 		await noContent(await endpoints['/rotators/:id/moveto'].POST(request(device.id, 60)))
 
-		expect(await waitUntil(() => !free(device))).toBeTrue()
-		expect(await waitUntil(() => device.angle.value === 60 && !device.moving, 10000)).toBeTrue()
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => !free(device))
+		await waitUntil(() => device.angle.value === 60 && !device.moving, 10000)
+		await waitUntil(() => free(device))
 	}, 15000)
 
 	test('clamps an angle outside the driver limits to a reachable one', async () => {
@@ -238,7 +238,7 @@ describe('rotator handler', () => {
 		try {
 			await noContent(await endpoints['/rotators/:id/moveto'].POST(request(device.id, device.angle.max + 30)))
 
-			expect(await waitUntil(() => moveTo.mock.calls.length > 0)).toBeTrue()
+			await waitUntil(() => moveTo.mock.calls.length > 0)
 			expect(moveTo).toHaveBeenCalledWith(device, device.angle.max)
 		} finally {
 			moveTo.mockRestore()
@@ -250,7 +250,7 @@ describe('rotator handler', () => {
 
 		await noContent(await endpoints['/rotators/:id/moveto'].POST(request(device.id, 90)))
 
-		expect(await waitUntil(() => !free(device))).toBeTrue()
+		await waitUntil(() => !free(device))
 
 		const response = await endpoints['/rotators/:id/sync'].POST(request(device.id, 10))
 

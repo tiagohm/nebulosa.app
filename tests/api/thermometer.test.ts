@@ -87,7 +87,7 @@ describe('thermometer handler', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socket.messages.some((message) => message.type === 'thermometer:add'))).toBeTrue()
+		await waitUntil(() => socket.messages.some((message) => message.type === 'thermometer:add'))
 
 		const message = socket.find<ThermometerAdded>((message) => message.type === 'thermometer:add')
 

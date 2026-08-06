@@ -6,10 +6,10 @@ import { GuideOutputManager, MountManager } from 'nebulosa/src/devices/indi/mana
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { ResourceArbiter, resourceDevice, resourceKey } from 'src/api/resource'
-import type { ResourceKey, ResourceOwner } from 'src/api/resource'
+import type { ResourceOwner } from 'src/api/resource'
 
-const CAMERA: ResourceKey = 'camera-1'
-const MOUNT: ResourceKey = 'mount-1'
+const CAMERA = 'camera-1'
+const MOUNT = 'mount-1'
 
 function owner(id: string): ResourceOwner {
 	return { id, kind: 'test' }
@@ -82,6 +82,29 @@ describe('resource arbiter', () => {
 
 		expect(arbiter.availability(CAMERA)).toBe('available')
 		expect(arbiter.availability(MOUNT)).toBe('available')
+	})
+
+	test('reports every ownership conflict in canonical order', () => {
+		const arbiter = new ResourceArbiter()
+		const cameraLease = arbiter.acquire(owner('camera-owner'), [{ key: CAMERA }])
+		const mountLease = arbiter.acquire(owner('mount-owner'), [{ key: MOUNT }])
+
+		const conflicted = arbiter.acquire(owner('contender'), [{ key: MOUNT }, { key: CAMERA }])
+
+		expect(cameraLease.ok).toBeTrue()
+		expect(mountLease.ok).toBeTrue()
+		expect(conflicted).toEqual({
+			ok: false,
+			conflicts: [
+				{ key: CAMERA, ownerId: 'camera-owner', ownerKind: 'test', causes: [] },
+				{ key: MOUNT, ownerId: 'mount-owner', ownerKind: 'test', causes: [] },
+			],
+		})
+		expect(arbiter.availability(CAMERA)).toBe('leased')
+		expect(arbiter.availability(MOUNT)).toBe('leased')
+
+		if (cameraLease.ok) cameraLease.lease.release()
+		if (mountLease.ok) mountLease.lease.release()
 	})
 
 	test('does not retain a partial lease after a multi-resource conflict', () => {
@@ -158,6 +181,29 @@ describe('resource arbiter', () => {
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
 
+	test('keeps a client-blocked lease owned until the client reconnects', () => {
+		const arbiter = new ResourceArbiter()
+		const device = camera(true)
+		const context = owner('owner-1')
+		const acquired = arbiter.acquire(context, [{ key: CAMERA, device }])
+
+		expect(acquired.ok).toBeTrue()
+		arbiter.markClientUnavailable(device.client.id)
+
+		expect(arbiter.availability(CAMERA)).toBe('unavailable')
+		expect(arbiter.ownersOf(CAMERA)).toEqual([context])
+		expect(arbiter.acquire(owner('owner-2'), [{ key: CAMERA, device }])).toEqual({
+			ok: false,
+			conflicts: [{ key: CAMERA, ownerId: 'resource-arbiter', ownerKind: 'unavailable', causes: ['lifecycle'] }],
+		})
+
+		arbiter.markClientAvailable(device.client.id)
+		expect(arbiter.availability(CAMERA)).toBe('leased')
+
+		if (acquired.ok) acquired.lease.release()
+		expect(arbiter.availability(CAMERA)).toBe('available')
+	})
+
 	test('lists the sorted resources held by a context across reentrant leases', () => {
 		const arbiter = new ResourceArbiter()
 		const context = owner('owner-1')
@@ -176,6 +222,45 @@ describe('resource arbiter', () => {
 
 		outer.lease.release()
 		expect(arbiter.resourcesOf(context)).toEqual([])
+	})
+
+	test('retains a physical association when duplicate requests differ by device metadata', () => {
+		const arbiter = new ResourceArbiter()
+		const device = camera(true)
+		const context = owner('owner-1')
+		const acquired = arbiter.acquire(context, [{ key: CAMERA }, { key: CAMERA, device }, { key: MOUNT, device }, { key: MOUNT }])
+
+		expect(acquired.ok).toBeTrue()
+		expect(arbiter.ownersOfClient(device.client.id)).toEqual([context])
+
+		if (!acquired.ok) return
+
+		acquired.lease.release()
+		expect(arbiter.disassociate(CAMERA, device)).toBeTrue()
+		expect(arbiter.disassociate(MOUNT, device)).toBeTrue()
+	})
+
+	test('retains the owning device association when a contender conflicts', () => {
+		const arbiter = new ResourceArbiter()
+		const device = camera(true)
+		const contender = camera(true)
+		contender.id = 'camera-2'
+		contender.hardwareId = 'hardware-2'
+		const logicalKey = 'logical:camera'
+		const context = owner('owner-1')
+
+		const acquired = arbiter.acquire(context, [{ key: logicalKey, device }])
+		const conflicted = arbiter.acquire(owner('owner-2'), [{ key: logicalKey, device: contender }])
+
+		expect(acquired.ok).toBeTrue()
+		expect(conflicted).toEqual({
+			ok: false,
+			conflicts: [{ key: logicalKey, ownerId: 'owner-1', ownerKind: 'test', causes: [] }],
+		})
+		expect(arbiter.ownersOfDevice(resourceKey(device))).toEqual([context])
+		expect(arbiter.ownersOfDevice(resourceKey(contender))).toEqual([])
+
+		if (acquired.ok) acquired.lease.release()
 	})
 
 	test('keeps an active cause after the physical device is disassociated', () => {

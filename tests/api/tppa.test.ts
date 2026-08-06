@@ -97,7 +97,7 @@ async function connectedDevices() {
 	cameraManager.connect(camera)
 	mountManager.connect(mount)
 
-	expect(await waitUntil(() => camera.connected && mount.connected)).toBeTrue()
+	await waitUntil(() => camera.connected && mount.connected)
 	resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
 	resourceArbiter.markAvailable({ key: resourceKey(mount), device: mount })
 
@@ -192,7 +192,7 @@ describe('tppa handler', () => {
 
 			id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForTppaState('capturing', id)).toBeTrue()
+			await waitForTppaState('capturing', id)
 			expect(capture).toHaveBeenCalledTimes(1)
 			expect(capture.mock.calls[0][1]).toBe(camera)
 			expect(mount.tracking).toBeTrue()
@@ -248,7 +248,7 @@ describe('tppa handler', () => {
 			wsm.open(socket)
 
 			id = await startRun(startRequest(camera, mount, request))
-			expect(await waitForTppaState('capturing', id)).toBeTrue()
+			await waitForTppaState('capturing', id)
 
 			const cameraIntruder = operationCoordinator.start('cameraCapture', [{ key: resourceKey(camera), device: camera }], () => successfulOperationResult(undefined))
 			const mountIntruder = operationCoordinator.start('mountGoTo', [{ key: resourceKey(mount), device: mount }], () => successfulOperationResult(undefined))
@@ -273,7 +273,7 @@ describe('tppa handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForTppaState('capturing', id)).toBeTrue()
+			await waitForTppaState('capturing', id)
 
 			const stopping = endpoints['/tppa/:id/stop'].POST(stopRequest(id))
 
@@ -281,7 +281,7 @@ describe('tppa handler', () => {
 
 			await noContent(await stopping)
 
-			expect(await waitForTppaState('idle', id)).toBeTrue()
+			await waitForTppaState('idle', id)
 			expect(tppaEvents().map((event) => event.state)).toEqual(['capturing', 'idle'])
 			expect(tppaEvents().filter((event) => event.state === 'idle')).toHaveLength(1)
 			expect(tppaEvents().at(-1)?.message).toBe('stopped')
@@ -303,14 +303,14 @@ describe('tppa handler', () => {
 			wsm.open(socket)
 
 			id = await startRun(startRequest(camera, mount, request))
-			expect(await waitForTppaState('capturing', id)).toBeTrue()
+			await waitForTppaState('capturing', id)
 
 			const refused = await startRun(startRequest(camera, mount, request))
 
 			expect(refused).not.toBe(id)
 			expect(capture).toHaveBeenCalledTimes(1)
 
-			expect(await waitForTppaState('idle', refused)).toBeTrue()
+			await waitForTppaState('idle', refused)
 			expect(tppaEvents().some((event) => event.id === id && event.state === 'idle')).toBeFalse()
 		} finally {
 			pending.resolve(successfulOperationResult({ paths: [], frameCount: 0 }))
@@ -344,7 +344,7 @@ describe('tppa handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForTppaState('idle', id)).toBeTrue()
+			await waitForTppaState('idle', id)
 			expect(tppaEvents().at(-1)?.message).toBe('the camera or the mount is in use by another operation')
 		} finally {
 			await owner.cancel()
@@ -363,7 +363,7 @@ describe('tppa handler', () => {
 		try {
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForTppaState('idle', id)).toBeTrue()
+			await waitForTppaState('idle', id)
 			expect(tppaEvents().at(-1)?.message).toBe('the camera and the mount are not available')
 		} finally {
 			resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
@@ -381,7 +381,7 @@ describe('tppa handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForTppaState('idle', id)).toBeTrue()
+			await waitForTppaState('idle', id)
 			expect(tppaEvents().at(-1)?.message).toBe('the capture produced no frame')
 		} finally {
 			capture.mockRestore()
@@ -398,7 +398,7 @@ describe('tppa handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForTppaState('idle', id)).toBeTrue()
+			await waitForTppaState('idle', id)
 			expect(tppaEvents().at(-1)?.message).toBe('capture cleanup failed')
 		} finally {
 			capture.mockRestore()
@@ -416,7 +416,7 @@ describe('tppa handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForTppaState('idle', id)).toBeTrue()
+			await waitForTppaState('idle', id)
 			expect(solve.mock.calls[0][0]).toEqual({ ...request.solver, ...mount.equatorialCoordinate, radius: 8, path: 'plate.fit', id: id, blind: false })
 			expect(solve.mock.calls[0][1]).toBeInstanceOf(AbortSignal)
 			expect(tppaEvents().map((event) => event.state)).toEqual(['capturing', 'solving', 'idle'])
@@ -453,12 +453,12 @@ describe('tppa handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForTppaState('solving', id)).toBeTrue()
+			await waitForTppaState('solving', id)
 
 			await noContent(await endpoints['/tppa/:id/stop'].POST(stopRequest(id)))
 
 			expect(solverAborted).toBeTrue()
-			expect(await waitForTppaState('idle', id)).toBeTrue()
+			await waitForTppaState('idle', id)
 			expect(tppaEvents().at(-1)?.message).toBe('stopped')
 		} finally {
 			solve.mockRestore()
@@ -477,7 +477,7 @@ describe('tppa handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForTppaState('moving', id, 5000)).toBeTrue()
+			await waitForTppaState('moving', id, 5000)
 
 			const events = tppaEvents()
 
@@ -489,12 +489,12 @@ describe('tppa handler', () => {
 
 			// The motion ends by itself once the configured duration is over, releasing the nested scope that
 			// held the mount while the axis was moving.
-			expect(await waitForTppaState('settling', id, 5000)).toBeTrue()
+			await waitForTppaState('settling', id, 5000)
 			expect(mountCommander.manualMoveOf(mount)).toBeUndefined()
 
 			await noContent(await endpoints['/tppa/:id/stop'].POST(stopRequest(id)))
 
-			expect(await waitForTppaState('idle', id)).toBeTrue()
+			await waitForTppaState('idle', id)
 			expect(tppaEvents().at(-1)?.message).toBe('stopped')
 		} finally {
 			solve.mockRestore()

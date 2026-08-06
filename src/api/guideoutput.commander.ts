@@ -108,7 +108,16 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 			const directions = pulses.map((pulse) => pulse.direction)
 			this.#stopOnCleanup(context, device, directions)
 
-			const results = await Promise.all(pulses.map((pulse) => this.#pulse(context, device, pulse.direction, pulse.duration, options)))
+			const siblingController = new AbortController()
+			const signal = AbortSignal.any([context.signal, siblingController.signal])
+			const results = await Promise.all(
+				pulses.map((pulse) =>
+					this.#pulse(context, device, pulse.direction, pulse.duration, options, signal).then((result) => {
+						if (!result.ok && !siblingController.signal.aborted) siblingController.abort(result.reason)
+						return result
+					}),
+				),
+			)
 
 			return results.find((result) => !result.ok) ?? successfulOperationResult(undefined)
 		}).result
@@ -178,7 +187,7 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 	// The opposite direction is zeroed before the pulse starts because both directions live in one vector:
 	// a leg commanded while the previous one is still counting down would otherwise be added to a driver
 	// already guiding the other way.
-	async #pulse(context: OperationContext, device: GuideOutput, direction: GuideDirection, duration: number, options: GuidePulseOptions): Promise<OperationResult<void>> {
+	async #pulse(context: OperationContext, device: GuideOutput, direction: GuideDirection, duration: number, options: GuidePulseOptions, signal: AbortSignal = context.signal): Promise<OperationResult<void>> {
 		// The driver times the pulse itself, so the delay is dispatched as part of the command and the wait
 		// around it observes the device for the whole leg instead of only after it. A pulse the driver
 		// refuses would otherwise be invisible: the Alert clears the flag as well, and by the time a
@@ -187,7 +196,7 @@ export class GuideOutputCommander implements DeviceHandler<GuideOutput> {
 		let elapsed = false
 
 		const pulsed = await waitForDeviceState<GuideOutputUpdate>({
-			signal: context.signal,
+			signal,
 			timeout: Math.max(0, duration) + (options.settleTimeout ?? DEFAULT_SETTLE_TIMEOUT),
 			subscribe: (listener) => this.#subscribe(device, listener),
 			current: () => ({ device }),

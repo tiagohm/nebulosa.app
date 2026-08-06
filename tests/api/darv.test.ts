@@ -99,7 +99,7 @@ async function connectedDevices() {
 	cameraManager.connect(camera)
 	mountManager.connect(mount)
 
-	expect(await waitUntil(() => camera.connected && mount.connected)).toBeTrue()
+	await waitUntil(() => camera.connected && mount.connected)
 	resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
 	resourceArbiter.markAvailable({ key: resourceKey(mount), device: mount })
 
@@ -175,7 +175,7 @@ describe('darv handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('idle', id, 5000)).toBeTrue()
+			await waitForDarvState('idle', id, 5000)
 			expect(capture).toHaveBeenCalledTimes(1)
 			expect(capture.mock.calls[0][0]).toHaveProperty('kind', 'darv')
 			expect(capture.mock.calls[0][1]).toBe(camera)
@@ -222,7 +222,7 @@ describe('darv handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('idle', id, 5000)).toBeTrue()
+			await waitForDarvState('idle', id, 5000)
 			expect(pulseEast.mock.calls.map((call) => call[1])).toEqual([10, 0, 0, 0])
 			expect(pulseWest.mock.calls.map((call) => call[1])).toEqual([0, 0, 10, 0])
 		} finally {
@@ -252,7 +252,7 @@ describe('darv handler', () => {
 
 			started.resolve(failedOperationResult('alert', 'the camera refused the exposure'))
 
-			expect(await waitForDarvState('idle', id)).toBeTrue()
+			await waitForDarvState('idle', id)
 			expect(darvEvents().map((event) => event.state)).toEqual(['idle'])
 			expect(darvEvents().at(-1)?.message).toBe('the camera refused the exposure')
 			expect(pulseEast).not.toHaveBeenCalled()
@@ -275,7 +275,7 @@ describe('darv handler', () => {
 			wsm.open(socket)
 
 			id = await startRun(startRequest(camera, mount, request))
-			expect(await waitForDarvState('waiting', id)).toBeTrue()
+			await waitForDarvState('waiting', id)
 
 			const cameraIntruder = operationCoordinator.start('cameraCapture', [{ key: resourceKey(camera), device: camera }], () => successfulOperationResult(undefined))
 			const mountIntruder = operationCoordinator.start('mountGoTo', [{ key: resourceKey(mount), device: mount }], () => successfulOperationResult(undefined))
@@ -298,11 +298,11 @@ describe('darv handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('waiting', id)).toBeTrue()
+			await waitForDarvState('waiting', id)
 
 			await noContent(await endpoints['/darv/:id/stop'].POST(stopRequest(id)))
 
-			expect(await waitForDarvState('idle', id)).toBeTrue()
+			await waitForDarvState('idle', id)
 			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'idle'])
 			expect(darvEvents().filter((event) => event.state === 'idle')).toHaveLength(1)
 			expect(darvEvents().at(-1)?.message).toBe('stopped')
@@ -322,14 +322,14 @@ describe('darv handler', () => {
 			wsm.open(socket)
 
 			id = await startRun(startRequest(camera, mount, request))
-			expect(await waitForDarvState('waiting', id)).toBeTrue()
+			await waitForDarvState('waiting', id)
 
 			const refused = await startRun(startRequest(camera, mount, request))
 
 			expect(refused).not.toBe(id)
 			expect(capture).toHaveBeenCalledTimes(1)
 
-			expect(await waitForDarvState('idle', refused)).toBeTrue()
+			await waitForDarvState('idle', refused)
 			expect(darvEvents().some((event) => event.id === id && event.state === 'idle')).toBeFalse()
 		} finally {
 			await darvHandler.stop(id)
@@ -362,7 +362,7 @@ describe('darv handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('idle', id)).toBeTrue()
+			await waitForDarvState('idle', id)
 			expect(darvEvents().at(-1)?.message).toBe('the camera or the mount is in use by another operation')
 		} finally {
 			await owner.cancel()
@@ -381,7 +381,7 @@ describe('darv handler', () => {
 		try {
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('idle', id)).toBeTrue()
+			await waitForDarvState('idle', id)
 			expect(darvEvents().at(-1)?.message).toBe('the camera and the mount are not available')
 		} finally {
 			resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
@@ -400,7 +400,7 @@ describe('darv handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('idle', id, 5000)).toBeTrue()
+			await waitForDarvState('idle', id, 5000)
 			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'idle'])
 			expect(darvEvents().at(-1)?.message).toBe('capture cleanup failed')
 		} finally {
@@ -421,11 +421,11 @@ describe('darv handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('forwarding', id)).toBeTrue()
+			await waitForDarvState('forwarding', id)
 
 			failed.resolve(failedOperationResult('alert', 'the exposure was aborted by the driver'))
 
-			expect(await waitForDarvState('idle', id, 5000)).toBeTrue()
+			await waitForDarvState('idle', id, 5000)
 			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'forwarding', 'idle'])
 			expect(darvEvents().at(-1)?.message).toBe('the exposure was aborted by the driver')
 			expect(pulseEast.mock.calls.filter((call) => call[1] > 0)).toHaveLength(0)
@@ -449,7 +449,7 @@ describe('darv handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('idle', id, 5000)).toBeTrue()
+			await waitForDarvState('idle', id, 5000)
 			expect(pulse).toHaveBeenCalledTimes(2)
 
 			const exposure = capture.mock.calls[0][2].exposureTime * 1000
@@ -480,7 +480,7 @@ describe('darv handler', () => {
 
 			const id = await startRun(startRequest(camera, mount, request))
 
-			expect(await waitForDarvState('idle', id, 10000)).toBeTrue()
+			await waitForDarvState('idle', id, 10000)
 			expect(pulse).toHaveBeenCalledTimes(1)
 			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'forwarding', 'backwarding', 'idle'])
 			expect(darvEvents().at(-1)?.message).toBe('the exposure ends before the trail can be finished')

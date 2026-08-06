@@ -97,7 +97,7 @@ describe('guide output handler', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socket.some((message) => message.type === 'guideOutput:add'))).toBeTrue()
+		await waitUntil(() => socket.some((message) => message.type === 'guideOutput:add'))
 
 		const message = socket.find<GuideOutputAdded>((message) => message.type === 'guideOutput:add')
 
@@ -145,10 +145,12 @@ describe('guide output handler', () => {
 
 		await noContent(await endpoints['/guideoutputs/:id/pulse'].POST(request(device.id, [pulse])))
 
-		expect(await waitUntil(() => device.pulsing)).toBeTrue()
+		await waitUntil(() => device.pulsing)
 		expect(guideOutputUpdates('pulsing').at(-1)?.body.device.pulsing).toBeTrue()
-		expect(await waitUntil(() => !device.pulsing, 3000)).toBeTrue()
+		await waitUntil(() => !device.pulsing, 3000)
 		expect(guideOutputUpdates('pulsing').at(-1)?.body.device.pulsing).toBeFalse()
+
+		await Bun.sleep(300)
 
 		const response = await endpoints['/guideoutputs/:id/guiderate'].POST(request(device.id, rate))
 
@@ -170,10 +172,10 @@ describe('guide output handler', () => {
 		try {
 			await noContent(await endpoints['/guideoutputs/:id/pulse'].POST(request(device.id, pulses)))
 
-			expect(await waitUntil(() => pulse.mock.calls.some((call) => call[1] === 'NORTH' && call[2] === 100))).toBeTrue()
+			await waitUntil(() => pulse.mock.calls.some((call) => call[1] === 'NORTH' && call[2] === 100))
 			expect(pulse.mock.calls.some((call) => call[1] === 'WEST' && call[2] === 100)).toBeTrue()
-			expect(await waitUntil(() => device.pulsing)).toBeTrue()
-			expect(await waitUntil(() => !device.pulsing && resourceArbiter.availability(resourceKey(device)) === 'available', 3000)).toBeTrue()
+			await waitUntil(() => device.pulsing)
+			await waitUntil(() => !device.pulsing && resourceArbiter.availability(resourceKey(device)) === 'available', 3000)
 		} finally {
 			pulse.mockRestore()
 		}
@@ -187,7 +189,7 @@ describe('guide output handler', () => {
 		try {
 			await noContent(await endpoints['/guideoutputs/:id/pulse'].POST(request(device.id, pulses)))
 
-			expect(await waitUntil(() => device.pulsing)).toBeTrue()
+			await waitUntil(() => device.pulsing)
 
 			const response = await endpoints['/guideoutputs/:id/stop'].POST(request(device.id))
 
@@ -266,7 +268,7 @@ describe('guide output handler', () => {
 		const device = getGuideOutput()
 		wsm.open(socket)
 		await noContent(await endpoints['/guideoutputs/:id/pulse'].POST(request(device.id, [pulse])))
-		expect(await waitUntil(() => device.pulsing)).toBeTrue()
+		await waitUntil(() => device.pulsing)
 		socket.clear()
 
 		mountManager.disconnect(mount)
@@ -313,7 +315,7 @@ describe('guide output handler', () => {
 			await endpoints['/guideoutputs/:id/guiderate'].POST(request(device.id, rate))
 			await noContent(await endpoints['/guideoutputs/:id/pulse'].POST(request(device.id, [guidePulse])))
 
-			expect(await waitUntil(() => pulse.mock.calls.some((call) => call[1] === guidePulse.direction))).toBeTrue()
+			await waitUntil(() => pulse.mock.calls.some((call) => call[1] === guidePulse.direction))
 			expect(guideRate).toHaveBeenCalledWith(device, rate.rightAscension, rate.declination)
 			expect(pulse).toHaveBeenCalledWith(device, guidePulse.direction, guidePulse.duration)
 		} finally {
@@ -329,7 +331,7 @@ describe('guide output handler', () => {
 
 		const pulse = guideOutputCommander.pulse(operationCoordinator, device, 'NORTH', 300)
 
-		expect(await waitUntil(() => device.pulsing)).toBeTrue()
+		await waitUntil(() => device.pulsing)
 
 		guideOutputCommander.updated(device, 'pulsing', 'Alert')
 
@@ -401,7 +403,7 @@ describe('guide output handler', () => {
 		const handle = operationCoordinator.start('darv', [{ key: resourceKey(device), device }], (context) => guideOutputCommander.pulseAxes(context, device, pulses))
 
 		try {
-			expect(await waitUntil(() => pulse.mock.calls.filter((call) => call[2] === 5000).length === 2)).toBeTrue()
+			await waitUntil(() => pulse.mock.calls.filter((call) => call[2] === 5000).length === 2)
 
 			canceling = true
 

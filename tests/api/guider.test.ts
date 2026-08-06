@@ -178,13 +178,13 @@ describe('remote session', () => {
 		try {
 			server.push({ Event: 'StartGuiding' })
 
-			expect(await waitUntil(() => commander.running(first))).toBeTrue()
+			await waitUntil(() => commander.running(first))
 			expect(commander.running(second)).toBeFalse()
 			expect(events.every((event) => event.id === first)).toBeTrue()
 
 			other.push({ Event: 'LoopingExposures', Frame: 1, StarMass: 1, SNR: 1, HFD: 1 })
 
-			expect(await waitUntil(() => commander.looping(second))).toBeTrue()
+			await waitUntil(() => commander.looping(second))
 			expect(commander.running(first)).toBeTrue()
 			expect(events.some((event) => event.id === second)).toBeTrue()
 		} finally {
@@ -211,7 +211,7 @@ describe('remote session', () => {
 
 		const calibrated = commander.calibrate(id)
 
-		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		await waitUntil(() => server.received('guide'))
 		server.push({ Event: 'StartCalibration', Mount: 'Mount Simulator' })
 
 		const transport: { stopCapture: () => unknown } = PHD2Client.prototype
@@ -284,7 +284,7 @@ describe('remote session', () => {
 
 		const found = commander.findStar(id)
 
-		expect(await waitUntil(() => server.received('find_star'))).toBeTrue()
+		await waitUntil(() => server.received('find_star'))
 		expect((await commander.disconnect(id)).ok).toBeTrue()
 
 		const result = await found
@@ -367,7 +367,7 @@ describe('remote session', () => {
 
 		const looped = commander.loop(id, DEFAULT_GUIDER_LOOP_START)
 
-		expect(await waitUntil(() => server.received('loop'))).toBeTrue()
+		await waitUntil(() => server.received('loop'))
 		server.push({ Event: 'LoopingExposures', Frame: 1, StarMass: 100, SNR: 20, HFD: 3 })
 
 		expect((await looped).ok).toBeTrue()
@@ -391,7 +391,7 @@ describe('remote session', () => {
 		const id = await connected()
 		const looped = commander.loop(id, DEFAULT_GUIDER_LOOP_START)
 
-		expect(await waitUntil(() => server.received('loop'))).toBeTrue()
+		await waitUntil(() => server.received('loop'))
 
 		await Bun.sleep(1500)
 		server.push({ Event: 'LoopingExposures', Frame: 1, StarMass: 100, SNR: 20, HFD: 3 })
@@ -404,7 +404,7 @@ describe('remote session', () => {
 		const id = await connected()
 
 		const guided = commander.startGuiding(id)
-		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		await waitUntil(() => server.received('guide'))
 		server.push({ Event: 'StartGuiding' })
 		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 		expect((await guided).ok).toBeTrue()
@@ -438,7 +438,7 @@ describe('remote session', () => {
 
 		const guided = commander.startGuiding(id)
 
-		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		await waitUntil(() => server.received('guide'))
 		server.push({ Event: 'StartGuiding' })
 		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 
@@ -451,7 +451,7 @@ describe('remote session', () => {
 
 		const guided = commander.startGuiding(id, { timeout: 5000 })
 
-		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		await waitUntil(() => server.received('guide'))
 		server.push({ Event: 'StartGuiding' })
 		server.push({ Event: 'StarLost', Frame: 1, Time: 1, StarMass: 0, SNR: 0, HFD: 0, AvgDist: 0, Status: 1 })
 		server.push({ Event: 'GuideStep', Frame: 2, Time: 1, RADistanceRaw: 1, DECDistanceRaw: 1, RADuration: 1, RADirection: 'West', DECDuration: 1, DECDirection: 'North', StarMass: 1, SNR: 1, HFD: 1 })
@@ -465,7 +465,7 @@ describe('remote session', () => {
 
 		const guided = commander.startGuiding(id)
 
-		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		await waitUntil(() => server.received('guide'))
 		server.push({ Event: 'StarLost', Frame: 1, Time: 1, StarMass: 0, SNR: 0, HFD: 0, AvgDist: 0, Status: 1 })
 
 		const result = await guided
@@ -479,7 +479,7 @@ describe('remote session', () => {
 
 		const calibrated = commander.calibrate(id)
 
-		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		await waitUntil(() => server.received('guide'))
 		server.push({ Event: 'StartCalibration', Mount: 'Mount Simulator' })
 		server.push({ Event: 'StartGuiding' })
 		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
@@ -492,7 +492,7 @@ describe('remote session', () => {
 
 		const calibrated = commander.calibrate(id)
 
-		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		await waitUntil(() => server.received('guide'))
 		server.push({ Event: 'StartCalibration', Mount: 'Mount Simulator' })
 		server.push({ Event: 'CalibrationFailed', Reason: 'not enough movement' })
 
@@ -500,20 +500,20 @@ describe('remote session', () => {
 
 		expect(result.ok).toBeFalse()
 		expect(result.ok || result.reason).toBe('alert')
-		expect(await waitUntil(() => server.received('stop_capture'))).toBeTrue()
+		await waitUntil(() => server.received('stop_capture'))
 	})
 
 	test('stops after the guider reports it stopped', async () => {
 		const id = await connected()
 
 		const guided = commander.startGuiding(id)
-		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		await waitUntil(() => server.received('guide'))
 		server.push({ Event: 'StartGuiding' })
 		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 		expect((await guided).ok).toBeTrue()
 
 		const stopped = commander.stopGuiding(id)
-		expect(await waitUntil(() => server.received('stop_capture'))).toBeTrue()
+		await waitUntil(() => server.received('stop_capture'))
 		server.push({ Event: 'GuidingStopped' })
 
 		expect((await stopped).ok).toBeTrue()
@@ -524,7 +524,7 @@ describe('remote session', () => {
 		const id = await connected()
 
 		const guided = commander.startGuiding(id)
-		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		await waitUntil(() => server.received('guide'))
 		server.push({ Event: 'StartGuiding' })
 		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 		expect((await guided).ok).toBeTrue()
@@ -542,7 +542,7 @@ describe('remote session', () => {
 		const id = await connected()
 
 		const guided = commander.startGuiding(id)
-		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		await waitUntil(() => server.received('guide'))
 		server.push({ Event: 'StartGuiding' })
 		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 		expect((await guided).ok).toBeTrue()
@@ -577,7 +577,7 @@ describe('dither', () => {
 		const id = await connected()
 
 		const guided = commander.startGuiding(id)
-		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		await waitUntil(() => server.received('guide'))
 		server.push({ Event: 'StartGuiding' })
 		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 		expect((await guided).ok).toBeTrue()
@@ -612,7 +612,7 @@ describe('dither', () => {
 		try {
 			const dithered = commander.dither(id, { amount: 3 })
 
-			expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+			await waitUntil(() => server.received('dither'))
 			server.push({ Event: 'SettleBegin' })
 			server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 
@@ -630,7 +630,7 @@ describe('dither', () => {
 		const phases: GuiderDitherPhase[] = []
 		const dithered = commander.dither(id, undefined, { onPhase: (phase) => phases.push(phase) })
 
-		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		await waitUntil(() => server.received('dither'))
 		server.push({ Event: 'SettleBegin' })
 		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 
@@ -651,7 +651,7 @@ describe('dither', () => {
 
 		const dithered = commander.dither(id)
 
-		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		await waitUntil(() => server.received('dither'))
 		server.push({ Event: 'SettleBegin' })
 		server.push({ Event: 'SettleDone', Status: 1, TotalFrames: 5, DroppedFrames: 5, Error: 'settle failed' })
 
@@ -689,7 +689,7 @@ describe('dither', () => {
 		const controller = new AbortController()
 		const dithered = commander.dither(id, undefined, { signal: controller.signal })
 
-		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		await waitUntil(() => server.received('dither'))
 		controller.abort('aborted')
 
 		const result = await dithered
@@ -705,7 +705,7 @@ describe('dither', () => {
 		const controller = new AbortController()
 		const abandoned = commander.dither(id, undefined, { signal: controller.signal })
 
-		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		await waitUntil(() => server.received('dither'))
 		controller.abort('aborted')
 		expect((await abandoned).ok).toBeFalse()
 
@@ -716,16 +716,16 @@ describe('dither', () => {
 
 		server.push({ Event: 'SettleBegin' })
 
-		expect(await waitUntil(() => commander.info(id)?.state === 'settling')).toBeTrue()
+		await waitUntil(() => commander.info(id)?.state === 'settling')
 
 		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 		server.push({ Event: 'GuideStep', Frame: 2, Time: 1, RADistanceRaw: 1, DECDistanceRaw: 1, RADuration: 1, RADirection: 'West', DECDuration: 1, DECDirection: 'North', StarMass: 1, SNR: 1, HFD: 1 })
 
-		expect(await waitUntil(() => commander.running(id))).toBeTrue()
+		await waitUntil(() => commander.running(id))
 
 		const dithered = commander.dither(id)
 
-		expect(await waitUntil(() => server.commands.filter((command) => command.method === 'dither').length === 2)).toBeTrue()
+		await waitUntil(() => server.commands.filter((command) => command.method === 'dither').length === 2)
 		server.push({ Event: 'SettleBegin' })
 		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 
@@ -765,7 +765,7 @@ describe('dither', () => {
 		try {
 			const dithered = commander.dither(id)
 
-			expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+			await waitUntil(() => server.received('dither'))
 			server.push({ Event: 'SettleBegin' })
 			server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 
@@ -828,19 +828,19 @@ describe('dither', () => {
 			},
 		})
 
-		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		await waitUntil(() => server.received('dither'))
 		server.push({ Event: 'SettleBegin' })
 		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 
 		expect((await dithered).ok).toBeTrue()
 
 		server.push({ Event: 'GuideStep', Frame: 2, Time: 1, RADistanceRaw: 1, DECDistanceRaw: 1, RADuration: 1, RADirection: 'West', DECDuration: 1, DECDirection: 'North', StarMass: 1, SNR: 1, HFD: 1 })
-		expect(await waitUntil(() => commander.running(id))).toBeTrue()
+		await waitUntil(() => commander.running(id))
 
 		// The session is left usable, rather than stuck on a command that never terminalized.
 		const again = commander.dither(id)
 
-		expect(await waitUntil(() => server.commands.filter((command) => command.method === 'dither').length === 2)).toBeTrue()
+		await waitUntil(() => server.commands.filter((command) => command.method === 'dither').length === 2)
 		server.push({ Event: 'SettleBegin' })
 		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 
@@ -853,7 +853,7 @@ describe('dither', () => {
 		const started = performance.now()
 		const dithered = commander.dither(id, undefined, { timeout: 400 })
 
-		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		await waitUntil(() => server.received('dither'))
 
 		// Settling begins late, leaving only the rest of the timeout for the settle itself.
 		await Bun.sleep(300)
@@ -873,7 +873,7 @@ describe('dither', () => {
 		const controller = new AbortController()
 		const abandoned = commander.dither(id, undefined, { signal: controller.signal })
 
-		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		await waitUntil(() => server.received('dither'))
 		controller.abort('aborted')
 		expect((await abandoned).ok).toBeFalse()
 
@@ -883,7 +883,7 @@ describe('dither', () => {
 		server.push({ Event: 'SettleBegin' })
 		server.push({ Event: 'GuideStep', Frame: 2, Time: 1, RADistanceRaw: 1, DECDistanceRaw: 1, RADuration: 1, RADirection: 'West', DECDuration: 1, DECDirection: 'North', StarMass: 1, SNR: 1, HFD: 1 })
 
-		expect(await waitUntil(() => commander.running(id))).toBeTrue()
+		await waitUntil(() => commander.running(id))
 
 		await Bun.sleep(250)
 
@@ -900,7 +900,7 @@ describe('dither', () => {
 
 		const dithered = commander.dither(guided)
 
-		expect(await waitUntil(() => server.received('dither'))).toBeTrue()
+		await waitUntil(() => server.received('dither'))
 		expect((await commander.disconnect(other)).ok).toBeTrue()
 
 		server.push({ Event: 'SettleBegin' })
@@ -916,14 +916,14 @@ describe('connection loss', () => {
 
 		const guided = commander.startGuiding(id)
 
-		expect(await waitUntil(() => server.received('guide'))).toBeTrue()
+		await waitUntil(() => server.received('guide'))
 		server.drop()
 
 		const result = await guided
 
 		expect(result.ok).toBeFalse()
 		expect(result.ok || result.reason).toBe('disconnected')
-		expect(await waitUntil(() => commander.info(id) === undefined)).toBeTrue()
+		await waitUntil(() => commander.info(id) === undefined)
 		expect(arbiter.availability(remoteGuiderKey('127.0.0.1', port))).toBe('available')
 	})
 
@@ -931,7 +931,7 @@ describe('connection loss', () => {
 		const id = await connected()
 
 		server.push({ Event: 'StartGuiding' })
-		expect(await waitUntil(() => commander.running(id))).toBeTrue()
+		await waitUntil(() => commander.running(id))
 
 		await commander.disconnect(id)
 
@@ -970,10 +970,10 @@ describe('local session', () => {
 		cameraManager.connect(camera)
 		mountManager.connect(mount)
 
-		expect(await waitUntil(() => camera.connected && mount.connected && guideOutputManager.get(client, 'Mount Simulator') !== undefined)).toBeTrue()
+		await waitUntil(() => camera.connected && mount.connected && guideOutputManager.get(client, 'Mount Simulator') !== undefined)
 
 		const guideOutput = guideOutputManager.get(client, 'Mount Simulator')!
-		expect(await waitUntil(() => guideOutput.connected)).toBeTrue()
+		await waitUntil(() => guideOutput.connected)
 		return [camera, guideOutput] as const
 	}
 
@@ -1050,7 +1050,7 @@ describe('local session', () => {
 		const id = connect.value.id
 		const looped = commander.loop(id, loop(10), { timeout: 15000 })
 
-		expect(await waitUntil(() => arbiter.availability(resourceKey(camera)) === 'leased')).toBeTrue()
+		await waitUntil(() => arbiter.availability(resourceKey(camera)) === 'leased')
 		expect(arbiter.availability(resourceKey(guideOutput))).toBe('leased')
 		expect((await looped).ok).toBeTrue()
 
@@ -1148,12 +1148,12 @@ describe('local session', () => {
 		expect(events[0].loop).toBeTrue()
 
 		// A frame the client decoded is buffered under the camera name and published to the viewer.
-		expect(await waitUntil(() => paths.length > 0, 15000)).toBeTrue()
+		await waitUntil(() => paths.length > 0, 15000)
 		expect(paths[0]).toEndWith(`${camera.name}.fit`)
 		expect(buffered[0]).toBe(paths[0])
 
 		expect((await commander.stopGuiding(id)).ok).toBeTrue()
-		expect(await waitUntil(() => unwatched)).toBeTrue()
+		await waitUntil(() => unwatched)
 		expect(events.at(-1)!.state).toBe('idle')
 		expect(events.at(-1)!.stopped).toBeFalse()
 	}, 30000)
@@ -1191,7 +1191,7 @@ describe('local session', () => {
 
 		held.resolve()
 		expect((await owner.result).ok).toBeTrue()
-		expect(await waitUntil(() => camera.bin.x.value === 2)).toBeTrue()
+		await waitUntil(() => camera.bin.x.value === 2)
 
 		const looped = await commander.loop(connect.value.id, loop(10), { timeout: 15000 })
 
@@ -1333,7 +1333,7 @@ describe('local session', () => {
 
 			const guided = commander.startGuiding(id, { timeout: 5000 })
 
-			expect(await waitUntil(() => clients.length === 2)).toBeTrue()
+			await waitUntil(() => clients.length === 2)
 			clients[1].emitEvent('SettleDone', { Status: 0, TotalFrames: 5, DroppedFrames: 0 })
 
 			expect((await guided).ok).toBeTrue()

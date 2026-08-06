@@ -105,7 +105,7 @@ function connectDevices() {
 async function connectedDevices() {
 	const { camera, focuser } = connectDevices()
 
-	expect(await waitUntil(() => camera.connected && focuser.connected)).toBeTrue()
+	await waitUntil(() => camera.connected && focuser.connected)
 	resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
 	resourceArbiter.markAvailable({ key: resourceKey(focuser), device: focuser })
 
@@ -184,7 +184,7 @@ describe('auto focus handler', () => {
 
 			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('capturing', id)).toBeTrue()
+			await waitForAutoFocusState('capturing', id)
 			expect(capture).toHaveBeenCalledTimes(1)
 			expect(capture.mock.calls[0][1]).toBe(camera)
 
@@ -228,7 +228,7 @@ describe('auto focus handler', () => {
 			wsm.open(socket)
 
 			const id = await startRun(startRequest(camera, focuser, request))
-			expect(await waitForAutoFocusState('capturing', id)).toBeTrue()
+			await waitForAutoFocusState('capturing', id)
 
 			// The run owns both devices for its whole search, so neither an unrelated capture nor an unrelated
 			// focuser move can slip between two samples of the curve.
@@ -243,7 +243,7 @@ describe('auto focus handler', () => {
 			expect((await focuserIntruder.result).ok).toBeFalse()
 
 			await noContent(await endpoints['/autofocus/:id/stop'].POST(stopRequest(id)))
-			expect(await waitForAutoFocusState('idle', id)).toBeTrue()
+			await waitForAutoFocusState('idle', id)
 		} finally {
 			detect.mockRestore()
 		}
@@ -258,11 +258,11 @@ describe('auto focus handler', () => {
 			wsm.open(socket)
 
 			const id = await startRun(startRequest(camera, focuser, request))
-			expect(await waitForAutoFocusState('capturing', id)).toBeTrue()
+			await waitForAutoFocusState('capturing', id)
 
 			await noContent(await endpoints['/autofocus/:id/stop'].POST(stopRequest(id)))
 
-			expect(await waitForAutoFocusState('idle', id)).toBeTrue()
+			await waitForAutoFocusState('idle', id)
 			expect(autoFocusEvents().filter((event) => event.state === 'idle')).toHaveLength(1)
 			expect(autoFocusEvents().at(-1)?.message).toBe('stopped')
 			expect(focuser.moving).toBeFalse()
@@ -288,7 +288,7 @@ describe('auto focus handler', () => {
 			expect(refused).not.toBe(id)
 			expect(capture).toHaveBeenCalledTimes(1)
 
-			expect(await waitForAutoFocusState('idle', refused)).toBeTrue()
+			await waitForAutoFocusState('idle', refused)
 			expect(autoFocusEvents().at(-1)?.message).toBe('the camera or the focuser is in use by another operation')
 			expect(autoFocusEvents().some((event) => event.id === id && event.state === 'idle')).toBeFalse()
 		} finally {
@@ -320,7 +320,7 @@ describe('auto focus handler', () => {
 		try {
 			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('idle', id)).toBeTrue()
+			await waitForAutoFocusState('idle', id)
 			expect(autoFocusEvents().at(-1)?.message).toBe('the camera or the focuser is in use by another operation')
 
 			// The refused run leaves the owner of the camera running.
@@ -349,7 +349,7 @@ describe('auto focus handler', () => {
 		try {
 			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('idle', id)).toBeTrue()
+			await waitForAutoFocusState('idle', id)
 			expect(autoFocusEvents().at(-1)?.message).toBe('the camera and the focuser are not available')
 		} finally {
 			resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
@@ -367,7 +367,7 @@ describe('auto focus handler', () => {
 
 			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('idle', id)).toBeTrue()
+			await waitForAutoFocusState('idle', id)
 			expect(autoFocusEvents().at(-1)?.message).toBe('the capture produced no frame')
 		} finally {
 			capture.mockRestore()
@@ -385,7 +385,7 @@ describe('auto focus handler', () => {
 
 			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('idle', id)).toBeTrue()
+			await waitForAutoFocusState('idle', id)
 			expect(detect).toHaveBeenCalledWith({ ...request.starDetection, path: 'focus.fit' }, AbortSignal.timeout(5000))
 			expect(autoFocusEvents().map((event) => event.state)).toEqual(['capturing', 'computing', 'idle'])
 			expect(autoFocusEvents().at(-1)?.message).toBe('no stars detected')
@@ -407,7 +407,7 @@ describe('auto focus handler', () => {
 
 			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('moving', id)).toBeTrue()
+			await waitForAutoFocusState('moving', id)
 
 			const moving = autoFocusEvents().find((event) => event.state === 'moving')
 
@@ -417,7 +417,7 @@ describe('auto focus handler', () => {
 
 			// The next sample is only commanded once the focuser has stopped at the previous one, so the
 			// second move is the proof that the run waited for the first instead of stacking positions.
-			expect(await waitUntil(() => autoFocusEvents().some((event) => event.message === `moving to position ${target - request.stepSize}`), 5000)).toBeTrue()
+			await waitUntil(() => autoFocusEvents().some((event) => event.message === `moving to position ${target - request.stepSize}`), 5000)
 			expect(focuser.position.value).toBeGreaterThanOrEqual(target - request.stepSize)
 		} finally {
 			detect.mockRestore()
@@ -435,7 +435,7 @@ describe('auto focus handler', () => {
 
 			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('idle', id)).toBeTrue()
+			await waitForAutoFocusState('idle', id)
 			expect(autoFocusEvents().at(-1)?.message).toBe('capture cleanup failed')
 		} finally {
 			capture.mockRestore()
@@ -454,7 +454,7 @@ describe('auto focus handler', () => {
 
 			const id = await startRun(startRequest(camera, focuser, request))
 
-			expect(await waitForAutoFocusState('idle', id, 25000)).toBeTrue()
+			await waitForAutoFocusState('idle', id, 25000)
 			expect(autoFocusEvents().at(-1)?.message).toBe('best focus!')
 			expect(autoFocusEvents().at(-1)?.focusPoint?.x).toBeCloseTo(best, 0)
 			expect(focuser.moving).toBeFalse()

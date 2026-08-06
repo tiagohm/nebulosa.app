@@ -1,4 +1,4 @@
-import type { Camera, Cover, Device, DeviceType, Focuser, GuideOutput, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Cover, Device, DeviceType, Dome, Focuser, GuideOutput, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager'
 import type { OperationFailureReason } from '#/orchestration'
 import { OperationCoordinator } from './operation'
@@ -151,6 +151,7 @@ export class DeviceLifecycle {
 	#invalidate(key: ResourceKey, device: Device, reason: OperationFailureReason) {
 		this.#nextValidation(key)
 		this.arbiter.markUnavailable({ key, device })
+		this.arbiter.markDeviceUnavailable(key)
 		// Cancellation aborts owners synchronously; only its cleanup is awaited, and a manager callback is
 		// the wrong place to block. The resource stays unavailable either way, so a failure is reported.
 		// Owners are looked up by device rather than by key, because a device can be held under a logical
@@ -174,6 +175,7 @@ export class DeviceLifecycle {
 		const pending: Promise<boolean>[] = []
 
 		this.arbiter.markUnavailable({ key, device: physicalDevice })
+		this.arbiter.markDeviceUnavailable(key)
 
 		for (const view of devices.values()) {
 			if (!view.device.connected) {
@@ -227,8 +229,10 @@ export class DeviceLifecycle {
 
 		if (available) {
 			this.arbiter.markAvailable({ key, device: physicalDevice })
+			this.arbiter.markDeviceAvailable(key)
 		} else {
 			this.arbiter.markUnavailable({ key, device: physicalDevice })
+			this.arbiter.markDeviceUnavailable(key)
 		}
 	}
 
@@ -249,6 +253,7 @@ const QUIESCENCE_PROPERTIES: Readonly<Partial<Record<DeviceType, ReadonlySet<str
 	rotator: new Set(['moving']),
 	guideOutput: new Set(['pulsing']),
 	cover: new Set(['parking']),
+	dome: new Set(['slewing', 'moving', 'homing', 'parking']),
 }
 
 // Reports whether a property change can alter the default quiescence verdict for the device.
@@ -282,6 +287,10 @@ export function isDeviceQuiescent(device: Device) {
 			return !(device as GuideOutput).pulsing
 		case 'cover':
 			return !(device as Cover).parking
+		case 'dome': {
+			const dome = device as Dome
+			return !dome.slewing && !dome.moving && !dome.homing && !dome.parking
+		}
 		default:
 			return true
 	}

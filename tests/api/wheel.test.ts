@@ -80,7 +80,7 @@ async function connected() {
 	wheelManager.connect(device)
 
 	expect(device.connected).toBeTrue()
-	expect(await waitUntil(() => free(device))).toBeTrue()
+	await waitUntil(() => free(device))
 
 	return device
 }
@@ -104,7 +104,7 @@ describe('wheel handler', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socket.some((message) => message.type === 'wheel:add'))).toBeTrue()
+		await waitUntil(() => socket.some((message) => message.type === 'wheel:add'))
 
 		const message = socket.find<WheelAdded>((message) => message.type === 'wheel:add')
 
@@ -146,14 +146,14 @@ describe('wheel handler', () => {
 
 		await noContent(await endpoints['/wheels/:id/moveto'].POST(request(device.id, 2)))
 
-		expect(await waitUntil(() => device.moving)).toBeTrue()
+		await waitUntil(() => device.moving)
 		expect(wheelUpdates('moving').at(-1)?.body.device.moving).toBeTrue()
 
-		expect(await waitUntil(() => device.position === 2 && !device.moving, 3000)).toBeTrue()
+		await waitUntil(() => device.position === 2 && !device.moving, 3000)
 		expect(wheelUpdates('position').at(-1)?.body.device.position).toBe(2)
 		expect(wheelUpdates('moving').at(-1)?.body.device.moving).toBeFalse()
 
-		expect(await waitUntil(() => free(device))).toBeTrue()
+		await waitUntil(() => free(device))
 
 		await succeeded(await endpoints['/wheels/:id/names'].POST(request(device.id, names)))
 
@@ -168,7 +168,7 @@ describe('wheel handler', () => {
 		try {
 			await noContent(await endpoints['/wheels/:id/moveto'].POST(request(device.id, device.count + 4)))
 
-			expect(await waitUntil(() => device.position === device.count - 1 && !device.moving, 3000)).toBeTrue()
+			await waitUntil(() => device.position === device.count - 1 && !device.moving, 3000)
 			expect(moveTo).toHaveBeenCalledWith(device, device.count - 1)
 		} finally {
 			moveTo.mockRestore()
@@ -182,16 +182,16 @@ describe('wheel handler', () => {
 		try {
 			const handle = operationCoordinator.start('wheelMoveTo', [{ key: resourceKey(device), device }], (context) => wheelCommander.moveTo(context, device, 2))
 
-			expect(await waitUntil(() => moveTo.mock.calls.length > 0)).toBeTrue()
+			await waitUntil(() => moveTo.mock.calls.length > 0)
 
 			const canceled = handle.cancel()
 
-			expect(await waitUntil(() => free(device), 200)).toBeFalse()
+			expect(await waitUntil(() => free(device), 200, true)).toBeFalse()
 
 			device.moving = true
 			wheelCommander.updated(device, 'moving', 'Busy')
 
-			expect(await waitUntil(() => free(device), 200)).toBeFalse()
+			expect(await waitUntil(() => free(device), 200, true)).toBeFalse()
 
 			device.moving = false
 			device.position = 2
@@ -202,7 +202,7 @@ describe('wheel handler', () => {
 			const result = await handle.result
 
 			expect(result.ok).toBeFalse()
-			expect(await waitUntil(() => free(device))).toBeTrue()
+			await waitUntil(() => free(device))
 		} finally {
 			device.moving = false
 			moveTo.mockRestore()
@@ -214,7 +214,7 @@ describe('wheel handler', () => {
 
 		await noContent(await endpoints['/wheels/:id/moveto'].POST(request(device.id, 3)))
 
-		expect(await waitUntil(() => !free(device))).toBeTrue()
+		await waitUntil(() => !free(device))
 
 		const response = await endpoints['/wheels/:id/names'].POST(request(device.id, ['L', 'R', 'G', 'B']))
 

@@ -398,7 +398,7 @@ function treeConflicts(holders: Map<ResourceKey, ActiveOperation<unknown>[]>, pa
 
 		if (holder !== undefined && !isSelfOrAncestor(holder, parent)) {
 			reported.add(request.key)
-			conflicts.push({ key: request.key, ownerId: holder.context.id, ownerKind: holder.context.kind, causes: [] })
+			conflicts.push({ key: request.key, by: 'lease', ownerId: holder.context.id, ownerKind: holder.context.kind, causes: [] })
 		}
 	}
 
@@ -412,5 +412,11 @@ function detailOf<T>(result: OperationResult<T>) {
 
 // Produces a compact diagnostic for an atomic busy result, naming why each resource was refused.
 function formatConflicts(conflicts: readonly ResourceConflict[]) {
-	return conflicts.map((conflict) => (conflict.causes.length > 0 ? `${conflict.key} is unavailable (${conflict.causes.join(', ')})` : `${conflict.key} is owned by ${conflict.ownerKind} ${conflict.ownerId}`)).join(', ')
+	return conflicts
+		.map((conflict) => {
+			if (conflict.by === 'unavailable') return `${conflict.key} is unavailable (${conflict.causes.join(', ')})`
+			if (conflict.by === 'reservation') return `${conflict.key} is reserved by ${conflict.ownerKind} ${conflict.ownerId}`
+			return `${conflict.key} is owned by ${conflict.ownerKind} ${conflict.ownerId}`
+		})
+		.join(', ')
 }

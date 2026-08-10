@@ -187,7 +187,11 @@ function schedule(pending: FeasibleTarget[], anchor: number, discarded: Discarde
 
 		for (let i = 0; i < pending.length; i++) {
 			const target = pending[i]
-			if (target.visibilityEnd <= cursor) continue
+
+			// A target that occupies time expires once the cursor reaches the end of its window. One with no
+			// declared duration consumes none, so it stays eligible at the endpoint itself, which is a verified
+			// visible instant: the contract defines a zero duration as asking for an ordering only.
+			if (target.duration > 0 ? target.visibilityEnd <= cursor : target.visibilityEnd < cursor) continue
 
 			if (target.visibilityStart <= cursor) {
 				if (target.visibilityEnd < earliestDeadline) {

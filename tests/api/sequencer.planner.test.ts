@@ -178,6 +178,17 @@ describe('ordering', () => {
 		expect(plan.discarded).toEqual([{ id: 'second', name: 'Omega Centauri', reason: 'noRemainingTime' }])
 	})
 
+	test('places a zero-duration target at the very end of a fully occupied window', () => {
+		// The first target consumes the whole window, leaving the cursor exactly at the end of the second one's.
+		const filler: TargetPlanCandidate = { ...OMEGA_CENTAURI, id: 'filler', duration: (END - START) / 1000 }
+		const plan = handler.planTargets(request([filler, { ...M42, id: 'ordering' }]))
+
+		expect(plan.discarded).toBeEmpty()
+		expect(plan.targets.map((target) => target.id)).toEqual(['filler', 'ordering'])
+		expect(plan.targets[1].slotStart).toBe(END)
+		expect(plan.targets[1].slotEnd).toBe(END)
+	})
+
 	test('waits for the next target to rise instead of idling', () => {
 		const plan = handler.planTargets(request([{ ...M42, duration: 1200 }], { constraints: { minimumAltitude: deg(30) } }))
 

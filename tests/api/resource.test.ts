@@ -552,6 +552,32 @@ describe('resource reservation', () => {
 		})
 	})
 
+	test('survives the removal and the re-addition of the reserved device', () => {
+		const arbiter = new ResourceArbiter()
+		const device = camera(true)
+		const reserved = arbiter.reserve(session('session-1'), [{ key: CAMERA, device }])
+
+		expect(reserved.ok).toBeTrue()
+
+		if (!reserved.ok) return
+
+		// Removal as the lifecycle performs it: block the resource, then drop the physical association.
+		arbiter.markUnavailable({ key: CAMERA, device })
+		expect(arbiter.disassociate(CAMERA, device)).toBeTrue()
+		expect(arbiter.reservationOwnerOf(CAMERA)?.id).toBe('session-1')
+
+		// Clearing the cause with no device left must not hand the reserved key to a third party.
+		arbiter.markAvailable(CAMERA)
+		expect(arbiter.availability(CAMERA)).toBe('reserved')
+		expect(arbiter.reserve(session('session-2'), [{ key: CAMERA }]).ok).toBeFalse()
+
+		const readded = camera(true)
+
+		expect(arbiter.acquire(owner('action-1'), [{ key: CAMERA, device: readded }], reserved.reservation.token).ok).toBeTrue()
+
+		reserved.reservation.release()
+	})
+
 	test('projects availability, ownership, causes, and association into a snapshot', () => {
 		const arbiter = new ResourceArbiter()
 		const device = camera(true)

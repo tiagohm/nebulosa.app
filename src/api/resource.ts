@@ -269,8 +269,11 @@ export class ResourceArbiter {
 		resource.clientId = undefined
 
 		// A record with nothing left to remember carries no state a future acquisition could not rebuild,
-		// so removing it keeps device churn from growing the map for the life of the process.
-		if (resource.owner === undefined && resource.causes.size === 0) this.#resources.delete(key)
+		// so removing it keeps device churn from growing the map for the life of the process. A reservation
+		// with no active operation matches every other discard condition, and dropping the record would
+		// release it in silence: the session would keep believing it owns the device while a manual command
+		// took it the moment it came back.
+		this.#discard(key, resource)
 
 		return true
 	}

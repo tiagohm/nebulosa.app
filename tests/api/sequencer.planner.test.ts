@@ -180,6 +180,23 @@ describe('visibility', () => {
 		expect(toDeg(coarse.targets[0].maximumAltitude)).toBeCloseTo(89.97039, 4)
 	})
 
+	test('splits a run at an excursion inside the first sampling interval', () => {
+		// The culmination is 17.9 s past the window boundary, so it lives in the interval no three-point bracket
+		// covers: the ceiling was reported as respected across the whole night and the published peak, 89.97039
+		// degrees, stood above it. The turn is computed from the culmination now, so the interval it belongs to no
+		// longer matters.
+		const plan = handler.planTargets(request([ZENITH_GRAZING], { constraints: { maximumAltitude: deg(89.95) } }))
+
+		expect(plan.targets).toHaveLength(1)
+
+		const [target] = plan.targets
+
+		expect(target.visibilityStart).toBeGreaterThan(START + 28000)
+		expect(target.visibilityStart).toBeLessThan(START + 29500)
+		expect(target.visibilityEnd).toBe(END)
+		expect(toDeg(target.maximumAltitude)).toBeLessThanOrEqual(89.95)
+	})
+
 	test('splits a run at an excursion that happens between two samples', () => {
 		// The culmination breaks the 89.8 degree ceiling while both neighbouring samples respect it, so the window
 		// must end before it instead of being reported as continuously feasible across the whole night.

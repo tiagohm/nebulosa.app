@@ -37,15 +37,19 @@ const MAX_SAMPLES = 4096
 // Eight halvings turn the default 300 s step into about 1.2 s, well below anything a session can act on.
 const EDGE_REFINEMENT_ITERATIONS = 8
 
-// Parabolic interpolation steps applied to a turn of one of the candidate's curves.
-// Each step evaluates the real curve once, and both curves are quadratic enough near a turn that four of them
-// take the default 300 s step to well under a second.
+// Parabolic interpolation steps applied to a turn of the candidate's Moon separation curve.
+// Each step evaluates the real curve once, and the curve is quadratic enough near a turn that four of them take
+// the default 300 s step to well under a second.
 const TURN_REFINEMENT_ITERATIONS = 4
 
 // Rate at which the Earth rotation angle advances, radians per second of UTC.
 // It is the mean sidereal rate, and the hour angle of a fixed direction follows it to about 13 ms of drift over
 // a four-hour extrapolation, measured against a golden-section maximization of the real altitude curve.
 const ERA_RATE = (2 * Math.PI * 1.00273781191135448) / 86400
+
+// Half a sidereal day in milliseconds, the interval between a culmination and the lower culmination that
+// follows it. Those two instants are the only ones where the apparent altitude of a fixed direction turns.
+const HALF_SIDEREAL_DAY = (Math.PI / ERA_RATE) * 1000
 
 // Sky state at one instant, shared by every candidate evaluated at that instant.
 // The ERFA astrometry context is the expensive part and the reason samples are computed once for all targets.
@@ -189,20 +193,21 @@ function pointingAt(utc: number, candidate: TargetPlanCandidate, location: Geogr
 	return [observedAltitude(sample.astrom, candidate.rightAscension, candidate.declination), moonDistanceOf(sample, candidate.rightAscension, candidate.declination)]
 }
 
-// Refines the instant where one of the candidate's curves turns, bracketed by three evaluated points,
+// Refines the instant where the candidate's Moon separation turns, bracketed by three evaluated points,
 // t0 < t1 < t2 in Unix milliseconds, whose values v0, v1, v2 are radians with v1 the extremum of the three.
-// moon selects the curve: the Moon separation when true, the apparent altitude when false. The direction
-// follows the bracket, so the closest approach of the Moon is refined as the minimum it is.
+// The direction follows the bracket, so the closest approach of the Moon is refined as the minimum it is.
+// Only the lunar curve is refined this way: the Moon moves against the sky, so its separation from a target has
+// no closed form, while the altitude turns of a fixed direction are computed by culminationAt.
 //
 // This is successive parabolic interpolation: each step fits a parabola through the current triple, evaluates
 // the real curve at its vertex, and keeps the vertex as the new middle point when it is a better extremum,
 // otherwise as the new bracket end on its side. The vertex of a single parabola through coarse samples is only
 // an approximation of the turn of the real curve, tens of seconds away from it at a five-minute step and far
-// more than that at a coarse one, which is enough to miss the violation the turn was evaluated to find or to
-// publish a culmination minutes off. Iterating against real evaluations is what removes that error.
+// more than that at a coarse one, which is enough to miss the violation the turn was evaluated to find.
+// Iterating against real evaluations is what removes that error.
 //
 // Returns the best instant found, always inside the original bracket.
-function refineTurn(t0: number, t1: number, t2: number, v0: number, v1: number, v2: number, moon: boolean, candidate: TargetPlanCandidate, location: GeographicPosition): number {
+function refineMoonTurn(t0: number, t1: number, t2: number, v0: number, v1: number, v2: number, candidate: TargetPlanCandidate, location: GeographicPosition): number {
 	const maximum = v1 >= v0 && v1 >= v2
 
 	for (let i = 0; i < TURN_REFINEMENT_ITERATIONS; i++) {
@@ -210,8 +215,7 @@ function refineTurn(t0: number, t1: number, t2: number, v0: number, v1: number, 
 		const vertex = turningInstant(t0, t1, t2, v0, v1, v2)
 		if (vertex < 0) break
 
-		const pointing = pointingAt(vertex, candidate, location)
-		const value = moon ? pointing[1] : pointing[0]
+		const value = pointingAt(vertex, candidate, location)[1]
 
 		if (maximum ? value > v1 : value < v1) {
 			if (vertex < t1) {
@@ -506,17 +510,20 @@ export class SequencerPlannerHandler {
 			const constraints = mergeConstraints(req.constraints, candidate.constraints)
 			const duration = Math.max(0, (candidate.duration ?? 0) * 1000)
 
-			// The altitude and Moon separation of this candidate on the grid, both needed in full because locating a
-			// turn of a curve is a comparison against both neighbours and cannot skip the samples another
-			// constraint already rejects.
+			// The altitude and Moon separation of this candidate on the grid, both needed in full: the altitude of
+			// every sample feeds the constraint decision and the discard reason, and locating a turn of the Moon
+			// curve is a comparison against both neighbours, which cannot skip the samples a constraint rejects.
 			for (let i = 0; i < sampleCount; i++) {
 				gridAltitudes[i] = observedAltitude(samples[i].astrom, candidate.rightAscension, candidate.declination)
 				gridMoonDistances[i] = moonDistanceOf(samples[i], candidate.rightAscension, candidate.declination)
 			}
 
-			// A turn is worth locating exactly only where a constraint reads that curve, since that is the only thing
-			// the evaluation sequence decides: the culmination that gets published is computed from the hour angle and
-			// owes nothing to the sequence. Refining costs real evaluations, so it follows the constraint set.
+			// Computed once per candidate: it locates every altitude turn of the evaluation sequence and is also the
+			// peak that gets published, so the sequence and the reported transit cannot disagree.
+			const culmination = culminationAt(samples[0], candidate)
+
+			// A turn is worth locating at all only where a constraint reads that curve, since that is the only thing
+			// the evaluation sequence decides. Evaluating one costs a full sky state, so it follows the constraint set.
 			const altitudeConstrained = constraints.minimumAltitude !== undefined || constraints.maximumAltitude !== undefined || constraints.maximumAirmass !== undefined
 			const moonConstrained = constraints.minimumMoonDistance !== undefined
 
@@ -532,29 +539,37 @@ export class SequencerPlannerHandler {
 				let firstTurn = -1
 				let secondTurn = -1
 
-				if (i > 0 && i < sampleCount - 1) {
+				// The altitude of a fixed direction turns at its culmination and at the lower culmination half a
+				// sidereal day away, so the turn that can fall inside a sampling interval is computed from the
+				// culmination instead of being bracketed and refined against four fresh sky states. Each interval is
+				// handled by the sample that opens it, which covers the first and the last as well, where a
+				// three-point bracket does not reach at all.
+				if (altitudeConstrained && i < sampleCount - 1) {
+					const after = samples[i + 1].utc
+					const turn = culmination + Math.ceil((utc - culmination) / HALF_SIDEREAL_DAY) * HALF_SIDEREAL_DAY
+					if (turn > utc && turn < after) firstTurn = turn
+				}
+
+				// A Moon turn with no lunar constraint to read it changes nothing, and the separation reported for the
+				// target is the one at its transit, so it is not even evaluated.
+				if (moonConstrained && i > 0 && i < sampleCount - 1) {
 					const before = samples[i - 1].utc
 					const after = samples[i + 1].utc
 
-					firstTurn = turningInstant(before, utc, after, gridAltitudes[i - 1], gridAltitudes[i], gridAltitudes[i + 1])
-					if (firstTurn > 0 && altitudeConstrained) firstTurn = refineTurn(before, utc, after, gridAltitudes[i - 1], gridAltitudes[i], gridAltitudes[i + 1], false, candidate, position)
-
-					// A Moon turn with no lunar constraint to read it changes nothing, and the separation reported for
-					// the target is the one at its transit, so it is not even evaluated.
-					secondTurn = moonConstrained ? turningInstant(before, utc, after, gridMoonDistances[i - 1], gridMoonDistances[i], gridMoonDistances[i + 1]) : -1
-					if (secondTurn > 0) secondTurn = refineTurn(before, utc, after, gridMoonDistances[i - 1], gridMoonDistances[i], gridMoonDistances[i + 1], true, candidate, position)
-
-					// Ordering the pair is what keeps the sequence sorted when both turns land on the same side of the
-					// sample, and it puts the only present turn first when there is one.
-					if (firstTurn < 0 || (secondTurn > 0 && secondTurn < firstTurn)) {
-						const earlier = secondTurn
-						secondTurn = firstTurn
-						firstTurn = earlier
-					}
-
-					// Two turns closer than a millisecond describe the same instant; evaluating it twice buys nothing.
-					if (secondTurn > 0 && secondTurn - firstTurn < 1) secondTurn = -1
+					secondTurn = turningInstant(before, utc, after, gridMoonDistances[i - 1], gridMoonDistances[i], gridMoonDistances[i + 1])
+					if (secondTurn > 0) secondTurn = refineMoonTurn(before, utc, after, gridMoonDistances[i - 1], gridMoonDistances[i], gridMoonDistances[i + 1], candidate, position)
 				}
+
+				// Ordering the pair is what keeps the sequence sorted when both turns land on the same side of the
+				// sample, and it puts the only present turn first when there is one.
+				if (firstTurn < 0 || (secondTurn > 0 && secondTurn < firstTurn)) {
+					const earlier = secondTurn
+					secondTurn = firstTurn
+					firstTurn = earlier
+				}
+
+				// Two turns closer than a millisecond describe the same instant; evaluating it twice buys nothing.
+				if (secondTurn > 0 && secondTurn - firstTurn < 1) secondTurn = -1
 
 				if (firstTurn > 0 && firstTurn < utc) {
 					instants[size] = firstTurn
@@ -628,9 +643,7 @@ export class SequencerPlannerHandler {
 				continue
 			}
 
-			// The peak of the interval is the culmination whenever the interval holds one, and the culmination is
-			// computed from the hour angle instead of being searched for between the evaluated points.
-			const culmination = culminationAt(samples[0], candidate)
+			// The peak of the interval is the culmination whenever the interval holds one.
 			let transit = culmination
 			let pointing = culmination > visibilityStart && culmination < visibilityEnd ? pointingAt(culmination, candidate, position) : undefined
 

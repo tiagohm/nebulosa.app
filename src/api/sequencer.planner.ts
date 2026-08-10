@@ -1,5 +1,5 @@
 import { DEFAULT_REFRACTION_PARAMETERS } from 'nebulosa/src/astronomy/coordinates/astrometry'
-import { eraApco13, eraAtciqz, eraAtioq, eraC2s, eraS2p } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
+import { eraAnpm, eraApco13, eraAtciqz, eraAtioq, eraC2s, eraS2p } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import type { EraAstrom } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { eraMoon98 } from 'nebulosa/src/astronomy/coordinates/erfa/moon'
 import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
@@ -42,10 +42,10 @@ const EDGE_REFINEMENT_ITERATIONS = 8
 // take the default 300 s step to well under a second.
 const TURN_REFINEMENT_ITERATIONS = 4
 
-// Interior points evaluated inside the outermost sampling interval of a visibility run to bracket a culmination
-// the grid cannot see. Four points split the default 300 s step into 60 s pieces, which brackets a culmination
-// wherever the altitude is peaked enough to hide one, at a cost paid at most twice per candidate.
-const OUTER_TURN_SAMPLES = 4
+// Rate at which the Earth rotation angle advances, radians per second of UTC.
+// It is the mean sidereal rate, and the hour angle of a fixed direction follows it to about 13 ms of drift over
+// a four-hour extrapolation, measured against a golden-section maximization of the real altitude curve.
+const ERA_RATE = (2 * Math.PI * 1.00273781191135448) / 86400
 
 // Sky state at one instant, shared by every candidate evaluated at that instant.
 // The ERFA astrometry context is the expensive part and the reason samples are computed once for all targets.
@@ -71,7 +71,8 @@ interface FeasibleTarget {
 	// Longest continuous interval in which every constraint holds, Unix milliseconds.
 	readonly visibilityStart: number
 	readonly visibilityEnd: number
-	// Instant of maximum altitude inside that interval, Unix milliseconds, resolved to the sampling grid.
+	// Instant of maximum altitude inside that interval, Unix milliseconds: the culmination when the interval holds
+	// one, and the higher of its two ends otherwise.
 	readonly transit: number
 	readonly maximumAltitude: Angle
 	readonly moonDistance: Angle
@@ -235,38 +236,23 @@ function refineTurn(t0: number, t1: number, t2: number, v0: number, v1: number, 
 	return t1
 }
 
-// Locates an altitude culmination strictly inside one sampling interval, t0 < t1 in Unix milliseconds with
-// endpoint altitudes v0 and v1 in radians, and returns the refined instant or -1 when the altitude is monotonic
-// across the interval. Only the outermost interval of a visibility run needs this: everywhere else the
-// culmination shows up as a sampled point higher than both of its neighbours.
+// Instant of the candidate's culmination nearest to the given sky sample, Unix milliseconds, which may fall
+// outside the request window.
 //
-// The interval is split into equal pieces that are evaluated until one point stands above both of its
-// neighbours, which is then handed to the parabolic refinement. Extrapolating the parabola through the samples
-// beyond the interval is not an option: near the zenith the altitude curve is sharply peaked, and for a target
-// culminating 51 s past a window boundary at 89.97 degrees that parabola puts its vertex 421 s before the
-// boundary, outside the interval and on the wrong side of it.
-function outerTurn(t0: number, v0: number, t1: number, v1: number, candidate: TargetPlanCandidate, location: GeographicPosition): number {
-	const width = (t1 - t0) / (OUTER_TURN_SAMPLES + 1)
-
-	let previous = t0
-	let previousValue = v0
-	let current = t0 + width
-	let currentValue = pointingAt(current, candidate, location)[0]
-
-	for (let i = 2; i <= OUTER_TURN_SAMPLES + 1; i++) {
-		const last = i > OUTER_TURN_SAMPLES
-		const next = last ? t1 : t0 + i * width
-		const nextValue = last ? v1 : pointingAt(next, candidate, location)[0]
-
-		if (currentValue >= previousValue && currentValue >= nextValue) return refineTurn(previous, current, next, previousValue, currentValue, nextValue, false, candidate, location)
-
-		previous = current
-		previousValue = currentValue
-		current = next
-		currentValue = nextValue
-	}
-
-	return -1
+// The apparent altitude of a fixed direction peaks when its hour angle is zero: refraction is a monotone
+// function of the true altitude and the remaining terms of the transformation are symmetric about the meridian,
+// so the observed maximum sits within 50 ms of that instant, measured against a golden-section maximization of
+// the real curve at declinations from -70 to +36 degrees. Computing the culmination replaces searching for it
+// between samples, which no sampled bracket resolves reliably next to a window boundary and no parabola
+// resolves at all near the zenith, where the altitude curve is sharply peaked.
+//
+// The hour angle comes from the sample's own astrometry context and is carried to zero at the Earth rotation
+// rate, which drifts by about 13 ms over four hours, so any sample of the night serves.
+function culminationAt(sample: SkySample, candidate: TargetPlanCandidate): number {
+	const [ri] = eraAtciqz(candidate.rightAscension, candidate.declination, sample.astrom)
+	// Wrapped to -PI..PI so the culmination located is the nearest one: positive means it already happened.
+	const hourAngle = eraAnpm(sample.astrom.eral - ri)
+	return sample.utc - (hourAngle / ERA_RATE) * 1000
 }
 
 // Merges the request-level constraints with the candidate overrides, property by property.
@@ -384,8 +370,8 @@ function schedule(pending: FeasibleTarget[], anchor: number, discarded: Discarde
 	return planned
 }
 
-// Returns the longest visibility interval among the runs of set flags in the first count entries, as the
-// inclusive index bounds of the winning run followed by its refined boundaries, Unix milliseconds. flags marks
+// Returns the longest visibility interval among the runs of set flags in the first count entries, as its refined
+// boundaries in Unix milliseconds. flags marks
 // the evaluated points where every constraint holds and instants holds their sorted, unequally spaced times:
 // the sequence carries extra points at the turns of the curves being scanned, so counting flags would let a
 // run win merely for containing one. windowStart and windowEnd close a run that reaches an end of the request
@@ -395,9 +381,7 @@ function schedule(pending: FeasibleTarget[], anchor: number, discarded: Discarde
 // that produced it by a different amount at each end: comparing the innermost evaluated points instead can
 // order two runs by where the grid happened to fall rather than by how long they last. The caller only calls
 // it when at least one flag is set, so the returned bounds are always a real run.
-function longestInterval(flags: Uint8Array, instants: Float64Array, count: number, windowStart: number, windowEnd: number, candidate: TargetPlanCandidate, constraints: TargetPlanConstraint, location: GeographicPosition): readonly [number, number, number, number] {
-	let bestFirst = 0
-	let bestLast = 0
+function longestInterval(flags: Uint8Array, instants: Float64Array, count: number, windowStart: number, windowEnd: number, candidate: TargetPlanCandidate, constraints: TargetPlanConstraint, location: GeographicPosition): readonly [number, number] {
 	let bestStart = windowStart
 	let bestEnd = windowStart
 	let bestElapsed = -1
@@ -420,8 +404,6 @@ function longestInterval(flags: Uint8Array, instants: Float64Array, count: numbe
 
 		if (elapsed > bestElapsed) {
 			bestElapsed = elapsed
-			bestFirst = currentFirst
-			bestLast = i
 			bestStart = start
 			bestEnd = end
 		}
@@ -429,7 +411,7 @@ function longestInterval(flags: Uint8Array, instants: Float64Array, count: numbe
 		currentFirst = -1
 	}
 
-	return [bestFirst, bestLast, bestStart, bestEnd]
+	return [bestStart, bestEnd]
 }
 
 // Instant where the parabola through three consecutive samples of a smooth curve turns, or -1 when the three
@@ -514,8 +496,6 @@ export class SequencerPlannerHandler {
 		const sources = new Int32Array(capacity)
 		const gridAltitudes = new Float64Array(sampleCount)
 		const gridMoonDistances = new Float64Array(sampleCount)
-		const altitudes = new Float64Array(capacity)
-		const moonDistances = new Float64Array(capacity)
 		const feasible = new Uint8Array(capacity)
 
 		const minimumDuration = Math.max(0, (req.minimumDuration ?? 0) * 1000)
@@ -535,8 +515,8 @@ export class SequencerPlannerHandler {
 			}
 
 			// A turn is worth locating exactly only where a constraint reads that curve, since that is the only thing
-			// the evaluation sequence decides: the culmination that gets published is refined separately, from the
-			// bracket the sequence provides. Refining costs real evaluations, so it follows the constraint set.
+			// the evaluation sequence decides: the culmination that gets published is computed from the hour angle and
+			// owes nothing to the sequence. Refining costs real evaluations, so it follows the constraint set.
 			const altitudeConstrained = constraints.minimumAltitude !== undefined || constraints.maximumAltitude !== undefined || constraints.maximumAirmass !== undefined
 			const moonConstrained = constraints.minimumMoonDistance !== undefined
 
@@ -560,7 +540,7 @@ export class SequencerPlannerHandler {
 					if (firstTurn > 0 && altitudeConstrained) firstTurn = refineTurn(before, utc, after, gridAltitudes[i - 1], gridAltitudes[i], gridAltitudes[i + 1], false, candidate, position)
 
 					// A Moon turn with no lunar constraint to read it changes nothing, and the separation reported for
-					// the target comes from its peak, so it is not even evaluated.
+					// the target is the one at its transit, so it is not even evaluated.
 					secondTurn = moonConstrained ? turningInstant(before, utc, after, gridMoonDistances[i - 1], gridMoonDistances[i], gridMoonDistances[i + 1]) : -1
 					if (secondTurn > 0) secondTurn = refineTurn(before, utc, after, gridMoonDistances[i - 1], gridMoonDistances[i], gridMoonDistances[i + 1], true, candidate, position)
 
@@ -624,9 +604,6 @@ export class SequencerPlannerHandler {
 
 				const altitude = source >= 0 ? gridAltitudes[source] : observedAltitude(sample.astrom, candidate.rightAscension, candidate.declination)
 				const moonDistance = source >= 0 ? gridMoonDistances[source] : moonDistanceOf(sample, candidate.rightAscension, candidate.declination)
-				altitudes[i] = altitude
-				moonDistances[i] = moonDistance
-
 				const violatedPointing = violatedPointingConstraint(altitude, moonDistance, constraints)
 
 				if (violatedPointing === undefined) {
@@ -644,100 +621,32 @@ export class SequencerPlannerHandler {
 				continue
 			}
 
-			const [first, last, visibilityStart, visibilityEnd] = longestInterval(feasible, instants, size, start, end, candidate, constraints, position)
+			const [visibilityStart, visibilityEnd] = longestInterval(feasible, instants, size, start, end, candidate, constraints, position)
 
 			if (visibilityEnd - visibilityStart < Math.max(minimumDuration, duration)) {
 				discarded.push({ id: candidate.id, name: candidate.name, reason: 'visibilityTooShort' })
 				continue
 			}
 
-			let peak = first
-			let transit = instants[first]
-			let maximumAltitude = altitudes[first]
-			let moonDistance = moonDistances[first]
+			// The peak of the interval is the culmination whenever the interval holds one, and the culmination is
+			// computed from the hour angle instead of being searched for between the evaluated points.
+			const culmination = culminationAt(samples[0], candidate)
+			let transit = culmination
+			let pointing = culmination > visibilityStart && culmination < visibilityEnd ? pointingAt(culmination, candidate, position) : undefined
 
-			for (let i = first + 1; i <= last; i++) {
-				if (altitudes[i] > maximumAltitude) {
-					peak = i
-					maximumAltitude = altitudes[i]!
-					moonDistance = moonDistances[i]!
-					transit = instants[i]
-				}
+			if (pointing === undefined) {
+				// With the culmination outside it the interval has no interior maximum, so the peak is at one of the
+				// ends. Both are evaluated because an interval longer than half a sidereal day holds the lower
+				// culmination instead and climbs again after it, which can leave the far end higher than the near one.
+				const atStart = pointingAt(visibilityStart, candidate, position)
+				const atEnd = pointingAt(visibilityEnd, candidate, position)
+				const ending = atEnd[0] > atStart[0]
+
+				transit = ending ? visibilityEnd : visibilityStart
+				pointing = ending ? atEnd : atStart
 			}
 
-			// The interval reaches further than the points that produced it, so the peak has to be checked at its
-			// refined boundaries as well. When a constraint ends a run while the target is still climbing, the
-			// highest altitude of the interval is at the boundary, up to a full sampling step past the last
-			// evaluated point and materially higher than it. A run truncated by the request window ends on an
-			// evaluated point, which is already in the sequence.
-			let startAltitude = -Infinity
-			let endAltitude = -Infinity
-			let onBoundary = false
-
-			if (first > 0) {
-				const [altitude, separation] = pointingAt(visibilityStart, candidate, position)
-
-				startAltitude = altitude
-
-				if (altitude > maximumAltitude) {
-					maximumAltitude = altitude
-					moonDistance = separation
-					transit = visibilityStart
-					onBoundary = true
-				}
-			}
-
-			if (last < size - 1) {
-				const [altitude, separation] = pointingAt(visibilityEnd, candidate, position)
-
-				endAltitude = altitude
-
-				if (altitude > maximumAltitude) {
-					maximumAltitude = altitude
-					moonDistance = separation
-					transit = visibilityEnd
-					onBoundary = true
-				}
-			}
-
-			// The points around the peak only bracket the culmination, and the altitude is flat at the top, so the
-			// highest of them sits tens of seconds and hundredths of a degree short of the real maximum. A peak that
-			// ended up on a boundary is where the interval stops climbing and has nothing to refine.
-			if (!onBoundary) {
-				// A side is only a bracket when something was evaluated there: the neighbouring point when the peak is
-				// interior to the run, the refined boundary when a constraint closed the run, and nothing at all when
-				// the request window truncated it.
-				const leftInstant = peak > first ? instants[peak - 1] : first > 0 ? visibilityStart : -1
-				const leftAltitude = peak > first ? altitudes[peak - 1] : startAltitude
-				const rightInstant = peak < last ? instants[peak + 1] : last < size - 1 ? visibilityEnd : -1
-				const rightAltitude = peak < last ? altitudes[peak + 1] : endAltitude
-				let bracket = -1
-
-				if (leftInstant > 0 && rightInstant > 0) {
-					bracket = refineTurn(leftInstant, transit, rightInstant, leftAltitude, maximumAltitude, rightAltitude, false, candidate, position)
-				} else if (leftInstant < 0 && peak < last) {
-					// The run starts where the request window does and the peak is that first point, so the altitudes
-					// stay monotonic across a culmination that falls inside the first sampling interval and nothing in
-					// the grid reveals it. The interval is searched instead.
-					bracket = outerTurn(transit, maximumAltitude, instants[peak + 1], altitudes[peak + 1], candidate, position)
-				} else if (rightInstant < 0 && peak > first) {
-					// The mirror case in the last sampling interval, where the window closes on the peak.
-					bracket = outerTurn(instants[peak - 1], altitudes[peak - 1], transit, maximumAltitude, candidate, position)
-				}
-
-				if (bracket > 0 && bracket !== transit) {
-					const [altitude, separation] = pointingAt(bracket, candidate, position)
-
-					// The refinement stops at a fixed iteration count rather than at a converged extremum, so on an
-					// almost flat top it can land a fraction of a millidegree below the point it started from. The
-					// sampled peak stands in that case, and the published altitude is never lowered by a refinement.
-					if (altitude > maximumAltitude) {
-						transit = bracket
-						maximumAltitude = altitude
-						moonDistance = separation
-					}
-				}
-			}
+			const [maximumAltitude, moonDistance] = pointing
 
 			pending.push({ candidate, constraints, visibilityStart, visibilityEnd, transit, maximumAltitude, moonDistance, duration })
 		}

@@ -42,8 +42,12 @@ const MOON_CROSSING: TargetPlanCandidate = { id: 'moonCrossing', name: 'Moon Cro
 // culmination falls inside the first sampling interval and nothing in the grid brackets it.
 const ZENITH_OPENING: TargetPlanCandidate = { id: 'zenithOpening', name: 'Zenith Opening', rightAscension: deg(259.1), declination: deg(-23.5475) }
 
-// The mirror case, culminating 36.91 s before the window closes at 89.87736 degrees.
+// The mirror case, culminating 36.96 s before the window closes at 89.87736 degrees.
 const ZENITH_CLOSING: TargetPlanCandidate = { id: 'zenithClosing', name: 'Zenith Closing', rightAscension: deg(34.2), declination: deg(-23.5475) }
+
+// Culminating 17.92 s after the window opens, at 89.97039 degrees, which is closer to the boundary than any
+// subdivision of the first sampling interval reaches: every interior point of it sits below the boundary itself.
+const ZENITH_GRAZING: TargetPlanCandidate = { id: 'zenithGrazing', name: 'Zenith Grazing', rightAscension: deg(258.96), declination: deg(-23.5475) }
 
 const handler = new SequencerPlannerHandler()
 
@@ -162,6 +166,18 @@ describe('visibility', () => {
 		expect(target.transit).toBeGreaterThan(END - 37500)
 		expect(target.transit).toBeLessThan(END - 36000)
 		expect(toDeg(target.maximumAltitude)).toBeCloseTo(89.87736, 4)
+	})
+
+	test('places the culmination at the same instant whatever the sampling step', () => {
+		// The culmination is 17.9 s past the window boundary, too close to it for any bracket built from evaluated
+		// points: the boundary is the highest point the grid can offer at every step, and reporting it costs
+		// 0.045 degrees. The instant comes from the hour angle instead, so the step no longer decides it.
+		const coarse = handler.planTargets(request([ZENITH_GRAZING], { step: 3600 }))
+		const fine = handler.planTargets(request([ZENITH_GRAZING], { step: 10 }))
+
+		expect(coarse.targets[0].transit).toBe(fine.targets[0].transit)
+		expect(coarse.targets[0].transit - START).toBeCloseTo(17916, -2)
+		expect(toDeg(coarse.targets[0].maximumAltitude)).toBeCloseTo(89.97039, 4)
 	})
 
 	test('splits a run at an excursion that happens between two samples', () => {

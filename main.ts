@@ -54,6 +54,7 @@ import { FramingHandler, framing } from './src/api/framing'
 import { ImageHandler, image } from './src/api/image'
 import { ImageProcessor } from './src/api/image.processor'
 import { PlateSolverHandler, plateSolver } from './src/api/platesolver'
+import { SequencerPlannerHandler, sequencerPlanner } from './src/api/sequencer.planner'
 import { StarDetectionHandler, starDetection } from './src/api/stardetection'
 import homeHtml from './src/web/pages/home/index.html'
 
@@ -260,6 +261,7 @@ const fileSystemHandler = new FileSystemHandler()
 const starDetectionHandler = new StarDetectionHandler(imageProcessor)
 const plateSolverHandler = new PlateSolverHandler(notificationHandler, imageProcessor)
 const atlasHandler = new AtlasHandler(notificationHandler)
+const sequencerPlannerHandler = new SequencerPlannerHandler()
 const imageHandler = new ImageHandler(imageProcessor, notificationHandler)
 const tppaHandler = new TppaHandler(wsm, cameraHandler, mountHandler, plateSolverHandler, operationCoordinator)
 const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutputHandler, operationCoordinator)
@@ -331,6 +333,7 @@ const server = Bun.serve({
 		...alpaca(alpacaHandler, alpacaPort, hasAlpaca),
 		...guider(guiderHandler),
 		...storage(storageHandler),
+		...sequencerPlanner(sequencerPlannerHandler),
 	},
 	websocket: {
 		open: (socket) => wsm.open(socket),

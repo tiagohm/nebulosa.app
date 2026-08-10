@@ -367,7 +367,7 @@ export class DomeCommander implements DeviceHandler<Dome> {
 			scope,
 			'domeSpeed',
 			dome,
-			() => true,
+			() => dome.canSetSpeed,
 			'set the speed',
 			() => this.domeManager.speed(dome, clamp(value, dome.speed.min, dome.speed.max)),
 		)
@@ -379,7 +379,7 @@ export class DomeCommander implements DeviceHandler<Dome> {
 			scope,
 			'domeBacklash',
 			dome,
-			() => true,
+			() => dome.hasBacklash,
 			'change backlash compensation',
 			() => this.domeManager.backlash(dome, enabled),
 		)
@@ -391,7 +391,7 @@ export class DomeCommander implements DeviceHandler<Dome> {
 			scope,
 			'domeBacklashSteps',
 			dome,
-			() => true,
+			() => dome.hasBacklash,
 			'set backlash steps',
 			() => this.domeManager.backlashSteps(dome, clamp(steps, dome.backlash.min, dome.backlash.max)),
 		)

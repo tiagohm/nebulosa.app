@@ -37,10 +37,18 @@ const MAX_SAMPLES = 4096
 // Eight halvings turn the default 300 s step into about 1.2 s, well below anything a session can act on.
 const EDGE_REFINEMENT_ITERATIONS = 8
 
-// Parabolic interpolation steps applied to a turn of the candidate's Moon separation curve.
-// Each step evaluates the real curve once, and the curve is quadratic enough near a turn that four of them take
-// the default 300 s step to well under a second.
-const TURN_REFINEMENT_ITERATIONS = 4
+// Width the bracket around the turn of the candidate's Moon separation is reduced to, milliseconds.
+// Matches the resolution the edge refinement reaches, so both boundaries of a run are located to the same
+// second and no violation wider than that survives the refinement.
+const TURN_REFINEMENT_TOLERANCE = 1000
+
+// Cap on the evaluations spent narrowing that bracket, which the golden-section fallback alone reaches from a
+// two-hour sampling step in about twenty steps. Parabolic steps converge much faster and normally end it first.
+const MAX_TURN_REFINEMENT_ITERATIONS = 32
+
+// Fraction of the wider half of the bracket taken by a golden-section step, (3 - sqrt(5)) / 2.
+// It is the step that shrinks the bracket the most per evaluation when the parabola cannot be trusted.
+const GOLDEN_SECTION_RATIO = 0.3819660112501051
 
 // Rate at which the Earth rotation angle advances, radians per second of UTC.
 // It is the mean sidereal rate, and the hour angle of a fixed direction follows it to about 13 ms of drift over
@@ -199,26 +207,34 @@ function pointingAt(utc: number, candidate: TargetPlanCandidate, location: Geogr
 // Only the lunar curve is refined this way: the Moon moves against the sky, so its separation from a target has
 // no closed form, while the altitude turns of a fixed direction are computed by culminationAt.
 //
-// This is successive parabolic interpolation: each step fits a parabola through the current triple, evaluates
-// the real curve at its vertex, and keeps the vertex as the new middle point when it is a better extremum,
-// otherwise as the new bracket end on its side. The vertex of a single parabola through coarse samples is only
-// an approximation of the turn of the real curve, tens of seconds away from it at a five-minute step and far
-// more than that at a coarse one, which is enough to miss the violation the turn was evaluated to find.
-// Iterating against real evaluations is what removes that error.
+// This is a safeguarded successive parabolic interpolation: each step fits a parabola through the current
+// triple, evaluates the real curve at its vertex, and keeps the vertex as the new middle point when it is a
+// better extremum, otherwise as the new bracket end on its side. The vertex of a single parabola through coarse
+// samples is only an approximation of the turn of the real curve, tens of seconds away from it at a five-minute
+// step and far more than that at a coarse one, which is enough to miss the violation the turn was evaluated to
+// find. A fixed number of steps is not enough either: the parabola can crawl towards the turn instead of
+// converging on it, and a step of hours then leaves the closest approach unevaluated and its crossing unseen.
+//
+// The step is therefore accepted only when it is at most half the previous one and keeps the tolerance away from
+// both ends of the bracket, and a golden-section step into the wider half is taken otherwise. That is what makes
+// the bracket shrink geometrically in the worst case, and the loop runs until it is narrower than the tolerance.
 //
 // Returns the best instant found, always inside the original bracket.
 function refineMoonTurn(t0: number, t1: number, t2: number, v0: number, v1: number, v2: number, candidate: TargetPlanCandidate, location: GeographicPosition): number {
 	const maximum = v1 >= v0 && v1 >= v2
+	let previousStep = t2 - t0
 
-	for (let i = 0; i < TURN_REFINEMENT_ITERATIONS; i++) {
-		// Also stops the refinement when the vertex has converged onto the middle point or left the bracket.
+	for (let i = 0; i < MAX_TURN_REFINEMENT_ITERATIONS && t2 - t0 > TURN_REFINEMENT_TOLERANCE; i++) {
 		const vertex = turningInstant(t0, t1, t2, v0, v1, v2)
-		if (vertex < 0) break
+		const useful = vertex > 0 && Math.abs(vertex - t1) <= previousStep / 2 && vertex - t0 > TURN_REFINEMENT_TOLERANCE && t2 - vertex > TURN_REFINEMENT_TOLERANCE
+		const next = useful ? vertex : t2 - t1 > t1 - t0 ? t1 + GOLDEN_SECTION_RATIO * (t2 - t1) : t1 - GOLDEN_SECTION_RATIO * (t1 - t0)
 
-		const value = pointingAt(vertex, candidate, location)[1]
+		previousStep = Math.abs(next - t1)
+
+		const value = pointingAt(next, candidate, location)[1]
 
 		if (maximum ? value > v1 : value < v1) {
-			if (vertex < t1) {
+			if (next < t1) {
 				t2 = t1
 				v2 = v1
 			} else {
@@ -226,13 +242,13 @@ function refineMoonTurn(t0: number, t1: number, t2: number, v0: number, v1: numb
 				v0 = v1
 			}
 
-			t1 = vertex
+			t1 = next
 			v1 = value
-		} else if (vertex < t1) {
-			t0 = vertex
+		} else if (next < t1) {
+			t0 = next
 			v0 = value
 		} else {
-			t2 = vertex
+			t2 = next
 			v2 = value
 		}
 	}

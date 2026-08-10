@@ -237,6 +237,22 @@ describe('visibility', () => {
 		expect(target.visibilityEnd).toBe(END)
 	})
 
+	test('refines the lunar closest approach until the bracket is narrower than a second', () => {
+		// A tighter limit on the same two-hour grid needs the approach itself and not a neighbourhood of it: a fixed
+		// count of parabolic steps stopped short of it and the separation evaluated there cleared 0.01 degrees, so
+		// the whole window read as continuously visible. The refinement runs to a bracket under a second now, and
+		// the crossing lands within the sampling resolution of the 9054.4 s a one-minute scan reports.
+		const plan = handler.planTargets(request([MOON_CROSSING], { step: 7200, constraints: { minimumMoonDistance: deg(0.01) } }))
+
+		expect(plan.targets).toHaveLength(1)
+
+		const [target] = plan.targets
+
+		expect(target.visibilityStart).toBeGreaterThan(START + 9050000)
+		expect(target.visibilityStart).toBeLessThan(START + 9070000)
+		expect(target.visibilityEnd).toBe(END)
+	})
+
 	test('keeps the run that lasts longest, not the one holding the most evaluated points', () => {
 		// The ceiling splits the night into a wing of 16015.7 s before the culmination and one of 16300.0 s after it.
 		// The shorter wing carries an extra evaluated point at a turning instant, so counting flags returns it.

@@ -293,22 +293,29 @@ function schedule(pending: FeasibleTarget[], anchor: number, discarded: Discarde
 	return planned
 }
 
-// Returns the inclusive index bounds of the longest run of set flags in the first count entries.
-// The caller only calls it when at least one flag is set, so the returned bounds are always a real run.
-function longestRun(flags: Uint8Array, count: number): readonly [number, number] {
+// Returns the inclusive index bounds of the run of set flags spanning the most elapsed time in the first
+// count entries. instants holds the instant of each entry, Unix milliseconds, sorted ascending and not
+// equally spaced: the evaluation sequence carries extra points at the turns of the curves being scanned, so
+// counting flags would let a run win merely for containing one. The caller only calls it when at least one
+// flag is set, so the returned bounds are always a real run.
+//
+// The comparison uses the evaluated points, while the interval finally reported reaches to its refined
+// boundaries, which moves each end by less than one sampling step. Two runs closer than that are ordered by
+// the resolution the caller asked for.
+function longestRun(flags: Uint8Array, instants: Float64Array, count: number): readonly [number, number] {
 	let bestFirst = 0
 	let bestLast = 0
-	let bestLength = 0
+	let bestElapsed = -1
 	let currentFirst = -1
 
 	for (let i = 0; i < count; i++) {
 		if (flags[i] === 1) {
 			if (currentFirst < 0) currentFirst = i
 
-			const length = i - currentFirst + 1
+			const elapsed = instants[i] - instants[currentFirst]
 
-			if (length > bestLength) {
-				bestLength = length
+			if (elapsed > bestElapsed) {
+				bestElapsed = elapsed
 				bestFirst = currentFirst
 				bestLast = i
 			}
@@ -480,7 +487,7 @@ export class SequencerPlannerHandler {
 				continue
 			}
 
-			const [first, last] = longestRun(feasible, size)
+			const [first, last] = longestRun(feasible, instants, size)
 
 			let transit = instants[first]
 			let maximumAltitude = altitudes[first]

@@ -25,6 +25,10 @@ const M42: TargetPlanCandidate = { id: 'm42', name: 'M42', rightAscension: deg(8
 const ZENITH: TargetPlanCandidate = { id: 'zenith', name: 'Zenith', rightAscension: deg(326.8), declination: deg(-23.5475) }
 const ZENITH_TRANSIT = START + 16230060
 
+// The same point culminating 190 s earlier, which puts the culmination just before the middle of the window so
+// that a ceiling placed under its peak leaves a shorter wing before it and a longer one after it.
+const ZENITH_EARLY: TargetPlanCandidate = { id: 'zenithEarly', name: 'Zenith Early', rightAscension: deg(326), declination: deg(-23.5475) }
+
 const handler = new SequencerPlannerHandler()
 
 function request(targets: readonly TargetPlanCandidate[], overrides?: Partial<PlanTargets>): PlanTargets {
@@ -129,6 +133,20 @@ describe('visibility', () => {
 
 		expect(target.transit).toBe(target.visibilityEnd)
 		expect(toDeg(target.maximumAltitude)).toBeCloseTo(89.7997, 3)
+	})
+
+	test('keeps the run that lasts longest, not the one holding the most evaluated points', () => {
+		// The ceiling splits the night into a wing of 16015.7 s before the culmination and one of 16300.0 s after it.
+		// The shorter wing carries an extra evaluated point at a turning instant, so counting flags returns it.
+		const plan = handler.planTargets(request([ZENITH_EARLY], { constraints: { maximumAltitude: deg(89.8) } }))
+
+		expect(plan.targets).toHaveLength(1)
+
+		const [target] = plan.targets
+
+		expect(target.visibilityStart).toBeGreaterThan(START + 16015700)
+		expect(target.visibilityStart).toBeLessThan(START + 16150000)
+		expect(target.visibilityEnd).toBe(END)
 	})
 
 	test('keeps the longest continuous run when a constraint splits the window', () => {

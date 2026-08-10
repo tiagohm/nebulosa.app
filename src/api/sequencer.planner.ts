@@ -170,6 +170,14 @@ function refineEdge(invisible: number, visible: number, candidate: TargetPlanCan
 	return visible
 }
 
+// Apparent altitude and Moon separation of a candidate at one instant, both radians, building the sky state on
+// the spot. Used for the boundaries of a visibility interval, which are refined instants and therefore fall
+// between the evaluated points rather than on one of them.
+function pointingAt(utc: number, candidate: TargetPlanCandidate, location: GeographicPosition): readonly [Angle, Angle] {
+	const sample = skySample(utc, location)
+	return [observedAltitude(sample.astrom, candidate.rightAscension, candidate.declination), moonDistanceOf(sample, candidate.rightAscension, candidate.declination)]
+}
+
 // Merges the request-level constraints with the candidate overrides, property by property.
 function mergeConstraints(base: TargetPlanConstraint | undefined, override: TargetPlanConstraint | undefined): TargetPlanConstraint {
 	if (!base) return override ?? {}
@@ -493,6 +501,30 @@ export class SequencerPlannerHandler {
 			if (visibilityEnd - visibilityStart < Math.max(minimumDuration, duration)) {
 				discarded.push({ id: candidate.id, name: candidate.name, reason: 'visibilityTooShort' })
 				continue
+			}
+
+			// The interval reaches further than the points that produced it, so the peak has to be checked at its
+			// refined boundaries as well. When a constraint ends a run while the target is still climbing, the
+			// highest altitude of the interval is at the boundary, up to a full sampling step past the last
+			// evaluated point and materially higher than it.
+			if (first > 0) {
+				const [altitude, separation] = pointingAt(visibilityStart, candidate, position)
+
+				if (altitude > maximumAltitude) {
+					maximumAltitude = altitude
+					moonDistance = separation
+					transit = visibilityStart
+				}
+			}
+
+			if (last < size - 1) {
+				const [altitude, separation] = pointingAt(visibilityEnd, candidate, position)
+
+				if (altitude > maximumAltitude) {
+					maximumAltitude = altitude
+					moonDistance = separation
+					transit = visibilityEnd
+				}
 			}
 
 			pending.push({ candidate, constraints, visibilityStart, visibilityEnd, transit, maximumAltitude, moonDistance, duration })

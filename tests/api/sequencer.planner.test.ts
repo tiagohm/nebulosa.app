@@ -120,6 +120,17 @@ describe('visibility', () => {
 		expect(target.visibilityEnd).toBeLessThan(ZENITH_TRANSIT)
 	})
 
+	test('reports the peak at the refined boundary when a constraint ends the run', () => {
+		// The target is still climbing when the 89.8 degree ceiling closes the window, so the highest altitude of
+		// the interval is at its refined end and not at the last evaluated point, which only reaches 89.7768.
+		const plan = handler.planTargets(request([ZENITH], { constraints: { maximumAltitude: deg(89.8) } }))
+
+		const [target] = plan.targets
+
+		expect(target.transit).toBe(target.visibilityEnd)
+		expect(toDeg(target.maximumAltitude)).toBeCloseTo(89.7997, 3)
+	})
+
 	test('keeps the longest continuous run when a constraint splits the window', () => {
 		// A maximum altitude below the target's peak carves the visible run into the two wings around transit.
 		const plan = handler.planTargets(request([M42], { constraints: { minimumAltitude: deg(10), maximumAltitude: deg(20) } }))

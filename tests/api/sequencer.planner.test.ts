@@ -31,6 +31,10 @@ const ZENITH_EARLY: TargetPlanCandidate = { id: 'zenithEarly', name: 'Zenith Ear
 
 // The topocentric direction of the Moon 9000 s into the window, so the separation from this point reaches zero
 // there and grows at about 0.00018 degrees per second on either side.
+// The same point culminating between the two above, where a ceiling leaves two wings that the evaluated points
+// alone cannot order: they differ by less than a sampling step until each one is extended to its real edge.
+const ZENITH_BALANCED: TargetPlanCandidate = { id: 'zenithBalanced', name: 'Zenith Balanced', rightAscension: deg(326.5), declination: deg(-23.5475) }
+
 const MOON_CROSSING: TargetPlanCandidate = { id: 'moonCrossing', name: 'Moon Crossing', rightAscension: deg(166.099001), declination: deg(6.290545) }
 
 const handler = new SequencerPlannerHandler()
@@ -194,6 +198,21 @@ describe('visibility', () => {
 		expect(target.visibilityStart).toBeGreaterThan(START + 10000000)
 		expect(target.visibilityStart).toBeLessThan(START + 10200000)
 		expect(target.visibilityEnd).toBe(END)
+	})
+
+	test('measures each run to its refined boundaries before choosing between them', () => {
+		// Both wings reach past the evaluated points that produced them, and by different amounts: the wing before
+		// the culmination lasts 16135.5 s and the one after it 16180.9 s, which 30 s and 10 s scans agree on, while
+		// their innermost evaluated points put the first one ahead.
+		const plan = handler.planTargets(request([ZENITH_BALANCED], { constraints: { maximumAltitude: deg(89.8) } }))
+
+		expect(plan.targets).toHaveLength(1)
+
+		const [target] = plan.targets
+
+		expect(target.visibilityStart).toBeGreaterThan(START + 16200000)
+		expect(target.visibilityEnd).toBe(END)
+		expect(target.visibilityEnd - target.visibilityStart).toBeGreaterThan(16150000)
 	})
 
 	test('keeps the longest continuous run when a constraint splits the window', () => {

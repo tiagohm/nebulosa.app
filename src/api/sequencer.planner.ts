@@ -345,38 +345,52 @@ function schedule(pending: FeasibleTarget[], anchor: number, discarded: Discarde
 	return planned
 }
 
-// Returns the inclusive index bounds of the run of set flags spanning the most elapsed time in the first
-// count entries. instants holds the instant of each entry, Unix milliseconds, sorted ascending and not
-// equally spaced: the evaluation sequence carries extra points at the turns of the curves being scanned, so
-// counting flags would let a run win merely for containing one. The caller only calls it when at least one
-// flag is set, so the returned bounds are always a real run.
+// Returns the longest visibility interval among the runs of set flags in the first count entries, as the
+// inclusive index bounds of the winning run followed by its refined boundaries, Unix milliseconds. flags marks
+// the evaluated points where every constraint holds and instants holds their sorted, unequally spaced times:
+// the sequence carries extra points at the turns of the curves being scanned, so counting flags would let a
+// run win merely for containing one. windowStart and windowEnd close a run that reaches an end of the request
+// window, where the truncation is the window and not a constraint, so there is no edge to refine.
 //
-// The comparison uses the evaluated points, while the interval finally reported reaches to its refined
-// boundaries, which moves each end by less than one sampling step. Two runs closer than that are ordered by
-// the resolution the caller asked for.
-function longestRun(flags: Uint8Array, instants: Float64Array, count: number): readonly [number, number] {
+// Each run is measured after both of its edges are refined, because a run reaches past the evaluated points
+// that produced it by a different amount at each end: comparing the innermost evaluated points instead can
+// order two runs by where the grid happened to fall rather than by how long they last. The caller only calls
+// it when at least one flag is set, so the returned bounds are always a real run.
+function longestInterval(flags: Uint8Array, instants: Float64Array, count: number, windowStart: number, windowEnd: number, candidate: TargetPlanCandidate, constraints: TargetPlanConstraint, location: GeographicPosition): readonly [number, number, number, number] {
 	let bestFirst = 0
 	let bestLast = 0
+	let bestStart = windowStart
+	let bestEnd = windowStart
 	let bestElapsed = -1
 	let currentFirst = -1
 
 	for (let i = 0; i < count; i++) {
-		if (flags[i] === 1) {
-			if (currentFirst < 0) currentFirst = i
-
-			const elapsed = instants[i] - instants[currentFirst]
-
-			if (elapsed > bestElapsed) {
-				bestElapsed = elapsed
-				bestFirst = currentFirst
-				bestLast = i
-			}
-		} else {
+		if (flags[i] === 0) {
 			currentFirst = -1
+			continue
 		}
+
+		if (currentFirst < 0) currentFirst = i
+
+		// The run continues, so there is nothing to measure yet.
+		if (i < count - 1 && flags[i + 1] === 1) continue
+
+		const start = currentFirst === 0 ? windowStart : refineEdge(instants[currentFirst - 1], instants[currentFirst], candidate, constraints, location)
+		const end = i === count - 1 ? windowEnd : refineEdge(instants[i + 1], instants[i], candidate, constraints, location)
+		const elapsed = end - start
+
+		if (elapsed > bestElapsed) {
+			bestElapsed = elapsed
+			bestFirst = currentFirst
+			bestLast = i
+			bestStart = start
+			bestEnd = end
+		}
+
+		currentFirst = -1
 	}
 
-	return [bestFirst, bestLast]
+	return [bestFirst, bestLast, bestStart, bestEnd]
 }
 
 // Instant where the parabola through three consecutive samples of a smooth curve turns, or -1 when the three
@@ -591,7 +605,12 @@ export class SequencerPlannerHandler {
 				continue
 			}
 
-			const [first, last] = longestRun(feasible, instants, size)
+			const [first, last, visibilityStart, visibilityEnd] = longestInterval(feasible, instants, size, start, end, candidate, constraints, position)
+
+			if (visibilityEnd - visibilityStart < Math.max(minimumDuration, duration)) {
+				discarded.push({ id: candidate.id, name: candidate.name, reason: 'visibilityTooShort' })
+				continue
+			}
 
 			let peak = first
 			let transit = instants[first]
@@ -621,15 +640,6 @@ export class SequencerPlannerHandler {
 					maximumAltitude = altitude
 					moonDistance = separation
 				}
-			}
-
-			// A run touching a window edge is truncated by the window, not by a constraint, so there is no edge to refine there.
-			const visibilityStart = first === 0 ? start : refineEdge(instants[first - 1], instants[first], candidate, constraints, position)
-			const visibilityEnd = last === size - 1 ? end : refineEdge(instants[last + 1], instants[last], candidate, constraints, position)
-
-			if (visibilityEnd - visibilityStart < Math.max(minimumDuration, duration)) {
-				discarded.push({ id: candidate.id, name: candidate.name, reason: 'visibilityTooShort' })
-				continue
 			}
 
 			// The interval reaches further than the points that produced it, so the peak has to be checked at its

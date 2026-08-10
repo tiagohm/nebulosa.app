@@ -49,6 +49,10 @@ const ZENITH_CLOSING: TargetPlanCandidate = { id: 'zenithClosing', name: 'Zenith
 // subdivision of the first sampling interval reaches: every interior point of it sits below the boundary itself.
 const ZENITH_GRAZING: TargetPlanCandidate = { id: 'zenithGrazing', name: 'Zenith Grazing', rightAscension: deg(258.96), declination: deg(-23.5475) }
 
+// Rises after the window opens and culminates 12.4847 h into it at 89.98739 degrees, so its culmination is
+// reached only from the one before the window, a sidereal day earlier.
+const LATE_CULMINATION: TargetPlanCandidate = { id: 'lateCulmination', name: 'Late Culmination', rightAscension: deg(86.8), declination: deg(-23.5475) }
+
 const handler = new SequencerPlannerHandler()
 
 function request(targets: readonly TargetPlanCandidate[], overrides?: Partial<PlanTargets>): PlanTargets {
@@ -178,6 +182,19 @@ describe('visibility', () => {
 		expect(coarse.targets[0].transit).toBe(fine.targets[0].transit)
 		expect(coarse.targets[0].transit - START).toBeCloseTo(17916, -2)
 		expect(toDeg(coarse.targets[0].maximumAltitude)).toBeCloseTo(89.97039, 4)
+	})
+
+	test('takes the culmination that falls inside a window longer than half a sidereal day', () => {
+		// The culmination nearest the first sample is the one before the window opens; the one the window contains
+		// comes a sidereal day later. Testing only the nearest left the peak on the window end at 15.2809 degrees,
+		// almost 75 degrees below the real one.
+		const plan = handler.planTargets(request([LATE_CULMINATION], { end: START + 64800000 }))
+
+		const [target] = plan.targets
+
+		expect(target.transit - START).toBeGreaterThan(44944000)
+		expect(target.transit - START).toBeLessThan(44946000)
+		expect(toDeg(target.maximumAltitude)).toBeCloseTo(89.98739, 4)
 	})
 
 	test('splits a run at an excursion inside the first sampling interval', () => {

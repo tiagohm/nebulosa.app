@@ -7,7 +7,7 @@ import { airmassKastenYoung } from 'nebulosa/src/astronomy/formulas'
 import { Ellipsoid, geodeticLocation } from 'nebulosa/src/astronomy/observer/location'
 import type { GeographicPosition } from 'nebulosa/src/astronomy/observer/location'
 import { pmAngles, tt, ut1 } from 'nebulosa/src/astronomy/time/time'
-import { ELLIPSOID_PARAMETERS, PIOVERTWO } from 'nebulosa/src/core/constants'
+import { DAYSEC, ELLIPSOID_PARAMETERS, PI, PIOVERTWO, TAU } from 'nebulosa/src/core/constants'
 import { vecAngle, vecLength } from 'nebulosa/src/math/linear-algebra/vec3'
 import type { MutVec3, Vec3 } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
@@ -53,11 +53,14 @@ const GOLDEN_SECTION_RATIO = 0.3819660112501051
 // Rate at which the Earth rotation angle advances, radians per second of UTC.
 // It is the mean sidereal rate, and the hour angle of a fixed direction follows it to about 13 ms of drift over
 // a four-hour extrapolation, measured against a golden-section maximization of the real altitude curve.
-const ERA_RATE = (2 * Math.PI * 1.00273781191135448) / 86400
+const ERA_RATE = (TAU * 1.00273781191135448) / DAYSEC
 
 // Half a sidereal day in milliseconds, the interval between a culmination and the lower culmination that
 // follows it. Those two instants are the only ones where the apparent altitude of a fixed direction turns.
-const HALF_SIDEREAL_DAY = (Math.PI / ERA_RATE) * 1000
+const HALF_SIDEREAL_DAY = (PI / ERA_RATE) * 1000
+
+// A sidereal day in milliseconds, the period at which the upper culmination of a fixed direction repeats.
+const SIDEREAL_DAY = 2 * HALF_SIDEREAL_DAY
 
 // Sky state at one instant, shared by every candidate evaluated at that instant.
 // The ERFA astrometry context is the expensive part and the reason samples are computed once for all targets.
@@ -114,8 +117,7 @@ function skySample(utc: number, location: GeographicPosition): SkySample {
 
 	// Observer relative to the geocentre, AU: eb is the SSB-to-observer vector the context already carries and
 	// ebpv[0] is the SSB-to-geocentre one, so the difference costs nothing beyond three subtractions.
-	const { eb } = astrom
-	const moon: Vec3 = [geocentricMoon[0] - (eb[0] - ebpv[0][0]), geocentricMoon[1] - (eb[1] - ebpv[0][1]), geocentricMoon[2] - (eb[2] - ebpv[0][2])]
+	const moon: Vec3 = [geocentricMoon[0] - (astrom.eb[0] - ebpv[0][0]), geocentricMoon[1] - (astrom.eb[1] - ebpv[0][1]), geocentricMoon[2] - (astrom.eb[2] - ebpv[0][2])]
 
 	const sunAltitude = observedAltitude(astrom, ...eraC2s(...sun))
 
@@ -659,9 +661,13 @@ export class SequencerPlannerHandler {
 				continue
 			}
 
-			// The peak of the interval is the culmination whenever the interval holds one.
-			let transit = culmination
-			let pointing = culmination > visibilityStart && culmination < visibilityEnd ? pointingAt(culmination, candidate, position) : undefined
+			// The peak of the interval is the culmination whenever the interval holds one. Culminations repeat every
+			// sidereal day and the one computed above is the nearest to the first sample, which a window longer than
+			// half a sidereal day can leave behind: the occurrence to test is the first one at or after the start of
+			// the interval, and an interval holding more than one holds them at the same altitude anyway.
+			const interior = culmination + Math.ceil((visibilityStart - culmination) / SIDEREAL_DAY) * SIDEREAL_DAY
+			let transit = interior
+			let pointing = interior > visibilityStart && interior < visibilityEnd ? pointingAt(interior, candidate, position) : undefined
 
 			if (pointing === undefined) {
 				// With the culmination outside it the interval has no interior maximum, so the peak is at one of the

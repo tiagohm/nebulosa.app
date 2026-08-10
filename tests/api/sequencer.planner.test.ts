@@ -178,6 +178,18 @@ describe('ordering', () => {
 		expect(plan.discarded).toEqual([{ id: 'second', name: 'Omega Centauri', reason: 'noRemainingTime' }])
 	})
 
+	test('waits for a tighter window instead of losing it to a longer target', () => {
+		// The altitude band opens 379.7 s into the window and closes 1091.0 s into it, so a 3600 s slot started
+		// at the anchor would leave the band with no room, while observing the band first still fits both.
+		const band: TargetPlanCandidate = { ...OMEGA_CENTAURI, duration: 600, constraints: { minimumAltitude: deg(36), maximumAltitude: deg(38) } }
+		const plan = handler.planTargets(request([{ ...M42, duration: 3600 }, band]))
+
+		expect(plan.discarded).toBeEmpty()
+		expect(plan.targets.map((target) => target.id)).toEqual(['omegaCen', 'm42'])
+		expect(plan.targets[0].slotStart).toBe(plan.targets[0].visibilityStart)
+		expect(plan.targets[1].slotStart).toBeGreaterThanOrEqual(plan.targets[0].slotEnd)
+	})
+
 	test('places a zero-duration target at the very end of a fully occupied window', () => {
 		// The first target consumes the whole window, leaving the cursor exactly at the end of the second one's.
 		const filler: TargetPlanCandidate = { ...OMEGA_CENTAURI, id: 'filler', duration: (END - START) / 1000 }

@@ -170,8 +170,15 @@ function mergeConstraints(base: TargetPlanConstraint | undefined, override: Targ
 // Orders the feasible targets and allocates a slot to each one.
 //
 // The policy is earliest-deadline-first among the targets already up at the cursor: whatever sets first is
-// observed first, which is what maximizes how many targets fit in the night. When nothing is up yet the
-// cursor jumps to the next target to rise instead of idling one sample at a time.
+// observed first. When nothing is up yet the cursor jumps to the next target to rise instead of idling one
+// sample at a time.
+//
+// Choosing only among the targets already up is not enough when durations differ, because a long target
+// started now can outlive a short window that has not opened yet. So before committing a slot the scheduler
+// looks one release ahead: if the target it is about to start would leave a tighter, not-yet-risen target with
+// no room, and observing that one first still leaves room for the current choice, it waits for the release
+// instead. Maximizing the number of targets exactly is NP-hard once releases, deadlines, and durations all
+// vary, so this stays a heuristic; it is the cheapest lookahead that removes the obvious loss.
 //
 // anchor is the instant the session is assumed to begin, Unix milliseconds. Every iteration either removes
 // one target from the pending set or strictly advances the cursor to a later release, so the loop always
@@ -184,6 +191,9 @@ function schedule(pending: FeasibleTarget[], anchor: number, discarded: Discarde
 		let chosen = -1
 		let earliestDeadline = Infinity
 		let earliestRelease = Infinity
+		// Tightest target still to rise, which is the one a slot committed now is most likely to destroy.
+		let tightest = -1
+		let tightestDeadline = Infinity
 
 		for (let i = 0; i < pending.length; i++) {
 			const target = pending[i]
@@ -198,8 +208,13 @@ function schedule(pending: FeasibleTarget[], anchor: number, discarded: Discarde
 					earliestDeadline = target.visibilityEnd
 					chosen = i
 				}
-			} else if (target.visibilityStart < earliestRelease) {
-				earliestRelease = target.visibilityStart
+			} else {
+				if (target.visibilityStart < earliestRelease) earliestRelease = target.visibilityStart
+
+				if (target.visibilityEnd < tightestDeadline) {
+					tightestDeadline = target.visibilityEnd
+					tightest = i
+				}
 			}
 		}
 
@@ -211,6 +226,21 @@ function schedule(pending: FeasibleTarget[], anchor: number, discarded: Discarde
 		}
 
 		const target = pending[chosen]
+
+		// One-step lookahead. Only a target that sets earlier than the current choice is worth waiting for, and
+		// only when starting now would actually leave it without room and observing it first still leaves room
+		// for the current choice. The cursor moves strictly forward to the release, so the loop still terminates.
+		if (tightest >= 0 && tightestDeadline < earliestDeadline) {
+			const next = pending[tightest]
+			const losesNext = Math.max(cursor + target.duration, next.visibilityStart) + next.duration > next.visibilityEnd
+			const keepsChosen = next.visibilityStart + next.duration + target.duration <= target.visibilityEnd
+
+			if (losesNext && keepsChosen) {
+				cursor = next.visibilityStart
+				continue
+			}
+		}
+
 		pending.splice(chosen, 1)
 
 		const slotStart = Math.max(cursor, target.visibilityStart)

@@ -46,8 +46,8 @@ describe('visibility', () => {
 		expect(target.visibilityEnd).toBeLessThanOrEqual(1753664025472)
 		expect(target.transit).toBe(START)
 		expect(toDeg(target.maximumAltitude)).toBeCloseTo(39.0589, 2)
-		// Geocentric, as the planner computes it. Astropy's topocentric separation at the same instant is 63.478 degrees.
-		expect(toDeg(target.moonDistance)).toBeCloseTo(62.7696, 2)
+		// Topocentric, as the planner computes it; Astropy gives 63.4780 for the same site and instant.
+		expect(toDeg(target.moonDistance)).toBeCloseTo(63.478, 2)
 	})
 
 	test('plans a rising target and refines the edge where it crosses the limit', () => {
@@ -120,7 +120,7 @@ describe('sky constraints', () => {
 	})
 
 	test('discards only the target too close to the Moon', () => {
-		// Geocentric separations at the window start are 62.8 degrees for Omega Centauri and 82.5 for M42.
+		// Topocentric separations at the window start are 63.5 degrees for Omega Centauri and 81.7 for M42.
 		const plan = handler.planTargets(request([OMEGA_CENTAURI, M42], { constraints: { minimumAltitude: deg(30), minimumMoonDistance: deg(70) } }))
 
 		expect(plan.discarded).toEqual([{ id: 'omegaCen', name: 'Omega Centauri', reason: 'moonTooClose' }])

@@ -44,7 +44,8 @@ interface SkySample {
 	readonly utc: number
 	// ICRS-to-observed astrometry context for the site at this instant.
 	readonly astrom: EraAstrom
-	// Geocentric Moon position in ICRS axes, AU.
+	// Topocentric Moon position in ICRS axes, AU: the geocentric vector shifted to the observer, which is what
+	// removes the up-to-one-degree lunar parallax from a site-specific separation constraint.
 	readonly moon: Vec3
 	// Illuminated fraction of the lunar disk, normalized to [0, 1].
 	readonly moonIllumination: number
@@ -86,10 +87,18 @@ function skySample(utc: number, location: GeographicPosition): SkySample {
 	const { radius, flattening } = ELLIPSOID_PARAMETERS[location.ellipsoid ?? Ellipsoid.IERS2010]
 	const astrom = eraApco13(a.day, a.fraction, b.day, b.fraction, location.longitude, location.latitude, location.elevation, xp, yp, sp, pressure, temperature, relativeHumidity, wl, ebpv, ehp, radius, flattening)
 
-	const [moon] = eraMoon98(a.day, a.fraction)
+	const [geocentricMoon] = eraMoon98(a.day, a.fraction)
+
+	// Observer relative to the geocentre, AU: eb is the SSB-to-observer vector the context already carries and
+	// ebpv[0] is the SSB-to-geocentre one, so the difference costs nothing beyond three subtractions.
+	const { eb } = astrom
+	const moon: Vec3 = [geocentricMoon[0] - (eb[0] - ebpv[0][0]), geocentricMoon[1] - (eb[1] - ebpv[0][1]), geocentricMoon[2] - (eb[2] - ebpv[0][2])]
+
 	const sunAltitude = observedAltitude(astrom, ...eraC2s(...sun))
 
-	return { utc, astrom, moon, moonIllumination: moonIlluminatedFraction(sun, moon), sunAltitude }
+	// Illumination stays geocentric: it is a property of the Sun-Earth-Moon geometry and the topocentric shift
+	// changes the phase angle by far less than the resolution any illumination threshold is expressed in.
+	return { utc, astrom, moon, moonIllumination: moonIlluminatedFraction(sun, geocentricMoon), sunAltitude }
 }
 
 // Apparent altitude of an ICRS/J2000 direction at the site and instant the context was built for, in radians.
@@ -112,9 +121,10 @@ function moonIlluminatedFraction(sun: Vec3, moon: Vec3) {
 	return (1 + Math.cos(phaseAngle)) / 2
 }
 
-// Angular separation between an ICRS/J2000 direction and the geocentric Moon, in radians.
-// The Moon is taken geocentrically: lunar parallax reaches about one degree, which is immaterial against the
-// tens of degrees a moon-avoidance constraint is expressed in.
+// Angular separation between an ICRS/J2000 direction and the Moon as seen from the site, in radians.
+// The Moon is topocentric because lunar parallax reaches about one degree near the horizon, enough to flip the
+// decision for a target sitting near the requested limit. Both directions are astrometric, so annual aberration
+// and light deflection cancel to well under an arcminute and are not applied.
 function moonDistanceOf(sample: SkySample, rightAscension: Angle, declination: Angle): Angle {
 	return vecAngle(eraS2p(rightAscension, declination, 1), sample.moon)
 }

@@ -285,6 +285,23 @@ describe('visibility', () => {
 		expect(target.visibilityEnd).toBe(END)
 	})
 
+	test('splits a run at the maximum of the lunar illumination', () => {
+		// A 10.5 h window on 2025-08-09 whose sampling interval of 3.5 h steps over the full Moon: the illuminated
+		// fraction peaks at 0.9994380 around 08:26 UTC and stays over 0.99942 for about 1.7 h, but every grid sample
+		// sits under the limit, so the whole window read as visible. A five-minute scan puts the start of the longest
+		// run at 20496.1 s, which the coarse grid reaches within its own edge resolution of 49 s.
+		const start = Date.UTC(2025, 7, 9, 3, 40)
+		const plan = handler.planTargets(request([M42], { start, end: start + 37800000, step: 12600, constraints: { maximumMoonIllumination: 0.99942 } }))
+
+		expect(plan.targets).toHaveLength(1)
+
+		const [target] = plan.targets
+
+		expect(target.visibilityStart - start).toBeGreaterThan(20470000)
+		expect(target.visibilityStart - start).toBeLessThan(20560000)
+		expect(target.visibilityEnd - start).toBe(37800000)
+	})
+
 	test('keeps the run that lasts longest, not the one holding the most evaluated points', () => {
 		// The ceiling splits the night into a wing of 16015.7 s before the culmination and one of 16300.0 s after it.
 		// The shorter wing carries an extra evaluated point at a turning instant, so counting flags returns it.

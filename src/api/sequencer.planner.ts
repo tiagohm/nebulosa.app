@@ -498,9 +498,10 @@ export class SequencerPlannerHandler {
 		const grid = new Array<SkySample>(count)
 		for (let i = 0; i < count; i++) grid[i] = skySample(start + i * step, position)
 
-		// The Sun's altitude turns once or twice inside a night-long window, and a darkness constraint set close
-		// to that turn opens or closes entirely between two grid samples. Evaluating the turn itself is what
-		// stops the scan from bridging or missing it, and the turn is target-independent so it is found once.
+		// The Sun's altitude turns once or twice inside a night-long window, and the illuminated fraction of the Moon
+		// turns at full and new Moon. A darkness or illumination constraint set close to either turn opens or closes
+		// entirely between two grid samples. Evaluating the turns themselves is what stops the scan from bridging or
+		// missing them, and both curves are target-independent so their turns are found once for every candidate.
 		const samples: SkySample[] = [grid[0]]
 
 		// A turn of the Moon separation is read from the samples surrounding it, which the two outer intervals lack
@@ -511,10 +512,26 @@ export class SequencerPlannerHandler {
 		for (let i = BOUNDARY_REFINEMENT_STEPS; i > 0; i--) samples.push(skySample(grid[0].utc + step / (1 << i), position))
 
 		for (let i = 1; i < count - 1; i++) {
-			const turn = turningInstant(grid[i - 1].utc, grid[i].utc, grid[i + 1].utc, grid[i - 1].sunAltitude, grid[i].sunAltitude, grid[i + 1].sunAltitude)
-			if (turn > 0 && turn < grid[i].utc) samples.push(skySample(turn, position))
+			const utc = grid[i].utc
+			let first = turningInstant(grid[i - 1].utc, utc, grid[i + 1].utc, grid[i - 1].sunAltitude, grid[i].sunAltitude, grid[i + 1].sunAltitude)
+			let second = turningInstant(grid[i - 1].utc, utc, grid[i + 1].utc, grid[i - 1].moonIllumination, grid[i].moonIllumination, grid[i + 1].moonIllumination)
+
+			// The two curves turn independently, so the instants arrive in no order. Emitting them sorted is what
+			// keeps the sample list monotonic, and a missing turn is a negative that sorts last.
+			if (second > 0 && (first < 0 || second < first)) {
+				const swap = first
+				first = second
+				second = swap
+			}
+
+			// Turns closer than a millisecond would leave an interval too narrow for any turn to be computed over.
+			if (second - first < 1) second = -1
+
+			if (first > 0 && first < utc) samples.push(skySample(first, position))
+			if (second > 0 && second < utc) samples.push(skySample(second, position))
 			samples.push(grid[i])
-			if (turn > grid[i].utc) samples.push(skySample(turn, position))
+			if (first > utc) samples.push(skySample(first, position))
+			if (second > utc) samples.push(skySample(second, position))
 		}
 
 		// The two ladders share the midpoint when the grid has only its two boundaries, and a repeated instant would

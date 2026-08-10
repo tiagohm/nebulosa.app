@@ -152,6 +152,21 @@ describe('visibility', () => {
 		expect(toDeg(target.maximumAltitude)).toBeCloseTo(89.7997, 3)
 	})
 
+	test('refines the lunar closest approach instead of trusting the parabola vertex', () => {
+		// On a two-hour grid the vertex of the parabola through the samples around the approach lands 562 s away
+		// from it, where the separation is still 0.103 degrees. Evaluating only that instant clears a 0.1 degree
+		// limit and hides the crossing entirely; a one-minute scan puts the interval start at 9541.6 s.
+		const plan = handler.planTargets(request([MOON_CROSSING], { step: 7200, constraints: { minimumMoonDistance: deg(0.1) } }))
+
+		expect(plan.targets).toHaveLength(1)
+
+		const [target] = plan.targets
+
+		expect(target.visibilityStart).toBeGreaterThan(START + 9500000)
+		expect(target.visibilityStart).toBeLessThan(START + 9600000)
+		expect(target.visibilityEnd).toBe(END)
+	})
+
 	test('keeps the run that lasts longest, not the one holding the most evaluated points', () => {
 		// The ceiling splits the night into a wing of 16015.7 s before the culmination and one of 16300.0 s after it.
 		// The shorter wing carries an extra evaluated point at a turning instant, so counting flags returns it.

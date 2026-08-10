@@ -37,10 +37,10 @@ const MAX_SAMPLES = 4096
 // Eight halvings turn the default 300 s step into about 1.2 s, well below anything a session can act on.
 const EDGE_REFINEMENT_ITERATIONS = 8
 
-// Parabolic interpolation steps applied to an altitude maximum found inside a visibility interval.
-// Each step evaluates the real altitude once, and the curve is quadratic enough near culmination that four
-// of them take the default 300 s step to well under a second.
-const PEAK_REFINEMENT_ITERATIONS = 4
+// Parabolic interpolation steps applied to a turn of one of the candidate's curves.
+// Each step evaluates the real curve once, and both curves are quadratic enough near a turn that four of them
+// take the default 300 s step to well under a second.
+const TURN_REFINEMENT_ITERATIONS = 4
 
 // Sky state at one instant, shared by every candidate evaluated at that instant.
 // The ERFA astrometry context is the expensive part and the reason samples are computed once for all targets.
@@ -183,48 +183,51 @@ function pointingAt(utc: number, candidate: TargetPlanCandidate, location: Geogr
 	return [observedAltitude(sample.astrom, candidate.rightAscension, candidate.declination), moonDistanceOf(sample, candidate.rightAscension, candidate.declination)]
 }
 
-// Refines the instant of maximum altitude bracketed by three evaluated points, t0 < t1 < t2 in Unix
-// milliseconds, whose altitudes a0, a1, a2 are radians with a1 the highest of the three. moonDistance is the
-// separation already known at t1, radians, carried so the returned triple always describes one instant.
+// Refines the instant where one of the candidate's curves turns, bracketed by three evaluated points,
+// t0 < t1 < t2 in Unix milliseconds, whose values v0, v1, v2 are radians with v1 the extremum of the three.
+// moon selects the curve: the Moon separation when true, the apparent altitude when false. The direction
+// follows the bracket, so the closest approach of the Moon is refined as the minimum it is.
 //
 // This is successive parabolic interpolation: each step fits a parabola through the current triple, evaluates
-// the real altitude at its vertex, and keeps the vertex as the new middle point when it is higher, otherwise
-// as the new bracket end on its side. The vertex of a single parabola through coarse samples is only an
-// approximation of the culmination of the real refracted curve, tens of seconds and hundredths of a degree
-// away from it at a five-minute step; iterating against real evaluations is what removes that error.
+// the real curve at its vertex, and keeps the vertex as the new middle point when it is a better extremum,
+// otherwise as the new bracket end on its side. The vertex of a single parabola through coarse samples is only
+// an approximation of the turn of the real curve, tens of seconds away from it at a five-minute step and far
+// more than that at a coarse one, which is enough to miss the violation the turn was evaluated to find or to
+// publish a culmination minutes off. Iterating against real evaluations is what removes that error.
 //
-// Returns the best instant found with its altitude and Moon separation. The result always lies inside the
-// original bracket, so a peak refined this way stays inside the visibility interval that produced it.
-function refinePeak(t0: number, t1: number, t2: number, a0: Angle, a1: Angle, a2: Angle, moonDistance: Angle, candidate: TargetPlanCandidate, location: GeographicPosition): readonly [number, Angle, Angle] {
-	for (let i = 0; i < PEAK_REFINEMENT_ITERATIONS; i++) {
+// Returns the best instant found, always inside the original bracket.
+function refineTurn(t0: number, t1: number, t2: number, v0: number, v1: number, v2: number, moon: boolean, candidate: TargetPlanCandidate, location: GeographicPosition): number {
+	const maximum = v1 >= v0 && v1 >= v2
+
+	for (let i = 0; i < TURN_REFINEMENT_ITERATIONS; i++) {
 		// Also stops the refinement when the vertex has converged onto the middle point or left the bracket.
-		const vertex = turningInstant(t0, t1, t2, a0, a1, a2)
+		const vertex = turningInstant(t0, t1, t2, v0, v1, v2)
 		if (vertex < 0) break
 
-		const [altitude, separation] = pointingAt(vertex, candidate, location)
+		const pointing = pointingAt(vertex, candidate, location)
+		const value = moon ? pointing[1] : pointing[0]
 
-		if (altitude > a1) {
+		if (maximum ? value > v1 : value < v1) {
 			if (vertex < t1) {
 				t2 = t1
-				a2 = a1
+				v2 = v1
 			} else {
 				t0 = t1
-				a0 = a1
+				v0 = v1
 			}
 
 			t1 = vertex
-			a1 = altitude
-			moonDistance = separation
+			v1 = value
 		} else if (vertex < t1) {
 			t0 = vertex
-			a0 = altitude
+			v0 = value
 		} else {
 			t2 = vertex
-			a2 = altitude
+			v2 = value
 		}
 	}
 
-	return [t1, a1, moonDistance]
+	return t1
 }
 
 // Merges the request-level constraints with the candidate overrides, property by property.
@@ -478,6 +481,12 @@ export class SequencerPlannerHandler {
 				gridMoonDistances[i] = moonDistanceOf(samples[i], candidate.rightAscension, candidate.declination)
 			}
 
+			// A turn is worth locating exactly only where a constraint reads that curve, since that is the only thing
+			// the evaluation sequence decides: the culmination that gets published is refined separately, from the
+			// bracket the sequence provides. Refining costs real evaluations, so it follows the constraint set.
+			const altitudeConstrained = constraints.minimumAltitude !== undefined || constraints.maximumAltitude !== undefined || constraints.maximumAirmass !== undefined
+			const moonConstrained = constraints.minimumMoonDistance !== undefined
+
 			// Evaluation sequence for this candidate: the grid plus the instants its own curves turn. Altitude turns
 			// at culmination and Moon separation turns at the closest approach of the Moon, and those are the only
 			// places where a constraint on altitude, airmass, or lunar distance can open and close between two
@@ -493,8 +502,14 @@ export class SequencerPlannerHandler {
 				if (i > 0 && i < sampleCount - 1) {
 					const before = samples[i - 1].utc
 					const after = samples[i + 1].utc
+
 					firstTurn = turningInstant(before, utc, after, gridAltitudes[i - 1], gridAltitudes[i], gridAltitudes[i + 1])
-					secondTurn = turningInstant(before, utc, after, gridMoonDistances[i - 1], gridMoonDistances[i], gridMoonDistances[i + 1])
+					if (firstTurn > 0 && altitudeConstrained) firstTurn = refineTurn(before, utc, after, gridAltitudes[i - 1], gridAltitudes[i], gridAltitudes[i + 1], false, candidate, position)
+
+					// A Moon turn with no lunar constraint to read it changes nothing, and the separation reported for
+					// the target comes from its peak, so it is not even evaluated.
+					secondTurn = moonConstrained ? turningInstant(before, utc, after, gridMoonDistances[i - 1], gridMoonDistances[i], gridMoonDistances[i + 1]) : -1
+					if (secondTurn > 0) secondTurn = refineTurn(before, utc, after, gridMoonDistances[i - 1], gridMoonDistances[i], gridMoonDistances[i + 1], true, candidate, position)
 
 					// Ordering the pair is what keeps the sequence sorted when both turns land on the same side of the
 					// sample, and it puts the only present turn first when there is one.
@@ -597,11 +612,15 @@ export class SequencerPlannerHandler {
 			// seconds and hundredths of a degree short of the real maximum. A peak at an end of the run is not
 			// bracketed and belongs to the boundary handling below instead.
 			if (peak > first && peak < last) {
-				const refined = refinePeak(instants[peak - 1], instants[peak], instants[peak + 1], altitudes[peak - 1], altitudes[peak], altitudes[peak + 1], moonDistance, candidate, position)
+				const refined = refineTurn(instants[peak - 1], instants[peak], instants[peak + 1], altitudes[peak - 1], altitudes[peak], altitudes[peak + 1], false, candidate, position)
 
-				transit = refined[0]
-				maximumAltitude = refined[1]
-				moonDistance = refined[2]
+				if (refined !== transit) {
+					const [altitude, separation] = pointingAt(refined, candidate, position)
+
+					transit = refined
+					maximumAltitude = altitude
+					moonDistance = separation
+				}
 			}
 
 			// A run touching a window edge is truncated by the window, not by a constraint, so there is no edge to refine there.

@@ -270,6 +270,21 @@ describe('visibility', () => {
 		expect(target.visibilityEnd).toBe(END)
 	})
 
+	test('finds a lunar approach that falls between the window start and the first sample', () => {
+		// The window opens 8700 s later, which puts the crossing inside the first two-hour sampling interval. A turn
+		// read from the samples on both sides of it cannot be found there, so the whole window read as visible; a
+		// ten-second scan starts it 408.6 s in.
+		const plan = handler.planTargets(request([MOON_CROSSING], { start: START + 8700000, step: 7200, constraints: { minimumMoonDistance: deg(0.02) } }))
+
+		expect(plan.targets).toHaveLength(1)
+
+		const [target] = plan.targets
+
+		expect(target.visibilityStart).toBeGreaterThan(START + 9108000)
+		expect(target.visibilityStart).toBeLessThan(START + 9110000)
+		expect(target.visibilityEnd).toBe(END)
+	})
+
 	test('keeps the run that lasts longest, not the one holding the most evaluated points', () => {
 		// The ceiling splits the night into a wing of 16015.7 s before the culmination and one of 16300.0 s after it.
 		// The shorter wing carries an extra evaluated point at a turning instant, so counting flags returns it.

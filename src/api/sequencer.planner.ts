@@ -37,6 +37,10 @@ const MAX_SAMPLES = 4096
 // Eight halvings turn the default 300 s step into about 1.2 s, well below anything a session can act on.
 const EDGE_REFINEMENT_ITERATIONS = 8
 
+// Extra samples added inside each of the two outer sampling intervals, at the successive halves of the interval
+// towards the window boundary. Five of them leave the innermost cell at a thirty-second of the sampling step.
+const BOUNDARY_REFINEMENT_STEPS = 5
+
 // Width the bracket around the turn of the candidate's Moon separation is reduced to, milliseconds.
 // Matches the resolution the edge refinement reaches, so both boundaries of a run are located to the same
 // second and no violation wider than that survives the refinement.
@@ -499,6 +503,13 @@ export class SequencerPlannerHandler {
 		// stops the scan from bridging or missing it, and the turn is target-independent so it is found once.
 		const samples: SkySample[] = [grid[0]]
 
+		// A turn of the Moon separation is read from the samples surrounding it, which the two outer intervals lack
+		// on the boundary side: a closest approach between a boundary and the first interior sample has no
+		// neighbourhood to be detected in, so a short separation violation there is bridged. Halving each outer
+		// interval towards its boundary gives those approaches somewhere to be seen and confines the blind spot to a
+		// small fraction of the sampling step. The instants are shared by every candidate, so the cost is paid once.
+		for (let i = BOUNDARY_REFINEMENT_STEPS; i > 0; i--) samples.push(skySample(grid[0].utc + step / (1 << i), position))
+
 		for (let i = 1; i < count - 1; i++) {
 			const turn = turningInstant(grid[i - 1].utc, grid[i].utc, grid[i + 1].utc, grid[i - 1].sunAltitude, grid[i].sunAltitude, grid[i + 1].sunAltitude)
 			if (turn > 0 && turn < grid[i].utc) samples.push(skySample(turn, position))
@@ -506,7 +517,11 @@ export class SequencerPlannerHandler {
 			if (turn > grid[i].utc) samples.push(skySample(turn, position))
 		}
 
-		if (count > 1) samples.push(grid[count - 1])
+		// The two ladders share the midpoint when the grid has only its two boundaries, and a repeated instant would
+		// leave a zero-width interval behind, which no turn can be computed over. The trailing ladder starts past it.
+		for (let i = count > 2 ? 1 : 2; i <= BOUNDARY_REFINEMENT_STEPS; i++) samples.push(skySample(grid[count - 1].utc - step / (1 << i), position))
+
+		samples.push(grid[count - 1])
 
 		const sampleCount = samples.length
 

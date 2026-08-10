@@ -312,6 +312,34 @@ function longestRun(flags: Uint8Array, count: number): readonly [number, number]
 	return [bestFirst, bestLast]
 }
 
+// Instant where the parabola through three consecutive samples of a smooth curve turns, or -1 when the three
+// samples carry no interior turn. Instants are Unix milliseconds and need not be equally spaced; values are
+// whatever quantity is being tracked, in its own unit.
+//
+// This is what makes a sampled scan able to see between its own samples. Every quantity the planner constrains
+// is smooth and turns at most once per sampling neighbourhood, so a crossing hidden between two samples of
+// equal feasibility can only happen around a turn: anywhere else the quantity is monotonic over the interval
+// and a crossing would show up as two samples that disagree, which the edge refinement already brackets.
+function turningInstant(t0: number, t1: number, t2: number, v0: number, v1: number, v2: number) {
+	// A turn requires the middle sample to be an extremum of the three; a flat triple has nothing to refine.
+	if (v0 === v1 && v1 === v2) return -1
+	if (!((v1 >= v0 && v1 >= v2) || (v1 <= v0 && v1 <= v2))) return -1
+
+	const first = (v1 - v0) / (t1 - t0)
+	const second = ((v2 - v1) / (t2 - t1) - first) / (t2 - t0)
+
+	// Near-collinear samples put the vertex arbitrarily far away, so there is nothing worth evaluating.
+	if (Math.abs(second) < 1e-30) return -1
+
+	const vertex = (t0 + t1) / 2 - first / (2 * second)
+
+	// Reject a vertex that rounding pushed outside the bracket, and one that lands on a sample already evaluated.
+	if (!(vertex > t0 && vertex < t2)) return -1
+	if (Math.abs(vertex - t1) < 1) return -1
+
+	return vertex
+}
+
 export class SequencerPlannerHandler {
 	// Orders candidate targets for one night and reports why each discarded candidate was dropped.
 	// The result is valid only under the anchor, site, and window it reports: it is an input to a definition,
@@ -339,13 +367,35 @@ export class SequencerPlannerHandler {
 		const count = Math.min(MAX_SAMPLES, Math.max(2, Math.floor(span / requestedStep) + 1))
 		const step = span / (count - 1)
 
-		const samples = new Array<SkySample>(count)
-		for (let i = 0; i < count; i++) samples[i] = skySample(start + i * step, position)
+		const grid = new Array<SkySample>(count)
+		for (let i = 0; i < count; i++) grid[i] = skySample(start + i * step, position)
 
-		// Reused across candidates so the scan allocates once instead of once per target.
-		const altitudes = new Float64Array(count)
-		const moonDistances = new Float64Array(count)
-		const feasible = new Uint8Array(count)
+		// The Sun's altitude turns once or twice inside a night-long window, and a darkness constraint set close
+		// to that turn opens or closes entirely between two grid samples. Evaluating the turn itself is what
+		// stops the scan from bridging or missing it, and the turn is target-independent so it is found once.
+		const samples: SkySample[] = [grid[0]]
+
+		for (let i = 1; i < count - 1; i++) {
+			const turn = turningInstant(grid[i - 1].utc, grid[i].utc, grid[i + 1].utc, grid[i - 1].sunAltitude, grid[i].sunAltitude, grid[i + 1].sunAltitude)
+			if (turn > 0 && turn < grid[i].utc) samples.push(skySample(turn, position))
+			samples.push(grid[i])
+			if (turn > grid[i].utc) samples.push(skySample(turn, position))
+		}
+
+		if (count > 1) samples.push(grid[count - 1])
+
+		const sampleCount = samples.length
+
+		// Reused across candidates so the scan allocates once instead of once per target. Each interior sample can
+		// contribute one extra evaluation point at the turn of the candidate's own altitude curve, which bounds
+		// the merged sequence at twice the sample count.
+		const capacity = 2 * sampleCount
+		const instants = new Float64Array(capacity)
+		const sources = new Int32Array(capacity)
+		const gridAltitudes = new Float64Array(sampleCount)
+		const altitudes = new Float64Array(capacity)
+		const moonDistances = new Float64Array(capacity)
+		const feasible = new Uint8Array(capacity)
 
 		const minimumDuration = Math.max(0, (req.minimumDuration ?? 0) * 1000)
 		const pending: FeasibleTarget[] = []
@@ -355,13 +405,42 @@ export class SequencerPlannerHandler {
 			const constraints = mergeConstraints(req.constraints, candidate.constraints)
 			const duration = Math.max(0, (candidate.duration ?? 0) * 1000)
 
+			// The altitude of this candidate on the grid, needed in full because locating a turn of the curve is a
+			// comparison against both neighbours and cannot skip the samples another constraint already rejects.
+			for (let i = 0; i < sampleCount; i++) gridAltitudes[i] = observedAltitude(samples[i].astrom, candidate.rightAscension, candidate.declination)
+
+			// Evaluation sequence for this candidate: the grid plus the instant its altitude turns, which is the
+			// only place a constraint on altitude or airmass can open or close between two samples that agree.
+			let size = 0
+
+			for (let i = 0; i < sampleCount; i++) {
+				const turn = i > 0 && i < sampleCount - 1 ? turningInstant(samples[i - 1].utc, samples[i].utc, samples[i + 1].utc, gridAltitudes[i - 1], gridAltitudes[i], gridAltitudes[i + 1]) : -1
+
+				if (turn > 0 && turn < samples[i].utc) {
+					instants[size] = turn
+					sources[size] = -1
+					size++
+				}
+
+				instants[size] = samples[i].utc
+				sources[size] = i
+				size++
+
+				if (turn > samples[i].utc) {
+					instants[size] = turn
+					sources[size] = -1
+					size++
+				}
+			}
+
 			let skyReason: TargetPlanDiscardReason | undefined
 			let blockedReason: TargetPlanDiscardReason | undefined
 			let blockedAltitude = -Infinity
 			let anyFeasible = false
 
-			for (let i = 0; i < count; i++) {
-				const sample = samples[i]
+			for (let i = 0; i < size; i++) {
+				const source = sources[i]
+				const sample = source >= 0 ? samples[source] : skySample(instants[i], position)
 				feasible[i] = 0
 
 				const violatedSky = violatedSkyConstraint(sample, constraints)
@@ -371,7 +450,7 @@ export class SequencerPlannerHandler {
 					continue
 				}
 
-				const altitude = observedAltitude(sample.astrom, candidate.rightAscension, candidate.declination)
+				const altitude = source >= 0 ? gridAltitudes[source] : observedAltitude(sample.astrom, candidate.rightAscension, candidate.declination)
 				const moonDistance = moonDistanceOf(sample, candidate.rightAscension, candidate.declination)
 				altitudes[i] = altitude
 				moonDistances[i] = moonDistance
@@ -393,9 +472,9 @@ export class SequencerPlannerHandler {
 				continue
 			}
 
-			const [first, last] = longestRun(feasible, count)
+			const [first, last] = longestRun(feasible, size)
 
-			let transit = samples[first].utc
+			let transit = instants[first]
 			let maximumAltitude = altitudes[first]
 			let moonDistance = moonDistances[first]
 
@@ -403,13 +482,13 @@ export class SequencerPlannerHandler {
 				if (altitudes[i] > maximumAltitude) {
 					maximumAltitude = altitudes[i]!
 					moonDistance = moonDistances[i]!
-					transit = samples[i].utc
+					transit = instants[i]
 				}
 			}
 
 			// A run touching a window edge is truncated by the window, not by a constraint, so there is no edge to refine there.
-			const visibilityStart = first === 0 ? start : refineEdge(samples[first - 1].utc, samples[first].utc, candidate, constraints, position)
-			const visibilityEnd = last === count - 1 ? end : refineEdge(samples[last + 1].utc, samples[last].utc, candidate, constraints, position)
+			const visibilityStart = first === 0 ? start : refineEdge(instants[first - 1], instants[first], candidate, constraints, position)
+			const visibilityEnd = last === size - 1 ? end : refineEdge(instants[last + 1], instants[last], candidate, constraints, position)
 
 			if (visibilityEnd - visibilityStart < Math.max(minimumDuration, duration)) {
 				discarded.push({ id: candidate.id, name: candidate.name, reason: 'visibilityTooShort' })

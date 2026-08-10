@@ -19,6 +19,12 @@ const M13: TargetPlanCandidate = { id: 'm13', name: 'M13', rightAscension: deg(2
 const POLARIS: TargetPlanCandidate = { id: 'polaris', name: 'Polaris', rightAscension: deg(37.9545), declination: deg(89.2641) }
 const M42: TargetPlanCandidate = { id: 'm42', name: 'M42', rightAscension: deg(83.8221), declination: deg(-5.3911) }
 
+// Synthetic point culminating almost exactly overhead 16230.1 s into the window, at 89.8593 degrees. The grid
+// samples bracketing that instant reach only 89.7768 and 89.0312 degrees, so a limit placed between them is
+// crossed entirely between two samples.
+const ZENITH: TargetPlanCandidate = { id: 'zenith', name: 'Zenith', rightAscension: deg(326.8), declination: deg(-23.5475) }
+const ZENITH_TRANSIT = START + 16230060
+
 const handler = new SequencerPlannerHandler()
 
 function request(targets: readonly TargetPlanCandidate[], overrides?: Partial<PlanTargets>): PlanTargets {
@@ -83,6 +89,35 @@ describe('visibility', () => {
 		const plan = handler.planTargets(request([POLARIS], { constraints: { maximumAirmass: 2 } }))
 
 		expect(plan.discarded).toEqual([{ id: 'polaris', name: 'Polaris', reason: 'airmassTooHigh' }])
+	})
+
+	test('finds a visibility band that opens and closes between two samples', () => {
+		// Every grid sample stays under 89.8 degrees; only the culmination itself clears it.
+		const plan = handler.planTargets(request([ZENITH], { constraints: { minimumAltitude: deg(89.8) } }))
+
+		expect(plan.discarded).toBeEmpty()
+		expect(plan.targets).toHaveLength(1)
+
+		const [target] = plan.targets
+
+		expect(target.visibilityStart).toBeGreaterThan(START + 16200000)
+		expect(target.visibilityStart).toBeLessThanOrEqual(ZENITH_TRANSIT)
+		expect(target.visibilityEnd).toBeGreaterThanOrEqual(ZENITH_TRANSIT)
+		expect(target.visibilityEnd).toBeLessThan(START + 16500000)
+	})
+
+	test('splits a run at an excursion that happens between two samples', () => {
+		// The culmination breaks the 89.8 degree ceiling while both neighbouring samples respect it, so the window
+		// must end before it instead of being reported as continuously feasible across the whole night.
+		const plan = handler.planTargets(request([ZENITH], { constraints: { maximumAltitude: deg(89.8) } }))
+
+		expect(plan.targets).toHaveLength(1)
+
+		const [target] = plan.targets
+
+		expect(target.visibilityStart).toBe(START)
+		expect(target.visibilityEnd).toBeGreaterThan(START + 16200000)
+		expect(target.visibilityEnd).toBeLessThan(ZENITH_TRANSIT)
 	})
 
 	test('keeps the longest continuous run when a constraint splits the window', () => {

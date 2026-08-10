@@ -475,6 +475,25 @@ function turningInstant(t0: number, t1: number, t2: number, v0: number, v1: numb
 	return vertex
 }
 
+// Instant of the closest lunar approach implied by three separations, or -1 when they imply none. Instants are
+// Unix milliseconds and need not be equally spaced; separations are radians.
+//
+// The separation itself is not smooth at an approach: the Moon crosses at a nearly constant rate, so the curve is a
+// V and a parabola fitted to it puts its vertex tens of thousands of seconds away. Its square is the quadratic one,
+// exactly so while the relative motion stays linear, which holds over a span short compared to the lunar motion.
+// The vertex of that parabola is the approach and is returned wherever it lands, including outside the three
+// samples: unlike a turn, an approach is not required to have the middle sample as the lowest of the three, which
+// is what allows it to be found in a cell that has no sample of its own to sit on.
+function approachInstant(t0: number, t1: number, t2: number, v0: number, v1: number, v2: number) {
+	const first = (v1 * v1 - v0 * v0) / (t1 - t0)
+	const second = ((v2 * v2 - v1 * v1) / (t2 - t1) - first) / (t2 - t0)
+
+	// Downward or near-flat curvature has no minimum to offer, the latter putting the vertex arbitrarily far away.
+	if (second < 1e-30) return -1
+
+	return (t0 + t1) / 2 - first / (2 * second)
+}
+
 export class SequencerPlannerHandler {
 	// Orders candidate targets for one night and reports why each discarded candidate was dropped.
 	// The result is valid only under the anchor, site, and window it reports: it is an input to a definition,
@@ -615,6 +634,26 @@ export class SequencerPlannerHandler {
 
 					secondTurn = turningInstant(before, utc, after, gridMoonDistances[i - 1], gridMoonDistances[i], gridMoonDistances[i + 1])
 					if (secondTurn > 0) secondTurn = refineMoonTurn(before, utc, after, gridMoonDistances[i - 1], gridMoonDistances[i], gridMoonDistances[i + 1], candidate, position)
+				}
+
+				// That bracket never holds the first or the last cell of the grid in its middle, so an approach inside
+				// one of them has no sample to be the lowest of three and stays invisible however narrow the boundary
+				// ladder makes the cell. Over a cell that short the relative motion is linear, which makes the square
+				// of the separation an exact parabola, and the three samples on the inner side of the cell fix it
+				// without a fresh sky state. The ladder is what guarantees those three exist.
+				if (moonConstrained && secondTurn < 0 && (i === 0 || i === sampleCount - 2)) {
+					const after = samples[i + 1].utc
+					const j = i === 0 ? 0 : sampleCount - 3
+					const approach = approachInstant(samples[j].utc, samples[j + 1].utc, samples[j + 2].utc, gridMoonDistances[j], gridMoonDistances[j + 1], gridMoonDistances[j + 2])
+
+					if (approach > utc && approach < after) {
+						const value = pointingAt(approach, candidate, position)[1]
+
+						// The vertex is the approach only as far as the linear motion holds. Where it already sits
+						// below both ends of the cell it brackets the real one and the refinement closes on it;
+						// otherwise it is evaluated as it is, which is still the closest instant the fit knows of.
+						secondTurn = value < gridMoonDistances[i] && value < gridMoonDistances[i + 1] ? refineMoonTurn(utc, approach, after, gridMoonDistances[i], value, gridMoonDistances[i + 1], candidate, position) : approach
+					}
 				}
 
 				// Ordering the pair is what keeps the sequence sorted when both turns land on the same side of the

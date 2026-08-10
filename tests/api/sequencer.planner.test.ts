@@ -285,6 +285,36 @@ describe('visibility', () => {
 		expect(target.visibilityEnd).toBe(END)
 	})
 
+	test('finds a lunar approach inside the narrowest cell of the boundary ladder', () => {
+		// The window opens 8950 s in, which puts the crossing 77 s past the boundary, inside the last cell the ladder
+		// leaves undivided. No sample of that cell can be the lowest of three, so the approach was invisible however
+		// narrow the cell is and the whole window read as visible; a one-second scan starts it 77.173 s in.
+		const plan = handler.planTargets(request([MOON_CROSSING], { start: START + 8950000, step: 7200, constraints: { minimumMoonDistance: deg(0.005) } }))
+
+		expect(plan.targets).toHaveLength(1)
+
+		const [target] = plan.targets
+
+		expect(target.visibilityStart - START - 8950000).toBeGreaterThan(77000)
+		expect(target.visibilityStart - START - 8950000).toBeLessThan(78000)
+		expect(target.visibilityEnd).toBe(END)
+	})
+
+	test('finds a lunar approach inside the narrowest cell at the closing boundary', () => {
+		// The mirror case: the window closes 100 s after the crossing, which lands inside the last cell of the
+		// trailing ladder. A one-second scan ends the run 7122.816 s in, 77.2 s before the window closes.
+		const end = START + 9050000
+		const plan = handler.planTargets(request([MOON_CROSSING], { start: end - 7200000, end, step: 7200, constraints: { minimumMoonDistance: deg(0.005) } }))
+
+		expect(plan.targets).toHaveLength(1)
+
+		const [target] = plan.targets
+
+		expect(target.visibilityStart).toBe(end - 7200000)
+		expect(target.visibilityEnd - (end - 7200000)).toBeGreaterThan(7122000)
+		expect(target.visibilityEnd - (end - 7200000)).toBeLessThan(7123000)
+	})
+
 	test('subdivides a sampling step that spans more than one solar cycle', () => {
 		// A seven-day window sampled once a day leaves whole daylight periods between two samples, so the turn read
 		// from three of them stands for many and the darkness constraint was bridged: the scan reported one dark

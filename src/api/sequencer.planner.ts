@@ -402,12 +402,13 @@ export class SequencerPlannerHandler {
 		const sampleCount = samples.length
 
 		// Reused across candidates so the scan allocates once instead of once per target. Each interior sample can
-		// contribute one extra evaluation point at the turn of the candidate's own altitude curve, which bounds
-		// the merged sequence at twice the sample count.
-		const capacity = 2 * sampleCount
+		// contribute two extra evaluation points, one at the turn of the candidate's altitude curve and one at the
+		// turn of its Moon separation, which bounds the merged sequence at three times the sample count.
+		const capacity = 3 * sampleCount
 		const instants = new Float64Array(capacity)
 		const sources = new Int32Array(capacity)
 		const gridAltitudes = new Float64Array(sampleCount)
+		const gridMoonDistances = new Float64Array(sampleCount)
 		const altitudes = new Float64Array(capacity)
 		const moonDistances = new Float64Array(capacity)
 		const feasible = new Uint8Array(capacity)
@@ -420,29 +421,68 @@ export class SequencerPlannerHandler {
 			const constraints = mergeConstraints(req.constraints, candidate.constraints)
 			const duration = Math.max(0, (candidate.duration ?? 0) * 1000)
 
-			// The altitude of this candidate on the grid, needed in full because locating a turn of the curve is a
-			// comparison against both neighbours and cannot skip the samples another constraint already rejects.
-			for (let i = 0; i < sampleCount; i++) gridAltitudes[i] = observedAltitude(samples[i].astrom, candidate.rightAscension, candidate.declination)
+			// The altitude and Moon separation of this candidate on the grid, both needed in full because locating a
+			// turn of a curve is a comparison against both neighbours and cannot skip the samples another
+			// constraint already rejects.
+			for (let i = 0; i < sampleCount; i++) {
+				gridAltitudes[i] = observedAltitude(samples[i].astrom, candidate.rightAscension, candidate.declination)
+				gridMoonDistances[i] = moonDistanceOf(samples[i], candidate.rightAscension, candidate.declination)
+			}
 
-			// Evaluation sequence for this candidate: the grid plus the instant its altitude turns, which is the
-			// only place a constraint on altitude or airmass can open or close between two samples that agree.
+			// Evaluation sequence for this candidate: the grid plus the instants its own curves turn. Altitude turns
+			// at culmination and Moon separation turns at the closest approach of the Moon, and those are the only
+			// places where a constraint on altitude, airmass, or lunar distance can open and close between two
+			// samples that agree. Away from a turn each curve is monotonic over a sampling interval, so a crossing
+			// shows up as two samples that disagree and the edge refinement already brackets it.
 			let size = 0
 
 			for (let i = 0; i < sampleCount; i++) {
-				const turn = i > 0 && i < sampleCount - 1 ? turningInstant(samples[i - 1].utc, samples[i].utc, samples[i + 1].utc, gridAltitudes[i - 1], gridAltitudes[i], gridAltitudes[i + 1]) : -1
+				const utc = samples[i].utc
+				let firstTurn = -1
+				let secondTurn = -1
 
-				if (turn > 0 && turn < samples[i].utc) {
-					instants[size] = turn
+				if (i > 0 && i < sampleCount - 1) {
+					const before = samples[i - 1].utc
+					const after = samples[i + 1].utc
+					firstTurn = turningInstant(before, utc, after, gridAltitudes[i - 1], gridAltitudes[i], gridAltitudes[i + 1])
+					secondTurn = turningInstant(before, utc, after, gridMoonDistances[i - 1], gridMoonDistances[i], gridMoonDistances[i + 1])
+
+					// Ordering the pair is what keeps the sequence sorted when both turns land on the same side of the
+					// sample, and it puts the only present turn first when there is one.
+					if (firstTurn < 0 || (secondTurn > 0 && secondTurn < firstTurn)) {
+						const earlier = secondTurn
+						secondTurn = firstTurn
+						firstTurn = earlier
+					}
+
+					// Two turns closer than a millisecond describe the same instant; evaluating it twice buys nothing.
+					if (secondTurn > 0 && secondTurn - firstTurn < 1) secondTurn = -1
+				}
+
+				if (firstTurn > 0 && firstTurn < utc) {
+					instants[size] = firstTurn
 					sources[size] = -1
 					size++
 				}
 
-				instants[size] = samples[i].utc
+				if (secondTurn > 0 && secondTurn < utc) {
+					instants[size] = secondTurn
+					sources[size] = -1
+					size++
+				}
+
+				instants[size] = utc
 				sources[size] = i
 				size++
 
-				if (turn > samples[i].utc) {
-					instants[size] = turn
+				if (firstTurn > utc) {
+					instants[size] = firstTurn
+					sources[size] = -1
+					size++
+				}
+
+				if (secondTurn > utc) {
+					instants[size] = secondTurn
 					sources[size] = -1
 					size++
 				}
@@ -466,7 +506,7 @@ export class SequencerPlannerHandler {
 				}
 
 				const altitude = source >= 0 ? gridAltitudes[source] : observedAltitude(sample.astrom, candidate.rightAscension, candidate.declination)
-				const moonDistance = moonDistanceOf(sample, candidate.rightAscension, candidate.declination)
+				const moonDistance = source >= 0 ? gridMoonDistances[source] : moonDistanceOf(sample, candidate.rightAscension, candidate.declination)
 				altitudes[i] = altitude
 				moonDistances[i] = moonDistance
 

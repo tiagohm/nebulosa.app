@@ -29,6 +29,10 @@ const ZENITH_TRANSIT = START + 16230060
 // that a ceiling placed under its peak leaves a shorter wing before it and a longer one after it.
 const ZENITH_EARLY: TargetPlanCandidate = { id: 'zenithEarly', name: 'Zenith Early', rightAscension: deg(326), declination: deg(-23.5475) }
 
+// The topocentric direction of the Moon 9000 s into the window, so the separation from this point reaches zero
+// there and grows at about 0.00018 degrees per second on either side.
+const MOON_CROSSING: TargetPlanCandidate = { id: 'moonCrossing', name: 'Moon Crossing', rightAscension: deg(166.099001), declination: deg(6.290545) }
+
 const handler = new SequencerPlannerHandler()
 
 function request(targets: readonly TargetPlanCandidate[], overrides?: Partial<PlanTargets>): PlanTargets {
@@ -146,6 +150,21 @@ describe('visibility', () => {
 
 		expect(target.visibilityStart).toBeGreaterThan(START + 16015700)
 		expect(target.visibilityStart).toBeLessThan(START + 16150000)
+		expect(target.visibilityEnd).toBe(END)
+	})
+
+	test('splits a run at a lunar closest approach that happens between two samples', () => {
+		// MOON_CROSSING sits exactly where the Moon passes 9000 s into the window. On an hourly grid the samples
+		// bracketing that instant are still 0.3267 and 0.3353 degrees away from it, so a 0.2 degree limit is
+		// violated only between them, over the 2180 s the separation stays under it.
+		const plan = handler.planTargets(request([MOON_CROSSING], { step: 3600, constraints: { minimumMoonDistance: deg(0.2) } }))
+
+		expect(plan.targets).toHaveLength(1)
+
+		const [target] = plan.targets
+
+		expect(target.visibilityStart).toBeGreaterThan(START + 10000000)
+		expect(target.visibilityStart).toBeLessThan(START + 10200000)
 		expect(target.visibilityEnd).toBe(END)
 	})
 

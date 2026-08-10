@@ -19,11 +19,11 @@ const M13: TargetPlanCandidate = { id: 'm13', name: 'M13', rightAscension: deg(2
 const POLARIS: TargetPlanCandidate = { id: 'polaris', name: 'Polaris', rightAscension: deg(37.9545), declination: deg(89.2641) }
 const M42: TargetPlanCandidate = { id: 'm42', name: 'M42', rightAscension: deg(83.8221), declination: deg(-5.3911) }
 
-// Synthetic point culminating almost exactly overhead 16230.1 s into the window, at 89.8593 degrees. The grid
-// samples bracketing that instant reach only 89.7768 and 89.0312 degrees, so a limit placed between them is
-// crossed entirely between two samples.
+// Synthetic point culminating almost exactly overhead 16249.06 s into the window, at 89.87957 degrees, as a
+// one-second scan of the same window puts it. The grid samples bracketing that instant reach only 89.7768 and
+// 89.0312 degrees, so a limit placed between them is crossed entirely between two samples.
 const ZENITH: TargetPlanCandidate = { id: 'zenith', name: 'Zenith', rightAscension: deg(326.8), declination: deg(-23.5475) }
-const ZENITH_TRANSIT = START + 16230060
+const ZENITH_TRANSIT = START + 16249056
 
 // The same point culminating 190 s earlier, which puts the culmination just before the middle of the window so
 // that a ceiling placed under its peak leaves a shorter wing before it and a longer one after it.
@@ -112,6 +112,19 @@ describe('visibility', () => {
 		expect(target.visibilityStart).toBeLessThanOrEqual(ZENITH_TRANSIT)
 		expect(target.visibilityEnd).toBeGreaterThanOrEqual(ZENITH_TRANSIT)
 		expect(target.visibilityEnd).toBeLessThan(START + 16500000)
+	})
+
+	test('refines the culmination instead of publishing the parabola that located it', () => {
+		// Nothing constrains the target, so the peak is an interior culmination and both the reported instant and
+		// altitude come from evaluated points. The best of them is the vertex of a parabola through grid samples,
+		// which lands 19 s and 0.0203 degrees short of the real maximum at the default step.
+		const plan = handler.planTargets(request([ZENITH]))
+
+		const [target] = plan.targets
+
+		expect(target.transit).toBeGreaterThan(ZENITH_TRANSIT - 100)
+		expect(target.transit).toBeLessThan(ZENITH_TRANSIT + 100)
+		expect(toDeg(target.maximumAltitude)).toBeCloseTo(89.87957, 4)
 	})
 
 	test('splits a run at an excursion that happens between two samples', () => {

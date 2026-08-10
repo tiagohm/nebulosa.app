@@ -37,6 +37,11 @@ const MAX_SAMPLES = 4096
 // Eight halvings turn the default 300 s step into about 1.2 s, well below anything a session can act on.
 const EDGE_REFINEMENT_ITERATIONS = 8
 
+// Parabolic interpolation steps applied to an altitude maximum found inside a visibility interval.
+// Each step evaluates the real altitude once, and the curve is quadratic enough near culmination that four
+// of them take the default 300 s step to well under a second.
+const PEAK_REFINEMENT_ITERATIONS = 4
+
 // Sky state at one instant, shared by every candidate evaluated at that instant.
 // The ERFA astrometry context is the expensive part and the reason samples are computed once for all targets.
 interface SkySample {
@@ -176,6 +181,50 @@ function refineEdge(invisible: number, visible: number, candidate: TargetPlanCan
 function pointingAt(utc: number, candidate: TargetPlanCandidate, location: GeographicPosition): readonly [Angle, Angle] {
 	const sample = skySample(utc, location)
 	return [observedAltitude(sample.astrom, candidate.rightAscension, candidate.declination), moonDistanceOf(sample, candidate.rightAscension, candidate.declination)]
+}
+
+// Refines the instant of maximum altitude bracketed by three evaluated points, t0 < t1 < t2 in Unix
+// milliseconds, whose altitudes a0, a1, a2 are radians with a1 the highest of the three. moonDistance is the
+// separation already known at t1, radians, carried so the returned triple always describes one instant.
+//
+// This is successive parabolic interpolation: each step fits a parabola through the current triple, evaluates
+// the real altitude at its vertex, and keeps the vertex as the new middle point when it is higher, otherwise
+// as the new bracket end on its side. The vertex of a single parabola through coarse samples is only an
+// approximation of the culmination of the real refracted curve, tens of seconds and hundredths of a degree
+// away from it at a five-minute step; iterating against real evaluations is what removes that error.
+//
+// Returns the best instant found with its altitude and Moon separation. The result always lies inside the
+// original bracket, so a peak refined this way stays inside the visibility interval that produced it.
+function refinePeak(t0: number, t1: number, t2: number, a0: Angle, a1: Angle, a2: Angle, moonDistance: Angle, candidate: TargetPlanCandidate, location: GeographicPosition): readonly [number, Angle, Angle] {
+	for (let i = 0; i < PEAK_REFINEMENT_ITERATIONS; i++) {
+		// Also stops the refinement when the vertex has converged onto the middle point or left the bracket.
+		const vertex = turningInstant(t0, t1, t2, a0, a1, a2)
+		if (vertex < 0) break
+
+		const [altitude, separation] = pointingAt(vertex, candidate, location)
+
+		if (altitude > a1) {
+			if (vertex < t1) {
+				t2 = t1
+				a2 = a1
+			} else {
+				t0 = t1
+				a0 = a1
+			}
+
+			t1 = vertex
+			a1 = altitude
+			moonDistance = separation
+		} else if (vertex < t1) {
+			t0 = vertex
+			a0 = altitude
+		} else {
+			t2 = vertex
+			a2 = altitude
+		}
+	}
+
+	return [t1, a1, moonDistance]
 }
 
 // Merges the request-level constraints with the candidate overrides, property by property.
@@ -529,16 +578,30 @@ export class SequencerPlannerHandler {
 
 			const [first, last] = longestRun(feasible, instants, size)
 
+			let peak = first
 			let transit = instants[first]
 			let maximumAltitude = altitudes[first]
 			let moonDistance = moonDistances[first]
 
 			for (let i = first + 1; i <= last; i++) {
 				if (altitudes[i] > maximumAltitude) {
+					peak = i
 					maximumAltitude = altitudes[i]!
 					moonDistance = moonDistances[i]!
 					transit = instants[i]
 				}
+			}
+
+			// A peak with an evaluated point on either side is a culmination the interval contains, and the
+			// evaluated points only bracket it: the altitude is flat there, so the highest of them sits tens of
+			// seconds and hundredths of a degree short of the real maximum. A peak at an end of the run is not
+			// bracketed and belongs to the boundary handling below instead.
+			if (peak > first && peak < last) {
+				const refined = refinePeak(instants[peak - 1], instants[peak], instants[peak + 1], altitudes[peak - 1], altitudes[peak], altitudes[peak + 1], moonDistance, candidate, position)
+
+				transit = refined[0]
+				maximumAltitude = refined[1]
+				moonDistance = refined[2]
 			}
 
 			// A run touching a window edge is truncated by the window, not by a constraint, so there is no edge to refine there.

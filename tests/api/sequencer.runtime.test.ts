@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { SessionAdmissionGate, SessionTeardown } from 'src/api/sequencer.runtime'
+import { OperationCoordinator } from 'src/api/operation'
+import { ResourceArbiter } from 'src/api/resource'
+import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
+import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult } from 'src/api/sequencer.registry'
+import { SequencerRuntime, SessionAdmissionGate, SessionTeardown } from 'src/api/sequencer.runtime'
+import type { SequencerPlan } from 'src/api/sequencer.runtime'
+import { InMemorySequencerStore } from 'src/api/sequencer.store'
 
 describe('session admission gate', () => {
 	test('admits the first session and refuses another one naming the holder', () => {
@@ -112,5 +118,250 @@ describe('session teardown', () => {
 		expect(reserved).toBeFalse()
 		expect(gate.sessionId).toBeUndefined()
 		expect(gate.claim('session-2')).toMatchObject({ ok: true, kind: 'admitted' })
+	})
+})
+
+const CAMERA_KEY = 'logical:camera-1'
+
+interface ExposeConfiguration {
+	readonly exposureTime: number
+}
+
+function exposeHandler(execute: (context: SequencerActionContext, configuration: ExposeConfiguration) => Promise<SequencerActionResult<number>>, version: number = 1): SequencerActionHandler<ExposeConfiguration, number> {
+	return {
+		type: 'expose',
+		version,
+		validate: (configuration) => {
+			const exposureTime = (configuration as Partial<ExposeConfiguration>).exposureTime
+			return typeof exposureTime === 'number' ? { ok: true, configuration: { exposureTime } } : { ok: false, issues: [{ path: 'exposureTime', message: 'exposureTime must be a number of seconds' }] }
+		},
+		resources: () => [{ role: 'camera' }],
+		execute,
+	}
+}
+
+function plan(): SequencerPlan {
+	return { definitionId: 'definition-1', definitionRevision: 1, devices: { camera: 'camera-1' }, action: { id: 'node-1', type: 'expose', configuration: { exposureTime: 2 } } }
+}
+
+function runtime(handler: SequencerActionHandler<ExposeConfiguration, number>) {
+	const arbiter = new ResourceArbiter()
+	const coordinator = new OperationCoordinator(arbiter)
+	const registry = new SequencerBlockRegistry()
+	const store = new InMemorySequencerStore()
+
+	registry.register(handler)
+
+	return { arbiter, coordinator, registry, store, runtime: new SequencerRuntime({ store, registry, coordinator, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) }) }
+}
+
+describe('sequencer runtime', () => {
+	test('takes a one action session from start to completed and releases everything', async () => {
+		const acquired: string[] = []
+
+		const {
+			runtime: instance,
+			store,
+			arbiter,
+		} = runtime(
+			exposeHandler(async (context, configuration) => {
+				const request = context.request('camera')!
+				const handle = context.scope.start('expose', [request], (operation) => {
+					acquired.push(...arbiter.resourcesOf(operation))
+					return { ok: true, value: configuration.exposureTime }
+				})
+
+				await handle.result
+				context.artifact({ logicalSlotId: 'slot-1', attempt: 1, status: 'committed', path: '/data/frame-1.fits' })
+
+				return { type: 'completed', value: configuration.exposureTime }
+			}),
+		)
+
+		const created = instance.create(plan())!
+		const started = instance.start(created.id)
+
+		expect(started).toMatchObject({ ok: true, reentrant: false })
+		expect(instance.activeSessionId).toBe(created.id)
+
+		const session = await instance.settled(created.id)
+
+		expect(acquired).toEqual([CAMERA_KEY])
+		expect(session?.state).toBe('completed')
+		expect(session?.endedAt).toBeDefined()
+		expect(session?.checkpoint.completed).toEqual(['node-1'])
+		expect(session?.checkpoint.cursor).toBeUndefined()
+		expect(store.events(created.id).map((event) => event.state)).toEqual(['running', 'finalizing', 'completed'])
+		expect(store.artifacts(created.id)).toMatchObject([{ logicalSlotId: 'slot-1', attempt: 1, status: 'committed' }])
+
+		// The reservation and the claim are gone only after the action and its cleanups finished.
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+		expect(instance.activeSessionId).toBeUndefined()
+	})
+
+	test('runs the action inside the reservation while refusing an operation outside it', async () => {
+		const outside = Promise.withResolvers<string>()
+
+		const { runtime: instance, coordinator } = runtime(
+			exposeHandler(async (context) => {
+				const request = context.request('camera')!
+
+				const external = coordinator.start('manual', [request], () => ({ ok: true, value: 1 }))
+				const result = await external.result
+
+				outside.resolve(result.ok ? 'acquired' : (result.error ?? result.reason))
+
+				const handle = context.scope.start('expose', [request], () => ({ ok: true, value: 2 }))
+
+				return (await handle.result).ok ? { type: 'completed', value: 2 } : { type: 'fatalFailure', reason: 'busy' }
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		const session = await instance.settled(created.id)
+
+		expect(await outside.promise).toContain('is reserved by sequencer')
+		expect(session?.state).toBe('completed')
+	})
+
+	test('refuses a second session while one is active and admits it afterwards', async () => {
+		const release = Promise.withResolvers<void>()
+
+		const { runtime: instance } = runtime(
+			exposeHandler(async () => {
+				await release.promise
+				return { type: 'completed', value: 1 }
+			}),
+		)
+
+		const first = instance.create(plan())!
+		const second = instance.create(plan())!
+
+		instance.start(first.id)
+
+		expect(instance.start(second.id)).toEqual({ ok: false, reason: 'busy', sessionId: first.id, detail: `session ${first.id} is already active` })
+		expect(instance.start(first.id)).toMatchObject({ ok: true, reentrant: true })
+
+		release.resolve()
+
+		await instance.settled(first.id)
+
+		expect(instance.start(second.id)).toMatchObject({ ok: true, reentrant: false })
+	})
+
+	test('refuses to start when the recorded handler version no longer matches', () => {
+		const { runtime: instance, registry, arbiter } = runtime(exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 })))
+		const created = instance.create(plan())!
+
+		// The handler is replaced by another version between creating the session and starting it.
+		const registered = registry.handler('expose')!
+		Object.defineProperty(registered, 'version', { value: 2 })
+
+		const started = instance.start(created.id)
+
+		expect(started).toMatchObject({ ok: false, reason: 'handlerUnresolved' })
+		expect(instance.activeSessionId).toBeUndefined()
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+		expect(instance.start(created.id)).toMatchObject({ ok: false, reason: 'handlerUnresolved' })
+	})
+
+	test('refuses to start when a commanded role cannot be resolved', () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const registry = new SequencerBlockRegistry()
+		const store = new InMemorySequencerStore()
+
+		registry.register(exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 })))
+
+		const instance = new SequencerRuntime({ store, registry, coordinator, resolve: () => undefined })
+		const created = instance.create(plan())!
+
+		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'role camera is not available' })
+		expect(instance.activeSessionId).toBeUndefined()
+		expect(store.session(created.id)?.state).toBe('created')
+	})
+
+	test('refuses to start when the resources are reserved by someone else', () => {
+		const { runtime: instance, arbiter } = runtime(exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 })))
+		const created = instance.create(plan())!
+
+		arbiter.reserve({ id: 'other', kind: 'guider' }, [{ key: CAMERA_KEY }])
+
+		expect(instance.start(created.id)).toMatchObject({ ok: false, reason: 'resourcesUnavailable', detail: `${CAMERA_KEY} is held by guider other` })
+		expect(instance.activeSessionId).toBeUndefined()
+	})
+
+	test('fails the session with the reported cause and still releases the reservation', async () => {
+		const { runtime: instance, arbiter } = runtime(exposeHandler(() => Promise.resolve({ type: 'fatalFailure', reason: 'commandFailed', detail: 'camera did not respond' })))
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		const session = await instance.settled(created.id)
+
+		expect(session?.state).toBe('failed')
+		expect(session?.failure).toEqual({ reason: 'commandFailed', detail: 'camera did not respond' })
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+		expect(instance.activeSessionId).toBeUndefined()
+	})
+
+	test('fails the session when the handler throws instead of reporting', async () => {
+		const { runtime: instance, arbiter } = runtime(
+			exposeHandler(() => {
+				throw new Error('driver exploded')
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		const session = await instance.settled(created.id)
+
+		expect(session?.state).toBe('failed')
+		expect(session?.failure).toEqual({ reason: 'commandFailed', detail: 'driver exploded' })
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+	})
+
+	test('stops a running session, aborting the action and its operations', async () => {
+		const running = Promise.withResolvers<void>()
+		const cleaned: string[] = []
+
+		const { runtime: instance, arbiter } = runtime(
+			exposeHandler(async (context) => {
+				const request = context.request('camera')!
+
+				const handle = context.scope.start('expose', [request], async (operation) => {
+					operation.onCleanup(() => void cleaned.push('expose'))
+					running.resolve()
+					await new Promise<void>((resolve) => {
+						operation.signal.addEventListener('abort', () => resolve(), { once: true })
+					})
+					return { ok: false, reason: 'aborted' }
+				})
+
+				await handle.result
+
+				return { type: 'fatalFailure', reason: 'aborted' }
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		await running.promise
+
+		const session = await instance.stop(created.id)
+
+		expect(cleaned).toEqual(['expose'])
+		expect(session?.state).toBe('failed')
+		expect(session?.desiredState).toBe('stopped')
+		expect(session?.failure?.reason).toBe('aborted')
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+		expect(instance.activeSessionId).toBeUndefined()
 	})
 })

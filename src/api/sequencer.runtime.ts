@@ -1,4 +1,18 @@
-// Session admission and bootstrap reversal for the sequencer runtime.
+import type { SequencerDeviceRole, SequencerDevices } from '#/sequencer'
+import type { SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerFailure, SequencerSession, SequencerSessionState } from '#/sequencer.state'
+import type { OperationCoordinator, OperationScope } from './operation'
+import type { ResourceArbiter, ResourceRequest, ResourceReservation, ResourceReservationOwner } from './resource'
+import type { SequencerActionContext, SequencerActionProgress, SequencerActionResult, SequencerBlockRegistry } from './sequencer.registry'
+import type { SequencerStore } from './sequencer.store'
+
+// Session admission, bootstrap reversal, and the V1 execution kernel of the sequencer.
+//
+// The runtime owns the whole life of a session: admitting it, resolving roles into real resources, holding
+// the reservation, executing the plan, persisting every transition, and finalizing. It executes a single
+// action per session for now, which is deliberately the least amount of orchestration that still crosses
+// every seam this design depends on — gate, store, registry, reservation, coordinator — end to end.
+//
+// Instants are milliseconds since the Unix epoch.
 //
 // "One active session per process" is a declared constraint, and a declared constraint without a mechanism
 // is a race: two concurrent starts can both observe that nothing is running and both succeed. The resource
@@ -117,5 +131,400 @@ export class SessionTeardown {
 		}
 
 		this.#steps.length = 0
+	}
+}
+
+// One executable action of a session.
+//
+// The V1 runtime takes this directly instead of lowering a definition, because the compiler is a separate
+// piece of work and the seams this runtime exists to prove are the ones after compilation. When the compiler
+// lands it produces exactly this shape, so nothing here changes.
+export interface SequencerPlanAction {
+	// Node identity, unique within the plan and stable across a resume.
+	readonly id: string
+	// Block type resolved through the registry.
+	readonly type: string
+	// Block configuration as stored, validated by the handler before the session starts.
+	readonly configuration: unknown
+}
+
+// Everything a session executes, snapshotted at creation and immutable for its whole life.
+export interface SequencerPlan {
+	// Definition the plan was produced from.
+	readonly definitionId: string
+	// Definition revision snapshotted for the session; a later edit does not affect a running one.
+	readonly definitionRevision: number
+	// Device id per role declared by the definition.
+	readonly devices: SequencerDevices
+	// Sole action of the V1 plan.
+	readonly action: SequencerPlanAction
+}
+
+// Turns a declared role and the device id behind it into the resource the arbiter arbitrates.
+//
+// The runtime cannot compute this itself: the physical key is the device `hardwareId`, which only exists
+// with the device present, so resolution is injected and happens at session start rather than at compile
+// time. Returning undefined means the device is unknown right now, which stops the session before it holds
+// anything.
+export type SequencerDeviceResolver = (role: SequencerDeviceRole, deviceId: string) => ResourceRequest | undefined
+
+// Collaborators the runtime is wired with.
+export interface SequencerRuntimeOptions {
+	// Durable state of every session.
+	readonly store: SequencerStore
+	// Block handlers and their versions.
+	readonly registry: SequencerBlockRegistry
+	// Owner of every operation tree the session starts.
+	readonly coordinator: OperationCoordinator
+	// Role resolution against the live devices.
+	readonly resolve: SequencerDeviceResolver
+	// Wall-clock source in milliseconds since the Unix epoch, injected so tests do not depend on real time.
+	readonly now?: () => number
+	// Receives action progress, which is presentation only and never persisted.
+	readonly progress?: (sessionId: string, nodeId: string, progress: SequencerActionProgress) => void
+}
+
+// Why a session could not be started.
+// - unknownSession: no session with that id exists.
+// - busy: another session holds the process claim; its id is reported.
+// - notStartable: the session already ran; a started or terminal session is not restarted.
+// - handlerUnresolved: the block type is missing or its version no longer matches the one recorded.
+// - invalidConfiguration: the handler rejected the stored configuration.
+// - roleUnresolved: a role the block commands is not declared, or its device is not present.
+// - resourcesUnavailable: the resources are leased or reserved by someone else.
+export type SequencerStartFailureReason = 'unknownSession' | 'busy' | 'notStartable' | 'handlerUnresolved' | 'invalidConfiguration' | 'roleUnresolved' | 'resourcesUnavailable'
+
+// Outcome of a start. Success carries the session as stored, which for a reentrant start is the running one.
+export type SequencerStartResult =
+	| {
+			readonly ok: true
+			// Session as stored after admission.
+			readonly session: SequencerSession
+			// True when the session was already running and this start did nothing, as an idempotent retry.
+			readonly reentrant: boolean
+	  }
+	| {
+			readonly ok: false
+			// Cause of the refusal.
+			readonly reason: SequencerStartFailureReason
+			// Diagnostic naming what exactly could not be resolved.
+			readonly detail?: string
+			// Session holding the claim, for a busy refusal.
+			readonly sessionId?: string
+	  }
+
+// One durable change the runtime applies, mirroring the fields of a store commit it actually uses.
+interface SessionChange {
+	// New lifecycle state, when it changes.
+	readonly state?: SequencerSessionState
+	// New desired state, when the operator asked for one.
+	readonly desiredState?: SequencerDesiredState
+	// Definitive cause, recorded together with a failed state.
+	readonly failure?: SequencerFailure
+	// Replacement checkpoint.
+	readonly checkpoint?: SequencerCheckpoint
+	// Events appended by this change, in order.
+	readonly events?: readonly SequencerEventDraft[]
+}
+
+// Live state of the single admitted session.
+interface ActiveSession {
+	// Session being executed.
+	readonly id: string
+	// Plan snapshotted at creation.
+	readonly plan: SequencerPlan
+	// Reservation owner identity, which is also what cancels every operation of the session.
+	readonly owner: ResourceReservationOwner
+	// Reservation held for the whole session.
+	readonly reservation: ResourceReservation
+	// Scope authorized by the reservation, handed to the action.
+	readonly scope: OperationScope
+	// Undo steps of the bootstrap, which is also the finalization sequence.
+	readonly teardown: SessionTeardown
+	// Artifacts registered by the action and not yet written.
+	readonly artifacts: SequencerArtifactDraft[]
+	// Cancellation source of the running action, aborted by a stop and by finalization.
+	readonly controller: AbortController
+	// Resolves once the session reached a terminal state and released everything.
+	readonly done: PromiseWithResolvers<SequencerSession>
+	// Last revision this runtime committed, used as the optimistic guard of the next commit.
+	revision: number
+	// Set once finalization began, so a stop arriving during it does not start a second one.
+	finalizing: boolean
+}
+
+// Executes one sequencer session at a time.
+export class SequencerRuntime {
+	readonly #gate = new SessionAdmissionGate()
+	readonly #store: SequencerStore
+	readonly #registry: SequencerBlockRegistry
+	readonly #coordinator: OperationCoordinator
+	readonly #arbiter: ResourceArbiter
+	readonly #resolve: SequencerDeviceResolver
+	readonly #now: () => number
+	readonly #progress?: (sessionId: string, nodeId: string, progress: SequencerActionProgress) => void
+	readonly #plans = new Map<string, SequencerPlan>()
+	#active?: ActiveSession
+
+	// Wires the runtime; the arbiter comes from the coordinator so both always see the same arbitration.
+	constructor(options: SequencerRuntimeOptions) {
+		this.#store = options.store
+		this.#registry = options.registry
+		this.#coordinator = options.coordinator
+		this.#arbiter = options.coordinator.arbiter
+		this.#resolve = options.resolve
+		this.#now = options.now ?? Date.now
+		this.#progress = options.progress
+	}
+
+	// Session currently holding the process claim, or undefined when the runtime is idle.
+	get activeSessionId() {
+		return this.#gate.sessionId
+	}
+
+	// Creates a session in `created` for a plan, recording the handler version it was compiled against.
+	// Returns undefined when the block type cannot be resolved, since such a session could never start.
+	create(plan: SequencerPlan): SequencerSession | undefined {
+		const resolution = this.#registry.resolve([{ type: plan.action.type }])
+
+		if (!resolution.ok) return undefined
+
+		const session = this.#store.createSession({ definitionId: plan.definitionId, definitionRevision: plan.definitionRevision, handlerVersions: resolution.versions })
+		this.#plans.set(session.id, plan)
+
+		return session
+	}
+
+	// Starts a session, executing its action in the background.
+	//
+	// Everything up to and including the claim is synchronous, which is what makes the gate a gate. The stages
+	// after it can fail, and each one that succeeded records its undo step, so a refusal at any point leaves
+	// the process exactly as admissible as it was before.
+	start(sessionId: string): SequencerStartResult {
+		const stored = this.#store.session(sessionId)
+		const plan = this.#plans.get(sessionId)
+
+		if (stored === undefined || plan === undefined) return { ok: false, reason: 'unknownSession' }
+
+		const admission = this.#gate.claim(sessionId)
+
+		if (!admission.ok) return { ok: false, reason: 'busy', sessionId: admission.sessionId, detail: `session ${admission.sessionId} is already active` }
+		if (admission.kind === 'reentrant') return { ok: true, session: this.#store.session(sessionId) ?? stored, reentrant: true }
+
+		const teardown = new SessionTeardown()
+		teardown.add(admission.claim.release)
+
+		// A session that already ran must not run again: its checkpoint describes work that was done and
+		// re-executing it would recapture frames the plan already considers complete.
+		if (stored.state !== 'created') {
+			teardown.run()
+			return { ok: false, reason: 'notStartable', detail: `session is ${stored.state}` }
+		}
+
+		const handler = this.#registry.handler(plan.action.type)
+		const recorded = stored.checkpoint.handlerVersions[plan.action.type]
+		const resolution = this.#registry.resolve([{ type: plan.action.type, version: recorded }])
+
+		// The version is checked again here and not only at creation, because the registry can change in
+		// between and running another handler under the same block type is worse than not running at all.
+		if (handler === undefined || !resolution.ok) {
+			teardown.run()
+			return { ok: false, reason: 'handlerUnresolved', detail: `block type ${plan.action.type} is unavailable at version ${recorded}` }
+		}
+
+		const validated = handler.validate(plan.action.configuration, { nodeId: plan.action.id, devices: plan.devices })
+
+		if (!validated.ok) {
+			teardown.run()
+			return { ok: false, reason: 'invalidConfiguration', detail: validated.issues.map((issue) => `${issue.path}: ${issue.message}`).join(', ') }
+		}
+
+		const configuration = validated.configuration
+		const requests: ResourceRequest[] = []
+		const roles = new Map<SequencerDeviceRole, ResourceRequest>()
+
+		for (const binding of handler.resources(configuration)) {
+			const deviceId = plan.devices[binding.role]
+			const request = deviceId === undefined ? undefined : this.#resolve(binding.role, deviceId)
+
+			if (request === undefined) {
+				teardown.run()
+				return { ok: false, reason: 'roleUnresolved', detail: `role ${binding.role} is not available` }
+			}
+
+			roles.set(binding.role, request)
+			requests.push(request)
+		}
+
+		const owner: ResourceReservationOwner = { id: sessionId, kind: 'sequencer' }
+		const reserved = this.#arbiter.reserve(owner, requests)
+
+		if (!reserved.ok) {
+			teardown.run()
+			return { ok: false, reason: 'resourcesUnavailable', detail: reserved.conflicts.map((conflict) => `${conflict.key} is held by ${conflict.ownerKind} ${conflict.ownerId}`).join(', ') }
+		}
+
+		teardown.add(reserved.reservation.release)
+
+		const active: ActiveSession = {
+			id: sessionId,
+			plan,
+			owner,
+			reservation: reserved.reservation,
+			scope: this.#coordinator.reservedScope(reserved.reservation),
+			teardown,
+			artifacts: [],
+			controller: new AbortController(),
+			done: Promise.withResolvers<SequencerSession>(),
+			revision: stored.revision,
+			finalizing: false,
+		}
+
+		this.#active = active
+
+		const running = this.#commit(active, { state: 'running', events: [{ type: 'stateChanged', state: 'running', nodeId: plan.action.id }], checkpoint: { ...stored.checkpoint, cursor: plan.action.id, attempts: { [plan.action.id]: 1 } } })
+
+		void this.#execute(active, handler.execute.bind(handler), configuration, roles)
+
+		return { ok: true, session: running, reentrant: false }
+	}
+
+	// Requests the active session to stop and resolves once it is fully torn down. Stopping an unknown or
+	// already finished session is a no-op that resolves immediately.
+	async stop(sessionId: string): Promise<SequencerSession | undefined> {
+		const active = this.#active
+
+		if (active === undefined || active.id !== sessionId) return this.#store.session(sessionId)
+
+		this.#commit(active, { desiredState: 'stopped' })
+
+		// Both signals are needed: the controller stops an action that is merely waiting, and the cancellation
+		// by reservation owner reaches every operation tree it started, including the ones the runtime holds
+		// no handle for. The latter resolves only after their cleanups ran.
+		active.controller.abort('aborted')
+		await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
+
+		return await active.done.promise
+	}
+
+	// Resolves once the active session finished, or immediately when nothing is running.
+	settled(sessionId: string): Promise<SequencerSession | undefined> {
+		const active = this.#active
+		return active === undefined || active.id !== sessionId ? Promise.resolve(this.#store.session(sessionId)) : active.done.promise
+	}
+
+	// Runs the sole action of the plan and finalizes on its decision.
+	async #execute(active: ActiveSession, execute: (context: SequencerActionContext, configuration: unknown) => Promise<SequencerActionResult<unknown>>, configuration: unknown, roles: ReadonlyMap<SequencerDeviceRole, ResourceRequest>) {
+		const node = active.plan.action.id
+
+		const context: SequencerActionContext = {
+			sessionId: active.id,
+			nodeId: node,
+			attempt: 1,
+			scope: active.scope,
+			signal: active.controller.signal,
+			now: this.#now,
+			request: (role) => roles.get(role),
+			progress: (progress) => this.#progress?.(active.id, node, progress),
+			artifact: (artifact) => active.artifacts.push(artifact),
+			checkpoint: this.#checkpoint(active),
+		}
+
+		let result: SequencerActionResult<unknown>
+
+		try {
+			result = await execute(context, configuration)
+		} catch (e) {
+			// An exception from a handler is a defect, not an operational outcome, so it fails the session
+			// with a normalized cause instead of escaping into an unhandled rejection.
+			console.error('sequencer action failed unexpectedly:', active.id, node, e)
+			result = { type: 'fatalFailure', reason: 'commandFailed', detail: e instanceof Error ? e.message : String(e) }
+		}
+
+		await this.#finalize(active, result)
+	}
+
+	// Moves the session to its terminal state, releases everything, and settles the waiters.
+	async #finalize(active: ActiveSession, result: SequencerActionResult<unknown>) {
+		if (active.finalizing) return
+
+		active.finalizing = true
+
+		const node = active.plan.action.id
+
+		this.#commit(active, { state: 'finalizing', events: [{ type: 'stateChanged', state: 'finalizing', nodeId: node }] })
+
+		// Nothing the session started may still be touching a device when the reservation is released, or the
+		// devices would be handed to a third party mid-quiescing.
+		active.controller.abort('aborted')
+		await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
+
+		const state = terminalStateOf(result)
+		const events: SequencerEventDraft[] = [{ type: 'stateChanged', state, nodeId: node }]
+
+		for (const artifact of active.artifacts) {
+			if (artifact.status === 'committed') events.push({ type: 'artifactCommitted', nodeId: node })
+		}
+
+		const session = this.#commit(active, {
+			state,
+			desiredState: state === 'stopped' ? 'stopped' : undefined,
+			failure: result.type === 'fatalFailure' || result.type === 'retryableFailure' ? { reason: result.reason, detail: result.detail } : undefined,
+			checkpoint: { ...this.#checkpoint(active), cursor: undefined, completed: [node] },
+			events,
+		})
+
+		// The claim is released here, after the cleanups and the reservation, and never on reaching the
+		// terminal state, which still had this work behind it.
+		active.teardown.run((error) => console.error('sequencer teardown failed:', active.id, error))
+
+		this.#active = undefined
+		active.artifacts.length = 0
+		active.done.resolve(session)
+	}
+
+	// Current checkpoint of the session. The store holds it, so nothing else can drift from it.
+	#checkpoint(active: ActiveSession): SequencerCheckpoint {
+		return this.#store.session(active.id)!.checkpoint
+	}
+
+	// Applies one durable change under the revision this runtime last wrote.
+	//
+	// The runtime is the only writer of an active session, so a mismatch here is a defect rather than a race
+	// to retry: it means two code paths inside the runtime believe they own the same session.
+	#commit(active: ActiveSession, change: SessionChange) {
+		const result = this.#store.commit({
+			sessionId: active.id,
+			expectedRevision: active.revision,
+			state: change.state,
+			desiredState: change.desiredState,
+			failure: change.failure,
+			checkpoint: change.checkpoint,
+			events: change.events,
+			artifacts: active.artifacts.length > 0 ? active.artifacts.slice() : undefined,
+		})
+
+		if (!result.ok) throw new Error(`sequencer commit refused: ${result.reason} (session ${active.id})`)
+
+		active.artifacts.length = 0
+		active.revision = result.session.revision
+
+		return result.session
+	}
+}
+
+// Maps an action decision to the terminal state of a single-action session. `pause` and `suspend` have no
+// resume path in V1, so a session asking for one is stopped rather than left holding devices forever.
+function terminalStateOf(result: SequencerActionResult<unknown>): SequencerSessionState {
+	switch (result.type) {
+		case 'completed':
+		case 'skipped':
+			return 'completed'
+		case 'retryableFailure':
+		case 'fatalFailure':
+			return 'failed'
+		case 'pause':
+		case 'suspend':
+			return 'stopped'
 	}
 }

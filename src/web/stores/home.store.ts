@@ -4,48 +4,36 @@ import { equipmentStore } from '@stores/equipment.store'
 import { wsStore } from '@stores/ws.store'
 import type { DockviewApi, DockviewGroupPanel, DockviewGroupPanelApi, DockviewReadyEvent, IDockviewGroupPanel, IDockviewPanel } from 'dockview-react'
 import { nanoid } from 'nanoid'
-import type { Camera, Device } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Device, DeviceType } from 'nebulosa/src/devices/indi/device'
 import type { Image, ImageSource } from '#/image'
 
 export type HomeStore = typeof homeStore
 
 export type HomePanelType =
+	| DeviceType
 	| 'about'
 	| 'alpacaServer'
 	| 'asteroid'
 	| 'autoFocus'
 	| 'calculator'
-	| 'camera'
 	| 'connections'
-	| 'cover'
 	| 'darv'
 	| 'devices'
-	| 'dewHeater'
-	| 'dome'
-	| 'flatPanel'
 	| 'flatWizard'
-	| 'focuser'
 	| 'framing'
 	| 'galaxy'
-	| 'gps'
-	| 'guideOutput'
 	| 'guider'
 	| 'image'
 	| 'indiServer'
 	| 'lunarEclipse'
 	| 'moon'
-	| 'mount'
 	| 'planet'
 	| 'planetarium'
-	| 'power'
-	| 'rotator'
 	| 'satellite'
 	| 'settings'
 	| 'solarEclipse'
 	| 'sun'
-	| 'thermometer'
 	| 'tppa'
-	| 'wheel'
 
 const panels: Record<HomePanelType, IDockviewPanel[]> = {
 	about: [],
@@ -77,6 +65,7 @@ const panels: Record<HomePanelType, IDockviewPanel[]> = {
 	planetarium: [],
 	power: [],
 	rotator: [],
+	safetyMonitor: [],
 	satellite: [],
 	settings: [],
 	solarEclipse: [],

@@ -4,7 +4,7 @@ import { DEFAULT_CAMERA, DEFAULT_MOUNT } from 'nebulosa/src/devices/indi/device'
 import { OperationCoordinator } from 'src/api/operation'
 import type { OperationContext } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
-import type { ResourceKey } from 'src/api/resource'
+import type { ResourceKey, ResourceReservationOwner } from 'src/api/resource'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 
@@ -718,5 +718,108 @@ describe('operation coordinator', () => {
 		expect(arbiter.availability(CAMERA)).toBe('leased')
 
 		await active.cancel()
+	})
+})
+
+describe('reserved operation scope', () => {
+	const SESSION: ResourceReservationOwner = { id: 'session-1', kind: 'sequencer' }
+
+	function reserve(arbiter: ResourceArbiter, ...keys: readonly ResourceKey[]) {
+		const reserved = arbiter.reserve(
+			SESSION,
+			keys.map((key) => ({ key })),
+		)
+
+		if (!reserved.ok) throw new Error('reservation refused')
+
+		return reserved.reservation
+	}
+
+	test('acquires inside the reservation while an external operation is refused', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const scope = coordinator.reservedScope(reserve(arbiter, CAMERA))
+		const inside = scope.start('capture', [{ key: CAMERA }], waitForAbort)
+		const outside = coordinator.start('manual', [{ key: CAMERA }], () => successfulOperationResult(undefined))
+
+		expect(await outside.result).toMatchObject(failedOperationResult('busy'))
+		expect(coordinator.get(inside.id)).toBeDefined()
+
+		await inside.cancel()
+
+		// The reservation outlives the operation, so the external attempt is still refused.
+		const again = coordinator.start('manual', [{ key: CAMERA }], () => successfulOperationResult(undefined))
+
+		expect(await again.result).toMatchObject(failedOperationResult('busy'))
+		expect(arbiter.availability(CAMERA)).toBe('reserved')
+	})
+
+	test('propagates the reservation authorization to nested scopes', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const scope = coordinator.reservedScope(reserve(arbiter, CAMERA, MOUNT))
+		const parent = scope.start('composite', [{ key: CAMERA }], async (context) => {
+			const nested = context.start('slew', [{ key: MOUNT }], (child) => successfulOperationResult(child.owns(MOUNT)))
+			return await nested.result
+		})
+
+		expect(await parent.result).toEqual(successfulOperationResult(true))
+	})
+
+	test('refuses an operation whose resources exceed the reservation', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const other = arbiter.reserve({ id: 'session-2', kind: 'sequencer' }, [{ key: MOUNT }])
+		const scope = coordinator.reservedScope(reserve(arbiter, CAMERA))
+		const refused = scope.start('slew', [{ key: MOUNT }], () => successfulOperationResult(undefined))
+
+		expect(other.ok).toBeTrue()
+		expect(await refused.result).toMatchObject(failedOperationResult('busy'))
+	})
+
+	test('cancels every root of one reservation owner and waits for their cleanups', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const reservation = reserve(arbiter, CAMERA, MOUNT)
+		const scope = coordinator.reservedScope(reservation)
+		const cleanups: string[] = []
+
+		const guiding = scope.start('guiding', [{ key: MOUNT }], (context) => {
+			context.onCleanup(() => {
+				cleanups.push('guiding')
+			})
+
+			return waitForAbort(context)
+		})
+
+		const capture = scope.start('capture', [{ key: CAMERA }], (context) => {
+			context.onCleanup(() => {
+				cleanups.push('capture')
+			})
+
+			return waitForAbort(context)
+		})
+
+		const unrelated = coordinator.start('unrelated', [{ key: 'other' }], waitForAbort)
+
+		await coordinator.cancelByReservationOwner(SESSION, 'aborted')
+
+		expect(cleanups.toSorted()).toEqual(['capture', 'guiding'])
+		expect(await guiding.result).toMatchObject(failedOperationResult('aborted'))
+		expect(await capture.result).toMatchObject(failedOperationResult('aborted'))
+		expect(unrelated.signal.aborted).toBeFalse()
+
+		// Every operation of the reservation has released, so the reservation itself can be released now.
+		expect(arbiter.availability(CAMERA)).toBe('reserved')
+		reservation.release()
+		expect(arbiter.availability(CAMERA)).toBe('available')
+
+		await unrelated.cancel()
+	})
+
+	test('ignores an owner with no operation of its own', async () => {
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+
+		expect(await coordinator.cancelByReservationOwner(SESSION)).toBeUndefined()
 	})
 })

@@ -28,6 +28,13 @@ import type { Endpoints } from './http'
 // Five minutes resolves every visibility edge coarsely, and the edges are then refined by bisection.
 const DEFAULT_STEP = 300
 
+// Longest sampling interval the grid accepts, seconds. The Sun's altitude, a target's altitude and its topocentric
+// Moon separation all turn twice a day, at extrema no closer to each other than half a sidereal day, and a turn is
+// read from the three samples around it, so the two intervals of that neighbourhood have to stay well inside the
+// separation. Three hours puts four intervals between consecutive extrema and keeps a whole night from falling
+// between two samples. A requested step longer than this is subdivided; the reported step is the one actually used.
+const MAX_STEP = 10800
+
 // Maximum number of time samples one request may evaluate.
 // The requested step is raised until the window fits, which is what stops a tiny step over a long window
 // from allocating and computing without bound.
@@ -491,7 +498,7 @@ export class SequencerPlannerHandler {
 			}
 		}
 
-		const requestedStep = (req.step !== undefined && req.step > 0 ? req.step : DEFAULT_STEP) * 1000
+		const requestedStep = Math.min(MAX_STEP, req.step !== undefined && req.step > 0 ? req.step : DEFAULT_STEP) * 1000
 		const count = Math.min(MAX_SAMPLES, Math.max(2, Math.floor(span / requestedStep) + 1))
 		const step = span / (count - 1)
 

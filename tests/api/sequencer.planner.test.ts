@@ -285,6 +285,22 @@ describe('visibility', () => {
 		expect(target.visibilityEnd).toBe(END)
 	})
 
+	test('subdivides a sampling step that spans more than one solar cycle', () => {
+		// A seven-day window sampled once a day leaves whole daylight periods between two samples, so the turn read
+		// from three of them stands for many and the darkness constraint was bridged: the scan reported one dark
+		// interval of 131.203 h. A five-minute scan of the same window finds the longest one lasting 11.271 h and
+		// starting 21.581 h in, which the subdivided grid reaches within its own resolution.
+		const plan = handler.planTargets(request([M42], { end: START + 604800000, step: 86400, constraints: { maximumSunAltitude: deg(-12) } }))
+
+		expect(plan.step).toBe(10800)
+		expect(plan.targets).toHaveLength(1)
+
+		const [target] = plan.targets
+
+		expect((target.visibilityEnd - target.visibilityStart) / 3600000).toBeCloseTo(11.262, 2)
+		expect((target.visibilityStart - START) / 3600000).toBeCloseTo(21.586, 2)
+	})
+
 	test('splits a run at the maximum of the lunar illumination', () => {
 		// A 10.5 h window on 2025-08-09 whose sampling interval of 3.5 h steps over the full Moon: the illuminated
 		// fraction peaks at 0.9994380 around 08:26 UTC and stays over 0.99942 for about 1.7 h, but every grid sample

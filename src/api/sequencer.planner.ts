@@ -42,6 +42,11 @@ const EDGE_REFINEMENT_ITERATIONS = 8
 // take the default 300 s step to well under a second.
 const TURN_REFINEMENT_ITERATIONS = 4
 
+// Interior points evaluated inside the outermost sampling interval of a visibility run to bracket a culmination
+// the grid cannot see. Four points split the default 300 s step into 60 s pieces, which brackets a culmination
+// wherever the altitude is peaked enough to hide one, at a cost paid at most twice per candidate.
+const OUTER_TURN_SAMPLES = 4
+
 // Sky state at one instant, shared by every candidate evaluated at that instant.
 // The ERFA astrometry context is the expensive part and the reason samples are computed once for all targets.
 interface SkySample {
@@ -228,6 +233,40 @@ function refineTurn(t0: number, t1: number, t2: number, v0: number, v1: number, 
 	}
 
 	return t1
+}
+
+// Locates an altitude culmination strictly inside one sampling interval, t0 < t1 in Unix milliseconds with
+// endpoint altitudes v0 and v1 in radians, and returns the refined instant or -1 when the altitude is monotonic
+// across the interval. Only the outermost interval of a visibility run needs this: everywhere else the
+// culmination shows up as a sampled point higher than both of its neighbours.
+//
+// The interval is split into equal pieces that are evaluated until one point stands above both of its
+// neighbours, which is then handed to the parabolic refinement. Extrapolating the parabola through the samples
+// beyond the interval is not an option: near the zenith the altitude curve is sharply peaked, and for a target
+// culminating 51 s past a window boundary at 89.97 degrees that parabola puts its vertex 421 s before the
+// boundary, outside the interval and on the wrong side of it.
+function outerTurn(t0: number, v0: number, t1: number, v1: number, candidate: TargetPlanCandidate, location: GeographicPosition): number {
+	const width = (t1 - t0) / (OUTER_TURN_SAMPLES + 1)
+
+	let previous = t0
+	let previousValue = v0
+	let current = t0 + width
+	let currentValue = pointingAt(current, candidate, location)[0]
+
+	for (let i = 2; i <= OUTER_TURN_SAMPLES + 1; i++) {
+		const last = i > OUTER_TURN_SAMPLES
+		const next = last ? t1 : t0 + i * width
+		const nextValue = last ? v1 : pointingAt(next, candidate, location)[0]
+
+		if (currentValue >= previousValue && currentValue >= nextValue) return refineTurn(previous, current, next, previousValue, currentValue, nextValue, false, candidate, location)
+
+		previous = current
+		previousValue = currentValue
+		current = next
+		currentValue = nextValue
+	}
+
+	return -1
 }
 
 // Merges the request-level constraints with the candidate overrides, property by property.
@@ -626,43 +665,77 @@ export class SequencerPlannerHandler {
 				}
 			}
 
-			// A peak with an evaluated point on either side is a culmination the interval contains, and the
-			// evaluated points only bracket it: the altitude is flat there, so the highest of them sits tens of
-			// seconds and hundredths of a degree short of the real maximum. A peak at an end of the run is not
-			// bracketed and belongs to the boundary handling below instead.
-			if (peak > first && peak < last) {
-				const refined = refineTurn(instants[peak - 1], instants[peak], instants[peak + 1], altitudes[peak - 1], altitudes[peak], altitudes[peak + 1], false, candidate, position)
-
-				if (refined !== transit) {
-					const [altitude, separation] = pointingAt(refined, candidate, position)
-
-					transit = refined
-					maximumAltitude = altitude
-					moonDistance = separation
-				}
-			}
-
 			// The interval reaches further than the points that produced it, so the peak has to be checked at its
 			// refined boundaries as well. When a constraint ends a run while the target is still climbing, the
 			// highest altitude of the interval is at the boundary, up to a full sampling step past the last
-			// evaluated point and materially higher than it.
+			// evaluated point and materially higher than it. A run truncated by the request window ends on an
+			// evaluated point, which is already in the sequence.
+			let startAltitude = -Infinity
+			let endAltitude = -Infinity
+			let onBoundary = false
+
 			if (first > 0) {
 				const [altitude, separation] = pointingAt(visibilityStart, candidate, position)
+
+				startAltitude = altitude
 
 				if (altitude > maximumAltitude) {
 					maximumAltitude = altitude
 					moonDistance = separation
 					transit = visibilityStart
+					onBoundary = true
 				}
 			}
 
 			if (last < size - 1) {
 				const [altitude, separation] = pointingAt(visibilityEnd, candidate, position)
 
+				endAltitude = altitude
+
 				if (altitude > maximumAltitude) {
 					maximumAltitude = altitude
 					moonDistance = separation
 					transit = visibilityEnd
+					onBoundary = true
+				}
+			}
+
+			// The points around the peak only bracket the culmination, and the altitude is flat at the top, so the
+			// highest of them sits tens of seconds and hundredths of a degree short of the real maximum. A peak that
+			// ended up on a boundary is where the interval stops climbing and has nothing to refine.
+			if (!onBoundary) {
+				// A side is only a bracket when something was evaluated there: the neighbouring point when the peak is
+				// interior to the run, the refined boundary when a constraint closed the run, and nothing at all when
+				// the request window truncated it.
+				const leftInstant = peak > first ? instants[peak - 1] : first > 0 ? visibilityStart : -1
+				const leftAltitude = peak > first ? altitudes[peak - 1] : startAltitude
+				const rightInstant = peak < last ? instants[peak + 1] : last < size - 1 ? visibilityEnd : -1
+				const rightAltitude = peak < last ? altitudes[peak + 1] : endAltitude
+				let bracket = -1
+
+				if (leftInstant > 0 && rightInstant > 0) {
+					bracket = refineTurn(leftInstant, transit, rightInstant, leftAltitude, maximumAltitude, rightAltitude, false, candidate, position)
+				} else if (leftInstant < 0 && peak < last) {
+					// The run starts where the request window does and the peak is that first point, so the altitudes
+					// stay monotonic across a culmination that falls inside the first sampling interval and nothing in
+					// the grid reveals it. The interval is searched instead.
+					bracket = outerTurn(transit, maximumAltitude, instants[peak + 1], altitudes[peak + 1], candidate, position)
+				} else if (rightInstant < 0 && peak > first) {
+					// The mirror case in the last sampling interval, where the window closes on the peak.
+					bracket = outerTurn(instants[peak - 1], altitudes[peak - 1], transit, maximumAltitude, candidate, position)
+				}
+
+				if (bracket > 0 && bracket !== transit) {
+					const [altitude, separation] = pointingAt(bracket, candidate, position)
+
+					// The refinement stops at a fixed iteration count rather than at a converged extremum, so on an
+					// almost flat top it can land a fraction of a millidegree below the point it started from. The
+					// sampled peak stands in that case, and the published altitude is never lowered by a refinement.
+					if (altitude > maximumAltitude) {
+						transit = bracket
+						maximumAltitude = altitude
+						moonDistance = separation
+					}
 				}
 			}
 

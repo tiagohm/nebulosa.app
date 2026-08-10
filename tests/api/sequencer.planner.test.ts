@@ -37,6 +37,14 @@ const ZENITH_BALANCED: TargetPlanCandidate = { id: 'zenithBalanced', name: 'Zeni
 
 const MOON_CROSSING: TargetPlanCandidate = { id: 'moonCrossing', name: 'Moon Crossing', rightAscension: deg(166.099001), declination: deg(6.290545) }
 
+// Synthetic point culminating 51.43 s after the window opens, at 89.97073 degrees, as a ten-second scan of the
+// same window puts it. The first evaluated point is the window boundary and every later one is lower, so the
+// culmination falls inside the first sampling interval and nothing in the grid brackets it.
+const ZENITH_OPENING: TargetPlanCandidate = { id: 'zenithOpening', name: 'Zenith Opening', rightAscension: deg(259.1), declination: deg(-23.5475) }
+
+// The mirror case, culminating 36.91 s before the window closes at 89.87736 degrees.
+const ZENITH_CLOSING: TargetPlanCandidate = { id: 'zenithClosing', name: 'Zenith Closing', rightAscension: deg(34.2), declination: deg(-23.5475) }
+
 const handler = new SequencerPlannerHandler()
 
 function request(targets: readonly TargetPlanCandidate[], overrides?: Partial<PlanTargets>): PlanTargets {
@@ -129,6 +137,31 @@ describe('visibility', () => {
 		expect(target.transit).toBeGreaterThan(ZENITH_TRANSIT - 100)
 		expect(target.transit).toBeLessThan(ZENITH_TRANSIT + 100)
 		expect(toDeg(target.maximumAltitude)).toBeCloseTo(89.87957, 4)
+	})
+
+	test('searches the first sampling interval for a culmination the grid cannot bracket', () => {
+		// The window opens 51.4 s before the culmination, so the highest evaluated point is the boundary itself and
+		// the altitude only falls from there. A ten-second scan puts the maximum at 89.97073 degrees, against the
+		// 89.80091 degrees of the boundary.
+		const plan = handler.planTargets(request([ZENITH_OPENING]))
+
+		const [target] = plan.targets
+
+		expect(target.transit).toBeGreaterThan(START + 51000)
+		expect(target.transit).toBeLessThan(START + 52000)
+		expect(toDeg(target.maximumAltitude)).toBeCloseTo(89.97073, 4)
+	})
+
+	test('searches the last sampling interval for a culmination the grid cannot bracket', () => {
+		// The mirror case: the window closes 36.9 s after the culmination, which a ten-second scan puts at
+		// 89.87736 degrees.
+		const plan = handler.planTargets(request([ZENITH_CLOSING]))
+
+		const [target] = plan.targets
+
+		expect(target.transit).toBeGreaterThan(END - 37500)
+		expect(target.transit).toBeLessThan(END - 36000)
+		expect(toDeg(target.maximumAltitude)).toBeCloseTo(89.87736, 4)
 	})
 
 	test('splits a run at an excursion that happens between two samples', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { compile } from 'src/api/sequencer.compiler'
+import { compile, sequencerNodeId, sequencerPlanNodes } from 'src/api/sequencer.compiler'
 import type { Sequencer, SequencerCameraSettings, SequencerFrame, SequencerLifecycleAction, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerPlanLoop, SequencerPlanSequence } from '#/sequencer.plan'
 
@@ -297,5 +297,76 @@ describe('lowering', () => {
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics[0].path).toBe('target.enabled')
+	})
+})
+
+describe('node identity', () => {
+	test('every node id is unique', () => {
+		const { plan } = ok(canonical())
+		const ids = [...sequencerPlanNodes(plan.root)].map((node) => node.id)
+
+		expect(new Set(ids).size).toBe(ids.length)
+	})
+
+	test('inserting an action does not rename any other node', () => {
+		const definition = canonical()
+		const before = [...sequencerPlanNodes(ok(definition).plan.root)].map((node) => node.id)
+		const actions = [definition.startup.actions[0], action('cool', { type: 'coolCamera' }), definition.startup.actions[1]]
+		const after = [...sequencerPlanNodes(ok({ ...definition, startup: { ...definition.startup, actions } }).plan.root)].map((node) => node.id)
+
+		expect(after).toContain('startup.action[cool]')
+		expect(after.filter((id) => id !== 'startup.action[cool]')).toEqual(before)
+	})
+
+	test('inserting a frame does not rename any other capture node', () => {
+		const definition = canonical()
+		const before = ok(definition).plan.groups.map((group) => group.nodeId)
+		const frames = [frame('lum'), frame('green'), frame('red')]
+		const after = ok({ ...definition, capture: { ...definition.capture, frames } }).plan.groups.map((group) => group.nodeId)
+
+		expect(after).toEqual(['target[m42].capture.frame[lum]', 'target[m42].capture.frame[green]', 'target[m42].capture.frame[red]'])
+		expect(after.filter((id) => !id.includes('green'))).toEqual(before)
+	})
+
+	test('reordering frames keeps the node id of each one', () => {
+		const definition = canonical()
+		const reversed = ok({ ...definition, capture: { ...definition.capture, frames: [frame('red'), frame('lum')] } }).plan
+
+		expect(reversed.groups.map((group) => group.nodeId)).toEqual(['target[m42].capture.frame[red]', 'target[m42].capture.frame[lum]'])
+	})
+
+	test('renaming a target changes no node id', () => {
+		const definition = canonical()
+		const before = [...sequencerPlanNodes(ok(definition).plan.root)].map((node) => node.id)
+		const after = [...sequencerPlanNodes(ok({ ...definition, target: { ...definition.target, name: 'Great Orion Nebula' } }).plan.root)].map((node) => node.id)
+
+		expect(after).toEqual(before)
+	})
+
+	test('the target segment is below the target and never in a pipeline', () => {
+		const { plan } = ok(canonical())
+		const segment = sequencerNodeId.target('m42')
+
+		for (const node of sequencerPlanNodes(plan.root)) {
+			if (node.id === 'plan' || node.id.startsWith('startup') || node.id.startsWith('finalize')) expect(node.id).not.toContain(segment)
+			else expect(node.id.startsWith(segment)).toBe(true)
+		}
+	})
+
+	test('another target id moves only the nodes below the target', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, target: { ...definition.target, id: 'm31' } })
+		const ids = [...sequencerPlanNodes(plan.root)].map((node) => node.id)
+
+		expect(ids).toContain('target[m31].capture.frame[lum]')
+		expect(ids).toContain('startup.action[connect]')
+		expect(ids.some((id) => id.includes('m42'))).toBe(false)
+	})
+
+	test('the loop body is entered exactly once by the traversal', () => {
+		const { plan } = ok(canonical())
+		const ids = [...sequencerPlanNodes(plan.root)].map((node) => node.id)
+
+		expect(ids.filter((id) => id === 'target[m42].capture.cycle')).toHaveLength(1)
 	})
 })

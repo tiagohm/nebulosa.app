@@ -116,11 +116,51 @@ interface CompilerContext {
 	readonly removals: SequencerRemoval[]
 }
 
-// Node id of the target block. Every node below the target carries this segment, which is what ties an
-// artifact and a file name to the target that produced it. The segment is built from the declared target id,
-// never from a position, so inserting an action or renaming the target leaves every existing id untouched.
-function targetNodeId(targetId: string) {
-	return `target[${targetId}]`
+// Node ids of the plan, built from declared ids and never from a position in an array.
+//
+// A node id is not a label: it is the key of the checkpoint, of the artifact, and of the readable part of the
+// file name, so an id that moved would orphan the frames already on disk and make a resume execute the wrong
+// node. Inserting an action, reordering the list, or renaming a target therefore has to leave every id that
+// already existed untouched, which positional ids cannot promise and declared ids give for free.
+//
+// The target segment appears in every node below the target, because those nodes exist once per target and
+// their artifacts belong to it. Startup and finalize carry no target segment: they run once per session, and
+// a target segment there would claim a relationship that does not exist.
+export const sequencerNodeId = {
+	// Root of the plan.
+	root: () => 'plan',
+	// Startup or finalize block.
+	pipeline: (pipeline: 'startup' | 'finalize') => pipeline,
+	// One lifecycle action of a pipeline, addressed by its declared action id.
+	pipelineAction: (pipeline: 'startup' | 'finalize', actionId: string) => `${pipeline}.action[${actionId}]`,
+	// Target block, addressed by its declared target id.
+	target: (targetId: string) => `target[${targetId}]`,
+	// Slew of the target block.
+	slew: (targetId: string) => `target[${targetId}].slew`,
+	// Centering of the target block.
+	center: (targetId: string) => `target[${targetId}].center`,
+	// Capture loop of the target block.
+	captureLoop: (targetId: string) => `target[${targetId}].capture.loop`,
+	// One iteration of the capture loop, which is the container of the triggers and the frames.
+	captureCycle: (targetId: string) => `target[${targetId}].capture.cycle`,
+	// Capture action of one frame group, addressed by its declared frame id.
+	captureFrame: (targetId: string, frameId: string) => `target[${targetId}].capture.frame[${frameId}]`,
+	// Safe-point trigger of the capture loop.
+	trigger: (targetId: string, trigger: 'autofocus' | 'dither' | 'meridianFlip') => `target[${targetId}].trigger.${trigger}`,
+} as const
+
+// Walks a node tree in execution order, yielding every node including the one it starts from.
+//
+// The traversal enters the body of a loop once: the body is one iteration, and how many iterations run is a
+// runtime decision the plan deliberately does not encode.
+export function* sequencerPlanNodes(node: SequencerPlanNode): Generator<SequencerPlanNode> {
+	yield node
+
+	if (node.kind === 'sequence') {
+		for (const child of node.children) yield* sequencerPlanNodes(child)
+	} else if (node.kind === 'loop') {
+		yield* sequencerPlanNodes(node.body)
+	}
 }
 
 // Reads the coordinate pair of a target, dropping the blocks that are lowered into their own nodes.
@@ -149,7 +189,7 @@ function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): Sequence
 
 	return {
 		id: frame.id,
-		nodeId: `${targetNodeId(target.id)}.capture.frame[${frame.id}]`,
+		nodeId: sequencerNodeId.captureFrame(target.id, frame.id),
 		frameType: frame.frameType,
 		exposureTime: frame.exposureTime,
 		count: frame.count,
@@ -167,7 +207,7 @@ function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): Sequence
 // run once per session, so a target segment there would claim a relationship that does not exist.
 function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction): SequencerPlanAction {
 	const configuration: SequencerLifecycleConfiguration = { action, required: action.required ?? false, timeout: action.timeout, retry: action.retry }
-	return { kind: 'action', id: `${pipeline}.action[${action.id}]`, type: `${SEQUENCER_LIFECYCLE_BLOCK_PREFIX}${action.type}`, configuration }
+	return { kind: 'action', id: sequencerNodeId.pipelineAction(pipeline, action.id), type: `${SEQUENCER_LIFECYCLE_BLOCK_PREFIX}${action.type}`, configuration }
 }
 
 // Lowers an ordered lifecycle pipeline. Returns undefined when the pipeline is disabled or declares no
@@ -182,7 +222,7 @@ function lowerPipeline(pipeline: 'startup' | 'finalize', enabled: boolean, actio
 		if (action.enabled) children.push(lowerLifecycleAction(pipeline, action))
 	}
 
-	return children.length > 0 ? { kind: 'sequence', id: pipeline, children } : undefined
+	return children.length > 0 ? { kind: 'sequence', id: sequencerNodeId.pipeline(pipeline), children } : undefined
 }
 
 // Lowers the safe-point triggers of the capture loop, in the order they are evaluated before a frame: the
@@ -190,22 +230,21 @@ function lowerPipeline(pipeline: 'startup' | 'finalize', enabled: boolean, actio
 // final pointing; then the dither, which is the last thing done before the exposure starts.
 function lowerTriggers(definition: Sequencer, targetId: string): SequencerPlanAction[] {
 	const { autofocus, dither, meridianFlip } = definition
-	const prefix = `${targetNodeId(targetId)}.trigger`
 	const triggers: SequencerPlanAction[] = []
 
 	if (meridianFlip.enabled) {
 		const { enabled, ...configuration } = meridianFlip
-		triggers.push({ kind: 'action', id: `${prefix}.meridianFlip`, type: SEQUENCER_BLOCK_TYPE.meridianFlip, configuration })
+		triggers.push({ kind: 'action', id: sequencerNodeId.trigger(targetId, 'meridianFlip'), type: SEQUENCER_BLOCK_TYPE.meridianFlip, configuration })
 	}
 
 	if (autofocus.enabled) {
 		const { enabled, ...configuration } = autofocus
-		triggers.push({ kind: 'action', id: `${prefix}.autofocus`, type: SEQUENCER_BLOCK_TYPE.autofocus, configuration })
+		triggers.push({ kind: 'action', id: sequencerNodeId.trigger(targetId, 'autofocus'), type: SEQUENCER_BLOCK_TYPE.autofocus, configuration })
 	}
 
 	if (dither.enabled) {
 		const { enabled, ...configuration } = dither
-		triggers.push({ kind: 'action', id: `${prefix}.dither`, type: SEQUENCER_BLOCK_TYPE.dither, configuration })
+		triggers.push({ kind: 'action', id: sequencerNodeId.trigger(targetId, 'dither'), type: SEQUENCER_BLOCK_TYPE.dither, configuration })
 	}
 
 	return triggers
@@ -214,20 +253,20 @@ function lowerTriggers(definition: Sequencer, targetId: string): SequencerPlanAc
 // Lowers the target block: the slew, the optional centering, and the capture loop, in that order.
 function lowerTarget(definition: Sequencer, groups: readonly SequencerPlanFrameGroup[]): SequencerPlanSequence {
 	const { capture, target } = definition
-	const id = targetNodeId(target.id)
+	const id = sequencerNodeId.target(target.id)
 	const coordinates = coordinatesOf(target)
 	const children: SequencerPlanNode[] = []
 
 	if (target.goto.enabled) {
 		const { enabled, ...goto } = target.goto
 		const configuration: SequencerSlewConfiguration = { ...goto, coordinates, tracking: target.tracking.enabled ? { mode: target.tracking.mode, rightAscensionRate: target.tracking.rightAscensionRate, declinationRate: target.tracking.declinationRate, retry: target.tracking.retry } : undefined }
-		children.push({ kind: 'action', id: `${id}.slew`, type: SEQUENCER_BLOCK_TYPE.slew, configuration })
+		children.push({ kind: 'action', id: sequencerNodeId.slew(target.id), type: SEQUENCER_BLOCK_TYPE.slew, configuration })
 	}
 
 	if (target.center.enabled) {
 		const { enabled, ...center } = target.center
 		const configuration: SequencerCenterConfiguration = { ...center, coordinates }
-		children.push({ kind: 'action', id: `${id}.center`, type: SEQUENCER_BLOCK_TYPE.center, configuration })
+		children.push({ kind: 'action', id: sequencerNodeId.center(target.id), type: SEQUENCER_BLOCK_TYPE.center, configuration })
 	}
 
 	const frames = groups.map<SequencerPlanAction>((group) => {
@@ -235,9 +274,9 @@ function lowerTarget(definition: Sequencer, groups: readonly SequencerPlanFrameG
 		return { kind: 'action', id: group.nodeId, type: SEQUENCER_BLOCK_TYPE.captureFrame, configuration }
 	})
 
-	const body: SequencerPlanSequence = { kind: 'sequence', id: `${id}.capture.cycle`, children: [...lowerTriggers(definition, target.id), ...frames] }
+	const body: SequencerPlanSequence = { kind: 'sequence', id: sequencerNodeId.captureCycle(target.id), children: [...lowerTriggers(definition, target.id), ...frames] }
 
-	children.push({ kind: 'loop', id: `${id}.capture.loop`, repeat: capture.repeat, order: capture.order, groups, body })
+	children.push({ kind: 'loop', id: sequencerNodeId.captureLoop(target.id), repeat: capture.repeat, order: capture.order, groups, body })
 
 	return { kind: 'sequence', id, children }
 }
@@ -305,7 +344,7 @@ export function compile(definition: Sequencer): SequencerCompilation {
 		definitionRevision: definition.revision ?? 0,
 		devices: definition.devices,
 		roles: rolesOf(definition, groups),
-		root: { kind: 'sequence', id: 'plan', children },
+		root: { kind: 'sequence', id: sequencerNodeId.root(), children },
 		groups,
 		startup: lowered && { continueOnFailure: startup.continueOnFailure },
 		finalize: finalized && { continueOnFailure: shutdown.continueOnFailure, runOn },

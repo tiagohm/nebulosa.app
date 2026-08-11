@@ -97,6 +97,11 @@ export interface SequencerLifecycle {
 	// configuration and an execution context that does not carry the plan, so the policy travels with the node
 	// that commands it: temperatures are degrees Celsius, ramps degrees Celsius per minute.
 	readonly cooling?: SequencerCooling
+	// Tracking policy the action establishes, present only on the action that starts tracking and undefined on
+	// every other one. The action declares no mode of its own — the target is the single authority for how the
+	// mount tracks — and a handler cannot read the target from its execution context, so the mode and the
+	// non-sidereal rates travel with the node that commands them: rates are radians per second.
+	readonly tracking?: Omit<SequencerTargetTracking, 'enabled'>
 }
 
 // Mutable accumulator threaded through the lowering, so every stage reports against the same definition
@@ -259,6 +264,15 @@ function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): Sequence
 	}
 }
 
+// Lowers the tracking policy of the target, or undefined when the target does not track. The enablement flag
+// is consumed here: a node carrying the policy carries how the mount tracks, not whether it was asked for.
+function lowerTracking(definition: Sequencer): Omit<SequencerTargetTracking, 'enabled'> | undefined {
+	const { tracking } = definition.target
+	if (!tracking.enabled) return undefined
+	const { enabled, ...policy } = tracking
+	return policy
+}
+
 // Lifecycle actions that command the camera cooler and therefore carry the thermal policy of the definition.
 const SEQUENCER_COOLER_ACTION: ReadonlySet<SequencerLifecycleAction['type']> = new Set(['coolCamera', 'warmCamera'])
 
@@ -267,22 +281,23 @@ const SEQUENCER_COOLER_ACTION: ReadonlySet<SequencerLifecycleAction['type']> = n
 // run once per session, so a target segment there would claim a relationship that does not exist.
 //
 // `cooling` is the thermal policy of the definition, or undefined when it declares none; it reaches only the
-// actions that command the cooler, which is the whole reason the policy is carried into a node.
-function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction, cooling: SequencerCooling | undefined): SequencerPlanAction {
-	const configuration: SequencerLifecycle = { action, required: action.required ?? false, timeout: action.timeout, retry: action.retry, cooling: SEQUENCER_COOLER_ACTION.has(action.type) ? cooling : undefined }
+// actions that command the cooler, which is the whole reason the policy is carried into a node. `tracking` is
+// the tracking policy of the target, carried the same way and reaching only the action that starts tracking.
+function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction, cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined): SequencerPlanAction {
+	const configuration: SequencerLifecycle = { action, required: action.required ?? false, timeout: action.timeout, retry: action.retry, cooling: SEQUENCER_COOLER_ACTION.has(action.type) ? cooling : undefined, tracking: action.type === 'startTracking' ? tracking : undefined }
 	return { kind: 'action', id: sequencerNodeId.pipelineAction(pipeline, action.id), type: `${SEQUENCER_LIFECYCLE_BLOCK_PREFIX}${action.type}`, configuration }
 }
 
 // Lowers an ordered lifecycle pipeline. Returns undefined when the pipeline is disabled or declares no
 // enabled action: an empty container would be a node the runtime enters and leaves for nothing, and it would
 // still show up in the checkpoint as a place the session had been.
-function lowerPipeline(pipeline: 'startup' | 'finalize', enabled: boolean, actions: readonly SequencerLifecycleAction[], cooling: SequencerCooling | undefined): SequencerPlanSequence | undefined {
+function lowerPipeline(pipeline: 'startup' | 'finalize', enabled: boolean, actions: readonly SequencerLifecycleAction[], cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined): SequencerPlanSequence | undefined {
 	if (!enabled) return undefined
 
 	const children: SequencerPlanAction[] = []
 
 	for (const action of actions) {
-		if (action.enabled) children.push(lowerLifecycleAction(pipeline, action, cooling))
+		if (action.enabled) children.push(lowerLifecycleAction(pipeline, action, cooling, tracking))
 	}
 
 	return children.length > 0 ? { kind: 'sequence', id: sequencerNodeId.pipeline(pipeline), children } : undefined
@@ -339,7 +354,7 @@ function lowerTarget(definition: Sequencer, groups: readonly SequencerPlanFrameG
 		const configuration: SequencerSlew = {
 			...goto,
 			coordinates: { type: target.type, [target.type]: { ...target[target.type] } },
-			tracking: target.tracking.enabled ? { mode: target.tracking.mode, rightAscensionRate: target.tracking.rightAscensionRate, declinationRate: target.tracking.declinationRate, retry: target.tracking.retry } : undefined,
+			tracking: lowerTracking(definition),
 		}
 		children.push({ kind: 'action', id: sequencerNodeId.slew(target.id), type: SEQUENCER_BLOCK_TYPE.slew, configuration })
 	}
@@ -785,6 +800,11 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	if (meridianFlip.enabled && meridianFlip.recenter && !target.center.enabled) diagnostics.push({ path: 'meridianFlip.recenter', message: 'the flip recenters after crossing, and the target declares no centering it could re-establish the pointing with' })
 	if (meridianFlip.enabled && meridianFlip.autofocus && !autofocus.enabled) diagnostics.push({ path: 'meridianFlip.autofocus', message: 'the flip focuses after crossing, and the definition disables the autofocus block that declares how to focus' })
 
+	// The action that starts tracking declares no mode of its own and carries the policy of the target, which is
+	// the single authority for how the mount tracks. A disabled tracking block leaves it nothing to carry, and
+	// the mount would be told to track without being told at which rate.
+	if (!target.tracking.enabled && commands(definition, ['startTracking'])) diagnostics.push({ path: 'target.tracking.enabled', message: 'a lifecycle action starts tracking, and the target block it reads the tracking mode and rates from is disabled' })
+
 	if (capture.abortOnDeviceAlert) diagnostics.push({ path: 'capture.abortOnDeviceAlert', message: 'this version has no device alert source, so the flag would promise a protection that does not exist' })
 	if (capture.continueAfterRejectedFrame) removals.push({ path: 'capture.continueAfterRejectedFrame', reason: 'quality evaluation is not executed, so no frame is ever rejected and the flag has no path to take effect' })
 
@@ -915,8 +935,9 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 
 	const children: SequencerPlanNode[] = []
 	const cooling = definition.cooling.enabled ? definition.cooling : undefined
-	const lowered = lowerPipeline('startup', startup.enabled, startup.actions, cooling)
-	const finalized = lowerPipeline('finalize', shutdown.enabled, shutdown.actions, cooling)
+	const tracking = lowerTracking(definition)
+	const lowered = lowerPipeline('startup', startup.enabled, startup.actions, cooling, tracking)
+	const finalized = lowerPipeline('finalize', shutdown.enabled, shutdown.actions, cooling, tracking)
 
 	if (lowered) children.push(lowered)
 	children.push(lowerTarget(definition, groups))

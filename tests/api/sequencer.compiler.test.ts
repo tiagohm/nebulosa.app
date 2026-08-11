@@ -155,6 +155,26 @@ describe('lowering', () => {
 		expect((park.configuration as SequencerLifecycle).cooling).toBeUndefined()
 	})
 
+	test('an action starting tracking carries the tracking policy of the target', () => {
+		const definition = canonical()
+		const { enabled, ...tracking } = definition.target.tracking
+		const { plan } = ok({ ...definition, startup: { ...definition.startup, actions: [...definition.startup.actions, action('track', { type: 'startTracking' })] } })
+		const startup = plan.root.children[0] as SequencerPlanSequence
+		const track = startup.children[3] as SequencerPlanAction
+		const unpark = startup.children[1] as SequencerPlanAction
+
+		expect((track.configuration as SequencerLifecycle).tracking).toEqual(tracking)
+		expect((unpark.configuration as SequencerLifecycle).tracking).toBeUndefined()
+	})
+
+	test('an action starting tracking is refused when the target declares no tracking', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, target: { ...definition.target, tracking: { ...definition.target.tracking, enabled: false } }, startup: { ...definition.startup, actions: [...definition.startup.actions, action('track', { type: 'startTracking' })] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'target.tracking.enabled', message: 'a lifecycle action starts tracking, and the target block it reads the tracking mode and rates from is disabled' }])
+	})
+
 	test('a disabled pipeline or a pipeline with no enabled action produces no block', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, cooling: { ...definition.cooling, enabled: false }, startup: { ...definition.startup, enabled: false }, shutdown: { ...definition.shutdown, actions: [action('park', { type: 'parkMount', enabled: false })] } })

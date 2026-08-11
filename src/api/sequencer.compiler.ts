@@ -713,6 +713,7 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	if (!definition.enabled) diagnostics.push({ path: 'enabled', message: 'the definition is disabled and a disabled definition has nothing to execute' })
 
 	if (target.constraints.enabled) diagnostics.push({ path: 'target.constraints.enabled', message: 'target constraints require the ephemeris and the monitor lane this version does not have' })
+	if (target.center.enabled && target.center.recenterAfterDrift) diagnostics.push({ path: 'target.center.recenterAfterDrift', message: 'recentering on drift is a safe-point trigger of the capture loop, and this version centers once before the loop and lowers no centering into it' })
 
 	if (capture.abortOnDeviceAlert) diagnostics.push({ path: 'capture.abortOnDeviceAlert', message: 'this version has no device alert source, so the flag would promise a protection that does not exist' })
 	if (capture.continueAfterRejectedFrame) removals.push({ path: 'capture.continueAfterRejectedFrame', reason: 'quality evaluation is not executed, so no frame is ever rejected and the flag has no path to take effect' })

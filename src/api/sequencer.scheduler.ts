@@ -62,13 +62,18 @@ export const SEQUENCER_INITIAL_GROUP_PROGRESS: SequencerGroupProgress = { cursor
 export const SEQUENCER_INITIAL_TARGET_PROGRESS: SequencerTargetProgress = { cycle: 0, groups: {} }
 
 // Progress of one target, or the initial progress when the target has not started yet.
+//
+// The lookup is by own key: target and group ids come from the definition and `constructor`, `toString` and
+// `__proto__` are all valid ones, so a plain index would answer a member of the prototype for them and hand
+// back a function as if it were the progress of the target.
 export function targetProgressOf(progress: SequencerCaptureProgress, targetId: string) {
-	return progress[targetId] ?? SEQUENCER_INITIAL_TARGET_PROGRESS
+	return Object.hasOwn(progress, targetId) ? progress[targetId] : SEQUENCER_INITIAL_TARGET_PROGRESS
 }
 
 // Counters of one group in the current cycle, or the initial counters when the cycle has not touched it yet.
+// Read by own key, for the same reason `targetProgressOf` is.
 export function groupProgressOf(progress: SequencerTargetProgress, groupId: string) {
-	return progress.groups[groupId] ?? SEQUENCER_INITIAL_GROUP_PROGRESS
+	return Object.hasOwn(progress.groups, groupId) ? progress.groups[groupId] : SEQUENCER_INITIAL_GROUP_PROGRESS
 }
 
 // Relative slack absorbing the rounding error accumulated by the integration sum.

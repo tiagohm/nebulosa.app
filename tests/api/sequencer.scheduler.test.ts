@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { captureCycleCompleted, frameGroupCompleted, frameGroupDegraded, frameGroupReachedTarget, frameScheduler, groupProgressOf, SEQUENCER_INITIAL_GROUP_PROGRESS, targetProgressOf } from 'src/api/sequencer.scheduler'
+import { captureCycleCompleted, frameGroupCompleted, frameGroupDegraded, frameGroupReachedTarget, frameScheduler, groupProgressOf, SEQUENCER_INITIAL_GROUP_PROGRESS, SEQUENCER_INITIAL_TARGET_PROGRESS, targetProgressOf } from 'src/api/sequencer.scheduler'
 import type { FrameSchedulingContext } from 'src/api/sequencer.scheduler'
 import type { SequencerPlanFrameGroup, SequencerPlanLoop, SequencerPlanSequence } from '#/sequencer.plan'
 import type { SequencerCaptureProgress, SequencerGroupProgress } from '#/sequencer.state'
@@ -43,6 +43,22 @@ function progress(groups: Record<string, Partial<SequencerGroupProgress>>, cycle
 	const entries = Object.entries(groups).map(([id, counters]) => [id, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, ...counters }] as const)
 	return { m42: { cycle, groups: Object.fromEntries(entries) } }
 }
+
+describe('progress lookup', () => {
+	test('reads an identifier that names a member of the prototype as untouched', () => {
+		for (const id of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+			expect(targetProgressOf({}, id)).toBe(SEQUENCER_INITIAL_TARGET_PROGRESS)
+			expect(groupProgressOf(targetProgressOf({}, id), id)).toBe(SEQUENCER_INITIAL_GROUP_PROGRESS)
+		}
+	})
+
+	test('still reads the entry a target of such a name recorded', () => {
+		const state = { constructor: { cycle: 2, groups: { toString: { ...SEQUENCER_INITIAL_GROUP_PROGRESS, accepted: 1 } } } }
+
+		expect(targetProgressOf(state, 'constructor').cycle).toBe(2)
+		expect(groupProgressOf(targetProgressOf(state, 'constructor'), 'toString').accepted).toBe(1)
+	})
+})
 
 describe('frame group completion', () => {
 	test('concludes on the frame count', () => {

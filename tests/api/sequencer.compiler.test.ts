@@ -259,7 +259,7 @@ describe('structural validation', () => {
 		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: startup }, shutdown: { ...definition.shutdown, actions: shutdown } })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled lifecycle action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' }])
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled startup action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' }])
 	})
 
 	test('a cooling block only a warming action commands is refused', () => {
@@ -268,7 +268,17 @@ describe('structural validation', () => {
 		const compilation = compile({ ...definition, startup: { ...definition.startup, actions } })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled lifecycle action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' }])
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled startup action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' }])
+	})
+
+	test('a cooling block only a shutdown action commands is refused', () => {
+		const definition = canonical()
+		const startup = definition.startup.actions.filter((action) => action.type !== 'coolCamera')
+		const shutdown = [action('cool', { type: 'coolCamera' }), ...definition.shutdown.actions]
+		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: startup }, shutdown: { ...definition.shutdown, actions: shutdown } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled startup action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' }])
 	})
 
 	test('a lifecycle action commanding the cooler is refused without a cooling block', () => {

@@ -654,9 +654,11 @@ const SEQUENCER_SCHEMA_VERSION = 1
 // Lifecycle actions commanding a device the device layer of this version does not implement.
 const SEQUENCER_UNSUPPORTED_ACTION: ReadonlySet<SequencerLifecycleAction['type']> = new Set(['openDome', 'closeDome', 'parkDome', 'unparkDome'])
 
-// Whether a pipeline has an enabled action of one of the given types.
-function commands(definition: Sequencer, types: readonly SequencerLifecycleAction['type'][]) {
-	for (const pipeline of [definition.startup, definition.shutdown]) {
+// Whether one of the named pipelines has an enabled action of one of the given types. `pipelines` selects
+// where to look, which matters for an action whose effect is only useful before the capture: an action found
+// in `shutdown` runs after the last frame and cannot have prepared anything the capture depended on.
+function commands(definition: Sequencer, types: readonly SequencerLifecycleAction['type'][], pipelines: readonly ('startup' | 'shutdown')[] = ['startup', 'shutdown']) {
+	for (const pipeline of pipelines.map((name) => definition[name])) {
 		if (!pipeline.enabled) continue
 
 		for (const action of pipeline.actions) {
@@ -788,10 +790,15 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	// `cooling.temperature`, and `warmCamera` is the terminal action that gives it back to the ambient. A
 	// definition whose only cooler action is the usual shutdown warming therefore declares a setpoint nothing
 	// ever reaches, and the whole session would capture at the sensor temperature it started at.
-	const cools = commands(definition, ['coolCamera'])
-	const cooled = cools || commands(definition, ['warmCamera'])
+	//
+	// Only a startup action counts as cooling the camera. `shutdown` runs after the last frame, so a cooling
+	// action placed there reaches the setpoint exactly once the frames that needed it have all been captured,
+	// which is the same session as no cooling at all. The reverse check still looks at both pipelines: a cooler
+	// commanded anywhere reads a temperature the disabled block does not declare.
+	const cools = commands(definition, ['coolCamera'], ['startup'])
+	const cooled = commands(definition, ['coolCamera', 'warmCamera'])
 	if (!cooling.enabled && cooled) diagnostics.push({ path: 'cooling.enabled', message: 'a lifecycle action commands the camera cooler, and the cooling block it reads the temperature from is disabled' })
-	if (cooling.enabled && !cools) diagnostics.push({ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled lifecycle action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' })
+	if (cooling.enabled && !cools) diagnostics.push({ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled startup action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' })
 
 	if (calibration.dark.enabled) diagnostics.push({ path: 'calibration.dark.enabled', message: 'calibration frames are not lowered by this version' })
 	if (calibration.bias.enabled) diagnostics.push({ path: 'calibration.bias.enabled', message: 'calibration frames are not lowered by this version' })

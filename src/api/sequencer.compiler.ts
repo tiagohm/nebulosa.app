@@ -1,6 +1,6 @@
 import { isAbsolute } from 'path'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-import type { Sequencer, SequencerAutofocus, SequencerCameraSettings, SequencerCentering, SequencerDeviceRole, SequencerDither, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerTarget, SequencerTargetTracking } from '#/sequencer'
+import type { Sequencer, SequencerAutofocus, SequencerCameraSettings, SequencerCentering, SequencerDeviceRole, SequencerDither, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerTarget, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { isSequencerPathSegment, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
 import type { SequencerBlockRegistry } from './sequencer.registry'
@@ -543,6 +543,63 @@ function commands(definition: Sequencer, types: readonly SequencerLifecycleActio
 	return false
 }
 
+// Failure reasons a retry cannot recover from. A disconnected or removed device is not a transient command
+// failure: retrying only repeats it until the attempts are exhausted, because there is nowhere to wait for the
+// device to come back — `waitingResources` is not part of this version.
+const SEQUENCER_UNRECOVERABLE_REASON: ReadonlySet<SequencerFailureReason> = new Set(['disconnected', 'removed'])
+
+// Checks one retry policy, addressed to the path that declared it.
+//
+// A policy retrying an unrecoverable reason and a policy suspending on exhaustion are both refused: the first
+// would spend its whole budget repeating a failure that cannot succeed, and the second names a state this
+// version never enters, so the definition would silently get another terminal action than the one it asked for.
+function checkRetry(context: CompilerContext, retry: SequencerRetryPolicy, path: string) {
+	for (const reason of retry.retryOn) {
+		if (SEQUENCER_UNRECOVERABLE_REASON.has(reason)) context.diagnostics.push({ path: `${path}.retryOn`, message: `a "${reason}" failure ends the session instead of being retried, and retrying it would only repeat the same failure` })
+	}
+
+	if (retry.onExhausted === 'suspend') context.diagnostics.push({ path: `${path}.onExhausted`, message: 'this version has no suspended state to exhaust a policy into' })
+}
+
+// Checks every failure policy of the definition and the meridian flip window.
+//
+// The retry policies of a disabled block are deliberately not checked: a block this version refuses when it is
+// enabled has nothing to execute, so the policy it declares is inert and reporting it would address the
+// operator to a field that changes nothing.
+function checkPolicies(context: CompilerContext, definition: Sequencer) {
+	const { autofocus, capture, dither, execution, guiding, meridianFlip, shutdown, startup, target } = definition
+
+	checkRetry(context, execution.defaultRetry, 'execution.defaultRetry')
+	checkRetry(context, capture.retry, 'capture.retry')
+	checkRetry(context, target.tracking.retry, 'target.tracking.retry')
+	checkRetry(context, target.goto.retry, 'target.goto.retry')
+	checkRetry(context, target.center.retry, 'target.center.retry')
+	if (guiding.enabled) checkRetry(context, guiding.retry, 'guiding.retry')
+	if (dither.enabled) checkRetry(context, dither.retry, 'dither.retry')
+	if (autofocus.enabled) checkRetry(context, autofocus.retry, 'autofocus.retry')
+
+	if (meridianFlip.enabled) {
+		checkRetry(context, meridianFlip.retry, 'meridianFlip.retry')
+
+		// An empty window leaves the safe point with no hour angle at which an exposure may resume: the pre-exposure
+		// guard already refuses to start and the flip is not permitted yet, which is a wait that never ends.
+		if (meridianFlip.maximumHourAngle < meridianFlip.minimumHourAngle) context.diagnostics.push({ path: 'meridianFlip.maximumHourAngle', message: 'the flip window is empty, because it ends before the hour angle it may start at' })
+		if (!meridianFlip.waitForCurrentExposure) context.diagnostics.push({ path: 'meridianFlip.waitForCurrentExposure', message: 'the exposure in progress when the window opens is always finished first, and the pre-exposure guard is not switchable' })
+	}
+
+	for (const pipeline of [
+		{ name: 'startup', actions: startup.actions, enabled: startup.enabled },
+		{ name: 'shutdown', actions: shutdown.actions, enabled: shutdown.enabled },
+	]) {
+		if (!pipeline.enabled) continue
+
+		for (let i = 0; i < pipeline.actions.length; i++) {
+			const action = pipeline.actions[i]
+			if (action.enabled) checkRetry(context, action.retry, `${pipeline.name}.actions[${i}].retry`)
+		}
+	}
+}
+
 // Reports every declared field this version does not execute.
 //
 // The compatibility rule is that a declared configuration is never silently ignored: a field the runtime does
@@ -656,6 +713,7 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	if (groups.length === 0) context.diagnostics.push({ path: 'capture.frames', message: 'the definition has no enabled frame group to capture' })
 
 	checkStorage(context, definition)
+	checkPolicies(context, definition)
 	checkCompatibility(context, definition)
 
 	if (context.diagnostics.length > 0) return { ok: false, diagnostics: context.diagnostics }

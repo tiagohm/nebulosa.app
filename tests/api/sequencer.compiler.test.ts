@@ -3,7 +3,7 @@ import { compile, sequencerNodeId, sequencerPlanNodes } from 'src/api/sequencer.
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { Sequencer } from '#/sequencer'
 import type { SequencerPlanLoop, SequencerPlanSequence } from '#/sequencer.plan'
-import { action, camera, canonical, frame } from './sequencer.fixture'
+import { action, camera, canonical, frame, retry } from './sequencer.fixture'
 
 function ok(definition: Sequencer) {
 	const compilation = compile(definition)
@@ -433,5 +433,61 @@ describe('path containment', () => {
 		const { plan } = ok({ ...definition, storage: { ...definition.storage, directoryTemplate: '' } })
 
 		expect(plan.storage.directoryTemplate).toBe('')
+	})
+})
+
+describe('failure policies', () => {
+	test('retrying a disconnected device is refused at the policy that declares it', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, retry: { ...retry(), retryOn: ['timeout', 'disconnected'] } } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.retry.retryOn', message: 'a "disconnected" failure ends the session instead of being retried, and retrying it would only repeat the same failure' }])
+	})
+
+	test('retrying a removed device is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, execution: { ...definition.execution, defaultRetry: { ...retry(), retryOn: ['removed'] } } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics.map((diagnostic) => diagnostic.path)).toEqual(['execution.defaultRetry.retryOn'])
+	})
+
+	test('exhausting a policy into a suspension is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('unpark', { retry: { ...retry(), onExhausted: 'suspend' } })] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'startup.actions[0].retry.onExhausted', message: 'this version has no suspended state to exhaust a policy into' }])
+	})
+
+	test('the policy of a disabled feature is not reported', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, guiding: { ...definition.guiding, enabled: false, retry: { ...retry(), retryOn: ['disconnected'] } } })
+
+		expect(compilation.ok).toBe(true)
+	})
+
+	test('an empty meridian flip window is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, meridianFlip: { ...definition.meridianFlip, minimumHourAngle: 0.1, maximumHourAngle: 0.01 } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'meridianFlip.maximumHourAngle', message: 'the flip window is empty, because it ends before the hour angle it may start at' }])
+	})
+
+	test('a meridian flip interrupting the current exposure is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, meridianFlip: { ...definition.meridianFlip, waitForCurrentExposure: false } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics.map((diagnostic) => diagnostic.path)).toEqual(['meridianFlip.waitForCurrentExposure'])
+	})
+
+	test('a window of a disabled meridian flip is not reported', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, meridianFlip: { ...definition.meridianFlip, enabled: false, minimumHourAngle: 0.1, maximumHourAngle: 0.01 } })
+
+		expect(compilation.ok).toBe(true)
 	})
 })

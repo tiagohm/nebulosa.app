@@ -161,12 +161,24 @@ function trimSegment(value: string, limit: number) {
 // the first and be skipped as already captured — a lost night with no error reported. The hash is what makes
 // the token injective in practice, and it is computed over the id and not over the encoding.
 //
-// The readable half is bounded and the hash is not, which is what keeps the token identifying while the ids it
+// The readable half is bounded and the hash is not, which is what keeps the token composable while the ids it
 // embeds grow: a node id carries the whole pipeline path of the target, and a definition whose target and
-// group ids are merely long — nothing a contract forbids — composes a token no filesystem accepts. Cutting the
-// readable half loses nothing the hash was not already carrying.
+// group ids are merely long — nothing a contract forbids — composes a token no filesystem accepts.
+//
+// Only the node and the group are cut. The cycle and the ordinal are what separate the slots of one group from
+// each other, they sit at the end of the id, and they are a handful of digits, so cutting the tail is what
+// would leave a 32-bit hash as the only difference between every slot of a long-named group — a collision
+// there maps two slots onto one file, and the reconciliation accepts one frame as satisfying both. Keeping
+// them verbatim costs nothing and leaves the hash separating what it already separated before any of this
+// was bounded.
 export function sequencerSlotToken(logicalSlotId: string) {
-	return `${trimSegment(encodeSegment(logicalSlotId), SEQUENCER_SLOT_READABLE_LIMIT)}-${hashOf(logicalSlotId)}`
+	// Start of the `cycle#ordinal` tail. A value that is not a composed slot id has no tail to preserve and is
+	// bounded whole.
+	const tail = logicalSlotId.lastIndexOf(SEQUENCER_SLOT_SEPARATOR, logicalSlotId.lastIndexOf(SEQUENCER_SLOT_SEPARATOR) - 1)
+	const head = tail > 0 ? logicalSlotId.slice(0, tail) : logicalSlotId
+	const readable = encodeSegment(`${trimSegment(encodeSegment(head), SEQUENCER_SLOT_READABLE_LIMIT)}${tail > 0 ? logicalSlotId.slice(tail) : ''}`)
+
+	return `${readable}-${hashOf(logicalSlotId)}`
 }
 
 // Everything a template interpolates for one frame, plus the identity the file name has to carry.

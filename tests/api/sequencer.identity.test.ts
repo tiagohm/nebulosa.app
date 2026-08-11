@@ -52,6 +52,18 @@ describe('logical slot identity', () => {
 		expect(sequencerSlotToken(first)).not.toBe(sequencerSlotToken(second))
 	})
 
+	test('keeps the cycle and the ordinal out of the truncated half of the token', () => {
+		const targetId = 'm'.repeat(100)
+		const groupId = 'g'.repeat(100)
+		const node = sequencerNodeId.captureFrame(targetId, groupId)
+		const slot = (cycle: number, ordinal: number) => sequencerSlotToken(sequencerLogicalSlotId(node, groupId, cycle, ordinal))
+
+		expect(slot(0, 1079599)).toContain('-0-1079599-')
+		expect(slot(0, 1079599)).not.toBe(slot(0, 1262382))
+		expect(slot(0, 1)).not.toBe(slot(1, 1))
+		expect(new Set([slot(0, 0), slot(0, 1), slot(1, 0), slot(1, 1)]).size).toBe(4)
+	})
+
 	test('keys an artifact by session, slot and attempt', () => {
 		const slot = sequencerLogicalSlotId(sequencerNodeId.captureFrame('m42', 'lum'), 'lum', 0, 0)
 

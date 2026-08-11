@@ -184,7 +184,7 @@ export class SequencerBlockRegistry {
 	// mistake into a failure in the middle of the night.
 	resolve(requirements: readonly SequencerHandlerRequirement[]): SequencerHandlerResolution {
 		const issues: SequencerHandlerIssue[] = []
-		const versions: Record<string, number> = {}
+		const versions: Record<string, number> = Object.create(null)
 
 		for (const requirement of requirements) {
 			const handler = this.#handlers.get(requirement.type)

@@ -527,6 +527,13 @@ describe('failure policies', () => {
 		expect(compilation.ok).toBe(true)
 	})
 
+	test('the policy of a disabled target feature is not reported', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, target: { ...definition.target, goto: { ...definition.target.goto, enabled: false, retry: { ...retry(), retryOn: ['disconnected'] } } } })
+
+		expect(compilation.ok).toBe(true)
+	})
+
 	test('an empty meridian flip window is refused', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, meridianFlip: { ...definition.meridianFlip, minimumHourAngle: 0.1, maximumHourAngle: 0.01 } })

@@ -586,9 +586,9 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 
 	checkRetry(context, execution.defaultRetry, 'execution.defaultRetry')
 	checkRetry(context, capture.retry, 'capture.retry')
-	checkRetry(context, target.tracking.retry, 'target.tracking.retry')
-	checkRetry(context, target.goto.retry, 'target.goto.retry')
-	checkRetry(context, target.center.retry, 'target.center.retry')
+	if (target.tracking.enabled) checkRetry(context, target.tracking.retry, 'target.tracking.retry')
+	if (target.goto.enabled) checkRetry(context, target.goto.retry, 'target.goto.retry')
+	if (target.center.enabled) checkRetry(context, target.center.retry, 'target.center.retry')
 	if (guiding.enabled) checkRetry(context, guiding.retry, 'guiding.retry')
 	if (dither.enabled) checkRetry(context, dither.retry, 'dither.retry')
 	if (autofocus.enabled) checkRetry(context, autofocus.retry, 'autofocus.retry')

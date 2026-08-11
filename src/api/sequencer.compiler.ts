@@ -741,6 +741,9 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 
 	if (!target.enabled) context.diagnostics.push({ path: 'target.enabled', message: 'the definition has no enabled target to observe' })
 	if (target.id.length === 0) context.diagnostics.push({ path: 'target.id', message: 'the target id is empty and cannot address a node' })
+	// The coordinate of the declared frame is optional in the transport type, and only a pointing action reads
+	// it: without it the slew would be commanded with an undefined right ascension and declination.
+	if ((target.goto.enabled || target.center.enabled) && target[target.type] === undefined) context.diagnostics.push({ path: `target.${target.type}`, message: `the target points in ${target.type} and declares no ${target.type} coordinate to point at` })
 	if (groups.length === 0) context.diagnostics.push({ path: 'capture.frames', message: 'the definition has no enabled frame group to capture' })
 
 	checkStorage(context, definition)

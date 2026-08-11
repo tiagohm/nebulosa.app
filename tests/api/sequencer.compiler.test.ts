@@ -177,6 +177,21 @@ describe('structural validation', () => {
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'shutdown.actions[0].id', message: 'the shutdown action id is empty and cannot address a node' }])
 	})
 
+	test('a target pointing in a frame it declares no coordinate for is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, target: { ...definition.target, type: 'JNOW' } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'target.JNOW', message: 'the target points in JNOW and declares no JNOW coordinate to point at' }])
+	})
+
+	test('a target with no pointing action needs no coordinate', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, target: { ...definition.target, type: 'JNOW', goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } } })
+
+		expect(compilation.ok).toBe(true)
+	})
+
 	test('a feature commanding a role the definition does not declare is refused', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, devices: { camera: 'Camera Simulator', mount: 'Mount Simulator', wheel: 'Wheel Simulator' } })

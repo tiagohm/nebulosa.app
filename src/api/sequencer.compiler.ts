@@ -762,6 +762,17 @@ function checkRetry(context: CompilerContext, retry: SequencerRetryPolicy, path:
 	if (retry.onExhausted === 'suspend') context.diagnostics.push({ path: `${path}.onExhausted`, message: 'this version has no suspended state to exhaust a policy into' })
 }
 
+// Checks the attempt budget of an operation that repeats itself until it succeeds, addressed to the path that
+// declared it.
+//
+// This is the bound of `checkRetry` applied to the counters a handler keeps on its own: a centering loop
+// solves, corrects and solves again, and a flip repeats the crossing, each counting one attempt at a time. A
+// budget above the safe range stops changing when it is incremented, so the loop never reaches it and the
+// operation repeats a failing command for the rest of the night.
+function checkAttempts(context: CompilerContext, maximumAttempts: number, path: string) {
+	if (maximumAttempts > Number.MAX_SAFE_INTEGER) context.diagnostics.push({ path, message: 'the attempt budget is above the range a number counts one by one, so a counter of failed attempts would stop advancing before exhausting it' })
+}
+
 // Checks the decision a feature applies when it cannot recover, addressed to the path that declared it.
 //
 // `suspend` is refused for the same reason `onExhausted: 'suspend'` is: the session has no suspended state to
@@ -771,7 +782,8 @@ function checkOnFailure(context: CompilerContext, onFailure: 'continue' | 'pause
 	if (onFailure === 'suspend') context.diagnostics.push({ path, message: 'this version has no suspended state to move the session into' })
 }
 
-// Checks every failure policy of the definition and the meridian flip window.
+// Checks every failure policy of the definition, the attempt budgets of the operations that repeat
+// themselves, and the meridian flip window.
 //
 // The retry policies of a disabled block are deliberately not checked: a block this version refuses when it is
 // enabled has nothing to execute, so the policy it declares is inert and reporting it would address the
@@ -783,7 +795,11 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 	checkRetry(context, capture.retry, 'capture.retry')
 	if (target.tracking.enabled) checkRetry(context, target.tracking.retry, 'target.tracking.retry')
 	if (target.goto.enabled) checkRetry(context, target.goto.retry, 'target.goto.retry')
-	if (target.center.enabled) checkRetry(context, target.center.retry, 'target.center.retry')
+	if (target.center.enabled) {
+		checkRetry(context, target.center.retry, 'target.center.retry')
+		checkAttempts(context, target.center.maximumAttempts, 'target.center.maximumAttempts')
+	}
+
 	if (guiding.enabled) checkRetry(context, guiding.retry, 'guiding.retry')
 	if (dither.enabled) {
 		checkRetry(context, dither.retry, 'dither.retry')
@@ -797,6 +813,7 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 
 	if (meridianFlip.enabled) {
 		checkRetry(context, meridianFlip.retry, 'meridianFlip.retry')
+		checkAttempts(context, meridianFlip.maximumAttempts, 'meridianFlip.maximumAttempts')
 		checkOnFailure(context, meridianFlip.onFailure, 'meridianFlip.onFailure')
 
 		// An empty window leaves the safe point with no hour angle at which an exposure may resume: the pre-exposure

@@ -968,6 +968,29 @@ describe('failure policies', () => {
 		expect(compilation.ok).toBe(true)
 	})
 
+	test('a centering budget above the counting range is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, target: { ...definition.target, center: { ...definition.target.center, maximumAttempts: Number.POSITIVE_INFINITY } } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'target.center.maximumAttempts', message: 'the attempt budget is above the range a number counts one by one, so a counter of failed attempts would stop advancing before exhausting it' }])
+	})
+
+	test('a flip budget above the counting range is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, meridianFlip: { ...definition.meridianFlip, maximumAttempts: Number.MAX_SAFE_INTEGER + 2 } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'meridianFlip.maximumAttempts', message: 'the attempt budget is above the range a number counts one by one, so a counter of failed attempts would stop advancing before exhausting it' }])
+	})
+
+	test('the budget of a disabled centering is not reported', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, meridianFlip: { ...definition.meridianFlip, enabled: false }, target: { ...definition.target, center: { ...definition.target.center, enabled: false, maximumAttempts: Number.POSITIVE_INFINITY } } })
+
+		expect(compilation.ok).toBe(true)
+	})
+
 	test('the policy of a disabled feature is not reported', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, dither: { ...definition.dither, enabled: false }, guiding: { ...definition.guiding, enabled: false, retry: { ...retry(), retryOn: ['disconnected'] } } })

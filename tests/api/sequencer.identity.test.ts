@@ -136,6 +136,33 @@ describe('frame naming', () => {
 		expect(sequencerFrameFileName('{exposure}', naming({ group: group('lum', { exposureTime: 60 }) }), slot, 'fit')).toStartWith('60-')
 	})
 
+	test('keeps a name of long identifiers inside the component budget', () => {
+		const targetId = 'm'.repeat(55)
+		const groupId = 'g'.repeat(55)
+		const slot = sequencerLogicalSlotId(sequencerNodeId.captureFrame(targetId, groupId), groupId, 0, 0)
+		const other = sequencerLogicalSlotId(sequencerNodeId.captureFrame(targetId, groupId), groupId, 0, 1)
+		const long = naming({ targetId, group: group(groupId), filter: 'L'.repeat(120) })
+		const name = sequencerFrameFileName('{target}-{group}-{filter}-{exposure}', long, slot, 'fit')
+
+		expect(name.length).toBeLessThanOrEqual(255)
+		expect(isPathSegment(name)).toBeTrue()
+		expect(name).toEndWith('.fit')
+		expect(name).not.toBe(sequencerFrameFileName('{target}-{group}-{filter}-{exposure}', long, other, 'fit'))
+		expect(name).not.toContain('--')
+
+		for (const directory of sequencerFrameDirectories('{target}/{filter}', long)) {
+			expect(directory.length).toBeLessThanOrEqual(255)
+		}
+	})
+
+	test('never cuts the identifying half of a name', () => {
+		const slot = sequencerLogicalSlotId(sequencerNodeId.captureFrame('m42', 'lum'), 'lum', 0, 0)
+		const name = sequencerFrameFileName('{filter}', naming({ filter: 'L'.repeat(400) }), slot, 'fit')
+
+		expect(name.length).toBeLessThanOrEqual(255)
+		expect(name).toContain(sequencerSlotToken(slot))
+	})
+
 	test('reports a placeholder no renderer interpolates', () => {
 		expect(sequencerUnknownPlaceholders('{target}-{filter}-{exposure}')).toEqual([])
 		expect(sequencerUnknownPlaceholders('{target}-{camera}-{camera}')).toEqual(['camera'])

@@ -135,6 +135,24 @@ function hashOf(value: string) {
 	return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
+// Longest a single path component may be, in bytes. Every filesystem this project writes to stops at 255, and
+// a longer name does not degrade: the write fails with ENAMETOOLONG for every slot of the group, before a
+// single frame is stored. Every character a composed name can carry is ASCII, because the encoding maps
+// everything else onto a dash, so a length in characters is a length in bytes.
+const SEQUENCER_NAME_LIMIT = 255
+
+// Longest readable half of a slot token. The hash beside it is what identifies the slot, so the readable half
+// is there to be read and may be cut: it still shows the node and the group of a slot whose ids are long, and
+// what it gives up is budget the readable part the template asked for gets to use instead.
+const SEQUENCER_SLOT_READABLE_LIMIT = 96
+
+// Cuts an encoded segment down to `limit` characters, dropping the separators the cut may have left at the
+// edge so the result never ends in a dash or addresses a relative name. Returns the value unchanged when it
+// already fits, and the empty string when nothing fits.
+function trimSegment(value: string, limit: number) {
+	return value.length <= limit ? value : limit <= 0 ? '' : value.slice(0, limit).replace(SEQUENCER_SEPARATOR_EDGE, '')
+}
+
 // Rendering of a logical slot id inside a file name: the readable encoding of the id, followed by the hash of
 // the id itself.
 //
@@ -142,8 +160,13 @@ function hashOf(value: string) {
 // that does not survive the encoding would render the same name, and the second slot would find the file of
 // the first and be skipped as already captured — a lost night with no error reported. The hash is what makes
 // the token injective in practice, and it is computed over the id and not over the encoding.
+//
+// The readable half is bounded and the hash is not, which is what keeps the token identifying while the ids it
+// embeds grow: a node id carries the whole pipeline path of the target, and a definition whose target and
+// group ids are merely long — nothing a contract forbids — composes a token no filesystem accepts. Cutting the
+// readable half loses nothing the hash was not already carrying.
 export function sequencerSlotToken(logicalSlotId: string) {
-	return `${encodeSegment(logicalSlotId)}-${hashOf(logicalSlotId)}`
+	return `${trimSegment(encodeSegment(logicalSlotId), SEQUENCER_SLOT_READABLE_LIMIT)}-${hashOf(logicalSlotId)}`
 }
 
 // Everything a template interpolates for one frame, plus the identity the file name has to carry.
@@ -204,11 +227,16 @@ function render(template: string, naming: SequencerFrameNaming) {
 //
 // Empty segments are dropped, so a template whose only content is a placeholder that rendered empty writes
 // straight into the session directory instead of into a directory with no name.
+//
+// Each segment is bounded by the same component budget as the file name, for the same reason: a directory
+// nobody can create fails the write of every frame below it. A directory carries no identity, so cutting it
+// costs nothing but readability — two values differing only past the budget end up in one directory, and the
+// frames inside it keep the distinct names their slot tokens give them.
 export function sequencerFrameDirectories(template: string, naming: SequencerFrameNaming) {
 	const segments: string[] = []
 
 	for (const segment of render(template, naming).split(/[/\\]/)) {
-		const encoded = encodeSegment(segment)
+		const encoded = trimSegment(encodeSegment(segment), SEQUENCER_NAME_LIMIT)
 		if (encoded.length > 0) segments.push(encoded)
 	}
 
@@ -224,13 +252,23 @@ export function sequencerFrameDirectories(template: string, naming: SequencerFra
 // produces exactly the name the template would have produced without the notion of attempts, and a future
 // recapture needs neither a separate namespace nor a rename of the file it replaces.
 //
+// The whole name stays inside the component budget of the filesystem. What the template asked for is cut first
+// and the identifying part is never cut, because a truncated readable part costs readability while a truncated
+// token costs the frame: the name a resumed session predicts would no longer be the name on disk. A template
+// interpolating ids that are long on their own — the target and the group both render into the token as well —
+// is otherwise enough to make every write of the group fail with ENAMETOOLONG.
+//
 // `extension` is the file extension without the dot.
 export function sequencerFrameFileName(template: string, naming: SequencerFrameNaming, logicalSlotId: string, extension: string) {
-	const readable = encodeSegment(render(template, naming))
 	const token = sequencerSlotToken(logicalSlotId)
 	const attempt = naming.attempt >= 1 ? `-a${naming.attempt}` : ''
+	const identity = `${token}${attempt}.${extension}`
 
-	return `${readable.length > 0 ? `${readable}-` : ''}${token}${attempt}.${extension}`
+	// One character of the budget belongs to the dash joining the two halves, so a readable part that only fits
+	// without it is dropped instead of being separated from the token by nothing.
+	const readable = trimSegment(encodeSegment(render(template, naming)), SEQUENCER_NAME_LIMIT - identity.length - 1)
+
+	return `${readable.length > 0 ? `${readable}-` : ''}${identity}`
 }
 
 // Digits of the ordinal of an auxiliary image, enough that a night of autofocus runs sorts lexicographically

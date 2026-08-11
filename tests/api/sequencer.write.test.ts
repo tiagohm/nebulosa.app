@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, readdir, rm } from 'fs/promises'
 import { tmpdir } from 'os'
-import { join, sep } from 'path'
+import { basename, join, sep } from 'path'
 import { writeImageToFits, writeImageToXisf } from 'nebulosa/src/imaging/model/image'
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import { bufferSink } from 'nebulosa/src/io/io'
-import { classifySequencerFrame, sequencerTemporaryPath, writeSequencerFrame } from 'src/api/sequencer.write'
+import { classifySequencerFrame, sequencerQuarantinePath, sequencerTemporaryPath, writeSequencerFrame } from 'src/api/sequencer.write'
 import type { SequencerWriteEnvironment } from 'src/api/sequencer.write'
 
 let root = ''
@@ -117,6 +117,28 @@ describe('write protocol', () => {
 		expect(await readdir(root)).toEqual([])
 	})
 
+	test('keeps the derived names inside the component budget when the final one fills it', () => {
+		const name = `${'m42-lum-'.padEnd(251, 'x')}.fit`
+		const path = join(root, name)
+		const environment = { temporaryDirectory: root, session: '019876c1-4f2e-7c4a-9c1f-0b6d2a3e5f70' }
+
+		expect(name.length).toBe(255)
+		expect(basename(sequencerTemporaryPath(path)).length).toBeLessThanOrEqual(255)
+		expect(basename(sequencerTemporaryPath(path, environment)).length).toBeLessThanOrEqual(255)
+		expect(basename(sequencerQuarantinePath(path, root)).length).toBeLessThanOrEqual(255)
+		expect(sequencerTemporaryPath(path, environment)).toEndWith('.partial')
+		expect(sequencerQuarantinePath(path, root)).toEndWith('.invalid')
+	})
+
+	test('keeps two names sharing everything up to the cut apart', () => {
+		const a = join(root, `${'a'.repeat(251)}.fit`)
+		const b = join(root, `${'a'.repeat(250)}b.fit`)
+		const environment = { temporaryDirectory: root, session: '019876c1-4f2e-7c4a-9c1f-0b6d2a3e5f70' }
+
+		expect(sequencerTemporaryPath(a, environment)).not.toBe(sequencerTemporaryPath(b, environment))
+		expect(sequencerQuarantinePath(a, root)).not.toBe(sequencerQuarantinePath(b, root))
+	})
+
 	test('gives two slots temporaries of their own', () => {
 		expect(sequencerTemporaryPath(join(root, 'a.fit'))).not.toBe(sequencerTemporaryPath(join(root, 'b.fit')))
 		expect(sequencerTemporaryPath(join(root, 'a.fit'))).toEndWith('.fit.partial')
@@ -153,6 +175,15 @@ describe('reconciliation', () => {
 		expect(await classifySequencerFrame(path, { ...accepting(false), quarantineDirectory })).toBe('invalidFinal')
 		expect(await Bun.file(path).exists()).toBeFalse()
 		expect(await readdir(quarantineDirectory)).toEqual(['m42-lum-0.fit.invalid'])
+	})
+
+	test('moves an invalid final to the quarantine path it derives', async () => {
+		const path = join(root, 'frames', 'm42-lum-0.fit')
+		const quarantineDirectory = join(root, 'auxiliary')
+		await Bun.write(path, FRAME)
+
+		expect(await classifySequencerFrame(path, { ...accepting(false), quarantineDirectory })).toBe('invalidFinal')
+		expect(await Bun.file(sequencerQuarantinePath(path, quarantineDirectory)).exists()).toBeTrue()
 	})
 
 	test('discards an orphan temporary instead of promoting it', async () => {

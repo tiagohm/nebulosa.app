@@ -139,7 +139,7 @@ function hashOf(value: string) {
 // a longer name does not degrade: the write fails with ENAMETOOLONG for every slot of the group, before a
 // single frame is stored. Every character a composed name can carry is ASCII, because the encoding maps
 // everything else onto a dash, so a length in characters is a length in bytes.
-const SEQUENCER_NAME_LIMIT = 255
+export const SEQUENCER_NAME_LIMIT = 255
 
 // Longest readable half of a slot token. The hash beside it is what identifies the slot, so the readable half
 // is there to be read and may be cut: it still shows the node and the group of a slot whose ids are long, and
@@ -151,6 +151,23 @@ const SEQUENCER_SLOT_READABLE_LIMIT = 96
 // already fits, and the empty string when nothing fits.
 function trimSegment(value: string, limit: number) {
 	return value.length <= limit ? value : limit <= 0 ? '' : value.slice(0, limit).replace(SEQUENCER_SEPARATOR_EDGE, '')
+}
+
+// Cuts a composed name down to `limit` characters, replacing what the cut dropped with the hash of the whole
+// name so two names sharing everything up to the cut do not become one. Returns the name unchanged when it
+// already fits.
+//
+// This is for names derived from one this module already composed, such as the temporary and the quarantine
+// names the write protocol decorates a final name with: those decorations are appended to a name that may
+// already fill the component budget, and the cut has to happen somewhere. `limit` must leave room for the
+// hash and the dash joining it, that is at least ten characters, or the result is the hash alone.
+export function sequencerBoundedName(name: string, limit: number = SEQUENCER_NAME_LIMIT) {
+	if (name.length <= limit) return name
+
+	const hash = hashOf(name)
+	const head = trimSegment(name, limit - hash.length - 1)
+
+	return head.length > 0 ? `${head}-${hash}` : hash
 }
 
 // Rendering of a logical slot id inside a file name: the readable encoding of the id, followed by the hash of

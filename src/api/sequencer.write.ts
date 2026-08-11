@@ -4,6 +4,7 @@ import { errorMessage } from 'nebulosa/src/core/util'
 import { readFits } from 'nebulosa/src/io/formats/fits/fits'
 import { readXisf } from 'nebulosa/src/io/formats/xisf/xisf'
 import { fileHandleSource } from 'nebulosa/src/io/io'
+import { SEQUENCER_NAME_LIMIT, sequencerBoundedName } from './sequencer.identity'
 
 // Write protocol of a captured frame and the classification of what a previous run left on disk.
 //
@@ -99,9 +100,21 @@ async function readableFrame(path: string, format: SequencerFrameFormat) {
 // the prefix, two runs producing the same slot produce the same temporary, and a session would classify the
 // leftover of a crashed run as its own orphan — or, running concurrently, delete the file the other one is in
 // the middle of writing and fail its rename.
+//
+// The final name is composed against the whole component budget, so the prefix and the suffix this one adds to
+// it do not fit by construction: the derived name is bounded on its own, which keeps it distinct through the
+// hash the bounding leaves in place of what it cut.
 export function sequencerTemporaryPath(finalPath: string, environment: SequencerWriteEnvironment = {}) {
 	const prefix = environment.temporaryDirectory !== undefined && environment.session !== undefined ? `${environment.session}-` : ''
-	return join(environment.temporaryDirectory ?? dirname(finalPath), `${prefix}${basename(finalPath)}${SEQUENCER_TEMPORARY_SUFFIX}`)
+	const name = sequencerBoundedName(`${prefix}${basename(finalPath)}`, SEQUENCER_NAME_LIMIT - SEQUENCER_TEMPORARY_SUFFIX.length)
+
+	return join(environment.temporaryDirectory ?? dirname(finalPath), `${name}${SEQUENCER_TEMPORARY_SUFFIX}`)
+}
+
+// Path an invalid final is moved to inside `quarantineDirectory`, under the reserved suffix that keeps it from
+// being read as a frame. Bounded on its own for the same reason the temporary is.
+export function sequencerQuarantinePath(finalPath: string, quarantineDirectory: string) {
+	return join(quarantineDirectory, `${sequencerBoundedName(basename(finalPath), SEQUENCER_NAME_LIMIT - SEQUENCER_QUARANTINE_SUFFIX.length)}${SEQUENCER_QUARANTINE_SUFFIX}`)
 }
 
 // Writes one frame through the protocol: temporary file, validation, atomic rename into the final path.
@@ -157,7 +170,7 @@ export async function classifySequencerFrame(finalPath: string, environment: Seq
 
 		if (environment.quarantineDirectory !== undefined) {
 			await mkdir(environment.quarantineDirectory, { recursive: true })
-			await rename(finalPath, join(environment.quarantineDirectory, `${basename(finalPath)}${SEQUENCER_QUARANTINE_SUFFIX}`))
+			await rename(finalPath, sequencerQuarantinePath(finalPath, environment.quarantineDirectory))
 		} else {
 			await rm(finalPath, { force: true })
 		}

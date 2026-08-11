@@ -512,6 +512,40 @@ describe('resource reservation', () => {
 		expect(arbiter.availability(MOUNT)).toBe('available')
 	})
 
+	test('extends a reservation while its own operation holds the lease', () => {
+		const arbiter = new ResourceArbiter()
+		const reservationOwner = session('session-1')
+		const first = arbiter.reserve(reservationOwner, [{ key: CAMERA }])
+
+		expect(first.ok).toBeTrue()
+
+		if (!first.ok) return
+
+		const acquired = arbiter.acquire(owner('action-1'), [{ key: CAMERA }], first.reservation.token)
+
+		expect(acquired.ok).toBeTrue()
+
+		const second = arbiter.reserve(reservationOwner, [{ key: CAMERA }, { key: MOUNT }])
+
+		expect(second.ok).toBeTrue()
+
+		if (!second.ok) return
+
+		expect(second.reservation).toBe(first.reservation)
+		expect(second.reservation.resources).toEqual([CAMERA, MOUNT])
+	})
+
+	test('refuses a reservation over a resource leased outside of it', () => {
+		const arbiter = new ResourceArbiter()
+		const acquired = arbiter.acquire(owner('manual'), [{ key: CAMERA }])
+
+		expect(acquired.ok).toBeTrue()
+		expect(arbiter.reserve(session('session-1'), [{ key: CAMERA }])).toEqual({
+			ok: false,
+			conflicts: [{ key: CAMERA, by: 'lease', ownerId: 'manual', ownerKind: 'test', causes: [] }],
+		})
+	})
+
 	test('reserves a disconnected device without making it acquirable', () => {
 		const arbiter = new ResourceArbiter()
 		const device = camera(false)

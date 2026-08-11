@@ -295,7 +295,12 @@ export class ResourceArbiter {
 			// As in acquire, a rejected contender must not steal the physical association of an existing record.
 			const resource = this.#resource(request, false)
 
-			if (resource.owner !== undefined) {
+			// A lease taken inside the caller's own reservation belongs to the caller: only its own token could
+			// have authorized it. Refusing it would make a session unable to extend a reservation it already
+			// holds while one of its actions is commanding a device it reserved.
+			const own = current !== undefined && resource.reservation === current
+
+			if (resource.owner !== undefined && !own) {
 				conflicts.push(conflict(request.key, 'lease', resource.owner))
 			} else if (resource.reservation !== undefined && resource.reservation !== current) {
 				conflicts.push(conflict(request.key, 'reservation', resource.reservation.owner))

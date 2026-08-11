@@ -839,15 +839,34 @@ describe('reserved operation scope', () => {
 		expect(await compensating.promise).toMatchObject(failedOperationResult('aborted'))
 		expect(arbiter.availability(MOUNT)).toBe('reserved')
 
+		// The closure outlives the cancellation: an action still resuming from its abort cannot open a tree
+		// nothing would wait for, which is what would hang the stop that cancelled it.
+		const late = scope.start('park', [{ key: MOUNT }], () => successfulOperationResult(undefined))
+
+		expect(await late.result).toMatchObject(failedOperationResult('aborted'))
+
 		reservation.release()
 
 		expect(arbiter.availability(MOUNT)).toBe('available')
 
-		// The reservation accepts work again once its cancellation has returned.
+		// A new reservation of the same owner is a new reservation, and it is open.
 		const other = coordinator.reservedScope(reserve(arbiter, CAMERA))
 		const restarted = other.start('capture', [{ key: CAMERA }], () => successfulOperationResult(undefined))
 
 		expect(await restarted.result).toEqual(successfulOperationResult(undefined))
+	})
+
+	test('closes a reservation that had not started a tree yet', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const scope = coordinator.reservedScope(reserve(arbiter, CAMERA))
+
+		await coordinator.cancelByReservationOwner(SESSION, 'aborted')
+
+		const late = scope.start('capture', [{ key: CAMERA }], () => successfulOperationResult(undefined))
+
+		expect(await late.result).toMatchObject(failedOperationResult('aborted'))
+		expect(arbiter.availability(CAMERA)).toBe('reserved')
 	})
 
 	test('ignores an owner with no operation of its own', async () => {

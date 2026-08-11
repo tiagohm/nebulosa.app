@@ -99,10 +99,16 @@ export class OperationCoordinator {
 	// operations through the handles it kept, because a service such as the guider owns a root of its own;
 	// the reservation owner is the only criterion that reaches every one of them.
 	readonly #operationsByReservationOwner = new Map<ResourceReservationOwner, Set<ActiveOperation<unknown>>>()
-	// Reservations whose cancellation is in flight. A root started while one is being cancelled would not be
-	// in the set that cancellation is awaiting, and the caller releases the reservation as soon as it
-	// returns, so that operation would keep commanding devices the session no longer owns.
-	readonly #cancellingReservations = new Set<ResourceReservationOwner>()
+	// Tokens of the reservations that have been cancelled. Cancelling one closes it to new roots for good: a
+	// root opened during the drain would not be in the set that cancellation is awaiting, and one opened after
+	// it would be awaited and aborted by nobody, since the caller cancels precisely because it is done with
+	// the reservation. Weakly held so a token forgotten with its session does not stay here for the life of
+	// the process.
+	readonly #cancelledReservations = new WeakSet<ReservationToken>()
+	// Token each reservation owner is currently running under, recorded when its scope is built so that a
+	// cancellation closes the reservation even when it has not started a single tree yet. Weakly held for the
+	// same reason.
+	readonly #reservationTokens = new WeakMap<ResourceReservationOwner, ReservationToken>()
 
 	// Creates a coordinator over the process-wide resource arbiter.
 	constructor(readonly arbiter: ResourceArbiter) {}
@@ -116,6 +122,8 @@ export class OperationCoordinator {
 	// already holds instead of competing for them. The scope is passed to services exactly like any other,
 	// and a service composed under it cannot tell the difference.
 	reservedScope(reservation: ResourceReservation): OperationScope {
+		this.#reservationTokens.set(reservation.token.owner, reservation.token)
+
 		return Object.freeze({
 			start: <T>(kind: string, resources: readonly ResourceRequest[], executor: OperationExecutor<T>) => this.#start(undefined, kind, resources, executor, reservation.token),
 		})
@@ -148,11 +156,11 @@ export class OperationCoordinator {
 		// rather than taking one from the caller.
 		const token = root === undefined ? reservationToken : root.token
 
-		// Same rule one level up: a reservation being cancelled must not gain new work either. Its owner is
-		// about to release the reservation, and a tree opened now would command devices under a token that no
-		// longer authorizes anything, with nobody left waiting for its cleanup.
-		if (token !== undefined && this.#cancellingReservations.has(token.owner)) {
-			return rejected(failedOperationResult('aborted', 'reservation is being cancelled'))
+		// Same rule one level up: a cancelled reservation must not gain new work either. A tree opened now
+		// commands devices under a token whose holder has already given them up, and nothing is left to wait
+		// for its cleanup — an executor that opened one and awaited it would hang the stop that cancelled it.
+		if (token !== undefined && this.#cancelledReservations.has(token)) {
+			return rejected(failedOperationResult('aborted', 'reservation has been cancelled'))
 		}
 
 		const context: OperationContext = Object.freeze({
@@ -293,31 +301,34 @@ export class OperationCoordinator {
 		return this.#cancelOwners(this.arbiter.ownersOfClient(clientId), reason)
 	}
 
-	// Aborts every operation tree started inside one reservation, then waits for all cleanup. This is what a
-	// session releasing its reservation has to use: releasing before these cleanups finish would hand the
-	// devices to a third party while the session is still quiescing them.
+	// Aborts every operation tree started inside one reservation, then waits for all cleanup, and closes the
+	// reservation to further starts. This is what a session releasing its reservation has to use: releasing
+	// before these cleanups finish would hand the devices to a third party while the session is still
+	// quiescing them.
+	//
+	// Cancelling is terminal for the reservation, not a pass over the trees that exist right now: it is called
+	// by a holder that is giving the devices up, and reopening it afterwards would only admit work nothing is
+	// waiting for. A reservation that must run again is a new reservation, and its token is a new token.
 	async cancelByReservationOwner(owner: ResourceReservationOwner, reason: OperationFailureReason = 'aborted') {
-		// Closing the reservation to new roots is synchronous and happens before the first await, so the
-		// snapshot below is complete: an executor resuming from its abort cannot open one more tree behind it.
-		// Draining in a loop instead would let a cleanup that starts a compensating operation on every pass
-		// never terminate.
-		this.#cancellingReservations.add(owner)
+		const token = this.#reservationTokens.get(owner)
+		const roots = this.#operationsByReservationOwner.get(owner)
 
-		try {
-			const roots = this.#operationsByReservationOwner.get(owner)
+		// Closing the reservation is synchronous and happens before the first await, so the snapshot below is
+		// complete: an executor resuming from its abort cannot open one more tree behind it. Draining in a loop
+		// instead would let a cleanup that starts a compensating operation on every pass never terminate. The
+		// roots are closed by their own token too, which is the current one unless the owner reserved again.
+		if (token !== undefined) this.#cancelledReservations.add(token)
 
-			if (roots === undefined) return
+		if (roots === undefined) return
 
-			// Roots leave the set only in their own finalization, which cannot run before this snapshot is taken.
-			await Promise.all(
-				roots
-					.values()
-					.toArray()
-					.map((operation) => this.#cancel(operation, reason)),
-			)
-		} finally {
-			this.#cancellingReservations.delete(owner)
+		const cancelling = roots.values().toArray()
+
+		for (const operation of cancelling) {
+			if (operation.token !== undefined) this.#cancelledReservations.add(operation.token)
 		}
+
+		// Roots leave the set only in their own finalization, which cannot run before this snapshot is taken.
+		await Promise.all(cancelling.map((operation) => this.#cancel(operation, reason)))
 	}
 
 	// Aborts every operation tree synchronously and waits for all cleanup; roots cascade to their scopes.

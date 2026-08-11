@@ -46,6 +46,21 @@ describe('preflight', () => {
 		expect(view.projectedIntegration).toBe(900)
 	})
 
+	test('the totals report the integration ceiling the session ends at', () => {
+		const definition = canonical()
+		const execution = { ...definition.execution, end: { type: 'integrationTime', time: 60 } as const }
+		const view = validate({ ...definition, execution, capture: { ...definition.capture, repeat: 3, frames: [frame('lum', { count: 4 })] } })
+
+		expect(view.projectedIntegration).toBe(720)
+		expect(view.integrationLimit).toBe(60)
+	})
+
+	test('a sequence that ends with itself declares no integration ceiling', () => {
+		const view = validate(canonical())
+
+		expect(view.integrationLimit).toBeUndefined()
+	})
+
 	test('the view reports the roles the session reserves', () => {
 		const view = validate(canonical())
 

@@ -280,14 +280,21 @@ export interface SequencerPreflight {
 	readonly repeat: number
 	// Per-cycle numbers of every frame group, in declaration order.
 	readonly groups: readonly SequencerPreflightGroup[]
-	// Slots the whole session needs, `repeat` times the required slots of every group.
+	// Slots the full sequence needs, `repeat` times the required slots of every group. It is an upper bound:
+	// an end condition may stop the session earlier, and `integrationLimit` reports the one that is known
+	// before the session runs.
 	readonly requiredSlots: number
-	// Slots the whole session may emit at most, `repeat` times the slot limit of every group. With the
+	// Slots the full sequence may emit at most, `repeat` times the slot limit of every group. With the
 	// attempt budget of each group it is the bound that makes the capture loop provably terminate.
 	readonly slotLimit: number
-	// Accepted exposure time of the whole session when every required slot is accepted, in seconds. It is a
-	// projection, not a promise: abandoned slots reduce it.
+	// Accepted exposure time of the full sequence when every required slot is accepted, in seconds. It is a
+	// projection, not a promise: abandoned slots reduce it and an end condition may stop the session before
+	// the sequence completes.
 	readonly projectedIntegration: number
+	// Accumulated integration that ends the session, in seconds, when it ends on integration time; absent for
+	// every other end condition. Below `projectedIntegration` it is the limit the session actually reaches,
+	// which is what keeps the totals above readable as the upper bound they are.
+	readonly integrationLimit?: number
 	// Roles the session reserves at start, empty when the definition was refused.
 	readonly roles: readonly SequencerDeviceRole[]
 }

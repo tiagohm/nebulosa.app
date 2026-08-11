@@ -8,7 +8,10 @@ import type { SequencerCompilerOptions } from './sequencer.compiler'
 // derived to prove the capture loop terminates. Nothing here recomputes anything the compiler decided.
 //
 // Durations are seconds and slot counts are exposures. Per-group numbers are per cycle, matching the plan
-// they come from; the totals of the view are for the whole session, which is `repeat` cycles.
+// they come from; the totals of the view are for the full sequence, which is `repeat` cycles. A session may
+// end before the sequence completes, so the totals are upper bounds and the integration ceiling declared by
+// the end condition is reported next to them rather than folded into them: which slot of which group reaches
+// that ceiling is a scheduling decision, and this view recomputes nothing the compiler did not decide.
 
 // Empty view returned for a refused definition, so a caller reading the numbers does not have to branch on
 // `ok` before finding them absent.
@@ -47,7 +50,9 @@ export function preflight(compilation: SequencerCompilation): SequencerPreflight
 		projectedIntegration += group.projectedIntegration
 	}
 
-	return { ok: true, diagnostics: [], removals, repeat, groups, requiredSlots: requiredSlots * repeat, slotLimit: slotLimit * repeat, projectedIntegration: projectedIntegration * repeat, roles: plan.roles }
+	const { end } = plan.execution
+
+	return { ok: true, diagnostics: [], removals, repeat, groups, requiredSlots: requiredSlots * repeat, slotLimit: slotLimit * repeat, projectedIntegration: projectedIntegration * repeat, integrationLimit: end.type === 'integrationTime' ? end.time : undefined, roles: plan.roles }
 }
 
 // Compiles a definition and returns only its pre-flight view, which is what an editor asks for while the

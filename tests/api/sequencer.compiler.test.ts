@@ -1,9 +1,27 @@
 import { describe, expect, test } from 'bun:test'
 import { compile, sequencerNodeId, sequencerPlanNodes } from 'src/api/sequencer.compiler'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
-import type { Sequencer } from '#/sequencer'
+import type { Sequencer, SequencerDeviceRole } from '#/sequencer'
 import type { SequencerPlanLoop, SequencerPlanSequence } from '#/sequencer.plan'
 import { action, camera, canonical, frame, retry } from './sequencer.fixture'
+
+function handlers(roles: Record<string, readonly SequencerDeviceRole[]> = {}) {
+	const registry = new SequencerBlockRegistry()
+
+	for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.warmCamera']) {
+		const declared = (roles[type] ?? []).map((role) => ({ role }))
+
+		registry.register({
+			type,
+			version: 1,
+			validate: (configuration) => ({ ok: true, configuration }),
+			resources: () => declared,
+			execute: () => Promise.resolve({ type: 'completed', value: undefined } as const),
+		})
+	}
+
+	return registry
+}
 
 function ok(definition: Sequencer) {
 	const compilation = compile(definition)
@@ -216,6 +234,20 @@ describe('structural validation', () => {
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'target[m42].slew.tolerance', message: 'the tolerance is below the arrival tolerance' }])
+	})
+
+	test('a role declared only by a handler is reserved by the session', () => {
+		const compilation = compile(canonical(), { registry: handlers({ 'lifecycle.parkMount': ['wheel'] }) })
+
+		expect(compilation.ok).toBe(true)
+		if (compilation.ok) expect(compilation.plan.roles).toEqual(['camera', 'mount', 'wheel', 'focuser'])
+	})
+
+	test('a role declared only by a handler is refused when no device answers for it', () => {
+		const compilation = compile(canonical(), { registry: handlers({ 'lifecycle.parkMount': ['rotator'] }) })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.rotator', message: 'finalize.action[park] requires the rotator role, which the definition does not declare' }])
 	})
 })
 

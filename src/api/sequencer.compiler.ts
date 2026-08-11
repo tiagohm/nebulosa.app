@@ -428,11 +428,25 @@ function checkRoles(context: CompilerContext, definition: Sequencer, requirement
 	}
 }
 
+// What validating the plan against a registry produced.
+interface HandlerCheck {
+	// Handler version per block type, recorded in the plan and demanded again at session start.
+	readonly versions: Record<string, number>
+	// Roles the handlers declared for their own configurations, addressed to the node that declared them.
+	readonly requirements: readonly RoleRequirement[]
+}
+
 // Validates every action node against the handler registered for its block type, translating each issue into
 // a diagnostic addressed to the node it came from. Without a registry the structural result stands on its
 // own, which is what lets a definition be checked before the handlers of a session are wired.
-function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistry, plan: SequencerPlan): Record<string, number> {
+//
+// A handler also declares the roles its block commands, which the definition alone cannot know: the block
+// type is a stable name and the code behind it may command a device no field of the definition mentions.
+// Those roles join the ones the lowering derived, because the session reserves the union once at start and a
+// role missing from it is a device the action later commands without holding it.
+function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistry, plan: SequencerPlan): HandlerCheck {
 	const versions: Record<string, number> = Object.create(null)
+	const requirements: RoleRequirement[] = []
 
 	for (const node of sequencerPlanNodes(plan.root)) {
 		if (node.kind !== 'action') continue
@@ -446,11 +460,19 @@ function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistr
 
 		const result = handler.validate(node.configuration, { nodeId: node.id, devices: plan.devices })
 
-		if (result.ok) versions[node.type] = handler.version
-		else for (const issue of result.issues) context.diagnostics.push({ path: issue.path.length > 0 ? `${node.id}.${issue.path}` : node.id, message: issue.message })
+		if (!result.ok) {
+			for (const issue of result.issues) context.diagnostics.push({ path: issue.path.length > 0 ? `${node.id}.${issue.path}` : node.id, message: issue.message })
+			continue
+		}
+
+		versions[node.type] = handler.version
+
+		// `resources` receives exactly what this handler's `validate` returned, which is the only value it is
+		// specified against.
+		for (const binding of handler.resources(result.configuration)) requirements.push({ role: binding.role, path: node.id })
 	}
 
-	return versions
+	return { versions, requirements }
 }
 
 // Lowers the guider the session will create and own, or undefined when the plan does not guide.
@@ -707,11 +729,17 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 		storage: { root: storage.root, fileNameTemplate: storage.fileNameTemplate, directoryTemplate: storage.directoryTemplate, temporaryDirectory: storage.temporaryDirectory, checksum: storage.checksum, autoSubFolderMode: storage.autoSubFolderMode },
 	}
 
-	checkRoles(context, definition, requirements)
-
+	// The handlers run before the roles are checked, because a role a handler declares is as required as one
+	// the lowering derived, and reporting a device missing for it is the same diagnostic.
 	const handlers = options?.registry && checkHandlers(context, options.registry, plan)
+
+	if (handlers) {
+		for (const requirement of handlers.requirements) requirements.push(requirement)
+	}
+
+	checkRoles(context, definition, requirements)
 
 	if (context.diagnostics.length > 0) return { ok: false, diagnostics: context.diagnostics }
 
-	return { ok: true, plan: handlers ? { ...plan, handlers } : plan, removals: context.removals }
+	return { ok: true, plan: handlers ? { ...plan, roles: rolesOf(requirements), handlers: handlers.versions } : plan, removals: context.removals }
 }

@@ -362,3 +362,76 @@ describe('node identity', () => {
 		expect(ids.filter((id) => id === 'target[m42].capture.cycle')).toHaveLength(1)
 	})
 })
+
+describe('path containment', () => {
+	test('a frame id with a relative segment is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('../../etc')] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0].id', message: 'the frame id "../../etc" contains a path separator or a relative segment and would escape the storage root' }])
+	})
+
+	test('a target id with a path separator is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, target: { ...definition.target, id: 'orion/m42' } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'target.id', message: 'the target id "orion/m42" contains a path separator or a relative segment and would escape the storage root' }])
+	})
+
+	test('a backslash in a frame id is refused on every host', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum\\red')] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0].id', message: 'the frame id "lum\\red" contains a path separator or a relative segment and would escape the storage root' }])
+	})
+
+	test('a directory template climbing out of the session segment is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, storage: { ...definition.storage, directoryTemplate: '../{target}' } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'storage.directoryTemplate', message: 'the directory segment ".." is a relative segment and would escape the session directory' }])
+	})
+
+	test('a file name template with a separator is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, storage: { ...definition.storage, fileNameTemplate: '{target}/{filter}' } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'storage.fileNameTemplate', message: 'the file name template "{target}/{filter}" is empty or contains a path separator, and the file name is a single segment' }])
+	})
+
+	test('an empty file name template is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, storage: { ...definition.storage, fileNameTemplate: '' } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'storage.fileNameTemplate', message: 'the file name template "" is empty or contains a path separator, and the file name is a single segment' }])
+	})
+
+	test('a relative storage root is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, storage: { ...definition.storage, root: 'data/nebulosa' } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'storage.root', message: 'the storage root "data/nebulosa" is not an absolute path' }])
+	})
+
+	test('a relative temporary directory is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, storage: { ...definition.storage, temporaryDirectory: 'tmp' } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'storage.temporaryDirectory', message: 'the temporary directory "tmp" is not an absolute path' }])
+	})
+
+	test('an empty directory template writes into the session directory', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, storage: { ...definition.storage, directoryTemplate: '' } })
+
+		expect(plan.storage.directoryTemplate).toBe('')
+	})
+})

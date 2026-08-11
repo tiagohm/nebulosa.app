@@ -1,6 +1,8 @@
+import { isAbsolute } from 'path'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Sequencer, SequencerAutofocus, SequencerCameraSettings, SequencerCentering, SequencerDeviceRole, SequencerDither, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerTarget, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
+import { isSequencerPathSegment, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
 import type { SequencerBlockRegistry } from './sequencer.registry'
 
 // Lowering of a sequencer definition into the executable plan.
@@ -423,6 +425,55 @@ function checkUniqueIds(context: CompilerContext, items: readonly { readonly id:
 	}
 }
 
+// Session segment the containment probe stands in for. The real one is derived from the session id at start,
+// which the pure lowering does not have; any safe segment proves the same property, since containment depends
+// on the shape of the composition and not on the value of that segment.
+const SEQUENCER_PROBE_SEGMENT = 'session'
+
+// Reports every value that reaches a path and could leave the directory the session owns.
+//
+// `storage.root`, both templates, the target id and the frame ids arrive over HTTP, and the ids are
+// interpolated into the file name of every artifact, so a `..` or a separator in any of them addresses a
+// directory the operator never approved. They are refused here, at the network boundary, which is where the
+// validation doctrine of the project says to refuse them; the composed path is then proved contained rather
+// than assumed to be.
+function checkStorage(context: CompilerContext, definition: Sequencer) {
+	const { capture, storage, target } = definition
+
+	// An empty id is already reported as unaddressable, and reporting it twice would say nothing new.
+	if (target.id.length > 0 && !isSequencerPathSegment(target.id)) context.diagnostics.push({ path: 'target.id', message: `the target id "${target.id}" contains a path separator or a relative segment and would escape the storage root` })
+
+	for (let i = 0; i < capture.frames.length; i++) {
+		const { id } = capture.frames[i]
+		if (id.length > 0 && !isSequencerPathSegment(id)) context.diagnostics.push({ path: `capture.frames[${i}].id`, message: `the frame id "${id}" contains a path separator or a relative segment and would escape the storage root` })
+	}
+
+	const absolute = isAbsolute(storage.root)
+
+	if (!absolute) context.diagnostics.push({ path: 'storage.root', message: `the storage root "${storage.root}" is not an absolute path` })
+	if (storage.temporaryDirectory !== undefined && !isAbsolute(storage.temporaryDirectory)) context.diagnostics.push({ path: 'storage.temporaryDirectory', message: `the temporary directory "${storage.temporaryDirectory}" is not an absolute path` })
+
+	const directories = sequencerPathSegments(storage.directoryTemplate)
+	let composable = absolute
+
+	for (const directory of directories) {
+		if (!isSequencerPathSegment(directory)) {
+			context.diagnostics.push({ path: 'storage.directoryTemplate', message: `the directory segment "${directory}" is a relative segment and would escape the session directory` })
+			composable = false
+		}
+	}
+
+	if (!isSequencerPathSegment(storage.fileNameTemplate)) {
+		context.diagnostics.push({ path: 'storage.fileNameTemplate', message: `the file name template "${storage.fileNameTemplate}" is empty or contains a path separator, and the file name is a single segment` })
+		composable = false
+	}
+
+	if (composable) {
+		const probe = sequencerArtifactPath({ root: storage.root, session: SEQUENCER_PROBE_SEGMENT, night: SEQUENCER_PROBE_SEGMENT }, directories, storage.fileNameTemplate)
+		if (!probe.ok) context.diagnostics.push({ path: 'storage.root', message: probe.reason })
+	}
+}
+
 // Reports every role the plan commands without a device declared for it.
 function checkRoles(context: CompilerContext, definition: Sequencer, requirements: readonly RoleRequirement[]) {
 	for (const requirement of requirements) {
@@ -518,6 +569,8 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	if (!target.enabled) context.diagnostics.push({ path: 'target.enabled', message: 'the definition has no enabled target to observe' })
 	if (target.id.length === 0) context.diagnostics.push({ path: 'target.id', message: 'the target id is empty and cannot address a node' })
 	if (groups.length === 0) context.diagnostics.push({ path: 'capture.frames', message: 'the definition has no enabled frame group to capture' })
+
+	checkStorage(context, definition)
 
 	if (context.diagnostics.length > 0) return { ok: false, diagnostics: context.diagnostics }
 

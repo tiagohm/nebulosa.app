@@ -583,9 +583,17 @@ export class SequencerRuntime {
 		let events = change.events
 
 		if (artifacts !== undefined) {
+			// An action may report the same artifact more than once before the commit runs — pending, then
+			// committed, then rejected for a frame the analysis threw away. The store keeps the last draft of
+			// each identity, so the event has to be derived from that same collapse: reading every draft would
+			// announce as committed an artifact whose stored status is not.
+			const latest = new Map<string, SequencerArtifactDraft>()
+
+			for (const artifact of artifacts) latest.set(`${artifact.logicalSlotId}#${artifact.attempt}`, artifact)
+
 			const committed: SequencerEventDraft[] = []
 
-			for (const artifact of artifacts) {
+			for (const artifact of latest.values()) {
 				if (artifact.status === 'committed') committed.push({ type: 'artifactCommitted', nodeId: active.plan.action.id, detail: artifact.logicalSlotId })
 			}
 

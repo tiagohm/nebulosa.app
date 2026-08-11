@@ -454,6 +454,32 @@ describe('sequencer runtime', () => {
 		expect(instance.start(instance.create(plan())!.id)).toMatchObject({ ok: true })
 	})
 
+	test('announces only the artifacts whose last draft is committed', async () => {
+		const { runtime: instance, store } = runtime(
+			exposeHandler((context) => {
+				context.artifact({ logicalSlotId: 'slot-1', attempt: 1, status: 'pending' })
+				context.artifact({ logicalSlotId: 'slot-1', attempt: 1, status: 'committed', path: '/data/frame-1.fits' })
+				context.artifact({ logicalSlotId: 'slot-1', attempt: 1, status: 'rejected' })
+				context.artifact({ logicalSlotId: 'slot-2', attempt: 1, status: 'committed', path: '/data/frame-2.fits' })
+
+				return Promise.resolve({ type: 'completed', value: 1 })
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		const session = await instance.settled(created.id)
+
+		expect(session?.state).toBe('completed')
+		expect(store.artifacts(created.id)).toMatchObject([
+			{ logicalSlotId: 'slot-1', attempt: 1, status: 'rejected' },
+			{ logicalSlotId: 'slot-2', attempt: 1, status: 'committed' },
+		])
+		expect(store.events(created.id).filter((event) => event.type === 'artifactCommitted')).toMatchObject([{ nodeId: 'node-1', detail: 'slot-2' }])
+	})
+
 	test('stops a running session, aborting the action and its operations', async () => {
 		const running = Promise.withResolvers<void>()
 		const cleaned: string[] = []

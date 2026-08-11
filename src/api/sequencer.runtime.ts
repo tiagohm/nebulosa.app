@@ -302,9 +302,8 @@ export class SequencerRuntime {
 	// the process exactly as admissible as it was before.
 	start(sessionId: string): SequencerStartResult {
 		const stored = this.#store.session(sessionId)
-		const plan = this.#plans.get(sessionId)
 
-		if (stored === undefined || plan === undefined) return { ok: false, reason: 'unknownSession' }
+		if (stored === undefined) return { ok: false, reason: 'unknownSession' }
 
 		const admission = this.#gate.claim(sessionId)
 
@@ -319,6 +318,15 @@ export class SequencerRuntime {
 		if (stored.state !== 'created') {
 			teardown.run()
 			return { ok: false, reason: 'notStartable', detail: `session is ${stored.state}` }
+		}
+
+		// Plans live in memory only, so a `created` session without one survived a restart of the process and
+		// has to be compiled again before it can start.
+		const plan = this.#plans.get(sessionId)
+
+		if (plan === undefined) {
+			teardown.run()
+			return { ok: false, reason: 'unknownSession', detail: 'no plan is loaded for the session' }
 		}
 
 		const handler = this.#registry.handler(plan.action.type)
@@ -481,6 +489,10 @@ export class SequencerRuntime {
 			// The claim is released here, after the cleanups and the reservation, and never on reaching the
 			// terminal state, which still had this work behind it.
 			active.teardown.run((error) => console.error('sequencer teardown failed:', active.id, error))
+
+			// A terminal session never starts again, so its plan is dead weight the process would otherwise
+			// carry until it exits.
+			this.#plans.delete(active.id)
 
 			this.#active = undefined
 			active.artifacts.length = 0

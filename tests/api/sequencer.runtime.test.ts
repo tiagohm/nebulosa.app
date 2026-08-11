@@ -254,6 +254,22 @@ describe('sequencer runtime', () => {
 		expect(instance.start(second.id)).toMatchObject({ ok: true, reentrant: false })
 	})
 
+	test('refuses to start an unknown session and a session that already ran', async () => {
+		const { runtime: instance } = runtime(exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 })))
+
+		expect(instance.start('session-404')).toEqual({ ok: false, reason: 'unknownSession' })
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		await instance.settled(created.id)
+
+		// The plan is dropped at finalization, and the terminal state is still what refuses the restart.
+		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'notStartable', detail: 'session is completed' })
+		expect(instance.activeSessionId).toBeUndefined()
+	})
+
 	test('refuses to start when the recorded handler version no longer matches', () => {
 		const { runtime: instance, registry, arbiter } = runtime(exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 })))
 		const created = instance.create(plan())!

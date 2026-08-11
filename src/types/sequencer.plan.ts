@@ -1,5 +1,5 @@
 import type { CameraTransferFormat, FrameType } from 'nebulosa/src/devices/indi/device'
-import type { SequencerCameraSettings, SequencerCapture, SequencerDeviceRole, SequencerDevices, SequencerFilterReference, SequencerRetryPolicy, SequencerStorage } from './sequencer'
+import type { SequencerCameraSettings, SequencerCapture, SequencerDeviceRole, SequencerDevices, SequencerFilterReference, SequencerLocalGuider, SequencerRemoteGuider, SequencerRetryPolicy, SequencerStorage } from './sequencer'
 
 // Executable plan produced by lowering a definition, and the diagnostics that lowering emits instead of a
 // plan. The definition in `sequencer.ts` is declarative and per feature; this is the node tree the runtime
@@ -141,6 +141,9 @@ export interface SequencerPlan {
 	readonly startup?: SequencerPlanPipeline
 	// Finalize pipeline policy; absent when the definition declares no terminal action to run.
 	readonly finalize?: SequencerPlanFinalize
+	// Guider the session creates and owns, absent when the plan does not guide. It is part of the plan
+	// because the session reserves the logical keys of that guider at start, before any guiding command.
+	readonly guider?: SequencerRemoteGuider | SequencerLocalGuider
 	// Storage decisions of the session.
 	readonly storage: SequencerPlanStorage
 }

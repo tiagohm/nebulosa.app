@@ -1,0 +1,149 @@
+import { describe, expect, test } from 'bun:test'
+import type { Camera, Device, Focuser, GuideOutput, Mount, Wheel } from 'nebulosa/src/devices/indi/device'
+import { DEFAULT_CAMERA, DEFAULT_FOCUSER, DEFAULT_GUIDE_OUTPUT, DEFAULT_MOUNT, DEFAULT_WHEEL } from 'nebulosa/src/devices/indi/device'
+import { compile } from 'src/api/sequencer.compiler'
+import { resolveResources } from 'src/api/sequencer.resolve'
+import type { Sequencer } from '#/sequencer'
+import type { SequencerPlan } from '#/sequencer.plan'
+import { canonical, frame } from './sequencer.fixture'
+
+function device<D extends Device>(defaults: D, name: string, hardwareId: string): D {
+	return { ...structuredClone(defaults), id: name, hardwareId, name, connected: true, client: { type: 'SIMULATOR', id: 'client' } }
+}
+
+function devices(...list: Device[]) {
+	const map = new Map(list.map((it) => [it.name, it]))
+	return (id: string) => map.get(id)
+}
+
+function observatory() {
+	return {
+		camera: device<Camera>(DEFAULT_CAMERA, 'Camera Simulator', 'hardware-camera'),
+		mount: device<Mount>(DEFAULT_MOUNT, 'Mount Simulator', 'hardware-mount'),
+		wheel: device<Wheel>(DEFAULT_WHEEL, 'Wheel Simulator', 'hardware-wheel'),
+		focuser: device<Focuser>(DEFAULT_FOCUSER, 'Focuser Simulator', 'hardware-focuser'),
+		guideCamera: device<Camera>(DEFAULT_CAMERA, 'Guide Camera Simulator', 'hardware-guide-camera'),
+		guideOutput: device<GuideOutput>(DEFAULT_GUIDE_OUTPUT, 'Guide Output Simulator', 'hardware-guide-output'),
+	}
+}
+
+function plan(definition: Sequencer): SequencerPlan {
+	const compilation = compile(definition)
+	if (!compilation.ok) throw new Error(`expected a plan, got ${JSON.stringify(compilation.diagnostics)}`)
+	return compilation.plan
+}
+
+function guided(): Sequencer {
+	const definition = canonical()
+
+	return {
+		...definition,
+		devices: { ...definition.devices, guideCamera: 'Guide Camera Simulator', guideOutput: 'Guide Output Simulator' },
+		guiding: { ...definition.guiding, enabled: true, connection: { mode: 'local', focalLength: 0.24, capture: { exposureTime: 2, frameType: 'LIGHT', binX: 1, binY: 1, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false }, owned: true } },
+	}
+}
+
+describe('resource resolution', () => {
+	test('every role resolves to the hardware key of its device', () => {
+		const setup = observatory()
+		const resolution = resolveResources(plan(canonical()), devices(setup.camera, setup.mount, setup.focuser))
+
+		expect(resolution.ok).toBe(true)
+		if (!resolution.ok) return
+
+		expect(resolution.resources.bindings.map((binding) => binding.role)).toEqual(['camera', 'mount', 'focuser'])
+		expect(resolution.resources.requests.map((request) => request.key)).toEqual(['hardware-camera', 'hardware-mount', 'hardware-focuser'])
+		expect(resolution.resources.requests.every((request) => request.device !== undefined)).toBe(true)
+	})
+
+	test('two roles on the same hardware collapse into one key', () => {
+		const setup = observatory()
+		const wheel = device<Wheel>(DEFAULT_WHEEL, 'Wheel Simulator', setup.camera.hardwareId)
+		const definition = canonical()
+		const compiled = plan({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { filter: { type: 'position', position: 1 } })] } })
+		const resolution = resolveResources(compiled, devices(setup.camera, setup.mount, wheel, setup.focuser))
+
+		expect(resolution.ok).toBe(true)
+		if (!resolution.ok) return
+
+		expect(compiled.roles).toContain('wheel')
+		expect(resolution.resources.bindings).toHaveLength(4)
+		expect(resolution.resources.requests.map((request) => request.key)).toEqual(['hardware-camera', 'hardware-mount', 'hardware-focuser'])
+	})
+
+	test('a local guider adds one logical key per guided device', () => {
+		const setup = observatory()
+		const resolution = resolveResources(plan(guided()), devices(setup.camera, setup.mount, setup.focuser, setup.guideCamera, setup.guideOutput))
+
+		expect(resolution.ok).toBe(true)
+		if (!resolution.ok) return
+
+		expect(resolution.resources.requests.map((request) => request.key)).toEqual(['hardware-camera', 'hardware-mount', 'hardware-focuser', 'hardware-guide-camera', 'hardware-guide-output', 'logical:guider:local:camera:hardware-guide-camera', 'logical:guider:local:output:hardware-guide-output'])
+	})
+
+	test('a remote guider adds its logical key and no device', () => {
+		const setup = observatory()
+		const definition = canonical()
+		const remote = { ...definition, guiding: { ...definition.guiding, enabled: true, connection: { mode: 'remote', host: 'PHD2.local', port: 4400, owned: true } as const } }
+		const resolution = resolveResources(plan(remote), devices(setup.camera, setup.mount, setup.focuser))
+
+		expect(resolution.ok).toBe(true)
+		if (!resolution.ok) return
+
+		const guider = resolution.resources.requests.at(-1)
+
+		expect(guider?.key).toBe('logical:guider:remote:phd2.local:4400')
+		expect(guider?.device).toBeUndefined()
+	})
+
+	test('a role no device answers for is refused', () => {
+		const setup = observatory()
+		const resolution = resolveResources(plan(canonical()), devices(setup.camera, setup.focuser))
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.diagnostics).toEqual([{ path: 'devices.mount', message: 'no device named "Mount Simulator" is available for the mount role' }])
+	})
+
+	test('a device that cannot do what the role requires is refused', () => {
+		const setup = observatory()
+		const impostor = device<Camera>(DEFAULT_CAMERA, 'Mount Simulator', 'hardware-impostor')
+		const resolution = resolveResources(plan(canonical()), devices(setup.camera, impostor, setup.focuser))
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.diagnostics).toEqual([{ path: 'devices.mount', message: 'the device "Mount Simulator" does not support the mount role' }])
+	})
+
+	test('every unresolvable role is reported at once', () => {
+		const setup = observatory()
+		const resolution = resolveResources(plan(canonical()), devices(setup.camera))
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.diagnostics.map((diagnostic) => diagnostic.path)).toEqual(['devices.mount', 'devices.focuser'])
+	})
+})
+
+describe('guider ownership', () => {
+	test('a guider session owned by another component is refused at compilation', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, guiding: { ...definition.guiding, enabled: true, connection: { mode: 'existing', guider: 'phd2', owned: false } } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.connection.mode', message: 'a guider session owned by another component cannot be reserved by this session' }])
+	})
+
+	test('an unowned remote guider is refused at compilation', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, guiding: { ...definition.guiding, enabled: true, connection: { mode: 'remote', host: 'localhost', port: 4400, owned: false } } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.connection.owned', message: 'the session must own the guider session it reserves' }])
+	})
+
+	test('a plan that does not guide reserves no logical key', () => {
+		const setup = observatory()
+		const resolution = resolveResources(plan(canonical()), devices(setup.camera, setup.mount, setup.focuser))
+
+		expect(resolution.ok).toBe(true)
+		if (resolution.ok) expect(resolution.resources.requests.every((request) => !request.key.startsWith('logical:'))).toBe(true)
+	})
+})

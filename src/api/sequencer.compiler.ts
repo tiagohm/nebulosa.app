@@ -452,6 +452,30 @@ function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistr
 	}
 }
 
+// Lowers the guider the session will create and own, or undefined when the plan does not guide.
+//
+// V1 has a single guiding mode, creating and owning the session, and it is not a policy preference: the
+// session reserves the logical keys of the guider at start, so a guider session already open holds a lease on
+// exactly those keys and the reservation fails before any guiding policy is consulted. A mode that reuses a
+// session someone else owns therefore describes a path no session can reach.
+function lowerGuider(context: CompilerContext, definition: Sequencer) {
+	const { guiding } = definition
+
+	if (!guiding.enabled) return undefined
+
+	if (guiding.connection.mode === 'existing') {
+		context.diagnostics.push({ path: 'guiding.connection.mode', message: 'a guider session owned by another component cannot be reserved by this session' })
+		return undefined
+	}
+
+	if (!guiding.connection.owned) {
+		context.diagnostics.push({ path: 'guiding.connection.owned', message: 'the session must own the guider session it reserves' })
+		return undefined
+	}
+
+	return guiding.connection
+}
+
 // Deduplicates the required roles and returns them in the fixed role order, which is what the session
 // reserves at start. Two features requiring the same role reserve it once.
 function rolesOf(requirements: readonly RoleRequirement[]): SequencerDeviceRole[] {
@@ -509,6 +533,7 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	if (shutdown.runOnFailure) runOn.push('failed')
 
 	const requirements = roleRequirements(definition, groups)
+	const guider = lowerGuider(context, definition)
 
 	const plan: SequencerPlan = {
 		definitionId: definition.id ?? '',
@@ -519,6 +544,7 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 		groups,
 		startup: lowered && { continueOnFailure: startup.continueOnFailure },
 		finalize: finalized && { continueOnFailure: shutdown.continueOnFailure, runOn },
+		guider,
 		storage: { root: storage.root, fileNameTemplate: storage.fileNameTemplate, directoryTemplate: storage.directoryTemplate, temporaryDirectory: storage.temporaryDirectory, checksum: storage.checksum, autoSubFolderMode: storage.autoSubFolderMode },
 	}
 

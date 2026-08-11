@@ -811,6 +811,10 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	// The coordinate of the declared frame is optional in the transport type, and only a pointing action reads
 	// it: without it the slew would be commanded with an undefined right ascension and declination.
 	if ((target.goto.enabled || target.center.enabled) && target[target.type] === undefined) context.diagnostics.push({ path: `target.${target.type}`, message: `the target points in ${target.type} and declares no ${target.type} coordinate to point at` })
+	// The tracking policy reaches the plan only through the slew, which establishes it on arrival. Without a
+	// slew there is no node carrying the mode and the rates, so an enabled tracking would be a policy the
+	// session declares and never commands.
+	if (target.tracking.enabled && !target.goto.enabled) context.diagnostics.push({ path: 'target.tracking.enabled', message: 'tracking is established by the slew on arrival, and the target declares no slew to establish it' })
 	if (groups.length === 0) context.diagnostics.push({ path: 'capture.frames', message: 'the definition has no enabled frame group to capture' })
 
 	checkStorage(context, definition)

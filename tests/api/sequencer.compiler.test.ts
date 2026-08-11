@@ -70,7 +70,7 @@ describe('lowering', () => {
 
 	test('a disabled slew or centering produces no node', () => {
 		const definition = canonical()
-		const { plan } = ok({ ...definition, target: { ...definition.target, goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } } })
+		const { plan } = ok({ ...definition, target: { ...definition.target, tracking: { ...definition.target.tracking, enabled: false }, goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } } })
 		const target = plan.root.children[1] as SequencerPlanSequence
 
 		expect(target.children.map((node) => node.id)).toEqual(['target[m42].capture.loop'])
@@ -199,9 +199,17 @@ describe('structural validation', () => {
 
 	test('a target with no pointing action needs no coordinate', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, target: { ...definition.target, type: 'JNOW', goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } } })
+		const compilation = compile({ ...definition, target: { ...definition.target, type: 'JNOW', tracking: { ...definition.target.tracking, enabled: false }, goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } } })
 
 		expect(compilation.ok).toBe(true)
+	})
+
+	test('a target tracking without a slew to establish it is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, target: { ...definition.target, goto: { ...definition.target.goto, enabled: false } } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'target.tracking.enabled', message: 'tracking is established by the slew on arrival, and the target declares no slew to establish it' }])
 	})
 
 	test('a dither without a guider is refused', () => {
@@ -622,7 +630,7 @@ describe('failure policies', () => {
 
 	test('the policy of a disabled target feature is not reported', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, target: { ...definition.target, goto: { ...definition.target.goto, enabled: false, retry: { ...retry(), retryOn: ['disconnected'] } } } })
+		const compilation = compile({ ...definition, target: { ...definition.target, tracking: { ...definition.target.tracking, enabled: false }, goto: { ...definition.target.goto, enabled: false, retry: { ...retry(), retryOn: ['disconnected'] } } } })
 
 		expect(compilation.ok).toBe(true)
 	})

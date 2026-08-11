@@ -267,6 +267,24 @@ function render(template: string, naming: SequencerFrameNaming) {
 	})
 }
 
+// Names Windows reserves for character devices, matched on the part before the first dot because that is what
+// the platform resolves: `CON` and `CON.fit` both address the console. `COM0` and `LPT0` are reserved alongside
+// the numbered ones on current versions, so the whole digit range is covered. The comparison is
+// case-insensitive, and no other spelling can reach it: encoding maps every character outside the safe class
+// onto a dash, so the superscript forms of the port numbers never survive to be tested.
+const SEQUENCER_RESERVED_DEVICE = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i
+
+// Escapes a segment that names a reserved device, by appending a separator the platform does not read as part
+// of a device name. A reserved name is at most four characters, so the appended one never pushes a bounded
+// segment past the component budget.
+//
+// The escape is not cosmetic: on a Windows host, creating a directory under a reserved name fails, and it
+// fails for every frame of the definition rather than for one of them. A target named `AUX` or a filter named
+// `NUL` is an ordinary value no contract forbids.
+function escapeReservedSegment(segment: string) {
+	return SEQUENCER_RESERVED_DEVICE.test(segment) ? `${segment}-` : segment
+}
+
 // Directory segments the directory template renders to for one frame, in order.
 //
 // Empty segments are dropped, so a template whose only content is a placeholder that rendered empty writes
@@ -276,12 +294,15 @@ function render(template: string, naming: SequencerFrameNaming) {
 // nobody can create fails the write of every frame below it. A directory carries no identity, so cutting it
 // costs nothing but readability — two values differing only past the budget end up in one directory, and the
 // frames inside it keep the distinct names their slot tokens give them.
+//
+// A segment naming a reserved device is escaped. Only directories need it: a frame name always carries the
+// slot token, and an auxiliary name always carries its kind and ordinal, so neither can be a reserved name.
 export function sequencerFrameDirectories(template: string, naming: SequencerFrameNaming) {
 	const segments: string[] = []
 
 	for (const segment of render(template, naming).split(/[/\\]/)) {
 		const encoded = trimSegment(encodeSegment(segment), SEQUENCER_NAME_LIMIT)
-		if (encoded.length > 0) segments.push(encoded)
+		if (encoded.length > 0) segments.push(escapeReservedSegment(encoded))
 	}
 
 	return segments

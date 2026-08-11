@@ -136,6 +136,13 @@ describe('frame naming', () => {
 		expect(sequencerFrameDirectories('{target}', naming({ targetId: '..' }))).toEqual([])
 	})
 
+	test('escapes a segment that names a reserved device', () => {
+		expect(sequencerFrameDirectories('{target}/{filter}', naming({ targetId: 'CON', filter: 'aux' }))).toEqual(['CON-', 'aux-'])
+		expect(sequencerFrameDirectories('{target}/{filter}', naming({ targetId: 'com1', filter: 'LPT9' }))).toEqual(['com1-', 'LPT9-'])
+		expect(sequencerFrameDirectories('{target}', naming({ targetId: 'NUL.fit' }))).toEqual(['NUL.fit-'])
+		expect(sequencerFrameDirectories('{target}/{filter}', naming({ targetId: 'console', filter: 'com' }))).toEqual(['console', 'com'])
+	})
+
 	test('drops the segments a template rendered empty', () => {
 		expect(sequencerFrameDirectories('{target}/{filter}', naming({ filter: undefined }))).toEqual(['m42'])
 		expect(sequencerFrameDirectories('', naming())).toEqual([])

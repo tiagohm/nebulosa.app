@@ -4,7 +4,7 @@ import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Sequencer, SequencerAutofocus, SequencerCamera, SequencerCentering, SequencerCooling, SequencerDeviceRole, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { sequencerUnknownPlaceholders } from './sequencer.identity'
-import { isSequencerPathSegment, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
+import { SEQUENCER_AUXILIARY_SEGMENT, isSequencerPathSegment, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
 import type { SequencerBlockRegistry } from './sequencer.registry'
 
 // Lowering of a sequencer definition into the executable plan.
@@ -529,6 +529,12 @@ function checkStorage(context: CompilerContext, definition: Sequencer) {
 	for (const directory of directories) {
 		if (!isSequencerPathSegment(directory)) {
 			context.diagnostics.push({ path: 'storage.directoryTemplate', message: `the directory segment "${directory}" is a relative segment and would escape the session directory` })
+			composable = false
+		} else if (directory === SEQUENCER_AUXILIARY_SEGMENT) {
+			// The reserved segment holds the images that fill no slot. A template writing frames into it would
+			// mix them with images the reconciliation is meant to ignore, so it is refused while the operator is
+			// still editing rather than at the first write.
+			context.diagnostics.push({ path: 'storage.directoryTemplate', message: `the directory segment "${directory}" is reserved for the images that are not frames of the plan` })
 			composable = false
 		}
 	}

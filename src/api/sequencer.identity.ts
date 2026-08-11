@@ -1,5 +1,6 @@
 import type { SequencerPlanFrameGroup } from '#/sequencer.plan'
 import type { SequencerArtifact } from '#/sequencer.state'
+import type { SequencerAuxiliaryKind } from './sequencer.path'
 
 // Identity of a captured frame: which slot of the plan it fills, which physical attempt produced it, and what
 // it is called on disk.
@@ -230,4 +231,20 @@ export function sequencerFrameFileName(template: string, naming: SequencerFrameN
 	const attempt = naming.attempt >= 1 ? `-a${naming.attempt}` : ''
 
 	return `${readable.length > 0 ? `${readable}-` : ''}${token}${attempt}.${extension}`
+}
+
+// Digits of the ordinal of an auxiliary image, enough that a night of autofocus runs sorts lexicographically
+// and small enough to stay readable.
+const SEQUENCER_AUXILIARY_DIGITS = 5
+
+// File name of one auxiliary image: the kind that produced it and an ordinal inside that kind.
+//
+// The name deliberately carries no slot token and no storage template. An auxiliary image fills no slot, so a
+// name shaped like a slot would be found by the reconciliation and counted as a frame of the plan, and a
+// template placeholder like the group or the ordinal has nothing to render from. The ordinal only separates
+// the images of one kind from each other and orders them; it means nothing to the plan.
+//
+// `extension` is the file extension without the dot.
+export function sequencerAuxiliaryFileName(kind: SequencerAuxiliaryKind, ordinal: number, extension: string) {
+	return `${kind}-${`${ordinal}`.padStart(SEQUENCER_AUXILIARY_DIGITS, '0')}.${extension}`
 }

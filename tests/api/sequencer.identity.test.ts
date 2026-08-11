@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { sequencerNodeId } from 'src/api/sequencer.compiler'
-import { SEQUENCER_TEMPLATE_PLACEHOLDERS, sequencerArtifactId, sequencerFrameDirectories, sequencerFrameFileName, sequencerLogicalSlotId, sequencerSlotAttempt, sequencerSlotToken, sequencerUnknownPlaceholders } from 'src/api/sequencer.identity'
+import { SEQUENCER_TEMPLATE_PLACEHOLDERS, sequencerArtifactId, sequencerAuxiliaryFileName, sequencerFrameDirectories, sequencerFrameFileName, sequencerLogicalSlotId, sequencerSlotAttempt, sequencerSlotToken, sequencerUnknownPlaceholders } from 'src/api/sequencer.identity'
 import type { SequencerFrameNaming } from 'src/api/sequencer.identity'
 import { isSequencerPathSegment } from 'src/api/sequencer.path'
 import type { SequencerPlanFrameGroup } from '#/sequencer.plan'
@@ -140,5 +140,26 @@ describe('frame naming', () => {
 		expect(sequencerUnknownPlaceholders('{target}-{filter}-{exposure}')).toEqual([])
 		expect(sequencerUnknownPlaceholders('{target}-{camera}-{camera}')).toEqual(['camera'])
 		expect(SEQUENCER_TEMPLATE_PLACEHOLDERS).toContain('frameType')
+	})
+})
+
+describe('auxiliary file names', () => {
+	test('names an auxiliary image by kind and ordinal', () => {
+		expect(sequencerAuxiliaryFileName('autofocus', 0, 'fit')).toBe('autofocus-00000.fit')
+		expect(sequencerAuxiliaryFileName('driftCheck', 42, 'xisf')).toBe('driftCheck-00042.xisf')
+		expect(isSequencerPathSegment(sequencerAuxiliaryFileName('guider', 7, 'fit'))).toBe(true)
+	})
+
+	test('carries no slot token, so the reconciliation cannot read it as a frame', () => {
+		const slot = sequencerLogicalSlotId(sequencerNodeId.captureFrame('m42', 'lum'), 'lum', 0, 0)
+
+		expect(sequencerAuxiliaryFileName('centering', 0, 'fit')).not.toContain(sequencerSlotToken(slot))
+		expect(sequencerAuxiliaryFileName('centering', 0, 'fit')).not.toMatch(/-[0-9a-f]{8}\./)
+	})
+
+	test('orders the images of one kind lexicographically', () => {
+		const names = [sequencerAuxiliaryFileName('autofocus', 10, 'fit'), sequencerAuxiliaryFileName('autofocus', 2, 'fit'), sequencerAuxiliaryFileName('autofocus', 1, 'fit')]
+
+		expect(names.toSorted()).toEqual([sequencerAuxiliaryFileName('autofocus', 1, 'fit'), sequencerAuxiliaryFileName('autofocus', 2, 'fit'), sequencerAuxiliaryFileName('autofocus', 10, 'fit')])
 	})
 })

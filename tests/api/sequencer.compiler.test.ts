@@ -925,6 +925,14 @@ describe('path containment', () => {
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'storage.fileNameTemplate', message: 'the placeholder "{camera}" is not interpolated, and it would be written into the path verbatim' }])
 	})
 
+	test('a directory template reaching the reserved auxiliary segment is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, storage: { ...definition.storage, directoryTemplate: '.auxiliary/{target}' } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'storage.directoryTemplate', message: 'the directory segment ".auxiliary" is reserved for the images that are not frames of the plan' }])
+	})
+
 	test('an empty directory template writes into the session directory', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, storage: { ...definition.storage, directoryTemplate: '' } })

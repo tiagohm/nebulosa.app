@@ -74,6 +74,51 @@ export function sequencerSessionDirectory(context: SequencerPathContext) {
 	return context.night ? resolve(context.root, context.night, context.session) : resolve(context.root, context.session)
 }
 
+// Directory of the images that are not frames of the plan, directly below the session directory.
+//
+// Autofocus, centering, drift check and the guider all produce images, and none of them fills a slot: they
+// register no artifact, move no capture counter and advance no trigger anchor. Keeping them under a segment
+// of their own is what makes that separation hold on disk — the reconciliation of §14.5 walks the paths the
+// session predicts, and an auxiliary image sharing that space would either collide with a slot name or be
+// read as a frame nobody asked for.
+//
+// The segment is reserved by the runtime and never derived from `directoryTemplate`, for the same reason the
+// session segment is not: a template cannot be allowed to remove the separation the reconciliation depends
+// on. The leading dot keeps it out of the way of a directory listing of the night's frames.
+export const SEQUENCER_AUXILIARY_SEGMENT = '.auxiliary'
+
+// What an auxiliary image was produced for. Each kind gets a directory of its own inside the auxiliary
+// segment, so the calibration library of §25 can index one kind without walking the others.
+//
+// `quarantine` is not a capture: it is where §14.5 moves a final file that did not parse, when the definition
+// asks for it to be preserved for diagnosis. It belongs here because the one thing it must not do is stay in
+// the namespace of the slots.
+export type SequencerAuxiliaryKind = 'autofocus' | 'centering' | 'driftCheck' | 'guider' | 'quarantine'
+
+// Directory one kind of auxiliary image is written into, `root/[night]/session/.auxiliary/kind`. Built only
+// from values the runtime controls, so it is normalized and not checked.
+export function sequencerAuxiliaryDirectory(context: SequencerPathContext, kind: SequencerAuxiliaryKind) {
+	return resolve(sequencerSessionDirectory(context), SEQUENCER_AUXILIARY_SEGMENT, kind)
+}
+
+// Composes the path of one auxiliary image and proves it is lexically contained.
+//
+// `fileName` is decided by whoever produced the image and may not carry a separator or a relative name. It
+// carries no slot token, because the image fills no slot: a name that looked like a slot would be picked up
+// by the reconciliation as a frame of the plan.
+export function sequencerAuxiliaryPath(context: SequencerPathContext, kind: SequencerAuxiliaryKind, fileName: string): SequencerPathResolution {
+	if (!isAbsolute(context.root)) return { ok: false, reason: `the storage root "${context.root}" is not an absolute path` }
+
+	if (!isSequencerPathSegment(fileName)) return { ok: false, reason: `the file name "${fileName}" is not a valid path segment` }
+
+	const base = sequencerSessionDirectory(context)
+	const path = resolve(base, SEQUENCER_AUXILIARY_SEGMENT, kind, fileName)
+
+	if (!path.startsWith(base + sep)) return { ok: false, reason: `the path "${path}" escapes the session directory "${base}"` }
+
+	return { ok: true, path }
+}
+
 // Composes the path of one artifact from the directories a template rendered and the final file name, and
 // proves it is lexically contained.
 //
@@ -90,6 +135,11 @@ export function sequencerArtifactPath(context: SequencerPathContext, directories
 
 	for (const directory of directories) {
 		if (!isSequencerPathSegment(directory)) return { ok: false, reason: `the directory segment "${directory}" is not a valid path segment` }
+
+		// A template that rendered the reserved name would write frames of the plan into the auxiliary space, and
+		// its first segment would land exactly where the auxiliary images live. The name is refused at every
+		// depth, because a nested one is the same name meaning something it does not mean.
+		if (directory === SEQUENCER_AUXILIARY_SEGMENT) return { ok: false, reason: `the directory segment "${directory}" is reserved for the images that are not frames of the plan` }
 	}
 
 	if (!isSequencerPathSegment(fileName)) return { ok: false, reason: `the file name "${fileName}" is not a valid path segment` }

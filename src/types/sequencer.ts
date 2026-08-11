@@ -599,7 +599,9 @@ export interface SequencerLocalGuider {
 
 	// Capture recipe used by this feature.
 	// The nested object must be valid for the selected camera.
-	readonly capture: SequencerAuxiliaryCapture
+	// The filter reference is omitted: a local guider drives its guide camera alone, and the only wheel the
+	// session addresses is the imaging one, which a guide filter must never move.
+	readonly capture: Omit<SequencerAuxiliaryCapture, 'filter'>
 	// Indicates whether the Sequencer owns and must close the referenced session.
 	// true permits lifecycle cleanup; false preserves externally managed sessions.
 	readonly owned: boolean

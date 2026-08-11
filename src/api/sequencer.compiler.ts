@@ -957,10 +957,12 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	// The coordinate of the declared frame is optional in the transport type, and only a pointing action reads
 	// it: without it the slew would be commanded with an undefined right ascension and declination.
 	if ((target.goto.enabled || target.center.enabled) && target[target.type] === undefined) context.diagnostics.push({ path: `target.${target.type}`, message: `the target points in ${target.type} and declares no ${target.type} coordinate to point at` })
-	// The tracking policy reaches the plan only through the slew, which establishes it on arrival. Without a
-	// slew there is no node carrying the mode and the rates, so an enabled tracking would be a policy the
-	// session declares and never commands.
-	if (target.tracking.enabled && !target.goto.enabled) context.diagnostics.push({ path: 'target.tracking.enabled', message: 'tracking is established by the slew on arrival, and the target declares no slew to establish it' })
+	// Two nodes carry the tracking policy and command it: the slew, which establishes it on arrival, and the
+	// startup action that starts tracking, which is how a session captures the field the mount is already on.
+	// With neither of them there is no node carrying the mode and the rates, so an enabled tracking would be a
+	// policy the session declares and never commands. Only a startup action counts: one placed in `shutdown`
+	// runs after the last frame, so it would start tracking for a capture that is already over.
+	if (target.tracking.enabled && !target.goto.enabled && !commands(definition, ['startTracking'], ['startup'])) context.diagnostics.push({ path: 'target.tracking.enabled', message: 'tracking is established by the slew on arrival or by a startup action that starts it, and the definition declares neither' })
 	if (groups.length === 0) context.diagnostics.push({ path: 'capture.frames', message: 'the definition has no enabled frame group to capture' })
 
 	checkStorage(context, definition)

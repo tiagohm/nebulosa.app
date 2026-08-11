@@ -285,12 +285,29 @@ describe('structural validation', () => {
 		expect(compilation.ok).toBe(true)
 	})
 
-	test('a target tracking without a slew to establish it is refused', () => {
+	test('a target tracking with nothing to establish it is refused', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, target: { ...definition.target, goto: { ...definition.target.goto, enabled: false } } })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'target.tracking.enabled', message: 'tracking is established by the slew on arrival, and the target declares no slew to establish it' }])
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'target.tracking.enabled', message: 'tracking is established by the slew on arrival or by a startup action that starts it, and the definition declares neither' }])
+	})
+
+	test('a startup action that starts tracking establishes it without a slew', () => {
+		const definition = canonical()
+		const startup = { ...definition.startup, actions: [...definition.startup.actions, action('track', { type: 'startTracking' })] }
+		const compilation = compile({ ...definition, startup, target: { ...definition.target, goto: { ...definition.target.goto, enabled: false } } })
+
+		expect(compilation.ok).toBe(true)
+	})
+
+	test('a shutdown action that starts tracking does not establish it for the capture', () => {
+		const definition = canonical()
+		const shutdown = { ...definition.shutdown, actions: [action('track', { type: 'startTracking' }), ...definition.shutdown.actions] }
+		const compilation = compile({ ...definition, shutdown, target: { ...definition.target, goto: { ...definition.target.goto, enabled: false } } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics.map((diagnostic) => diagnostic.path)).toEqual(['target.tracking.enabled'])
 	})
 
 	test('a dither without a guider is refused', () => {

@@ -259,6 +259,54 @@ export type SequencerCompilation =
 			readonly diagnostics: readonly SequencerDiagnostic[]
 	  }
 
+// One frame group as the pre-flight view reports it. Every number is per cycle, which is the unit the
+// termination proof is stated in; the session totals are on the view itself.
+export interface SequencerPreflightGroup {
+	// Frame group the numbers belong to.
+	readonly id: string
+	// Human-readable label of the group, as the editor shows it.
+	readonly name: string
+	// Frame classification of the group.
+	readonly frameType: FrameType
+	// Exposure duration of every frame of the group, in seconds.
+	readonly exposureTime: number
+	// Slots the group needs to reach its target in one cycle.
+	readonly requiredSlots: number
+	// Extra slots the group may spend on abandoned exposures in one cycle.
+	readonly abandonmentBudget: number
+	// Hard ceiling on the slots the scheduler may emit for the group in one cycle.
+	readonly slotLimit: number
+	// Accepted exposure time of one cycle when every required slot is accepted, in seconds.
+	readonly projectedIntegration: number
+}
+
+// Everything a definition tells about itself before it runs: why it was refused, what was dropped from it,
+// and how much of the night it asks for. It is the answer of `validate`, of the compilation event, and of
+// the plan of a session, so the operator compares what was written against what was compiled instead of
+// discovering the difference from the result of a night.
+export interface SequencerPreflight {
+	// Whether the definition lowered into an executable plan.
+	readonly ok: boolean
+	// Every reason the definition was refused, empty when it compiled.
+	readonly diagnostics: readonly SequencerDiagnostic[]
+	// Fields accepted but observably dropped from the executable plan.
+	readonly removals: readonly SequencerRemoval[]
+	// Complete passes over the frame groups, `0` when the definition was refused.
+	readonly repeat: number
+	// Per-cycle numbers of every frame group, in declaration order.
+	readonly groups: readonly SequencerPreflightGroup[]
+	// Slots the whole session needs, `repeat` times the required slots of every group.
+	readonly requiredSlots: number
+	// Slots the whole session may emit at most, `repeat` times the slot limit of every group. With the
+	// attempt budget of each group it is the bound that makes the capture loop provably terminate.
+	readonly slotLimit: number
+	// Accepted exposure time of the whole session when every required slot is accepted, in seconds. It is a
+	// projection, not a promise: abandoned slots reduce it.
+	readonly projectedIntegration: number
+	// Roles the session reserves at start, empty when the definition was refused.
+	readonly roles: readonly SequencerDeviceRole[]
+}
+
 // Transfer format of a plan camera setting, re-exported so consumers of the plan do not have to reach into
 // the device layer for the type of a field they read.
 export type SequencerPlanTransferFormat = CameraTransferFormat

@@ -459,6 +459,22 @@ describe('termination', () => {
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0].exposureTime', message: 'a frame group with an integration time requires a positive exposure time' }])
 	})
 
+	test('an integration target that overflows its slot count is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: Number.MAX_VALUE, exposureTime: Number.MIN_VALUE })] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0].integrationTime', message: 'the integration target needs more exposures of this length than a number can count, so the group has no slot limit to stop at' }])
+	})
+
+	test('an integration target that overflows is bounded by a frame count', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 5, integrationTime: Number.MAX_VALUE, exposureTime: Number.MIN_VALUE })] } })
+
+		expect(compilation.ok).toBe(true)
+		if (compilation.ok) expect(compilation.plan.groups[0].requiredSlots).toBe(5)
+	})
+
 	test('a capture with no cycle is refused', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, capture: { ...definition.capture, repeat: 0 } })

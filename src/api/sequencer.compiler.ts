@@ -172,21 +172,23 @@ function integrationSlotsOf(integrationTime: number, exposureTime: number) {
 // With both criteria active the group concludes at the cheaper of the two, so the smaller demand is the one
 // that decides. The integration criterion divides exactly rather than approximately: every slot of a group
 // exposes for the same `exposureTime` and, in V1, an accepted frame is every captured frame, so the
-// accumulated integration grows in identical steps. The caller guarantees the group is enabled and that
-// `exposureTime > 0` whenever `integrationTime > 0`, so the result is finite and >= 1.
+// accumulated integration grows in identical steps. For an enabled group the result is >= 1, and it is
+// infinite when the only active criterion is an integration target whose ratio to the exposure overflows,
+// which is what `checkTermination` refuses before a plan is built.
 function requiredSlotsOf(frame: SequencerFrame) {
 	const byCount = frame.count > 0 ? frame.count : Number.POSITIVE_INFINITY
 	const byIntegration = frame.integrationTime > 0 ? integrationSlotsOf(frame.integrationTime, frame.exposureTime) : Number.POSITIVE_INFINITY
 	return Math.min(byCount, byIntegration)
 }
 
-// Reports the two ways a frame group makes the capture loop unbounded, which is one of the only situations
+// Reports the three ways a frame group makes the capture loop unbounded, which is one of the only situations
 // this project checks at runtime.
 //
 // An integration target with a zero exposure divides by zero and yields an infinite slot limit, which is the
-// infinite loop coming back through another door. A repetition count of zero would have to be read as "no
-// cycle at all", and silently disabling the whole capture through the repetition counter is precisely the
-// quiet acceptance the compatibility rule forbids.
+// infinite loop coming back through another door, and an integration target so much larger than its exposure
+// that their ratio overflows arrives at the same infinity by a longer road. A repetition count of zero would
+// have to be read as "no cycle at all", and silently disabling the whole capture through the repetition
+// counter is precisely the quiet acceptance the compatibility rule forbids.
 function checkTermination(context: CompilerContext, definition: Sequencer) {
 	const { frames, repeat } = definition.capture
 
@@ -194,7 +196,11 @@ function checkTermination(context: CompilerContext, definition: Sequencer) {
 
 	for (let i = 0; i < frames.length; i++) {
 		const frame = frames[i]
-		if (frameGroupEnabled(frame) && frame.integrationTime > 0 && frame.exposureTime <= 0) context.diagnostics.push({ path: `capture.frames[${i}].exposureTime`, message: 'a frame group with an integration time requires a positive exposure time' })
+
+		if (!frameGroupEnabled(frame)) continue
+
+		if (frame.integrationTime > 0 && frame.exposureTime <= 0) context.diagnostics.push({ path: `capture.frames[${i}].exposureTime`, message: 'a frame group with an integration time requires a positive exposure time' })
+		else if (!Number.isFinite(requiredSlotsOf(frame))) context.diagnostics.push({ path: `capture.frames[${i}].integrationTime`, message: 'the integration target needs more exposures of this length than a number can count, so the group has no slot limit to stop at' })
 	}
 }
 

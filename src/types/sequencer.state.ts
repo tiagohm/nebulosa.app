@@ -174,7 +174,9 @@ export type SequencerArtifactStatus = 'pending' | 'committed' | 'rejected'
 export interface SequencerArtifactDraft {
 	// Logical slot the artifact fills, identifying target, group, and slot index within the plan.
 	readonly logicalSlotId: string
-	// Attempt that produced it, starting at 1.
+	// Attempt that produced it, starting at 0 and growing only when a previous attempt was rejected or
+	// abandoned. It is derived from this registry rather than stored anywhere else, so it never disagrees with
+	// what was written.
 	readonly attempt: number
 	// Status to register or move to.
 	readonly status: SequencerArtifactStatus

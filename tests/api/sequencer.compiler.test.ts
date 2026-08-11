@@ -917,6 +917,14 @@ describe('path containment', () => {
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'storage.temporaryDirectory', message: 'the temporary directory "tmp" is not an absolute path' }])
 	})
 
+	test('a placeholder no renderer interpolates is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, storage: { ...definition.storage, fileNameTemplate: '{target}-{camera}' } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'storage.fileNameTemplate', message: 'the placeholder "{camera}" is not interpolated, and it would be written into the path verbatim' }])
+	})
+
 	test('an empty directory template writes into the session directory', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, storage: { ...definition.storage, directoryTemplate: '' } })

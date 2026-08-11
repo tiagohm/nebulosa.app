@@ -3,6 +3,7 @@ import type { MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Sequencer, SequencerAutofocus, SequencerCamera, SequencerCentering, SequencerCooling, SequencerDeviceRole, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
+import { sequencerUnknownPlaceholders } from './sequencer.identity'
 import { isSequencerPathSegment, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
 import type { SequencerBlockRegistry } from './sequencer.registry'
 
@@ -535,6 +536,17 @@ function checkStorage(context: CompilerContext, definition: Sequencer) {
 	if (!isSequencerPathSegment(storage.fileNameTemplate)) {
 		context.diagnostics.push({ path: 'storage.fileNameTemplate', message: `the file name template "${storage.fileNameTemplate}" is empty or contains a path separator, and the file name is a single segment` })
 		composable = false
+	}
+
+	// A placeholder the renderer does not interpolate survives into the file name as literal text, so the
+	// operator who asked for a value gets the word back and every frame of the group carries it.
+	for (const [path, template] of [
+		['storage.directoryTemplate', storage.directoryTemplate],
+		['storage.fileNameTemplate', storage.fileNameTemplate],
+	] as const) {
+		for (const placeholder of sequencerUnknownPlaceholders(template)) {
+			context.diagnostics.push({ path, message: `the placeholder "{${placeholder}}" is not interpolated, and it would be written into the path verbatim` })
+		}
 	}
 
 	if (composable) {

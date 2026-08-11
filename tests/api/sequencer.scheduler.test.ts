@@ -102,6 +102,14 @@ describe('frame group completion', () => {
 		expect(frameGroupReachedTarget(lum, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, cursor: 9, accepted: 9, captured: 9, integration: integration - lum.exposureTime })).toBeFalse()
 	})
 
+	test('never forgives a whole exposure of a long target of short frames', () => {
+		const lucky = group('lucky', { count: 0, exposureTime: 0.0004, integrationTime: 1_000_000, requiredSlots: 2_500_000_000 })
+
+		expect(frameGroupReachedTarget(lucky, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, integration: 999_999.9992 })).toBeFalse()
+		expect(frameGroupReachedTarget(lucky, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, integration: 1_000_000 - lucky.exposureTime })).toBeFalse()
+		expect(frameGroupReachedTarget(lucky, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, integration: 1_000_000 - lucky.exposureTime * 0.25 })).toBeTrue()
+	})
+
 	test('concludes degraded when the cursor reaches the slot limit without the target', () => {
 		const lum = group('lum', { count: 3, abandonmentBudget: 1 })
 		const exhausted: SequencerGroupProgress = { ...SEQUENCER_INITIAL_GROUP_PROGRESS, cursor: 4, accepted: 1, rejected: 3, abandoned: 3 }

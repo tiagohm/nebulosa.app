@@ -84,10 +84,17 @@ export function groupProgressOf(progress: SequencerTargetProgress, groupId: stri
 // group that captured every frame it needed is classified as degraded when it has no abandonment budget, and
 // spends a slot of that budget on an eleventh frame the target does not need when it has one.
 //
-// The bound is orders of magnitude above the error of summing any number of exposures a night can hold and
-// orders of magnitude below the shortest exposure an operator can declare, so it never concludes a group that
-// is genuinely one exposure short.
+// The bound is orders of magnitude above the error of summing any number of exposures a night can hold, and it
+// is capped below so that it never reaches the length of one exposure.
 const SEQUENCER_INTEGRATION_TOLERANCE = 1e-9
+
+// Fraction of one exposure the slack may never exceed. A relative slack grows with the target while the
+// exposure does not, and past a target of about a million times the tolerance it stops absorbing a rounding
+// error and starts forgiving whole frames: with 0.0004-second exposures and a target of 1000000 seconds the
+// relative slack alone is 0.001 seconds, so a group two frames short of its target would be reported as having
+// reached it. Half an exposure cannot forgive a frame by construction, and it is still far above the error of
+// summing the exposures that reach any target of that size.
+const SEQUENCER_INTEGRATION_TOLERANCE_LIMIT = 0.5
 
 // Whether a group reached the target it was asked for in the current cycle.
 //
@@ -96,9 +103,14 @@ const SEQUENCER_INTEGRATION_TOLERANCE = 1e-9
 // `repeat: 3` of a group of ten frames three blocks of ten rather than one block of thirty.
 //
 // The integration target is compared with the tolerance of the accumulated sum, matching the tolerance the
-// compiler applied to the same target when it derived the slots the group was given.
+// compiler applied to the same target when it derived the slots the group was given, and capped in exposures
+// like the compiler caps its own in slots.
 export function frameGroupReachedTarget(group: SequencerPlanFrameGroup, progress: SequencerGroupProgress) {
-	return (group.count > 0 && progress.accepted >= group.count) || (group.integrationTime > 0 && progress.integration >= group.integrationTime * (1 - SEQUENCER_INTEGRATION_TOLERANCE))
+	if (group.count > 0 && progress.accepted >= group.count) return true
+	if (group.integrationTime <= 0) return false
+
+	const slack = Math.min(group.integrationTime * SEQUENCER_INTEGRATION_TOLERANCE, group.exposureTime * SEQUENCER_INTEGRATION_TOLERANCE_LIMIT)
+	return progress.integration >= group.integrationTime - slack
 }
 
 // Whether a group concluded the current cycle without reaching its target, having spent every slot the

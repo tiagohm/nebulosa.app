@@ -171,11 +171,11 @@ describe('session start resolution', () => {
 		if (!resolution.ok) expect(resolution.diagnostics.map((diagnostic) => diagnostic.path)).toContain('handlers.slew')
 	})
 
-	test('a plan compiled without a registry accepts whatever version is registered', () => {
+	test('a plan compiled without a registry is refused before anything is reserved', () => {
 		const resolution = resolveSession(compiled(canonical()), environment({ registry: registry(9) }))
 
-		expect(resolution.ok).toBe(true)
-		if (resolution.ok) expect(resolution.session.handlers.slew).toBe(9)
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.diagnostics).toEqual([{ path: 'handlers', message: 'the plan was compiled without a registry, so no handler declared the roles its block commands and the session would reserve less than it commands' }])
 	})
 
 	test('a temporary directory on another filesystem refuses the start', () => {

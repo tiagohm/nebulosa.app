@@ -205,7 +205,9 @@ export interface SequencerPlan {
 	// Handler version per block type, recorded when the compilation resolved the registry. The session start
 	// demands the same versions again, because a handler can be registered, replaced, or removed between
 	// validating a definition and running it, and a version that changed means the block no longer does what
-	// the plan was compiled against. Absent when the definition was compiled without a registry.
+	// the plan was compiled against. Absent when the definition was compiled without a registry, which is the
+	// pre-flight compilation: such a plan is refused at session start, because a handler that was never asked
+	// also never declared the roles its block commands.
 	readonly handlers?: Readonly<Record<string, number>>
 	// Storage decisions of the session.
 	readonly storage: SequencerPlanStorage

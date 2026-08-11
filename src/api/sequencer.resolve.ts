@@ -273,6 +273,13 @@ function checkTemporaryDirectory(diagnostics: SequencerDiagnostic[], plan: Seque
 // A failure carries every reason at once and resolves nothing, so the caller keeps the session idle and
 // unwinds whatever it had already set up rather than starting a session that is half configured.
 export function resolveSession(plan: SequencerPlan, environment: SequencerSessionEnvironment): SequencerSessionResolution {
+	// A plan compiled without a registry is the pre-flight product, and it is not startable: its roles are only
+	// the ones the definition itself implies, because no handler was asked which devices its block commands, so
+	// a handler declaring an extra role contributed nothing to `plan.roles` and the session would reserve less
+	// than it later commands. Re-validating the nodes here would resolve that, but it would also mean lowering
+	// decisions being taken outside the compiler, so the plan is refused instead of repaired.
+	if (plan.handlers === undefined) return { ok: false, diagnostics: [{ path: 'handlers', message: 'the plan was compiled without a registry, so no handler declared the roles its block commands and the session would reserve less than it commands' }] }
+
 	const resolution = resolveResources(plan, environment.lookup)
 
 	if (!resolution.ok) return resolution

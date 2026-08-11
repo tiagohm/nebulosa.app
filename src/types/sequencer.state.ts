@@ -85,6 +85,51 @@ export interface SequencerCheckpoint {
 	readonly handlerVersions: Readonly<Record<string, number>>
 }
 
+// Counters of one frame group inside the current cycle.
+//
+// Every counter is per cycle and resets when the cycle advances, because `count` and `integrationTime` are
+// per-cycle targets: `repeat: 3` of a group asking for ten frames is three blocks of ten, not thirty frames
+// in one block. Accumulating across cycles would make `repeat` indistinguishable from multiplying `count`.
+//
+// The three outcome counters exist separately even though two of them are constant in V1, where a physically
+// completed frame is always accepted and only an abandoned slot is ever rejected. Quality evaluation only has
+// to stop incrementing `accepted` and start incrementing `rejected`; neither the scheduler nor the stop
+// condition changes.
+export interface SequencerGroupProgress {
+	// Slots already emitted in this cycle, which is also the ordinal of the next slot. It never reaches beyond
+	// the `slotLimit` of the group, which is what bounds the cycle.
+	readonly cursor: number
+	// Frames accepted, which is the counter the completion criteria are stated in.
+	readonly accepted: number
+	// Frames physically completed. In V1 this equals `accepted`, since nothing rejects a completed frame.
+	readonly captured: number
+	// Frames discarded. In V1 only an abandoned slot increments it.
+	readonly rejected: number
+	// Slots closed without an accepted frame after exhausting their attempt window.
+	readonly abandoned: number
+	// Accumulated exposure time of the accepted frames of this cycle, in seconds.
+	readonly integration: number
+	// Physical attempt the current attempt window opened at. Attempts spent in the window are `attempt -
+	// attemptWindowStart`, exhaustion is that difference reaching the maximum, and granting a new window after
+	// a pause is writing the next physical attempt here. Only the window start is stored: the physical attempt
+	// itself is derived from the artifact registry, so the two can never disagree after a crash.
+	readonly attemptWindowStart: number
+}
+
+// Capture progress of one target: the cycle it is in and the counters of every group inside that cycle.
+export interface SequencerTargetProgress {
+	// Cycle of `repeat` being executed, starting at 0. The loop ends when cycle `repeat - 1` completes.
+	readonly cycle: number
+	// Counters per frame group id, holding an entry only for the groups the cycle has already touched.
+	readonly groups: Readonly<Record<string, SequencerGroupProgress>>
+}
+
+// Capture progress of the whole session, keyed by target id.
+//
+// V1 has exactly one entry, and the map exists anyway: the progress goes into the checkpoint, and turning a
+// record into a map afterwards would invalidate every checkpoint written before.
+export type SequencerCaptureProgress = Readonly<Record<string, SequencerTargetProgress>>
+
 // Categories of persisted event. All are low volume and all are needed to reconstruct what a session did.
 // - stateChanged: a lifecycle transition.
 // - policyApplied: a failure policy decision, such as a retry or a skip.

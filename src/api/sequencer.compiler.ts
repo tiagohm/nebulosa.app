@@ -867,6 +867,11 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	// the mount would be told to track without being told at which rate.
 	if (!target.tracking.enabled && commands(definition, ['startTracking'])) diagnostics.push({ path: 'target.tracking.enabled', message: 'a lifecycle action starts tracking, and the target block it reads the tracking mode and rates from is disabled' })
 
+	// The capture order selects the scheduler implementation, and this version implements the sequential one
+	// only. Lowering another order would produce a plan captured in an order other than the one that was asked
+	// for, with no way for the operator to notice it from the result of the night.
+	if (capture.order !== 'sequential') diagnostics.push({ path: 'capture.order', message: 'this version schedules frames in the declaration order of the groups, so no other capture order is executed' })
+
 	if (capture.abortOnDeviceAlert) diagnostics.push({ path: 'capture.abortOnDeviceAlert', message: 'this version has no device alert source, so the flag would promise a protection that does not exist' })
 	if (capture.continueAfterRejectedFrame) removals.push({ path: 'capture.continueAfterRejectedFrame', reason: 'quality evaluation is not executed, so no frame is ever rejected and the flag has no path to take effect' })
 

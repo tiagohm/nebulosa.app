@@ -191,7 +191,9 @@ describe('sequencer runtime', () => {
 		expect(session?.endedAt).toBeDefined()
 		expect(session?.checkpoint.completed).toEqual(['node-1'])
 		expect(session?.checkpoint.cursor).toBeUndefined()
-		expect(store.events(created.id).map((event) => event.state)).toEqual(['running', 'finalizing', 'completed'])
+		expect(store.events(created.id).map((event) => event.type)).toEqual(['stateChanged', 'stateChanged', 'artifactCommitted', 'stateChanged'])
+		expect(store.events(created.id).map((event) => event.state)).toEqual(['running', 'finalizing', undefined, 'completed'])
+		expect(store.events(created.id)[2]).toMatchObject({ nodeId: 'node-1', detail: 'slot-1' })
 		expect(store.artifacts(created.id)).toMatchObject([{ logicalSlotId: 'slot-1', attempt: 1, status: 'committed' }])
 
 		// The reservation and the claim are gone only after the action and its cleanups finished.

@@ -462,10 +462,6 @@ export class SequencerRuntime {
 		const state = terminalStateOf(result)
 		const events: SequencerEventDraft[] = [{ type: 'stateChanged', state, nodeId: node }]
 
-		for (const artifact of active.artifacts) {
-			if (artifact.status === 'committed') events.push({ type: 'artifactCommitted', nodeId: node })
-		}
-
 		const session = this.#commit(active, {
 			state,
 			desiredState: state === 'stopped' ? 'stopped' : undefined,
@@ -493,6 +489,23 @@ export class SequencerRuntime {
 	// The runtime is the only writer of an active session, so a mismatch here is a defect rather than a race
 	// to retry: it means two code paths inside the runtime believe they own the same session.
 	#commit(active: ActiveSession, change: SessionChange) {
+		const artifacts = active.artifacts.length > 0 ? active.artifacts.slice() : undefined
+
+		// The event announcing a committed artifact is derived here, from the artifacts this very commit
+		// writes, so both land in the same atomic unit. Deriving it anywhere else means either an event for an
+		// artifact the store refused, or an artifact no event ever announced.
+		let events = change.events
+
+		if (artifacts !== undefined) {
+			const committed: SequencerEventDraft[] = []
+
+			for (const artifact of artifacts) {
+				if (artifact.status === 'committed') committed.push({ type: 'artifactCommitted', nodeId: active.plan.action.id, detail: artifact.logicalSlotId })
+			}
+
+			if (committed.length > 0) events = events === undefined ? committed : [...events, ...committed]
+		}
+
 		const result = this.#store.commit({
 			sessionId: active.id,
 			expectedRevision: active.revision,
@@ -500,8 +513,8 @@ export class SequencerRuntime {
 			desiredState: change.desiredState,
 			failure: change.failure,
 			checkpoint: change.checkpoint,
-			events: change.events,
-			artifacts: active.artifacts.length > 0 ? active.artifacts.slice() : undefined,
+			events,
+			artifacts,
 		})
 
 		if (!result.ok) throw new Error(`sequencer commit refused: ${result.reason} (session ${active.id})`)

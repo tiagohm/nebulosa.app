@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { SequencerCapture, SequencerLifecycle } from 'src/api/sequencer.compiler'
+import type { SequencerCapture, SequencerCenter, SequencerLifecycle, SequencerMeridianFlipTrigger } from 'src/api/sequencer.compiler'
 import { compile, sequencerNodeId, sequencerPlanNodes } from 'src/api/sequencer.compiler'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { Sequencer, SequencerDeviceRole } from '#/sequencer'
@@ -68,9 +68,37 @@ describe('lowering', () => {
 		expect(loop.body.children.map((node) => node.id)).toEqual(['target[m42].trigger.autofocus', 'target[m42].capture.frame[lum]', 'target[m42].capture.frame[red]'])
 	})
 
+	test('a flip that recenters carries the centering of the target', () => {
+		const { plan } = ok(canonical())
+		const target = plan.root.children[1] as SequencerPlanSequence
+		const loop = target.children[2] as SequencerPlanLoop
+		const center = target.children[1] as SequencerPlanAction
+		const flip = loop.body.children[0] as SequencerPlanAction
+
+		expect((flip.configuration as SequencerMeridianFlipTrigger).centering).toEqual(center.configuration as SequencerCenter)
+	})
+
+	test('a flip that does not recenter carries no centering', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, meridianFlip: { ...definition.meridianFlip, recenter: false } })
+		const target = plan.root.children[1] as SequencerPlanSequence
+		const loop = target.children[2] as SequencerPlanLoop
+		const flip = loop.body.children[0] as SequencerPlanAction
+
+		expect((flip.configuration as SequencerMeridianFlipTrigger).centering).toBeUndefined()
+	})
+
+	test('a flip that recenters is refused when the target does not center', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, target: { ...definition.target, center: { ...definition.target.center, enabled: false } } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'meridianFlip.recenter', message: 'the flip recenters after crossing, and the target declares no centering it could re-establish the pointing with' }])
+	})
+
 	test('a disabled slew or centering produces no node', () => {
 		const definition = canonical()
-		const { plan } = ok({ ...definition, target: { ...definition.target, tracking: { ...definition.target.tracking, enabled: false }, goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } } })
+		const { plan } = ok({ ...definition, meridianFlip: { ...definition.meridianFlip, recenter: false }, target: { ...definition.target, tracking: { ...definition.target.tracking, enabled: false }, goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } } })
 		const target = plan.root.children[1] as SequencerPlanSequence
 
 		expect(target.children.map((node) => node.id)).toEqual(['target[m42].capture.loop'])
@@ -199,7 +227,11 @@ describe('structural validation', () => {
 
 	test('a target with no pointing action needs no coordinate', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, target: { ...definition.target, type: 'JNOW', tracking: { ...definition.target.tracking, enabled: false }, goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } } })
+		const compilation = compile({
+			...definition,
+			meridianFlip: { ...definition.meridianFlip, recenter: false },
+			target: { ...definition.target, type: 'JNOW', tracking: { ...definition.target.tracking, enabled: false }, goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } },
+		})
 
 		expect(compilation.ok).toBe(true)
 	})

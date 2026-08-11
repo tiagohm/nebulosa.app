@@ -1,7 +1,7 @@
 import { isAbsolute } from 'path'
 import type { MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-import type { Sequencer, SequencerCamera, SequencerCentering, SequencerCooling, SequencerDeviceRole, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerRetryPolicy, SequencerTargetTracking } from '#/sequencer'
+import type { Sequencer, SequencerCamera, SequencerCentering, SequencerCooling, SequencerDeviceRole, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { isSequencerPathSegment, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
 import type { SequencerBlockRegistry } from './sequencer.registry'
@@ -51,6 +51,16 @@ export interface SequencerSlew extends Omit<SequencerGoto, 'enabled'> {
 export interface SequencerCenter extends Omit<SequencerCentering, 'enabled'> {
 	// Coordinates the solved field is compared against.
 	readonly coordinates: MountTargetCoordinate<Angle>
+}
+
+// Configuration of the meridian-flip trigger: the declared flip policy plus the centering it re-establishes.
+export interface SequencerMeridianFlipTrigger extends Omit<SequencerMeridianFlip, 'enabled'> {
+	// Centering to perform once the mount is on the other side, present only when the flip asks to recenter and
+	// undefined otherwise. A flip invalidates the pointing, and a handler is given its configuration and an
+	// execution context that does not carry the plan, so the coordinates, solver, tolerance, and auxiliary
+	// capture the recentering needs travel with the node that commands it. It is the same centering the target
+	// performs before the loop, which is what makes the field the flip restores the field it started from.
+	readonly centering?: SequencerCenter
 }
 
 // Configuration of one capture action, which is the frame group plus the settling the capture plan requires
@@ -265,15 +275,30 @@ function lowerPipeline(pipeline: 'startup' | 'finalize', enabled: boolean, actio
 	return children.length > 0 ? { kind: 'sequence', id: sequencerNodeId.pipeline(pipeline), children } : undefined
 }
 
+// Lowers the centering of the target, or undefined when the target does not center. The coordinates are the
+// ones the target points at, so the node carries the pointing the solved field is compared against.
+function lowerCentering(definition: Sequencer): SequencerCenter | undefined {
+	const { target } = definition
+
+	if (!target.center.enabled) return undefined
+
+	const { enabled, ...center } = target.center
+
+	return { ...center, coordinates: { type: target.type, [target.type]: { ...target[target.type] } } }
+}
+
 // Lowers the safe-point triggers of the capture loop, in the order they are evaluated before a frame: the
 // flip first, because it invalidates the pointing everything else assumes; then autofocus, which needs the
 // final pointing; then the dither, which is the last thing done before the exposure starts.
-function lowerTriggers(definition: Sequencer, targetId: string): SequencerPlanAction[] {
+//
+// `centering` is the lowered centering of the target, which the flip carries when it recenters.
+function lowerTriggers(definition: Sequencer, targetId: string, centering: SequencerCenter | undefined): SequencerPlanAction[] {
 	const { autofocus, dither, meridianFlip } = definition
 	const triggers: SequencerPlanAction[] = []
 
 	if (meridianFlip.enabled) {
-		const { enabled, ...configuration } = meridianFlip
+		const { enabled, ...flip } = meridianFlip
+		const configuration: SequencerMeridianFlipTrigger = { ...flip, centering: meridianFlip.recenter ? centering : undefined }
 		triggers.push({ kind: 'action', id: sequencerNodeId.trigger(targetId, 'meridianFlip'), type: SEQUENCER_BLOCK_TYPE.meridianFlip, configuration })
 	}
 
@@ -306,10 +331,10 @@ function lowerTarget(definition: Sequencer, groups: readonly SequencerPlanFrameG
 		children.push({ kind: 'action', id: sequencerNodeId.slew(target.id), type: SEQUENCER_BLOCK_TYPE.slew, configuration })
 	}
 
-	if (target.center.enabled) {
-		const { enabled, ...center } = target.center
-		const configuration: SequencerCenter = { ...center, coordinates: { type: target.type, [target.type]: { ...target[target.type] } } }
-		children.push({ kind: 'action', id: sequencerNodeId.center(target.id), type: SEQUENCER_BLOCK_TYPE.center, configuration })
+	const centering = lowerCentering(definition)
+
+	if (centering) {
+		children.push({ kind: 'action', id: sequencerNodeId.center(target.id), type: SEQUENCER_BLOCK_TYPE.center, configuration: centering })
 	}
 
 	const frames = groups.map<SequencerPlanAction>((group) => {
@@ -317,7 +342,7 @@ function lowerTarget(definition: Sequencer, groups: readonly SequencerPlanFrameG
 		return { kind: 'action', id: group.nodeId, type: SEQUENCER_BLOCK_TYPE.captureFrame, configuration }
 	})
 
-	const body: SequencerPlanSequence = { kind: 'sequence', id: sequencerNodeId.captureCycle(target.id), children: [...lowerTriggers(definition, target.id), ...frames] }
+	const body: SequencerPlanSequence = { kind: 'sequence', id: sequencerNodeId.captureCycle(target.id), children: [...lowerTriggers(definition, target.id, centering), ...frames] }
 
 	children.push({ kind: 'loop', id: sequencerNodeId.captureLoop(target.id), repeat: capture.repeat, order: capture.order, groups, body })
 
@@ -724,7 +749,7 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 // Rejection is the default and removal is reserved for a field that is inert: the two removals below change
 // nothing about what the session does, while everything rejected here would change what it does.
 function checkCompatibility(context: CompilerContext, definition: Sequencer) {
-	const { autofocus, calibration, capture, cooling, cover, dither, dome, execution, flatPanel, guiding, monitoring, notification, quality, rotator, safety, shutdown, startup, storage, target } = definition
+	const { autofocus, calibration, capture, cooling, cover, dither, dome, execution, flatPanel, guiding, meridianFlip, monitoring, notification, quality, rotator, safety, shutdown, startup, storage, target } = definition
 	const { diagnostics, removals } = context
 
 	if (definition.schemaVersion !== SEQUENCER_SCHEMA_VERSION) diagnostics.push({ path: 'schemaVersion', message: `the definition declares schema version ${definition.schemaVersion}, and this version compiles ${SEQUENCER_SCHEMA_VERSION}` })
@@ -732,6 +757,12 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 
 	if (target.constraints.enabled) diagnostics.push({ path: 'target.constraints.enabled', message: 'target constraints require the ephemeris and the monitor lane this version does not have' })
 	if (target.center.enabled && target.center.recenterAfterDrift) diagnostics.push({ path: 'target.center.recenterAfterDrift', message: 'recentering on drift is a safe-point trigger of the capture loop, and this version centers once before the loop and lowers no centering into it' })
+
+	// The flip carries the centering of the target, because a handler is given its node configuration and a
+	// context that does not carry the plan. A target that does not center therefore leaves the flip nothing to
+	// re-establish the pointing with, and the trigger would come back from the other side of the meridian on
+	// whatever field the slew alone landed on.
+	if (meridianFlip.enabled && meridianFlip.recenter && !target.center.enabled) diagnostics.push({ path: 'meridianFlip.recenter', message: 'the flip recenters after crossing, and the target declares no centering it could re-establish the pointing with' })
 
 	if (capture.abortOnDeviceAlert) diagnostics.push({ path: 'capture.abortOnDeviceAlert', message: 'this version has no device alert source, so the flag would promise a protection that does not exist' })
 	if (capture.continueAfterRejectedFrame) removals.push({ path: 'capture.continueAfterRejectedFrame', reason: 'quality evaluation is not executed, so no frame is ever rejected and the flag has no path to take effect' })

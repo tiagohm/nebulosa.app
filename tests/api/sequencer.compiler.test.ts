@@ -378,6 +378,79 @@ describe('structural validation', () => {
 	})
 })
 
+describe('termination', () => {
+	test('a frame count alone decides the slots', () => {
+		const { plan } = ok(canonical())
+
+		expect(plan.groups[0].requiredSlots).toBe(10)
+		expect(plan.groups[0].abandonmentBudget).toBe(0)
+		expect(plan.groups[0].slotLimit).toBe(10)
+		expect(plan.groups[0].projectedIntegration).toBe(600)
+	})
+
+	test('an integration time alone decides the slots, rounded up', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 500, exposureTime: 60 })] } })
+
+		expect(plan.groups[0].requiredSlots).toBe(9)
+		expect(plan.groups[0].projectedIntegration).toBe(540)
+	})
+
+	test('with both criteria active the cheaper one decides the slots', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 10, integrationTime: 300, exposureTime: 60 }), frame('red', { count: 3, integrationTime: 600, exposureTime: 60 })] } })
+
+		expect(plan.groups.map((group) => group.requiredSlots)).toEqual([5, 3])
+	})
+
+	test('the abandonment budget raises the slot limit without raising the target', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 10, abandonmentBudget: 2 })] } })
+
+		expect(plan.groups[0].requiredSlots).toBe(10)
+		expect(plan.groups[0].slotLimit).toBe(12)
+		expect(plan.groups[0].projectedIntegration).toBe(600)
+	})
+
+	test('the exposures of one cycle are bounded by the slot limit times the attempts per slot', () => {
+		const { plan } = ok(canonical())
+		const group = plan.groups[0]
+
+		expect(group.slotLimit * group.retry.maxAttempts).toBe(30)
+	})
+
+	test('a group with neither criterion is disabled', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum'), frame('red', { count: 0, integrationTime: 0 })] } })
+
+		expect(plan.groups.map((group) => group.id)).toEqual(['lum'])
+	})
+
+	test('a definition whose every group is disabled by its criteria is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 0 })] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames', message: 'the definition has no enabled frame group to capture' }])
+	})
+
+	test('an integration time with a zero exposure time is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 600, exposureTime: 0 })] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0].exposureTime', message: 'a frame group with an integration time requires a positive exposure time' }])
+	})
+
+	test('a capture with no cycle is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, repeat: 0 } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.repeat', message: 'the capture must run at least one cycle' }])
+	})
+})
+
 describe('node identity', () => {
 	test('every node id is unique', () => {
 		const { plan } = ok(canonical())

@@ -80,6 +80,19 @@ export interface SequencerPlanFrameGroup {
 	readonly camera: SequencerCameraSettings
 	// Failure policy of the capture action, which is also the attempt budget of every slot of the group.
 	readonly retry: SequencerRetryPolicy
+	// Slots the group needs to reach its target in one cycle, derived from whichever completion criteria are
+	// active; always >= 1, since a group needing no slot is a disabled group and never reaches the plan.
+	readonly requiredSlots: number
+	// Extra slots the group may spend on abandoned exposures and still reach its target, `0` when the
+	// definition declares none. It is slack, not a stop trigger: it never ends the group by itself.
+	readonly abandonmentBudget: number
+	// Hard ceiling on the slots the scheduler may emit for the group in one cycle, `requiredSlots +
+	// abandonmentBudget`. Together with `retry.maxAttempts` it bounds the exposures of one autonomous cycle
+	// by `slotLimit × retry.maxAttempts`, which is what makes the capture loop provably terminate.
+	readonly slotLimit: number
+	// Accepted exposure time the group produces in one cycle when every required slot is accepted, in
+	// seconds. It is the honest projection of the plan, not a promise: abandoned slots reduce it.
+	readonly projectedIntegration: number
 }
 
 // Ordered lifecycle pipeline executed once per session, as a sibling of the target block.

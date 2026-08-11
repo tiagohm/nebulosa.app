@@ -183,10 +183,53 @@ function cameraSettingsOf(frame: SequencerFrame, defaults: SequencerCameraSettin
 	return { ...defaults, ...frame.camera, subframe: frame.camera.subframe ?? defaults.subframe }
 }
 
+// Whether a frame group contributes anything to the plan.
+//
+// A group concludes on whichever completion criterion is reached first, and `0` disables each criterion, so a
+// group that declares neither a frame count nor an integration time concludes on nothing. Following the
+// contract, disabling both criteria disables the group, with exactly the effect of `enabled: false`; the
+// alternative reading is a group that captures forever, which no operator writes on purpose.
+function frameGroupEnabled(frame: SequencerFrame) {
+	return frame.enabled && (frame.count > 0 || frame.integrationTime > 0)
+}
+
+// Slots one group needs to reach its target in one cycle.
+//
+// With both criteria active the group concludes at the cheaper of the two, so the smaller demand is the one
+// that decides. The integration criterion divides exactly rather than approximately: every slot of a group
+// exposes for the same `exposureTime` and, in V1, an accepted frame is every captured frame, so the
+// accumulated integration grows in identical steps. The caller guarantees the group is enabled and that
+// `exposureTime > 0` whenever `integrationTime > 0`, so the result is finite and >= 1.
+function requiredSlotsOf(frame: SequencerFrame) {
+	const byCount = frame.count > 0 ? frame.count : Number.POSITIVE_INFINITY
+	const byIntegration = frame.integrationTime > 0 ? Math.ceil(frame.integrationTime / frame.exposureTime) : Number.POSITIVE_INFINITY
+	return Math.min(byCount, byIntegration)
+}
+
+// Reports the two ways a frame group makes the capture loop unbounded, which is one of the only situations
+// this project checks at runtime.
+//
+// An integration target with a zero exposure divides by zero and yields an infinite slot limit, which is the
+// infinite loop coming back through another door. A repetition count of zero would have to be read as "no
+// cycle at all", and silently disabling the whole capture through the repetition counter is precisely the
+// quiet acceptance the compatibility rule forbids.
+function checkTermination(context: CompilerContext, definition: Sequencer) {
+	const { frames, repeat } = definition.capture
+
+	if (repeat < 1) context.diagnostics.push({ path: 'capture.repeat', message: 'the capture must run at least one cycle' })
+
+	for (let i = 0; i < frames.length; i++) {
+		const frame = frames[i]
+		if (frameGroupEnabled(frame) && frame.integrationTime > 0 && frame.exposureTime <= 0) context.diagnostics.push({ path: `capture.frames[${i}].exposureTime`, message: 'a frame group with an integration time requires a positive exposure time' })
+	}
+}
+
 // Lowers one enabled frame into a normalized group. The delay is resolved here, from the frame when it
 // declares one and from the capture plan otherwise, so the scheduler never sees an undefined spacing.
 function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): SequencerPlanFrameGroup {
 	const { capture, target } = definition
+	const requiredSlots = requiredSlotsOf(frame)
+	const abandonmentBudget = frame.abandonmentBudget ?? 0
 
 	return {
 		id: frame.id,
@@ -200,6 +243,10 @@ function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): Sequence
 		filter: frame.filter,
 		camera: cameraSettingsOf(frame, capture.defaults),
 		retry: capture.retry,
+		requiredSlots,
+		abandonmentBudget,
+		slotLimit: requiredSlots + abandonmentBudget,
+		projectedIntegration: requiredSlots * frame.exposureTime,
 	}
 }
 
@@ -431,8 +478,10 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 
 	const groups: SequencerPlanFrameGroup[] = []
 
+	checkTermination(context, definition)
+
 	for (const frame of capture.frames) {
-		if (frame.enabled) groups.push(lowerFrameGroup(definition, frame))
+		if (frameGroupEnabled(frame)) groups.push(lowerFrameGroup(definition, frame))
 	}
 
 	checkUniqueIds(context, capture.frames, 'capture.frames', 'frame')

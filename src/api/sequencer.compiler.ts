@@ -1,7 +1,7 @@
 import { isAbsolute } from 'path'
 import type { MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-import type { Sequencer, SequencerCamera, SequencerCentering, SequencerDeviceRole, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerRetryPolicy, SequencerTargetTracking } from '#/sequencer'
+import type { Sequencer, SequencerCamera, SequencerCentering, SequencerCooling, SequencerDeviceRole, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerRetryPolicy, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { isSequencerPathSegment, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
 import type { SequencerBlockRegistry } from './sequencer.registry'
@@ -72,6 +72,11 @@ export interface SequencerLifecycle {
 	readonly timeout: number
 	// Failure policy of the action.
 	readonly retry: SequencerRetryPolicy
+	// Thermal policy the action commands, present only on the actions that command the cooler and undefined on
+	// every other one. The cooler actions declare no setpoint of their own, and a handler is given its
+	// configuration and an execution context that does not carry the plan, so the policy travels with the node
+	// that commands it: temperatures are degrees Celsius, ramps degrees Celsius per minute.
+	readonly cooling?: SequencerCooling
 }
 
 // Mutable accumulator threaded through the lowering, so every stage reports against the same definition
@@ -220,24 +225,30 @@ function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): Sequence
 	}
 }
 
+// Lifecycle actions that command the camera cooler and therefore carry the thermal policy of the definition.
+const SEQUENCER_COOLER_ACTION: ReadonlySet<SequencerLifecycleAction['type']> = new Set(['coolCamera', 'warmCamera'])
+
 // Lowers one lifecycle action into its action node. The node id comes from the declared action id and the
 // pipeline it belongs to, with no target segment: startup and finalize are siblings of the target block and
 // run once per session, so a target segment there would claim a relationship that does not exist.
-function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction): SequencerPlanAction {
-	const configuration: SequencerLifecycle = { action, required: action.required ?? false, timeout: action.timeout, retry: action.retry }
+//
+// `cooling` is the thermal policy of the definition, or undefined when it declares none; it reaches only the
+// actions that command the cooler, which is the whole reason the policy is carried into a node.
+function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction, cooling: SequencerCooling | undefined): SequencerPlanAction {
+	const configuration: SequencerLifecycle = { action, required: action.required ?? false, timeout: action.timeout, retry: action.retry, cooling: SEQUENCER_COOLER_ACTION.has(action.type) ? cooling : undefined }
 	return { kind: 'action', id: sequencerNodeId.pipelineAction(pipeline, action.id), type: `${SEQUENCER_LIFECYCLE_BLOCK_PREFIX}${action.type}`, configuration }
 }
 
 // Lowers an ordered lifecycle pipeline. Returns undefined when the pipeline is disabled or declares no
 // enabled action: an empty container would be a node the runtime enters and leaves for nothing, and it would
 // still show up in the checkpoint as a place the session had been.
-function lowerPipeline(pipeline: 'startup' | 'finalize', enabled: boolean, actions: readonly SequencerLifecycleAction[]): SequencerPlanSequence | undefined {
+function lowerPipeline(pipeline: 'startup' | 'finalize', enabled: boolean, actions: readonly SequencerLifecycleAction[], cooling: SequencerCooling | undefined): SequencerPlanSequence | undefined {
 	if (!enabled) return undefined
 
 	const children: SequencerPlanAction[] = []
 
 	for (const action of actions) {
-		if (action.enabled) children.push(lowerLifecycleAction(pipeline, action))
+		if (action.enabled) children.push(lowerLifecycleAction(pipeline, action, cooling))
 	}
 
 	return children.length > 0 ? { kind: 'sequence', id: sequencerNodeId.pipeline(pipeline), children } : undefined
@@ -809,8 +820,9 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	if (context.diagnostics.length > 0) return { ok: false, diagnostics: context.diagnostics }
 
 	const children: SequencerPlanNode[] = []
-	const lowered = lowerPipeline('startup', startup.enabled, startup.actions)
-	const finalized = lowerPipeline('finalize', shutdown.enabled, shutdown.actions)
+	const cooling = definition.cooling.enabled ? definition.cooling : undefined
+	const lowered = lowerPipeline('startup', startup.enabled, startup.actions, cooling)
+	const finalized = lowerPipeline('finalize', shutdown.enabled, shutdown.actions, cooling)
 
 	if (lowered) children.push(lowered)
 	children.push(lowerTarget(definition, groups))
@@ -839,7 +851,7 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 		startup: lowered && { continueOnFailure: startup.continueOnFailure },
 		finalize: finalized && { continueOnFailure: shutdown.continueOnFailure, runOn },
 		guider,
-		cooling: definition.cooling.enabled ? definition.cooling : undefined,
+		cooling,
 		storage: { root: storage.root, fileNameTemplate: storage.fileNameTemplate, directoryTemplate: storage.directoryTemplate, temporaryDirectory: storage.temporaryDirectory, checksum: storage.checksum, autoSubFolderMode: storage.autoSubFolderMode },
 	}
 

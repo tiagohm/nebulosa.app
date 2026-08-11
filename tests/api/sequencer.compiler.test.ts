@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import type { SequencerCapture } from 'src/api/sequencer.compiler'
+import type { SequencerCapture, SequencerLifecycle } from 'src/api/sequencer.compiler'
 import { compile, sequencerNodeId, sequencerPlanNodes } from 'src/api/sequencer.compiler'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { Sequencer, SequencerDeviceRole } from '#/sequencer'
-import type { SequencerPlanLoop, SequencerPlanSequence } from '#/sequencer.plan'
+import type { SequencerPlanAction, SequencerPlanLoop, SequencerPlanSequence } from '#/sequencer.plan'
 import { action, camera, canonical, frame, retry } from './sequencer.fixture'
 
 function handlers(roles: Record<string, readonly SequencerDeviceRole[]> = {}) {
@@ -85,6 +85,17 @@ describe('lowering', () => {
 		expect(finalize.children.map((node) => node.id)).toEqual(['finalize.action[park]', 'finalize.action[warm]'])
 		expect(startup.children.every((node) => !node.id.includes('target['))).toBe(true)
 		expect(finalize.children.every((node) => !node.id.includes('target['))).toBe(true)
+	})
+
+	test('an action commanding the cooler carries the thermal policy', () => {
+		const definition = canonical()
+		const { plan } = ok(definition)
+		const finalize = plan.root.children[2] as SequencerPlanSequence
+		const warm = finalize.children[1] as SequencerPlanAction
+		const park = finalize.children[0] as SequencerPlanAction
+
+		expect((warm.configuration as SequencerLifecycle).cooling).toEqual(definition.cooling)
+		expect((park.configuration as SequencerLifecycle).cooling).toBeUndefined()
 	})
 
 	test('a disabled pipeline or a pipeline with no enabled action produces no block', () => {

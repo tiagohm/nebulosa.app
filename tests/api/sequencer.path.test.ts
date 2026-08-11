@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve, sep } from 'path'
-import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerAuxiliaryDirectory, sequencerAuxiliaryPath, sequencerPathSegments, sequencerSessionDirectory, sequencerVerifiedArtifactPath } from 'src/api/sequencer.path'
+import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerAuxiliaryDirectory, sequencerAuxiliaryPath, sequencerPathSegments, sequencerSessionDirectory, sequencerVerifiedArtifactPath, sequencerVerifiedAuxiliaryPath } from 'src/api/sequencer.path'
 import { isPathSegment } from 'src/api/util'
 
 const ROOT = resolve('/data/nebulosa')
@@ -168,5 +168,55 @@ describe('verified artifact paths', () => {
 
 		expect(resolution.ok).toBe(false)
 		if (!resolution.ok) expect(resolution.reason).toBe('the directory segment ".." is not a valid path segment')
+	})
+})
+
+describe('verified auxiliary paths', () => {
+	const temporary = mkdtempSync(join(tmpdir(), 'nebulosa-auxiliary-'))
+	const root = join(temporary, 'storage')
+	const outside = join(temporary, 'outside')
+
+	afterAll(() => rmSync(temporary, { recursive: true, force: true }))
+
+	test('a reserved directory that does not exist yet is contained', () => {
+		const resolution = sequencerVerifiedAuxiliaryPath({ root, session: 'session-1' }, 'autofocus', 'autofocus-00000.fits')
+
+		expect(resolution.ok).toBe(true)
+		if (resolution.ok) expect(resolution.path).toBe(resolve(root, 'session-1', SEQUENCER_AUXILIARY_SEGMENT, 'autofocus', 'autofocus-00000.fits'))
+	})
+
+	test('a linked auxiliary segment is refused', () => {
+		mkdirSync(outside, { recursive: true })
+		mkdirSync(join(root, 'session-2'), { recursive: true })
+		symlinkSync(outside, join(root, 'session-2', SEQUENCER_AUXILIARY_SEGMENT), 'junction')
+
+		const resolution = sequencerVerifiedAuxiliaryPath({ root, session: 'session-2' }, 'guider', 'guider-00000.fits')
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.reason).toBe(`the path component "${join(root, 'session-2', SEQUENCER_AUXILIARY_SEGMENT)}" is a symbolic link, and the write would follow it out of the session directory`)
+	})
+
+	test('a linked kind directory is refused', () => {
+		mkdirSync(outside, { recursive: true })
+		mkdirSync(join(root, '2026-08-10', 'session-3', SEQUENCER_AUXILIARY_SEGMENT), { recursive: true })
+		symlinkSync(outside, join(root, '2026-08-10', 'session-3', SEQUENCER_AUXILIARY_SEGMENT, 'quarantine'), 'junction')
+
+		const resolution = sequencerVerifiedAuxiliaryPath({ root, session: 'session-3', night: '2026-08-10' }, 'quarantine', 'frame.fits.invalid')
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.reason).toBe(`the path component "${join(root, '2026-08-10', 'session-3', SEQUENCER_AUXILIARY_SEGMENT, 'quarantine')}" is a symbolic link, and the write would follow it out of the session directory`)
+	})
+
+	test('a real reserved directory below the session directory is contained', () => {
+		mkdirSync(join(root, 'session-4', SEQUENCER_AUXILIARY_SEGMENT, 'centering'), { recursive: true })
+
+		expect(sequencerVerifiedAuxiliaryPath({ root, session: 'session-4' }, 'centering', 'centering-00001.fits').ok).toBe(true)
+	})
+
+	test('an invalid file name is refused before the filesystem is read', () => {
+		const resolution = sequencerVerifiedAuxiliaryPath({ root, session: 'session-1' }, 'driftCheck', '..')
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.reason).toBe('the file name ".." is not a valid path segment')
 	})
 })

@@ -100,6 +100,9 @@ export function sequencerAuxiliaryDirectory(context: SequencerPathContext, kind:
 // `fileName` is decided by whoever produced the image and may not carry a separator or a relative name. It
 // carries no slot token, because the image fills no slot: a name that looked like a slot would be picked up
 // by the reconciliation as a frame of the plan.
+//
+// Like `sequencerArtifactPath`, the proof is over the path as text and reads nothing from the filesystem: a
+// caller about to write must use `sequencerVerifiedAuxiliaryPath` instead.
 export function sequencerAuxiliaryPath(context: SequencerPathContext, kind: SequencerAuxiliaryKind, fileName: string): SequencerPathResolution {
 	if (!isAbsolute(context.root)) return { ok: false, reason: `the storage root "${context.root}" is not an absolute path` }
 
@@ -155,19 +158,45 @@ export function sequencerArtifactPath(context: SequencerPathContext, directories
 // write follows the link and lands wherever it points, so `root/night/session/link/frame.fits` writes outside
 // the approved root while reading as contained. Every component the runtime creates below the storage root is
 // therefore inspected here, and the first one that exists as a link refuses the composition.
-//
-// The root itself is not inspected: it is the directory the operator declared, and a root that is a link is a
-// root they chose. The walk stops at the first component that does not exist yet, because nothing can exist
-// below an absent directory; the runtime creates the rest, and a component it cannot create fails the write
-// on its own. Each call costs one `lstat` per existing component, which is nothing next to the artifact.
 export function sequencerVerifiedArtifactPath(context: SequencerPathContext, directories: readonly string[], fileName: string): SequencerPathResolution {
 	const resolution = sequencerArtifactPath(context, directories, fileName)
 
 	if (!resolution.ok) return resolution
 
+	return linkFreeWalk(context, context.night ? [context.night, context.session, ...directories, fileName] : [context.session, ...directories, fileName]) ?? resolution
+}
+
+// Composes the path of one auxiliary image and proves it is contained on the filesystem the write will land on.
+//
+// This is the composition to use before writing an auxiliary image, and it is the counterpart of
+// `sequencerVerifiedArtifactPath` for the same reason that one exists: the lexical proof only reads the text of
+// the path. The reserved segment is created by the runtime like any other directory, so `.auxiliary` or the
+// kind directory below it can already exist as a symbolic link, and every autofocus, guider and quarantine
+// write then lands wherever it points while the composition still reports `ok`. Quarantine is the one that
+// costs the most, because it moves a file out of the namespace of the slots and would move it off the approved
+// root instead.
+export function sequencerVerifiedAuxiliaryPath(context: SequencerPathContext, kind: SequencerAuxiliaryKind, fileName: string): SequencerPathResolution {
+	const resolution = sequencerAuxiliaryPath(context, kind, fileName)
+
+	if (!resolution.ok) return resolution
+
+	return linkFreeWalk(context, context.night ? [context.night, context.session, SEQUENCER_AUXILIARY_SEGMENT, kind, fileName] : [context.session, SEQUENCER_AUXILIARY_SEGMENT, kind, fileName]) ?? resolution
+}
+
+// Inspects every component the runtime creates below the storage root, in order, and refuses the composition at
+// the first one that already exists as a symbolic link.
+//
+// `components` are the segments below `context.root`, from the one directly under it down to the file name. The
+// root itself is not inspected: it is the directory the operator declared, and a root that is a link is a root
+// they chose. The walk stops at the first component that does not exist yet, because nothing can exist below an
+// absent directory; the runtime creates the rest, and a component it cannot create fails the write on its own.
+// Each call costs one `lstat` per existing component, which is nothing next to the image.
+//
+// Returns the refusal, or `undefined` when no component on the way is a link.
+function linkFreeWalk(context: SequencerPathContext, components: readonly string[]): SequencerPathResolution | undefined {
 	let current = resolve(context.root)
 
-	for (const component of context.night ? [context.night, context.session, ...directories, fileName] : [context.session, ...directories, fileName]) {
+	for (const component of components) {
 		current = join(current, component)
 
 		try {
@@ -177,5 +206,5 @@ export function sequencerVerifiedArtifactPath(context: SequencerPathContext, dir
 		}
 	}
 
-	return resolution
+	return undefined
 }

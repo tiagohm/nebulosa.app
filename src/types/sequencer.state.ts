@@ -67,8 +67,8 @@ export interface SequencerSession {
 // and written according to the configured cadence. High-frequency exposure progress is deliberately absent:
 // it is presentation, not state the runtime decides from.
 //
-// V1 persists execution position only. Capture progress, trigger anchors, and reconciliation hints join it
-// with the capture loop and the trigger evaluator.
+// V1 persists execution position and capture progress. Trigger anchors and reconciliation hints join them
+// with the trigger evaluator.
 export interface SequencerCheckpoint {
 	// Node the runtime is executing or is about to execute, absent before the first node and after the last.
 	readonly cursor?: string
@@ -78,6 +78,10 @@ export interface SequencerCheckpoint {
 	readonly attempts: Readonly<Record<string, number>>
 	// Nodes that reached a terminal decision and will not run again.
 	readonly completed: readonly string[]
+	// Capture progress per target, holding the current cycle and the per-group counters of that cycle. It is
+	// always present, empty before the first frame, because the scheduler decides from it and a resume that
+	// found it absent would restart the cycle it was in the middle of.
+	readonly capture: SequencerCaptureProgress
 	// Definition revision this checkpoint was produced from; a resume against another revision is invalid.
 	readonly definitionRevision: number
 	// Handler version per block type, as resolved when the session started. A resume against a registry

@@ -296,6 +296,15 @@ describe('termination', () => {
 		expect(plan.groups[0].projectedIntegration).toBe(540)
 	})
 
+	test('an integration time that divides exactly in decimal schedules no extra slot', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 0.07, exposureTime: 0.01 })] } })
+
+		expect(0.07 / 0.01).toBeGreaterThan(7)
+		expect(plan.groups[0].requiredSlots).toBe(7)
+		expect(plan.groups[0].projectedIntegration).toBeCloseTo(0.07, 12)
+	})
+
 	test('with both criteria active the cheaper one decides the slots', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 10, integrationTime: 300, exposureTime: 60 }), frame('red', { count: 3, integrationTime: 600, exposureTime: 60 })] } })

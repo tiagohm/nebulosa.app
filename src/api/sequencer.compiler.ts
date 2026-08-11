@@ -146,6 +146,22 @@ function frameGroupEnabled(frame: SequencerFrame) {
 	return frame.enabled && (frame.count > 0 || frame.integrationTime > 0)
 }
 
+// Relative tolerance snapping an integration quotient to the integer it is a rounding error away from. Two
+// decimal durations rarely divide exactly in binary: `0.07 / 0.01` is `7.000000000000001`, and the ceiling of
+// that schedules an eighth exposure for a target seven of them reach. The bound is orders of magnitude above
+// the representation error of a realistic quotient and orders of magnitude below any spacing an operator can
+// express in seconds, so it snaps only what is a rounding error and never a genuinely partial slot.
+const SEQUENCER_SLOT_TOLERANCE = 1e-9
+
+// Slots needed to accumulate `integrationTime` seconds in exposures of `exposureTime` seconds, rounded up
+// because a partial exposure does not reach the target. A quotient within the relative tolerance of an
+// integer is taken as that integer. Requires `exposureTime > 0`.
+function integrationSlotsOf(integrationTime: number, exposureTime: number) {
+	const quotient = integrationTime / exposureTime
+	const rounded = Math.round(quotient)
+	return Math.abs(quotient - rounded) <= SEQUENCER_SLOT_TOLERANCE * rounded ? rounded : Math.ceil(quotient)
+}
+
 // Slots one group needs to reach its target in one cycle.
 //
 // With both criteria active the group concludes at the cheaper of the two, so the smaller demand is the one
@@ -155,7 +171,7 @@ function frameGroupEnabled(frame: SequencerFrame) {
 // `exposureTime > 0` whenever `integrationTime > 0`, so the result is finite and >= 1.
 function requiredSlotsOf(frame: SequencerFrame) {
 	const byCount = frame.count > 0 ? frame.count : Number.POSITIVE_INFINITY
-	const byIntegration = frame.integrationTime > 0 ? Math.ceil(frame.integrationTime / frame.exposureTime) : Number.POSITIVE_INFINITY
+	const byIntegration = frame.integrationTime > 0 ? integrationSlotsOf(frame.integrationTime, frame.exposureTime) : Number.POSITIVE_INFINITY
 	return Math.min(byCount, byIntegration)
 }
 

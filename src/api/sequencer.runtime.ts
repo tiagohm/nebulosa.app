@@ -458,7 +458,7 @@ export class SequencerRuntime {
 			now: this.#now,
 			request: (role) => roles.get(role),
 			progress: (progress) => this.#report(active.id, node, progress),
-			artifact: (artifact) => active.artifacts.push(artifact),
+			artifact: (artifact) => this.#register(active, artifact),
 			checkpoint: this.#checkpoint(active),
 		}
 
@@ -550,6 +550,30 @@ export class SequencerRuntime {
 		}
 
 		return undefined
+	}
+
+	// Stages one artifact registration, writing it on its own when it is the `pending` record.
+	//
+	// `pending` exists to survive a crash: it is registered before the file write starts precisely so that a
+	// recovery finds a record for the attempt that was in flight instead of a file no session ever claimed.
+	// Holding it in memory until the session finalizes is exactly the window the status was invented to close,
+	// so it is committed here, immediately. The terminal statuses do not need that and are left staged for the
+	// unit that also writes the state transition: an action registers `committed` once the file is durable, and
+	// a crash that loses the promotion leaves the record `pending`, which a resume already handles by
+	// re-executing the same attempt against the file it finds.
+	//
+	// A refusal comes from what the action registered and must not escape into it — the handler called this for
+	// bookkeeping and can do nothing about the store. The draft stays staged, so the next commit carries it.
+	#register(active: ActiveSession, artifact: SequencerArtifactDraft) {
+		active.artifacts.push(artifact)
+
+		if (artifact.status !== 'pending') return
+
+		try {
+			this.#commit(active, {})
+		} catch (e) {
+			console.error('sequencer artifact registration refused:', active.id, artifact.logicalSlotId, e)
+		}
 	}
 
 	// Hands one progress report to the observer, if any, without letting it reach the action.

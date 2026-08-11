@@ -480,6 +480,32 @@ describe('sequencer runtime', () => {
 		expect(store.events(created.id).filter((event) => event.type === 'artifactCommitted')).toMatchObject([{ nodeId: 'node-1', detail: 'slot-2' }])
 	})
 
+	test('persists a pending artifact before the action returns', async () => {
+		const observed: string[][] = []
+
+		const harness = runtime(
+			exposeHandler((context) => {
+				context.artifact({ logicalSlotId: 'slot-1', attempt: 1, status: 'pending' })
+				observed.push(harness.store.artifacts(context.sessionId).map((artifact) => artifact.status))
+
+				context.artifact({ logicalSlotId: 'slot-1', attempt: 1, status: 'committed', path: '/data/frame-1.fits' })
+				observed.push(harness.store.artifacts(context.sessionId).map((artifact) => artifact.status))
+
+				return Promise.resolve({ type: 'completed', value: 1 })
+			}),
+		)
+
+		const created = harness.runtime.create(plan())!
+
+		harness.runtime.start(created.id)
+
+		const session = await harness.runtime.settled(created.id)
+
+		expect(session?.state).toBe('completed')
+		expect(observed).toEqual([['pending'], ['pending']])
+		expect(harness.store.artifacts(created.id)).toMatchObject([{ logicalSlotId: 'slot-1', attempt: 1, status: 'committed', path: '/data/frame-1.fits' }])
+	})
+
 	test('stops a running session, aborting the action and its operations', async () => {
 		const running = Promise.withResolvers<void>()
 		const cleaned: string[] = []

@@ -117,6 +117,28 @@ export function sequencerQuarantinePath(finalPath: string, quarantineDirectory: 
 	return join(quarantineDirectory, `${sequencerBoundedName(basename(finalPath), SEQUENCER_NAME_LIMIT - SEQUENCER_QUARANTINE_SUFFIX.length)}${SEQUENCER_QUARANTINE_SUFFIX}`)
 }
 
+// Writes the frame data to the temporary path, refusing whatever is already there instead of writing through
+// it.
+//
+// The temporary lives under a name nothing else composes, but the directory it lives in is not proof that the
+// name is free: the session directory is created by the runtime and a shared `temporaryDirectory` is declared
+// by the definition, so a leftover of a crashed run — or a symbolic link planted under the predictable name —
+// can occupy it. Opening it as an ordinary write would write through the link, symbolic or hard, and truncate
+// its target outside the approved root, before validation ever runs. The name is unlinked first — which
+// removes the link and not what it points at — and the file is then created
+// exclusively, so a name that reappears between the two fails the write instead of being written through.
+async function writeTemporary(temporary: string, data: Uint8Array) {
+	await rm(temporary, { force: true })
+
+	const handle = await open(temporary, 'wx')
+
+	try {
+		await handle.write(data)
+	} finally {
+		await handle.close()
+	}
+}
+
 // Writes one frame through the protocol: temporary file, validation, atomic rename into the final path.
 //
 // The caller registers the artifact as pending before calling and confirms it with the checkpoint in one
@@ -133,7 +155,7 @@ export async function writeSequencerFrame(data: Uint8Array, finalPath: string, e
 	try {
 		await mkdir(dirname(finalPath), { recursive: true })
 		if (environment.temporaryDirectory !== undefined) await mkdir(environment.temporaryDirectory, { recursive: true })
-		await Bun.write(temporary, data)
+		await writeTemporary(temporary, data)
 
 		if (!(await valid(temporary, formatOf(finalPath)))) {
 			await rm(temporary, { force: true })

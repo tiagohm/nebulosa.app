@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { linkSync } from 'fs'
 import { mkdtemp, readdir, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { basename, join, sep } from 'path'
@@ -115,6 +116,17 @@ describe('write protocol', () => {
 
 		expect(result).toEqual({ ok: false, reason: 'writeFailed', error: 'parser exploded' })
 		expect(await readdir(root)).toEqual([])
+	})
+
+	test('unlinks a link planted at the temporary path instead of writing through it', async () => {
+		const path = join(root, 'm42-lum-0.fit')
+		const victim = join(root, 'victim.txt')
+		await Bun.write(victim, 'external')
+		linkSync(victim, sequencerTemporaryPath(path))
+
+		expect(await writeSequencerFrame(FRAME, path, accepting())).toEqual({ ok: true, path })
+		expect(await Bun.file(victim).text()).toBe('external')
+		expect(await Bun.file(path).text()).toBe('frame')
 	})
 
 	test('keeps the derived names inside the component budget when the final one fills it', () => {

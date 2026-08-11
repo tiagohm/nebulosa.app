@@ -581,6 +581,18 @@ function capturedGroupOf(configuration: unknown): SequencerPlanFrameGroup | unde
 	return typeof group?.nodeId === 'string' ? group : undefined
 }
 
+// Restores the compiler-owned termination fields of a group a capture handler rebuilt, keeping everything
+// else the handler returned.
+//
+// A handler normalizes how a group is captured: its camera settings, its spacing, the filter it selects. The
+// counters that bound the capture loop are not its to change — they were derived from the definition and
+// proved finite before any handler ran, so a returned `slotLimit` of `Infinity` would put an endless loop in
+// the plan after every termination check had already passed. The projection is recomputed instead of
+// restored, because it is the integration of those slots at the exposure the handler settled on.
+function withTermination(captured: SequencerPlanFrameGroup, group: SequencerPlanFrameGroup): SequencerPlanFrameGroup {
+	return { ...captured, requiredSlots: group.requiredSlots, abandonmentBudget: group.abandonmentBudget, slotLimit: group.slotLimit, projectedIntegration: group.requiredSlots * captured.exposureTime }
+}
+
 // Rebuilds a node with the configuration its handler returned in place of the one the lowering produced.
 // Nodes the rewrite does not mention, and nodes whose handler returned its input unchanged, are returned as
 // they are, so a compilation whose handlers normalize nothing allocates nothing.
@@ -1009,13 +1021,23 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	if (!handlers) return { ok: true, plan, removals: context.removals }
 
 	const rewritten = new Map<string, SequencerPlanFrameGroup>()
+	const configurations = new Map(handlers.configurations)
 
+	// The corrected group replaces the returned one in both places it lives: the group list the scheduler reads
+	// and the configuration the capture action carries, which are required to agree.
 	for (const group of groups) {
-		const captured = capturedGroupOf(handlers.configurations.get(group.nodeId))
-		if (captured !== undefined) rewritten.set(group.nodeId, captured)
+		const configuration = configurations.get(group.nodeId)
+		const captured = capturedGroupOf(configuration)
+
+		if (captured === undefined) continue
+
+		const corrected = withTermination(captured, group)
+
+		rewritten.set(group.nodeId, corrected)
+		configurations.set(group.nodeId, { ...(configuration as SequencerCapture), group: corrected })
 	}
 
-	const rewrite: Rewrite = { configurations: handlers.configurations, groups: rewritten }
+	const rewrite: Rewrite = { configurations, groups: rewritten }
 
 	return { ok: true, plan: { ...plan, roles: rolesOf(requirements), root: withConfigurationsIn(plan.root, rewrite), groups: withGroups(groups, rewrite), handlers: handlers.versions }, removals: context.removals }
 }

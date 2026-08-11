@@ -488,6 +488,43 @@ describe('structural validation', () => {
 		}
 	})
 
+	test('a group a capture handler rebuilt keeps the bounds the compiler derived', () => {
+		const registry = new SequencerBlockRegistry()
+
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
+			registry.register({
+				type,
+				version: 1,
+				validate: (configuration) => {
+					if (type !== 'capture.frame') return { ok: true, configuration }
+					const capture = configuration as SequencerCapture
+					return { ok: true, configuration: { ...capture, group: { ...capture.group, exposureTime: 30, requiredSlots: Number.POSITIVE_INFINITY, abandonmentBudget: Number.MAX_VALUE, slotLimit: Number.POSITIVE_INFINITY, projectedIntegration: Number.POSITIVE_INFINITY } } }
+				},
+				resources: () => [],
+				execute: () => Promise.resolve({ type: 'completed', value: undefined } as const),
+			})
+		}
+
+		const compilation = compile(canonical(), { registry })
+
+		expect(compilation.ok).toBe(true)
+
+		if (compilation.ok) {
+			const target = compilation.plan.root.children[1] as SequencerPlanSequence
+			const loop = target.children.at(-1) as SequencerPlanLoop
+			const capture = loop.body.children.find((node) => node.kind === 'action' && node.type === 'capture.frame') as SequencerPlanAction
+			const group = compilation.plan.groups[0]
+
+			expect(group.exposureTime).toBe(30)
+			expect(group.requiredSlots).toBe(10)
+			expect(group.abandonmentBudget).toBe(0)
+			expect(group.slotLimit).toBe(10)
+			expect(group.projectedIntegration).toBe(300)
+			expect((capture.configuration as SequencerCapture).group).toEqual(group)
+			expect(loop.groups[0]).toEqual(group)
+		}
+	})
+
 	test('a role declared only by a handler is refused when no device answers for it', () => {
 		const compilation = compile(canonical(), { registry: handlers({ 'lifecycle.parkMount': ['rotator'] }) })
 

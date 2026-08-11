@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import type { SequencerCapture } from 'src/api/sequencer.compiler'
 import { compile, sequencerNodeId, sequencerPlanNodes } from 'src/api/sequencer.compiler'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { Sequencer, SequencerDeviceRole } from '#/sequencer'
@@ -290,6 +291,37 @@ describe('structural validation', () => {
 
 			expect(parked?.kind === 'action' && parked.configuration).toEqual({ normalized: true })
 			expect(connected?.kind === 'action' && connected.configuration).toMatchObject({ action: { id: 'connect', type: 'connectDevices' }, timeout: 30 })
+		}
+	})
+
+	test('a group a capture handler rebuilt is the group the scheduler follows', () => {
+		const registry = new SequencerBlockRegistry()
+
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.warmCamera']) {
+			registry.register({
+				type,
+				version: 1,
+				validate: (configuration) => {
+					if (type !== 'capture.frame') return { ok: true, configuration }
+					const capture = configuration as SequencerCapture
+					return { ok: true, configuration: { ...capture, group: { ...capture.group, delay: 30 } } }
+				},
+				resources: () => [],
+				execute: () => Promise.resolve({ type: 'completed', value: undefined } as const),
+			})
+		}
+
+		const compilation = compile(canonical(), { registry })
+
+		expect(compilation.ok).toBe(true)
+
+		if (compilation.ok) {
+			const loop = compilation.plan.root.children[1] as SequencerPlanSequence
+			const captures = (loop.children.at(-1) as SequencerPlanLoop).body.children.filter((node) => node.kind === 'action' && node.type === 'capture.frame')
+
+			expect(compilation.plan.groups.map((group) => group.delay)).toEqual([30, 30])
+			expect((loop.children.at(-1) as SequencerPlanLoop).groups).toEqual(compilation.plan.groups)
+			expect(captures.every((node) => node.kind === 'action' && (node.configuration as SequencerCapture).group.delay === 30)).toBe(true)
 		}
 	})
 

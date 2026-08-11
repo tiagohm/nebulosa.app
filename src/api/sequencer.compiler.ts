@@ -454,37 +454,73 @@ interface HandlerCheck {
 	readonly configurations: Map<string, unknown>
 }
 
+// What the handlers returned, keyed by the node it belongs to, and applied to the plan afterwards.
+interface Rewrite {
+	// Configuration each handler returned, by node id.
+	readonly configurations: ReadonlyMap<string, unknown>
+	// Frame group each capture handler returned, by the node id of the capture action of the group. The
+	// scheduler reads the group list of the loop while the capture action reads its own copy, so a group
+	// rewritten in one place has to be rewritten in the other: two copies that disagree would schedule one
+	// exposure and take another.
+	readonly groups: ReadonlyMap<string, SequencerPlanFrameGroup>
+}
+
+// Frame group a capture handler returned, when its configuration still carries one.
+//
+// The capture block type is declared by this module, so a capture node holds a `SequencerCapture`; the value
+// comes back from a handler that may have rebuilt it, so a returned object without a group is treated as a
+// configuration the scheduler cannot follow and the compiler keeps its own group.
+function capturedGroupOf(configuration: unknown): SequencerPlanFrameGroup | undefined {
+	const group = (configuration as SequencerCapture | undefined)?.group
+	return typeof group?.nodeId === 'string' ? group : undefined
+}
+
 // Rebuilds a node with the configuration its handler returned in place of the one the lowering produced.
-// Nodes the map does not mention, and nodes whose handler returned its input unchanged, are returned as they
-// are, so a compilation whose handlers normalize nothing allocates nothing.
-function withConfigurations(node: SequencerPlanNode, configurations: ReadonlyMap<string, unknown>): SequencerPlanNode {
+// Nodes the rewrite does not mention, and nodes whose handler returned its input unchanged, are returned as
+// they are, so a compilation whose handlers normalize nothing allocates nothing.
+function withConfigurations(node: SequencerPlanNode, rewrite: Rewrite): SequencerPlanNode {
 	switch (node.kind) {
 		case 'action': {
-			if (!configurations.has(node.id)) return node
-			const configuration = configurations.get(node.id)
+			if (!rewrite.configurations.has(node.id)) return node
+			const configuration = rewrite.configurations.get(node.id)
 			return configuration === node.configuration ? node : { ...node, configuration }
 		}
 		case 'sequence':
-			return withConfigurationsIn(node, configurations)
+			return withConfigurationsIn(node, rewrite)
 		case 'loop': {
-			const body = withConfigurationsIn(node.body, configurations)
-			return body === node.body ? node : { ...node, body }
+			const body = withConfigurationsIn(node.body, rewrite)
+			const groups = withGroups(node.groups, rewrite)
+			return body === node.body && groups === node.groups ? node : { ...node, body, groups }
 		}
 	}
 }
 
 // Rebuilds a sequence with the rewritten children, preserving its identity when no child changed.
-function withConfigurationsIn(sequence: SequencerPlanSequence, configurations: ReadonlyMap<string, unknown>): SequencerPlanSequence {
+function withConfigurationsIn(sequence: SequencerPlanSequence, rewrite: Rewrite): SequencerPlanSequence {
 	let changed = false
 	const children: SequencerPlanNode[] = []
 
 	for (const child of sequence.children) {
-		const rewritten = withConfigurations(child, configurations)
+		const rewritten = withConfigurations(child, rewrite)
 		changed ||= rewritten !== child
 		children.push(rewritten)
 	}
 
 	return changed ? { ...sequence, children } : sequence
+}
+
+// Replaces every group by the one its capture handler returned, preserving the array when none changed.
+function withGroups(groups: readonly SequencerPlanFrameGroup[], rewrite: Rewrite): readonly SequencerPlanFrameGroup[] {
+	let changed = false
+	const rewritten: SequencerPlanFrameGroup[] = []
+
+	for (const group of groups) {
+		const captured = rewrite.groups.get(group.nodeId) ?? group
+		changed ||= captured !== group
+		rewritten.push(captured)
+	}
+
+	return changed ? rewritten : groups
 }
 
 // Validates every action node against the handler registered for its block type, translating each issue into
@@ -817,5 +853,16 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 
 	if (context.diagnostics.length > 0) return { ok: false, diagnostics: context.diagnostics }
 
-	return { ok: true, plan: handlers ? { ...plan, roles: rolesOf(requirements), root: withConfigurationsIn(plan.root, handlers.configurations), handlers: handlers.versions } : plan, removals: context.removals }
+	if (!handlers) return { ok: true, plan, removals: context.removals }
+
+	const rewritten = new Map<string, SequencerPlanFrameGroup>()
+
+	for (const group of groups) {
+		const captured = capturedGroupOf(handlers.configurations.get(group.nodeId))
+		if (captured !== undefined) rewritten.set(group.nodeId, captured)
+	}
+
+	const rewrite: Rewrite = { configurations: handlers.configurations, groups: rewritten }
+
+	return { ok: true, plan: { ...plan, roles: rolesOf(requirements), root: withConfigurationsIn(plan.root, rewrite), groups: withGroups(groups, rewrite), handlers: handlers.versions }, removals: context.removals }
 }

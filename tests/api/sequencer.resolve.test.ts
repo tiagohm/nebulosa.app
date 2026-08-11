@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import type { Camera, Device, Focuser, GuideOutput, Mount, Wheel } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_CAMERA, DEFAULT_FOCUSER, DEFAULT_GUIDE_OUTPUT, DEFAULT_MOUNT, DEFAULT_WHEEL } from 'nebulosa/src/devices/indi/device'
 import { compile } from 'src/api/sequencer.compiler'
-import { resolveResources } from 'src/api/sequencer.resolve'
+import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
+import { resolveResources, resolveSession } from 'src/api/sequencer.resolve'
+import type { SequencerSessionEnvironment } from 'src/api/sequencer.resolve'
 import type { Sequencer } from '#/sequencer'
 import type { SequencerPlan } from '#/sequencer.plan'
 import { canonical, frame } from './sequencer.fixture'
@@ -116,6 +118,110 @@ describe('resource resolution', () => {
 	test('every unresolvable role is reported at once', () => {
 		const setup = observatory()
 		const resolution = resolveResources(plan(canonical()), devices(setup.camera))
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.diagnostics.map((diagnostic) => diagnostic.path)).toEqual(['devices.mount', 'devices.focuser'])
+	})
+})
+
+describe('session start resolution', () => {
+	function registry(version = 1) {
+		const registry = new SequencerBlockRegistry()
+
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.warmCamera']) {
+			registry.register({ type, version, validate: (configuration) => ({ ok: true, configuration }), resources: () => [], execute: () => Promise.resolve({ type: 'completed', value: undefined } as const) })
+		}
+
+		return registry
+	}
+
+	function environment(overrides?: Partial<SequencerSessionEnvironment>): SequencerSessionEnvironment {
+		const setup = observatory()
+		return { lookup: devices(setup.camera, setup.mount, setup.focuser), registry: registry(), filesystemId: () => 1, startedAt: Date.parse('2026-08-10T22:30:00'), ...overrides }
+	}
+
+	function compiled(definition: Sequencer, options?: { readonly registry?: SequencerBlockRegistry }): SequencerPlan {
+		const compilation = compile(definition, options)
+		if (!compilation.ok) throw new Error(`expected a plan, got ${JSON.stringify(compilation.diagnostics)}`)
+		return compilation.plan
+	}
+
+	test('the resolution binds the devices, the handlers and the night segment', () => {
+		const resolution = resolveSession(compiled(canonical(), { registry: registry() }), environment())
+
+		expect(resolution.ok).toBe(true)
+		if (!resolution.ok) return
+
+		expect(resolution.session.resources.requests.map((request) => request.key)).toEqual(['hardware-camera', 'hardware-mount', 'hardware-focuser'])
+		expect(resolution.session.handlers['capture.frame']).toBe(1)
+		expect(resolution.session.nightSegment).toBe('2026-08-10')
+	})
+
+	test('a handler version that changed since compilation refuses the start', () => {
+		const resolution = resolveSession(compiled(canonical(), { registry: registry() }), environment({ registry: registry(2) }))
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.diagnostics).toContainEqual({ path: 'handlers.slew', message: 'the block type "slew" was compiled against version 1 and version 2 is registered' })
+	})
+
+	test('a handler removed since compilation refuses the start', () => {
+		const resolution = resolveSession(compiled(canonical(), { registry: registry() }), environment({ registry: new SequencerBlockRegistry() }))
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.diagnostics.map((diagnostic) => diagnostic.path)).toContain('handlers.slew')
+	})
+
+	test('a plan compiled without a registry accepts whatever version is registered', () => {
+		const resolution = resolveSession(compiled(canonical()), environment({ registry: registry(9) }))
+
+		expect(resolution.ok).toBe(true)
+		if (resolution.ok) expect(resolution.session.handlers.slew).toBe(9)
+	})
+
+	test('a temporary directory on another filesystem refuses the start', () => {
+		const definition = canonical()
+		const plan = compiled({ ...definition, storage: { ...definition.storage, temporaryDirectory: '/tmp/nebulosa' } }, { registry: registry() })
+		const resolution = resolveSession(plan, environment({ filesystemId: (path) => (path === '/tmp/nebulosa' ? 2 : 1) }))
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.diagnostics).toEqual([{ path: 'storage.temporaryDirectory', message: 'the temporary directory is on another filesystem than the storage root, which would turn the atomic commit into a copy' }])
+	})
+
+	test('a temporary directory on the same filesystem starts', () => {
+		const definition = canonical()
+		const plan = compiled({ ...definition, storage: { ...definition.storage, temporaryDirectory: '/data/nebulosa/.tmp' } }, { registry: registry() })
+
+		expect(resolveSession(plan, environment()).ok).toBe(true)
+	})
+
+	test('the night segment of the noon mode keeps one night in one directory', () => {
+		const plan = compiled(canonical(), { registry: registry() })
+		const evening = resolveSession(plan, environment({ startedAt: Date.parse('2026-08-10T22:30:00') }))
+		const morning = resolveSession(plan, environment({ startedAt: Date.parse('2026-08-11T03:15:00') }))
+
+		expect(evening.ok && evening.session.nightSegment).toBe('2026-08-10')
+		expect(morning.ok && morning.session.nightSegment).toBe('2026-08-10')
+	})
+
+	test('the night segment of the midnight mode is the calendar date', () => {
+		const definition = canonical()
+		const plan = compiled({ ...definition, storage: { ...definition.storage, autoSubFolderMode: 'midnight' } }, { registry: registry() })
+		const resolution = resolveSession(plan, environment({ startedAt: Date.parse('2026-08-11T03:15:00') }))
+
+		expect(resolution.ok && resolution.session.nightSegment).toBe('2026-08-11')
+	})
+
+	test('the night segment is absent when the mode is off', () => {
+		const definition = canonical()
+		const plan = compiled({ ...definition, storage: { ...definition.storage, autoSubFolderMode: 'off' } }, { registry: registry() })
+		const resolution = resolveSession(plan, environment())
+
+		expect(resolution.ok && resolution.session.nightSegment).toBeUndefined()
+	})
+
+	test('an unresolvable device stops the start before anything else is resolved', () => {
+		const setup = observatory()
+		const resolution = resolveSession(compiled(canonical(), { registry: registry() }), environment({ lookup: devices(setup.camera), registry: new SequencerBlockRegistry() }))
 
 		expect(resolution.ok).toBe(false)
 		if (!resolution.ok) expect(resolution.diagnostics.map((diagnostic) => diagnostic.path)).toEqual(['devices.mount', 'devices.focuser'])

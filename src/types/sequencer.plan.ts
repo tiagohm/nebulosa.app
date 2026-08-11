@@ -144,6 +144,11 @@ export interface SequencerPlan {
 	// Guider the session creates and owns, absent when the plan does not guide. It is part of the plan
 	// because the session reserves the logical keys of that guider at start, before any guiding command.
 	readonly guider?: SequencerRemoteGuider | SequencerLocalGuider
+	// Handler version per block type, recorded when the compilation resolved the registry. The session start
+	// demands the same versions again, because a handler can be registered, replaced, or removed between
+	// validating a definition and running it, and a version that changed means the block no longer does what
+	// the plan was compiled against. Absent when the definition was compiled without a registry.
+	readonly handlers?: Readonly<Record<string, number>>
 	// Storage decisions of the session.
 	readonly storage: SequencerPlanStorage
 }

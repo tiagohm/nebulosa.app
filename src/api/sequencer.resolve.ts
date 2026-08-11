@@ -1,3 +1,5 @@
+import { statSync } from 'fs'
+import { dirname, resolve } from 'path'
 import { isCamera, isCover, isDome, isFlatPanel, isFocuser, isGuideOutput, isMount, isRotator, isWheel } from 'nebulosa/src/devices/indi/device'
 import type { Camera, Device, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { SequencerDeviceRole } from '#/sequencer'
@@ -5,6 +7,8 @@ import type { SequencerDiagnostic, SequencerPlan } from '#/sequencer.plan'
 import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from './guider.session'
 import type { ResourceKey, ResourceRequest } from './resource'
 import { resourceKey } from './resource'
+import { sequencerPlanNodes } from './sequencer.compiler'
+import type { SequencerBlockRegistry } from './sequencer.registry'
 
 // Resolution of a compiled plan against the devices that exist right now.
 //
@@ -149,4 +153,134 @@ export function resolveResources(plan: SequencerPlan, lookup: SequencerDeviceLoo
 	}
 
 	return { ok: true, resources: { bindings, requests } }
+}
+
+// Everything the session start resolved, frozen for the whole life of the session.
+export interface SequencerResolvedSession {
+	// Devices bound to roles and the key set to reserve.
+	readonly resources: SequencerResolvedResources
+	// Handler version per block type, as resolved right now.
+	readonly handlers: Readonly<Record<string, number>>
+	// Directory segment of the automatic per-night subdirectory, absent when the mode is off. It is resolved
+	// once and never re-evaluated, so a session crossing the boundary keeps writing to the same directory.
+	readonly nightSegment?: string
+}
+
+// Outcome of the session start resolution.
+export type SequencerSessionResolution = { readonly ok: true; readonly session: SequencerResolvedSession } | { readonly ok: false; readonly diagnostics: readonly SequencerDiagnostic[] }
+
+// Environment the session start resolution reads, injectable so a test can describe an observatory instead
+// of needing one.
+export interface SequencerSessionEnvironment {
+	// Finds the device currently answering for a device id.
+	readonly lookup: SequencerDeviceLookup
+	// Registry the handler versions are demanded from again.
+	readonly registry: SequencerBlockRegistry
+	// Wall-clock instant the session starts at, in milliseconds since the epoch. Defaults to now.
+	readonly startedAt?: number
+	// Identity of the filesystem holding a path, used to compare the temporary directory with the root.
+	// Defaults to the device number reported by the nearest existing ancestor of the path.
+	readonly filesystemId?: (path: string) => number | undefined
+}
+
+// Filesystem holding a path, or the nearest ancestor that exists, since the runtime creates the directories
+// it writes to and a directory that does not exist yet still lands on the filesystem of its parent. Returns
+// undefined when nothing along the chain can be inspected.
+function filesystemIdOf(path: string) {
+	let current = resolve(path)
+
+	for (;;) {
+		try {
+			return statSync(current).dev
+		} catch {
+			const parent = dirname(current)
+			if (parent === current) return undefined
+			current = parent
+		}
+	}
+}
+
+// Directory segment naming the observing night of an instant, in local time and `YYYY-MM-DD` form.
+//
+// With `'midnight'` the segment is the calendar date. With `'noon'` it is the date of the noon the night
+// started at, so the whole night before and after midnight lands in one directory, which is what an observer
+// means by "one night". Returns undefined when the mode is off.
+function nightSegmentOf(mode: SequencerPlan['storage']['autoSubFolderMode'], startedAt: number) {
+	if (mode === 'off') return undefined
+
+	const date = new Date(startedAt)
+
+	if (mode === 'noon' && date.getHours() < 12) date.setDate(date.getDate() - 1)
+
+	return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, '0')}-${`${date.getDate()}`.padStart(2, '0')}`
+}
+
+// Re-checks that every block type of the plan still resolves to the version it was compiled against.
+//
+// This is the only check that also runs while compiling, and it has to run twice: the registry can change
+// between validating a definition and starting it, so the first run keeps an invalid definition from being
+// saved and the second keeps a stale plan from being executed.
+function checkHandlerVersions(diagnostics: SequencerDiagnostic[], plan: SequencerPlan, registry: SequencerBlockRegistry) {
+	const types = new Set<string>()
+
+	for (const node of sequencerPlanNodes(plan.root)) {
+		if (node.kind === 'action') types.add(node.type)
+	}
+
+	const resolution = registry.resolve(
+		types
+			.values()
+			.toArray()
+			.map((type) => ({ type, version: plan.handlers?.[type] })),
+	)
+
+	if (resolution.ok) return resolution.versions
+
+	for (const issue of resolution.issues) {
+		if (issue.kind === 'missing') diagnostics.push({ path: `handlers.${issue.type}`, message: `no handler is registered for the block type "${issue.type}"` })
+		else diagnostics.push({ path: `handlers.${issue.type}`, message: `the block type "${issue.type}" was compiled against version ${issue.expected} and version ${issue.actual} is registered` })
+	}
+
+	return undefined
+}
+
+// Checks that the temporary directory shares a filesystem with the storage root.
+//
+// The commit of an artifact is a rename from the temporary file to the final path, and a rename across
+// filesystems is a copy: it stops being atomic, so an interrupted commit can leave a partial file under the
+// final name. Refusing to start is the honest outcome; degrading the rename silently is not.
+function checkTemporaryDirectory(diagnostics: SequencerDiagnostic[], plan: SequencerPlan, filesystemId: (path: string) => number | undefined) {
+	const { root, temporaryDirectory } = plan.storage
+
+	if (temporaryDirectory === undefined) return
+
+	const rootId = filesystemId(root)
+	const temporaryId = filesystemId(temporaryDirectory)
+
+	if (rootId === undefined || temporaryId === undefined) diagnostics.push({ path: 'storage.temporaryDirectory', message: 'the temporary directory and the storage root cannot be inspected' })
+	else if (rootId !== temporaryId) diagnostics.push({ path: 'storage.temporaryDirectory', message: 'the temporary directory is on another filesystem than the storage root, which would turn the atomic commit into a copy' })
+}
+
+// Resolves a compiled plan against the observatory as it is right now, once, before the first startup action.
+//
+// This is where everything the lowering could not decide because it is pure gets decided: which hardware
+// answers for each role, whether the handlers are still the ones the plan was compiled against, whether the
+// atomic commit will really be atomic, and which night the session belongs to. None of it needs a device in
+// motion, which is why all of it fits before the startup pipeline.
+//
+// A failure carries every reason at once and resolves nothing, so the caller keeps the session idle and
+// unwinds whatever it had already set up rather than starting a session that is half configured.
+export function resolveSession(plan: SequencerPlan, environment: SequencerSessionEnvironment): SequencerSessionResolution {
+	const resolution = resolveResources(plan, environment.lookup)
+
+	if (!resolution.ok) return resolution
+
+	const diagnostics: SequencerDiagnostic[] = []
+	const handlers = checkHandlerVersions(diagnostics, plan, environment.registry)
+
+	checkTemporaryDirectory(diagnostics, plan, environment.filesystemId ?? filesystemIdOf)
+
+	if (diagnostics.length > 0 || handlers === undefined) return { ok: false, diagnostics }
+
+	return { ok: true, session: { resources: resolution.resources, handlers, nightSegment: nightSegmentOf(plan.storage.autoSubFolderMode, environment.startedAt ?? Date.now()) } }
 }

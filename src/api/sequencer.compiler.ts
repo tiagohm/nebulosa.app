@@ -433,7 +433,9 @@ function checkRoles(context: CompilerContext, definition: Sequencer, requirement
 // Validates every action node against the handler registered for its block type, translating each issue into
 // a diagnostic addressed to the node it came from. Without a registry the structural result stands on its
 // own, which is what lets a definition be checked before the handlers of a session are wired.
-function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistry, plan: SequencerPlan) {
+function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistry, plan: SequencerPlan): Record<string, number> {
+	const versions: Record<string, number> = {}
+
 	for (const node of sequencerPlanNodes(plan.root)) {
 		if (node.kind !== 'action') continue
 
@@ -446,10 +448,11 @@ function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistr
 
 		const result = handler.validate(node.configuration, { nodeId: node.id, devices: plan.devices })
 
-		if (!result.ok) {
-			for (const issue of result.issues) context.diagnostics.push({ path: issue.path.length > 0 ? `${node.id}.${issue.path}` : node.id, message: issue.message })
-		}
+		if (result.ok) versions[node.type] = handler.version
+		else for (const issue of result.issues) context.diagnostics.push({ path: issue.path.length > 0 ? `${node.id}.${issue.path}` : node.id, message: issue.message })
 	}
+
+	return versions
 }
 
 // Lowers the guider the session will create and own, or undefined when the plan does not guide.
@@ -549,9 +552,10 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	}
 
 	checkRoles(context, definition, requirements)
-	if (options?.registry) checkHandlers(context, options.registry, plan)
+
+	const handlers = options?.registry && checkHandlers(context, options.registry, plan)
 
 	if (context.diagnostics.length > 0) return { ok: false, diagnostics: context.diagnostics }
 
-	return { ok: true, plan, removals: context.removals }
+	return { ok: true, plan: handlers ? { ...plan, handlers } : plan, removals: context.removals }
 }

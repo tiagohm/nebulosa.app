@@ -42,7 +42,7 @@ export function complete(): Sequencer {
 		guiding: { ...definition.guiding, connection: { mode: 'remote', host: 'localhost', port: 4400, profile: 'default', owned: true } },
 		storage: { ...definition.storage, temporaryDirectory: '/data/nebulosa/.tmp' },
 		startup: { ...definition.startup, actions: [action('connect', { type: 'connectDevices', devices: ['camera', 'mount'], required: true })] },
-		shutdown: { ...definition.shutdown, actions: [action('park', { type: 'parkMount', required: true })] },
+		shutdown: { ...definition.shutdown, actions: [action('park', { type: 'parkMount', required: true }), action('warm', { type: 'warmCamera' })] },
 	}
 }
 

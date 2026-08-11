@@ -89,7 +89,7 @@ describe('lowering', () => {
 
 	test('a disabled pipeline or a pipeline with no enabled action produces no block', () => {
 		const definition = canonical()
-		const { plan } = ok({ ...definition, startup: { ...definition.startup, enabled: false }, shutdown: { ...definition.shutdown, actions: [action('park', { type: 'parkMount', enabled: false })] } })
+		const { plan } = ok({ ...definition, cooling: { ...definition.cooling, enabled: false }, startup: { ...definition.startup, enabled: false }, shutdown: { ...definition.shutdown, actions: [action('park', { type: 'parkMount', enabled: false })] } })
 
 		expect(plan.root.children.map((node) => node.id)).toEqual(['target[m42]'])
 		expect(plan.startup).toBeUndefined()
@@ -172,7 +172,7 @@ describe('structural validation', () => {
 
 	test('an empty lifecycle action id is refused', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, shutdown: { ...definition.shutdown, actions: [action('', { type: 'parkMount' })] } })
+		const compilation = compile({ ...definition, cooling: { ...definition.cooling, enabled: false }, shutdown: { ...definition.shutdown, actions: [action('', { type: 'parkMount' })] } })
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'shutdown.actions[0].id', message: 'the shutdown action id is empty and cannot address a node' }])
@@ -201,6 +201,24 @@ describe('structural validation', () => {
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'dither.enabled', message: 'a dither is a guider command, and the definition declares no guider to send it to' }])
 	})
 
+	test('a cooling block no lifecycle action commands is refused', () => {
+		const definition = canonical()
+		const actions = definition.shutdown.actions.filter((action) => action.type !== 'warmCamera')
+		const compilation = compile({ ...definition, shutdown: { ...definition.shutdown, actions } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block is read only by the lifecycle actions that command the cooler, and no enabled action commands one, so the camera would never be cooled' }])
+	})
+
+	test('a session that does not cool the camera needs no cooling block', () => {
+		const definition = canonical()
+		const actions = definition.shutdown.actions.filter((action) => action.type !== 'warmCamera')
+		const compilation = compile({ ...definition, cooling: { ...definition.cooling, enabled: false }, shutdown: { ...definition.shutdown, actions } })
+
+		expect(compilation.ok).toBe(true)
+		if (compilation.ok) expect(compilation.plan.cooling).toBeUndefined()
+	})
+
 	test('a feature commanding a role the definition does not declare is refused', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, devices: { camera: 'Camera Simulator', mount: 'Mount Simulator', wheel: 'Wheel Simulator' } })
@@ -211,7 +229,7 @@ describe('structural validation', () => {
 
 	test('a lifecycle action commanding a missing role names the role', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, shutdown: { ...definition.shutdown, actions: [action('cover', { type: 'openCover' })] } })
+		const compilation = compile({ ...definition, cooling: { ...definition.cooling, enabled: false }, shutdown: { ...definition.shutdown, actions: [action('cover', { type: 'openCover' })] } })
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.cover', message: 'shutdown.actions[0] requires the cover role, which the definition does not declare' }])
@@ -220,7 +238,7 @@ describe('structural validation', () => {
 	test('a disabled lifecycle action requires no role', () => {
 		const definition = canonical()
 
-		expect(ok({ ...definition, shutdown: { ...definition.shutdown, actions: [action('close', { type: 'closeCover', enabled: false })] } }).plan.roles).not.toContain('cover')
+		expect(ok({ ...definition, cooling: { ...definition.cooling, enabled: false }, shutdown: { ...definition.shutdown, actions: [action('close', { type: 'closeCover', enabled: false })] } }).plan.roles).not.toContain('cover')
 	})
 
 	test('a role required twice is reserved once', () => {

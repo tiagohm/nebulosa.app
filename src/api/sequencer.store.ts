@@ -199,7 +199,7 @@ export class InMemorySequencerStore implements SequencerStore {
 		}
 
 		entry.session = session
-		entry.events.push(...events)
+		for (const event of events) entry.events.push(event)
 
 		return { ok: true, session, events }
 	}

@@ -549,6 +549,24 @@ describe('termination', () => {
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.repeat', message: 'the capture must run at least one cycle' }])
 	})
+
+	test('a cycle count above the counting range is refused', () => {
+		const definition = canonical()
+
+		for (const repeat of [Number.MAX_SAFE_INTEGER + 2, Number.POSITIVE_INFINITY]) {
+			const compilation = compile({ ...definition, capture: { ...definition.capture, repeat } })
+
+			expect(compilation.ok).toBe(false)
+			if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.repeat', message: 'the cycle count is above the range a number counts one by one, so a loop counting completed cycles would stop advancing before reaching it' }])
+		}
+	})
+
+	test('a cycle count at the end of the counting range is accepted', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, repeat: Number.MAX_SAFE_INTEGER } })
+
+		expect(compilation.ok).toBe(true)
+	})
 })
 
 describe('node identity', () => {

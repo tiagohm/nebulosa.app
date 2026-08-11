@@ -191,8 +191,8 @@ function requiredSlotsOf(frame: SequencerFrame) {
 	return Math.min(byCount, byIntegration)
 }
 
-// Reports the four ways a frame group makes the capture loop unbounded, which is one of the only situations
-// this project checks at runtime.
+// Reports the five ways the capture plan makes its loop unbounded, which is one of the only situations this
+// project checks at runtime.
 //
 // An integration target with a zero exposure divides by zero and yields an infinite slot limit, which is the
 // infinite loop coming back through another door, and an integration target so much larger than its exposure
@@ -201,10 +201,13 @@ function requiredSlotsOf(frame: SequencerFrame) {
 // changing its counter there, so it never reaches the bound and the supposedly bounded loop runs forever. A
 // repetition count of zero would have to be read as "no cycle at all", and silently disabling the whole
 // capture through the repetition counter is precisely the quiet acceptance the compatibility rule forbids.
+// The repetition count is bounded from above for the same reason the slot limit is: the loop counts the
+// cycles it completed, and a bound the counter cannot reach is a loop with no end.
 function checkTermination(context: CompilerContext, definition: Sequencer) {
 	const { frames, repeat } = definition.capture
 
 	if (repeat < 1) context.diagnostics.push({ path: 'capture.repeat', message: 'the capture must run at least one cycle' })
+	else if (repeat > Number.MAX_SAFE_INTEGER) context.diagnostics.push({ path: 'capture.repeat', message: 'the cycle count is above the range a number counts one by one, so a loop counting completed cycles would stop advancing before reaching it' })
 
 	for (let i = 0; i < frames.length; i++) {
 		const frame = frames[i]

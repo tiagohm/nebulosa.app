@@ -48,6 +48,11 @@ export interface SequencerWriteEnvironment {
 	// session start already checked, because a rename across filesystems is a copy and stops being atomic.
 	// Defaults to the directory of the final path, which trivially satisfies that.
 	readonly temporaryDirectory?: string
+	// Session the write belongs to, which is what keeps two sessions apart inside a shared temporary directory.
+	// The final path carries the session segment on its own, so this only matters when `temporaryDirectory`
+	// moves the temporary out from under it; it is always passed by the runtime and omitted only by a caller
+	// that writes beside the final path.
+	readonly session?: string
 	// Whether a written file is a readable frame of the given format. Defaults to parsing it.
 	readonly valid?: (path: string, format: SequencerFrameFormat) => Promise<boolean>
 	// Directory an invalid final is moved into instead of being removed, when the caller asks to preserve it
@@ -88,8 +93,15 @@ async function readableFrame(path: string, format: SequencerFrameFormat) {
 //
 // The name is derived from the final one, so an interrupted write is traceable to the slot it belonged to and
 // two slots never share a temporary. It carries the reserved suffix instead of the frame extension.
-export function sequencerTemporaryPath(finalPath: string, temporaryDirectory?: string) {
-	return join(temporaryDirectory ?? dirname(finalPath), `${basename(finalPath)}${SEQUENCER_TEMPORARY_SUFFIX}`)
+//
+// It is also prefixed with the session, because `storage.temporaryDirectory` is declared by the definition and
+// therefore shared by every run of it, while the final path is not: it carries the session segment. Without
+// the prefix, two runs producing the same slot produce the same temporary, and a session would classify the
+// leftover of a crashed run as its own orphan — or, running concurrently, delete the file the other one is in
+// the middle of writing and fail its rename.
+export function sequencerTemporaryPath(finalPath: string, environment: SequencerWriteEnvironment = {}) {
+	const prefix = environment.temporaryDirectory !== undefined && environment.session !== undefined ? `${environment.session}-` : ''
+	return join(environment.temporaryDirectory ?? dirname(finalPath), `${prefix}${basename(finalPath)}${SEQUENCER_TEMPORARY_SUFFIX}`)
 }
 
 // Writes one frame through the protocol: temporary file, validation, atomic rename into the final path.
@@ -102,7 +114,7 @@ export function sequencerTemporaryPath(finalPath: string, temporaryDirectory?: s
 // An invalid frame leaves nothing behind: the temporary is removed, the final path is untouched, and the
 // caller recaptures under a new attempt. Returns the final path on success.
 export async function writeSequencerFrame(data: Uint8Array, finalPath: string, environment: SequencerWriteEnvironment = {}): Promise<SequencerFrameWrite> {
-	const temporary = sequencerTemporaryPath(finalPath, environment.temporaryDirectory)
+	const temporary = sequencerTemporaryPath(finalPath, environment)
 	const valid = environment.valid ?? readableFrame
 
 	try {
@@ -153,7 +165,7 @@ export async function classifySequencerFrame(finalPath: string, environment: Seq
 		return 'invalidFinal'
 	}
 
-	const temporary = sequencerTemporaryPath(finalPath, environment.temporaryDirectory)
+	const temporary = sequencerTemporaryPath(finalPath, environment)
 
 	if (await Bun.file(temporary).exists()) {
 		await rm(temporary, { force: true })

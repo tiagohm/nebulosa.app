@@ -93,8 +93,18 @@ describe('write protocol', () => {
 		const result = await writeSequencerFrame(FRAME, path, { ...accepting(), temporaryDirectory })
 
 		expect(result).toEqual({ ok: true, path })
-		expect(sequencerTemporaryPath(path, temporaryDirectory)).toBe(join(temporaryDirectory, 'm42-lum-0.fit.partial'))
+		expect(sequencerTemporaryPath(path, { temporaryDirectory })).toBe(join(temporaryDirectory, 'm42-lum-0.fit.partial'))
 		expect(await readdir(temporaryDirectory)).toEqual([])
+	})
+
+	test('keeps two sessions sharing a temporary directory apart', () => {
+		const temporaryDirectory = join(root, 'tmp')
+		const path = join(root, 'frames', 'm42-lum-0.fit')
+		const a = sequencerTemporaryPath(path, { temporaryDirectory, session: 's1' })
+		const b = sequencerTemporaryPath(path, { temporaryDirectory, session: 's2' })
+
+		expect(a).toBe(join(temporaryDirectory, 's1-m42-lum-0.fit.partial'))
+		expect(b).toBe(join(temporaryDirectory, 's2-m42-lum-0.fit.partial'))
 	})
 
 	test('reports a write that failed without leaving a temporary', async () => {
@@ -152,6 +162,16 @@ describe('reconciliation', () => {
 		expect(await classifySequencerFrame(path, accepting())).toBe('orphanTemporary')
 		expect(await Bun.file(path).exists()).toBeFalse()
 		expect(await readdir(root)).toEqual([])
+	})
+
+	test('leaves the temporary of another session in the shared directory alone', async () => {
+		const temporaryDirectory = join(root, 'tmp')
+		const path = join(root, 'frames', 'm42-lum-0.fit')
+		const other = sequencerTemporaryPath(path, { temporaryDirectory, session: 's1' })
+		await Bun.write(other, FRAME)
+
+		expect(await classifySequencerFrame(path, { ...accepting(), temporaryDirectory, session: 's2' })).toBe('missing')
+		expect(await Bun.file(other).exists()).toBeTrue()
 	})
 
 	test('prefers the final over a temporary left beside it', async () => {

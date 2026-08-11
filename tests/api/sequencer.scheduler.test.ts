@@ -74,6 +74,18 @@ describe('frame group completion', () => {
 		expect(frameGroupReachedTarget(byIntegration, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, accepted: 99, integration: 60 })).toBeFalse()
 	})
 
+	test('concludes on an integration target the accumulated sum only reaches within rounding error', () => {
+		const lum = group('lum', { count: 0, exposureTime: 0.3, integrationTime: 3, requiredSlots: 10 })
+		let integration = 0
+
+		for (let i = 0; i < 10; i++) integration += lum.exposureTime
+
+		expect(integration).not.toBe(3)
+		expect(frameGroupReachedTarget(lum, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, cursor: 10, accepted: 10, captured: 10, integration })).toBeTrue()
+		expect(frameGroupDegraded(lum, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, cursor: 10, accepted: 10, captured: 10, integration })).toBeFalse()
+		expect(frameGroupReachedTarget(lum, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, cursor: 9, accepted: 9, captured: 9, integration: integration - lum.exposureTime })).toBeFalse()
+	})
+
 	test('concludes degraded when the cursor reaches the slot limit without the target', () => {
 		const lum = group('lum', { count: 3, abandonmentBudget: 1 })
 		const exhausted: SequencerGroupProgress = { ...SEQUENCER_INITIAL_GROUP_PROGRESS, cursor: 4, accepted: 1, rejected: 3, abandoned: 3 }

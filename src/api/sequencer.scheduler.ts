@@ -71,13 +71,29 @@ export function groupProgressOf(progress: SequencerTargetProgress, groupId: stri
 	return progress.groups[groupId] ?? SEQUENCER_INITIAL_GROUP_PROGRESS
 }
 
+// Relative slack absorbing the rounding error accumulated by the integration sum.
+//
+// `integration` grows by repeatedly adding the same exposure, and a decimal duration is not exact in binary:
+// ten accepted 0.3-second frames sum to 2.9999999999999996, which never reaches a 3-second target compared
+// exactly, while the compiler snapped the same quotient to the ten slots it gave the group. Without the slack a
+// group that captured every frame it needed is classified as degraded when it has no abandonment budget, and
+// spends a slot of that budget on an eleventh frame the target does not need when it has one.
+//
+// The bound is orders of magnitude above the error of summing any number of exposures a night can hold and
+// orders of magnitude below the shortest exposure an operator can declare, so it never concludes a group that
+// is genuinely one exposure short.
+const SEQUENCER_INTEGRATION_TOLERANCE = 1e-9
+
 // Whether a group reached the target it was asked for in the current cycle.
 //
 // A group concludes on whichever criterion is reached first, and a configured `0` disables that criterion, so
 // a group is compared only against the criteria it declares. Both targets are per cycle, which is what makes
 // `repeat: 3` of a group of ten frames three blocks of ten rather than one block of thirty.
+//
+// The integration target is compared with the tolerance of the accumulated sum, matching the tolerance the
+// compiler applied to the same target when it derived the slots the group was given.
 export function frameGroupReachedTarget(group: SequencerPlanFrameGroup, progress: SequencerGroupProgress) {
-	return (group.count > 0 && progress.accepted >= group.count) || (group.integrationTime > 0 && progress.integration >= group.integrationTime)
+	return (group.count > 0 && progress.accepted >= group.count) || (group.integrationTime > 0 && progress.integration >= group.integrationTime * (1 - SEQUENCER_INTEGRATION_TOLERANCE))
 }
 
 // Whether a group concluded the current cycle without reaching its target, having spent every slot the

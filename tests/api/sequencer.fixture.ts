@@ -41,7 +41,7 @@ export function complete(): Sequencer {
 		capture: { ...definition.capture, frames: [frame('lum', { abandonmentBudget: 2, delay: 8, filter: { type: 'name', name: 'L' }, camera: camera() })] },
 		guiding: { ...definition.guiding, connection: { mode: 'remote', host: 'localhost', port: 4400, profile: 'default', owned: true } },
 		storage: { ...definition.storage, temporaryDirectory: '/data/nebulosa/.tmp' },
-		startup: { ...definition.startup, actions: [action('connect', { type: 'connectDevices', devices: ['camera', 'mount'], required: true })] },
+		startup: { ...definition.startup, actions: [action('connect', { type: 'connectDevices', devices: ['camera', 'mount'], required: true }), action('cool', { type: 'coolCamera' })] },
 		shutdown: { ...definition.shutdown, actions: [action('park', { type: 'parkMount', required: true }), action('warm', { type: 'warmCamera' })] },
 	}
 }
@@ -183,7 +183,7 @@ export function canonical(): Sequencer {
 			continueAfterApplicationRestart: false,
 		},
 		storage: { enabled: true, root: '/data/nebulosa', fileNameTemplate: '{target}-{filter}-{exposure}', directoryTemplate: '{target}/{frameType}', atomicWrite: true, overwrite: false, checksum: 'sha256', autoSubFolderMode: 'noon' },
-		startup: { enabled: true, actions: [action('connect', { type: 'connectDevices', devices: ['camera', 'mount'] }), action('unpark')], continueOnFailure: false },
+		startup: { enabled: true, actions: [action('connect', { type: 'connectDevices', devices: ['camera', 'mount'] }), action('unpark'), action('cool', { type: 'coolCamera' })], continueOnFailure: false },
 		shutdown: { enabled: true, runOnCompletion: true, runOnStop: true, runOnFailure: false, runOnUnsafe: false, actions: [action('park', { type: 'parkMount' }), action('warm', { type: 'warmCamera' })], continueOnFailure: true },
 		notification: { enabled: false, events: [], channels: [], minimumSeverity: 'warning' },
 	}

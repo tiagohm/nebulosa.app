@@ -9,7 +9,7 @@ import { action, camera, canonical, frame, retry } from './sequencer.fixture'
 function handlers(roles: Record<string, readonly SequencerDeviceRole[]> = {}) {
 	const registry = new SequencerBlockRegistry()
 
-	for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.warmCamera']) {
+	for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
 		const declared = (roles[type] ?? []).map((role) => ({ role }))
 
 		registry.register({
@@ -81,7 +81,7 @@ describe('lowering', () => {
 		const startup = plan.root.children[0] as SequencerPlanSequence
 		const finalize = plan.root.children[2] as SequencerPlanSequence
 
-		expect(startup.children.map((node) => node.id)).toEqual(['startup.action[connect]', 'startup.action[unpark]'])
+		expect(startup.children.map((node) => node.id)).toEqual(['startup.action[connect]', 'startup.action[unpark]', 'startup.action[cool]'])
 		expect(finalize.children.map((node) => node.id)).toEqual(['finalize.action[park]', 'finalize.action[warm]'])
 		expect(startup.children.every((node) => !node.id.includes('target['))).toBe(true)
 		expect(finalize.children.every((node) => !node.id.includes('target['))).toBe(true)
@@ -183,7 +183,7 @@ describe('structural validation', () => {
 
 	test('an empty lifecycle action id is refused', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, cooling: { ...definition.cooling, enabled: false }, shutdown: { ...definition.shutdown, actions: [action('', { type: 'parkMount' })] } })
+		const compilation = compile({ ...definition, shutdown: { ...definition.shutdown, actions: [action('', { type: 'parkMount' })] } })
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'shutdown.actions[0].id', message: 'the shutdown action id is empty and cannot address a node' }])
@@ -222,17 +222,36 @@ describe('structural validation', () => {
 
 	test('a cooling block no lifecycle action commands is refused', () => {
 		const definition = canonical()
-		const actions = definition.shutdown.actions.filter((action) => action.type !== 'warmCamera')
-		const compilation = compile({ ...definition, shutdown: { ...definition.shutdown, actions } })
+		const startup = definition.startup.actions.filter((action) => action.type !== 'coolCamera')
+		const shutdown = definition.shutdown.actions.filter((action) => action.type !== 'warmCamera')
+		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: startup }, shutdown: { ...definition.shutdown, actions: shutdown } })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block is read only by the lifecycle actions that command the cooler, and no enabled action commands one, so the camera would never be cooled' }])
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled lifecycle action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' }])
+	})
+
+	test('a cooling block only a warming action commands is refused', () => {
+		const definition = canonical()
+		const actions = definition.startup.actions.filter((action) => action.type !== 'coolCamera')
+		const compilation = compile({ ...definition, startup: { ...definition.startup, actions } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled lifecycle action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' }])
+	})
+
+	test('a lifecycle action commanding the cooler is refused without a cooling block', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, cooling: { ...definition.cooling, enabled: false } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'a lifecycle action commands the camera cooler, and the cooling block it reads the temperature from is disabled' }])
 	})
 
 	test('a session that does not cool the camera needs no cooling block', () => {
 		const definition = canonical()
-		const actions = definition.shutdown.actions.filter((action) => action.type !== 'warmCamera')
-		const compilation = compile({ ...definition, cooling: { ...definition.cooling, enabled: false }, shutdown: { ...definition.shutdown, actions } })
+		const startup = definition.startup.actions.filter((action) => action.type !== 'coolCamera')
+		const shutdown = definition.shutdown.actions.filter((action) => action.type !== 'warmCamera')
+		const compilation = compile({ ...definition, cooling: { ...definition.cooling, enabled: false }, startup: { ...definition.startup, actions: startup }, shutdown: { ...definition.shutdown, actions: shutdown } })
 
 		expect(compilation.ok).toBe(true)
 		if (compilation.ok) expect(compilation.plan.cooling).toBeUndefined()
@@ -248,7 +267,7 @@ describe('structural validation', () => {
 
 	test('a lifecycle action commanding a missing role names the role', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, cooling: { ...definition.cooling, enabled: false }, shutdown: { ...definition.shutdown, actions: [action('cover', { type: 'openCover' })] } })
+		const compilation = compile({ ...definition, shutdown: { ...definition.shutdown, actions: [action('cover', { type: 'openCover' })] } })
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.cover', message: 'shutdown.actions[0] requires the cover role, which the definition does not declare' }])
@@ -257,7 +276,7 @@ describe('structural validation', () => {
 	test('a disabled lifecycle action requires no role', () => {
 		const definition = canonical()
 
-		expect(ok({ ...definition, cooling: { ...definition.cooling, enabled: false }, shutdown: { ...definition.shutdown, actions: [action('close', { type: 'closeCover', enabled: false })] } }).plan.roles).not.toContain('cover')
+		expect(ok({ ...definition, shutdown: { ...definition.shutdown, actions: [action('close', { type: 'closeCover', enabled: false })] } }).plan.roles).not.toContain('cover')
 	})
 
 	test('a role required twice is reserved once', () => {
@@ -297,7 +316,7 @@ describe('structural validation', () => {
 	test('a handler issue is addressed below the node it came from', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.warmCamera']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
 			registry.register({
 				type,
 				version: 1,
@@ -323,7 +342,7 @@ describe('structural validation', () => {
 	test('the configuration a handler returns replaces the lowered one', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.warmCamera']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
 			registry.register({
 				type,
 				version: 1,
@@ -350,7 +369,7 @@ describe('structural validation', () => {
 	test('a group a capture handler rebuilt is the group the scheduler follows', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.warmCamera']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
 			registry.register({
 				type,
 				version: 1,
@@ -495,11 +514,11 @@ describe('node identity', () => {
 	test('inserting an action does not rename any other node', () => {
 		const definition = canonical()
 		const before = [...sequencerPlanNodes(ok(definition).plan.root)].map((node) => node.id)
-		const actions = [definition.startup.actions[0], action('cool', { type: 'coolCamera' }), definition.startup.actions[1]]
+		const actions = [definition.startup.actions[0], action('stop', { type: 'stopTracking' }), ...definition.startup.actions.slice(1)]
 		const after = [...sequencerPlanNodes(ok({ ...definition, startup: { ...definition.startup, actions } }).plan.root)].map((node) => node.id)
 
-		expect(after).toContain('startup.action[cool]')
-		expect(after.filter((id) => id !== 'startup.action[cool]')).toEqual(before)
+		expect(after).toContain('startup.action[stop]')
+		expect(after.filter((id) => id !== 'startup.action[stop]')).toEqual(before)
 	})
 
 	test('inserting a frame does not rename any other capture node', () => {
@@ -647,7 +666,7 @@ describe('failure policies', () => {
 
 	test('exhausting a policy into a suspension is refused', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('unpark', { retry: { ...retry(), onExhausted: 'suspend' } })] } })
+		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('unpark', { retry: { ...retry(), onExhausted: 'suspend' } }), action('cool', { type: 'coolCamera' })] } })
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'startup.actions[0].retry.onExhausted', message: 'this version has no suspended state to exhaust a policy into' }])

@@ -745,9 +745,14 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	if (cover.enabled) diagnostics.push({ path: 'cover.enabled', message: 'the cover block only declares automatic behaviors this version does not perform; the cover is commanded by the lifecycle actions, which carry their own timeout and retry' })
 	if (flatPanel.enabled) diagnostics.push({ path: 'flatPanel.enabled', message: 'the flat panel is lit only for flat frames, which this version does not capture' })
 
-	const cooled = commands(definition, ['coolCamera', 'warmCamera'])
+	// The two halves of the thermal policy are not interchangeable: only `coolCamera` drives the sensor to
+	// `cooling.temperature`, and `warmCamera` is the terminal action that gives it back to the ambient. A
+	// definition whose only cooler action is the usual shutdown warming therefore declares a setpoint nothing
+	// ever reaches, and the whole session would capture at the sensor temperature it started at.
+	const cools = commands(definition, ['coolCamera'])
+	const cooled = cools || commands(definition, ['warmCamera'])
 	if (!cooling.enabled && cooled) diagnostics.push({ path: 'cooling.enabled', message: 'a lifecycle action commands the camera cooler, and the cooling block it reads the temperature from is disabled' })
-	if (cooling.enabled && !cooled) diagnostics.push({ path: 'cooling.enabled', message: 'the cooling block is read only by the lifecycle actions that command the cooler, and no enabled action commands one, so the camera would never be cooled' })
+	if (cooling.enabled && !cools) diagnostics.push({ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled lifecycle action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' })
 
 	if (calibration.dark.enabled) diagnostics.push({ path: 'calibration.dark.enabled', message: 'calibration frames are not lowered by this version' })
 	if (calibration.bias.enabled) diagnostics.push({ path: 'calibration.bias.enabled', message: 'calibration frames are not lowered by this version' })

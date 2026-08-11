@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { sequencerNodeId } from 'src/api/sequencer.compiler'
 import { SEQUENCER_TEMPLATE_PLACEHOLDERS, sequencerArtifactId, sequencerAuxiliaryFileName, sequencerFrameDirectories, sequencerFrameFileName, sequencerLogicalSlotId, sequencerSlotAttempt, sequencerSlotToken, sequencerUnknownPlaceholders } from 'src/api/sequencer.identity'
 import type { SequencerFrameNaming } from 'src/api/sequencer.identity'
-import { isSequencerPathSegment } from 'src/api/sequencer.path'
+import { isPathSegment } from 'src/api/util'
 import type { SequencerPlanFrameGroup } from '#/sequencer.plan'
 import type { SequencerArtifact, SequencerArtifactStatus } from '#/sequencer.state'
 import { camera, retry } from './sequencer.fixture'
@@ -62,7 +62,7 @@ describe('logical slot identity', () => {
 	test('renders a slot token that is a valid path segment and stays unique', () => {
 		const token = sequencerSlotToken(sequencerLogicalSlotId(sequencerNodeId.captureFrame('m42', 'lum'), 'lum', 0, 3))
 
-		expect(isSequencerPathSegment(token)).toBeTrue()
+		expect(isPathSegment(token)).toBeTrue()
 		expect(token).toStartWith('target-m42-capture.frame-lum')
 		expect(sequencerSlotToken('a b#g#0#0')).not.toBe(sequencerSlotToken('a-b#g#0#0'))
 	})
@@ -94,7 +94,7 @@ describe('frame naming', () => {
 		expect(name).toStartWith('m42-L-60-')
 		expect(name).toEndWith('.fit')
 		expect(name).toContain(sequencerSlotToken(slot))
-		expect(isSequencerPathSegment(name)).toBeTrue()
+		expect(isPathSegment(name)).toBeTrue()
 	})
 
 	test('names every slot differently even with a template carrying no placeholder', () => {
@@ -118,7 +118,7 @@ describe('frame naming', () => {
 		const escaping = naming({ targetId: '../../etc', group: group('lum', { frameType: 'DARK' }) })
 		const name = sequencerFrameFileName('{target}', escaping, slot, 'fit')
 
-		expect(isSequencerPathSegment(name)).toBeTrue()
+		expect(isPathSegment(name)).toBeTrue()
 		expect(name).not.toContain('..')
 		expect(sequencerFrameDirectories('{target}/{frameType}', escaping)).toEqual(['etc', 'DARK'])
 		expect(sequencerFrameDirectories('{target}', naming({ targetId: '..' }))).toEqual([])
@@ -147,7 +147,7 @@ describe('auxiliary file names', () => {
 	test('names an auxiliary image by kind and ordinal', () => {
 		expect(sequencerAuxiliaryFileName('autofocus', 0, 'fit')).toBe('autofocus-00000.fit')
 		expect(sequencerAuxiliaryFileName('driftCheck', 42, 'xisf')).toBe('driftCheck-00042.xisf')
-		expect(isSequencerPathSegment(sequencerAuxiliaryFileName('guider', 7, 'fit'))).toBe(true)
+		expect(isPathSegment(sequencerAuxiliaryFileName('guider', 7, 'fit'))).toBe(true)
 	})
 
 	test('carries no slot token, so the reconciliation cannot read it as a frame', () => {

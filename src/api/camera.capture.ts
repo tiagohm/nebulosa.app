@@ -1,5 +1,5 @@
 import { mkdir } from 'fs/promises'
-import { join } from 'path'
+import { isAbsolute, join } from 'path'
 import { formatTemporal, TIMEZONE, temporalAdd, temporalGet, temporalSubtract } from 'nebulosa/src/astronomy/time/temporal'
 import { errorMessage } from 'nebulosa/src/core/util'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
@@ -17,7 +17,7 @@ import type { ImageProcessor } from './image.processor'
 import type { OperationContext, OperationScope } from './operation'
 import { abortableDelay, abortReason } from './operation.wait'
 import { ResourceArbiter, resourceKey } from './resource'
-import { directoryExists } from './util'
+import { directoryExists, isPathSegment } from './util'
 
 // Minimum inter-frame delay that produces progress updates, in microseconds.
 const MINIMUM_WAITING_TIME = 1000000
@@ -386,6 +386,10 @@ class CameraCaptureSession {
 		// One name is one frame. Several frames under it would leave one file on disk while every frame reported
 		// the path it was supposedly written to, which is a capture that looks complete and is not.
 		if (this.#request.outputName && this.#reporter.remainingCount > 1) return this.#finishFailure('commandFailed', 'a fixed output name captures a single frame')
+
+		const destination = destinationFailure(this.#request)
+
+		if (destination !== undefined) return this.#finishFailure('commandFailed', destination)
 		try {
 			this.sessionContext.prepare?.()
 		} catch (error) {
@@ -655,11 +659,22 @@ class CameraCaptureSession {
 	// exposure is commanded rather than the instant its payload arrived: a name has to exist before the data.
 	async #resolveFramePath() {
 		const request = this.#request
-		if (request.outputPath && request.outputName) return join(request.outputPath, request.outputName)
+		let path: string
 
-		const name = request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : this.camera.name
-		const extension = request.transferFormat === 'XISF' ? 'xisf' : 'fit'
-		return join(request.outputPath ?? (await makePathFor(request)), request.outputName ?? `${name}.${extension}`)
+		if (request.outputPath && request.outputName) {
+			path = join(request.outputPath, request.outputName)
+		} else {
+			const name = request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : this.camera.name
+			const extension = request.transferFormat === 'XISF' ? 'xisf' : 'fit'
+			path = join(request.outputPath ?? (await makePathFor(request)), request.outputName ?? `${name}.${extension}`)
+		}
+
+		// A caller-supplied name addresses one specific file, and the frame has to be what creates it. Silently
+		// overwriting turns a capture request into a write over a file that was never a frame, and it is the same
+		// rule the sequencer follows for its own paths: a pre-existing file is classified, never overwritten.
+		if (request.outputName !== undefined && (await Bun.file(path).exists())) throw new Error(`the output file "${path}" already exists`)
+
+		return path
 	}
 
 	// Decodes, buffers, and optionally writes one BLOB while retaining the camera lease.
@@ -757,6 +772,20 @@ class CameraCaptureSession {
 		this.#reporter.terminal(!result.ok)
 		return result.ok ? successfulOperationResult({ paths: this.#paths, frameCount: this.#paths.length }) : result
 	}
+}
+
+// Why a caller-supplied destination cannot be used, or undefined when it can.
+//
+// `outputPath` and `outputName` arrive over HTTP on the start route, and they are the only part of a capture
+// request that names where bytes land instead of deriving it, so this is the boundary where they are checked.
+// A relative directory resolves against the working directory of the process rather than against anything the
+// caller named, and a name that is not a single segment climbs out of the directory it was given: an
+// `outputName` of `../../etc/cron.d/job` turns an approved directory into an arbitrary write.
+function destinationFailure(request: CameraCaptureStart) {
+	if (request.outputPath !== undefined && !isAbsolute(request.outputPath)) return `the output path "${request.outputPath}" is not an absolute path`
+	if (request.outputName !== undefined && !isPathSegment(request.outputName)) return `the output name "${request.outputName}" is not a valid file name`
+
+	return undefined
 }
 
 // Resolves the output directory while preserving existing automatic subfolder behavior.

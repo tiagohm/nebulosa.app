@@ -4,8 +4,9 @@ import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Sequencer, SequencerAutofocus, SequencerCamera, SequencerCentering, SequencerCooling, SequencerDeviceRole, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { sequencerUnknownPlaceholders } from './sequencer.identity'
-import { SEQUENCER_AUXILIARY_SEGMENT, isSequencerPathSegment, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
+import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
 import type { SequencerBlockRegistry } from './sequencer.registry'
+import { isPathSegment } from './util'
 
 // Lowering of a sequencer definition into the executable plan.
 //
@@ -511,11 +512,11 @@ function checkStorage(context: CompilerContext, definition: Sequencer) {
 	const { capture, storage, target } = definition
 
 	// An empty id is already reported as unaddressable, and reporting it twice would say nothing new.
-	if (target.id.length > 0 && !isSequencerPathSegment(target.id)) context.diagnostics.push({ path: 'target.id', message: `the target id "${target.id}" contains a path separator or a relative segment and would escape the storage root` })
+	if (target.id.length > 0 && !isPathSegment(target.id)) context.diagnostics.push({ path: 'target.id', message: `the target id "${target.id}" contains a path separator or a relative segment and would escape the storage root` })
 
 	for (let i = 0; i < capture.frames.length; i++) {
 		const { id } = capture.frames[i]
-		if (id.length > 0 && !isSequencerPathSegment(id)) context.diagnostics.push({ path: `capture.frames[${i}].id`, message: `the frame id "${id}" contains a path separator or a relative segment and would escape the storage root` })
+		if (id.length > 0 && !isPathSegment(id)) context.diagnostics.push({ path: `capture.frames[${i}].id`, message: `the frame id "${id}" contains a path separator or a relative segment and would escape the storage root` })
 	}
 
 	const absolute = isAbsolute(storage.root)
@@ -527,7 +528,7 @@ function checkStorage(context: CompilerContext, definition: Sequencer) {
 	let composable = absolute
 
 	for (const directory of directories) {
-		if (!isSequencerPathSegment(directory)) {
+		if (!isPathSegment(directory)) {
 			context.diagnostics.push({ path: 'storage.directoryTemplate', message: `the directory segment "${directory}" is a relative segment and would escape the session directory` })
 			composable = false
 		} else if (directory === SEQUENCER_AUXILIARY_SEGMENT) {
@@ -539,7 +540,7 @@ function checkStorage(context: CompilerContext, definition: Sequencer) {
 		}
 	}
 
-	if (!isSequencerPathSegment(storage.fileNameTemplate)) {
+	if (!isPathSegment(storage.fileNameTemplate)) {
 		context.diagnostics.push({ path: 'storage.fileNameTemplate', message: `the file name template "${storage.fileNameTemplate}" is empty or contains a path separator, and the file name is a single segment` })
 		composable = false
 	}

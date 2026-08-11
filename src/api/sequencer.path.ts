@@ -1,5 +1,6 @@
 import { lstatSync } from 'fs'
 import { isAbsolute, join, resolve, sep } from 'path'
+import { isPathSegment } from './util'
 
 // Composition and containment of the paths a session writes to. `storage.root`, both storage templates and
 // every declared id arrive over HTTP, and the contract only states that artifacts stay below an approved
@@ -16,13 +17,6 @@ import { isAbsolute, join, resolve, sep } from 'path'
 // of a path resolves to, which is all an editor validating a definition can ask about; the verified half also
 // reads the filesystem, because a directory that already exists as a symbolic link sends a lexically contained
 // write somewhere else entirely. Anything about to write uses the verified one.
-
-// Whether a value can be used as a single path segment. Rejects the empty name, the two relative names,
-// anything carrying either host separator, and NUL, which most filesystems reject and some truncate on. `..`
-// is the one that escapes the root; the others address a directory the caller did not name.
-export function isSequencerPathSegment(value: string) {
-	return value.length > 0 && value !== '.' && value !== '..' && !value.includes('/') && !value.includes('\\') && !value.includes('\0')
-}
 
 // Separator a directory template may use, matching either host convention so a definition written on one
 // platform still addresses the same directories on the other.
@@ -109,7 +103,7 @@ export function sequencerAuxiliaryDirectory(context: SequencerPathContext, kind:
 export function sequencerAuxiliaryPath(context: SequencerPathContext, kind: SequencerAuxiliaryKind, fileName: string): SequencerPathResolution {
 	if (!isAbsolute(context.root)) return { ok: false, reason: `the storage root "${context.root}" is not an absolute path` }
 
-	if (!isSequencerPathSegment(fileName)) return { ok: false, reason: `the file name "${fileName}" is not a valid path segment` }
+	if (!isPathSegment(fileName)) return { ok: false, reason: `the file name "${fileName}" is not a valid path segment` }
 
 	const base = sequencerSessionDirectory(context)
 	const path = resolve(base, SEQUENCER_AUXILIARY_SEGMENT, kind, fileName)
@@ -134,7 +128,7 @@ export function sequencerArtifactPath(context: SequencerPathContext, directories
 	if (!isAbsolute(context.root)) return { ok: false, reason: `the storage root "${context.root}" is not an absolute path` }
 
 	for (const directory of directories) {
-		if (!isSequencerPathSegment(directory)) return { ok: false, reason: `the directory segment "${directory}" is not a valid path segment` }
+		if (!isPathSegment(directory)) return { ok: false, reason: `the directory segment "${directory}" is not a valid path segment` }
 
 		// A template that rendered the reserved name would write frames of the plan into the auxiliary space, and
 		// its first segment would land exactly where the auxiliary images live. The name is refused at every
@@ -142,7 +136,7 @@ export function sequencerArtifactPath(context: SequencerPathContext, directories
 		if (directory === SEQUENCER_AUXILIARY_SEGMENT) return { ok: false, reason: `the directory segment "${directory}" is reserved for the images that are not frames of the plan` }
 	}
 
-	if (!isSequencerPathSegment(fileName)) return { ok: false, reason: `the file name "${fileName}" is not a valid path segment` }
+	if (!isPathSegment(fileName)) return { ok: false, reason: `the file name "${fileName}" is not a valid path segment` }
 
 	const base = sequencerSessionDirectory(context)
 	const path = resolve(base, ...directories, fileName)

@@ -1,6 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test'
+import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
-import { basename, join } from 'path'
+import { basename, join, sep } from 'path'
 import { parseTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { CLIENT } from 'nebulosa/src/devices/indi/device'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
@@ -651,6 +652,40 @@ describe('camera capture session cancellation', () => {
 			expect(harness.startExposure).not.toHaveBeenCalled()
 		} finally {
 			harness.restore()
+		}
+	})
+
+	test('refuses a destination that would write outside the directory it names', async () => {
+		const harness = createHarness()
+
+		try {
+			const escaping = harness.capturer.start(harness.coordinator, harness.camera, request({ outputPath: join(tmpdir(), 'sequencer-session'), outputName: `..${sep}..${sep}authorized_keys` }))
+			expect(await escaping.result).toEqual(failedOperationResult('commandFailed', `the output name "..${sep}..${sep}authorized_keys" is not a valid file name`))
+
+			const relative = harness.capturer.start(harness.coordinator, harness.camera, request({ outputPath: 'sequencer-session', outputName: 'm42-lum-0.fit' }))
+			expect(await relative.result).toEqual(failedOperationResult('commandFailed', 'the output path "sequencer-session" is not an absolute path'))
+
+			expect(harness.startExposure).not.toHaveBeenCalled()
+		} finally {
+			harness.restore()
+		}
+	})
+
+	test('refuses to overwrite the file a caller-supplied name already addresses', async () => {
+		const harness = createHarness()
+		const directory = await mkdtemp(join(tmpdir(), 'nebulosa-capture-'))
+		const path = join(directory, 'm42-lum-0.fit')
+		await Bun.write(path, 'a frame that is not this one')
+
+		try {
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request({ autoSave: true, outputPath: directory, outputName: 'm42-lum-0.fit' }))
+
+			expect(await handle.result).toEqual(failedOperationResult('commandFailed', `the output file "${path}" already exists`))
+			expect(harness.startExposure).not.toHaveBeenCalled()
+			expect(await Bun.file(path).text()).toBe('a frame that is not this one')
+		} finally {
+			harness.restore()
+			await rm(directory, { recursive: true, force: true })
 		}
 	})
 

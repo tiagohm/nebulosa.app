@@ -2,27 +2,28 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve, sep } from 'path'
-import { SEQUENCER_AUXILIARY_SEGMENT, isSequencerPathSegment, sequencerArtifactPath, sequencerAuxiliaryDirectory, sequencerAuxiliaryPath, sequencerPathSegments, sequencerSessionDirectory, sequencerVerifiedArtifactPath } from 'src/api/sequencer.path'
+import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerAuxiliaryDirectory, sequencerAuxiliaryPath, sequencerPathSegments, sequencerSessionDirectory, sequencerVerifiedArtifactPath } from 'src/api/sequencer.path'
+import { isPathSegment } from 'src/api/util'
 
 const ROOT = resolve('/data/nebulosa')
 
 describe('path segments', () => {
 	test('a plain name is a segment', () => {
-		expect(isSequencerPathSegment('m42')).toBe(true)
-		expect(isSequencerPathSegment('LIGHT-60s')).toBe(true)
-		expect(isSequencerPathSegment('...')).toBe(true)
+		expect(isPathSegment('m42')).toBe(true)
+		expect(isPathSegment('LIGHT-60s')).toBe(true)
+		expect(isPathSegment('...')).toBe(true)
 	})
 
 	test('the empty name and the relative names are not segments', () => {
-		expect(isSequencerPathSegment('')).toBe(false)
-		expect(isSequencerPathSegment('.')).toBe(false)
-		expect(isSequencerPathSegment('..')).toBe(false)
+		expect(isPathSegment('')).toBe(false)
+		expect(isPathSegment('.')).toBe(false)
+		expect(isPathSegment('..')).toBe(false)
 	})
 
 	test('a separator or a NUL is not a segment', () => {
-		expect(isSequencerPathSegment('a/b')).toBe(false)
-		expect(isSequencerPathSegment('a\\b')).toBe(false)
-		expect(isSequencerPathSegment('a\0b')).toBe(false)
+		expect(isPathSegment('a/b')).toBe(false)
+		expect(isPathSegment('a\\b')).toBe(false)
+		expect(isPathSegment('a\0b')).toBe(false)
 	})
 
 	test('a template splits on either host separator and drops the empty parts', () => {

@@ -169,16 +169,16 @@ describe('structural validation', () => {
 
 	test('a lifecycle action commanding a missing role names the role', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, shutdown: { ...definition.shutdown, actions: [action('close', { type: 'closeDome' })] } })
+		const compilation = compile({ ...definition, shutdown: { ...definition.shutdown, actions: [action('cover', { type: 'openCover' })] } })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.dome', message: 'shutdown.actions[0] requires the dome role, which the definition does not declare' }])
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.cover', message: 'shutdown.actions[0] requires the cover role, which the definition does not declare' }])
 	})
 
 	test('a disabled lifecycle action requires no role', () => {
 		const definition = canonical()
 
-		expect(ok({ ...definition, shutdown: { ...definition.shutdown, actions: [action('close', { type: 'closeDome', enabled: false })] } }).plan.roles).not.toContain('dome')
+		expect(ok({ ...definition, shutdown: { ...definition.shutdown, actions: [action('close', { type: 'closeCover', enabled: false })] } }).plan.roles).not.toContain('cover')
 	})
 
 	test('a role required twice is reserved once', () => {

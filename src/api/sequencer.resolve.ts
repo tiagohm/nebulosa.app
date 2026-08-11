@@ -88,7 +88,9 @@ function guideOutputOf(bindings: readonly SequencerRoleBinding[]): GuideOutput |
 function guiderKeysOf(plan: SequencerPlan, bindings: readonly SequencerRoleBinding[]): ResourceRequest[] {
 	if (plan.guider === undefined) return []
 
-	if (plan.guider.mode === 'remote') return [{ key: remoteGuiderKey(plan.guider.host, plan.guider.port) }]
+	const { connection } = plan.guider
+
+	if (connection.mode === 'remote') return [{ key: remoteGuiderKey(connection.host, connection.port) }]
 
 	const camera = guideCameraOf(bindings)
 	const guideOutput = guideOutputOf(bindings)

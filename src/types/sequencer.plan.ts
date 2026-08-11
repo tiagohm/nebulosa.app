@@ -1,5 +1,21 @@
 import type { CameraTransferFormat, FrameType } from 'nebulosa/src/devices/indi/device'
-import type { SequencerCameraSettings, SequencerCapture, SequencerDeviceRole, SequencerDevices, SequencerFilterReference, SequencerLocalGuider, SequencerRemoteGuider, SequencerRetryPolicy, SequencerStorage } from './sequencer'
+import type {
+	SequencerCameraSettings,
+	SequencerCapture,
+	SequencerCheckpoint,
+	SequencerCooling,
+	SequencerDeviceRole,
+	SequencerDevices,
+	SequencerEndCondition,
+	SequencerExecution,
+	SequencerFilterReference,
+	SequencerGuiderSettle,
+	SequencerLocalGuider,
+	SequencerRemoteGuider,
+	SequencerRetryPolicy,
+	SequencerStartCondition,
+	SequencerStorage,
+} from './sequencer'
 
 // Executable plan produced by lowering a definition, and the diagnostics that lowering emits instead of a
 // plan. The definition in `sequencer.ts` is declarative and per feature; this is the node tree the runtime
@@ -59,6 +75,9 @@ export interface SequencerPlanLoop {
 export interface SequencerPlanFrameGroup {
 	// Frame id as declared, unique within the capture plan.
 	readonly id: string
+	// Human-readable label of the group, carried so the pre-flight view names a group the same way the editor
+	// does instead of showing the id it addresses nodes with.
+	readonly name: string
 	// Node id of the capture action of this group.
 	readonly nodeId: string
 	// Frame classification written to the image metadata.
@@ -107,6 +126,50 @@ export interface SequencerPlanFinalize extends SequencerPlanPipeline {
 	readonly runOn: readonly ('completed' | 'stopped' | 'failed')[]
 }
 
+// Target the plan observes, which in V1 is exactly one.
+export interface SequencerPlanTarget {
+	// Target id as declared, which is also the segment every node below the target block carries.
+	readonly id: string
+	// Human-readable label of the target, carried for the pre-flight view and the session snapshot.
+	readonly name: string
+}
+
+// Guider the session creates and owns, with the policy every guiding command runs under. The connection is
+// part of the plan because the session reserves the logical keys of that guider at start, before any guiding
+// command, and the policy travels with it so no handler has to read the definition again.
+export interface SequencerPlanGuider {
+	// How the session reaches the guider. V1 always creates and owns the session.
+	readonly connection: SequencerRemoteGuider | SequencerLocalGuider
+	// Whether guiding calibrates before the first exposure of the session.
+	readonly calibrateBeforeStart: boolean
+	// Whether guiding recalibrates after a meridian flip, where the calibration no longer matches the sky.
+	readonly recalibrateAfterMeridianFlip: boolean
+	// Whether guiding is restored after an interruption that stopped it.
+	readonly restoreAfterInterruption: boolean
+	// Settling required after guiding starts or resumes, before an exposure may begin.
+	readonly settle: SequencerGuiderSettle
+	// Failure policy of the guiding commands.
+	readonly retry: SequencerRetryPolicy
+}
+
+// Execution policy of the session: when it may start and end, how it reacts to a pause or a stop, and how
+// often it checkpoints. It is snapshotted with the plan so an edit to the definition does not change the
+// semantics of a session already running.
+export interface SequencerPlanExecution {
+	// Condition allowing the session to start.
+	readonly start: SequencerStartCondition
+	// Condition ending the session.
+	readonly end: SequencerEndCondition
+	// Where a pause takes effect.
+	readonly pauseMode: SequencerExecution['pauseMode']
+	// Whether a stop finishes the current work or interrupts it.
+	readonly stopMode: SequencerExecution['stopMode']
+	// Failure policy applied to an action that declares none.
+	readonly defaultRetry: SequencerRetryPolicy
+	// When durable checkpoints are written.
+	readonly checkpoint: SequencerCheckpoint
+}
+
 // Storage decisions the plan carries, already checked for containment under the root.
 export interface SequencerPlanStorage {
 	// Root directory every artifact of the session is written below.
@@ -129,6 +192,14 @@ export interface SequencerPlan {
 	readonly definitionId: string
 	// Definition revision snapshotted for the session; a later edit does not affect a running one.
 	readonly definitionRevision: number
+	// Human-readable name of the definition, shown wherever a session is listed.
+	readonly name: string
+	// Human-readable explanation of the observing plan, empty when the definition declares none.
+	readonly description: string
+	// Target the session observes.
+	readonly target: SequencerPlanTarget
+	// Execution policy of the session.
+	readonly execution: SequencerPlanExecution
 	// Device id per role declared by the definition.
 	readonly devices: SequencerDevices
 	// Roles the plan actually commands, which is what the session reserves at start.
@@ -141,9 +212,11 @@ export interface SequencerPlan {
 	readonly startup?: SequencerPlanPipeline
 	// Finalize pipeline policy; absent when the definition declares no terminal action to run.
 	readonly finalize?: SequencerPlanFinalize
-	// Guider the session creates and owns, absent when the plan does not guide. It is part of the plan
-	// because the session reserves the logical keys of that guider at start, before any guiding command.
-	readonly guider?: SequencerRemoteGuider | SequencerLocalGuider
+	// Guider the session creates and owns, absent when the plan does not guide.
+	readonly guider?: SequencerPlanGuider
+	// Cooling policy the camera is held at, absent when the definition does not cool. The cooling and warming
+	// lifecycle actions declare no temperature of their own, so this is where they read it from.
+	readonly cooling?: SequencerCooling
 	// Handler version per block type, recorded when the compilation resolved the registry. The session start
 	// demands the same versions again, because a handler can be registered, replaced, or removed between
 	// validating a definition and running it, and a version that changed means the block no longer does what

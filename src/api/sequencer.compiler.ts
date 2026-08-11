@@ -235,6 +235,7 @@ function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): Sequence
 
 	return {
 		id: frame.id,
+		name: frame.name,
 		nodeId: sequencerNodeId.captureFrame(target.id, frame.id),
 		frameType: frame.frameType,
 		exposureTime: frame.exposureTime,
@@ -337,13 +338,10 @@ const SEQUENCER_ROLE_ORDER: readonly SequencerDeviceRole[] = ['camera', 'mount',
 
 // Role each lifecycle action commands, so an action that needs a device the definition never declared is
 // refused at compile time instead of failing halfway through the pipeline, with the observatory already
-// half open. `connectDevices` is absent because it declares its roles explicitly, and `custom` and `switch`
-// are absent because they address a host handler and a device id rather than a session role.
+// half open. `connectDevices` is absent because it declares its roles explicitly, `custom` and `switch` are
+// absent because they address a host handler and a device id rather than a session role, and the dome actions
+// are absent because the compatibility rule refuses them before a role could be required for them.
 const SEQUENCER_LIFECYCLE_ROLE: Partial<Record<SequencerLifecycleAction['type'], SequencerDeviceRole>> = {
-	unparkDome: 'dome',
-	openDome: 'dome',
-	parkDome: 'dome',
-	closeDome: 'dome',
 	unparkMount: 'mount',
 	parkMount: 'mount',
 	startTracking: 'mount',
@@ -366,7 +364,7 @@ interface RoleRequirement {
 // Collects every role the lowered plan commands. The camera is always required: a definition that exposes
 // nothing is refused before this runs.
 function roleRequirements(definition: Sequencer, groups: readonly SequencerPlanFrameGroup[]): RoleRequirement[] {
-	const { autofocus, cover, dome, flatPanel, guiding, meridianFlip, rotator, shutdown, startup, target } = definition
+	const { autofocus, guiding, meridianFlip, shutdown, startup, target } = definition
 	const requirements: RoleRequirement[] = [{ role: 'camera', path: 'capture.frames' }]
 
 	if (target.goto.enabled) requirements.push({ role: 'mount', path: 'target.goto' })
@@ -375,16 +373,11 @@ function roleRequirements(definition: Sequencer, groups: readonly SequencerPlanF
 	if (meridianFlip.enabled) requirements.push({ role: 'mount', path: 'meridianFlip' })
 	if (groups.some((group) => group.filter !== undefined)) requirements.push({ role: 'wheel', path: 'capture.frames' })
 	if (autofocus.enabled) requirements.push({ role: 'focuser', path: 'autofocus' })
-	if (rotator.enabled) requirements.push({ role: 'rotator', path: 'rotator' })
 
 	if (guiding.enabled && guiding.connection.mode === 'local') {
 		requirements.push({ role: 'guideCamera', path: 'guiding.connection' })
 		requirements.push({ role: 'guideOutput', path: 'guiding.connection' })
 	}
-
-	if (cover.enabled) requirements.push({ role: 'cover', path: 'cover' })
-	if (flatPanel.enabled) requirements.push({ role: 'flatPanel', path: 'flatPanel' })
-	if (dome.enabled) requirements.push({ role: 'dome', path: 'dome' })
 
 	for (const pipeline of [
 		{ name: 'startup', actions: startup.actions, enabled: startup.enabled },
@@ -527,7 +520,99 @@ function lowerGuider(context: CompilerContext, definition: Sequencer) {
 		return undefined
 	}
 
-	return guiding.connection
+	return { connection: guiding.connection, calibrateBeforeStart: guiding.calibrateBeforeStart, recalibrateAfterMeridianFlip: guiding.recalibrateAfterMeridianFlip, restoreAfterInterruption: guiding.restoreAfterInterruption, settle: guiding.settle, retry: guiding.retry }
+}
+
+// Schema revision this compiler understands. A definition serialized against another revision may have moved
+// a field this lowering reads, so it is refused instead of interpreted with the current reading.
+const SEQUENCER_SCHEMA_VERSION = 1
+
+// Lifecycle actions commanding a device the device layer of this version does not implement.
+const SEQUENCER_UNSUPPORTED_ACTION: ReadonlySet<SequencerLifecycleAction['type']> = new Set(['openDome', 'closeDome', 'parkDome', 'unparkDome'])
+
+// Whether a pipeline has an enabled action of one of the given types.
+function commands(definition: Sequencer, types: readonly SequencerLifecycleAction['type'][]) {
+	for (const pipeline of [definition.startup, definition.shutdown]) {
+		if (!pipeline.enabled) continue
+
+		for (const action of pipeline.actions) {
+			if (action.enabled && types.includes(action.type)) return true
+		}
+	}
+
+	return false
+}
+
+// Reports every declared field this version does not execute.
+//
+// The compatibility rule is that a declared configuration is never silently ignored: a field the runtime does
+// not execute either refuses the definition, addressed to the exact property that declared it, or is removed
+// from the executable plan and the removal is reported. Accepting a field and doing nothing with it is the one
+// outcome the rule forbids, because it produces a session that quietly disagrees with the definition the
+// operator wrote, and the disagreement is only discovered from the result of a night.
+//
+// Rejection is the default and removal is reserved for a field that is inert: the two removals below change
+// nothing about what the session does, while everything rejected here would change what it does.
+function checkCompatibility(context: CompilerContext, definition: Sequencer) {
+	const { autofocus, calibration, capture, cooling, cover, dome, execution, flatPanel, guiding, monitoring, notification, quality, rotator, safety, shutdown, startup, storage, target } = definition
+	const { diagnostics, removals } = context
+
+	if (definition.schemaVersion !== SEQUENCER_SCHEMA_VERSION) diagnostics.push({ path: 'schemaVersion', message: `the definition declares schema version ${definition.schemaVersion}, and this version compiles ${SEQUENCER_SCHEMA_VERSION}` })
+	if (!definition.enabled) diagnostics.push({ path: 'enabled', message: 'the definition is disabled and a disabled definition has nothing to execute' })
+
+	if (target.constraints.enabled) diagnostics.push({ path: 'target.constraints.enabled', message: 'target constraints require the ephemeris and the monitor lane this version does not have' })
+
+	if (capture.abortOnDeviceAlert) diagnostics.push({ path: 'capture.abortOnDeviceAlert', message: 'this version has no device alert source, so the flag would promise a protection that does not exist' })
+	if (capture.continueAfterRejectedFrame) removals.push({ path: 'capture.continueAfterRejectedFrame', reason: 'quality evaluation is not executed, so no frame is ever rejected and the flag has no path to take effect' })
+
+	if (guiding.thresholds.enabled) diagnostics.push({ path: 'guiding.thresholds.enabled', message: 'guiding thresholds require the continuous monitor lane this version does not have' })
+	if (guiding.recovery.enabled) diagnostics.push({ path: 'guiding.recovery.enabled', message: 'guiding recovery requires the continuous monitor lane this version does not have' })
+	if (!guiding.enabled && commands(definition, ['startGuiding', 'stopGuiding'])) diagnostics.push({ path: 'guiding.enabled', message: 'a lifecycle action commands guiding, which the definition disables' })
+
+	if (autofocus.triggers.starSizeChange !== 0) diagnostics.push({ path: 'autofocus.triggers.starSizeChange', message: 'triggering on star size requires measuring the star size of every frame, which this version does not do' })
+
+	if (rotator.enabled) diagnostics.push({ path: 'rotator.enabled', message: 'no action of this version commands the rotator, so an enabled rotator would never reach its angle' })
+	if (dome.enabled) diagnostics.push({ path: 'dome.enabled', message: 'the device layer of this version has no dome' })
+	if (cover.enabled) diagnostics.push({ path: 'cover.enabled', message: 'the cover block only declares automatic behaviors this version does not perform; the cover is commanded by the lifecycle actions, which carry their own timeout and retry' })
+	if (flatPanel.enabled) diagnostics.push({ path: 'flatPanel.enabled', message: 'the flat panel is lit only for flat frames, which this version does not capture' })
+
+	if (!cooling.enabled && commands(definition, ['coolCamera', 'warmCamera'])) diagnostics.push({ path: 'cooling.enabled', message: 'a lifecycle action commands the camera cooler, and the cooling block it reads the temperature from is disabled' })
+
+	if (calibration.dark.enabled) diagnostics.push({ path: 'calibration.dark.enabled', message: 'calibration frames are not lowered by this version' })
+	if (calibration.bias.enabled) diagnostics.push({ path: 'calibration.bias.enabled', message: 'calibration frames are not lowered by this version' })
+	if (calibration.flat.enabled) diagnostics.push({ path: 'calibration.flat.enabled', message: 'calibration frames are not lowered by this version' })
+	if (calibration.darkFlat.enabled) diagnostics.push({ path: 'calibration.darkFlat.enabled', message: 'calibration frames are not lowered by this version' })
+
+	if (monitoring.enabled) diagnostics.push({ path: 'monitoring.enabled', message: 'the monitor lane is not part of this version' })
+	if (safety.enabled) diagnostics.push({ path: 'safety.enabled', message: 'there is no safety monitor in this version' })
+	if (quality.enabled) diagnostics.push({ path: 'quality.enabled', message: 'frame quality evaluation is not part of this version' })
+	if (notification.enabled) removals.push({ path: 'notification', reason: 'notifications are delivered by channel adapters over the session events, outside the executable plan' })
+
+	if (execution.start.type === 'sunAltitude' || execution.start.type === 'targetAltitude') diagnostics.push({ path: 'execution.start.type', message: `starting on ${execution.start.type} requires the ephemeris this version does not compute` })
+	if (execution.end.type === 'sunAltitude' || execution.end.type === 'targetAltitude') diagnostics.push({ path: 'execution.end.type', message: `ending on ${execution.end.type} requires the ephemeris this version does not compute` })
+	if (!execution.checkpoint.enabled) diagnostics.push({ path: 'execution.checkpoint.enabled', message: 'the checkpoint is how a session knows what it already did, and this version always writes it' })
+	if (execution.maximumParallelActions !== 1) diagnostics.push({ path: 'execution.maximumParallelActions', message: 'this version executes one action at a time' })
+	if (execution.releaseResourcesWhilePaused) diagnostics.push({ path: 'execution.releaseResourcesWhilePaused', message: 'the reservation is held through a pause, which is the entire reason it exists' })
+	if (execution.releaseResourcesWhileSuspended) diagnostics.push({ path: 'execution.releaseResourcesWhileSuspended', message: 'the reservation is held through a suspension, which is the entire reason it exists' })
+	if (execution.continueAfterApplicationRestart) diagnostics.push({ path: 'execution.continueAfterApplicationRestart', message: 'a session of this version does not survive the process it runs in' })
+
+	if (!storage.enabled) diagnostics.push({ path: 'storage.enabled', message: 'a session with storage disabled would expose and discard every frame it captures' })
+	if (!storage.atomicWrite) diagnostics.push({ path: 'storage.atomicWrite', message: 'the write protocol is what keeps a partial file out of the final path, and this version always applies it' })
+	if (storage.overwrite) diagnostics.push({ path: 'storage.overwrite', message: 'an existing file is classified and never overwritten in silence' })
+
+	if (shutdown.runOnUnsafe) diagnostics.push({ path: 'shutdown.runOnUnsafe', message: 'there is no safety monitor in this version to declare a session unsafe' })
+
+	for (const pipeline of [
+		{ name: 'startup', actions: startup.actions, enabled: startup.enabled },
+		{ name: 'shutdown', actions: shutdown.actions, enabled: shutdown.enabled },
+	]) {
+		if (!pipeline.enabled) continue
+
+		for (let i = 0; i < pipeline.actions.length; i++) {
+			const action = pipeline.actions[i]
+			if (action.enabled && SEQUENCER_UNSUPPORTED_ACTION.has(action.type)) diagnostics.push({ path: `${pipeline.name}.actions[${i}].type`, message: `the device layer of this version has no dome, so the ${action.type} action cannot be executed` })
+		}
+	}
 }
 
 // Deduplicates the required roles and returns them in the fixed role order, which is what the session
@@ -571,6 +656,7 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	if (groups.length === 0) context.diagnostics.push({ path: 'capture.frames', message: 'the definition has no enabled frame group to capture' })
 
 	checkStorage(context, definition)
+	checkCompatibility(context, definition)
 
 	if (context.diagnostics.length > 0) return { ok: false, diagnostics: context.diagnostics }
 
@@ -594,6 +680,10 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	const plan: SequencerPlan = {
 		definitionId: definition.id ?? '',
 		definitionRevision: definition.revision ?? 0,
+		name: definition.name,
+		description: definition.description,
+		target: { id: target.id, name: target.name },
+		execution: { start: definition.execution.start, end: definition.execution.end, pauseMode: definition.execution.pauseMode, stopMode: definition.execution.stopMode, defaultRetry: definition.execution.defaultRetry, checkpoint: definition.execution.checkpoint },
 		devices: definition.devices,
 		roles: rolesOf(requirements),
 		root: { kind: 'sequence', id: sequencerNodeId.root(), children },
@@ -601,6 +691,7 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 		startup: lowered && { continueOnFailure: startup.continueOnFailure },
 		finalize: finalized && { continueOnFailure: shutdown.continueOnFailure, runOn },
 		guider,
+		cooling: definition.cooling.enabled ? definition.cooling : undefined,
 		storage: { root: storage.root, fileNameTemplate: storage.fileNameTemplate, directoryTemplate: storage.directoryTemplate, temporaryDirectory: storage.temporaryDirectory, checksum: storage.checksum, autoSubFolderMode: storage.autoSubFolderMode },
 	}
 

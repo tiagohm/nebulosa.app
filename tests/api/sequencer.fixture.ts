@@ -18,6 +18,34 @@ export function action(id: string, overrides?: Partial<SequencerLifecycleAction>
 	return { id, enabled: true, timeout: 30, retry: retry(), type: 'unparkMount', ...overrides } as SequencerLifecycleAction
 }
 
+// Canonical definition with every optional property of the contract declared, which is what the compatibility
+// test walks: a property absent from this object is a property no case classifies.
+export function complete(): Sequencer {
+	const definition = canonical()
+
+	return {
+		...definition,
+		devices: {
+			camera: 'Camera Simulator',
+			mount: 'Mount Simulator',
+			wheel: 'Wheel Simulator',
+			focuser: 'Focuser Simulator',
+			rotator: 'Rotator Simulator',
+			guideCamera: 'Guide Camera Simulator',
+			guideOutput: 'Guide Output Simulator',
+			cover: 'Cover Simulator',
+			flatPanel: 'Flat Panel Simulator',
+			dome: 'Dome Simulator',
+		},
+		target: { ...definition.target, tracking: { ...definition.target.tracking, rightAscensionRate: 0, declinationRate: 0 } },
+		capture: { ...definition.capture, frames: [frame('lum', { abandonmentBudget: 2, delay: 8, filter: { type: 'name', name: 'L' }, camera: camera() })] },
+		guiding: { ...definition.guiding, connection: { mode: 'remote', host: 'localhost', port: 4400, profile: 'default', owned: true } },
+		storage: { ...definition.storage, temporaryDirectory: '/data/nebulosa/.tmp' },
+		startup: { ...definition.startup, actions: [action('connect', { type: 'connectDevices', devices: ['camera', 'mount'], required: true })] },
+		shutdown: { ...definition.shutdown, actions: [action('park', { type: 'parkMount', required: true })] },
+	}
+}
+
 export function canonical(): Sequencer {
 	return {
 		schemaVersion: 1,

@@ -410,4 +410,35 @@ describe('sequencer runtime', () => {
 		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 		expect(instance.activeSessionId).toBeUndefined()
 	})
+
+	test('stops a running session even when the store refuses the stop intent', async () => {
+		const running = Promise.withResolvers<void>()
+
+		const { runtime: instance, arbiter } = runtime(
+			exposeHandler(async (context) => {
+				context.artifact({ logicalSlotId: 'slot-1', attempt: 1, status: 'committed', path: '/data/frame-1.fits' })
+				context.artifact({ logicalSlotId: 'slot-1', attempt: 2, status: 'committed', path: '/data/frame-2.fits' })
+				running.resolve()
+
+				await new Promise<void>((resolve) => {
+					context.signal.addEventListener('abort', () => resolve(), { once: true })
+				})
+
+				return { type: 'fatalFailure', reason: 'aborted' }
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		await running.promise
+
+		const session = await instance.stop(created.id)
+
+		expect(session?.state).toBe('failed')
+		expect(session?.desiredState).toBe('stopped')
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+		expect(instance.activeSessionId).toBeUndefined()
+	})
 })

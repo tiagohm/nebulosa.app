@@ -404,7 +404,10 @@ export class SequencerRuntime {
 
 		if (active === undefined || active.id !== sessionId) return this.#store.session(sessionId)
 
-		this.#commit(active, { desiredState: 'stopped' })
+		// The stop intent is persisted first, but a store refusal must not decide whether the session stops:
+		// the action would keep running, holding the reservation and the claim, waiting on a signal that was
+		// never aborted because the write failed.
+		this.#commitBestEffort(active, { desiredState: 'stopped' })
 
 		// Both signals are needed: the controller stops an action that is merely waiting, and the cancellation
 		// by reservation owner reaches every operation tree it started, including the ones the runtime holds
@@ -464,7 +467,7 @@ export class SequencerRuntime {
 		const node = active.plan.action.id
 
 		try {
-			this.#commitFinal(active, { state: 'finalizing', events: [{ type: 'stateChanged', state: 'finalizing', nodeId: node }] })
+			this.#commitBestEffort(active, { state: 'finalizing', events: [{ type: 'stateChanged', state: 'finalizing', nodeId: node }] })
 
 			// Nothing the session started may still be touching a device when the reservation is released, or the
 			// devices would be handed to a third party mid-quiescing.
@@ -474,7 +477,7 @@ export class SequencerRuntime {
 			const state = terminalStateOf(result)
 			const events: SequencerEventDraft[] = [{ type: 'stateChanged', state, nodeId: node }]
 
-			this.#commitFinal(active, {
+			this.#commitBestEffort(active, {
 				state,
 				desiredState: state === 'stopped' ? 'stopped' : undefined,
 				failure: result.type === 'fatalFailure' || result.type === 'retryableFailure' ? { reason: result.reason, detail: result.detail } : undefined,
@@ -500,18 +503,20 @@ export class SequencerRuntime {
 		}
 	}
 
-	// Applies one finalization change, retrying once without the pending artifacts when the store refuses.
+	// Applies one change on the release path, retrying once without the pending artifacts when the store
+	// refuses, and returning undefined rather than throwing when it refuses again.
 	//
 	// A refusal reachable here comes from what the action registered — two committed artifacts for the same
-	// logical slot, for instance — and dropping those artifacts is a far smaller loss than a session left in
-	// `finalizing` holding its reservation. The retry also realigns the revision, so a refusal caused by a
-	// stale guard settles on the second attempt.
-	#commitFinal(active: ActiveSession, change: SessionChange) {
+	// logical slot, for instance — and dropping those artifacts is a far smaller loss than a session left
+	// holding its reservation. The retry also realigns the revision, so a refusal caused by a stale guard
+	// settles on the second attempt. Every caller of this is a step that has to keep going regardless of what
+	// the store accepted.
+	#commitBestEffort(active: ActiveSession, change: SessionChange) {
 		for (let attempt = 0; attempt < 2; attempt++) {
 			try {
 				return this.#commit(active, change)
 			} catch (e) {
-				console.error('sequencer commit refused during finalization:', active.id, e)
+				console.error('sequencer commit refused while releasing the session:', active.id, e)
 
 				active.artifacts.length = 0
 				active.revision = this.#store.session(active.id)?.revision ?? active.revision

@@ -188,6 +188,7 @@ describe('sequencer runtime', () => {
 
 		expect(acquired).toEqual([CAMERA_KEY])
 		expect(session?.state).toBe('completed')
+		expect(session?.desiredState).toBe('stopped')
 		expect(session?.endedAt).toBeDefined()
 		expect(session?.checkpoint.completed).toEqual(['node-1'])
 		expect(session?.checkpoint.cursor).toBeUndefined()
@@ -488,6 +489,46 @@ describe('sequencer runtime', () => {
 		expect(session?.state).toBe('failed')
 		expect(session?.desiredState).toBe('stopped')
 		expect(session?.failure?.reason).toBe('aborted')
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+		expect(instance.activeSessionId).toBeUndefined()
+	})
+
+	test('converges the desired state of a session that stops while finalizing', async () => {
+		const cleaning = Promise.withResolvers<void>()
+		const release = Promise.withResolvers<void>()
+
+		const { runtime: instance, arbiter } = runtime(
+			exposeHandler(async (context) => {
+				const handle = context.scope.start('expose', [context.request('camera')!], (operation) => {
+					operation.onCleanup(async () => {
+						cleaning.resolve()
+						await release.promise
+					})
+
+					return { ok: true, value: 1 }
+				})
+
+				await handle.result
+
+				return { type: 'completed', value: 1 }
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		// The stop request lands while finalization is awaiting the cleanups of the operations it cancelled.
+		await cleaning.promise
+
+		const stopped = instance.stop(created.id)
+
+		release.resolve()
+
+		const session = await stopped
+
+		expect(session?.state).toBe('completed')
+		expect(session?.desiredState).toBe('stopped')
 		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 		expect(instance.activeSessionId).toBeUndefined()
 	})

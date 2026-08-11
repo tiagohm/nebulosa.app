@@ -500,7 +500,12 @@ export class SequencerRuntime {
 
 			this.#commitBestEffort(active, {
 				state,
-				desiredState: state === 'stopped' ? 'stopped' : undefined,
+				// A terminal session converges nowhere: it is not running and never will be again. Carrying the
+				// previous desire over would leave every completed session asking to run, and a stop that arrived
+				// while this very finalization was awaiting the cleanups would look like an intent the runtime
+				// ignored. The action result still decides the state — a stop reaching a session whose only action
+				// already completed does not turn that run into a stopped one.
+				desiredState: 'stopped',
 				failure: result.type === 'fatalFailure' || result.type === 'retryableFailure' ? { reason: result.reason, detail: result.detail } : undefined,
 				checkpoint: { ...this.#checkpoint(active), cursor: undefined, completed: [node] },
 				events,

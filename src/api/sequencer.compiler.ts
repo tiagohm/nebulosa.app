@@ -581,18 +581,25 @@ function capturedGroupOf(configuration: unknown): SequencerPlanFrameGroup | unde
 	return typeof group?.nodeId === 'string' ? group : undefined
 }
 
-// Restores the compiler-owned termination fields of a group a capture handler rebuilt, keeping everything
-// else the handler returned.
+// Restores the compiler-owned fields of a group a capture handler rebuilt, keeping everything else the
+// handler returned.
 //
 // A handler normalizes how a group is captured: its camera settings, its spacing, the filter it selects. What
-// the group has to capture is not its to change. The counters were derived from the definition and proved
-// finite before any handler ran, so a returned `slotLimit` of `Infinity` would put an endless loop in the plan
-// after every termination check had already passed. The criteria they were derived from are restored with
-// them: `requiredSlots` of an integration-only group is `integrationTime / exposureTime`, so a handler that
-// halves the exposure while the slot count stays behind ends the group at half the integration the definition
-// asked for. Restoring both keeps the group and its bounds describing the same capture.
-function withTermination(captured: SequencerPlanFrameGroup, group: SequencerPlanFrameGroup): SequencerPlanFrameGroup {
-	return { ...captured, exposureTime: group.exposureTime, count: group.count, integrationTime: group.integrationTime, requiredSlots: group.requiredSlots, abandonmentBudget: group.abandonmentBudget, slotLimit: group.slotLimit, projectedIntegration: group.projectedIntegration }
+// the group is, and what it has to capture, is not its to change. The counters were derived from the
+// definition and proved finite before any handler ran, so a returned `slotLimit` of `Infinity` would put an
+// endless loop in the plan after every termination check had already passed. The criteria they were derived
+// from are restored with them: `requiredSlots` of an integration-only group is `integrationTime /
+// exposureTime`, so a handler that halves the exposure while the slot count stays behind ends the group at
+// half the integration the definition asked for. Restoring both keeps the group and its bounds describing the
+// same capture.
+//
+// The two identifiers are restored for the same reason. `nodeId` is what ties the group to the capture action
+// that produces it — it keys this rewrite, addresses the checkpoints and the artifacts of the group, and is
+// the id the runtime reports progress under — and `id` is the frame id the definition declared and the
+// storage path is composed from. A handler returning either one changed would hand the scheduler a group
+// pointing at a node that does not run it.
+function withCompilerOwned(captured: SequencerPlanFrameGroup, group: SequencerPlanFrameGroup): SequencerPlanFrameGroup {
+	return { ...captured, id: group.id, nodeId: group.nodeId, exposureTime: group.exposureTime, count: group.count, integrationTime: group.integrationTime, requiredSlots: group.requiredSlots, abandonmentBudget: group.abandonmentBudget, slotLimit: group.slotLimit, projectedIntegration: group.projectedIntegration }
 }
 
 // Rebuilds a node with the configuration its handler returned in place of the one the lowering produced.
@@ -1035,7 +1042,7 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 
 		if (captured === undefined) continue
 
-		const corrected = withTermination(captured, group)
+		const corrected = withCompilerOwned(captured, group)
 
 		rewritten.set(group.nodeId, corrected)
 		configurations.set(group.nodeId, { ...(configuration as SequencerCapture), group: corrected })

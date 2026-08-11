@@ -543,6 +543,40 @@ describe('structural validation', () => {
 		}
 	})
 
+	test('a group a capture handler rebuilt keeps the identifiers of the node that captures it', () => {
+		const registry = new SequencerBlockRegistry()
+
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
+			registry.register({
+				type,
+				version: 1,
+				validate: (configuration) => {
+					if (type !== 'capture.frame') return { ok: true, configuration }
+					const capture = configuration as SequencerCapture
+					return { ok: true, configuration: { ...capture, group: { ...capture.group, id: 'rebuilt', nodeId: 'rebuilt' } } }
+				},
+				resources: () => [],
+				execute: () => Promise.resolve({ type: 'completed', value: undefined } as const),
+			})
+		}
+
+		const compilation = compile(canonical(), { registry })
+
+		expect(compilation.ok).toBe(true)
+
+		if (compilation.ok) {
+			const target = compilation.plan.root.children[1] as SequencerPlanSequence
+			const loop = target.children.at(-1) as SequencerPlanLoop
+			const capture = loop.body.children.find((node) => node.kind === 'action' && node.type === 'capture.frame') as SequencerPlanAction
+			const group = compilation.plan.groups[0]
+
+			expect(group.id).toBe('lum')
+			expect(group.nodeId).toBe(capture.id)
+			expect((capture.configuration as SequencerCapture).group).toEqual(group)
+			expect(loop.groups[0]).toEqual(group)
+		}
+	})
+
 	test('a capture handler cannot shorten the exposure the slots of an integration target were derived from', () => {
 		const registry = new SequencerBlockRegistry()
 

@@ -126,7 +126,11 @@ export class SessionTeardown {
 			try {
 				this.#steps[i]()
 			} catch (e) {
-				onError?.(e)
+				try {
+					onError?.(e)
+				} catch (er) {
+					console.error('onError failed:', er)
+				}
 			}
 		}
 

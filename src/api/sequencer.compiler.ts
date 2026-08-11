@@ -181,14 +181,16 @@ function requiredSlotsOf(frame: SequencerFrame) {
 	return Math.min(byCount, byIntegration)
 }
 
-// Reports the three ways a frame group makes the capture loop unbounded, which is one of the only situations
+// Reports the four ways a frame group makes the capture loop unbounded, which is one of the only situations
 // this project checks at runtime.
 //
 // An integration target with a zero exposure divides by zero and yields an infinite slot limit, which is the
 // infinite loop coming back through another door, and an integration target so much larger than its exposure
-// that their ratio overflows arrives at the same infinity by a longer road. A repetition count of zero would
-// have to be read as "no cycle at all", and silently disabling the whole capture through the repetition
-// counter is precisely the quiet acceptance the compatibility rule forbids.
+// that their ratio overflows arrives at the same infinity by a longer road. A finite slot limit above
+// `Number.MAX_SAFE_INTEGER` is the same failure once more: a scheduler counting slots one at a time stops
+// changing its counter there, so it never reaches the bound and the supposedly bounded loop runs forever. A
+// repetition count of zero would have to be read as "no cycle at all", and silently disabling the whole
+// capture through the repetition counter is precisely the quiet acceptance the compatibility rule forbids.
 function checkTermination(context: CompilerContext, definition: Sequencer) {
 	const { frames, repeat } = definition.capture
 
@@ -199,8 +201,11 @@ function checkTermination(context: CompilerContext, definition: Sequencer) {
 
 		if (!frameGroupEnabled(frame)) continue
 
+		const slots = requiredSlotsOf(frame)
+
 		if (frame.integrationTime > 0 && frame.exposureTime <= 0) context.diagnostics.push({ path: `capture.frames[${i}].exposureTime`, message: 'a frame group with an integration time requires a positive exposure time' })
-		else if (!Number.isFinite(requiredSlotsOf(frame))) context.diagnostics.push({ path: `capture.frames[${i}].integrationTime`, message: 'the integration target needs more exposures of this length than a number can count, so the group has no slot limit to stop at' })
+		else if (!Number.isFinite(slots)) context.diagnostics.push({ path: `capture.frames[${i}].integrationTime`, message: 'the integration target needs more exposures of this length than a number can count, so the group has no slot limit to stop at' })
+		else if (slots + (frame.abandonmentBudget ?? 0) > Number.MAX_SAFE_INTEGER) context.diagnostics.push({ path: `capture.frames[${i}]`, message: 'the slot limit of the group is above the range a number counts one by one, so a scheduler counting slots would stop advancing before reaching it' })
 	}
 }
 

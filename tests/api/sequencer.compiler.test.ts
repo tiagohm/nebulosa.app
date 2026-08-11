@@ -494,6 +494,22 @@ describe('termination', () => {
 		if (compilation.ok) expect(compilation.plan.groups[0].requiredSlots).toBe(5)
 	})
 
+	test('a slot limit above the safe counting range is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: Number.MAX_SAFE_INTEGER, abandonmentBudget: 2 })] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0]', message: 'the slot limit of the group is above the range a number counts one by one, so a scheduler counting slots would stop advancing before reaching it' }])
+	})
+
+	test('a slot limit at the end of the safe counting range is accepted', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: Number.MAX_SAFE_INTEGER })] } })
+
+		expect(compilation.ok).toBe(true)
+		if (compilation.ok) expect(compilation.plan.groups[0].slotLimit).toBe(Number.MAX_SAFE_INTEGER)
+	})
+
 	test('a capture with no cycle is refused', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, capture: { ...definition.capture, repeat: 0 } })

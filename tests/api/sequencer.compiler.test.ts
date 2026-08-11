@@ -523,6 +523,22 @@ describe('termination', () => {
 		expect(plan.groups[0].projectedIntegration).toBeCloseTo(0.07, 12)
 	})
 
+	test('a partial slot of a large integration target is not snapped away', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 500000.0004, exposureTime: 0.001 })] } })
+
+		expect(500000.0004 / 0.001).toBeGreaterThan(500000000)
+		expect(plan.groups[0].requiredSlots).toBe(500000001)
+	})
+
+	test('a large integration target still absorbs the rounding error of its division', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 1234.56, exposureTime: 0.01 })] } })
+
+		expect(1234.56 / 0.01).toBeLessThan(123456)
+		expect(plan.groups[0].requiredSlots).toBe(123456)
+	})
+
 	test('with both criteria active the cheaper one decides the slots', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 10, integrationTime: 300, exposureTime: 60 }), frame('red', { count: 3, integrationTime: 600, exposureTime: 60 })] } })

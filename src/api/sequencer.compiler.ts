@@ -183,13 +183,23 @@ function frameGroupEnabled(frame: SequencerFrame) {
 // express in seconds, so it snaps only what is a rounding error and never a genuinely partial slot.
 const SEQUENCER_SLOT_TOLERANCE = 1e-9
 
+// Widest distance, in slots, at which a quotient is still taken for the integer beside it. The relative
+// tolerance grows with the quotient and reaches half a slot around five hundred million exposures, where it
+// stops correcting a rounding error and becomes plain rounding: a target needing 500000000.4 exposures would
+// be answered with 500000000 and the group would end before reaching it. A millionth of an exposure is orders
+// of magnitude below any partial slot a declared duration produces and still absorbs the binary error of the
+// quotients an operator writes. Above the magnitude where the error of the division itself exceeds this cap
+// the quotient is rounded up instead, which overshoots the target by one exposure rather than missing it.
+const SEQUENCER_SLOT_TOLERANCE_LIMIT = 1e-6
+
 // Slots needed to accumulate `integrationTime` seconds in exposures of `exposureTime` seconds, rounded up
-// because a partial exposure does not reach the target. A quotient within the relative tolerance of an
-// integer is taken as that integer. Requires `exposureTime > 0`.
+// because a partial exposure does not reach the target. A quotient within the tolerance of an integer is
+// taken as that integer. Requires `exposureTime > 0`.
 function integrationSlotsOf(integrationTime: number, exposureTime: number) {
 	const quotient = integrationTime / exposureTime
 	const rounded = Math.round(quotient)
-	return Math.abs(quotient - rounded) <= SEQUENCER_SLOT_TOLERANCE * rounded ? rounded : Math.ceil(quotient)
+	const tolerance = Math.min(SEQUENCER_SLOT_TOLERANCE * rounded, SEQUENCER_SLOT_TOLERANCE_LIMIT)
+	return Math.abs(quotient - rounded) <= tolerance ? rounded : Math.ceil(quotient)
 }
 
 // Slots one group needs to reach its target in one cycle.

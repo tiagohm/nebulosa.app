@@ -270,6 +270,28 @@ describe('sequencer runtime', () => {
 		expect(instance.activeSessionId).toBeUndefined()
 	})
 
+	test('executes the plan as it was at creation, not as the caller left it', async () => {
+		const seen: number[] = []
+
+		const { runtime: instance } = runtime(
+			exposeHandler((_, configuration) => {
+				seen.push(configuration.exposureTime)
+				return Promise.resolve({ type: 'completed', value: configuration.exposureTime })
+			}),
+		)
+
+		const mutable = { definitionId: 'definition-1', definitionRevision: 1, devices: { camera: 'camera-1' }, action: { id: 'node-1', type: 'expose', configuration: { exposureTime: 2 } } }
+		const created = instance.create(mutable)!
+
+		mutable.action.configuration.exposureTime = 600
+		mutable.devices.camera = 'camera-2'
+
+		instance.start(created.id)
+
+		expect((await instance.settled(created.id))?.state).toBe('completed')
+		expect(seen).toEqual([2])
+	})
+
 	test('releases the claim when a bootstrap stage throws', async () => {
 		const handler = exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 }))
 		let broken = true

@@ -290,7 +290,12 @@ export class SequencerRuntime {
 		if (!resolution.ok) return undefined
 
 		const session = this.#store.createSession({ definitionId: plan.definitionId, definitionRevision: plan.definitionRevision, handlerVersions: resolution.versions })
-		this.#plans.set(session.id, plan)
+
+		// The plan is snapshotted, not referenced: the definition revision and the handler versions recorded in
+		// the checkpoint describe this plan as it is now, and an edit of the caller's object between `create`
+		// and `start` would run something that no longer matches its own metadata. `configuration` is opaque
+		// data of arbitrary shape, so the copy has to be deep.
+		this.#plans.set(session.id, structuredClone(plan))
 
 		return session
 	}

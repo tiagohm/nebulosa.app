@@ -270,6 +270,32 @@ describe('sequencer runtime', () => {
 		expect(instance.activeSessionId).toBeUndefined()
 	})
 
+	test('releases the claim when a bootstrap stage throws', async () => {
+		const handler = exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 }))
+		let broken = true
+
+		const { runtime: instance, arbiter } = runtime({
+			...handler,
+			resources: (configuration) => {
+				if (broken) throw new Error('resource declaration exploded')
+				return handler.resources(configuration)
+			},
+		})
+
+		const created = instance.create(plan())!
+
+		expect(() => instance.start(created.id)).toThrowError('resource declaration exploded')
+		expect(instance.activeSessionId).toBeUndefined()
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+
+		broken = false
+
+		const next = instance.create(plan())!
+
+		expect(instance.start(next.id)).toMatchObject({ ok: true, reentrant: false })
+		expect((await instance.settled(next.id))?.state).toBe('completed')
+	})
+
 	test('refuses to start when the recorded handler version no longer matches', () => {
 		const { runtime: instance, registry, arbiter } = runtime(exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 })))
 		const created = instance.create(plan())!

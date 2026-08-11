@@ -298,8 +298,8 @@ export class SequencerRuntime {
 	// Starts a session, executing its action in the background.
 	//
 	// Everything up to and including the claim is synchronous, which is what makes the gate a gate. The stages
-	// after it can fail, and each one that succeeded records its undo step, so a refusal at any point leaves
-	// the process exactly as admissible as it was before.
+	// after it can fail, and each one that succeeded records its undo step, so a refusal at any point — and an
+	// unexpected exception just the same — leaves the process exactly as admissible as it was before.
 	start(sessionId: string): SequencerStartResult {
 		const stored = this.#store.session(sessionId)
 
@@ -313,6 +313,22 @@ export class SequencerRuntime {
 		const teardown = new SessionTeardown()
 		teardown.add(admission.claim.release)
 
+		try {
+			return this.#bootstrap(sessionId, stored, teardown)
+		} catch (e) {
+			// Every stage after the claim runs code the runtime does not own — a handler's `validate` or
+			// `resources`, the device resolver, the arbiter, the store — and an exception from any of them used
+			// to escape with the claim still held, refusing every later session as busy for the life of the
+			// process. The bootstrap is unwound here and the defect still surfaces to the caller.
+			this.#active = undefined
+			teardown.run((error) => console.error('sequencer bootstrap teardown failed:', sessionId, error))
+
+			throw e
+		}
+	}
+
+	// Runs the stages between the claim and the first action, recording an undo step per stage that succeeded.
+	#bootstrap(sessionId: string, stored: SequencerSession, teardown: SessionTeardown): SequencerStartResult {
 		// A session that already ran must not run again: its checkpoint describes work that was done and
 		// re-executing it would recapture frames the plan already considers complete.
 		if (stored.state !== 'created') {

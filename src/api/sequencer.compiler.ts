@@ -1,7 +1,7 @@
 import { isAbsolute } from 'path'
 import type { MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-import type { Sequencer, SequencerCamera, SequencerCentering, SequencerCooling, SequencerDeviceRole, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerTargetTracking } from '#/sequencer'
+import type { Sequencer, SequencerAutofocus, SequencerCamera, SequencerCentering, SequencerCooling, SequencerDeviceRole, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { isSequencerPathSegment, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
 import type { SequencerBlockRegistry } from './sequencer.registry'
@@ -53,7 +53,12 @@ export interface SequencerCenter extends Omit<SequencerCentering, 'enabled'> {
 	readonly coordinates: MountTargetCoordinate<Angle>
 }
 
-// Configuration of the meridian-flip trigger: the declared flip policy plus the centering it re-establishes.
+// Configuration of the autofocus trigger, which is the declared autofocus policy without its enablement flag:
+// the focuser routine, its capture recipe, the star detection it measures with, and the filter offsets.
+export type SequencerFocus = Omit<SequencerAutofocus, 'enabled'>
+
+// Configuration of the meridian-flip trigger: the declared flip policy plus the operations it re-establishes
+// on the other side of the meridian.
 export interface SequencerMeridianFlipTrigger extends Omit<SequencerMeridianFlip, 'enabled'> {
 	// Centering to perform once the mount is on the other side, present only when the flip asks to recenter and
 	// undefined otherwise. A flip invalidates the pointing, and a handler is given its configuration and an
@@ -61,6 +66,11 @@ export interface SequencerMeridianFlipTrigger extends Omit<SequencerMeridianFlip
 	// capture the recentering needs travel with the node that commands it. It is the same centering the target
 	// performs before the loop, which is what makes the field the flip restores the field it started from.
 	readonly centering?: SequencerCenter
+	// Autofocus to run once the mount is on the other side, present only when the flip asks to focus and
+	// undefined otherwise. `autofocus` above is the declared request, and it says nothing about how to focus:
+	// the routine, the capture recipe, the star detection, and the filter offsets live in the autofocus block,
+	// and the execution context of a handler does not carry the plan to read them from.
+	readonly focusing?: SequencerFocus
 }
 
 // Configuration of one capture action, which is the frame group plus the settling the capture plan requires
@@ -298,16 +308,16 @@ function lowerCentering(definition: Sequencer): SequencerCenter | undefined {
 function lowerTriggers(definition: Sequencer, targetId: string, centering: SequencerCenter | undefined): SequencerPlanAction[] {
 	const { autofocus, dither, meridianFlip } = definition
 	const triggers: SequencerPlanAction[] = []
+	const { enabled: focusable, ...focusing } = autofocus
 
 	if (meridianFlip.enabled) {
 		const { enabled, ...flip } = meridianFlip
-		const configuration: SequencerMeridianFlipTrigger = { ...flip, centering: meridianFlip.recenter ? centering : undefined }
+		const configuration: SequencerMeridianFlipTrigger = { ...flip, centering: meridianFlip.recenter ? centering : undefined, focusing: meridianFlip.autofocus ? focusing : undefined }
 		triggers.push({ kind: 'action', id: sequencerNodeId.trigger(targetId, 'meridianFlip'), type: SEQUENCER_BLOCK_TYPE.meridianFlip, configuration })
 	}
 
-	if (autofocus.enabled) {
-		const { enabled, ...configuration } = autofocus
-		triggers.push({ kind: 'action', id: sequencerNodeId.trigger(targetId, 'autofocus'), type: SEQUENCER_BLOCK_TYPE.autofocus, configuration })
+	if (focusable) {
+		triggers.push({ kind: 'action', id: sequencerNodeId.trigger(targetId, 'autofocus'), type: SEQUENCER_BLOCK_TYPE.autofocus, configuration: focusing })
 	}
 
 	if (dither.enabled) {
@@ -768,6 +778,7 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	// re-establish the pointing with, and the trigger would come back from the other side of the meridian on
 	// whatever field the slew alone landed on.
 	if (meridianFlip.enabled && meridianFlip.recenter && !target.center.enabled) diagnostics.push({ path: 'meridianFlip.recenter', message: 'the flip recenters after crossing, and the target declares no centering it could re-establish the pointing with' })
+	if (meridianFlip.enabled && meridianFlip.autofocus && !autofocus.enabled) diagnostics.push({ path: 'meridianFlip.autofocus', message: 'the flip focuses after crossing, and the definition disables the autofocus block that declares how to focus' })
 
 	if (capture.abortOnDeviceAlert) diagnostics.push({ path: 'capture.abortOnDeviceAlert', message: 'this version has no device alert source, so the flag would promise a protection that does not exist' })
 	if (capture.continueAfterRejectedFrame) removals.push({ path: 'capture.continueAfterRejectedFrame', reason: 'quality evaluation is not executed, so no frame is ever rejected and the flag has no path to take effect' })

@@ -88,6 +88,35 @@ describe('lowering', () => {
 		expect((flip.configuration as SequencerMeridianFlipTrigger).centering).toBeUndefined()
 	})
 
+	test('a flip that focuses carries the autofocus policy of the definition', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, meridianFlip: { ...definition.meridianFlip, autofocus: true } })
+		const target = plan.root.children[1] as SequencerPlanSequence
+		const loop = target.children[2] as SequencerPlanLoop
+		const flip = loop.body.children[0] as SequencerPlanAction
+		const { enabled, ...focusing } = definition.autofocus
+
+		expect((flip.configuration as SequencerMeridianFlipTrigger).focusing).toEqual(focusing)
+	})
+
+	test('a flip that does not focus carries no autofocus policy', () => {
+		const definition = canonical()
+		const { plan } = ok(definition)
+		const target = plan.root.children[1] as SequencerPlanSequence
+		const loop = target.children[2] as SequencerPlanLoop
+		const flip = loop.body.children[0] as SequencerPlanAction
+
+		expect((flip.configuration as SequencerMeridianFlipTrigger).focusing).toBeUndefined()
+	})
+
+	test('a flip that focuses is refused when the definition disables autofocus', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, autofocus: { ...definition.autofocus, enabled: false }, meridianFlip: { ...definition.meridianFlip, autofocus: true } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'meridianFlip.autofocus', message: 'the flip focuses after crossing, and the definition disables the autofocus block that declares how to focus' }])
+	})
+
 	test('a flip that recenters is refused when the target does not center', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, target: { ...definition.target, center: { ...definition.target.center, enabled: false } } })

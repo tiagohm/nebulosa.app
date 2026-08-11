@@ -642,7 +642,7 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 // Rejection is the default and removal is reserved for a field that is inert: the two removals below change
 // nothing about what the session does, while everything rejected here would change what it does.
 function checkCompatibility(context: CompilerContext, definition: Sequencer) {
-	const { autofocus, calibration, capture, cooling, cover, dome, execution, flatPanel, guiding, monitoring, notification, quality, rotator, safety, shutdown, startup, storage, target } = definition
+	const { autofocus, calibration, capture, cooling, cover, dither, dome, execution, flatPanel, guiding, monitoring, notification, quality, rotator, safety, shutdown, startup, storage, target } = definition
 	const { diagnostics, removals } = context
 
 	if (definition.schemaVersion !== SEQUENCER_SCHEMA_VERSION) diagnostics.push({ path: 'schemaVersion', message: `the definition declares schema version ${definition.schemaVersion}, and this version compiles ${SEQUENCER_SCHEMA_VERSION}` })
@@ -656,6 +656,7 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	if (guiding.thresholds.enabled) diagnostics.push({ path: 'guiding.thresholds.enabled', message: 'guiding thresholds require the continuous monitor lane this version does not have' })
 	if (guiding.recovery.enabled) diagnostics.push({ path: 'guiding.recovery.enabled', message: 'guiding recovery requires the continuous monitor lane this version does not have' })
 	if (!guiding.enabled && commands(definition, ['startGuiding', 'stopGuiding'])) diagnostics.push({ path: 'guiding.enabled', message: 'a lifecycle action commands guiding, which the definition disables' })
+	if (!guiding.enabled && dither.enabled) diagnostics.push({ path: 'dither.enabled', message: 'a dither is a guider command, and the definition declares no guider to send it to' })
 
 	if (autofocus.triggers.starSizeChange !== 0) diagnostics.push({ path: 'autofocus.triggers.starSizeChange', message: 'triggering on star size requires measuring the star size of every frame, which this version does not do' })
 

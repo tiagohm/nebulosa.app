@@ -7,7 +7,7 @@ import { resolveResources, resolveSession } from 'src/api/sequencer.resolve'
 import type { SequencerSessionEnvironment } from 'src/api/sequencer.resolve'
 import type { Sequencer } from '#/sequencer'
 import type { SequencerPlan } from '#/sequencer.plan'
-import { canonical, frame } from './sequencer.fixture'
+import { canonical, frame, unguided } from './sequencer.fixture'
 
 function device<D extends Device>(defaults: D, name: string, hardwareId: string): D {
 	return { ...structuredClone(defaults), id: name, hardwareId, name, connected: true, client: { type: 'SIMULATOR', id: 'client' } }
@@ -48,7 +48,7 @@ function guided(): Sequencer {
 describe('resource resolution', () => {
 	test('every role resolves to the hardware key of its device', () => {
 		const setup = observatory()
-		const resolution = resolveResources(plan(canonical()), devices(setup.camera, setup.mount, setup.focuser))
+		const resolution = resolveResources(plan(unguided()), devices(setup.camera, setup.mount, setup.focuser))
 
 		expect(resolution.ok).toBe(true)
 		if (!resolution.ok) return
@@ -61,7 +61,7 @@ describe('resource resolution', () => {
 	test('two roles on the same hardware collapse into one key', () => {
 		const setup = observatory()
 		const wheel = device<Wheel>(DEFAULT_WHEEL, 'Wheel Simulator', setup.camera.hardwareId)
-		const definition = canonical()
+		const definition = unguided()
 		const compiled = plan({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { filter: { type: 'position', position: 1 } })] } })
 		const resolution = resolveResources(compiled, devices(setup.camera, setup.mount, wheel, setup.focuser))
 
@@ -147,7 +147,7 @@ describe('session start resolution', () => {
 	}
 
 	test('the resolution binds the devices, the handlers and the night segment', () => {
-		const resolution = resolveSession(compiled(canonical(), { registry: registry() }), environment())
+		const resolution = resolveSession(compiled(unguided(), { registry: registry() }), environment())
 
 		expect(resolution.ok).toBe(true)
 		if (!resolution.ok) return
@@ -247,7 +247,7 @@ describe('guider ownership', () => {
 
 	test('a plan that does not guide reserves no logical key', () => {
 		const setup = observatory()
-		const resolution = resolveResources(plan(canonical()), devices(setup.camera, setup.mount, setup.focuser))
+		const resolution = resolveResources(plan(unguided()), devices(setup.camera, setup.mount, setup.focuser))
 
 		expect(resolution.ok).toBe(true)
 		if (resolution.ok) expect(resolution.resources.requests.every((request) => !request.key.startsWith('logical:'))).toBe(true)

@@ -82,7 +82,7 @@ export function canonical(): Sequencer {
 		},
 		capture: { order: 'sequential', repeat: 2, frames: [frame('lum'), frame('red')], defaults: camera(), delay: 4, settle: 2, abortOnDeviceAlert: false, continueAfterRejectedFrame: false, retry: retry() },
 		guiding: {
-			enabled: false,
+			enabled: true,
 			connection: { mode: 'remote', host: 'localhost', port: 4400, owned: true },
 			calibrateBeforeStart: false,
 			recalibrateAfterMeridianFlip: true,
@@ -187,4 +187,10 @@ export function canonical(): Sequencer {
 		shutdown: { enabled: true, runOnCompletion: true, runOnStop: true, runOnFailure: false, runOnUnsafe: false, actions: [action('park', { type: 'parkMount' }), action('warm', { type: 'warmCamera' })], continueOnFailure: true },
 		notification: { enabled: false, events: [], channels: [], minimumSeverity: 'warning' },
 	}
+}
+
+// Canonical definition without a guider, and therefore without the dither that commands one.
+export function unguided(): Sequencer {
+	const definition = canonical()
+	return { ...definition, guiding: { ...definition.guiding, enabled: false }, dither: { ...definition.dither, enabled: false } }
 }

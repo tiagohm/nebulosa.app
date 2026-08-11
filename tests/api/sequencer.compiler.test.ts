@@ -192,6 +192,14 @@ describe('structural validation', () => {
 		expect(compilation.ok).toBe(true)
 	})
 
+	test('a dither without a guider is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, guiding: { ...definition.guiding, enabled: false }, dither: { ...definition.dither, enabled: true } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'dither.enabled', message: 'a dither is a guider command, and the definition declares no guider to send it to' }])
+	})
+
 	test('a feature commanding a role the definition does not declare is refused', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, devices: { camera: 'Camera Simulator', mount: 'Mount Simulator', wheel: 'Wheel Simulator' } })
@@ -546,7 +554,7 @@ describe('failure policies', () => {
 
 	test('the policy of a disabled feature is not reported', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, guiding: { ...definition.guiding, enabled: false, retry: { ...retry(), retryOn: ['disconnected'] } } })
+		const compilation = compile({ ...definition, dither: { ...definition.dither, enabled: false }, guiding: { ...definition.guiding, enabled: false, retry: { ...retry(), retryOn: ['disconnected'] } } })
 
 		expect(compilation.ok).toBe(true)
 	})

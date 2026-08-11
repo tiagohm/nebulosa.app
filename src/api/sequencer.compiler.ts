@@ -228,8 +228,14 @@ function requiredSlotsOf(frame: SequencerFrame) {
 // capture through the repetition counter is precisely the quiet acceptance the compatibility rule forbids.
 // The repetition count is bounded from above for the same reason the slot limit is: the loop counts the
 // cycles it completed, and a bound the counter cannot reach is a loop with no end.
+//
+// The projection derived from those bounded counters is checked here as well, because it is derived from the
+// same numbers: slots that terminate can still multiply by an exposure into a value outside the range of a
+// number, and a plan carrying an infinite projection reports it over HTTP as `null`, which is a session
+// accepted with no answer to how much of the night it asks for.
 function checkTermination(context: CompilerContext, definition: Sequencer) {
 	const { frames, repeat } = definition.capture
+	let projected = 0
 
 	if (repeat < 1) context.diagnostics.push({ path: 'capture.repeat', message: 'the capture must run at least one cycle' })
 	else if (repeat > Number.MAX_SAFE_INTEGER) context.diagnostics.push({ path: 'capture.repeat', message: 'the cycle count is above the range a number counts one by one, so a loop counting completed cycles would stop advancing before reaching it' })
@@ -240,11 +246,19 @@ function checkTermination(context: CompilerContext, definition: Sequencer) {
 		if (!frameGroupEnabled(frame)) continue
 
 		const slots = requiredSlotsOf(frame)
+		const integration = slots * frame.exposureTime
 
 		if (frame.integrationTime > 0 && frame.exposureTime <= 0) context.diagnostics.push({ path: `capture.frames[${i}].exposureTime`, message: 'a frame group with an integration time requires a positive exposure time' })
 		else if (!Number.isFinite(slots)) context.diagnostics.push({ path: `capture.frames[${i}].integrationTime`, message: 'the integration target needs more exposures of this length than a number can count, so the group has no slot limit to stop at' })
 		else if (slots + (frame.abandonmentBudget ?? 0) > Number.MAX_SAFE_INTEGER) context.diagnostics.push({ path: `capture.frames[${i}]`, message: 'the slot limit of the group is above the range a number counts one by one, so a scheduler counting slots would stop advancing before reaching it' })
+		else if (!Number.isFinite(integration)) context.diagnostics.push({ path: `capture.frames[${i}].exposureTime`, message: 'the slots of the group exposing for this long overflow the range of a number, so the plan would report no projected integration for it' })
+		else projected += integration
 	}
+
+	// The pre-flight view sums the projection of every group and scales it by the cycle count, so a sequence
+	// total can overflow while each group of one cycle stays inside the range. The cycle count is only read
+	// here once it is itself in range, because an out-of-range one is already reported at this path.
+	if (repeat >= 1 && repeat <= Number.MAX_SAFE_INTEGER && !Number.isFinite(projected * repeat)) context.diagnostics.push({ path: 'capture.repeat', message: 'the projected integration of the whole sequence overflows the range of a number, so the plan would report no projection for it' })
 }
 
 // Lowers one enabled frame into a normalized group. The delay is resolved here, from the frame when it

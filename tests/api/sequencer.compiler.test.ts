@@ -617,6 +617,22 @@ describe('termination', () => {
 		if (compilation.ok) expect(compilation.plan.groups[0].slotLimit).toBe(Number.MAX_SAFE_INTEGER)
 	})
 
+	test('a group whose projected integration overflows is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 2, exposureTime: Number.MAX_VALUE })] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0].exposureTime', message: 'the slots of the group exposing for this long overflow the range of a number, so the plan would report no projected integration for it' }])
+	})
+
+	test('a sequence whose projected integration overflows over the cycles is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, repeat: 1000, frames: [frame('lum', { count: 1, exposureTime: Number.MAX_VALUE / 2 })] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.repeat', message: 'the projected integration of the whole sequence overflows the range of a number, so the plan would report no projection for it' }])
+	})
+
 	test('a capture with no cycle is refused', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, capture: { ...definition.capture, repeat: 0 } })

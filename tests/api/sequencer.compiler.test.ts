@@ -666,6 +666,13 @@ describe('failure policies', () => {
 		expect(compilation.ok).toBe(true)
 	})
 
+	test('an unsupported trigger of a disabled feature is not reported', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, autofocus: { ...definition.autofocus, enabled: false, triggers: { ...definition.autofocus.triggers, starSizeChange: 0.2 } } })
+
+		expect(compilation.ok).toBe(true)
+	})
+
 	test('an empty meridian flip window is refused', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, meridianFlip: { ...definition.meridianFlip, minimumHourAngle: 0.1, maximumHourAngle: 0.01 } })

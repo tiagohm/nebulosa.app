@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { compile, sequencerNodeId, sequencerPlanNodes } from 'src/api/sequencer.compiler'
+import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { Sequencer, SequencerCameraSettings, SequencerFrame, SequencerLifecycleAction, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerPlanLoop, SequencerPlanSequence } from '#/sequencer.plan'
 
@@ -297,6 +298,83 @@ describe('lowering', () => {
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics[0].path).toBe('target.enabled')
+	})
+})
+
+describe('structural validation', () => {
+	test('a repeated frame id is refused at the property that repeats it', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum'), frame('lum')] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[1].id', message: 'the frame id "lum" is declared more than once' }])
+	})
+
+	test('an empty lifecycle action id is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, shutdown: { ...definition.shutdown, actions: [action('', { type: 'parkMount' })] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'shutdown.actions[0].id', message: 'the shutdown action id is empty and cannot address a node' }])
+	})
+
+	test('a feature commanding a role the definition does not declare is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, devices: { camera: 'Camera Simulator', mount: 'Mount Simulator', wheel: 'Wheel Simulator' } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.focuser', message: 'autofocus requires the focuser role, which the definition does not declare' }])
+	})
+
+	test('a lifecycle action commanding a missing role names the role', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, shutdown: { ...definition.shutdown, actions: [action('close', { type: 'closeDome' })] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.dome', message: 'shutdown.actions[0] requires the dome role, which the definition does not declare' }])
+	})
+
+	test('a disabled lifecycle action requires no role', () => {
+		const definition = canonical()
+
+		expect(ok({ ...definition, shutdown: { ...definition.shutdown, actions: [action('close', { type: 'closeDome', enabled: false })] } }).plan.roles).not.toContain('dome')
+	})
+
+	test('a role required twice is reserved once', () => {
+		const { plan } = ok(canonical())
+
+		expect(plan.roles).toEqual(['camera', 'mount', 'focuser'])
+	})
+
+	test('without a registry the block types are not resolved', () => {
+		expect(ok(canonical()).ok).toBe(true)
+	})
+
+	test('an unregistered block type is refused at the node that needs it', () => {
+		const registry = new SequencerBlockRegistry()
+		const compilation = compile(canonical(), { registry })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics[0]).toEqual({ path: 'startup.action[connect]', message: 'no handler is registered for the block type "lifecycle.connectDevices"' })
+	})
+
+	test('a handler issue is addressed below the node it came from', () => {
+		const registry = new SequencerBlockRegistry()
+
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.warmCamera']) {
+			registry.register({
+				type,
+				version: 1,
+				validate: (configuration) => (type === 'slew' ? { ok: false, issues: [{ path: 'tolerance', message: 'the tolerance is below the arrival tolerance' }] } : { ok: true, configuration }),
+				resources: () => [],
+				execute: () => Promise.resolve({ type: 'completed', value: undefined } as const),
+			})
+		}
+
+		const compilation = compile(canonical(), { registry })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'target[m42].slew.tolerance', message: 'the tolerance is below the arrival tolerance' }])
 	})
 })
 

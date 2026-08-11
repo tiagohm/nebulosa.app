@@ -1,6 +1,7 @@
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Sequencer, SequencerAutofocus, SequencerCameraSettings, SequencerCentering, SequencerDeviceRole, SequencerDither, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerTarget, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
+import type { SequencerBlockRegistry } from './sequencer.registry'
 
 // Lowering of a sequencer definition into the executable plan.
 //
@@ -281,36 +282,150 @@ function lowerTarget(definition: Sequencer, groups: readonly SequencerPlanFrameG
 	return { kind: 'sequence', id, children }
 }
 
-// Collects the device roles the lowered plan actually commands, in the fixed order of the role union so the
-// result is comparable across compilations. The camera is always present: a session that exposes nothing is
-// refused before this runs.
-function rolesOf(definition: Sequencer, groups: readonly SequencerPlanFrameGroup[]): SequencerDeviceRole[] {
-	const { autofocus, cover, dome, flatPanel, guiding, meridianFlip, rotator, target } = definition
-	const roles: SequencerDeviceRole[] = ['camera']
+// Roles in the order of the role union, so the role list of a plan is comparable across compilations
+// regardless of the order the features that need them were inspected in.
+const SEQUENCER_ROLE_ORDER: readonly SequencerDeviceRole[] = ['camera', 'mount', 'wheel', 'focuser', 'rotator', 'guideCamera', 'guideOutput', 'cover', 'flatPanel', 'dome']
 
-	if (target.goto.enabled || target.tracking.enabled || target.center.enabled || meridianFlip.enabled) roles.push('mount')
-	if (groups.some((group) => group.filter !== undefined)) roles.push('wheel')
-	if (autofocus.enabled) roles.push('focuser')
-	if (rotator.enabled) roles.push('rotator')
+// Role each lifecycle action commands, so an action that needs a device the definition never declared is
+// refused at compile time instead of failing halfway through the pipeline, with the observatory already
+// half open. `connectDevices` is absent because it declares its roles explicitly, and `custom` and `switch`
+// are absent because they address a host handler and a device id rather than a session role.
+const SEQUENCER_LIFECYCLE_ROLE: Partial<Record<SequencerLifecycleAction['type'], SequencerDeviceRole>> = {
+	unparkDome: 'dome',
+	openDome: 'dome',
+	parkDome: 'dome',
+	closeDome: 'dome',
+	unparkMount: 'mount',
+	parkMount: 'mount',
+	startTracking: 'mount',
+	stopTracking: 'mount',
+	openCover: 'cover',
+	closeCover: 'cover',
+	coolCamera: 'camera',
+	warmCamera: 'camera',
+}
+
+// One role the plan needs, together with the definition property that needs it, so a missing device can be
+// reported against the feature that would have commanded it rather than against the device map alone.
+interface RoleRequirement {
+	// Role that must resolve to a device.
+	readonly role: SequencerDeviceRole
+	// Property path of the feature requiring it.
+	readonly path: string
+}
+
+// Collects every role the lowered plan commands. The camera is always required: a definition that exposes
+// nothing is refused before this runs.
+function roleRequirements(definition: Sequencer, groups: readonly SequencerPlanFrameGroup[]): RoleRequirement[] {
+	const { autofocus, cover, dome, flatPanel, guiding, meridianFlip, rotator, shutdown, startup, target } = definition
+	const requirements: RoleRequirement[] = [{ role: 'camera', path: 'capture.frames' }]
+
+	if (target.goto.enabled) requirements.push({ role: 'mount', path: 'target.goto' })
+	if (target.tracking.enabled) requirements.push({ role: 'mount', path: 'target.tracking' })
+	if (target.center.enabled) requirements.push({ role: 'mount', path: 'target.center' })
+	if (meridianFlip.enabled) requirements.push({ role: 'mount', path: 'meridianFlip' })
+	if (groups.some((group) => group.filter !== undefined)) requirements.push({ role: 'wheel', path: 'capture.frames' })
+	if (autofocus.enabled) requirements.push({ role: 'focuser', path: 'autofocus' })
+	if (rotator.enabled) requirements.push({ role: 'rotator', path: 'rotator' })
 
 	if (guiding.enabled && guiding.connection.mode === 'local') {
-		roles.push('guideCamera')
-		roles.push('guideOutput')
+		requirements.push({ role: 'guideCamera', path: 'guiding.connection' })
+		requirements.push({ role: 'guideOutput', path: 'guiding.connection' })
 	}
 
-	if (cover.enabled) roles.push('cover')
-	if (flatPanel.enabled) roles.push('flatPanel')
-	if (dome.enabled) roles.push('dome')
+	if (cover.enabled) requirements.push({ role: 'cover', path: 'cover' })
+	if (flatPanel.enabled) requirements.push({ role: 'flatPanel', path: 'flatPanel' })
+	if (dome.enabled) requirements.push({ role: 'dome', path: 'dome' })
 
-	return roles
+	for (const pipeline of [
+		{ name: 'startup', actions: startup.actions, enabled: startup.enabled },
+		{ name: 'shutdown', actions: shutdown.actions, enabled: shutdown.enabled },
+	]) {
+		if (!pipeline.enabled) continue
+
+		for (let i = 0; i < pipeline.actions.length; i++) {
+			const action = pipeline.actions[i]
+			if (!action.enabled) continue
+
+			const path = `${pipeline.name}.actions[${i}]`
+
+			if (action.type === 'connectDevices') {
+				for (const role of action.devices) requirements.push({ role, path: `${path}.devices` })
+			} else {
+				const role = SEQUENCER_LIFECYCLE_ROLE[action.type]
+				if (role) requirements.push({ role, path })
+			}
+		}
+	}
+
+	return requirements
+}
+
+// Reports every declared id that cannot address a node: an empty one produces an unaddressable node, and a
+// repeated one produces two nodes with the same id, which makes the checkpoint of one the checkpoint of the
+// other and the artifact of one overwrite the artifact of the other.
+function checkUniqueIds(context: CompilerContext, items: readonly { readonly id: string }[], path: string, subject: string) {
+	const seen = new Set<string>()
+
+	for (let i = 0; i < items.length; i++) {
+		const id = items[i].id
+
+		if (id.length === 0) context.diagnostics.push({ path: `${path}[${i}].id`, message: `the ${subject} id is empty and cannot address a node` })
+		else if (seen.has(id)) context.diagnostics.push({ path: `${path}[${i}].id`, message: `the ${subject} id "${id}" is declared more than once` })
+		else seen.add(id)
+	}
+}
+
+// Reports every role the plan commands without a device declared for it.
+function checkRoles(context: CompilerContext, definition: Sequencer, requirements: readonly RoleRequirement[]) {
+	for (const requirement of requirements) {
+		if (definition.devices[requirement.role] === undefined) context.diagnostics.push({ path: `devices.${requirement.role}`, message: `${requirement.path} requires the ${requirement.role} role, which the definition does not declare` })
+	}
+}
+
+// Validates every action node against the handler registered for its block type, translating each issue into
+// a diagnostic addressed to the node it came from. Without a registry the structural result stands on its
+// own, which is what lets a definition be checked before the handlers of a session are wired.
+function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistry, plan: SequencerPlan) {
+	for (const node of sequencerPlanNodes(plan.root)) {
+		if (node.kind !== 'action') continue
+
+		const handler = registry.handler(node.type)
+
+		if (!handler) {
+			context.diagnostics.push({ path: node.id, message: `no handler is registered for the block type "${node.type}"` })
+			continue
+		}
+
+		const result = handler.validate(node.configuration, { nodeId: node.id, devices: plan.devices })
+
+		if (!result.ok) {
+			for (const issue of result.issues) context.diagnostics.push({ path: issue.path.length > 0 ? `${node.id}.${issue.path}` : node.id, message: issue.message })
+		}
+	}
+}
+
+// Deduplicates the required roles and returns them in the fixed role order, which is what the session
+// reserves at start. Two features requiring the same role reserve it once.
+function rolesOf(requirements: readonly RoleRequirement[]): SequencerDeviceRole[] {
+	const required = new Set(requirements.map((requirement) => requirement.role))
+	return SEQUENCER_ROLE_ORDER.filter((role) => required.has(role))
+}
+
+// Options of a compilation, all of them optional so a definition can be checked before a session exists.
+export interface SequencerCompilerOptions {
+	// Registry validating the configuration of every action node against the handler that will execute it.
+	// Without it the compilation checks only what the definition itself can answer, which is what lets the
+	// pre-flight endpoint validate a definition without wiring the handlers of a session.
+	readonly registry?: SequencerBlockRegistry
 }
 
 // Lowers a definition into the plan a session executes.
 //
 // Returns the plan and the fields observably dropped from it, or every diagnostic that prevented the
 // lowering. The definition is not mutated and nothing outside it is read, so the result depends only on the
-// argument.
-export function compile(definition: Sequencer): SequencerCompilation {
+// arguments.
+export function compile(definition: Sequencer, options?: SequencerCompilerOptions): SequencerCompilation {
 	const context: CompilerContext = { diagnostics: [], removals: [] }
 	const { capture, shutdown, startup, storage, target } = definition
 
@@ -320,7 +435,12 @@ export function compile(definition: Sequencer): SequencerCompilation {
 		if (frame.enabled) groups.push(lowerFrameGroup(definition, frame))
 	}
 
+	checkUniqueIds(context, capture.frames, 'capture.frames', 'frame')
+	checkUniqueIds(context, startup.actions, 'startup.actions', 'startup action')
+	checkUniqueIds(context, shutdown.actions, 'shutdown.actions', 'shutdown action')
+
 	if (!target.enabled) context.diagnostics.push({ path: 'target.enabled', message: 'the definition has no enabled target to observe' })
+	if (target.id.length === 0) context.diagnostics.push({ path: 'target.id', message: 'the target id is empty and cannot address a node' })
 	if (groups.length === 0) context.diagnostics.push({ path: 'capture.frames', message: 'the definition has no enabled frame group to capture' })
 
 	if (context.diagnostics.length > 0) return { ok: false, diagnostics: context.diagnostics }
@@ -339,17 +459,24 @@ export function compile(definition: Sequencer): SequencerCompilation {
 	if (shutdown.runOnStop) runOn.push('stopped')
 	if (shutdown.runOnFailure) runOn.push('failed')
 
+	const requirements = roleRequirements(definition, groups)
+
 	const plan: SequencerPlan = {
 		definitionId: definition.id ?? '',
 		definitionRevision: definition.revision ?? 0,
 		devices: definition.devices,
-		roles: rolesOf(definition, groups),
+		roles: rolesOf(requirements),
 		root: { kind: 'sequence', id: sequencerNodeId.root(), children },
 		groups,
 		startup: lowered && { continueOnFailure: startup.continueOnFailure },
 		finalize: finalized && { continueOnFailure: shutdown.continueOnFailure, runOn },
 		storage: { root: storage.root, fileNameTemplate: storage.fileNameTemplate, directoryTemplate: storage.directoryTemplate, temporaryDirectory: storage.temporaryDirectory, checksum: storage.checksum, autoSubFolderMode: storage.autoSubFolderMode },
 	}
+
+	checkRoles(context, definition, requirements)
+	if (options?.registry) checkHandlers(context, options.registry, plan)
+
+	if (context.diagnostics.length > 0) return { ok: false, diagnostics: context.diagnostics }
 
 	return { ok: true, plan, removals: context.removals }
 }

@@ -140,10 +140,11 @@ export class SessionTeardown {
 
 // One executable action of a session.
 //
-// The V1 runtime takes this directly instead of lowering a definition, because the compiler is a separate
-// piece of work and the seams this runtime exists to prove are the ones after compilation. When the compiler
-// lands it produces exactly this shape, so nothing here changes.
-export interface SequencerPlanAction {
+// The runtime takes this directly instead of walking the compiled node tree of `sequencer.plan.ts`, because
+// tree execution belongs to the scheduler and the seams this runtime exists to prove are the ones around a
+// single action: admission, reservation, checkpoint, and teardown. The compiled action node has exactly this
+// shape, so wiring the tree in later does not change anything here.
+export interface SequencerRuntimeAction {
 	// Node identity, unique within the plan and stable across a resume.
 	readonly id: string
 	// Block type resolved through the registry.
@@ -153,7 +154,7 @@ export interface SequencerPlanAction {
 }
 
 // Everything a session executes, snapshotted at creation and immutable for its whole life.
-export interface SequencerPlan {
+export interface SequencerRuntimePlan {
 	// Definition the plan was produced from.
 	readonly definitionId: string
 	// Definition revision snapshotted for the session; a later edit does not affect a running one.
@@ -161,7 +162,7 @@ export interface SequencerPlan {
 	// Device id per role declared by the definition.
 	readonly devices: SequencerDevices
 	// Sole action of the V1 plan.
-	readonly action: SequencerPlanAction
+	readonly action: SequencerRuntimeAction
 }
 
 // Turns a declared role and the device id behind it into the resource the arbiter arbitrates.
@@ -236,7 +237,7 @@ interface ActiveSession {
 	// Session being executed.
 	readonly id: string
 	// Plan snapshotted at creation.
-	readonly plan: SequencerPlan
+	readonly plan: SequencerRuntimePlan
 	// Reservation owner identity, which is also what cancels every operation of the session.
 	readonly owner: ResourceReservationOwner
 	// Reservation held for the whole session.
@@ -267,7 +268,7 @@ export class SequencerRuntime {
 	readonly #resolve: SequencerDeviceResolver
 	readonly #now: () => number
 	readonly #progress?: (sessionId: string, nodeId: string, progress: SequencerActionProgress) => void
-	readonly #plans = new Map<string, SequencerPlan>()
+	readonly #plans = new Map<string, SequencerRuntimePlan>()
 	#active?: ActiveSession
 
 	// Wires the runtime; the arbiter comes from the coordinator so both always see the same arbitration.
@@ -288,7 +289,7 @@ export class SequencerRuntime {
 
 	// Creates a session in `created` for a plan, recording the handler version it was compiled against.
 	// Returns undefined when the block type cannot be resolved, since such a session could never start.
-	create(plan: SequencerPlan): SequencerSession | undefined {
+	create(plan: SequencerRuntimePlan): SequencerSession | undefined {
 		const resolution = this.#registry.resolve([{ type: plan.action.type }])
 
 		if (!resolution.ok) return undefined

@@ -1,6 +1,7 @@
 import { isAbsolute } from 'path'
+import type { MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-import type { Sequencer, SequencerAutofocus, SequencerCameraSettings, SequencerCentering, SequencerDeviceRole, SequencerDither, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerTarget, SequencerTargetTracking } from '#/sequencer'
+import type { Sequencer, SequencerCamera, SequencerCentering, SequencerDeviceRole, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerRetryPolicy, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { isSequencerPathSegment, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
 import type { SequencerBlockRegistry } from './sequencer.registry'
@@ -38,68 +39,31 @@ export const SEQUENCER_BLOCK_TYPE = {
 // Prefix of every lifecycle block type; the suffix is the declared action type, such as `lifecycle.openCover`.
 export const SEQUENCER_LIFECYCLE_BLOCK_PREFIX = 'lifecycle.'
 
-// Target coordinates as the slew and centering actions receive them: the coordinate pair of the declared
-// frame and nothing else, so no action has to know about tracking, centering, or constraints to point.
-export type SequencerPlanCoordinates =
-	| {
-			// Equatorial frame the pair is expressed in.
-			readonly coordinateType: 'JNOW' | 'J2000'
-			// Right ascension, radians normalized to [0, 2π).
-			readonly rightAscension: Angle
-			// Declination, radians in [-π/2, π/2].
-			readonly declination: Angle
-	  }
-	| {
-			// Local horizontal frame.
-			readonly coordinateType: 'ALTAZ'
-			// Azimuth, radians normalized to [0, 2π).
-			readonly azimuth: Angle
-			// Altitude above the astronomical horizon, radians in [-π/2, π/2].
-			readonly altitude: Angle
-	  }
-	| {
-			// Ecliptic or galactic frame, which share the longitude/latitude pair.
-			readonly coordinateType: 'ECLIPTIC' | 'GALACTIC'
-			// Longitude, radians normalized to [0, 2π).
-			readonly longitude: Angle
-			// Latitude, radians in [-π/2, π/2].
-			readonly latitude: Angle
-	  }
-
 // Configuration of the slew action, with the tracking policy the mount must hold once it arrives.
-export interface SequencerSlewConfiguration extends Omit<SequencerGoto, 'enabled'> {
+export interface SequencerSlew extends Omit<SequencerGoto, 'enabled'> {
 	// Where to point.
-	readonly coordinates: SequencerPlanCoordinates
+	readonly coordinates: MountTargetCoordinate<Angle>
 	// Tracking to establish after arrival, absent when the target does not command tracking.
 	readonly tracking?: Omit<SequencerTargetTracking, 'enabled'>
 }
 
 // Configuration of the centering action.
-export interface SequencerCenterConfiguration extends Omit<SequencerCentering, 'enabled'> {
+export interface SequencerCenter extends Omit<SequencerCentering, 'enabled'> {
 	// Coordinates the solved field is compared against.
-	readonly coordinates: SequencerPlanCoordinates
+	readonly coordinates: MountTargetCoordinate<Angle>
 }
 
 // Configuration of one capture action, which is the frame group plus the settling the capture plan requires
 // before an exposure starts.
-export interface SequencerCaptureConfiguration {
+export interface SequencerCapture {
 	// Group this action exposes for.
 	readonly group: SequencerPlanFrameGroup
 	// Stable time required before the first or a resumed exposure, in seconds.
 	readonly settle: number
 }
 
-// Configuration of the autofocus trigger.
-export type SequencerAutofocusConfiguration = Omit<SequencerAutofocus, 'enabled'>
-
-// Configuration of the dither trigger.
-export type SequencerDitherConfiguration = Omit<SequencerDither, 'enabled'>
-
-// Configuration of the meridian-flip trigger.
-export type SequencerMeridianFlipConfiguration = Omit<SequencerMeridianFlip, 'enabled'>
-
 // Configuration of one lifecycle action: the declared action without the fields the pipeline itself consumes.
-export interface SequencerLifecycleConfiguration {
+export interface SequencerLifecycle {
 	// Declared action, verbatim, so the handler reads its own variant fields.
 	readonly action: SequencerLifecycleAction
 	// Whether a failure of this action must make the session terminal, normalized from the optional flag.
@@ -166,22 +130,9 @@ export function* sequencerPlanNodes(node: SequencerPlanNode): Generator<Sequence
 	}
 }
 
-// Reads the coordinate pair of a target, dropping the blocks that are lowered into their own nodes.
-function coordinatesOf(target: SequencerTarget): SequencerPlanCoordinates {
-	switch (target.coordinateType) {
-		case 'JNOW':
-		case 'J2000':
-			return { coordinateType: target.coordinateType, rightAscension: target.rightAscension, declination: target.declination }
-		case 'ALTAZ':
-			return { coordinateType: 'ALTAZ', azimuth: target.azimuth, altitude: target.altitude }
-		default:
-			return { coordinateType: target.coordinateType, longitude: target.longitude, latitude: target.latitude }
-	}
-}
-
 // Applies the per-frame camera overrides over the capture defaults, so the capture action never has to merge
 // anything at exposure time. Only properties the frame actually declares override the default.
-function cameraSettingsOf(frame: SequencerFrame, defaults: SequencerCameraSettings): SequencerCameraSettings {
+function cameraSettingsOf(frame: SequencerFrame, defaults: SequencerCamera): SequencerCamera {
 	return { ...defaults, ...frame.camera, subframe: frame.camera.subframe ?? defaults.subframe }
 }
 
@@ -257,7 +208,7 @@ function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): Sequence
 // pipeline it belongs to, with no target segment: startup and finalize are siblings of the target block and
 // run once per session, so a target segment there would claim a relationship that does not exist.
 function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction): SequencerPlanAction {
-	const configuration: SequencerLifecycleConfiguration = { action, required: action.required ?? false, timeout: action.timeout, retry: action.retry }
+	const configuration: SequencerLifecycle = { action, required: action.required ?? false, timeout: action.timeout, retry: action.retry }
 	return { kind: 'action', id: sequencerNodeId.pipelineAction(pipeline, action.id), type: `${SEQUENCER_LIFECYCLE_BLOCK_PREFIX}${action.type}`, configuration }
 }
 
@@ -305,23 +256,26 @@ function lowerTriggers(definition: Sequencer, targetId: string): SequencerPlanAc
 function lowerTarget(definition: Sequencer, groups: readonly SequencerPlanFrameGroup[]): SequencerPlanSequence {
 	const { capture, target } = definition
 	const id = sequencerNodeId.target(target.id)
-	const coordinates = coordinatesOf(target)
 	const children: SequencerPlanNode[] = []
 
 	if (target.goto.enabled) {
 		const { enabled, ...goto } = target.goto
-		const configuration: SequencerSlewConfiguration = { ...goto, coordinates, tracking: target.tracking.enabled ? { mode: target.tracking.mode, rightAscensionRate: target.tracking.rightAscensionRate, declinationRate: target.tracking.declinationRate, retry: target.tracking.retry } : undefined }
+		const configuration: SequencerSlew = {
+			...goto,
+			coordinates: { type: target.type, [target.type]: { ...target[target.type] } },
+			tracking: target.tracking.enabled ? { mode: target.tracking.mode, rightAscensionRate: target.tracking.rightAscensionRate, declinationRate: target.tracking.declinationRate, retry: target.tracking.retry } : undefined,
+		}
 		children.push({ kind: 'action', id: sequencerNodeId.slew(target.id), type: SEQUENCER_BLOCK_TYPE.slew, configuration })
 	}
 
 	if (target.center.enabled) {
 		const { enabled, ...center } = target.center
-		const configuration: SequencerCenterConfiguration = { ...center, coordinates }
+		const configuration: SequencerCenter = { ...center, coordinates: { type: target.type, [target.type]: { ...target[target.type] } } }
 		children.push({ kind: 'action', id: sequencerNodeId.center(target.id), type: SEQUENCER_BLOCK_TYPE.center, configuration })
 	}
 
 	const frames = groups.map<SequencerPlanAction>((group) => {
-		const configuration: SequencerCaptureConfiguration = { group, settle: capture.settle }
+		const configuration: SequencerCapture = { group, settle: capture.settle }
 		return { kind: 'action', id: group.nodeId, type: SEQUENCER_BLOCK_TYPE.captureFrame, configuration }
 	})
 
@@ -478,7 +432,7 @@ function checkRoles(context: CompilerContext, definition: Sequencer, requirement
 // a diagnostic addressed to the node it came from. Without a registry the structural result stands on its
 // own, which is what lets a definition be checked before the handlers of a session are wired.
 function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistry, plan: SequencerPlan): Record<string, number> {
-	const versions: Record<string, number> = {}
+	const versions: Record<string, number> = Object.create(null)
 
 	for (const node of sequencerPlanNodes(plan.root)) {
 		if (node.kind !== 'action') continue

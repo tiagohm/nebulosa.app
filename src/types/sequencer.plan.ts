@@ -1,21 +1,6 @@
 import type { CameraTransferFormat, FrameType } from 'nebulosa/src/devices/indi/device'
-import type {
-	SequencerCameraSettings,
-	SequencerCapture,
-	SequencerCheckpoint,
-	SequencerCooling,
-	SequencerDeviceRole,
-	SequencerDevices,
-	SequencerEndCondition,
-	SequencerExecution,
-	SequencerFilterReference,
-	SequencerGuiderSettle,
-	SequencerLocalGuider,
-	SequencerRemoteGuider,
-	SequencerRetryPolicy,
-	SequencerStartCondition,
-	SequencerStorage,
-} from './sequencer'
+// oxfmt-ignore
+import type { SequencerCamera, SequencerCapture, SequencerCheckpoint, SequencerCooling, SequencerDeviceRole, SequencerDevices, SequencerEndCondition, SequencerExecution, SequencerFilterReference, SequencerGuiderSettle, SequencerLocalGuider, SequencerRemoteGuider, SequencerRetryPolicy, SequencerStartCondition, SequencerStorage } from './sequencer'
 
 // Executable plan produced by lowering a definition, and the diagnostics that lowering emits instead of a
 // plan. The definition in `sequencer.ts` is declarative and per feature; this is the node tree the runtime
@@ -96,7 +81,7 @@ export interface SequencerPlanFrameGroup {
 	// Filter the group requires, absent when the group does not command the wheel.
 	readonly filter?: SequencerFilterReference
 	// Camera settings of the group, with the per-frame overrides already applied over the capture defaults.
-	readonly camera: SequencerCameraSettings
+	readonly camera: SequencerCamera
 	// Failure policy of the capture action, which is also the attempt budget of every slot of the group.
 	readonly retry: SequencerRetryPolicy
 	// Slots the group needs to reach its target in one cycle, derived from whichever completion criteria are

@@ -1,4 +1,4 @@
-import type { Sequencer, SequencerCameraSettings, SequencerFrame, SequencerLifecycleAction, SequencerRetryPolicy } from '#/sequencer'
+import type { Sequencer, SequencerCamera, SequencerFrame, SequencerLifecycleAction, SequencerRetryPolicy } from '#/sequencer'
 
 // Canonical sequencer definition shared by the compiler and resolution tests: every feature the V1 lowering
 // understands is enabled, so a test only has to override the property it is about.
@@ -6,7 +6,7 @@ export function retry(): SequencerRetryPolicy {
 	return { maxAttempts: 3, delay: 5, backoff: 2, maximumDelay: 60, retryOn: ['timeout', 'commandFailed'], onExhausted: 'fail' }
 }
 
-export function camera(): SequencerCameraSettings {
+export function camera(): SequencerCamera {
 	return { binX: 1, binY: 1, gain: 100, offset: 10, frameFormat: 'RAW16', transferFormat: 'FITS', compressed: false, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 } }
 }
 
@@ -59,9 +59,8 @@ export function canonical(): Sequencer {
 			id: 'm42',
 			name: 'Orion Nebula',
 			enabled: true,
-			coordinateType: 'J2000',
-			rightAscension: 1.4,
-			declination: -0.09,
+			type: 'J2000',
+			J2000: { x: 1.4, y: -0.09 },
 			tracking: { enabled: true, mode: 'SIDEREAL', retry: retry() },
 			goto: { enabled: true, skipWhenAlreadyAtTarget: true, tolerance: 0.001, arrivalTolerance: 0.0005, timeout: 300, settle: 5, retry: retry() },
 			center: {

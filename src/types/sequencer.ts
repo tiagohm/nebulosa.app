@@ -1,4 +1,4 @@
-import type { TrackMode, FrameType, CameraTransferFormat } from 'nebulosa/src/devices/indi/device'
+import type { TrackMode, FrameType, CameraTransferFormat, MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
 
@@ -200,11 +200,7 @@ export interface SequencerAngleRange {
 
 // Discriminated union of target coordinate representations accepted by the Sequencer.
 // The coordinateType property selects the active representation.
-export type SequencerTarget = SequencerEquatorialTarget | SequencerHorizontalTarget | SequencerEclipticTarget | SequencerGalacticTarget
-
-// Common target properties shared by all supported coordinate systems.
-// It configures tracking, slew, centering, and visibility constraints for the mount role.
-export interface SequencerTargetBase {
+export interface SequencerTarget extends MountTargetCoordinate<Angle> {
 	// Stable identifier used by definitions, checkpoints, events, or ordered actions.
 	// Use a non-empty value unique within its owning collection.
 	// It is a component of every node id below the target and therefore of artifact identity and file names, so renaming the target must not change it.
@@ -223,58 +219,6 @@ export interface SequencerTargetBase {
 	readonly center: SequencerCentering
 	// Configuration value for constraints.
 	readonly constraints: SequencerTargetConstraint
-}
-
-// Target expressed as equatorial right ascension and declination in either JNOW or J2000.
-// Right ascension is normally [0, 2π); declination is [-π/2, π/2].
-export interface SequencerEquatorialTarget extends SequencerTargetBase {
-	// Selects the coordinate type behavior.
-	readonly coordinateType: 'JNOW' | 'J2000'
-	// Target right ascension in the selected equatorial frame.
-	// Radians normalized to [0, 2π).
-	readonly rightAscension: Angle
-	// Target declination in the selected equatorial frame.
-	// Radians in [-π/2, π/2].
-	readonly declination: Angle
-}
-
-// Target expressed in the local horizontal frame.
-// Azimuth is normally [0, 2π); altitude is [-π/2, π/2].
-export interface SequencerHorizontalTarget extends SequencerTargetBase {
-	// Selects the coordinate type behavior.
-	readonly coordinateType: 'ALTAZ'
-	// Target azimuth in the local observed frame.
-	// Radians normalized to [0, 2π), following the project azimuth convention.
-	readonly azimuth: Angle
-	// Target altitude above the local astronomical horizon.
-	// Radians in [-π/2, π/2].
-	readonly altitude: Angle
-}
-
-// Target expressed in ecliptic longitude and latitude.
-// Longitude is normally [0, 2π); latitude is [-π/2, π/2].
-export interface SequencerEclipticTarget extends SequencerTargetBase {
-	// Selects the coordinate type behavior.
-	readonly coordinateType: 'ECLIPTIC'
-	// Target ecliptic longitude.
-	// Radians normalized to [0, 2π).
-	readonly longitude: Angle
-	// Target ecliptic latitude.
-	// Radians in [-π/2, π/2].
-	readonly latitude: Angle
-}
-
-// Target expressed in galactic longitude and latitude.
-// Longitude is normally [0, 2π); latitude is [-π/2, π/2].
-export interface SequencerGalacticTarget extends SequencerTargetBase {
-	// Selects the coordinate type behavior.
-	readonly coordinateType: 'GALACTIC'
-	// Target galactic longitude.
-	// Radians normalized to [0, 2π).
-	readonly longitude: Angle
-	// Target galactic latitude.
-	// Radians in [-π/2, π/2].
-	readonly latitude: Angle
 }
 
 // One timestamped equatorial sample for an externally interpolated or generated ephemeris.
@@ -444,7 +388,7 @@ export interface SequencerCapture {
 	readonly frames: readonly SequencerFrame[]
 
 	// Configuration value for defaults.
-	readonly defaults: SequencerCameraSettings
+	readonly defaults: SequencerCamera
 	// Default delay, in seconds, inserted between primary frames.
 	readonly delay: number
 	// Stable delay, in seconds, required before the first or resumed exposure.
@@ -499,7 +443,7 @@ export interface SequencerFrame {
 
 	// Per-frame camera-setting overrides applied over capture.defaults.
 	// Only supplied properties override defaults; this field is not a camera device reference.
-	readonly camera: Partial<SequencerCameraSettings>
+	readonly camera: Partial<SequencerCamera>
 }
 
 // Identifies a filter either by its configured name or by its zero/one-based wheel position, according to the driver convention.
@@ -520,7 +464,7 @@ export type SequencerFilterReference =
 
 // Contains reusable camera settings shared by primary and auxiliary captures.
 // Gain, offset, format, binning, and limits remain device-dependent.
-export interface SequencerCameraSettings {
+export interface SequencerCamera {
 	// Horizontal hardware/software binning factor.
 	readonly binX: number
 	// Vertical hardware/software binning factor.

@@ -186,10 +186,25 @@ export interface SequencerFrameNaming {
 	readonly filter?: string
 }
 
-// Renders the exposure of a group for a file name: an integral duration renders without a decimal point, and
-// a fractional one keeps up to three decimals, which is the resolution a declared exposure is written at.
+// Significant digits kept for an exposure shorter than a second. Three of them separate every exposure an
+// operator writes at that scale and keep the relative error of the rendered value below half a percent.
+const SEQUENCER_EXPOSURE_DIGITS = 3
+
+// Decimals kept for an exposure of a second or more, which is the resolution a declared exposure of that
+// length is written at.
+const SEQUENCER_EXPOSURE_DECIMALS = 3
+
+// Renders the exposure of a group, in seconds, for a file name.
+//
+// An integral duration renders without a decimal point. Below a second the value is rendered with significant
+// digits instead of decimals, because the contract accepts any finite positive exposure and a fixed number of
+// decimals throws away the whole value at the short end: three decimals render a 0.0004-second exposure — a
+// planetary or lucky-imaging frame, not an exotic one — as `0`, and a 0.0005-second one as `0.001`. The name
+// then reports an exposure the frame does not have, and a name is what calibration and frame selection read
+// when they read a directory. Above a second the decimals are what matter, and the two rules agree at 1.
 function exposureOf(exposureTime: number) {
-	return Number.isInteger(exposureTime) ? `${exposureTime}` : `${Number(exposureTime.toFixed(3))}`
+	if (Number.isInteger(exposureTime)) return `${exposureTime}`
+	return exposureTime < 1 ? `${Number(exposureTime.toPrecision(SEQUENCER_EXPOSURE_DIGITS))}` : `${Number(exposureTime.toFixed(SEQUENCER_EXPOSURE_DECIMALS))}`
 }
 
 // Interpolates the recognized placeholders of a template, encoding every value into path-segment characters.

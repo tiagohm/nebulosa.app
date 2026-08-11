@@ -817,6 +817,39 @@ describe('reserved operation scope', () => {
 		await unrelated.cancel()
 	})
 
+	test('refuses a root opened on a reservation whose cancellation is in flight', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const reservation = reserve(arbiter, CAMERA, MOUNT)
+		const scope = coordinator.reservedScope(reservation)
+		const compensating = Promise.withResolvers<OperationResult<unknown>>()
+
+		const capture = scope.start('capture', [{ key: CAMERA }], (context) => {
+			context.onCleanup(async () => {
+				const parked = scope.start('park', [{ key: MOUNT }], () => successfulOperationResult(undefined))
+				compensating.resolve(await parked.result)
+			})
+
+			return waitForAbort(context)
+		})
+
+		await coordinator.cancelByReservationOwner(SESSION, 'aborted')
+
+		expect(await capture.result).toMatchObject(failedOperationResult('aborted'))
+		expect(await compensating.promise).toMatchObject(failedOperationResult('aborted'))
+		expect(arbiter.availability(MOUNT)).toBe('reserved')
+
+		reservation.release()
+
+		expect(arbiter.availability(MOUNT)).toBe('available')
+
+		// The reservation accepts work again once its cancellation has returned.
+		const other = coordinator.reservedScope(reserve(arbiter, CAMERA))
+		const restarted = other.start('capture', [{ key: CAMERA }], () => successfulOperationResult(undefined))
+
+		expect(await restarted.result).toEqual(successfulOperationResult(undefined))
+	})
+
 	test('ignores an owner with no operation of its own', async () => {
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 

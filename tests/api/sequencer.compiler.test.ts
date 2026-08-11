@@ -777,6 +777,24 @@ describe('failure policies', () => {
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'startup.actions[0].retry.onExhausted', message: 'this version has no suspended state to exhaust a policy into' }])
 	})
 
+	test('an attempt budget above the counting range is refused', () => {
+		const definition = canonical()
+
+		for (const maxAttempts of [Number.MAX_SAFE_INTEGER + 2, Number.POSITIVE_INFINITY]) {
+			const compilation = compile({ ...definition, capture: { ...definition.capture, retry: { ...retry(), maxAttempts } } })
+
+			expect(compilation.ok).toBe(false)
+			if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.retry.maxAttempts', message: 'the attempt budget is above the range a number counts one by one, so a counter of failed attempts would stop advancing before exhausting it' }])
+		}
+	})
+
+	test('an attempt budget at the end of the counting range is accepted', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, retry: { ...retry(), maxAttempts: Number.MAX_SAFE_INTEGER } } })
+
+		expect(compilation.ok).toBe(true)
+	})
+
 	test('the policy of a disabled feature is not reported', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, dither: { ...definition.dither, enabled: false }, guiding: { ...definition.guiding, enabled: false, retry: { ...retry(), retryOn: ['disconnected'] } } })

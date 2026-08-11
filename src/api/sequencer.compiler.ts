@@ -689,11 +689,16 @@ const SEQUENCER_UNRECOVERABLE_REASON: ReadonlySet<SequencerFailureReason> = new 
 // A policy retrying an unrecoverable reason and a policy suspending on exhaustion are both refused: the first
 // would spend its whole budget repeating a failure that cannot succeed, and the second names a state this
 // version never enters, so the definition would silently get another terminal action than the one it asked for.
+//
+// The attempt budget is bounded from above for the same reason the slot limit and the cycle count are: an
+// attempt counter advances one failure at a time and stops changing above the safe range, so a budget beyond
+// it never exhausts and the action retries a failing command without end.
 function checkRetry(context: CompilerContext, retry: SequencerRetryPolicy, path: string) {
 	for (const reason of retry.retryOn) {
 		if (SEQUENCER_UNRECOVERABLE_REASON.has(reason)) context.diagnostics.push({ path: `${path}.retryOn`, message: `a "${reason}" failure ends the session instead of being retried, and retrying it would only repeat the same failure` })
 	}
 
+	if (retry.maxAttempts > Number.MAX_SAFE_INTEGER) context.diagnostics.push({ path: `${path}.maxAttempts`, message: 'the attempt budget is above the range a number counts one by one, so a counter of failed attempts would stop advancing before exhausting it' })
 	if (retry.onExhausted === 'suspend') context.diagnostics.push({ path: `${path}.onExhausted`, message: 'this version has no suspended state to exhaust a policy into' })
 }
 

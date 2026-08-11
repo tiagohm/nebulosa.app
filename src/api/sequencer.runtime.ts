@@ -457,7 +457,7 @@ export class SequencerRuntime {
 			signal: active.controller.signal,
 			now: this.#now,
 			request: (role) => roles.get(role),
-			progress: (progress) => this.#progress?.(active.id, node, progress),
+			progress: (progress) => this.#report(active.id, node, progress),
 			artifact: (artifact) => active.artifacts.push(artifact),
 			checkpoint: this.#checkpoint(active),
 		}
@@ -545,6 +545,19 @@ export class SequencerRuntime {
 		}
 
 		return undefined
+	}
+
+	// Hands one progress report to the observer, if any, without letting it reach the action.
+	//
+	// Progress is presentation and never a source of truth. A sink that throws — a fanout over a transport
+	// that just died, typically — would otherwise surface inside the handler that called `context.progress`
+	// and end a perfectly good session as `commandFailed`.
+	#report(sessionId: string, nodeId: string, progress: SequencerActionProgress) {
+		try {
+			this.#progress?.(sessionId, nodeId, progress)
+		} catch (e) {
+			console.error('sequencer progress observer failed:', sessionId, nodeId, e)
+		}
 	}
 
 	// Current checkpoint of the session. The store holds it, so nothing else can drift from it.

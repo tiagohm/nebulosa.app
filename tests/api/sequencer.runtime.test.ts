@@ -292,6 +292,39 @@ describe('sequencer runtime', () => {
 		expect(seen).toEqual([2])
 	})
 
+	test('completes the session when the progress observer throws', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const registry = new SequencerBlockRegistry()
+		const store = new InMemorySequencerStore()
+		const reported: number[] = []
+
+		registry.register(
+			exposeHandler((context, configuration) => {
+				context.progress({ fraction: 0.5, detail: 'exposing' })
+				return Promise.resolve({ type: 'completed', value: configuration.exposureTime })
+			}),
+		)
+
+		const instance = new SequencerRuntime({
+			store,
+			registry,
+			coordinator,
+			resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }),
+			progress: (_, __, progress) => {
+				reported.push(progress.fraction!)
+				throw new Error('websocket fanout failed')
+			},
+		})
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		expect((await instance.settled(created.id))?.state).toBe('completed')
+		expect(reported).toEqual([0.5])
+	})
+
 	test('releases the claim when a bootstrap stage throws', async () => {
 		const handler = exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 }))
 		let broken = true

@@ -562,17 +562,27 @@ export class SequencerRuntime {
 	// a crash that loses the promotion leaves the record `pending`, which a resume already handles by
 	// re-executing the same attempt against the file it finds.
 	//
-	// A refusal comes from what the action registered and must not escape into it — the handler called this for
-	// bookkeeping and can do nothing about the store. The draft stays staged, so the next commit carries it.
+	// The pending record is written alone, ahead of everything already staged, and a refusal is raised to the
+	// caller. Both follow from the guarantee: swallowing the refusal would let the action write a file with no
+	// record behind it, which is the very state `pending` exists to make impossible, and letting the write share
+	// the unit of a draft the store already refused would take the record down with it. Registering a terminal
+	// status cannot fail this way, because it is only staged.
 	#register(active: ActiveSession, artifact: SequencerArtifactDraft) {
-		active.artifacts.push(artifact)
+		if (artifact.status !== 'pending') {
+			active.artifacts.push(artifact)
+			return
+		}
 
-		if (artifact.status !== 'pending') return
+		const staged = active.artifacts.splice(0)
+
+		active.artifacts.push(artifact)
 
 		try {
 			this.#commit(active, {})
-		} catch (e) {
-			console.error('sequencer artifact registration refused:', active.id, artifact.logicalSlotId, e)
+		} finally {
+			// A successful commit emptied the buffer and a refusal left the draft in it; either way the staged
+			// drafts go back in front of what remains, in the order the action registered them.
+			for (let i = staged.length - 1; i >= 0; i--) active.artifacts.unshift(staged[i])
 		}
 	}
 

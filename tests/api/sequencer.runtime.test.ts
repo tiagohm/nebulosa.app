@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter } from 'src/api/resource'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
@@ -504,6 +504,29 @@ describe('sequencer runtime', () => {
 		expect(session?.state).toBe('completed')
 		expect(observed).toEqual([['pending'], ['pending']])
 		expect(harness.store.artifacts(created.id)).toMatchObject([{ logicalSlotId: 'slot-1', attempt: 1, status: 'committed', path: '/data/frame-1.fits' }])
+	})
+
+	test('fails the action when the pending artifact cannot be persisted', async () => {
+		const harness = runtime(
+			exposeHandler((context) => {
+				context.artifact({ logicalSlotId: 'slot-1', attempt: 1, status: 'pending' })
+				return Promise.resolve({ type: 'completed', value: 1 })
+			}),
+		)
+
+		const accepted = harness.store.commit.bind(harness.store)
+
+		spyOn(harness.store, 'commit').mockImplementation((commit) => (commit.artifacts === undefined ? accepted(commit) : { ok: false, reason: 'revisionMismatch' }))
+
+		const created = harness.runtime.create(plan())!
+
+		harness.runtime.start(created.id)
+
+		const session = await harness.runtime.settled(created.id)
+
+		expect(session?.state).toBe('failed')
+		expect(session?.failure?.reason).toBe('commandFailed')
+		expect(harness.store.artifacts(created.id)).toBeEmpty()
 	})
 
 	test('stops a running session, aborting the action and its operations', async () => {

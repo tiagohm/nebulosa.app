@@ -74,8 +74,9 @@ export interface SequencerActionContext {
 	// Reports progress; purely observational and safe to call at any rate.
 	readonly progress: (progress: SequencerActionProgress) => void
 	// Registers or promotes an artifact produced by the action. A `pending` registration is durable when this
-	// returns, so it must be made before the file write starts; a promotion is written with the next durable
-	// change of the session.
+	// returns and throws when it could not be persisted, so it must be made before the file write starts and the
+	// write must not begin if it failed; a promotion is staged and written with the next durable change of the
+	// session.
 	readonly artifact: (artifact: SequencerArtifactDraft) => void
 	// Read-only view of the current checkpoint. An action reads it and never writes it: the runtime owns it.
 	readonly checkpoint: SequencerCheckpoint

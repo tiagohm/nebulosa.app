@@ -328,6 +328,34 @@ describe('sequencer runtime', () => {
 		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 	})
 
+	test('releases everything when the store refuses the finalizing commit', async () => {
+		const {
+			runtime: instance,
+			arbiter,
+			store,
+		} = runtime(
+			exposeHandler((context) => {
+				context.artifact({ logicalSlotId: 'slot-1', attempt: 1, status: 'committed', path: '/data/frame-1.fits' })
+				context.artifact({ logicalSlotId: 'slot-1', attempt: 2, status: 'committed', path: '/data/frame-2.fits' })
+
+				return Promise.resolve({ type: 'completed', value: 1 })
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		const session = await instance.settled(created.id)
+
+		expect(session?.state).toBe('completed')
+		expect(store.artifacts(created.id)).toEqual([])
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+		expect(instance.activeSessionId).toBeUndefined()
+
+		expect(instance.start(instance.create(plan())!.id)).toMatchObject({ ok: true })
+	})
+
 	test('stops a running session, aborting the action and its operations', async () => {
 		const running = Promise.withResolvers<void>()
 		const cleaned: string[] = []

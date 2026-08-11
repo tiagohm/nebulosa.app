@@ -245,8 +245,8 @@ interface ActiveSession {
 	readonly artifacts: SequencerArtifactDraft[]
 	// Cancellation source of the running action, aborted by a stop and by finalization.
 	readonly controller: AbortController
-	// Resolves once the session reached a terminal state and released everything.
-	readonly done: PromiseWithResolvers<SequencerSession>
+	// Resolves once the session released everything, with the last durable state the store holds.
+	readonly done: PromiseWithResolvers<SequencerSession | undefined>
 	// Last revision this runtime committed, used as the optimistic guard of the next commit.
 	revision: number
 	// Set once finalization began, so a stop arriving during it does not start a second one.
@@ -375,7 +375,7 @@ export class SequencerRuntime {
 			teardown,
 			artifacts: [],
 			controller: new AbortController(),
-			done: Promise.withResolvers<SequencerSession>(),
+			done: Promise.withResolvers<SequencerSession | undefined>(),
 			revision: stored.revision,
 			finalizing: false,
 		}
@@ -445,6 +445,9 @@ export class SequencerRuntime {
 	}
 
 	// Moves the session to its terminal state, releases everything, and settles the waiters.
+	//
+	// Nothing in here may prevent the release: whatever the durable state ends up being, the devices and the
+	// process claim have to come back, or a single refused write would keep the observatory hostage.
 	async #finalize(active: ActiveSession, result: SequencerActionResult<unknown>) {
 		if (active.finalizing) return
 
@@ -452,31 +455,58 @@ export class SequencerRuntime {
 
 		const node = active.plan.action.id
 
-		this.#commit(active, { state: 'finalizing', events: [{ type: 'stateChanged', state: 'finalizing', nodeId: node }] })
+		try {
+			this.#commitFinal(active, { state: 'finalizing', events: [{ type: 'stateChanged', state: 'finalizing', nodeId: node }] })
 
-		// Nothing the session started may still be touching a device when the reservation is released, or the
-		// devices would be handed to a third party mid-quiescing.
-		active.controller.abort('aborted')
-		await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
+			// Nothing the session started may still be touching a device when the reservation is released, or the
+			// devices would be handed to a third party mid-quiescing.
+			active.controller.abort('aborted')
+			await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
 
-		const state = terminalStateOf(result)
-		const events: SequencerEventDraft[] = [{ type: 'stateChanged', state, nodeId: node }]
+			const state = terminalStateOf(result)
+			const events: SequencerEventDraft[] = [{ type: 'stateChanged', state, nodeId: node }]
 
-		const session = this.#commit(active, {
-			state,
-			desiredState: state === 'stopped' ? 'stopped' : undefined,
-			failure: result.type === 'fatalFailure' || result.type === 'retryableFailure' ? { reason: result.reason, detail: result.detail } : undefined,
-			checkpoint: { ...this.#checkpoint(active), cursor: undefined, completed: [node] },
-			events,
-		})
+			this.#commitFinal(active, {
+				state,
+				desiredState: state === 'stopped' ? 'stopped' : undefined,
+				failure: result.type === 'fatalFailure' || result.type === 'retryableFailure' ? { reason: result.reason, detail: result.detail } : undefined,
+				checkpoint: { ...this.#checkpoint(active), cursor: undefined, completed: [node] },
+				events,
+			})
+		} catch (e) {
+			// Cancelling the operation trees is the remaining step that can reject, and its failure says a
+			// cleanup misbehaved, not that the session may keep the devices.
+			console.error('sequencer finalization failed:', active.id, e)
+		} finally {
+			// The claim is released here, after the cleanups and the reservation, and never on reaching the
+			// terminal state, which still had this work behind it.
+			active.teardown.run((error) => console.error('sequencer teardown failed:', active.id, error))
 
-		// The claim is released here, after the cleanups and the reservation, and never on reaching the
-		// terminal state, which still had this work behind it.
-		active.teardown.run((error) => console.error('sequencer teardown failed:', active.id, error))
+			this.#active = undefined
+			active.artifacts.length = 0
+			active.done.resolve(this.#store.session(active.id))
+		}
+	}
 
-		this.#active = undefined
-		active.artifacts.length = 0
-		active.done.resolve(session)
+	// Applies one finalization change, retrying once without the pending artifacts when the store refuses.
+	//
+	// A refusal reachable here comes from what the action registered — two committed artifacts for the same
+	// logical slot, for instance — and dropping those artifacts is a far smaller loss than a session left in
+	// `finalizing` holding its reservation. The retry also realigns the revision, so a refusal caused by a
+	// stale guard settles on the second attempt.
+	#commitFinal(active: ActiveSession, change: SessionChange) {
+		for (let attempt = 0; attempt < 2; attempt++) {
+			try {
+				return this.#commit(active, change)
+			} catch (e) {
+				console.error('sequencer commit refused during finalization:', active.id, e)
+
+				active.artifacts.length = 0
+				active.revision = this.#store.session(active.id)?.revision ?? active.revision
+			}
+		}
+
+		return undefined
 	}
 
 	// Current checkpoint of the session. The store holds it, so nothing else can drift from it.

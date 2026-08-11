@@ -1,5 +1,8 @@
 import { describe, expect, spyOn, test } from 'bun:test'
+import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
+import { basename, join, sep } from 'path'
+import { parseTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { CLIENT } from 'nebulosa/src/devices/indi/device'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { CameraManager } from 'nebulosa/src/devices/indi/manager'
@@ -13,6 +16,8 @@ import type { CameraCaptureEvent, CameraCaptureStart } from '#/camera'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import { waitUntil } from './util'
+
+Bun.env.capturesDir = tmpdir()
 
 interface HarnessOptions {
 	readonly capture?: CameraCaptureOptions
@@ -605,6 +610,100 @@ describe('camera capture session cancellation', () => {
 			await cancellation
 			expect(await handle.result).toEqual(failedOperationResult('aborted'))
 			expect(paths).toHaveLength(0)
+		} finally {
+			harness.restore()
+		}
+	})
+
+	test('writes the frame to the destination the caller decided', async () => {
+		const written: string[] = []
+		const io: CameraCaptureDecodeAndWrite = {
+			decode: (data) => Promise.resolve(data),
+			write(path, data) {
+				written.push(path as string)
+				return Promise.resolve(data.byteLength)
+			},
+		}
+		const harness = createHarness({ io })
+		const directory = join(tmpdir(), 'sequencer-session')
+
+		try {
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request({ autoSave: true, outputPath: directory, outputName: 'm42-lum-0.fit' }))
+			expect((await handle.started).ok).toBeTrue()
+			finishExposure(harness)
+
+			const result = await handle.result
+			expect(result.ok).toBeTrue()
+			if (result.ok) expect(result.value.paths).toEqual([join(directory, 'm42-lum-0.fit')])
+			expect(written).toEqual([join(directory, 'm42-lum-0.fit')])
+			expect(harness.saved).toEqual([join(directory, 'm42-lum-0.fit')])
+		} finally {
+			harness.restore()
+		}
+	})
+
+	test('refuses a fixed output name asking for more than one frame', async () => {
+		const harness = createHarness()
+
+		try {
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request({ exposureMode: 'fixed', count: 2, outputName: 'm42-lum-0.fit' }))
+
+			expect(await handle.result).toEqual(failedOperationResult('commandFailed', 'a fixed output name captures a single frame'))
+			expect(harness.startExposure).not.toHaveBeenCalled()
+		} finally {
+			harness.restore()
+		}
+	})
+
+	test('refuses a destination that would write outside the directory it names', async () => {
+		const harness = createHarness()
+
+		try {
+			const escaping = harness.capturer.start(harness.coordinator, harness.camera, request({ outputPath: join(tmpdir(), 'sequencer-session'), outputName: `..${sep}..${sep}authorized_keys` }))
+			expect(await escaping.result).toEqual(failedOperationResult('commandFailed', `the output name "..${sep}..${sep}authorized_keys" is not a valid file name`))
+
+			const relative = harness.capturer.start(harness.coordinator, harness.camera, request({ outputPath: 'sequencer-session', outputName: 'm42-lum-0.fit' }))
+			expect(await relative.result).toEqual(failedOperationResult('commandFailed', 'the output path "sequencer-session" is not an absolute path'))
+
+			expect(harness.startExposure).not.toHaveBeenCalled()
+		} finally {
+			harness.restore()
+		}
+	})
+
+	test('refuses to overwrite the file a caller-supplied name already addresses', async () => {
+		const harness = createHarness()
+		const directory = await mkdtemp(join(tmpdir(), 'nebulosa-capture-'))
+		const path = join(directory, 'm42-lum-0.fit')
+		await Bun.write(path, 'a frame that is not this one')
+
+		try {
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request({ autoSave: true, outputPath: directory, outputName: 'm42-lum-0.fit' }))
+
+			expect(await handle.result).toEqual(failedOperationResult('commandFailed', `the output file "${path}" already exists`))
+			expect(harness.startExposure).not.toHaveBeenCalled()
+			expect(await Bun.file(path).text()).toBe('a frame that is not this one')
+		} finally {
+			harness.restore()
+			await rm(directory, { recursive: true, force: true })
+		}
+	})
+
+	test('names an automatic frame before the exposure is dispatched', async () => {
+		const io: CameraCaptureDecodeAndWrite = { decode: (data) => Promise.resolve(data), write: (_, data) => Promise.resolve(data.byteLength) }
+		const harness = createHarness({ io, capture: { frameGraceTime: 1000 } })
+
+		try {
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, savingRequest())
+			expect((await handle.started).ok).toBeTrue()
+
+			await Bun.sleep(50)
+			const beforeBlob = Date.now()
+			finishExposure(harness)
+			expect((await handle.result).ok).toBeTrue()
+
+			const name = basename(harness.saved[0], '.fit')
+			expect(parseTemporal(name, 'YYYYMMDD.HHmmssSSS')).toBeLessThan(beforeBlob)
 		} finally {
 			harness.restore()
 		}

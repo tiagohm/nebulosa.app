@@ -1,5 +1,6 @@
 import { lstatSync } from 'fs'
 import { isAbsolute, join, resolve, sep } from 'path'
+import { isPathSegment } from './util'
 
 // Composition and containment of the paths a session writes to. `storage.root`, both storage templates and
 // every declared id arrive over HTTP, and the contract only states that artifacts stay below an approved
@@ -16,13 +17,6 @@ import { isAbsolute, join, resolve, sep } from 'path'
 // of a path resolves to, which is all an editor validating a definition can ask about; the verified half also
 // reads the filesystem, because a directory that already exists as a symbolic link sends a lexically contained
 // write somewhere else entirely. Anything about to write uses the verified one.
-
-// Whether a value can be used as a single path segment. Rejects the empty name, the two relative names,
-// anything carrying either host separator, and NUL, which most filesystems reject and some truncate on. `..`
-// is the one that escapes the root; the others address a directory the caller did not name.
-export function isSequencerPathSegment(value: string) {
-	return value.length > 0 && value !== '.' && value !== '..' && !value.includes('/') && !value.includes('\\') && !value.includes('\0')
-}
 
 // Separator a directory template may use, matching either host convention so a definition written on one
 // platform still addresses the same directories on the other.
@@ -74,6 +68,54 @@ export function sequencerSessionDirectory(context: SequencerPathContext) {
 	return context.night ? resolve(context.root, context.night, context.session) : resolve(context.root, context.session)
 }
 
+// Directory of the images that are not frames of the plan, directly below the session directory.
+//
+// Autofocus, centering, drift check and the guider all produce images, and none of them fills a slot: they
+// register no artifact, move no capture counter and advance no trigger anchor. Keeping them under a segment
+// of their own is what makes that separation hold on disk — the reconciliation of §14.5 walks the paths the
+// session predicts, and an auxiliary image sharing that space would either collide with a slot name or be
+// read as a frame nobody asked for.
+//
+// The segment is reserved by the runtime and never derived from `directoryTemplate`, for the same reason the
+// session segment is not: a template cannot be allowed to remove the separation the reconciliation depends
+// on. The leading dot keeps it out of the way of a directory listing of the night's frames.
+export const SEQUENCER_AUXILIARY_SEGMENT = '.auxiliary'
+
+// What an auxiliary image was produced for. Each kind gets a directory of its own inside the auxiliary
+// segment, so the calibration library of §25 can index one kind without walking the others.
+//
+// `quarantine` is not a capture: it is where §14.5 moves a final file that did not parse, when the definition
+// asks for it to be preserved for diagnosis. It belongs here because the one thing it must not do is stay in
+// the namespace of the slots.
+export type SequencerAuxiliaryKind = 'autofocus' | 'centering' | 'driftCheck' | 'guider' | 'quarantine'
+
+// Directory one kind of auxiliary image is written into, `root/[night]/session/.auxiliary/kind`. Built only
+// from values the runtime controls, so it is normalized and not checked.
+export function sequencerAuxiliaryDirectory(context: SequencerPathContext, kind: SequencerAuxiliaryKind) {
+	return resolve(sequencerSessionDirectory(context), SEQUENCER_AUXILIARY_SEGMENT, kind)
+}
+
+// Composes the path of one auxiliary image and proves it is lexically contained.
+//
+// `fileName` is decided by whoever produced the image and may not carry a separator or a relative name. It
+// carries no slot token, because the image fills no slot: a name that looked like a slot would be picked up
+// by the reconciliation as a frame of the plan.
+//
+// Like `sequencerArtifactPath`, the proof is over the path as text and reads nothing from the filesystem: a
+// caller about to write must use `sequencerVerifiedAuxiliaryPath` instead.
+export function sequencerAuxiliaryPath(context: SequencerPathContext, kind: SequencerAuxiliaryKind, fileName: string): SequencerPathResolution {
+	if (!isAbsolute(context.root)) return { ok: false, reason: `the storage root "${context.root}" is not an absolute path` }
+
+	if (!isPathSegment(fileName)) return { ok: false, reason: `the file name "${fileName}" is not a valid path segment` }
+
+	const base = sequencerSessionDirectory(context)
+	const path = resolve(base, SEQUENCER_AUXILIARY_SEGMENT, kind, fileName)
+
+	if (!path.startsWith(base + sep)) return { ok: false, reason: `the path "${path}" escapes the session directory "${base}"` }
+
+	return { ok: true, path }
+}
+
 // Composes the path of one artifact from the directories a template rendered and the final file name, and
 // proves it is lexically contained.
 //
@@ -89,10 +131,15 @@ export function sequencerArtifactPath(context: SequencerPathContext, directories
 	if (!isAbsolute(context.root)) return { ok: false, reason: `the storage root "${context.root}" is not an absolute path` }
 
 	for (const directory of directories) {
-		if (!isSequencerPathSegment(directory)) return { ok: false, reason: `the directory segment "${directory}" is not a valid path segment` }
+		if (!isPathSegment(directory)) return { ok: false, reason: `the directory segment "${directory}" is not a valid path segment` }
+
+		// A template that rendered the reserved name would write frames of the plan into the auxiliary space, and
+		// its first segment would land exactly where the auxiliary images live. The name is refused at every
+		// depth, because a nested one is the same name meaning something it does not mean.
+		if (directory === SEQUENCER_AUXILIARY_SEGMENT) return { ok: false, reason: `the directory segment "${directory}" is reserved for the images that are not frames of the plan` }
 	}
 
-	if (!isSequencerPathSegment(fileName)) return { ok: false, reason: `the file name "${fileName}" is not a valid path segment` }
+	if (!isPathSegment(fileName)) return { ok: false, reason: `the file name "${fileName}" is not a valid path segment` }
 
 	const base = sequencerSessionDirectory(context)
 	const path = resolve(base, ...directories, fileName)
@@ -111,19 +158,45 @@ export function sequencerArtifactPath(context: SequencerPathContext, directories
 // write follows the link and lands wherever it points, so `root/night/session/link/frame.fits` writes outside
 // the approved root while reading as contained. Every component the runtime creates below the storage root is
 // therefore inspected here, and the first one that exists as a link refuses the composition.
-//
-// The root itself is not inspected: it is the directory the operator declared, and a root that is a link is a
-// root they chose. The walk stops at the first component that does not exist yet, because nothing can exist
-// below an absent directory; the runtime creates the rest, and a component it cannot create fails the write
-// on its own. Each call costs one `lstat` per existing component, which is nothing next to the artifact.
 export function sequencerVerifiedArtifactPath(context: SequencerPathContext, directories: readonly string[], fileName: string): SequencerPathResolution {
 	const resolution = sequencerArtifactPath(context, directories, fileName)
 
 	if (!resolution.ok) return resolution
 
+	return linkFreeWalk(context, context.night ? [context.night, context.session, ...directories, fileName] : [context.session, ...directories, fileName]) ?? resolution
+}
+
+// Composes the path of one auxiliary image and proves it is contained on the filesystem the write will land on.
+//
+// This is the composition to use before writing an auxiliary image, and it is the counterpart of
+// `sequencerVerifiedArtifactPath` for the same reason that one exists: the lexical proof only reads the text of
+// the path. The reserved segment is created by the runtime like any other directory, so `.auxiliary` or the
+// kind directory below it can already exist as a symbolic link, and every autofocus, guider and quarantine
+// write then lands wherever it points while the composition still reports `ok`. Quarantine is the one that
+// costs the most, because it moves a file out of the namespace of the slots and would move it off the approved
+// root instead.
+export function sequencerVerifiedAuxiliaryPath(context: SequencerPathContext, kind: SequencerAuxiliaryKind, fileName: string): SequencerPathResolution {
+	const resolution = sequencerAuxiliaryPath(context, kind, fileName)
+
+	if (!resolution.ok) return resolution
+
+	return linkFreeWalk(context, context.night ? [context.night, context.session, SEQUENCER_AUXILIARY_SEGMENT, kind, fileName] : [context.session, SEQUENCER_AUXILIARY_SEGMENT, kind, fileName]) ?? resolution
+}
+
+// Inspects every component the runtime creates below the storage root, in order, and refuses the composition at
+// the first one that already exists as a symbolic link.
+//
+// `components` are the segments below `context.root`, from the one directly under it down to the file name. The
+// root itself is not inspected: it is the directory the operator declared, and a root that is a link is a root
+// they chose. The walk stops at the first component that does not exist yet, because nothing can exist below an
+// absent directory; the runtime creates the rest, and a component it cannot create fails the write on its own.
+// Each call costs one `lstat` per existing component, which is nothing next to the image.
+//
+// Returns the refusal, or `undefined` when no component on the way is a link.
+function linkFreeWalk(context: SequencerPathContext, components: readonly string[]): SequencerPathResolution | undefined {
 	let current = resolve(context.root)
 
-	for (const component of context.night ? [context.night, context.session, ...directories, fileName] : [context.session, ...directories, fileName]) {
+	for (const component of components) {
 		current = join(current, component)
 
 		try {
@@ -133,5 +206,5 @@ export function sequencerVerifiedArtifactPath(context: SequencerPathContext, dir
 		}
 	}
 
-	return resolution
+	return undefined
 }

@@ -2,27 +2,28 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve, sep } from 'path'
-import { isSequencerPathSegment, sequencerArtifactPath, sequencerPathSegments, sequencerSessionDirectory, sequencerVerifiedArtifactPath } from 'src/api/sequencer.path'
+import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerAuxiliaryDirectory, sequencerAuxiliaryPath, sequencerPathSegments, sequencerSessionDirectory, sequencerVerifiedArtifactPath, sequencerVerifiedAuxiliaryPath } from 'src/api/sequencer.path'
+import { isPathSegment } from 'src/api/util'
 
 const ROOT = resolve('/data/nebulosa')
 
 describe('path segments', () => {
 	test('a plain name is a segment', () => {
-		expect(isSequencerPathSegment('m42')).toBe(true)
-		expect(isSequencerPathSegment('LIGHT-60s')).toBe(true)
-		expect(isSequencerPathSegment('...')).toBe(true)
+		expect(isPathSegment('m42')).toBe(true)
+		expect(isPathSegment('LIGHT-60s')).toBe(true)
+		expect(isPathSegment('...')).toBe(true)
 	})
 
 	test('the empty name and the relative names are not segments', () => {
-		expect(isSequencerPathSegment('')).toBe(false)
-		expect(isSequencerPathSegment('.')).toBe(false)
-		expect(isSequencerPathSegment('..')).toBe(false)
+		expect(isPathSegment('')).toBe(false)
+		expect(isPathSegment('.')).toBe(false)
+		expect(isPathSegment('..')).toBe(false)
 	})
 
 	test('a separator or a NUL is not a segment', () => {
-		expect(isSequencerPathSegment('a/b')).toBe(false)
-		expect(isSequencerPathSegment('a\\b')).toBe(false)
-		expect(isSequencerPathSegment('a\0b')).toBe(false)
+		expect(isPathSegment('a/b')).toBe(false)
+		expect(isPathSegment('a\\b')).toBe(false)
+		expect(isPathSegment('a\0b')).toBe(false)
 	})
 
 	test('a template splits on either host separator and drops the empty parts', () => {
@@ -75,6 +76,49 @@ describe('artifact paths', () => {
 
 		expect(first.ok && second.ok && first.path === second.path).toBe(false)
 	})
+
+	test('a template rendering the reserved segment is refused at any depth', () => {
+		for (const directories of [[SEQUENCER_AUXILIARY_SEGMENT], ['m42', SEQUENCER_AUXILIARY_SEGMENT]]) {
+			const resolution = sequencerArtifactPath({ root: ROOT, session: 'session-1' }, directories, 'frame.fits')
+
+			expect(resolution.ok).toBe(false)
+			if (!resolution.ok) expect(resolution.reason).toBe(`the directory segment "${SEQUENCER_AUXILIARY_SEGMENT}" is reserved for the images that are not frames of the plan`)
+		}
+	})
+})
+
+describe('auxiliary paths', () => {
+	test('an auxiliary image lands in the reserved directory of its kind', () => {
+		expect(sequencerAuxiliaryDirectory({ root: ROOT, session: 'session-1' }, 'autofocus')).toBe(resolve(ROOT, 'session-1', SEQUENCER_AUXILIARY_SEGMENT, 'autofocus'))
+		expect(sequencerAuxiliaryDirectory({ root: ROOT, session: 'session-1', night: '2026-08-10' }, 'guider')).toBe(resolve(ROOT, '2026-08-10', 'session-1', SEQUENCER_AUXILIARY_SEGMENT, 'guider'))
+
+		const resolution = sequencerAuxiliaryPath({ root: ROOT, session: 'session-1' }, 'centering', 'centering-00003.fits')
+
+		expect(resolution.ok).toBe(true)
+		if (resolution.ok) expect(resolution.path).toBe(resolve(ROOT, 'session-1', SEQUENCER_AUXILIARY_SEGMENT, 'centering', 'centering-00003.fits'))
+	})
+
+	test('an auxiliary image never shares a directory with the frames of the plan', () => {
+		const auxiliary = sequencerAuxiliaryPath({ root: ROOT, session: 'session-1' }, 'driftCheck', 'driftCheck-00000.fits')
+		const frame = sequencerArtifactPath({ root: ROOT, session: 'session-1' }, [], 'driftCheck-00000.fits')
+
+		expect(auxiliary.ok && frame.ok && auxiliary.path === frame.path).toBe(false)
+		expect(auxiliary.ok && auxiliary.path.startsWith(sequencerSessionDirectory({ root: ROOT, session: 'session-1' }) + sep)).toBe(true)
+	})
+
+	test('an auxiliary name climbing out of its directory is refused', () => {
+		const resolution = sequencerAuxiliaryPath({ root: ROOT, session: 'session-1' }, 'quarantine', `..${sep}..${sep}frame.fits`)
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.reason).toBe(`the file name "..${sep}..${sep}frame.fits" is not a valid path segment`)
+	})
+
+	test('a relative root is refused before anything is composed', () => {
+		const resolution = sequencerAuxiliaryPath({ root: 'data/nebulosa', session: 'session-1' }, 'autofocus', 'autofocus-00000.fits')
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.reason).toBe('the storage root "data/nebulosa" is not an absolute path')
+	})
 })
 
 describe('verified artifact paths', () => {
@@ -124,5 +168,55 @@ describe('verified artifact paths', () => {
 
 		expect(resolution.ok).toBe(false)
 		if (!resolution.ok) expect(resolution.reason).toBe('the directory segment ".." is not a valid path segment')
+	})
+})
+
+describe('verified auxiliary paths', () => {
+	const temporary = mkdtempSync(join(tmpdir(), 'nebulosa-auxiliary-'))
+	const root = join(temporary, 'storage')
+	const outside = join(temporary, 'outside')
+
+	afterAll(() => rmSync(temporary, { recursive: true, force: true }))
+
+	test('a reserved directory that does not exist yet is contained', () => {
+		const resolution = sequencerVerifiedAuxiliaryPath({ root, session: 'session-1' }, 'autofocus', 'autofocus-00000.fits')
+
+		expect(resolution.ok).toBe(true)
+		if (resolution.ok) expect(resolution.path).toBe(resolve(root, 'session-1', SEQUENCER_AUXILIARY_SEGMENT, 'autofocus', 'autofocus-00000.fits'))
+	})
+
+	test('a linked auxiliary segment is refused', () => {
+		mkdirSync(outside, { recursive: true })
+		mkdirSync(join(root, 'session-2'), { recursive: true })
+		symlinkSync(outside, join(root, 'session-2', SEQUENCER_AUXILIARY_SEGMENT), 'junction')
+
+		const resolution = sequencerVerifiedAuxiliaryPath({ root, session: 'session-2' }, 'guider', 'guider-00000.fits')
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.reason).toBe(`the path component "${join(root, 'session-2', SEQUENCER_AUXILIARY_SEGMENT)}" is a symbolic link, and the write would follow it out of the session directory`)
+	})
+
+	test('a linked kind directory is refused', () => {
+		mkdirSync(outside, { recursive: true })
+		mkdirSync(join(root, '2026-08-10', 'session-3', SEQUENCER_AUXILIARY_SEGMENT), { recursive: true })
+		symlinkSync(outside, join(root, '2026-08-10', 'session-3', SEQUENCER_AUXILIARY_SEGMENT, 'quarantine'), 'junction')
+
+		const resolution = sequencerVerifiedAuxiliaryPath({ root, session: 'session-3', night: '2026-08-10' }, 'quarantine', 'frame.fits.invalid')
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.reason).toBe(`the path component "${join(root, '2026-08-10', 'session-3', SEQUENCER_AUXILIARY_SEGMENT, 'quarantine')}" is a symbolic link, and the write would follow it out of the session directory`)
+	})
+
+	test('a real reserved directory below the session directory is contained', () => {
+		mkdirSync(join(root, 'session-4', SEQUENCER_AUXILIARY_SEGMENT, 'centering'), { recursive: true })
+
+		expect(sequencerVerifiedAuxiliaryPath({ root, session: 'session-4' }, 'centering', 'centering-00001.fits').ok).toBe(true)
+	})
+
+	test('an invalid file name is refused before the filesystem is read', () => {
+		const resolution = sequencerVerifiedAuxiliaryPath({ root, session: 'session-1' }, 'driftCheck', '..')
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.reason).toBe('the file name ".." is not a valid path segment')
 	})
 })

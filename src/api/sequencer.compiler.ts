@@ -3,8 +3,10 @@ import type { MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Sequencer, SequencerAutofocus, SequencerCamera, SequencerCentering, SequencerCooling, SequencerDeviceRole, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
-import { isSequencerPathSegment, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
+import { sequencerUnknownPlaceholders } from './sequencer.identity'
+import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
 import type { SequencerBlockRegistry } from './sequencer.registry'
+import { isPathSegment } from './util'
 
 // Lowering of a sequencer definition into the executable plan.
 //
@@ -510,11 +512,11 @@ function checkStorage(context: CompilerContext, definition: Sequencer) {
 	const { capture, storage, target } = definition
 
 	// An empty id is already reported as unaddressable, and reporting it twice would say nothing new.
-	if (target.id.length > 0 && !isSequencerPathSegment(target.id)) context.diagnostics.push({ path: 'target.id', message: `the target id "${target.id}" contains a path separator or a relative segment and would escape the storage root` })
+	if (target.id.length > 0 && !isPathSegment(target.id)) context.diagnostics.push({ path: 'target.id', message: `the target id "${target.id}" contains a path separator or a relative segment and would escape the storage root` })
 
 	for (let i = 0; i < capture.frames.length; i++) {
 		const { id } = capture.frames[i]
-		if (id.length > 0 && !isSequencerPathSegment(id)) context.diagnostics.push({ path: `capture.frames[${i}].id`, message: `the frame id "${id}" contains a path separator or a relative segment and would escape the storage root` })
+		if (id.length > 0 && !isPathSegment(id)) context.diagnostics.push({ path: `capture.frames[${i}].id`, message: `the frame id "${id}" contains a path separator or a relative segment and would escape the storage root` })
 	}
 
 	const absolute = isAbsolute(storage.root)
@@ -526,15 +528,32 @@ function checkStorage(context: CompilerContext, definition: Sequencer) {
 	let composable = absolute
 
 	for (const directory of directories) {
-		if (!isSequencerPathSegment(directory)) {
+		if (!isPathSegment(directory)) {
 			context.diagnostics.push({ path: 'storage.directoryTemplate', message: `the directory segment "${directory}" is a relative segment and would escape the session directory` })
+			composable = false
+		} else if (directory === SEQUENCER_AUXILIARY_SEGMENT) {
+			// The reserved segment holds the images that fill no slot. A template writing frames into it would
+			// mix them with images the reconciliation is meant to ignore, so it is refused while the operator is
+			// still editing rather than at the first write.
+			context.diagnostics.push({ path: 'storage.directoryTemplate', message: `the directory segment "${directory}" is reserved for the images that are not frames of the plan` })
 			composable = false
 		}
 	}
 
-	if (!isSequencerPathSegment(storage.fileNameTemplate)) {
+	if (!isPathSegment(storage.fileNameTemplate)) {
 		context.diagnostics.push({ path: 'storage.fileNameTemplate', message: `the file name template "${storage.fileNameTemplate}" is empty or contains a path separator, and the file name is a single segment` })
 		composable = false
+	}
+
+	// A placeholder the renderer does not interpolate survives into the file name as literal text, so the
+	// operator who asked for a value gets the word back and every frame of the group carries it.
+	for (const [path, template] of [
+		['storage.directoryTemplate', storage.directoryTemplate],
+		['storage.fileNameTemplate', storage.fileNameTemplate],
+	] as const) {
+		for (const placeholder of sequencerUnknownPlaceholders(template)) {
+			context.diagnostics.push({ path, message: `the placeholder "{${placeholder}}" is not interpolated, and it would be written into the path verbatim` })
+		}
 	}
 
 	if (composable) {
@@ -866,6 +885,11 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	// the single authority for how the mount tracks. A disabled tracking block leaves it nothing to carry, and
 	// the mount would be told to track without being told at which rate.
 	if (!target.tracking.enabled && commands(definition, ['startTracking'])) diagnostics.push({ path: 'target.tracking.enabled', message: 'a lifecycle action starts tracking, and the target block it reads the tracking mode and rates from is disabled' })
+
+	// The capture order selects the scheduler implementation, and this version implements the sequential one
+	// only. Lowering another order would produce a plan captured in an order other than the one that was asked
+	// for, with no way for the operator to notice it from the result of the night.
+	if (capture.order !== 'sequential') diagnostics.push({ path: 'capture.order', message: 'this version schedules frames in the declaration order of the groups, so no other capture order is executed' })
 
 	if (capture.abortOnDeviceAlert) diagnostics.push({ path: 'capture.abortOnDeviceAlert', message: 'this version has no device alert source, so the flag would promise a protection that does not exist' })
 	if (capture.continueAfterRejectedFrame) removals.push({ path: 'capture.continueAfterRejectedFrame', reason: 'quality evaluation is not executed, so no frame is ever rejected and the flag has no path to take effect' })

@@ -18,7 +18,7 @@ import type { CameraDeviceWatcher } from './camera.capture'
 import { CameraCaptureReporter } from './camera.event'
 import type { CameraCaptureListener } from './camera.event'
 import type { ImageProcessor } from './image.processor'
-import type { OperationContext, OperationCoordinator, OperationHandle } from './operation'
+import type { OperationContext, OperationCoordinator, OperationHandle, OperationScope } from './operation'
 import { abortReason, waitForDeviceState } from './operation.wait'
 import { resourceKey } from './resource'
 import type { ResourceKey, ResourceRequest } from './resource'
@@ -312,7 +312,12 @@ export class GuiderCommander {
 	// Opens a session and resolves only after the transport is attached and configured.
 	// The target is resolved before the operation starts, because its logical key is what the arbiter needs
 	// to refuse a second connection to the same server or to the same pair of devices.
-	async connect(request: GuiderConnect): Promise<OperationResult<GuiderSessionInfo>> {
+	//
+	// `scope` is where the session operation is opened, defaulting to the coordinator, which is the top-level
+	// tree an interactive connect belongs in. A caller holding a reservation over the guider resources passes
+	// its own scope instead: the session then acquires the keys the reservation already holds, rather than
+	// competing with its owner for them and being refused the devices that were reserved for it.
+	async connect(request: GuiderConnect, scope: OperationScope = this.coordinator): Promise<OperationResult<GuiderSessionInfo>> {
 		const target = this.#resolveTarget(request)
 
 		if (!target.ok) return target
@@ -320,7 +325,7 @@ export class GuiderCommander {
 		const started = Promise.withResolvers<OperationResult<GuiderSessionInfo>>()
 		const ended = Promise.withResolvers<OperationResult<void>>()
 
-		const operation = this.coordinator.start<void>('guiderSession', target.value.resources, async (context) => {
+		const operation = scope.start<void>('guiderSession', target.value.resources, async (context) => {
 			const session = new GuiderSession(context, request, target.value, ended, {
 				cameraManager: this.cameraManager,
 				guideOutputManager: this.guideOutputManager,

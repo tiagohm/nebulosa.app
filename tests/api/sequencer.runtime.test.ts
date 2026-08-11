@@ -4,7 +4,7 @@ import { ResourceArbiter } from 'src/api/resource'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult } from 'src/api/sequencer.registry'
 import { SequencerRuntime, SessionAdmissionGate, SessionTeardown } from 'src/api/sequencer.runtime'
-import type { SequencerPlan } from 'src/api/sequencer.runtime'
+import type { SequencerRuntimePlan } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
 
 describe('session admission gate', () => {
@@ -140,7 +140,7 @@ function exposeHandler(execute: (context: SequencerActionContext, configuration:
 	}
 }
 
-function plan(): SequencerPlan {
+function plan(): SequencerRuntimePlan {
 	return { definitionId: 'definition-1', definitionRevision: 1, devices: { camera: 'camera-1' }, action: { id: 'node-1', type: 'expose', configuration: { exposureTime: 2 } } }
 }
 

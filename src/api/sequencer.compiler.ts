@@ -584,13 +584,15 @@ function capturedGroupOf(configuration: unknown): SequencerPlanFrameGroup | unde
 // Restores the compiler-owned termination fields of a group a capture handler rebuilt, keeping everything
 // else the handler returned.
 //
-// A handler normalizes how a group is captured: its camera settings, its spacing, the filter it selects. The
-// counters that bound the capture loop are not its to change — they were derived from the definition and
-// proved finite before any handler ran, so a returned `slotLimit` of `Infinity` would put an endless loop in
-// the plan after every termination check had already passed. The projection is recomputed instead of
-// restored, because it is the integration of those slots at the exposure the handler settled on.
+// A handler normalizes how a group is captured: its camera settings, its spacing, the filter it selects. What
+// the group has to capture is not its to change. The counters were derived from the definition and proved
+// finite before any handler ran, so a returned `slotLimit` of `Infinity` would put an endless loop in the plan
+// after every termination check had already passed. The criteria they were derived from are restored with
+// them: `requiredSlots` of an integration-only group is `integrationTime / exposureTime`, so a handler that
+// halves the exposure while the slot count stays behind ends the group at half the integration the definition
+// asked for. Restoring both keeps the group and its bounds describing the same capture.
 function withTermination(captured: SequencerPlanFrameGroup, group: SequencerPlanFrameGroup): SequencerPlanFrameGroup {
-	return { ...captured, requiredSlots: group.requiredSlots, abandonmentBudget: group.abandonmentBudget, slotLimit: group.slotLimit, projectedIntegration: group.requiredSlots * captured.exposureTime }
+	return { ...captured, exposureTime: group.exposureTime, count: group.count, integrationTime: group.integrationTime, requiredSlots: group.requiredSlots, abandonmentBudget: group.abandonmentBudget, slotLimit: group.slotLimit, projectedIntegration: group.projectedIntegration }
 }
 
 // Rebuilds a node with the configuration its handler returned in place of the one the lowering produced.

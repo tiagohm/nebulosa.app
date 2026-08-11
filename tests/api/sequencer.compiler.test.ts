@@ -532,13 +532,46 @@ describe('structural validation', () => {
 			const capture = loop.body.children.find((node) => node.kind === 'action' && node.type === 'capture.frame') as SequencerPlanAction
 			const group = compilation.plan.groups[0]
 
-			expect(group.exposureTime).toBe(30)
+			expect(group.exposureTime).toBe(60)
+			expect(group.count).toBe(10)
 			expect(group.requiredSlots).toBe(10)
 			expect(group.abandonmentBudget).toBe(0)
 			expect(group.slotLimit).toBe(10)
-			expect(group.projectedIntegration).toBe(300)
+			expect(group.projectedIntegration).toBe(600)
 			expect((capture.configuration as SequencerCapture).group).toEqual(group)
 			expect(loop.groups[0]).toEqual(group)
+		}
+	})
+
+	test('a capture handler cannot shorten the exposure the slots of an integration target were derived from', () => {
+		const registry = new SequencerBlockRegistry()
+
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
+			registry.register({
+				type,
+				version: 1,
+				validate: (configuration) => {
+					if (type !== 'capture.frame') return { ok: true, configuration }
+					const capture = configuration as SequencerCapture
+					return { ok: true, configuration: { ...capture, group: { ...capture.group, exposureTime: 30 } } }
+				},
+				resources: () => [],
+				execute: () => Promise.resolve({ type: 'completed', value: undefined } as const),
+			})
+		}
+
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 600, exposureTime: 60 })] } }, { registry })
+
+		expect(compilation.ok).toBe(true)
+
+		if (compilation.ok) {
+			const group = compilation.plan.groups[0]
+
+			expect(group.exposureTime).toBe(60)
+			expect(group.integrationTime).toBe(600)
+			expect(group.requiredSlots).toBe(10)
+			expect(group.projectedIntegration).toBe(600)
 		}
 	})
 

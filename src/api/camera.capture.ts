@@ -145,6 +145,8 @@ interface CameraCaptureSessionContext {
 interface FrameAttempt {
 	// Monotonic generation within the session.
 	readonly generation: number
+	// Final path of the frame, resolved before the exposure was dispatched.
+	readonly path: string
 	// Terminal exposure state observed for this generation.
 	readonly exposureCompleted: PromiseWithResolvers<PropertyState>
 	// First BLOB observed for this generation.
@@ -381,6 +383,9 @@ class CameraCaptureSession {
 	async run(): Promise<OperationResult<CameraCaptureResult>> {
 		if (!this.camera.connected) return this.#finishFailure('disconnected')
 		if (this.#request.exposureTime <= 0 || this.#reporter.remainingCount <= 0) return this.#finishFailure('commandFailed', 'exposure time and frame count must be positive')
+		// One name is one frame. Several frames under it would leave one file on disk while every frame reported
+		// the path it was supposedly written to, which is a capture that looks complete and is not.
+		if (this.#request.outputName && this.#reporter.remainingCount > 1) return this.#finishFailure('commandFailed', 'a fixed output name captures a single frame')
 		try {
 			this.sessionContext.prepare?.()
 		} catch (error) {
@@ -550,10 +555,24 @@ class CameraCaptureSession {
 	async #captureFrame(): Promise<OperationResult<string>> {
 		if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
 
+		// The destination is resolved before the exposure is commanded, so the identity of the frame exists
+		// before its data does: a caller that has to recognize an interrupted frame afterwards can only do it
+		// against a path it already knew, and a path invented when the BLOB arrives was never knowable.
+		let path: string
+
+		try {
+			path = await this.#resolveFramePath()
+		} catch (error) {
+			return failedOperationResult('commandFailed', errorMessage(error))
+		}
+
+		if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
+
 		const attempt: FrameAttempt = {
 			// The rendezvous exists before the frame is opened, because the attempt has to be routable the
 			// moment the exposure is dispatched. Opening it below is what makes this the current generation.
 			generation: this.#reporter.generation + 1,
+			path,
 			exposureCompleted: Promise.withResolvers<PropertyState>(),
 			blobReceived: Promise.withResolvers<CameraBlob>(),
 			terminal: false,
@@ -587,7 +606,7 @@ class CameraCaptureSession {
 		}
 
 		this.#state = 'processingFrame'
-		const processed = await this.#processBlob(rendezvous.value)
+		const processed = await this.#processBlob(rendezvous.value, attempt.path)
 		attempt.terminal = true
 
 		if (!processed.ok) return processed
@@ -629,15 +648,24 @@ class CameraCaptureSession {
 		}
 	}
 
+	// Resolves the final path of the next frame, creating the directory it is written into.
+	//
+	// A caller that decided the destination provides both halves and nothing here is derived. Otherwise the
+	// automatic capture directory and the timestamp name are used, and the timestamp is now the instant the
+	// exposure is commanded rather than the instant its payload arrived: a name has to exist before the data.
+	async #resolveFramePath() {
+		const request = this.#request
+		if (request.outputPath && request.outputName) return join(request.outputPath, request.outputName)
+
+		const name = request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : this.camera.name
+		const extension = request.transferFormat === 'XISF' ? 'xisf' : 'fit'
+		return join(request.outputPath ?? (await makePathFor(request)), request.outputName ?? `${name}.${extension}`)
+	}
+
 	// Decodes, buffers, and optionally writes one BLOB while retaining the camera lease.
-	async #processBlob(blob: CameraBlob): Promise<OperationResult<string>> {
+	async #processBlob(blob: CameraBlob, path: string): Promise<OperationResult<string>> {
 		try {
 			const buffer = blob.encoding === 'raw' ? blob.data : await this.sessionContext.io.decode(blob.data)
-			if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
-
-			const name = this.#request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : this.camera.name
-			const extension = this.#request.transferFormat === 'XISF' ? 'xisf' : 'fit'
-			const path = join(await makePathFor(this.#request), `${name}.${extension}`)
 			if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
 
 			this.sessionContext.imageProcessor.save(buffer, path, this.camera)

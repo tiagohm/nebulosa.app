@@ -580,10 +580,40 @@ describe('resource reservation', () => {
 		const contender = arbiter.reserve(session('session-2'), [{ key: CAMERA }])
 
 		expect(contender.ok).toBeTrue()
+
+		// The dead token is the refusal, and it names the reservation that no longer exists rather than the
+		// one that took its place: the caller acquiring with it is the thing that has to be fixed.
 		expect(arbiter.acquire(owner('action-1'), [{ key: CAMERA }], token)).toEqual({
+			ok: false,
+			conflicts: [{ key: CAMERA, by: 'reservation', ownerId: 'session-1', ownerKind: 'sequencer', causes: [] }],
+		})
+
+		// An acquisition with no token still meets the reservation that actually holds the resource.
+		expect(arbiter.acquire(owner('action-1'), [{ key: CAMERA }])).toEqual({
 			ok: false,
 			conflicts: [{ key: CAMERA, by: 'reservation', ownerId: 'session-2', ownerKind: 'sequencer', causes: [] }],
 		})
+	})
+
+	test('refuses a released token even when the resource is free', () => {
+		const arbiter = new ResourceArbiter()
+		const reserved = arbiter.reserve(session('session-1'), [{ key: CAMERA }])
+
+		expect(reserved.ok).toBeTrue()
+
+		if (!reserved.ok) return
+
+		const token = reserved.reservation.token
+		reserved.reservation.release()
+
+		expect(arbiter.availability(CAMERA)).toBe('available')
+		expect(arbiter.acquire(owner('action-1'), [{ key: CAMERA }], token)).toEqual({
+			ok: false,
+			conflicts: [{ key: CAMERA, by: 'reservation', ownerId: 'session-1', ownerKind: 'sequencer', causes: [] }],
+		})
+
+		// The refusal retained nothing, so the resource is still free for an unreserved acquisition.
+		expect(arbiter.acquire(owner('action-2'), [{ key: CAMERA }]).ok).toBeTrue()
 	})
 
 	test('survives the removal and the re-addition of the reserved device', () => {

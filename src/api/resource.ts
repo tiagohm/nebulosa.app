@@ -325,13 +325,22 @@ export class ResourceArbiter {
 	}
 
 	// Acquires every sorted unique request or returns conflicts without retaining a partial lease. A token
-	// authorizes acquisition inside its own reservation; every other context conflicts with it.
+	// authorizes acquisition inside its own reservation; every other context conflicts with it. A token whose
+	// reservation is no longer live refuses the whole acquisition rather than degrading it to an ordinary one.
 	acquire(owner: ResourceOwner, requests: readonly ResourceRequest[], token?: ReservationToken): AcquireResult {
 		const normalized = normalizeRequests(requests)
 		const conflicts: ResourceConflict[] = []
 		const reservation = token === undefined ? undefined : this.#reservations.get(token.owner)
 		// A token released while the operation was being started no longer authorizes anything.
 		const authorized = reservation !== undefined && reservation.token === token && !reservation.released ? reservation : undefined
+
+		// A dead token must refuse the acquisition instead of falling through to an ordinary one. Releasing a
+		// reservation also clears it from every resource it covered, so each check below would find the
+		// resource free and hand out a plain lease: a retained scope would keep commanding hardware after the
+		// session that owned it finished cancelling, awaited by nobody and cancelled by nobody.
+		if (token !== undefined && authorized === undefined) {
+			return { ok: false, conflicts: normalized.map((request) => conflict(request.key, 'reservation', token.owner)) }
+		}
 
 		for (const request of normalized) {
 			// Conflict discovery must not replace the physical association of an existing record. A

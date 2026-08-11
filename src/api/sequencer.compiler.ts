@@ -353,7 +353,14 @@ function roleRequirements(definition: Sequencer, groups: readonly SequencerPlanF
 	if (target.center.enabled) requirements.push({ role: 'mount', path: 'target.center' })
 	if (meridianFlip.enabled) requirements.push({ role: 'mount', path: 'meridianFlip' })
 	if (groups.some((group) => group.filter !== undefined)) requirements.push({ role: 'wheel', path: 'capture.frames' })
-	if (autofocus.enabled) requirements.push({ role: 'focuser', path: 'autofocus' })
+
+	// An auxiliary capture selects its own filter, so it commands the wheel even when no frame group does.
+	if (target.center.enabled && target.center.capture.filter !== undefined) requirements.push({ role: 'wheel', path: 'target.center.capture.filter' })
+
+	if (autofocus.enabled) {
+		requirements.push({ role: 'focuser', path: 'autofocus' })
+		if (autofocus.capture.filter !== undefined) requirements.push({ role: 'wheel', path: 'autofocus.capture.filter' })
+	}
 
 	if (guiding.enabled && guiding.connection.mode === 'local') {
 		requirements.push({ role: 'guideCamera', path: 'guiding.connection' })

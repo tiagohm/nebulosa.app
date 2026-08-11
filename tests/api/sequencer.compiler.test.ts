@@ -266,6 +266,22 @@ describe('structural validation', () => {
 		expect(plan.roles).toEqual(['camera', 'mount', 'focuser'])
 	})
 
+	test('an auxiliary capture selecting a filter reserves the wheel', () => {
+		const definition = canonical()
+		const autofocus = { ...definition.autofocus, capture: { ...definition.autofocus.capture, filter: { type: 'name', name: 'L' } as const } }
+
+		expect(ok({ ...definition, autofocus }).plan.roles).toContain('wheel')
+	})
+
+	test('an auxiliary capture selecting a filter is refused without a wheel', () => {
+		const definition = canonical()
+		const center = { ...definition.target.center, capture: { ...definition.target.center.capture, filter: { type: 'name', name: 'L' } as const } }
+		const compilation = compile({ ...definition, devices: { camera: 'Camera Simulator', mount: 'Mount Simulator', focuser: 'Focuser Simulator' }, target: { ...definition.target, center } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.wheel', message: 'target.center.capture.filter requires the wheel role, which the definition does not declare' }])
+	})
+
 	test('without a registry the block types are not resolved', () => {
 		expect(ok(canonical()).ok).toBe(true)
 	})

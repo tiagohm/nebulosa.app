@@ -243,6 +243,33 @@ describe('structural validation', () => {
 		if (compilation.ok) expect(compilation.plan.roles).toEqual(['camera', 'mount', 'wheel', 'focuser'])
 	})
 
+	test('the configuration a handler returns replaces the lowered one', () => {
+		const registry = new SequencerBlockRegistry()
+
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.warmCamera']) {
+			registry.register({
+				type,
+				version: 1,
+				validate: (configuration) => (type === 'lifecycle.parkMount' ? { ok: true, configuration: { normalized: true } } : { ok: true, configuration }),
+				resources: () => [],
+				execute: () => Promise.resolve({ type: 'completed', value: undefined } as const),
+			})
+		}
+
+		const compilation = compile(canonical(), { registry })
+
+		expect(compilation.ok).toBe(true)
+
+		if (compilation.ok) {
+			const nodes = [...sequencerPlanNodes(compilation.plan.root)]
+			const parked = nodes.find((node) => node.id === 'finalize.action[park]')
+			const connected = nodes.find((node) => node.id === 'startup.action[connect]')
+
+			expect(parked?.kind === 'action' && parked.configuration).toEqual({ normalized: true })
+			expect(connected?.kind === 'action' && connected.configuration).toMatchObject({ action: { id: 'connect', type: 'connectDevices' }, timeout: 30 })
+		}
+	})
+
 	test('a role declared only by a handler is refused when no device answers for it', () => {
 		const compilation = compile(canonical(), { registry: handlers({ 'lifecycle.parkMount': ['rotator'] }) })
 

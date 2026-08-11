@@ -434,6 +434,41 @@ interface HandlerCheck {
 	readonly versions: Record<string, number>
 	// Roles the handlers declared for their own configurations, addressed to the node that declared them.
 	readonly requirements: readonly RoleRequirement[]
+	// Configuration each handler returned, by node id, replacing the one the lowering produced.
+	readonly configurations: Map<string, unknown>
+}
+
+// Rebuilds a node with the configuration its handler returned in place of the one the lowering produced.
+// Nodes the map does not mention, and nodes whose handler returned its input unchanged, are returned as they
+// are, so a compilation whose handlers normalize nothing allocates nothing.
+function withConfigurations(node: SequencerPlanNode, configurations: ReadonlyMap<string, unknown>): SequencerPlanNode {
+	switch (node.kind) {
+		case 'action': {
+			if (!configurations.has(node.id)) return node
+			const configuration = configurations.get(node.id)
+			return configuration === node.configuration ? node : { ...node, configuration }
+		}
+		case 'sequence':
+			return withConfigurationsIn(node, configurations)
+		case 'loop': {
+			const body = withConfigurationsIn(node.body, configurations)
+			return body === node.body ? node : { ...node, body }
+		}
+	}
+}
+
+// Rebuilds a sequence with the rewritten children, preserving its identity when no child changed.
+function withConfigurationsIn(sequence: SequencerPlanSequence, configurations: ReadonlyMap<string, unknown>): SequencerPlanSequence {
+	let changed = false
+	const children: SequencerPlanNode[] = []
+
+	for (const child of sequence.children) {
+		const rewritten = withConfigurations(child, configurations)
+		changed ||= rewritten !== child
+		children.push(rewritten)
+	}
+
+	return changed ? { ...sequence, children } : sequence
 }
 
 // Validates every action node against the handler registered for its block type, translating each issue into
@@ -447,6 +482,7 @@ interface HandlerCheck {
 function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistry, plan: SequencerPlan): HandlerCheck {
 	const versions: Record<string, number> = Object.create(null)
 	const requirements: RoleRequirement[] = []
+	const configurations = new Map<string, unknown>()
 
 	for (const node of sequencerPlanNodes(plan.root)) {
 		if (node.kind !== 'action') continue
@@ -467,12 +503,15 @@ function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistr
 
 		versions[node.type] = handler.version
 
-		// `resources` receives exactly what this handler's `validate` returned, which is the only value it is
-		// specified against.
+		// `resources` and `execute` receive exactly what this handler's `validate` returned, which is the only
+		// value they are specified against: a validator may normalize or rebuild its input, and the plan carries
+		// the narrowed value rather than the one the lowering produced.
+		configurations.set(node.id, result.configuration)
+
 		for (const binding of handler.resources(result.configuration)) requirements.push({ role: binding.role, path: node.id })
 	}
 
-	return { versions, requirements }
+	return { versions, requirements, configurations }
 }
 
 // Lowers the guider the session will create and own, or undefined when the plan does not guide.
@@ -741,5 +780,5 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 
 	if (context.diagnostics.length > 0) return { ok: false, diagnostics: context.diagnostics }
 
-	return { ok: true, plan: handlers ? { ...plan, roles: rolesOf(requirements), handlers: handlers.versions } : plan, removals: context.removals }
+	return { ok: true, plan: handlers ? { ...plan, roles: rolesOf(requirements), root: withConfigurationsIn(plan.root, handlers.configurations), handlers: handlers.versions } : plan, removals: context.removals }
 }

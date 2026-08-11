@@ -241,14 +241,19 @@ function artifactConflict(entry: SessionEntry, drafts: readonly SequencerArtifac
 		if (artifact.status === 'committed') committed.set(artifact.logicalSlotId, artifact.attempt)
 	}
 
+	// Drafts are applied in order, because a unit is allowed to free a slot and fill it again: a recapture
+	// rejects the attempt that held the slot and commits the replacement, and judging both against the state
+	// before the unit would refuse a batch whose final state has exactly one committed artifact per slot.
 	for (const draft of drafts) {
-		if (draft.status !== 'committed') continue
-
 		const attempt = committed.get(draft.logicalSlotId)
 
-		if (attempt !== undefined && attempt !== draft.attempt) return `slot ${draft.logicalSlotId} already has a committed artifact from attempt ${attempt}`
+		if (draft.status === 'committed') {
+			if (attempt !== undefined && attempt !== draft.attempt) return `slot ${draft.logicalSlotId} already has a committed artifact from attempt ${attempt}`
 
-		committed.set(draft.logicalSlotId, draft.attempt)
+			committed.set(draft.logicalSlotId, draft.attempt)
+		} else if (attempt === draft.attempt) {
+			committed.delete(draft.logicalSlotId)
+		}
 	}
 
 	return undefined

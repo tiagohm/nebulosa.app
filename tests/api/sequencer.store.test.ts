@@ -167,6 +167,28 @@ describe('in memory sequencer store', () => {
 		expect(instance.artifacts(created.id).map((artifact) => artifact.status)).toEqual(['rejected', 'committed'])
 	})
 
+	test('accepts a recapture that rejects the committed attempt it replaces', () => {
+		const { store: instance } = store()
+		const created = session(instance)
+
+		instance.commit({ sessionId: created.id, expectedRevision: 0, artifacts: [{ logicalSlotId: 'slot-1', attempt: 1, status: 'committed', path: '/data/frame-1.fits' }] })
+
+		const recaptured = instance.commit({
+			sessionId: created.id,
+			expectedRevision: 1,
+			artifacts: [
+				{ logicalSlotId: 'slot-1', attempt: 1, status: 'rejected' },
+				{ logicalSlotId: 'slot-1', attempt: 2, status: 'committed', path: '/data/frame-1-retry.fits' },
+			],
+		})
+
+		expect(recaptured.ok).toBeTrue()
+		expect(instance.artifacts(created.id).map((artifact) => artifact.status)).toEqual(['rejected', 'committed'])
+
+		// The slot is filled again, so a third attempt still conflicts.
+		expect(instance.commit({ sessionId: created.id, expectedRevision: 2, artifacts: [{ logicalSlotId: 'slot-1', attempt: 3, status: 'committed' }] })).toMatchObject({ ok: false, reason: 'artifactConflict' })
+	})
+
 	test('stamps the terminal instant once and records the failure', () => {
 		const { store: instance, tick } = store()
 		const created = session(instance)

@@ -566,6 +566,21 @@ describe('failure policies', () => {
 		expect(compilation.ok).toBe(true)
 	})
 
+	test('suspending on an unrecoverable failure is refused at the feature that declares it', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, dither: { ...definition.dither, onFailure: 'suspend' } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'dither.onFailure', message: 'this version has no suspended state to move the session into' }])
+	})
+
+	test('the failure decision of a disabled feature is not reported', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, autofocus: { ...definition.autofocus, enabled: false, onFailure: 'suspend' } })
+
+		expect(compilation.ok).toBe(true)
+	})
+
 	test('an empty meridian flip window is refused', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, meridianFlip: { ...definition.meridianFlip, minimumHourAngle: 0.1, maximumHourAngle: 0.01 } })

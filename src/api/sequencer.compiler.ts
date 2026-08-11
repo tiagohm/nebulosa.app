@@ -592,6 +592,15 @@ function checkRetry(context: CompilerContext, retry: SequencerRetryPolicy, path:
 	if (retry.onExhausted === 'suspend') context.diagnostics.push({ path: `${path}.onExhausted`, message: 'this version has no suspended state to exhaust a policy into' })
 }
 
+// Checks the decision a feature applies when it cannot recover, addressed to the path that declared it.
+//
+// `suspend` is refused for the same reason `onExhausted: 'suspend'` is: the session has no suspended state to
+// move into, so the definition would silently get another terminal decision than the one it declared. The
+// other members are carried into the configuration of the block and honored by its handler.
+function checkOnFailure(context: CompilerContext, onFailure: 'continue' | 'pause' | 'suspend' | 'stop' | 'fail', path: string) {
+	if (onFailure === 'suspend') context.diagnostics.push({ path, message: 'this version has no suspended state to move the session into' })
+}
+
 // Checks every failure policy of the definition and the meridian flip window.
 //
 // The retry policies of a disabled block are deliberately not checked: a block this version refuses when it is
@@ -606,11 +615,19 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 	if (target.goto.enabled) checkRetry(context, target.goto.retry, 'target.goto.retry')
 	if (target.center.enabled) checkRetry(context, target.center.retry, 'target.center.retry')
 	if (guiding.enabled) checkRetry(context, guiding.retry, 'guiding.retry')
-	if (dither.enabled) checkRetry(context, dither.retry, 'dither.retry')
-	if (autofocus.enabled) checkRetry(context, autofocus.retry, 'autofocus.retry')
+	if (dither.enabled) {
+		checkRetry(context, dither.retry, 'dither.retry')
+		checkOnFailure(context, dither.onFailure, 'dither.onFailure')
+	}
+
+	if (autofocus.enabled) {
+		checkRetry(context, autofocus.retry, 'autofocus.retry')
+		checkOnFailure(context, autofocus.onFailure, 'autofocus.onFailure')
+	}
 
 	if (meridianFlip.enabled) {
 		checkRetry(context, meridianFlip.retry, 'meridianFlip.retry')
+		checkOnFailure(context, meridianFlip.onFailure, 'meridianFlip.onFailure')
 
 		// An empty window leaves the safe point with no hour angle at which an exposure may resume: the pre-exposure
 		// guard already refuses to start and the flip is not permitted yet, which is a wait that never ends.

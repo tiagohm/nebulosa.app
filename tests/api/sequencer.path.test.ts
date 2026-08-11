@@ -1,6 +1,8 @@
-import { describe, expect, test } from 'bun:test'
-import { resolve, sep } from 'path'
-import { isSequencerPathSegment, sequencerArtifactPath, sequencerPathSegments, sequencerSessionDirectory } from 'src/api/sequencer.path'
+import { afterAll, describe, expect, test } from 'bun:test'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'fs'
+import { tmpdir } from 'os'
+import { join, resolve, sep } from 'path'
+import { isSequencerPathSegment, sequencerArtifactPath, sequencerPathSegments, sequencerSessionDirectory, sequencerVerifiedArtifactPath } from 'src/api/sequencer.path'
 
 const ROOT = resolve('/data/nebulosa')
 
@@ -72,5 +74,55 @@ describe('artifact paths', () => {
 		const second = sequencerArtifactPath({ root: ROOT, session: 'session-2' }, ['m42'], 'frame.fits')
 
 		expect(first.ok && second.ok && first.path === second.path).toBe(false)
+	})
+})
+
+describe('verified artifact paths', () => {
+	const temporary = mkdtempSync(join(tmpdir(), 'nebulosa-path-'))
+	const root = join(temporary, 'storage')
+	const outside = join(temporary, 'outside')
+
+	afterAll(() => rmSync(temporary, { recursive: true, force: true }))
+
+	test('a directory tree that does not exist yet is contained', () => {
+		const resolution = sequencerVerifiedArtifactPath({ root, session: 'session-1' }, ['m42', 'LIGHT'], 'frame.fits')
+
+		expect(resolution.ok).toBe(true)
+		if (resolution.ok) expect(resolution.path).toBe(resolve(root, 'session-1', 'm42', 'LIGHT', 'frame.fits'))
+	})
+
+	test('real directories below the session directory are contained', () => {
+		mkdirSync(join(root, 'session-2', 'm42'), { recursive: true })
+
+		expect(sequencerVerifiedArtifactPath({ root, session: 'session-2' }, ['m42'], 'frame.fits').ok).toBe(true)
+	})
+
+	test('a linked directory below the session directory is refused', () => {
+		mkdirSync(outside, { recursive: true })
+		mkdirSync(join(root, 'session-3'), { recursive: true })
+		symlinkSync(outside, join(root, 'session-3', 'link'), 'junction')
+
+		const resolution = sequencerVerifiedArtifactPath({ root, session: 'session-3' }, ['link'], 'frame.fits')
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.reason).toBe(`the path component "${join(root, 'session-3', 'link')}" is a symbolic link, and the write would follow it out of the session directory`)
+	})
+
+	test('a linked session directory is refused', () => {
+		mkdirSync(outside, { recursive: true })
+		mkdirSync(root, { recursive: true })
+		symlinkSync(outside, join(root, 'session-4'), 'junction')
+
+		const resolution = sequencerVerifiedArtifactPath({ root, session: 'session-4' }, ['m42'], 'frame.fits')
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.reason).toBe(`the path component "${join(root, 'session-4')}" is a symbolic link, and the write would follow it out of the session directory`)
+	})
+
+	test('a lexically escaping path is refused before the filesystem is read', () => {
+		const resolution = sequencerVerifiedArtifactPath({ root, session: 'session-1' }, ['..'], 'frame.fits')
+
+		expect(resolution.ok).toBe(false)
+		if (!resolution.ok) expect(resolution.reason).toBe('the directory segment ".." is not a valid path segment')
 	})
 })

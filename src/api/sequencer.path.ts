@@ -1,4 +1,5 @@
-import { isAbsolute, resolve, sep } from 'path'
+import { lstatSync } from 'fs'
+import { isAbsolute, join, resolve, sep } from 'path'
 
 // Composition and containment of the paths a session writes to. `storage.root`, both storage templates and
 // every declared id arrive over HTTP, and the contract only states that artifacts stay below an approved
@@ -10,6 +11,11 @@ import { isAbsolute, resolve, sep } from 'path'
 // directly below the root (below the night directory when the definition asks for one) and above everything
 // a template can produce: two runs of the same definition therefore never share a destination directory,
 // and no template can take that separation away.
+//
+// Containment is decided twice, because it has two halves. The lexical half is pure and answers what the text
+// of a path resolves to, which is all an editor validating a definition can ask about; the verified half also
+// reads the filesystem, because a directory that already exists as a symbolic link sends a lexically contained
+// write somewhere else entirely. Anything about to write uses the verified one.
 
 // Whether a value can be used as a single path segment. Rejects the empty name, the two relative names,
 // anything carrying either host separator, and NUL, which most filesystems reject and some truncate on. `..`
@@ -69,12 +75,16 @@ export function sequencerSessionDirectory(context: SequencerPathContext) {
 }
 
 // Composes the path of one artifact from the directories a template rendered and the final file name, and
-// proves it is still contained.
+// proves it is lexically contained.
 //
 // `directories` are the rendered segments of `directoryTemplate`, in order, and `fileName` is the rendered
 // file name; neither may carry a separator or a relative name. The composed path is normalized and must
 // remain strictly below the session directory, which refuses both a path escaping `storage.root` and one
 // that climbed out of the session segment while staying under the root.
+//
+// The proof is over the path as text and reads nothing from the filesystem, which is what lets the compiler
+// probe a definition without touching a disk. It therefore says nothing about where the path leads once
+// symbolic links are followed: a caller about to write must use `sequencerVerifiedArtifactPath` instead.
 export function sequencerArtifactPath(context: SequencerPathContext, directories: readonly string[], fileName: string): SequencerPathResolution {
 	if (!isAbsolute(context.root)) return { ok: false, reason: `the storage root "${context.root}" is not an absolute path` }
 
@@ -92,4 +102,36 @@ export function sequencerArtifactPath(context: SequencerPathContext, directories
 	if (!path.startsWith(base + sep)) return { ok: false, reason: `the path "${path}" escapes the session directory "${base}"` }
 
 	return { ok: true, path }
+}
+
+// Composes the path of one artifact and proves it is contained on the filesystem the write will land on.
+//
+// This is the composition to use before writing. The lexical proof only shows that the text of the path stays
+// below the session directory, and a directory that already exists as a symbolic link makes that text lie: the
+// write follows the link and lands wherever it points, so `root/night/session/link/frame.fits` writes outside
+// the approved root while reading as contained. Every component the runtime creates below the storage root is
+// therefore inspected here, and the first one that exists as a link refuses the composition.
+//
+// The root itself is not inspected: it is the directory the operator declared, and a root that is a link is a
+// root they chose. The walk stops at the first component that does not exist yet, because nothing can exist
+// below an absent directory; the runtime creates the rest, and a component it cannot create fails the write
+// on its own. Each call costs one `lstat` per existing component, which is nothing next to the artifact.
+export function sequencerVerifiedArtifactPath(context: SequencerPathContext, directories: readonly string[], fileName: string): SequencerPathResolution {
+	const resolution = sequencerArtifactPath(context, directories, fileName)
+
+	if (!resolution.ok) return resolution
+
+	let current = resolve(context.root)
+
+	for (const component of context.night ? [context.night, context.session, ...directories, fileName] : [context.session, ...directories, fileName]) {
+		current = join(current, component)
+
+		try {
+			if (lstatSync(current).isSymbolicLink()) return { ok: false, reason: `the path component "${current}" is a symbolic link, and the write would follow it out of the session directory` }
+		} catch {
+			break
+		}
+	}
+
+	return resolution
 }

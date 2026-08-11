@@ -427,6 +427,14 @@ describe('compatibility rule', () => {
 		if (!compilation.ok) expect(compilation.diagnostics.map((diagnostic) => diagnostic.path)).toContain('startup.actions[0].type')
 	})
 
+	test('a switch lifecycle action is rejected', () => {
+		const definition = complete()
+		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('flip', { type: 'switch', device: 'Power Box', switch: 'DEW_HEATER', value: true })] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics.map((diagnostic) => diagnostic.path)).toContain('startup.actions[0].type')
+	})
+
 	test('a disabled dome lifecycle action is not rejected', () => {
 		const definition = complete()
 		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('open', { type: 'openDome', enabled: false }), action('unpark')] } })

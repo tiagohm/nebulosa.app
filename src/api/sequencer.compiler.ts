@@ -325,9 +325,9 @@ const SEQUENCER_ROLE_ORDER: readonly SequencerDeviceRole[] = ['camera', 'mount',
 
 // Role each lifecycle action commands, so an action that needs a device the definition never declared is
 // refused at compile time instead of failing halfway through the pipeline, with the observatory already
-// half open. `connectDevices` is absent because it declares its roles explicitly, `custom` and `switch` are
-// absent because they address a host handler and a device id rather than a session role, and the dome actions
-// are absent because the compatibility rule refuses them before a role could be required for them.
+// half open. `connectDevices` is absent because it declares its roles explicitly, `custom` is absent because
+// it addresses a host handler, which declares its own roles through the registry, and the dome and switch
+// actions are absent because the compatibility rule refuses them before a role could be required for them.
 const SEQUENCER_LIFECYCLE_ROLE: Partial<Record<SequencerLifecycleAction['type'], SequencerDeviceRole>> = {
 	unparkMount: 'mount',
 	parkMount: 'mount',
@@ -781,7 +781,14 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 
 		for (let i = 0; i < pipeline.actions.length; i++) {
 			const action = pipeline.actions[i]
-			if (action.enabled && SEQUENCER_UNSUPPORTED_ACTION.has(action.type)) diagnostics.push({ path: `${pipeline.name}.actions[${i}].type`, message: `the device layer of this version has no dome, so the ${action.type} action cannot be executed` })
+
+			if (!action.enabled) continue
+
+			if (SEQUENCER_UNSUPPORTED_ACTION.has(action.type)) diagnostics.push({ path: `${pipeline.name}.actions[${i}].type`, message: `the device layer of this version has no dome, so the ${action.type} action cannot be executed` })
+			// A switch names the device it writes to, and a session reserves devices by role: there is no role for
+			// the switch to require, no way for its handler to request the device from the scope, and therefore no
+			// reservation standing between the action and a concurrent command to the same device.
+			else if (action.type === 'switch') diagnostics.push({ path: `${pipeline.name}.actions[${i}].type`, message: 'a switch action addresses a device directly, and a session reserves devices by role, so the switch would be written without holding the device it writes to' })
 		}
 	}
 }

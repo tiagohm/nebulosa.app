@@ -242,6 +242,49 @@ describe('auto focus runner', () => {
 		}
 	})
 
+	test('writes every sampled frame where the caller reserved it, one destination per sample', async () => {
+		const { camera, focuser } = await connectedDevices()
+		const requested: (string | undefined)[] = []
+		const directories: (string | undefined)[] = []
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_scope, _camera, start) => {
+			requested.push(start.outputName)
+			directories.push(start.outputPath)
+			return frame()
+		})
+		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(vCurve(focuser, focuser.position.value, 25))
+		let ordinal = 0
+
+		try {
+			const { handle } = runner.start(coordinator, camera, focuser, request(), () => ({ directory: '/data/.auxiliary/autofocus', fileName: `autofocus-${++ordinal}.fits` }))
+
+			await handle.result
+
+			expect(requested.length).toBeGreaterThan(1)
+			expect(new Set(requested).size).toBe(requested.length)
+			expect(requested[0]).toBe('autofocus-1.fits')
+			expect(new Set(directories)).toEqual(new Set(['/data/.auxiliary/autofocus']))
+		} finally {
+			detect.mockRestore()
+			capture.mockRestore()
+		}
+	}, 30000)
+
+	test('refuses to expose a frame the caller could not reserve a destination for', async () => {
+		const { camera, focuser } = await connectedDevices()
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => frame())
+
+		try {
+			const { handle } = runner.start(coordinator, camera, focuser, request(), () => undefined)
+			const result = await handle.result
+
+			expect(result.ok).toBeFalse()
+			expect(result.ok || result.reason).toBe('unexpectedState')
+			expect(capture).not.toHaveBeenCalled()
+		} finally {
+			capture.mockRestore()
+		}
+	})
+
 	test('searches without an event sink at all', async () => {
 		const { camera, focuser } = await connectedDevices()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => frame())

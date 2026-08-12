@@ -1,5 +1,5 @@
 import type { Wheel } from 'nebulosa/src/devices/indi/device'
-import type { SequencerFilterReference } from '#/sequencer'
+import type { SequencerFilterFocusOffset, SequencerFilterReference } from '#/sequencer'
 import { wheelSlot } from './wheel.commander'
 
 // Resolution of the declared optical path against the devices that carry it.
@@ -22,4 +22,28 @@ export function sequencerFilterSlot(wheel: Wheel, filter: SequencerFilterReferen
 	const slot = wheel.names.indexOf(filter.name)
 
 	return slot < 0 ? undefined : slot
+}
+
+// Focuser offset declared for one slot, in device steps, or zero when the slot has none.
+//
+// An offset is a property of the optical path, not of a focus run: a filter that is not listed is one whose
+// path is the same as the reference, which is zero rather than unknown. A reference the wheel cannot resolve
+// is ignored for the same reason it is ignored everywhere else — it names a filter this wheel does not carry.
+export function sequencerFocusOffset(wheel: Wheel, offsets: readonly SequencerFilterFocusOffset[], slot: number): number {
+	for (const entry of offsets) {
+		if (sequencerFilterSlot(wheel, entry.filter) === slot) return entry.offset
+	}
+
+	return 0
+}
+
+// Signed focuser correction to apply when the optical path moves from one slot to another, in device steps.
+//
+// Only the difference between the two offsets means anything: a focus position measured through one filter is
+// valid for another once the path difference between them is added, and the common part of both offsets is
+// already inside the measured position. Either slot being absent leaves the position where it was, since a
+// path that cannot be named cannot be corrected for.
+export function sequencerFocusOffsetShift(wheel: Wheel, offsets: readonly SequencerFilterFocusOffset[], from: number | undefined, to: number | undefined): number {
+	if (from === undefined || to === undefined || from === to) return 0
+	return sequencerFocusOffset(wheel, offsets, to) - sequencerFocusOffset(wheel, offsets, from)
 }

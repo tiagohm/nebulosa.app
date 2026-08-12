@@ -167,6 +167,10 @@ export interface SequencerRuntimePlan {
 	// Where the session writes, resolved at creation so the night and the session segment are fixed for its
 	// whole life. Absent when the session writes nothing, which makes every auxiliary destination unavailable.
 	readonly storage?: SequencerPathContext
+	// Guiding session the actions command, absent when the session guides through none. It is resolved for
+	// the session rather than declared per block, because a remote or local guider only has an id once it is
+	// connected, which happens when the session starts and not when it is compiled.
+	readonly guider?: string
 	// Sole action of the V1 plan.
 	readonly action: SequencerRuntimeAction
 }
@@ -476,6 +480,7 @@ export class SequencerRuntime {
 			progress: (progress) => this.#report(active.id, node, progress),
 			artifact: (artifact) => this.#register(active, artifact),
 			auxiliary: (kind, extension) => this.#auxiliary(active, kind, extension),
+			guider: active.plan.guider,
 			checkpoint: this.#checkpoint(active),
 		}
 

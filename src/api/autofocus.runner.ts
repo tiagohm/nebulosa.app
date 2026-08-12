@@ -35,6 +35,15 @@ export interface AutoFocusRunOutcome {
 	readonly message: string
 }
 
+// Where the next frame of a search is written, asked once per sample.
+//
+// It is a callback rather than a fixed path because a search exposes an unknown number of frames and a fixed
+// output name refuses to overwrite an existing file, so every sample needs a name of its own. Returning
+// undefined refuses the exposure: a caller that could not prove a destination must not have a frame written
+// somewhere it did not choose. A caller with nowhere in particular to put them passes nothing at all, and the
+// camera names and places the frames as it does for any other capture.
+export type AutoFocusFrameDestination = () => { readonly directory: string; readonly fileName: string } | undefined
+
 // A started search: the operation to await or cancel, plus the terminal publication its caller owns.
 export interface AutoFocusRunHandle {
 	// Operation of the search, holding the camera and the focuser until it terminates.
@@ -61,10 +70,11 @@ export class AutoFocusRunner {
 	// together, so a capture or a focuser move interleaved by another operation would corrupt a search that
 	// is still converging, and every position already sampled would be measured against a different focus.
 	// Starting from a scope that already owns either device inherits it instead of asking for it again.
-	start(scope: OperationScope, camera: Camera, focuser: Focuser, request: AutoFocusStart): AutoFocusRunHandle {
+	// `destination` names where each sampled frame is written, when the caller decides that.
+	start(scope: OperationScope, camera: Camera, focuser: Focuser, request: AutoFocusStart, destination?: AutoFocusFrameDestination): AutoFocusRunHandle {
 		// The request is copied because the run normalizes both the capture and the focus range, and the
 		// caller's object is not this feature's to rewrite.
-		const run = new AutoFocusRun(camera, focuser, structuredClone(request), this)
+		const run = new AutoFocusRun(camera, focuser, structuredClone(request), this, destination)
 		const resources = [
 			{ key: resourceKey(camera), device: camera },
 			{ key: resourceKey(focuser), device: focuser },
@@ -90,6 +100,7 @@ class AutoFocusRun {
 		readonly focuser: Focuser,
 		readonly request: AutoFocusStart,
 		readonly runner: AutoFocusRunner,
+		readonly destination?: AutoFocusFrameDestination,
 	) {
 		// An unset upper bound means the whole travel of this focuser, which only the device knows.
 		request.maxPosition ||= focuser.position.max
@@ -127,6 +138,17 @@ class AutoFocusRun {
 			if (context.signal.aborted) return failedOperationResult(abortReason(context.signal))
 
 			this.#publish('capturing', '')
+
+			// The destination is asked for before the exposure starts, so a frame with nowhere proven to go is
+			// never exposed at all.
+			if (this.destination !== undefined) {
+				const target = this.destination()
+
+				if (target === undefined) return failedOperationResult('unexpectedState', 'the autofocus frame has no destination')
+
+				capture.outputPath = target.directory
+				capture.outputName = target.fileName
+			}
 
 			// The capture nests in this run, inheriting the camera it already holds instead of asking the
 			// arbiter for a device its own parent owns.

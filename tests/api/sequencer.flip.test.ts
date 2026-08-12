@@ -149,6 +149,15 @@ describe('meridian flip block', () => {
 		expect(handler.resources(flipConfiguration({ centering: centering(), focusing: focusing() }))).toEqual([{ role: 'mount' }, { role: 'camera' }, { role: 'focuser' }])
 	})
 
+	test('declares the wheel the recovery reaches its declared filter through', () => {
+		const handler = sequencerMeridianFlipHandler({} as never)
+		const centeringFilter = { ...centering()!, capture: { ...centering()!.capture, filter: { type: 'name' as const, name: 'Luminance' } } }
+		const focusingFilter = { ...focusing()!, capture: { ...focusing()!.capture, filter: { type: 'name' as const, name: 'Luminance' } } }
+
+		expect(handler.resources(flipConfiguration({ centering: centeringFilter }))).toEqual([{ role: 'mount' }, { role: 'camera' }, { role: 'wheel', optional: true }])
+		expect(handler.resources(flipConfiguration({ centering: centering(), focusing: focusingFilter }))).toEqual([{ role: 'mount' }, { role: 'camera' }, { role: 'focuser' }, { role: 'wheel', optional: true }])
+	})
+
 	test('refuses a definition without a device the recovery needs', () => {
 		const handler = sequencerMeridianFlipHandler({} as never)
 

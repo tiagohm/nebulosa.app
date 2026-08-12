@@ -187,6 +187,7 @@ describe('centering block', () => {
 		const handler = sequencerCenterHandler({} as never)
 
 		expect(handler.resources(centerConfiguration())).toEqual([{ role: 'mount' }, { role: 'camera' }])
+		expect(handler.resources(centerConfiguration({ capture: { ...centerConfiguration().capture, filter: { type: 'name', name: 'Luminance' } } }))).toEqual([{ role: 'mount' }, { role: 'camera' }, { role: 'wheel', optional: true }])
 		expect(handler.validate(centerConfiguration(), { nodeId: 'target[m42].center', devices: { mount: 'Mount Simulator' } as SequencerDevices })).toEqual({ ok: false, issues: [{ path: 'devices.camera', message: 'the camera is required to point the telescope' }] })
 		expect(handler.validate(centerConfiguration(), { nodeId: 'target[m42].center', devices }).ok).toBe(true)
 	})

@@ -8,7 +8,7 @@ import { runAutofocus } from './sequencer.focus'
 import type { SequencerAutofocusOutcome, SequencerAutofocusServices } from './sequencer.focus'
 import { runCentering } from './sequencer.pointing'
 import type { SequencerCenteringServices, SequencerCenterOutcome } from './sequencer.pointing'
-import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerValidationContext, SequencerValidationResult } from './sequencer.registry'
+import type { ResourceBinding, SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerValidationContext, SequencerValidationResult } from './sequencer.registry'
 
 // The meridian flip as a safe-point action: the mount changes sides, and everything the crossing invalidated is
 // re-established before the next frame is exposed.
@@ -80,13 +80,18 @@ export function sequencerMeridianFlipHandler(services: SequencerMeridianFlipServ
 // The recentering exposes and solves, so it needs the camera; the refocusing needs the camera and the focuser.
 // Declaring them here is what puts them in the reservation set of the session, so a flip never finds a device
 // it is about to need held by something else.
-function flipResources(configuration: SequencerMeridianFlipTrigger) {
-	const roles: ('mount' | 'camera' | 'focuser')[] = ['mount']
+//
+// The recovery it nests is the same code the standalone blocks run, so the wheel a centering or an autofocus
+// recipe names a filter for has to be declared here too: a role this list omits is a device those blocks never
+// receive, and they would recover through the installed path while the definition asked for another one.
+function flipResources(configuration: SequencerMeridianFlipTrigger): ResourceBinding[] {
+	const roles: ResourceBinding[] = [{ role: 'mount' }]
 
-	if (configuration.centering !== undefined || configuration.focusing !== undefined) roles.push('camera')
-	if (configuration.focusing !== undefined) roles.push('focuser')
+	if (configuration.centering !== undefined || configuration.focusing !== undefined) roles.push({ role: 'camera' })
+	if (configuration.focusing !== undefined) roles.push({ role: 'focuser' })
+	if (configuration.centering?.capture.filter !== undefined || configuration.focusing?.capture.filter !== undefined) roles.push({ role: 'wheel', optional: true })
 
-	return roles.map((role) => ({ role }))
+	return roles
 }
 
 // Runs one meridian flip at a safe point: the crossing, the settle, and the recovery the definition declared.

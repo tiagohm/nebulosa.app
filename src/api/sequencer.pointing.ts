@@ -14,7 +14,7 @@ import { sequencerActionFailure, sequencerDeviceOf, sequencerMissingRole, sequen
 import type { SequencerCenter, SequencerSlew } from './sequencer.compiler'
 import { SEQUENCER_BLOCK_TYPE } from './sequencer.compiler'
 import { sequencerFilterSlot } from './sequencer.optics'
-import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerValidationContext, SequencerValidationResult } from './sequencer.registry'
+import type { ResourceBinding, SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerValidationContext, SequencerValidationResult } from './sequencer.registry'
 import type { WheelCommander } from './wheel.commander'
 
 // Executable blocks that decide where the telescope points: the slew that puts the target in the field and the
@@ -189,6 +189,20 @@ export function sequencerSlewHandler(mountCommander: MountCommander): SequencerA
 	}
 }
 
+// Roles the centering commands, which are the loop plus the wheel its recipe reaches a declared filter
+// through.
+//
+// The wheel is bound only when the recipe names a filter, and bound as optional because a rig without one
+// solves through whatever is installed rather than refusing to centre — the solution comes from the star
+// field, which every filter shows.
+function centeringResources(configuration: SequencerCenter): ResourceBinding[] {
+	const roles: ResourceBinding[] = [{ role: 'mount' }, { role: 'camera' }]
+
+	if (configuration.capture.filter !== undefined) roles.push({ role: 'wheel', optional: true })
+
+	return roles
+}
+
 // Centering block: captures, solves, and corrects until the solved field centre is within tolerance of the
 // target or the attempts run out.
 //
@@ -206,7 +220,7 @@ export function sequencerCenterHandler(services: SequencerCenteringServices): Se
 		type: SEQUENCER_BLOCK_TYPE.center,
 		version: SEQUENCER_POINTING_VERSION,
 		validate: (configuration, context) => validatePointing<SequencerCenter>(configuration, context, ['mount', 'camera']),
-		resources: () => [{ role: 'mount' }, { role: 'camera' }],
+		resources: (configuration) => centeringResources(configuration),
 		execute: (context, configuration) => runCentering(services, context, configuration),
 	}
 }

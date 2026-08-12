@@ -2,7 +2,10 @@ import type { SequencerDeviceRole, SequencerDevices } from '#/sequencer'
 import type { SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerFailure, SequencerSession, SequencerSessionState } from '#/sequencer.state'
 import type { OperationCoordinator, OperationScope } from './operation'
 import type { ResourceArbiter, ResourceRequest, ResourceReservation, ResourceReservationOwner } from './resource'
-import type { SequencerActionContext, SequencerActionProgress, SequencerActionResult, SequencerBlockRegistry } from './sequencer.registry'
+import { sequencerAuxiliaryFileName } from './sequencer.identity'
+import { sequencerAuxiliaryDirectory, sequencerVerifiedAuxiliaryPath } from './sequencer.path'
+import type { SequencerAuxiliaryKind, SequencerPathContext } from './sequencer.path'
+import type { SequencerActionContext, SequencerActionProgress, SequencerActionResult, SequencerAuxiliaryTarget, SequencerBlockRegistry } from './sequencer.registry'
 import type { SequencerStore } from './sequencer.store'
 
 // Session admission, bootstrap reversal, and the V1 execution kernel of the sequencer.
@@ -161,6 +164,9 @@ export interface SequencerRuntimePlan {
 	readonly definitionRevision: number
 	// Device id per role declared by the definition.
 	readonly devices: SequencerDevices
+	// Where the session writes, resolved at creation so the night and the session segment are fixed for its
+	// whole life. Absent when the session writes nothing, which makes every auxiliary destination unavailable.
+	readonly storage?: SequencerPathContext
 	// Sole action of the V1 plan.
 	readonly action: SequencerRuntimeAction
 }
@@ -248,6 +254,10 @@ interface ActiveSession {
 	readonly teardown: SessionTeardown
 	// Artifacts registered by the action and not yet written.
 	readonly artifacts: SequencerArtifactDraft[]
+	// Next ordinal per auxiliary kind, so two images of the same kind never share a file name within the
+	// session. It is deliberately not persisted: an auxiliary image fills no slot and is never resumed, and a
+	// counter restarting at zero after a restart can only collide with a file the session no longer needs.
+	readonly auxiliaries: Map<SequencerAuxiliaryKind, number>
 	// Cancellation source of the running action, aborted by a stop and by finalization.
 	readonly controller: AbortController
 	// Resolves once the session released everything, with the last durable state the store holds.
@@ -408,6 +418,7 @@ export class SequencerRuntime {
 			scope: this.#coordinator.reservedScope(reserved.reservation),
 			teardown,
 			artifacts: [],
+			auxiliaries: new Map(),
 			controller: new AbortController(),
 			done: Promise.withResolvers<SequencerSession | undefined>(),
 			revision: stored.revision,
@@ -464,6 +475,7 @@ export class SequencerRuntime {
 			request: (role) => roles.get(role),
 			progress: (progress) => this.#report(active.id, node, progress),
 			artifact: (artifact) => this.#register(active, artifact),
+			auxiliary: (kind, extension) => this.#auxiliary(active, kind, extension),
 			checkpoint: this.#checkpoint(active),
 		}
 
@@ -589,6 +601,31 @@ export class SequencerRuntime {
 			// drafts go back in front of what remains, in the order the action registered them.
 			for (let i = staged.length - 1; i >= 0; i--) active.artifacts.unshift(staged[i])
 		}
+	}
+
+	// Reserves the destination of one auxiliary image and proves it is contained on the filesystem it will be
+	// written to.
+	//
+	// The ordinal is consumed whether or not the composition succeeds, because the name it produced must not
+	// be handed out again by a later call that happens to succeed: a refusal here is about the directory, not
+	// about the name, and reusing the name after the directory is repaired would overwrite the earlier image.
+	#auxiliary(active: ActiveSession, kind: SequencerAuxiliaryKind, extension: string): SequencerAuxiliaryTarget | undefined {
+		const storage = active.plan.storage
+
+		if (storage === undefined) return undefined
+
+		const ordinal = active.auxiliaries.get(kind) ?? 1
+		active.auxiliaries.set(kind, ordinal + 1)
+
+		const fileName = sequencerAuxiliaryFileName(kind, ordinal, extension)
+		const resolution = sequencerVerifiedAuxiliaryPath(storage, kind, fileName)
+
+		if (!resolution.ok) {
+			console.error('sequencer auxiliary path refused:', active.id, resolution.reason)
+			return undefined
+		}
+
+		return { directory: sequencerAuxiliaryDirectory(storage, kind), fileName, path: resolution.path }
 	}
 
 	// Hands one progress report to the observer, if any, without letting it reach the action.

@@ -1,8 +1,9 @@
 import { describe, expect, spyOn, test } from 'bun:test'
+import { join } from 'path'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter } from 'src/api/resource'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
-import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult } from 'src/api/sequencer.registry'
+import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerAuxiliaryTarget } from 'src/api/sequencer.registry'
 import { SequencerRuntime, SessionAdmissionGate, SessionTeardown } from 'src/api/sequencer.runtime'
 import type { SequencerRuntimePlan } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
@@ -637,5 +638,46 @@ describe('sequencer runtime', () => {
 		expect(session?.desiredState).toBe('stopped')
 		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 		expect(instance.activeSessionId).toBeUndefined()
+	})
+
+	test('reserves one auxiliary destination per image with an ordinal of its own kind', async () => {
+		const targets: (SequencerAuxiliaryTarget | undefined)[] = []
+
+		const { runtime: instance } = runtime(
+			exposeHandler((context, configuration) => {
+				targets.push(context.auxiliary('centering', 'fits'), context.auxiliary('autofocus', 'fits'), context.auxiliary('centering', 'fits'))
+				return Promise.resolve({ type: 'completed', value: configuration.exposureTime })
+			}),
+		)
+
+		const created = instance.create({ ...plan(), storage: { root: '/data/nebulosa', session: 'session-1', night: '2026-08-12' } })!
+
+		instance.start(created.id)
+
+		const session = await instance.settled(created.id)
+
+		expect(session?.state).toBe('completed')
+		expect(targets.map((target) => target?.fileName)).toEqual(['centering-00001.fits', 'autofocus-00001.fits', 'centering-00002.fits'])
+		expect(targets[0]?.directory).toEndWith(join('2026-08-12', 'session-1', '.auxiliary', 'centering'))
+		expect(targets[0]?.path).toBe(join(targets[0]!.directory, 'centering-00001.fits'))
+	})
+
+	test('reports no auxiliary destination when the session has no storage', async () => {
+		let target: SequencerAuxiliaryTarget | undefined | 'unset' = 'unset'
+
+		const { runtime: instance } = runtime(
+			exposeHandler((context, configuration) => {
+				target = context.auxiliary('guider', 'fits')
+				return Promise.resolve({ type: 'completed', value: configuration.exposureTime })
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		await instance.settled(created.id)
+
+		expect(target).toBeUndefined()
 	})
 })

@@ -306,6 +306,32 @@ describe('frame preparation', () => {
 		])
 	})
 
+	test('puts the wheel back when the focus offset of the new filter fails', async () => {
+		const commands: Command[] = []
+		const carousel = wheel(['L', 'Ha'], 0)
+		const optics = focuser(12000)
+		const offsets = [
+			{ filter: { type: 'name' as const, name: 'L' }, offset: 100 },
+			{ filter: { type: 'name' as const, name: 'Ha' }, offset: 350 },
+		]
+		const request = preparation({ group: group({ filter: { type: 'name', name: 'Ha' } }), filterOffsets: offsets })
+		const services = prepareServices(commands, { focuserMoveTo: 'timeout' })
+		const context = actionContext({ camera: { device: camera() }, wheel: { device: carousel }, focuser: { device: optics }, mount: { device: mount(true) } })
+		const result = await runFramePreparation(services, context, request)
+
+		expect(result).toMatchObject({ type: 'retryableFailure', reason: 'timeout' })
+		expect(carousel.position).toBe(0)
+		expect(commands).toEqual([
+			{ name: 'wheelMoveTo', detail: 1 },
+			{ name: 'focuserMoveTo', detail: 12250 },
+			{ name: 'wheelMoveTo', detail: 0 },
+		])
+
+		const retried = await runFramePreparation(prepareServices(commands), context, request)
+
+		expect(retried).toMatchObject({ type: 'completed', value: { commanded: ['filter', 'focusOffset'], focusShift: 250 } })
+	})
+
 	test('moves the wheel without touching the focus when the two filters share the same path', async () => {
 		const commands: Command[] = []
 		const carousel = wheel(['L', 'R'], 0)

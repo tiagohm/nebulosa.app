@@ -280,7 +280,18 @@ export async function runFramePreparation(services: SequencerPreparationServices
 
 				const focused = await services.focuserCommander.moveTo(context.scope, focuser, focuser.position.value + shift)
 
-				if (!focused.ok) return sequencerActionFailure(focused, 'the focuser did not take the offset of the new filter')
+				if (!focused.ok) {
+					// The shift is the difference between two filters and not a position any device publishes, so it
+					// exists only while the transition is being made. A retry arriving with the wheel already at the
+					// target derives no shift at all and exposes the frame at the focus of the filter before it.
+					// Putting the wheel back is what keeps the pair atomic without remembering anything: the next
+					// attempt sees the same difference this one saw and commands both halves again. Nothing is
+					// reported about the restore — the focuser failure is what explains the preparation, and a wheel
+					// that did not come back leaves the retry deriving its offset from wherever the wheel is.
+					await services.wheelCommander.moveTo(context.scope, wheel, installed)
+
+					return sequencerActionFailure(focused, 'the focuser did not take the offset of the new filter')
+				}
 
 				focusShift = shift
 				commanded.push('focusOffset')

@@ -122,10 +122,22 @@ export class OperationCoordinator {
 	// already holds instead of competing for them. The scope is passed to services exactly like any other,
 	// and a service composed under it cannot tell the difference.
 	reservedScope(reservation: ResourceReservation): OperationScope {
-		this.#reservationTokens.set(reservation.token.owner, reservation.token)
+		return this.tokenScope(reservation.token)
+	}
+
+	// Builds the same scope from the token alone, for a service that keeps a root operation of its own.
+	//
+	// The guider session is the declared exception to the operation tree: a connection outlives every command
+	// issued through it, so it is a root owned by the commander rather than a scope nested in whoever asked
+	// for it. Such a service cannot be handed the reservation scope of its caller — it does not open its
+	// operation inside the caller's tree — but it still has to acquire under the reservation, and the token is
+	// exactly that credential. Nested operations inherit it from the root, so every later command acquires the
+	// physical devices with no further plumbing.
+	tokenScope(token: ReservationToken): OperationScope {
+		this.#reservationTokens.set(token.owner, token)
 
 		return Object.freeze({
-			start: <T>(kind: string, resources: readonly ResourceRequest[], executor: OperationExecutor<T>) => this.#start(undefined, kind, resources, executor, reservation.token),
+			start: <T>(kind: string, resources: readonly ResourceRequest[], executor: OperationExecutor<T>) => this.#start(undefined, kind, resources, executor, token),
 		})
 	}
 

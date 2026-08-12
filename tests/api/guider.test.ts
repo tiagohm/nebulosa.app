@@ -176,10 +176,28 @@ describe('remote session', () => {
 		expect(outside.ok).toBeFalse()
 		expect(outside.ok || outside.reason).toBe('busy')
 
-		const inside = await commander.connect(remote(), coordinator.reservedScope(reserved.reservation))
+		const inside = await commander.connect(remote(), reserved.reservation.token)
 
 		expect(inside.ok).toBeTrue()
 		expect(arbiter.availability(key)).toBe('leased')
+	})
+
+	test('keeps a session opened under a reservation reachable as a root of that reservation', async () => {
+		const key = remoteGuiderKey('127.0.0.1', port)
+		const reserved = arbiter.reserve({ id: 'session-2', kind: 'sequencer' }, [{ key }])
+
+		expect(reserved.ok).toBeTrue()
+		if (!reserved.ok) return
+
+		expect((await commander.connect(remote(), reserved.reservation.token)).ok).toBeTrue()
+
+		await coordinator.cancelByReservationOwner(reserved.reservation.token.owner)
+
+		expect(commander.list()).toBeEmpty()
+
+		reserved.reservation.release()
+
+		expect(arbiter.availability(key)).toBe('available')
 	})
 
 	test('keeps two sessions on different servers apart', async () => {

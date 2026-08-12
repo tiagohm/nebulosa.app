@@ -9,7 +9,7 @@ import type { FocuserCommander } from './focuser.commander'
 import { sequencerActionFailure, sequencerDeviceOf, sequencerMissingRole, sequencerSettle } from './sequencer.action'
 import { SEQUENCER_BLOCK_TYPE } from './sequencer.compiler'
 import { sequencerFilterSlot, sequencerFocusOffsetShift } from './sequencer.optics'
-import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerValidationContext, SequencerValidationResult } from './sequencer.registry'
+import type { ResourceBinding, SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerValidationContext, SequencerValidationResult } from './sequencer.registry'
 import type { WheelCommander } from './wheel.commander'
 
 // Autofocus as a safe-point action: the V-curve search of the focus feature, run under the session
@@ -102,13 +102,28 @@ function autofocusCapture(recipe: SequencerAuxiliaryCapture) {
 	}
 }
 
+// Roles the autofocus commands, which are the search plus the wheel the declared filter is reached through.
+//
+// The wheel is only bound when the recipe names a filter of its own, since that is the only reason this block
+// touches it, and it is bound as optional because a rig without a wheel focuses through the installed path
+// instead of refusing to focus. Without the binding the runtime never puts the wheel in the role map, and the
+// declared filter would be ignored in silence: the search would run through whatever is installed and the
+// offset between the two paths would never be applied.
+function autofocusResources(configuration: SequencerAutofocusTrigger): ResourceBinding[] {
+	const roles: ResourceBinding[] = [{ role: 'camera' }, { role: 'focuser' }]
+
+	if (configuration.capture.filter !== undefined) roles.push({ role: 'wheel', optional: true })
+
+	return roles
+}
+
 // Autofocus block: focuses through the declared path and leaves the focuser where the next frame needs it.
 export function sequencerAutofocusHandler(services: SequencerAutofocusServices): SequencerActionHandler<SequencerAutofocusTrigger, SequencerAutofocusOutcome> {
 	return {
 		type: SEQUENCER_BLOCK_TYPE.autofocus,
 		version: SEQUENCER_FOCUS_VERSION,
 		validate: (configuration, context) => validateAutofocus(configuration, context),
-		resources: () => [{ role: 'camera' }, { role: 'focuser' }],
+		resources: (configuration) => autofocusResources(configuration),
 		execute: (context, configuration) => runAutofocus(services, context, configuration),
 	}
 }

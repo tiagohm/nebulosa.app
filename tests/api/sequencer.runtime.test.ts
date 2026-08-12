@@ -385,6 +385,20 @@ describe('sequencer runtime', () => {
 		expect(store.session(created.id)?.state).toBe('created')
 	})
 
+	test('starts without an optional role the session does not carry', async () => {
+		let wheel: unknown = 'unread'
+		const handler = exposeHandler((context) => {
+			wheel = context.request('wheel')
+			return Promise.resolve({ type: 'completed', value: 1 })
+		})
+		const { runtime: instance } = runtime({ ...handler, resources: () => [{ role: 'camera' }, { role: 'wheel', optional: true }] })
+		const created = instance.create(plan())!
+
+		expect(instance.start(created.id)).toMatchObject({ ok: true })
+		expect((await instance.settled(created.id))?.state).toBe('completed')
+		expect(wheel).toBeUndefined()
+	})
+
 	test('refuses to start when the resources are reserved by someone else', () => {
 		const { runtime: instance, arbiter } = runtime(exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 })))
 		const created = instance.create(plan())!

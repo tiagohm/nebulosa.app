@@ -22,6 +22,11 @@ import type { SequencerAuxiliaryKind } from './sequencer.path'
 export interface ResourceBinding {
 	// Device role the block commands.
 	readonly role: SequencerDeviceRole
+	// Whether the block still runs when the session does not carry the role. A required role the session
+	// lacks refuses the block, which is the right answer for a mount a slew has to command; an optional one
+	// is left out of the reservation and the block finds it absent, which is the right answer for a wheel a
+	// recipe names a filter for on a rig that has none.
+	readonly optional?: boolean
 }
 
 // What a handler may look at while validating its own configuration.

@@ -100,6 +100,7 @@ describe('autofocus block', () => {
 		const handler = sequencerAutofocusHandler({} as never)
 
 		expect(handler.resources(autofocusConfiguration())).toEqual([{ role: 'camera' }, { role: 'focuser' }])
+		expect(handler.resources(autofocusConfiguration({ capture: { ...autofocusConfiguration().capture, filter: { type: 'name', name: 'Luminance' } } }))).toEqual([{ role: 'camera' }, { role: 'focuser' }, { role: 'wheel', optional: true }])
 		expect(handler.validate(autofocusConfiguration(), { nodeId: 'target[m42].autofocus', devices: { camera: 'Camera Simulator' } })).toEqual({ ok: false, issues: [{ path: 'devices.focuser', message: 'the focuser is required to autofocus' }] })
 		expect(handler.validate(autofocusConfiguration(), { nodeId: 'target[m42].autofocus', devices }).ok).toBe(true)
 	})

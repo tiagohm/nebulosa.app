@@ -396,6 +396,10 @@ export class SequencerRuntime {
 			const request = deviceId === undefined ? undefined : this.#resolve(binding.role, deviceId)
 
 			if (request === undefined) {
+				// An optional role the session does not carry is not an error: the block declared that it
+				// commands the device when it is there and runs without it when it is not.
+				if (binding.optional) continue
+
 				teardown.run()
 				return { ok: false, reason: 'roleUnresolved', detail: `role ${binding.role} is not available` }
 			}

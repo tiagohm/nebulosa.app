@@ -82,11 +82,55 @@ export interface SequencerCheckpoint {
 	// always present, empty before the first frame, because the scheduler decides from it and a resume that
 	// found it absent would restart the cycle it was in the middle of.
 	readonly capture: SequencerCaptureProgress
+	// Instants and counters the safe-point triggers are evaluated against. Always present, because a resume
+	// that found them absent would fire every trigger again on the first frame after the restart.
+	readonly anchors: SequencerTriggerAnchors
 	// Definition revision this checkpoint was produced from; a resume against another revision is invalid.
 	readonly definitionRevision: number
 	// Handler version per block type, as resolved when the session started. A resume against a registry
 	// that no longer offers the same versions is refused rather than silently executed by another handler.
 	readonly handlerVersions: Readonly<Record<string, number>>
+}
+
+// Last successful run of one safe-point trigger, which is what the next evaluation measures against.
+//
+// It records a run, not a decision: a trigger that was selected and failed leaves the anchor where it was,
+// so the condition that selected it is still true on the next safe point. A trigger suppressed by a rate
+// limiter leaves it untouched for the same reason.
+export interface SequencerTriggerAnchor {
+	// Wall-clock instant of the last successful run, in milliseconds since the Unix epoch. Absent while the
+	// trigger has never run, in which case the elapsed time is measured from the start of the session.
+	readonly at?: number
+	// Frames accepted since that instant, counting only the frames that looked at the sky. A calibration
+	// frame never moves it: a run of darks in the middle of the night would otherwise dither and check drift
+	// against a framing nothing touched.
+	readonly frames: number
+	// Temperature observed at the last run, in degrees Celsius, absent when no device reported one. It is
+	// the reference of the temperature-change condition, which is why it is captured with the run.
+	readonly temperature?: number
+	// Filter the last run served, absent when the session commands no wheel. It is the reference of the
+	// filter-change condition.
+	readonly filter?: string
+}
+
+// Every anchor of the session, which is the whole input the trigger evaluator reads besides the selection.
+//
+// `performance.now()` is the clock for durations inside an action, as the project convention requires, but
+// it cannot anchor these: it does not survive a restart, and surviving one is what these exist for.
+export interface SequencerTriggerAnchors {
+	// Instant the session started, in milliseconds since the Unix epoch. It is the origin of every elapsed
+	// time whose trigger has never run.
+	readonly sessionStart: number
+	// Instant the current target started, in milliseconds since the Unix epoch, absent before the first
+	// target begins. It is what the initial capture settle is measured from.
+	readonly targetStart?: number
+	// Anchor of the autofocus trigger.
+	readonly autofocus: SequencerTriggerAnchor
+	// Anchor of the dither trigger.
+	readonly dither: SequencerTriggerAnchor
+	// Anchor of the drift check, which is a capture and a solve rather than a reading, and is therefore
+	// rate limited by the same mechanism as the runs that command a device.
+	readonly driftCheck: SequencerTriggerAnchor
 }
 
 // Counters of one frame group inside the current cycle.

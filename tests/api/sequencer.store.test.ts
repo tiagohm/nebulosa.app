@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
+import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
 import type { SequencerCheckpoint } from '#/sequencer.state'
 
 function store(start: number = 1000) {
@@ -12,7 +13,7 @@ function session(instance: InMemorySequencerStore) {
 }
 
 function checkpoint(cursor: string): SequencerCheckpoint {
-	return { cursor, containers: ['root'], attempts: { [cursor]: 1 }, completed: [], capture: {}, definitionRevision: 3, handlerVersions: { wait: 1 } }
+	return { cursor, containers: ['root'], attempts: { [cursor]: 1 }, completed: [], capture: {}, anchors: sequencerInitialTriggerAnchors(1000), definitionRevision: 3, handlerVersions: { wait: 1 } }
 }
 
 describe('in memory sequencer store', () => {
@@ -26,7 +27,7 @@ describe('in memory sequencer store', () => {
 		expect(created.createdAt).toBe(1000)
 		expect(created.startedAt).toBeUndefined()
 		expect(created.endedAt).toBeUndefined()
-		expect(created.checkpoint).toEqual({ containers: [], attempts: {}, completed: [], capture: {}, definitionRevision: 3, handlerVersions: { wait: 1 } })
+		expect(created.checkpoint).toEqual({ containers: [], attempts: {}, completed: [], capture: {}, anchors: sequencerInitialTriggerAnchors(1000), definitionRevision: 3, handlerVersions: { wait: 1 } })
 		expect(instance.session(created.id)).toEqual(created)
 		expect(instance.sessions()).toEqual([created])
 	})

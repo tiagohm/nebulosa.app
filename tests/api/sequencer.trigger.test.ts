@@ -1,0 +1,204 @@
+import { describe, expect, test } from 'bun:test'
+import { evaluateSequencerTriggers, sequencerAnchorAdvanced, sequencerFrameCounted, sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
+import type { SequencerTriggerObservation, SequencerTriggerPolicies } from 'src/api/sequencer.trigger'
+import type { SequencerAutofocus, SequencerDither, SequencerMeridianFlip } from '#/sequencer'
+import type { SequencerTriggerAnchors } from '#/sequencer.state'
+
+const START = 1_000_000
+
+function anchors(overrides: Partial<SequencerTriggerAnchors> = {}): SequencerTriggerAnchors {
+	return { ...sequencerInitialTriggerAnchors(START), ...overrides }
+}
+
+function observation(overrides: Partial<SequencerTriggerObservation> = {}): SequencerTriggerObservation {
+	return { instant: START, frameType: 'LIGHT', ...overrides }
+}
+
+function autofocus(triggers: Partial<SequencerAutofocus['triggers']> = {}): Omit<SequencerAutofocus, 'enabled'> {
+	const merged = { onStart: false, onFilterChange: false, afterMeridianFlip: false, afterRecovery: false, everyFrames: 0, everyTime: 0, temperatureChange: 0, starSizeChange: 0, minimumTimeBetweenRuns: 0, ...triggers }
+	return { triggers: merged } as unknown as Omit<SequencerAutofocus, 'enabled'>
+}
+
+function dither(overrides: Partial<SequencerDither> = {}): Omit<SequencerDither, 'enabled'> {
+	return { beforeFirstFrame: false, afterMeridianFlip: false, afterFilterChange: false, everyFrames: 0, everyTime: 0, ...overrides } as unknown as Omit<SequencerDither, 'enabled'>
+}
+
+function meridianFlip(overrides: Partial<SequencerMeridianFlip> = {}): Omit<SequencerMeridianFlip, 'enabled'> {
+	return { minimumHourAngle: 0.01, maximumHourAngle: 0.05, ...overrides } as unknown as Omit<SequencerMeridianFlip, 'enabled'>
+}
+
+function kinds(policies: SequencerTriggerPolicies, state: SequencerTriggerAnchors, observed: SequencerTriggerObservation) {
+	return evaluateSequencerTriggers(policies, state, observed).map((decision) => `${decision.kind}:${decision.reason}`)
+}
+
+describe('sequencer trigger evaluator', () => {
+	test('selects nothing when no trigger was lowered', () => {
+		expect(evaluateSequencerTriggers({}, anchors(), observation())).toEqual([])
+	})
+
+	test('consults no trigger for a calibration frame', () => {
+		const policies = { meridianFlip: meridianFlip(), autofocus: autofocus({ onStart: true }), dither: dither({ beforeFirstFrame: true }) }
+		const observed = { hourAngle: 0.2, pierSide: 'WEST' as const, preFlipPierSide: 'WEST' as const }
+
+		expect(kinds(policies, anchors(), observation({ ...observed, frameType: 'LIGHT' }))).toEqual(['meridianFlip:hourAngle', 'autofocus:onStart', 'dither:beforeFirstFrame'])
+		expect(kinds(policies, anchors(), observation({ ...observed, frameType: 'DARK' }))).toEqual([])
+		expect(kinds(policies, anchors(), observation({ ...observed, frameType: 'FLAT' }))).toEqual([])
+		expect(kinds(policies, anchors(), observation({ ...observed, frameType: 'BIAS' }))).toEqual([])
+	})
+
+	test('orders the flip before the autofocus and the dither', () => {
+		const policies = { meridianFlip: meridianFlip(), autofocus: autofocus({ afterMeridianFlip: true }), dither: dither({ afterMeridianFlip: true }) }
+		const observed = observation({ hourAngle: 0.02, pierSide: 'WEST', preFlipPierSide: 'WEST' })
+
+		expect(kinds(policies, anchors(), observed)).toEqual(['meridianFlip:hourAngle', 'autofocus:afterMeridianFlip', 'dither:afterMeridianFlip'])
+	})
+
+	test('holds the flip until the hour angle reaches the earliest one allowed', () => {
+		const policies = { meridianFlip: meridianFlip({ minimumHourAngle: 0.02 }) }
+
+		expect(kinds(policies, anchors(), observation({ hourAngle: 0.019, pierSide: 'WEST', preFlipPierSide: 'WEST' }))).toEqual([])
+		expect(kinds(policies, anchors(), observation({ hourAngle: 0.02, pierSide: 'WEST', preFlipPierSide: 'WEST' }))).toEqual(['meridianFlip:hourAngle'])
+	})
+
+	test('decides no flip once the mount is on the other side of the pier', () => {
+		const policies = { meridianFlip: meridianFlip() }
+
+		expect(kinds(policies, anchors(), observation({ hourAngle: 0.5, pierSide: 'EAST', preFlipPierSide: 'WEST' }))).toEqual([])
+	})
+
+	test('decides no flip while the mount publishes no pier side', () => {
+		const policies = { meridianFlip: meridianFlip() }
+
+		expect(kinds(policies, anchors(), observation({ hourAngle: 0.5, preFlipPierSide: 'WEST' }))).toEqual([])
+		expect(kinds(policies, anchors(), observation({ hourAngle: 0.5, pierSide: 'WEST' }))).toEqual([])
+	})
+
+	test('autofocuses on the first frame of the session and not on the next one', () => {
+		const policies = { autofocus: autofocus({ onStart: true }) }
+		const observed = observation()
+
+		expect(kinds(policies, anchors(), observed)).toEqual(['autofocus:onStart'])
+
+		const advanced = sequencerAnchorAdvanced(anchors(), 'autofocus', observed)
+
+		expect(kinds(policies, advanced, observation({ instant: START + 60_000 }))).toEqual([])
+	})
+
+	test('autofocuses when the selected frame needs another filter than the installed one', () => {
+		const policies = { autofocus: autofocus({ onFilterChange: true }), dither: dither({ afterFilterChange: true }) }
+
+		expect(kinds(policies, anchors(), observation({ filter: 'Ha', installedFilter: 'L' }))).toEqual(['autofocus:filterChange', 'dither:filterChange'])
+		expect(kinds(policies, anchors(), observation({ filter: 'L', installedFilter: 'L' }))).toEqual([])
+	})
+
+	test('counts frames per accepted sky frame and fires the count conditions on the declared spacing', () => {
+		const policies = { autofocus: autofocus({ everyFrames: 3 }), dither: dither({ everyFrames: 2 }) }
+		let state = anchors()
+
+		expect(kinds(policies, state, observation())).toEqual([])
+
+		state = sequencerFrameCounted(state, 'LIGHT')
+		state = sequencerFrameCounted(state, 'DARK')
+
+		expect(state.dither.frames).toBe(1)
+		expect(kinds(policies, state, observation())).toEqual([])
+
+		state = sequencerFrameCounted(state, 'LIGHT')
+
+		expect(kinds(policies, state, observation())).toEqual(['dither:frames'])
+
+		state = sequencerFrameCounted(state, 'LIGHT')
+
+		expect(kinds(policies, state, observation())).toEqual(['autofocus:frames', 'dither:frames'])
+	})
+
+	test('measures elapsed time from the start of the session while the trigger never ran', () => {
+		const policies = { dither: dither({ everyTime: 300 }) }
+
+		expect(kinds(policies, anchors(), observation({ instant: START + 299_000 }))).toEqual([])
+		expect(kinds(policies, anchors(), observation({ instant: START + 300_000 }))).toEqual(['dither:elapsed'])
+	})
+
+	test('measures elapsed time from the last run once it happened', () => {
+		const policies = { dither: dither({ everyTime: 300 }) }
+		const state = sequencerAnchorAdvanced(anchors(), 'dither', observation({ instant: START + 300_000 }))
+
+		expect(kinds(policies, state, observation({ instant: START + 599_000 }))).toEqual([])
+		expect(kinds(policies, state, observation({ instant: START + 600_000 }))).toEqual(['dither:elapsed'])
+	})
+
+	test('treats zero as a disabled numeric condition', () => {
+		const policies = { autofocus: autofocus({ everyFrames: 0, everyTime: 0, temperatureChange: 0 }), dither: dither({ everyFrames: 0, everyTime: 0 }) }
+		let state = anchors()
+
+		for (let i = 0; i < 50; i++) state = sequencerFrameCounted(state, 'LIGHT')
+
+		expect(kinds(policies, state, observation({ instant: START + 86_400_000, temperature: 40 }))).toEqual([])
+	})
+
+	test('autofocuses on an absolute temperature change in either direction', () => {
+		const policies = { autofocus: autofocus({ temperatureChange: 2 }) }
+		const state = sequencerAnchorAdvanced(anchors(), 'autofocus', observation({ temperature: -5 }))
+		const later = START + 3_600_000
+
+		expect(kinds(policies, state, observation({ instant: later, temperature: -3.9 }))).toEqual([])
+		expect(kinds(policies, state, observation({ instant: later, temperature: -3 }))).toEqual(['autofocus:temperature'])
+		expect(kinds(policies, state, observation({ instant: later, temperature: -7 }))).toEqual(['autofocus:temperature'])
+	})
+
+	test('never measures a temperature change without a reference on both sides', () => {
+		const policies = { autofocus: autofocus({ temperatureChange: 2 }) }
+		const withoutReference = sequencerAnchorAdvanced(anchors(), 'autofocus', observation())
+		const withReference = sequencerAnchorAdvanced(anchors(), 'autofocus', observation({ temperature: -5 }))
+
+		expect(kinds(policies, withoutReference, observation({ instant: START + 1000, temperature: 20 }))).toEqual([])
+		expect(kinds(policies, withReference, observation({ instant: START + 1000 }))).toEqual([])
+	})
+
+	test('suppresses an autofocus inside the minimum spacing without advancing the anchor', () => {
+		const policies = { autofocus: autofocus({ temperatureChange: 1, minimumTimeBetweenRuns: 600 }) }
+		const state = sequencerAnchorAdvanced(anchors(), 'autofocus', observation({ temperature: -5 }))
+
+		expect(kinds(policies, state, observation({ instant: START + 599_000, temperature: -9 }))).toEqual([])
+		expect(state.autofocus.at).toBe(START)
+		expect(kinds(policies, state, observation({ instant: START + 600_000, temperature: -9 }))).toEqual(['autofocus:temperature'])
+	})
+
+	test('never applies the minimum spacing to the first run of the session', () => {
+		const policies = { autofocus: autofocus({ onStart: true, minimumTimeBetweenRuns: 3600 }) }
+
+		expect(kinds(policies, anchors(), observation())).toEqual(['autofocus:onStart'])
+	})
+
+	test('dithers on the frame after a flip instead of treating the movement as a dither', () => {
+		const policies = { meridianFlip: meridianFlip(), dither: dither({ afterMeridianFlip: true, everyFrames: 5 }) }
+		const observed = observation({ hourAngle: 0.5, pierSide: 'WEST', preFlipPierSide: 'WEST' })
+
+		expect(kinds(policies, anchors(), observed)).toEqual(['meridianFlip:hourAngle', 'dither:afterMeridianFlip'])
+	})
+
+	test('advances only the anchor of the trigger that ran', () => {
+		const state = sequencerFrameCounted(sequencerFrameCounted(anchors(), 'LIGHT'), 'LIGHT')
+		const advanced = sequencerAnchorAdvanced(state, 'dither', observation({ instant: START + 5000, temperature: -10, filter: 'Ha' }))
+
+		expect(advanced.dither).toEqual({ at: START + 5000, frames: 0, temperature: -10, filter: 'Ha' })
+		expect(advanced.autofocus).toEqual(state.autofocus)
+		expect(advanced.driftCheck).toEqual(state.driftCheck)
+		expect(advanced.sessionStart).toBe(START)
+		expect(state.dither.frames).toBe(2)
+	})
+
+	test('reports the first condition that held in the documented order', () => {
+		const policies = { autofocus: autofocus({ onStart: true, onFilterChange: true, everyFrames: 1 }) }
+		let state = anchors()
+
+		for (let i = 0; i < 3; i++) state = sequencerFrameCounted(state, 'LIGHT')
+
+		expect(kinds(policies, state, observation({ filter: 'Ha', installedFilter: 'L' }))).toEqual(['autofocus:onStart'])
+
+		const advanced = sequencerAnchorAdvanced(state, 'autofocus', observation({ filter: 'L' }))
+		const counted = sequencerFrameCounted(advanced, 'LIGHT')
+
+		expect(kinds(policies, counted, observation({ filter: 'Ha', installedFilter: 'L' }))).toEqual(['autofocus:filterChange'])
+	})
+})

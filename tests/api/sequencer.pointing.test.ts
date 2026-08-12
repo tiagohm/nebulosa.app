@@ -5,6 +5,7 @@ import type { SequencerCenter, SequencerSlew } from 'src/api/sequencer.compiler'
 import { sequencerCenterHandler, sequencerSlewHandler } from 'src/api/sequencer.pointing'
 import type { SequencerCenteringServices } from 'src/api/sequencer.pointing'
 import type { SequencerActionContext, SequencerAuxiliaryTarget } from 'src/api/sequencer.registry'
+import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason } from '#/orchestration'
 import type { SequencerDevices } from '#/sequencer'
@@ -65,7 +66,7 @@ function actionContext(devices: Record<string, { readonly device: unknown }>, au
 		progress: () => {},
 		artifact: () => {},
 		auxiliary: () => (auxiliary ?? defaultAuxiliary)(++ordinal),
-		checkpoint: { containers: [], attempts: {}, completed: [], capture: {}, definitionRevision: 1, handlerVersions: {} },
+		checkpoint: { containers: [], attempts: {}, completed: [], capture: {}, anchors: sequencerInitialTriggerAnchors(1_000_000), definitionRevision: 1, handlerVersions: {} },
 	}
 }
 

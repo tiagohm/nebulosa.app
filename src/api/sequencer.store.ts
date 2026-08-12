@@ -1,5 +1,6 @@
 import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEvent, SequencerEventDraft, SequencerFailure, SequencerSession, SequencerSessionState } from '#/sequencer.state'
 import { SEQUENCER_INITIAL_CAPTURE_PROGRESS } from './sequencer.progress'
+import { sequencerInitialTriggerAnchors } from './sequencer.trigger'
 
 // Persistence boundary of the sequencer: sessions, checkpoints, events, and artifacts.
 //
@@ -125,6 +126,7 @@ export class InMemorySequencerStore implements SequencerStore {
 				attempts: {},
 				completed: [],
 				capture: SEQUENCER_INITIAL_CAPTURE_PROGRESS,
+				anchors: sequencerInitialTriggerAnchors(timestamp),
 				definitionRevision: draft.definitionRevision,
 				handlerVersions: { ...draft.handlerVersions },
 			},

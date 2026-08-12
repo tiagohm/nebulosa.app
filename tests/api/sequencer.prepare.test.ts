@@ -332,6 +332,20 @@ describe('frame preparation', () => {
 		expect(field.angle.value).toBeCloseTo(30, 12)
 	})
 
+	test('measures the field angle by the shortest arc across the origin', async () => {
+		const commands: Command[] = []
+		const inside = await runFramePreparation(prepareServices(commands), actionContext({ camera: { device: camera() }, rotator: { device: rotator(359.5) }, mount: { device: mount(true) } }), preparation({ rotator: rotatorPolicy({ angle: deg(0.5) }) }))
+
+		expect(inside).toMatchObject({ type: 'completed', value: { commanded: [] } })
+		expect(commands).toBeEmpty()
+
+		const outside: Command[] = []
+		const result = await runFramePreparation(prepareServices(outside), actionContext({ camera: { device: camera() }, rotator: { device: rotator(359.5) }, mount: { device: mount(true) } }), preparation({ rotator: rotatorPolicy({ angle: deg(3) }) }))
+
+		expect(result).toMatchObject({ type: 'completed', value: { commanded: ['rotator'] } })
+		expect(outside).toHaveLength(1)
+	})
+
 	test('waits for the sensor to enter the tolerance and reports the temperature it reached', async () => {
 		const commands: Command[] = []
 		const sensor = camera(-4)

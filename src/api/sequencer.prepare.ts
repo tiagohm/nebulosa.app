@@ -155,6 +155,17 @@ function panelBrightness(panel: Omit<SequencerFlatPanel, 'enabled'>, wheel: Whee
 	return panel.brightness
 }
 
+// Shortest angular distance between two rotator angles, in degrees within 0..180.
+//
+// A rotator angle is circular, so the difference of the two numbers is not the distance between them: 359.5°
+// and 0.5° are one degree apart mechanically and 359 degrees apart arithmetically. Compared without the wrap,
+// a field already inside tolerance reads as a whole turn away, and the preparation commands a full rotation
+// plus its settle before every frame that lands near the origin.
+function angularDistance(from: number, to: number): number {
+	const delta = Math.abs(from - to) % 360
+	return delta > 180 ? 360 - delta : delta
+}
+
 // Derives the physical context of one frame from its type and the declared policies.
 //
 // The frame type decides the cover, the panel and the tracking; the filter, the angle and the temperature are
@@ -275,7 +286,7 @@ export async function runFramePreparation(services: SequencerPreparationServices
 	if (rotator !== undefined && required.angle !== undefined && preparation.rotator !== undefined) {
 		const target = toDeg(required.angle)
 
-		if (Math.abs(rotator.angle.value - target) > toDeg(preparation.rotator.tolerance)) {
+		if (angularDistance(rotator.angle.value, target) > toDeg(preparation.rotator.tolerance)) {
 			context.progress({ detail: 'rotating the field' })
 
 			const rotated = await services.rotatorCommander.moveTo(context.scope, rotator, target)

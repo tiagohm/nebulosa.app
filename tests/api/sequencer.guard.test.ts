@@ -17,7 +17,7 @@ function boundary(overrides?: Partial<SequencerFlipBoundary>): SequencerFlipBoun
 }
 
 function observation(overrides?: Partial<SequencerGuardObservation>): SequencerGuardObservation {
-	return { hourAngle: hourAngleOf(-600), exposureTime: 300, now: 1_000_000, startsAt: 1_000_000, ...overrides }
+	return { hourAngle: hourAngleOf(-600), exposureTime: 300, now: 1_000_000, startsAt: 1_000_000, flipPending: true, ...overrides }
 }
 
 function actionContext(now: () => number, signal = new AbortController().signal): SequencerActionContext {
@@ -78,6 +78,14 @@ describe('pre-exposure guard', () => {
 
 		expect(decision).toMatchObject({ type: 'refused' })
 		expect(decision.type === 'refused' && decision.wait).toBeCloseTo(150, 9)
+	})
+
+	test('admits every exposure once the flip is no longer pending', () => {
+		const decision = sequencerPreExposureGuard(boundary(), observation({ hourAngle: hourAngleOf(300), flipPending: false }))
+
+		expect(decision.type).toBe('allowed')
+		expect(decision.projectedHourAngle).toBeCloseTo(hourAngleOf(630), 12)
+		expect(sequencerPreExposureGuard(boundary(), observation({ hourAngle: hourAngleOf(300) })).type).toBe('refused')
 	})
 
 	test('reports no wait for a refusal made inside an already open window', () => {

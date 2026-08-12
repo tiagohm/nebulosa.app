@@ -62,6 +62,11 @@ export interface SequencerGuardObservation {
 	// Earliest instant the exposure may start, in epoch milliseconds, which is the cadence boundary of the
 	// safe point. A boundary already in the past adds nothing to the projection.
 	readonly startsAt: number
+	// Whether the flip this boundary protects is still pending, which is the mount reporting the pre-flip
+	// pier side. It is the same condition the trigger evaluator decides the flip on, and it has to be the
+	// same one here: the hour angle only grows, so past the boundary a guard that does not ask this refuses
+	// every exposure of the rest of the night for a flip that already happened and cannot happen again.
+	readonly flipPending: boolean
 }
 
 // What the guard decided about the selected frame.
@@ -99,10 +104,16 @@ export function sequencerFlipWindowDelay(boundary: SequencerFlipBoundary, hourAn
 // The projection assumes the mount keeps tracking at the sidereal rate for the whole exposure, which is what
 // the hour angle of a tracked target does by definition. A session that stops tracking mid-exposure is not
 // taking the frame the guard admitted either way.
+//
+// A boundary with no flip left ahead of it admits everything. The angle it protects is the last one an
+// exposure may begin at before the crossing, so once the mount has crossed there is nothing left to reserve
+// and the projection is only a number: the target keeps setting, the hour angle never comes back under the
+// boundary, and a guard that still refused would refuse the whole rest of the night for a flip that already
+// happened.
 export function sequencerPreExposureGuard(boundary: SequencerFlipBoundary, observation: SequencerGuardObservation): SequencerGuardDecision {
 	const projected = projectedHourAngle(boundary, observation)
 
-	if (projected <= boundary.maximumHourAngle) return { type: 'allowed', projectedHourAngle: projected }
+	if (!observation.flipPending || projected <= boundary.maximumHourAngle) return { type: 'allowed', projectedHourAngle: projected }
 
 	return { type: 'refused', projectedHourAngle: projected, wait: sequencerFlipWindowDelay(boundary, observation.hourAngle) }
 }

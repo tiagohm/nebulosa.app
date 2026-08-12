@@ -261,10 +261,14 @@ export async function runCentering(services: SequencerCenteringServices, context
 
 		if (separation <= configuration.tolerance) return { type: 'completed', value: outcome }
 
-		// The last attempt has no correction left to verify, so correcting here would end the action reporting a
-		// field nothing measured. Reporting the miss instead lets the retry policy decide, with the separation
-		// that was actually observed.
-		if (attempt === configuration.maximumAttempts) {
+		// The last attempt of a verifying centering has no solve left to prove the correction with, so
+		// correcting here would end the action reporting a field nothing measured. Reporting the miss instead
+		// lets the retry policy decide, with the separation that was actually observed.
+		//
+		// A centering that does not verify makes the opposite trade on purpose: the correction is what ends it,
+		// and the outcome says so with `verified: false`. Stopping it here would leave `maximumAttempts: 1`
+		// unable to correct at all, failing every time on a field it was one slew away from fixing.
+		if (attempt === configuration.maximumAttempts && configuration.finalSolve) {
 			return { type: 'retryableFailure', reason: 'unexpectedState', detail: `centering stopped ${(separation * RAD2DEG).toFixed(4)}° from the target after ${attempt} attempts` }
 		}
 

@@ -223,6 +223,15 @@ describe('centering block', () => {
 		expect(commands.map((command) => command.name)).toEqual(['capture', 'solve', 'sync', 'goTo'])
 	})
 
+	test('corrects on a single attempt when no final solve was asked for', async () => {
+		const commands: Command[] = []
+		const handler = sequencerCenterHandler(centeringServices(commands, [solution(1.41, -0.09)]))
+		const result = await handler.execute(actionContext({ mount: { device: mount() }, camera: { device: camera() } }), centerConfiguration({ finalSolve: false, maximumAttempts: 1 }))
+
+		expect(result).toMatchObject({ type: 'completed', value: { attempts: 1, verified: false, synced: true } })
+		expect(commands.map((command) => command.name)).toEqual(['capture', 'solve', 'sync', 'goTo'])
+	})
+
 	test('reports the observed miss when the attempts run out instead of correcting blindly', async () => {
 		const commands: Command[] = []
 		const handler = sequencerCenterHandler(centeringServices(commands, [solution(1.5, -0.09)]))

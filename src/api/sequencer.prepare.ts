@@ -69,8 +69,8 @@ export interface SequencerFrameContext {
 //
 // A dimension only exists when its role does: a definition without a cover generates no cover reconciliation
 // rather than failing on a device it never had. The panel decides more than its own dimension, because a flat
-// is only a panel flat when a panel is there to light it; a flat without one collects sky and must not be
-// taken behind a closed cover.
+// is only a panel flat when a panel is there to light it; a flat without one collects sky and requires the
+// cover open exactly like a light does.
 export interface SequencerFrameDevices {
 	// Wheel the session commands, used to resolve the per-filter brightness table.
 	readonly wheel?: Wheel
@@ -180,8 +180,13 @@ export function sequencerFrameContext(preparation: SequencerFramePreparation, de
 	// A flat is a panel flat only when the session carries a panel to light it.
 	const lit = group.frameType === 'FLAT' && flatPanel !== undefined && devices.flatPanel
 
+	// Frames whose light comes from the sky, which is the light and the flat no panel lights. The cover has to
+	// be open for both: a sky flat taken behind the cover the darks closed is a dark with a flat's name on it,
+	// and leaving the cover where it is only looks harmless when the frame before it was another flat.
+	const sky = light || (group.frameType === 'FLAT' && !lit)
+
 	return {
-		cover: !devices.cover || cover === undefined ? undefined : lit || (dark && cover.closeForDarkFrames) ? 'closed' : light && cover.openBeforeCapture ? 'open' : undefined,
+		cover: !devices.cover || cover === undefined ? undefined : lit || (dark && cover.closeForDarkFrames) ? 'closed' : sky && cover.openBeforeCapture ? 'open' : undefined,
 		panel: !devices.flatPanel || flatPanel === undefined ? undefined : { lit, brightness: lit ? panelBrightness(flatPanel, devices.wheel, group.filter) : 0 },
 		tracking: light ? true : undefined,
 		filter: group.filter,

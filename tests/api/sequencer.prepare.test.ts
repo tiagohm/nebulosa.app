@@ -207,8 +207,25 @@ describe('frame context', () => {
 	test('takes a flat as a sky flat when no panel lights it', () => {
 		const context = sequencerFrameContext(preparation({ group: group({ frameType: 'FLAT' }), cover: coverPolicy(), flatPanel: panelPolicy() }), { cover: true, flatPanel: false })
 
-		expect(context.cover).toBeUndefined()
+		expect(context.cover).toBe('open')
 		expect(context.panel).toBeUndefined()
+	})
+
+	test('opens the cover a preceding dark closed before a sky flat', async () => {
+		const commands: Command[] = []
+		const shutter = cover(true)
+		const request = preparation({ group: group({ frameType: 'FLAT' }), cover: coverPolicy(), flatPanel: panelPolicy() })
+		const result = await runFramePreparation(prepareServices(commands), actionContext({ camera: { device: camera() }, cover: { device: shutter }, mount: { device: mount(true) } }), request)
+
+		expect(result).toMatchObject({ type: 'completed', value: { commanded: ['cover'] } })
+		expect(commands).toEqual([{ name: 'unpark', detail: { timeout: 60000 } }])
+		expect(shutter.parked).toBe(false)
+	})
+
+	test('leaves the cover alone for a sky flat the policy never opens it for', () => {
+		const context = sequencerFrameContext(preparation({ group: group({ frameType: 'FLAT' }), cover: coverPolicy({ openBeforeCapture: false }), flatPanel: panelPolicy() }), { cover: true, flatPanel: false })
+
+		expect(context.cover).toBeUndefined()
 	})
 
 	test('lights a panel flat at the brightness declared for its own filter', () => {

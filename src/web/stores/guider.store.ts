@@ -19,7 +19,8 @@ export interface GuiderState {
 	readonly connection: Writable<Omit<GuiderRemoteConnect, 'mode'> & Omit<GuiderLocalConnect, 'mode'> & { mode: GuiderClientMode }>
 	camera?: DeviceState<Camera>
 	guideOutput?: DeviceState<GuideOutput>
-	readonly loop: GuiderLoopStart
+	// The panel always edits an exposure, so the optional capture of the request is required here.
+	readonly loop: Required<GuiderLoopStart>
 	readonly event: GuiderEvent
 	index: number
 	connecting: boolean

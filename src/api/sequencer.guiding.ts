@@ -40,7 +40,7 @@ export interface SequencerGuidingServices {
 const SEQUENCER_GUIDING_VERSION = 1
 
 // Configuration of the dither block, which is the feature without the flag that enabled it.
-type SequencerDitherTrigger = Omit<SequencerDither, 'enabled'>
+export type SequencerDitherTrigger = Omit<SequencerDither, 'enabled'>
 
 // Dither block: displaces the guide star and returns only once the guider has settled again.
 export function sequencerDitherHandler(services: SequencerGuidingServices): SequencerActionHandler<SequencerDitherTrigger, SequencerDitherOutcome> {

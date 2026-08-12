@@ -561,19 +561,26 @@ class GuiderSession {
 	}
 
 	// Starts looping exposures and resolves once the guider reports it is looping.
+	//
+	// A request without `capture` loops with the exposure the session is already using, which is what a caller
+	// that only wants the corrections stopped asks for: reconfiguring the guide camera to restart it would
+	// change how the star is measured for a reason that has nothing to do with the star.
 	async loop(request: GuiderLoopStart, options: GuiderCommandOptions): Promise<OperationResult<undefined>> {
-		if (this.target.camera && this.#client instanceof GuiderClient) {
-			try {
-				this.#configure(this.target.camera, this.#client, request.capture)
-			} catch (error) {
-				// connect() already attached the client to the camera manager, so a configuration that fails
-				// has to detach it here rather than leave it subscribed to a device the session gives back.
-				this.#detach()
-				return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
+		if (request.capture !== undefined) {
+			if (this.target.camera && this.#client instanceof GuiderClient) {
+				try {
+					this.#configure(this.target.camera, this.#client, request.capture)
+				} catch (error) {
+					// connect() already attached the client to the camera manager, so a configuration that fails
+					// has to detach it here rather than leave it subscribed to a device the session gives back.
+					this.#detach()
+					return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
+				}
 			}
+
+			Object.assign(this.#capture, structuredClone(request.capture))
 		}
 
-		Object.assign(this.#capture, structuredClone(request.capture))
 		Object.assign(this.#settle, request.settle)
 
 		return await this.#serialize(

@@ -25,7 +25,10 @@ export type GuiderConnect = GuiderRemoteConnect | GuiderLocalConnect
 export type GuiderConnected = OperationResult<GuiderSessionInfo>
 
 export interface GuiderLoopStart {
-	readonly capture: CameraCaptureStart
+	// Exposure the guide camera loops with. Absent when the caller only wants the corrections stopped, which
+	// keeps the exposure the session is already looping with instead of restarting it with another one.
+	readonly capture?: CameraCaptureStart
+	// Settle policy installed on the session, used by every guide, recalibration and dither that follows.
 	readonly settle: PHD2Settle
 }
 

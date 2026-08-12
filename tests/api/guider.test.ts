@@ -392,6 +392,25 @@ describe('remote session', () => {
 		expect(commander.looping(id)).toBeTrue()
 	})
 
+	test('installs the settle of a loop that carries no exposure of its own', async () => {
+		const id = await connected()
+
+		const looped = commander.loop(id, { settle: { pixels: 0.4, time: 7, timeout: 90 } })
+
+		await waitUntil(() => server.received('loop'))
+		server.push({ Event: 'LoopingExposures', Frame: 1, StarMass: 100, SNR: 20, HFD: 3 })
+		expect((await looped).ok).toBeTrue()
+
+		const guided = commander.startGuiding(id)
+
+		await waitUntil(() => server.received('guide'))
+		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+
+		expect((await guided).ok).toBeTrue()
+		expect(server.commands.find((command) => command.method === 'guide')?.params).toMatchObject({ recalibrate: false, settle: { pixels: 0.4, time: 7, timeout: 90 } })
+	})
+
 	test('fails a refused command instead of waiting for a state the guider will never reach', async () => {
 		const id = await connected()
 		server.refused.add('loop')

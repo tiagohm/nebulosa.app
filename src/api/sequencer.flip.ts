@@ -110,8 +110,14 @@ export async function runMeridianFlip(services: SequencerMeridianFlipServices, c
 	// worth. Demanding the verification and not getting it is a failure of the flip and not of the mount: the
 	// session cannot tell a crossing apart from a slew that went back to the same side, and every frame after
 	// it would be exposed on an unknown side of the pier.
+	//
+	// It is terminal for the same reason a failed recovery is: the movement was commanded and completed, so the
+	// mount may well be physically across, and what is missing is only the evidence. A retry would command the
+	// crossing again and take a mount that did cross back to the side the flip existed to leave, with the hour
+	// angle already past the meridian. The session stops instead, on a side it cannot name but has not made
+	// worse.
 	if (configuration.verifyPierSide && !flipped.value.pierSideVerified) {
-		return { type: 'retryableFailure', reason: 'unexpectedState', detail: `the mount did not confirm a pier side change, reporting ${flipped.value.pierSide}` }
+		return { type: 'fatalFailure', reason: 'unexpectedState', detail: `the mount did not confirm a pier side change, reporting ${flipped.value.pierSide}` }
 	}
 
 	const settled = await sequencerSettle(context, configuration.settle)

@@ -182,12 +182,13 @@ describe('meridian flip block', () => {
 		expect(commands).toEqual([{ name: 'flip', detail: { target: { type: 'JNOW', JNOW: { x: 1.41, y: -0.1 } }, options: { timeout: 600000 } } }])
 	})
 
-	test('refuses a crossing it was told to verify and could not', async () => {
+	test('refuses a crossing it was told to verify and could not, without commanding it again', async () => {
 		const commands: Command[] = []
 		const handler = sequencerMeridianFlipHandler(flipServices(commands, { pierSideVerified: false }))
 		const result = await handler.execute(actionContext({ mount: { device: mount() } }), flipConfiguration())
 
-		expect(result).toEqual({ type: 'retryableFailure', reason: 'unexpectedState', detail: 'the mount did not confirm a pier side change, reporting EAST' })
+		expect(result).toEqual({ type: 'fatalFailure', reason: 'unexpectedState', detail: 'the mount did not confirm a pier side change, reporting EAST' })
+		expect(commands.filter((command) => command.name === 'flip')).toHaveLength(1)
 	})
 
 	test('accepts an unverified crossing when the definition does not demand the evidence', async () => {

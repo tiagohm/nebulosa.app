@@ -4,6 +4,7 @@ import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { AutoFocusStart } from '#/autofocus'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import { successfulOperationResult } from '#/orchestration'
+import type { OperationResult } from '#/orchestration'
 import type { SequencerAutofocus, SequencerAuxiliaryCapture, SequencerStarDetection } from '#/sequencer'
 import type { AutoFocusRunner } from './autofocus.runner'
 import type { FocuserCommander } from './focuser.commander'
@@ -191,16 +192,16 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 	finish(handle.id, result.ok ? result.value.message : (result.error ?? result.reason))
 
 	if (!result.ok) {
-		await restoreFrameFilter(services, context, transition)
-		return sequencerActionFailure(result, 'the autofocus search failed')
+		const restored = await restoreFrameFilter(services, context, transition)
+		return strandedFrameFilter(sequencerActionFailure(result, 'the autofocus search failed'), restored, transition)
 	}
 
 	// The search reports a curve it could not fit as a successful operation, because no device misbehaved. For
 	// the session it is still a run that produced no focus, and treating it as completed would advance the
 	// anchor and silence the condition that asked for the run until it came back on its own.
 	if (result.value.outcome !== 'focused') {
-		await restoreFrameFilter(services, context, transition)
-		return { type: 'retryableFailure', reason: 'unexpectedState', detail: `the autofocus found no focus: ${result.value.message}` }
+		const restored = await restoreFrameFilter(services, context, transition)
+		return strandedFrameFilter({ type: 'retryableFailure', reason: 'unexpectedState', detail: `the autofocus found no focus: ${result.value.message}` }, restored, transition)
 	}
 
 	const measured = result.value.position
@@ -211,7 +212,7 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 	if (transition !== undefined) {
 		const restored = await restoreFrameFilter(services, context, transition)
 
-		if (!restored.ok) return sequencerActionFailure(restored, 'the wheel did not return to the frame filter')
+		if (!restored.ok) return strandedFrameFilter(sequencerActionFailure(restored, 'the wheel did not return to the frame filter'), restored, transition)
 
 		const shift = sequencerFocusOffsetShift(transition.wheel, configuration.filterOffsets, transition.focusSlot, transition.installedSlot)
 
@@ -245,14 +246,29 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 // derives the focus shift from the slot the wheel is standing at, and under a `continue` policy the science
 // frames that follow would be taken with an offset applied on top of a focus that never moved.
 //
-// The result is returned so the successful path can report a restore that failed. A failing exit ignores it:
-// the failure of the search is the one that explains the run.
+// The result is returned because every exit has to know whether the wheel came back, and it is the caller
+// that decides what a wheel left behind means for the failure it was already reporting.
 async function restoreFrameFilter(services: SequencerAutofocusServices, context: SequencerActionContext, transition: { readonly wheel: Wheel; readonly installedSlot: number } | undefined) {
 	if (transition === undefined) return successfulOperationResult(undefined)
 
 	context.progress({ detail: 'restoring the frame filter' })
 
 	return await services.wheelCommander.moveTo(context.scope, transition.wheel, transition.installedSlot)
+}
+
+// Escalates a failing exit to a terminal one when the restore left the wheel on the autofocus filter.
+//
+// Nothing durable records the slot the block came from, so a retry would read the wheel as it stands and
+// compute no transition at all: it would restore nothing, and the frames after it would be exposed through the
+// search filter while the focus offsets are measured against the one the session believes is installed.
+// Offering that retry is worse than stopping, so it is refused. The failure is returned untouched when the
+// wheel is standing where it belongs — a refused move that changed nothing — or when it is already fatal,
+// since an abort explains the run better than the wheel does.
+function strandedFrameFilter<T>(failure: SequencerActionResult<T>, restored: OperationResult<unknown>, transition: { readonly wheel: Wheel; readonly installedSlot: number } | undefined): SequencerActionResult<T> {
+	if (restored.ok || transition === undefined || transition.wheel.position === transition.installedSlot) return failure
+	if (failure.type === 'fatalFailure') return failure
+
+	return { type: 'fatalFailure', reason: restored.reason, detail: `the wheel did not return to the frame filter${restored.error === undefined ? '' : `: ${restored.error}`}` }
 }
 
 // Slot the search is performed through, or undefined when the recipe names no filter of its own or names one

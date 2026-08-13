@@ -266,6 +266,30 @@ describe('autofocus block', () => {
 		expect(result).toMatchObject({ type: 'retryableFailure', reason: 'timeout' })
 	})
 
+	test('ends the session when the wheel does not come back from a failed search', async () => {
+		const commands: Command[] = []
+		let moves = 0
+		const services: SequencerAutofocusServices = {
+			...focusServices(commands, failedOperationResult('timeout', 'boom')),
+			wheelCommander: {
+				moveTo: (_scope: unknown, device: Wheel, slot: number) => {
+					commands.push({ name: 'wheelMoveTo', detail: slot })
+					if (++moves > 1) return Promise.resolve(failedOperationResult('alert', 'the wheel jammed'))
+					device.position = slot
+					return Promise.resolve(successfulOperationResult(undefined))
+				},
+			} as unknown as SequencerAutofocusServices['wheelCommander'],
+		}
+		const handler = sequencerAutofocusHandler(services)
+		const device = wheel(['L', 'R', 'G', 'B'], 3)
+		const configuration = autofocusConfiguration({ capture: { ...autofocusConfiguration().capture, filter: { type: 'name', name: 'L' } } })
+		const result = await handler.execute(actionContext({ camera: { device: camera() }, focuser: { device: focuser(12000) }, wheel: { device } }), configuration)
+
+		expect(commands.map((command) => command.name)).toEqual(['wheelMoveTo', 'autofocus', 'wheelMoveTo'])
+		expect(device.position).toBe(0)
+		expect(result).toEqual({ type: 'fatalFailure', reason: 'alert', detail: 'the wheel did not return to the frame filter: the wheel jammed' })
+	})
+
 	test('maps a failed search to a retry and a stopped session to a terminal failure', async () => {
 		const failing = (reason: 'timeout' | 'aborted') => sequencerAutofocusHandler(focusServices([], failedOperationResult(reason, 'boom')))
 		const context = () => actionContext({ camera: { device: camera() }, focuser: { device: focuser(12000) } })

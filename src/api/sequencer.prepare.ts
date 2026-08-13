@@ -4,7 +4,7 @@ import { toDeg } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
-import type { SequencerCooling, SequencerCover, SequencerFilterFocusOffset, SequencerFilterReference, SequencerFlatPanel, SequencerRotator } from '#/sequencer'
+import type { SequencerCooling, SequencerCover, SequencerFilterFocusOffset, SequencerFilterReference, SequencerFlatPanel, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerPlanFrameGroup } from '#/sequencer.plan'
 import type { CoverCommander } from './cover.commander'
 import type { FlatPanelCommander } from './flatpanel.commander'
@@ -55,7 +55,8 @@ export interface SequencerFrameContext {
 	readonly cover?: 'open' | 'closed'
 	// Whether the panel must be lit, and at which brightness in the panel's own intensity units when it must.
 	readonly panel?: { readonly lit: boolean; readonly brightness: number }
-	// Whether the mount must be tracking, required by light frames and indifferent for every other type.
+	// Whether the mount must be tracking, required by a light frame of a target that declared tracking and
+	// indifferent for every other type and for a target that declared none.
 	readonly tracking?: boolean
 	// Filter the frame is exposed through, absent when the frame names none.
 	readonly filter?: SequencerFilterReference
@@ -93,6 +94,11 @@ export interface SequencerFramePreparation {
 	// Thermal policy, absent when the definition declares no cooling feature. The preparation only ever waits
 	// on it; commanding the setpoint belongs to the startup pipeline.
 	readonly cooling?: Omit<SequencerCooling, 'enabled'>
+	// Tracking policy of the target, absent when the definition does not track. The preparation only ever puts
+	// tracking back on for a light frame, and only a target that declared it may have it put back: a session
+	// whose tracking is off by definition — a fixed camera, a mount driven from outside the sequencer — must
+	// not have the mount started underneath it before every light.
+	readonly tracking?: Omit<SequencerTargetTracking, 'enabled'>
 	// Focuser offsets per filter, in device steps, applied when the reconciliation moves the wheel.
 	readonly filterOffsets: readonly SequencerFilterFocusOffset[]
 }
@@ -168,12 +174,13 @@ function angularDistance(from: number, to: number): number {
 
 // Derives the physical context of one frame from its type and the declared policies.
 //
-// The frame type decides the cover, the panel and the tracking; the filter, the angle and the temperature are
-// required by every type alike. Nothing here reads the `calibration` block: the selected frame is the only
+// The frame type decides the cover and the panel, and together with the tracking policy it decides the
+// tracking; the filter, the angle and the temperature are required by every type alike. Nothing here reads
+// the `calibration` block: the selected frame is the only
 // source of truth, so a dark written by hand into the plan does not change meaning with a policy block it
 // never came from.
 export function sequencerFrameContext(preparation: SequencerFramePreparation, devices: SequencerFrameDevices): SequencerFrameContext {
-	const { group, cover, flatPanel, rotator, cooling } = preparation
+	const { group, cover, flatPanel, rotator, cooling, tracking } = preparation
 	const dark = group.frameType === 'DARK' || group.frameType === 'BIAS'
 	const light = group.frameType === 'LIGHT'
 
@@ -188,7 +195,7 @@ export function sequencerFrameContext(preparation: SequencerFramePreparation, de
 	return {
 		cover: !devices.cover || cover === undefined ? undefined : lit || (dark && cover.closeForDarkFrames) ? 'closed' : sky && cover.openBeforeCapture ? 'open' : undefined,
 		panel: !devices.flatPanel || flatPanel === undefined ? undefined : { lit, brightness: lit ? panelBrightness(flatPanel, devices.wheel, group.filter) : 0 },
-		tracking: light ? true : undefined,
+		tracking: light && tracking !== undefined ? true : undefined,
 		filter: group.filter,
 		angle: rotator?.angle,
 		temperature: cooling === undefined || !cooling.waitForTarget ? undefined : cooling.temperature,

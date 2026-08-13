@@ -7,7 +7,7 @@ import type { SequencerActionContext } from 'src/api/sequencer.registry'
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason } from '#/orchestration'
-import type { SequencerCooling, SequencerCover, SequencerFlatPanel, SequencerRotator } from '#/sequencer'
+import type { SequencerCooling, SequencerCover, SequencerFlatPanel, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerPlanFrameGroup } from '#/sequencer.plan'
 import { camera as cameraSettings, retry } from './sequencer.fixture'
 
@@ -72,6 +72,10 @@ function coolingPolicy(overrides?: Partial<Omit<SequencerCooling, 'enabled'>>): 
 	return { temperature: -10, tolerance: 1, ramp: 0, waitForTarget: true, timeout: 60, maintainDuringPause: true, maintainDuringSuspension: true, warmTemperature: 15, warmRamp: 0, warmTimeout: 300, turnCoolerOffAfterWarm: false, ...overrides }
 }
 
+function trackingPolicy(overrides?: Partial<Omit<SequencerTargetTracking, 'enabled'>>): Omit<SequencerTargetTracking, 'enabled'> {
+	return { mode: 'SIDEREAL', retry: retry(), ...overrides }
+}
+
 function group(overrides?: Partial<SequencerPlanFrameGroup>): SequencerPlanFrameGroup {
 	return {
 		id: 'lum',
@@ -94,7 +98,7 @@ function group(overrides?: Partial<SequencerPlanFrameGroup>): SequencerPlanFrame
 }
 
 function preparation(overrides?: Partial<SequencerFramePreparation>): SequencerFramePreparation {
-	return { group: group(), filterOffsets: [], ...overrides }
+	return { group: group(), filterOffsets: [], tracking: trackingPolicy(), ...overrides }
 }
 
 function actionContext(devices: Record<string, { readonly device: unknown }>, now: () => number = () => 1_000_000): SequencerActionContext {
@@ -286,6 +290,16 @@ describe('frame preparation', () => {
 
 		expect(result).toMatchObject({ type: 'completed', value: { commanded: [] } })
 		expect(parked.tracking).toBeFalse()
+	})
+
+	test('leaves the mount alone for a light frame of a target that declares no tracking', async () => {
+		const commands: Command[] = []
+		const stopped = mount(false)
+		const result = await runFramePreparation(prepareServices(commands), actionContext({ camera: { device: camera() }, mount: { device: stopped } }), preparation({ tracking: undefined }))
+
+		expect(result).toMatchObject({ type: 'completed', value: { commanded: [] } })
+		expect(stopped.tracking).toBeFalse()
+		expect(sequencerFrameContext(preparation({ tracking: undefined }), { cover: true, flatPanel: true }).tracking).toBeUndefined()
 	})
 
 	test('carries the focus across a filter change by the difference of the declared offsets', async () => {

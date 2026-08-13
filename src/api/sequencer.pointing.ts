@@ -1,6 +1,6 @@
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
-import { timeNow } from 'nebulosa/src/astronomy/time/time'
+import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
 import { isCamera, isMount, isWheel } from 'nebulosa/src/devices/indi/device'
 import type { Camera, Mount, MountTargetCoordinate, PierSide, Wheel } from 'nebulosa/src/devices/indi/device'
@@ -91,10 +91,16 @@ function auxiliaryExtension(recipe: SequencerAuxiliaryCapture) {
 // target declared in another frame carries its J2000 point as well — the lowering resolves every frame it was
 // given — and a target that somehow carries none is compared against its primary point, which is the closest
 // thing to an answer available and is only ever reached by a coordinate the compiler did not fill in.
-function j2000Of(coordinates: MountTargetCoordinate<Angle>, location: GeographicCoordinate) {
+//
+// `instant` is the epoch the conversion is made for, in milliseconds since the Unix epoch. It matters for
+// every target that is not fixed on the sky: a horizontal coordinate names a different celestial point at
+// every moment, drifting at the sidereal rate, so a conversion made once and reused across the attempts of a
+// loop would measure the field against a point the sky has already carried away — fifteen arcseconds of right
+// ascension for every second between the conversion and the frame.
+function j2000Of(coordinates: MountTargetCoordinate<Angle>, location: GeographicCoordinate, instant: number) {
 	// The UI will always send the field specified by the type.
 	if (coordinates.type === 'J2000') return [coordinates.J2000!.x, coordinates.J2000!.y] as const
-	const time = timeNow(true)
+	const time = timeUnix(instant / 1000, true)
 	time.location = location
 	const info = coordinateInfo(time, location.longitude, coordinates, { equatorialJ2000: true })
 	return info.equatorialJ2000
@@ -281,17 +287,20 @@ export async function runCentering(services: SequencerCenteringServices, context
 
 // Runs the attempts of the centering, with the wheel already standing on the filter the recipe declared.
 async function runCenteringLoop(services: SequencerCenteringServices, context: SequencerActionContext, configuration: SequencerCenter, camera: Camera, mount: Mount): Promise<SequencerActionResult<SequencerCenterOutcome>> {
-	const target = j2000Of(configuration.coordinates, mount.geographicCoordinate)
-
 	let synced = false
 
 	for (let attempt = 1; attempt <= configuration.maximumAttempts; attempt++) {
 		context.progress({ fraction: (attempt - 1) / configuration.maximumAttempts, detail: `centering attempt ${attempt}` })
 
-		const solution = await solveOneFrame(services, context, configuration, camera, mount, attempt)
+		// Epoch of the frame this attempt measures with, taken as the middle of its exposure. Every attempt has
+		// one of its own: an exposure, a solve, a settle and a correction all advance the clock, and a target
+		// that is not fixed on the sky names another celestial point by the time the next frame is taken.
+		const observedAt = context.now() + configuration.capture.exposureTime * 500
+		const solution = await solveOneFrame(services, context, configuration, camera, mount, attempt, observedAt)
 
 		if (solution.type !== 'completed') return solution
 
+		const target = j2000Of(configuration.coordinates, mount.geographicCoordinate, observedAt)
 		const separation = sphericalSeparation(solution.value.rightAscension, solution.value.declination, target[0], target[1])
 		const outcome: SequencerCenterOutcome = { attempts: attempt, separation, rightAscension: solution.value.rightAscension, declination: solution.value.declination, verified: true, synced }
 
@@ -365,7 +374,9 @@ function centeringFilter(context: SequencerActionContext, configuration: Sequenc
 // be exposed at all; the capture is nested in the action's scope, so it inherits the camera the session already
 // holds instead of competing with it, and the solver inherits the action's signal, so a stopped session stops
 // the backend it started.
-async function solveOneFrame(services: SequencerCenteringServices, context: SequencerActionContext, configuration: SequencerCenter, camera: Camera, mount: Mount, attempt: number): Promise<SequencerActionResult<PlateSolution>> {
+// `observedAt` is the epoch the solver hint is converted for, in milliseconds since the Unix epoch, and is the
+// same one the comparison of the frame uses.
+async function solveOneFrame(services: SequencerCenteringServices, context: SequencerActionContext, configuration: SequencerCenter, camera: Camera, mount: Mount, attempt: number, observedAt: number): Promise<SequencerActionResult<PlateSolution>> {
 	const target = context.auxiliary('centering', auxiliaryExtension(configuration.capture))
 
 	if (target === undefined) return { type: 'fatalFailure', reason: 'unexpectedState', detail: 'the centering frame has no destination the session could prove' }
@@ -385,7 +396,7 @@ async function solveOneFrame(services: SequencerCenteringServices, context: Sequ
 
 	context.progress({ detail: `solving the centering frame ${attempt}` })
 
-	const hint = j2000Of(configuration.coordinates, mount.geographicCoordinate)
+	const hint = j2000Of(configuration.coordinates, mount.geographicCoordinate, observedAt)
 	const request = solveRequest(configuration.solver, path, `${context.sessionId}:${context.nodeId}:${attempt}`, hint[0], hint[1])
 	const solution = await services.plateSolver.start(request, context.signal)
 

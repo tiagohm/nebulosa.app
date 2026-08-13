@@ -52,7 +52,7 @@ function centerConfiguration(overrides?: Partial<SequencerCenter>): SequencerCen
 	}
 }
 
-function actionContext(devices: Record<string, { readonly device: unknown }>, auxiliary?: (ordinal: number, extension: string) => SequencerAuxiliaryTarget | undefined): SequencerActionContext {
+function actionContext(devices: Record<string, { readonly device: unknown }>, auxiliary?: (ordinal: number, extension: string) => SequencerAuxiliaryTarget | undefined, now?: () => number): SequencerActionContext {
 	let ordinal = 0
 
 	return {
@@ -61,7 +61,7 @@ function actionContext(devices: Record<string, { readonly device: unknown }>, au
 		attempt: 1,
 		scope: {} as SequencerActionContext['scope'],
 		signal: new AbortController().signal,
-		now: () => 1_000_000,
+		now: now ?? (() => 1_000_000),
 		request: (role) => devices[role] as never,
 		progress: () => {},
 		artifact: () => {},
@@ -212,6 +212,21 @@ describe('centering block', () => {
 		// Each exposure lands on its own reserved destination, so a loop never overwrites the frame that decided
 		// the previous correction.
 		expect(commands.filter((command) => command.name === 'capture').map((command) => command.detail)).toEqual(['centering-1.fits', 'centering-2.fits'])
+	})
+
+	test('compares each solved frame with the horizontal target converted for that frame', async () => {
+		const commands: Command[] = []
+		const device = { ...mount(), geographicCoordinate: { longitude: -0.8, latitude: -0.4, elevation: 700 } } as unknown as Mount
+		const handler = sequencerCenterHandler(centeringServices(commands, [solution(1.4, -0.09), solution(5.80545114311377, -0.0016613802495410756)]))
+		const configuration = centerConfiguration({ coordinates: { type: 'ALTAZ', ALTAZ: { x: 1.2, y: 0.9 } } })
+		const instants = [1_000_000, 1_300_000]
+		let call = 0
+		const result = await handler.execute(
+			actionContext({ mount: { device }, camera: { device: camera() } }, undefined, () => instants[Math.min(call++, instants.length - 1)]),
+			configuration,
+		)
+
+		expect(result).toMatchObject({ type: 'completed', value: { attempts: 2, separation: 0, verified: true } })
 	})
 
 	test('names every centering frame after the container its recipe transfers', async () => {

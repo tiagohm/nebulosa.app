@@ -69,7 +69,7 @@ function focusServices(commands: Command[], outcome: OperationResult<AutoFocusRu
 		runner: {
 			start: (_scope: unknown, _camera: Camera, _focuser: Focuser, request: unknown) => {
 				commands.push({ name: 'autofocus', detail: request })
-				return { handle: { result: Promise.resolve(outcome) }, finish: () => {} }
+				return { handle: { id: 'run-1', result: Promise.resolve(outcome) }, finish: () => {} }
 			},
 		} as unknown as SequencerAutofocusServices['runner'],
 		focuserCommander: {
@@ -222,6 +222,22 @@ describe('autofocus block', () => {
 		const result = await handler.execute(actionContext({ camera: { device: camera() }, focuser: { device: focuser(12000) } }), autofocusConfiguration())
 
 		expect(result).toEqual({ type: 'retryableFailure', reason: 'unexpectedState', detail: 'the autofocus found no focus: no stars were detected' })
+	})
+
+	test('ends the run of the shared feed whatever the search reported', async () => {
+		const finished: string[] = []
+		const runnerOf = (outcome: OperationResult<AutoFocusRunOutcome>) =>
+			({
+				start: () => ({ handle: { id: 'run-1', result: Promise.resolve(outcome) }, finish: (id: string, message: string) => finished.push(`${id}: ${message}`) }),
+			}) as unknown as SequencerAutofocusServices['runner']
+		const services = focusServices([], focused(12500))
+		const context = () => actionContext({ camera: { device: camera() }, focuser: { device: focuser(12000) } })
+
+		await sequencerAutofocusHandler({ ...services, runner: runnerOf(focused(12500)) }).execute(context(), autofocusConfiguration())
+		await sequencerAutofocusHandler({ ...services, runner: runnerOf(successfulOperationResult<AutoFocusRunOutcome>({ outcome: 'noStars', position: 12000, message: 'no stars were detected' })) }).execute(context(), autofocusConfiguration())
+		await sequencerAutofocusHandler({ ...services, runner: runnerOf(failedOperationResult('timeout', 'boom')) }).execute(context(), autofocusConfiguration())
+
+		expect(finished).toEqual(['run-1: focused', 'run-1: no stars were detected', 'run-1: boom'])
 	})
 
 	test('puts the wheel back on the frame filter when the search found no focus', async () => {

@@ -179,8 +179,16 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 		maxPosition: configuration.algorithm.maximumPosition,
 	}
 
-	const { handle } = services.runner.start(context.scope, camera, focuser, request, () => context.auxiliary('autofocus', auxiliaryExtension(configuration.capture)))
+	const { handle, finish } = services.runner.start(context.scope, camera, focuser, request, () => context.auxiliary('autofocus', auxiliaryExtension(configuration.capture)))
 	const result = await handle.result
+
+	// The runner publishes the states a search passes through and never the one that ends it: the terminal
+	// event belongs to whoever resolved the cause, because a start the arbiter refused never reaches the
+	// executor. The session is that owner here, and the feed is the same one the manual route publishes to, so
+	// leaving it unpublished would show every client an autofocus still running for the rest of the night.
+	// It is emitted before anything else is decided, so that the restore of the wheel and the offset of the
+	// filter cannot leave a path where the search never ended.
+	finish(handle.id, result.ok ? result.value.message : (result.error ?? result.reason))
 
 	if (!result.ok) {
 		await restoreFrameFilter(services, context, transition)

@@ -227,6 +227,17 @@ export async function runFramePreparation(services: SequencerPreparationServices
 	if (required.tracking === true && mount !== undefined && !mount.tracking) {
 		context.progress({ detail: 'resuming tracking' })
 
+		// The mode is commanded again with the tracking it belongs to. A mount that is standing still says
+		// nothing about which rate it will follow when it starts, and the rate it kept is whatever the last
+		// slew — of this session, of another program, or of the hand controller — selected. A session whose plan
+		// makes no slew of its own never passed through the block that establishes the mode, so a target
+		// followed at the solar rate trails a sidereal field by fifteen arcseconds of every minute exposed.
+		if (preparation.tracking !== undefined) {
+			const mode = await services.mountCommander.setTrackMode(context.scope, mount, preparation.tracking.mode)
+
+			if (!mode.ok) return sequencerActionFailure(mode, `the mount did not accept the ${preparation.tracking.mode} track mode`)
+		}
+
 		const tracked = await services.mountCommander.setTracking(context.scope, mount, true)
 
 		if (!tracked.ok) return sequencerActionFailure(tracked, 'the mount did not resume tracking')

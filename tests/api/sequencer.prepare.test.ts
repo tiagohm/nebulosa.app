@@ -18,6 +18,7 @@ interface Command {
 
 interface Failures {
 	readonly setTracking?: OperationFailureReason
+	readonly setTrackMode?: OperationFailureReason
 	readonly park?: OperationFailureReason
 	readonly unpark?: OperationFailureReason
 	readonly wheelMoveTo?: OperationFailureReason
@@ -52,8 +53,8 @@ function rotator(angle: number): Rotator {
 	return { type: 'rotator', name: 'Rotator Simulator', id: 'rotator-1', connected: true, moving: false, angle: { value: angle, min: -360, max: 360 } } as unknown as Rotator
 }
 
-function mount(tracking: boolean): Mount {
-	return { type: 'mount', name: 'Mount Simulator', id: 'mount-1', connected: true, tracking } as unknown as Mount
+function mount(tracking: boolean, trackMode: Mount['trackMode'] = 'SIDEREAL'): Mount {
+	return { type: 'mount', name: 'Mount Simulator', id: 'mount-1', connected: true, tracking, trackMode } as unknown as Mount
 }
 
 function coverPolicy(overrides?: Partial<Omit<SequencerCover, 'enabled'>>): Omit<SequencerCover, 'enabled'> {
@@ -129,6 +130,10 @@ function prepareServices(commands: Command[], failures: Failures = {}): Sequence
 			setTracking: (_scope: unknown, device: Mount, enabled: boolean) => {
 				device.tracking = enabled
 				return answer('setTracking', enabled)
+			},
+			setTrackMode: (_scope: unknown, device: Mount, mode: string) => {
+				device.trackMode = mode as Mount['trackMode']
+				return answer('setTrackMode', mode)
 			},
 		} as unknown as SequencerPreparationServices['mountCommander'],
 		coverCommander: {
@@ -290,6 +295,28 @@ describe('frame preparation', () => {
 
 		expect(result).toMatchObject({ type: 'completed', value: { commanded: [] } })
 		expect(parked.tracking).toBeFalse()
+	})
+
+	test('selects the declared track mode before the tracking it belongs to', async () => {
+		const commands: Command[] = []
+		const stopped = mount(false, 'SOLAR')
+		const result = await runFramePreparation(prepareServices(commands), actionContext({ camera: { device: camera() }, mount: { device: stopped } }), preparation())
+
+		expect(result).toMatchObject({ type: 'completed', value: { commanded: ['tracking'] } })
+		expect(commands.map((command) => command.name)).toEqual(['setTrackMode', 'setTracking'])
+		expect(commands[0].detail).toBe('SIDEREAL')
+		expect(stopped.trackMode).toBe('SIDEREAL')
+		expect(stopped.tracking).toBeTrue()
+	})
+
+	test('reports a mount that refuses the declared track mode instead of following the wrong rate', async () => {
+		const commands: Command[] = []
+		const stopped = mount(false, 'SOLAR')
+		const result = await runFramePreparation(prepareServices(commands, { setTrackMode: 'commandFailed' }), actionContext({ camera: { device: camera() }, mount: { device: stopped } }), preparation())
+
+		expect(result).toMatchObject({ type: 'retryableFailure', reason: 'commandFailed' })
+		expect(commands.map((command) => command.name)).toEqual(['setTrackMode'])
+		expect(stopped.tracking).toBeFalse()
 	})
 
 	test('leaves the mount alone for a light frame of a target that declares no tracking', async () => {

@@ -1,6 +1,6 @@
 import type { FrameType, PierSide } from 'nebulosa/src/devices/indi/device'
 import type { SequencerAutofocus, SequencerDither, SequencerMeridianFlip } from '#/sequencer'
-import type { SequencerTriggerAnchor, SequencerTriggerAnchors } from '#/sequencer.state'
+import type { SequencerTriggerAnchor, SequencerTriggerAnchors, SequencerTriggerEventReason } from '#/sequencer.state'
 
 // Safe-point trigger evaluation: which derived steps run before the next frame, in which order, and what
 // moves the anchors they are measured against.
@@ -20,7 +20,7 @@ export type SequencerTriggerKind = 'meridianFlip' | 'autofocus' | 'dither'
 
 // Condition that selected a trigger, reported so the session event says why a run happened rather than only
 // that it did. Exactly one is reported per decision, the first one that held in the documented order.
-export type SequencerTriggerReason = 'onStart' | 'beforeFirstFrame' | 'afterMeridianFlip' | 'afterRecovery' | 'filterChange' | 'frames' | 'elapsed' | 'temperature' | 'hourAngle'
+export type SequencerTriggerReason = 'onStart' | 'beforeFirstFrame' | SequencerTriggerEventReason | 'filterChange' | 'frames' | 'elapsed' | 'temperature' | 'hourAngle'
 
 // One trigger the safe point has to run, before the frame it was evaluated for.
 export interface SequencerTriggerDecision {
@@ -151,6 +151,28 @@ export function evaluateSequencerTriggers(policies: SequencerTriggerPolicies, an
 	return decisions
 }
 
+// Records the one-shot condition that selected an autofocus, so it outlives the run it selected.
+//
+// `afterMeridianFlip` and `afterRecovery` are edges and not states: the flip is over as soon as the mount
+// publishes the other side of the pier, and the recovery is over as soon as this safe point ends. A run that
+// fails, is skipped, is suppressed by `minimumTimeBetweenRuns` or exhausts its retries under `continue`
+// correctly leaves the anchor where it was, but the anchor is measured against conditions that no longer
+// exist, so the promised focus would simply never be attempted again — the frames after a flip or a recovery
+// would be exposed through whatever focus the event invalidated until an unrelated periodic condition happened
+// to fire.
+//
+// It is therefore applied at the safe point that decided, before the run, and it is `sequencerAnchorAdvanced`
+// that clears it once a run focused. The anchors are returned unchanged when no autofocus was selected or when
+// the condition that selected it was one the next safe point can observe again on its own.
+export function sequencerTriggerPending(anchors: SequencerTriggerAnchors, decisions: readonly SequencerTriggerDecision[]): SequencerTriggerAnchors {
+	const decision = decisions.find((item) => item.kind === 'autofocus')
+
+	if (decision === undefined || (decision.reason !== 'afterMeridianFlip' && decision.reason !== 'afterRecovery')) return anchors
+	if (anchors.pendingAutofocus === decision.reason) return anchors
+
+	return { ...anchors, pendingAutofocus: decision.reason }
+}
+
 // Counts one accepted frame against every anchor, or leaves them untouched when the frame is calibration.
 //
 // This is the counter half of the sky rule: only a frame that looked at the sky moves a sky trigger closer to
@@ -170,8 +192,18 @@ export function sequencerFrameCounted(anchors: SequencerTriggerAnchors, frameTyp
 //
 // `kind` is the anchored trigger. The meridian flip has no anchor, because what says it already happened is
 // the pier side of the mount and not an instant.
+//
+// A run of the autofocus also settles whatever one-shot condition was owed: the focus the flip or the recovery
+// invalidated is exactly what this run just measured, and keeping the promise alive would run it again at the
+// next safe point for an event that has already been served.
 export function sequencerAnchorAdvanced(anchors: SequencerTriggerAnchors, kind: 'autofocus' | 'dither' | 'driftCheck', observation: SequencerTriggerObservation): SequencerTriggerAnchors {
-	return { ...anchors, [kind]: { at: observation.instant, frames: 0, temperature: observation.temperature, filter: observation.filter } satisfies SequencerTriggerAnchor }
+	const anchor = { at: observation.instant, frames: 0, temperature: observation.temperature, filter: observation.filter } satisfies SequencerTriggerAnchor
+
+	if (kind !== 'autofocus') return { ...anchors, [kind]: anchor }
+
+	const { pendingAutofocus, ...rest } = anchors
+
+	return { ...rest, autofocus: anchor }
 }
 
 // Anchor carrying the filter the session was found on, or the same anchor when it already has a reference.
@@ -248,8 +280,9 @@ function meridianFlipDue(policy: Omit<SequencerMeridianFlip, 'enabled'>, observa
 // Condition that selects the autofocus, or undefined when none does.
 //
 // The conditions are tested in a fixed order so that the reported reason is deterministic: the first run of
-// the session, the flip that just happened, the recovery that just happened, the filter the frame needs, and
-// then the three measured conditions — frames, elapsed time and temperature drift.
+// the session, the flip that just happened, the recovery that just happened, the flip or recovery of an
+// earlier safe point that is still owed a focus, the filter the frame needs, and then the three measured
+// conditions — frames, elapsed time and temperature drift.
 //
 // `minimumTimeBetweenRuns` is applied at the end, over whatever won: it is the only global brake against
 // thrashing when the temperature oscillates around its threshold, and half a degree of sensor noise would
@@ -262,6 +295,7 @@ function autofocusReason(policy: Omit<SequencerAutofocus, 'enabled'>, anchors: S
 	const { triggers } = policy
 	const anchor = anchors.autofocus
 	const elapsed = observation.instant - anchoredAt(anchor, anchors)
+	const pending = pendingReason(triggers, anchors.pendingAutofocus)
 	const reason =
 		anchor.at === undefined && triggers.onStart
 			? 'onStart'
@@ -269,19 +303,32 @@ function autofocusReason(policy: Omit<SequencerAutofocus, 'enabled'>, anchors: S
 				? 'afterMeridianFlip'
 				: observation.recovered === true && triggers.afterRecovery
 					? 'afterRecovery'
-					: triggers.onFilterChange && filterChanged(anchor, observation)
-						? 'filterChange'
-						: reachedCount(anchor.frames, triggers.everyFrames)
-							? 'frames'
-							: reachedElapsed(elapsed, triggers.everyTime)
-								? 'elapsed'
-								: temperatureDrifted(anchor, observation, triggers.temperatureChange)
-									? 'temperature'
-									: undefined
+					: (pending ??
+						(triggers.onFilterChange && filterChanged(anchor, observation)
+							? 'filterChange'
+							: reachedCount(anchor.frames, triggers.everyFrames)
+								? 'frames'
+								: reachedElapsed(elapsed, triggers.everyTime)
+									? 'elapsed'
+									: temperatureDrifted(anchor, observation, triggers.temperatureChange)
+										? 'temperature'
+										: undefined))
 
 	if (reason === undefined) return undefined
 
 	return anchor.at !== undefined && elapsed < triggers.minimumTimeBetweenRuns * 1000 ? undefined : reason
+}
+
+// Condition owed by an earlier safe point whose autofocus never focused, or undefined when nothing is owed.
+//
+// The trigger flag is consulted again rather than assumed: the definition that selected the run is the one
+// running, but a session resumed against an edited definition that no longer asks to focus after a flip must
+// not focus for a flip it no longer recognizes. The promise is then simply dropped, which is what disabling
+// the trigger means, and the next run of the autofocus clears the anchor anyway.
+function pendingReason(triggers: SequencerAutofocus['triggers'], pending?: SequencerTriggerEventReason) {
+	if (pending === undefined) return undefined
+
+	return (pending === 'afterMeridianFlip' ? triggers.afterMeridianFlip : triggers.afterRecovery) ? pending : undefined
 }
 
 // Whether the temperature moved far enough from the one observed at the last run. Zero disables it, and so

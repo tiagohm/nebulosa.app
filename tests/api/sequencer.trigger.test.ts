@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { evaluateSequencerTriggers, sequencerAnchorAdvanced, sequencerFilterBaselined, sequencerFrameCounted, sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
+import { evaluateSequencerTriggers, sequencerAnchorAdvanced, sequencerFilterBaselined, sequencerFrameCounted, sequencerInitialTriggerAnchors, sequencerTriggerPending } from 'src/api/sequencer.trigger'
 import type { SequencerTriggerObservation, SequencerTriggerPolicies } from 'src/api/sequencer.trigger'
 import type { SequencerAutofocus, SequencerDither, SequencerMeridianFlip } from '#/sequencer'
 import type { SequencerTriggerAnchors } from '#/sequencer.state'
@@ -231,6 +231,57 @@ describe('sequencer trigger evaluator', () => {
 		expect(advanced.driftCheck).toEqual(state.driftCheck)
 		expect(advanced.sessionStart).toBe(START)
 		expect(state.dither.frames).toBe(2)
+	})
+
+	test('keeps the autofocus owed by a recovery pending until a run focused', () => {
+		const policies = { autofocus: autofocus({ afterRecovery: true }), dither: dither({ everyFrames: 1 }) }
+		const first = observation({ recovered: true })
+
+		expect(kinds(policies, anchors(), first)).toEqual(['autofocus:afterRecovery'])
+
+		const state = sequencerTriggerPending(anchors(), evaluateSequencerTriggers(policies, anchors(), first))
+
+		expect(state.pendingAutofocus).toBe('afterRecovery')
+
+		const second = observation({ instant: START + 60_000 })
+		const dithered = sequencerAnchorAdvanced(sequencerFrameCounted(state, 'LIGHT'), 'dither', second)
+
+		expect(dithered.pendingAutofocus).toBe('afterRecovery')
+		expect(kinds(policies, dithered, second)).toEqual(['autofocus:afterRecovery'])
+
+		const ran = sequencerAnchorAdvanced(dithered, 'autofocus', second)
+
+		expect(ran.pendingAutofocus).toBeUndefined()
+		expect(kinds(policies, ran, observation({ instant: START + 120_000 }))).toEqual([])
+	})
+
+	test('keeps the autofocus owed by a flip pending after the mount left the pre-flip side', () => {
+		const policies = { meridianFlip: meridianFlip(), autofocus: autofocus({ afterMeridianFlip: true }) }
+		const first = observation({ hourAngle: 0.02, pierSide: 'WEST', preFlipPierSide: 'WEST' })
+		const state = sequencerTriggerPending(anchors(), evaluateSequencerTriggers(policies, anchors(), first))
+
+		expect(state.pendingAutofocus).toBe('afterMeridianFlip')
+
+		const second = observation({ instant: START + 60_000, hourAngle: 0.08, pierSide: 'EAST', preFlipPierSide: 'WEST' })
+
+		expect(kinds(policies, state, second)).toEqual(['autofocus:afterMeridianFlip'])
+		expect(sequencerAnchorAdvanced(state, 'autofocus', second).pendingAutofocus).toBeUndefined()
+	})
+
+	test('records nothing pending for a condition the next safe point can observe again', () => {
+		const policies = { autofocus: autofocus({ everyFrames: 1 }) }
+		const state = sequencerFrameCounted(anchors(), 'LIGHT')
+
+		expect(sequencerTriggerPending(state, evaluateSequencerTriggers(policies, state, observation()))).toBe(state)
+		expect(sequencerTriggerPending(state, [])).toBe(state)
+	})
+
+	test('drops an owed autofocus whose trigger is no longer enabled', () => {
+		const state = anchors({ pendingAutofocus: 'afterMeridianFlip' })
+		const observed = observation({ instant: START + 60_000 })
+
+		expect(kinds({ autofocus: autofocus({ afterMeridianFlip: true }) }, state, observed)).toEqual(['autofocus:afterMeridianFlip'])
+		expect(kinds({ autofocus: autofocus({ afterRecovery: true }) }, state, observed)).toEqual([])
 	})
 
 	test('reports the first condition that held in the documented order', () => {

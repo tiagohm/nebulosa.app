@@ -113,6 +113,14 @@ export interface SequencerTriggerAnchor {
 	readonly filter?: string
 }
 
+// Condition of a safe point that happens once and is never observable again.
+//
+// A flip is over as soon as the mount reports the other side of the pier, and a recovery is over as soon as
+// the safe point that followed it ends. Everything else a trigger is stated over — frames, elapsed time,
+// temperature, the filter the frame needs — is still there to be measured at the next safe point, which is
+// why only these two have to be remembered when the run they selected did not focus.
+export type SequencerTriggerEventReason = 'afterMeridianFlip' | 'afterRecovery'
+
 // Every anchor of the session, which is the whole input the trigger evaluator reads besides the selection.
 //
 // `performance.now()` is the clock for durations inside an action, as the project convention requires, but
@@ -131,6 +139,10 @@ export interface SequencerTriggerAnchors {
 	// Anchor of the drift check, which is a capture and a solve rather than a reading, and is therefore
 	// rate limited by the same mechanism as the runs that command a device.
 	readonly driftCheck: SequencerTriggerAnchor
+	// One-shot condition that selected an autofocus which has not focused yet, absent when nothing is owed.
+	// It is what keeps the promise of a post-flip or post-recovery focus alive across the safe points that
+	// follow, and the run that focuses is what clears it.
+	readonly pendingAutofocus?: SequencerTriggerEventReason
 }
 
 // Counters of one frame group inside the current cycle.

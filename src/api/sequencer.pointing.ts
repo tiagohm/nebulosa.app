@@ -1,4 +1,5 @@
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
+import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { timeNow } from 'nebulosa/src/astronomy/time/time'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
 import { isCamera, isMount, isWheel } from 'nebulosa/src/devices/indi/device'
@@ -90,9 +91,12 @@ function auxiliaryExtension(recipe: SequencerAuxiliaryCapture) {
 // target declared in another frame carries its J2000 point as well — the lowering resolves every frame it was
 // given — and a target that somehow carries none is compared against its primary point, which is the closest
 // thing to an answer available and is only ever reached by a coordinate the compiler did not fill in.
-function j2000Of(coordinates: MountTargetCoordinate<Angle>, longitude: Angle) {
+function j2000Of(coordinates: MountTargetCoordinate<Angle>, location: GeographicCoordinate) {
+	// The UI will always send the field specified by the type.
 	if (coordinates.type === 'J2000') return [coordinates.J2000!.x, coordinates.J2000!.y] as const
-	const info = coordinateInfo(timeNow(true), longitude, coordinates, { equatorialJ2000: true })
+	const time = timeNow(true)
+	time.location = location
+	const info = coordinateInfo(time, location.longitude, coordinates, { equatorialJ2000: true })
 	return info.equatorialJ2000
 }
 
@@ -277,7 +281,7 @@ export async function runCentering(services: SequencerCenteringServices, context
 
 // Runs the attempts of the centering, with the wheel already standing on the filter the recipe declared.
 async function runCenteringLoop(services: SequencerCenteringServices, context: SequencerActionContext, configuration: SequencerCenter, camera: Camera, mount: Mount): Promise<SequencerActionResult<SequencerCenterOutcome>> {
-	const target = j2000Of(configuration.coordinates, mount.geographicCoordinate.longitude)
+	const target = j2000Of(configuration.coordinates, mount.geographicCoordinate)
 
 	let synced = false
 
@@ -381,7 +385,7 @@ async function solveOneFrame(services: SequencerCenteringServices, context: Sequ
 
 	context.progress({ detail: `solving the centering frame ${attempt}` })
 
-	const hint = j2000Of(configuration.coordinates, mount.geographicCoordinate.longitude)
+	const hint = j2000Of(configuration.coordinates, mount.geographicCoordinate)
 	const request = solveRequest(configuration.solver, path, `${context.sessionId}:${context.nodeId}:${attempt}`, hint[0], hint[1])
 	const solution = await services.plateSolver.start(request, context.signal)
 

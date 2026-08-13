@@ -91,6 +91,28 @@ export class SequencerCheckpointKeeper {
 		this.#replace({ completed: [...this.#checkpoint.completed, nodeId] })
 	}
 
+	// Reopens the nodes of a container that is starting another pass, dropping them from `completed` and
+	// discarding the attempts they spent.
+	//
+	// Both blocks are keyed by node id alone, and the capture loop runs its body once per frame (§8.3). Without
+	// this, the second iteration re-enters a body whose nodes are all recorded as settled: `sequencerResumePoint`
+	// answers `nextNode` for every one of them, and the preparation, the safe-point triggers and the capture of
+	// that iteration are skipped. The stale attempt count is the same defect from the budget side — the node
+	// would be re-entered carrying the retries another iteration already spent.
+	reenter(nodeIds: readonly string[]) {
+		const reopened = new Set(nodeIds)
+		const completed = this.#checkpoint.completed.filter((nodeId) => !reopened.has(nodeId))
+		const attempts: Record<string, number> = {}
+
+		for (const nodeId in this.#checkpoint.attempts) {
+			if (!reopened.has(nodeId)) attempts[nodeId] = this.#checkpoint.attempts[nodeId]!
+		}
+
+		if (completed.length === this.#checkpoint.completed.length && Object.keys(attempts).length === Object.keys(this.#checkpoint.attempts).length) return
+
+		this.#replace({ completed, attempts })
+	}
+
 	// Clears the cursor, which is the state of a session before the first node and after the last one.
 	leave() {
 		this.#replace({ cursor: undefined })

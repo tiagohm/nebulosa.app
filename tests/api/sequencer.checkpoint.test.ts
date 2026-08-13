@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { SequencerCheckpointKeeper, sequencerCheckpointDue } from 'src/api/sequencer.checkpoint'
+import { sequencerResumePoint } from 'src/api/sequencer.control'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
 import type { SequencerCheckpoint as SequencerCheckpointPolicy } from '#/sequencer'
@@ -96,6 +97,24 @@ describe('checkpoint kept in memory', () => {
 		keep.complete('wait-1')
 
 		expect(keep.checkpoint.completed).toEqual(['wait-1'])
+		expect(keep.dirty).toBeFalse()
+	})
+
+	test('reopens the body of a loop starting another pass', () => {
+		const keep = keeper({ cursor: 'capture-1', completed: ['startup-1', 'prepare-1', 'capture-1'], attempts: { 'prepare-1': 1, 'capture-1': 3 } })
+
+		keep.reenter(['prepare-1', 'capture-1'])
+
+		expect(keep.checkpoint.completed).toEqual(['startup-1'])
+		expect(keep.checkpoint.attempts).toEqual({})
+		expect(sequencerResumePoint(keep.checkpoint)).toEqual({ at: 'node', nodeId: 'capture-1', containers: [], attempt: 0 })
+	})
+
+	test('reopening nodes that were never settled changes nothing', () => {
+		const keep = keeper({ completed: ['startup-1'] })
+
+		keep.reenter(['prepare-1'])
+
 		expect(keep.dirty).toBeFalse()
 	})
 

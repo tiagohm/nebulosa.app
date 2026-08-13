@@ -69,7 +69,8 @@ export interface SequencerInterlockOutcome<T> {
 	readonly dither?: SequencerDitherOutcome
 }
 
-// Guiding sessions this interlock suspended and did not get back to guiding, by guider id.
+// Guiding sessions this interlock suspended and did not get back to guiding, by guider id, mapped to whether
+// each of them still owes a recalibration.
 //
 // It is what says a looping guider is a suspension of this bracket rather than the state someone else asked
 // for. Looping proves nothing on its own: the operator or another program can be looping deliberately — to
@@ -77,11 +78,16 @@ export interface SequencerInterlockOutcome<T> {
 // action is unguided by configuration, so resuming on the strength of looping alone would enable corrections
 // on a guiding session this sequencer never guided.
 //
-// An entry is added when the suspension lands and removed when the guider is guiding again, so the set only
+// The debt is carried because the calibration a crossing invalidated stays invalid until it is redone: a
+// recalibration that failed leaves the guider suspended, and the next bracket starts with no flip of its own,
+// so guiding on the existing solution would correct declination with the sign the crossing reversed and drag
+// the star across every exposure that follows.
+//
+// An entry is added when the suspension lands and removed when the guider is guiding again, so the map only
 // ever holds the guiders some bracket left behind, and it is deliberately shared by every session: a guider
 // abandoned by one session is picked up by the next bracket that commands it, whichever session opens it. It
 // does not survive the process, which is the same lifetime the V1 sessions have.
-const suspendedGuiders = new Set<string>()
+const suspendedGuiders = new Map<string, boolean>()
 
 // Strongest of two settle policies, field by field.
 //
@@ -136,6 +142,9 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 	// of the night with the guider still dutifully looping. Looping without the marker belongs to whoever asked
 	// for it and is left exactly as it is.
 	const guider = context.guider !== undefined && (services.guiderCommander.running(context.guider) || (suspendedGuiders.has(context.guider) && services.guiderCommander.looping(context.guider))) ? context.guider : undefined
+	// Recalibration a previous bracket of this guider could not complete, which this one has to pay before the
+	// corrections come back, whether or not anything crosses the meridian inside it.
+	const owed = guider !== undefined && suspendedGuiders.get(guider) === true
 	const state: SequencerInterlockState = { flipped: false }
 	const settle = sequencerFuseGuiderSettle(request.settle, request.dither?.settle)
 
@@ -149,7 +158,7 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 
 		if (!suspended.ok) return sequencerActionFailure(suspended, 'the guiding corrections could not be suspended')
 
-		suspendedGuiders.add(guider)
+		suspendedGuiders.set(guider, owed)
 	}
 
 	let executed: SequencerActionResult<T>
@@ -162,9 +171,11 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 		// and the guider still exposing. The resume is therefore attempted here too, and whatever it answers is
 		// discarded — the exception is what explains the safe point and is the one that continues on its way.
 		if (guider !== undefined) {
-			const resumed = await resumeGuiding(services, context, guider, state.flipped && request.recalibrateAfterMeridianFlip).catch(() => undefined)
+			const recalibrate = owed || (state.flipped && request.recalibrateAfterMeridianFlip)
+			const resumed = await resumeGuiding(services, context, guider, recalibrate).catch(() => undefined)
 
 			if (resumed?.ok) suspendedGuiders.delete(guider)
+			else suspendedGuiders.set(guider, recalibrate)
 		}
 
 		throw e
@@ -173,11 +184,12 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 	let recalibrated = false
 
 	if (guider !== undefined) {
-		recalibrated = state.flipped && request.recalibrateAfterMeridianFlip
+		recalibrated = owed || (state.flipped && request.recalibrateAfterMeridianFlip)
 
 		const resumed = await resumeGuiding(services, context, guider, recalibrated)
 
 		if (resumed.ok) suspendedGuiders.delete(guider)
+		else suspendedGuiders.set(guider, recalibrated)
 		if (executed.type !== 'completed') return executed
 		if (!resumed.ok) return sequencerActionFailure(resumed, 'the guiding corrections could not be resumed')
 	} else if (executed.type !== 'completed') return executed

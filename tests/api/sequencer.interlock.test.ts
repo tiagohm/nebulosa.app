@@ -186,6 +186,26 @@ describe('guiding interlock', () => {
 		expect(commands.map((command) => command.name)).toEqual(['loop', 'body', 'startGuiding'])
 	})
 
+	test('still owes the recalibration of a crossing whose calibration failed', async () => {
+		const failed: Command[] = []
+		const refused = await runGuidingInterlock(interlockServices(failed, true, { calibrate: 'timeout' }), actionContext('guider-flipped'), interlockRequest({ recalibrateAfterMeridianFlip: true }), body(failed, { type: 'completed', value: 'flipped' }, true))
+
+		expect(refused).toMatchObject({ type: 'retryableFailure', reason: 'timeout' })
+		expect(failed.map((command) => command.name)).toEqual(['loop', 'body', 'calibrate'])
+
+		const commands: Command[] = []
+		const result = await runGuidingInterlock(interlockServices(commands, false, {}, true), actionContext('guider-flipped'), interlockRequest(), body(commands))
+
+		expect(result).toEqual({ type: 'completed', value: { value: 'centered', suspended: true, recalibrated: true } })
+		expect(commands.map((command) => command.name)).toEqual(['loop', 'body', 'calibrate'])
+
+		const later: Command[] = []
+		const guided = await runGuidingInterlock(interlockServices(later, true), actionContext('guider-flipped'), interlockRequest(), body(later))
+
+		expect(guided).toEqual({ type: 'completed', value: { value: 'centered', suspended: true, recalibrated: false } })
+		expect(later.map((command) => command.name)).toEqual(['loop', 'body', 'startGuiding'])
+	})
+
 	test('stops treating a resumed guider as a suspension of its own', async () => {
 		const bracketed: Command[] = []
 

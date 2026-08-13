@@ -181,12 +181,15 @@ async function runStep(executor: SequencerPipelineExecutor, step: SequencerPipel
 
 		if (failure === undefined) return { ...base, outcome: result.type === 'skipped' ? 'skipped' : 'succeeded', detail: result.type === 'skipped' ? result.detail : undefined, attempts: attempt }
 
+		// A cancellation the session itself commanded, which is the only thing that ends the whole list.
+		const commanded = failure.reason === 'aborted' && signal.aborted
+
 		const decision = sequencerFailurePolicy({
 			reason: failure.reason,
 			detail: failure.detail,
 			attempt,
 			retry: failure.fatal ? withoutRetries(configuration) : configuration.retry,
-			commanded: signal.aborted,
+			commanded,
 		})
 
 		if (decision.kind === 'retry') {
@@ -194,10 +197,16 @@ async function runStep(executor: SequencerPipelineExecutor, step: SequencerPipel
 			continue
 		}
 
-		// `stop` is the commanded cancellation of §10, and it ends the pipeline rather than this action alone.
-		// Every other terminal decision — skip, continue, pause, fail — gives up on the action, and which one it
-		// was does not change what the session composes from it: `required` is what decides that.
-		return { ...base, outcome: decision.kind === 'stop' ? 'notRun' : 'failed', reason: failure.reason, detail: failure.detail, attempts: attempt }
+		// Only the commanded cancellation ends the pipeline instead of this action alone. `onExhausted: 'stop'`
+		// and `onFailure: 'stop'` reach the same decision, and they are the opposite situation: the action was
+		// attempted and did not work. Recording those as `notRun` would report a park that failed as a session
+		// nobody has to explain — no failure, every later required action skipped by the stop, and the cause of
+		// the night lost — which is exactly the outcome the required-action inversion exists to prevent.
+		if (commanded && decision.kind === 'stop') return { ...base, outcome: 'notRun', attempts: attempt }
+
+		// Every other terminal decision — skip, continue, pause, fail, stop — gives up on the action, and which
+		// one it was does not change what the session composes from it: `required` is what decides that.
+		return { ...base, outcome: 'failed', reason: failure.reason, detail: failure.detail, attempts: attempt }
 	}
 }
 

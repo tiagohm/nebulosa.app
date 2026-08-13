@@ -194,6 +194,16 @@ describe('commanded stop', () => {
 		expect(report.failure).toBeUndefined()
 	})
 
+	test('a declared stop gives up on the action without ending the pipeline', async () => {
+		const answers = { [nodeId('park')]: { type: 'retryableFailure', reason: 'commandFailed', detail: 'park refused' } as SequencerActionResult<unknown> }
+		const steps = [step('park', { required: true }, { onExhausted: 'stop' }), step('cover', { required: true })]
+		const report = await runSequencerPipeline({ continueOnFailure: true }, steps, executor(answers), new AbortController().signal)
+
+		expect(report.stopped).toBeFalse()
+		expect(report.results.map((result) => result.outcome)).toEqual(['failed', 'succeeded'])
+		expect(report.failure).toEqual({ nodeId: nodeId('park'), reason: 'commandFailed', detail: 'park refused' })
+	})
+
 	test('an abort with no command behind it is a failure of the action', async () => {
 		const answers = { [nodeId('a')]: { type: 'fatalFailure', reason: 'aborted', detail: 'camera' } as SequencerActionResult<unknown> }
 		const report = await runSequencerPipeline({ continueOnFailure: true }, [step('a', { required: true })], executor(answers), new AbortController().signal)

@@ -169,6 +169,10 @@ export class InMemorySequencerStore implements SequencerStore {
 		const state = commit.state ?? current.state
 		const started = current.startedAt ?? (state === 'created' ? undefined : timestamp)
 		const ended = current.endedAt ?? (isTerminal(state) ? timestamp : undefined)
+		// The stored checkpoint is an independent copy: a runtime that keeps mutating its own working value must
+		// not retroactively change what was committed, which is what a serializing store would give and what
+		// makes the two implementations interchangeable.
+		const checkpoint = commit.checkpoint === undefined ? current.checkpoint : structuredClone(commit.checkpoint)
 
 		const session: SequencerSession = {
 			...current,
@@ -179,10 +183,11 @@ export class InMemorySequencerStore implements SequencerStore {
 			startedAt: started,
 			endedAt: ended,
 			failure: commit.failure ?? current.failure,
-			// The stored checkpoint is an independent copy: a runtime that keeps mutating its own working
-			// value must not retroactively change what was committed, which is what a serializing store
-			// would give and what makes the two implementations interchangeable.
-			checkpoint: commit.checkpoint === undefined ? current.checkpoint : structuredClone(commit.checkpoint),
+			// Anchoring the elapsed-time triggers is the business of the instant the session started running,
+			// not of the instant it was created: a session created in the afternoon and started at dusk would
+			// otherwise reach its first safe point with hours of "elapsed" time already behind it and fire
+			// every time-based trigger at once, on a rig that has just been asked to expose its first frame.
+			checkpoint: current.startedAt === undefined && started !== undefined ? { ...checkpoint, anchors: { ...checkpoint.anchors, sessionStart: started } } : checkpoint,
 		}
 
 		const events: SequencerEvent[] = []

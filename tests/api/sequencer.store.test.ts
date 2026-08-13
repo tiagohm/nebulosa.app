@@ -66,6 +66,32 @@ describe('in memory sequencer store', () => {
 		expect(instance.artifacts(created.id)).toEqual([{ logicalSlotId: 'slot-1', attempt: 1, status: 'pending', sessionId: created.id, createdAt: 1005, updatedAt: 1005 }])
 	})
 
+	test('anchors the elapsed triggers at the instant the session started running', () => {
+		const { store: instance, tick } = store()
+		const created = session(instance)
+
+		tick(3_600_000)
+
+		const started = instance.commit({ sessionId: created.id, expectedRevision: 0, state: 'running', checkpoint: checkpoint('node-1') })
+
+		expect(started.ok).toBeTrue()
+
+		if (!started.ok) return
+
+		expect(started.session.startedAt).toBe(3_601_000)
+		expect(started.session.checkpoint.anchors.sessionStart).toBe(3_601_000)
+
+		tick(5000)
+
+		const running = instance.commit({ sessionId: created.id, expectedRevision: 1, state: 'running', checkpoint: checkpoint('node-2') })
+
+		expect(running.ok).toBeTrue()
+
+		if (!running.ok) return
+
+		expect(running.session.checkpoint.anchors.sessionStart).toBe(1000)
+	})
+
 	test('refuses a stale revision without writing anything', () => {
 		const { store: instance } = store()
 		const created = session(instance)

@@ -309,6 +309,26 @@ describe('frame preparation', () => {
 		expect(stopped.tracking).toBeTrue()
 	})
 
+	test('selects the declared track mode on a mount that is already tracking at another rate', async () => {
+		const commands: Command[] = []
+		const solar = mount(true, 'SOLAR')
+		const result = await runFramePreparation(prepareServices(commands), actionContext({ camera: { device: camera() }, mount: { device: solar } }), preparation())
+
+		expect(result).toMatchObject({ type: 'completed', value: { commanded: ['tracking'] } })
+		expect(commands.map((command) => command.name)).toEqual(['setTrackMode'])
+		expect(solar.trackMode).toBe('SIDEREAL')
+		expect(solar.tracking).toBeTrue()
+	})
+
+	test('commands nothing on a mount already tracking at the declared rate', async () => {
+		const commands: Command[] = []
+		const sidereal = mount(true)
+		const result = await runFramePreparation(prepareServices(commands), actionContext({ camera: { device: camera() }, mount: { device: sidereal } }), preparation())
+
+		expect(result).toMatchObject({ type: 'completed', value: { commanded: [] } })
+		expect(commands).toBeEmpty()
+	})
+
 	test('reports a mount that refuses the declared track mode instead of following the wrong rate', async () => {
 		const commands: Command[] = []
 		const stopped = mount(false, 'SOLAR')

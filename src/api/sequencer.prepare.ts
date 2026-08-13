@@ -224,25 +224,35 @@ export async function runFramePreparation(services: SequencerPreparationServices
 
 	// Tracking comes before the optical path because it is the only dimension that keeps the field from
 	// drifting while the rest of the preparation runs, and because it moves nothing the order below protects.
-	if (required.tracking === true && mount !== undefined && !mount.tracking) {
-		context.progress({ detail: 'resuming tracking' })
+	//
+	// The rate is reconciled on its own, because a mount that is already tracking is not evidence that it is
+	// tracking the declared target: the rate it kept is whatever the last slew — of this session, of another
+	// program, or of the hand controller — selected, and it survives the tracking being left on. A session whose
+	// plan makes no slew of its own never passed through the block that establishes the mode, so a target
+	// followed at the solar rate trails a sidereal field by fifteen arcseconds of every minute exposed.
+	if (required.tracking === true && mount !== undefined) {
+		const stopped = !mount.tracking
+		const mode = preparation.tracking !== undefined && mount.trackMode !== preparation.tracking.mode ? preparation.tracking.mode : undefined
 
-		// The mode is commanded again with the tracking it belongs to. A mount that is standing still says
-		// nothing about which rate it will follow when it starts, and the rate it kept is whatever the last
-		// slew — of this session, of another program, or of the hand controller — selected. A session whose plan
-		// makes no slew of its own never passed through the block that establishes the mode, so a target
-		// followed at the solar rate trails a sidereal field by fifteen arcseconds of every minute exposed.
-		if (preparation.tracking !== undefined) {
-			const mode = await services.mountCommander.setTrackMode(context.scope, mount, preparation.tracking.mode)
+		if (mode !== undefined) {
+			context.progress({ detail: `selecting the ${mode} track mode` })
 
-			if (!mode.ok) return sequencerActionFailure(mode, `the mount did not accept the ${preparation.tracking.mode} track mode`)
+			const selected = await services.mountCommander.setTrackMode(context.scope, mount, mode)
+
+			if (!selected.ok) return sequencerActionFailure(selected, `the mount did not accept the ${mode} track mode`)
 		}
 
-		const tracked = await services.mountCommander.setTracking(context.scope, mount, true)
+		if (stopped) {
+			context.progress({ detail: 'resuming tracking' })
 
-		if (!tracked.ok) return sequencerActionFailure(tracked, 'the mount did not resume tracking')
+			const tracked = await services.mountCommander.setTracking(context.scope, mount, true)
 
-		commanded.push('tracking')
+			if (!tracked.ok) return sequencerActionFailure(tracked, 'the mount did not resume tracking')
+		}
+
+		// One step for the whole dimension: the rate and the motion are the same reconciliation, and a rate
+		// selected on a mount that was already tracking is as much a change of context as starting it.
+		if (mode !== undefined || stopped) commanded.push('tracking')
 	}
 
 	if (panel !== undefined && required.panel?.lit === false && panel.enabled) {

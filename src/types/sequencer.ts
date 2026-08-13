@@ -616,7 +616,10 @@ export interface SequencerGuiderSettle {
 	readonly time: number
 	// Maximum time, in seconds, allowed for the guider to settle.
 	readonly timeout: number
-	// Minimum number of guide frames observed during settling.
+	// Minimum number of guide frames asked to be observed while settling.
+	// Carried by the definition and fused with the strongest policy in play, but not enforced: the guider
+	// transport settles on tolerance held for time within timeout and counts no frames of its own, so the
+	// settle a session waits on is the one those three fields describe.
 	readonly minimumFrames: number
 }
 

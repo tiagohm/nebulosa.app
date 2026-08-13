@@ -111,6 +111,13 @@ interface AttemptFailure {
 	readonly fatal: boolean
 }
 
+// Longest delay a timer accepts, in milliseconds, which is the 32-bit signed maximum — about 24.8 days.
+//
+// A larger value does not schedule a later timer: it overflows and is scheduled as `1`, so an action declaring
+// a deadline of a month would be aborted in the first millisecond and reported as having timed out. A deadline
+// beyond this is therefore reached in chunks rather than handed to one timer.
+const MAXIMUM_TIMER_DELAY = 2_147_483_647
+
 // Retry policy of a fatal cause: the same budget and spacing, with nothing left to consider recoverable.
 //
 // A `removed` device does not come back because the node ran again, and an `aborted` attempt has nothing left
@@ -134,11 +141,25 @@ async function runAttempt(executor: SequencerPipelineExecutor, step: SequencerPi
 	const controller = new AbortController()
 	const abort = () => controller.abort()
 	let expired = false
+	let timer: ReturnType<typeof setTimeout> | undefined
 
-	const timer = setTimeout(() => {
-		expired = true
-		controller.abort()
-	}, timeout)
+	// Waits `remaining` milliseconds, one timer chunk at a time, and expires the attempt at the end of the last
+	// one. Only the pending chunk is ever outstanding, so cancelling the attempt clears the whole deadline.
+	const schedule = (remaining: number) => {
+		timer = setTimeout(
+			() => {
+				const left = remaining - MAXIMUM_TIMER_DELAY
+
+				if (left > 0) return schedule(left)
+
+				expired = true
+				controller.abort()
+			},
+			Math.min(remaining, MAXIMUM_TIMER_DELAY),
+		)
+	}
+
+	schedule(timeout)
 
 	// A signal that is already aborted never dispatches the event again, so a stop that landed before this
 	// attempt started — during the retry delay of the previous one, or before the pipeline was entered at all —

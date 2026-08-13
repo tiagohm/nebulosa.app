@@ -121,6 +121,27 @@ describe('attempts', () => {
 		expect(report.failure).toBeUndefined()
 	})
 
+	test('a deadline beyond the timer limit is reached in chunks instead of overflowing', async () => {
+		const original = globalThis.setTimeout
+		const delays: number[] = []
+
+		globalThis.setTimeout = ((callback: () => void, delay: number) => {
+			delays.push(delay)
+			callback()
+			return 0 as unknown as ReturnType<typeof setTimeout>
+		}) as typeof globalThis.setTimeout
+
+		try {
+			const answers = { [nodeId('a')]: (_: number, signal: AbortSignal) => (signal.aborted ? ABORTED : COMPLETED) }
+			const report = await runSequencerPipeline({ continueOnFailure: true }, [step('a', { timeout: 5_000_000 }, { maxAttempts: 1 })], executor(answers), new AbortController().signal)
+
+			expect(delays).toEqual([2_147_483_647, 2_147_483_647, 705_032_706])
+			expect(report.results[0]).toMatchObject({ outcome: 'failed', reason: 'timeout' })
+		} finally {
+			globalThis.setTimeout = original
+		}
+	})
+
 	test('the deadline aborts the attempt it belongs to', async () => {
 		let aborted = false
 		const answers = {

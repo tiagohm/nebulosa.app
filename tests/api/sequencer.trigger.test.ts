@@ -91,6 +91,26 @@ describe('sequencer trigger evaluator', () => {
 		expect(kinds(policies, anchors(), observation({ filter: 'L', installedFilter: 'L' }))).toEqual([])
 	})
 
+	test('keeps the filter change pending after the preparation installed the filter of a suppressed run', () => {
+		const policies = { autofocus: autofocus({ onFilterChange: true, minimumTimeBetweenRuns: 600 }) }
+		const state = sequencerAnchorAdvanced(anchors(), 'autofocus', observation({ filter: 'R' }))
+
+		expect(kinds(policies, state, observation({ instant: START + 60_000, filter: 'G', installedFilter: 'R' }))).toEqual([])
+		expect(kinds(policies, state, observation({ instant: START + 700_000, filter: 'G', installedFilter: 'G' }))).toEqual(['autofocus:filterChange'])
+	})
+
+	test('keeps the filter change pending after a run that did not advance the anchor', () => {
+		const policies = { autofocus: autofocus({ onFilterChange: true }), dither: dither({ afterFilterChange: true }) }
+		const state = sequencerAnchorAdvanced(sequencerAnchorAdvanced(anchors(), 'autofocus', observation({ filter: 'R' })), 'dither', observation({ filter: 'R' }))
+
+		expect(kinds(policies, state, observation({ filter: 'G', installedFilter: 'R' }))).toEqual(['autofocus:filterChange', 'dither:filterChange'])
+		expect(kinds(policies, state, observation({ instant: START + 60_000, filter: 'G', installedFilter: 'G' }))).toEqual(['autofocus:filterChange', 'dither:filterChange'])
+
+		const ran = sequencerAnchorAdvanced(sequencerAnchorAdvanced(state, 'autofocus', observation({ filter: 'G' })), 'dither', observation({ filter: 'G' }))
+
+		expect(kinds(policies, ran, observation({ instant: START + 120_000, filter: 'G', installedFilter: 'G' }))).toEqual([])
+	})
+
 	test('counts frames per accepted sky frame and fires the count conditions on the declared spacing', () => {
 		const policies = { autofocus: autofocus({ everyFrames: 3 }), dither: dither({ everyFrames: 2 }) }
 		let state = anchors()

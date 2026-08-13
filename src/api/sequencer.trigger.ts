@@ -171,13 +171,25 @@ function reachedElapsed(elapsed: number, every: number) {
 	return every > 0 && elapsed >= every * 1000
 }
 
-// Whether the frame requires a filter other than the one installed.
+// Whether the frame requires a filter other than the one the trigger last ran through.
+//
+// The reference is the anchor and not the wheel, because the wheel stops describing the change as soon as
+// something moves it. The frame preparation of the same safe point installs the filter the frame needs
+// whether or not the trigger ran for it — a run suppressed by `minimumTimeBetweenRuns`, one skipped, and one
+// whose retries were exhausted under `continue` all leave the anchor where it was — and from the next safe
+// point on the selection and the installed filter agree, so a condition stated over the wheel would report
+// the change as already served by a run that never happened.
+//
+// Until the trigger has ever run there is no anchor to measure against, and the wheel is the only reference
+// of a change there is: a first frame taken through the filter already installed changed nothing.
 //
 // The comparison is over the selection and not over the movement, which the frame preparation only performs
 // later in the safe point: the whole point of the condition is to focus or dither for the filter the frame
 // is about to be taken through, before anything moves.
-function filterChanged(observation: SequencerTriggerObservation) {
-	return observation.filter !== undefined && observation.filter !== observation.installedFilter
+function filterChanged(anchor: SequencerTriggerAnchor, observation: SequencerTriggerObservation) {
+	if (observation.filter === undefined) return false
+
+	return anchor.at === undefined ? observation.filter !== observation.installedFilter : observation.filter !== anchor.filter
 }
 
 // Whether the flip is due at this safe point.
@@ -220,7 +232,7 @@ function autofocusReason(policy: Omit<SequencerAutofocus, 'enabled'>, anchors: S
 				? 'afterMeridianFlip'
 				: observation.recovered === true && triggers.afterRecovery
 					? 'afterRecovery'
-					: triggers.onFilterChange && filterChanged(observation)
+					: triggers.onFilterChange && filterChanged(anchor, observation)
 						? 'filterChange'
 						: reachedCount(anchor.frames, triggers.everyFrames)
 							? 'frames'
@@ -258,7 +270,7 @@ function ditherReason(policy: Omit<SequencerDither, 'enabled'>, anchors: Sequenc
 		? 'beforeFirstFrame'
 		: flipped && policy.afterMeridianFlip
 			? 'afterMeridianFlip'
-			: policy.afterFilterChange && filterChanged(observation)
+			: policy.afterFilterChange && filterChanged(anchor, observation)
 				? 'filterChange'
 				: reachedCount(anchor.frames, policy.everyFrames)
 					? 'frames'

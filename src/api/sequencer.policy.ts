@@ -79,7 +79,13 @@ export interface SequencerPolicyFailure {
 //
 // A `maximumDelay` below `delay` is honored literally and produces the shorter wait, like every other field
 // of the policy.
+//
+// A declared spacing of zero is answered before the power is taken. The overflow the cap absorbs is a finite
+// value meeting `Infinity`, and `0 * Infinity` is `NaN` instead: a policy asking to retry immediately would
+// hand the executor a wait that is not a number, which is the one thing a delay must never be.
 function retryDelay(retry: SequencerRetryPolicy, attempt: number) {
+	if (retry.delay <= 0) return 0
+
 	return Math.min(retry.delay * retry.backoff ** (attempt - 1), retry.maximumDelay) * 1000
 }
 

@@ -52,6 +52,12 @@ describe('retry', () => {
 	test('a zero delay retries without waiting', () => {
 		expect(sequencerFailurePolicy(failure({ retry: retry({ delay: 0 }) }))).toMatchObject({ kind: 'retry', delay: 0 })
 	})
+
+	test('a zero delay stays zero at an attempt whose backoff overflows', () => {
+		const policy = retry({ maxAttempts: 2000, delay: 0, backoff: 2 })
+
+		expect(sequencerFailurePolicy(failure({ attempt: 1100, retry: policy }))).toMatchObject({ kind: 'retry', delay: 0 })
+	})
 })
 
 describe('terminal decision', () => {

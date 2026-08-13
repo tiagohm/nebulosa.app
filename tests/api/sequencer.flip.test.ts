@@ -166,6 +166,13 @@ describe('meridian flip block', () => {
 		expect(handler.validate(flipConfiguration({ focusing: focusing() }), { nodeId: 'target[m42].trigger.meridianFlip', devices }).ok).toBe(true)
 	})
 
+	test('accepts a definition whose recovery names a filter but carries no wheel', () => {
+		const handler = sequencerMeridianFlipHandler({} as never)
+		const focusingFilter = { ...focusing()!, capture: { ...focusing()!.capture, filter: { type: 'name' as const, name: 'Luminance' } } }
+
+		expect(handler.validate(flipConfiguration({ focusing: focusingFilter }), { nodeId: 'target[m42].trigger.meridianFlip', devices: { mount: 'Mount Simulator', camera: 'Camera Simulator', focuser: 'Focuser Simulator' } }).ok).toBe(true)
+	})
+
 	test('crosses towards where the mount is pointing rather than where the night started', async () => {
 		const commands: Command[] = []
 		const handler = sequencerMeridianFlipHandler(flipServices(commands))

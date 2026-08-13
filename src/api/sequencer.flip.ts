@@ -161,10 +161,14 @@ async function refocus(services: SequencerMeridianFlipServices, context: Sequenc
 // definition can be edited to drop the focuser after the flip that refocuses was lowered, and finding that out
 // at the first crossing means finding it out in the middle of the night, with the mount already on the other
 // side.
+//
+// Only the mandatory bindings are demanded. The wheel is bound as optional precisely so a rig without one
+// recovers through the installed path instead of refusing, and requiring it here would refuse the whole
+// session at validation for the device the binding exists to do without.
 function validateMeridianFlip(configuration: unknown, context: SequencerValidationContext): SequencerValidationResult<SequencerMeridianFlipTrigger> {
 	const flip = configuration as SequencerMeridianFlipTrigger
 	const issues = flipResources(flip)
-		.filter((binding) => context.devices[binding.role] === undefined)
+		.filter((binding) => binding.optional !== true && context.devices[binding.role] === undefined)
 		.map((binding) => ({ path: `devices.${binding.role}`, message: `the ${binding.role} is required to flip across the meridian` }))
 
 	return issues.length > 0 ? { ok: false, issues } : { ok: true, configuration: flip }

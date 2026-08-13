@@ -346,6 +346,38 @@ describe('frame preparation', () => {
 		expect(retried).toMatchObject({ type: 'completed', value: { commanded: ['filter', 'focusOffset'], focusShift: 250 } })
 	})
 
+	test('ends the preparation when the wheel does not come back from a failed focus offset', async () => {
+		const commands: Command[] = []
+		const carousel = wheel(['L', 'Ha'], 0)
+		const optics = focuser(12000)
+		const offsets = [
+			{ filter: { type: 'name' as const, name: 'L' }, offset: 100 },
+			{ filter: { type: 'name' as const, name: 'Ha' }, offset: 350 },
+		]
+		const request = preparation({ group: group({ filter: { type: 'name', name: 'Ha' } }), filterOffsets: offsets })
+		let moves = 0
+		const services: SequencerPreparationServices = {
+			...prepareServices(commands, { focuserMoveTo: 'timeout' }),
+			wheelCommander: {
+				moveTo: (_scope: unknown, device: Wheel, slot: number) => {
+					commands.push({ name: 'wheelMoveTo', detail: slot })
+					if (++moves > 1) return Promise.resolve(failedOperationResult('alert', 'boom'))
+					device.position = slot
+					return Promise.resolve(successfulOperationResult(undefined))
+				},
+			} as unknown as SequencerPreparationServices['wheelCommander'],
+		}
+		const result = await runFramePreparation(services, actionContext({ camera: { device: camera() }, wheel: { device: carousel }, focuser: { device: optics }, mount: { device: mount(true) } }), request)
+
+		expect(result).toMatchObject({ type: 'fatalFailure', reason: 'timeout' })
+		expect(carousel.position).toBe(1)
+		expect(commands).toEqual([
+			{ name: 'wheelMoveTo', detail: 1 },
+			{ name: 'focuserMoveTo', detail: 12250 },
+			{ name: 'wheelMoveTo', detail: 0 },
+		])
+	})
+
 	test('moves the wheel without touching the focus when the two filters share the same path', async () => {
 		const commands: Command[] = []
 		const carousel = wheel(['L', 'R'], 0)

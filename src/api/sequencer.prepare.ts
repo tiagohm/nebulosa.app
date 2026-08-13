@@ -292,10 +292,15 @@ export async function runFramePreparation(services: SequencerPreparationServices
 					// exists only while the transition is being made. A retry arriving with the wheel already at the
 					// target derives no shift at all and exposes the frame at the focus of the filter before it.
 					// Putting the wheel back is what keeps the pair atomic without remembering anything: the next
-					// attempt sees the same difference this one saw and commands both halves again. Nothing is
-					// reported about the restore — the focuser failure is what explains the preparation, and a wheel
-					// that did not come back leaves the retry deriving its offset from wherever the wheel is.
+					// attempt sees the same difference this one saw and commands both halves again.
 					await services.wheelCommander.moveTo(context.scope, wheel, installed)
+
+					// A wheel that did not come back is the one case the atomicity argument does not cover: nothing
+					// remembers the offset that was owed, and the retry would find the filter already installed, derive
+					// no shift and expose the frame with the focuser still serving the previous filter. Retrying is
+					// what makes that silent, so the preparation is ended instead of offered again — the pair can only
+					// be repaired by moving the wheel or the focuser by hand.
+					if (wheel.position !== installed) return { type: 'fatalFailure', reason: focused.reason, detail: `the focuser did not take the offset of the new filter and the wheel did not return to the previous one${focused.error === undefined ? '' : `: ${focused.error}`}` }
 
 					return sequencerActionFailure(focused, 'the focuser did not take the offset of the new filter')
 				}

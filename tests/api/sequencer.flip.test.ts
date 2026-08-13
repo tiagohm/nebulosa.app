@@ -17,7 +17,7 @@ interface Command {
 }
 
 function mount(pierSide: PierSide = 'EAST'): Mount {
-	return { type: 'mount', name: 'Mount Simulator', id: 'mount-1', connected: true, canFlip: true, hasPierSide: true, pierSide, equatorialCoordinate: { rightAscension: 1.41, declination: -0.1 } } as unknown as Mount
+	return { type: 'mount', name: 'Mount Simulator', id: 'mount-1', connected: true, canFlip: true, hasPierSide: true, pierSide, equatorialCoordinate: { rightAscension: 1.41, declination: -0.1 }, geographicCoordinate: { longitude: 0 } } as unknown as Mount
 }
 
 function centering(): SequencerMeridianFlipTrigger['centering'] {

@@ -18,7 +18,7 @@ interface Command {
 }
 
 function mount(): Mount {
-	return { type: 'mount', name: 'Mount Simulator', id: 'mount-1', connected: true, tracking: false, pierSide: 'WEST', equatorialCoordinate: { rightAscension: 1.4, declination: -0.09 } } as unknown as Mount
+	return { type: 'mount', name: 'Mount Simulator', id: 'mount-1', connected: true, tracking: false, pierSide: 'WEST', equatorialCoordinate: { rightAscension: 1.4, declination: -0.09 }, geographicCoordinate: { longitude: 0 } } as unknown as Mount
 }
 
 function camera(): Camera {

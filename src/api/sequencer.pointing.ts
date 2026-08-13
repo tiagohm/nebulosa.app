@@ -1,4 +1,5 @@
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
+import { timeNow } from 'nebulosa/src/astronomy/time/time'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
 import { isCamera, isMount, isWheel } from 'nebulosa/src/devices/indi/device'
 import type { Camera, Mount, MountTargetCoordinate, PierSide } from 'nebulosa/src/devices/indi/device'
@@ -6,6 +7,7 @@ import { sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraCaptureStart } from '#/camera'
+import { coordinateInfo } from '#/mount'
 import type { SequencerAuxiliaryCapture, SequencerPlateSolver } from '#/sequencer'
 import type { CameraHandler } from './camera'
 import type { MountCommander } from './mount.commander'
@@ -88,8 +90,10 @@ function auxiliaryExtension(recipe: SequencerAuxiliaryCapture) {
 // target declared in another frame carries its J2000 point as well — the lowering resolves every frame it was
 // given — and a target that somehow carries none is compared against its primary point, which is the closest
 // thing to an answer available and is only ever reached by a coordinate the compiler did not fill in.
-function j2000Of(coordinates: MountTargetCoordinate<Angle>) {
-	return coordinates.J2000 ?? coordinates[coordinates.type]
+function j2000Of(coordinates: MountTargetCoordinate<Angle>, longitude: Angle) {
+	if (coordinates.type === 'J2000') return [coordinates.J2000!.x, coordinates.J2000!.y] as const
+	const info = coordinateInfo(timeNow(true), longitude, coordinates, { equatorialJ2000: true })
+	return info.equatorialJ2000
 }
 
 // Builds the camera request of one auxiliary exposure from a declared recipe and the destination the runtime
@@ -245,9 +249,7 @@ export async function runCentering(services: SequencerCenteringServices, context
 
 	if (camera === undefined) return sequencerMissingRole('camera')
 
-	const target = j2000Of(configuration.coordinates)
-
-	if (target === undefined) return { type: 'fatalFailure', reason: 'unexpectedState', detail: 'the centering target carries no coordinates to compare a solution against' }
+	const target = j2000Of(configuration.coordinates, mount.geographicCoordinate.longitude)
 
 	const prepared = await prepareCenteringFilter(services, context, configuration)
 
@@ -262,7 +264,7 @@ export async function runCentering(services: SequencerCenteringServices, context
 
 		if (solution.type !== 'completed') return solution
 
-		const separation = sphericalSeparation(solution.value.rightAscension, solution.value.declination, target.x, target.y)
+		const separation = sphericalSeparation(solution.value.rightAscension, solution.value.declination, target[0], target[1])
 		const outcome: SequencerCenterOutcome = { attempts: attempt, separation, rightAscension: solution.value.rightAscension, declination: solution.value.declination, verified: true, synced }
 
 		if (separation <= configuration.tolerance) return { type: 'completed', value: outcome }
@@ -353,8 +355,8 @@ async function solveOneFrame(services: SequencerCenteringServices, context: Sequ
 
 	context.progress({ detail: `solving the centering frame ${attempt}` })
 
-	const hint = j2000Of(configuration.coordinates)
-	const request = solveRequest(configuration.solver, path, `${context.sessionId}:${context.nodeId}:${attempt}`, hint?.x ?? 0, hint?.y ?? 0)
+	const hint = j2000Of(configuration.coordinates, mount.geographicCoordinate.longitude)
+	const request = solveRequest(configuration.solver, path, `${context.sessionId}:${context.nodeId}:${attempt}`, hint[0], hint[1])
 	const solution = await services.plateSolver.start(request, context.signal)
 
 	if (solution === undefined) {

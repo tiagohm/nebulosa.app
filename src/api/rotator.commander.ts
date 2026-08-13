@@ -240,6 +240,19 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 // Resolves a requested angle, in degrees, to one the rotator can be commanded to and will report back. An
 // angle outside the driver's limits is silently clipped by it, and waiting for the requested one would only
 // end in a timeout.
+//
+// The angle of a rotator is a direction and not a position on a rail: it repeats every 360°, and which
+// representative of a direction the driver publishes is a convention of that driver. So an angle outside the
+// published interval is first offered its equivalent inside it — 350° to a rotator reporting -180..180 is the
+// same orientation as -10°, and clipping it to 180° would leave the field about 170° from what was asked for
+// while every check reported success. Clipping remains for what is genuinely unreachable, which is a driver
+// publishing less than a full turn.
 export function rotatorAngle(rotator: Rotator, angle: number) {
-	return clamp(angle, rotator.angle.min, rotator.angle.max)
+	const { min, max } = rotator.angle
+
+	if (angle >= min && angle <= max) return angle
+
+	const wrapped = angle - 360 * Math.floor((angle - min) / 360)
+
+	return wrapped <= max ? wrapped : clamp(angle, min, max)
 }

@@ -8,7 +8,7 @@ import { waitUntil } from 'root/tests/api/util'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
-import { RotatorCommander } from 'src/api/rotator.commander'
+import { RotatorCommander, rotatorAngle } from 'src/api/rotator.commander'
 import { failedOperationResult } from '#/orchestration'
 
 const rotatorManager = new RotatorManager()
@@ -84,17 +84,30 @@ test('resolves immediately when the rotator already holds the requested angle', 
 	}
 })
 
-test('clips an angle to the rotator range before dispatching it', async () => {
+test('wraps an angle outside the rotator range before dispatching it', async () => {
 	const rotator = await connected()
 	const moveTo = spyOn(rotatorManager, 'moveTo').mockImplementation(() => {})
 
 	try {
 		expect(await rotatorCommander.moveTo(operationCoordinator, rotator, 500, { timeout: 20, settleTimeout: 20 })).toMatchObject(failedOperationResult('timeout'))
-		expect(moveTo).toHaveBeenCalledWith(rotator, rotator.angle.max)
+		expect(moveTo).toHaveBeenCalledWith(rotator, 140)
 		await waitUntil(() => isFree(rotator))
 	} finally {
 		moveTo.mockRestore()
 	}
+})
+
+test('resolves an angle to the equivalent one the driver publishes', () => {
+	const signed = { angle: { value: 0, min: -180, max: 180 } } as unknown as Rotator
+	const unsigned = { angle: { value: 0, min: 0, max: 360 } } as unknown as Rotator
+	const limited = { angle: { value: 0, min: 0, max: 180 } } as unknown as Rotator
+
+	expect(rotatorAngle(signed, 350)).toBe(-10)
+	expect(rotatorAngle(signed, 45)).toBe(45)
+	expect(rotatorAngle(signed, -190)).toBe(170)
+	expect(rotatorAngle(unsigned, -10)).toBe(350)
+	expect(rotatorAngle(unsigned, 400)).toBe(40)
+	expect(rotatorAngle(limited, 270)).toBe(180)
 })
 
 test('homes after observing the homing motion and supports synchronization and reversal', async () => {

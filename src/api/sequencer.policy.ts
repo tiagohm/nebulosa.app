@@ -1,4 +1,5 @@
 import type { SequencerFailureReason, SequencerRetryPolicy } from '#/sequencer'
+import type { SequencerDesiredState } from '#/sequencer.state'
 
 // What a session does when one action did not succeed (§10).
 //
@@ -60,8 +61,12 @@ export interface SequencerPolicyFailure {
 	// Terminal decision the feature declares, when it declares one. Absent for the actions that only carry a
 	// retry policy, where `onExhausted` decides.
 	readonly onFailure?: SequencerOnFailure
-	// Whether a control command in the queue explains an `aborted` outcome. Only meaningful for `aborted`.
-	readonly commanded?: boolean
+	// Desired state a control command in the queue converged to, when one explains an `aborted` outcome. Only
+	// meaningful for `aborted`, and absent when nothing commanded the cancellation. It is the state and not a
+	// flag because both of the states that cancel an action reach here: an immediate stop and an immediate
+	// pause both cancel what is running, and only the origin separates a session that is shutting down from one
+	// that is waiting for its operator.
+	readonly commandedBy?: Exclude<SequencerDesiredState, 'running'>
 	// Cause of the cancellation behind an `aborted` outcome, when the layer that cancelled reported one.
 	readonly abortedBy?: SequencerFailureReason
 }
@@ -109,19 +114,24 @@ function retryable(failure: SequencerPolicyFailure) {
 // Decides what the session does about one failed action (§10).
 //
 // An `aborted` outcome is decided by its origin rather than by the policy, because the origin is part of the
-// reason. A cancellation a control command explains is an intentional shutdown and ends the session
-// `stopped`; a cancellation nothing explains is a failure, and the cause of the cancellation — a disconnect,
+// reason. A cancellation a control command explains is intentional and converges to the state that command
+// asked for; a cancellation nothing explains is a failure, and the cause of the cancellation — a disconnect,
 // a removal, a quiescence — is carried forward instead. The device lifecycle cancels the active operation
 // when a device goes away, and that `aborted` has no command behind it: without this rule a session ends
 // "intentionally stopped" because of a USB cable, and the history records a human decision nobody made. When
 // in doubt the answer is failure, because attributing intent where there was none is the error that erases
 // the information.
 //
-// It is also why an aborted action is never retried: neither origin leaves anything to retry against, and the
-// commanded one would fight the very stop that produced it.
+// The commanded origin carries *which* state it converged to, and the two are not interchangeable: an
+// immediate pause cancels the running action exactly like an immediate stop does (§11.3), so reading every
+// commanded cancellation as a stop would shut a session down because the operator asked it to wait.
+//
+// It is also why an aborted action is never retried: no origin leaves anything to retry against, the stopped
+// one would fight the very stop that produced it, and the paused one is re-entered by the resume instead.
 export function sequencerFailurePolicy(failure: SequencerPolicyFailure): SequencerPolicyDecision {
 	if (failure.reason === 'aborted') {
-		if (failure.commanded === true) return { kind: 'stop' }
+		if (failure.commandedBy === 'stopped') return { kind: 'stop' }
+		if (failure.commandedBy === 'paused') return { kind: 'pause' }
 		return { kind: 'fail', reason: failure.abortedBy ?? 'aborted', detail: failure.detail }
 	}
 

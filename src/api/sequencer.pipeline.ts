@@ -181,7 +181,9 @@ async function runStep(executor: SequencerPipelineExecutor, step: SequencerPipel
 
 		if (failure === undefined) return { ...base, outcome: result.type === 'skipped' ? 'skipped' : 'succeeded', detail: result.type === 'skipped' ? result.detail : undefined, attempts: attempt }
 
-		// A cancellation the session itself commanded, which is the only thing that ends the whole list.
+		// A cancellation the session itself commanded, which is the only thing that ends the whole list. It is
+		// reported as a stop whatever asked for it, because a pipeline has no paused state of its own: the
+		// runtime does not cancel one to pause a session, and a cancelled pipeline is a session leaving the plan.
 		const commanded = failure.reason === 'aborted' && signal.aborted
 
 		const decision = sequencerFailurePolicy({
@@ -189,7 +191,7 @@ async function runStep(executor: SequencerPipelineExecutor, step: SequencerPipel
 			detail: failure.detail,
 			attempt,
 			retry: failure.fatal ? withoutRetries(configuration) : configuration.retry,
-			commanded,
+			commandedBy: commanded ? 'stopped' : undefined,
 		})
 
 		if (decision.kind === 'retry') {

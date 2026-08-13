@@ -1,7 +1,7 @@
 import type { SequencerFailureReason } from '#/sequencer'
 import type { SequencerPlanFrameGroup } from '#/sequencer.plan'
 import type { SequencerCaptureProgress } from '#/sequencer.state'
-import type { SequencerPolicyDecision } from './sequencer.policy'
+import type { SequencerPolicyDecision, SequencerPolicyFailure } from './sequencer.policy'
 import { sequencerFailurePolicy } from './sequencer.policy'
 import { abandonSlot, attemptsSpent } from './sequencer.progress'
 import { frameGroupDegraded, frameGroupReachedTarget, groupProgressOf, targetProgressOf } from './sequencer.scheduler'
@@ -41,8 +41,8 @@ export interface SequencerSlotFailure extends SequencerSlotCause {
 	// not the attempt the policy counts: the window may have been reopened by a resume, and the two are
 	// reconciled here.
 	readonly attempt: number
-	// Whether a control command in the queue explains an `aborted` outcome.
-	readonly commanded?: boolean
+	// Desired state a control command in the queue converged to, when one explains an `aborted` outcome.
+	readonly commandedBy?: SequencerPolicyFailure['commandedBy']
 	// Cause of the cancellation behind an `aborted` outcome, when the layer that cancelled reported one.
 	readonly abortedBy?: SequencerFailureReason
 }
@@ -50,14 +50,16 @@ export interface SequencerSlotFailure extends SequencerSlotCause {
 // What the caller does with the slot.
 // - retry: expose again under `attempt`, the next physical attempt, after waiting `delay` milliseconds.
 // - abandon: the slot closes without an accepted frame, the counters move, and the cursor advances.
-// - hold: the attempts are exhausted and the session pauses with the slot still on the cursor, so a resume
-//   can grant it a new window.
+// - hold: the session pauses with the slot still on the cursor. `exhausted` says whether the window ran out,
+//   which is what separates a resume that has to grant a new window from one that simply exposes again — an
+//   operator pausing mid-exposure spends no attempt, and granting a window there would hand the slot a budget
+//   the policy never allowed.
 // - stop: leave the plan and run the terminal pipeline.
 // - fail: end the session, carrying the cause of the last attempt.
 export type SequencerSlotDecision =
 	| { readonly kind: 'retry'; readonly attempt: number; readonly delay: number }
 	| { readonly kind: 'abandon'; readonly progress: SequencerCaptureProgress; readonly cause: SequencerSlotCause }
-	| { readonly kind: 'hold'; readonly cause: SequencerSlotCause }
+	| { readonly kind: 'hold'; readonly cause: SequencerSlotCause; readonly exhausted: boolean }
 	| { readonly kind: 'stop' }
 	| { readonly kind: 'fail'; readonly reason: SequencerFailureReason; readonly detail?: string }
 
@@ -70,8 +72,8 @@ export type SequencerSlotDecision =
 // exhaust again on its first failure.
 //
 // A policy that gives up on the action closes the slot in one of two ways, and which one it is matters:
-// `skip` and `continue` abandon it and the cursor advances, while `pause` leaves it on the cursor with its
-// window exhausted, which is the state a resume grants a new window against. Leaving the slot open under
+// `skip` and `continue` abandon it and the cursor advances, while `pause` leaves it on the cursor, reporting
+// whether the window ran out — which is what a resume grants a new window against. Leaving the slot open under
 // `skip` would be the infinite loop this section exists to rule out — `accepted` never moves and the
 // scheduler keeps producing work.
 export function sequencerSlotFailure(failure: SequencerSlotFailure): SequencerSlotDecision {
@@ -84,7 +86,7 @@ export function sequencerSlotFailure(failure: SequencerSlotFailure): SequencerSl
 		detail: failure.detail,
 		attempt: attemptsSpent(counters, attempt),
 		retry: group.retry,
-		commanded: failure.commanded,
+		commandedBy: failure.commandedBy,
 		abortedBy: failure.abortedBy,
 	})
 
@@ -102,7 +104,9 @@ function slotDecisionOf(decision: SequencerPolicyDecision, failure: SequencerSlo
 		case 'continue':
 			return { kind: 'abandon', progress: abandonSlot(failure.progress, failure.targetId, failure.group), cause }
 		case 'pause':
-			return { kind: 'hold', cause }
+			// An operator pausing mid-exposure and a slot that ran out of attempts both hold the slot on the
+			// cursor, and only the second one owes it a new attempt window on resume.
+			return { kind: 'hold', cause, exhausted: failure.commandedBy === undefined }
 		case 'stop':
 			return { kind: 'stop' }
 		default:

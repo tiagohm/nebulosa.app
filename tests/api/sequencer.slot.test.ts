@@ -58,7 +58,11 @@ describe('slot attempts', () => {
 	test('holds the slot on the cursor when the policy pauses', () => {
 		const lum = group(undefined, { onExhausted: 'pause' })
 
-		expect(sequencerSlotFailure(failure({ group: lum, attempt: 2, detail: 'cooler' }))).toEqual({ kind: 'hold', cause: { reason: 'timeout', detail: 'cooler' } })
+		expect(sequencerSlotFailure(failure({ group: lum, attempt: 2, detail: 'cooler' }))).toEqual({ kind: 'hold', cause: { reason: 'timeout', detail: 'cooler' }, exhausted: true })
+	})
+
+	test('an abort commanded by a pause holds the slot without spending its window', () => {
+		expect(sequencerSlotFailure(failure({ reason: 'aborted', commandedBy: 'paused', detail: 'operator' }))).toEqual({ kind: 'hold', cause: { reason: 'aborted', detail: 'operator' }, exhausted: false })
 	})
 
 	test('preserves the device reason when the policy fails', () => {
@@ -66,7 +70,7 @@ describe('slot attempts', () => {
 	})
 
 	test('a commanded abort stops instead of consuming the slot', () => {
-		expect(sequencerSlotFailure(failure({ reason: 'aborted', commanded: true }))).toEqual({ kind: 'stop' })
+		expect(sequencerSlotFailure(failure({ reason: 'aborted', commandedBy: 'stopped' }))).toEqual({ kind: 'stop' })
 	})
 
 	test('an abort with no matching command fails with the cause of the cancellation', () => {

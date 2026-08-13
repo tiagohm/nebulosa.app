@@ -85,7 +85,11 @@ describe('terminal decision', () => {
 
 describe('aborted', () => {
 	test('a commanded abort is an intentional shutdown', () => {
-		expect(sequencerFailurePolicy(failure({ reason: 'aborted', commanded: true }))).toEqual({ kind: 'stop' })
+		expect(sequencerFailurePolicy(failure({ reason: 'aborted', commandedBy: 'stopped' }))).toEqual({ kind: 'stop' })
+	})
+
+	test('an abort commanded by a pause holds the session instead of ending it', () => {
+		expect(sequencerFailurePolicy(failure({ reason: 'aborted', commandedBy: 'paused' }))).toEqual({ kind: 'pause' })
 	})
 
 	test('an abort with no matching command is a failure', () => {
@@ -100,7 +104,7 @@ describe('aborted', () => {
 		const policy = retry({ retryOn: ['aborted', 'timeout'], maxAttempts: 5 })
 
 		expect(sequencerFailurePolicy(failure({ reason: 'aborted', retry: policy }))).toMatchObject({ kind: 'fail' })
-		expect(sequencerFailurePolicy(failure({ reason: 'aborted', commanded: true, retry: policy }))).toEqual({ kind: 'stop' })
+		expect(sequencerFailurePolicy(failure({ reason: 'aborted', commandedBy: 'stopped', retry: policy }))).toEqual({ kind: 'stop' })
 	})
 
 	test('an uncommanded abort ignores the terminal decision of the action', () => {

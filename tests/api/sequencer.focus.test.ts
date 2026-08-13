@@ -42,7 +42,7 @@ function autofocusConfiguration(overrides?: Partial<AutofocusConfiguration>): Au
 	}
 }
 
-function actionContext(devices: Record<string, { readonly device: unknown }>, auxiliary?: (ordinal: number) => SequencerAuxiliaryTarget | undefined): SequencerActionContext {
+function actionContext(devices: Record<string, { readonly device: unknown }>, auxiliary?: (ordinal: number, extension: string) => SequencerAuxiliaryTarget | undefined): SequencerActionContext {
 	let ordinal = 0
 
 	return {
@@ -55,13 +55,13 @@ function actionContext(devices: Record<string, { readonly device: unknown }>, au
 		request: (role) => devices[role] as never,
 		progress: () => {},
 		artifact: () => {},
-		auxiliary: () => (auxiliary ?? defaultAuxiliary)(++ordinal),
+		auxiliary: (_kind, extension) => (auxiliary ?? defaultAuxiliary)(++ordinal, extension),
 		checkpoint: { containers: [], attempts: {}, completed: [], capture: {}, anchors: sequencerInitialTriggerAnchors(1_000_000), definitionRevision: 1, handlerVersions: {} },
 	}
 }
 
-function defaultAuxiliary(ordinal: number): SequencerAuxiliaryTarget {
-	return { directory: '/data/session-1/.auxiliary/autofocus', fileName: `autofocus-${ordinal}.fits`, path: `/data/session-1/.auxiliary/autofocus/autofocus-${ordinal}.fits` }
+function defaultAuxiliary(ordinal: number, extension = 'fits'): SequencerAuxiliaryTarget {
+	return { directory: '/data/session-1/.auxiliary/autofocus', fileName: `autofocus-${ordinal}.${extension}`, path: `/data/session-1/.auxiliary/autofocus/autofocus-${ordinal}.${extension}` }
 }
 
 function focusServices(commands: Command[], outcome: OperationResult<AutoFocusRunOutcome>, target?: Focuser): SequencerAutofocusServices {
@@ -194,6 +194,25 @@ describe('autofocus block', () => {
 		await handler.execute(actionContext({ camera: { device: camera() }, focuser: { device: focuser(12000) } }), autofocusConfiguration())
 
 		expect(destinations.map((destination) => destination?.fileName)).toEqual(['autofocus-1.fits', 'autofocus-2.fits'])
+	})
+
+	test('names every sampled frame after the container its recipe transfers', async () => {
+		const destinations: (SequencerAuxiliaryTarget | undefined)[] = []
+		const services = focusServices([], focused(12500))
+		const handler = sequencerAutofocusHandler({
+			...services,
+			runner: {
+				start: (_scope: unknown, _camera: Camera, _focuser: Focuser, _request: unknown, destination: () => SequencerAuxiliaryTarget | undefined) => {
+					destinations.push(destination())
+					return { handle: { result: Promise.resolve(focused(12500)) }, finish: () => {} }
+				},
+			} as unknown as SequencerAutofocusServices['runner'],
+		})
+		const configuration = autofocusConfiguration({ capture: { ...autofocusConfiguration().capture, transferFormat: 'XISF' } })
+
+		await handler.execute(actionContext({ camera: { device: camera() }, focuser: { device: focuser(12000) } }), configuration)
+
+		expect(destinations.map((destination) => destination?.fileName)).toEqual(['autofocus-1.xisf'])
 	})
 
 	test('keeps a search that found no focus as a run still owed instead of a completed one', async () => {

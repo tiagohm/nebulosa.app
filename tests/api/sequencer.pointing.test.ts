@@ -52,7 +52,7 @@ function centerConfiguration(overrides?: Partial<SequencerCenter>): SequencerCen
 	}
 }
 
-function actionContext(devices: Record<string, { readonly device: unknown }>, auxiliary?: (ordinal: number) => SequencerAuxiliaryTarget | undefined): SequencerActionContext {
+function actionContext(devices: Record<string, { readonly device: unknown }>, auxiliary?: (ordinal: number, extension: string) => SequencerAuxiliaryTarget | undefined): SequencerActionContext {
 	let ordinal = 0
 
 	return {
@@ -65,13 +65,13 @@ function actionContext(devices: Record<string, { readonly device: unknown }>, au
 		request: (role) => devices[role] as never,
 		progress: () => {},
 		artifact: () => {},
-		auxiliary: () => (auxiliary ?? defaultAuxiliary)(++ordinal),
+		auxiliary: (_kind, extension) => (auxiliary ?? defaultAuxiliary)(++ordinal, extension),
 		checkpoint: { containers: [], attempts: {}, completed: [], capture: {}, anchors: sequencerInitialTriggerAnchors(1_000_000), definitionRevision: 1, handlerVersions: {} },
 	}
 }
 
-function defaultAuxiliary(ordinal: number): SequencerAuxiliaryTarget {
-	return { directory: '/data/session-1/.auxiliary/centering', fileName: `centering-${ordinal}.fits`, path: `/data/session-1/.auxiliary/centering/centering-${ordinal}.fits` }
+function defaultAuxiliary(ordinal: number, extension = 'fits'): SequencerAuxiliaryTarget {
+	return { directory: '/data/session-1/.auxiliary/centering', fileName: `centering-${ordinal}.${extension}`, path: `/data/session-1/.auxiliary/centering/centering-${ordinal}.${extension}` }
 }
 
 function solution(rightAscension: number, declination: number): PlateSolution {
@@ -212,6 +212,16 @@ describe('centering block', () => {
 		// Each exposure lands on its own reserved destination, so a loop never overwrites the frame that decided
 		// the previous correction.
 		expect(commands.filter((command) => command.name === 'capture').map((command) => command.detail)).toEqual(['centering-1.fits', 'centering-2.fits'])
+	})
+
+	test('names every centering frame after the container its recipe transfers', async () => {
+		const commands: Command[] = []
+		const handler = sequencerCenterHandler(centeringServices(commands, [solution(1.4, -0.09)]))
+		const configuration = centerConfiguration()
+		const result = await handler.execute(actionContext({ mount: { device: mount() }, camera: { device: camera() } }), { ...configuration, capture: { ...configuration.capture, transferFormat: 'XISF' } })
+
+		expect(result).toMatchObject({ type: 'completed' })
+		expect(commands.filter((command) => command.name === 'capture').map((command) => command.detail)).toEqual(['centering-1.xisf'])
 	})
 
 	test('stops right after the correction when no final solve was asked for', async () => {

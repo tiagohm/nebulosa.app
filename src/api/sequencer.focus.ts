@@ -56,8 +56,14 @@ export interface SequencerAutofocusServices {
 // execution changes, which refuses a session compiled against the older meaning instead of running it here.
 const SEQUENCER_FOCUS_VERSION = 1
 
-// Extension of every auxiliary frame, which is the container the sequencer asks the camera to transfer.
-const SEQUENCER_AUXILIARY_EXTENSION = 'fits'
+// Extension of one auxiliary frame, which names the container the camera was asked to transfer.
+//
+// The camera writes the bytes of the declared transfer format under whatever name it is given, so a name that
+// disagrees with the format is a file every reader after it decodes by the wrong rules: the star detection of
+// this very search is the first one to open it.
+function auxiliaryExtension(recipe: SequencerAuxiliaryCapture) {
+	return recipe.transferFormat === 'XISF' ? 'xisf' : 'fits'
+}
 
 // Configuration of the autofocus block, which is the feature without the flag that enabled it.
 type SequencerAutofocusTrigger = Omit<SequencerAutofocus, 'enabled'>
@@ -169,7 +175,7 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 		maxPosition: configuration.algorithm.maximumPosition,
 	}
 
-	const { handle } = services.runner.start(context.scope, camera, focuser, request, () => context.auxiliary('autofocus', SEQUENCER_AUXILIARY_EXTENSION))
+	const { handle } = services.runner.start(context.scope, camera, focuser, request, () => context.auxiliary('autofocus', auxiliaryExtension(configuration.capture)))
 	const result = await handle.result
 
 	if (!result.ok) return sequencerActionFailure(result, 'the autofocus search failed')

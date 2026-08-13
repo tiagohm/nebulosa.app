@@ -73,8 +73,14 @@ export interface SequencerCenteringServices {
 // execution changes, which refuses a session compiled against the older meaning instead of running it here.
 const SEQUENCER_POINTING_VERSION = 1
 
-// Extension of every auxiliary frame, which is the container the sequencer asks the camera to transfer.
-const SEQUENCER_AUXILIARY_EXTENSION = 'fits'
+// Extension of one auxiliary frame, which names the container the camera was asked to transfer.
+//
+// The camera writes the bytes of the declared transfer format under whatever name it is given, so a name that
+// disagrees with the format is a file every reader after it decodes by the wrong rules: the plate solver of
+// this very loop is the first one to open it.
+function auxiliaryExtension(recipe: SequencerAuxiliaryCapture) {
+	return recipe.transferFormat === 'XISF' ? 'xisf' : 'fits'
+}
 
 // Coordinates the plate solution is compared against.
 //
@@ -328,7 +334,7 @@ async function prepareCenteringFilter(services: SequencerCenteringServices, cont
 // holds instead of competing with it, and the solver inherits the action's signal, so a stopped session stops
 // the backend it started.
 async function solveOneFrame(services: SequencerCenteringServices, context: SequencerActionContext, configuration: SequencerCenter, camera: Camera, mount: Mount, attempt: number): Promise<SequencerActionResult<PlateSolution>> {
-	const target = context.auxiliary('centering', SEQUENCER_AUXILIARY_EXTENSION)
+	const target = context.auxiliary('centering', auxiliaryExtension(configuration.capture))
 
 	if (target === undefined) return { type: 'fatalFailure', reason: 'unexpectedState', detail: 'the centering frame has no destination the session could prove' }
 

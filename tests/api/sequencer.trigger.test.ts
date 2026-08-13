@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { evaluateSequencerTriggers, sequencerAnchorAdvanced, sequencerFrameCounted, sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
+import { evaluateSequencerTriggers, sequencerAnchorAdvanced, sequencerFilterBaselined, sequencerFrameCounted, sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
 import type { SequencerTriggerObservation, SequencerTriggerPolicies } from 'src/api/sequencer.trigger'
 import type { SequencerAutofocus, SequencerDither, SequencerMeridianFlip } from '#/sequencer'
 import type { SequencerTriggerAnchors } from '#/sequencer.state'
@@ -109,6 +109,31 @@ describe('sequencer trigger evaluator', () => {
 		const ran = sequencerAnchorAdvanced(sequencerAnchorAdvanced(state, 'autofocus', observation({ filter: 'G' })), 'dither', observation({ filter: 'G' }))
 
 		expect(kinds(policies, ran, observation({ instant: START + 120_000, filter: 'G', installedFilter: 'G' }))).toEqual([])
+	})
+
+	test('keeps the first filter change pending after the run that never happened', () => {
+		const policies = { autofocus: autofocus({ onFilterChange: true }), dither: dither({ afterFilterChange: true }) }
+		const first = observation({ filter: 'G', installedFilter: 'R' })
+		const state = sequencerFilterBaselined(anchors(), first)
+
+		expect(state.autofocus).toEqual({ frames: 0, filter: 'R' })
+		expect(kinds(policies, state, first)).toEqual(['autofocus:filterChange', 'dither:filterChange'])
+
+		const second = observation({ instant: START + 60_000, filter: 'G', installedFilter: 'G' })
+		const baselined = sequencerFilterBaselined(state, second)
+
+		expect(baselined).toBe(state)
+		expect(kinds(policies, baselined, second)).toEqual(['autofocus:filterChange', 'dither:filterChange'])
+
+		const ran = sequencerAnchorAdvanced(sequencerAnchorAdvanced(baselined, 'autofocus', second), 'dither', second)
+
+		expect(kinds(policies, sequencerFilterBaselined(ran, second), observation({ instant: START + 120_000, filter: 'G', installedFilter: 'G' }))).toEqual([])
+	})
+
+	test('records no filter baseline for a session that commands no wheel', () => {
+		const state = anchors()
+
+		expect(sequencerFilterBaselined(state, observation({ filter: 'G' }))).toBe(state)
 	})
 
 	test('counts frames per accepted sky frame and fires the count conditions on the declared spacing', () => {

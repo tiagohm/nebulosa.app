@@ -82,6 +82,30 @@ export function sequencerInitialTriggerAnchors(instant: number): SequencerTrigge
 	return { sessionStart: instant, autofocus: SEQUENCER_INITIAL_TRIGGER_ANCHOR, dither: SEQUENCER_INITIAL_TRIGGER_ANCHOR, driftCheck: SEQUENCER_INITIAL_TRIGGER_ANCHOR }
 }
 
+// Records the filter the session was found on as the reference the first filter change is measured against.
+//
+// The anchor of a trigger that has never run carries no filter, and without one the only reference of a
+// change is the wheel — which stops describing it as soon as the frame preparation of the same safe point
+// installs the filter the frame needs. A first run that then fails, is skipped, or is suppressed leaves the
+// anchor untouched, so from the next safe point on the selection and the wheel agree and the change reports
+// itself as already served by a run that never happened.
+//
+// It is therefore applied at every safe point, before the triggers are evaluated and before anything moves,
+// and the anchors it returns are the ones the checkpoint keeps. It is idempotent and only ever fills an
+// anchor that has never run and carries no filter: once a run advanced the anchor, the filter that run was
+// made through is the reference. A session commanding no wheel reports no installed filter and is left
+// untouched, and the anchors are returned unchanged when there is nothing to record.
+export function sequencerFilterBaselined(anchors: SequencerTriggerAnchors, observation: SequencerTriggerObservation): SequencerTriggerAnchors {
+	const { installedFilter } = observation
+
+	if (installedFilter === undefined) return anchors
+
+	const autofocus = baselinedAnchor(anchors.autofocus, installedFilter)
+	const dither = baselinedAnchor(anchors.dither, installedFilter)
+
+	return autofocus === anchors.autofocus && dither === anchors.dither ? anchors : { ...anchors, autofocus, dither }
+}
+
 // Decides which triggers run before the selected frame, in the fixed order of the safe point.
 //
 // The order of the returned decisions is the order they execute in — flip, autofocus, dither — and it is not
@@ -100,7 +124,9 @@ export function sequencerInitialTriggerAnchors(instant: number): SequencerTrigge
 // passed".
 //
 // `anchors` is read and never modified; advancing it is `sequencerAnchorAdvanced`, and only a successful run
-// may do it.
+// may do it. The anchors given here are the ones `sequencerFilterBaselined` returned for the same
+// observation, which is what the filter-change conditions of a session that has never run are measured
+// against.
 export function evaluateSequencerTriggers(policies: SequencerTriggerPolicies, anchors: SequencerTriggerAnchors, observation: SequencerTriggerObservation): readonly SequencerTriggerDecision[] {
 	const decisions: SequencerTriggerDecision[] = []
 
@@ -148,6 +174,15 @@ export function sequencerAnchorAdvanced(anchors: SequencerTriggerAnchors, kind: 
 	return { ...anchors, [kind]: { at: observation.instant, frames: 0, temperature: observation.temperature, filter: observation.filter } satisfies SequencerTriggerAnchor }
 }
 
+// Anchor carrying the filter the session was found on, or the same anchor when it already has a reference.
+//
+// An anchor that ran has the filter of that run and is never rewritten; one that never ran takes the
+// baseline only once, so the reference survives the preparation that installs another filter later in the
+// same safe point.
+function baselinedAnchor(anchor: SequencerTriggerAnchor, filter: string) {
+	return anchor.at === undefined && anchor.filter === undefined ? { ...anchor, filter } : anchor
+}
+
 // Adds one accepted sky frame to an anchor.
 function countedAnchor(anchor: SequencerTriggerAnchor): SequencerTriggerAnchor {
 	return { ...anchor, frames: anchor.frames + 1 }
@@ -180,8 +215,10 @@ function reachedElapsed(elapsed: number, every: number) {
 // point on the selection and the installed filter agree, so a condition stated over the wheel would report
 // the change as already served by a run that never happened.
 //
-// Until the trigger has ever run there is no anchor to measure against, and the wheel is the only reference
-// of a change there is: a first frame taken through the filter already installed changed nothing.
+// Before the trigger has ever run the reference is the baseline `sequencerFilterBaselined` recorded at the
+// first safe point, which is the filter the session was found on: a first frame taken through the filter
+// already installed changed nothing. The wheel is only consulted when no baseline was recorded, which is a
+// session whose safe point did not apply one.
 //
 // The comparison is over the selection and not over the movement, which the frame preparation only performs
 // later in the safe point: the whole point of the condition is to focus or dither for the filter the frame
@@ -189,7 +226,7 @@ function reachedElapsed(elapsed: number, every: number) {
 function filterChanged(anchor: SequencerTriggerAnchor, observation: SequencerTriggerObservation) {
 	if (observation.filter === undefined) return false
 
-	return anchor.at === undefined ? observation.filter !== observation.installedFilter : observation.filter !== anchor.filter
+	return observation.filter !== (anchor.filter ?? observation.installedFilter)
 }
 
 // Whether the flip is due at this safe point.

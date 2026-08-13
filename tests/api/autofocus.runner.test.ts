@@ -207,6 +207,29 @@ describe('auto focus runner', () => {
 		}
 	}, 30000)
 
+	test('restores the initial position when a sampled move fails after the sweep already moved', async () => {
+		const { camera, focuser } = await connectedDevices()
+		const initial = focuser.position.value
+		const commander = focuserHandler.commander
+		const original = commander.moveTo.bind(commander)
+		let moves = 0
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => frame())
+		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(vCurve(focuser, initial, 25))
+		const moveTo = spyOn(commander, 'moveTo').mockImplementation((scope, device, position, options) => (++moves === 2 ? Promise.resolve(failedOperationResult('timeout', 'the focuser stalled')) : original(scope, device, position, options)))
+
+		try {
+			const { handle } = runner.start(coordinator, camera, focuser, request())
+			const result = await handle.result
+
+			expect(result).toMatchObject({ ok: false, reason: 'timeout' })
+			expect(focuser.position.value).toBe(initial)
+		} finally {
+			moveTo.mockRestore()
+			detect.mockRestore()
+			capture.mockRestore()
+		}
+	}, 30000)
+
 	test('leaves the caller request untouched and normalizes only its own copy', async () => {
 		const { camera, focuser } = await connectedDevices()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())

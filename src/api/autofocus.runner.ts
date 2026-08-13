@@ -212,7 +212,7 @@ class AutoFocusRun {
 
 				const moved = await this.#moveTo(context, position)
 
-				if (!moved.ok) return { ...moved, error: moved.error ?? `failed to move to position ${position}` }
+				if (!moved.ok) return await this.#restored(context, initialPosition, { ...moved, error: moved.error ?? `failed to move to position ${position}` })
 
 				continue
 			}
@@ -227,7 +227,7 @@ class AutoFocusRun {
 
 				const moved = await this.#moveTo(context, best)
 
-				if (!moved.ok) return { ...moved, error: moved.error ?? `failed to move to best focus at position ${best}` }
+				if (!moved.ok) return await this.#restored(context, initialPosition, { ...moved, error: moved.error ?? `failed to move to best focus at position ${best}` })
 
 				return successfulOperationResult(this.#outcome('focused', 'best focus!'))
 			}

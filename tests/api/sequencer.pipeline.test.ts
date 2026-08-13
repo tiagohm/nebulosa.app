@@ -194,6 +194,31 @@ describe('commanded stop', () => {
 		expect(report.failure).toBeUndefined()
 	})
 
+	test('a stop that landed before the attempt started is carried into it', async () => {
+		const controller = new AbortController()
+		const seen: boolean[] = []
+		const runner = executor({ [nodeId('a')]: TIMED_OUT })
+		const report = await runSequencerPipeline(
+			{ continueOnFailure: true },
+			[step('a', { timeout: 30 }), step('b')],
+			{
+				run(step, attempt, signal) {
+					seen.push(signal.aborted)
+					if (signal.aborted) return Promise.resolve<SequencerActionResult<unknown>>({ type: 'fatalFailure', reason: 'aborted' })
+					return runner.run(step, attempt, signal)
+				},
+				delay(delay) {
+					controller.abort()
+					return runner.delay(delay)
+				},
+			},
+			controller.signal,
+		)
+
+		expect(seen).toEqual([false, true])
+		expect(report.results[1]).toMatchObject({ outcome: 'notRun' })
+	})
+
 	test('a declared stop gives up on the action without ending the pipeline', async () => {
 		const answers = { [nodeId('park')]: { type: 'retryableFailure', reason: 'commandFailed', detail: 'park refused' } as SequencerActionResult<unknown> }
 		const steps = [step('park', { required: true }, { onExhausted: 'stop' }), step('cover', { required: true })]

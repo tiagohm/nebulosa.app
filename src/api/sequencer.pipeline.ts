@@ -140,7 +140,12 @@ async function runAttempt(executor: SequencerPipelineExecutor, step: SequencerPi
 		controller.abort()
 	}, timeout)
 
-	signal.addEventListener('abort', abort, { once: true })
+	// A signal that is already aborted never dispatches the event again, so a stop that landed before this
+	// attempt started — during the retry delay of the previous one, or before the pipeline was entered at all —
+	// has to be carried over by hand. Without it the attempt runs uncancelled for its whole timeout, or
+	// succeeds and lets the pipeline keep commanding devices for a session that is already leaving the plan.
+	if (signal.aborted) controller.abort()
+	else signal.addEventListener('abort', abort, { once: true })
 
 	try {
 		const result = await executor.run(step, attempt, controller.signal)

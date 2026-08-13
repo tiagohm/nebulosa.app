@@ -251,7 +251,7 @@ describe('centering block', () => {
 		expect(commands.map((command) => command.name)).toEqual(['capture', 'solve', 'sync', 'goTo', 'capture', 'solve'])
 	})
 
-	test('moves the wheel to the filter of its own recipe before exposing', async () => {
+	test('moves the wheel to the filter of its own recipe before exposing and puts it back after', async () => {
 		const commands: Command[] = []
 		const handler = sequencerCenterHandler(centeringServices(commands, [solution(1.4, -0.09)]))
 		const configuration = centerConfiguration({ capture: { ...centerConfiguration().capture, filter: { type: 'name', name: 'L' } } })
@@ -259,8 +259,19 @@ describe('centering block', () => {
 
 		await handler.execute(context, configuration)
 
-		expect(commands.map((command) => command.name)).toEqual(['wheelMoveTo', 'capture', 'solve'])
-		expect(commands[0].detail).toBe(3)
+		expect(commands.map((command) => command.name)).toEqual(['wheelMoveTo', 'capture', 'solve', 'wheelMoveTo'])
+		expect(commands.filter((command) => command.name === 'wheelMoveTo').map((command) => command.detail)).toEqual([3, 0])
+	})
+
+	test('puts the wheel back even when the centering itself failed', async () => {
+		const commands: Command[] = []
+		const handler = sequencerCenterHandler(centeringServices(commands, [solution(1.5, -0.09)]))
+		const configuration = centerConfiguration({ maximumAttempts: 1, capture: { ...centerConfiguration().capture, filter: { type: 'name', name: 'L' } } })
+		const context = actionContext({ mount: { device: mount() }, camera: { device: camera() }, wheel: { device: wheel(['R', 'G', 'B', 'L'], 0) } })
+		const result = await handler.execute(context, configuration)
+
+		expect(result).toMatchObject({ type: 'retryableFailure' })
+		expect(commands.filter((command) => command.name === 'wheelMoveTo').map((command) => command.detail)).toEqual([3, 0])
 	})
 
 	test('does not expose a frame it has nowhere proven to write', async () => {

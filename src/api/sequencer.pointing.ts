@@ -2,7 +2,7 @@ import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { timeNow } from 'nebulosa/src/astronomy/time/time'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
 import { isCamera, isMount, isWheel } from 'nebulosa/src/devices/indi/device'
-import type { Camera, Mount, MountTargetCoordinate, PierSide } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Mount, MountTargetCoordinate, PierSide, Wheel } from 'nebulosa/src/devices/indi/device'
 import { sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
@@ -249,11 +249,35 @@ export async function runCentering(services: SequencerCenteringServices, context
 
 	if (camera === undefined) return sequencerMissingRole('camera')
 
+	const transition = centeringFilter(context, configuration)
+
+	if (transition !== undefined) {
+		const moved = await services.wheelCommander.moveTo(context.scope, transition.wheel, transition.slot)
+
+		if (!moved.ok) return sequencerActionFailure(moved, 'the wheel did not reach the centering filter')
+	}
+
+	const result = await runCenteringLoop(services, context, configuration, camera, mount)
+
+	if (transition === undefined) return result
+
+	// The wheel goes back to the filter it was found on. The centering moves the wheel and never the focuser,
+	// so leaving it on the centering filter leaves the two describing different paths: the frame preparation
+	// that runs next derives its focus shift from the slot the wheel is standing at, and would correct from an
+	// offset the focuser was never moved to. Restoring here keeps the pair consistent without anything having
+	// to remember what the centering did.
+	const restored = await services.wheelCommander.moveTo(context.scope, transition.wheel, transition.installed)
+
+	// A restore that failed only gets reported when the loop itself succeeded, since the failure of the loop is
+	// the one that explains the action.
+	if (!restored.ok && result.type === 'completed') return sequencerActionFailure(restored, 'the wheel did not return to the frame filter')
+
+	return result
+}
+
+// Runs the attempts of the centering, with the wheel already standing on the filter the recipe declared.
+async function runCenteringLoop(services: SequencerCenteringServices, context: SequencerActionContext, configuration: SequencerCenter, camera: Camera, mount: Mount): Promise<SequencerActionResult<SequencerCenterOutcome>> {
 	const target = j2000Of(configuration.coordinates, mount.geographicCoordinate.longitude)
-
-	const prepared = await prepareCenteringFilter(services, context, configuration)
-
-	if (prepared !== undefined) return prepared
 
 	let synced = false
 
@@ -307,13 +331,17 @@ export async function runCentering(services: SequencerCenteringServices, context
 	return { type: 'fatalFailure', reason: 'unexpectedState', detail: 'the centering was allowed no attempt' }
 }
 
-// Moves the wheel to the filter the centering recipe declares, when it declares one.
+// Filter transition the centering has to make, or undefined when it has to make none.
 //
-// Returns the failure that must end the action, or undefined when there was nothing to do or the move
-// succeeded. A recipe naming a filter on a session without a wheel is left alone rather than failed: the
-// solution comes from the star field, which every filter shows, so the exposure through whatever filter is
-// mounted is worth more than refusing to centre at all.
-async function prepareCenteringFilter(services: SequencerCenteringServices, context: SequencerActionContext, configuration: SequencerCenter): Promise<SequencerActionResult<never> | undefined> {
+// Undefined covers everything that leaves the wheel alone: a recipe naming no filter, a session commanding no
+// wheel, a filter this wheel does not carry, and a filter already installed. A recipe naming a filter on a
+// session without a wheel is left alone rather than failed, because the solution comes from the star field,
+// which every filter shows, so exposing through whatever filter is mounted is worth more than refusing to
+// centre at all.
+//
+// `installed` is the slot the wheel was found on, 0-based, which is the slot the focuser position serves and
+// the one the wheel is put back to once the centering ends.
+function centeringFilter(context: SequencerActionContext, configuration: SequencerCenter): { readonly wheel: Wheel; readonly slot: number; readonly installed: number } | undefined {
 	if (configuration.capture.filter === undefined) return undefined
 
 	const wheel = sequencerDeviceOf(context, 'wheel', isWheel)
@@ -324,9 +352,7 @@ async function prepareCenteringFilter(services: SequencerCenteringServices, cont
 
 	if (slot === undefined || slot === wheel.position) return undefined
 
-	const moved = await services.wheelCommander.moveTo(context.scope, wheel, slot)
-
-	return moved.ok ? undefined : sequencerActionFailure(moved, 'the wheel did not reach the centering filter')
+	return { wheel, slot, installed: wheel.position }
 }
 
 // Captures one auxiliary frame and solves it, reporting the solved field centre.

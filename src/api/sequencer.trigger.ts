@@ -123,6 +123,12 @@ export function sequencerFilterBaselined(anchors: SequencerTriggerAnchors, obser
 // applies: a run of darks in the middle of the night must not make the next light dither because "ten frames
 // passed".
 //
+// A flip the definition asked to focus by itself is the autofocus of its safe point. Its node runs the same
+// sweep the standalone block runs, under the same reservation, so deciding a standalone autofocus next to it
+// would sweep the focuser twice in a row and spend minutes measuring the focus that was just measured. The
+// standalone decision is therefore omitted while that flip is the one being run, and the anchor advances on
+// the focus nested in its outcome, which is what `sequencerTriggerPending` keeps owed if that focus fails.
+//
 // `anchors` is read and never modified; advancing it is `sequencerAnchorAdvanced`, and only a successful run
 // may do it. The anchors given here are the ones `sequencerFilterBaselined` returned for the same
 // observation, which is what the filter-change conditions of a session that has never run are measured
@@ -136,7 +142,7 @@ export function evaluateSequencerTriggers(policies: SequencerTriggerPolicies, an
 
 	if (flipped) decisions.push({ kind: 'meridianFlip', reason: 'hourAngle' })
 
-	if (policies.autofocus !== undefined) {
+	if (policies.autofocus !== undefined && !focusedByFlip(policies, flipped)) {
 		const reason = autofocusReason(policies.autofocus, anchors, observation, flipped)
 
 		if (reason !== undefined) decisions.push({ kind: 'autofocus', reason })
@@ -164,13 +170,28 @@ export function evaluateSequencerTriggers(policies: SequencerTriggerPolicies, an
 // It is therefore applied at the safe point that decided, before the run, and it is `sequencerAnchorAdvanced`
 // that clears it once a run focused. The anchors are returned unchanged when no autofocus was selected or when
 // the condition that selected it was one the next safe point can observe again on its own.
-export function sequencerTriggerPending(anchors: SequencerTriggerAnchors, decisions: readonly SequencerTriggerDecision[]): SequencerTriggerAnchors {
+export function sequencerTriggerPending(policies: SequencerTriggerPolicies, anchors: SequencerTriggerAnchors, decisions: readonly SequencerTriggerDecision[]): SequencerTriggerAnchors {
+	const reason = pendingOf(policies, decisions)
+
+	if (reason === undefined || anchors.pendingAutofocus === reason) return anchors
+
+	return { ...anchors, pendingAutofocus: reason }
+}
+
+// One-shot condition owed by the decisions of this safe point, or undefined when none is.
+//
+// A flip that focuses inside its own node suppressed the standalone decision, so there is no autofocus
+// decision to read the condition from; the promise is recorded from the flip instead, because the run that
+// serves it is the nested one and only a focus that succeeded clears it. It is recorded only when the
+// standalone trigger asks for a post-flip focus, which is the configuration whose promise the suppression
+// would otherwise swallow: a definition that never asked for one is owed nothing.
+function pendingOf(policies: SequencerTriggerPolicies, decisions: readonly SequencerTriggerDecision[]): SequencerTriggerEventReason | undefined {
 	const decision = decisions.find((item) => item.kind === 'autofocus')
 
-	if (decision === undefined || (decision.reason !== 'afterMeridianFlip' && decision.reason !== 'afterRecovery')) return anchors
-	if (anchors.pendingAutofocus === decision.reason) return anchors
+	if (decision !== undefined) return decision.reason === 'afterMeridianFlip' || decision.reason === 'afterRecovery' ? decision.reason : undefined
+	if (policies.autofocus?.triggers.afterMeridianFlip !== true || policies.meridianFlip?.autofocus !== true) return undefined
 
-	return { ...anchors, pendingAutofocus: decision.reason }
+	return decisions.some((item) => item.kind === 'meridianFlip') ? 'afterMeridianFlip' : undefined
 }
 
 // Counts one accepted frame against every anchor, or leaves them untouched when the frame is calibration.
@@ -259,6 +280,15 @@ function filterChanged(anchor: SequencerTriggerAnchor, observation: SequencerTri
 	if (observation.filter === undefined) return false
 
 	return observation.filter !== (anchor.filter ?? observation.installedFilter)
+}
+
+// Whether the flip being run at this safe point refocuses inside its own node, which is what makes a
+// standalone autofocus at the same safe point a second sweep of the same focuser through the same field.
+//
+// It is stated over the flip that actually won, not over the policy alone: a definition whose flip refocuses
+// suppresses nothing at the safe points where no flip is due.
+function focusedByFlip(policies: SequencerTriggerPolicies, flipped: boolean) {
+	return flipped && policies.meridianFlip?.autofocus === true
 }
 
 // Whether the flip is due at this safe point.

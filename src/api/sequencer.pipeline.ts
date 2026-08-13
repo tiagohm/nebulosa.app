@@ -131,19 +131,61 @@ function withoutRetries(configuration: SequencerLifecycle) {
 	return { ...configuration.retry, retryOn: [] }
 }
 
+// Answer of one attempt, together with what the session was doing when it arrived.
+interface SequencerAttempt {
+	// Normalized answer of the executor, with the deadline already applied.
+	readonly result: SequencerActionResult<unknown>
+	// Whether the cancellation of the session was in place before the attempt answered. It is what separates an
+	// `aborted` the session caused from one it merely coincided with, and it is recorded rather than read back
+	// afterwards for exactly that reason.
+	readonly commanded: boolean
+}
+
 // Runs one attempt under the timeout of the action, in seconds, and normalizes what comes back.
 //
 // The deadline gets its own controller so the abort it causes is distinguishable from the abort of a session
 // that is stopping: the same `aborted` answer means "the action ran out of time" in one case and "the operator
 // stopped the session" in the other, and reporting the second as the first would attribute a decision nobody
 // made. A timeout of `0` runs without a deadline, which is what a definition asks for by declaring none.
-async function runAttempt(executor: SequencerPipelineExecutor, step: SequencerPipelineStep, attempt: number, signal: AbortSignal): Promise<SequencerActionResult<unknown>> {
+//
+// The cancellation of the session is recorded as it happens, ordered against the answer of the executor,
+// instead of being read from the signal once the attempt is over. Reading it afterwards cannot tell a device
+// that died from a device that died and was then stopped: a camera failing on its own an instant before the
+// operator presses stop would be reported as the stop, and the pipeline would end with no failure to explain
+// the night while the actual cause was thrown away. A cancellation that arrives after the answer belongs to
+// the next action, which sees it on the signal it is entered with.
+async function runAttempt(executor: SequencerPipelineExecutor, step: SequencerPipelineStep, attempt: number, signal: AbortSignal): Promise<SequencerAttempt> {
 	const timeout = step.configuration.timeout * 1000
+	// A cancellation already in place is the stop of a session that is leaving the plan, whatever this attempt
+	// answers; anything later counts only if it preceded the answer.
+	let commanded = signal.aborted
+	let settled = false
 
-	if (timeout <= 0) return await executor.run(step, attempt, signal)
+	// Records the cancellation of the session against the progress of the attempt.
+	const cancelled = () => {
+		commanded ||= !settled
+	}
+
+	if (timeout <= 0) {
+		signal.addEventListener('abort', cancelled, { once: true })
+
+		try {
+			const result = await executor.run(step, attempt, signal)
+			settled = true
+
+			return { result, commanded }
+		} finally {
+			signal.removeEventListener('abort', cancelled)
+		}
+	}
 
 	const controller = new AbortController()
-	const abort = () => controller.abort()
+
+	const abort = () => {
+		cancelled()
+		controller.abort()
+	}
+
 	let expired = false
 	let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -174,14 +216,15 @@ async function runAttempt(executor: SequencerPipelineExecutor, step: SequencerPi
 
 	try {
 		const result = await executor.run(step, attempt, controller.signal)
+		settled = true
 
 		// The deadline only rewrites an attempt that did not finish. An action that answered `completed` or
 		// `skipped` did the work — the mount is parked — and the timer firing in the same turn as that answer
 		// says nothing about the equipment. Reporting it as a timeout would park a mount twice, or, on a required
 		// finalize action with a single attempt, fail a night that had already finished.
-		if (!expired || result.type === 'completed' || result.type === 'skipped') return result
+		if (!expired || result.type === 'completed' || result.type === 'skipped') return { result, commanded }
 
-		return { type: 'retryableFailure', reason: 'timeout', detail: `the action did not finish within ${step.configuration.timeout}s` }
+		return { result: { type: 'retryableFailure', reason: 'timeout', detail: `the action did not finish within ${step.configuration.timeout}s` }, commanded }
 	} finally {
 		clearTimeout(timer)
 		signal.removeEventListener('abort', abort)
@@ -213,7 +256,7 @@ async function runStep(executor: SequencerPipelineExecutor, step: SequencerPipel
 	const base = { nodeId: step.nodeId, type: step.type, required: configuration.required }
 
 	for (let attempt = 1; ; attempt++) {
-		const result = await runAttempt(executor, step, attempt, signal)
+		const { result, commanded: cancellation } = await runAttempt(executor, step, attempt, signal)
 		const failure = attemptFailure(result)
 
 		if (failure === undefined) return { ...base, outcome: result.type === 'skipped' ? 'skipped' : 'succeeded', detail: result.type === 'skipped' ? result.detail : undefined, attempts: attempt }
@@ -221,7 +264,9 @@ async function runStep(executor: SequencerPipelineExecutor, step: SequencerPipel
 		// A cancellation the session itself commanded, which is the only thing that ends the whole list. It is
 		// reported as a stop whatever asked for it, because a pipeline has no paused state of its own: the
 		// runtime does not cancel one to pause a session, and a cancelled pipeline is a session leaving the plan.
-		const commanded = failure.reason === 'aborted' && signal.aborted
+		// The cancellation is the one the attempt observed, not the state of the signal now: a stop that arrived
+		// after the answer did not cause it, and the action keeps the cause it actually failed with.
+		const commanded = failure.reason === 'aborted' && cancellation
 
 		const decision = sequencerFailurePolicy({
 			reason: failure.reason,

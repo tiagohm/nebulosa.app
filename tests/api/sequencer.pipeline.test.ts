@@ -289,6 +289,23 @@ describe('commanded stop', () => {
 		expect(report.failure).toEqual({ nodeId: nodeId('park'), reason: 'commandFailed', detail: 'park refused' })
 	})
 
+	test('a failure that preceded the stop keeps its own cause', async () => {
+		const controller = new AbortController()
+		const answers = {
+			[nodeId('a')]: () => {
+				const answer = Promise.resolve<SequencerActionResult<unknown>>({ type: 'fatalFailure', reason: 'aborted', detail: 'camera' })
+
+				void answer.then(() => void Promise.resolve().then(() => void Promise.resolve().then(() => controller.abort())))
+
+				return answer
+			},
+		}
+		const report = await runSequencerPipeline({ continueOnFailure: true }, [step('a', { required: true })], executor(answers), controller.signal)
+
+		expect(report.results[0]).toMatchObject({ outcome: 'failed', reason: 'aborted', detail: 'camera' })
+		expect(report.failure).toEqual({ nodeId: nodeId('a'), reason: 'aborted', detail: 'camera' })
+	})
+
 	test('an abort with no command behind it is a failure of the action', async () => {
 		const answers = { [nodeId('a')]: { type: 'fatalFailure', reason: 'aborted', detail: 'camera' } as SequencerActionResult<unknown> }
 		const report = await runSequencerPipeline({ continueOnFailure: true }, [step('a', { required: true })], executor(answers), new AbortController().signal)

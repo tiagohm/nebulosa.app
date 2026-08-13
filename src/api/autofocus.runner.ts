@@ -117,6 +117,9 @@ class AutoFocusRun {
 		this.#event.id = context.id
 
 		const { capture } = this.request
+		// Position the focuser was found at, kept because the search moves away from it on its very first step
+		// and only the run that started knows where it came from.
+		const initialPosition = this.focuser.position.value
 
 		capture.delay = 0
 		capture.count = 1
@@ -176,7 +179,23 @@ class AutoFocusRun {
 			// A frame with no stars carries no measurement, so the curve cannot be advanced. That is the
 			// search failing to find focus rather than a device failing, which is why it ends successfully
 			// with an explanation instead of as an operational failure.
-			if (stars.length === 0) return successfulOperationResult(this.#outcome('noStars', 'no stars detected'))
+			//
+			// The focuser goes back to where the run found it first, exactly as the give-up path does. A star
+			// field can disappear at the far end of the sweep — clouds, or a defocus deep enough that nothing
+			// is detected — and returning there leaves the focuser hundreds of steps off focus, where every
+			// frame after it is out of focus and the next search starts from a position no measurement chose.
+			if (stars.length === 0) {
+				// The very first frame is measured before anything moves, so there is nothing to restore then.
+				if (this.focuser.position.value !== initialPosition) {
+					this.#publish('moving', `restoring to initial focus position ${initialPosition}`)
+
+					const moved = await this.#moveTo(context, initialPosition)
+
+					if (!moved.ok) return { ...moved, error: moved.error ?? `failed to restore focus position ${initialPosition}` }
+				}
+
+				return successfulOperationResult(this.#outcome('noStars', 'no stars detected'))
+			}
 
 			// The median rejects the outliers a single misdetected star would otherwise contribute.
 			const hfd = medianOf(stars.map((e) => e.hfd).sort(NumberComparator))

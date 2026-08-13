@@ -163,6 +163,30 @@ describe('auto focus runner', () => {
 		}
 	})
 
+	test('restores the initial position when the stars disappear after the sweep already moved', async () => {
+		const { camera, focuser } = await connectedDevices()
+		const initial = focuser.position.value
+		const measured = vCurve(focuser, initial, 25)
+		let frames = 0
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => frame())
+		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(() => (++frames > 1 ? Promise.resolve([]) : measured()))
+
+		try {
+			const { handle } = runner.start(coordinator, camera, focuser, request())
+			const result = await handle.result
+
+			expect(result.ok).toBeTrue()
+			if (!result.ok) return
+
+			expect(result.value.outcome).toBe('noStars')
+			expect(focuser.position.value).toBe(initial)
+			expect(result.value.position).toBe(initial)
+		} finally {
+			detect.mockRestore()
+			capture.mockRestore()
+		}
+	}, 30000)
+
 	test('leaves the caller request untouched and normalizes only its own copy', async () => {
 		const { camera, focuser } = await connectedDevices()
 		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())

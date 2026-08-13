@@ -159,7 +159,7 @@ describe('attempts', () => {
 					signal.addEventListener('abort', () => (aborted = true), { once: true })
 					return await runner.run(step, attempt, signal)
 				},
-				delay: (delay) => runner.delay(delay),
+				delay: (delay, signal) => runner.delay(delay, signal),
 			},
 			new AbortController().signal,
 		)
@@ -229,6 +229,31 @@ describe('commanded stop', () => {
 		expect(report.failure).toBeUndefined()
 	})
 
+	test('the wait between two attempts is handed the session signal', async () => {
+		const controller = new AbortController()
+		const seen: AbortSignal[] = []
+		const runner = executor({ [nodeId('a')]: TIMED_OUT })
+		const report = await runSequencerPipeline(
+			{ continueOnFailure: true },
+			[step('a', undefined, { maxAttempts: 2 })],
+			{
+				run(step, attempt, signal) {
+					if (signal.aborted) return Promise.resolve<SequencerActionResult<unknown>>({ type: 'fatalFailure', reason: 'aborted' })
+					return runner.run(step, attempt, signal)
+				},
+				delay(delay, signal) {
+					seen.push(signal)
+					controller.abort()
+					return runner.delay(delay, signal)
+				},
+			},
+			controller.signal,
+		)
+
+		expect(seen).toEqual([controller.signal])
+		expect(report.stopped).toBeTrue()
+	})
+
 	test('a stop that landed before the attempt started is carried into it', async () => {
 		const controller = new AbortController()
 		const seen: boolean[] = []
@@ -242,9 +267,9 @@ describe('commanded stop', () => {
 					if (signal.aborted) return Promise.resolve<SequencerActionResult<unknown>>({ type: 'fatalFailure', reason: 'aborted' })
 					return runner.run(step, attempt, signal)
 				},
-				delay(delay) {
+				delay(delay, signal) {
 					controller.abort()
-					return runner.delay(delay)
+					return runner.delay(delay, signal)
 				},
 			},
 			controller.signal,

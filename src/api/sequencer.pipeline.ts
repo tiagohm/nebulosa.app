@@ -97,8 +97,12 @@ export interface SequencerPipelineReport {
 export interface SequencerPipelineExecutor {
 	// Executes one attempt, with `attempt` starting at 1.
 	run(step: SequencerPipelineStep, attempt: number, signal: AbortSignal): Promise<SequencerActionResult<unknown>>
-	// Waits `delay` milliseconds between two attempts, resolving early when the session cancels.
-	delay(delay: number): Promise<void>
+	// Waits `delay` milliseconds between two attempts. `signal` is the cancellation of the session, and the wait
+	// resolves as soon as it is aborted: a stop that lands during the spacing of a long backoff would otherwise
+	// be answered only after the whole wait elapsed, which for a `maximumDelay` of minutes is a session that
+	// keeps holding its devices long after the operator ended it. It is the session signal and never the
+	// deadline of an attempt, because no attempt is running between two of them.
+	delay(delay: number, signal: AbortSignal): Promise<void>
 }
 
 // Failed attempt of one action, before the policy decides what to do about it.
@@ -228,7 +232,7 @@ async function runStep(executor: SequencerPipelineExecutor, step: SequencerPipel
 		})
 
 		if (decision.kind === 'retry') {
-			await executor.delay(decision.delay)
+			await executor.delay(decision.delay, signal)
 			continue
 		}
 

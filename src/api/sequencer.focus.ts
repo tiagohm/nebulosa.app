@@ -3,6 +3,7 @@ import type { Wheel } from 'nebulosa/src/devices/indi/device'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { AutoFocusStart } from '#/autofocus'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
+import { successfulOperationResult } from '#/orchestration'
 import type { SequencerAutofocus, SequencerAuxiliaryCapture, SequencerStarDetection } from '#/sequencer'
 import type { AutoFocusRunner } from './autofocus.runner'
 import type { FocuserCommander } from './focuser.commander'
@@ -153,11 +154,14 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 	// measured back to.
 	const installedSlot = wheel?.position
 	const focusSlot = focusThroughSlot(wheel, configuration)
+	// Filter change the search is performed through, absent when it happens on the installed path. Every exit
+	// of the block undoes it, so the wheel never outlives the search that moved it.
+	const transition = wheel !== undefined && installedSlot !== undefined && focusSlot !== undefined && focusSlot !== installedSlot ? { wheel, focusSlot, installedSlot } : undefined
 
-	if (wheel !== undefined && focusSlot !== undefined && focusSlot !== installedSlot) {
+	if (transition !== undefined) {
 		context.progress({ detail: 'moving to the autofocus filter' })
 
-		const moved = await services.wheelCommander.moveTo(context.scope, wheel, focusSlot)
+		const moved = await services.wheelCommander.moveTo(context.scope, transition.wheel, transition.focusSlot)
 
 		if (!moved.ok) return sequencerActionFailure(moved, 'the wheel did not reach the autofocus filter')
 	}
@@ -178,12 +182,16 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 	const { handle } = services.runner.start(context.scope, camera, focuser, request, () => context.auxiliary('autofocus', auxiliaryExtension(configuration.capture)))
 	const result = await handle.result
 
-	if (!result.ok) return sequencerActionFailure(result, 'the autofocus search failed')
+	if (!result.ok) {
+		await restoreFrameFilter(services, context, transition)
+		return sequencerActionFailure(result, 'the autofocus search failed')
+	}
 
 	// The search reports a curve it could not fit as a successful operation, because no device misbehaved. For
 	// the session it is still a run that produced no focus, and treating it as completed would advance the
 	// anchor and silence the condition that asked for the run until it came back on its own.
 	if (result.value.outcome !== 'focused') {
+		await restoreFrameFilter(services, context, transition)
 		return { type: 'retryableFailure', reason: 'unexpectedState', detail: `the autofocus found no focus: ${result.value.message}` }
 	}
 
@@ -192,14 +200,12 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 
 	// The wheel goes back before the offset is applied, so the position the action reports is the one the
 	// installed path is standing at rather than one that assumes a move still to come.
-	if (wheel !== undefined && focusSlot !== undefined && focusSlot !== installedSlot && installedSlot !== undefined) {
-		context.progress({ detail: 'restoring the frame filter' })
-
-		const restored = await services.wheelCommander.moveTo(context.scope, wheel, installedSlot)
+	if (transition !== undefined) {
+		const restored = await restoreFrameFilter(services, context, transition)
 
 		if (!restored.ok) return sequencerActionFailure(restored, 'the wheel did not return to the frame filter')
 
-		const shift = sequencerFocusOffsetShift(wheel, configuration.filterOffsets, focusSlot, installedSlot)
+		const shift = sequencerFocusOffsetShift(transition.wheel, configuration.filterOffsets, transition.focusSlot, transition.installedSlot)
 
 		if (shift !== 0) {
 			position = measured + shift
@@ -220,6 +226,25 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 		type: 'completed',
 		value: { position, measured, focusPoint: result.value.focusPoint, filter: filterNameOf(wheel, installedSlot), measuredFilter: filterNameOf(wheel, focusSlot ?? installedSlot) },
 	}
+}
+
+// Puts the wheel back on the slot the next frame is taken through, and does nothing when the search ran on
+// the installed path.
+//
+// The block always undoes its own filter change, on the exits that failed as much as on the one that focused.
+// The runner leaves the focuser on the position it started from when it finds no focus, so a wheel left on
+// the autofocus filter would make the two describe different paths: the frame preparation that runs next
+// derives the focus shift from the slot the wheel is standing at, and under a `continue` policy the science
+// frames that follow would be taken with an offset applied on top of a focus that never moved.
+//
+// The result is returned so the successful path can report a restore that failed. A failing exit ignores it:
+// the failure of the search is the one that explains the run.
+async function restoreFrameFilter(services: SequencerAutofocusServices, context: SequencerActionContext, transition: { readonly wheel: Wheel; readonly installedSlot: number } | undefined) {
+	if (transition === undefined) return successfulOperationResult(undefined)
+
+	context.progress({ detail: 'restoring the frame filter' })
+
+	return await services.wheelCommander.moveTo(context.scope, transition.wheel, transition.installedSlot)
 }
 
 // Slot the search is performed through, or undefined when the recipe names no filter of its own or names one

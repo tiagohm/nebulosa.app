@@ -224,6 +224,32 @@ describe('autofocus block', () => {
 		expect(result).toEqual({ type: 'retryableFailure', reason: 'unexpectedState', detail: 'the autofocus found no focus: no stars were detected' })
 	})
 
+	test('puts the wheel back on the frame filter when the search found no focus', async () => {
+		const commands: Command[] = []
+		const noStars = successfulOperationResult<AutoFocusRunOutcome>({ outcome: 'noStars', position: 12000, message: 'no stars were detected' })
+		const handler = sequencerAutofocusHandler(focusServices(commands, noStars))
+		const device = wheel(['L', 'R', 'G', 'B'], 3)
+		const configuration = autofocusConfiguration({ capture: { ...autofocusConfiguration().capture, filter: { type: 'name', name: 'L' } } })
+		const result = await handler.execute(actionContext({ camera: { device: camera() }, focuser: { device: focuser(12000) }, wheel: { device } }), configuration)
+
+		expect(commands.map((command) => command.name)).toEqual(['wheelMoveTo', 'autofocus', 'wheelMoveTo'])
+		expect(commands.map((command) => command.detail)).toMatchObject([0, {}, 3])
+		expect(device.position).toBe(3)
+		expect(result).toMatchObject({ type: 'retryableFailure', reason: 'unexpectedState' })
+	})
+
+	test('puts the wheel back on the frame filter when the search itself failed', async () => {
+		const commands: Command[] = []
+		const handler = sequencerAutofocusHandler(focusServices(commands, failedOperationResult('timeout', 'boom')))
+		const device = wheel(['L', 'R', 'G', 'B'], 3)
+		const configuration = autofocusConfiguration({ capture: { ...autofocusConfiguration().capture, filter: { type: 'name', name: 'L' } } })
+		const result = await handler.execute(actionContext({ camera: { device: camera() }, focuser: { device: focuser(12000) }, wheel: { device } }), configuration)
+
+		expect(commands.map((command) => command.name)).toEqual(['wheelMoveTo', 'autofocus', 'wheelMoveTo'])
+		expect(device.position).toBe(3)
+		expect(result).toMatchObject({ type: 'retryableFailure', reason: 'timeout' })
+	})
+
 	test('maps a failed search to a retry and a stopped session to a terminal failure', async () => {
 		const failing = (reason: 'timeout' | 'aborted') => sequencerAutofocusHandler(focusServices([], failedOperationResult(reason, 'boom')))
 		const context = () => actionContext({ camera: { device: camera() }, focuser: { device: focuser(12000) } })

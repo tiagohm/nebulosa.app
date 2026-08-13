@@ -380,9 +380,42 @@ describe('sequencer runtime', () => {
 		const instance = new SequencerRuntime({ store, registry, coordinator, resolve: () => undefined })
 		const created = instance.create(plan())!
 
-		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'role camera is not available' })
+		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'device camera-1 of role camera is not available' })
 		expect(instance.activeSessionId).toBeUndefined()
 		expect(store.session(created.id)?.state).toBe('created')
+	})
+
+	test('refuses to start when a required role the session does not carry is commanded', () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const registry = new SequencerBlockRegistry()
+		const store = new InMemorySequencerStore()
+		const handler = exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 }))
+
+		registry.register({ ...handler, resources: () => [{ role: 'camera' }, { role: 'wheel' }] })
+
+		const instance = new SequencerRuntime({ store, registry, coordinator, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) })
+		const created = instance.create(plan())!
+
+		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'role wheel is not available' })
+		expect(instance.activeSessionId).toBeUndefined()
+	})
+
+	test('refuses to start when an optional role the session carries cannot be resolved', () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const registry = new SequencerBlockRegistry()
+		const store = new InMemorySequencerStore()
+		const handler = exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 }))
+
+		registry.register({ ...handler, resources: () => [{ role: 'camera' }, { role: 'wheel', optional: true }] })
+
+		const instance = new SequencerRuntime({ store, registry, coordinator, resolve: (role, deviceId) => (role === 'wheel' ? undefined : { key: `logical:${deviceId}` }) })
+		const created = instance.create({ ...plan(), devices: { camera: 'camera-1', wheel: 'wheel-1' } })!
+
+		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'device wheel-1 of role wheel is not available' })
+		expect(instance.activeSessionId).toBeUndefined()
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 	})
 
 	test('starts without an optional role the session does not carry', async () => {

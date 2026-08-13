@@ -393,15 +393,26 @@ export class SequencerRuntime {
 
 		for (const binding of handler.resources(configuration)) {
 			const deviceId = plan.devices[binding.role]
-			const request = deviceId === undefined ? undefined : this.#resolve(binding.role, deviceId)
 
-			if (request === undefined) {
+			if (deviceId === undefined) {
 				// An optional role the session does not carry is not an error: the block declared that it
 				// commands the device when it is there and runs without it when it is not.
 				if (binding.optional) continue
 
 				teardown.run()
 				return { ok: false, reason: 'roleUnresolved', detail: `role ${binding.role} is not available` }
+			}
+
+			const request = this.#resolve(binding.role, deviceId)
+
+			// A device the definition named and the resolver cannot find is a failure of every binding,
+			// optional included. Optional means the block works without the role at all, not that it works
+			// without hardware the session was configured with: skipping here would run the autofocus or the
+			// centering with no wheel in its role map, silently through the installed path, while the
+			// definition asked for a filter and a disconnected wheel is what actually happened.
+			if (request === undefined) {
+				teardown.run()
+				return { ok: false, reason: 'roleUnresolved', detail: `device ${deviceId} of role ${binding.role} is not available` }
 			}
 
 			roles.set(binding.role, request)

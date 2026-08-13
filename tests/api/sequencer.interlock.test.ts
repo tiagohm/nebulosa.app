@@ -61,7 +61,7 @@ function actionContext(guider?: string): SequencerActionContext {
 	}
 }
 
-function interlockServices(commands: Command[], running: boolean, failures: Failures = {}): SequencerGuidingServices {
+function interlockServices(commands: Command[], running: boolean, failures: Failures = {}, looping = false): SequencerGuidingServices {
 	function answer(name: keyof Failures, detail?: unknown) {
 		commands.push({ name, detail })
 		const reason = failures[name]
@@ -71,6 +71,7 @@ function interlockServices(commands: Command[], running: boolean, failures: Fail
 	return {
 		guiderCommander: {
 			running: () => running,
+			looping: () => looping,
 			loop: (_id: string, request: unknown) => answer('loop', request),
 			startGuiding: () => answer('startGuiding'),
 			calibrate: () => answer('calibrate'),
@@ -162,6 +163,14 @@ describe('guiding interlock', () => {
 
 		expect(notRunning).toEqual({ type: 'completed', value: { value: 'centered', suspended: false, recalibrated: false } })
 		expect(idle.map((command) => command.name)).toEqual(['body'])
+	})
+
+	test('resumes a guider left looping by a bracket that never resumed it', async () => {
+		const commands: Command[] = []
+		const result = await runGuidingInterlock(interlockServices(commands, false, {}, true), actionContext('guider-1'), interlockRequest(), body(commands))
+
+		expect(result).toEqual({ type: 'completed', value: { value: 'centered', suspended: true, recalibrated: false } })
+		expect(commands.map((command) => command.name)).toEqual(['loop', 'body', 'startGuiding'])
 	})
 
 	test('refuses to run the steps when the corrections could not be suspended', async () => {

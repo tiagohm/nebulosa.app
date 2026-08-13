@@ -97,15 +97,21 @@ function guiderSettle(settle: SequencerGuiderSettle): PHD2Settle {
 
 // Runs the moving steps of a safe point inside one guiding bracket, and emits the dither with the resume.
 //
-// A session that is not guiding runs the body with no bracket at all: there are no corrections to stop, and
-// suspending a guider that is idle would only wait for a state it is already in. The dither still goes
-// through, because deciding it has nothing to displace belongs to the dither and not to the bracket.
+// A session whose guider is neither guiding nor looping runs the body with no bracket at all: there are no
+// corrections to stop, and suspending a guider that is idle would only wait for a state it is already in. The
+// dither still goes through, because deciding it has nothing to displace belongs to the dither and not to the
+// bracket.
 //
 // The resume is attempted even when the body failed, so a safe point that ends badly does not leave the
 // session looping without corrections until the next one. The failure of the body is what gets reported,
 // since it is the one that explains the safe point.
 export async function runGuidingInterlock<T>(services: SequencerGuidingServices, context: SequencerActionContext, request: SequencerInterlockRequest, body: SequencerInterlockBody<T>): Promise<SequencerActionResult<SequencerInterlockOutcome<T>>> {
-	const guider = context.guider !== undefined && services.guiderCommander.running(context.guider) ? context.guider : undefined
+	// A guider that is looping is a guider this same bracket suspended and could not resume — the resume of the
+	// previous safe point failed, or the session was recovered while it was open — and looping is exactly the
+	// state this bracket puts it in. Bracketing it too is what ends that suspension: leaving it out because it
+	// is not guiding right now runs the body unbracketed and, more importantly, never resumes, so the session
+	// keeps exposing uncorrected for the rest of the night with the guider still dutifully looping.
+	const guider = context.guider !== undefined && (services.guiderCommander.running(context.guider) || services.guiderCommander.looping(context.guider)) ? context.guider : undefined
 	const state: SequencerInterlockState = { flipped: false }
 	const settle = sequencerFuseGuiderSettle(request.settle, request.dither?.settle)
 

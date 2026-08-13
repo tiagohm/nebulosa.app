@@ -224,8 +224,27 @@ describe('meridian flip block', () => {
 		})
 		const result = await handler.execute(actionContext({ mount: { device: mount() }, camera: { device: { type: 'camera', name: 'Camera Simulator', connected: true } } }), flipConfiguration({ centering: centering() }))
 
-		expect(result).toMatchObject({ type: 'retryableFailure', reason: 'commandFailed' })
+		expect(result).toMatchObject({ type: 'fatalFailure', reason: 'commandFailed' })
 		expect(commands.map((command) => command.name)).toEqual(['flip', 'capture', 'solve'])
+	})
+
+	test('never sends a mount that already crossed back across the meridian', async () => {
+		const commands: Command[] = []
+		const services = flipServices(commands)
+		const handler = sequencerMeridianFlipHandler({
+			...services,
+			runner: {
+				start: () => {
+					commands.push({ name: 'autofocus' })
+					return { handle: { result: Promise.resolve(failedOperationResult('timeout', 'the sweep did not finish')) }, finish: () => {} }
+				},
+			} as unknown as SequencerMeridianFlipServices['runner'],
+		})
+		const context = actionContext({ mount: { device: mount() }, camera: { device: { type: 'camera', name: 'Camera Simulator', connected: true } }, focuser: { device: { type: 'focuser', name: 'Focuser Simulator', connected: true, position: { value: 12500, min: 0, max: 50000 } } } })
+		const result = await handler.execute(context, flipConfiguration({ focusing: focusing() }))
+
+		expect(result).toMatchObject({ type: 'fatalFailure', reason: 'timeout' })
+		expect(commands.filter((command) => command.name === 'flip')).toHaveLength(1)
 	})
 
 	test('maps a failed crossing to a retry and a stopped session to a terminal failure', async () => {

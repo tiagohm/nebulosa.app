@@ -131,7 +131,7 @@ export async function runMeridianFlip(services: SequencerMeridianFlipServices, c
 	if (configuration.centering !== undefined) {
 		const centered = await runCentering(services, context, configuration.centering)
 
-		if (centered.type !== 'completed') return centered
+		if (centered.type !== 'completed') return crossed(centered)
 
 		return await refocus(services, context, configuration, { ...outcome, centering: centered.value })
 	}
@@ -139,17 +139,35 @@ export async function runMeridianFlip(services: SequencerMeridianFlipServices, c
 	return await refocus(services, context, configuration, outcome)
 }
 
+// Reports a recovery failure of a flip whose crossing already happened, refusing to let it be retried.
+//
+// A retry re-executes the whole node, and the first thing the node does is command the crossing again. The
+// mount is already on the other side by then, so the second crossing takes it back to the side the flip
+// existed to leave — and with the hour angle now past the meridian, that is the side the mount cannot track
+// on. Nothing durable records that the crossing succeeded, so the retry has no way to start at the recovery,
+// and the recentering and the autofocus have already spent their own attempts internally before answering.
+//
+// The failure is therefore made terminal: the session stops with the mount safely on the post-flip side
+// instead of being sent back across it. A failure that is already fatal passes through untouched, and so does
+// anything that is not a failure.
+function crossed(result: SequencerActionResult<never>): SequencerActionResult<never> {
+	if (result.type !== 'retryableFailure') return result
+
+	return { type: 'fatalFailure', reason: result.reason, detail: result.detail === undefined ? 'the mount had already crossed the meridian' : `${result.detail}, with the mount already across the meridian` }
+}
+
 // Runs the refocusing of a flip, or returns the outcome unchanged when the flip does not focus.
 //
 // A flip that fails to refocus is reported as the failure it is rather than as a flip that completed: the
 // crossing already happened, but the anchor of the trigger must not move on a recovery that did not finish,
-// or the session would keep exposing through a focus the flip itself invalidated.
+// or the session would keep exposing through a focus the flip itself invalidated. It is reported through
+// `crossed` for the same reason the recentering is: the crossing is not repeatable.
 async function refocus(services: SequencerMeridianFlipServices, context: SequencerActionContext, configuration: SequencerMeridianFlipTrigger, outcome: SequencerMeridianFlipOutcome): Promise<SequencerActionResult<SequencerMeridianFlipOutcome>> {
 	if (configuration.focusing === undefined) return { type: 'completed', value: outcome }
 
 	const focused = await runAutofocus(services, context, configuration.focusing)
 
-	if (focused.type !== 'completed') return focused
+	if (focused.type !== 'completed') return crossed(focused)
 
 	return { type: 'completed', value: { ...outcome, focusing: focused.value } }
 }

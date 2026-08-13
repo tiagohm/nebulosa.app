@@ -190,6 +190,28 @@ describe('guiding interlock', () => {
 		expect(commands.map((command) => command.name)).toEqual(['loop', 'body', 'startGuiding'])
 	})
 
+	test('resumes the corrections when a bracketed step throws and lets the exception through', async () => {
+		const commands: Command[] = []
+		const thrower = async (state: { flipped: boolean }) => {
+			commands.push({ name: 'body' })
+			state.flipped = false
+			await Promise.resolve()
+			throw new Error('the camera handler exploded')
+		}
+
+		let thrown: unknown
+
+		try {
+			await runGuidingInterlock(interlockServices(commands, true), actionContext('guider-1'), interlockRequest({ dither: ditherTrigger() }), thrower)
+		} catch (e) {
+			thrown = e
+		}
+
+		expect(thrown).toBeInstanceOf(Error)
+		expect((thrown as Error).message).toBe('the camera handler exploded')
+		expect(commands.map((command) => command.name)).toEqual(['loop', 'body', 'startGuiding'])
+	})
+
 	test('reports a resume that never settled', async () => {
 		const commands: Command[] = []
 		const result = await runGuidingInterlock(interlockServices(commands, true, { startGuiding: 'timeout' }), actionContext('guider-1'), interlockRequest({ dither: ditherTrigger() }), body(commands))

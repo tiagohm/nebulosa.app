@@ -95,6 +95,16 @@ function guiderSettle(settle: SequencerGuiderSettle): PHD2Settle {
 	return { pixels: settle.tolerance, time: settle.time, timeout: settle.timeout }
 }
 
+// Puts the guider back to work at the end of a bracket, reporting which of the two ways it is being done.
+//
+// `recalibrate` asks for the calibration to be redone instead of guiding on the existing solution, which is
+// what a meridian flip inside the bracket requires and nothing else does.
+function resumeGuiding(services: SequencerGuidingServices, context: SequencerActionContext, guider: NonNullable<SequencerActionContext['guider']>, recalibrate: boolean) {
+	context.progress({ detail: recalibrate ? 'recalibrating the guider' : 'resuming the guiding corrections' })
+
+	return recalibrate ? services.guiderCommander.calibrate(guider, { signal: context.signal }) : services.guiderCommander.startGuiding(guider, { signal: context.signal })
+}
+
 // Runs the moving steps of a safe point inside one guiding bracket, and emits the dither with the resume.
 //
 // A session whose guider is neither guiding nor looping runs the body with no bracket at all: there are no
@@ -126,16 +136,26 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 		if (!suspended.ok) return sequencerActionFailure(suspended, 'the guiding corrections could not be suspended')
 	}
 
-	const executed = await body(state)
+	let executed: SequencerActionResult<T>
+
+	try {
+		executed = await body(state)
+	} catch (e) {
+		// A body that throws reports nothing, but it leaves the guider looping exactly like a body that failed:
+		// the runtime turns the exception into a fatal failure and the session ends with the corrections stopped
+		// and the guider still exposing. The resume is therefore attempted here too, and whatever it answers is
+		// discarded — the exception is what explains the safe point and is the one that continues on its way.
+		if (guider !== undefined) await resumeGuiding(services, context, guider, state.flipped && request.recalibrateAfterMeridianFlip).catch(() => undefined)
+
+		throw e
+	}
 
 	let recalibrated = false
 
 	if (guider !== undefined) {
 		recalibrated = state.flipped && request.recalibrateAfterMeridianFlip
 
-		context.progress({ detail: recalibrated ? 'recalibrating the guider' : 'resuming the guiding corrections' })
-
-		const resumed = recalibrated ? await services.guiderCommander.calibrate(guider, { signal: context.signal }) : await services.guiderCommander.startGuiding(guider, { signal: context.signal })
+		const resumed = await resumeGuiding(services, context, guider, recalibrated)
 
 		if (executed.type !== 'completed') return executed
 		if (!resumed.ok) return sequencerActionFailure(resumed, 'the guiding corrections could not be resumed')

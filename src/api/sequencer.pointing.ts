@@ -278,11 +278,17 @@ export async function runCentering(services: SequencerCenteringServices, context
 	// to remember what the centering did.
 	const restored = await services.wheelCommander.moveTo(context.scope, transition.wheel, transition.installed)
 
-	// A restore that failed only gets reported when the loop itself succeeded, since the failure of the loop is
-	// the one that explains the action.
-	if (!restored.ok && result.type === 'completed') return sequencerActionFailure(restored, 'the wheel did not return to the frame filter')
+	if (restored.ok || transition.wheel.position === transition.installed) return result
 
-	return result
+	// A wheel stranded on the centering filter is not something a retry repairs: the next run finds that filter
+	// already installed, makes no transition of its own and restores nothing, so it ends on the centering slot
+	// too, and every frame prepared after it derives a focus shift from a slot the focuser was never moved to.
+	// The action is therefore ended rather than offered again, whatever the loop itself decided. An abort is
+	// left alone: it already stops the session, and the failed restore is only the wheel refusing a command
+	// nothing was going to accept.
+	if (result.type === 'fatalFailure') return result
+
+	return { type: 'fatalFailure', reason: restored.reason, detail: `the wheel did not return to the frame filter${restored.error === undefined ? '' : `: ${restored.error}`}` }
 }
 
 // Runs the attempts of the centering, with the wheel already standing on the filter the recipe declared.

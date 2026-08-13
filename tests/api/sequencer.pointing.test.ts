@@ -289,6 +289,30 @@ describe('centering block', () => {
 		expect(commands.filter((command) => command.name === 'wheelMoveTo').map((command) => command.detail)).toEqual([3, 0])
 	})
 
+	test('ends the centering when the wheel does not come back to the frame filter', async () => {
+		const commands: Command[] = []
+		const device = wheel(['R', 'G', 'B', 'L'], 0)
+		let moves = 0
+		const services: SequencerCenteringServices = {
+			...centeringServices(commands, [solution(1.5, -0.09)]),
+			wheelCommander: {
+				moveTo: (_scope: unknown, moved: Wheel, slot: number) => {
+					commands.push({ name: 'wheelMoveTo', detail: slot })
+					if (++moves > 1) return Promise.resolve(failedOperationResult('alert', 'boom'))
+					moved.position = slot
+					return Promise.resolve(successfulOperationResult(undefined))
+				},
+			} as unknown as SequencerCenteringServices['wheelCommander'],
+		}
+		const handler = sequencerCenterHandler(services)
+		const configuration = centerConfiguration({ maximumAttempts: 1, capture: { ...centerConfiguration().capture, filter: { type: 'name', name: 'L' } } })
+		const result = await handler.execute(actionContext({ mount: { device: mount() }, camera: { device: camera() }, wheel: { device } }), configuration)
+
+		expect(result).toMatchObject({ type: 'fatalFailure', reason: 'alert' })
+		expect(device.position).toBe(3)
+		expect(commands.filter((command) => command.name === 'wheelMoveTo').map((command) => command.detail)).toEqual([3, 0])
+	})
+
 	test('does not expose a frame it has nowhere proven to write', async () => {
 		const commands: Command[] = []
 		const handler = sequencerCenterHandler(centeringServices(commands, [solution(1.4, -0.09)]))

@@ -160,15 +160,15 @@ class AutoFocusRun {
 
 			// Both milestones are awaited: a capture that never began and one that began and then failed are
 			// equally fatal to a search whose next position depends on this frame's HFD.
-			if (!started.ok) return started
+			if (!started.ok) return await this.#restored(context, initialPosition, started)
 
 			const captured = await handle.result
 
-			if (!captured.ok) return captured
+			if (!captured.ok) return await this.#restored(context, initialPosition, captured)
 
 			const path = captured.value.paths.at(-1)
 
-			if (path === undefined) return failedOperationResult('unexpectedState', 'the capture produced no frame')
+			if (path === undefined) return await this.#restored(context, initialPosition, failedOperationResult('unexpectedState', 'the capture produced no frame'))
 
 			this.#publish('computing', '')
 
@@ -249,6 +249,25 @@ class AutoFocusRun {
 	finish(id: string, message: string) {
 		this.#event.id = id
 		this.#publish('idle', message)
+	}
+
+	// Puts the focuser back where the run found it and reports the failure that ended the run.
+	//
+	// A search that stops on a device failure has already moved the focuser away from focus — every sample
+	// after the first is taken somewhere along the sweep — and returning the failure from there leaves it at an
+	// offset no measurement chose. Under a sequencer policy that continues past an exhausted retry, every frame
+	// of the rest of the night is exposed from that position, and even a retry starts its search from it.
+	//
+	// The restore is best effort: `failure` is what explains the run and is returned whether or not the focuser
+	// came back. Nothing is attempted once the signal is aborted, where the cleanup of the run is what stops
+	// the focuser and no command would be accepted anyway.
+	async #restored<T>(context: OperationContext, initialPosition: number, failure: OperationResult<T>) {
+		if (this.focuser.position.value !== initialPosition && !context.signal.aborted) {
+			this.#publish('moving', `restoring to initial focus position ${initialPosition}`)
+			await this.#moveTo(context, initialPosition)
+		}
+
+		return failure
 	}
 
 	// Builds the terminal outcome from the position the focuser was left at and the fitted curve.

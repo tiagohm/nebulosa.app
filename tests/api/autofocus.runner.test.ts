@@ -23,7 +23,7 @@ import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { StarDetectionHandler } from 'src/api/stardetection'
 import { DEFAULT_AUTO_FOCUS_START } from '#/autofocus'
 import type { AutoFocusEvent } from '#/autofocus'
-import { successfulOperationResult } from '#/orchestration'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import { captureHandle, waitUntil } from './util'
 
 cameraBus.forceSync = true
@@ -181,6 +181,26 @@ describe('auto focus runner', () => {
 			expect(result.value.outcome).toBe('noStars')
 			expect(focuser.position.value).toBe(initial)
 			expect(result.value.position).toBe(initial)
+		} finally {
+			detect.mockRestore()
+			capture.mockRestore()
+		}
+	}, 30000)
+
+	test('restores the initial position when a capture fails after the sweep already moved', async () => {
+		const { camera, focuser } = await connectedDevices()
+		const initial = focuser.position.value
+		const measured = vCurve(focuser, initial, 25)
+		let frames = 0
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => (++frames > 1 ? captureHandle({ result: Promise.resolve(failedOperationResult('commandFailed', 'the camera dropped the exposure')) }) : frame()))
+		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(measured)
+
+		try {
+			const { handle } = runner.start(coordinator, camera, focuser, request())
+			const result = await handle.result
+
+			expect(result).toMatchObject({ ok: false, reason: 'commandFailed' })
+			expect(focuser.position.value).toBe(initial)
 		} finally {
 			detect.mockRestore()
 			capture.mockRestore()

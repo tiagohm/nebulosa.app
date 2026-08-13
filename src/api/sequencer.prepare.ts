@@ -379,9 +379,15 @@ async function waitForTemperature(context: SequencerActionContext, camera: { rea
 	context.progress({ detail: 'waiting for the sensor temperature' })
 
 	while (Math.abs(camera.temperature - target) > cooling.tolerance) {
-		if (context.now() >= deadline) return failedOperationResult('timeout', `the sensor stayed at ${camera.temperature.toFixed(1)} °C`)
+		// Time the wait still has, in milliseconds. The sample is shortened to it rather than always lasting a
+		// full period: a sensor entering tolerance during a sample that ended after the deadline would otherwise
+		// be accepted as a convergence the wait no longer had time for, by up to one period, and a timeout
+		// shorter than a period would never be observed at all.
+		const remaining = deadline - context.now()
 
-		const waited = await abortableDelay(SEQUENCER_THERMAL_SAMPLE, context.signal)
+		if (remaining <= 0) return failedOperationResult('timeout', `the sensor stayed at ${camera.temperature.toFixed(1)} °C`)
+
+		const waited = await abortableDelay(Math.min(SEQUENCER_THERMAL_SAMPLE, remaining), context.signal)
 
 		if (!waited.ok) return waited
 	}

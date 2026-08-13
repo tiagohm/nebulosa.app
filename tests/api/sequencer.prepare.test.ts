@@ -446,6 +446,22 @@ describe('frame preparation', () => {
 		expect(result).toMatchObject({ type: 'completed', value: { commanded: ['cooling'], temperature: -9.6 } })
 	})
 
+	test('gives up on a sensor that converges only after a timeout shorter than one sample', async () => {
+		const commands: Command[] = []
+		const sensor = camera(-4)
+
+		setTimeout(() => (sensor.temperature = -9.6), 700)
+
+		const result = await runFramePreparation(
+			prepareServices(commands),
+			actionContext({ camera: { device: sensor }, mount: { device: mount(true) } }, () => Date.now()),
+			preparation({ cooling: coolingPolicy({ timeout: 0.5 }) }),
+		)
+
+		expect(result).toMatchObject({ type: 'retryableFailure', reason: 'timeout' })
+		expect(result).toHaveProperty('detail', 'the sensor did not reach the temperature the frame requires: the sensor stayed at -4.0 °C')
+	})
+
 	test('gives up on a sensor that does not converge before the declared timeout', async () => {
 		const commands: Command[] = []
 		const request = preparation({ cooling: coolingPolicy({ timeout: 0 }) })

@@ -168,6 +168,26 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 		const moved = await services.wheelCommander.moveTo(context.scope, transition.wheel, transition.focusSlot)
 
 		if (!moved.ok) return sequencerActionFailure(moved, 'the wheel did not reach the autofocus filter')
+
+		// Correction from the frame filter to the autofocus one, in device steps. The search samples a fixed
+		// number of steps around wherever the focuser stands, so starting it on the focus of the other path
+		// biases the whole curve by the difference between the two: an offset larger than the half-sweep
+		// `initialOffsetSteps * stepSize` puts every sampled frame outside the region where the star detection
+		// can measure an HFD, and the run finds no focus for a reason that has nothing to do with the sky.
+		const shift = sequencerFocusOffsetShift(transition.wheel, configuration.filterOffsets, transition.installedSlot, transition.focusSlot)
+
+		if (shift !== 0) {
+			const target = initialPosition + shift
+
+			context.progress({ detail: `applying the offset of the autofocus filter at position ${target}` })
+
+			const shifted = await services.focuserCommander.moveTo(context.scope, focuser, target)
+
+			if (!shifted.ok) {
+				const restored = await restoreFrameFilter(services, context, transition)
+				return await strandedFrameOptics(services, context, focuser, initialPosition, transition, restored, sequencerActionFailure(shifted, 'the focuser did not take the offset of the autofocus filter'))
+			}
+		}
 	}
 
 	context.progress({ detail: 'searching for focus' })
@@ -196,7 +216,7 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 
 	if (!result.ok) {
 		const restored = await restoreFrameFilter(services, context, transition)
-		return strandedFrameFilter(sequencerActionFailure(result, 'the autofocus search failed'), restored, transition)
+		return await strandedFrameOptics(services, context, focuser, initialPosition, transition, restored, sequencerActionFailure(result, 'the autofocus search failed'))
 	}
 
 	// The search reports a curve it could not fit as a successful operation, because no device misbehaved. For
@@ -204,7 +224,7 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 	// anchor and silence the condition that asked for the run until it came back on its own.
 	if (result.value.outcome !== 'focused') {
 		const restored = await restoreFrameFilter(services, context, transition)
-		return strandedFrameFilter({ type: 'retryableFailure', reason: 'unexpectedState', detail: `the autofocus found no focus: ${result.value.message}` }, restored, transition)
+		return await strandedFrameOptics(services, context, focuser, initialPosition, transition, restored, { type: 'retryableFailure', reason: 'unexpectedState', detail: `the autofocus found no focus: ${result.value.message}` })
 	}
 
 	const measured = result.value.position
@@ -215,7 +235,7 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 	if (transition !== undefined) {
 		const restored = await restoreFrameFilter(services, context, transition)
 
-		if (!restored.ok) return strandedFrameFilter(sequencerActionFailure(restored, 'the wheel did not return to the frame filter'), restored, transition)
+		if (!restored.ok) return await strandedFrameOptics(services, context, focuser, initialPosition, transition, restored, sequencerActionFailure(restored, 'the wheel did not return to the frame filter'))
 
 		const shift = sequencerFocusOffsetShift(transition.wheel, configuration.filterOffsets, transition.focusSlot, transition.installedSlot)
 
@@ -262,13 +282,12 @@ async function restoreFrameFilter(services: SequencerAutofocusServices, context:
 	return await services.wheelCommander.moveTo(context.scope, transition.wheel, transition.installedSlot)
 }
 
-// Puts the focuser back on the position the block found it at, after the offset of the frame filter was
-// refused, and reports the failure that asked for it.
+// Puts the focuser back on the position the block found it at and reports the failure that asked for it.
 //
-// The wheel is already back on the frame filter when the offset is applied, so a focuser left on the position
-// the search measured through the autofocus filter leaves the two describing different paths, and nothing
-// downstream repairs it: the frame preparation derives its shift from the slot the wheel stands on, which did
-// not change. Under a `continue` policy the frames taken after the retries ran out would be exposed out of
+// The wheel is already back on the frame filter by then, so a focuser left on the offset of the autofocus
+// filter — the one applied before the search or the one measured by it — leaves the two describing different
+// paths, and nothing downstream repairs it: the frame preparation derives its shift from the slot the wheel
+// stands on, which did not change. Under a `continue` policy the frames taken after the retries ran out would be exposed out of
 // focus by exactly the offset between the two filters. The position the frame filter was already focused at is
 // the state the block started from, so restoring it leaves the retry the same run to make.
 //
@@ -284,6 +303,26 @@ async function restoreFrameFocus(services: SequencerAutofocusServices, context: 
 	if (restored.ok || focuser.position.value === initialPosition) return failure
 
 	return { type: 'fatalFailure', reason: restored.reason, detail: `the focuser did not return to the focus of the frame filter${restored.error === undefined ? '' : `: ${restored.error}`}` }
+}
+
+// Undoes what a failing exit left of the optical path and reports the failure that asked for it.
+//
+// The block moves both halves of the path to focus through another filter — the wheel to the autofocus slot and
+// the focuser by the offset between the two — so an exit that reports no focus has to give both back or the
+// frames that follow are exposed through one filter with the focus of the other. The wheel is answered first,
+// because a wheel that stayed behind is terminal on its own and the focus of a path the session no longer knows
+// is not worth commanding.
+async function strandedFrameOptics(
+	services: SequencerAutofocusServices,
+	context: SequencerActionContext,
+	focuser: Focuser,
+	initialPosition: number,
+	transition: { readonly wheel: Wheel; readonly installedSlot: number } | undefined,
+	restored: OperationResult<unknown>,
+	failure: SequencerActionResult<SequencerAutofocusOutcome>,
+): Promise<SequencerActionResult<SequencerAutofocusOutcome>> {
+	const stranded = strandedFrameFilter(failure, restored, transition)
+	return stranded.type === 'fatalFailure' ? stranded : await restoreFrameFocus(services, context, focuser, initialPosition, stranded)
 }
 
 // Escalates a failing exit to a terminal one when the restore left the wheel on the autofocus filter.

@@ -148,9 +148,79 @@ describe('autofocus block', () => {
 		})
 		const result = await handler.execute(actionContext({ camera: { device: camera() }, focuser: { device }, wheel: { device: wheel(['L', 'R', 'G', 'B'], 3) } }), configuration)
 
-		expect(commands.map((command) => command.name)).toEqual(['wheelMoveTo', 'autofocus', 'wheelMoveTo', 'focuserMoveTo'])
-		expect(commands.map((command) => command.detail)).toMatchObject([0, {}, 3, 12580])
+		expect(commands.map((command) => command.name)).toEqual(['wheelMoveTo', 'focuserMoveTo', 'autofocus', 'wheelMoveTo', 'focuserMoveTo'])
+		expect(commands.map((command) => command.detail)).toMatchObject([0, 11920, {}, 3, 12580])
 		expect(result).toEqual({ type: 'completed', value: { position: 12580, measured: 12500, focusPoint: { x: 12500, y: 2.5 }, filter: 'B', measuredFilter: 'L' } })
+	})
+
+	test('takes the offset of the autofocus filter before searching through it', async () => {
+		const commands: Command[] = []
+		const device = focuser(12000)
+		let searchedFrom = 0
+		const services: SequencerAutofocusServices = {
+			...focusServices(commands, focused(11150), device),
+			runner: {
+				start: (_scope: unknown, _camera: Camera, _focuser: Focuser, request: unknown) => {
+					searchedFrom = device.position.value
+					commands.push({ name: 'autofocus', detail: request })
+					device.position.value = 11150
+					return { handle: { id: 'run-1', result: Promise.resolve(focused(11150)) }, finish: () => {} }
+				},
+			} as unknown as SequencerAutofocusServices['runner'],
+		}
+		const handler = sequencerAutofocusHandler(services)
+		const configuration = autofocusConfiguration({
+			capture: { ...autofocusConfiguration().capture, filter: { type: 'name', name: 'L' } },
+			filterOffsets: [
+				{ filter: { type: 'name', name: 'L' }, offset: 0 },
+				{ filter: { type: 'name', name: 'B' }, offset: 900 },
+			],
+		})
+		const result = await handler.execute(actionContext({ camera: { device: camera() }, focuser: { device }, wheel: { device: wheel(['L', 'R', 'G', 'B'], 3) } }), configuration)
+
+		expect(searchedFrom).toBe(11100)
+		expect(Math.abs(searchedFrom - 11150)).toBeLessThanOrEqual(configuration.algorithm.initialOffsetSteps * configuration.algorithm.stepSize)
+		expect(commands.map((command) => command.name)).toEqual(['wheelMoveTo', 'focuserMoveTo', 'autofocus', 'wheelMoveTo', 'focuserMoveTo'])
+		expect(commands.map((command) => command.detail)).toMatchObject([0, 11100, {}, 3, 12050])
+		expect(result).toMatchObject({ type: 'completed', value: { position: 12050, measured: 11150, filter: 'B', measuredFilter: 'L' } })
+	})
+
+	test('puts both halves of the path back when the offset of the autofocus filter is refused', async () => {
+		const commands: Command[] = []
+		const device = focuser(12000)
+		const optics = wheel(['L', 'R', 'G', 'B'], 3)
+		let moves = 0
+		const services: SequencerAutofocusServices = {
+			...focusServices(commands, focused(11150), device),
+			focuserCommander: {
+				moveTo: (_scope: unknown, _focuser: Focuser, position: number) => {
+					commands.push({ name: 'focuserMoveTo', detail: position })
+
+					if (++moves === 1) {
+						device.position.value = 11400
+						return Promise.resolve(failedOperationResult('timeout', 'the focuser stalled'))
+					}
+
+					device.position.value = position
+					return Promise.resolve(successfulOperationResult(undefined))
+				},
+			} as unknown as SequencerAutofocusServices['focuserCommander'],
+		}
+		const handler = sequencerAutofocusHandler(services)
+		const configuration = autofocusConfiguration({
+			capture: { ...autofocusConfiguration().capture, filter: { type: 'name', name: 'L' } },
+			filterOffsets: [
+				{ filter: { type: 'name', name: 'L' }, offset: 0 },
+				{ filter: { type: 'name', name: 'B' }, offset: 900 },
+			],
+		})
+		const result = await handler.execute(actionContext({ camera: { device: camera() }, focuser: { device }, wheel: { device: optics } }), configuration)
+
+		expect(commands.map((command) => command.name)).toEqual(['wheelMoveTo', 'focuserMoveTo', 'wheelMoveTo', 'focuserMoveTo'])
+		expect(commands.map((command) => command.detail)).toMatchObject([0, 11100, 3, 12000])
+		expect(optics.position).toBe(3)
+		expect(device.position.value).toBe(12000)
+		expect(result).toEqual({ type: 'retryableFailure', reason: 'timeout', detail: 'the focuser did not take the offset of the autofocus filter: the focuser stalled' })
 	})
 
 	test('leaves the focuser where the search left it when both paths share an offset', async () => {
@@ -270,13 +340,12 @@ describe('autofocus block', () => {
 	test('puts the focus of the frame filter back when the offset move is refused', async () => {
 		const commands: Command[] = []
 		const device = focuser(12000)
-		let moves = 0
 		const services: SequencerAutofocusServices = {
 			...focusServices(commands, focused(12500), device),
 			focuserCommander: {
 				moveTo: (_scope: unknown, _focuser: Focuser, position: number) => {
 					commands.push({ name: 'focuserMoveTo', detail: position })
-					if (++moves === 1) return Promise.resolve(failedOperationResult('timeout', 'the focuser stalled'))
+					if (position === 12580) return Promise.resolve(failedOperationResult('timeout', 'the focuser stalled'))
 					device.position.value = position
 					return Promise.resolve(successfulOperationResult(undefined))
 				},
@@ -292,8 +361,8 @@ describe('autofocus block', () => {
 		})
 		const result = await handler.execute(actionContext({ camera: { device: camera() }, focuser: { device }, wheel: { device: wheel(['L', 'R', 'G', 'B'], 3) } }), configuration)
 
-		expect(commands.map((command) => command.name)).toEqual(['wheelMoveTo', 'autofocus', 'wheelMoveTo', 'focuserMoveTo', 'focuserMoveTo'])
-		expect(commands.map((command) => command.detail)).toMatchObject([0, {}, 3, 12580, 12000])
+		expect(commands.map((command) => command.name)).toEqual(['wheelMoveTo', 'focuserMoveTo', 'autofocus', 'wheelMoveTo', 'focuserMoveTo', 'focuserMoveTo'])
+		expect(commands.map((command) => command.detail)).toMatchObject([0, 11920, {}, 3, 12580, 12000])
 		expect(device.position.value).toBe(12000)
 		expect(result).toEqual({ type: 'retryableFailure', reason: 'timeout', detail: 'the focuser did not accept the filter offset: the focuser stalled' })
 	})
@@ -306,6 +375,12 @@ describe('autofocus block', () => {
 			focuserCommander: {
 				moveTo: (_scope: unknown, _focuser: Focuser, position: number) => {
 					commands.push({ name: 'focuserMoveTo', detail: position })
+
+					if (position === 11920) {
+						device.position.value = position
+						return Promise.resolve(successfulOperationResult(undefined))
+					}
+
 					device.position.value = 12580
 					return Promise.resolve(failedOperationResult('alert', 'the focuser jammed'))
 				},

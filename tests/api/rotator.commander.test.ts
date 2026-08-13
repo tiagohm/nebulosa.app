@@ -110,6 +110,20 @@ test('resolves an angle to the equivalent one the driver publishes', () => {
 	expect(rotatorAngle(limited, 270)).toBe(180)
 })
 
+test('answers an unreachable direction with the limit fewest degrees away from it', () => {
+	const shifted = { angle: { value: 0, min: 10, max: 350 } } as unknown as Rotator
+	const narrow = { angle: { value: 0, min: 90, max: 200 } } as unknown as Rotator
+
+	expect(rotatorAngle(shifted, -5)).toBe(350)
+	expect(rotatorAngle(shifted, 355)).toBe(350)
+	expect(rotatorAngle(shifted, 1)).toBe(10)
+	expect(rotatorAngle(shifted, 361)).toBe(10)
+	expect(rotatorAngle(narrow, 210)).toBe(200)
+	expect(rotatorAngle(narrow, 80)).toBe(90)
+	expect(rotatorAngle(narrow, -300)).toBe(90)
+	expect(rotatorAngle(narrow, 305)).toBe(200)
+})
+
 test('homes after observing the homing motion and supports synchronization and reversal', async () => {
 	const rotator = await connected()
 

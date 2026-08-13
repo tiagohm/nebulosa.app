@@ -149,7 +149,14 @@ async function runAttempt(executor: SequencerPipelineExecutor, step: SequencerPi
 
 	try {
 		const result = await executor.run(step, attempt, controller.signal)
-		return expired ? { type: 'retryableFailure', reason: 'timeout', detail: `the action did not finish within ${step.configuration.timeout}s` } : result
+
+		// The deadline only rewrites an attempt that did not finish. An action that answered `completed` or
+		// `skipped` did the work — the mount is parked — and the timer firing in the same turn as that answer
+		// says nothing about the equipment. Reporting it as a timeout would park a mount twice, or, on a required
+		// finalize action with a single attempt, fail a night that had already finished.
+		if (!expired || result.type === 'completed' || result.type === 'skipped') return result
+
+		return { type: 'retryableFailure', reason: 'timeout', detail: `the action did not finish within ${step.configuration.timeout}s` }
 	} finally {
 		clearTimeout(timer)
 		signal.removeEventListener('abort', abort)

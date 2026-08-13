@@ -6,7 +6,7 @@ import type { SequencerActionResult } from 'src/api/sequencer.registry'
 import type { SequencerLifecycleAction, SequencerRetryPolicy } from '#/sequencer'
 import { retry } from './sequencer.fixture'
 
-type Answer = SequencerActionResult<unknown> | ((attempt: number) => SequencerActionResult<unknown> | Promise<SequencerActionResult<unknown>>)
+type Answer = SequencerActionResult<unknown> | ((attempt: number, signal: AbortSignal) => SequencerActionResult<unknown> | Promise<SequencerActionResult<unknown>>)
 
 function step(id: string, overrides?: Partial<SequencerLifecycle>, retryOverrides?: Partial<SequencerRetryPolicy>): SequencerPipelineStep {
 	const action = { id, type: 'parkMount', enabled: true, timeout: 30, retry: retry() } as unknown as SequencerLifecycleAction
@@ -17,10 +17,10 @@ function step(id: string, overrides?: Partial<SequencerLifecycle>, retryOverride
 
 function executor(answers: Readonly<Record<string, Answer>>, log?: string[]): SequencerPipelineExecutor {
 	return {
-		async run(step, attempt) {
+		async run(step, attempt, signal) {
 			log?.push(`${step.nodeId}#${attempt}`)
 			const answer = answers[step.nodeId] ?? { type: 'completed', value: undefined }
-			return typeof answer === 'function' ? await answer(attempt) : answer
+			return typeof answer === 'function' ? await answer(attempt, signal) : answer
 		},
 		delay(delay) {
 			log?.push(`delay:${delay}`)
@@ -31,6 +31,7 @@ function executor(answers: Readonly<Record<string, Answer>>, log?: string[]): Se
 
 const COMPLETED: SequencerActionResult<unknown> = { type: 'completed', value: undefined }
 const TIMED_OUT: SequencerActionResult<unknown> = { type: 'retryableFailure', reason: 'timeout' }
+const ABORTED: SequencerActionResult<unknown> = { type: 'retryableFailure', reason: 'aborted' }
 
 function nodeId(id: string) {
 	return `finalize.action[${id}]`
@@ -95,10 +96,10 @@ describe('attempts', () => {
 	test('an attempt that outlives its timeout fails as a timeout and is retried', async () => {
 		const log: string[] = []
 		const answers = {
-			[nodeId('a')]: async (attempt: number) => {
+			[nodeId('a')]: async (attempt: number, signal: AbortSignal) => {
 				if (attempt > 1) return COMPLETED
 				await Bun.sleep(20)
-				return COMPLETED
+				return signal.aborted ? ABORTED : COMPLETED
 			},
 		}
 		const report = await runSequencerPipeline({ continueOnFailure: true }, [step('a', { timeout: 0.005 })], executor(answers, log), new AbortController().signal)
@@ -107,12 +108,25 @@ describe('attempts', () => {
 		expect(log).toEqual([nodeId('a') + '#1', 'delay:5000', nodeId('a') + '#2'])
 	})
 
-	test('the deadline aborts the attempt it belongs to', async () => {
-		let aborted = false
+	test('an action that finished anyway is not turned into a timeout by its own deadline', async () => {
 		const answers = {
 			[nodeId('a')]: async () => {
 				await Bun.sleep(20)
 				return COMPLETED
+			},
+		}
+		const report = await runSequencerPipeline({ continueOnFailure: true }, [step('a', { required: true, timeout: 0.005 }, { maxAttempts: 1 })], executor(answers), new AbortController().signal)
+
+		expect(report.results[0]).toMatchObject({ outcome: 'succeeded', attempts: 1 })
+		expect(report.failure).toBeUndefined()
+	})
+
+	test('the deadline aborts the attempt it belongs to', async () => {
+		let aborted = false
+		const answers = {
+			[nodeId('a')]: async (_: number, signal: AbortSignal) => {
+				await Bun.sleep(20)
+				return signal.aborted ? ABORTED : COMPLETED
 			},
 		}
 		const runner = executor(answers)

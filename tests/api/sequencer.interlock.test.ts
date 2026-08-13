@@ -165,12 +165,37 @@ describe('guiding interlock', () => {
 		expect(idle.map((command) => command.name)).toEqual(['body'])
 	})
 
-	test('resumes a guider left looping by a bracket that never resumed it', async () => {
+	test('leaves a guider looping for someone else exactly as it is', async () => {
 		const commands: Command[] = []
-		const result = await runGuidingInterlock(interlockServices(commands, false, {}, true), actionContext('guider-1'), interlockRequest(), body(commands))
+		const result = await runGuidingInterlock(interlockServices(commands, false, {}, true), actionContext('guider-external'), interlockRequest(), body(commands))
+
+		expect(result).toEqual({ type: 'completed', value: { value: 'centered', suspended: false, recalibrated: false } })
+		expect(commands.map((command) => command.name)).toEqual(['body'])
+	})
+
+	test('resumes a guider left looping by a bracket that never resumed it', async () => {
+		const stranded: Command[] = []
+		const abandoned = await runGuidingInterlock(interlockServices(stranded, true, { startGuiding: 'timeout' }), actionContext('guider-stranded'), interlockRequest(), body(stranded))
+
+		expect(abandoned).toMatchObject({ type: 'retryableFailure', reason: 'timeout' })
+
+		const commands: Command[] = []
+		const result = await runGuidingInterlock(interlockServices(commands, false, {}, true), actionContext('guider-stranded'), interlockRequest(), body(commands))
 
 		expect(result).toEqual({ type: 'completed', value: { value: 'centered', suspended: true, recalibrated: false } })
 		expect(commands.map((command) => command.name)).toEqual(['loop', 'body', 'startGuiding'])
+	})
+
+	test('stops treating a resumed guider as a suspension of its own', async () => {
+		const bracketed: Command[] = []
+
+		await runGuidingInterlock(interlockServices(bracketed, true), actionContext('guider-resumed'), interlockRequest(), body(bracketed))
+
+		const commands: Command[] = []
+		const result = await runGuidingInterlock(interlockServices(commands, false, {}, true), actionContext('guider-resumed'), interlockRequest(), body(commands))
+
+		expect(result).toEqual({ type: 'completed', value: { value: 'centered', suspended: false, recalibrated: false } })
+		expect(commands.map((command) => command.name)).toEqual(['body'])
 	})
 
 	test('refuses to run the steps when the corrections could not be suspended', async () => {

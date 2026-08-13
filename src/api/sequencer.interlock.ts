@@ -69,6 +69,20 @@ export interface SequencerInterlockOutcome<T> {
 	readonly dither?: SequencerDitherOutcome
 }
 
+// Guiding sessions this interlock suspended and did not get back to guiding, by guider id.
+//
+// It is what says a looping guider is a suspension of this bracket rather than the state someone else asked
+// for. Looping proves nothing on its own: the operator or another program can be looping deliberately — to
+// frame, to acquire a star, to watch the seeing — and a session that never issued the `startGuiding` lifecycle
+// action is unguided by configuration, so resuming on the strength of looping alone would enable corrections
+// on a guiding session this sequencer never guided.
+//
+// An entry is added when the suspension lands and removed when the guider is guiding again, so the set only
+// ever holds the guiders some bracket left behind, and it is deliberately shared by every session: a guider
+// abandoned by one session is picked up by the next bracket that commands it, whichever session opens it. It
+// does not survive the process, which is the same lifetime the V1 sessions have.
+const suspendedGuiders = new Set<string>()
+
 // Strongest of two settle policies, field by field.
 //
 // Strongest means hardest to satisfy for the accuracy fields and most patient for the waiting ones: the
@@ -116,12 +130,12 @@ function resumeGuiding(services: SequencerGuidingServices, context: SequencerAct
 // session looping without corrections until the next one. The failure of the body is what gets reported,
 // since it is the one that explains the safe point.
 export async function runGuidingInterlock<T>(services: SequencerGuidingServices, context: SequencerActionContext, request: SequencerInterlockRequest, body: SequencerInterlockBody<T>): Promise<SequencerActionResult<SequencerInterlockOutcome<T>>> {
-	// A guider that is looping is a guider this same bracket suspended and could not resume — the resume of the
-	// previous safe point failed, or the session was recovered while it was open — and looping is exactly the
-	// state this bracket puts it in. Bracketing it too is what ends that suspension: leaving it out because it
-	// is not guiding right now runs the body unbracketed and, more importantly, never resumes, so the session
-	// keeps exposing uncorrected for the rest of the night with the guider still dutifully looping.
-	const guider = context.guider !== undefined && (services.guiderCommander.running(context.guider) || services.guiderCommander.looping(context.guider)) ? context.guider : undefined
+	// A guider looping under the marker of this interlock is a suspension a previous bracket could not resume,
+	// and bracketing it is what ends it: leaving it out because it is not guiding right now runs the body
+	// unbracketed and, more importantly, never resumes, so the session keeps exposing uncorrected for the rest
+	// of the night with the guider still dutifully looping. Looping without the marker belongs to whoever asked
+	// for it and is left exactly as it is.
+	const guider = context.guider !== undefined && (services.guiderCommander.running(context.guider) || (suspendedGuiders.has(context.guider) && services.guiderCommander.looping(context.guider))) ? context.guider : undefined
 	const state: SequencerInterlockState = { flipped: false }
 	const settle = sequencerFuseGuiderSettle(request.settle, request.dither?.settle)
 
@@ -134,6 +148,8 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 		const suspended = await services.guiderCommander.loop(guider, { settle: guiderSettle(settle) }, { signal: context.signal })
 
 		if (!suspended.ok) return sequencerActionFailure(suspended, 'the guiding corrections could not be suspended')
+
+		suspendedGuiders.add(guider)
 	}
 
 	let executed: SequencerActionResult<T>
@@ -145,7 +161,11 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 		// the runtime turns the exception into a fatal failure and the session ends with the corrections stopped
 		// and the guider still exposing. The resume is therefore attempted here too, and whatever it answers is
 		// discarded — the exception is what explains the safe point and is the one that continues on its way.
-		if (guider !== undefined) await resumeGuiding(services, context, guider, state.flipped && request.recalibrateAfterMeridianFlip).catch(() => undefined)
+		if (guider !== undefined) {
+			const resumed = await resumeGuiding(services, context, guider, state.flipped && request.recalibrateAfterMeridianFlip).catch(() => undefined)
+
+			if (resumed?.ok) suspendedGuiders.delete(guider)
+		}
 
 		throw e
 	}
@@ -157,6 +177,7 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 
 		const resumed = await resumeGuiding(services, context, guider, recalibrated)
 
+		if (resumed.ok) suspendedGuiders.delete(guider)
 		if (executed.type !== 'completed') return executed
 		if (!resumed.ok) return sequencerActionFailure(resumed, 'the guiding corrections could not be resumed')
 	} else if (executed.type !== 'completed') return executed

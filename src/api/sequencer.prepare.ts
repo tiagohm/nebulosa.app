@@ -296,7 +296,11 @@ export async function runFramePreparation(services: SequencerPreparationServices
 			if (shift !== 0 && focuser !== undefined) {
 				context.progress({ detail: 'applying the focus offset of the filter' })
 
-				const focused = await services.focuserCommander.moveTo(context.scope, focuser, focuser.position.value + shift)
+				// Focus of the filter the wheel is being moved away from, in device steps. It is the other half of
+				// the pair being rolled back, because a move that fails after the focuser started travelling stops
+				// it wherever it got to and never rewinds it.
+				const focusedFrom = focuser.position.value
+				const focused = await services.focuserCommander.moveTo(context.scope, focuser, focusedFrom + shift)
 
 				if (!focused.ok) {
 					// The shift is the difference between two filters and not a position any device publishes, so it
@@ -312,6 +316,19 @@ export async function runFramePreparation(services: SequencerPreparationServices
 					// what makes that silent, so the preparation is ended instead of offered again — the pair can only
 					// be repaired by moving the wheel or the focuser by hand.
 					if (wheel.position !== installed) return { type: 'fatalFailure', reason: focused.reason, detail: `the focuser did not take the offset of the new filter and the wheel did not return to the previous one${focused.error === undefined ? '' : `: ${focused.error}`}` }
+
+					// The focuser is put back for the same reason the wheel is. A move stopped part way leaves it at a
+					// position no declared offset describes, and the retry derives the same difference and adds it whole
+					// to wherever the focuser stands, so the frame is exposed past the focus of the new filter by
+					// however far the failed move got. Rewinding gives the retry the pair this attempt found.
+					if (focuser.position.value !== focusedFrom) {
+						const rewound = await services.focuserCommander.moveTo(context.scope, focuser, focusedFrom)
+
+						// Both halves of the transition are now unknown to everything that could repair them: the wheel is
+						// on the previous filter and the focuser is between the two focuses, with nothing recording either.
+						// A retry would compound the error, so the preparation ends here.
+						if (!rewound.ok && focuser.position.value !== focusedFrom) return { type: 'fatalFailure', reason: rewound.reason, detail: `the focuser did not take the offset of the new filter and did not return to the focus of the previous one${rewound.error === undefined ? '' : `: ${rewound.error}`}` }
+					}
 
 					return sequencerActionFailure(focused, 'the focuser did not take the offset of the new filter')
 				}

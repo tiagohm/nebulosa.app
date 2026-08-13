@@ -347,7 +347,7 @@ describe('frame preparation', () => {
 		])
 	})
 
-	test('puts the wheel back when the focus offset of the new filter fails', async () => {
+	test('puts the wheel and the focuser back when the focus offset of the new filter fails', async () => {
 		const commands: Command[] = []
 		const carousel = wheel(['L', 'Ha'], 0)
 		const optics = focuser(12000)
@@ -362,15 +362,44 @@ describe('frame preparation', () => {
 
 		expect(result).toMatchObject({ type: 'retryableFailure', reason: 'timeout' })
 		expect(carousel.position).toBe(0)
+		expect(optics.position.value).toBe(12000)
 		expect(commands).toEqual([
 			{ name: 'wheelMoveTo', detail: 1 },
 			{ name: 'focuserMoveTo', detail: 12250 },
 			{ name: 'wheelMoveTo', detail: 0 },
+			{ name: 'focuserMoveTo', detail: 12000 },
 		])
 
 		const retried = await runFramePreparation(prepareServices(commands), context, request)
 
 		expect(retried).toMatchObject({ type: 'completed', value: { commanded: ['filter', 'focusOffset'], focusShift: 250 } })
+		expect(optics.position.value).toBe(12250)
+	})
+
+	test('ends the preparation when the focuser stays between the two filters', async () => {
+		const commands: Command[] = []
+		const carousel = wheel(['L', 'Ha'], 0)
+		const optics = focuser(12000)
+		const offsets = [
+			{ filter: { type: 'name' as const, name: 'L' }, offset: 100 },
+			{ filter: { type: 'name' as const, name: 'Ha' }, offset: 350 },
+		]
+		const request = preparation({ group: group({ filter: { type: 'name', name: 'Ha' } }), filterOffsets: offsets })
+		const services: SequencerPreparationServices = {
+			...prepareServices(commands),
+			focuserCommander: {
+				moveTo: (_scope: unknown, device: Focuser, position: number) => {
+					commands.push({ name: 'focuserMoveTo', detail: position })
+					device.position.value = 12100
+					return Promise.resolve(failedOperationResult('alert', 'the focuser jammed'))
+				},
+			} as unknown as SequencerPreparationServices['focuserCommander'],
+		}
+		const result = await runFramePreparation(services, actionContext({ camera: { device: camera() }, wheel: { device: carousel }, focuser: { device: optics }, mount: { device: mount(true) } }), request)
+
+		expect(result).toEqual({ type: 'fatalFailure', reason: 'alert', detail: 'the focuser did not take the offset of the new filter and did not return to the focus of the previous one: the focuser jammed' })
+		expect(carousel.position).toBe(0)
+		expect(optics.position.value).toBe(12100)
 	})
 
 	test('ends the preparation when the wheel does not come back from a failed focus offset', async () => {

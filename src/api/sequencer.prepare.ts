@@ -402,7 +402,12 @@ export async function runFramePreparation(services: SequencerPreparationServices
 async function waitForTemperature(context: SequencerActionContext, camera: { readonly temperature: number }, target: number, cooling: Omit<SequencerCooling, 'enabled'>): Promise<OperationResult<number | undefined>> {
 	if (Math.abs(camera.temperature - target) <= cooling.tolerance) return successfulOperationResult(undefined)
 
-	const deadline = context.now() + cooling.timeout * 1000
+	// Instant the wait gives up at, on the monotonic clock. The declared timeout is a duration spent inside this
+	// action and never an instant anything else reads, so it is measured with `performance.now()`: the wall
+	// clock of the session can be stepped by an operator or by a time daemon while the sensor is cooling, and a
+	// backward adjustment would extend the wait by the whole correction while a forward one would report a
+	// timeout the sensor never had.
+	const deadline = performance.now() + cooling.timeout * 1000
 
 	context.progress({ detail: 'waiting for the sensor temperature' })
 
@@ -411,7 +416,7 @@ async function waitForTemperature(context: SequencerActionContext, camera: { rea
 		// full period: a sensor entering tolerance during a sample that ended after the deadline would otherwise
 		// be accepted as a convergence the wait no longer had time for, by up to one period, and a timeout
 		// shorter than a period would never be observed at all.
-		const remaining = deadline - context.now()
+		const remaining = deadline - performance.now()
 
 		if (remaining <= 0) return failedOperationResult('timeout', `the sensor stayed at ${camera.temperature.toFixed(1)} °C`)
 

@@ -508,14 +508,27 @@ describe('frame preparation', () => {
 
 		setTimeout(() => (sensor.temperature = -9.6), 700)
 
-		const result = await runFramePreparation(
-			prepareServices(commands),
-			actionContext({ camera: { device: sensor }, mount: { device: mount(true) } }, () => Date.now()),
-			preparation({ cooling: coolingPolicy({ timeout: 0.5 }) }),
-		)
+		const result = await runFramePreparation(prepareServices(commands), actionContext({ camera: { device: sensor }, mount: { device: mount(true) } }), preparation({ cooling: coolingPolicy({ timeout: 0.5 }) }))
 
 		expect(result).toMatchObject({ type: 'retryableFailure', reason: 'timeout' })
 		expect(result).toHaveProperty('detail', 'the sensor did not reach the temperature the frame requires: the sensor stayed at -4.0 °C')
+	})
+
+	test('measures the cooling timeout against a clock a wall-clock jump cannot move', async () => {
+		const commands: Command[] = []
+		const sensor = camera(-4)
+		let wall = 1_000_000
+
+		setTimeout(() => (wall += 3_600_000), 50)
+		setTimeout(() => (sensor.temperature = -9.6), 1_050)
+
+		const result = await runFramePreparation(
+			prepareServices(commands),
+			actionContext({ camera: { device: sensor }, mount: { device: mount(true) } }, () => wall),
+			preparation({ cooling: coolingPolicy({ timeout: 3 }) }),
+		)
+
+		expect(result).toMatchObject({ type: 'completed', value: { commanded: ['cooling'], temperature: -9.6 } })
 	})
 
 	test('gives up on a sensor that does not converge before the declared timeout', async () => {

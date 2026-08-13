@@ -231,7 +231,7 @@ describe('rotator handler', () => {
 		await waitUntil(() => free(device))
 	}, 15000)
 
-	test('clamps an angle outside the driver limits to a reachable one', async () => {
+	test('resolves an angle outside the driver limits to the equivalent one it publishes', async () => {
 		const device = await connected(45)
 		const moveTo = spyOn(rotatorManager, 'moveTo')
 
@@ -239,7 +239,7 @@ describe('rotator handler', () => {
 			await noContent(await endpoints['/rotators/:id/moveto'].POST(request(device.id, device.angle.max + 30)))
 
 			await waitUntil(() => moveTo.mock.calls.length > 0)
-			expect(moveTo).toHaveBeenCalledWith(device, device.angle.max)
+			expect(moveTo).toHaveBeenCalledWith(device, device.angle.min + 30)
 		} finally {
 			moveTo.mockRestore()
 		}

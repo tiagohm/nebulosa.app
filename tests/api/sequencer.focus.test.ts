@@ -69,6 +69,7 @@ function focusServices(commands: Command[], outcome: OperationResult<AutoFocusRu
 		runner: {
 			start: (_scope: unknown, _camera: Camera, _focuser: Focuser, request: unknown) => {
 				commands.push({ name: 'autofocus', detail: request })
+				if (target !== undefined && outcome.ok) target.position.value = outcome.value.position
 				return { handle: { id: 'run-1', result: Promise.resolve(outcome) }, finish: () => {} }
 			},
 		} as unknown as SequencerAutofocusServices['runner'],
@@ -264,6 +265,63 @@ describe('autofocus block', () => {
 		expect(commands.map((command) => command.name)).toEqual(['wheelMoveTo', 'autofocus', 'wheelMoveTo'])
 		expect(device.position).toBe(3)
 		expect(result).toMatchObject({ type: 'retryableFailure', reason: 'timeout' })
+	})
+
+	test('puts the focus of the frame filter back when the offset move is refused', async () => {
+		const commands: Command[] = []
+		const device = focuser(12000)
+		let moves = 0
+		const services: SequencerAutofocusServices = {
+			...focusServices(commands, focused(12500), device),
+			focuserCommander: {
+				moveTo: (_scope: unknown, _focuser: Focuser, position: number) => {
+					commands.push({ name: 'focuserMoveTo', detail: position })
+					if (++moves === 1) return Promise.resolve(failedOperationResult('timeout', 'the focuser stalled'))
+					device.position.value = position
+					return Promise.resolve(successfulOperationResult(undefined))
+				},
+			} as unknown as SequencerAutofocusServices['focuserCommander'],
+		}
+		const handler = sequencerAutofocusHandler(services)
+		const configuration = autofocusConfiguration({
+			capture: { ...autofocusConfiguration().capture, filter: { type: 'name', name: 'L' } },
+			filterOffsets: [
+				{ filter: { type: 'name', name: 'L' }, offset: 0 },
+				{ filter: { type: 'name', name: 'B' }, offset: 80 },
+			],
+		})
+		const result = await handler.execute(actionContext({ camera: { device: camera() }, focuser: { device }, wheel: { device: wheel(['L', 'R', 'G', 'B'], 3) } }), configuration)
+
+		expect(commands.map((command) => command.name)).toEqual(['wheelMoveTo', 'autofocus', 'wheelMoveTo', 'focuserMoveTo', 'focuserMoveTo'])
+		expect(commands.map((command) => command.detail)).toMatchObject([0, {}, 3, 12580, 12000])
+		expect(device.position.value).toBe(12000)
+		expect(result).toEqual({ type: 'retryableFailure', reason: 'timeout', detail: 'the focuser did not accept the filter offset: the focuser stalled' })
+	})
+
+	test('ends the session when the focus of the frame filter cannot be put back', async () => {
+		const commands: Command[] = []
+		const device = focuser(12000)
+		const services: SequencerAutofocusServices = {
+			...focusServices(commands, focused(12500), device),
+			focuserCommander: {
+				moveTo: (_scope: unknown, _focuser: Focuser, position: number) => {
+					commands.push({ name: 'focuserMoveTo', detail: position })
+					device.position.value = 12580
+					return Promise.resolve(failedOperationResult('alert', 'the focuser jammed'))
+				},
+			} as unknown as SequencerAutofocusServices['focuserCommander'],
+		}
+		const handler = sequencerAutofocusHandler(services)
+		const configuration = autofocusConfiguration({
+			capture: { ...autofocusConfiguration().capture, filter: { type: 'name', name: 'L' } },
+			filterOffsets: [
+				{ filter: { type: 'name', name: 'L' }, offset: 0 },
+				{ filter: { type: 'name', name: 'B' }, offset: 80 },
+			],
+		})
+		const result = await handler.execute(actionContext({ camera: { device: camera() }, focuser: { device }, wheel: { device: wheel(['L', 'R', 'G', 'B'], 3) } }), configuration)
+
+		expect(result).toEqual({ type: 'fatalFailure', reason: 'alert', detail: 'the focuser did not return to the focus of the frame filter: the focuser jammed' })
 	})
 
 	test('ends the session when the wheel does not come back from a failed search', async () => {

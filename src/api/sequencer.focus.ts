@@ -1,5 +1,5 @@
 import { isCamera, isFocuser, isWheel } from 'nebulosa/src/devices/indi/device'
-import type { Wheel } from 'nebulosa/src/devices/indi/device'
+import type { Focuser, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { AutoFocusStart } from '#/autofocus'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
@@ -150,6 +150,9 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 	if (focuser === undefined) return sequencerMissingRole('focuser')
 
 	const wheel = sequencerDeviceOf(context, 'wheel', isWheel)
+	// Position the focuser was found at, in device steps, which is the focus the frame filter was already
+	// being exposed with. It is what the block restores when it measured a new focus it could not apply.
+	const initialPosition = focuser.position.value
 	// Slot the frame about to be exposed will be taken through, which is the one the wheel is already on: the
 	// preparation of the frame runs after this block, so what is installed now is what the offsets are
 	// measured back to.
@@ -221,7 +224,10 @@ export async function runAutofocus(services: SequencerAutofocusServices, context
 
 			const moved = await services.focuserCommander.moveTo(context.scope, focuser, position)
 
-			if (!moved.ok) return sequencerActionFailure(moved, 'the focuser did not accept the filter offset')
+			if (!moved.ok) {
+				const failure = sequencerActionFailure(moved, 'the focuser did not accept the filter offset')
+				return failure.type === 'fatalFailure' ? failure : await restoreFrameFocus(services, context, focuser, initialPosition, failure)
+			}
 
 			position = focuser.position.value
 		}
@@ -254,6 +260,30 @@ async function restoreFrameFilter(services: SequencerAutofocusServices, context:
 	context.progress({ detail: 'restoring the frame filter' })
 
 	return await services.wheelCommander.moveTo(context.scope, transition.wheel, transition.installedSlot)
+}
+
+// Puts the focuser back on the position the block found it at, after the offset of the frame filter was
+// refused, and reports the failure that asked for it.
+//
+// The wheel is already back on the frame filter when the offset is applied, so a focuser left on the position
+// the search measured through the autofocus filter leaves the two describing different paths, and nothing
+// downstream repairs it: the frame preparation derives its shift from the slot the wheel stands on, which did
+// not change. Under a `continue` policy the frames taken after the retries ran out would be exposed out of
+// focus by exactly the offset between the two filters. The position the frame filter was already focused at is
+// the state the block started from, so restoring it leaves the retry the same run to make.
+//
+// A restore that does not land is terminal instead: nothing records the focus the night was using, so no later
+// step can reconstruct it, and offering a retry from a focus nobody knows is worse than stopping.
+async function restoreFrameFocus(services: SequencerAutofocusServices, context: SequencerActionContext, focuser: Focuser, initialPosition: number, failure: SequencerActionResult<SequencerAutofocusOutcome>): Promise<SequencerActionResult<SequencerAutofocusOutcome>> {
+	if (focuser.position.value === initialPosition) return failure
+
+	context.progress({ detail: `restoring the focus of the frame filter at position ${initialPosition}` })
+
+	const restored = await services.focuserCommander.moveTo(context.scope, focuser, initialPosition)
+
+	if (restored.ok || focuser.position.value === initialPosition) return failure
+
+	return { type: 'fatalFailure', reason: restored.reason, detail: `the focuser did not return to the focus of the frame filter${restored.error === undefined ? '' : `: ${restored.error}`}` }
 }
 
 // Escalates a failing exit to a terminal one when the restore left the wheel on the autofocus filter.

@@ -229,6 +229,35 @@ describe('centering block', () => {
 		expect(result).toMatchObject({ type: 'completed', value: { attempts: 2, separation: 0, verified: true } })
 	})
 
+	test('dates the frame from the moment the exposure started and not from the attempt', async () => {
+		const commands: Command[] = []
+		const device = { ...mount(), geographicCoordinate: { longitude: -0.8, latitude: -0.4, elevation: 700 } } as unknown as Mount
+		let clock = 1_000_000
+		const services: SequencerCenteringServices = {
+			...centeringServices(commands, [solution(5.80545114311377, -0.0016613802495410756)]),
+			cameraHandler: {
+				capture: (_scope: unknown, _camera: Camera, request: { outputName: string }) => {
+					commands.push({ name: 'capture', detail: request.outputName })
+
+					const started = Promise.resolve().then(() => {
+						clock = 1_300_000
+						return successfulOperationResult(undefined)
+					})
+
+					return { started, result: Promise.resolve(successfulOperationResult({ paths: [`/frames/${request.outputName}`] })) }
+				},
+			} as unknown as SequencerCenteringServices['cameraHandler'],
+		}
+		const handler = sequencerCenterHandler(services)
+		const configuration = centerConfiguration({ coordinates: { type: 'ALTAZ', ALTAZ: { x: 1.2, y: 0.9 } }, maximumAttempts: 1 })
+		const result = await handler.execute(
+			actionContext({ mount: { device }, camera: { device: camera() } }, undefined, () => clock),
+			configuration,
+		)
+
+		expect(result).toMatchObject({ type: 'completed', value: { attempts: 1, separation: 0, verified: true } })
+	})
+
 	test('names every centering frame after the container its recipe transfers', async () => {
 		const commands: Command[] = []
 		const handler = sequencerCenterHandler(centeringServices(commands, [solution(1.4, -0.09)]))

@@ -298,17 +298,14 @@ async function runCenteringLoop(services: SequencerCenteringServices, context: S
 	for (let attempt = 1; attempt <= configuration.maximumAttempts; attempt++) {
 		context.progress({ fraction: (attempt - 1) / configuration.maximumAttempts, detail: `centering attempt ${attempt}` })
 
-		// Epoch of the frame this attempt measures with, taken as the middle of its exposure. Every attempt has
-		// one of its own: an exposure, a solve, a settle and a correction all advance the clock, and a target
-		// that is not fixed on the sky names another celestial point by the time the next frame is taken.
-		const observedAt = context.now() + configuration.capture.exposureTime * 500
-		const solution = await solveOneFrame(services, context, configuration, camera, mount, attempt, observedAt)
+		const solved = await solveOneFrame(services, context, configuration, camera, mount, attempt)
 
-		if (solution.type !== 'completed') return solution
+		if (solved.type !== 'completed') return solved
 
+		const { solution, observedAt } = solved.value
 		const target = j2000Of(configuration.coordinates, mount.geographicCoordinate, observedAt)
-		const separation = sphericalSeparation(solution.value.rightAscension, solution.value.declination, target[0], target[1])
-		const outcome: SequencerCenterOutcome = { attempts: attempt, separation, rightAscension: solution.value.rightAscension, declination: solution.value.declination, verified: true, synced }
+		const separation = sphericalSeparation(solution.rightAscension, solution.declination, target[0], target[1])
+		const outcome: SequencerCenterOutcome = { attempts: attempt, separation, rightAscension: solution.rightAscension, declination: solution.declination, verified: true, synced }
 
 		if (separation <= configuration.tolerance) return { type: 'completed', value: outcome }
 
@@ -326,7 +323,7 @@ async function runCenteringLoop(services: SequencerCenteringServices, context: S
 		context.progress({ detail: 'correcting the pointing' })
 
 		if (configuration.syncMount) {
-			const sync = await services.mountCommander.sync(context.scope, mount, { type: 'J2000', J2000: { x: solution.value.rightAscension, y: solution.value.declination } })
+			const sync = await services.mountCommander.sync(context.scope, mount, { type: 'J2000', J2000: { x: solution.rightAscension, y: solution.declination } })
 
 			if (!sync.ok) return sequencerActionFailure(sync, 'the mount did not accept the solved position')
 
@@ -380,9 +377,13 @@ function centeringFilter(context: SequencerActionContext, configuration: Sequenc
 // be exposed at all; the capture is nested in the action's scope, so it inherits the camera the session already
 // holds instead of competing with it, and the solver inherits the action's signal, so a stopped session stops
 // the backend it started.
-// `observedAt` is the epoch the solver hint is converted for, in milliseconds since the Unix epoch, and is the
-// same one the comparison of the frame uses.
-async function solveOneFrame(services: SequencerCenteringServices, context: SequencerActionContext, configuration: SequencerCenter, camera: Camera, mount: Mount, attempt: number, observedAt: number): Promise<SequencerActionResult<PlateSolution>> {
+// The reported epoch is the middle of the exposure, measured from the moment the camera reported the exposure
+// started rather than from the moment the attempt was decided: resolving the destination, configuring the
+// camera and waiting for the driver to accept the command all advance the clock, and on a rig that is slow to
+// arm an exposure the difference is the whole delay rather than half of it. A target that is not fixed on the
+// sky names another celestial point over that interval, so the hint and the comparison would both be made
+// against a position the frame never saw.
+async function solveOneFrame(services: SequencerCenteringServices, context: SequencerActionContext, configuration: SequencerCenter, camera: Camera, mount: Mount, attempt: number): Promise<SequencerActionResult<{ readonly solution: PlateSolution; readonly observedAt: number }>> {
 	const target = context.auxiliary('centering', auxiliaryExtension(configuration.capture))
 
 	if (target === undefined) return { type: 'fatalFailure', reason: 'unexpectedState', detail: 'the centering frame has no destination the session could prove' }
@@ -392,6 +393,9 @@ async function solveOneFrame(services: SequencerCenteringServices, context: Sequ
 
 	if (!started.ok) return sequencerActionFailure(started, 'the centering exposure did not start')
 
+	// Epoch of the frame this attempt measures with. Every attempt has one of its own, because a solve, a
+	// settle and a correction all advance the clock between one frame and the next.
+	const observedAt = context.now() + configuration.capture.exposureTime * 500
 	const captured = await handle.result
 
 	if (!captured.ok) return sequencerActionFailure(captured, 'the centering exposure failed')
@@ -410,7 +414,7 @@ async function solveOneFrame(services: SequencerCenteringServices, context: Sequ
 		return context.signal.aborted ? { type: 'fatalFailure', reason: 'aborted' } : { type: 'retryableFailure', reason: 'commandFailed', detail: 'the centering frame could not be solved' }
 	}
 
-	return { type: 'completed', value: solution }
+	return { type: 'completed', value: { solution, observedAt } }
 }
 
 // Narrows a stored pointing configuration and refuses it when a role it commands is not part of the session.

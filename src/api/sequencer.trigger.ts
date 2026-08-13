@@ -170,28 +170,36 @@ export function evaluateSequencerTriggers(policies: SequencerTriggerPolicies, an
 // It is therefore applied at the safe point that decided, before the run, and it is `sequencerAnchorAdvanced`
 // that clears it once a run focused. The anchors are returned unchanged when no autofocus was selected or when
 // the condition that selected it was one the next safe point can observe again on its own.
-export function sequencerTriggerPending(policies: SequencerTriggerPolicies, anchors: SequencerTriggerAnchors, decisions: readonly SequencerTriggerDecision[]): SequencerTriggerAnchors {
-	const reason = pendingOf(policies, decisions)
+export function sequencerTriggerPending(policies: SequencerTriggerPolicies, anchors: SequencerTriggerAnchors, decisions: readonly SequencerTriggerDecision[], observation: SequencerTriggerObservation): SequencerTriggerAnchors {
+	const reason = pendingOf(policies, decisions, observation)
 
 	if (reason === undefined || anchors.pendingAutofocus === reason) return anchors
 
 	return { ...anchors, pendingAutofocus: reason }
 }
 
-// One-shot condition owed by the decisions of this safe point, or undefined when none is.
+// One-shot condition owed by this safe point, or undefined when none is.
 //
-// A flip that focuses inside its own node suppressed the standalone decision, so there is no autofocus
-// decision to read the condition from; the promise is recorded from the flip instead, because the run that
-// serves it is the nested one and only a focus that succeeded clears it. It is recorded only when the
-// standalone trigger asks for a post-flip focus, which is the configuration whose promise the suppression
-// would otherwise swallow: a definition that never asked for one is owed nothing.
-function pendingOf(policies: SequencerTriggerPolicies, decisions: readonly SequencerTriggerDecision[]): SequencerTriggerEventReason | undefined {
+// The condition is read from the autofocus decision when there is one, and from the event itself when there
+// is not: the standalone decision is absent both when a flip refocuses inside its own node and when
+// `minimumTimeBetweenRuns` suppressed the run, and in neither case has the focus the event invalidated been
+// measured. Reading the event directly is what keeps the promise alive through the rate limiter, which filters
+// the execution of this safe point and must not cancel a condition that no later safe point can observe again.
+//
+// It is owed only to a definition whose autofocus asks for that event, and an autofocus decision taken for any
+// other condition owes nothing: the run selected at this safe point measures the same focus the event
+// invalidated. The flip is read before the recovery, in the order `autofocusReason` itself tests them.
+function pendingOf(policies: SequencerTriggerPolicies, decisions: readonly SequencerTriggerDecision[], observation: SequencerTriggerObservation): SequencerTriggerEventReason | undefined {
 	const decision = decisions.find((item) => item.kind === 'autofocus')
 
 	if (decision !== undefined) return decision.reason === 'afterMeridianFlip' || decision.reason === 'afterRecovery' ? decision.reason : undefined
-	if (policies.autofocus?.triggers.afterMeridianFlip !== true || policies.meridianFlip?.autofocus !== true) return undefined
 
-	return decisions.some((item) => item.kind === 'meridianFlip') ? 'afterMeridianFlip' : undefined
+	const triggers = policies.autofocus?.triggers
+
+	if (triggers === undefined) return undefined
+	if (triggers.afterMeridianFlip && decisions.some((item) => item.kind === 'meridianFlip')) return 'afterMeridianFlip'
+
+	return triggers.afterRecovery && observation.recovered === true ? 'afterRecovery' : undefined
 }
 
 // Counts one accepted frame against every anchor, or leaves them untouched when the frame is calibration.

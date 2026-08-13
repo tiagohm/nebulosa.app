@@ -21,7 +21,7 @@ import type { ImageProcessor } from './image.processor'
 import type { OperationContext, OperationCoordinator, OperationHandle, OperationScope } from './operation'
 import { abortReason, waitForDeviceState } from './operation.wait'
 import { resourceKey } from './resource'
-import type { ResourceKey, ResourceRequest } from './resource'
+import type { ReservationToken, ResourceKey, ResourceRequest } from './resource'
 
 // Either transport driving a guider: a remote PHD2 server or the in-process client over INDI devices.
 export type GuiderTransport = PHD2Client | GuiderClient
@@ -313,11 +313,14 @@ export class GuiderCommander {
 	// The target is resolved before the operation starts, because its logical key is what the arbiter needs
 	// to refuse a second connection to the same server or to the same pair of devices.
 	//
-	// `scope` is where the session operation is opened, defaulting to the coordinator, which is the top-level
-	// tree an interactive connect belongs in. A caller holding a reservation over the guider resources passes
-	// its own scope instead: the session then acquires the keys the reservation already holds, rather than
-	// competing with its owner for them and being refused the devices that were reserved for it.
-	async connect(request: GuiderConnect, scope: OperationScope = this.coordinator): Promise<OperationResult<GuiderSessionInfo>> {
+	// What a caller holding a reservation over the guider resources passes is the reservation `token`, and not
+	// a scope of its own. The session is always a root operation of this commander, because a connection
+	// outlives every command issued through it, and nesting it in the caller's tree would make the connection
+	// die with any intermediate operation. The token changes nothing about where the operation is opened: it
+	// is the credential the acquisition is made with, so the session takes the keys the reservation already
+	// holds instead of competing with its owner for them and being refused the devices reserved for it.
+	async connect(request: GuiderConnect, token?: ReservationToken): Promise<OperationResult<GuiderSessionInfo>> {
+		const scope: OperationScope = token === undefined ? this.coordinator : this.coordinator.tokenScope(token)
 		const target = this.#resolveTarget(request)
 
 		if (!target.ok) return target
@@ -561,19 +564,26 @@ class GuiderSession {
 	}
 
 	// Starts looping exposures and resolves once the guider reports it is looping.
+	//
+	// A request without `capture` loops with the exposure the session is already using, which is what a caller
+	// that only wants the corrections stopped asks for: reconfiguring the guide camera to restart it would
+	// change how the star is measured for a reason that has nothing to do with the star.
 	async loop(request: GuiderLoopStart, options: GuiderCommandOptions): Promise<OperationResult<undefined>> {
-		if (this.target.camera && this.#client instanceof GuiderClient) {
-			try {
-				this.#configure(this.target.camera, this.#client, request.capture)
-			} catch (error) {
-				// connect() already attached the client to the camera manager, so a configuration that fails
-				// has to detach it here rather than leave it subscribed to a device the session gives back.
-				this.#detach()
-				return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
+		if (request.capture !== undefined) {
+			if (this.target.camera && this.#client instanceof GuiderClient) {
+				try {
+					this.#configure(this.target.camera, this.#client, request.capture)
+				} catch (error) {
+					// connect() already attached the client to the camera manager, so a configuration that fails
+					// has to detach it here rather than leave it subscribed to a device the session gives back.
+					this.#detach()
+					return { ok: false, reason: 'commandFailed', error: errorMessage(error) }
+				}
 			}
+
+			Object.assign(this.#capture, structuredClone(request.capture))
 		}
 
-		Object.assign(this.#capture, structuredClone(request.capture))
 		Object.assign(this.#settle, request.settle)
 
 		return await this.#serialize(

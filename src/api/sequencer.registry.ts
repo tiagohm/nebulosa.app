@@ -3,6 +3,7 @@ import type { SequencerDeviceRole, SequencerDevices } from '#/sequencer'
 import type { SequencerArtifactDraft, SequencerCheckpoint } from '#/sequencer.state'
 import type { OperationScope } from './operation'
 import type { ResourceRequest } from './resource'
+import type { SequencerAuxiliaryKind } from './sequencer.path'
 
 // Registry of executable block handlers, and the contract every one of them implements.
 //
@@ -21,6 +22,11 @@ import type { ResourceRequest } from './resource'
 export interface ResourceBinding {
 	// Device role the block commands.
 	readonly role: SequencerDeviceRole
+	// Whether the block still runs when the session does not carry the role. A required role the session
+	// lacks refuses the block, which is the right answer for a mount a slew has to command; an optional one
+	// is left out of the reservation and the block finds it absent, which is the right answer for a wheel a
+	// recipe names a filter for on a rig that has none.
+	readonly optional?: boolean
 }
 
 // What a handler may look at while validating its own configuration.
@@ -52,6 +58,18 @@ export interface SequencerActionProgress {
 	readonly detail?: string
 }
 
+// Destination of one image that is not a frame of the plan, reserved by the runtime for the action about to
+// write it. Directory and file name travel separately because a capture is commanded with both, and the
+// composed path is what the action reports and reads back.
+export interface SequencerAuxiliaryTarget {
+	// Directory the image is written into, `root/[night]/session/.auxiliary/kind`, proven free of links.
+	readonly directory: string
+	// File name including its extension, unique within the kind for the whole session.
+	readonly fileName: string
+	// Composed absolute path, which is `directory` joined with `fileName`.
+	readonly path: string
+}
+
 // Everything an action is allowed to touch while it runs. Device managers are deliberately absent: an
 // action commands hardware through the scope, which is authorized by the session reservation, and receives
 // domain services explicitly injected instead of reaching for them.
@@ -78,6 +96,16 @@ export interface SequencerActionContext {
 	// write must not begin if it failed; a promotion is staged and written with the next durable change of the
 	// session.
 	readonly artifact: (artifact: SequencerArtifactDraft) => void
+	// Reserves the destination of one image that fills no slot, such as a centering, autofocus or drift-check
+	// frame. Each call returns a distinct name, so an action capturing several images never overwrites its own.
+	// Returns undefined when the destination could not be composed — an unusable storage root, or a reserved
+	// directory that exists as a symbolic link — which the action must treat as a refusal to capture rather
+	// than writing somewhere it did not prove.
+	readonly auxiliary: (kind: SequencerAuxiliaryKind, extension: string) => SequencerAuxiliaryTarget | undefined
+	// Guiding session this sequencer session commands, absent when it guides through none. It is session
+	// state and not configuration: a remote or local guider only has an id once it has been connected, which
+	// is something the session does when it starts and the compiler cannot know.
+	readonly guider?: string
 	// Read-only view of the current checkpoint. An action reads it and never writes it: the runtime owns it.
 	readonly checkpoint: SequencerCheckpoint
 }

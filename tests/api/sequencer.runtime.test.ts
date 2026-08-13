@@ -1,8 +1,9 @@
 import { describe, expect, spyOn, test } from 'bun:test'
+import { join } from 'path'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter } from 'src/api/resource'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
-import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult } from 'src/api/sequencer.registry'
+import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerAuxiliaryTarget } from 'src/api/sequencer.registry'
 import { SequencerRuntime, SessionAdmissionGate, SessionTeardown } from 'src/api/sequencer.runtime'
 import type { SequencerRuntimePlan } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
@@ -379,9 +380,56 @@ describe('sequencer runtime', () => {
 		const instance = new SequencerRuntime({ store, registry, coordinator, resolve: () => undefined })
 		const created = instance.create(plan())!
 
-		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'role camera is not available' })
+		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'device camera-1 of role camera is not available' })
 		expect(instance.activeSessionId).toBeUndefined()
 		expect(store.session(created.id)?.state).toBe('created')
+	})
+
+	test('refuses to start when a required role the session does not carry is commanded', () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const registry = new SequencerBlockRegistry()
+		const store = new InMemorySequencerStore()
+		const handler = exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 }))
+
+		registry.register({ ...handler, resources: () => [{ role: 'camera' }, { role: 'wheel' }] })
+
+		const instance = new SequencerRuntime({ store, registry, coordinator, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) })
+		const created = instance.create(plan())!
+
+		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'role wheel is not available' })
+		expect(instance.activeSessionId).toBeUndefined()
+	})
+
+	test('refuses to start when an optional role the session carries cannot be resolved', () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const registry = new SequencerBlockRegistry()
+		const store = new InMemorySequencerStore()
+		const handler = exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 }))
+
+		registry.register({ ...handler, resources: () => [{ role: 'camera' }, { role: 'wheel', optional: true }] })
+
+		const instance = new SequencerRuntime({ store, registry, coordinator, resolve: (role, deviceId) => (role === 'wheel' ? undefined : { key: `logical:${deviceId}` }) })
+		const created = instance.create({ ...plan(), devices: { camera: 'camera-1', wheel: 'wheel-1' } })!
+
+		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'device wheel-1 of role wheel is not available' })
+		expect(instance.activeSessionId).toBeUndefined()
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+	})
+
+	test('starts without an optional role the session does not carry', async () => {
+		let wheel: unknown = 'unread'
+		const handler = exposeHandler((context) => {
+			wheel = context.request('wheel')
+			return Promise.resolve({ type: 'completed', value: 1 })
+		})
+		const { runtime: instance } = runtime({ ...handler, resources: () => [{ role: 'camera' }, { role: 'wheel', optional: true }] })
+		const created = instance.create(plan())!
+
+		expect(instance.start(created.id)).toMatchObject({ ok: true })
+		expect((await instance.settled(created.id))?.state).toBe('completed')
+		expect(wheel).toBeUndefined()
 	})
 
 	test('refuses to start when the resources are reserved by someone else', () => {
@@ -637,5 +685,46 @@ describe('sequencer runtime', () => {
 		expect(session?.desiredState).toBe('stopped')
 		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 		expect(instance.activeSessionId).toBeUndefined()
+	})
+
+	test('reserves one auxiliary destination per image with an ordinal of its own kind', async () => {
+		const targets: (SequencerAuxiliaryTarget | undefined)[] = []
+
+		const { runtime: instance } = runtime(
+			exposeHandler((context, configuration) => {
+				targets.push(context.auxiliary('centering', 'fits'), context.auxiliary('autofocus', 'fits'), context.auxiliary('centering', 'fits'))
+				return Promise.resolve({ type: 'completed', value: configuration.exposureTime })
+			}),
+		)
+
+		const created = instance.create({ ...plan(), storage: { root: '/data/nebulosa', session: 'session-1', night: '2026-08-12' } })!
+
+		instance.start(created.id)
+
+		const session = await instance.settled(created.id)
+
+		expect(session?.state).toBe('completed')
+		expect(targets.map((target) => target?.fileName)).toEqual(['centering-00001.fits', 'autofocus-00001.fits', 'centering-00002.fits'])
+		expect(targets[0]?.directory).toEndWith(join('2026-08-12', 'session-1', '.auxiliary', 'centering'))
+		expect(targets[0]?.path).toBe(join(targets[0]!.directory, 'centering-00001.fits'))
+	})
+
+	test('reports no auxiliary destination when the session has no storage', async () => {
+		let target: SequencerAuxiliaryTarget | undefined | 'unset' = 'unset'
+
+		const { runtime: instance } = runtime(
+			exposeHandler((context, configuration) => {
+				target = context.auxiliary('guider', 'fits')
+				return Promise.resolve({ type: 'completed', value: configuration.exposureTime })
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		await instance.settled(created.id)
+
+		expect(target).toBeUndefined()
 	})
 })

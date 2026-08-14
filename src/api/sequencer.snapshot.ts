@@ -247,8 +247,11 @@ function header(observation: SequencerSnapshotObservation, terminal: boolean) {
 		state: session.state,
 		desiredState: session.desiredState,
 		// A terminal session converges nowhere, and its desired state is `stopped` by construction; reading the
-		// two against each other there would show every completed session as still converging.
-		converging: !terminal && !converged(session),
+		// two against each other there would show every completed session as still converging. A session in
+		// `created` converges nowhere either: its desired state is the `running` every session is created with,
+		// and it means "run when started" rather than a transition already under way, so reading the two against
+		// each other would show a session nobody started as permanently transitioning.
+		converging: !terminal && session.state !== 'created' && !converged(session),
 		failure: session.failure,
 		createdAt: session.createdAt,
 		updatedAt: session.updatedAt,

@@ -99,7 +99,8 @@ describe('snapshot derivation', () => {
 		const snapshot = deriveSequencerSnapshot(observation({ session: session({ state: 'created', startedAt: undefined }) }))
 
 		expect(snapshot.state).toBe('created')
-		expect(snapshot.converging).toBeTrue()
+		expect(snapshot.desiredState).toBe('running')
+		expect(snapshot.converging).toBeFalse()
 		expect(snapshot.target).toEqual({ id: 'm42', name: 'Orion Nebula' })
 		expect(snapshot.capture.accepted).toBe(0)
 		expect(snapshot.capture.exposure).toBeUndefined()

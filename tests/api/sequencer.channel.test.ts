@@ -10,7 +10,7 @@ import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { AnySequencerActionHandler } from 'src/api/sequencer.registry'
 import { SequencerRuntime } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
-import { canonical } from './sequencer.fixture'
+import { canonical, services } from './sequencer.fixture'
 
 interface Received {
 	readonly type: string
@@ -51,7 +51,7 @@ function environment(execute: AnySequencerActionHandler['execute']) {
 	const registry = new SequencerBlockRegistry()
 	const store = new InMemorySequencerStore()
 	const coordinator = new OperationCoordinator(new ResourceArbiter())
-	const runtime = new SequencerRuntime({ store, registry, coordinator, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }), observe: (change) => channel.changed(change) })
+	const runtime = new SequencerRuntime({ store, registry, coordinator, ...services(), resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }), observe: (change) => channel.changed(change) })
 	const handler = new SequencerHandler({ store, runtime, registry, observe: (sessionId) => runtime.observation(sessionId) })
 	const channel = new SequencerChannel({ wsm, snapshot: (sessionId) => handler.snapshot(sessionId), sessions: () => store.sessions(), interval: 20 })
 
@@ -115,7 +115,7 @@ describe('fanout', () => {
 		const session = types(received, 'sequencer:session')
 		const last = session.at(-1)!.payload as { state: string; foreground?: unknown }
 
-		expect(last.state).toBe('completed')
+		expect(last.state).toBe('stopped')
 		// Nothing is in the foreground of a session that ended, and this is the last message published for it.
 		expect(last.foreground).toBeUndefined()
 		expect((session.at(-2)!.payload as { state: string; foreground?: { state: string } }).foreground?.state).toBe('cancelling')
@@ -153,6 +153,6 @@ describe('fanout', () => {
 
 		channel.close()
 
-		expect(handler.snapshot(first.session.id)?.state).toBe('completed')
+		expect(handler.snapshot(first.session.id)?.state).toBe('stopped')
 	})
 })

@@ -2,11 +2,16 @@ import { describe, expect, spyOn, test } from 'bun:test'
 import { join } from 'path'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter } from 'src/api/resource'
+import { sequencerNodeId } from 'src/api/sequencer.compiler'
+import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
+import type { SequencerPreparationServices } from 'src/api/sequencer.prepare'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerAuxiliaryTarget } from 'src/api/sequencer.registry'
 import { SequencerRuntime, SessionAdmissionGate, SessionTeardown } from 'src/api/sequencer.runtime'
 import type { SequencerRuntimePlanDraft } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
+import type { SequencerDevices, SequencerRetryPolicy } from '#/sequencer'
+import type { SequencerPlan, SequencerPlanAction, SequencerPlanSequence, SequencerPlanStorage } from '#/sequencer.plan'
 
 describe('session admission gate', () => {
 	test('admits the first session and refuses another one naming the holder', () => {
@@ -141,8 +146,32 @@ function exposeHandler(execute: (context: SequencerActionContext, configuration:
 	}
 }
 
-function plan(): SequencerRuntimePlanDraft {
-	return { definitionId: 'definition-1', definitionRevision: 1, devices: { camera: 'camera-1' }, action: { id: 'node-1', type: 'expose', configuration: { exposureTime: 2 } } }
+const RETRY: SequencerRetryPolicy = { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' }
+
+const SERVICES = { preparation: {} as SequencerPreparationServices, guiding: {} as SequencerGuidingServices }
+
+function compiled(overrides?: { readonly devices?: SequencerDevices; readonly storage?: Partial<SequencerPlanStorage>; readonly configuration?: unknown }): SequencerPlan {
+	const action: SequencerPlanAction = { kind: 'action', id: 'node-1', type: 'expose', configuration: overrides?.configuration ?? { exposureTime: 2 } }
+	const target: SequencerPlanSequence = { kind: 'sequence', id: sequencerNodeId.target('m42'), children: [action] }
+
+	return {
+		definitionId: 'definition-1',
+		definitionRevision: 1,
+		name: 'M42',
+		description: '',
+		target: { id: 'm42', name: 'Orion Nebula' },
+		execution: { start: { type: 'manual' }, end: { type: 'afterSequence' }, pauseMode: 'afterCurrentExposure', stopMode: 'graceful', defaultRetry: RETRY, checkpoint: { enabled: true, afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 60 } },
+		devices: overrides?.devices ?? { camera: 'camera-1' },
+		roles: ['camera'],
+		root: { kind: 'sequence', id: sequencerNodeId.root(), children: [target] },
+		groups: [],
+		handlers: { expose: 1 },
+		storage: { root: '/data/nebulosa', fileNameTemplate: '{target}', directoryTemplate: '{target}', checksum: 'none', autoSubFolderMode: 'noon', ...overrides?.storage },
+	}
+}
+
+function plan(overrides?: Parameters<typeof compiled>[0]): SequencerRuntimePlanDraft {
+	return { compiled: compiled(overrides) }
 }
 
 function runtime(handler: SequencerActionHandler<ExposeConfiguration, number>, now?: () => number) {
@@ -153,7 +182,7 @@ function runtime(handler: SequencerActionHandler<ExposeConfiguration, number>, n
 
 	registry.register(handler)
 
-	return { arbiter, coordinator, registry, store, runtime: new SequencerRuntime({ store, registry, coordinator, now, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) }) }
+	return { arbiter, coordinator, registry, store, runtime: new SequencerRuntime({ store, registry, coordinator, now, ...SERVICES, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) }) }
 }
 
 describe('sequencer runtime', () => {
@@ -193,9 +222,9 @@ describe('sequencer runtime', () => {
 		expect(session?.endedAt).toBeDefined()
 		expect(session?.checkpoint.completed).toEqual(['node-1'])
 		expect(session?.checkpoint.cursor).toBeUndefined()
-		expect(store.events(created.id).map((event) => event.type)).toEqual(['stateChanged', 'stateChanged', 'artifactCommitted', 'stateChanged'])
-		expect(store.events(created.id).map((event) => event.state)).toEqual(['running', 'finalizing', undefined, 'completed'])
-		expect(store.events(created.id)[2]).toMatchObject({ nodeId: 'node-1', detail: 'slot-1' })
+		expect(store.events(created.id).map((event) => event.type)).toEqual(['stateChanged', 'artifactCommitted', 'stateChanged', 'stateChanged'])
+		expect(store.events(created.id).map((event) => event.state)).toEqual(['running', undefined, 'finalizing', 'completed'])
+		expect(store.events(created.id)[1]).toMatchObject({ nodeId: 'node-1', detail: 'slot-1' })
 		expect(store.artifacts(created.id)).toMatchObject([{ logicalSlotId: 'slot-1', attempt: 1, status: 'committed' }])
 
 		// The reservation and the claim are gone only after the action and its cleanups finished.
@@ -282,11 +311,12 @@ describe('sequencer runtime', () => {
 			}),
 		)
 
-		const mutable = { definitionId: 'definition-1', definitionRevision: 1, devices: { camera: 'camera-1' }, action: { id: 'node-1', type: 'expose', configuration: { exposureTime: 2 } } }
+		const configuration = { exposureTime: 2 }
+		const mutable = plan({ configuration, devices: { camera: 'camera-1' } })
 		const created = instance.create(mutable)!
 
-		mutable.action.configuration.exposureTime = 600
-		mutable.devices.camera = 'camera-2'
+		configuration.exposureTime = 600
+		;(mutable.compiled.devices as { camera: string }).camera = 'camera-2'
 
 		instance.start(created.id)
 
@@ -312,6 +342,7 @@ describe('sequencer runtime', () => {
 			store,
 			registry,
 			coordinator,
+			...SERVICES,
 			resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }),
 			progress: (_, __, progress) => {
 				reported.push(progress.fraction!)
@@ -377,7 +408,7 @@ describe('sequencer runtime', () => {
 
 		registry.register(exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 })))
 
-		const instance = new SequencerRuntime({ store, registry, coordinator, resolve: () => undefined })
+		const instance = new SequencerRuntime({ store, registry, coordinator, ...SERVICES, resolve: () => undefined })
 		const created = instance.create(plan())!
 
 		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'device camera-1 of role camera is not available' })
@@ -394,7 +425,7 @@ describe('sequencer runtime', () => {
 
 		registry.register({ ...handler, resources: () => [{ role: 'camera' }, { role: 'wheel' }] })
 
-		const instance = new SequencerRuntime({ store, registry, coordinator, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) })
+		const instance = new SequencerRuntime({ store, registry, coordinator, ...SERVICES, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) })
 		const created = instance.create(plan())!
 
 		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'role wheel is not available' })
@@ -410,8 +441,8 @@ describe('sequencer runtime', () => {
 
 		registry.register({ ...handler, resources: () => [{ role: 'camera' }, { role: 'wheel', optional: true }] })
 
-		const instance = new SequencerRuntime({ store, registry, coordinator, resolve: (role, deviceId) => (role === 'wheel' ? undefined : { key: `logical:${deviceId}` }) })
-		const created = instance.create({ ...plan(), devices: { camera: 'camera-1', wheel: 'wheel-1' } })!
+		const instance = new SequencerRuntime({ store, registry, coordinator, ...SERVICES, resolve: (role, deviceId) => (role === 'wheel' ? undefined : { key: `logical:${deviceId}` }) })
+		const created = instance.create(plan({ devices: { camera: 'camera-1', wheel: 'wheel-1' } }))!
 
 		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'device wheel-1 of role wheel is not available' })
 		expect(instance.activeSessionId).toBeUndefined()
@@ -609,9 +640,9 @@ describe('sequencer runtime', () => {
 		const session = await instance.stop(created.id)
 
 		expect(cleaned).toEqual(['expose'])
-		expect(session?.state).toBe('failed')
+		expect(session?.state).toBe('stopped')
 		expect(session?.desiredState).toBe('stopped')
-		expect(session?.failure?.reason).toBe('aborted')
+		expect(session?.failure).toBeUndefined()
 		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 		expect(instance.activeSessionId).toBeUndefined()
 	})
@@ -681,7 +712,7 @@ describe('sequencer runtime', () => {
 
 		const session = await instance.stop(created.id)
 
-		expect(session?.state).toBe('failed')
+		expect(session?.state).toBe('stopped')
 		expect(session?.desiredState).toBe('stopped')
 		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 		expect(instance.activeSessionId).toBeUndefined()
@@ -702,7 +733,7 @@ describe('sequencer runtime', () => {
 			() => clock,
 		)
 
-		const created = instance.create({ ...plan(), storage: { root: '/data/nebulosa', autoSubFolderMode: 'midnight' } })!
+		const created = instance.create(plan({ storage: { autoSubFolderMode: 'midnight' } }))!
 
 		clock = new Date(2026, 7, 13, 0, 10).getTime()
 
@@ -714,25 +745,6 @@ describe('sequencer runtime', () => {
 		expect(targets.map((target) => target?.fileName)).toEqual(['centering-00001.fits', 'autofocus-00001.fits', 'centering-00002.fits'])
 		expect(targets[0]?.directory).toEndWith(join('2026-08-13', created.id, '.auxiliary', 'centering'))
 		expect(targets[0]?.path).toBe(join(targets[0]!.directory, 'centering-00001.fits'))
-	})
-
-	test('reports no auxiliary destination when the session has no storage', async () => {
-		let target: SequencerAuxiliaryTarget | undefined | 'unset' = 'unset'
-
-		const { runtime: instance } = runtime(
-			exposeHandler((context, configuration) => {
-				target = context.auxiliary('guider', 'fits')
-				return Promise.resolve({ type: 'completed', value: configuration.exposureTime })
-			}),
-		)
-
-		const created = instance.create(plan())!
-
-		instance.start(created.id)
-
-		await instance.settled(created.id)
-
-		expect(target).toBeUndefined()
 	})
 
 	test('ends the running session before releasing its reservation and admits no other one', async () => {

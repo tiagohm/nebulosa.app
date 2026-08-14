@@ -1,6 +1,5 @@
 import type { FrameType } from 'nebulosa/src/devices/indi/device'
-import type { OperationFailureReason } from './orchestration'
-import type { Sequencer, SequencerDeviceRole } from './sequencer'
+import type { Sequencer, SequencerDeviceRole, SequencerFailureReason } from './sequencer'
 
 // Durable execution state of a sequencer session: what the runtime persists, what it reloads after a
 // restart, and what the UI reads. Configuration lives in `sequencer.ts` and never appears here.
@@ -30,8 +29,10 @@ export function isSequencerTerminalState(state: SequencerSessionState) {
 
 // Definitive cause of a failed session, normalized from the operation that produced it.
 export interface SequencerFailure {
-	// Normalized terminal cause.
-	readonly reason: OperationFailureReason
+	// Normalized terminal cause. It is the sequencer's own set rather than the operation one, because a session
+	// also fails for causes no device operation has: a frame refused by the quality gate, an unsafe condition,
+	// or storage that went away mid-night.
+	readonly reason: SequencerFailureReason
 	// Human-readable diagnostic, when the failing operation carried one.
 	readonly detail?: string
 }

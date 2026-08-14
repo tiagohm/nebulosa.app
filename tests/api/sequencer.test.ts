@@ -8,7 +8,7 @@ import type { AnySequencerActionHandler } from 'src/api/sequencer.registry'
 import { SequencerRuntime } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
 import type { Sequencer } from '#/sequencer'
-import { canonical } from './sequencer.fixture'
+import { canonical, services } from './sequencer.fixture'
 
 function blockTypes() {
 	const compilation = compile(canonical())
@@ -32,7 +32,7 @@ function environment(execute?: AnySequencerActionHandler['execute']) {
 	const coordinator = new OperationCoordinator(arbiter)
 	const registry = new SequencerBlockRegistry()
 	const store = new InMemorySequencerStore()
-	const runtime = new SequencerRuntime({ store, registry, coordinator, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) })
+	const runtime = new SequencerRuntime({ store, registry, coordinator, ...services(), resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) })
 
 	for (const type of blockTypes()) registry.register(handler(type, execute ?? (() => Promise.resolve({ type: 'completed', value: undefined }))))
 
@@ -171,7 +171,7 @@ describe('sessions', () => {
 
 		await instance.stop(first.session.id)
 
-		expect(instance.snapshot(first.session.id)?.state).toBe('completed')
+		expect(instance.snapshot(first.session.id)?.state).toBe('stopped')
 	})
 
 	test('records a pause without ending the session and a stop that does', async () => {

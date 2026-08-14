@@ -3,7 +3,7 @@ import type { SequencerPlan, SequencerPreflight } from '#/sequencer.plan'
 import type { SequencerArtifact, SequencerDefinitionRecord, SequencerEvent, SequencerSessionSnapshot } from '#/sequencer.state'
 import { query, response } from './http'
 import type { Endpoints } from './http'
-import { compile, sequencerPlanNodes } from './sequencer.compiler'
+import { compile } from './sequencer.compiler'
 import { preflight } from './sequencer.preflight'
 import type { SequencerBlockRegistry } from './sequencer.registry'
 import type { SequencerControlResult, SequencerRuntime, SequencerRuntimePlanDraft, SequencerStartResult } from './sequencer.runtime'
@@ -31,9 +31,8 @@ export type SequencerLiveObservation = (sessionId: string) => Omit<Partial<Seque
 // Why a definition could not be turned into a session.
 // - unknownDefinition: no definition with that id is stored.
 // - invalidDefinition: the lowering refused it; the pre-flight view carries the diagnostics.
-// - emptyPlan: the definition compiled to a plan with no action, so a session would have nothing to execute.
-// - unresolvedHandler: no handler is registered for the block the session would run.
-export type SequencerSessionCreationFailure = 'unknownDefinition' | 'invalidDefinition' | 'emptyPlan' | 'unresolvedHandler'
+// - unresolvedHandler: no handler is registered for a block the session would run.
+export type SequencerSessionCreationFailure = 'unknownDefinition' | 'invalidDefinition' | 'unresolvedHandler'
 
 // Outcome of creating a session from a stored definition.
 export type SequencerSessionCreation =
@@ -150,17 +149,7 @@ export class SequencerHandler {
 		if (!compilation.ok) return { ok: false, reason: 'invalidDefinition', preflight: view }
 
 		const { plan } = compilation
-		const action = firstActionOf(plan)
-
-		if (action === undefined) return { ok: false, reason: 'emptyPlan' }
-
-		const draft: SequencerRuntimePlanDraft = {
-			definitionId: record.id,
-			definitionRevision: record.revision,
-			devices: plan.devices,
-			storage: { root: plan.storage.root, autoSubFolderMode: plan.storage.autoSubFolderMode },
-			action: { id: action.id, type: action.type, configuration: action.configuration },
-		}
+		const draft: SequencerRuntimePlanDraft = { compiled: plan }
 
 		// The plan is kept before the creation is announced: the announcement is a snapshot derived through this
 		// very map, and one taken without it would publish a session with no target and no estimate while the
@@ -243,16 +232,6 @@ export class SequencerHandler {
 	}
 }
 
-// First action node of a plan in execution order, or undefined when the plan has none. It is what the V1
-// runtime executes, while the plan the handler keeps stays whole for the pre-flight view.
-function firstActionOf(plan: SequencerPlan) {
-	for (const node of sequencerPlanNodes(plan.root)) {
-		if (node.kind === 'action') return node
-	}
-
-	return undefined
-}
-
 // Parses the `afterSequence` query parameter, ignoring anything that is not a number so a malformed cursor
 // returns the whole history instead of nothing at all.
 function afterSequenceOf(value: string | undefined) {
@@ -267,12 +246,12 @@ export function sequencer(handler: SequencerHandler) {
 	return {
 		'/sequencer/definitions': {
 			GET: () => response(handler.definitions()),
-			POST: async (req) => response(handler.create((await req.json()) as Sequencer)),
+			POST: async (req) => response(handler.create(await req.json())),
 		},
-		'/sequencer/definitions/validate': { POST: async (req) => response(handler.validate((await req.json()) as Sequencer)) },
+		'/sequencer/definitions/validate': { POST: async (req) => response(handler.validate(await req.json())) },
 		'/sequencer/definitions/:id': {
 			GET: (req) => response(handler.definition(req.params.id)),
-			PUT: async (req) => response(handler.update(req.params.id, (await req.json()) as Sequencer)),
+			PUT: async (req) => response(handler.update(req.params.id, await req.json())),
 			DELETE: (req) => response<SequencerDefinitionRemoval>(handler.remove(req.params.id)),
 		},
 		'/sequencer/definitions/:id/validate': { POST: (req) => response(handler.validateStored(req.params.id)) },

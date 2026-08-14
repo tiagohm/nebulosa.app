@@ -62,6 +62,10 @@ export function sequencerPauseAttended(mode: SequencerExecution['pauseMode'], sa
 	return SEQUENCER_SAFE_POINT_RANK[safePoint] >= SEQUENCER_SAFE_POINT_RANK[SEQUENCER_PAUSE_BOUNDARY[mode]]
 }
 
+// Fields of the execution policy a convergence is decided from. It is the pair and not the whole block
+// because the plan snapshots the execution policy into a shape of its own, and both carry these two.
+export type SequencerConvergencePolicy = Pick<SequencerExecution, 'pauseMode' | 'stopMode'>
+
 // What the runtime does when it reaches a safe point.
 // - continue: take the next step of the plan.
 // - pause: stop starting nodes and hold, keeping the reservation.
@@ -74,7 +78,7 @@ export type SequencerConvergence = 'continue' | 'pause' | 'stop'
 // would consume the focus or the dither the rest of the safe point would produce, so waiting for a broader
 // boundary would only spend devices on work nothing reads. `graceful` shows up as the absence of a
 // cancellation and never as a later boundary.
-export function sequencerConvergence(desiredState: SequencerDesiredState, execution: SequencerExecution, safePoint: SequencerSafePoint): SequencerConvergence {
+export function sequencerConvergence(desiredState: SequencerDesiredState, execution: SequencerConvergencePolicy, safePoint: SequencerSafePoint): SequencerConvergence {
 	if (desiredState === 'stopped') return 'stop'
 	if (desiredState === 'paused') return sequencerPauseAttended(execution.pauseMode, safePoint) ? 'pause' : 'continue'
 	return 'continue'
@@ -89,7 +93,7 @@ export function sequencerConvergence(desiredState: SequencerDesiredState, execut
 //
 // A graceful stop lets the running node finish precisely so a frame that was already exposed becomes durable
 // rather than being thrown away.
-export function sequencerCancelsActiveAction(desiredState: SequencerDesiredState, execution: SequencerExecution) {
+export function sequencerCancelsActiveAction(desiredState: SequencerDesiredState, execution: SequencerConvergencePolicy) {
 	if (desiredState === 'stopped') return execution.stopMode === 'immediate'
 	return desiredState === 'paused' && execution.pauseMode === 'immediate'
 }

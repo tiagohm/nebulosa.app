@@ -1,4 +1,11 @@
+import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
+import type { SequencerPreparationServices } from 'src/api/sequencer.prepare'
 import type { Sequencer, SequencerCamera, SequencerFrame, SequencerLifecycleAction, SequencerRetryPolicy } from '#/sequencer'
+
+// Device services the runtime hands the executor, absent in the tests that never reach the optical path.
+export function services(): { readonly preparation: SequencerPreparationServices; readonly guiding: SequencerGuidingServices } {
+	return { preparation: {} as SequencerPreparationServices, guiding: {} as SequencerGuidingServices }
+}
 
 // Canonical sequencer definition shared by the compiler and resolution tests: every feature the V1 lowering
 // understands is enabled, so a test only has to override the property it is about.

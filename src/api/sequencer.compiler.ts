@@ -1,7 +1,8 @@
 import { isAbsolute } from 'path'
 import type { MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-import type { Sequencer, SequencerAutofocus, SequencerCamera, SequencerCentering, SequencerCooling, SequencerDeviceRole, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerTargetTracking } from '#/sequencer'
+// oxfmt-ignore
+import type { Sequencer, SequencerAutofocus, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { sequencerUnknownPlaceholders } from './sequencer.identity'
 import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
@@ -82,6 +83,31 @@ export interface SequencerCapture {
 	readonly group: SequencerPlanFrameGroup
 	// Stable time required before the first or a resumed exposure, in seconds.
 	readonly settle: number
+	// Optical-path policies the safe point in front of this exposure reconciles against.
+	readonly preparation: SequencerCapturePreparation
+}
+
+// Policies the frame preparation of a capture node reconciles the optical path against, carried on the node
+// so the runtime never has to reach back into the definition to run a safe point.
+//
+// It is declared here rather than imported from the preparation module because the compiler is pure and that
+// module owns device commanders. The shape is deliberately the preparation input without its group, which the
+// capture node already carries.
+export interface SequencerCapturePreparation {
+	// Cover policy, absent when the definition declares no cover feature.
+	readonly cover?: Omit<SequencerCover, 'enabled'>
+	// Flat panel policy, absent when the definition declares no panel feature.
+	readonly flatPanel?: Omit<SequencerFlatPanel, 'enabled'>
+	// Rotator policy, absent when the definition declares no rotator feature.
+	readonly rotator?: Omit<SequencerRotator, 'enabled'>
+	// Thermal policy, absent when the definition declares no cooling feature. The preparation only waits on it.
+	readonly cooling?: Omit<SequencerCooling, 'enabled'>
+	// Tracking policy of the target, absent when the definition does not track.
+	readonly tracking?: Omit<SequencerTargetTracking, 'enabled'>
+	// Focuser offsets per filter, in device steps, applied when the reconciliation moves the wheel. They are
+	// carried whether or not autofocus is enabled: a filter change displaces focus by an amount the definition
+	// measured, and compensating for it is not an autofocus run.
+	readonly filterOffsets: readonly SequencerFilterFocusOffset[]
 }
 
 // Configuration of one lifecycle action: the declared action without the fields the pipeline itself consumes.
@@ -369,6 +395,22 @@ function lowerTriggers(definition: Sequencer, targetId: string, centering: Seque
 	return triggers
 }
 
+// Lowers the optical-path policies every capture node of the plan is prepared against. A feature the
+// definition disabled is dropped rather than carried disabled, so the preparation reads absence as "the
+// session does not command this dimension" and never has to re-check a flag.
+function lowerPreparation(definition: Sequencer): SequencerCapturePreparation {
+	const { cover, flatPanel, rotator, cooling, autofocus } = definition
+
+	return {
+		cover: cover.enabled ? cover : undefined,
+		flatPanel: flatPanel.enabled ? flatPanel : undefined,
+		rotator: rotator.enabled ? rotator : undefined,
+		cooling: cooling.enabled ? cooling : undefined,
+		tracking: lowerTracking(definition),
+		filterOffsets: autofocus.filterOffsets,
+	}
+}
+
 // Lowers the target block: the slew, the optional centering, and the capture loop, in that order.
 function lowerTarget(definition: Sequencer, groups: readonly SequencerPlanFrameGroup[]): SequencerPlanSequence {
 	const { capture, target } = definition
@@ -391,8 +433,10 @@ function lowerTarget(definition: Sequencer, groups: readonly SequencerPlanFrameG
 		children.push({ kind: 'action', id: sequencerNodeId.center(target.id), type: SEQUENCER_BLOCK_TYPE.center, configuration: centering })
 	}
 
+	const preparation = lowerPreparation(definition)
+
 	const frames = groups.map<SequencerPlanAction>((group) => {
-		const configuration: SequencerCapture = { group, settle: capture.settle }
+		const configuration: SequencerCapture = { group, settle: capture.settle, preparation }
 		return { kind: 'action', id: group.nodeId, type: SEQUENCER_BLOCK_TYPE.captureFrame, configuration }
 	})
 

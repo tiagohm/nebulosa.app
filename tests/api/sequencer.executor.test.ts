@@ -149,8 +149,12 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 			slotAttempt: (logicalSlotId) => sequencerSlotAttempt(artifacts(), logicalSlotId),
 			hold: (nodeId) => {
 				holds.push(nodeId)
-				state.desired = state.onHold?.(nodeId) ?? 'stopped'
-				return Promise.resolve(state.desired)
+
+				const converged = state.onHold?.(nodeId) ?? 'stopped'
+
+				if (state.desired === 'paused') state.desired = converged
+
+				return Promise.resolve(converged)
 			},
 			commit: (_, drafts) => {
 				events.push(...drafts)
@@ -376,6 +380,24 @@ describe('plan walk', () => {
 		expect(state.holds).toHaveLength(2)
 		expect(frames.map((it) => it.attempt)).toEqual([0, 1, 2, 3, 4, 5])
 		expect(new Set(frames.map((it) => it.slot!.path)).size).toBe(6)
+	})
+
+	test('takes the safe point again instead of exposing when a held slot resumes', async () => {
+		const base = definition()
+		const plan = planOf({ capture: { ...base.capture, retry: { ...base.capture.retry, onExhausted: 'pause' } } })
+		const state: Harness = harness(plan, (context) => (context.frame === undefined ? Promise.resolve({ type: 'completed', value: undefined }) : Promise.resolve({ type: 'retryableFailure', reason: 'commandFailed', detail: 'the camera did not answer' })))
+
+		state.onHold = () => {
+			state.desired = 'stopped'
+			return 'running'
+		}
+
+		const outcome = await runSequencerPlan(state.host)
+		const frames = state.executed.filter((it) => it.slot !== undefined)
+
+		expect(outcome.terminal.state).toBe('stopped')
+		expect(state.holds).toHaveLength(1)
+		expect(frames.map((it) => it.attempt)).toEqual([0, 1, 2])
 	})
 
 	test('fails the session when a target action reports a fatal failure', async () => {

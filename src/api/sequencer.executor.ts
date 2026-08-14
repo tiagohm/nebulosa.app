@@ -141,10 +141,15 @@ export interface SequencerExecutionOutcome {
 //
 // It is deliberately not a `SequencerActionResult`: an action says what happened to the device, this says what
 // happens to the rest of the plan.
-type SequencerNodeOutcome = { readonly kind: 'continue' } | { readonly kind: 'pause' } | { readonly kind: 'stop' } | { readonly kind: 'fail'; readonly reason: SequencerFailureReason; readonly detail?: string }
+// `retake` is the answer of a frame that has to be selected and safe-pointed again from scratch, which only
+// the capture loop can do; it never leaves that loop.
+type SequencerNodeOutcome = { readonly kind: 'continue' } | { readonly kind: 'pause' } | { readonly kind: 'retake' } | { readonly kind: 'stop' } | { readonly kind: 'fail'; readonly reason: SequencerFailureReason; readonly detail?: string }
 
 // Outcome of a node the plan simply carries on from.
 const SEQUENCER_CONTINUE: SequencerNodeOutcome = { kind: 'continue' }
+
+// Outcome of a frame whose slot is still on the cursor and whose safe point has to be taken again.
+const SEQUENCER_RETAKE: SequencerNodeOutcome = { kind: 'retake' }
 
 // What the pre-exposure guard leaves the safe point doing.
 //
@@ -439,15 +444,16 @@ async function holdWalk(execution: SequencerExecution, nodeId: string): Promise<
 
 // Primary outcome of the session, from what the target block ended as.
 //
-// A pause does not reach here: every site that can produce one holds the walk instead, so the only way the
-// walk unwinds to a terminal outcome is a stop, a failure, or the plan running out of work. The branch is kept
-// because the outcome union still carries the kind, and a paused session that somehow unwound is a stopped one
-// — never a completed one.
+// Neither a pause nor a retake reaches here: every site that can produce one is handled where the walk can act
+// on it, so the only way the walk unwinds to a terminal outcome is a stop, a failure, or the plan running out
+// of work. The branches are kept because the outcome union still carries the kinds, and a walk that somehow
+// unwound holding a frame it never took is a stopped session — never a completed one.
 function outcomeOf(outcome: SequencerNodeOutcome): SequencerPrimaryOutcome {
 	switch (outcome.kind) {
 		case 'continue':
 			return { kind: 'completed' }
 		case 'pause':
+		case 'retake':
 		case 'stop':
 			return { kind: 'stopped' }
 		default:
@@ -548,6 +554,10 @@ async function runCaptureLoop(execution: SequencerExecution, targetId: string, l
 			if (selection === undefined) break
 
 			const outcome = await runSafePoint(execution, targetId, loop, selection, instant)
+
+			// The slot is still on the cursor and the scheduler hands it back, so the frame is taken again from
+			// a reading of the moment it resumes rather than from the one the safe point was decided on.
+			if (outcome.kind === 'retake') continue
 
 			if (outcome.kind === 'pause') {
 				const held = await holdWalk(execution, selection.group.nodeId)
@@ -837,7 +847,9 @@ async function runExposureGuard(execution: SequencerExecution, policies: Sequenc
 // then advances from the decision, and deliberately does not read the registry again — the record of the
 // attempt that just failed is only staged until the next commit, so a second read would answer with the same
 // number, hand the retry the same file name, and leave the attempt window measuring an attempt that never
-// moved, which is a slot that retries forever on a budget it can never spend.
+// moved, which is a slot that retries forever on a budget it can never spend. A retake reads it again, and may:
+// it is entered after a hold that commits first, so the registry it reads is the one that already knows the
+// attempt is over.
 async function runExposure(execution: SequencerExecution, targetId: string, loop: SequencerPlanLoop, node: SequencerPlanAction, configuration: SequencerCapture, selection: FrameSelection): Promise<SequencerNodeOutcome> {
 	const { host } = execution
 	const { group, cycle, ordinal } = selection
@@ -897,6 +909,14 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 			case 'hold': {
 				execution.cause = decision.cause
 
+				// The session is about to sit still for an unbounded time, so what it has produced is made durable
+				// before it does. It is also what the resume reads back: the record of the attempt that just failed
+				// is only staged until a commit, and the physical attempt the retake derives from the registry
+				// would otherwise answer with the number that failed and expose over its file.
+				execution.keeper.capture(execution.capture)
+				host.commit(execution.keeper.checkpoint, execution.events)
+				execution.events = []
+
 				const resumed = await holdWalk(execution, node.id)
 
 				if (resumed.kind !== 'continue') return resumed
@@ -910,8 +930,14 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 					execution.keeper.capture(execution.capture)
 				}
 
-				attempt++
-				continue
+				// The resume goes back to the safe point, not straight to the cadence wait. Everything the safe
+				// point establishes was established before the hold and none of it survives one: the observatory
+				// reading is old, the triggers were evaluated against it, the guiding interlock was released with
+				// the bracket, the optical path was prepared for a frame that never happened and the flip window
+				// may have opened while the session sat still. Exposing from here would command the camera under
+				// conditions nobody looked at, and it would also skip the pause the operator may have asked for
+				// in the meantime.
+				return SEQUENCER_RETAKE
 			}
 			case 'stop':
 				return { kind: 'stop' }

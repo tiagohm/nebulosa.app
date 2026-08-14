@@ -236,7 +236,8 @@ export interface SequencerRuntimeChange {
 // - invalidConfiguration: the handler rejected the stored configuration.
 // - roleUnresolved: a role the block commands is not declared, or its device is not present.
 // - resourcesUnavailable: the resources are leased or reserved by someone else.
-export type SequencerStartFailureReason = 'unknownSession' | 'busy' | 'notStartable' | 'handlerUnresolved' | 'invalidConfiguration' | 'roleUnresolved' | 'resourcesUnavailable'
+// - shuttingDown: the process is ending and admits no further session.
+export type SequencerStartFailureReason = 'unknownSession' | 'busy' | 'notStartable' | 'handlerUnresolved' | 'invalidConfiguration' | 'roleUnresolved' | 'resourcesUnavailable' | 'shuttingDown'
 
 // Outcome of a start. Success carries the session as stored, which for a reentrant start is the running one.
 export type SequencerStartResult =
@@ -340,6 +341,8 @@ export class SequencerRuntime {
 	readonly #observe?: (change: SequencerRuntimeChange) => void
 	readonly #plans = new Map<string, SequencerRuntimePlan>()
 	#active?: ActiveSession
+	// Set once the process began shutting down, after which no session starts again.
+	#closed = false
 
 	// Wires the runtime; the arbiter comes from the coordinator so both always see the same arbitration.
 	constructor(options: SequencerRuntimeOptions) {
@@ -409,6 +412,7 @@ export class SequencerRuntime {
 		const stored = this.#store.session(sessionId)
 
 		if (stored === undefined) return { ok: false, reason: 'unknownSession' }
+		if (this.#closed) return { ok: false, reason: 'shuttingDown', detail: 'the process is shutting down' }
 
 		const admission = this.#gate.claim(sessionId)
 
@@ -556,6 +560,56 @@ export class SequencerRuntime {
 		await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
 
 		return await active.done.promise
+	}
+
+	// Ends the sequencer with the process (§20.2), in the only order that leaves no device commanded.
+	//
+	// It is not the finalization pipeline: shutting down ends the night, it does not conclude it, so no
+	// terminal state is written and nothing quiesces the way a completed session does. The session is recorded
+	// as `interrupted`, which is what it is — ended by the process, not stopped by the operator and not failed
+	// — and the day a session stops dying with the process, that record is the only step that changes.
+	//
+	// The steps are ordered against each other, not merely listed. New sessions are refused first, so nothing
+	// starts behind the shutdown; the state is written before anything is cancelled, because the caller's
+	// `cancelAll` would otherwise tear down operations whose session was never recorded; the cancellation is by
+	// reservation owner and not by the handles this runtime keeps, which is what catches the owned guiding
+	// session whose handle lives in the guider commander and which would otherwise escape past the release;
+	// and the reservation is released only after those cleanups ran, so no third party is handed a device that
+	// is still moving.
+	//
+	// Resolves once the session let go of everything. A runtime with nothing running resolves immediately, and
+	// calling it twice is a no-op.
+	async shutdown(): Promise<void> {
+		this.#closed = true
+
+		const active = this.#active
+
+		if (active === undefined || active.finalizing) return
+
+		// The action still runs until its cancellation lands, and its natural finalization must not race this
+		// one: whichever committed first would be overwritten by the other, and both would run the teardown.
+		active.finalizing = true
+
+		this.#commitBestEffort(active, {
+			state: 'interrupted',
+			desiredState: 'stopped',
+			events: [{ type: 'stateChanged', state: 'interrupted', nodeId: active.plan.action.id, detail: 'the process is shutting down' }],
+		})
+
+		try {
+			active.controller.abort('aborted')
+			await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
+		} catch (e) {
+			// A cleanup that misbehaved does not entitle the session to keep the devices past this point.
+			console.error('sequencer shutdown cancellation failed:', active.id, e)
+		} finally {
+			active.teardown.run((error) => console.error('sequencer shutdown teardown failed:', active.id, error))
+
+			this.#plans.delete(active.id)
+			this.#active = undefined
+			active.artifacts.length = 0
+			active.done.resolve(this.#store.session(active.id))
+		}
 	}
 
 	// Issues one operator command against a session and reports what it did.

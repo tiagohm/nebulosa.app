@@ -211,19 +211,25 @@ const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinato
 // Shared terminal path that cancels operations before lifecycle disposal and process exit.
 let shutdownTask: Promise<void> | undefined
 
-// Cancels active operations while transports are live, then releases observers and transient files.
+// Ends the running session, cancels active operations while transports are live, then releases observers and
+// transient files.
+//
+// The sequencer goes first and in one piece (§20.2): it refuses new sessions, records the one it is running as
+// interrupted, cancels every operation owned by that session's reservation, waits for their cleanups and only
+// then releases the reservation. Doing that before `cancelAll` is what keeps the order observable — a session
+// torn down by `cancelAll` would lose the state that was never written, and the owned guiding session, whose
+// handle lives in the guider commander rather than in the runtime, would escape past the release. The
+// sequencer is wired further down, so `shutdown` is only ever called once it exists.
 function shutdown() {
 	return (shutdownTask ??= (async () => {
+		await sequencerRuntime.shutdown()
+		sequencerChannel.close()
 		await operationCoordinator.cancelAll('aborted')
 		deviceLifecycle.dispose()
 		clearTemporaryDirectories()
 		process.exit(0)
 	})())
 }
-
-process.once('beforeExit', shutdown)
-process.once('SIGINT', shutdown)
-process.once('SIGTERM', shutdown)
 
 deviceLifecycle.observe(cameraManager)
 deviceLifecycle.observe(mountManager)
@@ -335,6 +341,13 @@ sequencerRegistry.register(sequencerCenterHandler({ cameraHandler, mountCommande
 sequencerRegistry.register(sequencerAutofocusHandler({ runner: autoFocusHandler.runner, focuserCommander, wheelCommander }))
 sequencerRegistry.register(sequencerDitherHandler({ guiderCommander }))
 sequencerRegistry.register(sequencerMeridianFlipHandler({ cameraHandler, mountCommander, wheelCommander, plateSolver: plateSolverHandler, runner: autoFocusHandler.runner, focuserCommander }))
+
+// Registered here and not next to `shutdown` itself: the terminal path ends the sequencer session first, so a
+// signal arriving before the sequencer exists would reach a handler that cannot run. Nothing before this point
+// holds a device or a reservation, and an interrupt there ends the process the way it always did.
+process.once('beforeExit', shutdown)
+process.once('SIGINT', shutdown)
+process.once('SIGTERM', shutdown)
 
 void atlasHandler.refreshImageOfSun()
 void atlasHandler.refreshSatellites()

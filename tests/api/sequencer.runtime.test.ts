@@ -727,4 +727,56 @@ describe('sequencer runtime', () => {
 
 		expect(target).toBeUndefined()
 	})
+
+	test('ends the running session before releasing its reservation and admits no other one', async () => {
+		const running = Promise.withResolvers<void>()
+		const order: string[] = []
+
+		const {
+			runtime: instance,
+			arbiter,
+			store,
+		} = runtime(
+			exposeHandler(async (context) => {
+				const handle = context.scope.start('expose', [context.request('camera')!], async (operation) => {
+					operation.onCleanup(() => {
+						order.push(`cleanup:${arbiter.availability(CAMERA_KEY)}`)
+					})
+
+					running.resolve()
+
+					await new Promise<void>((resolve) => {
+						operation.signal.addEventListener('abort', () => resolve(), { once: true })
+					})
+
+					return { ok: false, reason: 'aborted' }
+				})
+
+				await handle.result
+
+				return { type: 'fatalFailure', reason: 'aborted' }
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		await running.promise
+		await instance.shutdown()
+
+		order.push(`released:${arbiter.availability(CAMERA_KEY)}`)
+
+		const session = store.session(created.id)!
+		const other = instance.create(plan())!
+
+		expect(order).toEqual(['cleanup:leased', 'released:available'])
+		expect(session.state).toBe('interrupted')
+		expect(session.desiredState).toBe('stopped')
+		expect(session.endedAt).toBeUndefined()
+		expect(store.events(created.id).at(-1)).toMatchObject({ type: 'stateChanged', state: 'interrupted', detail: 'the process is shutting down' })
+		expect(instance.activeSessionId).toBeUndefined()
+		expect(instance.start(other.id)).toEqual({ ok: false, reason: 'shuttingDown', detail: 'the process is shutting down' })
+		expect(await instance.shutdown()).toBeUndefined()
+	})
 })

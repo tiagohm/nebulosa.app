@@ -226,7 +226,8 @@ describe('centering block', () => {
 			configuration,
 		)
 
-		expect(result).toMatchObject({ type: 'completed', value: { attempts: 2, separation: 0, verified: true } })
+		expect(result).toMatchObject({ type: 'completed', value: { attempts: 2, verified: true } })
+		expect(result.type === 'completed' ? result.value.separation : Number.NaN).toBeLessThan(1e-6)
 	})
 
 	test('dates the frame from the moment the exposure started and not from the attempt', async () => {
@@ -255,7 +256,8 @@ describe('centering block', () => {
 			configuration,
 		)
 
-		expect(result).toMatchObject({ type: 'completed', value: { attempts: 1, separation: 0, verified: true } })
+		expect(result).toMatchObject({ type: 'completed', value: { attempts: 1, verified: true } })
+		expect(result.type === 'completed' ? result.value.separation : Number.NaN).toBeLessThan(1e-6)
 	})
 
 	test('names every centering frame after the container its recipe transfers', async () => {

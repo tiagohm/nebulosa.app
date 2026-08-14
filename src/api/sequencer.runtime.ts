@@ -1,11 +1,11 @@
-import type { SequencerDeviceRole, SequencerDevices } from '#/sequencer'
+import type { SequencerDeviceRole, SequencerDevices, SequencerStorage } from '#/sequencer'
 import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEvent, SequencerEventDraft, SequencerFailure, SequencerSession, SequencerSessionState } from '#/sequencer.state'
 import type { OperationCoordinator, OperationScope } from './operation'
 import type { ResourceArbiter, ResourceRequest, ResourceReservation, ResourceReservationOwner } from './resource'
 import { sequencerAuxiliaryFileName } from './sequencer.identity'
 import { SEQUENCER_INTENT_NOOP_DETAIL, SequencerIntentQueue } from './sequencer.intent'
 import type { SequencerIntentEffect, SequencerIntentNoop } from './sequencer.intent'
-import { sequencerAuxiliaryDirectory, sequencerVerifiedAuxiliaryPath } from './sequencer.path'
+import { sequencerAuxiliaryDirectory, sequencerNightSegment, sequencerVerifiedAuxiliaryPath } from './sequencer.path'
 import type { SequencerAuxiliaryKind, SequencerPathContext } from './sequencer.path'
 import type { SequencerActionContext, SequencerActionProgress, SequencerActionResult, SequencerAuxiliaryTarget, SequencerBlockRegistry } from './sequencer.registry'
 import type { SequencerActivityObservation, SequencerSnapshotObservation } from './sequencer.snapshot'
@@ -167,8 +167,9 @@ export interface SequencerRuntimePlan {
 	readonly definitionRevision: number
 	// Device id per role declared by the definition.
 	readonly devices: SequencerDevices
-	// Where the session writes, resolved at creation so the night and the session segment are fixed for its
-	// whole life. Absent when the session writes nothing, which makes every auxiliary destination unavailable.
+	// Where the session writes, complete once the session starts, so the night and the session segment are fixed
+	// for its whole life. Absent when the session writes nothing, which makes every auxiliary destination
+	// unavailable.
 	readonly storage?: SequencerPathContext
 	// Guiding session the actions command, absent when the session guides through none. It is resolved for
 	// the session rather than declared per block, because a remote or local guider only has an id once it is
@@ -178,13 +179,31 @@ export interface SequencerRuntimePlan {
 	readonly action: SequencerRuntimeAction
 }
 
-// Plan as a caller hands it in, which is everything the runtime executes except the one segment the caller
-// cannot know: the session directory is derived from the session id, and the id only exists once the store
-// assigned it. `create` completes it, so nothing outside the runtime has to invent a segment for a session
+// Plan as a caller hands it in, which is everything the runtime executes except the two segments the caller
+// cannot decide. The session directory is derived from the session id, and the id only exists once the store
+// assigned it; the night directory belongs to the instant the session starts, which is not the instant it was
+// created — a session created at 23:50 and started at 00:10 writes into the night it observes, not the one it
+// was configured in. The runtime completes both, so nothing outside it has to invent a segment for a session
 // that does not exist yet or, worse, reuse one across two runs of the same definition.
 export interface SequencerRuntimePlanDraft extends Omit<SequencerRuntimePlan, 'storage'> {
-	// Storage of the session without its session segment.
-	readonly storage?: Omit<SequencerPathContext, 'session'>
+	// Storage of the session without either derived segment: the declared root and the per-night policy the
+	// night segment is resolved from at start.
+	readonly storage?: SequencerRuntimeStorageDraft
+}
+
+// Storage of a plan as handed in, carrying the policy instead of the resolved night segment.
+export interface SequencerRuntimeStorageDraft {
+	// Root directory every artifact is written below, as declared by the definition. Must be absolute.
+	readonly root: string
+	// Per-night directory policy of the definition, resolved into a segment when the session starts.
+	readonly autoSubFolderMode: SequencerStorage['autoSubFolderMode']
+}
+
+// Plan as the runtime keeps it between creation and start: the session segment is already fixed and the night
+// segment is still a policy, because the session has no start instant to resolve it against yet.
+interface PendingPlan extends Omit<SequencerRuntimePlan, 'storage'> {
+	// Storage with the session segment resolved and the night still to be.
+	readonly storage?: SequencerRuntimeStorageDraft & { readonly session: string }
 }
 
 // Turns a declared role and the device id behind it into the resource the arbiter arbitrates.
@@ -339,7 +358,7 @@ export class SequencerRuntime {
 	readonly #now: () => number
 	readonly #progress?: (sessionId: string, nodeId: string, progress: SequencerActionProgress) => void
 	readonly #observe?: (change: SequencerRuntimeChange) => void
-	readonly #plans = new Map<string, SequencerRuntimePlan>()
+	readonly #plans = new Map<string, PendingPlan>()
 	#active?: ActiveSession
 	// Set once the process began shutting down, after which no session starts again.
 	#closed = false
@@ -447,12 +466,18 @@ export class SequencerRuntime {
 
 		// Plans live in memory only, so a `created` session without one survived a restart of the process and
 		// has to be compiled again before it can start.
-		const plan = this.#plans.get(sessionId)
+		const pending = this.#plans.get(sessionId)
 
-		if (plan === undefined) {
+		if (pending === undefined) {
 			teardown.run()
 			return { ok: false, reason: 'unknownSession', detail: 'no plan is loaded for the session' }
 		}
+
+		// The night segment is resolved here and never again, which is what fixes it for a session that runs
+		// past its own boundary. It is read at the start and not at the creation because the observing night is
+		// the one the session captures in: a session prepared before midnight and started after it belongs to
+		// the night it is actually observing, and it is also the instant the resolution of §14 dates it from.
+		const plan: SequencerRuntimePlan = { ...pending, storage: pending.storage === undefined ? undefined : { root: pending.storage.root, session: pending.storage.session, night: sequencerNightSegment(pending.storage.autoSubFolderMode, this.#now()) } }
 
 		const handler = this.#registry.handler(plan.action.type)
 		const recorded = stored.checkpoint.handlerVersions[plan.action.type]

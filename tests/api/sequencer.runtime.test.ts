@@ -5,7 +5,7 @@ import { ResourceArbiter } from 'src/api/resource'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerAuxiliaryTarget } from 'src/api/sequencer.registry'
 import { SequencerRuntime, SessionAdmissionGate, SessionTeardown } from 'src/api/sequencer.runtime'
-import type { SequencerRuntimePlan } from 'src/api/sequencer.runtime'
+import type { SequencerRuntimePlanDraft } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
 
 describe('session admission gate', () => {
@@ -141,11 +141,11 @@ function exposeHandler(execute: (context: SequencerActionContext, configuration:
 	}
 }
 
-function plan(): SequencerRuntimePlan {
+function plan(): SequencerRuntimePlanDraft {
 	return { definitionId: 'definition-1', definitionRevision: 1, devices: { camera: 'camera-1' }, action: { id: 'node-1', type: 'expose', configuration: { exposureTime: 2 } } }
 }
 
-function runtime(handler: SequencerActionHandler<ExposeConfiguration, number>) {
+function runtime(handler: SequencerActionHandler<ExposeConfiguration, number>, now?: () => number) {
 	const arbiter = new ResourceArbiter()
 	const coordinator = new OperationCoordinator(arbiter)
 	const registry = new SequencerBlockRegistry()
@@ -153,7 +153,7 @@ function runtime(handler: SequencerActionHandler<ExposeConfiguration, number>) {
 
 	registry.register(handler)
 
-	return { arbiter, coordinator, registry, store, runtime: new SequencerRuntime({ store, registry, coordinator, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) }) }
+	return { arbiter, coordinator, registry, store, runtime: new SequencerRuntime({ store, registry, coordinator, now, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) }) }
 }
 
 describe('sequencer runtime', () => {
@@ -690,14 +690,21 @@ describe('sequencer runtime', () => {
 	test('reserves one auxiliary destination per image with an ordinal of its own kind', async () => {
 		const targets: (SequencerAuxiliaryTarget | undefined)[] = []
 
+		// The session is prepared before midnight and started after it, so the night it writes into is the one it
+		// observes and not the one it was configured in.
+		let clock = new Date(2026, 7, 12, 23, 50).getTime()
+
 		const { runtime: instance } = runtime(
 			exposeHandler((context, configuration) => {
 				targets.push(context.auxiliary('centering', 'fits'), context.auxiliary('autofocus', 'fits'), context.auxiliary('centering', 'fits'))
 				return Promise.resolve({ type: 'completed', value: configuration.exposureTime })
 			}),
+			() => clock,
 		)
 
-		const created = instance.create({ ...plan(), storage: { root: '/data/nebulosa', night: '2026-08-12' } })!
+		const created = instance.create({ ...plan(), storage: { root: '/data/nebulosa', autoSubFolderMode: 'midnight' } })!
+
+		clock = new Date(2026, 7, 13, 0, 10).getTime()
 
 		instance.start(created.id)
 
@@ -705,7 +712,7 @@ describe('sequencer runtime', () => {
 
 		expect(session?.state).toBe('completed')
 		expect(targets.map((target) => target?.fileName)).toEqual(['centering-00001.fits', 'autofocus-00001.fits', 'centering-00002.fits'])
-		expect(targets[0]?.directory).toEndWith(join('2026-08-12', created.id, '.auxiliary', 'centering'))
+		expect(targets[0]?.directory).toEndWith(join('2026-08-13', created.id, '.auxiliary', 'centering'))
 		expect(targets[0]?.path).toBe(join(targets[0]!.directory, 'centering-00001.fits'))
 	})
 

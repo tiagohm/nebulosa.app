@@ -4,7 +4,6 @@ import type { SequencerArtifact, SequencerDefinitionRecord, SequencerEvent, Sequ
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import { compile, sequencerPlanNodes } from './sequencer.compiler'
-import { sequencerNightSegment } from './sequencer.path'
 import { preflight } from './sequencer.preflight'
 import type { SequencerBlockRegistry } from './sequencer.registry'
 import type { SequencerControlResult, SequencerRuntime, SequencerRuntimePlanDraft, SequencerStartResult } from './sequencer.runtime'
@@ -159,7 +158,7 @@ export class SequencerHandler {
 			definitionId: record.id,
 			definitionRevision: record.revision,
 			devices: plan.devices,
-			storage: { root: plan.storage.root, night: sequencerNightSegment(plan.storage.autoSubFolderMode, this.#now()) },
+			storage: { root: plan.storage.root, autoSubFolderMode: plan.storage.autoSubFolderMode },
 			action: { id: action.id, type: action.type, configuration: action.configuration },
 		}
 

@@ -86,8 +86,15 @@ describe('fanout', () => {
 
 		const id = created.session.id
 
-		expect(types(received, 'sequencer:session')).toHaveLength(1)
+		const announced = types(received, 'sequencer:session')
+
+		expect(announced).toHaveLength(1)
 		expect(types(received, 'sequencer:progress')).toBeEmpty()
+		// The announcement of a creation is derived through the same plan the answer of that same call carries, so
+		// it names the target and the work of the session instead of describing a session with no plan behind it.
+		expect(created.session.target).toBeDefined()
+		expect(created.session.capture.requiredSlots).toBeGreaterThan(0)
+		expect(announced[0].payload).toMatchObject({ id, target: created.session.target, capture: { requiredSlots: created.session.capture.requiredSlots } })
 
 		handler.start(id)
 

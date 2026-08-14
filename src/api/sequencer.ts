@@ -162,11 +162,12 @@ export class SequencerHandler {
 			action: { id: action.id, type: action.type, configuration: action.configuration },
 		}
 
-		const session = this.#runtime.create(draft)
+		// The plan is kept before the creation is announced: the announcement is a snapshot derived through this
+		// very map, and one taken without it would publish a session with no target and no estimate while the
+		// answer to this same call carries both.
+		const session = this.#runtime.create(draft, (created) => this.#plans.set(created.id, { plan, preflight: view }))
 
 		if (session === undefined) return { ok: false, reason: 'unresolvedHandler' }
-
-		this.#plans.set(session.id, { plan, preflight: view })
 
 		return { ok: true, session: this.snapshot(session.id)! }
 	}

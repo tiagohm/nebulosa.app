@@ -402,7 +402,13 @@ export class SequencerRuntime {
 
 	// Creates a session in `created` for a plan, recording the handler version it was compiled against.
 	// Returns undefined when the block type cannot be resolved, since such a session could never start.
-	create(draft: SequencerRuntimePlanDraft): SequencerSession | undefined {
+	//
+	// `registered` is invoked with the stored session before the creation is announced, and exists because the
+	// announcement is derived and not merely forwarded: whatever the caller keeps per session — the lowered plan
+	// the target, the groups and the completion estimate come from — is keyed by an id only the store assigns, so
+	// an observer reached before that is in place would publish a session with no plan behind it and disagree
+	// with the answer the same call returns.
+	create(draft: SequencerRuntimePlanDraft, registered?: (session: SequencerSession) => void): SequencerSession | undefined {
 		const resolution = this.#registry.resolve([{ type: draft.action.type }])
 
 		if (!resolution.ok) return undefined
@@ -416,6 +422,8 @@ export class SequencerRuntime {
 		const snapshotted = structuredClone(draft)
 
 		this.#plans.set(session.id, { ...snapshotted, storage: snapshotted.storage === undefined ? undefined : { ...snapshotted.storage, session: session.id } })
+
+		registered?.(session)
 
 		this.#observed({ session, events: [], artifacts: [] })
 

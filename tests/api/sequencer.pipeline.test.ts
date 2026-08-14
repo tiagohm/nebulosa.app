@@ -289,6 +289,21 @@ describe('commanded stop', () => {
 		expect(report.failure).toEqual({ nodeId: nodeId('park'), reason: 'commandFailed', detail: 'park refused' })
 	})
 
+	test('a deadline that fires after the stop does not relabel it a timeout', async () => {
+		const controller = new AbortController()
+		const answers = {
+			[nodeId('a')]: async () => {
+				controller.abort()
+				await Bun.sleep(20)
+				return { type: 'fatalFailure', reason: 'aborted' } as SequencerActionResult<unknown>
+			},
+		}
+		const report = await runSequencerPipeline({ continueOnFailure: true }, [step('a', { timeout: 0.005 }, { maxAttempts: 1 })], executor(answers), controller.signal)
+
+		expect(report.stopped).toBeTrue()
+		expect(report.results[0]).toMatchObject({ outcome: 'notRun', attempts: 1 })
+	})
+
 	test('a failure that preceded the stop keeps its own cause', async () => {
 		const controller = new AbortController()
 		const answers = {

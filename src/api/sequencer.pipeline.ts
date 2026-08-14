@@ -191,6 +191,11 @@ async function runAttempt(executor: SequencerPipelineExecutor, step: SequencerPi
 
 	// Waits `remaining` milliseconds, one timer chunk at a time, and expires the attempt at the end of the last
 	// one. Only the pending chunk is ever outstanding, so cancelling the attempt clears the whole deadline.
+	//
+	// A deadline that arrives after the session already cancelled the attempt expires nothing: the cancellation
+	// that came first is the one that explains the attempt, and an executor slow to clean up would otherwise
+	// have its `aborted` answer relabelled `timeout` — the stop would be retried under the timeout policy and
+	// the pipeline would report a session that nobody stopped.
 	const schedule = (remaining: number) => {
 		timer = setTimeout(
 			() => {
@@ -198,7 +203,7 @@ async function runAttempt(executor: SequencerPipelineExecutor, step: SequencerPi
 
 				if (left > 0) return schedule(left)
 
-				expired = true
+				expired = !commanded
 				controller.abort()
 			},
 			Math.min(remaining, MAXIMUM_TIMER_DELAY),

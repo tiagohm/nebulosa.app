@@ -560,13 +560,27 @@ function triggerNodeOf(loop: SequencerPlanLoop, kind: 'meridianFlip' | 'autofocu
 // The dither travels as part of the interlock request rather than as a step after it, because it is emitted
 // with the resume: displacing before the corrections are back on would move a guider that is not correcting,
 // and the settle of the resume is the settle of the dither.
+//
+// The bracket is retried under the execution retry policy, because everything it commands is a device that can
+// time out once and answer the next time: a wheel that did not report the filter in place, a rotator that
+// missed its angle, a guider that did not settle. Failing the bracket outright would end the night on the
+// first of them. What is not repeated on a retry is a trigger that already ran — a flip is not flipped twice
+// and an autofocus sweep is not paid twice for the same frame — so only the preparation and the bracket itself
+// are actually re-commanded, and the crossing a previous attempt reported still turns the resume into a
+// recalibration.
 async function runInterlockedSafePoint(execution: SequencerExecution, loop: SequencerPlanLoop, frame: SequencerPlanAction, configuration: SequencerCapture, decisions: readonly SequencerTriggerDecision[], policies: SequencerTriggerPolicies, observation: SequencerTriggerObservation): Promise<SequencerNodeOutcome> {
 	const { host } = execution
 	const guider = host.plan.guider
+	const retry = host.plan.execution.defaultRetry
+	// Trigger kinds a previous attempt of this bracket already ran to completion or skipped.
+	const ran = new Set<'meridianFlip' | 'autofocus'>()
 	let interrupted: SequencerNodeOutcome | undefined
+	let flipped = false
+	let attempt = 1
 
 	const body = async (state: SequencerInterlockState): Promise<SequencerActionResult<unknown>> => {
 		for (const kind of ['meridianFlip', 'autofocus'] as const) {
+			if (ran.has(kind)) continue
 			if (!decisions.some((decision) => decision.kind === kind)) continue
 
 			const node = triggerNodeOf(loop, kind)
@@ -580,11 +594,15 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 				return { type: 'fatalFailure', reason: 'unexpectedState', detail: `the ${kind} trigger ended the plan` }
 			}
 
-			if (kind === 'meridianFlip') state.flipped = completed
+			ran.add(kind)
+
+			if (kind === 'meridianFlip') flipped = completed
 			else if (completed) execution.anchors = sequencerAnchorAdvanced(execution.anchors, 'autofocus', observation)
 		}
 
-		return await runFramePreparation(host.preparation, host.context(frame.id, 1, host.signal), { ...configuration.preparation, group: configuration.group })
+		state.flipped = flipped
+
+		return await runFramePreparation(host.preparation, host.context(frame.id, attempt, host.signal), { ...configuration.preparation, group: configuration.group })
 	}
 
 	const dither = decisions.some((decision) => decision.kind === 'dither') ? policies.dither : undefined
@@ -592,20 +610,43 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 	// A session that guides has a settle policy for it; one that does not never enters the bracket, and the
 	// request is then only the carrier of the dither the interlock still emits.
 	const request = { settle: guider?.settle ?? SEQUENCER_UNGUIDED_SETTLE, recalibrateAfterMeridianFlip: guider?.recalibrateAfterMeridianFlip ?? false, dither }
-	const result = await runGuidingInterlock(host.guiding, host.context(frame.id, 1, host.signal), request, body)
 
-	if (interrupted !== undefined) return interrupted
+	for (;;) {
+		const result = await runGuidingInterlock(host.guiding, host.context(frame.id, attempt, host.signal), request, body)
 
-	if (result.type === 'completed') {
-		if (result.value.dither !== undefined) execution.anchors = sequencerAnchorAdvanced(execution.anchors, 'dither', observation)
-		return SEQUENCER_CONTINUE
+		// A trigger that ended the plan spent its own budget already, so it is carried out of the bracket as it
+		// is rather than retried a second time under this policy.
+		if (interrupted !== undefined) return interrupted
+
+		if (result.type === 'completed') {
+			if (result.value.dither !== undefined) execution.anchors = sequencerAnchorAdvanced(execution.anchors, 'dither', observation)
+			return SEQUENCER_CONTINUE
+		}
+
+		if (result.type === 'skipped') return SEQUENCER_CONTINUE
+		if (result.type === 'pause') return { kind: 'pause' }
+		if (result.type === 'suspend') return { kind: 'fail', reason: 'unexpectedState', detail: result.detail }
+
+		// A fatal failure is decided by the terminal half of the same policy and never retried, which the budget
+		// of one attempt expresses without a second decision path.
+		const decision = sequencerFailurePolicy({
+			reason: result.reason,
+			detail: result.detail,
+			attempt,
+			retry: result.type === 'fatalFailure' ? { ...retry, maxAttempts: 1 } : retry,
+			commandedBy: commandedBy(execution),
+		})
+
+		if (decision.kind === 'retry') {
+			await host.delay(decision.delay, host.signal)
+			attempt = decision.attempt
+			continue
+		}
+
+		execution.events.push({ type: 'policyApplied', nodeId: frame.id, detail: decision.kind })
+
+		return decisionOutcome(decision, result.reason, result.detail)
 	}
-
-	if (result.type === 'skipped') return SEQUENCER_CONTINUE
-	if (result.type === 'pause') return { kind: 'pause' }
-	if (result.type === 'suspend') return { kind: 'fail', reason: 'unexpectedState', detail: result.detail }
-
-	return { kind: 'fail', reason: result.reason, detail: result.detail }
 }
 
 // Decides whether the selected exposure fits ahead of the meridian boundary, and holds until the flip window

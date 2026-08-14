@@ -5,8 +5,11 @@ import type { ResourceReservation } from 'src/api/resource'
 import { compile } from 'src/api/sequencer.compiler'
 import { runSequencerPlan } from 'src/api/sequencer.executor'
 import type { SequencerExecutorHost } from 'src/api/sequencer.executor'
+import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
 import { sequencerSlotAttempt } from 'src/api/sequencer.identity'
 import type { AnySequencerActionHandler, SequencerActionContext, SequencerActionResult, SequencerFrameSlot } from 'src/api/sequencer.registry'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
+import type { OperationResult } from '#/orchestration'
 import type { Sequencer } from '#/sequencer'
 import type { SequencerPlan } from '#/sequencer.plan'
 import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft } from '#/sequencer.state'
@@ -52,7 +55,19 @@ interface Harness {
 	desired: SequencerDesiredState
 }
 
-function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext, configuration: unknown) => Promise<SequencerActionResult<unknown>>): Harness {
+function guidingServices(loop: () => OperationResult<unknown>): SequencerGuidingServices {
+	return {
+		guiderCommander: {
+			running: () => true,
+			looping: () => true,
+			loop: () => Promise.resolve(loop()),
+			startGuiding: () => Promise.resolve(successfulOperationResult(undefined)),
+			calibrate: () => Promise.resolve(successfulOperationResult(undefined)),
+		},
+	} as unknown as SequencerGuidingServices
+}
+
+function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext, configuration: unknown) => Promise<SequencerActionResult<unknown>>, guiding?: SequencerGuidingServices): Harness {
 	const arbiter = new ResourceArbiter()
 	const coordinator = new OperationCoordinator(arbiter)
 	const reserved = arbiter.reserve({ id: 'session-1', kind: 'sequencer' }, [])
@@ -101,6 +116,7 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 			terminalSignal: new AbortController().signal,
 			now: Date.now,
 			...services(),
+			...(guiding === undefined ? {} : { guiding }),
 			handler,
 			context: (nodeId, attempt, signal, frameSlot) => ({
 				sessionId: 'session-1',
@@ -119,6 +135,7 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 				auxiliary: () => undefined,
 				checkpoint: {} as SequencerCheckpoint,
 				frame: frameSlot,
+				guider: guiding === undefined ? undefined : 'guider-1',
 			}),
 			observe: () => ({}),
 			desiredState: () => state.desired,
@@ -208,6 +225,37 @@ describe('plan walk', () => {
 		expect(frames).toHaveLength(3)
 		expect(frames.map((it) => it.attempt)).toEqual([0, 1, 2])
 		expect(new Set(frames.map((it) => it.slot!.path)).size).toBe(3)
+	})
+
+	test('retries the safe point a transient guiding failure interrupted', async () => {
+		let suspensions = 0
+		const state = harness(
+			planOf(),
+			undefined,
+			guidingServices(() => (suspensions++ === 0 ? failedOperationResult('commandFailed', 'the guider did not stop correcting') : successfulOperationResult(undefined))),
+		)
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(suspensions).toBe(3)
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
+	})
+
+	test('fails the session when the safe point spends the whole retry budget', async () => {
+		let suspensions = 0
+		const state = harness(
+			planOf(),
+			undefined,
+			guidingServices(() => {
+				suspensions++
+				return failedOperationResult('commandFailed', 'the guider did not stop correcting')
+			}),
+		)
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('failed')
+		expect(suspensions).toBe(3)
+		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 	})
 
 	test('ends as stopped when the operator stops it between two frames', async () => {

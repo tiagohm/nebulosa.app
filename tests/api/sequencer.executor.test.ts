@@ -4,7 +4,7 @@ import { ResourceArbiter } from 'src/api/resource'
 import type { ResourceReservation } from 'src/api/resource'
 import { compile } from 'src/api/sequencer.compiler'
 import { runSequencerPlan } from 'src/api/sequencer.executor'
-import type { SequencerExecutorHost } from 'src/api/sequencer.executor'
+import type { SequencerExecutorHost, SequencerSafePointObservation } from 'src/api/sequencer.executor'
 import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
 import { sequencerSlotAttempt } from 'src/api/sequencer.identity'
 import type { AnySequencerActionHandler, SequencerActionContext, SequencerActionResult, SequencerFrameSlot } from 'src/api/sequencer.registry'
@@ -53,6 +53,7 @@ interface Harness {
 	readonly artifacts: () => readonly SequencerArtifact[]
 	readonly controller: AbortController
 	desired: SequencerDesiredState
+	observation: SequencerSafePointObservation
 }
 
 function guidingServices(loop: () => OperationResult<unknown>): SequencerGuidingServices {
@@ -108,6 +109,7 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 		artifacts,
 		controller,
 		desired: 'running',
+		observation: {},
 		host: {
 			sessionId: 'session-1',
 			plan,
@@ -137,7 +139,7 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 				frame: frameSlot,
 				guider: guiding === undefined ? undefined : 'guider-1',
 			}),
-			observe: () => ({}),
+			observe: () => state.observation,
 			desiredState: () => state.desired,
 			slotAttempt: (logicalSlotId) => sequencerSlotAttempt(artifacts(), logicalSlotId),
 			commit: (_, drafts) => {
@@ -225,6 +227,22 @@ describe('plan walk', () => {
 		expect(frames).toHaveLength(3)
 		expect(frames.map((it) => it.attempt)).toEqual([0, 1, 2])
 		expect(new Set(frames.map((it) => it.slot!.path)).size).toBe(3)
+	})
+
+	test('takes the safe point again once the flip window the guard waited for opens', async () => {
+		const base = definition()
+		const state: Harness = harness(planOf({ meridianFlip: { ...base.meridianFlip, enabled: true } }), (context) => {
+			if (context.nodeId.endsWith('.trigger.meridianFlip')) state.observation = { ...state.observation, pierSide: 'EAST' }
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+
+		state.observation = { hourAngle: 0.15, pierSide: 'WEST', preFlipPierSide: 'WEST' }
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(state.executed.filter((it) => it.nodeId.endsWith('.trigger.meridianFlip'))).toHaveLength(1)
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
 	})
 
 	test('never spends a second attempt on a slot whose exposure failed fatally', async () => {

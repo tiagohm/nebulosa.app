@@ -140,6 +140,32 @@ type SequencerNodeOutcome = { readonly kind: 'continue' } | { readonly kind: 'pa
 // Outcome of a node the plan simply carries on from.
 const SEQUENCER_CONTINUE: SequencerNodeOutcome = { kind: 'continue' }
 
+// What the pre-exposure guard leaves the safe point doing.
+//
+// It is not a `SequencerNodeOutcome` because the guard has an answer no node has: neither exposing nor ending
+// the plan, but taking the same safe point again.
+type SequencerGuardOutcome =
+	// The exposure fits ahead of the flip boundary and starts now.
+	| { readonly kind: 'expose' }
+	// The flip window the guard waited for is open, so the safe point is taken again from the top and the
+	// trigger evaluator turns the open window into an actual flip. Nothing consumed an attempt and nothing
+	// advanced the cursor, so it is the same slot that is exposed on the other side of the flip.
+	| { readonly kind: 'reenter' }
+	// The guard ended the plan, carrying what it ended as.
+	| { readonly kind: 'ended'; readonly outcome: SequencerNodeOutcome }
+
+// Guard outcome of an exposure that may start now.
+const SEQUENCER_EXPOSE: SequencerGuardOutcome = { kind: 'expose' }
+
+// Times one safe point may be taken again for a flip window that opened, before the reordering is reported as
+// a defect instead of attempted once more.
+//
+// The reordering converges in one pass by construction: the window opens, the trigger evaluator of the new
+// pass fires the flip, the mount leaves the pre-flip side and the guard admits the exposure. A second pass
+// already means the flip was evaluated and did not run, and an unbounded number of them is a session busy
+// looping over a safe point that takes no frame, which is worse than ending with the reason for it.
+const SEQUENCER_FLIP_REENTRY_LIMIT = 3
+
 // Settle carried by the interlock request of a session that guides through nothing. The bracket is skipped
 // entirely for such a session, so no wait is ever taken against it; it exists because the request is still the
 // carrier of the dither, and a zero settle is the honest value for a guider that is not there.
@@ -468,6 +494,11 @@ async function runCaptureLoop(execution: SequencerExecution, targetId: string, l
 }
 
 // Runs the safe point of one selected frame, up to and including the exposure that fills its slot.
+//
+// A guard that waited for the flip window takes the whole safe point again instead of exposing: the reading it
+// was decided on is the one from before the wait, and what has to happen next is the flip the trigger
+// evaluator will now see. The retake is bounded, because a window that opens without a flip ever running would
+// otherwise be a loop taking no frames.
 async function runSafePoint(execution: SequencerExecution, targetId: string, loop: SequencerPlanLoop, selection: FrameSelection, instant: number): Promise<SequencerNodeOutcome> {
 	const { host } = execution
 	const { group } = selection
@@ -477,41 +508,49 @@ async function runSafePoint(execution: SequencerExecution, targetId: string, loo
 
 	const configuration = node.configuration as SequencerCapture
 	const policies = triggerPoliciesOf(loop)
-	const reading = host.observe(group.filter)
-	const observation: SequencerTriggerObservation = {
-		instant,
-		frameType: group.frameType,
-		filter: reading.filter,
-		installedFilter: reading.installedFilter,
-		hourAngle: reading.hourAngle,
-		pierSide: reading.pierSide,
-		preFlipPierSide: reading.preFlipPierSide,
-		temperature: reading.temperature,
+	let at = instant
+	let reentries = 0
+
+	for (;;) {
+		const reading = host.observe(group.filter)
+		const observation: SequencerTriggerObservation = {
+			instant: at,
+			frameType: group.frameType,
+			filter: reading.filter,
+			installedFilter: reading.installedFilter,
+			hourAngle: reading.hourAngle,
+			pierSide: reading.pierSide,
+			preFlipPierSide: reading.preFlipPierSide,
+			temperature: reading.temperature,
+		}
+
+		// The filter baseline is taken before the triggers are evaluated, so the first frame of a session does not
+		// read the wheel it found as a filter change nobody made.
+		execution.anchors = sequencerFilterBaselined(execution.anchors, observation)
+
+		const decisions = evaluateSequencerTriggers(policies, execution.anchors, observation)
+
+		execution.anchors = sequencerTriggerPending(policies, execution.anchors, decisions, observation)
+
+		for (const decision of decisions) execution.events.push({ type: 'triggerFired', nodeId: node.id, detail: `${decision.kind}:${decision.reason}` })
+
+		const bracketed = await runInterlockedSafePoint(execution, loop, node, configuration, decisions, policies, observation)
+
+		if (bracketed.kind !== 'continue') return bracketed
+
+		// Everything the bracket did is movement the exposure has to be stable after, so the settle is anchored on
+		// it rather than on the frame before it.
+		execution.cadence = sequencerSettleAnchored(execution.cadence, host.now())
+
+		const guarded = await runExposureGuard(execution, policies, group, configuration, observation)
+
+		if (guarded.kind === 'ended') return guarded.outcome
+		if (guarded.kind === 'expose') return await runExposure(execution, targetId, loop, node, configuration, selection)
+
+		if (++reentries > SEQUENCER_FLIP_REENTRY_LIMIT) return { kind: 'fail', reason: 'unexpectedState', detail: 'the meridian flip window opened but no flip took the mount off the pre-flip side' }
+
+		at = host.now()
 	}
-
-	// The filter baseline is taken before the triggers are evaluated, so the first frame of a session does not
-	// read the wheel it found as a filter change nobody made.
-	execution.anchors = sequencerFilterBaselined(execution.anchors, observation)
-
-	const decisions = evaluateSequencerTriggers(policies, execution.anchors, observation)
-
-	execution.anchors = sequencerTriggerPending(policies, execution.anchors, decisions, observation)
-
-	for (const decision of decisions) execution.events.push({ type: 'triggerFired', nodeId: node.id, detail: `${decision.kind}:${decision.reason}` })
-
-	const bracketed = await runInterlockedSafePoint(execution, loop, node, configuration, decisions, policies, observation)
-
-	if (bracketed.kind !== 'continue') return bracketed
-
-	// Everything the bracket did is movement the exposure has to be stable after, so the settle is anchored on
-	// it rather than on the frame before it.
-	execution.cadence = sequencerSettleAnchored(execution.cadence, host.now())
-
-	const guarded = await runExposureGuard(execution, policies, group, configuration, observation)
-
-	if (guarded.kind !== 'continue') return guarded
-
-	return await runExposure(execution, targetId, loop, node, configuration, selection)
 }
 
 // Capture node of one frame group inside the loop body.
@@ -654,10 +693,10 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 //
 // A refusal is not a failure: it reorders the safe point around a flip that is about to become possible, and
 // the caller re-enters the safe point so the trigger evaluator turns the open window into an actual flip.
-async function runExposureGuard(execution: SequencerExecution, policies: SequencerTriggerPolicies, group: SequencerPlanFrameGroup, configuration: SequencerCapture, observation: SequencerTriggerObservation): Promise<SequencerNodeOutcome> {
+async function runExposureGuard(execution: SequencerExecution, policies: SequencerTriggerPolicies, group: SequencerPlanFrameGroup, configuration: SequencerCapture, observation: SequencerTriggerObservation): Promise<SequencerGuardOutcome> {
 	const { meridianFlip } = policies
 
-	if (meridianFlip === undefined || observation.hourAngle === undefined) return SEQUENCER_CONTINUE
+	if (meridianFlip === undefined || observation.hourAngle === undefined) return SEQUENCER_EXPOSE
 
 	const boundary: SequencerFlipBoundary = { minimumHourAngle: meridianFlip.minimumHourAngle, maximumHourAngle: meridianFlip.maximumHourAngle, safetyMargin: meridianFlip.safetyMargin }
 	const now = execution.host.now()
@@ -670,13 +709,15 @@ async function runExposureGuard(execution: SequencerExecution, policies: Sequenc
 		flipPending,
 	})
 
-	if (decision.type === 'allowed') return SEQUENCER_CONTINUE
+	if (decision.type === 'allowed') return SEQUENCER_EXPOSE
 
 	const waited = await waitForFlipWindow(execution.host.context(group.nodeId, 1, execution.host.signal), boundary, () => execution.host.observe().hourAngle)
 
-	if (waited.type === 'completed' || waited.type === 'skipped') return { kind: 'stop' }
+	// The wait ends when the window is open, which is the reordering succeeding and not the session ending: the
+	// safe point is taken again so the flip runs, and the frame this guard refused is exposed after it.
+	if (waited.type === 'completed' || waited.type === 'skipped') return { kind: 'reenter' }
 
-	return waited.type === 'pause' ? { kind: 'pause' } : { kind: 'fail', reason: waited.type === 'suspend' ? 'unexpectedState' : waited.reason, detail: waited.detail }
+	return { kind: 'ended', outcome: waited.type === 'pause' ? { kind: 'pause' } : { kind: 'fail', reason: waited.type === 'suspend' ? 'unexpectedState' : waited.reason, detail: waited.detail } }
 }
 
 // Waits for the cadence boundary and exposes the selected frame, spending the attempts of the slot the failure

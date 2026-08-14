@@ -8,6 +8,7 @@ import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from './g
 import type { ResourceKey, ResourceRequest } from './resource'
 import { resourceKey } from './resource'
 import { sequencerPlanNodes } from './sequencer.compiler'
+import { sequencerNightSegment } from './sequencer.path'
 import type { SequencerBlockRegistry } from './sequencer.registry'
 
 // Resolution of a compiled plan against the devices that exist right now.
@@ -202,21 +203,6 @@ function filesystemIdOf(path: string) {
 	}
 }
 
-// Directory segment naming the observing night of an instant, in local time and `YYYY-MM-DD` form.
-//
-// With `'midnight'` the segment is the calendar date. With `'noon'` it is the date of the noon the night
-// started at, so the whole night before and after midnight lands in one directory, which is what an observer
-// means by "one night". Returns undefined when the mode is off.
-function nightSegmentOf(mode: SequencerPlan['storage']['autoSubFolderMode'], startedAt: number) {
-	if (mode === 'off') return undefined
-
-	const date = new Date(startedAt)
-
-	if (mode === 'noon' && date.getHours() < 12) date.setDate(date.getDate() - 1)
-
-	return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, '0')}-${`${date.getDate()}`.padStart(2, '0')}`
-}
-
 // Re-checks that every block type of the plan still resolves to the version it was compiled against.
 //
 // This is the only check that also runs while compiling, and it has to run twice: the registry can change
@@ -291,5 +277,5 @@ export function resolveSession(plan: SequencerPlan, environment: SequencerSessio
 
 	if (diagnostics.length > 0 || handlers === undefined) return { ok: false, diagnostics }
 
-	return { ok: true, session: { resources: resolution.resources, handlers, nightSegment: nightSegmentOf(plan.storage.autoSubFolderMode, environment.startedAt ?? Date.now()) } }
+	return { ok: true, session: { resources: resolution.resources, handlers, nightSegment: sequencerNightSegment(plan.storage.autoSubFolderMode, environment.startedAt ?? Date.now()) } }
 }

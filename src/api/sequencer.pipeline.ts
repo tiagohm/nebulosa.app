@@ -154,6 +154,13 @@ interface SequencerAttempt {
 // operator presses stop would be reported as the stop, and the pipeline would end with no failure to explain
 // the night while the actual cause was thrown away. A cancellation that arrives after the answer belongs to
 // the next action, which sees it on the signal it is entered with.
+//
+// The ordering is resolved to the turn, and a cancellation raised in the same synchronous turn as the answer
+// counts as commanded. That case is undecidable rather than unhandled: a promise never runs a callback before
+// the statement that follows its resolution, so nothing observing the answer — here or at the resolution
+// boundary — can be told apart from an answer and a stop that truly happened together. Attributing the tie to
+// the stop is the deliberate choice, because the session is leaving the plan either way and the alternative
+// invents a device failure to explain a night the operator ended.
 async function runAttempt(executor: SequencerPipelineExecutor, step: SequencerPipelineStep, attempt: number, signal: AbortSignal): Promise<SequencerAttempt> {
 	const timeout = step.configuration.timeout * 1000
 	// A cancellation already in place is the stop of a session that is leaving the plan, whatever this attempt

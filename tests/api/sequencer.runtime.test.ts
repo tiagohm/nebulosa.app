@@ -779,4 +779,43 @@ describe('sequencer runtime', () => {
 		expect(instance.start(other.id)).toEqual({ ok: false, reason: 'shuttingDown', detail: 'the process is shutting down' })
 		expect(await instance.shutdown()).toBeUndefined()
 	})
+
+	test('waits for a finalization already in flight instead of returning past its cleanups', async () => {
+		const cleaning = Promise.withResolvers<void>()
+		const release = Promise.withResolvers<void>()
+		const order: string[] = []
+
+		const { runtime: instance, arbiter } = runtime(
+			exposeHandler(async (context) => {
+				const handle = context.scope.start('expose', [context.request('camera')!], (operation) => {
+					operation.onCleanup(async () => {
+						cleaning.resolve()
+						await release.promise
+						order.push('cleanup')
+					})
+
+					return { ok: true, value: 1 }
+				})
+
+				await handle.result
+
+				return { type: 'completed', value: 1 }
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		await cleaning.promise
+
+		const closed = instance.shutdown().then(() => order.push(`shutdown:${arbiter.availability(CAMERA_KEY)}`))
+
+		release.resolve()
+
+		await closed
+
+		expect(order).toEqual(['cleanup', 'shutdown:available'])
+		expect(instance.activeSessionId).toBeUndefined()
+	})
 })

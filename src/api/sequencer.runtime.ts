@@ -578,13 +578,23 @@ export class SequencerRuntime {
 	// is still moving.
 	//
 	// Resolves once the session let go of everything. A runtime with nothing running resolves immediately, and
-	// calling it twice is a no-op.
+	// calling it twice waits for the first one instead of starting a second.
 	async shutdown(): Promise<void> {
 		this.#closed = true
 
 		const active = this.#active
 
-		if (active === undefined || active.finalizing) return
+		if (active === undefined) return
+
+		// A finalization already in flight owns the release path: it cancels the same operations by the same
+		// owner and runs the same teardown, and a second one would commit over it. What the shutdown needs from
+		// it is not to start another but to wait for this one, because everything the caller does next —
+		// cancelling every remaining operation, disposing the devices — is exactly what this method exists to
+		// keep behind the cleanups of the session.
+		if (active.finalizing) {
+			await active.done.promise
+			return
+		}
 
 		// The action still runs until its cancellation lands, and its natural finalization must not race this
 		// one: whichever committed first would be overwritten by the other, and both would run the teardown.

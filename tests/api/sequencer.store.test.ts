@@ -136,6 +136,15 @@ describe('in memory sequencer store', () => {
 		expect(instance.events(created.id).map((event) => event.sequence)).toEqual([1, 2, 3])
 		expect(instance.events(created.id, 1).map((event) => event.type)).toEqual(['triggerFired', 'artifactCommitted'])
 		expect(instance.events(created.id, 3)).toBeEmpty()
+		expect(instance.lastEventSequence(created.id)).toBe(3)
+	})
+
+	test('reports the last sequence of a session without events and of an unknown one', () => {
+		const { store: instance } = store()
+		const created = session(instance)
+
+		expect(instance.lastEventSequence(created.id)).toBe(0)
+		expect(instance.lastEventSequence('missing')).toBe(0)
 	})
 
 	test('stores the checkpoint independently of the value handed in', () => {

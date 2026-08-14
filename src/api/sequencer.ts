@@ -193,13 +193,11 @@ export class SequencerHandler {
 
 		if (session === undefined) return undefined
 
-		const events = this.#store.events(sessionId)
-
 		return deriveSequencerSnapshot({
 			...this.#observe?.(sessionId),
 			session,
 			plan: this.#plans.get(sessionId)?.plan,
-			lastEventSequence: events.at(-1)?.sequence ?? 0,
+			lastEventSequence: this.#store.lastEventSequence(sessionId),
 			now: this.#now(),
 		})
 	}

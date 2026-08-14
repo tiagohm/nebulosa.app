@@ -114,6 +114,9 @@ export interface SequencerStore {
 	commit: (commit: SequencerCommit) => SequencerCommitResult
 	// Returns the events of a session in sequence order, optionally only those after a given sequence.
 	events: (sessionId: string, afterSequence?: number) => readonly SequencerEvent[]
+	// Returns the sequence of the last event of a session, or 0 when it has none or does not exist. Exists so a
+	// caller that only needs the cursor does not pay for a copy of the whole history.
+	lastEventSequence: (sessionId: string) => number
 	// Returns the artifacts of a session in registration order.
 	artifacts: (sessionId: string) => readonly SequencerArtifact[]
 }
@@ -313,6 +316,10 @@ export class InMemorySequencerStore implements SequencerStore {
 
 		// Sequences are dense and ascending, so the cursor indexes directly instead of scanning.
 		return afterSequence <= 0 ? events.slice() : events.slice(afterSequence)
+	}
+
+	lastEventSequence(sessionId: string) {
+		return this.#sessions.get(sessionId)?.events.at(-1)?.sequence ?? 0
 	}
 
 	artifacts(sessionId: string): readonly SequencerArtifact[] {

@@ -357,7 +357,7 @@ export interface SequencerCaptureSnapshot {
 	// conditions as `remaining` and carrying the same caveats.
 	readonly estimatedCompletion?: number
 	// Moving average of the interval between the end of one exposure and the start of the next, in seconds,
-	// absent until two exposures have been observed. It is measured and never configured, which is why a
+	// absent until one such interval has been measured. It is measured and never configured, which is why a
 	// session that has just started estimates optimistically and converges as triggers actually run.
 	readonly overhead?: number
 }

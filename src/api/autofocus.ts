@@ -60,6 +60,12 @@ export class AutoFocusHandler {
 		autoFocusBus.subscribe('update', (event) => wsm.send('autofocus:update', event))
 	}
 
+	// Runner behind the manual searches, handed to the sequencer so a session focuses through the same
+	// V-curve search the route uses and publishes to the same fanout, under its own reserved scope (§17.2).
+	get runner() {
+		return this.#runner
+	}
+
 	// Publishes one snapshot, copied so a later mutation cannot rewrite an event already sent.
 	sendEvent(event: AutoFocusEvent) {
 		autoFocusBus.emit('update', structuredClone(event))

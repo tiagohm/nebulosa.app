@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve, sep } from 'path'
-import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerAuxiliaryDirectory, sequencerAuxiliaryPath, sequencerPathSegments, sequencerSessionDirectory, sequencerVerifiedArtifactPath, sequencerVerifiedAuxiliaryPath } from 'src/api/sequencer.path'
+import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerAuxiliaryDirectory, sequencerAuxiliaryPath, sequencerNightSegment, sequencerPathSegments, sequencerSessionDirectory, sequencerVerifiedArtifactPath, sequencerVerifiedAuxiliaryPath } from 'src/api/sequencer.path'
 import { isPathSegment } from 'src/api/util'
 
 const ROOT = resolve('/data/nebulosa')
@@ -30,6 +30,23 @@ describe('path segments', () => {
 		expect(sequencerPathSegments('{target}/{frameType}')).toEqual(['{target}', '{frameType}'])
 		expect(sequencerPathSegments('\\{target}\\\\{filter}\\')).toEqual(['{target}', '{filter}'])
 		expect(sequencerPathSegments('')).toEqual([])
+	})
+})
+
+describe('night segments', () => {
+	test('the noon mode keeps a night that crosses midnight in one directory', () => {
+		expect(sequencerNightSegment('noon', Date.parse('2026-08-10T22:30:00'))).toBe('2026-08-10')
+		expect(sequencerNightSegment('noon', Date.parse('2026-08-11T03:15:00'))).toBe('2026-08-10')
+		expect(sequencerNightSegment('noon', Date.parse('2026-08-11T12:00:00'))).toBe('2026-08-11')
+	})
+
+	test('the midnight mode names the calendar date', () => {
+		expect(sequencerNightSegment('midnight', Date.parse('2026-08-10T22:30:00'))).toBe('2026-08-10')
+		expect(sequencerNightSegment('midnight', Date.parse('2026-08-11T03:15:00'))).toBe('2026-08-11')
+	})
+
+	test('no segment is named when the mode is off', () => {
+		expect(sequencerNightSegment('off', Date.parse('2026-08-11T03:15:00'))).toBeUndefined()
 	})
 })
 

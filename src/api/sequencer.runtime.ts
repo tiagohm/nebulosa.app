@@ -1,11 +1,14 @@
-import type { SequencerDeviceRole, SequencerDevices } from '#/sequencer'
-import type { SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerFailure, SequencerSession, SequencerSessionState } from '#/sequencer.state'
+import type { SequencerDeviceRole, SequencerDevices, SequencerStorage } from '#/sequencer'
+import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEvent, SequencerEventDraft, SequencerFailure, SequencerSession, SequencerSessionState } from '#/sequencer.state'
 import type { OperationCoordinator, OperationScope } from './operation'
 import type { ResourceArbiter, ResourceRequest, ResourceReservation, ResourceReservationOwner } from './resource'
 import { sequencerAuxiliaryFileName } from './sequencer.identity'
-import { sequencerAuxiliaryDirectory, sequencerVerifiedAuxiliaryPath } from './sequencer.path'
+import { SEQUENCER_INTENT_NOOP_DETAIL, SequencerIntentQueue } from './sequencer.intent'
+import type { SequencerIntentEffect, SequencerIntentNoop } from './sequencer.intent'
+import { sequencerAuxiliaryDirectory, sequencerNightSegment, sequencerVerifiedAuxiliaryPath } from './sequencer.path'
 import type { SequencerAuxiliaryKind, SequencerPathContext } from './sequencer.path'
 import type { SequencerActionContext, SequencerActionProgress, SequencerActionResult, SequencerAuxiliaryTarget, SequencerBlockRegistry } from './sequencer.registry'
+import type { SequencerActivityObservation, SequencerSnapshotObservation } from './sequencer.snapshot'
 import type { SequencerStore } from './sequencer.store'
 
 // Session admission, bootstrap reversal, and the V1 execution kernel of the sequencer.
@@ -164,8 +167,9 @@ export interface SequencerRuntimePlan {
 	readonly definitionRevision: number
 	// Device id per role declared by the definition.
 	readonly devices: SequencerDevices
-	// Where the session writes, resolved at creation so the night and the session segment are fixed for its
-	// whole life. Absent when the session writes nothing, which makes every auxiliary destination unavailable.
+	// Where the session writes, complete once the session starts, so the night and the session segment are fixed
+	// for its whole life. Absent when the session writes nothing, which makes every auxiliary destination
+	// unavailable.
 	readonly storage?: SequencerPathContext
 	// Guiding session the actions command, absent when the session guides through none. It is resolved for
 	// the session rather than declared per block, because a remote or local guider only has an id once it is
@@ -173,6 +177,33 @@ export interface SequencerRuntimePlan {
 	readonly guider?: string
 	// Sole action of the V1 plan.
 	readonly action: SequencerRuntimeAction
+}
+
+// Plan as a caller hands it in, which is everything the runtime executes except the two segments the caller
+// cannot decide. The session directory is derived from the session id, and the id only exists once the store
+// assigned it; the night directory belongs to the instant the session starts, which is not the instant it was
+// created — a session created at 23:50 and started at 00:10 writes into the night it observes, not the one it
+// was configured in. The runtime completes both, so nothing outside it has to invent a segment for a session
+// that does not exist yet or, worse, reuse one across two runs of the same definition.
+export interface SequencerRuntimePlanDraft extends Omit<SequencerRuntimePlan, 'storage'> {
+	// Storage of the session without either derived segment: the declared root and the per-night policy the
+	// night segment is resolved from at start.
+	readonly storage?: SequencerRuntimeStorageDraft
+}
+
+// Storage of a plan as handed in, carrying the policy instead of the resolved night segment.
+export interface SequencerRuntimeStorageDraft {
+	// Root directory every artifact is written below, as declared by the definition. Must be absolute.
+	readonly root: string
+	// Per-night directory policy of the definition, resolved into a segment when the session starts.
+	readonly autoSubFolderMode: SequencerStorage['autoSubFolderMode']
+}
+
+// Plan as the runtime keeps it between creation and start: the session segment is already fixed and the night
+// segment is still a policy, because the session has no start instant to resolve it against yet.
+interface PendingPlan extends Omit<SequencerRuntimePlan, 'storage'> {
+	// Storage with the session segment resolved and the night still to be.
+	readonly storage?: SequencerRuntimeStorageDraft & { readonly session: string }
 }
 
 // Turns a declared role and the device id behind it into the resource the arbiter arbitrates.
@@ -197,6 +228,23 @@ export interface SequencerRuntimeOptions {
 	readonly now?: () => number
 	// Receives action progress, which is presentation only and never persisted.
 	readonly progress?: (sessionId: string, nodeId: string, progress: SequencerActionProgress) => void
+	// Receives every durable change the runtime writes, after it is stored. A sink that throws is reported and
+	// never reaches the session: what is already committed does not depend on anyone being able to observe it.
+	readonly observe?: (change: SequencerRuntimeChange) => void
+}
+
+// One durable change as it was written, handed to the observer of the runtime.
+//
+// It is the commit as accepted, not an invitation to re-read: `session` is the record the store now holds, and
+// `events` and `artifacts` are exactly the ones this unit wrote, so a subscriber can fan them out without
+// diffing anything. A session that was just created reports itself with both lists empty.
+export interface SequencerRuntimeChange {
+	// Session as stored after the change.
+	readonly session: SequencerSession
+	// Events appended by this change, in sequence order.
+	readonly events: readonly SequencerEvent[]
+	// Artifacts written by this change, in the order they were handed to the store.
+	readonly artifacts: readonly SequencerArtifact[]
 }
 
 // Why a session could not be started.
@@ -207,7 +255,8 @@ export interface SequencerRuntimeOptions {
 // - invalidConfiguration: the handler rejected the stored configuration.
 // - roleUnresolved: a role the block commands is not declared, or its device is not present.
 // - resourcesUnavailable: the resources are leased or reserved by someone else.
-export type SequencerStartFailureReason = 'unknownSession' | 'busy' | 'notStartable' | 'handlerUnresolved' | 'invalidConfiguration' | 'roleUnresolved' | 'resourcesUnavailable'
+// - shuttingDown: the process is ending and admits no further session.
+export type SequencerStartFailureReason = 'unknownSession' | 'busy' | 'notStartable' | 'handlerUnresolved' | 'invalidConfiguration' | 'roleUnresolved' | 'resourcesUnavailable' | 'shuttingDown'
 
 // Outcome of a start. Success carries the session as stored, which for a reentrant start is the running one.
 export type SequencerStartResult =
@@ -226,6 +275,24 @@ export type SequencerStartResult =
 			readonly detail?: string
 			// Session holding the claim, for a busy refusal.
 			readonly sessionId?: string
+	  }
+
+// Outcome of one operator command. The only failure is a session that does not exist: every other command is
+// accepted, and a command that changed nothing reports the effect `none` together with why.
+export type SequencerControlResult =
+	| {
+			readonly ok: true
+			// What the fold decided the command does.
+			readonly effect: SequencerIntentEffect
+			// Why it did nothing, present exactly when the effect is `none`.
+			readonly noop?: SequencerIntentNoop
+			// Session as stored after the command was recorded.
+			readonly session: SequencerSession
+	  }
+	| {
+			readonly ok: false
+			// Cause of the refusal.
+			readonly reason: 'unknownSession'
 	  }
 
 // One durable change the runtime applies, mirroring the fields of a store commit it actually uses.
@@ -262,10 +329,20 @@ interface ActiveSession {
 	// session. It is deliberately not persisted: an auxiliary image fills no slot and is never resumed, and a
 	// counter restarting at zero after a restart can only collide with a file the session no longer needs.
 	readonly auxiliaries: Map<SequencerAuxiliaryKind, number>
+	// Control lane of the session. Every operator command enters it, so two that raced reduce in arrival order
+	// instead of overwriting each other's desired state.
+	readonly intents: SequencerIntentQueue
 	// Cancellation source of the running action, aborted by a stop and by finalization.
 	readonly controller: AbortController
 	// Resolves once the session released everything, with the last durable state the store holds.
 	readonly done: PromiseWithResolvers<SequencerSession | undefined>
+	// Device actually bound per role at start, which is what the session commands for its whole life.
+	readonly resolved: Readonly<Partial<Record<SequencerDeviceRole, string>>>
+	// Action being executed, as the runtime knows it. It is the live half of the snapshot, replaced whole on
+	// every progress report so a reader never observes a half-updated activity. It is cleared before the
+	// transition that ends the session is committed, because there is no action in the foreground of a session
+	// that just reached its last state.
+	activity?: SequencerActivityObservation
 	// Last revision this runtime committed, used as the optimistic guard of the next commit.
 	revision: number
 	// Set once finalization began, so a stop arriving during it does not start a second one.
@@ -282,8 +359,11 @@ export class SequencerRuntime {
 	readonly #resolve: SequencerDeviceResolver
 	readonly #now: () => number
 	readonly #progress?: (sessionId: string, nodeId: string, progress: SequencerActionProgress) => void
-	readonly #plans = new Map<string, SequencerRuntimePlan>()
+	readonly #observe?: (change: SequencerRuntimeChange) => void
+	readonly #plans = new Map<string, PendingPlan>()
 	#active?: ActiveSession
+	// Set once the process began shutting down, after which no session starts again.
+	#closed = false
 
 	// Wires the runtime; the arbiter comes from the coordinator so both always see the same arbitration.
 	constructor(options: SequencerRuntimeOptions) {
@@ -294,6 +374,16 @@ export class SequencerRuntime {
 		this.#resolve = options.resolve
 		this.#now = options.now ?? Date.now
 		this.#progress = options.progress
+		this.#observe = options.observe
+	}
+
+	// Reports one written change, keeping a failing subscriber out of the session's path.
+	#observed(change: SequencerRuntimeChange) {
+		try {
+			this.#observe?.(change)
+		} catch (e) {
+			console.error('sequencer change observation failed:', change.session.id, e)
+		}
 	}
 
 	// Session currently holding the process claim, or undefined when the runtime is idle.
@@ -301,20 +391,43 @@ export class SequencerRuntime {
 		return this.#gate.sessionId
 	}
 
+	// Live half of the snapshot of one session (§15.1), or undefined when that session is not the running one.
+	//
+	// It is deliberately not the whole observation: the session record, its plan and the instant of the reading
+	// belong to whoever derives the snapshot, and everything here is state only the runtime holds. A session
+	// that already finalized reports nothing, which is what makes its snapshot describe the record alone.
+	observation(sessionId: string): Pick<SequencerSnapshotObservation, 'resolved' | 'foreground'> | undefined {
+		const active = this.#active
+
+		return active?.id === sessionId ? { resolved: active.resolved, foreground: active.activity } : undefined
+	}
+
 	// Creates a session in `created` for a plan, recording the handler version it was compiled against.
 	// Returns undefined when the block type cannot be resolved, since such a session could never start.
-	create(plan: SequencerRuntimePlan): SequencerSession | undefined {
-		const resolution = this.#registry.resolve([{ type: plan.action.type }])
+	//
+	// `registered` is invoked with the stored session before the creation is announced, and exists because the
+	// announcement is derived and not merely forwarded: whatever the caller keeps per session — the lowered plan
+	// the target, the groups and the completion estimate come from — is keyed by an id only the store assigns, so
+	// an observer reached before that is in place would publish a session with no plan behind it and disagree
+	// with the answer the same call returns.
+	create(draft: SequencerRuntimePlanDraft, registered?: (session: SequencerSession) => void): SequencerSession | undefined {
+		const resolution = this.#registry.resolve([{ type: draft.action.type }])
 
 		if (!resolution.ok) return undefined
 
-		const session = this.#store.createSession({ definitionId: plan.definitionId, definitionRevision: plan.definitionRevision, handlerVersions: resolution.versions })
+		const session = this.#store.createSession({ definitionId: draft.definitionId, definitionRevision: draft.definitionRevision, handlerVersions: resolution.versions })
 
 		// The plan is snapshotted, not referenced: the definition revision and the handler versions recorded in
 		// the checkpoint describe this plan as it is now, and an edit of the caller's object between `create`
 		// and `start` would run something that no longer matches its own metadata. `configuration` is opaque
 		// data of arbitrary shape, so the copy has to be deep.
-		this.#plans.set(session.id, structuredClone(plan))
+		const snapshotted = structuredClone(draft)
+
+		this.#plans.set(session.id, { ...snapshotted, storage: snapshotted.storage === undefined ? undefined : { ...snapshotted.storage, session: session.id } })
+
+		registered?.(session)
+
+		this.#observed({ session, events: [], artifacts: [] })
 
 		return session
 	}
@@ -328,6 +441,7 @@ export class SequencerRuntime {
 		const stored = this.#store.session(sessionId)
 
 		if (stored === undefined) return { ok: false, reason: 'unknownSession' }
+		if (this.#closed) return { ok: false, reason: 'shuttingDown', detail: 'the process is shutting down' }
 
 		const admission = this.#gate.claim(sessionId)
 
@@ -362,12 +476,18 @@ export class SequencerRuntime {
 
 		// Plans live in memory only, so a `created` session without one survived a restart of the process and
 		// has to be compiled again before it can start.
-		const plan = this.#plans.get(sessionId)
+		const pending = this.#plans.get(sessionId)
 
-		if (plan === undefined) {
+		if (pending === undefined) {
 			teardown.run()
 			return { ok: false, reason: 'unknownSession', detail: 'no plan is loaded for the session' }
 		}
+
+		// The night segment is resolved here and never again, which is what fixes it for a session that runs
+		// past its own boundary. It is read at the start and not at the creation because the observing night is
+		// the one the session captures in: a session prepared before midnight and started after it belongs to
+		// the night it is actually observing, and it is also the instant the resolution of §14 dates it from.
+		const plan: SequencerRuntimePlan = { ...pending, storage: pending.storage === undefined ? undefined : { root: pending.storage.root, session: pending.storage.session, night: sequencerNightSegment(pending.storage.autoSubFolderMode, this.#now()) } }
 
 		const handler = this.#registry.handler(plan.action.type)
 		const recorded = stored.checkpoint.handlerVersions[plan.action.type]
@@ -438,8 +558,11 @@ export class SequencerRuntime {
 			teardown,
 			artifacts: [],
 			auxiliaries: new Map(),
+			intents: new SequencerIntentQueue(),
 			controller: new AbortController(),
 			done: Promise.withResolvers<SequencerSession | undefined>(),
+			resolved: resolvedDevices(plan.devices, roles),
+			activity: { nodeId: plan.action.id, type: plan.action.type, state: 'running', attempt: 1, startedAt: this.#now() },
 			revision: stored.revision,
 			finalizing: false,
 		}
@@ -472,6 +595,130 @@ export class SequencerRuntime {
 		await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
 
 		return await active.done.promise
+	}
+
+	// Ends the sequencer with the process (§20.2), in the only order that leaves no device commanded.
+	//
+	// It is not the finalization pipeline: shutting down ends the night, it does not conclude it, so no
+	// terminal state is written and nothing quiesces the way a completed session does. The session is recorded
+	// as `interrupted`, which is what it is — ended by the process, not stopped by the operator and not failed
+	// — and the day a session stops dying with the process, that record is the only step that changes.
+	//
+	// The steps are ordered against each other, not merely listed. New sessions are refused first, so nothing
+	// starts behind the shutdown; the state is written before anything is cancelled, because the caller's
+	// `cancelAll` would otherwise tear down operations whose session was never recorded; the cancellation is by
+	// reservation owner and not by the handles this runtime keeps, which is what catches the owned guiding
+	// session whose handle lives in the guider commander and which would otherwise escape past the release;
+	// and the reservation is released only after those cleanups ran, so no third party is handed a device that
+	// is still moving.
+	//
+	// Resolves once the session let go of everything. A runtime with nothing running resolves immediately, and
+	// calling it twice waits for the first one instead of starting a second.
+	async shutdown(): Promise<void> {
+		this.#closed = true
+
+		const active = this.#active
+
+		if (active === undefined) return
+
+		// A finalization already in flight owns the release path: it cancels the same operations by the same
+		// owner and runs the same teardown, and a second one would commit over it. What the shutdown needs from
+		// it is not to start another but to wait for this one, because everything the caller does next —
+		// cancelling every remaining operation, disposing the devices — is exactly what this method exists to
+		// keep behind the cleanups of the session.
+		if (active.finalizing) {
+			await active.done.promise
+			return
+		}
+
+		// The action still runs until its cancellation lands, and its natural finalization must not race this
+		// one: whichever committed first would be overwritten by the other, and both would run the teardown.
+		active.finalizing = true
+
+		// The cancellation is the next thing that happens to the action, so the record of the interruption shows
+		// the session cancelling and not an action the process is about to take away.
+		if (active.activity !== undefined) active.activity = { ...active.activity, state: 'cancelling' }
+
+		this.#commitBestEffort(active, {
+			state: 'interrupted',
+			desiredState: 'stopped',
+			events: [{ type: 'stateChanged', state: 'interrupted', nodeId: active.plan.action.id, detail: 'the process is shutting down' }],
+		})
+
+		try {
+			active.controller.abort('aborted')
+			await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
+		} catch (e) {
+			// A cleanup that misbehaved does not entitle the session to keep the devices past this point.
+			console.error('sequencer shutdown cancellation failed:', active.id, e)
+		} finally {
+			active.teardown.run((error) => console.error('sequencer shutdown teardown failed:', active.id, error))
+
+			this.#plans.delete(active.id)
+			this.#active = undefined
+			active.artifacts.length = 0
+			active.done.resolve(this.#store.session(active.id))
+		}
+	}
+
+	// Issues one operator command against a session and reports what it did.
+	//
+	// The command is never refused at the edge: it enters the control lane, the fold decides whether it acts,
+	// and the record of a command that did nothing is committed with the reason it did nothing. A transport
+	// that decided instead would have to answer for the state machine, and it would answer late.
+	//
+	// A pause records the state the session converges to and does not itself stop anything: V1 executes a
+	// single action, whose only boundary is the action settling, so a paused session is one whose desired state
+	// says `paused` while its state still says `running` until that boundary is reached. A stop is different
+	// and is carried through here, because the stop path is the one that also cancels and releases.
+	async control(sessionId: string, kind: 'pause' | 'resume' | 'stop'): Promise<SequencerControlResult> {
+		const stored = this.#store.session(sessionId)
+
+		if (stored === undefined) return { ok: false, reason: 'unknownSession' }
+
+		const active = this.#active?.id === sessionId ? this.#active : undefined
+
+		// A session nobody is running has no lane of its own to serialize against: nothing else submits to it,
+		// so reducing the command on the spot is the same fold over the same single command.
+		const queue = active?.intents ?? new SequencerIntentQueue()
+
+		queue.submit(kind, this.#now())
+
+		const reduction = queue.drain(stored.state, stored.desiredState)
+		const outcome = reduction.outcomes.at(-1)!
+		const events = reduction.outcomes.map<SequencerEventDraft>((it) => ({ type: 'policyApplied', detail: it.noop === undefined ? `${it.intent.kind} accepted` : `${it.intent.kind} did nothing: ${SEQUENCER_INTENT_NOOP_DETAIL[it.noop]}` }))
+
+		if (outcome.effect === 'stop') {
+			// A session nobody is executing ends here and now: there is no action to settle, nothing to cancel and
+			// no reservation to give back, so recording only the desire would leave it non-terminal forever — the
+			// state a session created and never started would otherwise be stuck in, which is also what keeps its
+			// definition undeletable. The stop path of a running session already persists the desired state, so
+			// committing it here too would write it twice.
+			const session = active === undefined ? this.#commitControl(stored, { state: 'stopped', desiredState: 'stopped', events: [...events, { type: 'stateChanged', state: 'stopped' }] }) : (this.#commitBestEffort(active, { events }), await this.stop(sessionId))
+
+			return { ok: true, effect: outcome.effect, noop: outcome.noop, session: session ?? stored }
+		}
+
+		const change = { desiredState: outcome.effect === 'none' ? undefined : reduction.desiredState, events }
+		const session = active === undefined ? this.#commitControl(stored, change) : this.#commitBestEffort(active, change)
+
+		return { ok: true, effect: outcome.effect, noop: outcome.noop, session: session ?? stored }
+	}
+
+	// Applies one control change to a session this runtime is not executing, under the revision the store
+	// currently holds. Nothing else writes such a session, so a mismatch is not retried: it means a second
+	// writer exists, and the command is reported as it was stored rather than forced over the other one.
+	#commitControl(stored: SequencerSession, change: { readonly state?: SequencerSessionState; readonly desiredState?: SequencerDesiredState; readonly events: readonly SequencerEventDraft[] }) {
+		const result = this.#store.commit({ sessionId: stored.id, expectedRevision: stored.revision, state: change.state, desiredState: change.desiredState, events: change.events })
+
+		if (!result.ok) {
+			console.error('sequencer control commit refused:', stored.id, result.reason)
+			return undefined
+		}
+
+		this.#observed(result)
+
+		return result.session
 	}
 
 	// Resolves once the active session finished, or immediately when nothing is running.
@@ -525,6 +772,10 @@ export class SequencerRuntime {
 		const node = active.plan.action.id
 
 		try {
+			// The action returned and its operations are about to be cancelled, so what the foreground shows from
+			// here on is the cleanups running and not an action still doing work.
+			if (active.activity !== undefined) active.activity = { ...active.activity, state: 'cancelling' }
+
 			this.#commitBestEffort(active, { state: 'finalizing', events: [{ type: 'stateChanged', state: 'finalizing', nodeId: node }] })
 
 			// Nothing the session started may still be touching a device when the reservation is released, or the
@@ -534,6 +785,11 @@ export class SequencerRuntime {
 
 			const state = terminalStateOf(result)
 			const events: SequencerEventDraft[] = [{ type: 'stateChanged', state, nodeId: node }]
+
+			// Nothing is in the foreground of a session that ended, and this commit is the last one an observer
+			// sees for it: leaving the activity in place would publish the session as completed and still running
+			// an action, with nothing behind it to correct that afterwards.
+			active.activity = undefined
 
 			this.#commitBestEffort(active, {
 				state,
@@ -654,6 +910,14 @@ export class SequencerRuntime {
 	// that just died, typically — would otherwise surface inside the handler that called `context.progress`
 	// and end a perfectly good session as `commandFailed`.
 	#report(sessionId: string, nodeId: string, progress: SequencerActionProgress) {
+		const active = this.#active
+
+		// The report is also what the derived snapshot reads, so it is recorded before it is fanned out: an
+		// observer that never runs still leaves the live half current.
+		if (active?.id === sessionId && active.activity?.nodeId === nodeId) {
+			active.activity = { ...active.activity, progress: progress.fraction, detail: progress.detail }
+		}
+
 		try {
 			this.#progress?.(sessionId, nodeId, progress)
 		} catch (e) {
@@ -712,8 +976,23 @@ export class SequencerRuntime {
 		active.artifacts.length = 0
 		active.revision = result.session.revision
 
+		this.#observed(result)
+
 		return result.session
 	}
+}
+
+// Names the device bound to each role the action actually reserved.
+//
+// `devices` is what the definition declared and `roles` is what the start resolved, so the intersection is the
+// honest answer: an optional role the block skipped is declared and commands nothing, and reporting it as
+// resolved would show a device the session never took.
+function resolvedDevices(devices: SequencerDevices, roles: ReadonlyMap<SequencerDeviceRole, ResourceRequest>) {
+	const resolved: Partial<Record<SequencerDeviceRole, string>> = {}
+
+	for (const role of roles.keys()) resolved[role] = devices[role]
+
+	return resolved
 }
 
 // Maps an action decision to the terminal state of a single-action session. `pause` and `suspend` have no

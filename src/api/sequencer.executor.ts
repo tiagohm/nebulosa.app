@@ -227,6 +227,14 @@ export async function runSequencerPlan(host: SequencerExecutorHost): Promise<Seq
 
 	execution.keeper.leave()
 	execution.keeper.capture(execution.capture)
+	execution.keeper.anchors(execution.anchors)
+
+	// Whatever was produced since the last checkpoint write is committed here rather than left behind. The walk
+	// ends on the events that explain how it ended — the policy that gave up on the last slot, the trigger that
+	// fired at the last safe point — and the commit the runtime makes around the terminal state carries its own
+	// list and never this one, so dropping them loses exactly the part of the night an operator reads first.
+	execution.host.commit(execution.keeper.checkpoint, execution.events)
+	execution.events = []
 
 	return { terminal: sequencerTerminalOutcome(primary, finalized), checkpoint: execution.keeper.checkpoint, capture: execution.capture }
 }

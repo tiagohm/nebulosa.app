@@ -229,6 +229,14 @@ describe('plan walk', () => {
 		expect(new Set(frames.map((it) => it.slot!.path)).size).toBe(3)
 	})
 
+	test('commits the events produced after the last checkpoint of the walk', async () => {
+		const state = harness(planOf(), (context) => (context.frame === undefined ? Promise.resolve({ type: 'completed', value: undefined }) : Promise.resolve({ type: 'fatalFailure', reason: 'commandFailed', detail: 'the camera is gone' })))
+
+		await runSequencerPlan(state.host)
+
+		expect(state.events.filter((it) => it.type === 'policyApplied')).toHaveLength(1)
+	})
+
 	test('takes the safe point again once the flip window the guard waited for opens', async () => {
 		const base = definition()
 		const state: Harness = harness(planOf({ meridianFlip: { ...base.meridianFlip, enabled: true } }), (context) => {

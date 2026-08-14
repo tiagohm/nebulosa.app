@@ -316,6 +316,18 @@ describe('plan walk', () => {
 		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(1)
 	})
 
+	test('fails the session when a group spends every slot without reaching its target', async () => {
+		const base = definition()
+		const plan = planOf({ capture: { ...base.capture, retry: { ...base.capture.retry, onExhausted: 'skip' } } })
+		const state = harness(plan, (context) => (context.frame === undefined ? Promise.resolve({ type: 'completed', value: undefined }) : Promise.resolve({ type: 'retryableFailure', reason: 'commandFailed', detail: 'the camera did not answer' })))
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('failed')
+		expect(outcome.terminal.failure).toEqual({ reason: 'commandFailed', detail: 'the camera did not answer' })
+		expect(outcome.capture.m42?.groups.lum?.accepted).toBe(0)
+		expect(outcome.capture.m42?.groups.lum?.abandoned).toBeGreaterThan(0)
+	})
+
 	test('holds the walk on an operator pause and takes the remaining frames on the resume', async () => {
 		let paused = false
 		const state: Harness = harness(planOf(), (context) => {

@@ -27,7 +27,8 @@ import { abandonSlot, acceptFrame, advanceCaptureCycle, grantAttemptWindow, SEQU
 import type { AnySequencerActionHandler, SequencerActionContext, SequencerActionResult, SequencerFrameSlot } from './sequencer.registry'
 import { frameScheduler, targetProgressOf } from './sequencer.scheduler'
 import type { FrameSelection } from './sequencer.scheduler'
-import { sequencerSlotFailure } from './sequencer.slot'
+import { sequencerDegradedCause, sequencerGroupOutcome, sequencerSlotFailure } from './sequencer.slot'
+import type { SequencerSlotCause } from './sequencer.slot'
 import { sequencerFinalizeRuns, sequencerStartupOutcome, sequencerTerminalOutcome } from './sequencer.terminal'
 import type { SequencerPrimaryOutcome, SequencerTerminalOutcome } from './sequencer.terminal'
 import { evaluateSequencerTriggers, sequencerAnchorAdvanced, sequencerFilterBaselined, sequencerFrameCounted, sequencerInitialTriggerAnchors, sequencerTriggerPending } from './sequencer.trigger'
@@ -191,6 +192,9 @@ interface SequencerExecution {
 	anchors: SequencerTriggerAnchors
 	// Cadence anchors of the session.
 	cadence: SequencerCadenceAnchors
+	// Cause of the last slot the capture loop lost, carried so a group that ends degraded is reported with the
+	// failure that emptied it instead of with the counter that noticed the emptiness.
+	cause?: SequencerSlotCause
 }
 
 // Executes a compiled plan and returns what it ended as.
@@ -559,12 +563,43 @@ async function runCaptureLoop(execution: SequencerExecution, targetId: string, l
 			if (outcome.kind !== 'continue') return outcome
 		}
 
+		// The cycle is over and every cursor of it is final, which is the only moment a degraded group is
+		// visible: the advance below reopens the cursors for the next cycle and the evidence would be gone.
+		const degraded = degradedOutcome(execution, targetId, loop)
+
+		if (degraded.kind !== 'continue') return degraded
+
 		execution.capture = advanceCaptureCycle(execution.capture, targetId)
 		execution.keeper.capture(execution.capture)
 		execution.keeper.reenter(body)
 
 		await checkpointDue(execution, 'transition')
 	}
+}
+
+// What the cycle that just closed ended as, evaluated while its cursors still hold what it spent.
+//
+// A group that spent its slot limit without reaching its target completed degraded, and a degraded completion
+// is a failure of the plan (§8.6), not a night that merely produced fewer frames: the session is what an
+// operator reads in the morning to know whether the target is done, and reporting `completed` for a group that
+// lost every slot to a camera that stopped answering is the one answer that costs a whole night. The cause
+// reported is the one of the last slot lost, which is the camera error rather than the counter that noticed it
+// — `unknown` only when nothing recorded why, which a resume after a restart can produce.
+//
+// The first degraded group decides. Reporting one cause is what the terminal outcome carries, and it is the
+// most recent failure of the target either way.
+function degradedOutcome(execution: SequencerExecution, targetId: string, loop: SequencerPlanLoop): SequencerNodeOutcome {
+	for (const group of loop.groups) {
+		if (sequencerGroupOutcome(group, execution.capture, targetId) !== 'degraded') continue
+
+		const cause = sequencerDegradedCause(execution.cause)
+
+		execution.events.push({ type: 'policyApplied', nodeId: group.nodeId, detail: `the frame group ${group.id} completed degraded` })
+
+		return { kind: 'fail', reason: cause.reason, detail: cause.detail }
+	}
+
+	return SEQUENCER_CONTINUE
 }
 
 // Runs the safe point of one selected frame, up to and including the exposure that fills its slot.
@@ -855,10 +890,13 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 				continue
 			case 'abandon':
 				execution.capture = abandonSlot(execution.capture, targetId, group)
+				execution.cause = decision.cause
 				execution.keeper.capture(execution.capture)
 				await checkpointDue(execution, 'frame')
 				return SEQUENCER_CONTINUE
 			case 'hold': {
+				execution.cause = decision.cause
+
 				const resumed = await holdWalk(execution, node.id)
 
 				if (resumed.kind !== 'continue') return resumed

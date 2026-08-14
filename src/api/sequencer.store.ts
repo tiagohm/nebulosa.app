@@ -67,6 +67,9 @@ export type SequencerCommitResult =
 			readonly session: SequencerSession
 			// Events appended by this commit, in sequence order.
 			readonly events: readonly SequencerEvent[]
+			// Artifacts written by this commit, as stored, in the order they were handed in. A registration and a
+			// promotion both appear here: what the record says changed, not whether it is new.
+			readonly artifacts: readonly SequencerArtifact[]
 	  }
 	| {
 			readonly ok: false
@@ -283,16 +286,21 @@ export class InMemorySequencerStore implements SequencerStore {
 			events.push({ ...draft, sessionId: current.id, sequence, timestamp })
 		}
 
+		const artifacts: SequencerArtifact[] = []
+
 		for (const draft of commit.artifacts ?? []) {
 			const key = artifactKey(draft.logicalSlotId, draft.attempt)
 			const existing = entry.artifacts.get(key)
-			entry.artifacts.set(key, { ...draft, sessionId: current.id, createdAt: existing?.createdAt ?? timestamp, updatedAt: timestamp })
+			const artifact: SequencerArtifact = { ...draft, sessionId: current.id, createdAt: existing?.createdAt ?? timestamp, updatedAt: timestamp }
+
+			entry.artifacts.set(key, artifact)
+			artifacts.push(artifact)
 		}
 
 		entry.session = session
 		for (const event of events) entry.events.push(event)
 
-		return { ok: true, session, events }
+		return { ok: true, session, events, artifacts }
 	}
 
 	events(sessionId: string, afterSequence: number = 0): readonly SequencerEvent[] {

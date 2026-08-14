@@ -56,6 +56,7 @@ import { ImageHandler, image } from './src/api/image'
 import { ImageProcessor } from './src/api/image.processor'
 import { PlateSolverHandler, plateSolver } from './src/api/platesolver'
 import { SequencerHandler, sequencer } from './src/api/sequencer'
+import { SequencerChannel } from './src/api/sequencer.channel'
 import { sequencerMeridianFlipHandler } from './src/api/sequencer.flip'
 import { sequencerAutofocusHandler } from './src/api/sequencer.focus'
 import { sequencerDitherHandler } from './src/api/sequencer.guiding'
@@ -319,8 +320,12 @@ const sequencerDeviceResolver: SequencerDeviceResolver = (role, deviceId) => {
 	return device === undefined ? undefined : { key: resourceKey(resourceDevice(device)), device }
 }
 
-const sequencerRuntime = new SequencerRuntime({ store: sequencerStore, registry: sequencerRegistry, coordinator: operationCoordinator, resolve: sequencerDeviceResolver })
-const sequencerHandler = new SequencerHandler({ store: sequencerStore, runtime: sequencerRuntime, registry: sequencerRegistry })
+// The three references close over each other on purpose: the runtime reports what it wrote to the channel,
+// the channel derives the snapshot it publishes through the handler, and the handler reads the live half back
+// from the runtime. Every one of those calls happens after all three exist.
+const sequencerRuntime = new SequencerRuntime({ store: sequencerStore, registry: sequencerRegistry, coordinator: operationCoordinator, resolve: sequencerDeviceResolver, observe: (change) => sequencerChannel.changed(change) })
+const sequencerHandler = new SequencerHandler({ store: sequencerStore, runtime: sequencerRuntime, registry: sequencerRegistry, observe: (sessionId) => sequencerRuntime.observation(sessionId) })
+const sequencerChannel = new SequencerChannel({ wsm, snapshot: (sessionId) => sequencerHandler.snapshot(sessionId), sessions: () => sequencerStore.sessions() })
 
 // Blocks the compiler resolves and the runtime executes. Registering them here rather than inside the
 // registry is what keeps the domain modules free of the services they command: each one is a pure function of

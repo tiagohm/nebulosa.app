@@ -1,5 +1,5 @@
 import type { SequencerDeviceRole, SequencerDevices } from '#/sequencer'
-import type { SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerFailure, SequencerSession, SequencerSessionState } from '#/sequencer.state'
+import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEvent, SequencerEventDraft, SequencerFailure, SequencerSession, SequencerSessionState } from '#/sequencer.state'
 import type { OperationCoordinator, OperationScope } from './operation'
 import type { ResourceArbiter, ResourceRequest, ResourceReservation, ResourceReservationOwner } from './resource'
 import { sequencerAuxiliaryFileName } from './sequencer.identity'
@@ -8,6 +8,7 @@ import type { SequencerIntentEffect, SequencerIntentNoop } from './sequencer.int
 import { sequencerAuxiliaryDirectory, sequencerVerifiedAuxiliaryPath } from './sequencer.path'
 import type { SequencerAuxiliaryKind, SequencerPathContext } from './sequencer.path'
 import type { SequencerActionContext, SequencerActionProgress, SequencerActionResult, SequencerAuxiliaryTarget, SequencerBlockRegistry } from './sequencer.registry'
+import type { SequencerActivityObservation, SequencerSnapshotObservation } from './sequencer.snapshot'
 import type { SequencerStore } from './sequencer.store'
 
 // Session admission, bootstrap reversal, and the V1 execution kernel of the sequencer.
@@ -208,6 +209,23 @@ export interface SequencerRuntimeOptions {
 	readonly now?: () => number
 	// Receives action progress, which is presentation only and never persisted.
 	readonly progress?: (sessionId: string, nodeId: string, progress: SequencerActionProgress) => void
+	// Receives every durable change the runtime writes, after it is stored. A sink that throws is reported and
+	// never reaches the session: what is already committed does not depend on anyone being able to observe it.
+	readonly observe?: (change: SequencerRuntimeChange) => void
+}
+
+// One durable change as it was written, handed to the observer of the runtime.
+//
+// It is the commit as accepted, not an invitation to re-read: `session` is the record the store now holds, and
+// `events` and `artifacts` are exactly the ones this unit wrote, so a subscriber can fan them out without
+// diffing anything. A session that was just created reports itself with both lists empty.
+export interface SequencerRuntimeChange {
+	// Session as stored after the change.
+	readonly session: SequencerSession
+	// Events appended by this change, in sequence order.
+	readonly events: readonly SequencerEvent[]
+	// Artifacts written by this change, in the order they were handed to the store.
+	readonly artifacts: readonly SequencerArtifact[]
 }
 
 // Why a session could not be started.
@@ -298,6 +316,11 @@ interface ActiveSession {
 	readonly controller: AbortController
 	// Resolves once the session released everything, with the last durable state the store holds.
 	readonly done: PromiseWithResolvers<SequencerSession | undefined>
+	// Device actually bound per role at start, which is what the session commands for its whole life.
+	readonly resolved: Readonly<Partial<Record<SequencerDeviceRole, string>>>
+	// Action being executed, as the runtime knows it. It is the live half of the snapshot, replaced whole on
+	// every progress report so a reader never observes a half-updated activity.
+	activity: SequencerActivityObservation
 	// Last revision this runtime committed, used as the optimistic guard of the next commit.
 	revision: number
 	// Set once finalization began, so a stop arriving during it does not start a second one.
@@ -314,6 +337,7 @@ export class SequencerRuntime {
 	readonly #resolve: SequencerDeviceResolver
 	readonly #now: () => number
 	readonly #progress?: (sessionId: string, nodeId: string, progress: SequencerActionProgress) => void
+	readonly #observe?: (change: SequencerRuntimeChange) => void
 	readonly #plans = new Map<string, SequencerRuntimePlan>()
 	#active?: ActiveSession
 
@@ -326,11 +350,32 @@ export class SequencerRuntime {
 		this.#resolve = options.resolve
 		this.#now = options.now ?? Date.now
 		this.#progress = options.progress
+		this.#observe = options.observe
+	}
+
+	// Reports one written change, keeping a failing subscriber out of the session's path.
+	#observed(change: SequencerRuntimeChange) {
+		try {
+			this.#observe?.(change)
+		} catch (e) {
+			console.error('sequencer change observation failed:', change.session.id, e)
+		}
 	}
 
 	// Session currently holding the process claim, or undefined when the runtime is idle.
 	get activeSessionId() {
 		return this.#gate.sessionId
+	}
+
+	// Live half of the snapshot of one session (§15.1), or undefined when that session is not the running one.
+	//
+	// It is deliberately not the whole observation: the session record, its plan and the instant of the reading
+	// belong to whoever derives the snapshot, and everything here is state only the runtime holds. A session
+	// that already finalized reports nothing, which is what makes its snapshot describe the record alone.
+	observation(sessionId: string): Pick<SequencerSnapshotObservation, 'resolved' | 'foreground'> | undefined {
+		const active = this.#active
+
+		return active?.id === sessionId ? { resolved: active.resolved, foreground: active.activity } : undefined
 	}
 
 	// Creates a session in `created` for a plan, recording the handler version it was compiled against.
@@ -349,6 +394,8 @@ export class SequencerRuntime {
 		const snapshotted = structuredClone(draft)
 
 		this.#plans.set(session.id, { ...snapshotted, storage: snapshotted.storage === undefined ? undefined : { ...snapshotted.storage, session: session.id } })
+
+		this.#observed({ session, events: [], artifacts: [] })
 
 		return session
 	}
@@ -475,6 +522,8 @@ export class SequencerRuntime {
 			intents: new SequencerIntentQueue(),
 			controller: new AbortController(),
 			done: Promise.withResolvers<SequencerSession | undefined>(),
+			resolved: resolvedDevices(plan.devices, roles),
+			activity: { nodeId: plan.action.id, type: plan.action.type, state: 'running', attempt: 1, startedAt: this.#now() },
 			revision: stored.revision,
 			finalizing: false,
 		}
@@ -559,6 +608,8 @@ export class SequencerRuntime {
 			console.error('sequencer control commit refused:', stored.id, result.reason)
 			return undefined
 		}
+
+		this.#observed(result)
 
 		return result.session
 	}
@@ -743,6 +794,14 @@ export class SequencerRuntime {
 	// that just died, typically — would otherwise surface inside the handler that called `context.progress`
 	// and end a perfectly good session as `commandFailed`.
 	#report(sessionId: string, nodeId: string, progress: SequencerActionProgress) {
+		const active = this.#active
+
+		// The report is also what the derived snapshot reads, so it is recorded before it is fanned out: an
+		// observer that never runs still leaves the live half current.
+		if (active?.id === sessionId && active.activity.nodeId === nodeId) {
+			active.activity = { ...active.activity, progress: progress.fraction, detail: progress.detail }
+		}
+
 		try {
 			this.#progress?.(sessionId, nodeId, progress)
 		} catch (e) {
@@ -801,8 +860,23 @@ export class SequencerRuntime {
 		active.artifacts.length = 0
 		active.revision = result.session.revision
 
+		this.#observed(result)
+
 		return result.session
 	}
+}
+
+// Names the device bound to each role the action actually reserved.
+//
+// `devices` is what the definition declared and `roles` is what the start resolved, so the intersection is the
+// honest answer: an optional role the block skipped is declared and commands nothing, and reporting it as
+// resolved would show a device the session never took.
+function resolvedDevices(devices: SequencerDevices, roles: ReadonlyMap<SequencerDeviceRole, ResourceRequest>) {
+	const resolved: Partial<Record<SequencerDeviceRole, string>> = {}
+
+	for (const role of roles.keys()) resolved[role] = devices[role]
+
+	return resolved
 }
 
 // Maps an action decision to the terminal state of a single-action session. `pause` and `suspend` have no

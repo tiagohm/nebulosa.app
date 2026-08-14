@@ -724,7 +724,12 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 		if (result.type === 'pause') return { kind: 'pause' }
 		if (result.type === 'suspend') return { kind: 'fail', reason: 'unexpectedState', detail: result.detail }
 
-		const decision = sequencerSlotFailure({ targetId, group, progress: execution.capture, attempt, reason: result.reason, detail: result.detail, commandedBy: commandedBy(execution) })
+		// A fatal failure is decided by the terminal half of the same policy and never retried, which the budget
+		// of one attempt expresses without a second decision path, exactly as an action node spends it. Handing
+		// the declared budget to a camera that reported a fatal failure would expose the same slot again against
+		// a condition no attempt of the same node can change.
+		const failed = result.type === 'fatalFailure' ? { ...group, retry: { ...group.retry, maxAttempts: 1 } } : group
+		const decision = sequencerSlotFailure({ targetId, group: failed, progress: execution.capture, attempt, reason: result.reason, detail: result.detail, commandedBy: commandedBy(execution) })
 
 		execution.events.push({ type: 'policyApplied', nodeId: node.id, detail: decision.kind })
 

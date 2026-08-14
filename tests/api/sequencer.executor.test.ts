@@ -227,6 +227,16 @@ describe('plan walk', () => {
 		expect(new Set(frames.map((it) => it.slot!.path)).size).toBe(3)
 	})
 
+	test('never spends a second attempt on a slot whose exposure failed fatally', async () => {
+		const state = harness(planOf(), (context) => (context.frame === undefined ? Promise.resolve({ type: 'completed', value: undefined }) : Promise.resolve({ type: 'fatalFailure', reason: 'commandFailed', detail: 'the camera is gone' })))
+		const outcome = await runSequencerPlan(state.host)
+		const frames = state.executed.filter((it) => it.slot !== undefined)
+
+		expect(outcome.terminal.state).toBe('failed')
+		expect(outcome.terminal.failure).toEqual({ reason: 'commandFailed', detail: 'the camera is gone' })
+		expect(frames).toHaveLength(1)
+	})
+
 	test('retries the safe point a transient guiding failure interrupted', async () => {
 		let suspensions = 0
 		const state = harness(

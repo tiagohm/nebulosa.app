@@ -66,17 +66,17 @@ export type SequencerPathResolution =
 
 // Segment of the observing night a session started in, or undefined when the definition asks for none.
 //
-// The boundary is the one the manual capture path already uses, so the same night written by both lands in
-// the same directory: `midnight` names the local calendar day, and `noon` keeps a night that crosses midnight
-// under the day it began on by dating everything before local noon back twelve hours. `at` is milliseconds
-// since the Unix epoch, read once at session start and never again, which is what fixes the segment for the
-// whole session even when it runs past its own boundary.
+// `midnight` names the local calendar day. `noon` keeps a night that crosses midnight under the day it began
+// on, which is what an observer means by "one night": an instant before local noon belongs to the night of the
+// previous day and is dated twelve hours back, and an instant after it already carries that day. `at` is
+// milliseconds since the Unix epoch, read once at session start and never again, which is what fixes the
+// segment for the whole session even when it runs past its own boundary.
 export function sequencerNightSegment(mode: SequencerStorage['autoSubFolderMode'], at: number) {
 	if (mode === 'off') return undefined
 
 	const local = temporalAdd(at, TIMEZONE, 'm')
 
-	return mode === 'midnight' || temporalGet(local, 'h') < 12 ? formatTemporal(local, 'YYYY-MM-DD') : formatTemporal(temporalSubtract(local, 12, 'h'), 'YYYY-MM-DD')
+	return formatTemporal(mode === 'noon' && temporalGet(local, 'h') < 12 ? temporalSubtract(local, 12, 'h') : local, 'YYYY-MM-DD')
 }
 
 // Directory of the session, `root/[night]/session`. The result is normalized but not checked: it is built

@@ -697,7 +697,7 @@ describe('sequencer runtime', () => {
 			}),
 		)
 
-		const created = instance.create({ ...plan(), storage: { root: '/data/nebulosa', session: 'session-1', night: '2026-08-12' } })!
+		const created = instance.create({ ...plan(), storage: { root: '/data/nebulosa', night: '2026-08-12' } })!
 
 		instance.start(created.id)
 
@@ -705,7 +705,7 @@ describe('sequencer runtime', () => {
 
 		expect(session?.state).toBe('completed')
 		expect(targets.map((target) => target?.fileName)).toEqual(['centering-00001.fits', 'autofocus-00001.fits', 'centering-00002.fits'])
-		expect(targets[0]?.directory).toEndWith(join('2026-08-12', 'session-1', '.auxiliary', 'centering'))
+		expect(targets[0]?.directory).toEndWith(join('2026-08-12', created.id, '.auxiliary', 'centering'))
 		expect(targets[0]?.path).toBe(join(targets[0]!.directory, 'centering-00001.fits'))
 	})
 

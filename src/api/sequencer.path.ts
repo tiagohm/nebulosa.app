@@ -1,5 +1,7 @@
 import { lstatSync } from 'fs'
 import { isAbsolute, join, resolve, sep } from 'path'
+import { formatTemporal, TIMEZONE, temporalAdd, temporalGet, temporalSubtract } from 'nebulosa/src/astronomy/time/temporal'
+import type { SequencerStorage } from '#/sequencer'
 import { isPathSegment } from './util'
 
 // Composition and containment of the paths a session writes to. `storage.root`, both storage templates and
@@ -61,6 +63,21 @@ export type SequencerPathResolution =
 			// Why the composition was refused, phrased for the operator editing the definition.
 			readonly reason: string
 	  }
+
+// Segment of the observing night a session started in, or undefined when the definition asks for none.
+//
+// The boundary is the one the manual capture path already uses, so the same night written by both lands in
+// the same directory: `midnight` names the local calendar day, and `noon` keeps a night that crosses midnight
+// under the day it began on by dating everything before local noon back twelve hours. `at` is milliseconds
+// since the Unix epoch, read once at session start and never again, which is what fixes the segment for the
+// whole session even when it runs past its own boundary.
+export function sequencerNightSegment(mode: SequencerStorage['autoSubFolderMode'], at: number) {
+	if (mode === 'off') return undefined
+
+	const local = temporalAdd(at, TIMEZONE, 'm')
+
+	return mode === 'midnight' || temporalGet(local, 'h') < 12 ? formatTemporal(local, 'YYYY-MM-DD') : formatTemporal(temporalSubtract(local, 12, 'h'), 'YYYY-MM-DD')
+}
 
 // Directory of the session, `root/[night]/session`. The result is normalized but not checked: it is built
 // only from values the runtime controls, and it is the base every artifact path is contained in.

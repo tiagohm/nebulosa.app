@@ -3,6 +3,8 @@ import type { SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState
 import type { OperationCoordinator, OperationScope } from './operation'
 import type { ResourceArbiter, ResourceRequest, ResourceReservation, ResourceReservationOwner } from './resource'
 import { sequencerAuxiliaryFileName } from './sequencer.identity'
+import { SEQUENCER_INTENT_NOOP_DETAIL, SequencerIntentQueue } from './sequencer.intent'
+import type { SequencerIntentEffect, SequencerIntentNoop } from './sequencer.intent'
 import { sequencerAuxiliaryDirectory, sequencerVerifiedAuxiliaryPath } from './sequencer.path'
 import type { SequencerAuxiliaryKind, SequencerPathContext } from './sequencer.path'
 import type { SequencerActionContext, SequencerActionProgress, SequencerActionResult, SequencerAuxiliaryTarget, SequencerBlockRegistry } from './sequencer.registry'
@@ -175,6 +177,15 @@ export interface SequencerRuntimePlan {
 	readonly action: SequencerRuntimeAction
 }
 
+// Plan as a caller hands it in, which is everything the runtime executes except the one segment the caller
+// cannot know: the session directory is derived from the session id, and the id only exists once the store
+// assigned it. `create` completes it, so nothing outside the runtime has to invent a segment for a session
+// that does not exist yet or, worse, reuse one across two runs of the same definition.
+export interface SequencerRuntimePlanDraft extends Omit<SequencerRuntimePlan, 'storage'> {
+	// Storage of the session without its session segment.
+	readonly storage?: Omit<SequencerPathContext, 'session'>
+}
+
 // Turns a declared role and the device id behind it into the resource the arbiter arbitrates.
 //
 // The runtime cannot compute this itself: the physical key is the device `hardwareId`, which only exists
@@ -228,6 +239,24 @@ export type SequencerStartResult =
 			readonly sessionId?: string
 	  }
 
+// Outcome of one operator command. The only failure is a session that does not exist: every other command is
+// accepted, and a command that changed nothing reports the effect `none` together with why.
+export type SequencerControlResult =
+	| {
+			readonly ok: true
+			// What the fold decided the command does.
+			readonly effect: SequencerIntentEffect
+			// Why it did nothing, present exactly when the effect is `none`.
+			readonly noop?: SequencerIntentNoop
+			// Session as stored after the command was recorded.
+			readonly session: SequencerSession
+	  }
+	| {
+			readonly ok: false
+			// Cause of the refusal.
+			readonly reason: 'unknownSession'
+	  }
+
 // One durable change the runtime applies, mirroring the fields of a store commit it actually uses.
 interface SessionChange {
 	// New lifecycle state, when it changes.
@@ -262,6 +291,9 @@ interface ActiveSession {
 	// session. It is deliberately not persisted: an auxiliary image fills no slot and is never resumed, and a
 	// counter restarting at zero after a restart can only collide with a file the session no longer needs.
 	readonly auxiliaries: Map<SequencerAuxiliaryKind, number>
+	// Control lane of the session. Every operator command enters it, so two that raced reduce in arrival order
+	// instead of overwriting each other's desired state.
+	readonly intents: SequencerIntentQueue
 	// Cancellation source of the running action, aborted by a stop and by finalization.
 	readonly controller: AbortController
 	// Resolves once the session released everything, with the last durable state the store holds.
@@ -303,18 +335,20 @@ export class SequencerRuntime {
 
 	// Creates a session in `created` for a plan, recording the handler version it was compiled against.
 	// Returns undefined when the block type cannot be resolved, since such a session could never start.
-	create(plan: SequencerRuntimePlan): SequencerSession | undefined {
-		const resolution = this.#registry.resolve([{ type: plan.action.type }])
+	create(draft: SequencerRuntimePlanDraft): SequencerSession | undefined {
+		const resolution = this.#registry.resolve([{ type: draft.action.type }])
 
 		if (!resolution.ok) return undefined
 
-		const session = this.#store.createSession({ definitionId: plan.definitionId, definitionRevision: plan.definitionRevision, handlerVersions: resolution.versions })
+		const session = this.#store.createSession({ definitionId: draft.definitionId, definitionRevision: draft.definitionRevision, handlerVersions: resolution.versions })
 
 		// The plan is snapshotted, not referenced: the definition revision and the handler versions recorded in
 		// the checkpoint describe this plan as it is now, and an edit of the caller's object between `create`
 		// and `start` would run something that no longer matches its own metadata. `configuration` is opaque
 		// data of arbitrary shape, so the copy has to be deep.
-		this.#plans.set(session.id, structuredClone(plan))
+		const snapshotted = structuredClone(draft)
+
+		this.#plans.set(session.id, { ...snapshotted, storage: snapshotted.storage === undefined ? undefined : { ...snapshotted.storage, session: session.id } })
 
 		return session
 	}
@@ -438,6 +472,7 @@ export class SequencerRuntime {
 			teardown,
 			artifacts: [],
 			auxiliaries: new Map(),
+			intents: new SequencerIntentQueue(),
 			controller: new AbortController(),
 			done: Promise.withResolvers<SequencerSession | undefined>(),
 			revision: stored.revision,
@@ -472,6 +507,60 @@ export class SequencerRuntime {
 		await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
 
 		return await active.done.promise
+	}
+
+	// Issues one operator command against a session and reports what it did.
+	//
+	// The command is never refused at the edge: it enters the control lane, the fold decides whether it acts,
+	// and the record of a command that did nothing is committed with the reason it did nothing. A transport
+	// that decided instead would have to answer for the state machine, and it would answer late.
+	//
+	// A pause records the state the session converges to and does not itself stop anything: V1 executes a
+	// single action, whose only boundary is the action settling, so a paused session is one whose desired state
+	// says `paused` while its state still says `running` until that boundary is reached. A stop is different
+	// and is carried through here, because the stop path is the one that also cancels and releases.
+	async control(sessionId: string, kind: 'pause' | 'resume' | 'stop'): Promise<SequencerControlResult> {
+		const stored = this.#store.session(sessionId)
+
+		if (stored === undefined) return { ok: false, reason: 'unknownSession' }
+
+		const active = this.#active?.id === sessionId ? this.#active : undefined
+
+		// A session nobody is running has no lane of its own to serialize against: nothing else submits to it,
+		// so reducing the command on the spot is the same fold over the same single command.
+		const queue = active?.intents ?? new SequencerIntentQueue()
+
+		queue.submit(kind, this.#now())
+
+		const reduction = queue.drain(stored.state, stored.desiredState)
+		const outcome = reduction.outcomes.at(-1)!
+		const events = reduction.outcomes.map<SequencerEventDraft>((it) => ({ type: 'policyApplied', detail: it.noop === undefined ? `${it.intent.kind} accepted` : `${it.intent.kind} did nothing: ${SEQUENCER_INTENT_NOOP_DETAIL[it.noop]}` }))
+
+		if (outcome.effect === 'stop') {
+			// The stop path already persists the desired state, so committing it here too would write it twice.
+			const session = active === undefined ? this.#commitControl(stored, { desiredState: 'stopped', events }) : (this.#commitBestEffort(active, { events }), await this.stop(sessionId))
+
+			return { ok: true, effect: outcome.effect, noop: outcome.noop, session: session ?? stored }
+		}
+
+		const change = { desiredState: outcome.effect === 'none' ? undefined : reduction.desiredState, events }
+		const session = active === undefined ? this.#commitControl(stored, change) : this.#commitBestEffort(active, change)
+
+		return { ok: true, effect: outcome.effect, noop: outcome.noop, session: session ?? stored }
+	}
+
+	// Applies one control change to a session this runtime is not executing, under the revision the store
+	// currently holds. Nothing else writes such a session, so a mismatch is not retried: it means a second
+	// writer exists, and the command is reported as it was stored rather than forced over the other one.
+	#commitControl(stored: SequencerSession, change: { readonly desiredState?: SequencerDesiredState; readonly events: readonly SequencerEventDraft[] }) {
+		const result = this.#store.commit({ sessionId: stored.id, expectedRevision: stored.revision, desiredState: change.desiredState, events: change.events })
+
+		if (!result.ok) {
+			console.error('sequencer control commit refused:', stored.id, result.reason)
+			return undefined
+		}
+
+		return result.session
 	}
 
 	// Resolves once the active session finished, or immediately when nothing is running.

@@ -252,7 +252,10 @@ export class InMemorySequencerStore implements SequencerStore {
 
 		const timestamp = this.#now()
 		const state = commit.state ?? current.state
-		const started = current.startedAt ?? (state === 'created' ? undefined : timestamp)
+		// The start instant is stamped by the transition into `running` and by nothing else. A session that is
+		// discarded before it ever ran ends without one, and stamping it from any state that is not `created`
+		// would give such a session a start it never had, one instant before its end.
+		const started = current.startedAt ?? (state === 'running' ? timestamp : undefined)
 		const ended = current.endedAt ?? (isTerminal(state) ? timestamp : undefined)
 		// The stored checkpoint is an independent copy: a runtime that keeps mutating its own working value must
 		// not retroactively change what was committed, which is what a serializing store would give and what

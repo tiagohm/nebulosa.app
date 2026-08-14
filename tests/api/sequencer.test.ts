@@ -83,6 +83,26 @@ describe('definitions', () => {
 		expect(session.ok).toBeTrue()
 		expect(instance.remove(created.id)).toEqual({ ok: false, reason: 'inUse', sessionId: session.ok ? session.session.id : '' })
 	})
+
+	test('removes a definition once the session that named it was discarded', async () => {
+		const { handler: instance } = environment()
+		const created = stored(instance)
+		const session = instance.createSession(created.id)
+
+		expect(session.ok).toBeTrue()
+
+		if (!session.ok) return
+
+		// A session that never started ends on the spot: nothing is running, so there is nothing to wait for.
+		const stop = await instance.stop(session.session.id)
+
+		expect(stop).toMatchObject({ ok: true, effect: 'stop' })
+		expect(stop.ok && stop.session.state).toBe('stopped')
+		expect(stop.ok && stop.session.startedAt).toBeUndefined()
+		expect(stop.ok && stop.session.endedAt).toBeDefined()
+		expect(instance.snapshot(session.session.id)?.converging).toBeFalse()
+		expect(instance.remove(created.id)).toEqual({ ok: true })
+	})
 })
 
 describe('sessions', () => {

@@ -689,8 +689,12 @@ export class SequencerRuntime {
 		const events = reduction.outcomes.map<SequencerEventDraft>((it) => ({ type: 'policyApplied', detail: it.noop === undefined ? `${it.intent.kind} accepted` : `${it.intent.kind} did nothing: ${SEQUENCER_INTENT_NOOP_DETAIL[it.noop]}` }))
 
 		if (outcome.effect === 'stop') {
-			// The stop path already persists the desired state, so committing it here too would write it twice.
-			const session = active === undefined ? this.#commitControl(stored, { desiredState: 'stopped', events }) : (this.#commitBestEffort(active, { events }), await this.stop(sessionId))
+			// A session nobody is executing ends here and now: there is no action to settle, nothing to cancel and
+			// no reservation to give back, so recording only the desire would leave it non-terminal forever — the
+			// state a session created and never started would otherwise be stuck in, which is also what keeps its
+			// definition undeletable. The stop path of a running session already persists the desired state, so
+			// committing it here too would write it twice.
+			const session = active === undefined ? this.#commitControl(stored, { state: 'stopped', desiredState: 'stopped', events: [...events, { type: 'stateChanged', state: 'stopped' }] }) : (this.#commitBestEffort(active, { events }), await this.stop(sessionId))
 
 			return { ok: true, effect: outcome.effect, noop: outcome.noop, session: session ?? stored }
 		}
@@ -704,8 +708,8 @@ export class SequencerRuntime {
 	// Applies one control change to a session this runtime is not executing, under the revision the store
 	// currently holds. Nothing else writes such a session, so a mismatch is not retried: it means a second
 	// writer exists, and the command is reported as it was stored rather than forced over the other one.
-	#commitControl(stored: SequencerSession, change: { readonly desiredState?: SequencerDesiredState; readonly events: readonly SequencerEventDraft[] }) {
-		const result = this.#store.commit({ sessionId: stored.id, expectedRevision: stored.revision, desiredState: change.desiredState, events: change.events })
+	#commitControl(stored: SequencerSession, change: { readonly state?: SequencerSessionState; readonly desiredState?: SequencerDesiredState; readonly events: readonly SequencerEventDraft[] }) {
+		const result = this.#store.commit({ sessionId: stored.id, expectedRevision: stored.revision, state: change.state, desiredState: change.desiredState, events: change.events })
 
 		if (!result.ok) {
 			console.error('sequencer control commit refused:', stored.id, result.reason)

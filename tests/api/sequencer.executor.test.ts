@@ -47,7 +47,7 @@ interface Harness {
 	readonly host: SequencerExecutorHost
 	readonly executed: Executed[]
 	readonly events: SequencerEventDraft[]
-	readonly artifacts: SequencerArtifact[]
+	readonly artifacts: () => readonly SequencerArtifact[]
 	readonly controller: AbortController
 	desired: SequencerDesiredState
 }
@@ -59,9 +59,13 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 	const scope = coordinator.reservedScope((reserved as { readonly reservation: ResourceReservation }).reservation)
 	const executed: Executed[] = []
 	const events: SequencerEventDraft[] = []
-	const artifacts: SequencerArtifact[] = []
+	const durable = new Map<string, SequencerArtifact>()
+	const staged: SequencerArtifact[] = []
 	const controller = new AbortController()
 	let sequence = 0
+
+	const store = (artifact: SequencerArtifact) => durable.set(`${artifact.logicalSlotId}#${artifact.attempt}`, artifact)
+	const artifacts = () => [...durable.values()]
 
 	const handler = (type: string): AnySequencerActionHandler => ({
 		type,
@@ -71,11 +75,15 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 		execute: async (context, configuration) => {
 			executed.push({ nodeId: context.nodeId, attempt: context.attempt, slot: context.frame })
 
-			if (context.frame !== undefined) {
-				context.artifact({ logicalSlotId: context.frame.logicalSlotId, attempt: context.attempt, status: 'committed', path: context.frame.path })
-			}
+			if (context.frame === undefined) return execute === undefined ? { type: 'completed', value: undefined } : await execute(context, configuration)
 
-			return execute === undefined ? { type: 'completed', value: undefined } : await execute(context, configuration)
+			context.artifact({ logicalSlotId: context.frame.logicalSlotId, attempt: context.attempt, status: 'pending' })
+
+			const result = execute === undefined ? ({ type: 'completed', value: undefined } as SequencerActionResult<unknown>) : await execute(context, configuration)
+
+			context.artifact({ logicalSlotId: context.frame.logicalSlotId, attempt: context.attempt, status: result.type === 'completed' ? 'committed' : 'rejected', path: context.frame.path })
+
+			return result
 		},
 	})
 
@@ -103,15 +111,23 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 				now: Date.now,
 				request: () => undefined,
 				progress: () => undefined,
-				artifact: (draft: SequencerArtifactDraft) => void artifacts.push({ ...draft, sessionId: 'session-1', createdAt: sequence++, updatedAt: Date.now() }),
+				artifact: (draft: SequencerArtifactDraft) => {
+					const artifact: SequencerArtifact = { ...draft, sessionId: 'session-1', createdAt: sequence++, updatedAt: Date.now() }
+					if (draft.status === 'pending') store(artifact)
+					else staged.push(artifact)
+				},
 				auxiliary: () => undefined,
 				checkpoint: {} as SequencerCheckpoint,
 				frame: frameSlot,
 			}),
 			observe: () => ({}),
 			desiredState: () => state.desired,
-			slotAttempt: (logicalSlotId) => sequencerSlotAttempt(artifacts, logicalSlotId),
-			commit: (_, drafts) => void events.push(...drafts),
+			slotAttempt: (logicalSlotId) => sequencerSlotAttempt(artifacts(), logicalSlotId),
+			commit: (_, drafts) => {
+				events.push(...drafts)
+				for (const artifact of staged) store(artifact)
+				staged.length = 0
+			},
 			delay: () => Promise.resolve(),
 		},
 	}
@@ -134,7 +150,7 @@ describe('plan walk', () => {
 		expect(frames.map((it) => it.slot!.ordinal)).toEqual([0, 1])
 		expect(frames.map((it) => it.attempt)).toEqual([0, 0])
 		expect(new Set(frames.map((it) => it.slot!.path)).size).toBe(2)
-		expect(state.artifacts).toHaveLength(2)
+		expect(state.artifacts()).toHaveLength(2)
 		expect(outcome.capture.m42?.cycle).toBe(1)
 		expect(outcome.capture.m42?.groups).toBeEmpty()
 	})
@@ -180,6 +196,18 @@ describe('plan walk', () => {
 		expect(frames.map((it) => it.attempt)).toEqual([0, 1, 0])
 		expect(frames[0].slot!.logicalSlotId).toBe(frames[1].slot!.logicalSlotId)
 		expect(frames[0].slot!.path).not.toBe(frames[1].slot!.path)
+	})
+
+	test('exhausts the attempt window of a slot whose every exposure fails', async () => {
+		const state = harness(planOf(), (context) => (context.frame === undefined ? Promise.resolve({ type: 'completed', value: undefined }) : Promise.resolve({ type: 'retryableFailure', reason: 'commandFailed', detail: 'the camera did not answer' })))
+		const outcome = await runSequencerPlan(state.host)
+		const frames = state.executed.filter((it) => it.slot !== undefined)
+
+		expect(outcome.terminal.state).toBe('failed')
+		expect(outcome.terminal.failure).toEqual({ reason: 'commandFailed', detail: 'the camera did not answer' })
+		expect(frames).toHaveLength(3)
+		expect(frames.map((it) => it.attempt)).toEqual([0, 1, 2])
+		expect(new Set(frames.map((it) => it.slot!.path)).size).toBe(3)
 	})
 
 	test('ends as stopped when the operator stops it between two frames', async () => {

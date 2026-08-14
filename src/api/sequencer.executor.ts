@@ -641,16 +641,20 @@ async function runExposureGuard(execution: SequencerExecution, policies: Sequenc
 // Waits for the cadence boundary and exposes the selected frame, spending the attempts of the slot the failure
 // policy allows it.
 //
-// The attempt is physical and read back from the artifact registry before every exposure: it is what names the
-// file, and deriving it from a counter here would let a resume overwrite the attempt a crash left behind.
+// The attempt is physical: it is what names the file. The first one of the slot is read back from the artifact
+// registry, because a resume must expose past whatever a crash left behind rather than over it. Every retry
+// then advances from the decision, and deliberately does not read the registry again — the record of the
+// attempt that just failed is only staged until the next commit, so a second read would answer with the same
+// number, hand the retry the same file name, and leave the attempt window measuring an attempt that never
+// moved, which is a slot that retries forever on a budget it can never spend.
 async function runExposure(execution: SequencerExecution, targetId: string, loop: SequencerPlanLoop, node: SequencerPlanAction, configuration: SequencerCapture, selection: FrameSelection): Promise<SequencerNodeOutcome> {
 	const { host } = execution
 	const { group, cycle, ordinal } = selection
 	const logicalSlotId = sequencerLogicalSlotId(group.nodeId, group.id, cycle, ordinal)
+	let attempt = host.slotAttempt(logicalSlotId)
 
 	for (;;) {
 		const boundary = sequencerCadenceBoundary(execution.cadence, { delay: group.delay, settle: configuration.settle })
-		const attempt = host.slotAttempt(logicalSlotId)
 		const held = await waitForCadenceBoundary(host.context(node.id, attempt, host.signal), boundary)
 
 		if (held.type !== 'completed') return held.type === 'pause' ? { kind: 'pause' } : { kind: 'stop' }
@@ -686,6 +690,7 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 		switch (decision.kind) {
 			case 'retry':
 				await host.delay(decision.delay, host.signal)
+				attempt = decision.attempt
 				continue
 			case 'abandon':
 				execution.capture = abandonSlot(execution.capture, targetId, group)

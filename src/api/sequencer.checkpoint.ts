@@ -102,7 +102,7 @@ export class SequencerCheckpointKeeper {
 	reenter(nodeIds: readonly string[]) {
 		const reopened = new Set(nodeIds)
 		const completed = this.#checkpoint.completed.filter((nodeId) => !reopened.has(nodeId))
-		const attempts: Record<string, number> = {}
+		const attempts: Record<string, number> = Object.create(null)
 
 		for (const nodeId in this.#checkpoint.attempts) {
 			if (!reopened.has(nodeId)) attempts[nodeId] = this.#checkpoint.attempts[nodeId]!

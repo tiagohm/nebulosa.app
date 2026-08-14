@@ -331,6 +331,10 @@ interface ActiveSession {
 	// transition that ends the session is committed, because there is no action in the foreground of a session
 	// that just reached its last state.
 	activity?: SequencerActivityObservation
+	// Release of the hold the walk is sitting in, present only while the session is actually paused. It is
+	// resolved by the command that takes the desired state off `paused` and by the abort that ends the session,
+	// so a stop never waits on an operator who is no longer there.
+	resume?: PromiseWithResolvers<void>
 	// Last revision this runtime committed, used as the optimistic guard of the next commit.
 	revision: number
 	// Set once finalization began, so a stop arriving during it does not start a second one.
@@ -692,9 +696,10 @@ export class SequencerRuntime {
 	//
 	// A pause records the state the session converges to and does not itself stop anything: the walk observes
 	// the desired state at the boundaries §11.3 declares — before a frame and, under the immediate mode, at the
-	// end of the exposure that is running — so a paused session is one whose desired state says `paused` while
-	// its state still says `running` until the walk reaches one of them. A stop is different and is carried
-	// through here, because the stop path is the one that also cancels and releases.
+	// end of the exposure that is running — and holds there, keeping its cursor, its progress and its
+	// reservation until a resume or a stop arrives. The state therefore still says `running` between the command
+	// and the boundary the walk reaches. A stop is different and is carried through here, because the stop path
+	// is the one that also cancels and releases.
 	async control(sessionId: string, kind: 'pause' | 'resume' | 'stop'): Promise<SequencerControlResult> {
 		const stored = this.#store.session(sessionId)
 
@@ -725,6 +730,10 @@ export class SequencerRuntime {
 
 		const change = { desiredState: outcome.effect === 'none' ? undefined : reduction.desiredState, events }
 		const session = active === undefined ? this.#commitControl(stored, change) : this.#commitBestEffort(active, change)
+
+		// The desired state is written before the hold is released, so the walk that wakes up reads the state
+		// this command produced and not the one it was holding on.
+		if (reduction.desiredState !== 'paused') active?.resume?.resolve()
 
 		return { ok: true, effect: outcome.effect, noop: outcome.noop, session: session ?? stored }
 	}
@@ -782,9 +791,53 @@ export class SequencerRuntime {
 			observe: (filter) => this.#observation(active, filter),
 			desiredState: () => this.#store.session(active.id)?.desiredState ?? 'running',
 			slotAttempt: (logicalSlotId) => sequencerSlotAttempt(this.#store.artifacts(active.id), logicalSlotId),
+			hold: (nodeId) => this.#hold(active, nodeId),
 			commit: (checkpoint, events) => void this.#commitBestEffort(active, { checkpoint, events }),
 			delay: async (delay, signal) => void (await abortableDelay(delay, signal)),
 		}
+	}
+
+	// Holds the walk at a safe point for as long as the session is meant to stay paused, and answers with the
+	// state the operator converged it to.
+	//
+	// This is where a pause becomes a real one. The desired state is re-read here rather than trusted from the
+	// caller, because the walk decided to hold at the boundary and the operator may have resumed in between; a
+	// session no longer wanting to pause is therefore not held at all. Nothing is released while it holds — the
+	// reservation of a paused session is what makes the resume possible (§11.3) — and the state is published as
+	// `paused` so a reader sees a session that is waiting rather than one that is merely slow.
+	//
+	// The abort of the session releases the hold as surely as a resume does, and it has to: `stop` waits for the
+	// walk to unwind before it reports, so a hold that only listened for the operator would deadlock the very
+	// command meant to end it. An abort answers `stopped`, which is what the walk carries into the finalization.
+	async #hold(active: ActiveSession, nodeId: string): Promise<SequencerDesiredState> {
+		const desired = this.#store.session(active.id)?.desiredState ?? 'running'
+
+		if (desired !== 'paused') return desired
+		if (active.controller.signal.aborted) return 'stopped'
+
+		this.#commitBestEffort(active, { state: 'paused', events: [{ type: 'stateChanged', state: 'paused', nodeId }] })
+
+		const resume = Promise.withResolvers<void>()
+		const release = () => resume.resolve()
+
+		active.resume = resume
+		active.controller.signal.addEventListener('abort', release, { once: true })
+
+		try {
+			await resume.promise
+		} finally {
+			active.controller.signal.removeEventListener('abort', release)
+			active.resume = undefined
+		}
+
+		// Only an explicit resume puts the session back on its feet. Anything else — a stop, the process ending,
+		// a store that lost the session — ends it, and reporting it as running would restart a walk whose devices
+		// are already being taken away.
+		if ((this.#store.session(active.id)?.desiredState ?? 'stopped') !== 'running') return 'stopped'
+
+		this.#commitBestEffort(active, { state: 'running', events: [{ type: 'stateChanged', state: 'running', nodeId }] })
+
+		return 'running'
 	}
 
 	// Builds the execution context of one node and puts that node in the foreground of the session.

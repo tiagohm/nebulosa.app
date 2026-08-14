@@ -23,7 +23,7 @@ import type { SequencerPipelineReport, SequencerPipelineStep } from './sequencer
 import { sequencerFailurePolicy } from './sequencer.policy'
 import { runFramePreparation } from './sequencer.prepare'
 import type { SequencerPreparationServices } from './sequencer.prepare'
-import { abandonSlot, acceptFrame, advanceCaptureCycle, SEQUENCER_INITIAL_CAPTURE_PROGRESS } from './sequencer.progress'
+import { abandonSlot, acceptFrame, advanceCaptureCycle, grantAttemptWindow, SEQUENCER_INITIAL_CAPTURE_PROGRESS } from './sequencer.progress'
 import type { AnySequencerActionHandler, SequencerActionContext, SequencerActionResult, SequencerFrameSlot } from './sequencer.registry'
 import { frameScheduler, targetProgressOf } from './sequencer.scheduler'
 import type { FrameSelection } from './sequencer.scheduler'
@@ -114,6 +114,11 @@ export interface SequencerExecutorHost {
 	readonly desiredState: () => SequencerDesiredState
 	// Next physical attempt of a logical slot, derived from the artifact registry.
 	readonly slotAttempt: (logicalSlotId: string) => number
+	// Holds the walk at the safe point `nodeId` was reached on, publishing the session as `paused` for as long
+	// as the hold lasts, and resolves with the state the operator converged it to: `running` when it was
+	// resumed, `stopped` when it was stopped or the process is ending. Nothing is released while it holds —
+	// the reservation of a paused session is what makes the resume possible (§11.3).
+	readonly hold: (nodeId: string) => Promise<SequencerDesiredState>
 	// Persists the checkpoint together with the events produced since the last write. It is best-effort: a
 	// refused write leaves the checkpoint dirty and the next one carries it.
 	readonly commit: (checkpoint: SequencerCheckpoint, events: readonly SequencerEventDraft[]) => void
@@ -407,7 +412,33 @@ function decisionOutcome(decision: ReturnType<typeof sequencerFailurePolicy>, re
 	}
 }
 
+// Holds the walk until the operator resumes or stops the session, and reports what the walk does next.
+//
+// A pause is not an ending: the session keeps its reservation, its cursor and its progress, and the whole
+// point of holding here rather than returning is that the walk still exists to be resumed. `continue` means it
+// was resumed and the caller carries on from where it held; `stop` means the operator stopped it instead, or
+// the process is ending, and the terminal pipeline runs.
+//
+// The settle is re-anchored on the resume rather than on the pause: a session can sit paused for an hour, and
+// the first frame after it starts from a mount that has just been told to track again, so the resume pays the
+// spacing a movement pays. How much of it is actually spent is the cadence boundary's decision, and it is
+// usually none.
+async function holdWalk(execution: SequencerExecution, nodeId: string): Promise<SequencerNodeOutcome> {
+	const converged = await execution.host.hold(nodeId)
+
+	if (converged === 'stopped') return { kind: 'stop' }
+
+	execution.cadence = sequencerSettleAnchored(execution.cadence, execution.host.now())
+
+	return SEQUENCER_CONTINUE
+}
+
 // Primary outcome of the session, from what the target block ended as.
+//
+// A pause does not reach here: every site that can produce one holds the walk instead, so the only way the
+// walk unwinds to a terminal outcome is a stop, a failure, or the plan running out of work. The branch is kept
+// because the outcome union still carries the kind, and a paused session that somehow unwound is a stopped one
+// — never a completed one.
 function outcomeOf(outcome: SequencerNodeOutcome): SequencerPrimaryOutcome {
 	switch (outcome.kind) {
 		case 'continue':
@@ -446,12 +477,27 @@ async function runTargetBlock(execution: SequencerExecution): Promise<SequencerN
 
 	if (block === undefined) return { kind: 'fail', reason: 'unexpectedState', detail: 'the plan carries no target block' }
 
-	for (const node of actionsOf(block)) {
+	const nodes = actionsOf(block)
+	let index = 0
+
+	while (index < nodes.length) {
+		const node = nodes[index]
 		const { outcome } = await runActionNode(execution, node, execution.host.signal)
+
+		if (outcome.kind === 'pause') {
+			const held = await holdWalk(execution, node.id)
+
+			if (held.kind !== 'continue') return held
+
+			// The node that asked for the hold is the one that runs again. It never reached a terminal decision,
+			// and running what comes after it would point at a target the slew never finished reaching.
+			continue
+		}
 
 		if (outcome.kind !== 'continue') return outcome
 
 		execution.cadence = sequencerSettleAnchored(execution.cadence, execution.host.now())
+		index++
 	}
 
 	const loop = loopOf(block)
@@ -479,8 +525,17 @@ async function runCaptureLoop(execution: SequencerExecution, targetId: string, l
 		for (;;) {
 			const convergence = sequencerConvergence(execution.host.desiredState(), execution.host.plan.execution, 'beforeFrame')
 
-			if (convergence === 'pause') return { kind: 'pause' }
 			if (convergence === 'stop') return { kind: 'stop' }
+
+			if (convergence === 'pause') {
+				const held = await holdWalk(execution, loop.id)
+
+				if (held.kind !== 'continue') return held
+
+				// Nothing of the cursor moved while it held, so the boundary is evaluated again: the frame the
+				// scheduler picks after the resume is the one it would have picked without the pause.
+				continue
+			}
 
 			const instant = execution.host.now()
 			const reading = execution.host.observe()
@@ -489,6 +544,17 @@ async function runCaptureLoop(execution: SequencerExecution, targetId: string, l
 			if (selection === undefined) break
 
 			const outcome = await runSafePoint(execution, targetId, loop, selection, instant)
+
+			if (outcome.kind === 'pause') {
+				const held = await holdWalk(execution, selection.group.nodeId)
+
+				if (held.kind !== 'continue') return held
+
+				// The slot the safe point paused on was never filled, so the scheduler is asked again and hands
+				// back the same one: the retake starts from the observatory reading of the moment it resumes,
+				// which is the only reading the decisions after an arbitrarily long hold may be made on.
+				continue
+			}
 
 			if (outcome.kind !== 'continue') return outcome
 		}
@@ -792,8 +858,23 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 				execution.keeper.capture(execution.capture)
 				await checkpointDue(execution, 'frame')
 				return SEQUENCER_CONTINUE
-			case 'hold':
-				return { kind: 'pause' }
+			case 'hold': {
+				const resumed = await holdWalk(execution, node.id)
+
+				if (resumed.kind !== 'continue') return resumed
+
+				// A slot held because it spent its budget gets the window restarted under it, since the operator
+				// resuming is the judgement the exhaustion was waiting for. Without it the next failure would be
+				// weighed against attempts already counted and hold again immediately, which is a resume that
+				// resumes nothing.
+				if (decision.exhausted) {
+					execution.capture = grantAttemptWindow(execution.capture, targetId, group.id, attempt + 1)
+					execution.keeper.capture(execution.capture)
+				}
+
+				attempt++
+				continue
+			}
 			case 'stop':
 				return { kind: 'stop' }
 			default:

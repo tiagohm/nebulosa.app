@@ -647,6 +647,73 @@ describe('sequencer runtime', () => {
 		expect(instance.activeSessionId).toBeUndefined()
 	})
 
+	test('holds a paused session without releasing anything and runs the node again on the resume', async () => {
+		let held = false
+
+		const {
+			runtime: instance,
+			store,
+			arbiter,
+		} = runtime(
+			exposeHandler(async (context, configuration) => {
+				if (held) return { type: 'completed', value: configuration.exposureTime }
+
+				held = true
+
+				await instance.control(context.sessionId, 'pause')
+
+				return { type: 'pause' }
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		while (store.session(created.id)?.state !== 'paused') await Bun.sleep(1)
+
+		expect(arbiter.availability(CAMERA_KEY)).toBe('reserved')
+
+		await instance.control(created.id, 'resume')
+
+		const session = await instance.settled(created.id)
+
+		expect(session?.state).toBe('completed')
+		expect(
+			store
+				.events(created.id)
+				.filter((event) => event.type === 'stateChanged')
+				.map((event) => event.state),
+		).toEqual(['running', 'paused', 'running', 'finalizing', 'completed'])
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+	})
+
+	test('ends a held session when the operator stops it instead of resuming it', async () => {
+		const {
+			runtime: instance,
+			store,
+			arbiter,
+		} = runtime(
+			exposeHandler(async (context) => {
+				await instance.control(context.sessionId, 'pause')
+				return { type: 'pause' }
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		while (store.session(created.id)?.state !== 'paused') await Bun.sleep(1)
+
+		const session = await instance.stop(created.id)
+
+		expect(session?.state).toBe('stopped')
+		expect(session?.desiredState).toBe('stopped')
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+		expect(instance.activeSessionId).toBeUndefined()
+	})
+
 	test('converges the desired state of a session that stops while finalizing', async () => {
 		const cleaning = Promise.withResolvers<void>()
 		const release = Promise.withResolvers<void>()

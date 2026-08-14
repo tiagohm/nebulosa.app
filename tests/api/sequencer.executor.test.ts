@@ -52,8 +52,10 @@ interface Harness {
 	readonly events: SequencerEventDraft[]
 	readonly artifacts: () => readonly SequencerArtifact[]
 	readonly controller: AbortController
+	readonly holds: string[]
 	desired: SequencerDesiredState
 	observation: SequencerSafePointObservation
+	onHold?: (nodeId: string) => SequencerDesiredState
 }
 
 function guidingServices(loop: () => OperationResult<unknown>): SequencerGuidingServices {
@@ -103,11 +105,14 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 		},
 	})
 
+	const holds: string[] = []
+
 	const state: Harness = {
 		executed,
 		events,
 		artifacts,
 		controller,
+		holds,
 		desired: 'running',
 		observation: {},
 		host: {
@@ -142,6 +147,11 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 			observe: () => state.observation,
 			desiredState: () => state.desired,
 			slotAttempt: (logicalSlotId) => sequencerSlotAttempt(artifacts(), logicalSlotId),
+			hold: (nodeId) => {
+				holds.push(nodeId)
+				state.desired = state.onHold?.(nodeId) ?? 'stopped'
+				return Promise.resolve(state.desired)
+			},
 			commit: (_, drafts) => {
 				events.push(...drafts)
 				for (const artifact of staged) store(artifact)
@@ -304,6 +314,56 @@ describe('plan walk', () => {
 
 		expect(outcome.terminal.state).toBe('stopped')
 		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(1)
+	})
+
+	test('holds the walk on an operator pause and takes the remaining frames on the resume', async () => {
+		let paused = false
+		const state: Harness = harness(planOf(), (context) => {
+			if (context.frame !== undefined && !paused) {
+				paused = true
+				state.desired = 'paused'
+			}
+
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+
+		state.onHold = () => 'running'
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(state.holds).toHaveLength(1)
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
+	})
+
+	test('ends the session when the pause it is holding on is stopped', async () => {
+		const state: Harness = harness(planOf(), (context) => {
+			if (context.frame !== undefined) state.desired = 'paused'
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('stopped')
+		expect(state.holds).toHaveLength(1)
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(1)
+	})
+
+	test('grants a fresh attempt window to a slot resumed after it exhausted the first one', async () => {
+		const base = definition()
+		const plan = planOf({ capture: { ...base.capture, retry: { ...base.capture.retry, onExhausted: 'pause' } } })
+		const state: Harness = harness(plan, (context) => (context.frame === undefined ? Promise.resolve({ type: 'completed', value: undefined }) : Promise.resolve({ type: 'retryableFailure', reason: 'commandFailed', detail: 'the camera did not answer' })))
+		let resumed = 0
+
+		state.onHold = () => (resumed++ === 0 ? 'running' : 'stopped')
+
+		const outcome = await runSequencerPlan(state.host)
+		const frames = state.executed.filter((it) => it.slot !== undefined)
+
+		expect(outcome.terminal.state).toBe('stopped')
+		expect(state.holds).toHaveLength(2)
+		expect(frames.map((it) => it.attempt)).toEqual([0, 1, 2, 3, 4, 5])
+		expect(new Set(frames.map((it) => it.slot!.path)).size).toBe(6)
 	})
 
 	test('fails the session when a target action reports a fatal failure', async () => {

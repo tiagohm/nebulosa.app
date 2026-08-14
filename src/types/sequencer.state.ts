@@ -1,4 +1,6 @@
+import type { FrameType } from 'nebulosa/src/devices/indi/device'
 import type { OperationFailureReason } from './orchestration'
+import type { SequencerDeviceRole } from './sequencer'
 
 // Durable execution state of a sequencer session: what the runtime persists, what it reloads after a
 // restart, and what the UI reads. Configuration lives in `sequencer.ts` and never appears here.
@@ -249,4 +251,240 @@ export interface SequencerArtifact extends SequencerArtifactDraft {
 	readonly createdAt: number
 	// Instant of the last status change.
 	readonly updatedAt: number
+}
+
+// Everything below describes what the UI observes, and nothing below is a source of truth: the snapshot is
+// derived from the runtime state and the checkpoint on every tick, and no execution decision reads it (§15.1).
+// It is therefore not persisted and carries no revision of its own beyond the one of the session it describes.
+
+// One declared device role and what it resolved to when the session started.
+export interface SequencerDeviceSnapshot {
+	// Role the definition declared.
+	readonly role: SequencerDeviceRole
+	// Device id as written in the definition.
+	readonly declaredId: string
+	// Device actually resolved for the session, absent while the role could not be resolved against the live
+	// devices. The declared id is kept either way, because "the definition asked for this and it is not here"
+	// is what the operator has to read.
+	readonly deviceId?: string
+}
+
+// Target the session is executing, which in V1 is always the only one.
+export interface SequencerTargetSnapshot {
+	// Target id as declared, which is also the segment of every node below the target block.
+	readonly id: string
+	// Human-readable label of the target.
+	readonly name: string
+}
+
+// Exposure the sensor is integrating right now.
+//
+// It is a field of the capture block rather than one more foreground action on purpose: "capture is idle" is
+// the absence of an exposure, and the UI has to tell the two apart without inspecting action types (§15.1).
+export interface SequencerExposureSnapshot {
+	// Instant the exposure started, in milliseconds since the Unix epoch.
+	readonly startedAt: number
+	// Time already integrated, in seconds, clamped to `total`.
+	readonly elapsed: number
+	// Requested duration of the exposure, in seconds.
+	readonly total: number
+	// Time left, in seconds, `0` once the elapsed time reached the total. The sensor may still be reading out,
+	// which is why reaching zero does not remove the exposure from the snapshot.
+	readonly remaining: number
+}
+
+// Progress of one frame group of the current cycle, joining the plan targets with the checkpoint counters.
+//
+// `abandoned` and `slotLimit` are reported alongside the outcome counters because a degraded completion must
+// not appear only in the terminal state: the operator has to watch the margin being spent while intervening
+// is still possible (§15.1).
+export interface SequencerGroupSnapshot {
+	// Frame group id within the plan.
+	readonly id: string
+	// Human-readable label of the group, absent when the definition declared none.
+	readonly name?: string
+	// Classification of the frames the group captures.
+	readonly frameType: FrameType
+	// Exposure duration of every frame of the group, in seconds.
+	readonly exposureTime: number
+	// Filter the group captures through, absent when the session commands no wheel.
+	readonly filter?: string
+	// Slots already emitted in this cycle, which is also the ordinal of the next one.
+	readonly cursor: number
+	// Frames accepted in this cycle.
+	readonly accepted: number
+	// Frames physically completed in this cycle.
+	readonly captured: number
+	// Frames discarded in this cycle.
+	readonly rejected: number
+	// Slots closed without an accepted frame after exhausting their attempt window.
+	readonly abandoned: number
+	// Slots the group needs to reach its target in one cycle.
+	readonly requiredSlots: number
+	// Hard ceiling on the slots the scheduler may emit for the group in one cycle.
+	readonly slotLimit: number
+	// Accepted exposure time accumulated in this cycle, in seconds.
+	readonly integration: number
+	// Accepted exposure time of one cycle when every required slot is accepted, in seconds.
+	readonly projectedIntegration: number
+}
+
+// Capture block of the snapshot: where the session is inside the plan and how much of it is done.
+export interface SequencerCaptureSnapshot {
+	// Cycle of `repeat` being executed, starting at 0.
+	readonly cycle: number
+	// Group the scheduler selected, absent before the first frame and after the last.
+	readonly groupId?: string
+	// Exposure in progress, absent whenever the sensor is not integrating, which is what makes the capture
+	// idle even while a foreground action runs.
+	readonly exposure?: SequencerExposureSnapshot
+	// Every group of the current target, in plan order.
+	readonly groups: readonly SequencerGroupSnapshot[]
+	// Frames accepted across every group of the current cycle.
+	readonly accepted: number
+	// Slots every group of one cycle requires.
+	readonly requiredSlots: number
+	// Accepted exposure time accumulated in this cycle, in seconds.
+	readonly integration: number
+	// Accepted exposure time of one full cycle, in seconds.
+	readonly projectedIntegration: number
+	// Estimated work left, in seconds, absent while no plan backs the session. It is an estimate and never a
+	// firm forecast: it projects the required slots still to be accepted against the exposure time plus the
+	// measured average overhead, ignores flip and astronomical waits, counts no trigger it cannot predict, and
+	// is recomputed on every tick rather than persisted (§15.1).
+	readonly remaining?: number
+	// Instant the session is estimated to finish, in milliseconds since the Unix epoch, absent under the same
+	// conditions as `remaining` and carrying the same caveats.
+	readonly estimatedCompletion?: number
+	// Moving average of the interval between the end of one exposure and the start of the next, in seconds,
+	// absent until two exposures have been observed. It is measured and never configured, which is why a
+	// session that has just started estimates optimistically and converges as triggers actually run.
+	readonly overhead?: number
+}
+
+// Why a session is standing still with a known end, such as the flip window of §8.4.
+//
+// A long wait is never hidden behind the completion estimate: it is reported as the foreground action, with
+// the instant it ends and the reason it exists, because a frozen bar with no explanation is the worst thing
+// an operator can find at three in the morning (§15.1).
+export interface SequencerWaitSnapshot {
+	// Why the session is waiting, phrased for the operator.
+	readonly reason: string
+	// Instant the wait is expected to end, in milliseconds since the Unix epoch, absent when the condition is
+	// not a clock — a resource that has to come back, typically.
+	readonly until?: number
+}
+
+// What an action of the snapshot is doing right now.
+// - running: the action is executing.
+// - waiting: the action is standing still on a condition, described by its `wait`.
+// - retrying: the attempt failed and the next one has not started.
+// - cancelling: a cancellation was requested and the cleanups are still running.
+export type SequencerActivityState = 'running' | 'waiting' | 'retrying' | 'cancelling'
+
+// One action the session is running, in foreground or in background.
+export interface SequencerActivitySnapshot {
+	// Plan node the action belongs to.
+	readonly nodeId: string
+	// Block type of the node, as registered. The UI reads it to tell a trigger — autofocus, dither, flip,
+	// recentering — from the capture itself.
+	readonly type: string
+	// Human-readable label of the node, falling back to its type when the plan declares none.
+	readonly name: string
+	// What the action is doing.
+	readonly state: SequencerActivityState
+	// Attempt in progress, starting at 1, so a retry is visible before it fails again.
+	readonly attempt: number
+	// Fraction of the action already done, in `0..1`, absent when the action cannot report one.
+	readonly progress?: number
+	// Short human-readable detail reported by the handler.
+	readonly detail?: string
+	// Instant the action started, in milliseconds since the Unix epoch.
+	readonly startedAt: number
+	// Condition the action is standing still on, present exactly when the state is `waiting`.
+	readonly wait?: SequencerWaitSnapshot
+}
+
+// Safe-point triggers the snapshot reports the readiness of.
+export type SequencerTriggerName = 'autofocus' | 'dither' | 'driftCheck' | 'meridianFlip'
+
+// Whether one trigger would fire at the next safe point, and how far it is from firing.
+//
+// The two distances are reported separately, and both are absent for a trigger whose condition is neither a
+// frame count nor a clock, because the honest answer there is "when it happens", not a number.
+export interface SequencerTriggerSnapshot {
+	// Trigger being reported.
+	readonly name: SequencerTriggerName
+	// Whether its condition already holds, so it runs at the next safe point.
+	readonly armed: boolean
+	// Frames still to be accepted before the frame-count condition holds, absent when the trigger states none.
+	readonly frames?: number
+	// Time left before the elapsed-time condition holds, in seconds, absent when the trigger states none.
+	readonly elapsed?: number
+}
+
+// One monitor of the session. V1 declares no monitors and the list is always empty; the field exists so the
+// UI is written against the final shape rather than against a value that appears later.
+export interface SequencerMonitorSnapshot {
+	// Monitor id.
+	readonly id: string
+	// Human-readable label.
+	readonly name: string
+	// Whether the condition the monitor watches currently holds.
+	readonly triggered: boolean
+	// Short human-readable detail of the last reading.
+	readonly detail?: string
+}
+
+// The single value that describes everything the UI shows (§15.1).
+export interface SequencerSessionSnapshot {
+	// Session being described.
+	readonly id: string
+	// Definition it executes.
+	readonly definitionId: string
+	// Definition revision it snapshotted at creation.
+	readonly definitionRevision: number
+	// Revision of the session record this snapshot was derived from, which is what makes two snapshots of the
+	// same session comparable.
+	readonly revision: number
+	// Current lifecycle state.
+	readonly state: SequencerSessionState
+	// State the runtime is converging to.
+	readonly desiredState: SequencerDesiredState
+	// Whether the current state differs from the desired one, which is the "converging" the UI shows instead
+	// of the `pausing` and `stopping` states the state machine deliberately does not have.
+	readonly converging: boolean
+	// Cause of a failed session.
+	readonly failure?: SequencerFailure
+	// Instant the session record was created.
+	readonly createdAt: number
+	// Instant of the last committed change.
+	readonly updatedAt: number
+	// Instant the session started, absent while it never did.
+	readonly startedAt?: number
+	// Instant the session ended, absent while it has not.
+	readonly endedAt?: number
+	// Device roles the session declared and what they resolved to.
+	readonly devices: readonly SequencerDeviceSnapshot[]
+	// Target being executed, absent while no plan backs the session.
+	readonly target?: SequencerTargetSnapshot
+	// Capture progress, always present so the UI never branches on its absence.
+	readonly capture: SequencerCaptureSnapshot
+	// Action the UI shows, absent when nothing is running. With the serialized V1 runtime there is at most one.
+	readonly foreground?: SequencerActivitySnapshot
+	// Actions running alongside the foreground one. Empty in practice in V1, where background is telemetry
+	// only (§11.2).
+	readonly background: readonly SequencerActivitySnapshot[]
+	// Node the plan takes next, absent whenever it is not determinable.
+	readonly next?: string
+	// Readiness of every trigger the plan lowered.
+	readonly triggers: readonly SequencerTriggerSnapshot[]
+	// Monitors of the session, always empty in V1.
+	readonly monitors: readonly SequencerMonitorSnapshot[]
+	// Highest event sequence committed for the session, `0` when it has none. A client that reconnects asks
+	// for the events after the sequence it already holds instead of replaying the whole history.
+	readonly lastEventSequence: number
+	// Instant the snapshot was derived, in milliseconds since the Unix epoch. It is what makes the elapsed
+	// time of the exposure and the completion estimate readable as a reading taken at a known moment.
+	readonly timestamp: number
 }

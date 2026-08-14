@@ -1,6 +1,6 @@
 import type { FrameType } from 'nebulosa/src/devices/indi/device'
 import type { OperationFailureReason } from './orchestration'
-import type { SequencerDeviceRole } from './sequencer'
+import type { Sequencer, SequencerDeviceRole } from './sequencer'
 
 // Durable execution state of a sequencer session: what the runtime persists, what it reloads after a
 // restart, and what the UI reads. Configuration lives in `sequencer.ts` and never appears here.
@@ -34,6 +34,24 @@ export interface SequencerFailure {
 	readonly reason: OperationFailureReason
 	// Human-readable diagnostic, when the failing operation carried one.
 	readonly detail?: string
+}
+
+// Stored definition, which is the request contract plus what persistence assigns to it.
+//
+// The id and the revision are optional on the definition itself, because a definition being edited has not
+// been stored yet and has neither. A stored one always has both, so they are reported here as the total values
+// they are; the stored definition carries the same two, written from this record and never from the payload.
+export interface SequencerDefinitionRecord {
+	// Identifier assigned by persistence.
+	readonly id: string
+	// Revision of this version, starting at 1 and incremented by every update.
+	readonly revision: number
+	// Definition as stored, with its id and revision filled in.
+	readonly definition: Sequencer
+	// Instant the definition was first stored.
+	readonly createdAt: number
+	// Instant of the last update.
+	readonly updatedAt: number
 }
 
 // Persisted session record. `revision` is the optimistic-concurrency guard: every commit checks the

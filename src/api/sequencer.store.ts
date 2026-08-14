@@ -1,8 +1,14 @@
-import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEvent, SequencerEventDraft, SequencerFailure, SequencerSession, SequencerSessionState } from '#/sequencer.state'
+import type { Sequencer } from '#/sequencer'
+import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDefinitionRecord, SequencerDesiredState, SequencerEvent, SequencerEventDraft, SequencerFailure, SequencerSession, SequencerSessionState } from '#/sequencer.state'
+import { isSequencerTerminalState } from '#/sequencer.state'
 import { SEQUENCER_INITIAL_CAPTURE_PROGRESS } from './sequencer.progress'
 import { sequencerInitialTriggerAnchors } from './sequencer.trigger'
 
-// Persistence boundary of the sequencer: sessions, checkpoints, events, and artifacts.
+// Persistence boundary of the sequencer: definitions, sessions, checkpoints, events, and artifacts.
+//
+// Definitions are the one part with an ordinary CRUD shape, because they are edited rather than executed: a
+// write replaces the stored value and assigns the next revision. Everything about a session goes the other
+// way, through a single atomic commit.
 //
 // The store exposes exactly one write operation, `commit`, and it is deliberately the only one. A session
 // transition changes state, checkpoint, events, and artifacts together, and five separate writes would
@@ -72,8 +78,29 @@ export type SequencerCommitResult =
 			readonly detail?: string
 	  }
 
+// Why a definition could not be removed.
+// - unknownDefinition: no definition with that id exists.
+// - inUse: a non-terminal session executes it. The session snapshots the revision it runs (§5.5), but the
+//   artifact history references the definition by id, and deleting it under a running session would break
+//   the reading of that history.
+export type SequencerDefinitionRemovalFailure = 'unknownDefinition' | 'inUse'
+
+// Outcome of removing a definition.
+export type SequencerDefinitionRemoval = { readonly ok: true } | { readonly ok: false; readonly reason: SequencerDefinitionRemovalFailure; readonly sessionId?: string }
+
 // Durable state of the sequencer. Reads return stored snapshots; writes go through `commit`.
 export interface SequencerStore {
+	// Stores a new definition, assigning revision 1 and the id of the definition when it carries one. Returns
+	// undefined when a definition with that id already exists, which is a conflict and not an update.
+	createDefinition: (definition: Sequencer) => SequencerDefinitionRecord | undefined
+	// Replaces a stored definition, assigning the next revision. Returns undefined when the id is unknown.
+	updateDefinition: (id: string, definition: Sequencer) => SequencerDefinitionRecord | undefined
+	// Returns one definition, or undefined when it does not exist.
+	definition: (id: string) => SequencerDefinitionRecord | undefined
+	// Returns every definition, oldest first.
+	definitions: () => readonly SequencerDefinitionRecord[]
+	// Removes a definition, refusing while a non-terminal session executes it.
+	deleteDefinition: (id: string) => SequencerDefinitionRemoval
 	// Creates a session in `created`, with an empty checkpoint carrying the resolved handler versions.
 	createSession: (draft: SequencerSessionDraft) => SequencerSession
 	// Returns one session, or undefined when it does not exist.
@@ -100,6 +127,7 @@ interface SessionEntry {
 
 // In-memory implementation used by the V1 runtime, honoring the same contract a SQLite one would.
 export class InMemorySequencerStore implements SequencerStore {
+	readonly #definitions = new Map<string, SequencerDefinitionRecord>()
 	readonly #sessions = new Map<string, SessionEntry>()
 	// Wall-clock source, injectable so tests do not depend on real time.
 	readonly #now: () => number
@@ -107,6 +135,60 @@ export class InMemorySequencerStore implements SequencerStore {
 	// Builds a store over an optional clock; the default is the process wall clock.
 	constructor(now: () => number = Date.now) {
 		this.#now = now
+	}
+
+	createDefinition(definition: Sequencer) {
+		// A definition arriving without an id is a new one the editor never saved; one arriving with an id that
+		// is already stored is an update issued against the wrong verb, and silently overwriting it would lose
+		// the stored version with no revision to explain where it went.
+		const id = definition.id !== undefined && definition.id.length > 0 ? definition.id : Bun.randomUUIDv7()
+
+		if (this.#definitions.has(id)) return undefined
+
+		const timestamp = this.#now()
+		const record: SequencerDefinitionRecord = { id, revision: 1, definition: { ...structuredClone(definition), id, revision: 1 }, createdAt: timestamp, updatedAt: timestamp }
+
+		this.#definitions.set(id, record)
+
+		return record
+	}
+
+	updateDefinition(id: string, definition: Sequencer) {
+		const current = this.#definitions.get(id)
+
+		if (current === undefined) return undefined
+
+		// The revision is assigned by the store and never taken from the payload: it is what a session snapshots
+		// to prove which version it is executing, and a client that echoed a stale one back would make two
+		// different definitions claim the same revision.
+		const revision = current.revision + 1
+		const record: SequencerDefinitionRecord = { id, revision, definition: { ...structuredClone(definition), id, revision }, createdAt: current.createdAt, updatedAt: this.#now() }
+
+		this.#definitions.set(id, record)
+
+		return record
+	}
+
+	definition(id: string) {
+		return this.#definitions.get(id)
+	}
+
+	definitions(): readonly SequencerDefinitionRecord[] {
+		return this.#definitions.values().toArray()
+	}
+
+	deleteDefinition(id: string): SequencerDefinitionRemoval {
+		if (!this.#definitions.has(id)) return { ok: false, reason: 'unknownDefinition' }
+
+		for (const entry of this.#sessions.values()) {
+			const session = entry.session
+
+			if (session.definitionId === id && !isSequencerTerminalState(session.state)) return { ok: false, reason: 'inUse', sessionId: session.id }
+		}
+
+		this.#definitions.delete(id)
+
+		return { ok: true }
 	}
 
 	createSession(draft: SequencerSessionDraft): SequencerSession {

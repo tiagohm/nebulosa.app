@@ -339,8 +339,10 @@ interface ActiveSession {
 	// Device actually bound per role at start, which is what the session commands for its whole life.
 	readonly resolved: Readonly<Partial<Record<SequencerDeviceRole, string>>>
 	// Action being executed, as the runtime knows it. It is the live half of the snapshot, replaced whole on
-	// every progress report so a reader never observes a half-updated activity.
-	activity: SequencerActivityObservation
+	// every progress report so a reader never observes a half-updated activity. It is cleared before the
+	// transition that ends the session is committed, because there is no action in the foreground of a session
+	// that just reached its last state.
+	activity?: SequencerActivityObservation
 	// Last revision this runtime committed, used as the optimistic guard of the next commit.
 	revision: number
 	// Set once finalization began, so a stop arriving during it does not start a second one.
@@ -633,6 +635,10 @@ export class SequencerRuntime {
 		// one: whichever committed first would be overwritten by the other, and both would run the teardown.
 		active.finalizing = true
 
+		// The cancellation is the next thing that happens to the action, so the record of the interruption shows
+		// the session cancelling and not an action the process is about to take away.
+		if (active.activity !== undefined) active.activity = { ...active.activity, state: 'cancelling' }
+
 		this.#commitBestEffort(active, {
 			state: 'interrupted',
 			desiredState: 'stopped',
@@ -762,6 +768,10 @@ export class SequencerRuntime {
 		const node = active.plan.action.id
 
 		try {
+			// The action returned and its operations are about to be cancelled, so what the foreground shows from
+			// here on is the cleanups running and not an action still doing work.
+			if (active.activity !== undefined) active.activity = { ...active.activity, state: 'cancelling' }
+
 			this.#commitBestEffort(active, { state: 'finalizing', events: [{ type: 'stateChanged', state: 'finalizing', nodeId: node }] })
 
 			// Nothing the session started may still be touching a device when the reservation is released, or the
@@ -771,6 +781,11 @@ export class SequencerRuntime {
 
 			const state = terminalStateOf(result)
 			const events: SequencerEventDraft[] = [{ type: 'stateChanged', state, nodeId: node }]
+
+			// Nothing is in the foreground of a session that ended, and this commit is the last one an observer
+			// sees for it: leaving the activity in place would publish the session as completed and still running
+			// an action, with nothing behind it to correct that afterwards.
+			active.activity = undefined
 
 			this.#commitBestEffort(active, {
 				state,
@@ -895,7 +910,7 @@ export class SequencerRuntime {
 
 		// The report is also what the derived snapshot reads, so it is recorded before it is fanned out: an
 		// observer that never runs still leaves the live half current.
-		if (active?.id === sessionId && active.activity.nodeId === nodeId) {
+		if (active?.id === sessionId && active.activity?.nodeId === nodeId) {
 			active.activity = { ...active.activity, progress: progress.fraction, detail: progress.detail }
 		}
 

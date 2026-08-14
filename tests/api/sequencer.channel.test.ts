@@ -112,9 +112,13 @@ describe('fanout', () => {
 		await Bun.sleep(50)
 
 		const emitted = types(received, 'sequencer:progress').length
-		const last = types(received, 'sequencer:session').at(-1)!.payload as { state: string }
+		const session = types(received, 'sequencer:session')
+		const last = session.at(-1)!.payload as { state: string; foreground?: unknown }
 
 		expect(last.state).toBe('completed')
+		// Nothing is in the foreground of a session that ended, and this is the last message published for it.
+		expect(last.foreground).toBeUndefined()
+		expect((session.at(-2)!.payload as { state: string; foreground?: { state: string } }).foreground?.state).toBe('cancelling')
 
 		await Bun.sleep(60)
 

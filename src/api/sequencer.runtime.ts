@@ -690,10 +690,11 @@ export class SequencerRuntime {
 	// and the record of a command that did nothing is committed with the reason it did nothing. A transport
 	// that decided instead would have to answer for the state machine, and it would answer late.
 	//
-	// A pause records the state the session converges to and does not itself stop anything: V1 executes a
-	// single action, whose only boundary is the action settling, so a paused session is one whose desired state
-	// says `paused` while its state still says `running` until that boundary is reached. A stop is different
-	// and is carried through here, because the stop path is the one that also cancels and releases.
+	// A pause records the state the session converges to and does not itself stop anything: the walk observes
+	// the desired state at the boundaries §11.3 declares — before a frame and, under the immediate mode, at the
+	// end of the exposure that is running — so a paused session is one whose desired state says `paused` while
+	// its state still says `running` until the walk reaches one of them. A stop is different and is carried
+	// through here, because the stop path is the one that also cancels and releases.
 	async control(sessionId: string, kind: 'pause' | 'resume' | 'stop'): Promise<SequencerControlResult> {
 		const stored = this.#store.session(sessionId)
 

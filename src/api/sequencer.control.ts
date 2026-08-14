@@ -1,0 +1,135 @@
+import type { SequencerExecution } from '#/sequencer'
+import type { SequencerCheckpoint, SequencerDesiredState, SequencerSessionState } from '#/sequencer.state'
+import { isSequencerTerminalState } from '#/sequencer.state'
+
+// Where a pause, a resume and a stop take effect, and what the session keeps hold of while they are pending.
+//
+// The intent reducer decides *that* the session converges to `paused` or to `stopped`; nothing in it decides
+// *where*. That is this module: the safe point a pending pause is attended at, whether the active action is
+// cancelled to reach it, the node a resume re-enters, and the boundary a stop honors. Keeping the two apart
+// is what lets the reducer stay a pure fold over commands while the boundary rules stay a pure function of
+// the configured mode, with the runtime as the only impure part.
+//
+// The one rule that spans every decision here: the reservation is retained in every non-terminal state,
+// paused and suspended included. Between the `release()` of a cancelled exposure's lease and the `acquire()`
+// of the next action there is a real window in which the device is free, and without the reservation a manual
+// HTTP command lands exactly in it (§11.3). With it the window still exists and is unreachable from outside
+// the session.
+//
+// Instants are milliseconds since the Unix epoch.
+
+// Boundaries at which the runtime is between nodes and can honor a pending pause or stop (§11.3).
+//
+// They are ordered by how much already-started work has finished, which is what the modes select over:
+// - afterExposure: the sensor is done and nothing is on disk yet.
+// - afterArtifact: the frame is written and its artifact registered, so the frame is durable.
+// - afterAction: the node that was running reached a terminal decision, safe-point triggers included.
+// - beforeFrame: the next frame has not started.
+export type SequencerSafePoint = 'afterExposure' | 'afterArtifact' | 'afterAction' | 'beforeFrame'
+
+// Rank of a safe point in that order, used to compare it with the earliest boundary a mode accepts.
+const SEQUENCER_SAFE_POINT_RANK: Readonly<Record<SequencerSafePoint, number>> = {
+	afterExposure: 0,
+	afterArtifact: 1,
+	afterAction: 2,
+	beforeFrame: 3,
+}
+
+// Earliest safe point each pause mode is attended at.
+//
+// `immediate` accepts the first boundary of all and, unlike the other two, does not wait to reach one: it
+// cancels the active action and waits for its cleanups (§11.3).
+//
+// `afterCurrentExposure` is attended once the frame is durable and not once the sensor is done. Pausing in
+// between would hold a session with an exposed frame that exists nowhere, and the write is the same node
+// finishing rather than a new node starting, which is what `paused` forbids (§7.2).
+//
+// `afterCurrentAction` waits for the whole safe point, the triggers it selected included, so the session
+// pauses with focus and dithering already applied. That is the more conservative boundary and not the more
+// useful one: the post-frame work prepares the *next* frame, and a session that then sits paused for an hour
+// will have to redo it. The choice is the operator's, which is why both exist.
+const SEQUENCER_PAUSE_BOUNDARY: Readonly<Record<SequencerExecution['pauseMode'], SequencerSafePoint>> = {
+	immediate: 'afterExposure',
+	afterCurrentExposure: 'afterArtifact',
+	afterCurrentAction: 'afterAction',
+}
+
+// Whether a pending pause is attended at this safe point under the configured mode.
+//
+// A mode that is attended at one boundary is attended at every later one: a pause that arrived after its own
+// boundary had passed still has to take effect, and never at the same boundary of the *next* frame.
+export function sequencerPauseAttended(mode: SequencerExecution['pauseMode'], safePoint: SequencerSafePoint) {
+	return SEQUENCER_SAFE_POINT_RANK[safePoint] >= SEQUENCER_SAFE_POINT_RANK[SEQUENCER_PAUSE_BOUNDARY[mode]]
+}
+
+// What the runtime does when it reaches a safe point.
+// - continue: take the next step of the plan.
+// - pause: stop starting nodes and hold, keeping the reservation.
+// - stop: leave the plan and run the terminal pipeline.
+export type SequencerConvergence = 'continue' | 'pause' | 'stop'
+
+// Decides what a safe point does about the state the session is converging to.
+//
+// A stop is attended at every boundary, under either stop mode: unlike a pause, there is no later state that
+// would consume the focus or the dither the rest of the safe point would produce, so waiting for a broader
+// boundary would only spend devices on work nothing reads. `graceful` shows up as the absence of a
+// cancellation and never as a later boundary.
+export function sequencerConvergence(desiredState: SequencerDesiredState, execution: SequencerExecution, safePoint: SequencerSafePoint): SequencerConvergence {
+	if (desiredState === 'stopped') return 'stop'
+	if (desiredState === 'paused') return sequencerPauseAttended(execution.pauseMode, safePoint) ? 'pause' : 'continue'
+	return 'continue'
+}
+
+// Whether converging to the desired state requires cancelling the action that is running, instead of letting
+// it reach its own terminal decision and honoring the pause or the stop at the next safe point.
+//
+// Only the two immediate modes do. The cancellation is a request and never a kill: the runtime waits for the
+// cleanups of the cancelled action before it reports the new state, because reporting early would leave a
+// device mid-command while the UI says nothing is running (§12).
+//
+// A graceful stop lets the running node finish precisely so a frame that was already exposed becomes durable
+// rather than being thrown away.
+export function sequencerCancelsActiveAction(desiredState: SequencerDesiredState, execution: SequencerExecution) {
+	if (desiredState === 'stopped') return execution.stopMode === 'immediate'
+	return desiredState === 'paused' && execution.pauseMode === 'immediate'
+}
+
+// Whether the session still holds its reservation in this state (§11.3).
+//
+// Every non-terminal state retains it, `paused` and `suspended` included: a paused session is one that will
+// resume against the same devices, and releasing them would let another client take the camera and hand the
+// operator a resume that cannot happen. The reservation is released with the terminal state, after the
+// terminal pipeline ran (§8.6).
+export function sequencerRetainsReservation(state: SequencerSessionState) {
+	return !isSequencerTerminalState(state)
+}
+
+// Where a resume re-enters the plan.
+// - node: the cursor is a node that had not reached a terminal decision, and it runs again.
+// - nextNode: the cursor had already settled, so the walk continues from the containers that hold it.
+// - plan: nothing had started, and the walk begins at the root.
+export type SequencerResumePoint = { readonly at: 'node'; readonly nodeId: string; readonly containers: readonly string[]; readonly attempt: number } | { readonly at: 'nextNode'; readonly nodeId: string; readonly containers: readonly string[] } | { readonly at: 'plan' }
+
+// Derives the node a resume re-enters from the checkpoint (§13.3).
+//
+// The checkpoint is the only input: the runtime holds the same cursor in memory, but reading the in-memory
+// copy here would make a resume after a restart take a different path from a resume after a pause, and the
+// path that is exercised every night is the one that has to be the same as the path exercised after a crash.
+//
+// The attempt carried back is the number of attempts already consumed by that node, which is what makes a
+// resume continue the retry budget of the node instead of restarting it. It is deliberately not incremented
+// here: the node is re-entered on the attempt it was interrupted on, and only a failure spends the next one.
+//
+// A resume also re-anchors the capture settle at the instant it happens, which the caller does through
+// `sequencerSettleAnchored`. The reason is mechanical rather than procedural: a session can sit paused for an
+// hour, and the first frame after it starts from a mount that has just been told to track again, so the
+// resume pays the same spacing a movement pays. How much of it is actually spent is the cadence boundary's
+// decision, and it is usually none.
+export function sequencerResumePoint(checkpoint: SequencerCheckpoint): SequencerResumePoint {
+	const nodeId = checkpoint.cursor
+
+	if (nodeId === undefined) return { at: 'plan' }
+	if (checkpoint.completed.includes(nodeId)) return { at: 'nextNode', nodeId, containers: checkpoint.containers }
+
+	return { at: 'node', nodeId, containers: checkpoint.containers, attempt: checkpoint.attempts[nodeId] ?? 0 }
+}

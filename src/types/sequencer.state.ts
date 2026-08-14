@@ -76,7 +76,8 @@ export interface SequencerCheckpoint {
 	readonly containers: readonly string[]
 	// Attempts already consumed per node id, including the one in progress.
 	readonly attempts: Readonly<Record<string, number>>
-	// Nodes that reached a terminal decision and will not run again.
+	// Nodes that reached a terminal decision and will not run again in the pass they belong to. A loop starting
+	// another pass reopens the nodes of its body, which run once per iteration.
 	readonly completed: readonly string[]
 	// Capture progress per target, holding the current cycle and the per-group counters of that cycle. It is
 	// always present, empty before the first frame, because the scheduler decides from it and a resume that

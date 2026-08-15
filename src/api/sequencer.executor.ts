@@ -10,6 +10,7 @@ import type { SequencerCheckpointTrigger } from './sequencer.checkpoint'
 import { SEQUENCER_BLOCK_TYPE, sequencerNodeId, sequencerPlanNodes } from './sequencer.compiler'
 import type { SequencerCapture, SequencerFocus, SequencerLifecycle, SequencerMeridianFlipTrigger } from './sequencer.compiler'
 import { sequencerConvergence } from './sequencer.control'
+import type { SequencerSafePoint } from './sequencer.control'
 import { sequencerPreExposureGuard, waitForFlipWindow } from './sequencer.guard'
 import type { SequencerFlipBoundary } from './sequencer.guard'
 import type { SequencerDitherTrigger, SequencerGuidingServices } from './sequencer.guiding'
@@ -93,8 +94,14 @@ export interface SequencerExecutorHost {
 	readonly plan: SequencerPlan
 	// Namespace every artifact of the session is written below.
 	readonly storage: SequencerPathContext
-	// Cancellation signal of the plan, aborted by a stop and by a shutdown.
+	// Cancellation signal of the action that is running, aborted by a shutdown, by an immediate stop and by an
+	// immediate pause. A graceful stop deliberately does not abort it: the frame that is on the sensor is let
+	// finish and becomes durable instead of being thrown away (§11.3).
 	readonly signal: AbortSignal
+	// Cancellation signal of the waits the walk takes between actions, aborted by every stop, graceful included.
+	// The spacing between two frames and the wait for a flip window hold nothing a stop should preserve, and a
+	// stop that had to sit through them until the sky moved would not be a stop.
+	readonly waitSignal: AbortSignal
 	// Cancellation signal of the terminal pipeline, aborted only by a shutdown so a stop still leaves the
 	// observatory safe.
 	readonly terminalSignal: AbortSignal
@@ -442,6 +449,37 @@ async function holdWalk(execution: SequencerExecution, nodeId: string): Promise<
 	return SEQUENCER_CONTINUE
 }
 
+// Attends the state the session is converging to, at one boundary of the walk (§11.3).
+//
+// The safe point is where this call sits, and the configured pause mode decides whether a pending pause is
+// attended here or at a later boundary: that is the whole difference between the modes on this side, since what
+// separates `immediate` from the other two is the cancellation the runtime issues and not a boundary of its own.
+// A stop is attended at every boundary, under either stop mode.
+//
+// The boundary is re-evaluated after a hold rather than assumed to be clear, because the operator who resumed
+// may have paused again while the walk was waking up. A `continue` outcome therefore means the session really is
+// running at this point, and the caller may start what comes next.
+//
+// `held` reports whether the walk actually waited, which the callers that decided something before the boundary
+// need: an arbitrary amount of time passes inside a hold, and a decision taken on the observatory reading of
+// before it is no longer a decision about now.
+async function convergeAt(execution: SequencerExecution, safePoint: SequencerSafePoint, nodeId: string): Promise<{ readonly outcome: SequencerNodeOutcome; readonly held: boolean }> {
+	let held = false
+
+	for (;;) {
+		const convergence = sequencerConvergence(execution.host.desiredState(), execution.host.plan.execution, safePoint)
+
+		if (convergence === 'continue') return { outcome: SEQUENCER_CONTINUE, held }
+		if (convergence === 'stop') return { outcome: { kind: 'stop' }, held }
+
+		const resumed = await holdWalk(execution, nodeId)
+
+		held = true
+
+		if (resumed.kind !== 'continue') return { outcome: resumed, held }
+	}
+}
+
 // Primary outcome of the session, from what the target block ended as.
 //
 // Neither a pause nor a retake reaches here: every site that can produce one is handled where the walk can act
@@ -492,6 +530,16 @@ async function runTargetBlock(execution: SequencerExecution): Promise<SequencerN
 
 	while (index < nodes.length) {
 		const node = nodes[index]
+
+		// The previous node reached its terminal decision and this one has not started, which is the boundary a
+		// pause is attended at while the target is still being pointed at. Waiting for the capture loop instead
+		// would slew and center a target the operator asked the session to stop short of. It is taken before the
+		// node rather than after it so a plan that has run out of nodes ends as what it did, not as a stop that
+		// interrupted nothing.
+		const converged = await convergeAt(execution, 'afterAction', node.id)
+
+		if (converged.outcome.kind !== 'continue') return converged.outcome
+
 		const { outcome } = await runActionNode(execution, node, execution.host.signal)
 
 		if (outcome.kind === 'pause') {
@@ -533,19 +581,12 @@ async function runCaptureLoop(execution: SequencerExecution, targetId: string, l
 		if (targetProgressOf(execution.capture, targetId).cycle >= loop.repeat) return SEQUENCER_CONTINUE
 
 		for (;;) {
-			const convergence = sequencerConvergence(execution.host.desiredState(), execution.host.plan.execution, 'beforeFrame')
+			// Nothing of the cursor moves while it holds, so the frame the scheduler picks after a resume is the
+			// one it would have picked without the pause — but it is picked from a reading of the moment it
+			// resumes, which is why the selection is taken after the boundary and never before it.
+			const converged = await convergeAt(execution, 'beforeFrame', loop.id)
 
-			if (convergence === 'stop') return { kind: 'stop' }
-
-			if (convergence === 'pause') {
-				const held = await holdWalk(execution, loop.id)
-
-				if (held.kind !== 'continue') return held
-
-				// Nothing of the cursor moved while it held, so the boundary is evaluated again: the frame the
-				// scheduler picks after the resume is the one it would have picked without the pause.
-				continue
-			}
+			if (converged.outcome.kind !== 'continue') return converged.outcome
 
 			const instant = execution.host.now()
 			const reading = execution.host.observe()
@@ -660,6 +701,23 @@ async function runSafePoint(execution: SequencerExecution, targetId: string, loo
 		// Everything the bracket did is movement the exposure has to be stable after, so the settle is anchored on
 		// it rather than on the frame before it.
 		execution.cadence = sequencerSettleAnchored(execution.cadence, host.now())
+
+		// The triggers of this safe point reached their terminal decision and the bracket closed behind them, which
+		// is the boundary the broadest pause mode is attended at: the corrections are back on, the optical path is
+		// where the next frame wants it and nothing is on the sensor. Honoring the pause only at the next frame
+		// would sit through the whole exposure it was asked to come before.
+		const converged = await convergeAt(execution, 'afterAction', node.id)
+
+		if (converged.outcome.kind !== 'continue') return converged.outcome
+
+		// A hold ends the validity of everything above it, so the safe point is taken again from a reading of the
+		// moment the session resumed instead of exposing on the one it paused over. It costs no reentry of the
+		// flip budget: the loop is being re-entered because the operator stopped the walk, not because a window
+		// opened that no flip answered.
+		if (converged.held) {
+			at = host.now()
+			continue
+		}
 
 		const guarded = await runExposureGuard(execution, policies, group, configuration, observation)
 
@@ -796,7 +854,7 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 		})
 
 		if (decision.kind === 'retry') {
-			await host.delay(decision.delay, host.signal)
+			await host.delay(decision.delay, host.waitSignal)
 			attempt = decision.attempt
 			continue
 		}
@@ -830,7 +888,7 @@ async function runExposureGuard(execution: SequencerExecution, policies: Sequenc
 
 	if (decision.type === 'allowed') return SEQUENCER_EXPOSE
 
-	const waited = await waitForFlipWindow(execution.host.context(group.nodeId, 1, execution.host.signal), boundary, () => execution.host.observe().hourAngle)
+	const waited = await waitForFlipWindow(execution.host.context(group.nodeId, 1, execution.host.waitSignal), boundary, () => execution.host.observe().hourAngle)
 
 	// The wait ends when the window is open, which is the reordering succeeding and not the session ending: the
 	// safe point is taken again so the flip runs, and the frame this guard refused is exposed after it.
@@ -858,9 +916,18 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 
 	for (;;) {
 		const boundary = sequencerCadenceBoundary(execution.cadence, { delay: group.delay, settle: configuration.settle })
-		const held = await waitForCadenceBoundary(host.context(node.id, attempt, host.signal), boundary)
+		const held = await waitForCadenceBoundary(host.context(node.id, attempt, host.waitSignal), boundary)
 
 		if (held.type !== 'completed') return held.type === 'pause' ? { kind: 'pause' } : { kind: 'stop' }
+
+		// The spacing may have taken an arbitrary part of the cadence, so the boundary is asked again before the
+		// camera is commanded: a stop or a pause that arrived while the session was spacing frames must not be
+		// answered by exposing one more. A hold also invalidates the safe point above it, which is what the retake
+		// takes again.
+		const converged = await convergeAt(execution, 'beforeFrame', node.id)
+
+		if (converged.outcome.kind !== 'continue') return converged.outcome
+		if (converged.held) return SEQUENCER_RETAKE
 
 		const slot = frameSlotOf(execution, targetId, group, selection, attempt, logicalSlotId)
 
@@ -897,7 +964,7 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 
 		switch (decision.kind) {
 			case 'retry':
-				await host.delay(decision.delay, host.signal)
+				await host.delay(decision.delay, host.waitSignal)
 				attempt = decision.attempt
 				continue
 			case 'abandon':

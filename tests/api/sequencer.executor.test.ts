@@ -120,6 +120,7 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 			plan,
 			storage: { root: plan.storage.root, session: 'session-1' },
 			signal: controller.signal,
+			waitSignal: controller.signal,
 			terminalSignal: new AbortController().signal,
 			now: Date.now,
 			...services(),
@@ -350,6 +351,38 @@ describe('plan walk', () => {
 		expect(outcome.terminal.state).toBe('completed')
 		expect(state.holds).toHaveLength(1)
 		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
+	})
+
+	test('attends a pause at the boundary between two target actions', async () => {
+		let paused = false
+		const state: Harness = harness(planOf(), (context) => {
+			if (context.frame === undefined && !paused) {
+				paused = true
+				state.desired = 'paused'
+			}
+
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('stopped')
+		expect(state.holds).toEqual(['target[m42].center'])
+		expect(state.executed.map((it) => it.nodeId)).toEqual(['target[m42].slew'])
+	})
+
+	test('attends a pause between the triggers of a safe point and the exposure they prepared', async () => {
+		const base = definition()
+		const state: Harness = harness(planOf({ autofocus: { ...base.autofocus, enabled: true } }), (context) => {
+			if (context.nodeId.endsWith('.autofocus')) state.desired = 'paused'
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('stopped')
+		expect(state.holds).toEqual(['target[m42].capture.frame[lum]'])
+		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 	})
 
 	test('ends the session when the pause it is holding on is stopped', async () => {

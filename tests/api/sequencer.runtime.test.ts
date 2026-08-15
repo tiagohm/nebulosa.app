@@ -150,9 +150,13 @@ const RETRY: SequencerRetryPolicy = { maxAttempts: 1, delay: 0, backoff: 1, maxi
 
 const SERVICES = { preparation: {} as SequencerPreparationServices, guiding: {} as SequencerGuidingServices }
 
-function compiled(overrides?: { readonly devices?: SequencerDevices; readonly storage?: Partial<SequencerPlanStorage>; readonly configuration?: unknown }): SequencerPlan {
-	const action: SequencerPlanAction = { kind: 'action', id: 'node-1', type: 'expose', configuration: overrides?.configuration ?? { exposureTime: 2 } }
-	const target: SequencerPlanSequence = { kind: 'sequence', id: sequencerNodeId.target('m42'), children: [action] }
+function compiled(overrides?: { readonly devices?: SequencerDevices; readonly storage?: Partial<SequencerPlanStorage>; readonly configuration?: unknown; readonly execution?: Partial<SequencerPlan['execution']>; readonly nodes?: number }): SequencerPlan {
+	const configuration = overrides?.configuration ?? { exposureTime: 2 }
+	const actions: SequencerPlanAction[] = []
+
+	for (let i = 1; i <= (overrides?.nodes ?? 1); i++) actions.push({ kind: 'action', id: `node-${i}`, type: 'expose', configuration })
+
+	const target: SequencerPlanSequence = { kind: 'sequence', id: sequencerNodeId.target('m42'), children: actions }
 
 	return {
 		definitionId: 'definition-1',
@@ -160,7 +164,7 @@ function compiled(overrides?: { readonly devices?: SequencerDevices; readonly st
 		name: 'M42',
 		description: '',
 		target: { id: 'm42', name: 'Orion Nebula' },
-		execution: { start: { type: 'manual' }, end: { type: 'afterSequence' }, pauseMode: 'afterCurrentExposure', stopMode: 'graceful', defaultRetry: RETRY, checkpoint: { enabled: true, afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 60 } },
+		execution: { start: { type: 'manual' }, end: { type: 'afterSequence' }, pauseMode: 'afterCurrentExposure', stopMode: 'graceful', defaultRetry: RETRY, checkpoint: { enabled: true, afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 60 }, ...overrides?.execution },
 		devices: overrides?.devices ?? { camera: 'camera-1' },
 		roles: ['camera'],
 		root: { kind: 'sequence', id: sequencerNodeId.root(), children: [target] },
@@ -631,7 +635,7 @@ describe('sequencer runtime', () => {
 			}),
 		)
 
-		const created = instance.create(plan())!
+		const created = instance.create(plan({ execution: { stopMode: 'immediate' } }))!
 
 		instance.start(created.id)
 
@@ -645,6 +649,87 @@ describe('sequencer runtime', () => {
 		expect(session?.failure).toBeUndefined()
 		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 		expect(instance.activeSessionId).toBeUndefined()
+	})
+
+	test('lets a graceful stop finish the running action and ends before the next node', async () => {
+		const running = Promise.withResolvers<void>()
+		const release = Promise.withResolvers<void>()
+		const executed: string[] = []
+		const aborted: boolean[] = []
+
+		const { runtime: instance } = runtime(
+			exposeHandler(async (context, configuration) => {
+				executed.push(context.nodeId)
+
+				if (executed.length === 1) {
+					running.resolve()
+					await release.promise
+					aborted.push(context.signal.aborted)
+				}
+
+				return { type: 'completed', value: configuration.exposureTime }
+			}),
+		)
+
+		const created = instance.create(plan({ nodes: 2 }))!
+
+		instance.start(created.id)
+
+		await running.promise
+
+		const stopped = instance.stop(created.id)
+
+		release.resolve()
+
+		const session = await stopped
+
+		expect(aborted).toEqual([false])
+		expect(executed).toEqual(['node-1'])
+		expect(session?.state).toBe('stopped')
+		expect(session?.failure).toBeUndefined()
+	})
+
+	test('cancels the running action on an immediate pause and runs it again on the resume', async () => {
+		const running = Promise.withResolvers<void>()
+		const executed: string[] = []
+
+		const {
+			runtime: instance,
+			store,
+			arbiter,
+		} = runtime(
+			exposeHandler(async (context, configuration) => {
+				executed.push(context.nodeId)
+
+				if (executed.length > 1) return { type: 'completed', value: configuration.exposureTime }
+
+				running.resolve()
+
+				await new Promise<void>((resolve) => {
+					context.signal.addEventListener('abort', () => resolve(), { once: true })
+				})
+
+				return { type: 'fatalFailure', reason: 'aborted' }
+			}),
+		)
+
+		const created = instance.create(plan({ execution: { pauseMode: 'immediate' } }))!
+
+		instance.start(created.id)
+
+		await running.promise
+		await instance.control(created.id, 'pause')
+
+		while (store.session(created.id)?.state !== 'paused') await Bun.sleep(1)
+
+		expect(arbiter.availability(CAMERA_KEY)).toBe('reserved')
+
+		await instance.control(created.id, 'resume')
+
+		const session = await instance.settled(created.id)
+
+		expect(executed).toEqual(['node-1', 'node-1'])
+		expect(session?.state).toBe('completed')
 	})
 
 	test('holds a paused session without releasing anything and runs the node again on the resume', async () => {
@@ -771,7 +856,7 @@ describe('sequencer runtime', () => {
 			}),
 		)
 
-		const created = instance.create(plan())!
+		const created = instance.create(plan({ execution: { stopMode: 'immediate' } }))!
 
 		instance.start(created.id)
 

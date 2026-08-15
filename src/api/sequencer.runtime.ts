@@ -6,6 +6,7 @@ import type { OperationCoordinator, OperationScope } from './operation'
 import { abortableDelay } from './operation.wait'
 import type { ResourceArbiter, ResourceRequest, ResourceReservation, ResourceReservationOwner } from './resource'
 import { sequencerPlanNodes } from './sequencer.compiler'
+import { sequencerCancelsActiveAction } from './sequencer.control'
 import { runSequencerPlan } from './sequencer.executor'
 import type { SequencerExecutionOutcome, SequencerExecutorHost, SequencerSafePointObservation } from './sequencer.executor'
 import type { SequencerGuidingServices } from './sequencer.guiding'
@@ -313,8 +314,14 @@ interface ActiveSession {
 	// Control lane of the session. Every operator command enters it, so two that raced reduce in arrival order
 	// instead of overwriting each other's desired state.
 	readonly intents: SequencerIntentQueue
-	// Cancellation source of the running action, aborted by a stop and by finalization.
+	// Cancellation source of the session itself, aborted by every stop and by the shutdown. It ends the waits the
+	// walk takes between actions and releases a hold, and it is deliberately not what cancels the running action:
+	// a graceful stop ends the session without taking the frame that is on the sensor away from it.
 	readonly controller: AbortController
+	// Cancellation source of the action that is running, aborted by an immediate stop and by an immediate pause
+	// (§11.3). It is replaced rather than reused after a cancelled action, because a signal that already fired
+	// cannot carry the next one and an immediate pause is followed by a resume that has to run again.
+	action: AbortController
 	// Cancellation source of the terminal pipeline, aborted only by a shutdown. A stop ends the plan and the
 	// finalization is precisely what has to run after it, so it must not be cancelled by the same signal.
 	readonly terminal: AbortController
@@ -546,6 +553,7 @@ export class SequencerRuntime {
 			auxiliaries: new Map(),
 			intents: new SequencerIntentQueue(),
 			controller: new AbortController(),
+			action: new AbortController(),
 			terminal: new AbortController(),
 			roles,
 			types,
@@ -612,13 +620,33 @@ export class SequencerRuntime {
 		// never aborted because the write failed.
 		this.#commitBestEffort(active, { desiredState: 'stopped' })
 
-		// Both signals are needed: the controller stops an action that is merely waiting, and the cancellation
-		// by reservation owner reaches every operation tree it started, including the ones the runtime holds
-		// no handle for. The latter resolves only after their cleanups ran.
+		// The session signal always goes down: it is what ends the waits the walk takes between actions and what
+		// releases a hold, and a stop that left the walk sitting in either would be waiting for itself.
 		active.controller.abort('aborted')
-		await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
+
+		// The action itself is cancelled only under the immediate stop mode. A graceful stop exists precisely so
+		// the frame that is already on the sensor finishes and becomes durable, and the walk then leaves the plan
+		// at the next boundary of §11.3 instead of throwing the exposure away.
+		if (sequencerCancelsActiveAction('stopped', active.plan.compiled.execution)) await this.#cancelActiveAction(active)
 
 		return await active.done.promise
+	}
+
+	// Cancels the action that is running and waits for its cleanups, then arms the session with a fresh
+	// cancellation source.
+	//
+	// Both halves are needed: the controller stops an action that is merely waiting, and the cancellation by
+	// reservation owner reaches every operation tree it started, including the ones the runtime holds no handle
+	// for. The latter resolves only after their cleanups ran, which is why the new state is never reported before
+	// it does — reporting early would leave a device mid-command while the UI says nothing is running (§12).
+	//
+	// The replacement is what makes an immediate pause resumable: the walk that wakes up runs a node again, and a
+	// spent signal would abort it before it commanded anything. A session that is stopping never reaches for the
+	// new one, and arming it on the single path is what guarantees a resume is never handed a spent signal.
+	async #cancelActiveAction(active: ActiveSession) {
+		active.action.abort('aborted')
+		await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
+		active.action = new AbortController()
 	}
 
 	// Ends the sequencer with the process (§20.2), in the only order that leaves no device commanded.
@@ -670,10 +698,13 @@ export class SequencerRuntime {
 		})
 
 		try {
-			// Both signals go down here and only here: the terminal pipeline exists to survive a stop, not the
-			// process ending, and a finalization still running would otherwise hold the release behind it.
+			// Every signal goes down here and only here: the terminal pipeline exists to survive a stop, not the
+			// process ending, and a finalization still running would otherwise hold the release behind it. The
+			// action is cancelled under either stop mode, because a graceful stop is a promise about a session that
+			// is ending on its own terms and not about one whose process is going away.
 			active.terminal.abort('aborted')
 			active.controller.abort('aborted')
+			active.action.abort('aborted')
 			await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
 		} catch (e) {
 			// A cleanup that misbehaved does not entitle the session to keep the devices past this point.
@@ -731,9 +762,19 @@ export class SequencerRuntime {
 		const change = { desiredState: outcome.effect === 'none' ? undefined : reduction.desiredState, events }
 		const session = active === undefined ? this.#commitControl(stored, change) : this.#commitBestEffort(active, change)
 
-		// The desired state is written before the hold is released, so the walk that wakes up reads the state
-		// this command produced and not the one it was holding on.
-		if (reduction.desiredState !== 'paused') active?.resume?.resolve()
+		if (reduction.desiredState !== 'paused') {
+			// The desired state is written before the hold is released, so the walk that wakes up reads the state
+			// this command produced and not the one it was holding on.
+			active?.resume?.resolve()
+		} else if (outcome.effect !== 'none' && active !== undefined && sequencerCancelsActiveAction('paused', active.plan.compiled.execution)) {
+			// An immediate pause does not wait for a boundary: it cancels what is running and the walk holds where
+			// the cancellation left it, which is the whole difference between the three pause modes. The cancelled
+			// action reports `aborted`, the desired state written above is what attributes it to this command, and
+			// the slot policy therefore holds the slot on the cursor without spending an attempt on the operator
+			// (§8.3). A command that changed nothing cancels nothing: the session it would interrupt is already
+			// paused or already converging to it.
+			await this.#cancelActiveAction(active)
+		}
 
 		return { ok: true, effect: outcome.effect, noop: outcome.noop, session: session ?? stored }
 	}
@@ -781,7 +822,12 @@ export class SequencerRuntime {
 			sessionId: active.id,
 			plan: active.plan.compiled,
 			storage: active.plan.storage,
-			signal: active.controller.signal,
+			// Read through a getter and never captured: an immediate pause cancels the action and the walk that
+			// resumes must be handed the controller that replaced the spent one.
+			get signal() {
+				return active.action.signal
+			},
+			waitSignal: active.controller.signal,
 			terminalSignal: active.terminal.signal,
 			now: this.#now,
 			preparation: this.#preparation,
@@ -932,6 +978,7 @@ export class SequencerRuntime {
 			// devices would be handed to a third party mid-quiescing.
 			active.terminal.abort('aborted')
 			active.controller.abort('aborted')
+			active.action.abort('aborted')
 			await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
 
 			// A walk that threw produced no outcome at all, which is a defect of this process and not a night that

@@ -17,8 +17,6 @@ export interface Sequencer {
 
 	// Human-readable name shown in lists and editors.
 	readonly name: string
-	// Optional human-readable explanation of the observing plan.
-	readonly description: string
 	// Controls whether this definition may be started.
 	// false keeps the definition editable and persisted but not executable.
 	readonly enabled: boolean
@@ -69,7 +67,7 @@ export interface Sequencer {
 	// Workflow start/end conditions, interruption semantics, checkpointing, and resource retention.
 	// These settings govern the session runtime rather than individual devices.
 	readonly execution: SequencerExecution
-	// Artifact paths, naming templates, write strategy, checksum, and metadata.
+	// Artifact paths, naming templates, and metadata.
 	// The host validates all paths before execution.
 	readonly storage: SequencerStorage
 	// Ordered preparation actions executed before target acquisition.
@@ -146,17 +144,6 @@ export interface SequencerRetryPolicy {
 	readonly onExhausted: Exclude<SequencerFailureAction, 'retry'>
 }
 
-// Reusable timeout and post-command settling configuration.
-// Both values are seconds and should be finite and non-negative.
-export interface SequencerTimeoutPolicy {
-	// Maximum time, in seconds, allowed for the primary operation.
-	// Seconds; use a finite value > 0, or 0 only when the consumer explicitly supports no timeout.
-	readonly timeout: number
-	// Additional stable time required after the operation reports completion.
-	// Seconds; use a finite value >= 0.
-	readonly settle: number
-}
-
 // Defines an optional absolute and solar-altitude execution window.
 // When multiple limits are provided, all enabled limits must be satisfied.
 export interface SequencerTimeWindow {
@@ -172,28 +159,6 @@ export interface SequencerTimeWindow {
 	// Maximum allowed apparent Sun altitude.
 	// Radians in [-π/2, π/2]; negative values select twilight or night.
 	readonly maximumSunAltitude?: Angle
-}
-
-// Optional inclusive numeric range used by generic validators and UI controls.
-// Omitted limits represent an unbounded side of the range.
-export interface SequencerRange {
-	// Optional inclusive lower numeric bound.
-	// Use any finite number; omit when unbounded.
-	readonly minimum?: number
-	// Optional inclusive upper numeric bound.
-	// Use any finite number >= minimum; omit when unbounded.
-	readonly maximum?: number
-}
-
-// Optional inclusive angular range expressed in radians through Angle.
-// Omitted limits represent an unbounded side; normalization depends on the consuming coordinate domain.
-export interface SequencerAngleRange {
-	// Optional inclusive lower angular bound.
-	// Radians; omit when unbounded and normalize according to the consuming coordinate domain.
-	readonly minimum?: Angle
-	// Optional inclusive upper angular bound.
-	// Radians; normally >= minimum unless the consuming domain supports wrap-around.
-	readonly maximum?: Angle
 }
 
 // Target
@@ -221,20 +186,6 @@ export interface SequencerTarget extends MountTargetCoordinate<Angle> {
 	readonly constraints: SequencerTargetConstraint
 }
 
-// One timestamped equatorial sample for an externally interpolated or generated ephemeris.
-// Right ascension is normally [0, 2π); declination is [-π/2, π/2].
-export interface SequencerEphemerisSample {
-	// Timestamp associated with this ephemeris coordinate sample.
-	// Use a valid Unix timestamp with an explicit offset.
-	readonly time: number
-	// Sampled right ascension.
-	// Radians normalized to [0, 2π).
-	readonly rightAscension: Angle
-	// Sampled declination.
-	// Radians in [-π/2, π/2].
-	readonly declination: Angle
-}
-
 // Configures mount tracking before, during, and after target acquisition.
 // Optional non-sidereal rates are radians per second.
 export interface SequencerTargetTracking {
@@ -257,11 +208,9 @@ export interface SequencerTargetTracking {
 export interface SequencerGoto {
 	// Controls whether this feature or definition is active.
 	readonly enabled: boolean
-	// Controls whether skip when already at target is applied.
-	readonly skipWhenAlreadyAtTarget: boolean
 
-	// Angular distance below which the current position is considered already on target.
-	// Radians; use a finite value >= 0 and typically a few arcseconds to arcminutes.
+	// Angular distance below which the current position is considered already on target, which skips the slew.
+	// Radians; use a finite value >= 0 and typically a few arcseconds to arcminutes; 0 always slews.
 	readonly tolerance: Angle
 
 	// Maximum angular error accepted after the slew completes.
@@ -293,8 +242,6 @@ export interface SequencerCentering {
 	readonly settle: number
 	// Controls whether sync mount is applied.
 	readonly syncMount: boolean
-	// Controls whether final solve is applied.
-	readonly finalSolve: boolean
 	// Controls whether recenter after drift is applied.
 	readonly recenterAfterDrift: boolean
 
@@ -302,9 +249,9 @@ export interface SequencerCentering {
 	readonly driftTolerance: Angle
 
 	// Number of accepted light frames between drift checks, 0 disables the frame-count trigger.
-	readonly checkEveryFrames: number
+	readonly everyFrames: number
 	// Elapsed time between drift checks, 0 disables the time trigger.
-	readonly checkEveryTime: number
+	readonly everyTime: number
 	// Capture recipe used by this feature.
 	readonly capture: SequencerAuxiliaryCapture
 	// Retry policy applied when this operation fails.
@@ -328,12 +275,6 @@ export interface SequencerPlateSolver {
 	// Integer image downsampling factor used before solving.
 	// Use an integer >= 1; values from 1 to 4 are common.
 	readonly downsample: number
-	// Maximum number of detected stars supplied to the solver.
-	// Use an integer >= 0; 0 means backend default or unlimited.
-	readonly maximumStars: number
-	// Minimum signal-to-noise ratio accepted for solve stars.
-	// Use a finite value >= 0; 0 disables the threshold.
-	readonly minimumSNR: number
 }
 
 // Defines environmental and geometric conditions under which the target may be observed.
@@ -366,8 +307,6 @@ export interface SequencerTargetConstraint {
 	// Radians; recommended normalized range [-π, π] and >= minimumHourAngle.
 	readonly maximumHourAngle?: Angle
 
-	// Controls whether stop when violated is applied.
-	readonly stopWhenViolated: boolean
 	// Decision applied while target constraints are violated.
 	readonly onViolation: 'wait' | 'pause' | 'suspend' | 'stop' | 'fail'
 	// Continuous time, in seconds, for which violated constraints must become valid before resuming.
@@ -552,20 +491,8 @@ export interface SequencerGuiding {
 }
 
 // Discriminated union describing how the Sequencer obtains a guider session.
-// The mode may reuse an existing session, connect to a remote guider, or create a local guider.
-export type SequencerGuiderConnection = SequencerExistingGuider | SequencerRemoteGuider | SequencerLocalGuider
-
-// References an already-open guider session that remains owned by another component.
-// The Sequencer may command it only according to the host adapter permissions.
-export interface SequencerExistingGuider {
-	// Selects the operating mode for this configuration.
-	readonly mode: 'existing'
-	// Identifier of the guider session used by this feature.
-	readonly guider: string
-	// Indicates whether the Sequencer owns and must close the referenced session.
-	// true permits lifecycle cleanup; false preserves externally managed sessions.
-	readonly owned: false
-}
+// The mode may connect to a remote guider or create a local one.
+export type SequencerGuiderConnection = SequencerRemoteGuider | SequencerLocalGuider
 
 // Defines a network connection to an external guider service such as PHD2.
 // TCP ports are integers from 1 to 65535; 4400 is the usual PHD2 default.
@@ -614,11 +541,6 @@ export interface SequencerGuiderSettle {
 	readonly time: number
 	// Maximum time, in seconds, allowed for the guider to settle.
 	readonly timeout: number
-	// Minimum number of guide frames asked to be observed while settling.
-	// Carried by the definition and fused with the strongest policy in play, but not enforced: the guider
-	// transport settles on tolerance held for time within timeout and counts no frames of its own, so the
-	// settle a session waits on is the one those three fields describe.
-	readonly minimumFrames: number
 }
 
 // Defines optional quality thresholds used to pause capture or trigger guiding recovery.
@@ -678,8 +600,6 @@ export interface SequencerDither {
 
 	// Controls whether before first frame is applied.
 	readonly beforeFirstFrame: boolean
-	// Controls whether after meridian flip is applied.
-	readonly afterMeridianFlip: boolean
 	// Controls whether after filter change is applied.
 	readonly afterFilterChange: boolean
 
@@ -735,13 +655,13 @@ export interface SequencerAutofocusTrigger {
 	// Controls whether after recovery is applied.
 	readonly afterRecovery: boolean
 
-	// Number of accepted frames between autofocus runs,  0 disables this trigger.
+	// Number of accepted frames between autofocus runs, 0 disables this trigger.
 	readonly everyFrames: number
 
-	// Elapsed time between autofocus runs,  0 disables this trigger.
+	// Elapsed time between autofocus runs, 0 disables this trigger.
 	readonly everyTime: number
 
-	// Absolute sensor/focuser temperature change that triggers autofocus,  0 disables this trigger.
+	// Absolute sensor/focuser temperature change that triggers autofocus, 0 disables this trigger.
 	readonly temperatureChange: number
 
 	// Relative HFD/FWHM degradation that triggers autofocus.
@@ -833,7 +753,11 @@ export interface SequencerRotator {
 }
 
 // Defines when and how an equatorial mount performs a meridian flip.
-// The workflow coordinates exposure, guiding, dome slaving, pier-side verification, recentering, and autofocus.
+//
+// The crossing is always guarded the same way and the workflow around it is derived rather than declared: the
+// exposure in progress is finished first, the pier side is verified when the driver publishes one, the
+// guiding is suspended and resumed by the interlock bracket of the safe point, the recentering happens when
+// the target declares a centering, and the refocusing when the autofocus block asks to focus after a flip.
 export interface SequencerMeridianFlip {
 	// Controls whether this feature or definition is active.
 	readonly enabled: boolean
@@ -849,26 +773,8 @@ export interface SequencerMeridianFlip {
 	// Time, in seconds, reserved before the flip boundary so no new exposure overruns it.
 	readonly safetyMargin: number
 
-	// Controls whether wait for current exposure is applied.
-	readonly waitForCurrentExposure: boolean
-	// Controls whether stop guiding is applied.
-	readonly stopGuiding: boolean
-	// Controls whether pause dome slaving is applied.
-	readonly pauseDomeSlaving: boolean
 	// Stable delay or settling policy required after a state transition.
 	readonly settle: number
-	// Controls whether verify pier side is applied.
-	readonly verifyPierSide: boolean
-	// Controls whether recenter is applied.
-	readonly recenter: boolean
-	// Controls whether autofocus is applied.
-	readonly autofocus: boolean
-	// Controls whether restore guiding is applied.
-	readonly restoreGuiding: boolean
-	// Controls whether restore rotator is applied.
-	readonly restoreRotator: boolean
-	// Maximum number of attempts allowed for this operation or recovery.
-	readonly maximumAttempts: number
 	// Maximum time, in seconds, allowed for the operation to reach its terminal state.
 	readonly timeout: number
 	// Retry policy applied when this operation fails.
@@ -910,8 +816,6 @@ export interface SequencerCooling {
 	// Maximum warm-up rate, in °C per minute.
 	readonly warmRamp: number
 
-	// Numeric value for warm timeout.
-	readonly warmTimeout: number
 	// Controls whether turn cooler off after warm is applied.
 	readonly turnCoolerOffAfterWarm: boolean
 }
@@ -1034,8 +938,6 @@ export interface SequencerDark extends SequencerCalibrationBase {
 	readonly matchLightFrames: boolean
 	// Explicit dark exposure durations in seconds. An empty array is allowed when matchLightFrames is true.
 	readonly exposureTimes: readonly number[]
-	// Controls whether close cover is applied.
-	readonly closeCover: boolean
 	// Controls whether move to dark filter is applied.
 	readonly moveDarkFilter: boolean
 	// Filter reference associated with dark filter.
@@ -1059,8 +961,6 @@ export interface SequencerFlat extends SequencerCalibrationBase {
 	readonly filters: readonly SequencerFilterReference[]
 	// Configuration value for exposure.
 	readonly exposure: SequencerFlatExposure
-	// Controls whether rotate away from target is applied.
-	readonly rotateAwayFromTarget: boolean
 	// Controls whether park mount is applied.
 	readonly parkMount: boolean
 }
@@ -1081,8 +981,6 @@ export interface SequencerFlatExposure {
 	readonly targetMean: number
 	// Use a finite value >= 0 and in the same measurement domain as targetMean.
 	readonly tolerance: number
-	// Maximum number of attempts allowed for this operation or recovery.
-	readonly maximumAttempts: number
 }
 
 // Defines dark-flat acquisition matching the exposure settings of flat frames.
@@ -1092,8 +990,6 @@ export interface SequencerDarkFlat extends SequencerCalibrationBase {
 	readonly matchFlatFrames: boolean
 	// Explicit dark-flat exposure durations, in seconds. An empty array is allowed when matchFlatFrames is true
 	readonly exposureTimes: readonly number[]
-	// Controls whether close cover is applied.
-	readonly closeCover: boolean
 	// Controls whether move to dark filter is applied.
 	readonly moveDarkFilter: boolean
 	// Filter reference associated with dark filter.
@@ -1421,13 +1317,9 @@ export interface SequencerCloseDomeSafetyAction extends SequencerSafetyActionBas
 // It inherits identity, timeout, retry, and continuation behavior from SequencerSafetyActionBase.
 export interface SequencerWarmCameraSafetyAction extends SequencerSafetyActionBase {
 	// Discriminator selecting the concrete variant represented by this object.
+	// The setpoint, the ramp, and the cooler switch-off are not declared here: SequencerCooling is the single
+	// authority for the thermal targets, exactly as for the warmCamera lifecycle action.
 	readonly type: 'warmCamera'
-	// Temperature requested or evaluated by this operation.
-	readonly temperature: number
-	// Maximum requested temperature-change rate, in °C per minute, with 0 usually disabling ramp control.
-	readonly ramp: number
-	// Controls whether turn cooler off is applied.
-	readonly turnCoolerOff: boolean
 }
 
 // Configures the Switch step used by the ordered safety routine.
@@ -1466,26 +1358,12 @@ export interface SequencerRecovery {
 
 	// Maximum time spent waiting for safe conditions and required devices.
 	readonly maximumWait: number
-	// Maximum number of attempts allowed for this operation or recovery.
-	readonly maximumAttempts: number
 	// Controls whether reconnect devices is applied.
 	readonly reconnectDevices: boolean
-	// Controls whether reopen dome is applied.
-	readonly reopenDome: boolean
-	// Controls whether reopen cover is applied.
-	readonly reopenCover: boolean
 	// Controls whether unpark mount is applied.
 	readonly unparkMount: boolean
 	// Controls whether restore tracking is applied.
 	readonly restoreTracking: boolean
-	// Controls whether restore rotator is applied.
-	readonly restoreRotator: boolean
-	// Controls whether recenter target is applied.
-	readonly recenterTarget: boolean
-	// Controls whether run autofocus is applied.
-	readonly runAutofocus: boolean
-	// Controls whether restore guiding is applied.
-	readonly restoreGuiding: boolean
 	// Controls whether resume capture is applied.
 	readonly resumeCapture: boolean
 	// Decision applied when this feature cannot recover from failure.
@@ -1518,10 +1396,6 @@ export interface SequencerQuality {
 	readonly maximumBackground?: number
 	// Maximum accepted background non-uniformity.
 	readonly maximumBackgroundVariation?: number
-	// Maximum accepted translational drift relative to the reference frame.
-	readonly maximumDrift?: number
-	// Maximum accepted frame rotation relative to the reference.
-	readonly maximumRotation?: Angle
 	// Maximum accepted saturated-pixel fraction.
 	readonly maximumSaturation?: number
 
@@ -1532,10 +1406,6 @@ export interface SequencerQuality {
 	// Maximum replacement attempts for one rejected logical frame.
 	// Use an integer >= 0; 0 disables replacement attempts.
 	readonly maximumRepeatedFrames: number
-	// Controls whether trigger autofocus is applied.
-	readonly triggerAutofocus: boolean
-	// Controls whether trigger centering is applied.
-	readonly triggerCentering: boolean
 	// Number of consecutive rejected frames that causes a pause.
 	readonly pauseAfterConsecutiveRejectedFrames: number
 }
@@ -1650,11 +1520,10 @@ export interface SequencerCheckpoint {
 
 // Storage
 
-// Defines image path templates, write strategy, checksum, overwrite behavior, and additional metadata.
+// Defines image path templates and additional metadata.
 // Paths are interpreted by the host application and should be absolute or rooted under an approved storage directory.
+// Artifacts are always written, always through the atomic protocol, and never overwrite an existing file.
 export interface SequencerStorage {
-	// Controls whether this feature or definition is active.
-	readonly enabled: boolean
 	// Root directory for all session artifacts.
 	// Use a non-empty host-approved directory path.
 	readonly root: string
@@ -1667,12 +1536,6 @@ export interface SequencerStorage {
 	// Optional directory used for atomic temporary writes.
 	// Use a writable path on the same filesystem as the final destination when atomic rename is required.
 	readonly temporaryDirectory?: string
-	// Controls whether atomic write is applied.
-	readonly atomicWrite: boolean
-	// Controls whether overwrite is applied.
-	readonly overwrite: boolean
-	// Selects the checksum behavior.
-	readonly checksum: 'none' | 'crc32' | 'sha256'
 	// Selects the auto sub folder mode behavior.
 	readonly autoSubFolderMode: 'off' | 'noon' | 'midnight'
 }

@@ -162,7 +162,6 @@ function compiled(overrides?: { readonly devices?: SequencerDevices; readonly st
 		definitionId: 'definition-1',
 		definitionRevision: 1,
 		name: 'M42',
-		description: '',
 		target: { id: 'm42', name: 'Orion Nebula' },
 		execution: { start: { type: 'manual' }, end: { type: 'afterSequence' }, pauseMode: 'afterCurrentExposure', stopMode: 'graceful', defaultRetry: RETRY, checkpoint: { enabled: true, afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 60 }, ...overrides?.execution },
 		devices: overrides?.devices ?? { camera: 'camera-1' },
@@ -170,7 +169,7 @@ function compiled(overrides?: { readonly devices?: SequencerDevices; readonly st
 		root: { kind: 'sequence', id: sequencerNodeId.root(), children: [target] },
 		groups: [],
 		handlers: { expose: 1 },
-		storage: { root: '/data/nebulosa', fileNameTemplate: '{target}', directoryTemplate: '{target}', checksum: 'none', autoSubFolderMode: 'noon', ...overrides?.storage },
+		storage: { root: '/data/nebulosa', fileNameTemplate: '{target}', directoryTemplate: '{target}', autoSubFolderMode: 'noon', ...overrides?.storage },
 	}
 }
 

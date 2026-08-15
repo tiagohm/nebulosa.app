@@ -205,7 +205,7 @@ const SEQUENCER_FLIP_REENTRY_LIMIT = 3
 // Settle carried by the interlock request of a session that guides through nothing. The bracket is skipped
 // entirely for such a session, so no wait is ever taken against it; it exists because the request is still the
 // carrier of the dither, and a zero settle is the honest value for a guider that is not there.
-const SEQUENCER_UNGUIDED_SETTLE: SequencerGuiderSettle = { tolerance: 0, time: 0, timeout: 0, minimumFrames: 0 }
+const SEQUENCER_UNGUIDED_SETTLE: SequencerGuiderSettle = { tolerance: 0, time: 0, timeout: 0 }
 
 // Mutable state of one walk, threaded through every step instead of living in module scope so two sessions
 // never share it.
@@ -945,7 +945,7 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 			if (kind === 'meridianFlip') {
 				flipped = completed
 
-				if (completed && policies.meridianFlip?.autofocus === true) execution.anchors = sequencerAnchorAdvanced(execution.anchors, 'autofocus', observation)
+				if (completed && policies.autofocus?.triggers.afterMeridianFlip === true) execution.anchors = sequencerAnchorAdvanced(execution.anchors, 'autofocus', observation)
 			} else if (completed) {
 				execution.anchors = sequencerAnchorAdvanced(execution.anchors, 'autofocus', observation)
 			}

@@ -229,14 +229,6 @@ describe('session start resolution', () => {
 })
 
 describe('guider ownership', () => {
-	test('a guider session owned by another component is refused at compilation', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, guiding: { ...definition.guiding, enabled: true, connection: { mode: 'existing', guider: 'phd2', owned: false } } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.connection.mode', message: 'a guider session owned by another component cannot be reserved by this session' }])
-	})
-
 	test('an unowned remote guider is refused at compilation', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, guiding: { ...definition.guiding, enabled: true, connection: { mode: 'remote', host: 'localhost', port: 4400, owned: false } } })

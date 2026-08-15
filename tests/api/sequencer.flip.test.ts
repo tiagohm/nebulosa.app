@@ -23,16 +23,15 @@ function mount(pierSide: PierSide = 'EAST'): Mount {
 function centering(): SequencerMeridianFlipTrigger['centering'] {
 	return {
 		coordinates: TARGET,
-		solver: { type: 'astap', timeout: 60, blind: false, searchRadius: 0.05, downsample: 2, maximumStars: 500, minimumSNR: 10 },
+		solver: { type: 'astap', timeout: 60, blind: false, searchRadius: 0.05, downsample: 2 },
 		tolerance: 0.0001,
 		maximumAttempts: 3,
 		settle: 0,
 		syncMount: true,
-		finalSolve: true,
 		recenterAfterDrift: false,
 		driftTolerance: 0,
-		checkEveryFrames: 0,
-		checkEveryTime: 0,
+		everyFrames: 0,
+		everyTime: 0,
 		capture: { exposureTime: 5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false },
 		retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' },
 	}
@@ -56,16 +55,7 @@ function flipConfiguration(overrides?: Partial<SequencerMeridianFlipTrigger>): S
 		minimumHourAngle: 0.01,
 		maximumHourAngle: 0.05,
 		safetyMargin: 60,
-		waitForCurrentExposure: true,
-		stopGuiding: true,
-		pauseDomeSlaving: false,
 		settle: 0,
-		verifyPierSide: true,
-		recenter: false,
-		autofocus: false,
-		restoreGuiding: true,
-		restoreRotator: false,
-		maximumAttempts: 2,
 		timeout: 600,
 		retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' },
 		onFailure: 'pause',
@@ -189,14 +179,6 @@ describe('meridian flip block', () => {
 
 		expect(result).toEqual({ type: 'fatalFailure', reason: 'unexpectedState', detail: 'the mount did not confirm a pier side change, reporting EAST' })
 		expect(commands.filter((command) => command.name === 'flip')).toHaveLength(1)
-	})
-
-	test('accepts an unverified crossing when the definition does not demand the evidence', async () => {
-		const commands: Command[] = []
-		const handler = sequencerMeridianFlipHandler(flipServices(commands, { pierSideVerified: false }))
-		const result = await handler.execute(actionContext({ mount: { device: mount() } }), flipConfiguration({ verifyPierSide: false }))
-
-		expect(result).toMatchObject({ type: 'completed', value: { verified: false, pierSide: 'EAST' } })
 	})
 
 	test('re-establishes the pointing before the focus, both under the same node', async () => {

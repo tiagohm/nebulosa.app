@@ -70,7 +70,7 @@ function rotatorPolicy(overrides?: Partial<Omit<SequencerRotator, 'enabled'>>): 
 }
 
 function coolingPolicy(overrides?: Partial<Omit<SequencerCooling, 'enabled'>>): Omit<SequencerCooling, 'enabled'> {
-	return { temperature: -10, tolerance: 1, ramp: 0, waitForTarget: true, timeout: 60, maintainDuringPause: true, maintainDuringSuspension: true, warmTemperature: 15, warmRamp: 0, warmTimeout: 300, turnCoolerOffAfterWarm: false, ...overrides }
+	return { temperature: -10, tolerance: 1, ramp: 0, waitForTarget: true, timeout: 60, maintainDuringPause: true, maintainDuringSuspension: true, warmTemperature: 15, warmRamp: 0, turnCoolerOffAfterWarm: false, ...overrides }
 }
 
 function trackingPolicy(overrides?: Partial<Omit<SequencerTargetTracking, 'enabled'>>): Omit<SequencerTargetTracking, 'enabled'> {

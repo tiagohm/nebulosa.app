@@ -165,8 +165,6 @@ export interface SequencerPlanStorage {
 	readonly directoryTemplate: string
 	// Directory of the temporary file of the atomic write, when the definition declares one.
 	readonly temporaryDirectory?: string
-	// Checksum computed and recorded for every committed artifact.
-	readonly checksum: SequencerStorage['checksum']
 	// Boundary of the automatic per-night subdirectory, resolved once at session start.
 	readonly autoSubFolderMode: SequencerStorage['autoSubFolderMode']
 }
@@ -179,8 +177,6 @@ export interface SequencerPlan {
 	readonly definitionRevision: number
 	// Human-readable name of the definition, shown wherever a session is listed.
 	readonly name: string
-	// Human-readable explanation of the observing plan, empty when the definition declares none.
-	readonly description: string
 	// Target the session observes.
 	readonly target: SequencerPlanTarget
 	// Execution policy of the session.

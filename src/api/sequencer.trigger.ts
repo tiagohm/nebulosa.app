@@ -294,9 +294,10 @@ function filterChanged(anchor: SequencerTriggerAnchor, observation: SequencerTri
 // standalone autofocus at the same safe point a second sweep of the same focuser through the same field.
 //
 // It is stated over the flip that actually won, not over the policy alone: a definition whose flip refocuses
-// suppresses nothing at the safe points where no flip is due.
+// suppresses nothing at the safe points where no flip is due. Whether the flip refocuses is the autofocus
+// trigger itself, which is the same condition the lowering nested the focusing into the flip node under.
 function focusedByFlip(policies: SequencerTriggerPolicies, flipped: boolean) {
-	return flipped && policies.meridianFlip?.autofocus === true
+	return flipped && policies.autofocus?.triggers.afterMeridianFlip === true
 }
 
 // Whether the flip is due at this safe point.
@@ -388,15 +389,5 @@ function ditherReason(policy: Omit<SequencerDither, 'enabled'>, anchors: Sequenc
 	const anchor = anchors.dither
 	const elapsed = observation.instant - anchoredAt(anchor, anchors)
 
-	return anchor.at === undefined && policy.beforeFirstFrame
-		? 'beforeFirstFrame'
-		: flipped && policy.afterMeridianFlip
-			? 'afterMeridianFlip'
-			: policy.afterFilterChange && filterChanged(anchor, observation)
-				? 'filterChange'
-				: reachedCount(anchor.frames, policy.everyFrames)
-					? 'frames'
-					: reachedElapsed(elapsed, policy.everyTime)
-						? 'elapsed'
-						: undefined
+	return anchor.at === undefined && policy.beforeFirstFrame ? 'beforeFirstFrame' : policy.afterFilterChange && filterChanged(anchor, observation) ? 'filterChange' : reachedCount(anchor.frames, policy.everyFrames) ? 'frames' : reachedElapsed(elapsed, policy.everyTime) ? 'elapsed' : undefined
 }

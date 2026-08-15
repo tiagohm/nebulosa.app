@@ -20,7 +20,7 @@ function autofocus(triggers: Partial<SequencerAutofocus['triggers']> = {}): Omit
 }
 
 function dither(overrides: Partial<SequencerDither> = {}): Omit<SequencerDither, 'enabled'> {
-	return { beforeFirstFrame: false, afterMeridianFlip: false, afterFilterChange: false, everyFrames: 0, everyTime: 0, ...overrides } as unknown as Omit<SequencerDither, 'enabled'>
+	return { beforeFirstFrame: false, afterFilterChange: false, everyFrames: 0, everyTime: 0, ...overrides } as unknown as Omit<SequencerDither, 'enabled'>
 }
 
 function meridianFlip(overrides: Partial<SequencerMeridianFlip> = {}): Omit<SequencerMeridianFlip, 'enabled'> {
@@ -47,10 +47,10 @@ describe('sequencer trigger evaluator', () => {
 	})
 
 	test('orders the flip before the autofocus and the dither', () => {
-		const policies = { meridianFlip: meridianFlip(), autofocus: autofocus({ afterMeridianFlip: true }), dither: dither({ afterMeridianFlip: true }) }
+		const policies = { meridianFlip: meridianFlip(), autofocus: autofocus({ onStart: true }), dither: dither({ beforeFirstFrame: true }) }
 		const observed = observation({ hourAngle: 0.02, pierSide: 'WEST', preFlipPierSide: 'WEST' })
 
-		expect(kinds(policies, anchors(), observed)).toEqual(['meridianFlip:hourAngle', 'autofocus:afterMeridianFlip', 'dither:afterMeridianFlip'])
+		expect(kinds(policies, anchors(), observed)).toEqual(['meridianFlip:hourAngle', 'autofocus:onStart', 'dither:beforeFirstFrame'])
 	})
 
 	test('holds the flip until the hour angle reaches the earliest one allowed', () => {
@@ -215,13 +215,6 @@ describe('sequencer trigger evaluator', () => {
 		expect(kinds(policies, anchors(), observation())).toEqual(['autofocus:onStart'])
 	})
 
-	test('dithers on the frame after a flip instead of treating the movement as a dither', () => {
-		const policies = { meridianFlip: meridianFlip(), dither: dither({ afterMeridianFlip: true, everyFrames: 5 }) }
-		const observed = observation({ hourAngle: 0.5, pierSide: 'WEST', preFlipPierSide: 'WEST' })
-
-		expect(kinds(policies, anchors(), observed)).toEqual(['meridianFlip:hourAngle', 'dither:afterMeridianFlip'])
-	})
-
 	test('advances only the anchor of the trigger that ran', () => {
 		const state = sequencerFrameCounted(sequencerFrameCounted(anchors(), 'LIGHT'), 'LIGHT')
 		const advanced = sequencerAnchorAdvanced(state, 'dither', observation({ instant: START + 5000, temperature: -10, filter: 'Ha' }))
@@ -269,27 +262,19 @@ describe('sequencer trigger evaluator', () => {
 	})
 
 	test('sweeps once when the flip that won focuses inside its own node', () => {
-		const nested = { meridianFlip: meridianFlip({ autofocus: true }), autofocus: autofocus({ afterMeridianFlip: true, everyFrames: 1 }), dither: dither({ afterMeridianFlip: true }) }
-		const standalone = { ...nested, meridianFlip: meridianFlip({ autofocus: false }) }
+		const nested = { meridianFlip: meridianFlip(), autofocus: autofocus({ afterMeridianFlip: true, everyFrames: 1 }) }
 		const state = sequencerFrameCounted(anchors(), 'LIGHT')
 		const observed = observation({ hourAngle: 0.02, pierSide: 'WEST', preFlipPierSide: 'WEST' })
 
-		expect(kinds(nested, state, observed)).toEqual(['meridianFlip:hourAngle', 'dither:afterMeridianFlip'])
-		expect(kinds(standalone, state, observed)).toEqual(['meridianFlip:hourAngle', 'autofocus:afterMeridianFlip', 'dither:afterMeridianFlip'])
+		expect(kinds(nested, state, observed)).toEqual(['meridianFlip:hourAngle'])
 		expect(kinds(nested, state, observation({ instant: START + 60_000 }))).toEqual(['autofocus:frames'])
 	})
 
-	test('keeps the post-flip focus owed when the flip was the one that had to focus', () => {
-		const policies = { meridianFlip: meridianFlip({ autofocus: true }), autofocus: autofocus({ afterMeridianFlip: true }) }
+	test('owes no post-flip focus to a definition whose autofocus does not ask for one', () => {
+		const policies = { meridianFlip: meridianFlip(), autofocus: autofocus({ everyFrames: 5 }) }
 		const observed = observation({ hourAngle: 0.02, pierSide: 'WEST', preFlipPierSide: 'WEST' })
-		const state = sequencerTriggerPending(policies, anchors(), evaluateSequencerTriggers(policies, anchors(), observed), observed)
 
-		expect(state.pendingAutofocus).toBe('afterMeridianFlip')
-		expect(kinds(policies, state, observation({ instant: START + 60_000, hourAngle: 0.08, pierSide: 'EAST', preFlipPierSide: 'WEST' }))).toEqual(['autofocus:afterMeridianFlip'])
-
-		const unasked = { meridianFlip: meridianFlip({ autofocus: true }), autofocus: autofocus({ everyFrames: 5 }) }
-
-		expect(sequencerTriggerPending(unasked, anchors(), evaluateSequencerTriggers(unasked, anchors(), observed), observed).pendingAutofocus).toBeUndefined()
+		expect(sequencerTriggerPending(policies, anchors(), evaluateSequencerTriggers(policies, anchors(), observed), observed).pendingAutofocus).toBeUndefined()
 	})
 
 	test('keeps a post-event focus owed while the minimum time between runs suppresses it', () => {

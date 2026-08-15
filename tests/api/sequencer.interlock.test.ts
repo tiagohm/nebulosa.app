@@ -21,7 +21,7 @@ interface Failures {
 }
 
 function settle(overrides?: Partial<SequencerGuiderSettle>): SequencerGuiderSettle {
-	return { tolerance: 1.5, time: 10, timeout: 60, minimumFrames: 3, ...overrides }
+	return { tolerance: 1.5, time: 10, timeout: 60, ...overrides }
 }
 
 function ditherTrigger(overrides?: Partial<Omit<SequencerDither, 'enabled'>>): Omit<SequencerDither, 'enabled'> {
@@ -29,7 +29,6 @@ function ditherTrigger(overrides?: Partial<Omit<SequencerDither, 'enabled'>>): O
 		amount: 3,
 		raOnly: false,
 		beforeFirstFrame: false,
-		afterMeridianFlip: true,
 		afterFilterChange: false,
 		everyFrames: 1,
 		everyTime: 0,
@@ -101,7 +100,7 @@ describe('guiding interlock', () => {
 
 	test('installs the strongest settle in play on the session that suspends', async () => {
 		const commands: Command[] = []
-		const dither = ditherTrigger({ settle: { tolerance: 0.8, time: 5, timeout: 120, minimumFrames: 8 } })
+		const dither = ditherTrigger({ settle: { tolerance: 0.8, time: 5, timeout: 120 } })
 
 		await runGuidingInterlock(interlockServices(commands, true), actionContext('guider-1'), interlockRequest({ dither }), body(commands))
 
@@ -109,9 +108,9 @@ describe('guiding interlock', () => {
 	})
 
 	test('fuses two settles by taking the tightest error and the most patient waits', () => {
-		const fused = sequencerFuseGuiderSettle(settle(), { tolerance: 0.8, time: 5, timeout: 120, minimumFrames: 8 })
+		const fused = sequencerFuseGuiderSettle(settle(), { tolerance: 0.8, time: 5, timeout: 120 })
 
-		expect(fused).toEqual({ tolerance: 0.8, time: 10, timeout: 120, minimumFrames: 8 })
+		expect(fused).toEqual({ tolerance: 0.8, time: 10, timeout: 120 })
 		expect(sequencerFuseGuiderSettle(settle())).toEqual(settle())
 	})
 

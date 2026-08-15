@@ -53,8 +53,8 @@ export interface SequencerCenterOutcome {
 	// Solved declination in radians, J2000, of the last frame.
 	readonly declination: Angle
 	// True when the reported separation was measured after the last correction, which is what proves the field
-	// is where it was asked to be. It is false for a centering that corrected without solving again, which is
-	// what `finalSolve: false` asks for.
+	// is where it was asked to be. The centering loop always solves again after correcting, so a completed
+	// centering reports it true.
 	readonly verified: boolean
 	// Whether the mount model was synchronized to a solved position during the loop.
 	readonly synced: boolean
@@ -163,10 +163,9 @@ function solveRequest(solver: SequencerPlateSolver, path: string, id: string, ri
 // tracking the target asked for.
 //
 // The arrival check belongs to the commander, which compares the position the mount publishes once it has
-// stopped against `arrivalTolerance` and refuses a slew that ended somewhere else. `skipWhenAlreadyAtTarget`
-// is expressed as the commander's `tolerance`, which is the separation below which nothing is commanded at
-// all; a definition that turns the skip off asks for the movement to be commanded unconditionally, which is a
-// tolerance of zero.
+// stopped against `arrivalTolerance` and refuses a slew that ended somewhere else. The declared `tolerance` is
+// the commander's, which is the separation below which nothing is commanded at all; a definition that wants the
+// movement commanded unconditionally declares a tolerance of zero.
 export function sequencerSlewHandler(mountCommander: MountCommander): SequencerActionHandler<SequencerSlew, SequencerSlewOutcome> {
 	return {
 		type: SEQUENCER_BLOCK_TYPE.slew,
@@ -180,7 +179,7 @@ export function sequencerSlewHandler(mountCommander: MountCommander): SequencerA
 
 			context.progress({ detail: 'slewing to the target' })
 
-			const options = { timeout: configuration.timeout * 1000, tolerance: configuration.skipWhenAlreadyAtTarget ? configuration.tolerance : 0, arrivalTolerance: configuration.arrivalTolerance }
+			const options = { timeout: configuration.timeout * 1000, tolerance: configuration.tolerance, arrivalTolerance: configuration.arrivalTolerance }
 			const slewed = await mountCommander.goTo(context.scope, mount, configuration.coordinates, options)
 
 			if (!slewed.ok) return sequencerActionFailure(slewed, 'the mount did not reach the target')
@@ -227,10 +226,9 @@ function centeringResources(configuration: SequencerCenter): ResourceBinding[] {
 // target or the attempts run out.
 //
 // The loop always measures before it corrects, so the first exposure of a mount that is already centred ends
-// it without commanding anything. `finalSolve` decides what happens after a correction: with it, the loop
-// solves again and only stops once the separation it measured was measured on the corrected position, which is
-// what makes the reported outcome a verified one; without it, the first correction ends the centering and the
-// outcome reports the separation that motivated the correction rather than the one that followed it.
+// it without commanding anything. A correction is always followed by another solve, so the loop only stops
+// once the separation it reports was measured on the corrected position, which is what makes the outcome a
+// verified one; the last attempt therefore reports the miss instead of correcting blindly.
 //
 // `syncMount` corrects the mount's own model before commanding it back to the target, which is what turns a
 // pointing error into a corrected slew instead of repeating the same wrong movement; without it, the loop still
@@ -309,14 +307,10 @@ async function runCenteringLoop(services: SequencerCenteringServices, context: S
 
 		if (separation <= configuration.tolerance) return { type: 'completed', value: outcome }
 
-		// The last attempt of a verifying centering has no solve left to prove the correction with, so
-		// correcting here would end the action reporting a field nothing measured. Reporting the miss instead
-		// lets the retry policy decide, with the separation that was actually observed.
-		//
-		// A centering that does not verify makes the opposite trade on purpose: the correction is what ends it,
-		// and the outcome says so with `verified: false`. Stopping it here would leave `maximumAttempts: 1`
-		// unable to correct at all, failing every time on a field it was one slew away from fixing.
-		if (attempt === configuration.maximumAttempts && configuration.finalSolve) {
+		// The last attempt has no solve left to prove the correction with, so correcting here would end the action
+		// reporting a field nothing measured. Reporting the miss instead lets the retry policy decide, with the
+		// separation that was actually observed.
+		if (attempt === configuration.maximumAttempts) {
 			return { type: 'retryableFailure', reason: 'unexpectedState', detail: `centering stopped ${(separation * RAD2DEG).toFixed(4)}° from the target after ${attempt} attempts` }
 		}
 
@@ -337,10 +331,6 @@ async function runCenteringLoop(services: SequencerCenteringServices, context: S
 		const settled = await sequencerSettle(context, configuration.settle)
 
 		if (!settled.ok) return sequencerActionFailure(settled, 'the settle after the correcting slew was interrupted')
-
-		if (!configuration.finalSolve) {
-			return { type: 'completed', value: { ...outcome, verified: false, synced } }
-		}
 	}
 
 	// Unreachable for a positive attempt limit, and the honest answer for a definition that asked for none.

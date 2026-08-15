@@ -30,22 +30,21 @@ function wheel(names: readonly string[], position: number): Wheel {
 }
 
 function slewConfiguration(overrides?: Partial<SequencerSlew>): SequencerSlew {
-	return { coordinates: TARGET, skipWhenAlreadyAtTarget: true, tolerance: 0.001, arrivalTolerance: 0.01, timeout: 300, settle: 0, retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' }, ...overrides }
+	return { coordinates: TARGET, tolerance: 0.001, arrivalTolerance: 0.01, timeout: 300, settle: 0, retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' }, ...overrides }
 }
 
 function centerConfiguration(overrides?: Partial<SequencerCenter>): SequencerCenter {
 	return {
 		coordinates: TARGET,
-		solver: { type: 'astap', timeout: 60, blind: false, searchRadius: 0.05, downsample: 2, maximumStars: 500, minimumSNR: 10 },
+		solver: { type: 'astap', timeout: 60, blind: false, searchRadius: 0.05, downsample: 2 },
 		tolerance: 0.0001,
 		maximumAttempts: 3,
 		settle: 0,
 		syncMount: true,
-		finalSolve: true,
 		recenterAfterDrift: false,
 		driftTolerance: 0,
-		checkEveryFrames: 0,
-		checkEveryTime: 0,
+		everyFrames: 0,
+		everyTime: 0,
 		capture: { exposureTime: 5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false },
 		retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' },
 		...overrides,
@@ -167,7 +166,7 @@ describe('slew block', () => {
 		}
 
 		const handler = sequencerSlewHandler(commander as never)
-		await handler.execute(actionContext({ mount: { device: mount() } }), slewConfiguration({ skipWhenAlreadyAtTarget: false }))
+		await handler.execute(actionContext({ mount: { device: mount() } }), slewConfiguration({ tolerance: 0 }))
 
 		expect(commands).toEqual([{ name: 'goTo', detail: 0 }])
 	})
@@ -270,22 +269,13 @@ describe('centering block', () => {
 		expect(commands.filter((command) => command.name === 'capture').map((command) => command.detail)).toEqual(['centering-1.xisf'])
 	})
 
-	test('stops right after the correction when no final solve was asked for', async () => {
+	test('reports the miss without correcting when a single attempt is allowed', async () => {
 		const commands: Command[] = []
 		const handler = sequencerCenterHandler(centeringServices(commands, [solution(1.41, -0.09)]))
-		const result = await handler.execute(actionContext({ mount: { device: mount() }, camera: { device: camera() } }), centerConfiguration({ finalSolve: false }))
+		const result = await handler.execute(actionContext({ mount: { device: mount() }, camera: { device: camera() } }), centerConfiguration({ maximumAttempts: 1 }))
 
-		expect(result).toMatchObject({ type: 'completed', value: { attempts: 1, verified: false, synced: true } })
-		expect(commands.map((command) => command.name)).toEqual(['capture', 'solve', 'sync', 'goTo'])
-	})
-
-	test('corrects on a single attempt when no final solve was asked for', async () => {
-		const commands: Command[] = []
-		const handler = sequencerCenterHandler(centeringServices(commands, [solution(1.41, -0.09)]))
-		const result = await handler.execute(actionContext({ mount: { device: mount() }, camera: { device: camera() } }), centerConfiguration({ finalSolve: false, maximumAttempts: 1 }))
-
-		expect(result).toMatchObject({ type: 'completed', value: { attempts: 1, verified: false, synced: true } })
-		expect(commands.map((command) => command.name)).toEqual(['capture', 'solve', 'sync', 'goTo'])
+		expect(result).toMatchObject({ type: 'retryableFailure', reason: 'unexpectedState' })
+		expect(commands.map((command) => command.name)).toEqual(['capture', 'solve'])
 	})
 
 	test('reports the observed miss when the attempts run out instead of correcting blindly', async () => {

@@ -68,7 +68,7 @@ describe('lowering', () => {
 		expect(loop.body.children.map((node) => node.id)).toEqual(['target[m42].trigger.autofocus', 'target[m42].capture.frame[lum]', 'target[m42].capture.frame[red]'])
 	})
 
-	test('a flip that recenters carries the centering of the target', () => {
+	test('a flip carries the centering the target declares', () => {
 		const { plan } = ok(canonical())
 		const target = plan.root.children[1] as SequencerPlanSequence
 		const loop = target.children[2] as SequencerPlanLoop
@@ -78,11 +78,11 @@ describe('lowering', () => {
 		expect((flip.configuration as SequencerMeridianFlipTrigger).centering).toEqual(center.configuration as SequencerCenter)
 	})
 
-	test('a flip that does not recenter carries no centering', () => {
+	test('a flip carries no centering when the target declares none', () => {
 		const definition = canonical()
-		const { plan } = ok({ ...definition, meridianFlip: { ...definition.meridianFlip, recenter: false } })
+		const { plan } = ok({ ...definition, target: { ...definition.target, center: { ...definition.target.center, enabled: false } } })
 		const target = plan.root.children[1] as SequencerPlanSequence
-		const loop = target.children[2] as SequencerPlanLoop
+		const loop = target.children[1] as SequencerPlanLoop
 		const flip = loop.body.children[0] as SequencerPlanAction
 
 		expect((flip.configuration as SequencerMeridianFlipTrigger).centering).toBeUndefined()
@@ -90,7 +90,7 @@ describe('lowering', () => {
 
 	test('a flip that focuses carries the autofocus policy of the definition', () => {
 		const definition = canonical()
-		const { plan } = ok({ ...definition, meridianFlip: { ...definition.meridianFlip, autofocus: true } })
+		const { plan } = ok(definition)
 		const target = plan.root.children[1] as SequencerPlanSequence
 		const loop = target.children[2] as SequencerPlanLoop
 		const flip = loop.body.children[0] as SequencerPlanAction
@@ -101,7 +101,7 @@ describe('lowering', () => {
 
 	test('a flip that does not focus carries no autofocus policy', () => {
 		const definition = canonical()
-		const { plan } = ok(definition)
+		const { plan } = ok({ ...definition, autofocus: { ...definition.autofocus, triggers: { ...definition.autofocus.triggers, afterMeridianFlip: false } } })
 		const target = plan.root.children[1] as SequencerPlanSequence
 		const loop = target.children[2] as SequencerPlanLoop
 		const flip = loop.body.children[0] as SequencerPlanAction
@@ -109,25 +109,19 @@ describe('lowering', () => {
 		expect((flip.configuration as SequencerMeridianFlipTrigger).focusing).toBeUndefined()
 	})
 
-	test('a flip that focuses is refused when the definition disables autofocus', () => {
+	test('a flip carries no focusing when the definition disables autofocus', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, autofocus: { ...definition.autofocus, enabled: false }, meridianFlip: { ...definition.meridianFlip, autofocus: true } })
+		const { plan } = ok({ ...definition, autofocus: { ...definition.autofocus, enabled: false } })
+		const target = plan.root.children[1] as SequencerPlanSequence
+		const loop = target.children[2] as SequencerPlanLoop
+		const flip = loop.body.children[0] as SequencerPlanAction
 
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'meridianFlip.autofocus', message: 'the flip focuses after crossing, and the definition disables the autofocus block that declares how to focus' }])
-	})
-
-	test('a flip that recenters is refused when the target does not center', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, target: { ...definition.target, center: { ...definition.target.center, enabled: false } } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'meridianFlip.recenter', message: 'the flip recenters after crossing, and the target declares no centering it could re-establish the pointing with' }])
+		expect((flip.configuration as SequencerMeridianFlipTrigger).focusing).toBeUndefined()
 	})
 
 	test('a disabled slew or centering produces no node', () => {
 		const definition = canonical()
-		const { plan } = ok({ ...definition, meridianFlip: { ...definition.meridianFlip, recenter: false }, target: { ...definition.target, tracking: { ...definition.target.tracking, enabled: false }, goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } } })
+		const { plan } = ok({ ...definition, target: { ...definition.target, tracking: { ...definition.target.tracking, enabled: false }, goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } } })
 		const target = plan.root.children[1] as SequencerPlanSequence
 
 		expect(target.children.map((node) => node.id)).toEqual(['target[m42].capture.loop'])
@@ -222,7 +216,7 @@ describe('lowering', () => {
 	test('storage decisions are carried into the plan', () => {
 		const { plan } = ok(canonical())
 
-		expect(plan.storage).toEqual({ root: '/data/nebulosa', fileNameTemplate: '{target}-{filter}-{exposure}', directoryTemplate: '{target}/{frameType}', temporaryDirectory: undefined, checksum: 'sha256', autoSubFolderMode: 'noon' })
+		expect(plan.storage).toEqual({ root: '/data/nebulosa', fileNameTemplate: '{target}-{filter}-{exposure}', directoryTemplate: '{target}/{frameType}', temporaryDirectory: undefined, autoSubFolderMode: 'noon' })
 	})
 
 	test('compiling the same definition twice produces an identical plan', () => {
@@ -278,7 +272,6 @@ describe('structural validation', () => {
 		const definition = canonical()
 		const compilation = compile({
 			...definition,
-			meridianFlip: { ...definition.meridianFlip, recenter: false },
 			target: { ...definition.target, type: 'JNOW', tracking: { ...definition.target.tracking, enabled: false }, goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } },
 		})
 
@@ -992,14 +985,6 @@ describe('failure policies', () => {
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'target.center.maximumAttempts', message: 'the attempt budget is above the range a number counts one by one, so a counter of failed attempts would stop advancing before exhausting it' }])
 	})
 
-	test('a flip budget above the counting range is refused', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, meridianFlip: { ...definition.meridianFlip, maximumAttempts: Number.MAX_SAFE_INTEGER + 2 } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'meridianFlip.maximumAttempts', message: 'the attempt budget is above the range a number counts one by one, so a counter of failed attempts would stop advancing before exhausting it' }])
-	})
-
 	test('the budget of a disabled centering is not reported', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, meridianFlip: { ...definition.meridianFlip, enabled: false }, target: { ...definition.target, center: { ...definition.target.center, enabled: false, maximumAttempts: Number.POSITIVE_INFINITY } } })
@@ -1049,14 +1034,6 @@ describe('failure policies', () => {
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'meridianFlip.maximumHourAngle', message: 'the flip window is empty, because it ends before the hour angle it may start at' }])
-	})
-
-	test('a meridian flip interrupting the current exposure is refused', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, meridianFlip: { ...definition.meridianFlip, waitForCurrentExposure: false } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics.map((diagnostic) => diagnostic.path)).toEqual(['meridianFlip.waitForCurrentExposure'])
 	})
 
 	test('a window of a disabled meridian flip is not reported', () => {

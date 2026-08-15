@@ -106,9 +106,8 @@ export async function runMeridianFlip(services: SequencerMeridianFlipServices, c
 
 	if (!flipped.ok) return sequencerActionFailure(flipped, 'the mount did not cross the meridian')
 
-	// A driver that publishes no pier side still performs the movement, and the definition decides what that is
-	// worth. Demanding the verification and not getting it is a failure of the flip and not of the mount: the
-	// session cannot tell a crossing apart from a slew that went back to the same side, and every frame after
+	// A driver that publishes no pier side still performs the movement, and the crossing is refused all the same:
+	// the session cannot tell a crossing apart from a slew that went back to the same side, and every frame after
 	// it would be exposed on an unknown side of the pier.
 	//
 	// It is terminal for the same reason a failed recovery is: the movement was commanded and completed, so the
@@ -116,7 +115,7 @@ export async function runMeridianFlip(services: SequencerMeridianFlipServices, c
 	// crossing again and take a mount that did cross back to the side the flip existed to leave, with the hour
 	// angle already past the meridian. The session stops instead, on a side it cannot name but has not made
 	// worse.
-	if (configuration.verifyPierSide && !flipped.value.pierSideVerified) {
+	if (!flipped.value.pierSideVerified) {
 		return { type: 'fatalFailure', reason: 'unexpectedState', detail: `the mount did not confirm a pier side change, reporting ${flipped.value.pierSide}` }
 	}
 

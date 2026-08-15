@@ -108,8 +108,8 @@ const suspendedGuiders = new Map<string, boolean>()
 // Strongest of two settle policies, field by field.
 //
 // Strongest means hardest to satisfy for the accuracy fields and most patient for the waiting ones: the
-// smallest tolerated error, the longest time it has to be held, the largest number of guide frames observed,
-// and the longest the guider may take to get there. Fusing this way keeps a safe point where a dither and the
+// smallest tolerated error, the longest time it has to be held, and the longest the guider may take to get
+// there. Fusing this way keeps a safe point where a dither and the
 // bracket are both in play from settling twice, once loosely and once strictly, while never settling to a
 // weaker criterion than either of them asked for.
 export function sequencerFuseGuiderSettle(settle: SequencerGuiderSettle, other?: SequencerGuiderSettle): SequencerGuiderSettle {
@@ -119,14 +119,10 @@ export function sequencerFuseGuiderSettle(settle: SequencerGuiderSettle, other?:
 		tolerance: Math.min(settle.tolerance, other.tolerance),
 		time: Math.max(settle.time, other.time),
 		timeout: Math.max(settle.timeout, other.timeout),
-		minimumFrames: Math.max(settle.minimumFrames, other.minimumFrames),
 	}
 }
 
 // Translates a declared settle into the settle the guider transport understands.
-//
-// `minimumFrames` has no counterpart in the transport, which counts frames by its own settling rule, so it
-// survives only in the fused policy the session keeps and not in the command.
 function guiderSettle(settle: SequencerGuiderSettle): PHD2Settle {
 	return { pixels: settle.tolerance, time: settle.time, timeout: settle.timeout }
 }

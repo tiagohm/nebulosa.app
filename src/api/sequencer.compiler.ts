@@ -377,9 +377,13 @@ function lowerTriggers(definition: Sequencer, targetId: string, centering: Seque
 	const triggers: SequencerPlanAction[] = []
 	const { enabled: focusable, ...focusing } = autofocus
 
+	// What the flip re-establishes is derived from the blocks that own those dimensions instead of being declared
+	// a second time: the pointing is re-established when the target declares a centering, and the focus when the
+	// autofocus block is enabled and asks to focus after a flip. A flag of its own would be a second source of
+	// truth that can disagree with the block it depends on.
 	if (meridianFlip.enabled) {
 		const { enabled, ...flip } = meridianFlip
-		const configuration: SequencerMeridianFlipTrigger = { ...flip, centering: meridianFlip.recenter ? centering : undefined, focusing: meridianFlip.autofocus ? focusing : undefined }
+		const configuration: SequencerMeridianFlipTrigger = { ...flip, centering, focusing: focusable && autofocus.triggers.afterMeridianFlip ? focusing : undefined }
 		triggers.push({ kind: 'action', id: sequencerNodeId.trigger(targetId, 'meridianFlip'), type: SEQUENCER_BLOCK_TYPE.meridianFlip, configuration })
 	}
 
@@ -758,19 +762,14 @@ function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistr
 
 // Lowers the guider the session will create and own, or undefined when the plan does not guide.
 //
-// V1 has a single guiding mode, creating and owning the session, and it is not a policy preference: the
-// session reserves the logical keys of the guider at start, so a guider session already open holds a lease on
-// exactly those keys and the reservation fails before any guiding policy is consulted. A mode that reuses a
-// session someone else owns therefore describes a path no session can reach.
+// The session always creates and owns its guider session, and that is not a policy preference: the session
+// reserves the logical keys of the guider at start, so a guider session already open holds a lease on exactly
+// those keys and the reservation fails before any guiding policy is consulted. A connection the session does
+// not own therefore describes a path no session can reach.
 function lowerGuider(context: CompilerContext, definition: Sequencer) {
 	const { guiding } = definition
 
 	if (!guiding.enabled) return undefined
-
-	if (guiding.connection.mode === 'existing') {
-		context.diagnostics.push({ path: 'guiding.connection.mode', message: 'a guider session owned by another component cannot be reserved by this session' })
-		return undefined
-	}
 
 	if (!guiding.connection.owned) {
 		context.diagnostics.push({ path: 'guiding.connection.owned', message: 'the session must own the guider session it reserves' })
@@ -876,13 +875,11 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 
 	if (meridianFlip.enabled) {
 		checkRetry(context, meridianFlip.retry, 'meridianFlip.retry')
-		checkAttempts(context, meridianFlip.maximumAttempts, 'meridianFlip.maximumAttempts')
 		checkOnFailure(context, meridianFlip.onFailure, 'meridianFlip.onFailure')
 
 		// An empty window leaves the safe point with no hour angle at which an exposure may resume: the pre-exposure
 		// guard already refuses to start and the flip is not permitted yet, which is a wait that never ends.
 		if (meridianFlip.maximumHourAngle < meridianFlip.minimumHourAngle) context.diagnostics.push({ path: 'meridianFlip.maximumHourAngle', message: 'the flip window is empty, because it ends before the hour angle it may start at' })
-		if (!meridianFlip.waitForCurrentExposure) context.diagnostics.push({ path: 'meridianFlip.waitForCurrentExposure', message: 'the exposure in progress when the window opens is always finished first, and the pre-exposure guard is not switchable' })
 	}
 
 	for (const pipeline of [
@@ -917,13 +914,6 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 
 	if (target.constraints.enabled) diagnostics.push({ path: 'target.constraints.enabled', message: 'target constraints require the ephemeris and the monitor lane this version does not have' })
 	if (target.center.enabled && target.center.recenterAfterDrift) diagnostics.push({ path: 'target.center.recenterAfterDrift', message: 'recentering on drift is a safe-point trigger of the capture loop, and this version centers once before the loop and lowers no centering into it' })
-
-	// The flip carries the centering of the target, because a handler is given its node configuration and a
-	// context that does not carry the plan. A target that does not center therefore leaves the flip nothing to
-	// re-establish the pointing with, and the trigger would come back from the other side of the meridian on
-	// whatever field the slew alone landed on.
-	if (meridianFlip.enabled && meridianFlip.recenter && !target.center.enabled) diagnostics.push({ path: 'meridianFlip.recenter', message: 'the flip recenters after crossing, and the target declares no centering it could re-establish the pointing with' })
-	if (meridianFlip.enabled && meridianFlip.autofocus && !autofocus.enabled) diagnostics.push({ path: 'meridianFlip.autofocus', message: 'the flip focuses after crossing, and the definition disables the autofocus block that declares how to focus' })
 
 	// The action that starts tracking declares no mode of its own and carries the policy of the target, which is
 	// the single authority for how the mount tracks. A disabled tracking block leaves it nothing to carry, and
@@ -983,10 +973,6 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	if (execution.releaseResourcesWhilePaused) diagnostics.push({ path: 'execution.releaseResourcesWhilePaused', message: 'the reservation is held through a pause, which is the entire reason it exists' })
 	if (execution.releaseResourcesWhileSuspended) diagnostics.push({ path: 'execution.releaseResourcesWhileSuspended', message: 'the reservation is held through a suspension, which is the entire reason it exists' })
 	if (execution.continueAfterApplicationRestart) diagnostics.push({ path: 'execution.continueAfterApplicationRestart', message: 'a session of this version does not survive the process it runs in' })
-
-	if (!storage.enabled) diagnostics.push({ path: 'storage.enabled', message: 'a session with storage disabled would expose and discard every frame it captures' })
-	if (!storage.atomicWrite) diagnostics.push({ path: 'storage.atomicWrite', message: 'the write protocol is what keeps a partial file out of the final path, and this version always applies it' })
-	if (storage.overwrite) diagnostics.push({ path: 'storage.overwrite', message: 'an existing file is classified and never overwritten in silence' })
 
 	if (shutdown.runOnUnsafe) diagnostics.push({ path: 'shutdown.runOnUnsafe', message: 'there is no safety monitor in this version to declare a session unsafe' })
 
@@ -1088,7 +1074,6 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 		definitionId: definition.id ?? '',
 		definitionRevision: definition.revision ?? 0,
 		name: definition.name,
-		description: definition.description,
 		target: { id: target.id, name: target.name },
 		execution: { start: definition.execution.start, end: definition.execution.end, pauseMode: definition.execution.pauseMode, stopMode: definition.execution.stopMode, defaultRetry: definition.execution.defaultRetry, checkpoint: definition.execution.checkpoint },
 		devices: definition.devices,
@@ -1099,7 +1084,7 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 		finalize: finalized && { continueOnFailure: shutdown.continueOnFailure, runOn },
 		guider,
 		cooling,
-		storage: { root: storage.root, fileNameTemplate: storage.fileNameTemplate, directoryTemplate: storage.directoryTemplate, temporaryDirectory: storage.temporaryDirectory, checksum: storage.checksum, autoSubFolderMode: storage.autoSubFolderMode },
+		storage: { root: storage.root, fileNameTemplate: storage.fileNameTemplate, directoryTemplate: storage.directoryTemplate, temporaryDirectory: storage.temporaryDirectory, autoSubFolderMode: storage.autoSubFolderMode },
 	}
 
 	// The handlers run before the roles are checked, because a role a handler declares is as required as one

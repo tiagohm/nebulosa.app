@@ -326,8 +326,12 @@ async function runPipelineBlock(execution: SequencerExecution, pipeline: Sequenc
 
 				const result = await runNode(execution, step.nodeId, step.type, step.configuration, attempt, stepSignal)
 
-				execution.keeper.complete(step.nodeId)
-				await checkpointDue(execution, 'action')
+				// Only a step that ran is recorded as done. A failed attempt stays open so the retry the pipeline
+				// decides re-enters the same node, and a step given up on is never resumed past on a restart.
+				if (result.type === 'completed' || result.type === 'skipped') {
+					execution.keeper.complete(step.nodeId)
+					await checkpointDue(execution, 'action')
+				}
 
 				return result
 			},

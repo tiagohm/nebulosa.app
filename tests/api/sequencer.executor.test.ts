@@ -450,5 +450,24 @@ describe('plan walk', () => {
 
 		expect(outcome.terminal.state).toBe('failed')
 		expect(state.executed.map((it) => it.nodeId)).toEqual(['startup.action[park]'])
+		expect(outcome.checkpoint.completed).not.toContain('startup.action[park]')
+	})
+
+	test('records a lifecycle step as completed only when it ran', async () => {
+		const base = definition()
+		const startup = {
+			...base.startup,
+			actions: [
+				{ id: 'park', enabled: true, timeout: 30, retry: retry(), type: 'parkMount' as const, required: false },
+				{ id: 'unpark', enabled: true, timeout: 30, retry: retry(), type: 'unparkMount' as const, required: false },
+			],
+			continueOnFailure: true,
+		}
+		const state = harness(planOf({ startup }), (context) => (context.nodeId === 'startup.action[park]' ? Promise.resolve({ type: 'fatalFailure', reason: 'commandFailed', detail: 'the mount did not park' }) : Promise.resolve({ type: 'completed', value: undefined })))
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(outcome.checkpoint.completed).not.toContain('startup.action[park]')
+		expect(outcome.checkpoint.completed).toContain('startup.action[unpark]')
 	})
 })

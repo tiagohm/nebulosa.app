@@ -31,8 +31,9 @@ function configuration(type: SequencerLifecycleAction['type'], overrides?: Parti
 	return { action, required: false, timeout: 0, retry: retry(), ...overrides }
 }
 
-function actionContext(devices: Record<string, unknown>, signal: AbortSignal): SequencerActionContext {
+function actionContext(devices: Record<string, unknown>, signal: AbortSignal, guider?: string): SequencerActionContext {
 	return {
+		guider,
 		sessionId: 'session-1',
 		nodeId: 'finalize.action[a]',
 		attempt: 1,
@@ -47,7 +48,7 @@ function actionContext(devices: Record<string, unknown>, signal: AbortSignal): S
 	}
 }
 
-function lifecycleServices(commands: string[], onCommand?: (name: string) => void): SequencerLifecycleServices {
+function lifecycleServices(commands: string[], onCommand?: (name: string) => void, guiding = false): SequencerLifecycleServices {
 	function answer(name: string) {
 		commands.push(name)
 		onCommand?.(name)
@@ -69,7 +70,11 @@ function lifecycleServices(commands: string[], onCommand?: (name: string) => voi
 			cooler: (_scope: unknown, _device: Camera, enabled: boolean) => answer(`cooler:${enabled}`),
 			temperature: (_scope: unknown, _device: Camera, value: number) => answer(`temperature:${value}`),
 		},
-		guiderCommander: {},
+		guiderCommander: {
+			running: () => guiding,
+			startGuiding: () => answer('startGuiding'),
+			calibrate: () => answer('calibrate'),
+		},
 	} as unknown as SequencerLifecycleServices
 }
 
@@ -140,5 +145,57 @@ describe('cancellation', () => {
 
 		expect(commands).toEqual(['setTrackMode:SIDEREAL', 'setTracking:true'])
 		expect(result).toMatchObject({ type: 'completed', value: { action: 'startTracking', commanded: true } })
+	})
+})
+
+describe('start guiding', () => {
+	test('starts on the solution the guider carries when no calibration is declared', async () => {
+		const commands: string[] = []
+		const services = lifecycleServices(commands)
+
+		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: { calibrateBeforeStart: false } }))
+
+		expect(commands).toEqual(['startGuiding'])
+		expect(result).toMatchObject({ type: 'completed', value: { action: 'startGuiding', commanded: true } })
+	})
+
+	test('forces a fresh solution when the definition calibrates before the start', async () => {
+		const commands: string[] = []
+		const services = lifecycleServices(commands)
+
+		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: { calibrateBeforeStart: true } }))
+
+		expect(commands).toEqual(['calibrate'])
+		expect(result).toMatchObject({ type: 'completed', value: { action: 'startGuiding', commanded: true } })
+	})
+
+	test('calibrates a guider that is already guiding on the solution the flag discards', async () => {
+		const commands: string[] = []
+		const services = lifecycleServices(commands, undefined, true)
+
+		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: { calibrateBeforeStart: true } }))
+
+		expect(commands).toEqual(['calibrate'])
+		expect(result).toMatchObject({ type: 'completed', value: { action: 'startGuiding', commanded: true } })
+	})
+
+	test('leaves a guider that is already guiding alone when no calibration is declared', async () => {
+		const commands: string[] = []
+		const services = lifecycleServices(commands, undefined, true)
+
+		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: { calibrateBeforeStart: false } }))
+
+		expect(commands).toBeEmpty()
+		expect(result).toMatchObject({ type: 'completed', value: { action: 'startGuiding', commanded: false } })
+	})
+
+	test('skips a session that guides through no guider', async () => {
+		const commands: string[] = []
+		const services = lifecycleServices(commands)
+
+		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal), configuration('startGuiding', { guiding: { calibrateBeforeStart: true } }))
+
+		expect(commands).toBeEmpty()
+		expect(result).toMatchObject({ type: 'skipped' })
 	})
 })

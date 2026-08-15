@@ -413,17 +413,28 @@ async function rampSetpoint(services: SequencerLifecycleServices, context: Seque
 //
 // A session guiding through no guider is a session that was configured that way, so the action is skipped
 // rather than failed, exactly as the dither is.
-async function runStartGuiding(services: SequencerLifecycleServices, context: SequencerActionContext): Promise<SequencerActionResult<SequencerLifecycleOutcome>> {
+//
+// `calibrateBeforeStart` decides which command establishes the run. The plain start reuses whatever solution
+// the guider carries, which is the one it computed for the last target it guided; the flag is the declaration
+// that such a solution is not to be trusted for this session, and the commander then forces a calibration and
+// resolves only once the guider settled into guiding with the fresh one. It is one command and not a
+// calibration followed by a start, so nothing can guide on the stale solution in between — and for the same
+// reason a guider that is already guiding is not left alone when the flag is set: it is guiding on exactly
+// the solution the flag exists to discard.
+async function runStartGuiding(services: SequencerLifecycleServices, context: SequencerActionContext, configuration: SequencerLifecycle): Promise<SequencerActionResult<SequencerLifecycleOutcome>> {
 	const { guider } = context
 
 	if (guider === undefined) return { type: 'skipped', detail: 'the session guides through no guider' }
-	if (services.guiderCommander.running(guider)) return { type: 'completed', value: { action: 'startGuiding', commanded: false } }
 
-	context.progress({ detail: 'starting the guiding corrections' })
+	const calibrate = configuration.guiding?.calibrateBeforeStart ?? false
 
-	const guided = await services.guiderCommander.startGuiding(guider, { signal: context.signal })
+	if (!calibrate && services.guiderCommander.running(guider)) return { type: 'completed', value: { action: 'startGuiding', commanded: false } }
 
-	if (!guided.ok) return sequencerActionFailure(guided, 'the guider did not start guiding')
+	context.progress({ detail: calibrate ? 'calibrating the guider' : 'starting the guiding corrections' })
+
+	const guided = await (calibrate ? services.guiderCommander.calibrate(guider, { signal: context.signal }) : services.guiderCommander.startGuiding(guider, { signal: context.signal }))
+
+	if (!guided.ok) return sequencerActionFailure(guided, calibrate ? 'the guider did not calibrate' : 'the guider did not start guiding')
 
 	return { type: 'completed', value: { action: 'startGuiding', commanded: true } }
 }

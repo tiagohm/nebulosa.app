@@ -3,7 +3,7 @@ import type { MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 // oxfmt-ignore
 import type { Sequencer, SequencerAutofocus, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGoto, SequencerGuiderSettle, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
-import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
+import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanGuider, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { sequencerUnknownPlaceholders } from './sequencer.identity'
 import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
 import type { SequencerBlockRegistry } from './sequencer.registry'
@@ -137,6 +137,11 @@ export interface SequencerLifecycle {
 	// mount tracks — and a handler cannot read the target from its execution context, so the mode and the
 	// non-sidereal rates travel with the node that commands them: rates are radians per second.
 	readonly tracking?: Omit<SequencerTargetTracking, 'enabled'>
+	// Guiding policy the action establishes, present only on the action that starts guiding and undefined on
+	// every other one. The action declares no calibration of its own — the guiding block is the single
+	// authority for how the session guides — and a handler cannot read the plan from its execution context, so
+	// the policy travels with the node that commands it.
+	readonly guiding?: Pick<SequencerPlanGuider, 'calibrateBeforeStart'>
 }
 
 // Mutable accumulator threaded through the lowering, so every stage reports against the same definition
@@ -296,22 +301,38 @@ const SEQUENCER_COOLER_ACTION: ReadonlySet<SequencerLifecycleAction['type']> = n
 //
 // `cooling` is the thermal policy of the definition, or undefined when it declares none; it reaches only the
 // actions that command the cooler, which is the whole reason the policy is carried into a node. `tracking` is
-// the tracking policy of the target, carried the same way and reaching only the action that starts tracking.
-function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction, cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined): SequencerPlanAction {
-	const configuration: SequencerLifecycle = { action, required: action.required ?? false, timeout: action.timeout, retry: action.retry, cooling: SEQUENCER_COOLER_ACTION.has(action.type) ? cooling : undefined, tracking: action.type === 'startTracking' ? tracking : undefined }
+// the tracking policy of the target, carried the same way and reaching only the action that starts tracking,
+// and `guiding` is the guiding policy of the definition, reaching only the action that starts guiding.
+function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction, cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined, guiding: Pick<SequencerPlanGuider, 'calibrateBeforeStart'> | undefined): SequencerPlanAction {
+	const configuration: SequencerLifecycle = {
+		action,
+		required: action.required ?? false,
+		timeout: action.timeout,
+		retry: action.retry,
+		cooling: SEQUENCER_COOLER_ACTION.has(action.type) ? cooling : undefined,
+		tracking: action.type === 'startTracking' ? tracking : undefined,
+		guiding: action.type === 'startGuiding' ? guiding : undefined,
+	}
 	return { kind: 'action', id: sequencerNodeId.pipelineAction(pipeline, action.id), type: `${SEQUENCER_LIFECYCLE_BLOCK_PREFIX}${action.type}`, configuration }
 }
 
 // Lowers an ordered lifecycle pipeline. Returns undefined when the pipeline is disabled or declares no
 // enabled action: an empty container would be a node the runtime enters and leaves for nothing, and it would
 // still show up in the checkpoint as a place the session had been.
-function lowerPipeline(pipeline: 'startup' | 'finalize', enabled: boolean, actions: readonly SequencerLifecycleAction[], cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined): SequencerPlanSequence | undefined {
+function lowerPipeline(
+	pipeline: 'startup' | 'finalize',
+	enabled: boolean,
+	actions: readonly SequencerLifecycleAction[],
+	cooling: SequencerCooling | undefined,
+	tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined,
+	guiding: Pick<SequencerPlanGuider, 'calibrateBeforeStart'> | undefined,
+): SequencerPlanSequence | undefined {
 	if (!enabled) return undefined
 
 	const children: SequencerPlanAction[] = []
 
 	for (const action of actions) {
-		if (action.enabled) children.push(lowerLifecycleAction(pipeline, action, cooling, tracking))
+		if (action.enabled) children.push(lowerLifecycleAction(pipeline, action, cooling, tracking, guiding))
 	}
 
 	return children.length > 0 ? { kind: 'sequence', id: sequencerNodeId.pipeline(pipeline), children } : undefined
@@ -1002,8 +1023,13 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	const children: SequencerPlanNode[] = []
 	const cooling = definition.cooling.enabled ? definition.cooling : undefined
 	const tracking = lowerTracking(definition)
-	const lowered = lowerPipeline('startup', startup.enabled, startup.actions, cooling, tracking)
-	const finalized = lowerPipeline('finalize', shutdown.enabled, shutdown.actions, cooling, tracking)
+	const guider = lowerGuider(definition)
+	// Only the calibration reaches the node: the rest of the guider is the connection and the policy the
+	// session itself commands through, and copying it into every guiding action would carry a second, staler
+	// authority for what the plan already states once.
+	const guiding = guider === undefined ? undefined : { calibrateBeforeStart: guider.calibrateBeforeStart }
+	const lowered = lowerPipeline('startup', startup.enabled, startup.actions, cooling, tracking, guiding)
+	const finalized = lowerPipeline('finalize', shutdown.enabled, shutdown.actions, cooling, tracking, guiding)
 
 	if (lowered) children.push(lowered)
 	children.push(lowerTarget(definition, groups))
@@ -1016,7 +1042,6 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	if (shutdown.runOnFailure) runOn.push('failed')
 
 	const requirements = roleRequirements(definition, groups)
-	const guider = lowerGuider(definition)
 
 	const plan: SequencerPlan = {
 		definitionId: definition.id ?? '',

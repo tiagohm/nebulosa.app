@@ -1094,8 +1094,8 @@ async function runExposureGuard(execution: SequencerExecution, policies: Sequenc
 // attempt that just failed is only staged until the next commit, so a second read would answer with the same
 // number, hand the retry the same file name, and leave the attempt window measuring an attempt that never
 // moved, which is a slot that retries forever on a budget it can never spend. A retake reads it again, and may:
-// it is entered after a hold that commits first, so the registry it reads is the one that already knows the
-// attempt is over.
+// every path that leaves the loop for one commits the failed attempt first, so the registry it reads is the one
+// that already knows the attempt is over.
 async function runExposure(execution: SequencerExecution, targetId: string, loop: SequencerPlanLoop, node: SequencerPlanAction, configuration: SequencerCapture, selection: FrameSelection): Promise<SequencerNodeOutcome> {
 	const { host } = execution
 	const { group, cycle, ordinal } = selection
@@ -1173,10 +1173,33 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 		execution.events.push({ type: 'policyApplied', nodeId: node.id, detail: decision.kind })
 
 		switch (decision.kind) {
-			case 'retry':
+			case 'retry': {
+				// The record of the attempt that just failed is only staged, and both paths below hand the slot back
+				// to a retake that derives the physical attempt from the registry — the flip window opening here, a
+				// hold taken at the cadence boundary of the next attempt. A registry that has not seen the failure
+				// answers with the number that failed and the retake exposes over its file, which is why the hold
+				// path makes the same write before it lets go of the loop.
+				execution.keeper.capture(execution.capture)
+
+				if (host.commit(execution.keeper.checkpoint, execution.events)) execution.events = []
+
 				await host.delay(decision.delay, host.waitSignal)
+
+				// The delay is sky the guard that admitted this exposure never saw: it decided the frame fits ahead
+				// of the meridian before the attempt that failed, and the mount has been tracking through the
+				// failure and the wait ever since. Without asking it again a retried exposure starts past
+				// `maximumHourAngle`, or after the flip window opened, and runs the mount into the pier — the very
+				// case the guard exists for, and the one a retry makes likeliest, since a slot that failed is a slot
+				// whose frames are being taken later than planned. A window that opened in the meantime reorders the
+				// safe point around the flip instead of exposing before it.
+				const guarded = await runExposureGuard(execution, triggerPoliciesOf(loop), group)
+
+				if (guarded.kind === 'ended') return guarded.outcome
+				if (guarded.kind === 'reenter') return SEQUENCER_RETAKE
+
 				attempt = decision.attempt
 				continue
+			}
 			case 'abandon':
 				execution.capture = abandonSlot(execution.capture, targetId, group)
 				execution.cause = decision.cause

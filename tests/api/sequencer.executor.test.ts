@@ -316,6 +316,37 @@ describe('plan walk', () => {
 		expect(state.events.filter((it) => it.type === 'policyApplied')).toHaveLength(1)
 	})
 
+	test('asks the meridian guard again before the retry of an exposure that failed', async () => {
+		const base = definition()
+		let failures = 0
+		const state: Harness = harness(planOf({ meridianFlip: { ...base.meridianFlip, enabled: true } }), (context) => {
+			if (context.nodeId.endsWith('.trigger.meridianFlip')) {
+				state.observation = { ...state.observation, pierSide: 'EAST' }
+
+				return Promise.resolve({ type: 'completed', value: undefined })
+			}
+
+			if (context.frame !== undefined && failures++ === 0) {
+				state.observation = { ...state.observation, preFlipPierSide: 'WEST' }
+
+				return Promise.resolve({ type: 'retryableFailure', reason: 'commandFailed', detail: 'the camera did not answer' })
+			}
+
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+
+		state.observation = { hourAngle: 0.099, pierSide: 'WEST' }
+
+		const outcome = await runSequencerPlan(state.host)
+
+		const flipped = state.executed.findIndex((it) => it.nodeId.endsWith('.trigger.meridianFlip'))
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(state.executed.filter((it) => it.nodeId.endsWith('.trigger.meridianFlip'))).toHaveLength(1)
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(3)
+		expect(state.executed.slice(0, flipped).filter((it) => it.slot !== undefined)).toHaveLength(1)
+	})
+
 	test('takes the safe point again once the flip window the guard waited for opens', async () => {
 		const base = definition()
 		const state: Harness = harness(planOf({ meridianFlip: { ...base.meridianFlip, enabled: true } }), (context) => {

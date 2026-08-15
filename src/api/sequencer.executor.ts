@@ -226,6 +226,12 @@ interface SequencerExecution {
 // The startup pipeline decides on its own whether the plan runs at all: a required action of it that failed is
 // already the primary outcome of the session, and the target block is never entered. The finalize pipeline then
 // runs for the outcomes the definition asked it to run on, under the terminal signal.
+//
+// Startup runs under the wait signal rather than the action one, so a pause never tears it down. A lifecycle
+// pipeline has no paused state (§11.3): a pause is honored at the safe points of the target block, and the
+// immediate mode cancelling the running action would end the startup as a commanded stop — every remaining step
+// `notRun`, the session terminal and non-resumable — for an operator who only asked it to wait. A stop still
+// cancels it, gracefully included, because there is no frame in a lifecycle step worth preserving.
 export async function runSequencerPlan(host: SequencerExecutorHost): Promise<SequencerExecutionOutcome> {
 	const { plan } = host
 	const at = host.now()
@@ -245,7 +251,7 @@ export async function runSequencerPlan(host: SequencerExecutorHost): Promise<Seq
 	const startup = pipelineOf(plan.root, 'startup')
 
 	if (startup !== undefined && plan.startup !== undefined) {
-		const report = await runPipelineBlock(execution, plan.startup, startup, host.signal)
+		const report = await runPipelineBlock(execution, plan.startup, startup, host.waitSignal)
 		primary = sequencerStartupOutcome(report)
 	}
 

@@ -52,6 +52,7 @@ interface Harness {
 	readonly events: SequencerEventDraft[]
 	readonly artifacts: () => readonly SequencerArtifact[]
 	readonly controller: AbortController
+	readonly action: AbortController
 	readonly holds: string[]
 	desired: SequencerDesiredState
 	observation: SequencerSafePointObservation
@@ -81,7 +82,10 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 	const durable = new Map<string, SequencerArtifact>()
 	const staged: SequencerArtifact[] = []
 	const controller = new AbortController()
+	const action = new AbortController()
 	let sequence = 0
+
+	controller.signal.addEventListener('abort', () => action.abort(), { once: true })
 
 	const store = (artifact: SequencerArtifact) => durable.set(`${artifact.logicalSlotId}#${artifact.attempt}`, artifact)
 	const artifacts = () => [...durable.values()]
@@ -113,6 +117,7 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 		events,
 		artifacts,
 		controller,
+		action,
 		holds,
 		desired: 'running',
 		observation: {},
@@ -120,7 +125,7 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 			sessionId: 'session-1',
 			plan,
 			storage: { root: plan.storage.root, session: 'session-1' },
-			signal: controller.signal,
+			signal: action.signal,
 			waitSignal: controller.signal,
 			terminalSignal: new AbortController().signal,
 			now: Date.now,
@@ -516,6 +521,32 @@ describe('plan walk', () => {
 		expect(outcome.terminal.state).toBe('completed')
 		expect(dithers).toBeGreaterThan(0)
 		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
+	})
+
+	test('keeps the startup pipeline running when a pause cancels the action', async () => {
+		const base = definition()
+		const startup = {
+			...base.startup,
+			actions: [
+				{ id: 'park', enabled: true, timeout: 30, retry: retry(), type: 'parkMount' as const, required: true },
+				{ id: 'unpark', enabled: true, timeout: 30, retry: retry(), type: 'unparkMount' as const, required: true },
+			],
+			continueOnFailure: false,
+		}
+		const state: Harness = harness(planOf({ startup }), (context) => {
+			if (context.nodeId === 'startup.action[park]') {
+				state.action.abort()
+
+				if (context.signal.aborted) return Promise.resolve({ type: 'retryableFailure', reason: 'aborted', detail: 'the pause cancelled the action' })
+			}
+
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[unpark]')
+		expect(outcome.checkpoint.completed).toContain('startup.action[park]')
+		expect(outcome.checkpoint.completed).toContain('startup.action[unpark]')
 	})
 
 	test('records a lifecycle step as completed only when it ran', async () => {

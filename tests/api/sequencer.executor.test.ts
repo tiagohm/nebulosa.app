@@ -65,6 +65,7 @@ interface Harness {
 	observation: SequencerSafePointObservation
 	onHold?: (nodeId: string) => SequencerDesiredState
 	clock?: () => number
+	refuseCommit?: () => boolean
 }
 
 function guidingServices(loop: () => OperationResult<unknown>, dither?: () => OperationResult<unknown>): SequencerGuidingServices {
@@ -175,9 +176,13 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 			},
 			finalizing: () => void state.phases.push('finalizing'),
 			commit: (_, drafts) => {
+				if (state.refuseCommit?.()) return false
+
 				events.push(...drafts)
 				for (const artifact of staged) store(artifact)
 				staged.length = 0
+
+				return true
 			},
 			delay: () => Promise.resolve(),
 		},
@@ -281,6 +286,33 @@ describe('plan walk', () => {
 
 		await runSequencerPlan(state.host)
 
+		expect(state.events.filter((it) => it.type === 'policyApplied')).toHaveLength(1)
+	})
+
+	test('carries the events a refused commit could not place into the next one', async () => {
+		let refuse = false
+		let failed = false
+
+		const state: Harness = harness(planOf(), (context) => {
+			if (context.frame !== undefined && !failed) {
+				failed = true
+				refuse = true
+
+				return Promise.resolve({ type: 'retryableFailure', reason: 'commandFailed', detail: 'the camera did not answer' })
+			}
+
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+
+		state.refuseCommit = () => {
+			const refused = refuse
+			refuse = false
+			return refused
+		}
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
 		expect(state.events.filter((it) => it.type === 'policyApplied')).toHaveLength(1)
 	})
 

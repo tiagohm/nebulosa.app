@@ -134,9 +134,10 @@ export interface SequencerExecutorHost {
 	// tells a reader the plan is still capturing and lets the control reduction accept a pause or a resume that
 	// nothing can act on any more — the terminal pipeline is never interrupted (§8.6).
 	readonly finalizing: () => void
-	// Persists the checkpoint together with the events produced since the last write. It is best-effort: a
-	// refused write leaves the checkpoint dirty and the next one carries it.
-	readonly commit: (checkpoint: SequencerCheckpoint, events: readonly SequencerEventDraft[]) => void
+	// Persists the checkpoint together with the events produced since the last write, answering whether the
+	// store accepted the write. It is best-effort: a refused write leaves the checkpoint dirty and the next one
+	// carries it, together with the events it could not place, which is what the answer is read for.
+	readonly commit: (checkpoint: SequencerCheckpoint, events: readonly SequencerEventDraft[]) => boolean
 	// Waits `delay` milliseconds, resolving early when the signal aborts.
 	readonly delay: (delay: number, signal: AbortSignal) => Promise<void>
 	// Opens the collaborators the walk cannot open for itself, which is the guiding session the plan declares,
@@ -628,9 +629,14 @@ async function checkpointDue(execution: SequencerExecution, trigger: SequencerCh
 
 	execution.keeper.capture(execution.capture)
 	execution.keeper.anchors(execution.anchors)
-	execution.host.commit(execution.keeper.checkpoint, execution.events)
-	execution.keeper.written(at)
-	execution.events = []
+
+	// A refused write leaves the checkpoint dirty and the events staged, so the next unit carries both. Marking
+	// it written here would tell the keeper the store holds a value it never took, and the difference would only
+	// be noticed by a resume reading a checkpoint from before the frames it is resuming after.
+	if (execution.host.commit(execution.keeper.checkpoint, execution.events)) {
+		execution.keeper.written(at)
+		execution.events = []
+	}
 
 	await Promise.resolve()
 }
@@ -1168,8 +1174,8 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 				// is only staged until a commit, and the physical attempt the retake derives from the registry
 				// would otherwise answer with the number that failed and expose over its file.
 				execution.keeper.capture(execution.capture)
-				host.commit(execution.keeper.checkpoint, execution.events)
-				execution.events = []
+
+				if (host.commit(execution.keeper.checkpoint, execution.events)) execution.events = []
 
 				const resumed = await holdWalk(execution, node.id)
 

@@ -1025,7 +1025,7 @@ export class SequencerRuntime {
 			slotAttempt: (logicalSlotId) => sequencerSlotAttempt(this.#store.artifacts(active.id), logicalSlotId),
 			hold: (nodeId) => this.#hold(active, nodeId),
 			finalizing: () => this.#enterFinalizing(active),
-			commit: (checkpoint, events) => void this.#commitBestEffort(active, { checkpoint, events }),
+			commit: (checkpoint, events) => this.#commitBestEffort(active, { checkpoint, events }) !== undefined,
 			delay: async (delay, signal) => void (await abortableDelay(delay, signal)),
 			open: () => this.#openGuider(active),
 		}

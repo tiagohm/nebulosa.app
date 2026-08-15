@@ -1011,6 +1011,21 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 
 		if (decision.kind === 'retry') {
 			await host.delay(decision.delay, host.waitSignal)
+
+			// The retry delay is where a stop lands: it ends the wait early and leaves standing a decision taken
+			// before the operator commanded anything, so the boundary is asked again before the bracket commands
+			// a second time. Without it a stopped session goes on to suspend the guider, turn a wheel and sweep a
+			// focuser, which is the whole point of the delay being interruptible. The boundary is the earliest of
+			// all: nothing is on the sensor and the safe point has not reached its terminal decision, so a pause
+			// is attended here only under the immediate mode, exactly as it is between two exposure attempts.
+			const converged = await convergeAt(execution, 'afterExposure', frame.id)
+
+			if (converged.outcome.kind !== 'continue') return converged.outcome
+
+			// A hold ends the validity of the reading the safe point was decided on, so the whole safe point is
+			// taken again from the moment the session resumed instead of retried against an hour-old sky.
+			if (converged.held) return SEQUENCER_RETAKE
+
 			attempt = decision.attempt
 			continue
 		}

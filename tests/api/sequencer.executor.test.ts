@@ -393,6 +393,26 @@ describe('plan walk', () => {
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 	})
 
+	test('commands nothing again when the operator stops the session inside the retry delay of the safe point', async () => {
+		let suspensions = 0
+		const state: Harness = harness(
+			guided(),
+			undefined,
+			guidingServices(() => {
+				suspensions++
+				state.desired = 'stopped'
+
+				return failedOperationResult('commandFailed', 'the guider did not stop correcting')
+			}),
+		)
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('stopped')
+		expect(suspensions).toBe(1)
+		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
+	})
+
 	test('spends the guiding budget and not the execution default on a suspension that keeps failing', async () => {
 		const base = definition()
 		let suspensions = 0

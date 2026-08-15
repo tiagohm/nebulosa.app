@@ -856,6 +856,56 @@ describe('reserved operation scope', () => {
 		expect(await restarted.result).toEqual(successfulOperationResult(undefined))
 	})
 
+	test('reopens the reservation a drain closed once its cleanups resolved', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const reservation = reserve(arbiter, CAMERA, MOUNT)
+		const scope = coordinator.reservedScope(reservation)
+		const compensating = Promise.withResolvers<OperationResult<unknown>>()
+
+		const capture = scope.start('capture', [{ key: CAMERA }], (context) => {
+			context.onCleanup(async () => {
+				const parked = scope.start('park', [{ key: MOUNT }], () => successfulOperationResult(undefined))
+				compensating.resolve(await parked.result)
+			})
+
+			return waitForAbort(context)
+		})
+
+		await coordinator.drainByReservationOwner(SESSION, 'aborted')
+
+		expect(await capture.result).toMatchObject(failedOperationResult('aborted'))
+		expect(await compensating.promise).toMatchObject(failedOperationResult('aborted'))
+
+		const resumed = scope.start('capture', [{ key: CAMERA }], () => successfulOperationResult(undefined))
+
+		expect(await resumed.result).toEqual(successfulOperationResult(undefined))
+
+		reservation.release()
+
+		expect(arbiter.availability(CAMERA)).toBe('available')
+	})
+
+	test('leaves a reservation another caller cancelled for good closed after a drain', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const reservation = reserve(arbiter, CAMERA, MOUNT)
+		const scope = coordinator.reservedScope(reservation)
+
+		const capture = scope.start('capture', [{ key: CAMERA }], waitForAbort)
+
+		await coordinator.cancelByReservationOwner(SESSION, 'aborted')
+		await coordinator.drainByReservationOwner(SESSION, 'aborted')
+
+		expect(await capture.result).toMatchObject(failedOperationResult('aborted'))
+
+		const late = scope.start('capture', [{ key: CAMERA }], () => successfulOperationResult(undefined))
+
+		expect(await late.result).toMatchObject(failedOperationResult('aborted'))
+
+		reservation.release()
+	})
+
 	test('closes a reservation that had not started a tree yet', async () => {
 		const arbiter = new ResourceArbiter()
 		const coordinator = new OperationCoordinator(arbiter)

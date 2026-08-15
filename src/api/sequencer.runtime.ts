@@ -719,9 +719,15 @@ export class SequencerRuntime {
 	// The replacement is what makes an immediate pause resumable: the walk that wakes up runs a node again, and a
 	// spent signal would abort it before it commanded anything. A session that is stopping never reaches for the
 	// new one, and arming it on the single path is what guarantees a resume is never handed a spent signal.
+	//
+	// The drain is the non-terminal form for the same reason. Neither caller is giving the reservation up: a
+	// pause resumes into it and an immediate stop runs its terminal pipeline under it, so closing it for good
+	// here would refuse the resumed action and every park and warm of the finalize as `reservation has been
+	// cancelled`. The reservation is released by the finalization and by the shutdown, which is where the
+	// terminal form belongs and where it stayed.
 	async #cancelActiveAction(active: ActiveSession) {
 		active.action.abort('aborted')
-		await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
+		await this.#coordinator.drainByReservationOwner(active.owner, 'aborted')
 		active.action = new AbortController()
 	}
 

@@ -321,26 +321,64 @@ export class OperationCoordinator {
 	// Cancelling is terminal for the reservation, not a pass over the trees that exist right now: it is called
 	// by a holder that is giving the devices up, and reopening it afterwards would only admit work nothing is
 	// waiting for. A reservation that must run again is a new reservation, and its token is a new token.
-	async cancelByReservationOwner(owner: ResourceReservationOwner, reason: OperationFailureReason = 'aborted') {
+	cancelByReservationOwner(owner: ResourceReservationOwner, reason: OperationFailureReason = 'aborted') {
+		return this.#drainReservation(owner, reason, true)
+	}
+
+	// Aborts every operation tree started inside one reservation and waits for all cleanup, leaving the
+	// reservation open to the work that comes after.
+	//
+	// This is the non-terminal half of `cancelByReservationOwner`, for a holder interrupting its own work and
+	// keeping the devices. The sequencer has two such moments and neither gives the reservation up: an immediate
+	// pause cancels the action and resumes into the same reservation, and an immediate stop cancels the action
+	// and then runs its terminal pipeline under it. Closing the reservation for good at either point refuses
+	// everything the session does next with `reservation has been cancelled` — a pause that can never resume,
+	// and a stop whose mount is never parked and whose camera is never warmed.
+	//
+	// The tokens are still closed for the duration of the drain, for the reason the terminal form closes them:
+	// an executor resuming from its abort must not open one more tree behind the snapshot being awaited. They
+	// are reopened once every cleanup resolved, which is the instant nothing of the cancelled work is left
+	// running. A token another caller had already closed for good stays closed.
+	drainByReservationOwner(owner: ResourceReservationOwner, reason: OperationFailureReason = 'aborted') {
+		return this.#drainReservation(owner, reason, false)
+	}
+
+	// Cancels the trees of one reservation and awaits their cleanups, closing the reservation permanently when
+	// `terminal` and reopening exactly the tokens this call closed otherwise.
+	async #drainReservation(owner: ResourceReservationOwner, reason: OperationFailureReason, terminal: boolean) {
 		const token = this.#reservationTokens.get(owner)
 		const roots = this.#operationsByReservationOwner.get(owner)
+		// Tokens closed by this call, which are the only ones a non-terminal drain may reopen: one that was
+		// already closed belongs to a caller that gave the reservation up, and reopening it would readmit work
+		// nothing is waiting for.
+		const closed: ReservationToken[] = []
 
 		// Closing the reservation is synchronous and happens before the first await, so the snapshot below is
 		// complete: an executor resuming from its abort cannot open one more tree behind it. Draining in a loop
 		// instead would let a cleanup that starts a compensating operation on every pass never terminate. The
 		// roots are closed by their own token too, which is the current one unless the owner reserved again.
-		if (token !== undefined) this.#cancelledReservations.add(token)
-
-		if (roots === undefined) return
-
-		const cancelling = roots.values().toArray()
-
-		for (const operation of cancelling) {
-			if (operation.token !== undefined) this.#cancelledReservations.add(operation.token)
+		if (token !== undefined && !this.#cancelledReservations.has(token)) {
+			this.#cancelledReservations.add(token)
+			closed.push(token)
 		}
 
-		// Roots leave the set only in their own finalization, which cannot run before this snapshot is taken.
-		await Promise.all(cancelling.map((operation) => this.#cancel(operation, reason)))
+		const cancelling = roots === undefined ? [] : roots.values().toArray()
+
+		for (const operation of cancelling) {
+			if (operation.token !== undefined && !this.#cancelledReservations.has(operation.token)) {
+				this.#cancelledReservations.add(operation.token)
+				closed.push(operation.token)
+			}
+		}
+
+		try {
+			// Roots leave the set only in their own finalization, which cannot run before this snapshot is taken.
+			await Promise.all(cancelling.map((operation) => this.#cancel(operation, reason)))
+		} finally {
+			// A cleanup that threw still leaves the reservation usable: the drain is over either way, and holding
+			// it closed would strand the pause or the terminal pipeline the caller is about to run.
+			if (!terminal) for (const each of closed) this.#cancelledReservations.delete(each)
+		}
 	}
 
 	// Aborts every operation tree synchronously and waits for all cleanup; roots cascade to their scopes.

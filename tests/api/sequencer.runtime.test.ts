@@ -790,7 +790,12 @@ describe('sequencer runtime', () => {
 			exposeHandler(async (context, configuration) => {
 				executed.push(context.nodeId)
 
-				if (executed.length > 1) return { type: 'completed', value: configuration.exposureTime }
+				if (executed.length > 1) {
+					const handle = context.scope.start('expose', [context.request('camera')!], () => successfulOperationResult(configuration.exposureTime))
+					const result = await handle.result
+
+					return result.ok ? { type: 'completed', value: result.value } : { type: 'fatalFailure', reason: result.reason }
+				}
 
 				running.resolve()
 

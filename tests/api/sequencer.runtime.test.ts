@@ -1,17 +1,20 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import { join } from 'path'
+import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
+import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
 import { OperationCoordinator } from 'src/api/operation'
-import { ResourceArbiter } from 'src/api/resource'
+import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import { sequencerNodeId } from 'src/api/sequencer.compiler'
 import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
 import type { SequencerPreparationServices } from 'src/api/sequencer.prepare'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerAuxiliaryTarget } from 'src/api/sequencer.registry'
 import { SequencerRuntime, SessionAdmissionGate, SessionTeardown } from 'src/api/sequencer.runtime'
-import type { SequencerRuntimePlanDraft } from 'src/api/sequencer.runtime'
+import type { SequencerDeviceResolver, SequencerRuntimePlanDraft } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
+import { successfulOperationResult } from '#/orchestration'
 import type { SequencerDevices, SequencerRetryPolicy } from '#/sequencer'
-import type { SequencerPlan, SequencerPlanAction, SequencerPlanSequence, SequencerPlanStorage } from '#/sequencer.plan'
+import type { SequencerPlan, SequencerPlanAction, SequencerPlanGuider, SequencerPlanSequence, SequencerPlanStorage } from '#/sequencer.plan'
 
 describe('session admission gate', () => {
 	test('admits the first session and refuses another one naming the holder', () => {
@@ -150,7 +153,7 @@ const RETRY: SequencerRetryPolicy = { maxAttempts: 1, delay: 0, backoff: 1, maxi
 
 const SERVICES = { preparation: {} as SequencerPreparationServices, guiding: {} as SequencerGuidingServices }
 
-function compiled(overrides?: { readonly devices?: SequencerDevices; readonly storage?: Partial<SequencerPlanStorage>; readonly configuration?: unknown; readonly execution?: Partial<SequencerPlan['execution']>; readonly nodes?: number }): SequencerPlan {
+function compiled(overrides?: { readonly devices?: SequencerDevices; readonly storage?: Partial<SequencerPlanStorage>; readonly configuration?: unknown; readonly execution?: Partial<SequencerPlan['execution']>; readonly nodes?: number; readonly guider?: SequencerPlan['guider'] }): SequencerPlan {
 	const configuration = overrides?.configuration ?? { exposureTime: 2 }
 	const actions: SequencerPlanAction[] = []
 
@@ -170,14 +173,19 @@ function compiled(overrides?: { readonly devices?: SequencerDevices; readonly st
 		groups: [],
 		handlers: { expose: 1 },
 		storage: { root: '/data/nebulosa', fileNameTemplate: '{target}', directoryTemplate: '{target}', autoSubFolderMode: 'noon', ...overrides?.storage },
+		guider: overrides?.guider,
 	}
+}
+
+function guiderPlan(connection: SequencerPlanGuider['connection']): SequencerPlanGuider {
+	return { connection, calibrateBeforeStart: false, recalibrateAfterMeridianFlip: false, restoreAfterInterruption: false, settle: { tolerance: 1.5, time: 10, timeout: 120 }, retry: RETRY }
 }
 
 function plan(overrides?: Parameters<typeof compiled>[0]): SequencerRuntimePlanDraft {
 	return { compiled: compiled(overrides) }
 }
 
-function runtime(handler: SequencerActionHandler<ExposeConfiguration, number>, now?: () => number) {
+function runtime(handler: SequencerActionHandler<ExposeConfiguration, number>, now?: () => number, overrides?: { readonly resolve?: SequencerDeviceResolver; readonly guiding?: SequencerGuidingServices }) {
 	const arbiter = new ResourceArbiter()
 	const coordinator = new OperationCoordinator(arbiter)
 	const registry = new SequencerBlockRegistry()
@@ -185,7 +193,7 @@ function runtime(handler: SequencerActionHandler<ExposeConfiguration, number>, n
 
 	registry.register(handler)
 
-	return { arbiter, coordinator, registry, store, runtime: new SequencerRuntime({ store, registry, coordinator, now, ...SERVICES, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) }) }
+	return { arbiter, coordinator, registry, store, runtime: new SequencerRuntime({ store, registry, coordinator, now, ...SERVICES, ...overrides, resolve: overrides?.resolve ?? ((_, deviceId) => ({ key: `logical:${deviceId}` })) }) }
 }
 
 describe('sequencer runtime', () => {
@@ -233,6 +241,88 @@ describe('sequencer runtime', () => {
 		// The reservation and the claim are gone only after the action and its cleanups finished.
 		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 		expect(instance.activeSessionId).toBeUndefined()
+	})
+
+	test('reserves the logical key of the remote guider the plan declares', async () => {
+		let connected: unknown
+		let availability: string | undefined
+
+		const { runtime: instance, arbiter } = runtime(
+			exposeHandler(() => {
+				availability = arbiter.availability(remoteGuiderKey('localhost', 4400))
+				return Promise.resolve({ type: 'completed', value: 1 })
+			}),
+			undefined,
+			{
+				guiding: {
+					guiderCommander: {
+						connect: (request: unknown) => {
+							connected = request
+							return Promise.resolve(successfulOperationResult({ id: 'guider-1' }))
+						},
+					},
+				} as unknown as SequencerGuidingServices,
+			},
+		)
+
+		const created = instance.create(plan({ guider: guiderPlan({ mode: 'remote', host: 'localhost', port: 4400 }) }))!
+
+		instance.start(created.id)
+
+		const session = await instance.settled(created.id)
+
+		expect(session?.state).toBe('completed')
+		expect(connected).toEqual({ mode: 'remote', host: 'localhost', port: 4400 })
+		expect(availability).not.toBe('available')
+		expect(arbiter.availability(remoteGuiderKey('localhost', 4400))).toBe('available')
+	})
+
+	test('reserves the devices and the logical keys of the local guider the plan declares', async () => {
+		const camera = { id: 'guide-camera-1', type: 'camera', hardwareId: 'hw-guide-camera', connected: true, client: { id: 'client-1' } } as unknown as Camera
+		const guideOutput = { id: 'guide-output-1', canPulseGuide: true, hardwareId: 'hw-guide-output', connected: true, client: { id: 'client-1' } } as unknown as GuideOutput
+		let connected: unknown
+		const held: string[] = []
+
+		const { runtime: instance, arbiter } = runtime(
+			exposeHandler(() => {
+				for (const key of [localGuiderCameraKey(camera), localGuiderOutputKey(guideOutput), 'hw-guide-camera', 'hw-guide-output']) {
+					if (arbiter.availability(key) !== 'available') held.push(key)
+				}
+
+				return Promise.resolve({ type: 'completed', value: 1 })
+			}),
+			undefined,
+			{
+				resolve: (role, deviceId) => {
+					if (role === 'guideCamera') return { key: resourceKey(camera), device: camera }
+					if (role === 'guideOutput') return { key: resourceKey(guideOutput), device: guideOutput }
+					return { key: `logical:${deviceId}` }
+				},
+				guiding: {
+					guiderCommander: {
+						connect: (request: unknown) => {
+							connected = request
+							return Promise.resolve(successfulOperationResult({ id: 'guider-1' }))
+						},
+					},
+				} as unknown as SequencerGuidingServices,
+			},
+		)
+
+		const created = instance.create(
+			plan({
+				devices: { camera: 'camera-1', guideCamera: 'guide-camera-1', guideOutput: 'guide-output-1' },
+				guider: guiderPlan({ mode: 'local', focalLength: 200, capture: { exposureTime: 2, frameType: 'LIGHT', binX: 1, binY: 1, gain: 0, offset: 0, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false } }),
+			}),
+		)!
+
+		instance.start(created.id)
+
+		const session = await instance.settled(created.id)
+
+		expect(session?.state).toBe('completed')
+		expect(connected).toEqual({ mode: 'local', focalLength: 200, camera: 'guide-camera-1', guideOutput: 'guide-output-1' })
+		expect(held).toEqual([localGuiderCameraKey(camera), localGuiderOutputKey(guideOutput), 'hw-guide-camera', 'hw-guide-output'])
 	})
 
 	test('runs the action inside the reservation while refusing an operation outside it', async () => {

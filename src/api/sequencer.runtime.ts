@@ -1,11 +1,12 @@
 import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
-import { isCamera, isMount, isWheel } from 'nebulosa/src/devices/indi/device'
+import { isCamera, isGuideOutput, isMount, isWheel } from 'nebulosa/src/devices/indi/device'
 import type { PierSide } from 'nebulosa/src/devices/indi/device'
 import { normalizePI } from 'nebulosa/src/math/units/angle'
 import type { GuiderConnect } from '#/guider'
 import type { SequencerDeviceRole, SequencerDevices, SequencerFilterReference } from '#/sequencer'
 import type { SequencerPlan, SequencerPlanAction } from '#/sequencer.plan'
 import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEvent, SequencerEventDraft, SequencerFailure, SequencerSession, SequencerSessionState } from '#/sequencer.state'
+import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from './guider.session'
 import type { OperationCoordinator, OperationScope } from './operation'
 import { abortableDelay } from './operation.wait'
 import type { ResourceArbiter, ResourceRequest, ResourceReservation, ResourceReservationOwner } from './resource'
@@ -553,6 +554,13 @@ export class SequencerRuntime {
 			}
 		}
 
+		const guiderRefusal = this.#reserveGuider(plan.compiled, devices, roles, requests)
+
+		if (guiderRefusal !== undefined) {
+			teardown.run()
+			return guiderRefusal
+		}
+
 		const owner: ResourceReservationOwner = { id: sessionId, kind: 'sequencer' }
 		const reserved = this.#arbiter.reserve(owner, requests)
 
@@ -626,6 +634,52 @@ export class SequencerRuntime {
 			roles.set(binding.role, request)
 			requests.push(request)
 		}
+
+		return undefined
+	}
+
+	// Reserves what the guiding session of the plan occupies, accumulating into the same role map and request
+	// set the blocks charge. Returns the refusal that stops the start, or undefined when the plan declares no
+	// guider or everything it declares resolved.
+	//
+	// No block declares any of this, which is why it cannot come from `handler.resources`: the session opens the
+	// guider itself, between the reservation and its first node, and there are two halves to take.
+	//
+	// The physical roles of a local guider are what `#openGuider` names in its connect request, and no lifecycle
+	// action binds them — `startGuiding` commands a session, not a device — so a local guider without this
+	// resolves to nothing in `roles` and refuses every start as disconnected.
+	//
+	// The logical `logical:guider:*` keys are the other half. `guider.session.ts` reserves a guiding session by
+	// those keys and deliberately leaves the physical device acquirable so the guider's own operations can lease
+	// it, so reserving only the physical half produces a state worse than a clean failure: a guider opened by
+	// hand during the session connects, because the logical keys are free, and only fails at its first command.
+	// A local guider takes one key per device rather than one naming the pair, because a combined key would
+	// differ for every combination and two sessions sharing only the camera would both be accepted.
+	#reserveGuider(plan: SequencerPlan, devices: SequencerDevices, roles: Map<SequencerDeviceRole, ResourceRequest>, requests: ResourceRequest[]): SequencerStartResult | undefined {
+		const guider = plan.guider
+
+		if (guider === undefined) return undefined
+
+		const { connection } = guider
+
+		if (connection.mode === 'remote') {
+			requests.push({ key: remoteGuiderKey(connection.host, connection.port) })
+			return undefined
+		}
+
+		const refusal = this.#reserveRoles([{ role: 'guideCamera' }, { role: 'guideOutput' }], devices, roles, requests)
+
+		if (refusal !== undefined) return refusal
+
+		const camera = roles.get('guideCamera')?.device
+		const guideOutput = roles.get('guideOutput')?.device
+
+		// The resolver already refused a device that cannot do what its role requires, so these narrowings only
+		// restate what the bindings above guarantee.
+		if (camera === undefined || !isCamera(camera)) return { ok: false, reason: 'roleUnresolved', detail: 'device of role guideCamera is not a camera' }
+		if (guideOutput === undefined || !isGuideOutput(guideOutput)) return { ok: false, reason: 'roleUnresolved', detail: 'device of role guideOutput is not a guide output' }
+
+		requests.push({ key: localGuiderCameraKey(camera) }, { key: localGuiderOutputKey(guideOutput) })
 
 		return undefined
 	}

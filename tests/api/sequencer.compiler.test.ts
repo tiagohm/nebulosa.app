@@ -381,6 +381,24 @@ describe('structural validation', () => {
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and no enabled startup action starts guiding, so every frame would be captured unguided' }])
 	})
 
+	test('a startup action starting guiding without failing the session is refused', () => {
+		const definition = canonical()
+		const actions = definition.startup.actions.map((it) => (it.type === 'startGuiding' ? { ...it, required: false } : it))
+		const compilation = compile({ ...definition, startup: { ...definition.startup, actions } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'startup.actions[3].required', message: 'the guiding block declares the guider the capture runs under, and this action does not fail the session when it cannot start guiding, so every frame would be captured unguided' }])
+	})
+
+	test('a disabled startup action starting guiding is not asked to fail the session', () => {
+		const definition = canonical()
+		const actions = definition.startup.actions.map((it) => (it.type === 'startGuiding' ? { ...it, enabled: false, required: false } : it))
+		const compilation = compile({ ...definition, dither: { ...definition.dither, enabled: false }, startup: { ...definition.startup, actions } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and no enabled startup action starts guiding, so every frame would be captured unguided' }])
+	})
+
 	test('a lifecycle action commanding the cooler is refused without a cooling block', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, cooling: { ...definition.cooling, enabled: false } })
@@ -929,7 +947,7 @@ describe('failure policies', () => {
 
 	test('exhausting a policy into a suspension is refused', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('unpark', { retry: { ...retry(), onExhausted: 'suspend' } }), action('cool', { type: 'coolCamera' }), action('guide', { type: 'startGuiding' })] } })
+		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('unpark', { retry: { ...retry(), onExhausted: 'suspend' } }), action('cool', { type: 'coolCamera' }), action('guide', { type: 'startGuiding', required: true })] } })
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'startup.actions[0].retry.onExhausted', message: 'this version has no suspended state to exhaust a policy into' }])

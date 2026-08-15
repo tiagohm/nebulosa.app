@@ -49,7 +49,7 @@ function planOf(overrides?: Partial<Sequencer>): SequencerPlan {
 function guided(): SequencerPlan {
 	const base = definition()
 
-	return planOf({ guiding: { ...base.guiding, enabled: true }, dither: { ...base.dither, enabled: true, everyFrames: 1, beforeFirstFrame: true }, startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding' })] } })
+	return planOf({ guiding: { ...base.guiding, enabled: true }, dither: { ...base.dither, enabled: true, everyFrames: 1, beforeFirstFrame: true }, startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding', required: true })] } })
 }
 
 interface Harness {
@@ -451,7 +451,7 @@ describe('plan walk', () => {
 			planOf({
 				guiding: { ...base.guiding, enabled: true, retry: { ...retry(), maxAttempts: 2 } },
 				dither: { ...base.dither, enabled: true, everyFrames: 1, beforeFirstFrame: true },
-				startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding' })] },
+				startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding', required: true })] },
 			}),
 			undefined,
 			guidingServices(() => {
@@ -685,7 +685,7 @@ describe('plan walk', () => {
 		const dither = { ...base.dither, enabled: true, onFailure: 'continue' as const, retry: { ...retry(), maxAttempts: 1 } }
 		let dithers = 0
 		const state = harness(
-			planOf({ dither, guiding: { ...base.guiding, enabled: true }, startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding' })] } }),
+			planOf({ dither, guiding: { ...base.guiding, enabled: true }, startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding', required: true })] } }),
 			undefined,
 			guidingServices(
 				() => successfulOperationResult(undefined),

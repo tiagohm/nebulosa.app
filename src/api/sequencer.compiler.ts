@@ -921,6 +921,26 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	// so guiding started there guides nothing.
 	if (guiding.enabled && !commands(definition, ['startGuiding'], ['startup'])) diagnostics.push({ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and no enabled startup action starts guiding, so every frame would be captured unguided' })
 
+	// Existing is not enough: the action has to be terminal too. `required` is what turns a startup failure into
+	// a session failure, and it defaults to false, so a guiding start that exhausted its retries otherwise lets
+	// the walk continue into the target. The rest of the session then behaves exactly as a session configured
+	// without a guider — the interlock leaves the idle guider alone, the dither skips — and every frame of the
+	// night is exposed unguided on a definition that declares guiding, which is the same silent disagreement the
+	// check above prevents, reached at runtime instead of at edit time.
+	//
+	// It is refused rather than forced during the lowering: an operator who really wants the night captured
+	// unguided when the guider does not come up says so by disabling the guiding block, and rewriting a declared
+	// `required: false` into `true` would be the compiler quietly disagreeing with the definition instead.
+	if (guiding.enabled && startup.enabled) {
+		for (let i = 0; i < startup.actions.length; i++) {
+			const action = startup.actions[i]
+
+			if (action.enabled && action.type === 'startGuiding' && action.required !== true) {
+				diagnostics.push({ path: `startup.actions[${i}].required`, message: 'the guiding block declares the guider the capture runs under, and this action does not fail the session when it cannot start guiding, so every frame would be captured unguided' })
+			}
+		}
+	}
+
 	if (rotator.enabled) diagnostics.push({ path: 'rotator.enabled', message: 'no action of this version commands the rotator, so an enabled rotator would never reach its angle' })
 	if (dome.enabled) diagnostics.push({ path: 'dome.enabled', message: 'the device layer of this version has no dome' })
 	if (cover.enabled) diagnostics.push({ path: 'cover.enabled', message: 'the cover block only declares automatic behaviors this version does not perform; the cover is commanded by the lifecycle actions, which carry their own timeout and retry' })

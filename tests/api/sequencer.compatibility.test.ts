@@ -389,7 +389,7 @@ describe('compatibility rule', () => {
 
 	test('a disabled dome lifecycle action is not rejected', () => {
 		const definition = complete()
-		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('open', { type: 'openDome', enabled: false }), action('unpark'), action('cool', { type: 'coolCamera' }), action('guide', { type: 'startGuiding' })] } })
+		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('open', { type: 'openDome', enabled: false }), action('unpark'), action('cool', { type: 'coolCamera' }), action('guide', { type: 'startGuiding', required: true })] } })
 
 		expect(compilation.ok).toBe(true)
 	})

@@ -7,6 +7,7 @@ import { runSequencerPlan } from 'src/api/sequencer.executor'
 import type { SequencerExecutorHost, SequencerSafePointObservation } from 'src/api/sequencer.executor'
 import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
 import { sequencerSlotAttempt } from 'src/api/sequencer.identity'
+import type { SequencerPreparationServices } from 'src/api/sequencer.prepare'
 import type { AnySequencerActionHandler, SequencerActionContext, SequencerActionResult, SequencerFrameSlot } from 'src/api/sequencer.registry'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
@@ -63,6 +64,7 @@ interface Harness {
 	readonly phases: string[]
 	desired: SequencerDesiredState
 	observation: SequencerSafePointObservation
+	devices?: Record<string, { readonly device: unknown }>
 	onHold?: (nodeId: string) => SequencerDesiredState
 	onObserve?: () => void
 	clock?: () => number
@@ -82,7 +84,7 @@ function guidingServices(loop: () => OperationResult<unknown>, dither?: () => Op
 	} as unknown as SequencerGuidingServices
 }
 
-function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext, configuration: unknown) => Promise<SequencerActionResult<unknown>>, guiding?: SequencerGuidingServices): Harness {
+function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext, configuration: unknown) => Promise<SequencerActionResult<unknown>>, guiding?: SequencerGuidingServices, preparation?: SequencerPreparationServices): Harness {
 	const arbiter = new ResourceArbiter()
 	const coordinator = new OperationCoordinator(arbiter)
 	const reserved = arbiter.reserve({ id: 'session-1', kind: 'sequencer' }, [])
@@ -143,6 +145,7 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 			now: () => state.clock?.() ?? Date.now(),
 			...services(),
 			...(guiding === undefined ? {} : { guiding }),
+			...(preparation === undefined ? {} : { preparation }),
 			handler,
 			context: (nodeId, attempt, signal, frameSlot) => ({
 				sessionId: 'session-1',
@@ -151,7 +154,7 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 				scope,
 				signal,
 				now: Date.now,
-				request: () => undefined,
+				request: (role) => state.devices?.[role] as never,
 				progress: () => undefined,
 				artifact: (draft: SequencerArtifactDraft) => {
 					const artifact: SequencerArtifact = { ...draft, sessionId: 'session-1', createdAt: sequence++, updatedAt: Date.now() }
@@ -488,6 +491,31 @@ describe('plan walk', () => {
 
 		expect(outcome.terminal.state).toBe('failed')
 		expect(suspensions).toBe(2)
+	})
+
+	test('gives up the frame instead of exposing it when the preparation is skipped', async () => {
+		const base = definition()
+		const mount = { type: 'mount', name: 'Mount Simulator', id: 'mount-1', connected: true, tracking: false, trackMode: 'SIDEREAL' }
+		let commanded = 0
+		const preparation = {
+			mountCommander: {
+				setTracking: () => {
+					commanded++
+					return Promise.resolve(failedOperationResult('commandFailed', 'the mount did not resume tracking'))
+				},
+			},
+		} as unknown as SequencerPreparationServices
+		const state = harness(planOf({ execution: { ...base.execution, defaultRetry: { ...retry(), maxAttempts: 1, onExhausted: 'skip' } } }), undefined, undefined, preparation)
+
+		state.devices = { mount: { device: mount } }
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(commanded).toBe(2)
+		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
+		expect(state.artifacts()).toBeEmpty()
+		expect(outcome.terminal.state).toBe('failed')
+		expect(outcome.terminal.failure?.reason).toBe('commandFailed')
 	})
 
 	test('exposes a safe point that moves nothing without suspending the corrections', async () => {

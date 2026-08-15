@@ -825,7 +825,24 @@ async function runSafePoint(execution: SequencerExecution, targetId: string, loo
 
 		const bracketed = await runInterlockedSafePoint(execution, loop, node, configuration, decisions, policies, observation)
 
-		if (bracketed.kind !== 'continue') return bracketed
+		if (bracketed.outcome.kind !== 'continue') return bracketed.outcome
+
+		// A bracket that spent its budget and was told to skip did not reconcile the optical path: the filter the
+		// group declares may not be in the beam, the cover may still be closed, the mount may not be tracking the
+		// mode the frame wants, the rotator may be off its angle and the sensor away from its temperature. Exposing
+		// on that state produces a plausible frame under a header describing a setup it was not taken with, and
+		// `acceptFrame` would count it for a group it does not belong to. The slot is given up instead, which is
+		// what makes the walk advance — leaving it on the cursor would select the same frame forever — and the
+		// cause is kept so the group reports the preparation that failed rather than completing degraded on nothing.
+		if (bracketed.skipped !== undefined) {
+			execution.capture = abandonSlot(execution.capture, targetId, group)
+			execution.cause = bracketed.skipped
+			execution.keeper.capture(execution.capture)
+			// Nothing was exposed and no artifact row was registered, so this write stays on the cadence the frame
+			// policy declares instead of the one an artifact commit is due on.
+			await checkpointDue(execution, 'frame')
+			return SEQUENCER_CONTINUE
+		}
 
 		// The triggers of this safe point reached their terminal decision and the bracket closed behind them, which
 		// is the boundary the broadest pause mode is attended at: the corrections are back on, the optical path is
@@ -910,7 +927,19 @@ function triggerNodeOf(loop: SequencerPlanLoop, kind: 'meridianFlip' | 'autofocu
 // already ran — a flip is not flipped twice and an autofocus sweep is not paid twice for the same frame — so
 // only the preparation and the bracket itself are actually re-commanded, and the crossing a previous attempt
 // reported still turns the resume into a recalibration.
-async function runInterlockedSafePoint(execution: SequencerExecution, loop: SequencerPlanLoop, frame: SequencerPlanAction, configuration: SequencerCapture, decisions: readonly SequencerTriggerDecision[], policies: SequencerTriggerPolicies, observation: SequencerTriggerObservation): Promise<SequencerNodeOutcome> {
+//
+// `skipped` carries the cause of a bracket that spent its budget and was told to skip. That answer flattens
+// into the same `continue` a successful bracket returns, and the caller must not read it as one: the optical
+// path stands where the failure left it.
+async function runInterlockedSafePoint(
+	execution: SequencerExecution,
+	loop: SequencerPlanLoop,
+	frame: SequencerPlanAction,
+	configuration: SequencerCapture,
+	decisions: readonly SequencerTriggerDecision[],
+	policies: SequencerTriggerPolicies,
+	observation: SequencerTriggerObservation,
+): Promise<{ readonly outcome: SequencerNodeOutcome; readonly skipped?: SequencerSlotCause }> {
 	const { host } = execution
 	const guider = host.plan.guider
 	const retry = host.plan.execution.defaultRetry
@@ -977,17 +1006,17 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 
 		// A trigger that ended the plan spent its own budget already, so it is carried out of the bracket as it
 		// is rather than retried a second time under this policy.
-		if (interrupted !== undefined) return interrupted
+		if (interrupted !== undefined) return { outcome: interrupted }
 
 		if (result.type === 'completed') {
 			if (result.value.dither !== undefined) execution.anchors = sequencerAnchorAdvanced(execution.anchors, 'dither', observation)
 
-			return SEQUENCER_CONTINUE
+			return { outcome: SEQUENCER_CONTINUE }
 		}
 
-		if (result.type === 'skipped') return SEQUENCER_CONTINUE
-		if (result.type === 'pause') return { kind: 'pause' }
-		if (result.type === 'suspend') return { kind: 'fail', reason: 'unexpectedState', detail: result.detail }
+		if (result.type === 'skipped') return { outcome: SEQUENCER_CONTINUE }
+		if (result.type === 'pause') return { outcome: { kind: 'pause' } }
+		if (result.type === 'suspend') return { outcome: { kind: 'fail', reason: 'unexpectedState', detail: result.detail } }
 
 		// A dither that failed is decided by the dither, which declares its own budget and its own terminal
 		// answer, and a suspension or a resume by the guiding, which declares the budget of the guider commands
@@ -1020,11 +1049,11 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 			// is attended here only under the immediate mode, exactly as it is between two exposure attempts.
 			const converged = await convergeAt(execution, 'afterExposure', frame.id)
 
-			if (converged.outcome.kind !== 'continue') return converged.outcome
+			if (converged.outcome.kind !== 'continue') return { outcome: converged.outcome }
 
 			// A hold ends the validity of the reading the safe point was decided on, so the whole safe point is
 			// taken again from the moment the session resumed instead of retried against an hour-old sky.
-			if (converged.held) return SEQUENCER_RETAKE
+			if (converged.held) return { outcome: SEQUENCER_RETAKE }
 
 			attempt = decision.attempt
 			continue
@@ -1032,7 +1061,10 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 
 		execution.events.push({ type: 'policyApplied', nodeId: frame.id, detail: decision.kind })
 
-		return decisionOutcome(decision, result.reason, result.detail)
+		// A `skip` is the only terminal answer that lets the walk go on after the bracket failed, and it flattens
+		// into the same `continue` a successful bracket returns. The caller has to tell them apart: the optical
+		// path stands where the failure left it, so the frame ahead is not the frame the plan declared.
+		return { outcome: decisionOutcome(decision, result.reason, result.detail), skipped: decision.kind === 'skip' ? { reason: result.reason, detail: result.detail } : undefined }
 	}
 }
 

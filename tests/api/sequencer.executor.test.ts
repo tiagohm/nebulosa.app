@@ -46,6 +46,12 @@ function planOf(overrides?: Partial<Sequencer>): SequencerPlan {
 	return compilation.ok ? compilation.plan : ({} as SequencerPlan)
 }
 
+function guided(): SequencerPlan {
+	const base = definition()
+
+	return planOf({ guiding: { ...base.guiding, enabled: true }, dither: { ...base.dither, enabled: true, everyFrames: 1, beforeFirstFrame: true } })
+}
+
 interface Harness {
 	readonly host: SequencerExecutorHost
 	readonly executed: Executed[]
@@ -291,7 +297,7 @@ describe('plan walk', () => {
 	test('retries the safe point a transient guiding failure interrupted', async () => {
 		let suspensions = 0
 		const state = harness(
-			planOf(),
+			guided(),
 			undefined,
 			guidingServices(() => (suspensions++ === 0 ? failedOperationResult('commandFailed', 'the guider did not stop correcting') : successfulOperationResult(undefined))),
 		)
@@ -305,7 +311,7 @@ describe('plan walk', () => {
 	test('fails the session when the safe point spends the whole retry budget', async () => {
 		let suspensions = 0
 		const state = harness(
-			planOf(),
+			guided(),
 			undefined,
 			guidingServices(() => {
 				suspensions++
@@ -317,6 +323,20 @@ describe('plan walk', () => {
 		expect(outcome.terminal.state).toBe('failed')
 		expect(suspensions).toBe(3)
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
+	})
+
+	test('exposes a safe point that moves nothing without suspending the corrections', async () => {
+		let suspensions = 0
+		const state = harness(
+			planOf(),
+			undefined,
+			guidingServices(() => (++suspensions, successfulOperationResult(undefined))),
+		)
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(suspensions).toBe(0)
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
 	})
 
 	test('ends as stopped when the operator stops it between two frames', async () => {

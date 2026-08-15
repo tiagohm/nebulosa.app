@@ -24,7 +24,7 @@ import { runSequencerPipeline, SEQUENCER_MAXIMUM_TIMER_DELAY } from './sequencer
 import type { SequencerPipelineReport, SequencerPipelineStep } from './sequencer.pipeline'
 import { sequencerFailurePolicy } from './sequencer.policy'
 import type { SequencerOnFailure } from './sequencer.policy'
-import { runFramePreparation } from './sequencer.prepare'
+import { runFramePreparation, sequencerFramePreparationPending } from './sequencer.prepare'
 import type { SequencerPreparationOutcome, SequencerPreparationServices } from './sequencer.prepare'
 import { abandonSlot, acceptFrame, advanceCaptureCycle, grantAttemptWindow, SEQUENCER_INITIAL_CAPTURE_PROGRESS } from './sequencer.progress'
 import type { AnySequencerActionHandler, SequencerActionContext, SequencerActionResult, SequencerFrameSlot } from './sequencer.registry'
@@ -909,6 +909,7 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 	const { host } = execution
 	const guider = host.plan.guider
 	const retry = host.plan.execution.defaultRetry
+	const preparation = { ...configuration.preparation, group: configuration.group }
 	// Trigger kinds a previous attempt of this bracket already ran to completion or skipped.
 	const ran = new Set<'meridianFlip' | 'autofocus'>()
 	let interrupted: SequencerNodeOutcome | undefined
@@ -952,18 +953,25 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 
 		state.flipped = flipped
 
-		return await runFramePreparation(host.preparation, host.context(frame.id, attempt, host.signal), { ...configuration.preparation, group: configuration.group })
+		return await runFramePreparation(host.preparation, host.context(frame.id, attempt, host.signal), preparation)
 	}
 
 	const dither = decisions.some((decision) => decision.kind === 'dither') ? policies.dither : undefined
 
-	// A session that guides has a settle policy for it; one that does not never enters the bracket, and the
-	// request is then only the carrier of the dither the interlock still emits.
-	const request = { settle: guider?.settle ?? SEQUENCER_UNGUIDED_SETTLE, recalibrateAfterMeridianFlip: guider?.recalibrateAfterMeridianFlip ?? false, dither }
-
 	for (;;) {
 		const report: SequencerInterlockReport = {}
-		const result = await runGuidingInterlock(host.guiding, host.context(frame.id, attempt, host.signal), request, body, report)
+		const context = host.context(frame.id, attempt, host.signal)
+
+		// A safe point where no trigger won and the optical path already stands where the frame requires it
+		// commands nothing, and the bracket is told so: it is the only place that knows the body ahead of running
+		// it. The reading is taken again on every attempt, because a retry follows a preparation that failed part
+		// way and left a dimension it had already moved.
+		const idle = decisions.length === 0 && !sequencerFramePreparationPending(context, preparation)
+
+		// A session that guides has a settle policy for it; one that does not never enters the bracket, and the
+		// request is then only the carrier of the dither the interlock still emits.
+		const request = { settle: guider?.settle ?? SEQUENCER_UNGUIDED_SETTLE, recalibrateAfterMeridianFlip: guider?.recalibrateAfterMeridianFlip ?? false, dither, idle }
+		const result = await runGuidingInterlock(host.guiding, context, request, body, report)
 
 		// A trigger that ended the plan spent its own budget already, so it is carried out of the bracket as it
 		// is rather than retried a second time under this policy.

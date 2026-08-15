@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Camera, Cover, FlatPanel, Focuser, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
 import { deg } from 'nebulosa/src/math/units/angle'
-import { runFramePreparation, sequencerFrameContext } from 'src/api/sequencer.prepare'
+import { runFramePreparation, sequencerFrameContext, sequencerFramePreparationPending } from 'src/api/sequencer.prepare'
 import type { SequencerFramePreparation, SequencerPreparationServices } from 'src/api/sequencer.prepare'
 import type { SequencerActionContext } from 'src/api/sequencer.registry'
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
@@ -585,5 +585,41 @@ describe('frame preparation', () => {
 
 		expect(result).toMatchObject({ type: 'retryableFailure', reason: 'alert' })
 		expect(commands.map((command) => command.name)).toEqual(['unpark', 'wheelMoveTo'])
+	})
+})
+
+describe('pending preparation', () => {
+	test('reports nothing pending on a path that already matches the frame', () => {
+		const devices = { camera: { device: camera() }, wheel: { device: wheel(['L', 'Ha'], 1) }, cover: { device: cover(false) }, flatPanel: { device: flatPanel(false) }, rotator: { device: rotator(30) }, mount: { device: mount(true) } }
+		const request = preparation({ group: group({ filter: { type: 'name', name: 'Ha' } }), cover: coverPolicy(), flatPanel: panelPolicy(), rotator: rotatorPolicy(), cooling: coolingPolicy() })
+
+		expect(sequencerFramePreparationPending(actionContext(devices), request)).toBe(false)
+	})
+
+	test('reports every dimension the frame still requires', () => {
+		const devices = { camera: { device: camera() }, wheel: { device: wheel(['L', 'Ha'], 1) }, cover: { device: cover(false) }, flatPanel: { device: flatPanel(false) }, rotator: { device: rotator(30) }, mount: { device: mount(true) } }
+		const request = preparation({ group: group({ filter: { type: 'name', name: 'Ha' } }), cover: coverPolicy(), flatPanel: panelPolicy(), rotator: rotatorPolicy(), cooling: coolingPolicy() })
+
+		expect(sequencerFramePreparationPending(actionContext({ ...devices, mount: { device: mount(false) } }), request)).toBe(true)
+		expect(sequencerFramePreparationPending(actionContext({ ...devices, mount: { device: mount(true, 'LUNAR') } }), request)).toBe(true)
+		expect(sequencerFramePreparationPending(actionContext({ ...devices, flatPanel: { device: flatPanel(true) } }), request)).toBe(true)
+		expect(sequencerFramePreparationPending(actionContext({ ...devices, cover: { device: cover(true) } }), request)).toBe(true)
+		expect(sequencerFramePreparationPending(actionContext({ ...devices, wheel: { device: wheel(['L', 'Ha'], 0) } }), request)).toBe(true)
+		expect(sequencerFramePreparationPending(actionContext({ ...devices, rotator: { device: rotator(45) } }), request)).toBe(true)
+		expect(sequencerFramePreparationPending(actionContext({ ...devices, camera: { device: camera(-4) } }), request)).toBe(true)
+	})
+
+	test('reports a filter the wheel does not carry as pending and leaves the refusal to the preparation', () => {
+		const devices = { camera: { device: camera() }, wheel: { device: wheel(['L', 'Ha'], 0) }, mount: { device: mount(true) } }
+		const request = preparation({ group: group({ filter: { type: 'name', name: 'OIII' } }) })
+
+		expect(sequencerFramePreparationPending(actionContext(devices), request)).toBe(true)
+	})
+
+	test('reports the lit panel of a flat as pending on every frame', () => {
+		const devices = { camera: { device: camera() }, flatPanel: { device: flatPanel(true, 80) }, mount: { device: mount(true) } }
+		const request = preparation({ group: group({ frameType: 'FLAT' }), flatPanel: panelPolicy() })
+
+		expect(sequencerFramePreparationPending(actionContext(devices), request)).toBe(true)
 	})
 })

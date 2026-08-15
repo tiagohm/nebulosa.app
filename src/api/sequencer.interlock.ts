@@ -43,6 +43,10 @@ export interface SequencerInterlockRequest {
 	// Dither that won this safe point, absent when none did. It is emitted with the resume rather than as a
 	// step after it, and it is emitted whatever the bracketed steps did.
 	readonly dither?: SequencerDitherTrigger
+	// Whether the bracketed steps command nothing at all: no trigger fired, no dither is in play and the optical
+	// path already stands where the frame requires it. It is what lets the bracket be left unopened, and it is
+	// asserted by the caller because only it can tell, before the body runs, that the body has nothing to do.
+	readonly idle: boolean
 }
 
 // What the bracketed steps report back to the bracket while they run.
@@ -142,7 +146,8 @@ function resumeGuiding(services: SequencerGuidingServices, context: SequencerAct
 // A session whose guider is neither guiding nor looping runs the body with no bracket at all: there are no
 // corrections to stop, and suspending a guider that is idle would only wait for a state it is already in. The
 // dither still goes through, because deciding it has nothing to displace belongs to the dither and not to the
-// bracket.
+// bracket. A safe point the caller declares idle is left unbracketed for the opposite reason — the corrections
+// are running and nothing is going to disturb them.
 //
 // The resume is attempted even when the body failed, so a safe point that ends badly does not leave the
 // session looping without corrections until the next one. The failure of the body is what gets reported,
@@ -157,7 +162,13 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 	// unbracketed and, more importantly, never resumes, so the session keeps exposing uncorrected for the rest
 	// of the night with the guider still dutifully looping. Looping without the marker belongs to whoever asked
 	// for it and is left exactly as it is.
-	const guider = context.guider !== undefined && (services.guiderCommander.running(context.guider) || (suspendedGuiders.has(context.guider) && services.guiderCommander.looping(context.guider))) ? context.guider : undefined
+	const bracketable = context.guider !== undefined && (services.guiderCommander.running(context.guider) || (suspendedGuiders.has(context.guider) && services.guiderCommander.looping(context.guider))) ? context.guider : undefined
+	// A safe point that commands nothing is not bracketed: there is nothing for the corrections to be suspended
+	// around, and suspending anyway would stop the corrections, resume them and pay the settle of the resume
+	// before every frame of a sequence that never moves anything — on a short exposure that is a large part of
+	// the night spent reacquiring guiding that was never disturbed. The one guider an idle safe point still
+	// brackets is one a previous bracket left looping, because the bracket is what puts it back to guiding.
+	const guider = bracketable !== undefined && request.idle && !suspendedGuiders.has(bracketable) ? undefined : bracketable
 	// Recalibration a previous bracket of this guider could not complete, which this one has to pay before the
 	// corrections come back, whether or not anything crosses the meridian inside it.
 	const owed = guider !== undefined && suspendedGuiders.get(guider) === true

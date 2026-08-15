@@ -41,7 +41,7 @@ function ditherTrigger(overrides?: Partial<Omit<SequencerDither, 'enabled'>>): O
 }
 
 function interlockRequest(overrides?: Partial<SequencerInterlockRequest>): SequencerInterlockRequest {
-	return { settle: settle(), recalibrateAfterMeridianFlip: false, ...overrides }
+	return { settle: settle(), recalibrateAfterMeridianFlip: false, idle: false, ...overrides }
 }
 
 function actionContext(guider?: string): SequencerActionContext {
@@ -163,6 +163,27 @@ describe('guiding interlock', () => {
 
 		expect(notRunning).toEqual({ type: 'completed', value: { value: 'centered', suspended: false, recalibrated: false } })
 		expect(idle.map((command) => command.name)).toEqual(['body'])
+	})
+
+	test('leaves the corrections alone when the safe point commands nothing', async () => {
+		const commands: Command[] = []
+		const result = await runGuidingInterlock(interlockServices(commands, true), actionContext('guider-1'), interlockRequest({ idle: true }), body(commands))
+
+		expect(result).toEqual({ type: 'completed', value: { value: 'centered', suspended: false, recalibrated: false } })
+		expect(commands.map((command) => command.name)).toEqual(['body'])
+	})
+
+	test('brackets an idle safe point when it is what resumes a guider left looping', async () => {
+		const stranded: Command[] = []
+		const abandoned = await runGuidingInterlock(interlockServices(stranded, true, { startGuiding: 'timeout' }), actionContext('guider-idle'), interlockRequest(), body(stranded))
+
+		expect(abandoned).toMatchObject({ type: 'retryableFailure', reason: 'timeout' })
+
+		const commands: Command[] = []
+		const result = await runGuidingInterlock(interlockServices(commands, false, {}, true), actionContext('guider-idle'), interlockRequest({ idle: true }), body(commands))
+
+		expect(result).toEqual({ type: 'completed', value: { value: 'centered', suspended: true, recalibrated: false } })
+		expect(commands.map((command) => command.name)).toEqual(['loop', 'body', 'startGuiding'])
 	})
 
 	test('leaves a guider looping for someone else exactly as it is', async () => {

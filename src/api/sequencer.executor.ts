@@ -902,13 +902,14 @@ function triggerNodeOf(loop: SequencerPlanLoop, kind: 'meridianFlip' | 'autofocu
 // with the resume: displacing before the corrections are back on would move a guider that is not correcting,
 // and the settle of the resume is the settle of the dither.
 //
-// The bracket is retried under the execution retry policy, because everything it commands is a device that can
-// time out once and answer the next time: a wheel that did not report the filter in place, a rotator that
-// missed its angle, a guider that did not settle. Failing the bracket outright would end the night on the
-// first of them. What is not repeated on a retry is a trigger that already ran — a flip is not flipped twice
-// and an autofocus sweep is not paid twice for the same frame — so only the preparation and the bracket itself
-// are actually re-commanded, and the crossing a previous attempt reported still turns the resume into a
-// recalibration.
+// The bracket is retried because everything it commands is a device that can time out once and answer the next
+// time: a wheel that did not report the filter in place, a rotator that missed its angle, a guider that did not
+// settle. Failing the bracket outright would end the night on the first of them. Which budget pays for the
+// retry follows the step that failed — the guiding policy for the suspension and the resume, the dither policy
+// for the dither, the execution default for everything else. What is not repeated on a retry is a trigger that
+// already ran — a flip is not flipped twice and an autofocus sweep is not paid twice for the same frame — so
+// only the preparation and the bracket itself are actually re-commanded, and the crossing a previous attempt
+// reported still turns the resume into a recalibration.
 async function runInterlockedSafePoint(execution: SequencerExecution, loop: SequencerPlanLoop, frame: SequencerPlanAction, configuration: SequencerCapture, decisions: readonly SequencerTriggerDecision[], policies: SequencerTriggerPolicies, observation: SequencerTriggerObservation): Promise<SequencerNodeOutcome> {
 	const { host } = execution
 	const guider = host.plan.guider
@@ -989,10 +990,13 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 		if (result.type === 'suspend') return { kind: 'fail', reason: 'unexpectedState', detail: result.detail }
 
 		// A dither that failed is decided by the dither, which declares its own budget and its own terminal
-		// answer; everything else the bracket commands is decided by the execution default, because a suspension,
-		// a resume and the preparation belong to the bracket and not to any node the plan walks.
+		// answer, and a suspension or a resume by the guiding, which declares the budget of the guider commands
+		// the session issues outside the plan walk — the bracket is the only place they are issued from, so a
+		// guiding retry policy read nowhere else would apply to nothing. The preparation and the triggers of the
+		// body stay on the execution default: they belong to the bracket and not to the guiding.
 		const failing = report.phase === 'dither' ? dither : undefined
-		const budget = failing?.retry ?? retry
+		const guiding = report.phase === 'suspension' || report.phase === 'resume' ? guider : undefined
+		const budget = failing?.retry ?? guiding?.retry ?? retry
 
 		// A fatal failure is decided by the terminal half of the same policy and never retried, which the budget
 		// of one attempt expresses without a second decision path.

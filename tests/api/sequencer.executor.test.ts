@@ -393,6 +393,28 @@ describe('plan walk', () => {
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 	})
 
+	test('spends the guiding budget and not the execution default on a suspension that keeps failing', async () => {
+		const base = definition()
+		let suspensions = 0
+		const state = harness(
+			planOf({
+				guiding: { ...base.guiding, enabled: true, retry: { ...retry(), maxAttempts: 2 } },
+				dither: { ...base.dither, enabled: true, everyFrames: 1, beforeFirstFrame: true },
+				startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding' })] },
+			}),
+			undefined,
+			guidingServices(() => {
+				suspensions++
+				return failedOperationResult('commandFailed', 'the guider did not stop correcting')
+			}),
+		)
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('failed')
+		expect(suspensions).toBe(2)
+	})
+
 	test('exposes a safe point that moves nothing without suspending the corrections', async () => {
 		let suspensions = 0
 		const state = harness(

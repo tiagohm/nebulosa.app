@@ -179,11 +179,20 @@ interface SequencerAttempt {
 // boundary — can be told apart from an answer and a stop that truly happened together. Attributing the tie to
 // the stop is the deliberate choice, because the session is leaving the plan either way and the alternative
 // invents a device failure to explain a night the operator ended.
+//
+// An attempt is never *started* under a cancellation the session already commanded, and the handler is declined
+// rather than entered with an aborted signal. Handing it one only helps a handler that consults it, and the
+// lifecycle handlers command the mount, the cover and the cooler through the scope of the session without
+// consulting anything: entering one after a stop opens a cover, unparks a mount or ramps a cooler for a session
+// that is already leaving the plan, and the convergence that would have refused it is only asked between two
+// actions. Declining reports the same `aborted` the running attempt would have, so the caller composes it
+// exactly as it composes a stop that landed while the action was running.
 async function runAttempt(executor: SequencerPipelineExecutor, step: SequencerPipelineStep, attempt: number, signal: AbortSignal): Promise<SequencerAttempt> {
+	if (signal.aborted) return { result: { type: 'fatalFailure', reason: 'aborted', detail: 'the session was stopped before the attempt started' }, commanded: true }
+
 	const timeout = step.configuration.timeout * 1000
-	// A cancellation already in place is the stop of a session that is leaving the plan, whatever this attempt
-	// answers; anything later counts only if it preceded the answer.
-	let commanded = signal.aborted
+	// The cancellation of the session counts only if it preceded the answer of the attempt.
+	let commanded = false
 	let settled = false
 
 	// Records the cancellation of the session against the progress of the attempt.
@@ -237,12 +246,7 @@ async function runAttempt(executor: SequencerPipelineExecutor, step: SequencerPi
 
 	schedule(timeout)
 
-	// A signal that is already aborted never dispatches the event again, so a stop that landed before this
-	// attempt started — during the retry delay of the previous one, or before the pipeline was entered at all —
-	// has to be carried over by hand. Without it the attempt runs uncancelled for its whole timeout, or
-	// succeeds and lets the pipeline keep commanding devices for a session that is already leaving the plan.
-	if (signal.aborted) controller.abort()
-	else signal.addEventListener('abort', abort, { once: true })
+	signal.addEventListener('abort', abort, { once: true })
 
 	try {
 		const result = await executor.run(step, attempt, controller.signal)
@@ -286,6 +290,14 @@ async function runStep(executor: SequencerPipelineExecutor, step: SequencerPipel
 	const base = { nodeId: step.nodeId, type: step.type, required: configuration.required }
 
 	for (let attempt = 1; ; attempt++) {
+		// A stop that landed before this attempt started ends the action here, spending nothing. The wait between
+		// two attempts resolves as soon as the session cancels, so without this the backoff of a failed action
+		// would be answered by starting the next one: a cover reopened, a mount unparked or a cooler ramped for a
+		// session the operator already ended, and the convergence that refuses the rest of the list is only asked
+		// once this action is over. The count is the attempts actually spent, which is one fewer than the one this
+		// iteration would have been.
+		if (signal.aborted) return { ...base, outcome: 'notRun', attempts: attempt - 1 }
+
 		const { result, commanded: cancellation } = await runAttempt(executor, step, attempt, signal)
 		const failure = attemptFailure(result)
 

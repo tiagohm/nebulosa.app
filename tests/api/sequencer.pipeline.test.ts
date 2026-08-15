@@ -254,19 +254,15 @@ describe('commanded stop', () => {
 		expect(report.stopped).toBeTrue()
 	})
 
-	test('a stop that landed before the attempt started is carried into it', async () => {
+	test('a stop that landed during the retry delay starts no further attempt', async () => {
 		const controller = new AbortController()
-		const seen: boolean[] = []
-		const runner = executor({ [nodeId('a')]: TIMED_OUT })
+		const log: string[] = []
+		const runner = executor({ [nodeId('a')]: TIMED_OUT }, log)
 		const report = await runSequencerPipeline(
 			{ continueOnFailure: true },
 			[step('a', { timeout: 30 }), step('b')],
 			{
-				run(step, attempt, signal) {
-					seen.push(signal.aborted)
-					if (signal.aborted) return Promise.resolve<SequencerActionResult<unknown>>({ type: 'fatalFailure', reason: 'aborted' })
-					return runner.run(step, attempt, signal)
-				},
+				run: (step, attempt, signal) => runner.run(step, attempt, signal),
 				delay(delay, signal) {
 					controller.abort()
 					return runner.delay(delay, signal)
@@ -275,8 +271,24 @@ describe('commanded stop', () => {
 			controller.signal,
 		)
 
-		expect(seen).toEqual([false, true])
-		expect(report.results[1]).toMatchObject({ outcome: 'notRun' })
+		expect(log).toEqual([nodeId('a') + '#1', 'delay:5000'])
+		expect(report.stopped).toBeTrue()
+		expect(report.results[0]).toMatchObject({ outcome: 'notRun', attempts: 1 })
+		expect(report.results[1]).toMatchObject({ outcome: 'notRun', attempts: 0 })
+	})
+
+	test('a stop already in place when the pipeline is entered commands nothing', async () => {
+		const controller = new AbortController()
+		const log: string[] = []
+
+		controller.abort()
+
+		const report = await runSequencerPipeline({ continueOnFailure: true }, [step('a', { required: true }), step('b')], executor({}, log), controller.signal)
+
+		expect(log).toBeEmpty()
+		expect(report.stopped).toBeTrue()
+		expect(report.results.map((result) => result.outcome)).toEqual(['notRun', 'notRun'])
+		expect(report.results[0]).toMatchObject({ attempts: 0 })
 	})
 
 	test('a declared stop gives up on the action without ending the pipeline', async () => {

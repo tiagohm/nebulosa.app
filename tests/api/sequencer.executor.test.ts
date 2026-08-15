@@ -64,6 +64,7 @@ interface Harness {
 	desired: SequencerDesiredState
 	observation: SequencerSafePointObservation
 	onHold?: (nodeId: string) => SequencerDesiredState
+	onObserve?: () => void
 	clock?: () => number
 	refuseCommit?: () => boolean
 }
@@ -162,7 +163,10 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 				frame: frameSlot,
 				guider: guiding === undefined ? undefined : 'guider-1',
 			}),
-			observe: () => state.observation,
+			observe: () => {
+				state.onObserve?.()
+				return state.observation
+			},
 			desiredState: () => state.desired,
 			slotAttempt: (logicalSlotId) => sequencerSlotAttempt(artifacts(), logicalSlotId),
 			hold: (nodeId) => {
@@ -361,6 +365,26 @@ describe('plan walk', () => {
 		expect(outcome.terminal.state).toBe('completed')
 		expect(state.executed.filter((it) => it.nodeId.endsWith('.trigger.meridianFlip'))).toHaveLength(1)
 		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
+	})
+
+	test('leaves the plan stopped when a stop ends the wait for the flip window', async () => {
+		const base = definition()
+		const capture = { ...base.capture, frames: [frame('lum', { count: 2, exposureTime: 1300, camera: camera() })] }
+		const state = harness(planOf({ capture, meridianFlip: { ...base.meridianFlip, enabled: true } }))
+		let readings = 0
+
+		state.observation = { hourAngle: 0.005, pierSide: 'WEST', preFlipPierSide: 'WEST' }
+		state.onObserve = () => {
+			if (++readings < 4) return
+
+			state.desired = 'stopped'
+			state.controller.abort()
+		}
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('stopped')
+		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 	})
 
 	test('guards the exposure against the sky as it stands after the safe point instead of before it', async () => {

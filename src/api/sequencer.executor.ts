@@ -1077,10 +1077,19 @@ async function runExposureGuard(execution: SequencerExecution, policies: Sequenc
 	// safe point is taken again so the flip runs, and the frame this guard refused is exposed after it.
 	if (waited.type === 'completed' || waited.type === 'skipped') return { kind: 'reenter' }
 
+	const commanded = commandedBy(execution)
+
 	// The window can be an hour away, so the cancellation of an immediate pause is what ends this wait far more
 	// often than anything else, and it is a pause: the slot the guard refused is still on the cursor and the
 	// safe point is taken again once the session resumes.
-	if (waited.type === 'pause' || commandedBy(execution) === 'paused') return { kind: 'ended', outcome: { kind: 'pause' } }
+	if (waited.type === 'pause' || commanded === 'paused') return { kind: 'ended', outcome: { kind: 'pause' } }
+
+	// A stop ends the same wait, under both modes: it travels on the wait signal precisely because an hour spent
+	// waiting for the sky is what a stop must not sit through. It is the operator leaving the plan and not
+	// something the mount did, so reporting it as a failure ends the night on a cause nobody caused and, worse,
+	// composes the terminal pipeline for the wrong outcome — a finalize declared to run only on a stop is
+	// skipped, and the mount is left unparked and the cover open on a session the operator ended deliberately.
+	if (commanded === 'stopped') return { kind: 'ended', outcome: { kind: 'stop' } }
 
 	return { kind: 'ended', outcome: { kind: 'fail', reason: waited.type === 'suspend' ? 'unexpectedState' : waited.reason, detail: waited.detail } }
 }

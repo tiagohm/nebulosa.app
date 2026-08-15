@@ -56,6 +56,18 @@ export interface SequencerInterlockState {
 // The steps of the safe point that run with the corrections suspended, in their own fixed order.
 export type SequencerInterlockBody<T> = (state: SequencerInterlockState) => Promise<SequencerActionResult<T>>
 
+// Step of the bracket a failure came out of. The bracket runs steps of three different origins around the body
+// it was given, and a failure of each of them means something different to the caller.
+export type SequencerInterlockPhase = 'suspension' | 'body' | 'resume' | 'dither'
+
+// Mutable record of what the bracket did, filled as it runs so the caller can attribute the failure it returns.
+export interface SequencerInterlockReport {
+	// Phase the returned failure came from, absent while nothing failed. It is what lets the caller apply the
+	// terminal policy of the step that actually failed: the dither is emitted by the bracket rather than walked
+	// by the plan, and it carries its own retry budget and `onFailure` (§10).
+	phase?: SequencerInterlockPhase
+}
+
 // What one bracket did, around what its steps produced.
 export interface SequencerInterlockOutcome<T> {
 	// Value the bracketed steps completed with.
@@ -135,7 +147,11 @@ function resumeGuiding(services: SequencerGuidingServices, context: SequencerAct
 // The resume is attempted even when the body failed, so a safe point that ends badly does not leave the
 // session looping without corrections until the next one. The failure of the body is what gets reported,
 // since it is the one that explains the safe point.
-export async function runGuidingInterlock<T>(services: SequencerGuidingServices, context: SequencerActionContext, request: SequencerInterlockRequest, body: SequencerInterlockBody<T>): Promise<SequencerActionResult<SequencerInterlockOutcome<T>>> {
+//
+// `report` is filled in place with the phase a returned failure came from, and is left untouched by a bracket
+// that completed. A body that throws reports nothing, because the exception is what explains the safe point
+// and it never reaches the caller as a result.
+export async function runGuidingInterlock<T>(services: SequencerGuidingServices, context: SequencerActionContext, request: SequencerInterlockRequest, body: SequencerInterlockBody<T>, report?: SequencerInterlockReport): Promise<SequencerActionResult<SequencerInterlockOutcome<T>>> {
 	// A guider looping under the marker of this interlock is a suspension a previous bracket could not resume,
 	// and bracketing it is what ends it: leaving it out because it is not guiding right now runs the body
 	// unbracketed and, more importantly, never resumes, so the session keeps exposing uncorrected for the rest
@@ -156,7 +172,10 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 		// same command, which is what makes the resume and the dither after it settle under one policy.
 		const suspended = await services.guiderCommander.loop(guider, { settle: guiderSettle(settle) }, { signal: context.signal })
 
-		if (!suspended.ok) return sequencerActionFailure(suspended, 'the guiding corrections could not be suspended')
+		if (!suspended.ok) {
+			if (report !== undefined) report.phase = 'suspension'
+			return sequencerActionFailure(suspended, 'the guiding corrections could not be suspended')
+		}
 
 		suspendedGuiders.set(guider, owed)
 	}
@@ -190,9 +209,20 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 
 		if (resumed.ok) suspendedGuiders.delete(guider)
 		else suspendedGuiders.set(guider, recalibrated)
-		if (executed.type !== 'completed') return executed
-		if (!resumed.ok) return sequencerActionFailure(resumed, 'the guiding corrections could not be resumed')
-	} else if (executed.type !== 'completed') return executed
+
+		if (executed.type !== 'completed') {
+			if (report !== undefined) report.phase = 'body'
+			return executed
+		}
+
+		if (!resumed.ok) {
+			if (report !== undefined) report.phase = 'resume'
+			return sequencerActionFailure(resumed, 'the guiding corrections could not be resumed')
+		}
+	} else if (executed.type !== 'completed') {
+		if (report !== undefined) report.phase = 'body'
+		return executed
+	}
 
 	const outcome: SequencerInterlockOutcome<T> = { value: executed.value, suspended: guider !== undefined, recalibrated }
 
@@ -200,7 +230,10 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 
 	const dithered = await runDither(services, context, request.dither)
 
-	if (dithered.type !== 'completed' && dithered.type !== 'skipped') return dithered
+	if (dithered.type !== 'completed' && dithered.type !== 'skipped') {
+		if (report !== undefined) report.phase = 'dither'
+		return dithered
+	}
 
 	return { type: 'completed', value: dithered.type === 'completed' ? { ...outcome, dither: dithered.value } : outcome }
 }

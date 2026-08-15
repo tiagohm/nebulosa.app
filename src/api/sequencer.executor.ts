@@ -16,12 +16,13 @@ import type { SequencerFlipBoundary } from './sequencer.guard'
 import type { SequencerDitherTrigger, SequencerGuidingServices } from './sequencer.guiding'
 import { sequencerFrameDirectories, sequencerFrameFileName, sequencerLogicalSlotId } from './sequencer.identity'
 import { runGuidingInterlock } from './sequencer.interlock'
-import type { SequencerInterlockState } from './sequencer.interlock'
+import type { SequencerInterlockReport, SequencerInterlockState } from './sequencer.interlock'
 import { sequencerAuxiliaryDirectory, sequencerVerifiedArtifactPath } from './sequencer.path'
 import type { SequencerPathContext } from './sequencer.path'
 import { runSequencerPipeline } from './sequencer.pipeline'
 import type { SequencerPipelineReport, SequencerPipelineStep } from './sequencer.pipeline'
 import { sequencerFailurePolicy } from './sequencer.policy'
+import type { SequencerOnFailure } from './sequencer.policy'
 import { runFramePreparation } from './sequencer.prepare'
 import type { SequencerPreparationServices } from './sequencer.prepare'
 import { abandonSlot, acceptFrame, advanceCaptureCycle, grantAttemptWindow, SEQUENCER_INITIAL_CAPTURE_PROGRESS } from './sequencer.progress'
@@ -363,6 +364,14 @@ function retryOf(configuration: unknown, fallback: SequencerRetryPolicy): Sequen
 	return (configuration as { readonly retry?: SequencerRetryPolicy }).retry ?? fallback
 }
 
+// Terminal decision a block declares, absent for the blocks that only carry a retry policy. Of the nodes the
+// target block walks it is the three safe-point triggers that declare one — the flip, the autofocus and the
+// dither — and their answer is the more expressive of the two (§10), so it is what decides once the attempts
+// are spent rather than the `onExhausted` of the retry policy.
+function onFailureOf(configuration: unknown): SequencerOnFailure | undefined {
+	return (configuration as { readonly onFailure?: SequencerOnFailure }).onFailure
+}
+
 // Runs one action node under its own retry policy, answering what the rest of the plan does.
 //
 // `completed` separates a node that ran from one that was skipped or given up on, which is what the meridian
@@ -393,6 +402,7 @@ async function runActionNode(execution: SequencerExecution, node: SequencerPlanA
 			detail: result.detail,
 			attempt,
 			retry: result.type === 'fatalFailure' ? { ...retry, maxAttempts: 1 } : retry,
+			onFailure: onFailureOf(node.configuration),
 			commandedBy: commandedBy(execution),
 		})
 
@@ -832,7 +842,8 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 	const request = { settle: guider?.settle ?? SEQUENCER_UNGUIDED_SETTLE, recalibrateAfterMeridianFlip: guider?.recalibrateAfterMeridianFlip ?? false, dither }
 
 	for (;;) {
-		const result = await runGuidingInterlock(host.guiding, host.context(frame.id, attempt, host.signal), request, body)
+		const report: SequencerInterlockReport = {}
+		const result = await runGuidingInterlock(host.guiding, host.context(frame.id, attempt, host.signal), request, body, report)
 
 		// A trigger that ended the plan spent its own budget already, so it is carried out of the bracket as it
 		// is rather than retried a second time under this policy.
@@ -847,13 +858,20 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 		if (result.type === 'pause') return { kind: 'pause' }
 		if (result.type === 'suspend') return { kind: 'fail', reason: 'unexpectedState', detail: result.detail }
 
+		// A dither that failed is decided by the dither, which declares its own budget and its own terminal
+		// answer; everything else the bracket commands is decided by the execution default, because a suspension,
+		// a resume and the preparation belong to the bracket and not to any node the plan walks.
+		const failing = report.phase === 'dither' ? dither : undefined
+		const budget = failing?.retry ?? retry
+
 		// A fatal failure is decided by the terminal half of the same policy and never retried, which the budget
 		// of one attempt expresses without a second decision path.
 		const decision = sequencerFailurePolicy({
 			reason: result.reason,
 			detail: result.detail,
 			attempt,
-			retry: result.type === 'fatalFailure' ? { ...retry, maxAttempts: 1 } : retry,
+			retry: result.type === 'fatalFailure' ? { ...budget, maxAttempts: 1 } : budget,
+			onFailure: failing?.onFailure,
 			commandedBy: commandedBy(execution),
 		})
 

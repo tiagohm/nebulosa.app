@@ -58,7 +58,7 @@ interface Harness {
 	onHold?: (nodeId: string) => SequencerDesiredState
 }
 
-function guidingServices(loop: () => OperationResult<unknown>): SequencerGuidingServices {
+function guidingServices(loop: () => OperationResult<unknown>, dither?: () => OperationResult<unknown>): SequencerGuidingServices {
 	return {
 		guiderCommander: {
 			running: () => true,
@@ -66,6 +66,7 @@ function guidingServices(loop: () => OperationResult<unknown>): SequencerGuiding
 			loop: () => Promise.resolve(loop()),
 			startGuiding: () => Promise.resolve(successfulOperationResult(undefined)),
 			calibrate: () => Promise.resolve(successfulOperationResult(undefined)),
+			dither: () => Promise.resolve(dither === undefined ? successfulOperationResult(undefined) : dither()),
 		},
 	} as unknown as SequencerGuidingServices
 }
@@ -451,6 +452,39 @@ describe('plan walk', () => {
 		expect(outcome.terminal.state).toBe('failed')
 		expect(state.executed.map((it) => it.nodeId)).toEqual(['startup.action[park]'])
 		expect(outcome.checkpoint.completed).not.toContain('startup.action[park]')
+	})
+
+	test('applies the terminal decision an autofocus trigger declares instead of the retry default', async () => {
+		const base = definition()
+		const autofocus = { ...base.autofocus, enabled: true, onFailure: 'continue' as const, retry: { ...retry(), maxAttempts: 1 } }
+		const state = harness(planOf({ autofocus }), (context) => (context.nodeId.endsWith('.trigger.autofocus') ? Promise.resolve({ type: 'retryableFailure', reason: 'commandFailed', detail: 'the focuser did not move' }) : Promise.resolve({ type: 'completed', value: undefined })))
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(state.executed.filter((it) => it.nodeId.endsWith('.trigger.autofocus'))).toHaveLength(2)
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
+	})
+
+	test('applies the terminal decision the dither declares when the dither is what failed', async () => {
+		const base = definition()
+		const dither = { ...base.dither, enabled: true, onFailure: 'continue' as const, retry: { ...retry(), maxAttempts: 1 } }
+		let dithers = 0
+		const state = harness(
+			planOf({ dither, guiding: { ...base.guiding, enabled: true } }),
+			undefined,
+			guidingServices(
+				() => successfulOperationResult(undefined),
+				() => {
+					dithers++
+					return failedOperationResult('commandFailed', 'the dither did not settle')
+				},
+			),
+		)
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(dithers).toBeGreaterThan(0)
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
 	})
 
 	test('records a lifecycle step as completed only when it ran', async () => {

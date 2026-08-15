@@ -35,7 +35,6 @@ export type SequencerCheckpointTrigger = 'action' | 'frame' | 'artifact' | 'tran
 // the maximum time a session may go without a durable checkpoint, not a timer of its own.
 export function sequencerCheckpointDue(policy: SequencerCheckpointPolicy, trigger: SequencerCheckpointTrigger, elapsed: number) {
 	if (trigger === 'transition' || trigger === 'artifact') return true
-	if (!policy.enabled) return false
 	if (trigger === 'action' && policy.afterEveryAction) return true
 	if (trigger === 'frame' && policy.afterEveryFrame) return true
 

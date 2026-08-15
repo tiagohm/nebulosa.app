@@ -30,7 +30,7 @@ function wheel(names: readonly string[], position: number): Wheel {
 }
 
 function slewConfiguration(overrides?: Partial<SequencerSlew>): SequencerSlew {
-	return { coordinates: TARGET, tolerance: 0.001, arrivalTolerance: 0.01, timeout: 300, settle: 0, retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' }, ...overrides }
+	return { coordinates: TARGET, skipTolerance: 0.001, arrivalTolerance: 0.01, timeout: 300, settle: 0, retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' }, ...overrides }
 }
 
 function centerConfiguration(overrides?: Partial<SequencerCenter>): SequencerCenter {
@@ -41,10 +41,6 @@ function centerConfiguration(overrides?: Partial<SequencerCenter>): SequencerCen
 		maximumAttempts: 3,
 		settle: 0,
 		syncMount: true,
-		recenterAfterDrift: false,
-		driftTolerance: 0,
-		everyFrames: 0,
-		everyTime: 0,
 		capture: { exposureTime: 5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false },
 		retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' },
 		...overrides,
@@ -166,7 +162,7 @@ describe('slew block', () => {
 		}
 
 		const handler = sequencerSlewHandler(commander as never)
-		await handler.execute(actionContext({ mount: { device: mount() } }), slewConfiguration({ tolerance: 0 }))
+		await handler.execute(actionContext({ mount: { device: mount() } }), slewConfiguration({ skipTolerance: 0 }))
 
 		expect(commands).toEqual([{ name: 'goTo', detail: 0 }])
 	})

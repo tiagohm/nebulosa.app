@@ -163,7 +163,7 @@ function compiled(overrides?: { readonly devices?: SequencerDevices; readonly st
 		definitionRevision: 1,
 		name: 'M42',
 		target: { id: 'm42', name: 'Orion Nebula' },
-		execution: { start: { type: 'manual' }, end: { type: 'afterSequence' }, pauseMode: 'afterCurrentExposure', stopMode: 'graceful', defaultRetry: RETRY, checkpoint: { enabled: true, afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 60 }, ...overrides?.execution },
+		execution: { start: { type: 'manual' }, end: { type: 'afterSequence' }, pauseMode: 'afterCurrentExposure', stopMode: 'graceful', defaultRetry: RETRY, checkpoint: { afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 60 }, ...overrides?.execution },
 		devices: overrides?.devices ?? { camera: 'camera-1' },
 		roles: ['camera'],
 		root: { kind: 'sequence', id: sequencerNodeId.root(), children: [target] },

@@ -15,7 +15,6 @@ function group(id: string, overrides?: Partial<SequencerPlanFrameGroup>): Sequen
 		frameType: 'LIGHT',
 		exposureTime: 60,
 		count: 3,
-		integrationTime: 0,
 		delay: 0,
 		weight: 1,
 		camera: camera(),

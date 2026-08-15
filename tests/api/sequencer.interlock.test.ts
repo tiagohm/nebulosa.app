@@ -1,12 +1,13 @@
 import { describe, expect, test } from 'bun:test'
+import type { SequencerDitherTrigger } from 'src/api/sequencer.compiler'
 import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
-import { runGuidingInterlock, sequencerFuseGuiderSettle } from 'src/api/sequencer.interlock'
+import { runGuidingInterlock } from 'src/api/sequencer.interlock'
 import type { SequencerInterlockRequest } from 'src/api/sequencer.interlock'
 import type { SequencerActionContext, SequencerActionResult } from 'src/api/sequencer.registry'
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason } from '#/orchestration'
-import type { SequencerDither, SequencerGuiderSettle } from '#/sequencer'
+import type { SequencerGuiderSettle } from '#/sequencer'
 
 interface Command {
 	readonly name: string
@@ -24,7 +25,7 @@ function settle(overrides?: Partial<SequencerGuiderSettle>): SequencerGuiderSett
 	return { tolerance: 1.5, time: 10, timeout: 60, ...overrides }
 }
 
-function ditherTrigger(overrides?: Partial<Omit<SequencerDither, 'enabled'>>): Omit<SequencerDither, 'enabled'> {
+function ditherTrigger(overrides?: Partial<SequencerDitherTrigger>): SequencerDitherTrigger {
 	return {
 		amount: 3,
 		raOnly: false,
@@ -98,20 +99,13 @@ describe('guiding interlock', () => {
 		expect(commands.map((command) => command.name)).toEqual(['loop', 'body', 'startGuiding'])
 	})
 
-	test('installs the strongest settle in play on the session that suspends', async () => {
+	test('installs the settle of the session on the guider that suspends', async () => {
 		const commands: Command[] = []
 		const dither = ditherTrigger({ settle: { tolerance: 0.8, time: 5, timeout: 120 } })
 
 		await runGuidingInterlock(interlockServices(commands, true), actionContext('guider-1'), interlockRequest({ dither }), body(commands))
 
-		expect(commands[0]).toEqual({ name: 'loop', detail: { settle: { pixels: 0.8, time: 10, timeout: 120 } } })
-	})
-
-	test('fuses two settles by taking the tightest error and the most patient waits', () => {
-		const fused = sequencerFuseGuiderSettle(settle(), { tolerance: 0.8, time: 5, timeout: 120 })
-
-		expect(fused).toEqual({ tolerance: 0.8, time: 10, timeout: 120 })
-		expect(sequencerFuseGuiderSettle(settle())).toEqual(settle())
+		expect(commands[0]).toEqual({ name: 'loop', detail: { settle: { pixels: 1.5, time: 10, timeout: 60 } } })
 	})
 
 	test('emits the dither with the resume and reports the displacement it took', async () => {

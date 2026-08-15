@@ -17,7 +17,6 @@ function group(id: string, overrides?: Partial<SequencerPlanFrameGroup>): Sequen
 		frameType: 'LIGHT',
 		exposureTime: 60,
 		count,
-		integrationTime: 0,
 		delay: 0,
 		weight: 1,
 		camera: camera(),
@@ -107,8 +106,8 @@ describe('capture progress', () => {
 		expect(targetProgressOf(progress, 'm42').cycle).toBe(3)
 	})
 
-	test('the integration criterion accumulates only the exposure of accepted frames', () => {
-		const lum = group('lum', { count: 0, integrationTime: 180, requiredSlots: 3, abandonmentBudget: 1 })
+	test('the integration accumulates only the exposure of accepted frames', () => {
+		const lum = group('lum', { count: 3, requiredSlots: 3, abandonmentBudget: 1 })
 		let progress = abandonSlot(SEQUENCER_INITIAL_CAPTURE_PROGRESS, 'm42', lum)
 
 		for (let i = 0; i < 3; i++) progress = acceptFrame(progress, 'm42', lum)

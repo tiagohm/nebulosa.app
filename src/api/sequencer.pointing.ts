@@ -163,9 +163,9 @@ function solveRequest(solver: SequencerPlateSolver, path: string, id: string, ri
 // tracking the target asked for.
 //
 // The arrival check belongs to the commander, which compares the position the mount publishes once it has
-// stopped against `arrivalTolerance` and refuses a slew that ended somewhere else. The declared `tolerance` is
-// the commander's, which is the separation below which nothing is commanded at all; a definition that wants the
-// movement commanded unconditionally declares a tolerance of zero.
+// stopped against `arrivalTolerance` and refuses a slew that ended somewhere else. The declared `skipTolerance`
+// is the separation below which nothing is commanded at all; a definition that wants the movement commanded
+// unconditionally declares a skip tolerance of zero.
 export function sequencerSlewHandler(mountCommander: MountCommander): SequencerActionHandler<SequencerSlew, SequencerSlewOutcome> {
 	return {
 		type: SEQUENCER_BLOCK_TYPE.slew,
@@ -179,7 +179,7 @@ export function sequencerSlewHandler(mountCommander: MountCommander): SequencerA
 
 			context.progress({ detail: 'slewing to the target' })
 
-			const options = { timeout: configuration.timeout * 1000, tolerance: configuration.tolerance, arrivalTolerance: configuration.arrivalTolerance }
+			const options = { timeout: configuration.timeout * 1000, tolerance: configuration.skipTolerance, arrivalTolerance: configuration.arrivalTolerance }
 			const slewed = await mountCommander.goTo(context.scope, mount, configuration.coordinates, options)
 
 			if (!slewed.ok) return sequencerActionFailure(slewed, 'the mount did not reach the target')

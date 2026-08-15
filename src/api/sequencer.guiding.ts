@@ -1,6 +1,6 @@
-import type { SequencerDither } from '#/sequencer'
 import type { GuiderCommander } from './guider.session'
 import { sequencerActionFailure } from './sequencer.action'
+import type { SequencerDitherTrigger } from './sequencer.compiler'
 import { SEQUENCER_BLOCK_TYPE } from './sequencer.compiler'
 import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerValidationContext, SequencerValidationResult } from './sequencer.registry'
 
@@ -38,9 +38,6 @@ export interface SequencerGuidingServices {
 // Handler version of the dither block. It changes whenever the meaning of its configuration or of its
 // execution changes, which refuses a session compiled against the older meaning instead of running it here.
 const SEQUENCER_GUIDING_VERSION = 1
-
-// Configuration of the dither block, which is the feature without the flag that enabled it.
-export type SequencerDitherTrigger = Omit<SequencerDither, 'enabled'>
 
 // Dither block: displaces the guide star and returns only once the guider has settled again.
 export function sequencerDitherHandler(services: SequencerGuidingServices): SequencerActionHandler<SequencerDitherTrigger, SequencerDitherOutcome> {

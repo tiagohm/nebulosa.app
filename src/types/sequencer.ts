@@ -17,9 +17,6 @@ export interface Sequencer {
 
 	// Human-readable name shown in lists and editors.
 	readonly name: string
-	// Controls whether this definition may be started.
-	// false keeps the definition editable and persisted but not executable.
-	readonly enabled: boolean
 
 	// Devices used by the whole session, declared once and referenced by role everywhere else.
 	readonly devices: SequencerDevices
@@ -211,7 +208,7 @@ export interface SequencerGoto {
 
 	// Angular distance below which the current position is considered already on target, which skips the slew.
 	// Radians; use a finite value >= 0 and typically a few arcseconds to arcminutes; 0 always slews.
-	readonly tolerance: Angle
+	readonly skipTolerance: Angle
 
 	// Maximum angular error accepted after the slew completes.
 	// Radians; use a finite value >= 0 and normally >= the mount pointing repeatability.
@@ -225,7 +222,7 @@ export interface SequencerGoto {
 	readonly retry: SequencerRetryPolicy
 }
 
-// Configures closed-loop plate-solve centering and optional drift-triggered recentering.
+// Configures closed-loop plate-solve centering.
 // The routine repeatedly captures, solves, corrects, and verifies until tolerance or attempt limits are reached.
 export interface SequencerCentering {
 	// Controls whether this feature or definition is active.
@@ -242,16 +239,6 @@ export interface SequencerCentering {
 	readonly settle: number
 	// Controls whether sync mount is applied.
 	readonly syncMount: boolean
-	// Controls whether recenter after drift is applied.
-	readonly recenterAfterDrift: boolean
-
-	// Angular drift that triggers a new centering cycle, zero effectively triggers on any measurable drift.
-	readonly driftTolerance: Angle
-
-	// Number of accepted light frames between drift checks, 0 disables the frame-count trigger.
-	readonly everyFrames: number
-	// Elapsed time between drift checks, 0 disables the time trigger.
-	readonly everyTime: number
 	// Capture recipe used by this feature.
 	readonly capture: SequencerAuxiliaryCapture
 	// Retry policy applied when this operation fails.
@@ -330,17 +317,13 @@ export interface SequencerCapture {
 	readonly defaults: SequencerCamera
 	// Default delay, in seconds, inserted between primary frames.
 	readonly delay: number
-	// Stable delay, in seconds, required before the first or resumed exposure.
-	readonly settle: number
-	// Controls whether abort on device alert is applied.
-	readonly abortOnDeviceAlert: boolean
 	// Controls whether continue after rejected frame is applied.
 	readonly continueAfterRejectedFrame: boolean
 	// Retry policy applied when this operation fails.
 	readonly retry: SequencerRetryPolicy
 }
 
-// Defines one logical frame group, including exposure, count, filter, completion criteria, and camera overrides.
+// Defines one logical frame group, including exposure, count, filter, and camera overrides.
 // A stable id is required so checkpoints and artifacts can resume without duplicating work.
 export interface SequencerFrame {
 	// Stable identifier used by definitions, checkpoints, events, or ordered actions.
@@ -359,12 +342,8 @@ export interface SequencerFrame {
 	readonly exposureTime: number
 
 	// Requested number of accepted frames in this group.
-	// Use an integer >= 0; 0 means no frame-count completion requirement.
+	// Use an integer >= 0; 0 makes the group execute nothing.
 	readonly count: number
-
-	// Requested accumulated accepted exposure time for this group.
-	// Seconds; use a finite value >= 0; 0 disables integration-time completion.
-	readonly integrationTime: number
 
 	// Extra slots this group may lose to abandoned frames and still reach its target.
 	// Use an integer >= 0; omit for 0, which makes the group execute exactly the slots it needs.
@@ -505,9 +484,6 @@ export interface SequencerRemoteGuider {
 	readonly port: number
 	// Optional named profile understood by the selected backend.
 	readonly profile?: string
-	// Indicates whether the Sequencer owns and must close the referenced session.
-	// true permits lifecycle cleanup; false preserves externally managed sessions.
-	readonly owned: boolean
 }
 
 // Defines a guider implemented locally from the session guideCamera and guideOutput devices.
@@ -527,9 +503,6 @@ export interface SequencerLocalGuider {
 	// The filter reference is omitted: a local guider drives its guide camera alone, and the only wheel the
 	// session addresses is the imaging one, which a guide filter must never move.
 	readonly capture: Omit<SequencerAuxiliaryCapture, 'filter'>
-	// Indicates whether the Sequencer owns and must close the referenced session.
-	// true permits lifecycle cleanup; false preserves externally managed sessions.
-	readonly owned: boolean
 }
 
 // Defines when guiding is considered stable after start, recovery, or dither.
@@ -588,7 +561,7 @@ export interface SequencerGuidingRecovery {
 }
 
 // Configures periodic guider dithering and the conditions that trigger it.
-// Dither runs only at safe exposure boundaries and must settle before the next frame.
+// Dither runs only at safe exposure boundaries and settles under `guiding.settle` before the next frame.
 export interface SequencerDither {
 	// Controls whether this feature or definition is active.
 	readonly enabled: boolean
@@ -609,8 +582,6 @@ export interface SequencerDither {
 	// Elapsed time, in seconds, between dithers, 0 disables this trigger.
 	readonly everyTime: number
 
-	// Stable delay or settling policy required after a state transition.
-	readonly settle: SequencerGuiderSettle
 	// Retry policy applied when this operation fails.
 	readonly retry: SequencerRetryPolicy
 	// Decision applied when this feature cannot recover from failure.
@@ -643,7 +614,7 @@ export interface SequencerAutofocus {
 	readonly onFailure: 'continue' | 'pause' | 'suspend' | 'stop' | 'fail'
 }
 
-// Defines event-, frame-, time-, temperature-, and image-quality-based autofocus triggers.
+// Defines event-, frame-, time-, and temperature-based autofocus triggers.
 // Zero disables numeric triggers unless stated otherwise.
 export interface SequencerAutofocusTrigger {
 	// Controls whether on start is applied.
@@ -652,8 +623,6 @@ export interface SequencerAutofocusTrigger {
 	readonly onFilterChange: boolean
 	// Controls whether after meridian flip is applied.
 	readonly afterMeridianFlip: boolean
-	// Controls whether after recovery is applied.
-	readonly afterRecovery: boolean
 
 	// Number of accepted frames between autofocus runs, 0 disables this trigger.
 	readonly everyFrames: number
@@ -663,10 +632,6 @@ export interface SequencerAutofocusTrigger {
 
 	// Absolute sensor/focuser temperature change that triggers autofocus, 0 disables this trigger.
 	readonly temperatureChange: number
-
-	// Relative HFD/FWHM degradation that triggers autofocus.
-	// Use a fraction >= 0; for example 0.1 represents a 10% increase; 0 disables it.
-	readonly starSizeChange: number
 
 	// Minimum spacing, in seconds, between autofocus runs regardless of trigger count.
 	readonly minimumTimeBetweenRuns: number
@@ -744,8 +709,6 @@ export interface SequencerRotator {
 	readonly moveBeforeCentering: boolean
 	// Controls whether restore after meridian flip is applied.
 	readonly restoreAfterMeridianFlip: boolean
-	// Controls whether restore after recovery is applied.
-	readonly restoreAfterRecovery: boolean
 	// Controls whether reverse is applied.
 	readonly reverse: boolean
 	// Retry policy applied when this operation fails.
@@ -805,10 +768,6 @@ export interface SequencerCooling {
 	readonly waitForTarget: boolean
 	// Maximum time, in seconds, allowed for the operation to reach its terminal state.
 	readonly timeout: number
-	// Controls whether maintain during pause is applied.
-	readonly maintainDuringPause: boolean
-	// Controls whether maintain during suspension is applied.
-	readonly maintainDuringSuspension: boolean
 
 	// Target sensor temperature during controlled warm-up.
 	readonly warmTemperature: number
@@ -934,10 +893,6 @@ export interface SequencerDark extends SequencerCalibrationBase {
 	// Degrees Celsius; use a finite value >= 0; 0 disables this trigger.
 	readonly temperatureChange: number
 
-	// Controls whether match light frames is applied.
-	readonly matchLightFrames: boolean
-	// Explicit dark exposure durations in seconds. An empty array is allowed when matchLightFrames is true.
-	readonly exposureTimes: readonly number[]
 	// Controls whether move to dark filter is applied.
 	readonly moveDarkFilter: boolean
 	// Filter reference associated with dark filter.
@@ -970,7 +925,7 @@ export interface SequencerFlat extends SequencerCalibrationBase {
 export interface SequencerFlatExposure {
 	// Selects the operating mode for this configuration.
 	readonly mode: 'fixed' | 'automatic'
-	// Fixed flat exposure or initial guess for automatic mode, in seconds.
+	// Fixed flat exposure, in seconds.
 	readonly exposureTime: number
 	// Lower exposure bound for automatic flats, in seconds.
 	readonly minimumExposureTime: number
@@ -986,10 +941,6 @@ export interface SequencerFlatExposure {
 // Defines dark-flat acquisition matching the exposure settings of flat frames.
 // Exposure times are seconds and the optical path should remain dark.
 export interface SequencerDarkFlat extends SequencerCalibrationBase {
-	// Controls whether match flat frames is applied.
-	readonly matchFlatFrames: boolean
-	// Explicit dark-flat exposure durations, in seconds. An empty array is allowed when matchFlatFrames is true
-	readonly exposureTimes: readonly number[]
 	// Controls whether move to dark filter is applied.
 	readonly moveDarkFilter: boolean
 	// Filter reference associated with dark filter.
@@ -1027,10 +978,6 @@ export type SequencerMonitor =
 	| SequencerHeartbeatMonitor
 	| SequencerCustomMonitor
 
-// Defines how a monitor with missing, stale, or indeterminate data contributes to safety.
-// Use unsafe for fail-closed observatories and safe only when absence of data is explicitly acceptable.
-export type SequencerMonitorUnknownPolicy = 'safe' | 'warning' | 'unsafe'
-
 // Common lifecycle, severity, debounce, freshness, and unknown-state policy for all monitors.
 // All timing fields are seconds and must be non-negative.
 export interface SequencerMonitorBase {
@@ -1050,8 +997,6 @@ export interface SequencerMonitorBase {
 	readonly clearAfter: number
 	// Maximum age, in seconds, of the last observation before it becomes stale.
 	readonly staleAfter: number
-	// Configuration value for unknown as.
-	readonly unknownAs: SequencerMonitorUnknownPolicy
 }
 
 // Reads an aggregate weather-safety source supplied by a device or application provider.
@@ -1059,10 +1004,6 @@ export interface SequencerMonitorBase {
 export interface SequencerWeatherMonitor extends SequencerMonitorBase {
 	// Discriminator selecting the concrete variant represented by this object.
 	readonly type: 'weather'
-	// Serialized value for device.
-	readonly device?: string
-	// Identifies the data, light, power, or provider source used by this configuration.
-	readonly source?: string
 }
 
 // Detects rain or wet-sensor state and maps it to an unsafe observation.
@@ -1070,8 +1011,6 @@ export interface SequencerWeatherMonitor extends SequencerMonitorBase {
 export interface SequencerRainMonitor extends SequencerMonitorBase {
 	// Discriminator selecting the concrete variant represented by this object.
 	readonly type: 'rain'
-	// Serialized value for device.
-	readonly device?: string
 	// Controls whether wet is unsafe is applied.
 	readonly wetIsUnsafe: boolean
 }
@@ -1081,8 +1020,6 @@ export interface SequencerRainMonitor extends SequencerMonitorBase {
 export interface SequencerWindMonitor extends SequencerMonitorBase {
 	// Discriminator selecting the concrete variant represented by this object.
 	readonly type: 'wind'
-	// Serialized value for device.
-	readonly device?: string
 
 	// Maximum accepted sustained wind speed.
 	// Metres per second; use a finite value >= 0.
@@ -1098,8 +1035,6 @@ export interface SequencerWindMonitor extends SequencerMonitorBase {
 export interface SequencerHumidityMonitor extends SequencerMonitorBase {
 	// Discriminator selecting the concrete variant represented by this object.
 	readonly type: 'humidity'
-	// Serialized value for device.
-	readonly device?: string
 	// Maximum accepted relative humidity.
 	readonly maximumHumidity: number
 }
@@ -1109,8 +1044,6 @@ export interface SequencerHumidityMonitor extends SequencerMonitorBase {
 export interface SequencerDewPointMonitor extends SequencerMonitorBase {
 	// Discriminator selecting the concrete variant represented by this object.
 	readonly type: 'dewPoint'
-	// Serialized value for device.
-	readonly device?: string
 
 	// Minimum ambient-temperature minus dew-point margin.
 	readonly minimumDifference: number
@@ -1121,8 +1054,6 @@ export interface SequencerDewPointMonitor extends SequencerMonitorBase {
 export interface SequencerCloudMonitor extends SequencerMonitorBase {
 	// Discriminator selecting the concrete variant represented by this object.
 	readonly type: 'cloud'
-	// Serialized value for device.
-	readonly device?: string
 	// Maximum accepted cloud-cover estimate.
 	readonly maximumCloudCover: number
 }
@@ -1401,18 +1332,11 @@ export interface SequencerQuality {
 
 	// Controls whether reject frame is applied.
 	readonly rejectFrame: boolean
-	// Controls whether repeat rejected frame is applied.
-	readonly repeatRejectedFrame: boolean
-	// Maximum replacement attempts for one rejected logical frame.
-	// Use an integer >= 0; 0 disables replacement attempts.
-	readonly maximumRepeatedFrames: number
-	// Number of consecutive rejected frames that causes a pause.
-	readonly pauseAfterConsecutiveRejectedFrames: number
 }
 
 // Execution
 
-// Defines session start/end conditions, interruption modes, default retry behavior, checkpointing, and resource retention.
+// Defines session start/end conditions, interruption modes, default retry behavior, and checkpointing.
 // It controls workflow semantics rather than device-specific settings.
 export interface SequencerExecution {
 	// Configuration value for start.
@@ -1427,14 +1351,6 @@ export interface SequencerExecution {
 	readonly defaultRetry: SequencerRetryPolicy
 	// Configuration value for checkpoint.
 	readonly checkpoint: SequencerCheckpoint
-	// Global limit on simultaneously executing Sequencer actions.
-	readonly maximumParallelActions: number
-	// Controls whether release resources while paused is applied.
-	readonly releaseResourcesWhilePaused: boolean
-	// Controls whether release resources while suspended is applied.
-	readonly releaseResourcesWhileSuspended: boolean
-	// Controls whether continue after application restart is applied.
-	readonly continueAfterApplicationRestart: boolean
 }
 
 // Discriminated union defining when a session is allowed to start.
@@ -1506,8 +1422,6 @@ export type SequencerEndCondition =
 // Controls when durable runtime checkpoints are requested from the host.
 // The interval is seconds; zero disables interval-based checkpoints.
 export interface SequencerCheckpoint {
-	// Controls whether this feature or definition is active.
-	readonly enabled: boolean
 	// Controls whether after every action is applied.
 	readonly afterEveryAction: boolean
 	// Controls whether after every frame is applied.
@@ -1566,8 +1480,6 @@ export interface SequencerShutdown {
 	readonly runOnStop: boolean
 	// Controls whether run on failure is applied.
 	readonly runOnFailure: boolean
-	// Controls whether run on unsafe is applied.
-	readonly runOnUnsafe: boolean
 	// Ordered actions executed by this pipeline.
 	// The array may be empty when the pipeline is enabled only for future configuration.
 	readonly actions: readonly SequencerLifecycleAction[]

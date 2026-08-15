@@ -137,11 +137,10 @@ export interface SequencerTriggerAnchor {
 
 // Condition of a safe point that happens once and is never observable again.
 //
-// A flip is over as soon as the mount reports the other side of the pier, and a recovery is over as soon as
-// the safe point that followed it ends. Everything else a trigger is stated over — frames, elapsed time,
-// temperature, the filter the frame needs — is still there to be measured at the next safe point, which is
-// why only these two have to be remembered when the run they selected did not focus.
-export type SequencerTriggerEventReason = 'afterMeridianFlip' | 'afterRecovery'
+// A flip is over as soon as the mount reports the other side of the pier. Everything else a trigger is stated
+// over — frames, elapsed time, temperature, the filter the frame needs — is still there to be measured at the
+// next safe point, which is why only this one has to be remembered when the run it selected did not focus.
+export type SequencerTriggerEventReason = 'afterMeridianFlip'
 
 // Every anchor of the session, which is the whole input the trigger evaluator reads besides the selection.
 //
@@ -169,9 +168,9 @@ export interface SequencerTriggerAnchors {
 
 // Counters of one frame group inside the current cycle.
 //
-// Every counter is per cycle and resets when the cycle advances, because `count` and `integrationTime` are
-// per-cycle targets: `repeat: 3` of a group asking for ten frames is three blocks of ten, not thirty frames
-// in one block. Accumulating across cycles would make `repeat` indistinguishable from multiplying `count`.
+// Every counter is per cycle and resets when the cycle advances, because `count` is a per-cycle target:
+// `repeat: 3` of a group asking for ten frames is three blocks of ten, not thirty frames in one block.
+// Accumulating across cycles would make `repeat` indistinguishable from multiplying `count`.
 //
 // The three outcome counters exist separately even though two of them are constant in V1, where a physically
 // completed frame is always accepted and only an abandoned slot is ever rejected. Quality evaluation only has
@@ -181,7 +180,7 @@ export interface SequencerGroupProgress {
 	// Slots already emitted in this cycle, which is also the ordinal of the next slot. It never reaches beyond
 	// the `slotLimit` of the group, which is what bounds the cycle.
 	readonly cursor: number
-	// Frames accepted, which is the counter the completion criteria are stated in.
+	// Frames accepted, which is the counter the completion criterion is stated in.
 	readonly accepted: number
 	// Frames physically completed. In V1 this equals `accepted`, since nothing rejects a completed frame.
 	readonly captured: number

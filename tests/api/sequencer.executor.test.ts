@@ -31,7 +31,7 @@ function definition(overrides?: Partial<Sequencer>): Sequencer {
 		autofocus: { ...base.autofocus, enabled: false },
 		meridianFlip: { ...base.meridianFlip, enabled: false },
 		cooling: { ...base.cooling, enabled: false },
-		capture: { ...base.capture, order: 'sequential', repeat: 1, delay: 0, settle: 0, frames: [frame('lum', { count: 2, camera: camera() })], retry: retry() },
+		capture: { ...base.capture, order: 'sequential', repeat: 1, delay: 0, frames: [frame('lum', { count: 2, camera: camera() })], retry: retry() },
 		startup: { ...base.startup, actions: [] },
 		shutdown: { ...base.shutdown, actions: [] },
 		...overrides,
@@ -483,10 +483,10 @@ describe('plan walk', () => {
 		expect(outcome.checkpoint.completed).not.toContain('startup.action[park]')
 	})
 
-	test('never spends the settle on a safe point that moved nothing', async () => {
+	test('spends nothing on a safe point that moved nothing', async () => {
 		const base = definition()
 		const target = { ...base.target, goto: { ...base.target.goto, enabled: false }, center: { ...base.target.center, enabled: false }, tracking: { ...base.target.tracking, enabled: false } }
-		const state = harness(planOf({ target, capture: { ...base.capture, settle: 1 } }))
+		const state = harness(planOf({ target }))
 		const started = performance.now()
 		const outcome = await runSequencerPlan(state.host)
 
@@ -497,7 +497,7 @@ describe('plan walk', () => {
 
 	test('never refocuses after a flip that refocused inside its own node', async () => {
 		const base = definition()
-		const autofocus = { ...base.autofocus, enabled: true, triggers: { ...base.autofocus.triggers, onStart: false, onFilterChange: false, afterMeridianFlip: true, afterRecovery: false, everyFrames: 0, everyTime: 0, temperatureChange: 0, starSizeChange: 0, minimumTimeBetweenRuns: 0 } }
+		const autofocus = { ...base.autofocus, enabled: true, triggers: { ...base.autofocus.triggers, onStart: false, onFilterChange: false, afterMeridianFlip: true, everyFrames: 0, everyTime: 0, temperatureChange: 0, minimumTimeBetweenRuns: 0 } }
 		const meridianFlip = { ...base.meridianFlip, enabled: true, autofocus: true }
 		const state: Harness = harness(planOf({ autofocus, meridianFlip }), (context) => {
 			if (context.nodeId.endsWith('.trigger.meridianFlip')) state.observation = { ...state.observation, pierSide: 'EAST' }

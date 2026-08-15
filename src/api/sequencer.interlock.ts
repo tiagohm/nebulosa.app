@@ -1,8 +1,9 @@
 import type { PHD2Settle } from 'nebulosa/src/devices/guiding/phd2'
 import type { SequencerGuiderSettle } from '#/sequencer'
 import { sequencerActionFailure } from './sequencer.action'
+import type { SequencerDitherTrigger } from './sequencer.compiler'
 import { runDither } from './sequencer.guiding'
-import type { SequencerDitherOutcome, SequencerDitherTrigger, SequencerGuidingServices } from './sequencer.guiding'
+import type { SequencerDitherOutcome, SequencerGuidingServices } from './sequencer.guiding'
 import type { SequencerActionContext, SequencerActionResult } from './sequencer.registry'
 
 // The guiding interlock of a safe point: the steps that move pointing, focus or angle run with the guiding
@@ -25,9 +26,9 @@ import type { SequencerActionContext, SequencerActionResult } from './sequencer.
 // previous calibration has the wrong sign, and the recalibration happens here, inside the bracket of that
 // safe point, rather than as a step of its own.
 //
-// Settles are fused instead of accumulated. The settle installed on the session is the strongest of the ones
-// in play at this safe point, and the dither is emitted immediately after the resume, inside the bracket, so
-// the safe point stands still for the settles the guider itself pays and for none of its own. What is never
+// Settling is not accumulated. One guiding settle is installed on the session, and the dither is emitted
+// immediately after the resume, inside the bracket, so the safe point stands still for the settles the guider
+// itself pays under that one policy and for none of its own. What is never
 // done is suppressing the dither because a centering "already moved" the field: a centering corrects drift
 // back to the reference position, which is exactly where the previous frames were taken, so it removes the
 // positional diversity a dither exists to provide.
@@ -105,23 +106,6 @@ export interface SequencerInterlockOutcome<T> {
 // does not survive the process, which is the same lifetime the V1 sessions have.
 const suspendedGuiders = new Map<string, boolean>()
 
-// Strongest of two settle policies, field by field.
-//
-// Strongest means hardest to satisfy for the accuracy fields and most patient for the waiting ones: the
-// smallest tolerated error, the longest time it has to be held, and the longest the guider may take to get
-// there. Fusing this way keeps a safe point where a dither and the
-// bracket are both in play from settling twice, once loosely and once strictly, while never settling to a
-// weaker criterion than either of them asked for.
-export function sequencerFuseGuiderSettle(settle: SequencerGuiderSettle, other?: SequencerGuiderSettle): SequencerGuiderSettle {
-	if (other === undefined) return settle
-
-	return {
-		tolerance: Math.min(settle.tolerance, other.tolerance),
-		time: Math.max(settle.time, other.time),
-		timeout: Math.max(settle.timeout, other.timeout),
-	}
-}
-
 // Translates a declared settle into the settle the guider transport understands.
 function guiderSettle(settle: SequencerGuiderSettle): PHD2Settle {
 	return { pixels: settle.tolerance, time: settle.time, timeout: settle.timeout }
@@ -169,15 +153,14 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 	// corrections come back, whether or not anything crosses the meridian inside it.
 	const owed = guider !== undefined && suspendedGuiders.get(guider) === true
 	const state: SequencerInterlockState = { flipped: false }
-	const settle = sequencerFuseGuiderSettle(request.settle, request.dither?.settle)
 
 	if (guider !== undefined) {
 		context.progress({ detail: 'suspending the guiding corrections' })
 
 		// Looping is the suspension: the exposures continue, so the star stays acquired and the resume has
-		// something to guide on, while no correction reaches the mount. The fused settle is installed with the
-		// same command, which is what makes the resume and the dither after it settle under one policy.
-		const suspended = await services.guiderCommander.loop(guider, { settle: guiderSettle(settle) }, { signal: context.signal })
+		// something to guide on, while no correction reaches the mount. The settle is installed with the same
+		// command, which is what makes the resume and the dither after it settle under one policy.
+		const suspended = await services.guiderCommander.loop(guider, { settle: guiderSettle(request.settle) }, { signal: context.signal })
 
 		if (!suspended.ok) {
 			if (report !== undefined) report.phase = 'suspension'

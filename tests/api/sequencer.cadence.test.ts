@@ -1,12 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { SEQUENCER_INITIAL_CADENCE_ANCHORS, sequencerCadenceBoundary, sequencerExposureEnded, sequencerSettleAnchored, waitForCadenceBoundary } from 'src/api/sequencer.cadence'
-import type { SequencerCadenceSpacing } from 'src/api/sequencer.cadence'
+import { SEQUENCER_INITIAL_CADENCE_ANCHORS, sequencerCadenceBoundary, sequencerExposureEnded, waitForCadenceBoundary } from 'src/api/sequencer.cadence'
 import type { SequencerActionContext } from 'src/api/sequencer.registry'
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
-
-function spacing(overrides?: Partial<SequencerCadenceSpacing>): SequencerCadenceSpacing {
-	return { delay: 30, settle: 10, ...overrides }
-}
 
 function actionContext(now: () => number, signal = new AbortController().signal): SequencerActionContext {
 	return {
@@ -26,45 +21,19 @@ function actionContext(now: () => number, signal = new AbortController().signal)
 
 describe('cadence boundary', () => {
 	test('leaves the first exposure of a session unspaced', () => {
-		expect(sequencerCadenceBoundary(SEQUENCER_INITIAL_CADENCE_ANCHORS, spacing())).toBe(0)
+		expect(sequencerCadenceBoundary(SEQUENCER_INITIAL_CADENCE_ANCHORS, 30)).toBe(0)
 	})
 
 	test('spaces the next exposure from the end of the previous one', () => {
-		expect(sequencerCadenceBoundary(sequencerExposureEnded(1_000_000), spacing())).toBe(1_030_000)
+		expect(sequencerCadenceBoundary(sequencerExposureEnded(1_000_000), 30)).toBe(1_030_000)
 	})
 
-	test('takes the later of the two spacings instead of adding them', () => {
-		const anchors = sequencerSettleAnchored(sequencerExposureEnded(1_000_000), 1_005_000)
-
-		expect(sequencerCadenceBoundary(anchors, spacing())).toBe(1_030_000)
-		expect(sequencerCadenceBoundary(anchors, spacing({ settle: 60 }))).toBe(1_065_000)
+	test('anchors the spacing on the end of the exposure and nothing else', () => {
+		expect(sequencerExposureEnded(1_000_000)).toEqual({ exposureEndedAt: 1_000_000 })
 	})
 
-	test('keeps the spacing of the previous exposure across a movement', () => {
-		const anchors = sequencerSettleAnchored(sequencerExposureEnded(1_000_000), 1_001_000)
-
-		expect(anchors).toEqual({ exposureEndedAt: 1_000_000, settleAnchoredAt: 1_001_000 })
-	})
-
-	test('retires the initial settle once a frame was exposed against it', () => {
-		const moved = sequencerSettleAnchored(SEQUENCER_INITIAL_CADENCE_ANCHORS, 1_000_000)
-		const exposed = sequencerExposureEnded(1_100_000)
-
-		expect(sequencerCadenceBoundary(moved, spacing())).toBe(1_010_000)
-		expect(exposed.settleAnchoredAt).toBeUndefined()
-		expect(sequencerCadenceBoundary(exposed, spacing({ delay: 0 }))).toBe(0)
-	})
-
-	test('settles the first exposure after a slew with no previous frame', () => {
-		const anchors = sequencerSettleAnchored(SEQUENCER_INITIAL_CADENCE_ANCHORS, 1_000_000)
-
-		expect(sequencerCadenceBoundary(anchors, spacing())).toBe(1_010_000)
-	})
-
-	test('spaces nothing when both durations are zero', () => {
-		const anchors = sequencerSettleAnchored(sequencerExposureEnded(1_000_000), 1_005_000)
-
-		expect(sequencerCadenceBoundary(anchors, spacing({ delay: 0, settle: 0 }))).toBe(0)
+	test('spaces nothing when the declared delay is zero', () => {
+		expect(sequencerCadenceBoundary(sequencerExposureEnded(1_000_000), 0)).toBe(0)
 	})
 })
 

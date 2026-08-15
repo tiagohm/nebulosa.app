@@ -41,7 +41,7 @@ function guided(): Sequencer {
 	return {
 		...definition,
 		devices: { ...definition.devices, guideCamera: 'Guide Camera Simulator', guideOutput: 'Guide Output Simulator' },
-		guiding: { ...definition.guiding, enabled: true, connection: { mode: 'local', focalLength: 0.24, capture: { exposureTime: 2, frameType: 'LIGHT', binX: 1, binY: 1, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false }, owned: true } },
+		guiding: { ...definition.guiding, enabled: true, connection: { mode: 'local', focalLength: 0.24, capture: { exposureTime: 2, frameType: 'LIGHT', binX: 1, binY: 1, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false } } },
 	}
 }
 
@@ -229,14 +229,6 @@ describe('session start resolution', () => {
 })
 
 describe('guider ownership', () => {
-	test('an unowned remote guider is refused at compilation', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, guiding: { ...definition.guiding, enabled: true, connection: { mode: 'remote', host: 'localhost', port: 4400, owned: false } } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.connection.owned', message: 'the session must own the guider session it reserves' }])
-	})
-
 	test('a plan that does not guide reserves no logical key', () => {
 		const setup = observatory()
 		const resolution = resolveResources(plan(unguided()), devices(setup.camera, setup.mount, setup.focuser))

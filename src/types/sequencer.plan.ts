@@ -69,10 +69,8 @@ export interface SequencerPlanFrameGroup {
 	readonly frameType: FrameType
 	// Exposure duration of every frame of the group, in seconds.
 	readonly exposureTime: number
-	// Requested number of accepted frames per cycle; 0 disables the frame-count criterion.
+	// Requested number of accepted frames per cycle; a group reaching the plan always declares at least one.
 	readonly count: number
-	// Requested accumulated accepted exposure time per cycle, in seconds; 0 disables the criterion.
-	readonly integrationTime: number
 	// Minimum spacing between the end of one exposure and the start of the next, in seconds. Resolved from
 	// the frame delay when declared and from the capture delay otherwise, so the runtime never sees undefined.
 	readonly delay: number
@@ -84,8 +82,8 @@ export interface SequencerPlanFrameGroup {
 	readonly camera: SequencerCamera
 	// Failure policy of the capture action, which is also the attempt budget of every slot of the group.
 	readonly retry: SequencerRetryPolicy
-	// Slots the group needs to reach its target in one cycle, derived from whichever completion criteria are
-	// active; always >= 1, since a group needing no slot is a disabled group and never reaches the plan.
+	// Slots the group needs to reach its target in one cycle, which is its declared count; always >= 1, since a
+	// group needing no slot is a disabled group and never reaches the plan.
 	readonly requiredSlots: number
 	// Extra slots the group may spend on abandoned exposures and still reach its target, `0` when the
 	// definition declares none. It is slack, not a stop trigger: it never ends the group by itself.

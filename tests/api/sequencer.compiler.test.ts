@@ -570,7 +570,7 @@ describe('structural validation', () => {
 		}
 	})
 
-	test('a capture handler cannot shorten the exposure the slots of an integration target were derived from', () => {
+	test('a capture handler cannot shorten the exposure the projected integration was derived from', () => {
 		const registry = new SequencerBlockRegistry()
 
 		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
@@ -588,7 +588,7 @@ describe('structural validation', () => {
 		}
 
 		const definition = canonical()
-		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 600, exposureTime: 60 })] } }, { registry })
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 10, exposureTime: 60 })] } }, { registry })
 
 		expect(compilation.ok).toBe(true)
 
@@ -596,7 +596,6 @@ describe('structural validation', () => {
 			const group = compilation.plan.groups[0]
 
 			expect(group.exposureTime).toBe(60)
-			expect(group.integrationTime).toBe(600)
 			expect(group.requiredSlots).toBe(10)
 			expect(group.projectedIntegration).toBe(600)
 		}
@@ -620,46 +619,6 @@ describe('termination', () => {
 		expect(plan.groups[0].projectedIntegration).toBe(600)
 	})
 
-	test('an integration time alone decides the slots, rounded up', () => {
-		const definition = canonical()
-		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 500, exposureTime: 60 })] } })
-
-		expect(plan.groups[0].requiredSlots).toBe(9)
-		expect(plan.groups[0].projectedIntegration).toBe(540)
-	})
-
-	test('an integration time that divides exactly in decimal schedules no extra slot', () => {
-		const definition = canonical()
-		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 0.07, exposureTime: 0.01 })] } })
-
-		expect(0.07 / 0.01).toBeGreaterThan(7)
-		expect(plan.groups[0].requiredSlots).toBe(7)
-		expect(plan.groups[0].projectedIntegration).toBeCloseTo(0.07, 12)
-	})
-
-	test('a partial slot of a large integration target is not snapped away', () => {
-		const definition = canonical()
-		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 500000.0004, exposureTime: 0.001 })] } })
-
-		expect(500000.0004 / 0.001).toBeGreaterThan(500000000)
-		expect(plan.groups[0].requiredSlots).toBe(500000001)
-	})
-
-	test('a large integration target still absorbs the rounding error of its division', () => {
-		const definition = canonical()
-		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 1234.56, exposureTime: 0.01 })] } })
-
-		expect(1234.56 / 0.01).toBeLessThan(123456)
-		expect(plan.groups[0].requiredSlots).toBe(123456)
-	})
-
-	test('with both criteria active the cheaper one decides the slots', () => {
-		const definition = canonical()
-		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 10, integrationTime: 300, exposureTime: 60 }), frame('red', { count: 3, integrationTime: 600, exposureTime: 60 })] } })
-
-		expect(plan.groups.map((group) => group.requiredSlots)).toEqual([5, 3])
-	})
-
 	test('the abandonment budget raises the slot limit without raising the target', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 10, abandonmentBudget: 2 })] } })
@@ -676,43 +635,19 @@ describe('termination', () => {
 		expect(group.slotLimit * group.retry.maxAttempts).toBe(30)
 	})
 
-	test('a group with neither criterion is disabled', () => {
+	test('a group asking for no frame at all is disabled', () => {
 		const definition = canonical()
-		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum'), frame('red', { count: 0, integrationTime: 0 })] } })
+		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum'), frame('red', { count: 0 })] } })
 
 		expect(plan.groups.map((group) => group.id)).toEqual(['lum'])
 	})
 
-	test('a definition whose every group is disabled by its criteria is refused', () => {
+	test('a definition whose every group asks for no frame is refused', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 0 })] } })
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0 })] } })
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames', message: 'the definition has no enabled frame group to capture' }])
-	})
-
-	test('an integration time with a zero exposure time is refused', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 600, exposureTime: 0 })] } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0].exposureTime', message: 'a frame group with an integration time requires a positive exposure time' }])
-	})
-
-	test('an integration target that overflows its slot count is refused', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: Number.MAX_VALUE, exposureTime: Number.MIN_VALUE })] } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0].integrationTime', message: 'the integration target needs more exposures of this length than a number can count, so the group has no slot limit to stop at' }])
-	})
-
-	test('an integration target that overflows is bounded by a frame count', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 5, integrationTime: Number.MAX_VALUE, exposureTime: Number.MIN_VALUE })] } })
-
-		expect(compilation.ok).toBe(true)
-		if (compilation.ok) expect(compilation.plan.groups[0].requiredSlots).toBe(5)
 	})
 
 	test('a slot limit above the safe counting range is refused', () => {
@@ -1021,9 +956,9 @@ describe('failure policies', () => {
 		expect(compilation.ok).toBe(true)
 	})
 
-	test('an unsupported trigger of a disabled feature is not reported', () => {
+	test('an unsupported option of a disabled feature is not reported', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, autofocus: { ...definition.autofocus, enabled: false, triggers: { ...definition.autofocus.triggers, starSizeChange: 0.2 } } })
+		const compilation = compile({ ...definition, guiding: { ...definition.guiding, enabled: false }, dither: { ...definition.dither, enabled: false }, quality: { ...definition.quality, enabled: false, rejectFrame: true } })
 
 		expect(compilation.ok).toBe(true)
 	})

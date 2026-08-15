@@ -7,7 +7,7 @@ import type { SequencerCheckpoint as SequencerCheckpointPolicy } from '#/sequenc
 import type { SequencerCheckpoint, SequencerGroupProgress } from '#/sequencer.state'
 
 function policy(overrides?: Partial<SequencerCheckpointPolicy>): SequencerCheckpointPolicy {
-	return { enabled: true, afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 60, ...overrides }
+	return { afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 60, ...overrides }
 }
 
 function checkpoint(overrides?: Partial<SequencerCheckpoint>): SequencerCheckpoint {
@@ -24,7 +24,7 @@ function keeper(overrides?: Partial<SequencerCheckpoint>) {
 
 describe('write cadence', () => {
 	test('a transition and an artifact are written whatever the policy declares', () => {
-		const disabled = policy({ enabled: false, afterEveryAction: false, afterEveryFrame: false, afterEveryArtifact: false, interval: 0 })
+		const disabled = policy({ afterEveryAction: false, afterEveryFrame: false, afterEveryArtifact: false, interval: 0 })
 
 		expect(sequencerCheckpointDue(disabled, 'transition', 0)).toBeTrue()
 		expect(sequencerCheckpointDue(disabled, 'artifact', 0)).toBeTrue()
@@ -49,8 +49,8 @@ describe('write cadence', () => {
 		expect(sequencerCheckpointDue(policy({ interval: 0 }), 'interval', 3_600_000)).toBeFalse()
 	})
 
-	test('a disabled policy suppresses every cadence write and nothing else', () => {
-		const off = policy({ enabled: false })
+	test('a cadence that declines everything suppresses every cadence write and nothing else', () => {
+		const off = policy({ afterEveryAction: false, afterEveryFrame: false, interval: 0 })
 
 		expect(sequencerCheckpointDue(off, 'action', 0)).toBeFalse()
 		expect(sequencerCheckpointDue(off, 'frame', 0)).toBeFalse()
@@ -77,7 +77,7 @@ describe('checkpoint kept in memory', () => {
 
 		keep.capture({ 'target-1': { cycle: 2, groups: {} } })
 
-		expect(keep.due(policy({ enabled: false }), 'frame', 4000)).toBeFalse()
+		expect(keep.due(policy({ afterEveryFrame: false }), 'frame', 4000)).toBeFalse()
 		expect(keep.checkpoint.capture['target-1']?.cycle).toBe(2)
 	})
 
@@ -192,7 +192,7 @@ describe('atomic commit unit', () => {
 
 		keep.capture({ 'target-1': { cycle: 1, groups: { luminance: group(1) } } })
 
-		expect(keep.due(policy({ enabled: false }), 'artifact', 5000)).toBeTrue()
+		expect(keep.due(policy(), 'artifact', 5000)).toBeTrue()
 
 		const result = store.commit({
 			sessionId: created.id,

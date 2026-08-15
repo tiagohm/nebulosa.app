@@ -1,13 +1,14 @@
 import { describe, expect, test } from 'bun:test'
+import type { SequencerDitherTrigger } from 'src/api/sequencer.compiler'
 import { sequencerDitherHandler } from 'src/api/sequencer.guiding'
 import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
 import type { SequencerActionContext } from 'src/api/sequencer.registry'
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason } from '#/orchestration'
-import type { SequencerDevices, SequencerDither } from '#/sequencer'
+import type { SequencerDevices } from '#/sequencer'
 
-type DitherConfiguration = Omit<SequencerDither, 'enabled'>
+type DitherConfiguration = SequencerDitherTrigger
 
 interface Command {
 	readonly name: string

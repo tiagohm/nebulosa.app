@@ -2,7 +2,7 @@ import { isAbsolute } from 'path'
 import type { MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 // oxfmt-ignore
-import type { Sequencer, SequencerAutofocus, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
+import type { Sequencer, SequencerAutofocus, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGoto, SequencerGuiderSettle, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { sequencerUnknownPlaceholders } from './sequencer.identity'
 import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
@@ -56,6 +56,15 @@ export interface SequencerCenter extends Omit<SequencerCentering, 'enabled'> {
 	readonly coordinates: MountTargetCoordinate<Angle>
 }
 
+// Configuration of the dither trigger: the declared dither policy without its enablement flag, plus the
+// settle the lowering resolved for it.
+export interface SequencerDitherTrigger extends Omit<SequencerDither, 'enabled'> {
+	// Guiding settle the dither waits under, which is the settle of the session. A dither is a displacement of
+	// the guiding, so what counts as settled after it is what counts as settled after any other transition of
+	// the same guider.
+	readonly settle: SequencerGuiderSettle
+}
+
 // Configuration of the autofocus trigger, which is the declared autofocus policy without its enablement flag:
 // the focuser routine, its capture recipe, the star detection it measures with, and the filter offsets.
 export type SequencerFocus = Omit<SequencerAutofocus, 'enabled'>
@@ -81,8 +90,6 @@ export interface SequencerMeridianFlipTrigger extends Omit<SequencerMeridianFlip
 export interface SequencerCapture {
 	// Group this action exposes for.
 	readonly group: SequencerPlanFrameGroup
-	// Stable time required before the first or a resumed exposure, in seconds.
-	readonly settle: number
 	// Optical-path policies the safe point in front of this exposure reconciles against.
 	readonly preparation: SequencerCapturePreparation
 }
@@ -196,66 +203,24 @@ function cameraSettingsOf(frame: SequencerFrame, defaults: SequencerCamera): Seq
 
 // Whether a frame group contributes anything to the plan.
 //
-// A group concludes on whichever completion criterion is reached first, and `0` disables each criterion, so a
-// group that declares neither a frame count nor an integration time concludes on nothing. Following the
-// contract, disabling both criteria disables the group, with exactly the effect of `enabled: false`; the
-// alternative reading is a group that captures forever, which no operator writes on purpose.
+// The frame count is the only completion criterion, and `0` disables it, so a group asking for no frame
+// concludes on nothing. Following the contract, a zero count disables the group, with exactly the effect of
+// `enabled: false`; the alternative reading is a group that captures forever, which no operator writes on
+// purpose.
 function frameGroupEnabled(frame: SequencerFrame) {
-	return frame.enabled && (frame.count > 0 || frame.integrationTime > 0)
+	return frame.enabled && frame.count > 0
 }
 
-// Relative tolerance snapping an integration quotient to the integer it is a rounding error away from. Two
-// decimal durations rarely divide exactly in binary: `0.07 / 0.01` is `7.000000000000001`, and the ceiling of
-// that schedules an eighth exposure for a target seven of them reach. The bound is orders of magnitude above
-// the representation error of a realistic quotient and orders of magnitude below any spacing an operator can
-// express in seconds, so it snaps only what is a rounding error and never a genuinely partial slot.
-const SEQUENCER_SLOT_TOLERANCE = 1e-9
-
-// Widest distance, in slots, at which a quotient is still taken for the integer beside it. The relative
-// tolerance grows with the quotient and reaches half a slot around five hundred million exposures, where it
-// stops correcting a rounding error and becomes plain rounding: a target needing 500000000.4 exposures would
-// be answered with 500000000 and the group would end before reaching it. A millionth of an exposure is orders
-// of magnitude below any partial slot a declared duration produces and still absorbs the binary error of the
-// quotients an operator writes. Above the magnitude where the error of the division itself exceeds this cap
-// the quotient is rounded up instead, which overshoots the target by one exposure rather than missing it.
-const SEQUENCER_SLOT_TOLERANCE_LIMIT = 1e-6
-
-// Slots needed to accumulate `integrationTime` seconds in exposures of `exposureTime` seconds, rounded up
-// because a partial exposure does not reach the target. A quotient within the tolerance of an integer is
-// taken as that integer. Requires `exposureTime > 0`.
-function integrationSlotsOf(integrationTime: number, exposureTime: number) {
-	const quotient = integrationTime / exposureTime
-	const rounded = Math.round(quotient)
-	const tolerance = Math.min(SEQUENCER_SLOT_TOLERANCE * rounded, SEQUENCER_SLOT_TOLERANCE_LIMIT)
-	return Math.abs(quotient - rounded) <= tolerance ? rounded : Math.ceil(quotient)
-}
-
-// Slots one group needs to reach its target in one cycle.
-//
-// With both criteria active the group concludes at the cheaper of the two, so the smaller demand is the one
-// that decides. The integration criterion divides exactly rather than approximately: every slot of a group
-// exposes for the same `exposureTime` and, in V1, an accepted frame is every captured frame, so the
-// accumulated integration grows in identical steps. For an enabled group the result is >= 1, and it is
-// infinite when the only active criterion is an integration target whose ratio to the exposure overflows,
-// which is what `checkTermination` refuses before a plan is built.
-function requiredSlotsOf(frame: SequencerFrame) {
-	const byCount = frame.count > 0 ? frame.count : Number.POSITIVE_INFINITY
-	const byIntegration = frame.integrationTime > 0 ? integrationSlotsOf(frame.integrationTime, frame.exposureTime) : Number.POSITIVE_INFINITY
-	return Math.min(byCount, byIntegration)
-}
-
-// Reports the five ways the capture plan makes its loop unbounded, which is one of the only situations this
+// Reports the three ways the capture plan makes its loop unbounded, which is one of the only situations this
 // project checks at runtime.
 //
-// An integration target with a zero exposure divides by zero and yields an infinite slot limit, which is the
-// infinite loop coming back through another door, and an integration target so much larger than its exposure
-// that their ratio overflows arrives at the same infinity by a longer road. A finite slot limit above
-// `Number.MAX_SAFE_INTEGER` is the same failure once more: a scheduler counting slots one at a time stops
-// changing its counter there, so it never reaches the bound and the supposedly bounded loop runs forever. A
-// repetition count of zero would have to be read as "no cycle at all", and silently disabling the whole
-// capture through the repetition counter is precisely the quiet acceptance the compatibility rule forbids.
-// The repetition count is bounded from above for the same reason the slot limit is: the loop counts the
-// cycles it completed, and a bound the counter cannot reach is a loop with no end.
+// A slot limit above `Number.MAX_SAFE_INTEGER` is an infinite loop coming through another door: a scheduler
+// counting slots one at a time stops changing its counter there, so it never reaches the bound and the
+// supposedly bounded loop runs forever. A repetition count of zero would have to be read as "no cycle at
+// all", and silently disabling the whole capture through the repetition counter is precisely the quiet
+// acceptance the compatibility rule forbids. The repetition count is bounded from above for the same reason
+// the slot limit is: the loop counts the cycles it completed, and a bound the counter cannot reach is a loop
+// with no end.
 //
 // The projection derived from those bounded counters is checked here as well, because it is derived from the
 // same numbers: slots that terminate can still multiply by an exposure into a value outside the range of a
@@ -273,12 +238,10 @@ function checkTermination(context: CompilerContext, definition: Sequencer) {
 
 		if (!frameGroupEnabled(frame)) continue
 
-		const slots = requiredSlotsOf(frame)
+		const slots = frame.count
 		const integration = slots * frame.exposureTime
 
-		if (frame.integrationTime > 0 && frame.exposureTime <= 0) context.diagnostics.push({ path: `capture.frames[${i}].exposureTime`, message: 'a frame group with an integration time requires a positive exposure time' })
-		else if (!Number.isFinite(slots)) context.diagnostics.push({ path: `capture.frames[${i}].integrationTime`, message: 'the integration target needs more exposures of this length than a number can count, so the group has no slot limit to stop at' })
-		else if (slots + (frame.abandonmentBudget ?? 0) > Number.MAX_SAFE_INTEGER) context.diagnostics.push({ path: `capture.frames[${i}]`, message: 'the slot limit of the group is above the range a number counts one by one, so a scheduler counting slots would stop advancing before reaching it' })
+		if (slots + (frame.abandonmentBudget ?? 0) > Number.MAX_SAFE_INTEGER) context.diagnostics.push({ path: `capture.frames[${i}]`, message: 'the slot limit of the group is above the range a number counts one by one, so a scheduler counting slots would stop advancing before reaching it' })
 		else if (!Number.isFinite(integration)) context.diagnostics.push({ path: `capture.frames[${i}].exposureTime`, message: 'the slots of the group exposing for this long overflow the range of a number, so the plan would report no projected integration for it' })
 		else projected += integration
 	}
@@ -293,7 +256,7 @@ function checkTermination(context: CompilerContext, definition: Sequencer) {
 // declares one and from the capture plan otherwise, so the scheduler never sees an undefined spacing.
 function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): SequencerPlanFrameGroup {
 	const { capture, target } = definition
-	const requiredSlots = requiredSlotsOf(frame)
+	const requiredSlots = frame.count
 	const abandonmentBudget = frame.abandonmentBudget ?? 0
 
 	return {
@@ -303,7 +266,6 @@ function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): Sequence
 		frameType: frame.frameType,
 		exposureTime: frame.exposureTime,
 		count: frame.count,
-		integrationTime: frame.integrationTime,
 		delay: frame.delay ?? capture.delay,
 		weight: frame.weight,
 		filter: frame.filter,
@@ -373,7 +335,7 @@ function lowerCentering(definition: Sequencer): SequencerCenter | undefined {
 //
 // `centering` is the lowered centering of the target, which the flip carries when it recenters.
 function lowerTriggers(definition: Sequencer, targetId: string, centering: SequencerCenter | undefined): SequencerPlanAction[] {
-	const { autofocus, dither, meridianFlip } = definition
+	const { autofocus, dither, guiding, meridianFlip } = definition
 	const triggers: SequencerPlanAction[] = []
 	const { enabled: focusable, ...focusing } = autofocus
 
@@ -391,8 +353,11 @@ function lowerTriggers(definition: Sequencer, targetId: string, centering: Seque
 		triggers.push({ kind: 'action', id: sequencerNodeId.trigger(targetId, 'autofocus'), type: SEQUENCER_BLOCK_TYPE.autofocus, configuration: focusing })
 	}
 
+	// The dither waits under the settle of the guiding session: a dither is a displacement of the guiding, and
+	// a settle of its own would be a second policy for the same guider.
 	if (dither.enabled) {
-		const { enabled, ...configuration } = dither
+		const { enabled, ...policy } = dither
+		const configuration: SequencerDitherTrigger = { ...policy, settle: guiding.settle }
 		triggers.push({ kind: 'action', id: sequencerNodeId.trigger(targetId, 'dither'), type: SEQUENCER_BLOCK_TYPE.dither, configuration })
 	}
 
@@ -440,7 +405,7 @@ function lowerTarget(definition: Sequencer, groups: readonly SequencerPlanFrameG
 	const preparation = lowerPreparation(definition)
 
 	const frames = groups.map<SequencerPlanAction>((group) => {
-		const configuration: SequencerCapture = { group, settle: capture.settle, preparation }
+		const configuration: SequencerCapture = { group, preparation }
 		return { kind: 'action', id: group.nodeId, type: SEQUENCER_BLOCK_TYPE.captureFrame, configuration }
 	})
 
@@ -654,11 +619,9 @@ function capturedGroupOf(configuration: unknown): SequencerPlanFrameGroup | unde
 // A handler normalizes how a group is captured: its camera settings, its spacing, the filter it selects. What
 // the group is, and what it has to capture, is not its to change. The counters were derived from the
 // definition and proved finite before any handler ran, so a returned `slotLimit` of `Infinity` would put an
-// endless loop in the plan after every termination check had already passed. The criteria they were derived
-// from are restored with them: `requiredSlots` of an integration-only group is `integrationTime /
-// exposureTime`, so a handler that halves the exposure while the slot count stays behind ends the group at
-// half the integration the definition asked for. Restoring both keeps the group and its bounds describing the
-// same capture.
+// endless loop in the plan after every termination check had already passed. The count they were derived from
+// is restored with them, and so is the exposure the projection is stated in, which keeps the group and its
+// bounds describing the same capture.
 //
 // The two identifiers are restored for the same reason. `nodeId` is what ties the group to the capture action
 // that produces it — it keys this rewrite, addresses the checkpoints and the artifacts of the group, and is
@@ -666,7 +629,7 @@ function capturedGroupOf(configuration: unknown): SequencerPlanFrameGroup | unde
 // storage path is composed from. A handler returning either one changed would hand the scheduler a group
 // pointing at a node that does not run it.
 function withCompilerOwned(captured: SequencerPlanFrameGroup, group: SequencerPlanFrameGroup): SequencerPlanFrameGroup {
-	return { ...captured, id: group.id, nodeId: group.nodeId, exposureTime: group.exposureTime, count: group.count, integrationTime: group.integrationTime, requiredSlots: group.requiredSlots, abandonmentBudget: group.abandonmentBudget, slotLimit: group.slotLimit, projectedIntegration: group.projectedIntegration }
+	return { ...captured, id: group.id, nodeId: group.nodeId, exposureTime: group.exposureTime, count: group.count, requiredSlots: group.requiredSlots, abandonmentBudget: group.abandonmentBudget, slotLimit: group.slotLimit, projectedIntegration: group.projectedIntegration }
 }
 
 // Rebuilds a node with the configuration its handler returned in place of the one the lowering produced.
@@ -764,17 +727,11 @@ function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistr
 //
 // The session always creates and owns its guider session, and that is not a policy preference: the session
 // reserves the logical keys of the guider at start, so a guider session already open holds a lease on exactly
-// those keys and the reservation fails before any guiding policy is consulted. A connection the session does
-// not own therefore describes a path no session can reach.
-function lowerGuider(context: CompilerContext, definition: Sequencer) {
+// those keys and the reservation fails before any guiding policy is consulted.
+function lowerGuider(definition: Sequencer) {
 	const { guiding } = definition
 
 	if (!guiding.enabled) return undefined
-
-	if (!guiding.connection.owned) {
-		context.diagnostics.push({ path: 'guiding.connection.owned', message: 'the session must own the guider session it reserves' })
-		return undefined
-	}
 
 	return { connection: guiding.connection, calibrateBeforeStart: guiding.calibrateBeforeStart, recalibrateAfterMeridianFlip: guiding.recalibrateAfterMeridianFlip, restoreAfterInterruption: guiding.restoreAfterInterruption, settle: guiding.settle, retry: guiding.retry }
 }
@@ -910,10 +867,8 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	const { diagnostics, removals } = context
 
 	if (definition.schemaVersion !== SEQUENCER_SCHEMA_VERSION) diagnostics.push({ path: 'schemaVersion', message: `the definition declares schema version ${definition.schemaVersion}, and this version compiles ${SEQUENCER_SCHEMA_VERSION}` })
-	if (!definition.enabled) diagnostics.push({ path: 'enabled', message: 'the definition is disabled and a disabled definition has nothing to execute' })
 
 	if (target.constraints.enabled) diagnostics.push({ path: 'target.constraints.enabled', message: 'target constraints require the ephemeris and the monitor lane this version does not have' })
-	if (target.center.enabled && target.center.recenterAfterDrift) diagnostics.push({ path: 'target.center.recenterAfterDrift', message: 'recentering on drift is a safe-point trigger of the capture loop, and this version centers once before the loop and lowers no centering into it' })
 
 	// The action that starts tracking declares no mode of its own and carries the policy of the target, which is
 	// the single authority for how the mount tracks. A disabled tracking block leaves it nothing to carry, and
@@ -922,20 +877,15 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 
 	// The capture order selects the scheduler implementation, and this version implements the sequential one
 	// only. Lowering another order would produce a plan captured in an order other than the one that was asked
-	// for, with no way for the operator to notice it from the result of the night.
+	// for, which is the silent acceptance the compatibility rule forbids.
 	if (capture.order !== 'sequential') diagnostics.push({ path: 'capture.order', message: 'this version schedules frames in the declaration order of the groups, so no other capture order is executed' })
 
-	if (capture.abortOnDeviceAlert) diagnostics.push({ path: 'capture.abortOnDeviceAlert', message: 'this version has no device alert source, so the flag would promise a protection that does not exist' })
 	if (capture.continueAfterRejectedFrame) removals.push({ path: 'capture.continueAfterRejectedFrame', reason: 'quality evaluation is not executed, so no frame is ever rejected and the flag has no path to take effect' })
 
 	if (guiding.thresholds.enabled) diagnostics.push({ path: 'guiding.thresholds.enabled', message: 'guiding thresholds require the continuous monitor lane this version does not have' })
 	if (guiding.recovery.enabled) diagnostics.push({ path: 'guiding.recovery.enabled', message: 'guiding recovery requires the continuous monitor lane this version does not have' })
 	if (!guiding.enabled && commands(definition, ['startGuiding', 'stopGuiding'])) diagnostics.push({ path: 'guiding.enabled', message: 'a lifecycle action commands guiding, which the definition disables' })
 	if (!guiding.enabled && dither.enabled) diagnostics.push({ path: 'dither.enabled', message: 'a dither is a guider command, and the definition declares no guider to send it to' })
-
-	// Only an enabled autofocus is lowered into a trigger node, so the trigger settings of a disabled one are
-	// inert and reporting them would address the operator to a field that changes nothing.
-	if (autofocus.enabled && autofocus.triggers.starSizeChange !== 0) diagnostics.push({ path: 'autofocus.triggers.starSizeChange', message: 'triggering on star size requires measuring the star size of every frame, which this version does not do' })
 
 	if (rotator.enabled) diagnostics.push({ path: 'rotator.enabled', message: 'no action of this version commands the rotator, so an enabled rotator would never reach its angle' })
 	if (dome.enabled) diagnostics.push({ path: 'dome.enabled', message: 'the device layer of this version has no dome' })
@@ -968,13 +918,6 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 
 	if (execution.start.type === 'sunAltitude' || execution.start.type === 'targetAltitude') diagnostics.push({ path: 'execution.start.type', message: `starting on ${execution.start.type} requires the ephemeris this version does not compute` })
 	if (execution.end.type === 'sunAltitude' || execution.end.type === 'targetAltitude') diagnostics.push({ path: 'execution.end.type', message: `ending on ${execution.end.type} requires the ephemeris this version does not compute` })
-	if (!execution.checkpoint.enabled) diagnostics.push({ path: 'execution.checkpoint.enabled', message: 'the checkpoint is how a session knows what it already did, and this version always writes it' })
-	if (execution.maximumParallelActions !== 1) diagnostics.push({ path: 'execution.maximumParallelActions', message: 'this version executes one action at a time' })
-	if (execution.releaseResourcesWhilePaused) diagnostics.push({ path: 'execution.releaseResourcesWhilePaused', message: 'the reservation is held through a pause, which is the entire reason it exists' })
-	if (execution.releaseResourcesWhileSuspended) diagnostics.push({ path: 'execution.releaseResourcesWhileSuspended', message: 'the reservation is held through a suspension, which is the entire reason it exists' })
-	if (execution.continueAfterApplicationRestart) diagnostics.push({ path: 'execution.continueAfterApplicationRestart', message: 'a session of this version does not survive the process it runs in' })
-
-	if (shutdown.runOnUnsafe) diagnostics.push({ path: 'shutdown.runOnUnsafe', message: 'there is no safety monitor in this version to declare a session unsafe' })
 
 	for (const pipeline of [
 		{ name: 'startup', actions: startup.actions, enabled: startup.enabled },
@@ -1068,7 +1011,7 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	if (shutdown.runOnFailure) runOn.push('failed')
 
 	const requirements = roleRequirements(definition, groups)
-	const guider = lowerGuider(context, definition)
+	const guider = lowerGuider(definition)
 
 	const plan: SequencerPlan = {
 		definitionId: definition.id ?? '',

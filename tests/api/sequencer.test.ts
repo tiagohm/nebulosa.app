@@ -55,7 +55,7 @@ function mount(hourAngle: number, pierSide: PierSide = 'WEST'): Mount {
 }
 
 function brief(): Sequencer['capture'] {
-	return { ...canonical().capture, repeat: 1, delay: 0, settle: 0, frames: [frame('lum', { count: 2 })] }
+	return { ...canonical().capture, repeat: 1, delay: 0, frames: [frame('lum', { count: 2 })] }
 }
 
 function environment(execute?: AnySequencerActionHandler['execute'], devices?: Partial<Record<SequencerDeviceRole, Device>>, guidingServices?: SequencerGuidingServices) {

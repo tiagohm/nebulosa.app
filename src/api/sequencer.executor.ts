@@ -4,17 +4,17 @@ import type { SequencerFailureReason, SequencerFilterReference, SequencerGuiderS
 import type { SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanLoop, SequencerPlanPipeline, SequencerPlanSequence } from '#/sequencer.plan'
 import type { SequencerCaptureProgress, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerTriggerAnchors } from '#/sequencer.state'
 import { abortableDelay } from './operation.wait'
-import { sequencerCadenceBoundary, sequencerExposureEnded, sequencerSettleAnchored, SEQUENCER_INITIAL_CADENCE_ANCHORS, waitForCadenceBoundary } from './sequencer.cadence'
+import { sequencerCadenceBoundary, sequencerExposureEnded, SEQUENCER_INITIAL_CADENCE_ANCHORS, waitForCadenceBoundary } from './sequencer.cadence'
 import type { SequencerCadenceAnchors } from './sequencer.cadence'
 import { SequencerCheckpointKeeper } from './sequencer.checkpoint'
 import type { SequencerCheckpointTrigger } from './sequencer.checkpoint'
 import { SEQUENCER_BLOCK_TYPE, sequencerNodeId, sequencerPlanNodes } from './sequencer.compiler'
-import type { SequencerCapture, SequencerFocus, SequencerLifecycle, SequencerMeridianFlipTrigger } from './sequencer.compiler'
+import type { SequencerCapture, SequencerDitherTrigger, SequencerFocus, SequencerLifecycle, SequencerMeridianFlipTrigger } from './sequencer.compiler'
 import { sequencerConvergence, sequencerEndReached } from './sequencer.control'
 import type { SequencerSafePoint } from './sequencer.control'
 import { sequencerPreExposureGuard, waitForFlipWindow } from './sequencer.guard'
 import type { SequencerFlipBoundary } from './sequencer.guard'
-import type { SequencerDitherTrigger, SequencerGuidingServices } from './sequencer.guiding'
+import type { SequencerGuidingServices } from './sequencer.guiding'
 import { sequencerFrameDirectories, sequencerFrameFileName, sequencerLogicalSlotId } from './sequencer.identity'
 import { runGuidingInterlock } from './sequencer.interlock'
 import type { SequencerInterlockReport, SequencerInterlockState } from './sequencer.interlock'
@@ -164,17 +164,6 @@ const SEQUENCER_CONTINUE: SequencerNodeOutcome = { kind: 'continue' }
 
 // Outcome of a frame whose slot is still on the cursor and whose safe point has to be taken again.
 const SEQUENCER_RETAKE: SequencerNodeOutcome = { kind: 'retake' }
-
-// What the guiding bracket of one safe point did.
-interface SequencerBracketOutcome {
-	// What the rest of the plan does after it.
-	readonly outcome: SequencerNodeOutcome
-	// Whether anything inside it actually moved a device the exposure has to be stable after: a trigger that ran
-	// to completion, a dither that was taken, or a preparation that issued at least one reconciliation. It is
-	// what decides whether the settle of the capture is re-anchored, and it is reported even when the bracket
-	// ended the plan, because the triggers that already ran moved the observatory regardless of how it ended.
-	readonly moved: boolean
-}
 
 // What the pre-exposure guard leaves the safe point doing.
 //
@@ -546,17 +535,10 @@ function decisionOutcome(decision: ReturnType<typeof sequencerFailurePolicy>, re
 // point of holding here rather than returning is that the walk still exists to be resumed. `continue` means it
 // was resumed and the caller carries on from where it held; `stop` means the operator stopped it instead, or
 // the process is ending, and the terminal pipeline runs.
-//
-// The settle is re-anchored on the resume rather than on the pause: a session can sit paused for an hour, and
-// the first frame after it starts from a mount that has just been told to track again, so the resume pays the
-// spacing a movement pays. How much of it is actually spent is the cadence boundary's decision, and it is
-// usually none.
 async function holdWalk(execution: SequencerExecution, nodeId: string): Promise<SequencerNodeOutcome> {
 	const converged = await execution.host.hold(nodeId)
 
 	if (converged === 'stopped') return { kind: 'stop' }
-
-	execution.cadence = sequencerSettleAnchored(execution.cadence, execution.host.now())
 
 	return SEQUENCER_CONTINUE
 }
@@ -627,10 +609,6 @@ async function checkpointDue(execution: SequencerExecution, trigger: SequencerCh
 }
 
 // Runs the target block: the slew, the centering, and the capture loop, in the order the lowering emitted.
-//
-// The slew and the centering are what the initial settle is anchored on: they are the movement the first
-// exposure of the session has to be stable after, and the cadence charges that settle once rather than before
-// every frame.
 async function runTargetBlock(execution: SequencerExecution): Promise<SequencerNodeOutcome> {
 	const { plan } = execution.host
 	const block = targetOf(plan.root, plan.target.id)
@@ -666,7 +644,6 @@ async function runTargetBlock(execution: SequencerExecution): Promise<SequencerN
 
 		if (outcome.kind !== 'continue') return outcome
 
-		execution.cadence = sequencerSettleAnchored(execution.cadence, execution.host.now())
 		index++
 	}
 
@@ -809,19 +786,13 @@ async function runSafePoint(execution: SequencerExecution, targetId: string, loo
 
 		const decisions = evaluateSequencerTriggers(policies, execution.anchors, observation)
 
-		execution.anchors = sequencerTriggerPending(policies, execution.anchors, decisions, observation)
+		execution.anchors = sequencerTriggerPending(policies, execution.anchors, decisions)
 
 		for (const decision of decisions) execution.events.push({ type: 'triggerFired', nodeId: node.id, detail: `${decision.kind}:${decision.reason}` })
 
 		const bracketed = await runInterlockedSafePoint(execution, loop, node, configuration, decisions, policies, observation)
 
-		if (bracketed.outcome.kind !== 'continue') return bracketed.outcome
-
-		// Movement the bracket commanded is what the exposure has to be stable after, so the settle is anchored on
-		// it rather than on the frame before it. A safe point that decided no trigger and reconciled nothing moved
-		// no device, and anchoring there would turn the settle into a delay paid before every single frame, which
-		// is exactly what it is not.
-		if (bracketed.moved) execution.cadence = sequencerSettleAnchored(execution.cadence, host.now())
+		if (bracketed.kind !== 'continue') return bracketed
 
 		// The triggers of this safe point reached their terminal decision and the bracket closed behind them, which
 		// is the boundary the broadest pause mode is attended at: the corrections are back on, the optical path is
@@ -905,7 +876,7 @@ function triggerNodeOf(loop: SequencerPlanLoop, kind: 'meridianFlip' | 'autofocu
 // and an autofocus sweep is not paid twice for the same frame — so only the preparation and the bracket itself
 // are actually re-commanded, and the crossing a previous attempt reported still turns the resume into a
 // recalibration.
-async function runInterlockedSafePoint(execution: SequencerExecution, loop: SequencerPlanLoop, frame: SequencerPlanAction, configuration: SequencerCapture, decisions: readonly SequencerTriggerDecision[], policies: SequencerTriggerPolicies, observation: SequencerTriggerObservation): Promise<SequencerBracketOutcome> {
+async function runInterlockedSafePoint(execution: SequencerExecution, loop: SequencerPlanLoop, frame: SequencerPlanAction, configuration: SequencerCapture, decisions: readonly SequencerTriggerDecision[], policies: SequencerTriggerPolicies, observation: SequencerTriggerObservation): Promise<SequencerNodeOutcome> {
 	const { host } = execution
 	const guider = host.plan.guider
 	const retry = host.plan.execution.defaultRetry
@@ -914,7 +885,6 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 	const ran = new Set<'meridianFlip' | 'autofocus'>()
 	let interrupted: SequencerNodeOutcome | undefined
 	let flipped = false
-	let moved = false
 	let attempt = 1
 
 	const body = async (state: SequencerInterlockState): Promise<SequencerActionResult<SequencerPreparationOutcome>> => {
@@ -940,8 +910,6 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 			// too: leaving it where it was measures the next safe point against a focus two flips old and keeps the
 			// `afterMeridianFlip` condition owed by a run that already paid it, so the session refocuses again on the
 			// very next frame.
-			moved ||= completed
-
 			if (kind === 'meridianFlip') {
 				flipped = completed
 
@@ -975,20 +943,17 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 
 		// A trigger that ended the plan spent its own budget already, so it is carried out of the bracket as it
 		// is rather than retried a second time under this policy.
-		if (interrupted !== undefined) return { outcome: interrupted, moved }
+		if (interrupted !== undefined) return interrupted
 
 		if (result.type === 'completed') {
 			if (result.value.dither !== undefined) execution.anchors = sequencerAnchorAdvanced(execution.anchors, 'dither', observation)
 
-			// A dither displaces the mount and every reconciliation the preparation issued moved a device the frame
-			// is taken through. A bracket that issued none of them left the optical path exactly as the previous
-			// frame left it, and there is nothing for the settle to be measured from.
-			return { outcome: SEQUENCER_CONTINUE, moved: moved || result.value.dither !== undefined || result.value.value.commanded.length > 0 }
+			return SEQUENCER_CONTINUE
 		}
 
-		if (result.type === 'skipped') return { outcome: SEQUENCER_CONTINUE, moved }
-		if (result.type === 'pause') return { outcome: { kind: 'pause' }, moved }
-		if (result.type === 'suspend') return { outcome: { kind: 'fail', reason: 'unexpectedState', detail: result.detail }, moved }
+		if (result.type === 'skipped') return SEQUENCER_CONTINUE
+		if (result.type === 'pause') return { kind: 'pause' }
+		if (result.type === 'suspend') return { kind: 'fail', reason: 'unexpectedState', detail: result.detail }
 
 		// A dither that failed is decided by the dither, which declares its own budget and its own terminal
 		// answer; everything else the bracket commands is decided by the execution default, because a suspension,
@@ -1015,7 +980,7 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 
 		execution.events.push({ type: 'policyApplied', nodeId: frame.id, detail: decision.kind })
 
-		return { outcome: decisionOutcome(decision, result.reason, result.detail), moved }
+		return decisionOutcome(decision, result.reason, result.detail)
 	}
 }
 
@@ -1036,7 +1001,7 @@ async function runExposureGuard(execution: SequencerExecution, policies: Sequenc
 		hourAngle: observation.hourAngle,
 		exposureTime: group.exposureTime,
 		now,
-		startsAt: sequencerCadenceBoundary(execution.cadence, { delay: group.delay, settle: configuration.settle }),
+		startsAt: sequencerCadenceBoundary(execution.cadence, group.delay),
 		flipPending,
 	})
 
@@ -1074,7 +1039,7 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 	let attempt = host.slotAttempt(logicalSlotId)
 
 	for (;;) {
-		const boundary = sequencerCadenceBoundary(execution.cadence, { delay: group.delay, settle: configuration.settle })
+		const boundary = sequencerCadenceBoundary(execution.cadence, group.delay)
 		const held = await waitForCadenceBoundary(host.context(node.id, attempt, waitsOf(host)), boundary)
 
 		// A cancellation the operator paused with is a pause and not a stop: the loop holds on the slot the wait
@@ -1203,7 +1168,9 @@ function frameSlotOf(execution: SequencerExecution, targetId: string, group: Seq
 	return { logicalSlotId, cycle: selection.cycle, ordinal: selection.ordinal, path: resolution.path, write }
 }
 
-// File extension of a frame, without the leading dot, from the container format the camera writes.
+// File extension of a frame, without the leading dot, from the transfer format the camera writes it in.
+//
+// `NATIVE` is written as FITS, which is the container the driver delivers it in.
 function frameExtension(group: SequencerPlanFrameGroup) {
-	return group.camera.frameFormat.toLowerCase().includes('xisf') ? 'xisf' : 'fits'
+	return group.camera.transferFormat === 'XISF' ? 'xisf' : 'fits'
 }

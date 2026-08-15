@@ -66,11 +66,11 @@ function panelPolicy(overrides?: Partial<Omit<SequencerFlatPanel, 'enabled'>>): 
 }
 
 function rotatorPolicy(overrides?: Partial<Omit<SequencerRotator, 'enabled'>>): Omit<SequencerRotator, 'enabled'> {
-	return { angle: deg(30), tolerance: deg(1), settle: 0, moveBeforeCentering: false, restoreAfterMeridianFlip: false, restoreAfterRecovery: false, reverse: false, retry: retry(), ...overrides }
+	return { angle: deg(30), tolerance: deg(1), settle: 0, moveBeforeCentering: false, restoreAfterMeridianFlip: false, reverse: false, retry: retry(), ...overrides }
 }
 
 function coolingPolicy(overrides?: Partial<Omit<SequencerCooling, 'enabled'>>): Omit<SequencerCooling, 'enabled'> {
-	return { temperature: -10, tolerance: 1, ramp: 0, waitForTarget: true, timeout: 60, maintainDuringPause: true, maintainDuringSuspension: true, warmTemperature: 15, warmRamp: 0, turnCoolerOffAfterWarm: false, ...overrides }
+	return { temperature: -10, tolerance: 1, ramp: 0, waitForTarget: true, timeout: 60, warmTemperature: 15, warmRamp: 0, turnCoolerOffAfterWarm: false, ...overrides }
 }
 
 function trackingPolicy(overrides?: Partial<Omit<SequencerTargetTracking, 'enabled'>>): Omit<SequencerTargetTracking, 'enabled'> {
@@ -85,7 +85,6 @@ function group(overrides?: Partial<SequencerPlanFrameGroup>): SequencerPlanFrame
 		frameType: 'LIGHT',
 		exposureTime: 60,
 		count: 3,
-		integrationTime: 0,
 		delay: 0,
 		weight: 1,
 		camera: cameraSettings(),

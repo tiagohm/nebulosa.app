@@ -17,7 +17,6 @@ function group(id: string, overrides?: Partial<SequencerPlanFrameGroup>): Sequen
 		frameType: 'LIGHT',
 		exposureTime: 60,
 		count,
-		integrationTime: 0,
 		delay: 0,
 		weight: 1,
 		camera: camera(),
@@ -62,52 +61,17 @@ describe('progress lookup', () => {
 
 describe('frame group completion', () => {
 	test('concludes on the frame count', () => {
-		const lum = group('lum', { count: 3, integrationTime: 0 })
+		const lum = group('lum', { count: 3 })
 
 		expect(frameGroupReachedTarget(lum, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, cursor: 3, accepted: 2 })).toBeFalse()
 		expect(frameGroupReachedTarget(lum, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, cursor: 3, accepted: 3 })).toBeTrue()
 	})
 
-	test('concludes on the integration time', () => {
-		const lum = group('lum', { count: 0, integrationTime: 180, requiredSlots: 3 })
+	test('counts only accepted frames towards the target', () => {
+		const lum = group('lum', { count: 3 })
 
-		expect(frameGroupReachedTarget(lum, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, accepted: 2, integration: 120 })).toBeFalse()
-		expect(frameGroupReachedTarget(lum, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, accepted: 3, integration: 180 })).toBeTrue()
-	})
-
-	test('concludes on whichever criterion is reached first', () => {
-		const lum = group('lum', { count: 10, integrationTime: 120, requiredSlots: 2 })
-
-		expect(frameGroupReachedTarget(lum, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, accepted: 2, integration: 120 })).toBeTrue()
-		expect(frameGroupReachedTarget(group('lum', { count: 2, integrationTime: 600, requiredSlots: 2 }), { ...SEQUENCER_INITIAL_GROUP_PROGRESS, accepted: 2, integration: 120 })).toBeTrue()
-	})
-
-	test('ignores the criterion configured with zero', () => {
-		const byCount = group('lum', { count: 2, integrationTime: 0 })
-		const byIntegration = group('lum', { count: 0, integrationTime: 120, requiredSlots: 2 })
-
-		expect(frameGroupReachedTarget(byCount, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, accepted: 2, integration: 0 })).toBeTrue()
-		expect(frameGroupReachedTarget(byIntegration, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, accepted: 99, integration: 60 })).toBeFalse()
-	})
-
-	test('concludes on an integration target the accumulated sum only reaches within rounding error', () => {
-		const lum = group('lum', { count: 0, exposureTime: 0.3, integrationTime: 3, requiredSlots: 10 })
-		let integration = 0
-
-		for (let i = 0; i < 10; i++) integration += lum.exposureTime
-
-		expect(integration).not.toBe(3)
-		expect(frameGroupReachedTarget(lum, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, cursor: 10, accepted: 10, captured: 10, integration })).toBeTrue()
-		expect(frameGroupDegraded(lum, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, cursor: 10, accepted: 10, captured: 10, integration })).toBeFalse()
-		expect(frameGroupReachedTarget(lum, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, cursor: 9, accepted: 9, captured: 9, integration: integration - lum.exposureTime })).toBeFalse()
-	})
-
-	test('never forgives a whole exposure of a long target of short frames', () => {
-		const lucky = group('lucky', { count: 0, exposureTime: 0.0004, integrationTime: 1_000_000, requiredSlots: 2_500_000_000 })
-
-		expect(frameGroupReachedTarget(lucky, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, integration: 999_999.9992 })).toBeFalse()
-		expect(frameGroupReachedTarget(lucky, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, integration: 1_000_000 - lucky.exposureTime })).toBeFalse()
-		expect(frameGroupReachedTarget(lucky, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, integration: 1_000_000 - lucky.exposureTime * 0.25 })).toBeTrue()
+		expect(frameGroupReachedTarget(lum, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, cursor: 5, captured: 5, accepted: 2, rejected: 3 })).toBeFalse()
+		expect(frameGroupReachedTarget(lum, { ...SEQUENCER_INITIAL_GROUP_PROGRESS, cursor: 5, captured: 5, accepted: 3, rejected: 2 })).toBeTrue()
 	})
 
 	test('concludes degraded when the cursor reaches the slot limit without the target', () => {

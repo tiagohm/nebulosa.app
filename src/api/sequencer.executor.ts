@@ -811,7 +811,7 @@ async function runSafePoint(execution: SequencerExecution, targetId: string, loo
 			continue
 		}
 
-		const guarded = await runExposureGuard(execution, policies, group, configuration, observation)
+		const guarded = await runExposureGuard(execution, policies, group)
 
 		if (guarded.kind === 'ended') return guarded.outcome
 		if (guarded.kind === 'expose') return await runExposure(execution, targetId, loop, node, configuration, selection)
@@ -989,16 +989,28 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 //
 // A refusal is not a failure: it reorders the safe point around a flip that is about to become possible, and
 // the caller re-enters the safe point so the trigger evaluator turns the open window into an actual flip.
-async function runExposureGuard(execution: SequencerExecution, policies: SequencerTriggerPolicies, group: SequencerPlanFrameGroup, configuration: SequencerCapture, observation: SequencerTriggerObservation): Promise<SequencerGuardOutcome> {
+//
+// The sky is read again here rather than taken from the observation the safe point was decided on. Everything
+// between the two — a meridian flip, an autofocus sweep, the frame preparation, the settle of the guiding
+// resume, a hold — takes minutes, and the projection combines the hour angle with the *current* instant
+// without adding the interval that elapsed: an angle sampled before the bracket, projected from after it,
+// understates the position of the target by exactly the time the bracket took, and admits an exposure that
+// starts past `maximumHourAngle` or after the flip window opened. The pier sides come from the same reading,
+// so the pending flip is judged on one consistent sample of the mount.
+async function runExposureGuard(execution: SequencerExecution, policies: SequencerTriggerPolicies, group: SequencerPlanFrameGroup): Promise<SequencerGuardOutcome> {
 	const { meridianFlip } = policies
 
-	if (meridianFlip === undefined || observation.hourAngle === undefined) return SEQUENCER_EXPOSE
+	if (meridianFlip === undefined) return SEQUENCER_EXPOSE
+
+	const reading = execution.host.observe()
+
+	if (reading.hourAngle === undefined) return SEQUENCER_EXPOSE
 
 	const boundary: SequencerFlipBoundary = { minimumHourAngle: meridianFlip.minimumHourAngle, maximumHourAngle: meridianFlip.maximumHourAngle, safetyMargin: meridianFlip.safetyMargin }
 	const now = execution.host.now()
-	const flipPending = observation.preFlipPierSide !== undefined && observation.pierSide === observation.preFlipPierSide
+	const flipPending = reading.preFlipPierSide !== undefined && reading.pierSide === reading.preFlipPierSide
 	const decision = sequencerPreExposureGuard(boundary, {
-		hourAngle: observation.hourAngle,
+		hourAngle: reading.hourAngle,
 		exposureTime: group.exposureTime,
 		now,
 		startsAt: sequencerCadenceBoundary(execution.cadence, group.delay),

@@ -284,6 +284,26 @@ describe('plan walk', () => {
 		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
 	})
 
+	test('guards the exposure against the sky as it stands after the safe point instead of before it', async () => {
+		const base = definition()
+		const capture = { ...base.capture, frames: [frame('lum', { count: 1, camera: camera() })] }
+		const state: Harness = harness(planOf({ capture, autofocus: { ...base.autofocus, enabled: true }, meridianFlip: { ...base.meridianFlip, enabled: true } }), (context) => {
+			if (context.nodeId.endsWith('.trigger.autofocus')) state.observation = { ...state.observation, hourAngle: 0.095 }
+			if (context.nodeId.endsWith('.trigger.meridianFlip')) state.observation = { ...state.observation, pierSide: 'EAST' }
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+
+		state.observation = { hourAngle: -0.5, pierSide: 'WEST', preFlipPierSide: 'WEST' }
+
+		const outcome = await runSequencerPlan(state.host)
+		const order = state.executed.map((it) => it.nodeId)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(state.executed.filter((it) => it.nodeId.endsWith('.trigger.meridianFlip'))).toHaveLength(1)
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(1)
+		expect(order.findIndex((id) => id.endsWith('.trigger.meridianFlip'))).toBeLessThan(order.findIndex((id) => id.endsWith('.frame[lum]')))
+	})
+
 	test('never spends a second attempt on a slot whose exposure failed fatally', async () => {
 		const state = harness(planOf(), (context) => (context.frame === undefined ? Promise.resolve({ type: 'completed', value: undefined }) : Promise.resolve({ type: 'fatalFailure', reason: 'commandFailed', detail: 'the camera is gone' })))
 		const outcome = await runSequencerPlan(state.host)

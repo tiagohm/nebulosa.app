@@ -256,8 +256,18 @@ export async function runSequencerPlan(host: SequencerExecutorHost): Promise<Seq
 	const startup = pipelineOf(plan.root, 'startup')
 
 	if (primary === undefined && startup !== undefined && plan.startup !== undefined) {
-		const report = await runPipelineBlock(execution, plan.startup, startup, host.waitSignal, true)
-		primary = sequencerStartupOutcome(report)
+		// The scheduled wait ends on the clock and never on the state of the session, and a pause does not abort it,
+		// so an operator may well have paused during it. The pipeline asks its `converge` between two steps and
+		// never in front of the first one, which the walk already decided to enter it for — the boundary in front of
+		// the first startup action therefore has to be taken here. Without it a session told to hold still unparks
+		// the mount, opens the cover or starts the cooler, and only notices the pause once that action is over. It
+		// is the same `afterAction` boundary the pipeline uses between two steps, so a pause holds and stays
+		// resumable while a stop ends the session before it commanded anything. The target block takes the same
+		// boundary in front of every node of its own, this one included.
+		const converged = await convergeAt(execution, 'afterAction', startup.id)
+
+		if (converged.outcome.kind !== 'continue') primary = outcomeOf(converged.outcome)
+		else primary = sequencerStartupOutcome(await runPipelineBlock(execution, plan.startup, startup, host.waitSignal, true))
 	}
 
 	primary ??= outcomeOf(await runTargetBlock(execution))

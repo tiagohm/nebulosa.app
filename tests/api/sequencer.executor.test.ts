@@ -493,6 +493,20 @@ describe('plan walk', () => {
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 	})
 
+	test('attends a pause pending in front of the first startup action instead of commanding it', async () => {
+		const base = definition()
+		const startup = { ...base.startup, actions: [{ id: 'unpark', enabled: true, timeout: 30, retry: retry(), type: 'unparkMount' as const }], continueOnFailure: false }
+		const state: Harness = harness(planOf({ startup }))
+
+		state.desired = 'paused'
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('stopped')
+		expect(state.holds).toHaveLength(1)
+		expect(state.executed).toBeEmpty()
+	})
+
 	test('runs the finalize pipeline after the plan and never reaches the target when startup refuses it', async () => {
 		const base = definition()
 		const startup = { ...base.startup, actions: [{ id: 'park', enabled: true, timeout: 30, retry: retry(), type: 'parkMount' as const, required: true }], continueOnFailure: false }

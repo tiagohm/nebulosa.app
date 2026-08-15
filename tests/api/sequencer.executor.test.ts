@@ -181,6 +181,7 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 
 				return Promise.resolve(converged)
 			},
+			capturing: () => void state.phases.push('capturing'),
 			finalizing: () => void state.phases.push('finalizing'),
 			commit: (_, drafts) => {
 				if (state.refuseCommit?.()) return false
@@ -688,6 +689,7 @@ describe('plan walk', () => {
 		expect(outcome.terminal.state).toBe('failed')
 		expect(state.executed.map((it) => it.nodeId)).toEqual(['startup.action[park]'])
 		expect(outcome.checkpoint.completed).not.toContain('startup.action[park]')
+		expect(state.phases).toBeEmpty()
 	})
 
 	test('spends nothing on a safe point that moved nothing', async () => {
@@ -917,7 +919,7 @@ describe('plan walk', () => {
 		const outcome = await runSequencerPlan(state.host)
 
 		expect(outcome.terminal.state).toBe('completed')
-		expect(state.phases).toEqual(['finalizing', 'finalize.action[park]'])
+		expect(state.phases).toEqual(['capturing', 'finalizing', 'finalize.action[park]'])
 	})
 
 	test('publishes no finalizing phase when no terminal pipeline runs', async () => {
@@ -927,7 +929,7 @@ describe('plan walk', () => {
 		const outcome = await runSequencerPlan(state.host)
 
 		expect(outcome.terminal.state).toBe('completed')
-		expect(state.phases).toBeEmpty()
+		expect(state.phases).toEqual(['capturing'])
 	})
 
 	test('records a lifecycle step as completed only when it ran', async () => {

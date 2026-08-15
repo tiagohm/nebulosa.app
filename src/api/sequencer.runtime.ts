@@ -346,6 +346,10 @@ interface ActiveSession {
 	resume?: PromiseWithResolvers<void>
 	// Last revision this runtime committed, used as the optimistic guard of the next commit.
 	revision: number
+	// Set while the walk is inside the target block, which is the only phase whose actions run under the action
+	// signal. The guider connection and the startup pipeline run outside it, and the terminal pipeline runs after
+	// it, so a cancellation issued during either of them is an `aborted` no command explains (§11.3).
+	capturing: boolean
 	// Set once finalization began, so a stop arriving during it does not start a second one.
 	finalizing: boolean
 	// Set once the session was published as `finalizing`, which the walk does before it enters the terminal
@@ -593,6 +597,7 @@ export class SequencerRuntime {
 			done: Promise.withResolvers<SequencerSession | undefined>(),
 			resolved: resolvedDevices(devices, roles),
 			revision: stored.revision,
+			capturing: false,
 			finalizing: false,
 			finalized: false,
 		}
@@ -908,13 +913,21 @@ export class SequencerRuntime {
 			// The desired state is written before the hold is released, so the walk that wakes up reads the state
 			// this command produced and not the one it was holding on.
 			active?.resume?.resolve()
-		} else if (outcome.effect !== 'none' && active !== undefined && sequencerCancelsActiveAction('paused', active.plan.compiled.execution)) {
+		} else if (outcome.effect !== 'none' && active?.capturing === true && sequencerCancelsActiveAction('paused', active.plan.compiled.execution)) {
 			// An immediate pause does not wait for a boundary: it cancels what is running and the walk holds where
 			// the cancellation left it, which is the whole difference between the three pause modes. The cancelled
 			// action reports `aborted`, the desired state written above is what attributes it to this command, and
 			// the slot policy therefore holds the slot on the cursor without spending an attempt on the operator
 			// (§8.3). A command that changed nothing cancels nothing: the session it would interrupt is already
 			// paused or already converging to it.
+			//
+			// Only the target block is cancelled, because it is the only phase that carries the attribution. The
+			// guider connection runs under no action signal at all and the startup pipeline runs under the wait
+			// signal, which a pause deliberately never aborts: the drain would still reach their operations through
+			// the reservation, and the `aborted` they answered with would be read as an ordinary failure — the
+			// guider becoming an unreachable one that fails the session, a required startup action failing the
+			// night instead of holding it for the resume. Both phases are attended anyway, at the `afterAction`
+			// boundary the walk takes in front of every step, so the pause is honored without cancelling anything.
 			await this.#cancelActiveAction(active)
 		}
 
@@ -1024,6 +1037,7 @@ export class SequencerRuntime {
 			desiredState: () => this.#store.session(active.id)?.desiredState ?? 'running',
 			slotAttempt: (logicalSlotId) => sequencerSlotAttempt(this.#store.artifacts(active.id), logicalSlotId),
 			hold: (nodeId) => this.#hold(active, nodeId),
+			capturing: () => void (active.capturing = true),
 			finalizing: () => this.#enterFinalizing(active),
 			commit: (checkpoint, events) => this.#commitBestEffort(active, { checkpoint, events }) !== undefined,
 			delay: async (delay, signal) => void (await abortableDelay(delay, signal)),
@@ -1173,6 +1187,10 @@ export class SequencerRuntime {
 	// the intent reducer accept a pause or a resume the terminal pipeline never honors. Recording it here also
 	// keeps `#finalize` from committing the same transition a second time once the walk returns.
 	#enterFinalizing(active: ActiveSession) {
+		// The target block is over whether or not the transition is written here, and what the flag decides is
+		// whether a command still cancels what is running: the terminal pipeline is never interrupted (§8.6).
+		active.capturing = false
+
 		if (active.finalized) return
 
 		active.finalized = true
@@ -1188,6 +1206,9 @@ export class SequencerRuntime {
 		if (active.finalizing) return
 
 		active.finalizing = true
+		// The walk is over, including a plan that ran no terminal pipeline and therefore never published the
+		// finalizing phase. Nothing of the plan is under the action signal any more.
+		active.capturing = false
 
 		const node = active.activity?.nodeId
 

@@ -134,6 +134,14 @@ export interface SequencerExecutorHost {
 	// tells a reader the plan is still capturing and lets the control reduction accept a pause or a resume that
 	// nothing can act on any more — the terminal pipeline is never interrupted (§8.6).
 	readonly finalizing: () => void
+	// Announces that the walk is entering the target block, called once and only when it actually enters it.
+	//
+	// It is the boundary between the phases that run outside the action signal — the guider being opened, the
+	// startup pipeline, both attended on the wait signal — and the one whose nodes run under it. An immediate
+	// pause is expressed as the cancellation of what is running (§11.3), and only the target block has something
+	// that answer means anything for: cancelling the guider connection or a startup action produces an `aborted`
+	// nothing attributes to the operator, which fails the session instead of holding it for the resume.
+	readonly capturing: () => void
 	// Persists the checkpoint together with the events produced since the last write, answering whether the
 	// store accepted the write. It is best-effort: a refused write leaves the checkpoint dirty and the next one
 	// carries it, together with the events it could not place, which is what the answer is read for.
@@ -288,7 +296,13 @@ export async function runSequencerPlan(host: SequencerExecutorHost): Promise<Seq
 		else primary = sequencerStartupOutcome(await runPipelineBlock(execution, plan.startup, startup, host.waitSignal, true))
 	}
 
-	primary ??= outcomeOf(await runTargetBlock(execution))
+	// The phase is announced before the block is entered and not after it ended, because what reads it is the
+	// operator command that arrives while it runs: from here on there is an action of the plan under the action
+	// signal, which is what an immediate pause is allowed to cancel.
+	if (primary === undefined) {
+		host.capturing()
+		primary = outcomeOf(await runTargetBlock(execution))
+	}
 
 	let finalized: SequencerPipelineReport | undefined
 	const finalize = pipelineOf(plan.root, 'finalize')

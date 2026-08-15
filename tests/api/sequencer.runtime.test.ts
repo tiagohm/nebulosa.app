@@ -160,6 +160,7 @@ function compiled(overrides?: {
 	readonly execution?: Partial<SequencerPlan['execution']>
 	readonly nodes?: number
 	readonly guider?: SequencerPlan['guider']
+	readonly startup?: SequencerPlan['startup']
 	readonly finalize?: SequencerPlan['finalize']
 }): SequencerPlan {
 	const configuration = overrides?.configuration ?? { exposureTime: 2 }
@@ -168,7 +169,11 @@ function compiled(overrides?: {
 	for (let i = 1; i <= (overrides?.nodes ?? 1); i++) actions.push({ kind: 'action', id: `node-${i}`, type: 'expose', configuration })
 
 	const target: SequencerPlanSequence = { kind: 'sequence', id: sequencerNodeId.target('m42'), children: actions }
-	const children: SequencerPlanSequence[] = [target]
+	const children: SequencerPlanSequence[] = []
+
+	if (overrides?.startup !== undefined) children.push({ kind: 'sequence', id: sequencerNodeId.pipeline('startup'), children: [{ kind: 'action', id: 'startup-1', type: 'expose', configuration: { exposureTime: 2, required: true, timeout: 30, retry: RETRY } }] })
+
+	children.push(target)
 
 	if (overrides?.finalize !== undefined) children.push({ kind: 'sequence', id: sequencerNodeId.pipeline('finalize'), children: [{ kind: 'action', id: 'finalize-1', type: 'expose', configuration }] })
 
@@ -185,6 +190,7 @@ function compiled(overrides?: {
 		handlers: { expose: 1 },
 		storage: { root: '/data/nebulosa', fileNameTemplate: '{target}', directoryTemplate: '{target}', autoSubFolderMode: 'noon', ...overrides?.storage },
 		guider: overrides?.guider,
+		startup: overrides?.startup,
 		finalize: overrides?.finalize,
 	}
 }
@@ -866,6 +872,51 @@ describe('sequencer runtime', () => {
 		const session = await instance.settled(created.id)
 
 		expect(executed).toEqual(['node-1', 'node-1'])
+		expect(session?.state).toBe('completed')
+	})
+
+	test('cancels no startup operation on an immediate pause the phase cannot attribute', async () => {
+		const running = Promise.withResolvers<void>()
+		const release = Promise.withResolvers<void>()
+		const executed: string[] = []
+
+		const { runtime: instance } = runtime(
+			exposeHandler(async (context, configuration) => {
+				executed.push(context.nodeId)
+
+				if (context.nodeId !== 'startup-1') return { type: 'completed', value: configuration.exposureTime }
+
+				const handle = context.scope.start('expose', [context.request('camera')!], async (operation) => {
+					running.resolve()
+
+					await new Promise<void>((resolve) => {
+						operation.signal.addEventListener('abort', () => resolve(), { once: true })
+						void release.promise.then(resolve)
+					})
+
+					return operation.signal.aborted ? failedOperationResult('aborted') : successfulOperationResult(configuration.exposureTime)
+				})
+
+				const result = await handle.result
+
+				return result.ok ? { type: 'completed', value: result.value } : { type: 'fatalFailure', reason: result.reason }
+			}),
+		)
+
+		const created = instance.create(plan({ execution: { pauseMode: 'immediate' }, startup: { continueOnFailure: false } }))!
+
+		instance.start(created.id)
+
+		await running.promise
+		await instance.control(created.id, 'pause')
+
+		release.resolve()
+
+		await instance.control(created.id, 'resume')
+
+		const session = await instance.settled(created.id)
+
+		expect(executed).toEqual(['startup-1', 'node-1'])
 		expect(session?.state).toBe('completed')
 	})
 

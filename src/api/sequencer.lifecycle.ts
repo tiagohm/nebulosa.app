@@ -9,7 +9,7 @@ import type { GuiderCommander } from './guider.session'
 import { connect } from './indi'
 import type { MountCommander } from './mount.commander'
 import { abortableDelay } from './operation.wait'
-import { sequencerActionFailure, sequencerDeviceOf, sequencerMissingRole } from './sequencer.action'
+import { sequencerActionFailure, sequencerCommand, sequencerDeviceOf, sequencerMissingRole } from './sequencer.action'
 import { SEQUENCER_LIFECYCLE_BLOCK_PREFIX } from './sequencer.compiler'
 import type { SequencerLifecycle } from './sequencer.compiler'
 import type { ResourceBinding, SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerValidationResult } from './sequencer.registry'
@@ -26,6 +26,13 @@ import type { ResourceBinding, SequencerActionContext, SequencerActionHandler, S
 // are applied by `runSequencerPipeline`, which owns the ordering and the failure policy; a handler here only
 // commands and reports. In particular the deadline arrives as `context.signal`, so a handler waits on it
 // instead of measuring a clock of its own.
+//
+// No lifecycle action commands anything under a cancellation. The cancellation is the session leaving the plan
+// — for the startup pipeline a stop, for the finalization pipeline the shutdown of the process, since a stop is
+// what makes that pipeline run — and every device command of this module goes through `sequencerCommand`, which
+// is what makes the rule hold between two commands of the same action and not only in front of the first one.
+// A lifecycle action has nothing to undo when it is cut in half: it is a reconciliation against the state the
+// device is in, so the next run of the same action starts from wherever the cancellation left it.
 //
 // The cooler actions are the one place a lifecycle block reads a policy it did not declare: `coolCamera` and
 // `warmCamera` carry no setpoint, because `SequencerCooling` is the single authority for the thermal targets,
@@ -54,6 +61,12 @@ const SEQUENCER_RAMP_STEP = 5000
 
 // Milliseconds in one minute, which is the unit the declared ramp rate is expressed per.
 const SEQUENCER_MINUTE = 60000
+
+// Answer of a lifecycle action entered under a cancellation, which is a device this pipeline never touched.
+//
+// It is fatal because there is nothing to retry against: the cancellation is the session leaving the plan, and
+// the pipeline attributes an `aborted` it commanded to the stop that caused it rather than to the equipment.
+const SEQUENCER_LIFECYCLE_CANCELLED: SequencerActionResult<SequencerLifecycleOutcome> = { type: 'fatalFailure', reason: 'aborted', detail: 'the action was cancelled before it commanded anything' }
 
 // What one lifecycle action did.
 export interface SequencerLifecycleOutcome {
@@ -124,6 +137,11 @@ const SEQUENCER_LIFECYCLE_RUNNER: Partial<Record<SequencerLifecycleAction['type'
 // exactly the set the compiler accepts: registering them one by one would let a definition compile against an
 // action nobody registered, which the compilation check would then refuse at session start instead of at edit
 // time.
+//
+// The cancellation is answered here, in front of every runner, so the rule holds for an action added later
+// whether or not it remembers to consult the signal itself. The runners still front their own commands, which
+// is the half of the rule this seam cannot cover: a cancellation that lands between two commands of the same
+// action arrives after this decision was taken.
 export function sequencerLifecycleHandlers(services: SequencerLifecycleServices): readonly SequencerActionHandler<SequencerLifecycle, SequencerLifecycleOutcome>[] {
 	const handlers: SequencerActionHandler<SequencerLifecycle, SequencerLifecycleOutcome>[] = []
 
@@ -133,7 +151,7 @@ export function sequencerLifecycleHandlers(services: SequencerLifecycleServices)
 			version: SEQUENCER_LIFECYCLE_VERSION,
 			validate: (configuration): SequencerValidationResult<SequencerLifecycle> => ({ ok: true, configuration: configuration as SequencerLifecycle }),
 			resources: (configuration) => resourcesOf(type, configuration),
-			execute: (context, configuration) => run(services, context, configuration),
+			execute: (context, configuration) => (context.signal.aborted ? Promise.resolve(SEQUENCER_LIFECYCLE_CANCELLED) : run(services, context, configuration)),
 		})
 	}
 
@@ -198,7 +216,7 @@ async function runMountPark(services: SequencerLifecycleServices, context: Seque
 	context.progress({ detail: park ? 'parking the mount' : 'unparking the mount' })
 
 	const timeout = timeoutOf(configuration.timeout)
-	const commanded = park ? await services.mountCommander.park(context.scope, mount, { timeout }) : await services.mountCommander.unpark(context.scope, mount, { timeout })
+	const commanded = await sequencerCommand(context, () => (park ? services.mountCommander.park(context.scope, mount, { timeout }) : services.mountCommander.unpark(context.scope, mount, { timeout })))
 
 	if (!commanded.ok) return sequencerActionFailure(commanded, park ? 'the mount did not park' : 'the mount did not unpark')
 
@@ -220,7 +238,7 @@ async function runStartTracking(services: SequencerLifecycleServices, context: S
 	if (mode !== undefined) {
 		context.progress({ detail: `selecting the ${mode} track mode` })
 
-		const selected = await services.mountCommander.setTrackMode(context.scope, mount, mode)
+		const selected = await sequencerCommand(context, () => services.mountCommander.setTrackMode(context.scope, mount, mode))
 
 		if (!selected.ok) return sequencerActionFailure(selected, `the mount did not accept the ${mode} track mode`)
 	}
@@ -229,7 +247,7 @@ async function runStartTracking(services: SequencerLifecycleServices, context: S
 
 	context.progress({ detail: 'starting tracking' })
 
-	const tracked = await services.mountCommander.setTracking(context.scope, mount, true)
+	const tracked = await sequencerCommand(context, () => services.mountCommander.setTracking(context.scope, mount, true))
 
 	if (!tracked.ok) return sequencerActionFailure(tracked, 'the mount did not start tracking')
 
@@ -245,7 +263,7 @@ async function runStopTracking(services: SequencerLifecycleServices, context: Se
 
 	context.progress({ detail: 'stopping tracking' })
 
-	const tracked = await services.mountCommander.setTracking(context.scope, mount, false)
+	const tracked = await sequencerCommand(context, () => services.mountCommander.setTracking(context.scope, mount, false))
 
 	if (!tracked.ok) return sequencerActionFailure(tracked, 'the mount did not stop tracking')
 
@@ -263,7 +281,7 @@ async function runCover(services: SequencerLifecycleServices, context: Sequencer
 	context.progress({ detail: close ? 'closing the cover' : 'opening the cover' })
 
 	const timeout = timeoutOf(configuration.timeout)
-	const moved = close ? await services.coverCommander.park(context.scope, cover, { timeout }) : await services.coverCommander.unpark(context.scope, cover, { timeout })
+	const moved = await sequencerCommand(context, () => (close ? services.coverCommander.park(context.scope, cover, { timeout }) : services.coverCommander.unpark(context.scope, cover, { timeout })))
 
 	if (!moved.ok) return sequencerActionFailure(moved, close ? 'the cover did not close' : 'the cover did not open')
 
@@ -293,7 +311,7 @@ async function runCoolCamera(services: SequencerLifecycleServices, context: Sequ
 	if (camera.hasCoolerControl && !camera.cooler) {
 		context.progress({ detail: 'turning the cooler on' })
 
-		const enabled = await services.cameraCommander.cooler(context.scope, camera, true)
+		const enabled = await sequencerCommand(context, () => services.cameraCommander.cooler(context.scope, camera, true))
 
 		if (!enabled.ok) return sequencerActionFailure(enabled, 'the cooler did not turn on')
 
@@ -331,7 +349,7 @@ async function runWarmCamera(services: SequencerLifecycleServices, context: Sequ
 	if (cooling.turnCoolerOffAfterWarm && camera.hasCoolerControl && camera.cooler) {
 		context.progress({ detail: 'turning the cooler off' })
 
-		const disabled = await services.cameraCommander.cooler(context.scope, camera, false)
+		const disabled = await sequencerCommand(context, () => services.cameraCommander.cooler(context.scope, camera, false))
 
 		if (!disabled.ok) return sequencerActionFailure(disabled, 'the cooler did not turn off')
 
@@ -364,7 +382,7 @@ async function rampSetpoint(services: SequencerLifecycleServices, context: Seque
 
 		context.progress({ detail: `commanding the sensor setpoint to ${target} °C` })
 
-		const commanded = await services.cameraCommander.temperature(context.scope, camera, target)
+		const commanded = await sequencerCommand(context, () => services.cameraCommander.temperature(context.scope, camera, target))
 
 		return commanded.ok ? successfulOperationResult(true) : commanded
 	}
@@ -378,7 +396,7 @@ async function rampSetpoint(services: SequencerLifecycleServices, context: Seque
 	while (setpoint !== target) {
 		setpoint = setpoint < target ? Math.min(target, setpoint + step) : Math.max(target, setpoint - step)
 
-		const commanded = await services.cameraCommander.temperature(context.scope, camera, setpoint)
+		const commanded = await sequencerCommand(context, () => services.cameraCommander.temperature(context.scope, camera, setpoint))
 
 		if (!commanded.ok) return commanded
 		if (setpoint === target) break

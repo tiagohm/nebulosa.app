@@ -869,6 +869,58 @@ describe('sequencer runtime', () => {
 		expect(session?.state).toBe('completed')
 	})
 
+	test('takes the whole effect of an immediate pause before folding the resume that follows it', async () => {
+		const running = Promise.withResolvers<void>()
+		const observed: (string | undefined)[] = []
+		const executed: string[] = []
+		let sessionId = ''
+
+		const { runtime: instance, store } = runtime(
+			exposeHandler(async (context, configuration) => {
+				executed.push(context.nodeId)
+
+				if (executed.length > 1) return { type: 'completed', value: configuration.exposureTime }
+
+				const handle = context.scope.start('expose', [context.request('camera')!], async (operation) => {
+					operation.onCleanup(async () => {
+						await Bun.sleep(5)
+						observed.push(store.session(sessionId)?.desiredState)
+					})
+
+					running.resolve()
+
+					await new Promise<void>((resolve) => {
+						operation.signal.addEventListener('abort', () => resolve(), { once: true })
+					})
+
+					return failedOperationResult('aborted')
+				})
+
+				await handle.result
+
+				return { type: 'fatalFailure', reason: 'aborted' }
+			}),
+		)
+
+		const created = instance.create(plan({ execution: { pauseMode: 'immediate' } }))!
+
+		sessionId = created.id
+
+		instance.start(created.id)
+
+		await running.promise
+
+		const commanded = Promise.all([instance.control(created.id, 'pause'), instance.control(created.id, 'resume')])
+
+		expect(await commanded).toMatchObject([{ ok: true }, { ok: true }])
+
+		const session = await instance.settled(created.id)
+
+		expect(observed).toEqual(['paused'])
+		expect(executed).toEqual(['node-1', 'node-1'])
+		expect(session?.state).toBe('completed')
+	})
+
 	test('holds a paused session without releasing anything and runs the node again on the resume', async () => {
 		let held = false
 

@@ -385,6 +385,10 @@ export class SequencerRuntime {
 	readonly #observe?: (change: SequencerRuntimeChange) => void
 	readonly #plans = new Map<string, PendingPlan>()
 	#active?: ActiveSession
+	// Tail of the operator command that is still taking effect, which is what `control` chains the next one onto,
+	// and undefined while no command is in flight. It never rejects: a command that failed is reported to its own
+	// caller and the chain continues.
+	#controlling?: Promise<void>
 	// Set once the process began shutting down, after which no session starts again.
 	#closed = false
 
@@ -813,7 +817,49 @@ export class SequencerRuntime {
 	// reservation until a resume or a stop arrives. The state therefore still says `running` between the command
 	// and the boundary the walk reaches. A stop is different and is carried through here, because the stop path
 	// is the one that also cancels and releases.
-	async control(sessionId: string, kind: 'pause' | 'resume' | 'stop'): Promise<SequencerControlResult> {
+	//
+	// Commands are serialized against each other, and the queue is not enough for it: the fold is synchronous,
+	// but what a command does after folding is not — an immediate pause cancels the running action, which awaits.
+	// A second command folding during that window reads a state its predecessor has not established yet, so a
+	// resume could persist `running` while the pause it answers is still tearing the action down, and two
+	// cancellations could race on the controller that replaces the spent one. Chaining makes one command's whole
+	// effect the state the next one folds against.
+	//
+	// A command that arrives on an idle runtime folds on the spot rather than a microtask later, so the state a
+	// caller reads right after awaiting it is the one its own command produced and not one the walk reached in
+	// between.
+	control(sessionId: string, kind: 'pause' | 'resume' | 'stop'): Promise<SequencerControlResult> {
+		const released = Promise.withResolvers<void>()
+		const pending = this.#controlling
+		const commanded = pending === undefined ? this.#control(sessionId, kind, released.resolve) : pending.then(() => this.#control(sessionId, kind, released.resolve))
+
+		// The chain carries no failure: a command that rejected is reported to its own caller, and the next one
+		// still runs. Its rejection is answered here so the tail is never an unhandled one. The tail also ends at
+		// the early release a stop takes, since the terminal pipeline it then waits for is not part of the effect
+		// the next command folds against — and a pause commanded from inside a finalize action would otherwise be
+		// waiting for the very pipeline it is running in.
+		const tail = Promise.race([
+			released.promise,
+			commanded.then(
+				() => undefined,
+				() => undefined,
+			),
+		])
+
+		this.#controlling = tail
+
+		void tail.then(() => {
+			if (this.#controlling === tail) this.#controlling = undefined
+		})
+
+		return commanded
+	}
+
+	// Reduces one operator command. Never called directly: `control` is what serializes it.
+	//
+	// `release` ends the serialization early and is called before waiting for anything that is no longer part of
+	// the state the next command folds against.
+	async #control(sessionId: string, kind: 'pause' | 'resume' | 'stop', release: () => void): Promise<SequencerControlResult> {
 		const stored = this.#store.session(sessionId)
 
 		if (stored === undefined) return { ok: false, reason: 'unknownSession' }
@@ -836,7 +882,21 @@ export class SequencerRuntime {
 			// state a session created and never started would otherwise be stuck in, which is also what keeps its
 			// definition undeletable. The stop path of a running session already persists the desired state, so
 			// committing it here too would write it twice.
-			const session = active === undefined ? this.#commitControl(stored, { state: 'stopped', desiredState: 'stopped', events: [...events, { type: 'stateChanged', state: 'stopped' }] }) : (this.#commitBestEffort(active, { events }), await this.stop(sessionId))
+			let session: SequencerSession | undefined
+
+			if (active === undefined) {
+				session = this.#commitControl(stored, { state: 'stopped', desiredState: 'stopped', events: [...events, { type: 'stateChanged', state: 'stopped' }] })
+			} else {
+				this.#commitBestEffort(active, { events })
+
+				// Everything the next command folds against is written by the synchronous prefix of `stop`: the
+				// stopped desire, which reduces every later command to a no-op, and the abort that ends the waits.
+				// What remains is the terminal pipeline, which the following commands must be able to answer while
+				// it runs, so the serialization ends here rather than at the end of the command.
+				release()
+
+				session = await this.stop(sessionId)
+			}
 
 			return { ok: true, effect: outcome.effect, noop: outcome.noop, session: session ?? stored }
 		}

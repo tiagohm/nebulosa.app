@@ -54,6 +54,7 @@ interface Harness {
 	readonly controller: AbortController
 	readonly action: AbortController
 	readonly holds: string[]
+	readonly phases: string[]
 	desired: SequencerDesiredState
 	observation: SequencerSafePointObservation
 	onHold?: (nodeId: string) => SequencerDesiredState
@@ -111,6 +112,7 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 	})
 
 	const holds: string[] = []
+	const phases: string[] = []
 
 	const state: Harness = {
 		executed,
@@ -119,6 +121,7 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 		controller,
 		action,
 		holds,
+		phases,
 		desired: 'running',
 		observation: {},
 		host: {
@@ -163,6 +166,7 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 
 				return Promise.resolve(converged)
 			},
+			finalizing: () => void state.phases.push('finalizing'),
 			commit: (_, drafts) => {
 				events.push(...drafts)
 				for (const artifact of staged) store(artifact)
@@ -656,6 +660,30 @@ describe('plan walk', () => {
 		expect(state.executed.map((it) => it.nodeId)).not.toContain('startup.action[track]')
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 		expect(outcome.terminal.state).toBe('stopped')
+	})
+
+	test('publishes the finalizing phase before the first terminal action runs', async () => {
+		const base = canonical()
+		const shutdown = { ...base.shutdown, actions: [{ id: 'park', enabled: true, timeout: 30, retry: retry(), type: 'parkMount' as const, required: true }] }
+		const state: Harness = harness(planOf({ shutdown }), (context) => {
+			if (context.nodeId === 'finalize.action[park]') state.phases.push(context.nodeId)
+
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(state.phases).toEqual(['finalizing', 'finalize.action[park]'])
+	})
+
+	test('publishes no finalizing phase when no terminal pipeline runs', async () => {
+		const base = canonical()
+		const shutdown = { ...base.shutdown, enabled: false, actions: [] }
+		const state = harness(planOf({ shutdown }))
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(state.phases).toBeEmpty()
 	})
 
 	test('records a lifecycle step as completed only when it ran', async () => {

@@ -129,6 +129,11 @@ export interface SequencerExecutorHost {
 	// resumed, `stopped` when it was stopped or the process is ending. Nothing is released while it holds —
 	// the reservation of a paused session is what makes the resume possible (§11.3).
 	readonly hold: (nodeId: string) => Promise<SequencerDesiredState>
+	// Publishes the session as `finalizing`, called once and only when the terminal pipeline is about to run.
+	// Parking a mount and warming a camera take minutes, and a session that spent them published as `running`
+	// tells a reader the plan is still capturing and lets the control reduction accept a pause or a resume that
+	// nothing can act on any more — the terminal pipeline is never interrupted (§8.6).
+	readonly finalizing: () => void
 	// Persists the checkpoint together with the events produced since the last write. It is best-effort: a
 	// refused write leaves the checkpoint dirty and the next one carries it.
 	readonly commit: (checkpoint: SequencerCheckpoint, events: readonly SequencerEventDraft[]) => void
@@ -272,6 +277,10 @@ export async function runSequencerPlan(host: SequencerExecutorHost): Promise<Seq
 	const finalize = pipelineOf(plan.root, 'finalize')
 
 	if (finalize !== undefined && plan.finalize !== undefined && sequencerFinalizeRuns(plan.finalize, primary)) {
+		// The plan is over and what runs from here is the quiescing, which is published before it starts rather
+		// than after it finished: it is the phase the session actually spends the next minutes in.
+		host.finalizing()
+
 		finalized = await runPipelineBlock(execution, plan.finalize, finalize, host.terminalSignal, false)
 	}
 

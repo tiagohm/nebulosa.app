@@ -346,6 +346,10 @@ interface ActiveSession {
 	revision: number
 	// Set once finalization began, so a stop arriving during it does not start a second one.
 	finalizing: boolean
+	// Set once the session was published as `finalizing`, which the walk does before it enters the terminal
+	// pipeline and the finalization does otherwise. It keeps the transition to a single commit whichever of the
+	// two got there first.
+	finalized: boolean
 }
 
 // Executes one sequencer session at a time.
@@ -561,6 +565,7 @@ export class SequencerRuntime {
 			resolved: resolvedDevices(devices, roles),
 			revision: stored.revision,
 			finalizing: false,
+			finalized: false,
 		}
 
 		this.#active = active
@@ -838,6 +843,7 @@ export class SequencerRuntime {
 			desiredState: () => this.#store.session(active.id)?.desiredState ?? 'running',
 			slotAttempt: (logicalSlotId) => sequencerSlotAttempt(this.#store.artifacts(active.id), logicalSlotId),
 			hold: (nodeId) => this.#hold(active, nodeId),
+			finalizing: () => this.#enterFinalizing(active),
 			commit: (checkpoint, events) => void this.#commitBestEffort(active, { checkpoint, events }),
 			delay: async (delay, signal) => void (await abortableDelay(delay, signal)),
 		}
@@ -956,6 +962,20 @@ export class SequencerRuntime {
 		return observation
 	}
 
+	// Publishes the session as `finalizing`, once, when the walk is about to enter the terminal pipeline.
+	//
+	// The phase is what the session is really doing: parking a mount and warming a camera are minutes in which
+	// nothing of the plan is left to run, and publishing them as `running` both misreports the night and lets
+	// the intent reducer accept a pause or a resume the terminal pipeline never honors. Recording it here also
+	// keeps `#finalize` from committing the same transition a second time once the walk returns.
+	#enterFinalizing(active: ActiveSession) {
+		if (active.finalized) return
+
+		active.finalized = true
+
+		this.#commitBestEffort(active, { state: 'finalizing', events: [{ type: 'stateChanged', state: 'finalizing', nodeId: active.activity?.nodeId }] })
+	}
+
 	// Moves the session to its terminal state, releases everything, and settles the waiters.
 	//
 	// Nothing in here may prevent the release: whatever the durable state ends up being, the devices and the
@@ -972,7 +992,15 @@ export class SequencerRuntime {
 			// here on is the cleanups running and not an action still doing work.
 			if (active.activity !== undefined) active.activity = { ...active.activity, state: 'cancelling' }
 
-			this.#commitBestEffort(active, { state: 'finalizing', events: [{ type: 'stateChanged', state: 'finalizing', nodeId: node }] })
+			// A walk that ran the terminal pipeline already published the phase, so the transition is not repeated
+			// and no second `finalizing` event is written for one session. The commit itself still happens: it is
+			// what publishes the foreground as cancelling, which is the only notice a reader gets that what is
+			// running now is the cleanups.
+			const transition: readonly SequencerEventDraft[] = active.finalized ? [] : [{ type: 'stateChanged', state: 'finalizing', nodeId: node }]
+
+			active.finalized = true
+
+			this.#commitBestEffort(active, { state: 'finalizing', events: transition })
 
 			// Nothing the session started may still be touching a device when the reservation is released, or the
 			// devices would be handed to a third party mid-quiescing.

@@ -8,6 +8,7 @@ import type { AnySequencerActionHandler } from 'src/api/sequencer.registry'
 import { SequencerRuntime } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
 import type { Sequencer } from '#/sequencer'
+import type { SequencerSessionState } from '#/sequencer.state'
 import { canonical, services } from './sequencer.fixture'
 
 function blockTypes() {
@@ -209,6 +210,36 @@ describe('sessions', () => {
 		expect(instance.snapshot(id)?.desiredState).toBe('stopped')
 		expect(await instance.pause(id)).toMatchObject({ ok: true, effect: 'none', noop: 'terminal' })
 		expect(await instance.pause('missing')).toEqual({ ok: false, reason: 'unknownSession' })
+	})
+
+	test('publishes the session as finalizing while the terminal pipeline runs', async () => {
+		let observed: SequencerSessionState | undefined
+		let refused: unknown
+
+		const { handler: instance } = environment(async (context) => {
+			if (context.nodeId === 'finalize.action[park]') {
+				observed = instance.snapshot(id)?.state
+				refused = await instance.pause(id)
+			}
+
+			return { type: 'completed', value: undefined }
+		})
+		const created = instance.createSession(stored(instance).id)
+
+		expect(created.ok).toBeTrue()
+
+		if (!created.ok) return
+
+		const id = created.session.id
+
+		instance.start(id)
+
+		await instance.stop(id)
+
+		expect(observed).toBe('finalizing')
+		expect(refused).toMatchObject({ ok: true, effect: 'none', noop: 'finalizing' })
+		expect(instance.snapshot(id)?.state).toBe('stopped')
+		expect(instance.events(id).filter((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toHaveLength(1)
 	})
 
 	test('recovers only the events beyond a sequence the caller already has', async () => {

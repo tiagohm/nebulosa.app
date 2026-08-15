@@ -12,6 +12,7 @@ import { abortableDelay } from './operation.wait'
 import { sequencerActionFailure, sequencerCommand, sequencerDeviceOf, sequencerMissingRole } from './sequencer.action'
 import { SEQUENCER_LIFECYCLE_BLOCK_PREFIX } from './sequencer.compiler'
 import type { SequencerLifecycle } from './sequencer.compiler'
+import { sequencerGuiderSettle } from './sequencer.guiding'
 import type { ResourceBinding, SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerValidationResult } from './sequencer.registry'
 
 // The blocks of the two lifecycle pipelines: what the startup pipeline commands before the first safe point
@@ -414,6 +415,10 @@ async function rampSetpoint(services: SequencerLifecycleServices, context: Seque
 // A session guiding through no guider is a session that was configured that way, so the action is skipped
 // rather than failed, exactly as the dither is.
 //
+// The declared settle is installed on the guider session here, with the loop that precedes the guide, because
+// the transport keeps it as session state and reads it back on every guide, recalibration and dither that
+// follows. This is the first of them, so nothing else can have installed it.
+//
 // `calibrateBeforeStart` decides which command establishes the run. The plain start reuses whatever solution
 // the guider carries, which is the one it computed for the last target it guided; the flag is the declaration
 // that such a solution is not to be trusted for this session, and the commander then forces a calibration and
@@ -429,6 +434,26 @@ async function runStartGuiding(services: SequencerLifecycleServices, context: Se
 	const calibrate = configuration.guiding?.calibrateBeforeStart ?? false
 
 	if (!calibrate && services.guiderCommander.running(guider)) return { type: 'completed', value: { action: 'startGuiding', commanded: false } }
+
+	const settle = configuration.guiding?.settle
+
+	// The declared settle is installed on the guider session before it is asked to guide anything. It is
+	// session state and not a command argument — the guide, the calibration and every dither of the night read
+	// it back from the session — and the only command that writes it is the loop, which is why the interlock
+	// installs it with the suspension of every safe point. The session that never loops before its first guide
+	// settles the whole first frame under the transport defaults instead of the declared policy, which is a
+	// tolerance and a timeout nobody in this observatory chose.
+	//
+	// It is installed after the guider was found not to be guiding already, because a loop command is what
+	// stops the corrections: paying it against a run that is already established would suspend the very guiding
+	// this action exists to have.
+	if (settle !== undefined) {
+		context.progress({ detail: 'looping the guide camera' })
+
+		const looping = await services.guiderCommander.loop(guider, { settle: sequencerGuiderSettle(settle) }, { signal: context.signal })
+
+		if (!looping.ok) return sequencerActionFailure(looping, 'the guide camera did not start looping')
+	}
 
 	context.progress({ detail: calibrate ? 'calibrating the guider' : 'starting the guiding corrections' })
 

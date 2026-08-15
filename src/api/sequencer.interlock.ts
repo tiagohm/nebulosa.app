@@ -1,8 +1,7 @@
-import type { PHD2Settle } from 'nebulosa/src/devices/guiding/phd2'
 import type { SequencerGuiderSettle } from '#/sequencer'
 import { sequencerActionFailure } from './sequencer.action'
 import type { SequencerDitherTrigger } from './sequencer.compiler'
-import { runDither } from './sequencer.guiding'
+import { runDither, sequencerGuiderSettle } from './sequencer.guiding'
 import type { SequencerDitherOutcome, SequencerGuidingServices } from './sequencer.guiding'
 import type { SequencerActionContext, SequencerActionResult } from './sequencer.registry'
 
@@ -106,11 +105,6 @@ export interface SequencerInterlockOutcome<T> {
 // does not survive the process, which is the same lifetime the V1 sessions have.
 const suspendedGuiders = new Map<string, boolean>()
 
-// Translates a declared settle into the settle the guider transport understands.
-function guiderSettle(settle: SequencerGuiderSettle): PHD2Settle {
-	return { pixels: settle.tolerance, time: settle.time, timeout: settle.timeout }
-}
-
 // Puts the guider back to work at the end of a bracket, reporting which of the two ways it is being done.
 //
 // `recalibrate` asks for the calibration to be redone instead of guiding on the existing solution, which is
@@ -160,7 +154,7 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 		// Looping is the suspension: the exposures continue, so the star stays acquired and the resume has
 		// something to guide on, while no correction reaches the mount. The settle is installed with the same
 		// command, which is what makes the resume and the dither after it settle under one policy.
-		const suspended = await services.guiderCommander.loop(guider, { settle: guiderSettle(request.settle) }, { signal: context.signal })
+		const suspended = await services.guiderCommander.loop(guider, { settle: sequencerGuiderSettle(request.settle) }, { signal: context.signal })
 
 		if (!suspended.ok) {
 			if (report !== undefined) report.phase = 'suspension'

@@ -138,10 +138,10 @@ export interface SequencerLifecycle {
 	// non-sidereal rates travel with the node that commands them: rates are radians per second.
 	readonly tracking?: Omit<SequencerTargetTracking, 'enabled'>
 	// Guiding policy the action establishes, present only on the action that starts guiding and undefined on
-	// every other one. The action declares no calibration of its own — the guiding block is the single
-	// authority for how the session guides — and a handler cannot read the plan from its execution context, so
-	// the policy travels with the node that commands it.
-	readonly guiding?: Pick<SequencerPlanGuider, 'calibrateBeforeStart'>
+	// every other one. The action declares neither the calibration nor the settle of its own — the guiding block
+	// is the single authority for how the session guides — and a handler cannot read the plan from its execution
+	// context, so the policy travels with the node that commands it.
+	readonly guiding?: Pick<SequencerPlanGuider, 'calibrateBeforeStart' | 'settle'>
 }
 
 // Mutable accumulator threaded through the lowering, so every stage reports against the same definition
@@ -303,7 +303,7 @@ const SEQUENCER_COOLER_ACTION: ReadonlySet<SequencerLifecycleAction['type']> = n
 // actions that command the cooler, which is the whole reason the policy is carried into a node. `tracking` is
 // the tracking policy of the target, carried the same way and reaching only the action that starts tracking,
 // and `guiding` is the guiding policy of the definition, reaching only the action that starts guiding.
-function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction, cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined, guiding: Pick<SequencerPlanGuider, 'calibrateBeforeStart'> | undefined): SequencerPlanAction {
+function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction, cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined, guiding: Pick<SequencerPlanGuider, 'calibrateBeforeStart' | 'settle'> | undefined): SequencerPlanAction {
 	const configuration: SequencerLifecycle = {
 		action,
 		required: action.required ?? false,
@@ -325,7 +325,7 @@ function lowerPipeline(
 	actions: readonly SequencerLifecycleAction[],
 	cooling: SequencerCooling | undefined,
 	tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined,
-	guiding: Pick<SequencerPlanGuider, 'calibrateBeforeStart'> | undefined,
+	guiding: Pick<SequencerPlanGuider, 'calibrateBeforeStart' | 'settle'> | undefined,
 ): SequencerPlanSequence | undefined {
 	if (!enabled) return undefined
 
@@ -1024,10 +1024,11 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	const cooling = definition.cooling.enabled ? definition.cooling : undefined
 	const tracking = lowerTracking(definition)
 	const guider = lowerGuider(definition)
-	// Only the calibration reaches the node: the rest of the guider is the connection and the policy the
-	// session itself commands through, and copying it into every guiding action would carry a second, staler
-	// authority for what the plan already states once.
-	const guiding = guider === undefined ? undefined : { calibrateBeforeStart: guider.calibrateBeforeStart }
+	// Only what the start of the guiding establishes reaches the node: the calibration it runs under and the
+	// settle it installs on the guider session for the rest of the night. The rest of the guider is the
+	// connection and the policy the session itself commands through, and copying it into every guiding action
+	// would carry a second, staler authority for what the plan already states once.
+	const guiding = guider === undefined ? undefined : { calibrateBeforeStart: guider.calibrateBeforeStart, settle: guider.settle }
 	const lowered = lowerPipeline('startup', startup.enabled, startup.actions, cooling, tracking, guiding)
 	const finalized = lowerPipeline('finalize', shutdown.enabled, shutdown.actions, cooling, tracking, guiding)
 

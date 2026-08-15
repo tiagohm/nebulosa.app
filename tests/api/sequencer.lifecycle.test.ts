@@ -6,7 +6,8 @@ import type { SequencerLifecycleServices } from 'src/api/sequencer.lifecycle'
 import type { SequencerActionContext, SequencerActionHandler } from 'src/api/sequencer.registry'
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
 import { successfulOperationResult } from '#/orchestration'
-import type { SequencerCooling, SequencerLifecycleAction, SequencerTargetTracking } from '#/sequencer'
+import type { SequencerCooling, SequencerGuiderSettle, SequencerLifecycleAction, SequencerTargetTracking } from '#/sequencer'
+import type { SequencerPlanGuider } from '#/sequencer.plan'
 import { retry } from './sequencer.fixture'
 
 function mount(overrides?: Partial<Mount>): Mount {
@@ -23,6 +24,12 @@ function coolingPolicy(overrides?: Partial<SequencerCooling>): SequencerCooling 
 
 function trackingPolicy(): Omit<SequencerTargetTracking, 'enabled'> {
 	return { mode: 'SIDEREAL', retry: retry() }
+}
+
+const GUIDER_SETTLE: SequencerGuiderSettle = { tolerance: 1.5, time: 10, timeout: 120 }
+
+function guidingPolicy(calibrateBeforeStart: boolean, settle = GUIDER_SETTLE): Pick<SequencerPlanGuider, 'calibrateBeforeStart' | 'settle'> {
+	return { calibrateBeforeStart, settle }
 }
 
 function configuration(type: SequencerLifecycleAction['type'], overrides?: Partial<SequencerLifecycle>): SequencerLifecycle {
@@ -72,6 +79,7 @@ function lifecycleServices(commands: string[], onCommand?: (name: string) => voi
 		},
 		guiderCommander: {
 			running: () => guiding,
+			loop: (_guider: string, request: { settle?: { pixels: number; time: number; timeout: number } }) => answer(`loop:${request.settle?.pixels}/${request.settle?.time}/${request.settle?.timeout}`),
 			startGuiding: () => answer('startGuiding'),
 			calibrate: () => answer('calibrate'),
 		},
@@ -153,9 +161,9 @@ describe('start guiding', () => {
 		const commands: string[] = []
 		const services = lifecycleServices(commands)
 
-		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: { calibrateBeforeStart: false } }))
+		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: guidingPolicy(false) }))
 
-		expect(commands).toEqual(['startGuiding'])
+		expect(commands).toEqual(['loop:1.5/10/120', 'startGuiding'])
 		expect(result).toMatchObject({ type: 'completed', value: { action: 'startGuiding', commanded: true } })
 	})
 
@@ -163,9 +171,9 @@ describe('start guiding', () => {
 		const commands: string[] = []
 		const services = lifecycleServices(commands)
 
-		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: { calibrateBeforeStart: true } }))
+		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: guidingPolicy(true) }))
 
-		expect(commands).toEqual(['calibrate'])
+		expect(commands).toEqual(['loop:1.5/10/120', 'calibrate'])
 		expect(result).toMatchObject({ type: 'completed', value: { action: 'startGuiding', commanded: true } })
 	})
 
@@ -173,9 +181,9 @@ describe('start guiding', () => {
 		const commands: string[] = []
 		const services = lifecycleServices(commands, undefined, true)
 
-		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: { calibrateBeforeStart: true } }))
+		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: guidingPolicy(true) }))
 
-		expect(commands).toEqual(['calibrate'])
+		expect(commands).toEqual(['loop:1.5/10/120', 'calibrate'])
 		expect(result).toMatchObject({ type: 'completed', value: { action: 'startGuiding', commanded: true } })
 	})
 
@@ -183,17 +191,27 @@ describe('start guiding', () => {
 		const commands: string[] = []
 		const services = lifecycleServices(commands, undefined, true)
 
-		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: { calibrateBeforeStart: false } }))
+		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: guidingPolicy(false) }))
 
 		expect(commands).toBeEmpty()
 		expect(result).toMatchObject({ type: 'completed', value: { action: 'startGuiding', commanded: false } })
+	})
+
+	test('installs the declared settle on the session before the first guide', async () => {
+		const commands: string[] = []
+		const services = lifecycleServices(commands)
+
+		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: guidingPolicy(false, { tolerance: 0.8, time: 6, timeout: 45 }) }))
+
+		expect(commands).toEqual(['loop:0.8/6/45', 'startGuiding'])
+		expect(result).toMatchObject({ type: 'completed', value: { action: 'startGuiding', commanded: true } })
 	})
 
 	test('skips a session that guides through no guider', async () => {
 		const commands: string[] = []
 		const services = lifecycleServices(commands)
 
-		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal), configuration('startGuiding', { guiding: { calibrateBeforeStart: true } }))
+		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal), configuration('startGuiding', { guiding: guidingPolicy(true) }))
 
 		expect(commands).toBeEmpty()
 		expect(result).toMatchObject({ type: 'skipped' })

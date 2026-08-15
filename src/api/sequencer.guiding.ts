@@ -1,3 +1,5 @@
+import type { PHD2Settle } from 'nebulosa/src/devices/guiding/phd2'
+import type { SequencerGuiderSettle } from '#/sequencer'
 import type { GuiderCommander } from './guider.session'
 import { sequencerActionFailure } from './sequencer.action'
 import type { SequencerDitherTrigger } from './sequencer.compiler'
@@ -38,6 +40,14 @@ export interface SequencerGuidingServices {
 // Handler version of the dither block. It changes whenever the meaning of its configuration or of its
 // execution changes, which refuses a session compiled against the older meaning instead of running it here.
 const SEQUENCER_GUIDING_VERSION = 1
+
+// Translates a declared settle into the settle the guider transport understands.
+//
+// The tolerance is guider pixels on both sides, and the time and the timeout are seconds on both sides, so
+// only the names change.
+export function sequencerGuiderSettle(settle: SequencerGuiderSettle): PHD2Settle {
+	return { pixels: settle.tolerance, time: settle.time, timeout: settle.timeout }
+}
 
 // Dither block: displaces the guide star and returns only once the guider has settled again.
 export function sequencerDitherHandler(services: SequencerGuidingServices): SequencerActionHandler<SequencerDitherTrigger, SequencerDitherOutcome> {

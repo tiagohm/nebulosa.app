@@ -161,14 +161,14 @@ describe('lowering', () => {
 		expect((unpark.configuration as SequencerLifecycle).tracking).toBeUndefined()
 	})
 
-	test('an action starting guiding carries the calibration the guiding block declares', () => {
+	test('an action starting guiding carries the calibration and the settle the guiding block declares', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, guiding: { ...definition.guiding, calibrateBeforeStart: true } })
 		const startup = plan.root.children[0] as SequencerPlanSequence
 		const guide = startup.children[3] as SequencerPlanAction
 		const unpark = startup.children[1] as SequencerPlanAction
 
-		expect((guide.configuration as SequencerLifecycle).guiding).toEqual({ calibrateBeforeStart: true })
+		expect((guide.configuration as SequencerLifecycle).guiding).toEqual({ calibrateBeforeStart: true, settle: definition.guiding.settle })
 		expect((unpark.configuration as SequencerLifecycle).guiding).toBeUndefined()
 	})
 

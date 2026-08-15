@@ -262,7 +262,7 @@ export async function runSequencerPlan(host: SequencerExecutorHost): Promise<Seq
 	const startup = pipelineOf(plan.root, 'startup')
 
 	if (primary === undefined && startup !== undefined && plan.startup !== undefined) {
-		const report = await runPipelineBlock(execution, plan.startup, startup, host.waitSignal)
+		const report = await runPipelineBlock(execution, plan.startup, startup, host.waitSignal, true)
 		primary = sequencerStartupOutcome(report)
 	}
 
@@ -272,7 +272,7 @@ export async function runSequencerPlan(host: SequencerExecutorHost): Promise<Seq
 	const finalize = pipelineOf(plan.root, 'finalize')
 
 	if (finalize !== undefined && plan.finalize !== undefined && sequencerFinalizeRuns(plan.finalize, primary)) {
-		finalized = await runPipelineBlock(execution, plan.finalize, finalize, host.terminalSignal)
+		finalized = await runPipelineBlock(execution, plan.finalize, finalize, host.terminalSignal, false)
 	}
 
 	execution.keeper.leave()
@@ -379,8 +379,13 @@ function loopOf(sequence: SequencerPlanSequence): SequencerPlanLoop | undefined 
 }
 
 // Runs one lifecycle pipeline through the pipeline executor, which owns the timeout, the retries and the
-// commanded-stop attribution; the only thing supplied here is how a step runs and how a wait is taken.
-async function runPipelineBlock(execution: SequencerExecution, pipeline: SequencerPlanPipeline, block: SequencerPlanSequence, signal: AbortSignal): Promise<SequencerPipelineReport> {
+// commanded-stop attribution; the only thing supplied here is how a step runs, how a wait is taken and, when
+// `attended`, what the boundary between two actions does about the state the session is converging to.
+//
+// The startup pipeline is attended and the finalize pipeline is not. Attending the finalize pipeline would
+// refuse every one of its actions, since it runs precisely because the session is converging to a terminal
+// state, and the night would end with the mount unparked and the cover open.
+async function runPipelineBlock(execution: SequencerExecution, pipeline: SequencerPlanPipeline, block: SequencerPlanSequence, signal: AbortSignal, attended: boolean): Promise<SequencerPipelineReport> {
 	const { host } = execution
 	const steps = actionsOf(block).map<SequencerPipelineStep>((node) => ({ nodeId: node.id, type: node.type, configuration: node.configuration as SequencerLifecycle }))
 
@@ -404,6 +409,10 @@ async function runPipelineBlock(execution: SequencerExecution, pipeline: Sequenc
 				return result
 			},
 			delay: (delay, delaySignal) => host.delay(delay, delaySignal),
+			// The boundary between two lifecycle actions is `afterAction`: the step that was running reached its own
+			// terminal decision, so every pause mode is attended here and a pause holds instead of ending the
+			// pipeline, which is what keeps a session paused during startup resumable (§11.3).
+			...(attended ? { converge: async (step: SequencerPipelineStep) => (await convergeAt(execution, 'afterAction', step.nodeId)).outcome.kind === 'continue' } : {}),
 		},
 		signal,
 	)

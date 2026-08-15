@@ -32,7 +32,8 @@ import type { SequencerActionResult } from './sequencer.registry'
 // - skipped: the handler declared the action does not apply to this session.
 // - failed: every attempt the policy allowed was spent without success.
 // - notRun: the action did not take effect, because `continueOnFailure: false` interrupted the chain of
-//   optional actions or a commanded stop ended the pipeline. Outside a commanded stop it is only possible for
+//   optional actions, or the session left the plan — through a stop that cancelled the action or through the
+//   convergence asked in front of it. Outside a session leaving the plan it is only possible for
 //   an optional action, since a required one is always attempted; a required action reported this way is a
 //   defect, which is exactly why the composition of §8.6 converts it into a failure instead of assuming it
 //   cannot happen.
@@ -85,7 +86,8 @@ export interface SequencerPipelineReport {
 	// session — a night without a dew heater is still a night. A required action that never ran carries no
 	// failure of its own and is composed from its result by §8.6, which is where the primary outcome is known.
 	readonly failure?: SequencerPipelineFailure
-	// Whether a commanded stop interrupted the pipeline.
+	// Whether the pipeline was interrupted by the session leaving the plan, which is a stop that cancelled the
+	// running action or a convergence that refused the next one.
 	readonly stopped: boolean
 }
 
@@ -103,6 +105,22 @@ export interface SequencerPipelineExecutor {
 	// keeps holding its devices long after the operator ended it. It is the session signal and never the
 	// deadline of an attempt, because no attempt is running between two of them.
 	delay(delay: number, signal: AbortSignal): Promise<void>
+	// Asked between two actions, and never while one is running, whether the pipeline may command the next one.
+	// It is not asked in front of the first action, which the walk already decided to enter the pipeline for.
+	// Absent for a pipeline that runs to its end whatever the session is converging to, which is what the
+	// finalize pipeline does: it runs *because* the session ended.
+	//
+	// A pause or a stop commanded while an action runs is not visible on `signal` under every mode, and without
+	// this the rest of the list would keep opening covers, starting tracking and cooling cameras for a session
+	// the operator already paused or stopped, until the walk reached its first boundary. It is asked between two
+	// actions and never inside one: an action that has begun moving hardware is finished rather than abandoned
+	// halfway, and the deadline of an attempt is armed around `run`.
+	//
+	// A pause is attended inside this call, which is why it is asynchronous and why it has no answer of its own:
+	// a pipeline has no paused state (§11.3), so it either continues once the session resumes or is stopped. A
+	// `false` answer therefore means the session is leaving the plan, and it ends the pipeline exactly as a
+	// commanded stop does.
+	converge?(step: SequencerPipelineStep): Promise<boolean>
 }
 
 // Failed attempt of one action, before the policy decides what to do about it.
@@ -320,9 +338,20 @@ export async function runSequencerPipeline(pipeline: SequencerPlanPipeline, step
 	let failure: SequencerPipelineFailure | undefined
 	let halted = false
 	let stopped = false
+	// Whether an action of this list has already been attempted, which is what makes the next boundary a boundary
+	// *between* two actions.
+	let entered = false
 
 	for (const step of steps) {
 		const { configuration } = step
+
+		// Only the action that was already running is allowed to finish: a session converging to `paused` or to
+		// `stopped` holds or leaves here, in front of the next one, instead of commanding the rest of the list and
+		// honoring the command at the first boundary of the walk.
+		//
+		// It is asked between two actions and not in front of the first: entering the pipeline is the decision the
+		// walk already took, and the boundary in front of it belongs to the walk rather than to this list.
+		if (entered && !stopped && executor.converge !== undefined && !(await executor.converge(step))) stopped = true
 
 		if (stopped || (halted && !configuration.required)) {
 			results.push({ nodeId: step.nodeId, type: step.type, required: configuration.required, outcome: 'notRun', attempts: 0 })
@@ -331,6 +360,7 @@ export async function runSequencerPipeline(pipeline: SequencerPlanPipeline, step
 
 		const result = await runStep(executor, step, signal)
 		results.push(result)
+		entered = true
 
 		if (result.outcome === 'notRun') {
 			stopped = true

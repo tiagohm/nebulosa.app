@@ -613,6 +613,51 @@ describe('plan walk', () => {
 		expect(outcome.checkpoint.completed).toContain('startup.action[unpark]')
 	})
 
+	test('holds the startup pipeline between two actions when the session is paused', async () => {
+		const base = definition()
+		const startup = {
+			...base.startup,
+			actions: [
+				{ id: 'unpark', enabled: true, timeout: 30, retry: retry(), type: 'unparkMount' as const, required: true },
+				{ id: 'track', enabled: true, timeout: 30, retry: retry(), type: 'startTracking' as const, required: true },
+			],
+		}
+		const state: Harness = harness(planOf({ startup }), (context) => {
+			if (context.nodeId === 'startup.action[unpark]') state.desired = 'paused'
+
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+
+		state.onHold = () => 'running'
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(state.holds).toContain('startup.action[track]')
+		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[track]')
+		expect(outcome.terminal.state).toBe('completed')
+	})
+
+	test('commands no further startup action once the session is stopping', async () => {
+		const base = definition()
+		const startup = {
+			...base.startup,
+			actions: [
+				{ id: 'unpark', enabled: true, timeout: 30, retry: retry(), type: 'unparkMount' as const, required: true },
+				{ id: 'track', enabled: true, timeout: 30, retry: retry(), type: 'startTracking' as const, required: true },
+			],
+		}
+		const state: Harness = harness(planOf({ startup }), (context) => {
+			if (context.nodeId === 'startup.action[unpark]') state.desired = 'stopped'
+
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(state.executed.map((it) => it.nodeId)).not.toContain('startup.action[track]')
+		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
+		expect(outcome.terminal.state).toBe('stopped')
+	})
+
 	test('records a lifecycle step as completed only when it ran', async () => {
 		const base = definition()
 		const startup = {

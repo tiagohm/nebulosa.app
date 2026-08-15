@@ -541,6 +541,31 @@ describe('plan walk', () => {
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 	})
 
+	test('holds the whole session until the declared start instant', async () => {
+		const base = definition()
+		const startup = { ...base.startup, actions: [{ id: 'unpark', enabled: true, timeout: 30, retry: retry(), type: 'unparkMount' as const, required: true }] }
+		const at = Date.now() + 200
+		const state = harness(planOf({ startup, execution: { ...base.execution, start: { type: 'at', time: at } } }))
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(Date.now()).toBeGreaterThanOrEqual(at)
+		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[unpark]')
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
+	})
+
+	test('ends as stopped without entering the plan when the scheduled start is cancelled', async () => {
+		const base = definition()
+		const state = harness(planOf({ execution: { ...base.execution, start: { type: 'at', time: Date.now() + 3_600_000 } } }))
+
+		setTimeout(() => state.controller.abort(), 20)
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('stopped')
+		expect(state.executed).toBeEmpty()
+	})
+
 	test('wakes the wait for the minimum spacing when a pause cancels the action', async () => {
 		const base = definition()
 		const state: Harness = harness(planOf({ capture: { ...base.capture, delay: 2 } }), (context) => {

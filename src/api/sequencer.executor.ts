@@ -3,6 +3,7 @@ import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { SequencerFailureReason, SequencerFilterReference, SequencerGuiderSettle, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanLoop, SequencerPlanPipeline, SequencerPlanSequence } from '#/sequencer.plan'
 import type { SequencerCaptureProgress, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerTriggerAnchors } from '#/sequencer.state'
+import { abortableDelay } from './operation.wait'
 import { sequencerCadenceBoundary, sequencerExposureEnded, sequencerSettleAnchored, SEQUENCER_INITIAL_CADENCE_ANCHORS, waitForCadenceBoundary } from './sequencer.cadence'
 import type { SequencerCadenceAnchors } from './sequencer.cadence'
 import { SequencerCheckpointKeeper } from './sequencer.checkpoint'
@@ -19,7 +20,7 @@ import { runGuidingInterlock } from './sequencer.interlock'
 import type { SequencerInterlockReport, SequencerInterlockState } from './sequencer.interlock'
 import { sequencerAuxiliaryDirectory, sequencerVerifiedArtifactPath } from './sequencer.path'
 import type { SequencerPathContext } from './sequencer.path'
-import { runSequencerPipeline } from './sequencer.pipeline'
+import { runSequencerPipeline, SEQUENCER_MAXIMUM_TIMER_DELAY } from './sequencer.pipeline'
 import type { SequencerPipelineReport, SequencerPipelineStep } from './sequencer.pipeline'
 import { sequencerFailurePolicy } from './sequencer.policy'
 import type { SequencerOnFailure } from './sequencer.policy'
@@ -238,6 +239,7 @@ interface SequencerExecution {
 // cancels it, gracefully included, because there is no frame in a lifecycle step worth preserving.
 export async function runSequencerPlan(host: SequencerExecutorHost): Promise<SequencerExecutionOutcome> {
 	const { plan } = host
+	const scheduled = await waitForScheduledStart(host)
 	const at = host.now()
 	const execution: SequencerExecution = {
 		host,
@@ -251,11 +253,15 @@ export async function runSequencerPlan(host: SequencerExecutorHost): Promise<Seq
 
 	execution.keeper.anchors(execution.anchors)
 
-	let primary: SequencerPrimaryOutcome | undefined
+	// A session whose scheduled start was cancelled never enters the plan, and it is stopped rather than failed:
+	// the only thing that cancels the wait is the operator or the process ending. The finalize pipeline still
+	// runs when the definition asks it to run on a stop, which is what leaves an observatory that was opened for
+	// the session closed again.
+	let primary: SequencerPrimaryOutcome | undefined = scheduled ? undefined : { kind: 'stopped' }
 
 	const startup = pipelineOf(plan.root, 'startup')
 
-	if (startup !== undefined && plan.startup !== undefined) {
+	if (primary === undefined && startup !== undefined && plan.startup !== undefined) {
 		const report = await runPipelineBlock(execution, plan.startup, startup, host.waitSignal)
 		primary = sequencerStartupOutcome(report)
 	}
@@ -281,6 +287,45 @@ export async function runSequencerPlan(host: SequencerExecutorHost): Promise<Seq
 	execution.events = []
 
 	return { terminal: sequencerTerminalOutcome(primary, finalized), checkpoint: execution.keeper.checkpoint, capture: execution.capture }
+}
+
+// Holds the walk until the instant the definition scheduled the session to start, and reports whether it was
+// reached.
+//
+// The wait is taken in front of everything the session does, the startup pipeline included. Cooling a sensor
+// and unparking a mount hours before the first exposure spends the night on state that has to be re-established
+// anyway, and the anchors of the walk are taken after this returns so a session scheduled for midnight does not
+// begin with its elapsed-time triggers measured from the afternoon it was submitted.
+//
+// The remaining time is recomputed after every chunk rather than handed to a single timer: a timer accepts
+// about 24.8 days and anything beyond it overflows into a millisecond, which would start a session scheduled
+// for next month immediately. Recomputing also absorbs a timer that fires early and a clock that moved.
+//
+// A `false` answer means the wait was cancelled, which only a stop or a shutdown does. It is taken on the wait
+// signal and not the action one because no action is running here for a pause to cancel: a session pausing
+// before its scheduled start is already doing exactly what a pause asks of it, and it is honored at the first
+// safe point of the walk.
+async function waitForScheduledStart(host: SequencerExecutorHost): Promise<boolean> {
+	const { start } = host.plan.execution
+
+	if (start.type !== 'at') return true
+
+	let announced = false
+
+	for (;;) {
+		const remaining = start.time - host.now()
+
+		if (remaining <= 0) return true
+
+		if (!announced) {
+			announced = true
+			host.context(host.plan.root.id, 1, host.waitSignal).progress({ detail: 'waiting for the scheduled start of the session' })
+		}
+
+		const waited = await abortableDelay(Math.min(remaining, SEQUENCER_MAXIMUM_TIMER_DELAY), host.waitSignal)
+
+		if (!waited.ok) return false
+	}
 }
 
 // Checkpoint a session starts from, which records the revisions the plan was compiled and resolved against so

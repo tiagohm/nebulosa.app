@@ -120,7 +120,7 @@ interface AttemptFailure {
 // A larger value does not schedule a later timer: it overflows and is scheduled as `1`, so an action declaring
 // a deadline of a month would be aborted in the first millisecond and reported as having timed out. A deadline
 // beyond this is therefore reached in chunks rather than handed to one timer.
-const MAXIMUM_TIMER_DELAY = 2_147_483_647
+export const SEQUENCER_MAXIMUM_TIMER_DELAY = 2_147_483_647
 
 // Retry policy of a fatal cause: the same budget and spacing, with nothing left to consider recoverable.
 //
@@ -206,14 +206,14 @@ async function runAttempt(executor: SequencerPipelineExecutor, step: SequencerPi
 	const schedule = (remaining: number) => {
 		timer = setTimeout(
 			() => {
-				const left = remaining - MAXIMUM_TIMER_DELAY
+				const left = remaining - SEQUENCER_MAXIMUM_TIMER_DELAY
 
 				if (left > 0) return schedule(left)
 
 				expired = !commanded
 				controller.abort()
 			},
-			Math.min(remaining, MAXIMUM_TIMER_DELAY),
+			Math.min(remaining, SEQUENCER_MAXIMUM_TIMER_DELAY),
 		)
 	}
 

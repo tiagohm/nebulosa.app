@@ -261,6 +261,21 @@ describe('plan walk', () => {
 		expect(new Set(frames.map((it) => it.slot!.path)).size).toBe(3)
 	})
 
+	test('makes the artifact row of a frame durable together with the progress counting it', async () => {
+		const base = definition()
+		const checkpoint = { afterEveryAction: false, afterEveryFrame: false, afterEveryArtifact: true, interval: 0 }
+		let seen: readonly SequencerArtifact[] = []
+		const state: Harness = harness(planOf({ execution: { ...base.execution, checkpoint } }), (context) => {
+			if (context.frame?.ordinal === 1) seen = state.artifacts()
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(seen.filter((it) => it.status === 'committed')).toHaveLength(1)
+	})
+
 	test('commits the events produced after the last checkpoint of the walk', async () => {
 		const state = harness(planOf(), (context) => (context.frame === undefined ? Promise.resolve({ type: 'completed', value: undefined }) : Promise.resolve({ type: 'fatalFailure', reason: 'commandFailed', detail: 'the camera is gone' })))
 

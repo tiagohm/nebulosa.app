@@ -1107,7 +1107,13 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 			execution.keeper.capture(execution.capture)
 			execution.keeper.anchors(execution.anchors)
 
-			await checkpointDue(execution, 'frame')
+			// Every terminating path of the capture block registers a terminal artifact row — committed for the frame
+			// it published, rejected for the one it lost — so the progress that counts this slot and the row that
+			// records it are one unit (§13.2), and the checkpoint carrying the progress is written as the `artifact`
+			// it belongs to rather than as a `frame` the policy may space out. Written apart, a restart finds a
+			// committed artifact no progress counted and exposes the slot a second time, or progress for a frame no
+			// row records. A `skipped` result registered nothing, so it stays on the cadence the policy declares.
+			await checkpointDue(execution, result.type === 'completed' ? 'artifact' : 'frame')
 
 			return SEQUENCER_CONTINUE
 		}
@@ -1133,7 +1139,9 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 				execution.capture = abandonSlot(execution.capture, targetId, group)
 				execution.cause = decision.cause
 				execution.keeper.capture(execution.capture)
-				await checkpointDue(execution, 'frame')
+				// The attempt that gave up the slot registered a rejected row, so this write carries the same unit the
+				// accepted frame above does and is due for the same reason.
+				await checkpointDue(execution, 'artifact')
 				return SEQUENCER_CONTINUE
 			case 'hold': {
 				execution.cause = decision.cause

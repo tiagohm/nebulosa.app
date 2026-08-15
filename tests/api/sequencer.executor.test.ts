@@ -454,6 +454,18 @@ describe('plan walk', () => {
 		expect(outcome.checkpoint.completed).not.toContain('startup.action[park]')
 	})
 
+	test('never spends the settle on a safe point that moved nothing', async () => {
+		const base = definition()
+		const target = { ...base.target, goto: { ...base.target.goto, enabled: false }, center: { ...base.target.center, enabled: false }, tracking: { ...base.target.tracking, enabled: false } }
+		const state = harness(planOf({ target, capture: { ...base.capture, settle: 1 } }))
+		const started = performance.now()
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
+		expect(performance.now() - started).toBeLessThan(500)
+	})
+
 	test('never refocuses after a flip that refocused inside its own node', async () => {
 		const base = definition()
 		const autofocus = { ...base.autofocus, enabled: true, triggers: { ...base.autofocus.triggers, onStart: false, onFilterChange: false, afterMeridianFlip: true, afterRecovery: false, everyFrames: 0, everyTime: 0, temperatureChange: 0, starSizeChange: 0, minimumTimeBetweenRuns: 0 } }

@@ -24,7 +24,7 @@ import type { SequencerPipelineReport, SequencerPipelineStep } from './sequencer
 import { sequencerFailurePolicy } from './sequencer.policy'
 import type { SequencerOnFailure } from './sequencer.policy'
 import { runFramePreparation } from './sequencer.prepare'
-import type { SequencerPreparationServices } from './sequencer.prepare'
+import type { SequencerPreparationOutcome, SequencerPreparationServices } from './sequencer.prepare'
 import { abandonSlot, acceptFrame, advanceCaptureCycle, grantAttemptWindow, SEQUENCER_INITIAL_CAPTURE_PROGRESS } from './sequencer.progress'
 import type { AnySequencerActionHandler, SequencerActionContext, SequencerActionResult, SequencerFrameSlot } from './sequencer.registry'
 import { frameScheduler, targetProgressOf } from './sequencer.scheduler'
@@ -158,6 +158,17 @@ const SEQUENCER_CONTINUE: SequencerNodeOutcome = { kind: 'continue' }
 
 // Outcome of a frame whose slot is still on the cursor and whose safe point has to be taken again.
 const SEQUENCER_RETAKE: SequencerNodeOutcome = { kind: 'retake' }
+
+// What the guiding bracket of one safe point did.
+interface SequencerBracketOutcome {
+	// What the rest of the plan does after it.
+	readonly outcome: SequencerNodeOutcome
+	// Whether anything inside it actually moved a device the exposure has to be stable after: a trigger that ran
+	// to completion, a dither that was taken, or a preparation that issued at least one reconciliation. It is
+	// what decides whether the settle of the capture is re-anchored, and it is reported even when the bracket
+	// ended the plan, because the triggers that already ran moved the observatory regardless of how it ended.
+	readonly moved: boolean
+}
 
 // What the pre-exposure guard leaves the safe point doing.
 //
@@ -710,11 +721,13 @@ async function runSafePoint(execution: SequencerExecution, targetId: string, loo
 
 		const bracketed = await runInterlockedSafePoint(execution, loop, node, configuration, decisions, policies, observation)
 
-		if (bracketed.kind !== 'continue') return bracketed
+		if (bracketed.outcome.kind !== 'continue') return bracketed.outcome
 
-		// Everything the bracket did is movement the exposure has to be stable after, so the settle is anchored on
-		// it rather than on the frame before it.
-		execution.cadence = sequencerSettleAnchored(execution.cadence, host.now())
+		// Movement the bracket commanded is what the exposure has to be stable after, so the settle is anchored on
+		// it rather than on the frame before it. A safe point that decided no trigger and reconciled nothing moved
+		// no device, and anchoring there would turn the settle into a delay paid before every single frame, which
+		// is exactly what it is not.
+		if (bracketed.moved) execution.cadence = sequencerSettleAnchored(execution.cadence, host.now())
 
 		// The triggers of this safe point reached their terminal decision and the bracket closed behind them, which
 		// is the boundary the broadest pause mode is attended at: the corrections are back on, the optical path is
@@ -798,7 +811,7 @@ function triggerNodeOf(loop: SequencerPlanLoop, kind: 'meridianFlip' | 'autofocu
 // and an autofocus sweep is not paid twice for the same frame — so only the preparation and the bracket itself
 // are actually re-commanded, and the crossing a previous attempt reported still turns the resume into a
 // recalibration.
-async function runInterlockedSafePoint(execution: SequencerExecution, loop: SequencerPlanLoop, frame: SequencerPlanAction, configuration: SequencerCapture, decisions: readonly SequencerTriggerDecision[], policies: SequencerTriggerPolicies, observation: SequencerTriggerObservation): Promise<SequencerNodeOutcome> {
+async function runInterlockedSafePoint(execution: SequencerExecution, loop: SequencerPlanLoop, frame: SequencerPlanAction, configuration: SequencerCapture, decisions: readonly SequencerTriggerDecision[], policies: SequencerTriggerPolicies, observation: SequencerTriggerObservation): Promise<SequencerBracketOutcome> {
 	const { host } = execution
 	const guider = host.plan.guider
 	const retry = host.plan.execution.defaultRetry
@@ -806,9 +819,10 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 	const ran = new Set<'meridianFlip' | 'autofocus'>()
 	let interrupted: SequencerNodeOutcome | undefined
 	let flipped = false
+	let moved = false
 	let attempt = 1
 
-	const body = async (state: SequencerInterlockState): Promise<SequencerActionResult<unknown>> => {
+	const body = async (state: SequencerInterlockState): Promise<SequencerActionResult<SequencerPreparationOutcome>> => {
 		for (const kind of ['meridianFlip', 'autofocus'] as const) {
 			if (ran.has(kind)) continue
 			if (!decisions.some((decision) => decision.kind === kind)) continue
@@ -831,6 +845,8 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 			// too: leaving it where it was measures the next safe point against a focus two flips old and keeps the
 			// `afterMeridianFlip` condition owed by a run that already paid it, so the session refocuses again on the
 			// very next frame.
+			moved ||= completed
+
 			if (kind === 'meridianFlip') {
 				flipped = completed
 
@@ -857,16 +873,20 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 
 		// A trigger that ended the plan spent its own budget already, so it is carried out of the bracket as it
 		// is rather than retried a second time under this policy.
-		if (interrupted !== undefined) return interrupted
+		if (interrupted !== undefined) return { outcome: interrupted, moved }
 
 		if (result.type === 'completed') {
 			if (result.value.dither !== undefined) execution.anchors = sequencerAnchorAdvanced(execution.anchors, 'dither', observation)
-			return SEQUENCER_CONTINUE
+
+			// A dither displaces the mount and every reconciliation the preparation issued moved a device the frame
+			// is taken through. A bracket that issued none of them left the optical path exactly as the previous
+			// frame left it, and there is nothing for the settle to be measured from.
+			return { outcome: SEQUENCER_CONTINUE, moved: moved || result.value.dither !== undefined || result.value.value.commanded.length > 0 }
 		}
 
-		if (result.type === 'skipped') return SEQUENCER_CONTINUE
-		if (result.type === 'pause') return { kind: 'pause' }
-		if (result.type === 'suspend') return { kind: 'fail', reason: 'unexpectedState', detail: result.detail }
+		if (result.type === 'skipped') return { outcome: SEQUENCER_CONTINUE, moved }
+		if (result.type === 'pause') return { outcome: { kind: 'pause' }, moved }
+		if (result.type === 'suspend') return { outcome: { kind: 'fail', reason: 'unexpectedState', detail: result.detail }, moved }
 
 		// A dither that failed is decided by the dither, which declares its own budget and its own terminal
 		// answer; everything else the bracket commands is decided by the execution default, because a suspension,
@@ -893,7 +913,7 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 
 		execution.events.push({ type: 'policyApplied', nodeId: frame.id, detail: decision.kind })
 
-		return decisionOutcome(decision, result.reason, result.detail)
+		return { outcome: decisionOutcome(decision, result.reason, result.detail), moved }
 	}
 }
 

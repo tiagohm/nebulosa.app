@@ -523,6 +523,24 @@ describe('plan walk', () => {
 		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
 	})
 
+	test('ends the capture loop once the accumulated integration reaches the declared target', async () => {
+		const base = definition()
+		const state = harness(planOf({ execution: { ...base.execution, end: { type: 'integrationTime', time: 60 } } }))
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(1)
+	})
+
+	test('takes no frame when the declared end instant has already passed', async () => {
+		const base = definition()
+		const state = harness(planOf({ execution: { ...base.execution, end: { type: 'at', time: Date.now() - 1000 } } }))
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
+	})
+
 	test('wakes the wait for the minimum spacing when a pause cancels the action', async () => {
 		const base = definition()
 		const state: Harness = harness(planOf({ capture: { ...base.capture, delay: 2 } }), (context) => {

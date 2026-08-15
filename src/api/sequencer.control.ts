@@ -1,4 +1,4 @@
-import type { SequencerExecution } from '#/sequencer'
+import type { SequencerEndCondition, SequencerExecution } from '#/sequencer'
 import type { SequencerCheckpoint, SequencerDesiredState, SequencerSessionState } from '#/sequencer.state'
 import { isSequencerTerminalState } from '#/sequencer.state'
 
@@ -82,6 +82,33 @@ export function sequencerConvergence(desiredState: SequencerDesiredState, execut
 	if (desiredState === 'stopped') return 'stop'
 	if (desiredState === 'paused') return sequencerPauseAttended(execution.pauseMode, safePoint) ? 'pause' : 'continue'
 	return 'continue'
+}
+
+// Whether the declared end condition of the session has been reached, asked in front of every frame.
+//
+// The condition bounds the night from outside the plan: the loop stops selecting frames as soon as it holds,
+// and the session completes normally with whatever it captured, exactly as if the sequence had run out. It is
+// evaluated in front of a frame and never during one, so the frame that is on the sensor when the boundary
+// passes is always finished and written.
+//
+// `at` is the instant of the evaluation and `end.time` of the `at` condition an absolute instant, both in
+// milliseconds since the Unix epoch. `integration` is the exposure time the accepted frames of the session
+// have accumulated and `end.time` of the `integrationTime` condition the target, both in seconds; the
+// accumulation counts the whole session and not the cycle, because the condition ends the session and not the
+// cycle.
+//
+// `afterSequence` ends with the plan itself and therefore never holds here. The two altitude conditions need
+// the ephemeris this version does not compute, and the compiler refuses a definition that declares one, so
+// they cannot reach a running session.
+export function sequencerEndReached(end: SequencerEndCondition, at: number, integration: number) {
+	switch (end.type) {
+		case 'at':
+			return at >= end.time
+		case 'integrationTime':
+			return integration >= end.time
+		default:
+			return false
+	}
 }
 
 // Whether converging to the desired state requires cancelling the action that is running, instead of letting

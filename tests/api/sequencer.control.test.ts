@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { SequencerSafePoint } from 'src/api/sequencer.control'
-import { sequencerCancelsActiveAction, sequencerConvergence, sequencerPauseAttended, sequencerResumePoint, sequencerRetainsReservation } from 'src/api/sequencer.control'
+import { sequencerCancelsActiveAction, sequencerConvergence, sequencerEndReached, sequencerPauseAttended, sequencerResumePoint, sequencerRetainsReservation } from 'src/api/sequencer.control'
 import type { SequencerExecution } from '#/sequencer'
 import type { SequencerCheckpoint, SequencerSessionState } from '#/sequencer.state'
 
@@ -53,6 +53,29 @@ describe('convergence', () => {
 		for (const mode of ['graceful', 'immediate'] as const) {
 			expect(SAFE_POINTS.every((it) => sequencerConvergence('stopped', execution('afterCurrentAction', mode), it) === 'stop')).toBe(true)
 		}
+	})
+})
+
+describe('end condition', () => {
+	test('a sequence end never stops the loop on its own', () => {
+		expect(sequencerEndReached({ type: 'afterSequence' }, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)).toBe(false)
+	})
+
+	test('an instant holds from the moment it is reached', () => {
+		expect(sequencerEndReached({ type: 'at', time: 1000 }, 999, 0)).toBe(false)
+		expect(sequencerEndReached({ type: 'at', time: 1000 }, 1000, 0)).toBe(true)
+		expect(sequencerEndReached({ type: 'at', time: 1000 }, 1001, 0)).toBe(true)
+	})
+
+	test('an integration target holds from the moment it is reached', () => {
+		expect(sequencerEndReached({ type: 'integrationTime', time: 3600 }, 0, 3599)).toBe(false)
+		expect(sequencerEndReached({ type: 'integrationTime', time: 3600 }, 0, 3600)).toBe(true)
+		expect(sequencerEndReached({ type: 'integrationTime', time: 3600 }, 0, 3660)).toBe(true)
+	})
+
+	test('an altitude crossing the compiler refuses never reaches a running session', () => {
+		expect(sequencerEndReached({ type: 'sunAltitude', altitude: 0, direction: 'rising' }, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)).toBe(false)
+		expect(sequencerEndReached({ type: 'targetAltitude', altitude: 0, direction: 'setting' }, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)).toBe(false)
 	})
 })
 

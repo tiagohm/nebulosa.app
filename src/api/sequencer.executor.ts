@@ -9,7 +9,7 @@ import { SequencerCheckpointKeeper } from './sequencer.checkpoint'
 import type { SequencerCheckpointTrigger } from './sequencer.checkpoint'
 import { SEQUENCER_BLOCK_TYPE, sequencerNodeId, sequencerPlanNodes } from './sequencer.compiler'
 import type { SequencerCapture, SequencerFocus, SequencerLifecycle, SequencerMeridianFlipTrigger } from './sequencer.compiler'
-import { sequencerConvergence } from './sequencer.control'
+import { sequencerConvergence, sequencerEndReached } from './sequencer.control'
 import type { SequencerSafePoint } from './sequencer.control'
 import { sequencerPreExposureGuard, waitForFlipWindow } from './sequencer.guard'
 import type { SequencerFlipBoundary } from './sequencer.guard'
@@ -216,6 +216,10 @@ interface SequencerExecution {
 	anchors: SequencerTriggerAnchors
 	// Cadence anchors of the session.
 	cadence: SequencerCadenceAnchors
+	// Exposure time the accepted frames of the whole session have accumulated, in seconds. The per-group
+	// counters cannot answer for it: they are per cycle and reset with it, while the end condition it feeds is
+	// stated over the session.
+	integration: number
 	// Cause of the last slot the capture loop lost, carried so a group that ends degraded is reported with the
 	// failure that emptied it instead of with the counter that noticed the emptiness.
 	cause?: SequencerSlotCause
@@ -242,6 +246,7 @@ export async function runSequencerPlan(host: SequencerExecutorHost): Promise<Seq
 		capture: SEQUENCER_INITIAL_CAPTURE_PROGRESS,
 		anchors: sequencerInitialTriggerAnchors(at),
 		cadence: SEQUENCER_INITIAL_CADENCE_ANCHORS,
+		integration: 0,
 	}
 
 	execution.keeper.anchors(execution.anchors)
@@ -633,6 +638,13 @@ async function runCaptureLoop(execution: SequencerExecution, targetId: string, l
 			if (converged.outcome.kind !== 'continue') return converged.outcome
 
 			const instant = execution.host.now()
+
+			// The night is bounded from outside the plan as well, and the boundary is honored here rather than at
+			// the end of a cycle: a session told to stop at 05:00 or after four hours of integration must not spend
+			// the rest of a cycle it can no longer use. It is a normal completion with whatever was captured, so
+			// the loop leaves through the same door running out of work leaves through.
+			if (sequencerEndReached(execution.host.plan.execution.end, instant, execution.integration)) return SEQUENCER_CONTINUE
+
 			const reading = execution.host.observe()
 			const selection = scheduler.next(execution.capture, { targetId, instant, sensorTemperature: reading.sensorTemperature, filter: reading.installedFilter })
 
@@ -1019,6 +1031,12 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 		if (result.type === 'completed' || result.type === 'skipped') {
 			execution.cadence = sequencerExposureEnded(host.now())
 			execution.capture = result.type === 'completed' ? acceptFrame(execution.capture, targetId, group) : abandonSlot(execution.capture, targetId, group)
+
+			// Only an accepted frame integrates, and it integrates the exposure the group declares rather than the
+			// time the node spent: the declared time is what the group counters are stated in, and a session ending
+			// on integration must not have the read-out and the safe point of every frame counted into its target.
+			if (result.type === 'completed') execution.integration += group.exposureTime
+
 			execution.anchors = sequencerFrameCounted(execution.anchors, group.frameType)
 			execution.keeper.capture(execution.capture)
 			execution.keeper.anchors(execution.anchors)

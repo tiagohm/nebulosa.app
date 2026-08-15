@@ -2,7 +2,7 @@ import { isAbsolute } from 'path'
 import type { MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 // oxfmt-ignore
-import type { Sequencer, SequencerAutofocus, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGoto, SequencerGuiderSettle, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
+import type { Sequencer, SequencerAutofocus, SequencerAuxiliaryCapture, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGoto, SequencerGuiderSettle, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanGuider, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { sequencerUnknownPlaceholders } from './sequencer.identity'
 import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
@@ -138,10 +138,20 @@ export interface SequencerLifecycle {
 	// non-sidereal rates travel with the node that commands them: rates are radians per second.
 	readonly tracking?: Omit<SequencerTargetTracking, 'enabled'>
 	// Guiding policy the action establishes, present only on the action that starts guiding and undefined on
-	// every other one. The action declares neither the calibration nor the settle of its own — the guiding block
-	// is the single authority for how the session guides — and a handler cannot read the plan from its execution
-	// context, so the policy travels with the node that commands it.
-	readonly guiding?: Pick<SequencerPlanGuider, 'calibrateBeforeStart' | 'settle'>
+	// every other one. The action declares nothing of it on its own — the guiding block is the single authority
+	// for how the session guides — and a handler cannot read the plan from its execution context, so the policy
+	// travels with the node that commands it.
+	readonly guiding?: SequencerLifecycleGuiding
+}
+
+// What the action that starts guiding establishes on the guiding session, taken from the guiding block of the
+// definition. It is the part of the guider the start of the night writes; the connection, the retry policy and
+// the recalibration rules are commanded elsewhere and are deliberately not repeated here.
+export interface SequencerLifecycleGuiding extends Pick<SequencerPlanGuider, 'calibrateBeforeStart' | 'settle'> {
+	// Recipe the guide camera exposes with, present only for a guider this session owns locally and absent for
+	// a remote one, whose exposures belong to the program running it. The filter is not part of it: a local
+	// guider drives its guide camera alone. Exposure time is seconds.
+	readonly capture?: Omit<SequencerAuxiliaryCapture, 'filter'>
 }
 
 // Mutable accumulator threaded through the lowering, so every stage reports against the same definition
@@ -303,7 +313,7 @@ const SEQUENCER_COOLER_ACTION: ReadonlySet<SequencerLifecycleAction['type']> = n
 // actions that command the cooler, which is the whole reason the policy is carried into a node. `tracking` is
 // the tracking policy of the target, carried the same way and reaching only the action that starts tracking,
 // and `guiding` is the guiding policy of the definition, reaching only the action that starts guiding.
-function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction, cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined, guiding: Pick<SequencerPlanGuider, 'calibrateBeforeStart' | 'settle'> | undefined): SequencerPlanAction {
+function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction, cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined, guiding: SequencerLifecycleGuiding | undefined): SequencerPlanAction {
 	const configuration: SequencerLifecycle = {
 		action,
 		required: action.required ?? false,
@@ -319,14 +329,7 @@ function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: Sequence
 // Lowers an ordered lifecycle pipeline. Returns undefined when the pipeline is disabled or declares no
 // enabled action: an empty container would be a node the runtime enters and leaves for nothing, and it would
 // still show up in the checkpoint as a place the session had been.
-function lowerPipeline(
-	pipeline: 'startup' | 'finalize',
-	enabled: boolean,
-	actions: readonly SequencerLifecycleAction[],
-	cooling: SequencerCooling | undefined,
-	tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined,
-	guiding: Pick<SequencerPlanGuider, 'calibrateBeforeStart' | 'settle'> | undefined,
-): SequencerPlanSequence | undefined {
+function lowerPipeline(pipeline: 'startup' | 'finalize', enabled: boolean, actions: readonly SequencerLifecycleAction[], cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined, guiding: SequencerLifecycleGuiding | undefined): SequencerPlanSequence | undefined {
 	if (!enabled) return undefined
 
 	const children: SequencerPlanAction[] = []
@@ -1024,11 +1027,13 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	const cooling = definition.cooling.enabled ? definition.cooling : undefined
 	const tracking = lowerTracking(definition)
 	const guider = lowerGuider(definition)
-	// Only what the start of the guiding establishes reaches the node: the calibration it runs under and the
-	// settle it installs on the guider session for the rest of the night. The rest of the guider is the
-	// connection and the policy the session itself commands through, and copying it into every guiding action
-	// would carry a second, staler authority for what the plan already states once.
-	const guiding = guider === undefined ? undefined : { calibrateBeforeStart: guider.calibrateBeforeStart, settle: guider.settle }
+	// Only what the start of the guiding establishes reaches the node: the calibration it runs under, the settle
+	// it installs on the guider session for the rest of the night, and — for a guider this session owns — the
+	// recipe its guide camera exposes with. The rest of the guider is the connection and the policy the session
+	// itself commands through, and copying it into every guiding action would carry a second, staler authority
+	// for what the plan already states once. A remote guider exposes under the program that runs it, so it
+	// carries no recipe of ours.
+	const guiding = guider === undefined ? undefined : { calibrateBeforeStart: guider.calibrateBeforeStart, settle: guider.settle, capture: guider.connection.mode === 'local' ? guider.connection.capture : undefined }
 	const lowered = lowerPipeline('startup', startup.enabled, startup.actions, cooling, tracking, guiding)
 	const finalized = lowerPipeline('finalize', shutdown.enabled, shutdown.actions, cooling, tracking, guiding)
 

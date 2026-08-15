@@ -5,8 +5,9 @@ import { sequencerLifecycleHandlers } from 'src/api/sequencer.lifecycle'
 import type { SequencerLifecycleServices } from 'src/api/sequencer.lifecycle'
 import type { SequencerActionContext, SequencerActionHandler } from 'src/api/sequencer.registry'
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
+import type { GuiderLoopStart } from '#/guider'
 import { successfulOperationResult } from '#/orchestration'
-import type { SequencerCooling, SequencerGuiderSettle, SequencerLifecycleAction, SequencerTargetTracking } from '#/sequencer'
+import type { SequencerAuxiliaryCapture, SequencerCooling, SequencerGuiderSettle, SequencerLifecycleAction, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerPlanGuider } from '#/sequencer.plan'
 import { retry } from './sequencer.fixture'
 
@@ -79,7 +80,10 @@ function lifecycleServices(commands: string[], onCommand?: (name: string) => voi
 		},
 		guiderCommander: {
 			running: () => guiding,
-			loop: (_guider: string, request: { settle?: { pixels: number; time: number; timeout: number } }) => answer(`loop:${request.settle?.pixels}/${request.settle?.time}/${request.settle?.timeout}`),
+			loop: (_guider: string, request: GuiderLoopStart) =>
+				answer(
+					`loop:${request.settle.pixels}/${request.settle.time}/${request.settle.timeout}${request.capture === undefined ? '' : ` capture:${request.capture.exposureTime}${request.capture.exposureTimeUnit}/${request.capture.binX}x${request.capture.binY}/${request.capture.gain}/${request.capture.offset}/${request.capture.transferFormat}`}`,
+				),
 			startGuiding: () => answer('startGuiding'),
 			calibrate: () => answer('calibrate'),
 		},
@@ -204,6 +208,18 @@ describe('start guiding', () => {
 		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: guidingPolicy(false, { tolerance: 0.8, time: 6, timeout: 45 }) }))
 
 		expect(commands).toEqual(['loop:0.8/6/45', 'startGuiding'])
+		expect(result).toMatchObject({ type: 'completed', value: { action: 'startGuiding', commanded: true } })
+	})
+
+	test('exposes the guide camera with the recipe a local guider declares', async () => {
+		const commands: string[] = []
+		const services = lifecycleServices(commands)
+		const capture: Omit<SequencerAuxiliaryCapture, 'filter'> = { exposureTime: 2.5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 30, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false }
+		const guiding = { ...guidingPolicy(false), capture }
+
+		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding }))
+
+		expect(commands).toEqual(['loop:1.5/10/120 capture:2.5second/2x2/120/30/FITS', 'startGuiding'])
 		expect(result).toMatchObject({ type: 'completed', value: { action: 'startGuiding', commanded: true } })
 	})
 

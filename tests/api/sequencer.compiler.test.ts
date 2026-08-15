@@ -4,7 +4,7 @@ import { compile, sequencerNodeId, sequencerPlanNodes } from 'src/api/sequencer.
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { Sequencer, SequencerDeviceRole } from '#/sequencer'
 import type { SequencerPlanAction, SequencerPlanLoop, SequencerPlanSequence } from '#/sequencer.plan'
-import { action, camera, canonical, frame, retry, unguided } from './sequencer.fixture'
+import { action, camera, canonical, complete, frame, retry, unguided } from './sequencer.fixture'
 
 function handlers(roles: Record<string, readonly SequencerDeviceRole[]> = {}) {
 	const registry = new SequencerBlockRegistry()
@@ -170,6 +170,17 @@ describe('lowering', () => {
 
 		expect((guide.configuration as SequencerLifecycle).guiding).toEqual({ calibrateBeforeStart: true, settle: definition.guiding.settle })
 		expect((unpark.configuration as SequencerLifecycle).guiding).toBeUndefined()
+	})
+
+	test('an action starting guiding carries the guide-camera recipe of a local guider', () => {
+		const definition = complete()
+		const capture = { exposureTime: 2.5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 30, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false } as const
+		const connection = { mode: 'local', focalLength: 200, capture } as const
+		const { plan } = ok({ ...definition, guiding: { ...definition.guiding, connection } })
+		const startup = plan.root.children[0] as SequencerPlanSequence
+		const guide = startup.children[2] as SequencerPlanAction
+
+		expect((guide.configuration as SequencerLifecycle).guiding).toEqual({ calibrateBeforeStart: false, settle: definition.guiding.settle, capture })
 	})
 
 	test('an action starting tracking is refused when the target declares no tracking', () => {

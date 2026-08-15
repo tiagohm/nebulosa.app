@@ -1067,6 +1067,14 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 		if (converged.outcome.kind !== 'continue') return converged.outcome
 		if (converged.held) return SEQUENCER_RETAKE
 
+		// The boundary of the night is asked again immediately before the camera is commanded, for the same reason
+		// the convergence above is. Everything between the check the loop made and this instant — a meridian flip,
+		// an autofocus sweep, the settle of the guiding resume, the wait for the flip window, this very cadence
+		// spacing, and the retry delay of a previous attempt — takes minutes, so a session told to stop at 05:00
+		// would otherwise start one more exposure well past it. Leaving through `continue` returns the walk to the
+		// loop, which asks the same question in front of the next frame and ends the session normally there.
+		if (sequencerEndReached(host.plan.execution.end, host.now(), execution.integration)) return SEQUENCER_CONTINUE
+
 		const slot = frameSlotOf(execution, targetId, group, selection, attempt, logicalSlotId)
 
 		if (slot === undefined) return { kind: 'fail', reason: 'unexpectedState', detail: `the destination of the frame ${logicalSlotId} could not be composed inside the storage root` }

@@ -64,6 +64,7 @@ interface Harness {
 	desired: SequencerDesiredState
 	observation: SequencerSafePointObservation
 	onHold?: (nodeId: string) => SequencerDesiredState
+	clock?: () => number
 }
 
 function guidingServices(loop: () => OperationResult<unknown>, dither?: () => OperationResult<unknown>): SequencerGuidingServices {
@@ -137,7 +138,7 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 			signal: action.signal,
 			waitSignal: controller.signal,
 			terminalSignal: new AbortController().signal,
-			now: Date.now,
+			now: () => state.clock?.() ?? Date.now(),
 			...services(),
 			...(guiding === undefined ? {} : { guiding }),
 			handler,
@@ -582,6 +583,23 @@ describe('plan walk', () => {
 		const outcome = await runSequencerPlan(state.host)
 
 		expect(outcome.terminal.state).toBe('completed')
+		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
+	})
+
+	test('takes no frame when the declared end instant passes inside the safe point', async () => {
+		const base = definition()
+		const at = Date.now() + 100_000
+		const state: Harness = harness(planOf({ autofocus: { ...base.autofocus, enabled: true }, execution: { ...base.execution, end: { type: 'at', time: at } } }), (context) => {
+			if (context.nodeId.endsWith('.trigger.autofocus')) state.clock = () => at + 1000
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+
+		state.clock = () => at - 1000
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(state.executed.filter((it) => it.nodeId.endsWith('.trigger.autofocus'))).toHaveLength(1)
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 	})
 

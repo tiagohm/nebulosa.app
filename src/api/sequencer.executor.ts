@@ -826,8 +826,18 @@ async function runInterlockedSafePoint(execution: SequencerExecution, loop: Sequ
 
 			ran.add(kind)
 
-			if (kind === 'meridianFlip') flipped = completed
-			else if (completed) execution.anchors = sequencerAnchorAdvanced(execution.anchors, 'autofocus', observation)
+			// A flip that refocuses does it inside its own node, and the trigger evaluator suppresses the standalone
+			// autofocus of that safe point precisely because of it (§8.4). The anchor has to advance on that sweep
+			// too: leaving it where it was measures the next safe point against a focus two flips old and keeps the
+			// `afterMeridianFlip` condition owed by a run that already paid it, so the session refocuses again on the
+			// very next frame.
+			if (kind === 'meridianFlip') {
+				flipped = completed
+
+				if (completed && policies.meridianFlip?.autofocus === true) execution.anchors = sequencerAnchorAdvanced(execution.anchors, 'autofocus', observation)
+			} else if (completed) {
+				execution.anchors = sequencerAnchorAdvanced(execution.anchors, 'autofocus', observation)
+			}
 		}
 
 		state.flipped = flipped

@@ -454,6 +454,25 @@ describe('plan walk', () => {
 		expect(outcome.checkpoint.completed).not.toContain('startup.action[park]')
 	})
 
+	test('never refocuses after a flip that refocused inside its own node', async () => {
+		const base = definition()
+		const autofocus = { ...base.autofocus, enabled: true, triggers: { ...base.autofocus.triggers, onStart: false, onFilterChange: false, afterMeridianFlip: true, afterRecovery: false, everyFrames: 0, everyTime: 0, temperatureChange: 0, starSizeChange: 0, minimumTimeBetweenRuns: 0 } }
+		const meridianFlip = { ...base.meridianFlip, enabled: true, autofocus: true }
+		const state: Harness = harness(planOf({ autofocus, meridianFlip }), (context) => {
+			if (context.nodeId.endsWith('.trigger.meridianFlip')) state.observation = { ...state.observation, pierSide: 'EAST' }
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+
+		state.observation = { hourAngle: 0.05, pierSide: 'WEST', preFlipPierSide: 'WEST' }
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(state.executed.filter((it) => it.nodeId.endsWith('.trigger.meridianFlip'))).toHaveLength(1)
+		expect(state.executed.filter((it) => it.nodeId.endsWith('.trigger.autofocus'))).toBeEmpty()
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
+	})
+
 	test('applies the terminal decision an autofocus trigger declares instead of the retry default', async () => {
 		const base = definition()
 		const autofocus = { ...base.autofocus, enabled: true, onFailure: 'continue' as const, retry: { ...retry(), maxAttempts: 1 } }

@@ -49,9 +49,6 @@ export interface Sequencer {
 	// Flat-panel illumination and per-filter brightness configuration.
 	// Set enabled to false when flats use sky or a manual light source.
 	readonly flatPanel: SequencerFlatPanel
-	// Dark, bias, flat, and dark-flat acquisition plans.
-	// Each calibration subtype is enabled and scheduled independently.
-	readonly calibration: SequencerCalibration
 	// Background observation sources and their polling cadence.
 	// Monitors feed observations into safety policy and never command devices directly.
 	readonly monitoring: SequencerMonitoring

@@ -863,7 +863,7 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 // Rejection is the default and removal is reserved for a field that is inert: the two removals below change
 // nothing about what the session does, while everything rejected here would change what it does.
 function checkCompatibility(context: CompilerContext, definition: Sequencer) {
-	const { autofocus, calibration, capture, cooling, cover, dither, dome, execution, flatPanel, guiding, meridianFlip, monitoring, notification, quality, rotator, safety, shutdown, startup, storage, target } = definition
+	const { capture, cooling, cover, dither, dome, execution, flatPanel, guiding, monitoring, notification, quality, rotator, safety, shutdown, startup, target } = definition
 	const { diagnostics, removals } = context
 
 	if (definition.schemaVersion !== SEQUENCER_SCHEMA_VERSION) diagnostics.push({ path: 'schemaVersion', message: `the definition declares schema version ${definition.schemaVersion}, and this version compiles ${SEQUENCER_SCHEMA_VERSION}` })
@@ -905,11 +905,6 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	const cooled = commands(definition, ['coolCamera', 'warmCamera'])
 	if (!cooling.enabled && cooled) diagnostics.push({ path: 'cooling.enabled', message: 'a lifecycle action commands the camera cooler, and the cooling block it reads the temperature from is disabled' })
 	if (cooling.enabled && !cools) diagnostics.push({ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled startup action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' })
-
-	if (calibration.dark.enabled) diagnostics.push({ path: 'calibration.dark.enabled', message: 'calibration frames are not lowered by this version' })
-	if (calibration.bias.enabled) diagnostics.push({ path: 'calibration.bias.enabled', message: 'calibration frames are not lowered by this version' })
-	if (calibration.flat.enabled) diagnostics.push({ path: 'calibration.flat.enabled', message: 'calibration frames are not lowered by this version' })
-	if (calibration.darkFlat.enabled) diagnostics.push({ path: 'calibration.darkFlat.enabled', message: 'calibration frames are not lowered by this version' })
 
 	if (monitoring.enabled) diagnostics.push({ path: 'monitoring.enabled', message: 'the monitor lane is not part of this version' })
 	if (safety.enabled) diagnostics.push({ path: 'safety.enabled', message: 'there is no safety monitor in this version' })

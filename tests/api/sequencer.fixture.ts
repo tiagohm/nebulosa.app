@@ -134,21 +134,6 @@ export function canonical(): Sequencer {
 		dome: { enabled: false, closeOnUnsafe: true, slaving: false, synchronizeBeforeCapture: false, settle: 5, timeout: 300, retry: retry(), onFailure: 'pause' },
 		cover: { enabled: false, closeOnUnsafe: true, openBeforeCapture: true, closeForDarkFrames: true, timeout: 120, retry: retry() },
 		flatPanel: { enabled: false, brightness: 100, brightnessByFilter: [], timeout: 60, retry: retry() },
-		calibration: {
-			dark: { enabled: false, order: 'afterLights', count: 20, retry: retry(), everyFrames: 0, temperatureChange: 0, moveDarkFilter: false },
-			bias: { enabled: false, order: 'afterLights', count: 50, retry: retry() },
-			flat: {
-				enabled: false,
-				order: 'afterLights',
-				count: 20,
-				retry: retry(),
-				source: 'panel',
-				filters: [],
-				exposure: { mode: 'automatic', exposureTime: 1, minimumExposureTime: 0.1, maximumExposureTime: 10, targetMean: 30000, tolerance: 2000 },
-				parkMount: false,
-			},
-			darkFlat: { enabled: false, order: 'afterLights', count: 20, retry: retry(), moveDarkFilter: false },
-		},
 		monitoring: { enabled: false, interval: 30, monitors: [] },
 		safety: {
 			enabled: false,

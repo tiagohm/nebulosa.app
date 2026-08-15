@@ -885,10 +885,12 @@ export class SequencerRuntime {
 
 	// Opens the guiding session the plan declares and binds it to every action of the session.
 	//
-	// It runs after the reservation and before the first node, which is the only window that works: the
-	// connection acquires the guider resources under the reservation token, so it takes the very keys the
-	// session already reserved for it instead of competing with itself for them, and a guider bound after the
-	// walk started would leave the first frames exposed with the corrections off.
+	// This is the `open` hook of the executor host, so the walk calls it after the scheduled wait and before its
+	// first action, which is the only window that works: the connection acquires the guider resources under the
+	// reservation token, so it takes the very keys the session already reserved for it instead of competing with
+	// itself for them, and a guider bound after the walk started would leave the first frames exposed with the
+	// corrections off. A refusal is an ordinary primary outcome of the walk, which is what keeps the finalize
+	// pipeline running for it.
 	//
 	// A session whose plan declares no guider opens nothing and leaves the binding absent, which is what the
 	// dither and the guiding interlock read as "this session guides through no guider".
@@ -929,15 +931,6 @@ export class SequencerRuntime {
 	async #execute(active: ActiveSession) {
 		let outcome: SequencerExecutionOutcome | undefined
 
-		// The guider is the one collaborator the walk cannot open for itself, and a session that declared one
-		// and could not reach it is not a session that captures unguided: it ends here, before any frame.
-		const refusal = await this.#openGuider(active)
-
-		if (refusal !== undefined) {
-			await this.#finalize(active, undefined, refusal)
-			return
-		}
-
 		try {
 			outcome = await runSequencerPlan(this.#host(active))
 		} catch (e) {
@@ -974,6 +967,7 @@ export class SequencerRuntime {
 			finalizing: () => this.#enterFinalizing(active),
 			commit: (checkpoint, events) => void this.#commitBestEffort(active, { checkpoint, events }),
 			delay: async (delay, signal) => void (await abortableDelay(delay, signal)),
+			open: () => this.#openGuider(active),
 		}
 	}
 
@@ -1130,9 +1124,7 @@ export class SequencerRuntime {
 	//
 	// Nothing in here may prevent the release: whatever the durable state ends up being, the devices and the
 	// process claim have to come back, or a single refused write would keep the observatory hostage.
-	// `failure` is the cause of a session that never reached the walk, such as a guider that could not be
-	// opened, and is used only when there is no outcome to take a terminal failure from.
-	async #finalize(active: ActiveSession, outcome?: SequencerExecutionOutcome, failure?: SequencerFailure) {
+	async #finalize(active: ActiveSession, outcome?: SequencerExecutionOutcome) {
 		if (active.finalizing) return
 
 		active.finalizing = true
@@ -1185,7 +1177,7 @@ export class SequencerRuntime {
 				// ignored. The action result still decides the state — a stop reaching a session whose only action
 				// already completed does not turn that run into a stopped one.
 				desiredState: 'stopped',
-				failure: outcome?.terminal.failure ?? (outcome === undefined ? (failure ?? { reason: 'unexpectedState', detail: 'the plan ended with an unexpected error' }) : undefined),
+				failure: outcome?.terminal.failure ?? (outcome === undefined ? { reason: 'unexpectedState', detail: 'the plan ended with an unexpected error' } : undefined),
 				checkpoint: outcome === undefined ? undefined : { ...outcome.checkpoint, cursor: undefined },
 				events,
 			})

@@ -12,7 +12,7 @@ import type { SequencerActionContext, SequencerActionHandler, SequencerActionRes
 import { SequencerRuntime, SessionAdmissionGate, SessionTeardown } from 'src/api/sequencer.runtime'
 import type { SequencerDeviceResolver, SequencerRuntimePlanDraft } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
-import { successfulOperationResult } from '#/orchestration'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { SequencerDevices, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerPlan, SequencerPlanAction, SequencerPlanGuider, SequencerPlanSequence, SequencerPlanStorage } from '#/sequencer.plan'
 
@@ -153,13 +153,24 @@ const RETRY: SequencerRetryPolicy = { maxAttempts: 1, delay: 0, backoff: 1, maxi
 
 const SERVICES = { preparation: {} as SequencerPreparationServices, guiding: {} as SequencerGuidingServices }
 
-function compiled(overrides?: { readonly devices?: SequencerDevices; readonly storage?: Partial<SequencerPlanStorage>; readonly configuration?: unknown; readonly execution?: Partial<SequencerPlan['execution']>; readonly nodes?: number; readonly guider?: SequencerPlan['guider'] }): SequencerPlan {
+function compiled(overrides?: {
+	readonly devices?: SequencerDevices
+	readonly storage?: Partial<SequencerPlanStorage>
+	readonly configuration?: unknown
+	readonly execution?: Partial<SequencerPlan['execution']>
+	readonly nodes?: number
+	readonly guider?: SequencerPlan['guider']
+	readonly finalize?: SequencerPlan['finalize']
+}): SequencerPlan {
 	const configuration = overrides?.configuration ?? { exposureTime: 2 }
 	const actions: SequencerPlanAction[] = []
 
 	for (let i = 1; i <= (overrides?.nodes ?? 1); i++) actions.push({ kind: 'action', id: `node-${i}`, type: 'expose', configuration })
 
 	const target: SequencerPlanSequence = { kind: 'sequence', id: sequencerNodeId.target('m42'), children: actions }
+	const children: SequencerPlanSequence[] = [target]
+
+	if (overrides?.finalize !== undefined) children.push({ kind: 'sequence', id: sequencerNodeId.pipeline('finalize'), children: [{ kind: 'action', id: 'finalize-1', type: 'expose', configuration }] })
 
 	return {
 		definitionId: 'definition-1',
@@ -169,11 +180,12 @@ function compiled(overrides?: { readonly devices?: SequencerDevices; readonly st
 		execution: { start: { type: 'manual' }, end: { type: 'afterSequence' }, pauseMode: 'afterCurrentExposure', stopMode: 'graceful', defaultRetry: RETRY, checkpoint: { afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 60 }, ...overrides?.execution },
 		devices: overrides?.devices ?? { camera: 'camera-1' },
 		roles: ['camera'],
-		root: { kind: 'sequence', id: sequencerNodeId.root(), children: [target] },
+		root: { kind: 'sequence', id: sequencerNodeId.root(), children },
 		groups: [],
 		handlers: { expose: 1 },
 		storage: { root: '/data/nebulosa', fileNameTemplate: '{target}', directoryTemplate: '{target}', autoSubFolderMode: 'noon', ...overrides?.storage },
 		guider: overrides?.guider,
+		finalize: overrides?.finalize,
 	}
 }
 
@@ -323,6 +335,37 @@ describe('sequencer runtime', () => {
 		expect(session?.state).toBe('completed')
 		expect(connected).toEqual({ mode: 'local', focalLength: 200, camera: 'guide-camera-1', guideOutput: 'guide-output-1' })
 		expect(held).toEqual([localGuiderCameraKey(camera), localGuiderOutputKey(guideOutput), 'hw-guide-camera', 'hw-guide-output'])
+	})
+
+	test('fails the session through the finalize pipeline when the guider the plan declares cannot be opened', async () => {
+		const executed: string[] = []
+
+		const { runtime: instance, arbiter } = runtime(
+			exposeHandler((context) => {
+				executed.push(context.nodeId)
+				return Promise.resolve({ type: 'completed', value: 1 })
+			}),
+			undefined,
+			{
+				guiding: {
+					guiderCommander: {
+						connect: () => Promise.resolve(failedOperationResult('disconnected', 'the guider is unreachable')),
+					},
+				} as unknown as SequencerGuidingServices,
+			},
+		)
+
+		const created = instance.create(plan({ guider: guiderPlan({ mode: 'remote', host: 'localhost', port: 4400 }), finalize: { continueOnFailure: true, runOn: ['failed'] } }))!
+
+		instance.start(created.id)
+
+		const session = await instance.settled(created.id)
+
+		expect(executed).toEqual(['finalize-1'])
+		expect(session?.state).toBe('failed')
+		expect(session?.failure).toEqual({ reason: 'disconnected', detail: 'the guider is unreachable' })
+		expect(arbiter.availability(remoteGuiderKey('localhost', 4400))).toBe('available')
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 	})
 
 	test('runs the action inside the reservation while refusing an operation outside it', async () => {

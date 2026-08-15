@@ -2,7 +2,7 @@ import type { PierSide } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { SequencerFailureReason, SequencerFilterReference, SequencerGuiderSettle, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanLoop, SequencerPlanPipeline, SequencerPlanSequence } from '#/sequencer.plan'
-import type { SequencerCaptureProgress, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerTriggerAnchors } from '#/sequencer.state'
+import type { SequencerCaptureProgress, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerFailure, SequencerTriggerAnchors } from '#/sequencer.state'
 import { abortableDelay } from './operation.wait'
 import { sequencerCadenceBoundary, sequencerExposureEnded, SEQUENCER_INITIAL_CADENCE_ANCHORS, waitForCadenceBoundary } from './sequencer.cadence'
 import type { SequencerCadenceAnchors } from './sequencer.cadence'
@@ -139,6 +139,10 @@ export interface SequencerExecutorHost {
 	readonly commit: (checkpoint: SequencerCheckpoint, events: readonly SequencerEventDraft[]) => void
 	// Waits `delay` milliseconds, resolving early when the signal aborts.
 	readonly delay: (delay: number, signal: AbortSignal) => Promise<void>
+	// Opens the collaborators the walk cannot open for itself, which is the guiding session the plan declares,
+	// and answers with the failure that ends the session or undefined when there was nothing to open or it
+	// opened. A host with nothing to open omits it.
+	readonly open?: () => Promise<SequencerFailure | undefined>
 }
 
 // What one execution of a plan produced.
@@ -252,6 +256,19 @@ export async function runSequencerPlan(host: SequencerExecutorHost): Promise<Seq
 	// runs when the definition asks it to run on a stop, which is what leaves an observatory that was opened for
 	// the session closed again.
 	let primary: SequencerPrimaryOutcome | undefined = scheduled ? undefined : { kind: 'stopped' }
+
+	// The guider is the one collaborator the walk cannot open for itself, and a session that declared one and
+	// could not reach it is not a session that captures unguided: it fails here, before any action. It is opened
+	// inside the walk rather than in front of it so the failure is an ordinary primary outcome, which is what
+	// leaves the finalize pipeline running for a definition that asked it to run on a failure — an observatory
+	// opened for a session whose guider was unreachable is closed again instead of left open until morning. It
+	// runs after the scheduled wait for the same reason the startup pipeline does: a session waiting for midnight
+	// would otherwise hold a guider connection through the whole evening.
+	if (primary === undefined) {
+		const refusal = await host.open?.()
+
+		if (refusal !== undefined) primary = { kind: 'failed', reason: refusal.reason, detail: refusal.detail }
+	}
 
 	const startup = pipelineOf(plan.root, 'startup')
 

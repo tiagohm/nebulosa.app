@@ -5,14 +5,16 @@ import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter } from 'src/api/resource'
 import { SequencerHandler } from 'src/api/sequencer'
 import { compile, sequencerPlanNodes } from 'src/api/sequencer.compiler'
+import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { AnySequencerActionHandler } from 'src/api/sequencer.registry'
 import { SequencerRuntime } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
 import { makeTime } from 'src/api/util'
+import { failedOperationResult } from '#/orchestration'
 import type { Sequencer, SequencerDeviceRole } from '#/sequencer'
 import type { SequencerSessionState } from '#/sequencer.state'
-import { canonical, frame, services } from './sequencer.fixture'
+import { canonical, frame, guiding, services } from './sequencer.fixture'
 
 function blockTypes() {
 	const compilation = compile(canonical())
@@ -56,12 +58,12 @@ function brief(): Sequencer['capture'] {
 	return { ...canonical().capture, repeat: 1, delay: 0, settle: 0, frames: [frame('lum', { count: 2 })] }
 }
 
-function environment(execute?: AnySequencerActionHandler['execute'], devices?: Partial<Record<SequencerDeviceRole, Device>>) {
+function environment(execute?: AnySequencerActionHandler['execute'], devices?: Partial<Record<SequencerDeviceRole, Device>>, guidingServices?: SequencerGuidingServices) {
 	const arbiter = new ResourceArbiter()
 	const coordinator = new OperationCoordinator(arbiter)
 	const registry = new SequencerBlockRegistry()
 	const store = new InMemorySequencerStore()
-	const runtime = new SequencerRuntime({ store, registry, coordinator, ...services(), resolve: (role, deviceId) => ({ key: `logical:${deviceId}`, device: devices?.[role] }) })
+	const runtime = new SequencerRuntime({ store, registry, coordinator, ...services(), ...(guidingServices === undefined ? {} : { guiding: guidingServices }), resolve: (role, deviceId) => ({ key: `logical:${deviceId}`, device: devices?.[role] }) })
 
 	for (const type of blockTypes()) registry.register(handler(type, execute ?? (() => Promise.resolve({ type: 'completed', value: undefined }))))
 
@@ -312,6 +314,49 @@ describe('sessions', () => {
 		await runtime.settled(created.session.id)
 
 		expect(nodes.some((nodeId) => nodeId.endsWith('.trigger.meridianFlip'))).toBeFalse()
+	})
+
+	test('opens the guider the plan declares and hands it to every action', async () => {
+		const guiders = new Set<string | undefined>()
+		const { handler: instance, runtime } = environment((context) => {
+			guiders.add(context.guider)
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+		const created = instance.createSession(stored(instance, { capture: brief() }).id)
+
+		expect(created.ok).toBeTrue()
+
+		if (!created.ok) return
+
+		instance.start(created.session.id)
+
+		expect((await runtime.settled(created.session.id))?.state).toBe('completed')
+		expect(guiders).toEqual(new Set(['guider-1']))
+	})
+
+	test('fails the session when the guider the plan declares cannot be opened', async () => {
+		let executed = 0
+		const { handler: instance, runtime } = environment(
+			() => {
+				executed++
+				return Promise.resolve({ type: 'completed', value: undefined })
+			},
+			undefined,
+			guiding(() => failedOperationResult('disconnected', 'the guider server refused the connection')),
+		)
+		const created = instance.createSession(stored(instance, { capture: brief() }).id)
+
+		expect(created.ok).toBeTrue()
+
+		if (!created.ok) return
+
+		instance.start(created.session.id)
+
+		const settled = await runtime.settled(created.session.id)
+
+		expect(settled?.state).toBe('failed')
+		expect(settled?.failure).toEqual({ reason: 'disconnected', detail: 'the guider server refused the connection' })
+		expect(executed).toBe(0)
 	})
 
 	test('recovers only the events beyond a sequence the caller already has', async () => {

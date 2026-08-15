@@ -2,6 +2,7 @@ import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { isCamera, isMount, isWheel } from 'nebulosa/src/devices/indi/device'
 import type { PierSide } from 'nebulosa/src/devices/indi/device'
 import { normalizePI } from 'nebulosa/src/math/units/angle'
+import type { GuiderConnect } from '#/guider'
 import type { SequencerDeviceRole, SequencerDevices, SequencerFilterReference } from '#/sequencer'
 import type { SequencerPlan, SequencerPlanAction } from '#/sequencer.plan'
 import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEvent, SequencerEventDraft, SequencerFailure, SequencerSession, SequencerSessionState } from '#/sequencer.state'
@@ -167,10 +168,6 @@ export interface SequencerRuntimePlan {
 	// Where the session writes, complete once the session starts, so the night and the session segment are
 	// fixed for its whole life.
 	readonly storage: SequencerPathContext
-	// Guiding session the actions command, absent when the session guides through none. It is resolved for
-	// the session rather than declared per block, because a remote or local guider only has an id once it is
-	// connected, which happens when the session starts and not when it is compiled.
-	readonly guider?: string
 }
 
 // Plan as a caller hands it in, which is everything the runtime executes except the two storage segments the
@@ -358,6 +355,10 @@ interface ActiveSession {
 	// the flip is still pending. It is re-read for as long as the target is east of the meridian and then frozen,
 	// because the side the mount takes after it flips is precisely what must stop matching it.
 	preFlipPierSide?: PierSide
+	// Guiding session every action of this session commands, absent while the plan declares no guider. It is
+	// session state and not plan configuration: a remote or local guider only has an id once its connection is
+	// open, which happens after the reservation exists and before the first node runs.
+	guider?: string
 }
 
 // Pier side a German equatorial mount is on before it flips, used for a session that began after its target
@@ -822,9 +823,60 @@ export class SequencerRuntime {
 		return active === undefined || active.id !== sessionId ? Promise.resolve(this.#store.session(sessionId)) : active.done.promise
 	}
 
+	// Opens the guiding session the plan declares and binds it to every action of the session.
+	//
+	// It runs after the reservation and before the first node, which is the only window that works: the
+	// connection acquires the guider resources under the reservation token, so it takes the very keys the
+	// session already reserved for it instead of competing with itself for them, and a guider bound after the
+	// walk started would leave the first frames exposed with the corrections off.
+	//
+	// A session whose plan declares no guider opens nothing and leaves the binding absent, which is what the
+	// dither and the guiding interlock read as "this session guides through no guider".
+	//
+	// Returns the failure that stops the session, or undefined when there was nothing to open or it opened.
+	async #openGuider(active: ActiveSession): Promise<SequencerFailure | undefined> {
+		const declared = active.plan.compiled.guider
+
+		if (declared === undefined) return undefined
+
+		const { connection } = declared
+		let request: GuiderConnect
+
+		if (connection.mode === 'remote') {
+			request = { mode: 'remote', host: connection.host, port: connection.port }
+		} else {
+			const camera = active.roles.get('guideCamera')?.device
+			const guideOutput = active.roles.get('guideOutput')?.device
+
+			// The lowering requires both roles of a local guider and the bootstrap reserved them, so a session
+			// reaching this without them is one whose devices went away between the reservation and the first node.
+			if (camera === undefined || guideOutput === undefined) return { reason: 'disconnected', detail: 'the local guider devices are no longer available' }
+
+			// The focal length is millimetres on both sides, so it travels as declared.
+			request = { mode: 'local', focalLength: connection.focalLength, camera: camera.id, guideOutput: guideOutput.id }
+		}
+
+		const opened = await this.#guiding.guiderCommander.connect(request, active.reservation.token)
+
+		if (!opened.ok) return { reason: opened.reason, detail: opened.error ?? 'the guider session could not be opened' }
+
+		active.guider = opened.value.id
+
+		return undefined
+	}
+
 	// Walks the plan and finalizes on what it ended as.
 	async #execute(active: ActiveSession) {
 		let outcome: SequencerExecutionOutcome | undefined
+
+		// The guider is the one collaborator the walk cannot open for itself, and a session that declared one
+		// and could not reach it is not a session that captures unguided: it ends here, before any frame.
+		const refusal = await this.#openGuider(active)
+
+		if (refusal !== undefined) {
+			await this.#finalize(active, undefined, refusal)
+			return
+		}
 
 		try {
 			outcome = await runSequencerPlan(this.#host(active))
@@ -928,7 +980,7 @@ export class SequencerRuntime {
 			progress: (progress) => this.#report(active.id, nodeId, progress),
 			artifact: (artifact) => this.#register(active, artifact),
 			auxiliary: (kind, extension) => this.#auxiliary(active, kind, extension),
-			guider: active.plan.guider,
+			guider: active.guider,
 			checkpoint: this.#checkpoint(active),
 			frame,
 		}
@@ -1018,7 +1070,9 @@ export class SequencerRuntime {
 	//
 	// Nothing in here may prevent the release: whatever the durable state ends up being, the devices and the
 	// process claim have to come back, or a single refused write would keep the observatory hostage.
-	async #finalize(active: ActiveSession, outcome?: SequencerExecutionOutcome) {
+	// `failure` is the cause of a session that never reached the walk, such as a guider that could not be
+	// opened, and is used only when there is no outcome to take a terminal failure from.
+	async #finalize(active: ActiveSession, outcome?: SequencerExecutionOutcome, failure?: SequencerFailure) {
 		if (active.finalizing) return
 
 		active.finalizing = true
@@ -1071,7 +1125,7 @@ export class SequencerRuntime {
 				// ignored. The action result still decides the state — a stop reaching a session whose only action
 				// already completed does not turn that run into a stopped one.
 				desiredState: 'stopped',
-				failure: outcome?.terminal.failure ?? (outcome === undefined ? { reason: 'unexpectedState', detail: 'the plan ended with an unexpected error' } : undefined),
+				failure: outcome?.terminal.failure ?? (outcome === undefined ? (failure ?? { reason: 'unexpectedState', detail: 'the plan ended with an unexpected error' }) : undefined),
 				checkpoint: outcome === undefined ? undefined : { ...outcome.checkpoint, cursor: undefined },
 				events,
 			})

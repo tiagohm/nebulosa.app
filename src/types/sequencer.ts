@@ -589,12 +589,10 @@ export interface SequencerLocalGuider {
 	// Selects the operating mode for this configuration.
 	readonly mode: 'local'
 
-	// Focal length of the guide optical system.
-	// Metres; use a finite value > 0.
+	// Focal length (mm) of the guide optical system.
 	readonly focalLength: number
 
-	// Physical guide-camera pixel size.
-	// Metres; use a finite value > 0, or omit when the camera reports it.
+	// Physical guide-camera pixel size in micrometers.
 	readonly pixelSize?: number
 
 	// Capture recipe used by this feature.

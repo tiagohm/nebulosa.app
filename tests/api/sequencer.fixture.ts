@@ -1,10 +1,25 @@
 import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
 import type { SequencerPreparationServices } from 'src/api/sequencer.prepare'
+import type { GuiderSessionInfo } from '#/guider'
+import { successfulOperationResult } from '#/orchestration'
+import type { OperationResult } from '#/orchestration'
 import type { Sequencer, SequencerCamera, SequencerFrame, SequencerLifecycleAction, SequencerRetryPolicy } from '#/sequencer'
 
 // Device services the runtime hands the executor, absent in the tests that never reach the optical path.
+// The guider commander is the exception: a canonical session declares a guider and opens it before its first
+// node, so it answers the connect with a session that is open and not guiding.
 export function services(): { readonly preparation: SequencerPreparationServices; readonly guiding: SequencerGuidingServices } {
-	return { preparation: {} as SequencerPreparationServices, guiding: {} as SequencerGuidingServices }
+	return { preparation: {} as SequencerPreparationServices, guiding: guiding() }
+}
+
+export function guiding(connect?: () => OperationResult<GuiderSessionInfo>): SequencerGuidingServices {
+	return {
+		guiderCommander: {
+			connect: () => Promise.resolve(connect === undefined ? successfulOperationResult({ id: 'guider-1', mode: 'remote', key: 'logical:guider:remote:localhost:4400', target: 'localhost:4400', state: 'idle', connected: true, looping: false, running: false }) : connect()),
+			running: () => false,
+			looping: () => false,
+		},
+	} as unknown as SequencerGuidingServices
 }
 
 // Canonical sequencer definition shared by the compiler and resolution tests: every feature the V1 lowering

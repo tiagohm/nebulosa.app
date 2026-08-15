@@ -523,6 +523,27 @@ describe('plan walk', () => {
 		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
 	})
 
+	test('wakes the wait for the minimum spacing when a pause cancels the action', async () => {
+		const base = definition()
+		const state: Harness = harness(planOf({ capture: { ...base.capture, delay: 2 } }), (context) => {
+			if (context.frame !== undefined && state.executed.filter((it) => it.slot !== undefined).length === 1) {
+				setTimeout(() => {
+					state.desired = 'paused'
+					state.action.abort()
+				}, 20)
+			}
+
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+		const started = performance.now()
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(state.holds).not.toBeEmpty()
+		expect(performance.now() - started).toBeLessThan(1000)
+		expect(outcome.terminal.state).toBe('stopped')
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(1)
+	})
+
 	test('keeps the startup pipeline running when a pause cancels the action', async () => {
 		const base = definition()
 		const startup = {

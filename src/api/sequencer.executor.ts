@@ -435,6 +435,19 @@ async function runActionNode(execution: SequencerExecution, node: SequencerPlanA
 	}
 }
 
+// Signal the waits taken in front of an exposure run under, which is every stop plus the cancellation an
+// immediate pause issues.
+//
+// The wait signal alone answers every stop and no pause, because a pause cancels the action that is running
+// (§11.3) and between two frames nothing is running. A session paused while it spaces frames, or while it
+// stands in front of a closed flip window, would therefore keep waiting until the spacing elapsed or the sky
+// moved before noticing the command — minutes in one case and up to an hour in the other, for an operator who
+// asked for the pause that takes effect at once. Joining the two ends the wait immediately, and what the
+// cancellation means is decided afterwards by the state the session is converging to.
+function waitsOf(host: SequencerExecutorHost): AbortSignal {
+	return AbortSignal.any([host.signal, host.waitSignal])
+}
+
 // State a control command converged to, when one explains a cancellation. `running` explains nothing and is
 // reported as absent, which is what makes an unexplained abort a failure instead of an intentional stop.
 function commandedBy(execution: SequencerExecution) {
@@ -946,13 +959,18 @@ async function runExposureGuard(execution: SequencerExecution, policies: Sequenc
 
 	if (decision.type === 'allowed') return SEQUENCER_EXPOSE
 
-	const waited = await waitForFlipWindow(execution.host.context(group.nodeId, 1, execution.host.waitSignal), boundary, () => execution.host.observe().hourAngle)
+	const waited = await waitForFlipWindow(execution.host.context(group.nodeId, 1, waitsOf(execution.host)), boundary, () => execution.host.observe().hourAngle)
 
 	// The wait ends when the window is open, which is the reordering succeeding and not the session ending: the
 	// safe point is taken again so the flip runs, and the frame this guard refused is exposed after it.
 	if (waited.type === 'completed' || waited.type === 'skipped') return { kind: 'reenter' }
 
-	return { kind: 'ended', outcome: waited.type === 'pause' ? { kind: 'pause' } : { kind: 'fail', reason: waited.type === 'suspend' ? 'unexpectedState' : waited.reason, detail: waited.detail } }
+	// The window can be an hour away, so the cancellation of an immediate pause is what ends this wait far more
+	// often than anything else, and it is a pause: the slot the guard refused is still on the cursor and the
+	// safe point is taken again once the session resumes.
+	if (waited.type === 'pause' || commandedBy(execution) === 'paused') return { kind: 'ended', outcome: { kind: 'pause' } }
+
+	return { kind: 'ended', outcome: { kind: 'fail', reason: waited.type === 'suspend' ? 'unexpectedState' : waited.reason, detail: waited.detail } }
 }
 
 // Waits for the cadence boundary and exposes the selected frame, spending the attempts of the slot the failure
@@ -974,9 +992,11 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 
 	for (;;) {
 		const boundary = sequencerCadenceBoundary(execution.cadence, { delay: group.delay, settle: configuration.settle })
-		const held = await waitForCadenceBoundary(host.context(node.id, attempt, host.waitSignal), boundary)
+		const held = await waitForCadenceBoundary(host.context(node.id, attempt, waitsOf(host)), boundary)
 
-		if (held.type !== 'completed') return held.type === 'pause' ? { kind: 'pause' } : { kind: 'stop' }
+		// A cancellation the operator paused with is a pause and not a stop: the loop holds on the slot the wait
+		// was taken for and hands it back on the resume, so the frame is retaken instead of lost.
+		if (held.type !== 'completed') return held.type === 'pause' || commandedBy(execution) === 'paused' ? { kind: 'pause' } : { kind: 'stop' }
 
 		// The spacing may have taken an arbitrary part of the cadence, so the boundary is asked again before the
 		// camera is commanded: a stop or a pause that arrived while the session was spacing frames must not be

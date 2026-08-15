@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
+import type { Device, Mount, PierSide } from 'nebulosa/src/devices/indi/device'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter } from 'src/api/resource'
 import { SequencerHandler } from 'src/api/sequencer'
@@ -7,9 +9,10 @@ import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { AnySequencerActionHandler } from 'src/api/sequencer.registry'
 import { SequencerRuntime } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
-import type { Sequencer } from '#/sequencer'
+import { makeTime } from 'src/api/util'
+import type { Sequencer, SequencerDeviceRole } from '#/sequencer'
 import type { SequencerSessionState } from '#/sequencer.state'
-import { canonical, services } from './sequencer.fixture'
+import { canonical, frame, services } from './sequencer.fixture'
 
 function blockTypes() {
 	const compilation = compile(canonical())
@@ -25,15 +28,40 @@ function blockTypes() {
 }
 
 function handler(type: string, execute: AnySequencerActionHandler['execute']): AnySequencerActionHandler {
-	return { type, version: 1, validate: (configuration) => ({ ok: true, configuration }), resources: () => [{ role: 'camera' }], execute }
+	return { type, version: 1, validate: (configuration) => ({ ok: true, configuration }), resources: () => [{ role: 'camera' }, { role: 'mount' }], execute }
 }
 
-function environment(execute?: AnySequencerActionHandler['execute']) {
+function mount(hourAngle: number, pierSide: PierSide = 'WEST'): Mount {
+	const geographicCoordinate = { longitude: 0, latitude: 0, elevation: 0 }
+
+	return {
+		type: 'mount',
+		name: 'Mount Simulator',
+		id: 'mount-1',
+		connected: true,
+		client: { id: 'indi-1' },
+		tracking: true,
+		trackMode: 'SIDEREAL',
+		canFlip: true,
+		hasPierSide: true,
+		pierSide,
+		geographicCoordinate,
+		get equatorialCoordinate() {
+			return { rightAscension: localSiderealTime(makeTime(Date.now(), geographicCoordinate), geographicCoordinate, true) - hourAngle, declination: -0.09 }
+		},
+	} as unknown as Mount
+}
+
+function brief(): Sequencer['capture'] {
+	return { ...canonical().capture, repeat: 1, delay: 0, settle: 0, frames: [frame('lum', { count: 2 })] }
+}
+
+function environment(execute?: AnySequencerActionHandler['execute'], devices?: Partial<Record<SequencerDeviceRole, Device>>) {
 	const arbiter = new ResourceArbiter()
 	const coordinator = new OperationCoordinator(arbiter)
 	const registry = new SequencerBlockRegistry()
 	const store = new InMemorySequencerStore()
-	const runtime = new SequencerRuntime({ store, registry, coordinator, ...services(), resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) })
+	const runtime = new SequencerRuntime({ store, registry, coordinator, ...services(), resolve: (role, deviceId) => ({ key: `logical:${deviceId}`, device: devices?.[role] }) })
 
 	for (const type of blockTypes()) registry.register(handler(type, execute ?? (() => Promise.resolve({ type: 'completed', value: undefined }))))
 
@@ -240,6 +268,50 @@ describe('sessions', () => {
 		expect(refused).toMatchObject({ ok: true, effect: 'none', noop: 'finalizing' })
 		expect(instance.snapshot(id)?.state).toBe('stopped')
 		expect(instance.events(id).filter((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toHaveLength(1)
+	})
+
+	test('commands the meridian flip once the mount reports the target past the boundary', async () => {
+		const nodes: string[] = []
+		const { handler: instance, runtime } = environment(
+			(context) => {
+				nodes.push(context.nodeId)
+				return Promise.resolve({ type: 'completed', value: undefined })
+			},
+			{ mount: mount(0.05) },
+		)
+		const created = instance.createSession(stored(instance, { capture: brief() }).id)
+
+		expect(created.ok).toBeTrue()
+
+		if (!created.ok) return
+
+		instance.start(created.session.id)
+
+		await runtime.settled(created.session.id)
+
+		expect(nodes.some((nodeId) => nodeId.endsWith('.trigger.meridianFlip'))).toBeTrue()
+	})
+
+	test('commands no meridian flip while the mount reports the target east of the meridian', async () => {
+		const nodes: string[] = []
+		const { handler: instance, runtime } = environment(
+			(context) => {
+				nodes.push(context.nodeId)
+				return Promise.resolve({ type: 'completed', value: undefined })
+			},
+			{ mount: mount(-0.05, 'EAST') },
+		)
+		const created = instance.createSession(stored(instance, { capture: brief() }).id)
+
+		expect(created.ok).toBeTrue()
+
+		if (!created.ok) return
+
+		instance.start(created.session.id)
+
+		await runtime.settled(created.session.id)
+
+		expect(nodes.some((nodeId) => nodeId.endsWith('.trigger.meridianFlip'))).toBeFalse()
 	})
 
 	test('recovers only the events beyond a sequence the caller already has', async () => {

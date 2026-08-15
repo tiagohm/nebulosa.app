@@ -1,4 +1,7 @@
+import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { isCamera, isMount, isWheel } from 'nebulosa/src/devices/indi/device'
+import type { PierSide } from 'nebulosa/src/devices/indi/device'
+import { normalizePI } from 'nebulosa/src/math/units/angle'
 import type { SequencerDeviceRole, SequencerDevices, SequencerFilterReference } from '#/sequencer'
 import type { SequencerPlan, SequencerPlanAction } from '#/sequencer.plan'
 import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEvent, SequencerEventDraft, SequencerFailure, SequencerSession, SequencerSessionState } from '#/sequencer.state'
@@ -20,6 +23,7 @@ import type { SequencerPreparationServices } from './sequencer.prepare'
 import type { ResourceBinding, SequencerActionContext, SequencerActionProgress, SequencerAuxiliaryTarget, SequencerBlockRegistry, SequencerFrameSlot } from './sequencer.registry'
 import type { SequencerActivityObservation, SequencerSnapshotObservation } from './sequencer.snapshot'
 import type { SequencerStore } from './sequencer.store'
+import { makeTime } from './util'
 
 // Session admission, bootstrap reversal, and the execution kernel of the sequencer.
 //
@@ -350,7 +354,19 @@ interface ActiveSession {
 	// pipeline and the finalization does otherwise. It keeps the transition to a single commit whichever of the
 	// two got there first.
 	finalized: boolean
+	// Pier side the mount reported while the target was still east of the meridian, which is the side that means
+	// the flip is still pending. It is re-read for as long as the target is east of the meridian and then frozen,
+	// because the side the mount takes after it flips is precisely what must stop matching it.
+	preFlipPierSide?: PierSide
 }
+
+// Pier side a German equatorial mount is on before it flips, used for a session that began after its target
+// had already crossed the meridian and therefore never saw the mount on that side.
+//
+// It is the convention `expectedPierSide` reads in the other direction: a target east of the meridian is
+// tracked from the west side of the pier. A mount already reporting the east side therefore reads as flipped
+// and is not flipped again, which is what a session started or resumed after a flip needs.
+const SEQUENCER_PRE_FLIP_PIER_SIDE: PierSide = 'WEST'
 
 // Executes one sequencer session at a time.
 export class SequencerRuntime {
@@ -922,23 +938,45 @@ export class SequencerRuntime {
 	// the session actually holds.
 	//
 	// Every field is absent when the session does not carry the role or the device publishes nothing for it,
-	// which is what the executor reads as "this dimension is not decidable" rather than as a value. The hour
-	// angle is one of those: the mount publishes coordinates and a pier side but no hour angle, and computing
-	// one here would put an ephemeris in the runtime, so no flip is decided and no exposure is guarded until a
-	// later version supplies it.
+	// which is what the executor reads as "this dimension is not decidable" rather than as a value.
+	//
+	// The hour angle is the one field no device publishes: it is derived from the local sidereal time of the
+	// site the mount reports and the right ascension it is pointing at, both at date, and it is normalized to
+	// `-PI..PI` so a negative value is a target still east of the meridian. It is what the flip trigger and the
+	// pre-exposure guard are decided from, so a mount that publishes no site or no coordinates leaves the
+	// dimension undecidable rather than answering zero.
 	#observation(active: ActiveSession, filter?: SequencerFilterReference): SequencerSafePointObservation {
 		const mount = active.roles.get('mount')?.device
 		const camera = active.roles.get('camera')?.device
 		const wheel = active.roles.get('wheel')?.device
 		const observation: {
+			hourAngle?: number
 			pierSide?: SequencerSafePointObservation['pierSide']
+			preFlipPierSide?: PierSide
 			sensorTemperature?: number
 			temperature?: number
 			installedFilter?: string
 			filter?: string
 		} = {}
 
-		if (mount !== undefined && isMount(mount) && mount.hasPierSide) observation.pierSide = mount.pierSide
+		if (mount !== undefined && isMount(mount)) {
+			const lst = localSiderealTime(makeTime(this.#now(), mount.geographicCoordinate), mount.geographicCoordinate, true)
+			const hourAngle = normalizePI(lst - mount.equatorialCoordinate.rightAscension)
+
+			observation.hourAngle = hourAngle
+
+			if (mount.hasPierSide) {
+				observation.pierSide = mount.pierSide
+
+				// The side the mount is on while the target is still east of the meridian is the side that means the
+				// flip has not happened yet, and it is taken from the mount itself rather than assumed: a session
+				// re-reads it for as long as the target is east of the meridian, so whatever convention the mount
+				// publishes is the one the flip is decided against.
+				if (hourAngle < 0 && mount.pierSide !== 'NEITHER') active.preFlipPierSide = mount.pierSide
+
+				observation.preFlipPierSide = active.preFlipPierSide ?? SEQUENCER_PRE_FLIP_PIER_SIDE
+			}
+		}
 
 		if (camera !== undefined && isCamera(camera) && camera.hasThermometer) {
 			observation.sensorTemperature = camera.temperature

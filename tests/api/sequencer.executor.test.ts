@@ -13,7 +13,7 @@ import type { OperationResult } from '#/orchestration'
 import type { Sequencer } from '#/sequencer'
 import type { SequencerPlan } from '#/sequencer.plan'
 import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft } from '#/sequencer.state'
-import { camera, canonical, frame, retry, services } from './sequencer.fixture'
+import { action, camera, canonical, frame, retry, services } from './sequencer.fixture'
 
 interface Executed {
 	readonly nodeId: string
@@ -49,7 +49,7 @@ function planOf(overrides?: Partial<Sequencer>): SequencerPlan {
 function guided(): SequencerPlan {
 	const base = definition()
 
-	return planOf({ guiding: { ...base.guiding, enabled: true }, dither: { ...base.dither, enabled: true, everyFrames: 1, beforeFirstFrame: true } })
+	return planOf({ guiding: { ...base.guiding, enabled: true }, dither: { ...base.dither, enabled: true, everyFrames: 1, beforeFirstFrame: true }, startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding' })] } })
 }
 
 interface Harness {
@@ -580,7 +580,7 @@ describe('plan walk', () => {
 		const dither = { ...base.dither, enabled: true, onFailure: 'continue' as const, retry: { ...retry(), maxAttempts: 1 } }
 		let dithers = 0
 		const state = harness(
-			planOf({ dither, guiding: { ...base.guiding, enabled: true } }),
+			planOf({ dither, guiding: { ...base.guiding, enabled: true }, startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding' })] } }),
 			undefined,
 			guidingServices(
 				() => successfulOperationResult(undefined),

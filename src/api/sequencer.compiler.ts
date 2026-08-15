@@ -887,6 +887,16 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	if (!guiding.enabled && commands(definition, ['startGuiding', 'stopGuiding'])) diagnostics.push({ path: 'guiding.enabled', message: 'a lifecycle action commands guiding, which the definition disables' })
 	if (!guiding.enabled && dither.enabled) diagnostics.push({ path: 'dither.enabled', message: 'a dither is a guider command, and the definition declares no guider to send it to' })
 
+	// The other half of the same pair, for the same reason cooling has one. The runtime opens the guider session
+	// before the plan, but opening is a connection and not a correction: nothing calibrates, nothing loops and
+	// nothing guides until an action commands it. The interlock brackets a guider that is running and leaves an
+	// idle one alone precisely because a session that never issued `startGuiding` is unguided by configuration,
+	// and the dither is skipped for the same reason. So an enabled guiding block with no action that starts it
+	// captures every frame unguided while reporting a guided plan, which is the silent disagreement the
+	// compatibility rule exists to prevent. Only a startup action counts: `shutdown` runs after the last frame,
+	// so guiding started there guides nothing.
+	if (guiding.enabled && !commands(definition, ['startGuiding'], ['startup'])) diagnostics.push({ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and no enabled startup action starts guiding, so every frame would be captured unguided' })
+
 	if (rotator.enabled) diagnostics.push({ path: 'rotator.enabled', message: 'no action of this version commands the rotator, so an enabled rotator would never reach its angle' })
 	if (dome.enabled) diagnostics.push({ path: 'dome.enabled', message: 'the device layer of this version has no dome' })
 	if (cover.enabled) diagnostics.push({ path: 'cover.enabled', message: 'the cover block only declares automatic behaviors this version does not perform; the cover is commanded by the lifecycle actions, which carry their own timeout and retry' })

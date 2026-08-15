@@ -63,7 +63,7 @@ export function complete(): Sequencer {
 		capture: { ...definition.capture, frames: [frame('lum', { abandonmentBudget: 2, delay: 8, filter: { type: 'name', name: 'L' }, camera: camera() })] },
 		guiding: { ...definition.guiding, connection: { mode: 'remote', host: 'localhost', port: 4400, profile: 'default' } },
 		storage: { ...definition.storage, temporaryDirectory: '/data/nebulosa/.tmp' },
-		startup: { ...definition.startup, actions: [action('connect', { type: 'connectDevices', devices: ['camera', 'mount'], required: true }), action('cool', { type: 'coolCamera' })] },
+		startup: { ...definition.startup, actions: [action('connect', { type: 'connectDevices', devices: ['camera', 'mount'], required: true }), action('cool', { type: 'coolCamera' }), action('guide', { type: 'startGuiding' })] },
 		shutdown: { ...definition.shutdown, actions: [action('park', { type: 'parkMount', required: true }), action('warm', { type: 'warmCamera' })] },
 	}
 }
@@ -162,14 +162,14 @@ export function canonical(): Sequencer {
 			checkpoint: { afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 60 },
 		},
 		storage: { root: '/data/nebulosa', fileNameTemplate: '{target}-{filter}-{exposure}', directoryTemplate: '{target}/{frameType}', autoSubFolderMode: 'noon' },
-		startup: { enabled: true, actions: [action('connect', { type: 'connectDevices', devices: ['camera', 'mount'] }), action('unpark'), action('cool', { type: 'coolCamera' })], continueOnFailure: false },
+		startup: { enabled: true, actions: [action('connect', { type: 'connectDevices', devices: ['camera', 'mount'] }), action('unpark'), action('cool', { type: 'coolCamera' }), action('guide', { type: 'startGuiding' })], continueOnFailure: false },
 		shutdown: { enabled: true, runOnCompletion: true, runOnStop: true, runOnFailure: false, actions: [action('park', { type: 'parkMount' }), action('warm', { type: 'warmCamera' })], continueOnFailure: true },
 		notification: { enabled: false, events: [], channels: [], minimumSeverity: 'warning' },
 	}
 }
 
-// Canonical definition without a guider, and therefore without the dither that commands one.
+// Canonical definition without a guider, and therefore without the dither and the startup action that command one.
 export function unguided(): Sequencer {
 	const definition = canonical()
-	return { ...definition, guiding: { ...definition.guiding, enabled: false }, dither: { ...definition.dither, enabled: false } }
+	return { ...definition, guiding: { ...definition.guiding, enabled: false }, dither: { ...definition.dither, enabled: false }, startup: { ...definition.startup, actions: definition.startup.actions.filter((action) => action.type !== 'startGuiding') } }
 }

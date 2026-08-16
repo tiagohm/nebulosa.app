@@ -1,5 +1,5 @@
 import { isAbsolute } from 'path'
-import type { MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
+import type { MountTargetCoordinate, PierSide } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 // oxfmt-ignore
 import type { Sequencer, SequencerAutofocus, SequencerAuxiliaryCapture, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGoto, SequencerGuiderSettle, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
@@ -83,6 +83,12 @@ export interface SequencerMeridianFlipTrigger extends Omit<SequencerMeridianFlip
 	// the routine, the capture recipe, the star detection, and the filter offsets live in the autofocus block,
 	// and the execution context of a handler does not carry the plan to read them from.
 	readonly focusing?: SequencerFocus
+	// Side the mount was on before a crossing that already happened, present only when the executor re-enters
+	// this node to finish a recovery an interruption cut short, and never lowered by the compiler: the plan
+	// describes a whole flip, and this is the one fact about a particular night the node cannot rediscover.
+	// It is what makes the re-entry resume at the recentering and the refocusing instead of commanding a second
+	// crossing, which would take a mount that is already across back to the side the flip existed to leave.
+	readonly crossedFrom?: PierSide
 }
 
 // Configuration of one capture action, which is the frame group plus the settling the capture plan requires

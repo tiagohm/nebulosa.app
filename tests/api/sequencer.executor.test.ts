@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
+import type { PierSide } from 'nebulosa/src/devices/indi/device'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter } from 'src/api/resource'
 import type { ResourceReservation } from 'src/api/resource'
 import { compile } from 'src/api/sequencer.compiler'
+import type { SequencerMeridianFlipTrigger } from 'src/api/sequencer.compiler'
 import { runSequencerPlan } from 'src/api/sequencer.executor'
 import type { SequencerExecutorHost, SequencerSafePointObservation } from 'src/api/sequencer.executor'
 import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
@@ -391,6 +393,34 @@ describe('plan walk', () => {
 
 		expect(outcome.terminal.state).toBe('stopped')
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
+	})
+
+	test('finishes the recovery of a flip a pause interrupted after the crossing', async () => {
+		const base = definition()
+		const entries: (PierSide | undefined)[] = []
+		const state: Harness = harness(planOf({ meridianFlip: { ...base.meridianFlip, enabled: true } }), (context, configuration) => {
+			if (context.nodeId.endsWith('.trigger.meridianFlip')) {
+				entries.push((configuration as SequencerMeridianFlipTrigger).crossedFrom)
+
+				if (entries.length === 1) {
+					state.observation = { ...state.observation, pierSide: 'EAST' }
+					state.desired = 'paused'
+
+					return Promise.resolve({ type: 'retryableFailure', reason: 'aborted', detail: 'the recentering after the crossing was cancelled' })
+				}
+			}
+
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+
+		state.observation = { hourAngle: 0.05, pierSide: 'WEST', preFlipPierSide: 'WEST' }
+		state.onHold = () => 'running'
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(entries).toEqual([undefined, 'WEST'])
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
 	})
 
 	test('ends the plan at the meridian boundary of a mount that publishes no pier side', async () => {

@@ -189,6 +189,18 @@ describe('meridian flip block', () => {
 		expect(result).toMatchObject({ type: 'completed', value: { verified: true, centering: { attempts: 1, verified: true }, focusing: { position: 12500, measured: 12500 } } })
 	})
 
+	test('resumes at the recovery of a crossing that already happened, without crossing again', async () => {
+		const commands: Command[] = []
+		const handler = sequencerMeridianFlipHandler(flipServices(commands))
+		const result = await handler.execute(
+			actionContext({ mount: { device: mount('WEST') }, camera: { device: { type: 'camera', name: 'Camera Simulator', connected: true } }, focuser: { device: { type: 'focuser', name: 'Focuser Simulator', connected: true, position: { value: 12500, min: 0, max: 50000 } } } }),
+			flipConfiguration({ centering: centering(), focusing: focusing(), crossedFrom: 'EAST' }),
+		)
+
+		expect(commands.map((command) => command.name)).toEqual(['capture', 'solve', 'autofocus'])
+		expect(result).toMatchObject({ type: 'completed', value: { pierSide: 'WEST', initialPierSide: 'EAST', verified: true, centering: { attempts: 1 }, focusing: { position: 12500 } } })
+	})
+
 	test('reports a recovery that did not finish instead of a flip that completed', async () => {
 		const commands: Command[] = []
 		const services = flipServices(commands)

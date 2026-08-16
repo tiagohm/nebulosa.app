@@ -67,6 +67,10 @@ export interface SequencerTriggerObservation {
 	// Pier side the mount is on before the flip, which is the side that means the flip is still pending.
 	// Absent when the session cannot tell the sides apart, in which case no flip is decided.
 	readonly preFlipPierSide?: PierSide
+	// Whether a crossing that already happened is still owed the recovery it was interrupted during, which
+	// makes the flip due again no matter which side the mount is on. The crossing left the pointing raw and
+	// the pier side it changed is precisely what would otherwise report the flip as no longer needed.
+	readonly flipRecoveryPending?: boolean
 	// Temperature the focus drift is measured against, in degrees Celsius, absent when no device reports one.
 	readonly temperature?: number
 }
@@ -305,8 +309,15 @@ function focusedByFlip(policies: SequencerTriggerPolicies, flipped: boolean) {
 // one that already happened. Without a pier side there is nothing that says the flip has not already run,
 // and the hour angle alone keeps growing, so an unpublished side decides no flip rather than flipping on
 // every frame for the rest of the night.
+//
+// A crossing that already happened and whose recovery was interrupted is due on its own, ahead of both: the
+// side changed, so the pier-side condition reports the flip as served while the pointing and the focus that
+// crossing invalidated were never re-established, and every frame after it would be taken through the raw
+// crossing. The node it selects resumes at that recovery instead of crossing a second time.
 function meridianFlipDue(policy: Omit<SequencerMeridianFlip, 'enabled'>, observation: SequencerTriggerObservation) {
 	const { hourAngle, pierSide, preFlipPierSide } = observation
+
+	if (observation.flipRecoveryPending === true) return true
 
 	if (hourAngle === undefined || pierSide === undefined || preFlipPierSide === undefined) return false
 

@@ -231,6 +231,15 @@ interface SequencerExecution {
 	// Cause of the last slot the capture loop lost, carried so a group that ends degraded is reported with the
 	// failure that emptied it instead of with the counter that noticed the emptiness.
 	cause?: SequencerSlotCause
+	// Side the mount was on before a crossing that happened but whose recovery was cut short, present only
+	// between the interruption and the safe point that finishes it.
+	//
+	// It is the whole memory of an interrupted flip. The crossing itself leaves nothing durable behind, and the
+	// pier side it changed is what every later evaluation of the trigger reads: without this, a flip paused
+	// between the crossing and its recentering looks, on resume, like a flip that is no longer due, and the
+	// session goes on exposing through the pointing the raw crossing left. It lives for the pause and not for a
+	// restart, which is the same scope the interruption it repairs has.
+	flipRecovery?: PierSide
 }
 
 // Executes a compiled plan and returns what it ended as.
@@ -829,6 +838,7 @@ async function runSafePoint(execution: SequencerExecution, targetId: string, loo
 			pierSide: reading.pierSide,
 			preFlipPierSide: reading.preFlipPierSide,
 			temperature: reading.temperature,
+			flipRecoveryPending: execution.flipRecovery !== undefined,
 		}
 
 		// The filter baseline is taken before the triggers are evaluated, so the first frame of a session does not
@@ -930,6 +940,27 @@ function triggerNodeOf(loop: SequencerPlanLoop, kind: 'meridianFlip' | 'autofocu
 	return undefined
 }
 
+// Side the mount was on before a crossing that happened during a flip node that did not finish, or undefined
+// when nothing crossed.
+//
+// The mount is read again rather than trusted from the node, which reported nothing: an interrupted node
+// answers with how it ended and not with how far it got. What separates the two cases is the side — a node
+// interrupted before or during the crossing leaves the mount on the pre-flip side, and one interrupted after it
+// leaves it on the other, which is the same evidence the crossing itself is verified by.
+//
+// `observation` is the reading of the safe point, whose pre-flip side is the one the crossing was decided
+// against. A mount that publishes no side answers nothing here either, and the flip node of such a session
+// never crosses to begin with.
+function crossedSide(execution: SequencerExecution, observation: SequencerTriggerObservation): PierSide | undefined {
+	const { preFlipPierSide } = observation
+
+	if (preFlipPierSide === undefined) return undefined
+
+	const current = execution.host.observe().pierSide
+
+	return current !== undefined && current !== 'NEITHER' && current !== preFlipPierSide ? preFlipPierSide : undefined
+}
+
 // Runs the moving half of the safe point with the guiding corrections suspended: the triggers that displace
 // the optical path, followed by the frame preparation that reconciles it.
 //
@@ -977,9 +1008,27 @@ async function runInterlockedSafePoint(
 
 			if (node === undefined) continue
 
-			const { outcome, completed } = await runActionNode(execution, node, host.signal)
+			// A flip whose crossing already happened re-enters carrying the side it came from, which is what makes
+			// the node resume at the recovery instead of commanding a second crossing. The plan is not rewritten for
+			// it: the fact belongs to this night and is handed to the one execution of the node that needs it.
+			const resumed = kind === 'meridianFlip' ? execution.flipRecovery : undefined
+			const running = resumed === undefined ? node : { ...node, configuration: { ...(node.configuration as SequencerMeridianFlipTrigger), crossedFrom: resumed } }
+			const { outcome, completed } = await runActionNode(execution, running, host.signal)
 
 			if (outcome.kind !== 'continue') {
+				// The crossing is not undone by whatever ended the node, and nothing else records that it happened:
+				// the pier side it changed is the only trace, and it is exactly what makes the trigger read as no
+				// longer due once the session resumes. So the crossing is remembered here, and reported to the
+				// bracket at once — a resume that skipped the recalibration would guide the rest of the night with
+				// the declination axis moving the star the other way.
+				const crossed = kind === 'meridianFlip' ? (resumed ?? crossedSide(execution, observation)) : undefined
+
+				if (crossed !== undefined) {
+					execution.flipRecovery = crossed
+					flipped = true
+					state.flipped = true
+				}
+
 				interrupted = outcome
 				return { type: 'fatalFailure', reason: 'unexpectedState', detail: `the ${kind} trigger ended the plan` }
 			}
@@ -992,7 +1041,12 @@ async function runInterlockedSafePoint(
 			// `afterMeridianFlip` condition owed by a run that already paid it, so the session refocuses again on the
 			// very next frame.
 			if (kind === 'meridianFlip') {
-				flipped = completed
+				// The node answered, so nothing is owed to it any more: either the recovery finished or the failure
+				// policy of the session decided to go on without it, and repeating the trigger for every remaining
+				// frame is not what either of them asked for.
+				execution.flipRecovery = undefined
+				flipped = completed || resumed !== undefined
+				state.flipped = flipped
 
 				if (completed && policies.autofocus?.triggers.afterMeridianFlip === true) execution.anchors = sequencerAnchorAdvanced(execution.anchors, 'autofocus', observation)
 			} else if (completed) {

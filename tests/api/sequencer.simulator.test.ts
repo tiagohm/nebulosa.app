@@ -226,4 +226,37 @@ describe('canonical night', () => {
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(4)
 		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(1)
 	}, 30_000)
+
+	test('A.09 unguided field rig', async () => {
+		const night = await runNight({
+			patch: {
+				devices: { wheel: undefined },
+				guiding: { enabled: false },
+				dither: { enabled: false },
+				cooling: { enabled: false },
+				meridianFlip: { enabled: false },
+				capture: { frames: [frame('lum', { name: 'Luminance', count: 8, exposureTime: 0.5 })] },
+				startup: { enabled: false },
+				shutdown: { enabled: false },
+			},
+			sim: {
+				mount: { parked: false, tracking: true },
+				camera: { cooler: true, temperature: -10 },
+				cover: { parked: false },
+			},
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(names.some((name) => name.startsWith('guider.'))).toBeFalse()
+		expect(names.some((name) => name.startsWith('cover.') || name.startsWith('panel.'))).toBeFalse()
+		expect(names.includes('guider.dither')).toBeFalse()
+		expect(names.includes('flip')).toBeFalse()
+		expect(names.includes('park')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(8)
+		expect(night.devices.mount.parked).toBeFalse()
+	}, 30_000)
 })

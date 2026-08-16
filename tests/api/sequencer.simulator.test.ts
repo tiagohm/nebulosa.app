@@ -47,4 +47,22 @@ describe('canonical night', () => {
 		expect(night.arbiter.availability('hw-mount')).toBe('available')
 		expect(JSON.stringify(night.session)).not.toContain('ReservationToken')
 	}, 30_000)
+
+	test('A.02 snapshot during the first autofocus', async () => {
+		let duringAutofocus: { readonly state: string; readonly exposure?: unknown; readonly type?: string; readonly name?: string } | undefined
+		const night = await runNight({
+			control: async (api) => {
+				const snapshot = await api.waitUntil((current) => current.foreground?.type === 'trigger.autofocus')
+
+				duringAutofocus = { state: snapshot.state, exposure: snapshot.capture.exposure, type: snapshot.foreground?.type, name: snapshot.foreground?.name }
+			},
+		})
+
+		nights.push(night)
+
+		expect(duringAutofocus).toEqual({ state: 'running', exposure: undefined, type: 'trigger.autofocus', name: 'trigger.autofocus' })
+		expect(night.session.state).toBe('completed')
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(4)
+	}, 30_000)
 })

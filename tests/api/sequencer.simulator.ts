@@ -34,7 +34,7 @@ import { InMemorySequencerStore } from 'src/api/sequencer.store'
 import type { WheelCommander } from 'src/api/wheel.commander'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { Sequencer, SequencerAuxiliaryCapture, SequencerCamera, SequencerRetryPolicy } from '#/sequencer'
-import type { SequencerArtifact, SequencerSession } from '#/sequencer.state'
+import type { SequencerArtifact, SequencerSession, SequencerSessionSnapshot } from '#/sequencer.state'
 import { action, camera, frame } from './sequencer.fixture'
 
 export interface SimulatorCommand {
@@ -72,9 +72,15 @@ export interface NightResult {
 	readonly root: string
 }
 
+export interface NightControl {
+	readonly snapshot: () => SequencerSessionSnapshot | undefined
+	readonly waitUntil: (predicate: (snapshot: SequencerSessionSnapshot) => boolean) => Promise<SequencerSessionSnapshot>
+}
+
 export interface NightOptions {
 	readonly patch?: DeepPartial<Sequencer>
 	readonly sim?: { readonly mount?: Partial<Mount> & { readonly hourAngle?: number } }
+	readonly control?: (api: NightControl) => void | Promise<void>
 }
 
 export const RETRY: SequencerRetryPolicy = { maxAttempts: 3, delay: 0, backoff: 1, maximumDelay: 0, retryOn: ['timeout', 'commandFailed'], onExhausted: 'fail' }
@@ -210,13 +216,20 @@ export async function runNight(options: NightOptions = {}): Promise<NightResult>
 		const devices = observatory(options.sim)
 		const log: SimulatorCommand[] = []
 		const frameBytes = await syntheticFits()
-		const { arbiter, runtime, handler, store } = environment(definition, devices, log, clock, frameBytes)
+		const firstAutofocus = options.control === undefined ? undefined : Promise.withResolvers<void>()
+		const { arbiter, runtime, handler, store } = environment(definition, devices, log, clock, frameBytes, firstAutofocus?.promise)
 		const started = await handler.start(definition)
 
 		if (!started.ok) {
 			await rm(root, { recursive: true, force: true })
 			const diagnostics = started.preflight?.diagnostics.map((item) => `${item.path}: ${item.message}`).join('; ')
 			throw new Error(`session refused: ${started.reason}${started.detail === undefined ? '' : `: ${started.detail}`}${diagnostics === undefined || diagnostics.length === 0 ? '' : ` (${diagnostics})`}`)
+		}
+
+		try {
+			if (options.control !== undefined) await options.control(nightControl(handler, started.session.id))
+		} finally {
+			firstAutofocus?.resolve()
 		}
 
 		const session = (await runtime.settled(started.session.id)) ?? store.session(started.session.id)
@@ -306,7 +319,7 @@ function observatory(sim?: NightOptions['sim']): SimulatorDevices {
 	}
 }
 
-function environment(definition: Sequencer, devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array) {
+function environment(definition: Sequencer, devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>) {
 	const arbiter = new ResourceArbiter()
 	const coordinator = new OperationCoordinator(arbiter)
 	const registry = new SequencerBlockRegistry()
@@ -322,7 +335,7 @@ function environment(definition: Sequencer, devices: SimulatorDevices, log: Simu
 		[devices.guideCamera.name]: devices.guideCamera,
 		[devices.guideOutput.name]: devices.guideOutput,
 	}
-	const commanders = simulatedCommanders(devices, log, clock, frameBytes)
+	const commanders = simulatedCommanders(devices, log, clock, frameBytes, holdFirstAutofocus)
 	const runtime = new SequencerRuntime({
 		store,
 		registry,
@@ -365,10 +378,33 @@ function environment(definition: Sequencer, devices: SimulatorDevices, log: Simu
 		registry.register(handler)
 	}
 
-	return { arbiter, registry, store, runtime, handler: new SequencerHandler({ store, runtime, registry, now: () => clock.now }) }
+	return { arbiter, registry, store, runtime, handler: new SequencerHandler({ store, runtime, registry, now: () => clock.now, observe: (sessionId) => runtime.observation(sessionId) }) }
 }
 
-function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array) {
+function nightControl(handler: SequencerHandler, sessionId: string): NightControl {
+	const snapshot = () => handler.snapshot(sessionId)
+
+	return {
+		snapshot,
+		waitUntil: async (predicate) => {
+			const deadline = Date.now() + 5_000
+
+			while (Date.now() < deadline) {
+				const current = snapshot()
+
+				if (current !== undefined && predicate(current)) return current
+
+				await new Promise<void>((resolve) => {
+					setTimeout(resolve, 1)
+				})
+			}
+
+			throw new Error('the night did not reach the expected snapshot')
+		},
+	}
+}
+
+function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>) {
 	const push = (name: string, detail?: string) => log.push(detail === undefined ? { name } : { name, detail })
 	const ok = <T>(value: T) => Promise.resolve(successfulOperationResult(value))
 
@@ -494,8 +530,11 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 			start: (_scope: unknown, _camera: Camera, focuser: Focuser) => {
 				push('autofocus.run')
 				clock.advance(30_000)
+				const focused = { outcome: 'focused' as const, position: focuser.position.value, message: 'best focus!', focusPoint: [focuser.position.value, 1] }
+				const result = holdFirstAutofocus === undefined || log.filter((entry) => entry.name === 'autofocus.run').length > 1 ? ok(focused) : holdFirstAutofocus.then(() => successfulOperationResult(focused))
+
 				return {
-					handle: { id: 'af-1', kind: 'autoFocus', signal: new AbortController().signal, result: ok({ outcome: 'focused', position: focuser.position.value, message: 'best focus!', focusPoint: [focuser.position.value, 1] }), cancel: () => Promise.resolve() },
+					handle: { id: 'af-1', kind: 'autoFocus', signal: new AbortController().signal, result, cancel: () => Promise.resolve() },
 					finish: () => undefined,
 				}
 			},

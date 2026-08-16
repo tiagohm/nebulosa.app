@@ -734,9 +734,17 @@ export class SequencerRuntime {
 	// here would refuse the resumed action and every park and warm of the finalize as `reservation has been
 	// cancelled`. The reservation is released by the finalization and by the shutdown, which is where the
 	// terminal form belongs and where it stayed.
+	//
+	// The guiding session is the one root the drain leaves alone, for the same reason. It is a root of this
+	// reservation rather than a tree of the action, because a connection outlives every command issued through
+	// it, so draining it would disconnect the guider of a session that is only being interrupted: the binding
+	// left behind names a session that no longer exists, and nothing on the resume path reconnects it, which is
+	// a night whose remaining frames are exposed unguided while the interlock and the dither silently find
+	// nothing to command. It is released where every other resource of the session is, by the finalization and
+	// by the shutdown.
 	async #cancelActiveAction(active: ActiveSession) {
 		active.action.abort('aborted')
-		await this.#coordinator.drainByReservationOwner(active.owner, 'aborted')
+		await this.#coordinator.drainByReservationOwner(active.owner, 'aborted', active.guider)
 		active.action = new AbortController()
 	}
 

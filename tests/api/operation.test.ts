@@ -886,6 +886,31 @@ describe('reserved operation scope', () => {
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
 
+	test('leaves the preserved root of a reservation running through a drain', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const reservation = reserve(arbiter, CAMERA, MOUNT)
+		const scope = coordinator.tokenScope(reservation.token)
+
+		const guiding = scope.start('guiderSession', [{ key: MOUNT }], waitForAbort)
+		const capture = scope.start('capture', [{ key: CAMERA }], waitForAbort)
+
+		await coordinator.drainByReservationOwner(SESSION, 'aborted', guiding.id)
+
+		expect(await capture.result).toMatchObject(failedOperationResult('aborted'))
+		expect(guiding.signal.aborted).toBeFalse()
+
+		const resumed = scope.start('capture', [{ key: CAMERA }], () => successfulOperationResult(undefined))
+
+		expect(await resumed.result).toEqual(successfulOperationResult(undefined))
+
+		await coordinator.cancelByReservationOwner(SESSION, 'aborted')
+
+		expect(await guiding.result).toMatchObject(failedOperationResult('aborted'))
+
+		reservation.release()
+	})
+
 	test('leaves a reservation another caller cancelled for good closed after a drain', async () => {
 		const arbiter = new ResourceArbiter()
 		const coordinator = new OperationCoordinator(arbiter)

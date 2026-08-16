@@ -339,13 +339,21 @@ export class OperationCoordinator {
 	// an executor resuming from its abort must not open one more tree behind the snapshot being awaited. They
 	// are reopened once every cleanup resolved, which is the instant nothing of the cancelled work is left
 	// running. A token another caller had already closed for good stays closed.
-	drainByReservationOwner(owner: ResourceReservationOwner, reason: OperationFailureReason = 'aborted') {
-		return this.#drainReservation(owner, reason, false)
+	//
+	// `preserve` is the id of one root the drain leaves running, for the collaborator whose lifetime is the
+	// holder's and not the work being interrupted. The sequencer's guiding session is exactly that: it is a
+	// root of the reservation because a connection outlives every command issued through it, so a drain that
+	// tore it down for an interruption the holder resumes from would leave the session pointing at a session
+	// that no longer exists, with nothing on the resume path reconnecting it. It has no effect on the terminal
+	// form, which is called by a holder that is giving the devices up.
+	drainByReservationOwner(owner: ResourceReservationOwner, reason: OperationFailureReason = 'aborted', preserve?: string) {
+		return this.#drainReservation(owner, reason, false, preserve)
 	}
 
 	// Cancels the trees of one reservation and awaits their cleanups, closing the reservation permanently when
-	// `terminal` and reopening exactly the tokens this call closed otherwise.
-	async #drainReservation(owner: ResourceReservationOwner, reason: OperationFailureReason, terminal: boolean) {
+	// `terminal` and reopening exactly the tokens this call closed otherwise. `preserve` names a root that is
+	// left running, and is ignored when `terminal`.
+	async #drainReservation(owner: ResourceReservationOwner, reason: OperationFailureReason, terminal: boolean, preserve?: string) {
 		const token = this.#reservationTokens.get(owner)
 		const roots = this.#operationsByReservationOwner.get(owner)
 		// Tokens closed by this call, which are the only ones a non-terminal drain may reopen: one that was
@@ -362,14 +370,19 @@ export class OperationCoordinator {
 			closed.push(token)
 		}
 
-		const cancelling = roots === undefined ? [] : roots.values().toArray()
+		const snapshot = roots === undefined ? [] : roots.values().toArray()
 
-		for (const operation of cancelling) {
+		for (const operation of snapshot) {
 			if (operation.token !== undefined && !this.#cancelledReservations.has(operation.token)) {
 				this.#cancelledReservations.add(operation.token)
 				closed.push(operation.token)
 			}
 		}
+
+		// The preserved root is excluded from the cancellation only, never from the closing above: its token is
+		// the reservation's, and leaving it open during the drain would readmit the trees the snapshot is meant
+		// to be complete against.
+		const cancelling = terminal || preserve === undefined ? snapshot : snapshot.filter((operation) => operation.context.id !== preserve)
 
 		try {
 			// Roots leave the set only in their own finalization, which cannot run before this snapshot is taken.

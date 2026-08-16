@@ -3,7 +3,9 @@ import { join } from 'path'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
 import { OperationCoordinator } from 'src/api/operation'
+import type { OperationContext, OperationHandle } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
+import type { ReservationToken } from 'src/api/resource'
 import { sequencerNodeId } from 'src/api/sequencer.compiler'
 import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
 import type { SequencerPreparationServices } from 'src/api/sequencer.prepare'
@@ -13,6 +15,7 @@ import { SequencerRuntime, SessionAdmissionGate, SessionTeardown } from 'src/api
 import type { SequencerDeviceResolver, SequencerRuntimePlanDraft } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
+import type { OperationResult } from '#/orchestration'
 import type { SequencerDevices, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerPlan, SequencerPlanAction, SequencerPlanGuider, SequencerPlanSequence, SequencerPlanStorage } from '#/sequencer.plan'
 
@@ -873,6 +876,66 @@ describe('sequencer runtime', () => {
 
 		expect(executed).toEqual(['node-1', 'node-1'])
 		expect(session?.state).toBe('completed')
+	})
+
+	test('keeps the guiding session open across an immediate pause of the target block', async () => {
+		const running = Promise.withResolvers<void>()
+		const executed: string[] = []
+		const opened: { coordinator?: OperationCoordinator; session?: OperationHandle<void> } = {}
+
+		const { runtime: instance, coordinator } = runtime(
+			exposeHandler(async (context, configuration) => {
+				executed.push(context.nodeId)
+
+				if (executed.length > 1) return { type: 'completed', value: configuration.exposureTime }
+
+				running.resolve()
+
+				await new Promise<void>((resolve) => {
+					context.signal.addEventListener('abort', () => resolve(), { once: true })
+				})
+
+				return { type: 'fatalFailure', reason: 'aborted' }
+			}),
+			undefined,
+			{
+				guiding: {
+					guiderCommander: {
+						connect: (_: unknown, token: ReservationToken) => {
+							const executor = (operation: OperationContext) =>
+								new Promise<OperationResult<void>>((resolve) => {
+									operation.signal.addEventListener('abort', () => resolve(failedOperationResult('aborted')), { once: true })
+								})
+
+							const handle = opened.coordinator!.tokenScope(token).start<void>('guiderSession', [], executor)
+
+							opened.session = handle
+
+							return Promise.resolve(successfulOperationResult({ id: handle.id }))
+						},
+					},
+				} as unknown as SequencerGuidingServices,
+			},
+		)
+
+		opened.coordinator = coordinator
+
+		const created = instance.create(plan({ execution: { pauseMode: 'immediate' }, guider: guiderPlan({ mode: 'remote', host: 'localhost', port: 4400 }) }))!
+
+		instance.start(created.id)
+
+		await running.promise
+		await instance.control(created.id, 'pause')
+
+		expect(opened.session?.signal.aborted).toBeFalse()
+
+		await instance.control(created.id, 'resume')
+
+		const stored = await instance.settled(created.id)
+
+		expect(executed).toEqual(['node-1', 'node-1'])
+		expect(stored?.state).toBe('completed')
+		expect(opened.session?.signal.aborted).toBeTrue()
 	})
 
 	test('cancels no startup operation on an immediate pause the phase cannot attribute', async () => {

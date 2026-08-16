@@ -31,6 +31,7 @@ import { sequencerLifecycleHandlers } from 'src/api/sequencer.lifecycle'
 import { sequencerCenterHandler, sequencerSlewHandler } from 'src/api/sequencer.pointing'
 import type { SequencerPreparationServices } from 'src/api/sequencer.prepare'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
+import type { SequencerControlResult } from 'src/api/sequencer.runtime'
 import { SequencerRuntime } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
 import type { WheelCommander } from 'src/api/wheel.commander'
@@ -85,6 +86,9 @@ export interface NightControl {
 	readonly devices: SimulatorDevices
 	readonly log: readonly SimulatorCommand[]
 	readonly events: () => readonly SequencerEvent[]
+	// Asks the session to stop. Must not be awaited while a hold is open: a graceful stop waits for the
+	// current exposure, and that exposure is waiting for this callback to return.
+	readonly stop: () => Promise<SequencerControlResult>
 }
 
 export interface NightOptions {
@@ -492,6 +496,7 @@ function nightControl(handler: SequencerHandler, sessionId: string, arbiter: Res
 		devices,
 		log,
 		events: (afterSequence?: number) => handler.events(sessionId, afterSequence),
+		stop: () => handler.stop(sessionId),
 		snapshot,
 		waitUntil: async (predicate) => {
 			const deadline = Date.now() + 5_000
@@ -635,6 +640,9 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 					push('camera.expose')
 					settleStarted(successfulOperationResult(undefined))
 					await work
+					// The write finished and the lease is about to drop. Stop-order cases use this to see the
+					// exposure cleanup land before the terminal pipeline.
+					push('camera.done')
 					return successfulOperationResult({ paths: path === undefined ? [] : [path], frameCount: path === undefined ? 0 : 1 })
 				})
 

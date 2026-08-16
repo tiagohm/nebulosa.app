@@ -5,7 +5,7 @@ import type { ResourceArbiter } from 'src/api/resource'
 import type { SequencerEvent, SequencerSessionSnapshot } from '#/sequencer.state'
 import { action, frame } from './sequencer.fixture'
 import { commandNames, disposeNight, disposeProcess, openProcess, runNight } from './sequencer.simulator'
-import type { NightResult, SimulatorProcess } from './sequencer.simulator'
+import type { NightControl, NightResult, SimulatorProcess } from './sequencer.simulator'
 
 const nights: NightResult[] = []
 const processes: SimulatorProcess[] = []
@@ -783,6 +783,45 @@ describe('admission', () => {
 		expect(await httpBody(night.events)).toBeArray()
 		expect(await httpBody(night.session)).toMatchObject({ id: night.session.id, state: 'completed' })
 		assertNoReservationToken(night.started, live?.snapshot, live?.events, night.session, night.events, night.artifacts)
+	}, 30_000)
+
+	test('B.12 a stop mid-exposure releases only after the cleanups', async () => {
+		let during: { readonly camera: string; readonly owners: number } | undefined
+		let stopping: ReturnType<NightControl['stop']> | undefined
+		const night = await runNight({
+			holdFirstExposure: true,
+			control: async (api) => {
+				await api.waitUntil((current) => current.capture.exposure !== undefined)
+
+				during = { camera: api.arbiter.availability(api.devices.camera.hardwareId), owners: api.arbiter.ownersOf(api.devices.camera.hardwareId).length }
+				stopping = api.stop()
+			},
+		})
+
+		nights.push(night)
+
+		const stopped = await stopping
+		const names = commandNames(night.log)
+		const keys = [night.devices.camera.hardwareId, night.devices.mount.hardwareId, night.devices.wheel.hardwareId, night.devices.focuser.hardwareId, night.devices.rotator.hardwareId, night.devices.cover.hardwareId, night.devices.flatPanel.hardwareId, remoteGuiderKey('127.0.0.1', 4400)]
+
+		expect(during).toEqual({ camera: 'leased', owners: 1 })
+		expect(stopped).toMatchObject({ ok: true, effect: 'stop' })
+		expect(night.session.state).toBe('stopped')
+		expect(night.session.failure).toBeUndefined()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(1)
+		expect(night.files.filter((path) => path.includes('/LIGHT/') && path.endsWith('.fits'))).toHaveLength(1)
+		expect(names.lastIndexOf('camera.done')).toBeGreaterThan(names.lastIndexOf('camera.expose'))
+		expect(names.indexOf('guider.stop')).toBeGreaterThan(names.lastIndexOf('camera.done'))
+		expect(names.indexOf('park')).toBeGreaterThan(names.indexOf('guider.stop'))
+		expect(names.indexOf('cover.close')).toBeGreaterThan(names.indexOf('park'))
+		expect(names.indexOf('cooler.off')).toBeGreaterThan(names.indexOf('cover.close'))
+		expect(names.indexOf('guider.disconnect')).toBeGreaterThan(names.indexOf('cooler.off'))
+		expect(night.devices.guiderConnected).toBeFalse()
+
+		for (const key of keys) {
+			expect(night.arbiter.availability(key)).toBe('available')
+			expect(night.arbiter.ownersOf(key)).toHaveLength(0)
+		}
 	}, 30_000)
 })
 

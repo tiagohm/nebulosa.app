@@ -485,6 +485,9 @@ function roleRequirements(definition: Sequencer, groups: readonly SequencerPlanF
 	if (target.tracking.enabled) requirements.push({ role: 'mount', path: 'target.tracking' })
 	if (target.center.enabled) requirements.push({ role: 'mount', path: 'target.center' })
 	if (meridianFlip.enabled) requirements.push({ role: 'mount', path: 'meridianFlip' })
+	if (definition.cover.enabled) requirements.push({ role: 'cover', path: 'cover' })
+	if (definition.rotator.enabled) requirements.push({ role: 'rotator', path: 'rotator' })
+	if (definition.flatPanel.enabled) requirements.push({ role: 'flatPanel', path: 'flatPanel' })
 	if (groups.some((group) => group.filter !== undefined)) requirements.push({ role: 'wheel', path: 'capture.frames' })
 
 	// An auxiliary capture selects its own filter, so it commands the wheel even when no frame group does.
@@ -953,10 +956,10 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 		}
 	}
 
-	if (rotator.enabled) diagnostics.push({ path: 'rotator.enabled', message: 'no action of this version commands the rotator, so an enabled rotator would never reach its angle' })
 	if (dome.enabled) diagnostics.push({ path: 'dome.enabled', message: 'the device layer of this version has no dome' })
-	if (cover.enabled) diagnostics.push({ path: 'cover.enabled', message: 'the cover block only declares automatic behaviors this version does not perform; the cover is commanded by the lifecycle actions, which carry their own timeout and retry' })
-	if (flatPanel.enabled) diagnostics.push({ path: 'flatPanel.enabled', message: 'the flat panel is lit only for flat frames, which this version does not capture' })
+	if (cover.enabled && cover.closeOnUnsafe) diagnostics.push({ path: 'cover.closeOnUnsafe', message: 'closing the cover on an unsafe condition requires the safety monitor this version does not have' })
+	if (rotator.enabled && rotator.restoreAfterMeridianFlip) diagnostics.push({ path: 'rotator.restoreAfterMeridianFlip', message: 'restoring the rotator after a flip is not commanded, so the flag would change nothing about the night' })
+	if (rotator.enabled && rotator.reverse) diagnostics.push({ path: 'rotator.reverse', message: 'the rotator is commanded to the declared angle, so reversing it would change nothing about the night' })
 
 	// The two halves of the thermal policy are not interchangeable: only `coolCamera` drives the sensor to
 	// `cooling.temperature`, and `warmCamera` is the terminal action that gives it back to the ambient. A

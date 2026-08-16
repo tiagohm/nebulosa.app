@@ -235,6 +235,20 @@ describe('lowering', () => {
 		expect(plan.roles).toEqual(['camera', 'mount', 'wheel', 'focuser'])
 	})
 
+	test('an enabled cover, rotator and panel reserve those roles', () => {
+		const definition = complete()
+		const { plan } = ok({
+			...definition,
+			cover: { ...definition.cover, enabled: true, closeOnUnsafe: false },
+			rotator: { ...definition.rotator, enabled: true, restoreAfterMeridianFlip: false, reverse: false },
+			flatPanel: { ...definition.flatPanel, enabled: true },
+		})
+
+		expect(plan.roles).toContain('cover')
+		expect(plan.roles).toContain('rotator')
+		expect(plan.roles).toContain('flatPanel')
+	})
+
 	test('storage decisions are carried into the plan', () => {
 		const { plan } = ok(canonical())
 

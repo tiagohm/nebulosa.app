@@ -81,6 +81,8 @@ export interface NightOptions {
 	readonly patch?: DeepPartial<Sequencer>
 	readonly sim?: { readonly mount?: Partial<Mount> & { readonly hourAngle?: number } }
 	readonly control?: (api: NightControl) => void | Promise<void>
+	// Existing storage root to reuse. When omitted, the night creates and owns a temporary directory.
+	readonly root?: string
 }
 
 export const RETRY: SequencerRetryPolicy = { maxAttempts: 3, delay: 0, backoff: 1, maximumDelay: 0, retryOn: ['timeout', 'commandFailed'], onExhausted: 'fail' }
@@ -196,7 +198,8 @@ export function mergeSequencer(base: Sequencer, patch?: DeepPartial<Sequencer>):
 }
 
 export async function runNight(options: NightOptions = {}): Promise<NightResult> {
-	const root = await mkdtemp(join(tmpdir(), 'sequencer-sim-'))
+	const owned = options.root === undefined
+	const root = options.root ?? (await mkdtemp(join(tmpdir(), 'sequencer-sim-')))
 	const clock: SimulatorClock = {
 		now: T0,
 		advance(ms: number) {
@@ -221,7 +224,7 @@ export async function runNight(options: NightOptions = {}): Promise<NightResult>
 		const started = await handler.start(definition)
 
 		if (!started.ok) {
-			await rm(root, { recursive: true, force: true })
+			if (owned) await rm(root, { recursive: true, force: true })
 			const diagnostics = started.preflight?.diagnostics.map((item) => `${item.path}: ${item.message}`).join('; ')
 			throw new Error(`session refused: ${started.reason}${started.detail === undefined ? '' : `: ${started.detail}`}${diagnostics === undefined || diagnostics.length === 0 ? '' : ` (${diagnostics})`}`)
 		}
@@ -235,7 +238,7 @@ export async function runNight(options: NightOptions = {}): Promise<NightResult>
 		const session = (await runtime.settled(started.session.id)) ?? store.session(started.session.id)
 
 		if (session === undefined) {
-			await rm(root, { recursive: true, force: true })
+			if (owned) await rm(root, { recursive: true, force: true })
 			throw new Error('session vanished before it settled')
 		}
 

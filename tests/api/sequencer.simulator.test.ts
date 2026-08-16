@@ -65,4 +65,33 @@ describe('canonical night', () => {
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(4)
 	}, 30_000)
+
+	test('A.03 second run of the same definition', async () => {
+		const first = await runNight()
+
+		nights.push(first)
+
+		const second = await runNight({ root: first.root })
+
+		nights.push(second)
+
+		const firstCommitted = first.artifacts.filter((artifact) => artifact.status === 'committed')
+		const secondCommitted = second.artifacts.filter((artifact) => artifact.status === 'committed')
+		const firstPaths = firstCommitted.map((artifact) => artifact.path)
+		const secondPaths = secondCommitted.map((artifact) => artifact.path)
+		const lights = second.files.filter((path) => path.includes('/LIGHT/') && path.endsWith('.fits'))
+
+		expect(first.session.state).toBe('completed')
+		expect(second.session.state).toBe('completed')
+		expect(second.session.id).not.toBe(first.session.id)
+		expect(firstCommitted).toHaveLength(9)
+		expect(secondCommitted).toHaveLength(9)
+		expect(secondCommitted.map((artifact) => artifact.logicalSlotId)).toEqual(firstCommitted.map((artifact) => artifact.logicalSlotId))
+		expect(firstPaths.every((path) => path !== undefined)).toBeTrue()
+		expect(secondPaths.every((path) => path !== undefined)).toBeTrue()
+		expect(secondPaths.some((path) => firstPaths.includes(path))).toBeFalse()
+		expect(lights).toHaveLength(18)
+		expect(firstPaths.every((path) => path !== undefined && second.files.includes(path))).toBeTrue()
+		expect(secondPaths.every((path) => path !== undefined && second.files.includes(path))).toBeTrue()
+	}, 60_000)
 })

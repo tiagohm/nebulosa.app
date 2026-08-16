@@ -73,11 +73,13 @@ function captureResources(configuration: SequencerCapture): readonly ResourceBin
 // Builds the camera request of one frame of the plan.
 //
 // `outputPath` and `outputName` are the two halves of the temporary the protocol writes into, so the driver
-// creates the file the protocol expects and nothing else. `autoSave` is what actually writes it: without it the
-// payload is only buffered in the image processor, and the rename that publishes the frame would find nothing.
+// creates the file the protocol expects and nothing else. `publishPath` is the final name the image is
+// announced under, so a `.partial` is never what the viewer opens. `autoSave` is what actually writes it:
+// without it the payload is only buffered in the image processor, and the rename that publishes the frame
+// would find nothing.
 // One name is one frame, which is why the request always asks for a single exposure with no delay of its own —
 // the spacing between frames is the cadence of the loop and is waited for outside the exposure.
-function frameCapture(group: SequencerPlanFrameGroup, staged: string, devices: SequencerCaptureDevices): CameraCaptureStart {
+function frameCapture(group: SequencerPlanFrameGroup, staged: string, published: string, devices: SequencerCaptureDevices): CameraCaptureStart {
 	const { camera } = group
 
 	return {
@@ -103,6 +105,7 @@ function frameCapture(group: SequencerPlanFrameGroup, staged: string, devices: S
 		autoSave: true,
 		outputPath: dirname(staged),
 		outputName: basename(staged),
+		publishPath: published,
 		mount: devices.mount,
 		wheel: devices.wheel,
 		focuser: devices.focuser,
@@ -203,7 +206,7 @@ async function runCapture(services: SequencerCaptureServices, context: Sequencer
 
 	context.progress({ fraction: 0, detail: `exposing ${configuration.group.name} for ${configuration.group.exposureTime}s`, exposure: configuration.group.exposureTime })
 
-	const handle = services.cameraHandler.capture(context.scope, camera, frameCapture(configuration.group, staged, captureDevices(context)))
+	const handle = services.cameraHandler.capture(context.scope, camera, frameCapture(configuration.group, staged, slot.path, captureDevices(context)))
 	const started = await handle.started
 
 	if (!started.ok) {

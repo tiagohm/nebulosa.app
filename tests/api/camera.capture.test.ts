@@ -642,6 +642,35 @@ describe('camera capture session cancellation', () => {
 		}
 	})
 
+	test('writes the temporary and publishes the final path a caller asked for', async () => {
+		const written: string[] = []
+		const io: CameraCaptureDecodeAndWrite = {
+			decode: (data) => Promise.resolve(data),
+			write(path, data) {
+				written.push(path as string)
+				return Promise.resolve(data.byteLength)
+			},
+		}
+		const harness = createHarness({ io })
+		const directory = join(tmpdir(), 'sequencer-session')
+		const staged = join(directory, 'm42-lum-0.fit.partial')
+		const published = join(directory, 'm42-lum-0.fit')
+
+		try {
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request({ autoSave: true, outputPath: directory, outputName: 'm42-lum-0.fit.partial', publishPath: published }))
+			expect((await handle.started).ok).toBeTrue()
+			finishExposure(harness)
+
+			const result = await handle.result
+			expect(result.ok).toBeTrue()
+			if (result.ok) expect(result.value.paths).toEqual([published])
+			expect(written).toEqual([staged])
+			expect(harness.saved).toEqual([published])
+		} finally {
+			harness.restore()
+		}
+	})
+
 	test('refuses a fixed output name asking for more than one frame', async () => {
 		const harness = createHarness()
 

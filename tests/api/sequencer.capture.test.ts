@@ -103,6 +103,26 @@ describe('capture block', () => {
 		expect(result.type === 'fatalFailure' && result.reason).toBe('aborted')
 	})
 
+	test('commands the camera into the temporary and publishes the final path', async () => {
+		const drafts: SequencerArtifactDraft[] = []
+		let requested: { readonly outputName?: string; readonly publishPath?: string } | undefined
+		const services = {
+			cameraHandler: {
+				capture: (_scope: unknown, _camera: unknown, request: { readonly outputName?: string; readonly publishPath?: string }) => {
+					requested = request
+					return { started: Promise.resolve({ ok: false, reason: 'commandFailed' }), result: Promise.resolve({ ok: false, reason: 'commandFailed' }) }
+				},
+			},
+		} as unknown as SequencerCaptureServices
+		const configuration = captureConfiguration()
+		const context = contextOf(new AbortController().signal, drafts)
+
+		await sequencerCaptureHandler(services).execute(context, configuration)
+
+		expect(requested?.outputName?.endsWith('.partial')).toBeTrue()
+		expect(requested?.publishPath).toBe(context.frame?.path)
+	})
+
 	test('commands the exposure of a frame the session has not cancelled', async () => {
 		const drafts: SequencerArtifactDraft[] = []
 		let commanded = 0

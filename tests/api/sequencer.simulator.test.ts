@@ -197,4 +197,33 @@ describe('canonical night', () => {
 		expect(night.arbiter.availability('hw-camera')).toBe('available')
 		expect(night.arbiter.availability('hw-mount')).toBe('available')
 	}, 30_000)
+
+	test('A.08 OSC rig without a wheel or rotator', async () => {
+		const night = await runNight({
+			patch: {
+				devices: { wheel: undefined, rotator: undefined, cover: undefined, flatPanel: undefined },
+				rotator: { enabled: false },
+				cover: { enabled: false },
+				flatPanel: { enabled: false },
+				capture: { frames: [frame('lum', { name: 'Luminance', count: 4, exposureTime: 2 })] },
+				startup: {
+					actions: [action('unpark', { type: 'unparkMount', required: true }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
+				},
+				shutdown: {
+					actions: [action('stopGuide', { type: 'stopGuiding', required: true }), action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('warm', { type: 'warmCamera' })],
+				},
+			},
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(names.includes('wheel.move')).toBeFalse()
+		expect(names.includes('rotator.move')).toBeFalse()
+		expect(names.some((name) => name.startsWith('cover.') || name.startsWith('panel.'))).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(4)
+		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(1)
+	}, 30_000)
 })

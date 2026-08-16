@@ -75,6 +75,8 @@ export interface NightResult {
 export interface NightControl {
 	readonly snapshot: () => SequencerSessionSnapshot | undefined
 	readonly waitUntil: (predicate: (snapshot: SequencerSessionSnapshot) => boolean) => Promise<SequencerSessionSnapshot>
+	readonly arbiter: ResourceArbiter
+	readonly devices: SimulatorDevices
 }
 
 export interface NightOptions {
@@ -87,6 +89,8 @@ export interface NightOptions {
 	readonly control?: (api: NightControl) => void | Promise<void>
 	// Existing storage root to reuse. When omitted, the night creates and owns a temporary directory.
 	readonly root?: string
+	// Holds the first science exposure until `control` returns, so a mid-capture assertion can run.
+	readonly holdFirstExposure?: boolean
 }
 
 // One Sequencer process with a shared runtime, arbiter, and device registry. Admission cases start more
@@ -234,8 +238,9 @@ export async function runNight(options: NightOptions = {}): Promise<NightResult>
 		const devices = observatory(options.sim)
 		const log: SimulatorCommand[] = []
 		const frameBytes = await syntheticFits()
-		const firstAutofocus = options.control === undefined ? undefined : Promise.withResolvers<void>()
-		const { arbiter, runtime, handler, store } = environment(definition, devices, log, clock, frameBytes, firstAutofocus?.promise)
+		const firstAutofocus = options.control === undefined || options.holdFirstExposure ? undefined : Promise.withResolvers<void>()
+		const firstExposure = options.holdFirstExposure ? Promise.withResolvers<void>() : undefined
+		const { arbiter, runtime, handler, store } = environment(definition, devices, log, clock, frameBytes, firstAutofocus?.promise, undefined, firstExposure?.promise)
 		const started = await handler.start(definition)
 
 		if (!started.ok) {
@@ -245,9 +250,10 @@ export async function runNight(options: NightOptions = {}): Promise<NightResult>
 		}
 
 		try {
-			if (options.control !== undefined) await options.control(nightControl(handler, started.session.id))
+			if (options.control !== undefined) await options.control(nightControl(handler, started.session.id, arbiter, devices))
 		} finally {
 			firstAutofocus?.resolve()
+			firstExposure?.resolve()
 		}
 
 		const session = (await runtime.settled(started.session.id)) ?? store.session(started.session.id)
@@ -416,14 +422,14 @@ function registerDevices(byName: Record<string, Device>, devices: SimulatorDevic
 	byName[devices.guideOutput.name] = devices.guideOutput
 }
 
-function environment(definition: Sequencer, devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>, byName: Record<string, Device> = {}) {
+function environment(definition: Sequencer, devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>, byName: Record<string, Device> = {}, holdFirstExposure?: Promise<void>) {
 	const arbiter = new ResourceArbiter()
 	const coordinator = new OperationCoordinator(arbiter)
 	const registry = new SequencerBlockRegistry()
 	const store = new InMemorySequencerStore()
 
 	registerDevices(byName, devices)
-	const commanders = simulatedCommanders(devices, log, clock, frameBytes, holdFirstAutofocus)
+	const commanders = simulatedCommanders(devices, log, clock, frameBytes, holdFirstAutofocus, holdFirstExposure)
 	const runtime = new SequencerRuntime({
 		store,
 		registry,
@@ -469,10 +475,12 @@ function environment(definition: Sequencer, devices: SimulatorDevices, log: Simu
 	return { arbiter, registry, store, runtime, handler: new SequencerHandler({ store, runtime, registry, now: () => clock.now, observe: (sessionId) => runtime.observation(sessionId) }) }
 }
 
-function nightControl(handler: SequencerHandler, sessionId: string): NightControl {
+function nightControl(handler: SequencerHandler, sessionId: string, arbiter: ResourceArbiter, devices: SimulatorDevices): NightControl {
 	const snapshot = () => handler.snapshot(sessionId)
 
 	return {
+		arbiter,
+		devices,
 		snapshot,
 		waitUntil: async (predicate) => {
 			const deadline = Date.now() + 5_000
@@ -492,9 +500,10 @@ function nightControl(handler: SequencerHandler, sessionId: string): NightContro
 	}
 }
 
-function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>) {
+function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>, holdFirstExposure?: Promise<void>) {
 	const push = (name: string, detail?: string) => log.push(detail === undefined ? { name } : { name, detail })
 	const ok = <T>(value: T) => Promise.resolve(successfulOperationResult(value))
+	let heldScienceExposure = false
 
 	return {
 		mount: {
@@ -596,11 +605,15 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 			},
 		},
 		camera: {
-			capture: (_scope: unknown, _camera: Camera, request: { readonly outputPath?: string; readonly outputName?: string }) => {
+			capture: (_scope: unknown, _camera: Camera, request: { readonly outputPath?: string; readonly outputName?: string; readonly publishPath?: string }) => {
 				push('camera.expose')
 				const path = request.outputPath === undefined || request.outputName === undefined ? undefined : join(request.outputPath, request.outputName)
 				const write = path === undefined ? Promise.resolve() : mkdir(dirname(path), { recursive: true }).then(() => writeFile(path, frameBytes))
-				const result = write.then(() => successfulOperationResult({ paths: path === undefined ? [] : [path], frameCount: path === undefined ? 0 : 1 }))
+				const science = holdFirstExposure !== undefined && !heldScienceExposure && request.publishPath !== undefined
+
+				if (science) heldScienceExposure = true
+
+				const result = (science ? holdFirstExposure.then(() => write) : write).then(() => successfulOperationResult({ paths: path === undefined ? [] : [path], frameCount: path === undefined ? 0 : 1 }))
 
 				return { id: 'capture-1', started: ok(undefined), result, cancel: () => Promise.resolve() }
 			},

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
+import type { ResourceArbiter } from 'src/api/resource'
 import { action, frame } from './sequencer.fixture'
 import { commandNames, disposeNight, disposeProcess, openProcess, runNight } from './sequencer.simulator'
 import type { NightResult, SimulatorProcess } from './sequencer.simulator'
@@ -580,5 +581,34 @@ describe('admission', () => {
 		expect(process.arbiter.availability(guideCameraKey)).toBe('available')
 		expect(process.arbiter.availability(logicalCamera)).toBe('available')
 		expect(process.arbiter.availability(logicalOutput)).toBe('available')
+	}, 30_000)
+
+	test('B.06 the cover is reserved from the start', async () => {
+		let manual: ReturnType<ResourceArbiter['acquire']> | undefined
+		const night = await runNight({
+			holdFirstExposure: true,
+			control: async (api) => {
+				await api.waitUntil((current) => current.capture.exposure !== undefined)
+
+				expect(api.arbiter.snapshot(api.devices.cover.hardwareId).reservationOwner).toMatchObject({ kind: 'sequencer' })
+
+				manual = api.arbiter.acquire({ id: 'manual', kind: 'cover' }, [{ key: api.devices.cover.hardwareId, device: api.devices.cover }])
+			},
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(manual?.ok).toBeFalse()
+
+		if (manual === undefined || manual.ok) return
+
+		expect(manual.conflicts).toEqual([{ key: night.devices.cover.hardwareId, by: 'reservation', ownerKind: 'sequencer', ownerId: night.session.id, causes: [] }])
+		expect(night.session.state).toBe('completed')
+		expect(night.log.filter((entry) => entry.name === 'cover.close')).toHaveLength(1)
+		expect(names.indexOf('cover.close')).toBeGreaterThan(names.lastIndexOf('camera.expose'))
+		expect(night.devices.cover.parked).toBeTrue()
+		expect(night.arbiter.availability(night.devices.cover.hardwareId)).toBe('available')
 	}, 30_000)
 })

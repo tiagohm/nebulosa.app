@@ -2,9 +2,10 @@ import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
-import { isCamera, isMount, isWheel } from 'nebulosa/src/devices/indi/device'
+import { isCamera, isMount, isRotator, isWheel } from 'nebulosa/src/devices/indi/device'
 import type { Camera, Mount, MountTargetCoordinate, PierSide, Wheel } from 'nebulosa/src/devices/indi/device'
 import { sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
+import { toDeg } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraCaptureStart } from '#/camera'
@@ -13,6 +14,7 @@ import type { SequencerAuxiliaryCapture, SequencerPlateSolver } from '#/sequence
 import type { CameraHandler } from './camera'
 import type { MountCommander } from './mount.commander'
 import type { PlateSolverHandler } from './platesolver'
+import type { RotatorCommander } from './rotator.commander'
 import { sequencerActionFailure, sequencerDeviceOf, sequencerMissingRole, sequencerSettle } from './sequencer.action'
 import type { SequencerCenter, SequencerSlew } from './sequencer.compiler'
 import { SEQUENCER_BLOCK_TYPE } from './sequencer.compiler'
@@ -68,6 +70,8 @@ export interface SequencerCenteringServices {
 	readonly mountCommander: MountCommander
 	// Owner of the wheel, used only when the centering recipe names a filter of its own.
 	readonly wheelCommander: WheelCommander
+	// Owner of the rotator, used when the centering must happen after the field angle is already in place.
+	readonly rotatorCommander?: RotatorCommander
 	// Backend solving each auxiliary frame.
 	readonly plateSolver: PlateSolverHandler
 }
@@ -218,6 +222,7 @@ function centeringResources(configuration: SequencerCenter): ResourceBinding[] {
 	const roles: ResourceBinding[] = [{ role: 'mount' }, { role: 'camera' }]
 
 	if (configuration.capture.filter !== undefined) roles.push({ role: 'wheel', optional: true })
+	if (configuration.rotator !== undefined) roles.push({ role: 'rotator', optional: true })
 
 	return roles
 }
@@ -256,6 +261,10 @@ export async function runCentering(services: SequencerCenteringServices, context
 	const camera = sequencerDeviceOf(context, 'camera', isCamera)
 
 	if (camera === undefined) return sequencerMissingRole('camera')
+
+	const rotated = await rotateBeforeCentering(services, context, configuration)
+
+	if (rotated !== undefined && rotated.type !== 'completed') return rotated
 
 	const transition = centeringFilter(context, configuration)
 
@@ -335,6 +344,37 @@ async function runCenteringLoop(services: SequencerCenteringServices, context: S
 
 	// Unreachable for a positive attempt limit, and the honest answer for a definition that asked for none.
 	return { type: 'fatalFailure', reason: 'unexpectedState', detail: 'the centering was allowed no attempt' }
+}
+
+// Moves the rotator to the declared field angle before the plate-solve, when the definition asked for that
+// order. Absent configuration, missing commander or a rotator already inside tolerance are no-ops.
+async function rotateBeforeCentering(services: SequencerCenteringServices, context: SequencerActionContext, configuration: SequencerCenter): Promise<SequencerActionResult<undefined> | undefined> {
+	const policy = configuration.rotator
+	const commander = services.rotatorCommander
+
+	if (policy === undefined || commander === undefined) return undefined
+
+	const rotator = sequencerDeviceOf(context, 'rotator', isRotator)
+
+	if (rotator === undefined) return sequencerMissingRole('rotator')
+
+	const target = toDeg(policy.angle)
+	const delta = Math.abs(rotator.angle.value - target) % 360
+	const distance = delta > 180 ? 360 - delta : delta
+
+	if (distance <= toDeg(policy.tolerance)) return { type: 'completed', value: undefined }
+
+	context.progress({ detail: 'rotating the field before centering' })
+
+	const rotated = await commander.moveTo(context.scope, rotator, target)
+
+	if (!rotated.ok) return sequencerActionFailure(rotated, 'the rotator did not reach the angle the centering requires')
+
+	const settled = await sequencerSettle(context, policy.settle)
+
+	if (!settled.ok) return sequencerActionFailure(settled, 'the settle after the rotation was interrupted')
+
+	return { type: 'completed', value: undefined }
 }
 
 // Filter transition the centering has to make, or undefined when it has to make none.

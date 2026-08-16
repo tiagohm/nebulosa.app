@@ -78,6 +78,15 @@ describe('lowering', () => {
 		expect((flip.configuration as SequencerMeridianFlipTrigger).centering).toEqual(center.configuration as SequencerCenter)
 	})
 
+	test('a rotator that moves before centering travels with the centering node', () => {
+		const definition = complete()
+		const { plan } = ok({ ...definition, rotator: { ...definition.rotator, enabled: true, restoreAfterMeridianFlip: false, reverse: false, moveBeforeCentering: true } })
+		const target = plan.root.children[1] as SequencerPlanSequence
+		const center = target.children[1] as SequencerPlanAction
+
+		expect((center.configuration as SequencerCenter).rotator).toEqual({ angle: definition.rotator.angle, tolerance: definition.rotator.tolerance, settle: definition.rotator.settle })
+	})
+
 	test('a flip carries no centering when the target declares none', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, target: { ...definition.target, center: { ...definition.target.center, enabled: false } } })

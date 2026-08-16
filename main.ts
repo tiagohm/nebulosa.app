@@ -345,10 +345,10 @@ const sequencerChannel = new SequencerChannel({ wsm, snapshot: (sessionId) => se
 // registry is what keeps the domain modules free of the services they command: each one is a pure function of
 // the collaborators it is given.
 sequencerRegistry.register(sequencerSlewHandler(mountCommander))
-sequencerRegistry.register(sequencerCenterHandler({ cameraHandler, mountCommander, wheelCommander, plateSolver: plateSolverHandler }))
+sequencerRegistry.register(sequencerCenterHandler({ cameraHandler, mountCommander, wheelCommander, rotatorCommander, plateSolver: plateSolverHandler }))
 sequencerRegistry.register(sequencerAutofocusHandler({ runner: autoFocusHandler.runner, focuserCommander, wheelCommander }))
 sequencerRegistry.register(sequencerDitherHandler({ guiderCommander }))
-sequencerRegistry.register(sequencerMeridianFlipHandler({ cameraHandler, mountCommander, wheelCommander, plateSolver: plateSolverHandler, runner: autoFocusHandler.runner, focuserCommander }))
+sequencerRegistry.register(sequencerMeridianFlipHandler({ cameraHandler, mountCommander, wheelCommander, rotatorCommander, plateSolver: plateSolverHandler, runner: autoFocusHandler.runner, focuserCommander }))
 sequencerRegistry.register(sequencerCaptureHandler({ cameraHandler }))
 
 for (const handler of sequencerLifecycleHandlers({ mountCommander, coverCommander, cameraCommander, guiderCommander })) {

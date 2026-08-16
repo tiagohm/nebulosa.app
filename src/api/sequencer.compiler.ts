@@ -54,6 +54,9 @@ export interface SequencerSlew extends Omit<SequencerGoto, 'enabled'> {
 export interface SequencerCenter extends Omit<SequencerCentering, 'enabled'> {
 	// Coordinates the solved field is compared against.
 	readonly coordinates: MountTargetCoordinate<Angle>
+	// Rotator position to reach before the plate-solve, present when `moveBeforeCentering` is set. Rotating
+	// after the solve undoes the field the centering just verified.
+	readonly rotator?: Pick<SequencerRotator, 'angle' | 'tolerance' | 'settle'>
 }
 
 // Configuration of the dither trigger: the declared dither policy without its enablement flag, plus the
@@ -355,8 +358,9 @@ function lowerCentering(definition: Sequencer): SequencerCenter | undefined {
 	if (!target.center.enabled) return undefined
 
 	const { enabled, ...center } = target.center
+	const rotator = definition.rotator.enabled && definition.rotator.moveBeforeCentering ? { angle: definition.rotator.angle, tolerance: definition.rotator.tolerance, settle: definition.rotator.settle } : undefined
 
-	return { ...center, coordinates: { type: target.type, [target.type]: { ...target[target.type] } } }
+	return { ...center, coordinates: { type: target.type, [target.type]: { ...target[target.type] } }, rotator }
 }
 
 // Lowers the safe-point triggers of the capture loop, in the order they are evaluated before a frame: the

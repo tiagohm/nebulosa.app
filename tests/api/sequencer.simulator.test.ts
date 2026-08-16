@@ -383,4 +383,51 @@ describe('admission', () => {
 		expect(process.arbiter.availability(admittedDevices.camera.hardwareId)).toBe('available')
 		expect(process.arbiter.availability(refusedDevices.camera.hardwareId)).toBe('available')
 	}, 30_000)
+
+	test('B.02 reentrant start of the same session', async () => {
+		const process = await openProcess()
+
+		processes.push(process)
+
+		const observatory = process.addObservatory('east')
+		const created = process.handler.createSession(
+			process.definition(observatory, {
+				id: 'east',
+				guiding: { enabled: false },
+				dither: { enabled: false },
+				autofocus: { enabled: false },
+				meridianFlip: { enabled: false },
+				target: { center: { enabled: false } },
+				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				startup: { actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true })] },
+				shutdown: { actions: [action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('close', { type: 'closeCover' }), action('warm', { type: 'warmCamera' })] },
+			}),
+		)
+
+		expect(created.ok).toBeTrue()
+
+		if (!created.ok) return
+
+		const first = process.runtime.start(created.session.id)
+		const snapshot = structuredClone(process.handler.snapshot(created.session.id))
+		const second = process.runtime.start(created.session.id)
+		const again = process.handler.snapshot(created.session.id)
+
+		expect(first).toMatchObject({ ok: true, reentrant: false })
+		expect(second).toMatchObject({ ok: true, reentrant: true })
+
+		if (!first.ok || !second.ok) return
+
+		expect(second.session).toEqual(first.session)
+		expect(again).toEqual(snapshot)
+		expect(['reserved', 'leased']).toContain(process.arbiter.availability(observatory.camera.hardwareId))
+		expect(process.arbiter.snapshot(observatory.camera.hardwareId).reservationOwner).toEqual({ id: created.session.id, kind: 'sequencer' })
+
+		const session = await process.runtime.settled(created.session.id)
+
+		expect(session?.state).toBe('completed')
+		expect(process.log.filter((entry) => entry.name === 'unpark')).toHaveLength(1)
+		expect(process.log.filter((entry) => entry.name === 'camera.expose')).toHaveLength(1)
+		expect(process.arbiter.availability(observatory.camera.hardwareId)).toBe('available')
+	}, 30_000)
 })

@@ -770,7 +770,7 @@ function lowerGuider(definition: Sequencer) {
 
 	if (!guiding.enabled) return undefined
 
-	return { connection: guiding.connection, calibrateBeforeStart: guiding.calibrateBeforeStart, recalibrateAfterMeridianFlip: guiding.recalibrateAfterMeridianFlip, restoreAfterInterruption: guiding.restoreAfterInterruption, settle: guiding.settle, retry: guiding.retry }
+	return { connection: guiding.connection, calibrateBeforeStart: guiding.calibrateBeforeStart, recalibrateAfterMeridianFlip: guiding.recalibrateAfterMeridianFlip, settle: guiding.settle, retry: guiding.retry }
 }
 
 // Schema revision this compiler understands. A definition serialized against another revision may have moved
@@ -937,6 +937,10 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 
 	if (guiding.thresholds.enabled) diagnostics.push({ path: 'guiding.thresholds.enabled', message: 'guiding thresholds require the continuous monitor lane this version does not have' })
 	if (guiding.recovery.enabled) diagnostics.push({ path: 'guiding.recovery.enabled', message: 'guiding recovery requires the continuous monitor lane this version does not have' })
+	// The interlock of each safe point is what puts the corrections back after a suspension, and a pause
+	// re-enters that same safe point. There is no second restore path for an interruption that stopped the
+	// guider itself, so the flag would change nothing about the night whether it is set or not.
+	if (guiding.enabled) removals.push({ path: 'guiding.restoreAfterInterruption', reason: 'guiding is resumed by the interlock of each safe point, so a restore-after-interruption flag has no path of its own' })
 	if (!guiding.enabled && commands(definition, ['startGuiding', 'stopGuiding'])) diagnostics.push({ path: 'guiding.enabled', message: 'a lifecycle action commands guiding, which the definition disables' })
 	if (!guiding.enabled && dither.enabled) diagnostics.push({ path: 'dither.enabled', message: 'a dither is a guider command, and the definition declares no guider to send it to' })
 

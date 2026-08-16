@@ -199,7 +199,7 @@ function compiled(overrides?: {
 }
 
 function guiderPlan(connection: SequencerPlanGuider['connection']): SequencerPlanGuider {
-	return { connection, calibrateBeforeStart: false, recalibrateAfterMeridianFlip: false, restoreAfterInterruption: false, settle: { tolerance: 1.5, time: 10, timeout: 120 }, retry: RETRY }
+	return { connection, calibrateBeforeStart: false, recalibrateAfterMeridianFlip: false, settle: { tolerance: 1.5, time: 10, timeout: 120 }, retry: RETRY }
 }
 
 function plan(overrides?: Parameters<typeof compiled>[0]): SequencerRuntimePlanDraft {

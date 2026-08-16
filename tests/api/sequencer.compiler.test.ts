@@ -170,6 +170,21 @@ describe('lowering', () => {
 		expect((unpark.configuration as SequencerLifecycle).tracking).toBeUndefined()
 	})
 
+	test('restore after interruption is observably dropped from the plan', () => {
+		const compilation = compile(canonical())
+
+		expect(compilation.ok).toBe(true)
+		if (!compilation.ok) return
+		expect(compilation.plan.guider).toEqual({
+			connection: canonical().guiding.connection,
+			calibrateBeforeStart: false,
+			recalibrateAfterMeridianFlip: true,
+			settle: canonical().guiding.settle,
+			retry: canonical().guiding.retry,
+		})
+		expect(compilation.removals).toContainEqual({ path: 'guiding.restoreAfterInterruption', reason: 'guiding is resumed by the interlock of each safe point, so a restore-after-interruption flag has no path of its own' })
+	})
+
 	test('an action starting guiding carries the calibration and the settle the guiding block declares', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, guiding: { ...definition.guiding, calibrateBeforeStart: true } })

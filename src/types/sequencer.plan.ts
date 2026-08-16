@@ -127,8 +127,6 @@ export interface SequencerPlanGuider {
 	readonly calibrateBeforeStart: boolean
 	// Whether guiding recalibrates after a meridian flip, where the calibration no longer matches the sky.
 	readonly recalibrateAfterMeridianFlip: boolean
-	// Whether guiding is restored after an interruption that stopped it.
-	readonly restoreAfterInterruption: boolean
 	// Settling required after guiding starts or resumes, before an exposure may begin.
 	readonly settle: SequencerGuiderSettle
 	// Failure policy of the guiding commands.

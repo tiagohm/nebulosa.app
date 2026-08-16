@@ -124,7 +124,6 @@ const CONSUMED = [
 	'guiding.connection.profile',
 	'guiding.calibrateBeforeStart',
 	'guiding.recalibrateAfterMeridianFlip',
-	'guiding.restoreAfterInterruption',
 	'guiding.settle.tolerance',
 	'guiding.settle.time',
 	'guiding.settle.timeout',
@@ -317,6 +316,7 @@ const REJECTED: readonly Classified[] = [
 
 const REMOVED: readonly Classified[] = [
 	{ root: 'notification', path: 'notification', declare: (d) => ({ ...d, notification: { ...d.notification, enabled: true } }) },
+	{ root: 'guiding.restoreAfterInterruption', path: 'guiding.restoreAfterInterruption', declare: (d) => d },
 	{ root: 'capture.continueAfterRejectedFrame', path: 'capture.continueAfterRejectedFrame', declare: (d) => ({ ...d, capture: { ...d.capture, continueAfterRejectedFrame: true } }) },
 	{ root: 'dither.retry.onExhausted', path: 'dither.retry.onExhausted', declare: (d) => d },
 	{ root: 'autofocus.retry.onExhausted', path: 'autofocus.retry.onExhausted', declare: (d) => d },

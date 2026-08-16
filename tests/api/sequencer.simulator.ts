@@ -1,0 +1,590 @@
+import { spyOn } from 'bun:test'
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'fs/promises'
+import { tmpdir } from 'os'
+import { dirname, join } from 'path'
+import type { DeepPartial } from 'nebulosa/src/core/types'
+import type { Camera, Cover, Device, FlatPanel, Focuser, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
+import { DEFAULT_CAMERA, DEFAULT_COVER, DEFAULT_FLAT_PANEL, DEFAULT_FOCUSER, DEFAULT_MOUNT, DEFAULT_ROTATOR, DEFAULT_WHEEL } from 'nebulosa/src/devices/indi/device'
+import { writeImageToFits } from 'nebulosa/src/imaging/model/image'
+import type { Image } from 'nebulosa/src/imaging/model/types'
+import { bufferSink } from 'nebulosa/src/io/io'
+import type { AutoFocusRunner } from 'src/api/autofocus.runner'
+import type { CameraHandler } from 'src/api/camera'
+import type { CameraCommander } from 'src/api/camera.commander'
+import type { CoverCommander } from 'src/api/cover.commander'
+import type { FocuserCommander } from 'src/api/focuser.commander'
+import type { GuiderCommander } from 'src/api/guider.session'
+import type { MountCommander } from 'src/api/mount.commander'
+import { OperationCoordinator } from 'src/api/operation'
+import type { PlateSolverHandler } from 'src/api/platesolver'
+import { ResourceArbiter } from 'src/api/resource'
+import type { RotatorCommander } from 'src/api/rotator.commander'
+import { SequencerHandler } from 'src/api/sequencer'
+import { sequencerCaptureHandler } from 'src/api/sequencer.capture'
+import { sequencerMeridianFlipHandler } from 'src/api/sequencer.flip'
+import { sequencerAutofocusHandler } from 'src/api/sequencer.focus'
+import { sequencerDitherHandler } from 'src/api/sequencer.guiding'
+import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
+import { sequencerLifecycleHandlers } from 'src/api/sequencer.lifecycle'
+import { sequencerCenterHandler, sequencerSlewHandler } from 'src/api/sequencer.pointing'
+import type { SequencerPreparationServices } from 'src/api/sequencer.prepare'
+import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
+import { SequencerRuntime } from 'src/api/sequencer.runtime'
+import { InMemorySequencerStore } from 'src/api/sequencer.store'
+import type { WheelCommander } from 'src/api/wheel.commander'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
+import type { Sequencer, SequencerAuxiliaryCapture, SequencerCamera, SequencerRetryPolicy } from '#/sequencer'
+import type { SequencerArtifact, SequencerSession } from '#/sequencer.state'
+import { action, camera, frame } from './sequencer.fixture'
+
+export interface SimulatorCommand {
+	readonly name: string
+	readonly detail?: string
+}
+
+export interface SimulatorClock {
+	now: number
+	readonly advance: (ms: number) => void
+}
+
+export interface SimulatorDevices {
+	readonly camera: Camera
+	readonly mount: Mount
+	readonly wheel: Wheel
+	readonly focuser: Focuser
+	readonly rotator: Rotator
+	readonly cover: Cover
+	readonly flatPanel: FlatPanel
+	readonly guideCamera: Camera
+	readonly guideOutput: Device
+	guiderConnected: boolean
+	guiderRunning: boolean
+	guiderLooping: boolean
+}
+
+export interface NightResult {
+	readonly session: SequencerSession
+	readonly log: readonly SimulatorCommand[]
+	readonly devices: SimulatorDevices
+	readonly artifacts: readonly SequencerArtifact[]
+	readonly files: readonly string[]
+	readonly arbiter: ResourceArbiter
+	readonly root: string
+}
+
+export interface NightOptions {
+	readonly patch?: DeepPartial<Sequencer>
+	readonly sim?: { readonly mount?: Partial<Mount> & { readonly hourAngle?: number } }
+}
+
+export const RETRY: SequencerRetryPolicy = { maxAttempts: 3, delay: 0, backoff: 1, maximumDelay: 0, retryOn: ['timeout', 'commandFailed'], onExhausted: 'fail' }
+
+const AUX_3S: SequencerAuxiliaryCapture = { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false }
+const AUX_5S: SequencerAuxiliaryCapture = { ...AUX_3S, exposureTime: 5 }
+const T0 = 1_700_000_000_000
+const FILTERS = ['L', 'R', 'G', 'B', 'Ha', 'Dark'] as const
+
+export function defaultSequencer(root: string): Sequencer {
+	const defaults: SequencerCamera = camera()
+
+	return {
+		schemaVersion: 1,
+		id: 'simulator-default',
+		revision: 1,
+		name: 'LRGB M42',
+		devices: {
+			camera: 'Camera Simulator',
+			mount: 'Mount Simulator',
+			wheel: 'Wheel Simulator',
+			focuser: 'Focuser Simulator',
+			rotator: 'Rotator Simulator',
+			guideCamera: 'Guide Camera Simulator',
+			guideOutput: 'Guide Output Simulator',
+			cover: 'Cover Simulator',
+			flatPanel: 'Flat Panel Simulator',
+		},
+		target: {
+			id: 'm42',
+			name: 'Orion Nebula',
+			enabled: true,
+			type: 'J2000',
+			J2000: { x: 1.4, y: -0.09 },
+			tracking: { enabled: true, mode: 'SIDEREAL', retry: RETRY },
+			goto: { enabled: true, skipTolerance: 0.001, arrivalTolerance: 0.0005, timeout: 300, settle: 2, retry: RETRY },
+			center: { enabled: true, solver: { type: 'astap', timeout: 60, blind: false, searchRadius: 0.05, downsample: 2 }, tolerance: 0.0001, maximumAttempts: 3, settle: 1, syncMount: true, capture: AUX_5S, retry: RETRY },
+			constraints: { enabled: false, window: { enabled: false }, onViolation: 'wait', stableFor: 60 },
+		},
+		capture: {
+			order: 'sequential',
+			repeat: 1,
+			delay: 1,
+			continueAfterRejectedFrame: false,
+			retry: RETRY,
+			defaults,
+			frames: [
+				frame('lum', { name: 'Luminance', count: 3, exposureTime: 2, filter: { type: 'name', name: 'L' } }),
+				frame('red', { name: 'Red', count: 2, exposureTime: 2, filter: { type: 'name', name: 'R' } }),
+				frame('green', { name: 'Green', count: 2, exposureTime: 2, filter: { type: 'name', name: 'G' } }),
+				frame('blue', { name: 'Blue', count: 2, exposureTime: 2, filter: { type: 'name', name: 'B' } }),
+			],
+		},
+		guiding: {
+			enabled: true,
+			connection: { mode: 'remote', host: '127.0.0.1', port: 4400 },
+			calibrateBeforeStart: false,
+			recalibrateAfterMeridianFlip: true,
+			restoreAfterInterruption: true,
+			settle: { tolerance: 1.5, time: 2, timeout: 30 },
+			thresholds: { enabled: false, pauseCaptureWhenExceeded: false },
+			recovery: { enabled: false, maximumAttempts: 3, stopBeforeRetry: true, findStarBeforeRetry: true, recalibrate: false, settle: { tolerance: 1.5, time: 2, timeout: 30 }, onFailure: 'pause' },
+			retry: RETRY,
+		},
+		dither: { enabled: true, amount: 3, raOnly: false, beforeFirstFrame: false, afterFilterChange: false, everyFrames: 2, everyTime: 0, retry: RETRY, onFailure: 'continue' },
+		autofocus: {
+			enabled: true,
+			triggers: { onStart: true, onFilterChange: true, afterMeridianFlip: true, everyFrames: 0, everyTime: 0, temperatureChange: 0, minimumTimeBetweenRuns: 30 },
+			algorithm: { initialOffsetSteps: 3, stepSize: 50, fittingMode: 'TREND_HYPERBOLIC', rmsdThreshold: 0.5, reversed: false, maximumPosition: 50000, backlash: { enabled: false, mode: 'overshoot', steps: 0 } },
+			capture: AUX_3S,
+			starDetection: { type: 'nebulosa', timeout: 10, minimumSNR: 10, maximumStars: 200 },
+			filterOffsets: [],
+			settle: 1,
+			retry: RETRY,
+			onFailure: 'continue',
+		},
+		rotator: { enabled: true, angle: 0.5, tolerance: 0.001, settle: 1, moveBeforeCentering: true, restoreAfterMeridianFlip: false, reverse: false, retry: RETRY },
+		meridianFlip: { enabled: true, minimumHourAngle: 0.01, maximumHourAngle: 0.08, safetyMargin: 10, settle: 2, timeout: 120, retry: RETRY, onFailure: 'pause' },
+		cooling: { enabled: true, temperature: -10, tolerance: 1, ramp: 2, waitForTarget: true, timeout: 60, warmTemperature: 15, warmRamp: 2, turnCoolerOffAfterWarm: true },
+		dome: { enabled: false, closeOnUnsafe: true, slaving: false, synchronizeBeforeCapture: false, settle: 5, timeout: 300, retry: RETRY, onFailure: 'pause' },
+		cover: { enabled: true, closeOnUnsafe: false, openBeforeCapture: true, closeForDarkFrames: true, timeout: 30, retry: RETRY },
+		flatPanel: { enabled: true, brightness: 80, brightnessByFilter: [{ filter: { type: 'name', name: 'L' }, brightness: 40 }], timeout: 20, retry: RETRY },
+		monitoring: { enabled: false, interval: 30, monitors: [] },
+		safety: { enabled: false, triggerOnWarning: false, abortCurrentExposure: true, actions: [], recovery: { enabled: false, automatic: true, stableFor: 600, maximumWait: 3600, reconnectDevices: true, unparkMount: true, restoreTracking: true, resumeCapture: true, onFailure: 'pause' } },
+		quality: { enabled: false, starDetection: { type: 'nebulosa', timeout: 10, minimumSNR: 10, maximumStars: 200 }, evaluateEveryFrames: 1, rejectFrame: false },
+		execution: { start: { type: 'manual' }, end: { type: 'afterSequence' }, pauseMode: 'afterCurrentExposure', stopMode: 'graceful', defaultRetry: RETRY, checkpoint: { afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 30 } },
+		storage: { root, fileNameTemplate: '{target}-{filter}-{exposure}', directoryTemplate: '{target}/{frameType}', autoSubFolderMode: 'off' },
+		startup: {
+			enabled: true,
+			continueOnFailure: false,
+			actions: [
+				action('connect', { type: 'connectDevices', devices: ['camera', 'mount', 'wheel', 'focuser', 'rotator', 'cover', 'flatPanel'], required: true }),
+				action('unpark', { type: 'unparkMount', required: true }),
+				action('open', { type: 'openCover' }),
+				action('cool', { type: 'coolCamera', required: true }),
+				action('guide', { type: 'startGuiding', required: true }),
+			],
+		},
+		shutdown: {
+			enabled: true,
+			runOnCompletion: true,
+			runOnStop: true,
+			runOnFailure: true,
+			continueOnFailure: true,
+			actions: [action('stopGuide', { type: 'stopGuiding', required: true }), action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('close', { type: 'closeCover' }), action('warm', { type: 'warmCamera' })],
+		},
+		notification: { enabled: false, events: [], channels: [], minimumSeverity: 'warning' },
+	}
+}
+
+export function mergeSequencer(base: Sequencer, patch?: DeepPartial<Sequencer>): Sequencer {
+	return (patch === undefined ? structuredClone(base) : mergeValue(base, patch)) as Sequencer
+}
+
+export async function runNight(options: NightOptions = {}): Promise<NightResult> {
+	const root = await mkdtemp(join(tmpdir(), 'sequencer-sim-'))
+	const clock: SimulatorClock = {
+		now: T0,
+		advance(ms: number) {
+			clock.now += Math.max(0, ms)
+		},
+	}
+	const wait = await import('src/api/operation.wait')
+	const delay = spyOn(wait, 'abortableDelay').mockImplementation((ms: number, signal: AbortSignal) => {
+		if (signal.aborted) return Promise.resolve(failedOperationResult('aborted'))
+
+		clock.advance(ms)
+		return Promise.resolve(successfulOperationResult(undefined))
+	})
+
+	try {
+		const definition = mergeSequencer(defaultSequencer(root), options.patch)
+		const devices = observatory(options.sim)
+		const log: SimulatorCommand[] = []
+		const frameBytes = await syntheticFits()
+		const { arbiter, runtime, handler, store } = environment(definition, devices, log, clock, frameBytes)
+		const started = await handler.start(definition)
+
+		if (!started.ok) {
+			await rm(root, { recursive: true, force: true })
+			const diagnostics = started.preflight?.diagnostics.map((item) => `${item.path}: ${item.message}`).join('; ')
+			throw new Error(`session refused: ${started.reason}${started.detail === undefined ? '' : `: ${started.detail}`}${diagnostics === undefined || diagnostics.length === 0 ? '' : ` (${diagnostics})`}`)
+		}
+
+		const session = (await runtime.settled(started.session.id)) ?? store.session(started.session.id)
+
+		if (session === undefined) {
+			await rm(root, { recursive: true, force: true })
+			throw new Error('session vanished before it settled')
+		}
+
+		return { session, log, devices, artifacts: store.artifacts(session.id), files: await listFiles(root), arbiter, root }
+	} finally {
+		delay.mockRestore()
+	}
+}
+
+export async function disposeNight(night: NightResult) {
+	await rm(night.root, { recursive: true, force: true })
+}
+
+export function commandNames(log: readonly SimulatorCommand[]) {
+	return log.map((entry) => entry.name)
+}
+
+function observatory(sim?: NightOptions['sim']): SimulatorDevices {
+	const mount = structuredClone(DEFAULT_MOUNT)
+
+	Object.assign(mount, {
+		id: 'mount-1',
+		hardwareId: 'hw-mount',
+		name: 'Mount Simulator',
+		connected: true,
+		parked: true,
+		tracking: false,
+		canFlip: true,
+		hasPierSide: true,
+		pierSide: 'WEST',
+		hourAngle: -0.2,
+		trackMode: 'SIDEREAL',
+		canPark: true,
+		canUnpark: true,
+		canSetTracking: true,
+		canSlew: true,
+		...sim?.mount,
+	})
+
+	const imaging = structuredClone(DEFAULT_CAMERA)
+
+	Object.assign(imaging, { id: 'camera-1', hardwareId: 'hw-camera', name: 'Camera Simulator', connected: true, hasCooler: true, hasCoolerControl: true, hasThermometer: true, cooler: false, temperature: 20, canSetTemperature: true })
+
+	const guideCamera = structuredClone(DEFAULT_CAMERA)
+
+	Object.assign(guideCamera, { id: 'guide-camera-1', hardwareId: 'hw-guide-camera', name: 'Guide Camera Simulator', connected: true })
+
+	const wheel = structuredClone(DEFAULT_WHEEL)
+
+	Object.assign(wheel, { id: 'wheel-1', hardwareId: 'hw-wheel', name: 'Wheel Simulator', connected: true, count: FILTERS.length, position: FILTERS.length - 1, names: [...FILTERS] })
+
+	const focuser = structuredClone(DEFAULT_FOCUSER)
+
+	Object.assign(focuser, { id: 'focuser-1', hardwareId: 'hw-focuser', name: 'Focuser Simulator', connected: true, position: { value: 25000, min: 0, max: 50000, step: 1 } })
+
+	const rotator = structuredClone(DEFAULT_ROTATOR)
+
+	Object.assign(rotator, { id: 'rotator-1', hardwareId: 'hw-rotator', name: 'Rotator Simulator', connected: true, angle: { value: 0, min: 0, max: 360, step: 0.1 } })
+
+	const cover = structuredClone(DEFAULT_COVER)
+
+	Object.assign(cover, { id: 'cover-1', hardwareId: 'hw-cover', name: 'Cover Simulator', connected: true, parked: true, canPark: true, canUnpark: true })
+
+	const flatPanel = structuredClone(DEFAULT_FLAT_PANEL)
+
+	Object.assign(flatPanel, { id: 'flat-1', hardwareId: 'hw-flat', name: 'Flat Panel Simulator', connected: true, enabled: false, intensity: { value: 0, min: 0, max: 255, step: 1 } })
+
+	return {
+		camera: imaging,
+		mount,
+		wheel,
+		focuser,
+		rotator,
+		cover,
+		flatPanel,
+		guideCamera,
+		guideOutput: { type: 'guideOutput', id: 'guide-output-1', hardwareId: 'hw-guide-output', name: 'Guide Output Simulator', connected: true } as Device,
+		guiderConnected: false,
+		guiderRunning: false,
+		guiderLooping: false,
+	}
+}
+
+function environment(definition: Sequencer, devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array) {
+	const arbiter = new ResourceArbiter()
+	const coordinator = new OperationCoordinator(arbiter)
+	const registry = new SequencerBlockRegistry()
+	const store = new InMemorySequencerStore()
+	const byName: Record<string, Device> = {
+		[devices.camera.name]: devices.camera,
+		[devices.mount.name]: devices.mount,
+		[devices.wheel.name]: devices.wheel,
+		[devices.focuser.name]: devices.focuser,
+		[devices.rotator.name]: devices.rotator,
+		[devices.cover.name]: devices.cover,
+		[devices.flatPanel.name]: devices.flatPanel,
+		[devices.guideCamera.name]: devices.guideCamera,
+		[devices.guideOutput.name]: devices.guideOutput,
+	}
+	const commanders = simulatedCommanders(devices, log, clock, frameBytes)
+	const runtime = new SequencerRuntime({
+		store,
+		registry,
+		coordinator,
+		now: () => clock.now,
+		resolve: (_role, deviceId) => {
+			const device = byName[deviceId]
+			return device === undefined ? undefined : { key: device.hardwareId, device }
+		},
+		preparation: { wheelCommander: commanders.wheel, focuserCommander: commanders.focuser, coverCommander: commanders.cover, flatPanelCommander: commanders.flatPanel, rotatorCommander: commanders.rotator, mountCommander: commanders.mount } as unknown as SequencerPreparationServices,
+		guiding: { guiderCommander: commanders.guider } as unknown as SequencerGuidingServices,
+	})
+
+	registry.register(sequencerSlewHandler(commanders.mount as unknown as MountCommander))
+	registry.register(
+		sequencerCenterHandler({
+			cameraHandler: commanders.camera as unknown as CameraHandler,
+			mountCommander: commanders.mount as unknown as MountCommander,
+			wheelCommander: commanders.wheel as unknown as WheelCommander,
+			rotatorCommander: commanders.rotator as unknown as RotatorCommander,
+			plateSolver: commanders.solver as unknown as PlateSolverHandler,
+		}),
+	)
+	registry.register(sequencerAutofocusHandler({ runner: commanders.autofocus as unknown as AutoFocusRunner, focuserCommander: commanders.focuser as unknown as FocuserCommander, wheelCommander: commanders.wheel as unknown as WheelCommander }))
+	registry.register(sequencerDitherHandler({ guiderCommander: commanders.guider as unknown as GuiderCommander }))
+	registry.register(
+		sequencerMeridianFlipHandler({
+			cameraHandler: commanders.camera as unknown as CameraHandler,
+			mountCommander: commanders.mount as unknown as MountCommander,
+			wheelCommander: commanders.wheel as unknown as WheelCommander,
+			rotatorCommander: commanders.rotator as unknown as RotatorCommander,
+			plateSolver: commanders.solver as unknown as PlateSolverHandler,
+			runner: commanders.autofocus as unknown as AutoFocusRunner,
+			focuserCommander: commanders.focuser as unknown as FocuserCommander,
+		}),
+	)
+	registry.register(sequencerCaptureHandler({ cameraHandler: commanders.camera as unknown as CameraHandler }))
+
+	for (const handler of sequencerLifecycleHandlers({ mountCommander: commanders.mount as unknown as MountCommander, coverCommander: commanders.cover as unknown as CoverCommander, cameraCommander: commanders.thermal as unknown as CameraCommander, guiderCommander: commanders.guider as unknown as GuiderCommander })) {
+		registry.register(handler)
+	}
+
+	return { arbiter, registry, store, runtime, handler: new SequencerHandler({ store, runtime, registry, now: () => clock.now }) }
+}
+
+function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array) {
+	const push = (name: string, detail?: string) => log.push(detail === undefined ? { name } : { name, detail })
+	const ok = <T>(value: T) => Promise.resolve(successfulOperationResult(value))
+
+	return {
+		mount: {
+			goTo: (_scope: unknown, mount: Mount, target: { readonly type?: string; readonly J2000?: { readonly x: number; readonly y: number } }) => {
+				push('slew')
+				mount.parked = false
+				if (target.J2000 !== undefined) {
+					mount.equatorialCoordinate.rightAscension = target.J2000.x
+					mount.equatorialCoordinate.declination = target.J2000.y
+				}
+				return ok({ rightAscension: mount.equatorialCoordinate.rightAscension, declination: mount.equatorialCoordinate.declination, pierSide: mount.pierSide })
+			},
+			sync: () => {
+				push('sync')
+				return ok(undefined)
+			},
+			park: (_scope: unknown, mount: Mount) => {
+				push('park')
+				mount.parked = true
+				mount.tracking = false
+				return ok(undefined)
+			},
+			unpark: (_scope: unknown, mount: Mount) => {
+				push('unpark')
+				mount.parked = false
+				return ok(undefined)
+			},
+			setTracking: (_scope: unknown, mount: Mount, enabled: boolean) => {
+				push('track', enabled ? 'on' : 'off')
+				mount.tracking = enabled
+				return ok(undefined)
+			},
+			setTrackMode: (_scope: unknown, mount: Mount, mode: Mount['trackMode']) => {
+				mount.trackMode = mode
+				return ok(undefined)
+			},
+			flip: (_scope: unknown, mount: Mount) => {
+				push('flip')
+				mount.pierSide = mount.pierSide === 'WEST' ? 'EAST' : 'WEST'
+				return ok({ rightAscension: mount.equatorialCoordinate.rightAscension, declination: mount.equatorialCoordinate.declination, pierSide: mount.pierSide, initialPierSide: mount.pierSide === 'WEST' ? 'EAST' : 'WEST', pierSideVerified: true })
+			},
+		},
+		cover: {
+			park: (_scope: unknown, cover: Cover) => {
+				push('cover.close')
+				cover.parked = true
+				return ok(undefined)
+			},
+			unpark: (_scope: unknown, cover: Cover) => {
+				push('cover.open')
+				cover.parked = false
+				return ok(undefined)
+			},
+		},
+		wheel: {
+			moveTo: (_scope: unknown, wheel: Wheel, slot: number) => {
+				wheel.position = slot
+				push('wheel.move', wheel.names[slot] || String(slot))
+				return ok(undefined)
+			},
+		},
+		focuser: {
+			moveTo: (_scope: unknown, focuser: Focuser, position: number) => {
+				push('focuser.move', String(position))
+				focuser.position.value = position
+				return ok(undefined)
+			},
+		},
+		rotator: {
+			moveTo: (_scope: unknown, rotator: Rotator, angle: number) => {
+				push('rotator.move', String(angle))
+				rotator.angle.value = angle
+				return ok(undefined)
+			},
+		},
+		flatPanel: {
+			enable: (_scope: unknown, panel: FlatPanel, brightness?: number) => {
+				push('panel.on', brightness === undefined ? undefined : String(brightness))
+				panel.enabled = true
+				if (brightness !== undefined) panel.intensity.value = brightness
+				return ok(undefined)
+			},
+			disable: (_scope: unknown, panel: FlatPanel) => {
+				push('panel.off')
+				panel.enabled = false
+				return ok(undefined)
+			},
+		},
+		thermal: {
+			cooler: (_scope: unknown, camera: Camera, enabled: boolean) => {
+				push(enabled ? 'cooler.on' : 'cooler.off')
+				camera.cooler = enabled
+				return ok(undefined)
+			},
+			temperature: (_scope: unknown, camera: Camera, value: number) => {
+				push('cooler.set', String(value))
+				camera.temperature = value
+				return ok(undefined)
+			},
+		},
+		camera: {
+			capture: (_scope: unknown, _camera: Camera, request: { readonly outputPath?: string; readonly outputName?: string }) => {
+				push('camera.expose')
+				const path = request.outputPath === undefined || request.outputName === undefined ? undefined : join(request.outputPath, request.outputName)
+				const write = path === undefined ? Promise.resolve() : mkdir(dirname(path), { recursive: true }).then(() => writeFile(path, frameBytes))
+				const result = write.then(() => successfulOperationResult({ paths: path === undefined ? [] : [path], frameCount: path === undefined ? 0 : 1 }))
+
+				return { id: 'capture-1', started: ok(undefined), result, cancel: () => Promise.resolve() }
+			},
+		},
+		solver: {
+			start: (request: { readonly rightAscension?: number | string; readonly declination?: number | string }) => {
+				push('solve')
+				const rightAscension = typeof request.rightAscension === 'number' ? request.rightAscension : 1.4
+				const declination = typeof request.declination === 'number' ? request.declination : -0.09
+
+				return { SIMPLE: true, BITPIX: -32, NAXIS: 2, NAXIS1: 8, NAXIS2: 8, rightAscension, declination }
+			},
+		},
+		autofocus: {
+			start: (_scope: unknown, _camera: Camera, focuser: Focuser) => {
+				push('autofocus.run')
+				clock.advance(30_000)
+				return {
+					handle: { id: 'af-1', kind: 'autoFocus', signal: new AbortController().signal, result: ok({ outcome: 'focused', position: focuser.position.value, message: 'best focus!', focusPoint: [focuser.position.value, 1] }), cancel: () => Promise.resolve() },
+					finish: () => undefined,
+				}
+			},
+		},
+		guider: {
+			running: () => devices.guiderRunning,
+			looping: () => devices.guiderLooping,
+			connect: () => {
+				push('guider.connect')
+				devices.guiderConnected = true
+				return ok({ id: 'guider-1', mode: 'remote', key: 'logical:guider:remote:127.0.0.1:4400', target: '127.0.0.1:4400', state: 'idle', connected: true, looping: false, running: false })
+			},
+			disconnect: () => {
+				push('guider.disconnect')
+				devices.guiderConnected = false
+				devices.guiderRunning = false
+				devices.guiderLooping = false
+				return ok(undefined)
+			},
+			loop: () => {
+				push('guider.loop')
+				devices.guiderLooping = true
+				devices.guiderRunning = false
+				return ok(undefined)
+			},
+			startGuiding: () => {
+				push('guider.start')
+				devices.guiderRunning = true
+				devices.guiderLooping = true
+				return ok(undefined)
+			},
+			stopGuiding: () => {
+				push('guider.stop')
+				devices.guiderRunning = false
+				return ok(undefined)
+			},
+			calibrate: () => {
+				push('guider.calibrate')
+				devices.guiderRunning = true
+				devices.guiderLooping = true
+				return ok(undefined)
+			},
+			dither: () => {
+				push('guider.dither')
+				return ok(undefined)
+			},
+		},
+	} as const
+}
+
+function mergeValue(base: unknown, patch: unknown): unknown {
+	if (patch === undefined) return structuredClone(base)
+	if (Array.isArray(patch) || patch === null || typeof patch !== 'object' || typeof base !== 'object' || base === null || Array.isArray(base)) return structuredClone(patch)
+
+	const next: Record<string, unknown> = { ...(base as Record<string, unknown>) }
+
+	for (const [key, value] of Object.entries(patch)) next[key] = mergeValue((base as Record<string, unknown>)[key], value)
+
+	return next
+}
+
+async function syntheticFits() {
+	const width = 8
+	const height = 8
+	const raw = new Float32Array(width * height)
+	const buffer = Buffer.alloc(64 * 1024)
+	const sink = bufferSink(buffer)
+	const image: Image = {
+		header: { SIMPLE: true, BITPIX: -32, NAXIS: 2, NAXIS1: width, NAXIS2: height },
+		raw,
+		metadata: { width, height, channels: 1, stride: width, pixelCount: width * height, strideInBytes: width * 4, pixelSizeInBytes: 4, bitpix: -32, bayer: undefined },
+	}
+
+	await writeImageToFits(image, sink)
+	return buffer.subarray(0, sink.position)
+}
+
+async function listFiles(root: string) {
+	const files: string[] = []
+
+	async function walk(directory: string) {
+		for (const entry of await readdir(directory, { withFileTypes: true })) {
+			const path = join(directory, entry.name)
+			if (entry.isDirectory()) await walk(path)
+			else files.push(path)
+		}
+	}
+
+	await walk(root)
+
+	return files
+}

@@ -327,6 +327,7 @@ describe('sequencer runtime', () => {
 							connected = request
 							return Promise.resolve(successfulOperationResult({ id: 'guider-1' }))
 						},
+						disconnect: () => Promise.resolve(successfulOperationResult(undefined)),
 					},
 				} as unknown as SequencerGuidingServices,
 			},
@@ -371,6 +372,7 @@ describe('sequencer runtime', () => {
 							connected = request
 							return Promise.resolve(successfulOperationResult({ id: 'guider-1' }))
 						},
+						disconnect: () => Promise.resolve(successfulOperationResult(undefined)),
 					},
 				} as unknown as SequencerGuidingServices,
 			},
@@ -959,6 +961,7 @@ describe('sequencer runtime', () => {
 
 							return Promise.resolve(successfulOperationResult({ id: handle.id }))
 						},
+						disconnect: () => Promise.resolve(successfulOperationResult(undefined)),
 					},
 				} as unknown as SequencerGuidingServices,
 			},

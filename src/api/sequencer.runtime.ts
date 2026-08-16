@@ -1018,6 +1018,25 @@ export class SequencerRuntime {
 		return active === undefined || active.id !== sessionId ? Promise.resolve(this.#store.session(sessionId)) : active.done.promise
 	}
 
+	// Closes the guiding session this runtime opened, before the reservation is released.
+	//
+	// The connection is a root under the reservation token and is not an action of the plan, so the terminal
+	// pipeline's `stopGuiding` leaves it attached. Releasing the reservation while it is still open would keep
+	// the logical guider keys occupied and refuse the next start the way an idle PHD2 session does.
+	async #closeGuider(active: ActiveSession) {
+		if (active.guider === undefined) return
+
+		const disconnect = this.#guiding.guiderCommander.disconnect?.bind(this.#guiding.guiderCommander)
+
+		if (disconnect !== undefined) {
+			const closed = await disconnect(active.guider)
+
+			if (!closed.ok) console.error('sequencer guider disconnect failed:', active.id, closed.reason, closed.error)
+		}
+
+		active.guider = undefined
+	}
+
 	// Opens the guiding session the plan declares and binds it to every action of the session.
 	//
 	// This is the `open` hook of the executor host, so the walk calls it after the scheduled wait and before its
@@ -1315,6 +1334,7 @@ export class SequencerRuntime {
 			active.controller.abort('aborted')
 			active.action.abort('aborted')
 			await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
+			await this.#closeGuider(active)
 
 			// A walk that threw produced no outcome at all, which is a defect of this process and not a night that
 			// ended: it fails the session with the cause the exception was normalized to.

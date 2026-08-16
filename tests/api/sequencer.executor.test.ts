@@ -762,6 +762,7 @@ describe('plan walk', () => {
 		expect(state.holds).toHaveLength(2)
 		expect(frames.map((it) => it.attempt)).toEqual([0, 1, 2, 3, 4, 5])
 		expect(new Set(frames.map((it) => it.slot!.path)).size).toBe(6)
+		expect(state.events.filter((event) => event.type === 'policyApplied' && event.detail === 'grantAttemptWindow')).toHaveLength(1)
 	})
 
 	test('takes the safe point again instead of exposing when a held slot resumes', async () => {

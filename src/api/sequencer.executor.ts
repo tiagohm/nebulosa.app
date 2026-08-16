@@ -1433,6 +1433,7 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 				if (decision.exhausted) {
 					execution.capture = grantAttemptWindow(execution.capture, targetId, group.id, attempt + 1)
 					execution.keeper.capture(execution.capture)
+					execution.events.push({ type: 'policyApplied', nodeId: node.id, detail: 'grantAttemptWindow' })
 				}
 
 				// The resume goes back to the safe point, not straight to the cadence wait. Everything the safe

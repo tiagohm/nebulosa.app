@@ -436,6 +436,20 @@ describe('plan walk', () => {
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 	})
 
+	test('exposes a calibration frame past the meridian boundary instead of waiting for a flip it will not run', async () => {
+		const base = definition()
+		const capture = { ...base.capture, frames: [frame('dark', { count: 2, frameType: 'DARK', camera: camera() })] }
+		const state = harness(planOf({ capture, meridianFlip: { ...base.meridianFlip, enabled: true } }))
+
+		state.observation = { hourAngle: 0.15, pierSide: 'WEST', preFlipPierSide: 'WEST' }
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(state.executed.filter((it) => it.nodeId.endsWith('.trigger.meridianFlip'))).toBeEmpty()
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
+	})
+
 	test('exposes ahead of the meridian boundary of a mount that publishes no pier side', async () => {
 		const base = definition()
 		const state = harness(planOf({ meridianFlip: { ...base.meridianFlip, enabled: true } }))

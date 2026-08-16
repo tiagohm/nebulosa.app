@@ -1156,7 +1156,10 @@ async function runInterlockedSafePoint(
 async function runExposureGuard(execution: SequencerExecution, policies: SequencerTriggerPolicies, group: SequencerPlanFrameGroup): Promise<SequencerGuardOutcome> {
 	const { meridianFlip } = policies
 
-	if (meridianFlip === undefined) return SEQUENCER_EXPOSE
+	// The guard exists to reorder around a flip. Calibration frames never evaluate sky triggers, so there
+	// is no flip for the refusal to wait on: admitting them past the boundary is the only way the walk
+	// advances, and refusing them is a loop that takes no frame and then fails the re-entry budget.
+	if (meridianFlip === undefined || group.frameType !== 'LIGHT') return SEQUENCER_EXPOSE
 
 	const reading = execution.host.observe()
 

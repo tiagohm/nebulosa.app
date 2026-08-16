@@ -237,6 +237,21 @@ describe('lowering', () => {
 		expect(plan.groups.map((group) => group.id)).toEqual(['lum'])
 	})
 
+	test('a frame weight other than 1 is refused while only sequential order is executed', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { weight: 2 })] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0].weight', message: 'this version schedules frames in the declaration order of the groups, so a weight other than 1 is not executed' }])
+	})
+
+	test('a disabled frame may carry an unused weight', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum'), frame('red', { enabled: false, weight: 3 })] } })
+
+		expect(plan.groups.map((group) => group.id)).toEqual(['lum'])
+	})
+
 	test('the plan collects the roles it commands', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { filter: { type: 'position', position: 1 } })] } })

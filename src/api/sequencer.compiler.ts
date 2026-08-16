@@ -923,6 +923,16 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	// for, which is the silent acceptance the compatibility rule forbids.
 	if (capture.order !== 'sequential') diagnostics.push({ path: 'capture.order', message: 'this version schedules frames in the declaration order of the groups, so no other capture order is executed' })
 
+	// Weight is the input of the weighted round-robin order, and the sequential scheduler never reads it.
+	// Equal weight is the sequential equivalent and is consumed honestly; any other value would change which
+	// group is selected next if it were honored, and accepting it here would be the silent disagreement the
+	// compatibility rule exists to prevent.
+	for (let i = 0; i < capture.frames.length; i++) {
+		const frame = capture.frames[i]
+
+		if (frame.enabled && frame.weight !== 1) diagnostics.push({ path: `capture.frames[${i}].weight`, message: 'this version schedules frames in the declaration order of the groups, so a weight other than 1 is not executed' })
+	}
+
 	if (capture.continueAfterRejectedFrame) removals.push({ path: 'capture.continueAfterRejectedFrame', reason: 'quality evaluation is not executed, so no frame is ever rejected and the flag has no path to take effect' })
 
 	if (guiding.thresholds.enabled) diagnostics.push({ path: 'guiding.thresholds.enabled', message: 'guiding thresholds require the continuous monitor lane this version does not have' })

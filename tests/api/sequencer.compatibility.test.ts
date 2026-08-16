@@ -394,6 +394,14 @@ describe('compatibility rule', () => {
 		if (!compilation.ok) expect(compilation.diagnostics.map((diagnostic) => diagnostic.path)).toContain('schemaVersion')
 	})
 
+	test('a frame weight other than 1 is rejected', () => {
+		const definition = complete()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [{ ...definition.capture.frames[0], weight: 2 }] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics.map((diagnostic) => diagnostic.path)).toContain('capture.frames[0].weight')
+	})
+
 	test('an altitude start or end condition is rejected', () => {
 		const definition = complete()
 		const start = compile({ ...definition, execution: { ...definition.execution, start: { type: 'sunAltitude', altitude: -0.2, direction: 'setting' } } })

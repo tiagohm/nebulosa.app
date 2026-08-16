@@ -76,6 +76,7 @@ export interface NightControl {
 	readonly snapshot: () => SequencerSessionSnapshot | undefined
 	readonly waitUntil: (predicate: (snapshot: SequencerSessionSnapshot) => boolean) => Promise<SequencerSessionSnapshot>
 	readonly arbiter: ResourceArbiter
+	readonly coordinator: OperationCoordinator
 	readonly devices: SimulatorDevices
 }
 
@@ -240,7 +241,7 @@ export async function runNight(options: NightOptions = {}): Promise<NightResult>
 		const frameBytes = await syntheticFits()
 		const firstAutofocus = options.control === undefined || options.holdFirstExposure ? undefined : Promise.withResolvers<void>()
 		const firstExposure = options.holdFirstExposure ? Promise.withResolvers<void>() : undefined
-		const { arbiter, runtime, handler, store } = environment(definition, devices, log, clock, frameBytes, firstAutofocus?.promise, undefined, firstExposure?.promise)
+		const { arbiter, coordinator, runtime, handler, store } = environment(definition, devices, log, clock, frameBytes, firstAutofocus?.promise, undefined, firstExposure?.promise)
 		const started = await handler.start(definition)
 
 		if (!started.ok) {
@@ -250,7 +251,7 @@ export async function runNight(options: NightOptions = {}): Promise<NightResult>
 		}
 
 		try {
-			if (options.control !== undefined) await options.control(nightControl(handler, started.session.id, arbiter, devices))
+			if (options.control !== undefined) await options.control(nightControl(handler, started.session.id, arbiter, coordinator, devices))
 		} finally {
 			firstAutofocus?.resolve()
 			firstExposure?.resolve()
@@ -472,14 +473,15 @@ function environment(definition: Sequencer, devices: SimulatorDevices, log: Simu
 		registry.register(handler)
 	}
 
-	return { arbiter, registry, store, runtime, handler: new SequencerHandler({ store, runtime, registry, now: () => clock.now, observe: (sessionId) => runtime.observation(sessionId) }) }
+	return { arbiter, coordinator, registry, store, runtime, handler: new SequencerHandler({ store, runtime, registry, now: () => clock.now, observe: (sessionId) => runtime.observation(sessionId) }) }
 }
 
-function nightControl(handler: SequencerHandler, sessionId: string, arbiter: ResourceArbiter, devices: SimulatorDevices): NightControl {
+function nightControl(handler: SequencerHandler, sessionId: string, arbiter: ResourceArbiter, coordinator: OperationCoordinator, devices: SimulatorDevices): NightControl {
 	const snapshot = () => handler.snapshot(sessionId)
 
 	return {
 		arbiter,
+		coordinator,
 		devices,
 		snapshot,
 		waitUntil: async (predicate) => {

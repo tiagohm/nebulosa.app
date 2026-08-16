@@ -611,4 +611,24 @@ describe('admission', () => {
 		expect(night.devices.cover.parked).toBeTrue()
 		expect(night.arbiter.availability(night.devices.cover.hardwareId)).toBe('available')
 	}, 30_000)
+
+	test('B.07 an external slew is busy during capture', async () => {
+		let external: { readonly ok: boolean; readonly reason?: string; readonly error?: string } | undefined
+		const night = await runNight({
+			holdFirstExposure: true,
+			control: async (api) => {
+				await api.waitUntil((current) => current.capture.exposure !== undefined)
+
+				external = await api.coordinator.start('slew', [{ key: api.devices.mount.hardwareId, device: api.devices.mount }], () => ({ ok: true, value: undefined })).result
+			},
+		})
+
+		nights.push(night)
+
+		expect(external).toMatchObject({ ok: false, reason: 'busy' })
+		expect(external?.error).toContain(`${night.devices.mount.hardwareId} is reserved by sequencer ${night.session.id}`)
+		expect(night.session.state).toBe('completed')
+		expect(night.log.filter((entry) => entry.name === 'slew')).toHaveLength(1)
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+	}, 30_000)
 })

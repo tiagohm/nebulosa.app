@@ -276,7 +276,11 @@ export async function runSequencerPlan(host: SequencerExecutorHost): Promise<Seq
 	if (primary === undefined) {
 		const refusal = await host.open?.()
 
-		if (refusal !== undefined) primary = { kind: 'failed', reason: refusal.reason, detail: refusal.detail }
+		// An immediate stop is expressed as the cancellation of everything the reservation owns, and the connection
+		// in flight is one of those operations, so the refusal it answers with is the stop itself rather than an
+		// unreachable guider. It ends the session the way the operator commanded instead of recording a failure the
+		// night did not have and running the failure finalization in place of the stop one.
+		if (refusal !== undefined) primary = refusal.reason === 'aborted' && commandedBy(execution) === 'stopped' ? { kind: 'stopped' } : { kind: 'failed', reason: refusal.reason, detail: refusal.detail }
 	}
 
 	const startup = pipelineOf(plan.root, 'startup')

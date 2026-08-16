@@ -130,6 +130,19 @@ describe('flip window wait', () => {
 		expect(result).toMatchObject({ type: 'fatalFailure', reason: 'unexpectedState' })
 	})
 
+	test('fails the wait when the hour angle vanishes after the refusal already started it', async () => {
+		let reads = 0
+		const result = await waitForFlipWindow(
+			actionContext(() => 1_000_000),
+			boundary({ minimumHourAngle: hourAngleOf(0.02) }),
+			() => (++reads === 1 ? hourAngleOf(0) : undefined),
+		)
+
+		expect(result).toMatchObject({ type: 'fatalFailure', reason: 'unexpectedState' })
+		expect(result.type === 'fatalFailure' && result.detail).toContain('stopped publishing an hour angle')
+		expect(reads).toBe(2)
+	})
+
 	test('reports a cancelled wait as the abort it is', async () => {
 		const controller = new AbortController()
 		const context = actionContext(() => 1_000_000, controller.signal)

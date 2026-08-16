@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { action } from './sequencer.fixture'
+import { action, frame } from './sequencer.fixture'
 import { commandNames, disposeNight, runNight } from './sequencer.simulator'
 import type { NightResult } from './sequencer.simulator'
 
@@ -126,5 +126,30 @@ describe('canonical night', () => {
 		expect(names.indexOf('park')).toBeGreaterThan(names.lastIndexOf('camera.expose'))
 		expect(night.devices.mount.parked).toBeTrue()
 		expect(night.devices.guiderConnected).toBeFalse()
+	}, 30_000)
+
+	test('A.05 without a wheel', async () => {
+		const night = await runNight({
+			patch: {
+				devices: { wheel: undefined },
+				capture: { frames: [frame('lum', { name: 'Luminance', count: 4, exposureTime: 2 })] },
+				startup: {
+					actions: [
+						action('connect', { type: 'connectDevices', devices: ['camera', 'mount', 'focuser', 'rotator', 'cover', 'flatPanel'], required: true }),
+						action('unpark', { type: 'unparkMount', required: true }),
+						action('open', { type: 'openCover' }),
+						action('cool', { type: 'coolCamera', required: true }),
+						action('guide', { type: 'startGuiding', required: true }),
+					],
+				},
+			},
+		})
+
+		nights.push(night)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.log.filter((entry) => entry.name === 'wheel.move')).toHaveLength(0)
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(4)
+		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(1)
 	}, 30_000)
 })

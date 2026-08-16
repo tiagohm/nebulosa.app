@@ -594,7 +594,11 @@ function mergeValue(base: unknown, patch: unknown): unknown {
 
 	const next: Record<string, unknown> = { ...(base as Record<string, unknown>) }
 
-	for (const [key, value] of Object.entries(patch)) next[key] = mergeValue((base as Record<string, unknown>)[key], value)
+	// An explicit undefined removes the DEFAULT key, which is how a case omits an optional device or field.
+	for (const [key, value] of Object.entries(patch)) {
+		if (value === undefined) delete next[key]
+		else next[key] = mergeValue((base as Record<string, unknown>)[key], value)
+	}
 
 	return next
 }

@@ -187,6 +187,21 @@ describe('in memory sequencer store', () => {
 		expect(instance.session(created.id)?.revision).toBe(2)
 	})
 
+	test('refuses to re-register a committed attempt as pending', () => {
+		const { store: instance } = store()
+		const created = session(instance)
+
+		instance.commit({ sessionId: created.id, expectedRevision: 0, artifacts: [{ logicalSlotId: 'slot-1', attempt: 1, status: 'committed', path: '/data/frame-1.fits' }] })
+
+		const conflicted = instance.commit({ sessionId: created.id, expectedRevision: 1, artifacts: [{ logicalSlotId: 'slot-1', attempt: 1, status: 'pending' }] })
+
+		expect(conflicted.ok).toBeFalse()
+		if (conflicted.ok) return
+		expect(conflicted.reason).toBe('artifactConflict')
+		expect(instance.artifacts(created.id)).toHaveLength(1)
+		expect(instance.artifacts(created.id)[0].status).toBe('committed')
+	})
+
 	test('keeps a rejected attempt beside the committed recapture', () => {
 		const { store: instance } = store()
 		const created = session(instance)

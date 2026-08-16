@@ -361,6 +361,11 @@ function artifactConflict(entry: SessionEntry, drafts: readonly SequencerArtifac
 
 			committed.set(draft.logicalSlotId, draft.attempt)
 		} else if (attempt === draft.attempt) {
+			// Quality evaluation may reject the committed attempt of a slot so a recapture can take its
+			// place. Re-registering the same identity as `pending` would uncommit a finished frame by
+			// accident and leave the slot looking open while the file is still there.
+			if (draft.status === 'pending') return `slot ${draft.logicalSlotId} already has a committed artifact from attempt ${attempt}`
+
 			committed.delete(draft.logicalSlotId)
 		}
 	}

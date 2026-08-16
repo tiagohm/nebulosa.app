@@ -719,4 +719,44 @@ describe('admission', () => {
 		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(4)
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
+
+	test('B.10 removing the camera does not drop the reservation', async () => {
+		let afterReadd: { readonly owner?: string; readonly available: boolean; readonly acquired: boolean; readonly reserved: boolean } | undefined
+		const night = await runNight({
+			holdFirstExposure: true,
+			control: async (api) => {
+				const snapshot = await api.waitUntil((current) => current.capture.exposure !== undefined)
+				const device = api.devices.camera
+				const key = device.hardwareId
+
+				api.arbiter.markUnavailable({ key, device })
+				api.arbiter.markDeviceUnavailable(key)
+				void api.coordinator.cancelByDevice(key, 'removed')
+				expect(api.arbiter.disassociate(key, device)).toBeTrue()
+				expect(api.arbiter.reservationOwnerOf(key)).toMatchObject({ kind: 'sequencer', id: snapshot.id })
+
+				const readded = structuredClone(device)
+
+				readded.id = `${device.id}-readded`
+				api.arbiter.markUnavailable({ key, device: readded })
+				api.arbiter.markAvailable({ key, device: readded })
+				api.arbiter.markDeviceAvailable(key)
+
+				afterReadd = {
+					owner: api.arbiter.reservationOwnerOf(key)?.id,
+					available: api.arbiter.availability(key) === 'available',
+					acquired: api.arbiter.acquire({ id: 'manual', kind: 'capture' }, [{ key, device: readded }]).ok,
+					reserved: api.arbiter.reserve({ id: 'other', kind: 'sequencer' }, [{ key, device: readded }]).ok,
+				}
+			},
+		})
+
+		nights.push(night)
+
+		expect(afterReadd).toEqual({ owner: night.session.id, available: false, acquired: false, reserved: false })
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure?.reason).toBe('removed')
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.arbiter.availability(night.devices.camera.hardwareId)).toBe('available')
+	}, 30_000)
 })

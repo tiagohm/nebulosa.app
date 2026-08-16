@@ -1056,20 +1056,31 @@ export class SequencerRuntime {
 	// Holds the walk at a safe point for as long as the session is meant to stay paused, and answers with the
 	// state the operator converged it to.
 	//
-	// This is where a pause becomes a real one. The desired state is re-read here rather than trusted from the
-	// caller, because the walk decided to hold at the boundary and the operator may have resumed in between; a
-	// session no longer wanting to pause is therefore not held at all. Nothing is released while it holds — the
-	// reservation of a paused session is what makes the resume possible (§11.3) — and the state is published as
-	// `paused` so a reader sees a session that is waiting rather than one that is merely slow.
+	// This is where a pause becomes a real one. The walk reaches here both when the operator already asked for
+	// `paused` and when a failure policy or a handler answered `pause` without writing that desire — the default
+	// of a meridian flip that cannot recover is exactly that. A session still marked `running` is therefore
+	// paused here rather than returned to the caller: bouncing off would retry the same node forever, which is
+	// the loop the slot budget exists to rule out and which a policy pause is the opposite of.
+	//
+	// A stop already in place, or the abort of the session, is left alone. The reservation is kept for the whole
+	// hold — that is what makes the resume possible (§11.3) — and the state is published as `paused` so a reader
+	// sees a session that is waiting rather than one that is merely slow.
 	//
 	// The abort of the session releases the hold as surely as a resume does, and it has to: `stop` waits for the
 	// walk to unwind before it reports, so a hold that only listened for the operator would deadlock the very
 	// command meant to end it. An abort answers `stopped`, which is what the walk carries into the finalization.
 	async #hold(active: ActiveSession, nodeId: string): Promise<SequencerDesiredState> {
+		if (active.controller.signal.aborted) return 'stopped'
+
 		const desired = this.#store.session(active.id)?.desiredState ?? 'running'
 
-		if (desired !== 'paused') return desired
-		if (active.controller.signal.aborted) return 'stopped'
+		if (desired === 'stopped') return 'stopped'
+
+		// A policy or handler asked the walk to hold. That is itself a pause: without writing the desire here, a
+		// session that is still `running` would bounce off this method and retry the same node forever.
+		if (desired !== 'paused') {
+			this.#commitBestEffort(active, { desiredState: 'paused', events: [{ type: 'policyApplied', nodeId, detail: 'pause accepted' }] })
+		}
 
 		this.#commitBestEffort(active, { state: 'paused', events: [{ type: 'stateChanged', state: 'paused', nodeId }] })
 

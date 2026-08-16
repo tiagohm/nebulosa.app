@@ -1035,6 +1035,45 @@ describe('sequencer runtime', () => {
 		expect(session?.state).toBe('completed')
 	})
 
+	test('holds the walk when a handler asks to pause without an operator command', async () => {
+		let held = false
+
+		const {
+			runtime: instance,
+			store,
+			arbiter,
+		} = runtime(
+			exposeHandler(async (context, configuration) => {
+				if (held) return { type: 'completed', value: configuration.exposureTime }
+
+				held = true
+
+				return { type: 'pause' }
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		while (store.session(created.id)?.state !== 'paused') await Bun.sleep(1)
+
+		expect(store.session(created.id)?.desiredState).toBe('paused')
+		expect(arbiter.availability(CAMERA_KEY)).toBe('reserved')
+
+		await instance.control(created.id, 'resume')
+
+		const session = await instance.settled(created.id)
+
+		expect(session?.state).toBe('completed')
+		expect(
+			store
+				.events(created.id)
+				.filter((event) => event.type === 'stateChanged')
+				.map((event) => event.state),
+		).toEqual(['running', 'paused', 'running', 'finalizing', 'completed'])
+	})
+
 	test('holds a paused session without releasing anything and runs the node again on the resume', async () => {
 		let held = false
 

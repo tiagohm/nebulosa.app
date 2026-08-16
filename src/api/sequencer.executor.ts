@@ -1110,7 +1110,14 @@ async function runExposureGuard(execution: SequencerExecution, policies: Sequenc
 
 	const boundary: SequencerFlipBoundary = { minimumHourAngle: meridianFlip.minimumHourAngle, maximumHourAngle: meridianFlip.maximumHourAngle, safetyMargin: meridianFlip.safetyMargin }
 	const now = execution.host.now()
-	const flipPending = reading.preFlipPierSide !== undefined && reading.pierSide === reading.preFlipPierSide
+	// Whether the sides can be told apart at all, which is the question in front of the one the flip is decided
+	// on. A mount that publishes no pier side, or publishes NEITHER, answers neither: nothing says the flip
+	// already happened and nothing says it is still owed. Reading that silence as "no flip is pending" is what
+	// switches the boundary off — the trigger evaluator refuses the flip for exactly the same missing reading, so
+	// the hour angle keeps growing with nothing ever crossing, and every exposure of the rest of the night is
+	// admitted past the angle the definition declared as the last safe one to begin at.
+	const determined = reading.pierSide !== undefined && reading.pierSide !== 'NEITHER' && reading.preFlipPierSide !== undefined
+	const flipPending = determined ? reading.pierSide === reading.preFlipPierSide : true
 	const decision = sequencerPreExposureGuard(boundary, {
 		hourAngle: reading.hourAngle,
 		exposureTime: group.exposureTime,
@@ -1120,6 +1127,13 @@ async function runExposureGuard(execution: SequencerExecution, policies: Sequenc
 	})
 
 	if (decision.type === 'allowed') return SEQUENCER_EXPOSE
+
+	// A refusal decided on sides nobody can name is not the reordering the wait exists for: the flip the window
+	// would open for is refused by the trigger evaluator on the same reading, so the safe point would be taken
+	// again, cross nothing, and refuse the same frame for the rest of the night. The session ends on the boundary
+	// instead — it is a safety limit and not a cadence, and the one thing it must never do is let the mount keep
+	// tracking past it because the evidence that the flip is no longer needed could not be read.
+	if (!determined) return { kind: 'ended', outcome: { kind: 'fail', reason: 'unexpectedState', detail: 'the mount publishes no pier side, so whether the meridian flip this boundary protects already happened cannot be decided' } }
 
 	const waited = await waitForFlipWindow(execution.host.context(group.nodeId, 1, waitsOf(execution.host)), boundary, () => execution.host.observe().hourAngle)
 

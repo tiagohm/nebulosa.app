@@ -345,7 +345,7 @@ describe('plan walk', () => {
 			return Promise.resolve({ type: 'completed', value: undefined })
 		})
 
-		state.observation = { hourAngle: 0.099, pierSide: 'WEST' }
+		state.observation = { hourAngle: 0.099, pierSide: 'WEST', preFlipPierSide: 'EAST' }
 
 		const outcome = await runSequencerPlan(state.host)
 
@@ -391,6 +391,31 @@ describe('plan walk', () => {
 
 		expect(outcome.terminal.state).toBe('stopped')
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
+	})
+
+	test('ends the plan at the meridian boundary of a mount that publishes no pier side', async () => {
+		const base = definition()
+		const state = harness(planOf({ meridianFlip: { ...base.meridianFlip, enabled: true } }))
+
+		state.observation = { hourAngle: 0.099 }
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('failed')
+		expect(outcome.terminal.failure?.reason).toBe('unexpectedState')
+		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
+	})
+
+	test('exposes ahead of the meridian boundary of a mount that publishes no pier side', async () => {
+		const base = definition()
+		const state = harness(planOf({ meridianFlip: { ...base.meridianFlip, enabled: true } }))
+
+		state.observation = { hourAngle: -0.5 }
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
 	})
 
 	test('guards the exposure against the sky as it stands after the safe point instead of before it', async () => {

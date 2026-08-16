@@ -62,10 +62,14 @@ export interface SequencerGuardObservation {
 	// Earliest instant the exposure may start, in epoch milliseconds, which is the cadence boundary of the
 	// safe point. A boundary already in the past adds nothing to the projection.
 	readonly startsAt: number
-	// Whether the flip this boundary protects is still pending, which is the mount reporting the pre-flip
+	// Whether the flip this boundary protects may still be owed, which is the mount reporting the pre-flip
 	// pier side. It is the same condition the trigger evaluator decides the flip on, and it has to be the
 	// same one here: the hour angle only grows, so past the boundary a guard that does not ask this refuses
 	// every exposure of the rest of the night for a flip that already happened and cannot happen again.
+	//
+	// A caller that cannot tell the sides apart reports it as pending, because the evidence that the flip is
+	// no longer needed is exactly what it is missing. The refusal that follows is then not a reordering — no
+	// window opens onto a flip nobody can decide — and it is the caller that says so.
 	readonly flipPending: boolean
 }
 

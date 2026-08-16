@@ -945,6 +945,24 @@ describe('plan walk', () => {
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 	})
 
+	test('measures elapsed-time triggers from the start of the walk, not from the wait that preceded it', async () => {
+		const base = definition()
+		const at = Date.now() + 250
+		const autofocus = {
+			...base.autofocus,
+			enabled: true,
+			triggers: { onStart: false, onFilterChange: false, afterMeridianFlip: false, everyFrames: 0, everyTime: 0.1, temperatureChange: 0, minimumTimeBetweenRuns: 0 },
+			retry: { ...retry(), maxAttempts: 1 },
+		}
+		const state = harness(planOf({ autofocus, execution: { ...base.execution, start: { type: 'at', time: at } } }))
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(Date.now()).toBeGreaterThanOrEqual(at)
+		expect(state.executed.filter((it) => it.nodeId.endsWith('.trigger.autofocus'))).toBeEmpty()
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
+	})
+
 	test('holds the whole session until the declared start instant', async () => {
 		const base = definition()
 		const startup = { ...base.startup, actions: [{ id: 'unpark', enabled: true, timeout: 30, retry: retry(), type: 'unparkMount' as const, required: true }] }

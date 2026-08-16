@@ -853,16 +853,22 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 	if (dither.enabled) {
 		checkRetry(context, dither.retry, 'dither.retry')
 		checkOnFailure(context, dither.onFailure, 'dither.onFailure')
+		// `onFailure` is the terminal decision of this feature (§10). Leaving `onExhausted` in the executable
+		// plan would be the silent acceptance the compatibility rule forbids: `onExhausted: 'fail'` next to
+		// `onFailure: 'continue'` would look like a night-ending policy and never end the night.
+		context.removals.push({ path: 'dither.retry.onExhausted', reason: 'onFailure is the terminal decision of this feature, so onExhausted is not consulted' })
 	}
 
 	if (autofocus.enabled) {
 		checkRetry(context, autofocus.retry, 'autofocus.retry')
 		checkOnFailure(context, autofocus.onFailure, 'autofocus.onFailure')
+		context.removals.push({ path: 'autofocus.retry.onExhausted', reason: 'onFailure is the terminal decision of this feature, so onExhausted is not consulted' })
 	}
 
 	if (meridianFlip.enabled) {
 		checkRetry(context, meridianFlip.retry, 'meridianFlip.retry')
 		checkOnFailure(context, meridianFlip.onFailure, 'meridianFlip.onFailure')
+		context.removals.push({ path: 'meridianFlip.retry.onExhausted', reason: 'onFailure is the terminal decision of this feature, so onExhausted is not consulted' })
 
 		// An empty window leaves the safe point with no hour angle at which an exposure may resume: the pre-exposure
 		// guard already refuses to start and the flip is not permitted yet, which is a wait that never ends.

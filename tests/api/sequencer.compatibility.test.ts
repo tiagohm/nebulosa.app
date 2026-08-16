@@ -146,7 +146,6 @@ const CONSUMED = [
 	'dither.retry.backoff',
 	'dither.retry.maximumDelay',
 	'dither.retry.retryOn[]',
-	'dither.retry.onExhausted',
 	'dither.onFailure',
 	'autofocus.enabled',
 	'autofocus.triggers.onStart',
@@ -189,7 +188,6 @@ const CONSUMED = [
 	'autofocus.retry.backoff',
 	'autofocus.retry.maximumDelay',
 	'autofocus.retry.retryOn[]',
-	'autofocus.retry.onExhausted',
 	'autofocus.onFailure',
 	'meridianFlip.enabled',
 	'meridianFlip.minimumHourAngle',
@@ -202,7 +200,6 @@ const CONSUMED = [
 	'meridianFlip.retry.backoff',
 	'meridianFlip.retry.maximumDelay',
 	'meridianFlip.retry.retryOn[]',
-	'meridianFlip.retry.onExhausted',
 	'meridianFlip.onFailure',
 	'cooling.enabled',
 	'cooling.temperature',
@@ -287,6 +284,9 @@ const REJECTED: readonly Classified[] = [
 const REMOVED: readonly Classified[] = [
 	{ root: 'notification', path: 'notification', declare: (d) => ({ ...d, notification: { ...d.notification, enabled: true } }) },
 	{ root: 'capture.continueAfterRejectedFrame', path: 'capture.continueAfterRejectedFrame', declare: (d) => ({ ...d, capture: { ...d.capture, continueAfterRejectedFrame: true } }) },
+	{ root: 'dither.retry.onExhausted', path: 'dither.retry.onExhausted', declare: (d) => d },
+	{ root: 'autofocus.retry.onExhausted', path: 'autofocus.retry.onExhausted', declare: (d) => d },
+	{ root: 'meridianFlip.retry.onExhausted', path: 'meridianFlip.retry.onExhausted', declare: (d) => d },
 ]
 
 function leaves(value: unknown, prefix: string, out: string[]) {

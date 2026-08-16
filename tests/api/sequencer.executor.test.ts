@@ -603,7 +603,15 @@ describe('plan walk', () => {
 				},
 			},
 		} as unknown as SequencerPreparationServices
-		const state = harness(planOf({ execution: { ...base.execution, defaultRetry: { ...retry(), maxAttempts: 1, onExhausted: 'skip' } } }), undefined, undefined, preparation)
+		const state = harness(
+			planOf({
+				capture: { ...base.capture, retry: { ...retry(), maxAttempts: 1, onExhausted: 'skip' } },
+				execution: { ...base.execution, defaultRetry: { ...retry(), maxAttempts: 9, onExhausted: 'continue' } },
+			}),
+			undefined,
+			undefined,
+			preparation,
+		)
 
 		state.devices = { mount: { device: mount } }
 

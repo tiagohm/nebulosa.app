@@ -1137,11 +1137,13 @@ async function runInterlockedSafePoint(
 		// A dither that failed is decided by the dither, which declares its own budget and its own terminal
 		// answer, and a suspension or a resume by the guiding, which declares the budget of the guider commands
 		// the session issues outside the plan walk — the bracket is the only place they are issued from, so a
-		// guiding retry policy read nowhere else would apply to nothing. The preparation and the triggers of the
-		// body stay on the execution default: they belong to the bracket and not to the guiding.
+		// guiding retry policy read nowhere else would apply to nothing. A body that failed is the preparation
+		// of this slot: spending the execution default on it would be a second budget for the same attempt
+		// window the capture already bounds, and a slot could then survive more failures than the product the
+		// termination proof counts. The group's retry is the attempt budget of the slot.
 		const failing = report.phase === 'dither' ? dither : undefined
 		const guiding = report.phase === 'suspension' || report.phase === 'resume' ? guider : undefined
-		const budget = failing?.retry ?? guiding?.retry ?? retry
+		const budget = failing?.retry ?? guiding?.retry ?? (report.phase === 'body' ? configuration.group.retry : retry)
 
 		// A fatal failure is decided by the terminal half of the same policy and never retried, which the budget
 		// of one attempt expresses without a second decision path.

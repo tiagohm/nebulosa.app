@@ -4,7 +4,7 @@ import { sequencerCancelsActiveAction, sequencerConvergence, sequencerEndReached
 import type { SequencerExecution } from '#/sequencer'
 import type { SequencerCheckpoint, SequencerSessionState } from '#/sequencer.state'
 
-const SAFE_POINTS: readonly SequencerSafePoint[] = ['afterExposure', 'afterArtifact', 'afterAction', 'beforeFrame']
+const SAFE_POINTS: readonly SequencerSafePoint[] = ['afterExposure', 'afterArtifact', 'afterAction', 'beforeExposure', 'beforeFrame']
 
 function execution(pauseMode: SequencerExecution['pauseMode'], stopMode: SequencerExecution['stopMode'] = 'graceful') {
 	return { pauseMode, stopMode } as SequencerExecution
@@ -23,6 +23,7 @@ describe('pause boundary', () => {
 		expect(sequencerPauseAttended('afterCurrentExposure', 'afterExposure')).toBe(false)
 		expect(sequencerPauseAttended('afterCurrentExposure', 'afterArtifact')).toBe(true)
 		expect(sequencerPauseAttended('afterCurrentExposure', 'afterAction')).toBe(true)
+		expect(sequencerPauseAttended('afterCurrentExposure', 'beforeExposure')).toBe(false)
 		expect(sequencerPauseAttended('afterCurrentExposure', 'beforeFrame')).toBe(true)
 	})
 
@@ -30,6 +31,7 @@ describe('pause boundary', () => {
 		expect(sequencerPauseAttended('afterCurrentAction', 'afterExposure')).toBe(false)
 		expect(sequencerPauseAttended('afterCurrentAction', 'afterArtifact')).toBe(false)
 		expect(sequencerPauseAttended('afterCurrentAction', 'afterAction')).toBe(true)
+		expect(sequencerPauseAttended('afterCurrentAction', 'beforeExposure')).toBe(true)
 		expect(sequencerPauseAttended('afterCurrentAction', 'beforeFrame')).toBe(true)
 	})
 

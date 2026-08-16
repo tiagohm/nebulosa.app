@@ -876,7 +876,7 @@ async function runSafePoint(execution: SequencerExecution, targetId: string, loo
 		// is the boundary the broadest pause mode is attended at: the corrections are back on, the optical path is
 		// where the next frame wants it and nothing is on the sensor. Honoring the pause only at the next frame
 		// would sit through the whole exposure it was asked to come before.
-		const converged = await convergeAt(execution, 'afterAction', node.id)
+		const converged = await convergeAt(execution, 'beforeExposure', node.id)
 
 		if (converged.outcome.kind !== 'continue') return converged.outcome
 
@@ -1251,10 +1251,10 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 		}
 
 		// The spacing may have taken an arbitrary part of the cadence, so the boundary is asked again before the
-		// camera is commanded: a stop or a pause that arrived while the session was spacing frames must not be
-		// answered by exposing one more. A hold also invalidates the safe point above it, which is what the retake
-		// takes again.
-		const converged = await convergeAt(execution, 'beforeFrame', node.id)
+		// camera is commanded. A stop must not start one more exposure. A pause under `afterCurrentAction` or
+		// `immediate` is the same. `afterCurrentExposure` is deliberately not attended here: this frame is the
+		// one already selected and prepared, and that mode finishes it.
+		const converged = await convergeAt(execution, 'beforeExposure', node.id)
 
 		if (converged.outcome.kind !== 'continue') return converged.outcome
 		if (converged.held) return SEQUENCER_RETAKE
@@ -1296,6 +1296,13 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 			// committed artifact no progress counted and exposes the slot a second time, or progress for a frame no
 			// row records. A `skipped` result registered nothing, so it stays on the cadence the policy declares.
 			await checkpointDue(execution, result.type === 'completed' ? 'artifact' : 'frame')
+
+			// The frame is durable, which is the boundary `afterCurrentExposure` is attended at. Asking it only
+			// at the next `beforeFrame` would work for a pause that arrived during the write, and would miss one
+			// that arrived during the exposure itself under a mode that must not cancel the shutter.
+			const converged = await convergeAt(execution, 'afterArtifact', node.id)
+
+			if (converged.outcome.kind !== 'continue') return converged.outcome
 
 			return SEQUENCER_CONTINUE
 		}

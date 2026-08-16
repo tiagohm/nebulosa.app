@@ -1253,8 +1253,9 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 
 			if (held.type === 'pause' || commanded === 'paused') return { kind: 'pause' }
 			if (commanded === 'stopped') return { kind: 'stop' }
+			if (held.type === 'retryableFailure' || held.type === 'fatalFailure') return { kind: 'fail', reason: held.reason, detail: held.detail }
 
-			return { kind: 'fail', reason: held.type === 'suspend' ? 'unexpectedState' : held.reason, detail: held.detail }
+			return { kind: 'fail', reason: 'unexpectedState', detail: held.detail }
 		}
 
 		// The spacing may have taken an arbitrary part of the cadence, so the boundary is asked again before the

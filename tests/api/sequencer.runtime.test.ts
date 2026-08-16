@@ -1043,12 +1043,12 @@ describe('sequencer runtime', () => {
 			store,
 			arbiter,
 		} = runtime(
-			exposeHandler(async (context, configuration) => {
-				if (held) return { type: 'completed', value: configuration.exposureTime }
+			exposeHandler((context, configuration) => {
+				if (held) return Promise.resolve({ type: 'completed', value: configuration.exposureTime })
 
 				held = true
 
-				return { type: 'pause' }
+				return Promise.resolve({ type: 'pause' })
 			}),
 		)
 

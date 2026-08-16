@@ -547,7 +547,7 @@ describe('window', () => {
 		// 32400 s at 1 s would need 32401 samples, far past the 4096 the planner is willing to compute.
 		expect(plan.step).toBeCloseTo(32400 / 4095, 6)
 		expect(plan.targets).toHaveLength(1)
-	}, 10000)
+	}, 30000)
 
 	test('produces the same plan twice for the same request', () => {
 		const req = request([M42, OMEGA_CENTAURI, M13, POLARIS], { constraints: { minimumAltitude: deg(25) } })

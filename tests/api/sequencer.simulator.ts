@@ -173,13 +173,7 @@ export function defaultSequencer(root: string): Sequencer {
 		startup: {
 			enabled: true,
 			continueOnFailure: false,
-			actions: [
-				action('connect', { type: 'connectDevices', devices: ['camera', 'mount', 'wheel', 'focuser', 'rotator', 'cover', 'flatPanel'], required: true }),
-				action('unpark', { type: 'unparkMount', required: true }),
-				action('open', { type: 'openCover' }),
-				action('cool', { type: 'coolCamera', required: true }),
-				action('guide', { type: 'startGuiding', required: true }),
-			],
+			actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
 		},
 		shutdown: {
 			enabled: true,

@@ -9,7 +9,7 @@ import { action, camera, canonical, complete, frame, retry, unguided } from './s
 function handlers(roles: Record<string, readonly SequencerDeviceRole[]> = {}) {
 	const registry = new SequencerBlockRegistry()
 
-	for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+	for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 		const declared = (roles[type] ?? []).map((role) => ({ role }))
 
 		registry.register({
@@ -141,7 +141,7 @@ describe('lowering', () => {
 		const startup = plan.root.children[0] as SequencerPlanSequence
 		const finalize = plan.root.children[2] as SequencerPlanSequence
 
-		expect(startup.children.map((node) => node.id)).toEqual(['startup.action[connect]', 'startup.action[unpark]', 'startup.action[cool]', 'startup.action[guide]'])
+		expect(startup.children.map((node) => node.id)).toEqual(['startup.action[unpark]', 'startup.action[cool]', 'startup.action[guide]'])
 		expect(finalize.children.map((node) => node.id)).toEqual(['finalize.action[park]', 'finalize.action[warm]'])
 		expect(startup.children.every((node) => !node.id.includes('target['))).toBe(true)
 		expect(finalize.children.every((node) => !node.id.includes('target['))).toBe(true)
@@ -163,8 +163,8 @@ describe('lowering', () => {
 		const { enabled, ...tracking } = definition.target.tracking
 		const { plan } = ok({ ...definition, startup: { ...definition.startup, actions: [...definition.startup.actions, action('track', { type: 'startTracking' })] } })
 		const startup = plan.root.children[0] as SequencerPlanSequence
-		const track = startup.children[4] as SequencerPlanAction
-		const unpark = startup.children[1] as SequencerPlanAction
+		const track = startup.children[3] as SequencerPlanAction
+		const unpark = startup.children[0] as SequencerPlanAction
 
 		expect((track.configuration as SequencerLifecycle).tracking).toEqual(tracking)
 		expect((unpark.configuration as SequencerLifecycle).tracking).toBeUndefined()
@@ -189,8 +189,8 @@ describe('lowering', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, guiding: { ...definition.guiding, calibrateBeforeStart: true } })
 		const startup = plan.root.children[0] as SequencerPlanSequence
-		const guide = startup.children[3] as SequencerPlanAction
-		const unpark = startup.children[1] as SequencerPlanAction
+		const guide = startup.children[2] as SequencerPlanAction
+		const unpark = startup.children[0] as SequencerPlanAction
 
 		expect((guide.configuration as SequencerLifecycle).guiding).toEqual({ calibrateBeforeStart: true, settle: definition.guiding.settle })
 		expect((unpark.configuration as SequencerLifecycle).guiding).toBeUndefined()
@@ -202,7 +202,7 @@ describe('lowering', () => {
 		const connection = { mode: 'local', focalLength: 200, capture } as const
 		const { plan } = ok({ ...definition, guiding: { ...definition.guiding, connection } })
 		const startup = plan.root.children[0] as SequencerPlanSequence
-		const guide = startup.children[2] as SequencerPlanAction
+		const guide = startup.children[1] as SequencerPlanAction
 
 		expect((guide.configuration as SequencerLifecycle).guiding).toEqual({ calibrateBeforeStart: false, settle: definition.guiding.settle, capture })
 	})
@@ -440,7 +440,7 @@ describe('structural validation', () => {
 		const compilation = compile({ ...definition, startup: { ...definition.startup, actions } })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'startup.actions[3].required', message: 'the guiding block declares the guider the capture runs under, and this action does not fail the session when it cannot start guiding, so every frame would be captured unguided' }])
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'startup.actions[2].required', message: 'the guiding block declares the guider the capture runs under, and this action does not fail the session when it cannot start guiding, so every frame would be captured unguided' }])
 	})
 
 	test('a disabled startup action starting guiding is not asked to fail the session', () => {
@@ -523,13 +523,13 @@ describe('structural validation', () => {
 		const compilation = compile(canonical(), { registry })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics[0]).toEqual({ path: 'startup.action[connect]', message: 'no handler is registered for the block type "lifecycle.connectDevices"' })
+		if (!compilation.ok) expect(compilation.diagnostics[0]).toEqual({ path: 'startup.action[unpark]', message: 'no handler is registered for the block type "lifecycle.unparkMount"' })
 	})
 
 	test('a handler issue is addressed below the node it came from', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 			registry.register({
 				type,
 				version: 1,
@@ -555,7 +555,7 @@ describe('structural validation', () => {
 	test('the configuration a handler returns replaces the lowered one', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 			registry.register({
 				type,
 				version: 1,
@@ -572,17 +572,17 @@ describe('structural validation', () => {
 		if (compilation.ok) {
 			const nodes = [...sequencerPlanNodes(compilation.plan.root)]
 			const parked = nodes.find((node) => node.id === 'finalize.action[park]')
-			const connected = nodes.find((node) => node.id === 'startup.action[connect]')
+			const unparked = nodes.find((node) => node.id === 'startup.action[unpark]')
 
 			expect(parked?.kind === 'action' && parked.configuration).toEqual({ normalized: true })
-			expect(connected?.kind === 'action' && connected.configuration).toMatchObject({ action: { id: 'connect', type: 'connectDevices' }, timeout: 30 })
+			expect(unparked?.kind === 'action' && unparked.configuration).toMatchObject({ action: { id: 'unpark', type: 'unparkMount' }, timeout: 30 })
 		}
 	})
 
 	test('a group a capture handler rebuilt is the group the scheduler follows', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 			registry.register({
 				type,
 				version: 1,
@@ -613,7 +613,7 @@ describe('structural validation', () => {
 	test('a group a capture handler rebuilt keeps the bounds the compiler derived', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 			registry.register({
 				type,
 				version: 1,
@@ -651,7 +651,7 @@ describe('structural validation', () => {
 	test('a group a capture handler rebuilt keeps the identifiers of the node that captures it', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 			registry.register({
 				type,
 				version: 1,
@@ -685,7 +685,7 @@ describe('structural validation', () => {
 	test('a capture handler cannot shorten the exposure the projected integration was derived from', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 			registry.register({
 				type,
 				version: 1,
@@ -880,7 +880,7 @@ describe('node identity', () => {
 		const ids = [...sequencerPlanNodes(plan.root)].map((node) => node.id)
 
 		expect(ids).toContain('target[m31].capture.frame[lum]')
-		expect(ids).toContain('startup.action[connect]')
+		expect(ids).toContain('startup.action[unpark]')
 		expect(ids.some((id) => id.includes('m42'))).toBe(false)
 	})
 

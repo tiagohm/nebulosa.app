@@ -1,5 +1,5 @@
 import { isCamera, isCover, isMount } from 'nebulosa/src/devices/indi/device'
-import type { Camera, Device } from 'nebulosa/src/devices/indi/device'
+import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraCaptureStart } from '#/camera'
 import type { GuiderLoopStart } from '#/guider'
@@ -9,7 +9,6 @@ import type { SequencerAuxiliaryCapture, SequencerDeviceRole, SequencerLifecycle
 import type { CameraCommander } from './camera.commander'
 import type { CoverCommander } from './cover.commander'
 import type { GuiderCommander } from './guider.session'
-import { connect } from './indi'
 import type { MountCommander } from './mount.commander'
 import { abortableDelay } from './operation.wait'
 import { sequencerActionFailure, sequencerCommand, sequencerDeviceOf, sequencerMissingRole } from './sequencer.action'
@@ -51,13 +50,6 @@ import type { ResourceBinding, SequencerActionContext, SequencerActionHandler, S
 // execution changes, which refuses a session compiled against the older meaning instead of running it here.
 const SEQUENCER_LIFECYCLE_VERSION = 1
 
-// Milliseconds between two samples of the connection state of a device being connected.
-//
-// A driver publishes `CONNECTION` as soon as it is up, and the handler holds a device reference rather than a
-// subscription, so the transition is sampled. A connection takes a second at best, which this interval is well
-// below.
-const SEQUENCER_CONNECT_SAMPLE = 250
-
 // Milliseconds between two setpoint updates of a controlled thermal ramp. The cooler of an astronomical camera
 // moves at a few degrees per minute, so a five-second step is fine enough to shape the ramp and coarse enough
 // not to flood the driver with property writes.
@@ -98,9 +90,8 @@ export interface SequencerLifecycleServices {
 // Role each lifecycle action commands, or undefined when the action commands no device of the definition.
 //
 // It mirrors the map the compiler checks the definition against, so a block never asks for a role the
-// compilation did not require the definition to declare. `connectDevices` is absent because the roles it
-// commands are named by the action itself, and the guiding actions are absent because they command the guiding
-// session rather than a device of the session.
+// compilation did not require the definition to declare. The guiding actions are absent because they command
+// the guiding session rather than a device of the session.
 const SEQUENCER_LIFECYCLE_ROLE: Partial<Record<SequencerLifecycleAction['type'], SequencerDeviceRole>> = {
 	unparkMount: 'mount',
 	parkMount: 'mount',
@@ -122,7 +113,6 @@ type SequencerLifecycleRunner = (services: SequencerLifecycleServices, context: 
 // away. `custom` is absent for the opposite reason — it addresses a handler the host registers by name, and the
 // registry is where that handler arrives.
 const SEQUENCER_LIFECYCLE_RUNNER: Partial<Record<SequencerLifecycleAction['type'], SequencerLifecycleRunner>> = {
-	connectDevices: runConnectDevices,
 	unparkMount: (services, context, configuration) => runMountPark(services, context, configuration, false),
 	parkMount: (services, context, configuration) => runMountPark(services, context, configuration, true),
 	startTracking: runStartTracking,
@@ -154,7 +144,7 @@ export function sequencerLifecycleHandlers(services: SequencerLifecycleServices)
 			type: `${SEQUENCER_LIFECYCLE_BLOCK_PREFIX}${type}`,
 			version: SEQUENCER_LIFECYCLE_VERSION,
 			validate: (configuration): SequencerValidationResult<SequencerLifecycle> => ({ ok: true, configuration: configuration as SequencerLifecycle }),
-			resources: (configuration) => resourcesOf(type, configuration),
+			resources: () => resourcesOf(type),
 			execute: (context, configuration) => (context.signal.aborted ? Promise.resolve(SEQUENCER_LIFECYCLE_CANCELLED) : run(services, context, configuration)),
 		})
 	}
@@ -164,49 +154,12 @@ export function sequencerLifecycleHandlers(services: SequencerLifecycleServices)
 
 // Roles one lifecycle action needs reserved.
 //
-// The roles `connectDevices` names are optional bindings: the action exists to bring up whatever the session
-// carries, and a role the definition did not declare is simply not part of it. Every other action binds the one
-// role of the map, and does so as a required binding, because an action commanding a device the session does not
-// have is a definition the compiler already refused.
-function resourcesOf(type: SequencerLifecycleAction['type'], configuration: SequencerLifecycle): readonly ResourceBinding[] {
-	if (configuration.action.type === 'connectDevices') return configuration.action.devices.map((role) => ({ role, optional: true }))
-
+// Every action binds the one role of the map as a required binding, because an action commanding a device the
+// session does not have is a definition the compiler already refused.
+function resourcesOf(type: SequencerLifecycleAction['type']): readonly ResourceBinding[] {
 	const role = SEQUENCER_LIFECYCLE_ROLE[type]
 
 	return role === undefined ? [] : [{ role }]
-}
-
-// Connects every declared role that is not connected yet, and returns once all of them report the connection.
-//
-// The INDI connection command is a property write with no completion of its own, so the transition is observed
-// on the device. A role the session does not carry is skipped rather than failed: the action names the roles the
-// definition wants brought up, and one it never declared is not a device that failed to connect.
-//
-// The deadline of the action is the only bound on the wait, which is what a driver that never answers runs into.
-async function runConnectDevices(_services: SequencerLifecycleServices, context: SequencerActionContext, configuration: SequencerLifecycle): Promise<SequencerActionResult<SequencerLifecycleOutcome>> {
-	if (configuration.action.type !== 'connectDevices') return { type: 'fatalFailure', reason: 'unexpectedState', detail: 'the node does not carry a device connection action' }
-
-	const pending: Device[] = []
-
-	for (const role of configuration.action.devices) {
-		const device = context.request(role)?.device
-
-		if (device === undefined || device.connected) continue
-
-		context.progress({ detail: `connecting the ${role}` })
-		connect(device)
-		pending.push(device)
-	}
-
-	if (pending.length === 0) return { type: 'completed', value: { action: 'connectDevices', commanded: false } }
-
-	while (pending.some((device) => !device.connected)) {
-		const waited = await abortableDelay(SEQUENCER_CONNECT_SAMPLE, context.signal)
-
-		if (!waited.ok) return sequencerActionFailure(waited, 'the devices did not report the connection')
-	}
-
-	return { type: 'completed', value: { action: 'connectDevices', commanded: true } }
 }
 
 // Parks or unparks the mount, or reports that it is already where the action wants it.

@@ -242,9 +242,10 @@ export interface SequencerRuntimeChange {
 // - handlerUnresolved: the block type is missing or its version no longer matches the one recorded.
 // - invalidConfiguration: the handler rejected the stored configuration.
 // - roleUnresolved: a role the block commands is not declared, or its device is not present.
+// - disconnected: a role resolved to a device that is not connected.
 // - resourcesUnavailable: the resources are leased or reserved by someone else.
 // - shuttingDown: the process is ending and admits no further session.
-export type SequencerStartFailureReason = 'unknownSession' | 'busy' | 'notStartable' | 'handlerUnresolved' | 'invalidConfiguration' | 'roleUnresolved' | 'resourcesUnavailable' | 'shuttingDown'
+export type SequencerStartFailureReason = 'unknownSession' | 'busy' | 'notStartable' | 'handlerUnresolved' | 'invalidConfiguration' | 'roleUnresolved' | 'disconnected' | 'resourcesUnavailable' | 'shuttingDown'
 
 // Outcome of a start. Success carries the session as stored, which for a reentrant start is the running one.
 export type SequencerStartResult =
@@ -690,6 +691,10 @@ export class SequencerRuntime {
 			// centering with no wheel in its role map, silently through the installed path, while the
 			// definition asked for a filter and a disconnected wheel is what actually happened.
 			if (request === undefined) return { ok: false, reason: 'roleUnresolved', detail: `device ${deviceId} of role ${binding.role} is not available` }
+
+			// Connecting is the operator's job. A start that found the device but not a live connection would
+			// otherwise walk into the first command and fail there, with the reservation already held.
+			if (request.device !== undefined && !request.device.connected) return { ok: false, reason: 'disconnected', detail: `device ${deviceId} of role ${binding.role} is not connected` }
 
 			roles.set(binding.role, request)
 			requests.push(request)

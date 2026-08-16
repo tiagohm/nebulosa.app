@@ -128,7 +128,7 @@ describe('session start resolution', () => {
 	function registry(version = 1) {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 			registry.register({ type, version, validate: (configuration) => ({ ok: true, configuration }), resources: () => [], execute: () => Promise.resolve({ type: 'completed', value: undefined } as const) })
 		}
 

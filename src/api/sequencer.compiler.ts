@@ -460,9 +460,9 @@ const SEQUENCER_ROLE_ORDER: readonly SequencerDeviceRole[] = ['camera', 'mount',
 
 // Role each lifecycle action commands, so an action that needs a device the definition never declared is
 // refused at compile time instead of failing halfway through the pipeline, with the observatory already
-// half open. `connectDevices` is absent because it declares its roles explicitly, `custom` is absent because
-// it addresses a host handler, which declares its own roles through the registry, and the dome and switch
-// actions are absent because the compatibility rule refuses them before a role could be required for them.
+// half open. `custom` is absent because it addresses a host handler, which declares its own roles through
+// the registry, and the dome and switch actions are absent because the compatibility rule refuses them
+// before a role could be required for them.
 const SEQUENCER_LIFECYCLE_ROLE: Partial<Record<SequencerLifecycleAction['type'], SequencerDeviceRole>> = {
 	unparkMount: 'mount',
 	parkMount: 'mount',
@@ -523,12 +523,8 @@ function roleRequirements(definition: Sequencer, groups: readonly SequencerPlanF
 
 			const path = `${pipeline.name}.actions[${i}]`
 
-			if (action.type === 'connectDevices') {
-				for (const role of action.devices) requirements.push({ role, path: `${path}.devices` })
-			} else {
-				const role = SEQUENCER_LIFECYCLE_ROLE[action.type]
-				if (role) requirements.push({ role, path })
-			}
+			const role = SEQUENCER_LIFECYCLE_ROLE[action.type]
+			if (role) requirements.push({ role, path })
 		}
 	}
 

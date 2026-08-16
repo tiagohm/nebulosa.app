@@ -102,12 +102,7 @@ describe('canonical night', () => {
 				guiding: { enabled: false },
 				dither: { enabled: false },
 				startup: {
-					actions: [
-						action('connect', { type: 'connectDevices', devices: ['camera', 'mount', 'wheel', 'focuser', 'rotator', 'cover', 'flatPanel'], required: true }),
-						action('unpark', { type: 'unparkMount', required: true }),
-						action('open', { type: 'openCover' }),
-						action('cool', { type: 'coolCamera', required: true }),
-					],
+					actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true })],
 				},
 				shutdown: {
 					actions: [action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('close', { type: 'closeCover' }), action('warm', { type: 'warmCamera' })],
@@ -133,15 +128,6 @@ describe('canonical night', () => {
 			patch: {
 				devices: { wheel: undefined },
 				capture: { frames: [frame('lum', { name: 'Luminance', count: 4, exposureTime: 2 })] },
-				startup: {
-					actions: [
-						action('connect', { type: 'connectDevices', devices: ['camera', 'mount', 'focuser', 'rotator', 'cover', 'flatPanel'], required: true }),
-						action('unpark', { type: 'unparkMount', required: true }),
-						action('open', { type: 'openCover' }),
-						action('cool', { type: 'coolCamera', required: true }),
-						action('guide', { type: 'startGuiding', required: true }),
-					],
-				},
 			},
 		})
 

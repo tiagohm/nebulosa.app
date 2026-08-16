@@ -1490,7 +1490,6 @@ export interface SequencerShutdown {
 // Discriminated union of actions available in startup and shutdown pipelines.
 // Actions execute in list order and are independent from the main capture sequence.
 export type SequencerLifecycleAction =
-	| SequencerConnectDevicesLifecycleAction
 	| SequencerUnparkDomeLifecycleAction
 	| SequencerOpenDomeLifecycleAction
 	| SequencerUnparkMountLifecycleAction
@@ -1524,15 +1523,6 @@ export interface SequencerLifecycleActionBase {
 	// Whether the terminal state of the session must reflect a failure of this action.
 	// Omit for false, which lets the pipeline continue and report the failure without failing the session.
 	readonly required?: boolean
-}
-
-// Configures the ConnectDevices step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-export interface SequencerConnectDevicesLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'connectDevices'
-	// Roles, resolved through the session devices, that must be connected by this action.
-	readonly devices: readonly SequencerDeviceRole[]
 }
 
 // Configures the UnparkDome step used by a startup or shutdown pipeline.

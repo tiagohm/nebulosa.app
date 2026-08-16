@@ -625,6 +625,24 @@ describe('sequencer runtime', () => {
 		expect(instance.activeSessionId).toBeUndefined()
 	})
 
+	test('refuses to start when a commanded device is not connected', () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const registry = new SequencerBlockRegistry()
+		const store = new InMemorySequencerStore()
+		const camera = { id: 'camera-1', type: 'camera', hardwareId: 'hw-camera', connected: false } as Camera
+
+		registry.register(exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 })))
+
+		const instance = new SequencerRuntime({ store, registry, coordinator, ...SERVICES, resolve: () => ({ key: resourceKey(camera), device: camera }) })
+		const created = instance.create(plan())!
+
+		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'disconnected', detail: 'device camera-1 of role camera is not connected' })
+		expect(instance.activeSessionId).toBeUndefined()
+		expect(store.session(created.id)?.state).toBe('created')
+		expect(arbiter.availability(resourceKey(camera))).toBe('available')
+	})
+
 	test('refuses to start when an optional role the session carries cannot be resolved', () => {
 		const arbiter = new ResourceArbiter()
 		const coordinator = new OperationCoordinator(arbiter)

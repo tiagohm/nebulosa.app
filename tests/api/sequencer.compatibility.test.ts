@@ -273,7 +273,6 @@ const CONSUMED = [
 	'startup.actions[].retry.retryOn[]',
 	'startup.actions[].retry.onExhausted',
 	'startup.actions[].type',
-	'startup.actions[].devices[]',
 	'startup.actions[].required',
 	'startup.continueOnFailure',
 	'shutdown.enabled',

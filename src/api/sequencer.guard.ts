@@ -147,7 +147,10 @@ export async function waitForFlipWindow(context: SequencerActionContext, boundar
 
 		if (!announced) {
 			announced = true
-			context.progress({ detail: 'waiting for the meridian flip window to open' })
+			context.progress({
+				detail: 'waiting for the meridian flip window to open',
+				wait: { reason: 'waiting for the meridian flip window', until: context.now() + remaining * 1000 },
+			})
 		}
 
 		const waited = await abortableDelay(Math.min(remaining * 1000, SEQUENCER_HOUR_ANGLE_SAMPLE), context.signal)

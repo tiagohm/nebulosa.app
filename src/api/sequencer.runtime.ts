@@ -25,8 +25,10 @@ import { sequencerAuxiliaryDirectory, sequencerNightSegment, sequencerVerifiedAu
 import type { SequencerAuxiliaryKind, SequencerPathContext } from './sequencer.path'
 import type { SequencerPreparationServices } from './sequencer.prepare'
 import type { ResourceBinding, SequencerActionContext, SequencerActionProgress, SequencerAuxiliaryTarget, SequencerBlockRegistry, SequencerFrameSlot } from './sequencer.registry'
-import type { SequencerActivityObservation, SequencerSnapshotObservation } from './sequencer.snapshot'
+import type { SequencerActivityObservation, SequencerExposureObservation, SequencerSnapshotObservation } from './sequencer.snapshot'
+import { SequencerOverheadMeter } from './sequencer.snapshot'
 import type { SequencerStore } from './sequencer.store'
+import { sequencerPlanTriggerPolicies } from './sequencer.trigger'
 import { makeTime } from './util'
 
 // Session admission, bootstrap reversal, and the execution kernel of the sequencer.
@@ -342,6 +344,11 @@ interface ActiveSession {
 	// transition that ends the session is committed, because there is no action in the foreground of a session
 	// that just reached its last state.
 	activity?: SequencerActivityObservation
+	// Exposure the sensor is integrating, absent whenever the shutter is not open. It is a field of its own
+	// so the snapshot can say "capture is idle" without inspecting the foreground action type (§15.1).
+	exposure?: SequencerExposureObservation
+	// Moving average of the interval between two exposures, which is what the completion estimate projects.
+	readonly meter: SequencerOverheadMeter
 	// Release of the hold the walk is sitting in, present only while the session is actually paused. It is
 	// resolved by the command that takes the desired state off `paused` and by the abort that ends the session,
 	// so a stop never waits on an operator who is no longer there.
@@ -455,10 +462,20 @@ export class SequencerRuntime {
 	// It is deliberately not the whole observation: the session record, its plan and the instant of the reading
 	// belong to whoever derives the snapshot, and everything here is state only the runtime holds. A session
 	// that already finalized reports nothing, which is what makes its snapshot describe the record alone.
-	observation(sessionId: string): Pick<SequencerSnapshotObservation, 'resolved' | 'foreground'> | undefined {
+	observation(sessionId: string): Pick<SequencerSnapshotObservation, 'resolved' | 'foreground' | 'exposure' | 'overhead' | 'triggers' | 'meridianFlipDue'> | undefined {
 		const active = this.#active
 
-		return active?.id === sessionId ? { resolved: active.resolved, foreground: active.activity } : undefined
+		if (active?.id !== sessionId) return undefined
+
+		const triggers = sequencerPlanTriggerPolicies(active.plan.compiled)
+		const reading = this.#observation(active)
+		const flip = triggers?.meridianFlip
+		const hourAngle = reading.hourAngle
+		const pierSide = reading.pierSide
+		const determined = hourAngle !== undefined && pierSide !== undefined && pierSide !== 'NEITHER' && reading.preFlipPierSide !== undefined
+		const meridianFlipDue = flip !== undefined && determined && pierSide === reading.preFlipPierSide && hourAngle >= flip.minimumHourAngle
+
+		return { resolved: active.resolved, foreground: active.activity, exposure: active.exposure, overhead: active.meter.average, triggers, meridianFlipDue }
 	}
 
 	// Creates a session in `created` for a plan, recording the handler version it was compiled against.
@@ -629,6 +646,7 @@ export class SequencerRuntime {
 			types,
 			done: Promise.withResolvers<SequencerSession | undefined>(),
 			resolved: resolvedDevices(devices, roles),
+			meter: new SequencerOverheadMeter(),
 			revision: stored.revision,
 			capturing: false,
 			finalizing: false,
@@ -1140,6 +1158,11 @@ export class SequencerRuntime {
 
 		this.#commitBestEffort(active, { state: 'running', events: [{ type: 'stateChanged', state: 'running', nodeId }] })
 
+		// A pause is not overhead: pairing the last exposure before it with the first one after it would
+		// report the hold as the interval the estimate projects, and a session that sat still for an hour
+		// would then look an hour behind for the rest of the night.
+		active.meter.reset()
+
 		return 'running'
 	}
 
@@ -1149,6 +1172,7 @@ export class SequencerRuntime {
 	// of a node: an observer that reads the snapshot between two nodes sees the one that is actually running.
 	#context(active: ActiveSession, nodeId: string, attempt: number, signal: AbortSignal, frame?: SequencerFrameSlot): SequencerActionContext {
 		if (active.activity?.nodeId !== nodeId || active.activity.attempt !== attempt) {
+			this.#endExposure(active)
 			active.activity = { nodeId, type: active.types.get(nodeId) ?? nodeId, state: 'running', attempt, startedAt: this.#now() }
 		}
 
@@ -1306,6 +1330,7 @@ export class SequencerRuntime {
 			// Nothing is in the foreground of a session that ended, and this commit is the last one an observer
 			// sees for it: leaving the activity in place would publish the session as completed and still running
 			// an action, with nothing behind it to correct that afterwards.
+			this.#endExposure(active)
 			active.activity = undefined
 
 			this.#commitBestEffort(active, {
@@ -1418,6 +1443,26 @@ export class SequencerRuntime {
 		return { directory: sequencerAuxiliaryDirectory(storage, kind), fileName, path: resolution.path }
 	}
 
+	// Opens the live exposure the snapshot reads, pairing it with the previous end so the overhead meter
+	// can close the interval between two frames.
+	#beginExposure(active: ActiveSession, total: number) {
+		if (active.exposure !== undefined) return
+
+		const at = this.#now()
+
+		active.meter.exposureStarted(at)
+		active.exposure = { startedAt: at, total }
+	}
+
+	// Closes the live exposure. Called when the frame settles, when another node starts, and when the
+	// session ends, so a snapshot never shows a shutter that is no longer open.
+	#endExposure(active: ActiveSession) {
+		if (active.exposure === undefined) return
+
+		active.meter.exposureEnded(this.#now())
+		active.exposure = undefined
+	}
+
 	// Hands one progress report to the observer, if any, without letting it reach the action.
 	//
 	// Progress is presentation and never a source of truth. A sink that throws — a fanout over a transport
@@ -1429,7 +1474,16 @@ export class SequencerRuntime {
 		// The report is also what the derived snapshot reads, so it is recorded before it is fanned out: an
 		// observer that never runs still leaves the live half current.
 		if (active?.id === sessionId && active.activity?.nodeId === nodeId) {
-			active.activity = { ...active.activity, progress: progress.fraction, detail: progress.detail }
+			if (progress.exposure !== undefined) this.#beginExposure(active, progress.exposure)
+			if (progress.fraction === 1) this.#endExposure(active)
+
+			active.activity = {
+				...active.activity,
+				state: progress.wait === undefined ? 'running' : 'waiting',
+				progress: progress.fraction,
+				detail: progress.detail,
+				wait: progress.wait,
+			}
 		}
 
 		try {

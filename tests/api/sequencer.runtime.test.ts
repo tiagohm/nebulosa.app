@@ -264,6 +264,52 @@ describe('sequencer runtime', () => {
 		expect(instance.activeSessionId).toBeUndefined()
 	})
 
+	test('publishes the live half of the snapshot while an action is running', async () => {
+		const exposing = Promise.withResolvers<void>()
+		const hold = Promise.withResolvers<void>()
+		const waiting = Promise.withResolvers<void>()
+		const release = Promise.withResolvers<void>()
+		const now = 10_000
+		const { runtime: instance } = runtime(
+			exposeHandler(async (context) => {
+				context.progress({ fraction: 0, detail: 'exposing lum', exposure: 30 })
+				exposing.resolve()
+				await hold.promise
+				context.progress({ detail: 'waiting for the meridian flip window to open', wait: { reason: 'waiting for the meridian flip window', until: 70_000 } })
+				waiting.resolve()
+				await release.promise
+				context.progress({ fraction: 1, detail: 'publishing the frame' })
+				return { type: 'completed', value: 1 }
+			}),
+			() => now,
+		)
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+		await exposing.promise
+
+		const live = instance.observation(created.id)
+
+		expect(live?.resolved).toEqual({ camera: 'camera-1' })
+		expect(live?.exposure).toEqual({ startedAt: 10_000, total: 30 })
+		expect(live?.foreground).toMatchObject({ nodeId: 'node-1', type: 'expose', state: 'running', detail: 'exposing lum', progress: 0 })
+		expect(live?.overhead).toBeUndefined()
+
+		hold.resolve()
+		await waiting.promise
+
+		const held = instance.observation(created.id)
+
+		expect(held?.foreground?.state).toBe('waiting')
+		expect(held?.foreground?.wait).toEqual({ reason: 'waiting for the meridian flip window', until: 70_000 })
+		expect(held?.exposure).toEqual({ startedAt: 10_000, total: 30 })
+
+		release.resolve()
+		await instance.settled(created.id)
+
+		expect(instance.observation(created.id)).toBeUndefined()
+	})
+
 	test('reserves the logical key of the remote guider the plan declares', async () => {
 		let connected: unknown
 		let availability: string | undefined

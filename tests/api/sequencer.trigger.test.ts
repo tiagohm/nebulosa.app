@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import type { SequencerDitherTrigger } from 'src/api/sequencer.compiler'
-import { evaluateSequencerTriggers, sequencerAnchorAdvanced, sequencerFilterBaselined, sequencerFrameCounted, sequencerInitialTriggerAnchors, sequencerTriggerPending } from 'src/api/sequencer.trigger'
+import { compile } from 'src/api/sequencer.compiler'
+import { evaluateSequencerTriggers, sequencerAnchorAdvanced, sequencerFilterBaselined, sequencerFrameCounted, sequencerInitialTriggerAnchors, sequencerPlanTriggerPolicies, sequencerTriggerPending } from 'src/api/sequencer.trigger'
 import type { SequencerTriggerObservation, SequencerTriggerPolicies } from 'src/api/sequencer.trigger'
 import type { SequencerAutofocus, SequencerMeridianFlip } from '#/sequencer'
 import type { SequencerTriggerAnchors } from '#/sequencer.state'
+import { canonical } from './sequencer.fixture'
 
 const START = 1_000_000
 
@@ -33,6 +35,19 @@ function kinds(policies: SequencerTriggerPolicies, state: SequencerTriggerAnchor
 }
 
 describe('sequencer trigger evaluator', () => {
+	test('reads the lowered trigger policies off the compiled plan', () => {
+		const compilation = compile(canonical())
+
+		expect(compilation.ok).toBeTrue()
+		if (!compilation.ok) return
+
+		const policies = sequencerPlanTriggerPolicies(compilation.plan)
+
+		expect(policies?.meridianFlip).toBeDefined()
+		expect(policies?.autofocus).toBeDefined()
+		expect(policies?.dither).toBeDefined()
+	})
+
 	test('selects nothing when no trigger was lowered', () => {
 		expect(evaluateSequencerTriggers({}, anchors(), observation())).toEqual([])
 	})

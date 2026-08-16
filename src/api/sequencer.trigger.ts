@@ -1,7 +1,9 @@
 import type { FrameType, PierSide } from 'nebulosa/src/devices/indi/device'
 import type { SequencerAutofocus, SequencerDither, SequencerMeridianFlip } from '#/sequencer'
+import type { SequencerPlan } from '#/sequencer.plan'
 import type { SequencerTriggerAnchor, SequencerTriggerAnchors, SequencerTriggerEventReason } from '#/sequencer.state'
-import type { SequencerDitherTrigger } from './sequencer.compiler'
+import { SEQUENCER_BLOCK_TYPE, sequencerPlanNodes } from './sequencer.compiler'
+import type { SequencerDitherTrigger, SequencerFocus, SequencerMeridianFlipTrigger } from './sequencer.compiler'
 
 // Safe-point trigger evaluation: which derived steps run before the next frame, in which order, and what
 // moves the anchors they are measured against.
@@ -42,6 +44,26 @@ export interface SequencerTriggerPolicies {
 	readonly autofocus?: Omit<SequencerAutofocus, 'enabled'>
 	// Dither policy, absent when the definition does not dither.
 	readonly dither?: SequencerDitherTrigger
+}
+
+// Trigger policies the compiled plan lowered, or undefined when the plan enables none.
+//
+// The snapshot reads this instead of walking the tree itself: the live half has to name the same triggers
+// the walk will evaluate, and the lowering is the only place that already decided which ones exist.
+export function sequencerPlanTriggerPolicies(plan: SequencerPlan): SequencerTriggerPolicies | undefined {
+	let meridianFlip: SequencerMeridianFlipTrigger | undefined
+	let autofocus: SequencerFocus | undefined
+	let dither: SequencerDitherTrigger | undefined
+
+	for (const node of sequencerPlanNodes(plan.root)) {
+		if (node.kind !== 'action') continue
+
+		if (node.type === SEQUENCER_BLOCK_TYPE.meridianFlip) meridianFlip = node.configuration as SequencerMeridianFlipTrigger
+		else if (node.type === SEQUENCER_BLOCK_TYPE.autofocus) autofocus = node.configuration as SequencerFocus
+		else if (node.type === SEQUENCER_BLOCK_TYPE.dither) dither = node.configuration as SequencerDitherTrigger
+	}
+
+	return meridianFlip === undefined && autofocus === undefined && dither === undefined ? undefined : { meridianFlip, autofocus, dither }
 }
 
 // Single reading of the safe point: what the selection requires and what the observatory reports right now.

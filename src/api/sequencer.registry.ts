@@ -1,6 +1,6 @@
 import type { OperationFailureReason } from '#/orchestration'
 import type { SequencerDeviceRole, SequencerDevices } from '#/sequencer'
-import type { SequencerArtifactDraft, SequencerCheckpoint } from '#/sequencer.state'
+import type { SequencerArtifactDraft, SequencerCheckpoint, SequencerWaitSnapshot } from '#/sequencer.state'
 import type { OperationScope } from './operation'
 import type { ResourceRequest } from './resource'
 import type { SequencerAuxiliaryKind } from './sequencer.path'
@@ -57,6 +57,11 @@ export interface SequencerActionProgress {
 	readonly fraction?: number
 	// Short human-readable description of the current step.
 	readonly detail?: string
+	// Requested exposure duration, in seconds, present exactly while the sensor is integrating. It is what
+	// the live snapshot reads as the capture block rather than as one more foreground action.
+	readonly exposure?: number
+	// Condition the action is standing still on, present while the action is waiting rather than executing.
+	readonly wait?: SequencerWaitSnapshot
 }
 
 // Destination of one image that is not a frame of the plan, reserved by the runtime for the action about to

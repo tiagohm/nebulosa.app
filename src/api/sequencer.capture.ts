@@ -201,7 +201,7 @@ async function runCapture(services: SequencerCaptureServices, context: Sequencer
 
 	const startedAt = context.now()
 
-	context.progress({ fraction: 0, detail: `exposing ${configuration.group.name} for ${configuration.group.exposureTime}s` })
+	context.progress({ fraction: 0, detail: `exposing ${configuration.group.name} for ${configuration.group.exposureTime}s`, exposure: configuration.group.exposureTime })
 
 	const handle = services.cameraHandler.capture(context.scope, camera, frameCapture(configuration.group, staged, captureDevices(context)))
 	const started = await handle.started

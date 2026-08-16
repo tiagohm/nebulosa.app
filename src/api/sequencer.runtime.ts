@@ -1,3 +1,5 @@
+import { statSync } from 'fs'
+import { dirname, resolve } from 'path'
 import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { isCamera, isGuideOutput, isMount, isWheel } from 'nebulosa/src/devices/indi/device'
 import type { PierSide } from 'nebulosa/src/devices/indi/device'
@@ -366,13 +368,37 @@ interface ActiveSession {
 	guider?: string
 }
 
-// Pier side a German equatorial mount is on before it flips, used for a session that began after its target
-// had already crossed the meridian and therefore never saw the mount on that side.
-//
-// It is the convention `expectedPierSide` reads in the other direction: a target east of the meridian is
-// tracked from the west side of the pier. A mount already reporting the east side therefore reads as flipped
-// and is not flipped again, which is what a session started or resumed after a flip needs.
-const SEQUENCER_PRE_FLIP_PIER_SIDE: PierSide = 'WEST'
+// Identity of the filesystem holding `path`, or the nearest ancestor that exists. Undefined when nothing
+// along the chain can be inspected.
+function filesystemIdOf(path: string) {
+	let current = resolve(path)
+
+	for (;;) {
+		try {
+			return statSync(current).dev
+		} catch {
+			const parent = dirname(current)
+
+			if (parent === current) return undefined
+
+			current = parent
+		}
+	}
+}
+
+// Why the temporary directory cannot host the atomic rename, or undefined when it can. A cross-filesystem
+// rename is a copy, and an interrupted copy leaves a partial file under the final name.
+function sequencerTemporaryDirectoryIssue(root: string, temporaryDirectory?: string) {
+	if (temporaryDirectory === undefined) return undefined
+
+	const rootId = filesystemIdOf(root)
+	const temporaryId = filesystemIdOf(temporaryDirectory)
+
+	if (rootId === undefined || temporaryId === undefined) return 'storage.temporaryDirectory: the temporary directory and the storage root cannot be inspected'
+	if (rootId !== temporaryId) return 'storage.temporaryDirectory: the temporary directory is on another filesystem than the storage root, which would turn the atomic commit into a copy'
+
+	return undefined
+}
 
 // Executes one sequencer session at a time.
 export class SequencerRuntime {
@@ -520,6 +546,13 @@ export class SequencerRuntime {
 		// past its own boundary. It is read at the start and not at the creation because the observing night is
 		// the one the session captures in: a session prepared before midnight and started after it belongs to
 		// the night it is actually observing, and it is also the instant the resolution of §14 dates it from.
+		const storageIssue = sequencerTemporaryDirectoryIssue(pending.compiled.storage.root, pending.compiled.storage.temporaryDirectory)
+
+		if (storageIssue !== undefined) {
+			teardown.run()
+			return { ok: false, reason: 'invalidConfiguration', detail: storageIssue }
+		}
+
 		const plan: SequencerRuntimePlan = { ...pending, storage: { root: pending.compiled.storage.root, session: pending.session, night: sequencerNightSegment(pending.compiled.storage.autoSubFolderMode, this.#now()) } }
 		const nodes = planActionsOf(plan.compiled)
 		const devices = plan.compiled.devices
@@ -699,6 +732,10 @@ export class SequencerRuntime {
 		const active = this.#active
 
 		if (active === undefined || active.id !== sessionId) return this.#store.session(sessionId)
+
+		// The terminal pipeline is never interrupted (§8.6). A stop that arrived while it is already running
+		// is recorded as a no-op by the reducer; a direct call must do the same instead of cancelling a park.
+		if (active.finalizing || active.finalized) return await active.done.promise
 
 		// The stop intent is persisted first, but a store refusal must not decide whether the session stops:
 		// the action would keep running, holding the reservation and the claim, waiting on a signal that was
@@ -900,12 +937,11 @@ export class SequencerRuntime {
 			if (active === undefined) {
 				session = this.#commitControl(stored, { state: 'stopped', desiredState: 'stopped', events: [...events, { type: 'stateChanged', state: 'stopped' }] })
 			} else {
-				this.#commitBestEffort(active, { events })
+				// The stopped desire has to land before `release()`: the next command is scheduled on the
+				// microtask that `release` unblocks, and an `await` at the top of `stop` would let a resume
+				// persist `running` over a session that is already leaving.
+				this.#commitBestEffort(active, { desiredState: 'stopped', events })
 
-				// Everything the next command folds against is written by the synchronous prefix of `stop`: the
-				// stopped desire, which reduces every later command to a no-op, and the abort that ends the waits.
-				// What remains is the terminal pipeline, which the following commands must be able to answer while
-				// it runs, so the serialization ends here rather than at the end of the command.
 				release()
 
 				session = await this.stop(sessionId)
@@ -1173,7 +1209,10 @@ export class SequencerRuntime {
 				// publishes is the one the flip is decided against.
 				if (hourAngle < 0 && mount.pierSide !== 'NEITHER') active.preFlipPierSide = mount.pierSide
 
-				observation.preFlipPierSide = active.preFlipPierSide ?? SEQUENCER_PRE_FLIP_PIER_SIDE
+				// Without a sample east of the meridian the pre-flip side is unknown. Guessing WEST would flip a
+				// session that started already west, or a driver with the opposite convention, and the guard
+				// already fails when the sides cannot be told apart.
+				observation.preFlipPierSide = active.preFlipPierSide
 			}
 		}
 

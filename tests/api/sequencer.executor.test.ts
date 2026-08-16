@@ -242,7 +242,19 @@ describe('plan walk', () => {
 
 		expect(outcome.terminal.state).toBe('completed')
 		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(6)
-		expect(outcome.capture.m42?.cycle).toBe(3)
+		expect(outcome.capture.m42?.cycle).toBe(2)
+		expect(outcome.capture.m42?.groups.lum?.accepted).toBe(2)
+	})
+
+	test('fails a degraded first cycle without opening the next one', async () => {
+		const base = definition()
+		const plan = planOf({ capture: { ...base.capture, repeat: 2, retry: { ...base.capture.retry, onExhausted: 'skip' } } })
+		const state = harness(plan, (context) => (context.frame === undefined ? Promise.resolve({ type: 'completed', value: undefined }) : Promise.resolve({ type: 'retryableFailure', reason: 'commandFailed', detail: 'the camera did not answer' })))
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('failed')
+		expect(outcome.capture.m42?.cycle).toBe(0)
+		expect(state.executed.filter((it) => it.slot !== undefined).every((it) => it.slot!.cycle === 0)).toBeTrue()
 	})
 
 	test('spends a second attempt on a slot whose first exposure failed', async () => {
@@ -626,6 +638,20 @@ describe('plan walk', () => {
 		expect(outcome.terminal.failure).toEqual({ reason: 'commandFailed', detail: 'the camera did not answer' })
 		expect(outcome.capture.m42?.groups.lum?.accepted).toBe(0)
 		expect(outcome.capture.m42?.groups.lum?.abandoned).toBeGreaterThan(0)
+	})
+
+	test('bounds skip exposures by the slot limit times the attempts per slot', async () => {
+		const base = definition()
+		const retry = { ...base.capture.retry, maxAttempts: 2, onExhausted: 'skip' as const }
+		const plan = planOf({ capture: { ...base.capture, frames: [frame('lum', { count: 1, abandonmentBudget: 1, camera: camera() })], retry } })
+		const state = harness(plan, (context) => (context.frame === undefined ? Promise.resolve({ type: 'completed', value: undefined }) : Promise.resolve({ type: 'retryableFailure', reason: 'commandFailed', detail: 'the camera did not answer' })))
+		const outcome = await runSequencerPlan(state.host)
+		const frames = state.executed.filter((it) => it.slot !== undefined)
+
+		expect(outcome.terminal.state).toBe('failed')
+		expect(frames).toHaveLength(4)
+		expect(outcome.capture.m42?.groups.lum?.abandoned).toBe(2)
+		expect(outcome.capture.m42?.groups.lum?.accepted).toBe(0)
 	})
 
 	test('holds the walk on an operator pause and takes the remaining frames on the resume', async () => {

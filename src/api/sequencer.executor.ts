@@ -776,6 +776,11 @@ async function runCaptureLoop(execution: SequencerExecution, targetId: string, l
 
 		if (degraded.kind !== 'continue') return degraded
 
+		// The cycle that just closed is the last one the definition asked for. Advancing here would leave the
+		// checkpoint on `{ cycle: repeat, groups: {} }`, which looks like a fresh cycle the scheduler would
+		// start over and which the snapshot would project as another full set of required slots during finalize.
+		if (targetProgressOf(execution.capture, targetId).cycle + 1 >= loop.repeat) return SEQUENCER_CONTINUE
+
 		execution.capture = advanceCaptureCycle(execution.capture, targetId)
 		execution.keeper.capture(execution.capture)
 		execution.keeper.reenter(body)

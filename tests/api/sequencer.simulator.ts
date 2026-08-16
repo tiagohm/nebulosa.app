@@ -16,8 +16,9 @@ import type { FocuserCommander } from 'src/api/focuser.commander'
 import type { GuiderCommander } from 'src/api/guider.session'
 import type { MountCommander } from 'src/api/mount.commander'
 import { OperationCoordinator } from 'src/api/operation'
+import type { OperationScope } from 'src/api/operation'
 import type { PlateSolverHandler } from 'src/api/platesolver'
-import { ResourceArbiter } from 'src/api/resource'
+import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import type { RotatorCommander } from 'src/api/rotator.commander'
 import { SequencerHandler } from 'src/api/sequencer'
 import { sequencerCaptureHandler } from 'src/api/sequencer.capture'
@@ -33,6 +34,7 @@ import { SequencerRuntime } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
 import type { WheelCommander } from 'src/api/wheel.commander'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
+import type { OperationResult } from '#/orchestration'
 import type { Sequencer, SequencerAuxiliaryCapture, SequencerCamera, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerArtifact, SequencerSession, SequencerSessionSnapshot } from '#/sequencer.state'
 import { action, camera, frame } from './sequencer.fixture'
@@ -607,17 +609,33 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 			},
 		},
 		camera: {
-			capture: (_scope: unknown, _camera: Camera, request: { readonly outputPath?: string; readonly outputName?: string; readonly publishPath?: string }) => {
-				push('camera.expose')
+			capture: (scope: OperationScope, camera: Camera, request: { readonly outputPath?: string; readonly outputName?: string; readonly publishPath?: string }) => {
 				const path = request.outputPath === undefined || request.outputName === undefined ? undefined : join(request.outputPath, request.outputName)
 				const write = path === undefined ? Promise.resolve() : mkdir(dirname(path), { recursive: true }).then(() => writeFile(path, frameBytes))
 				const science = holdFirstExposure !== undefined && !heldScienceExposure && request.publishPath !== undefined
 
 				if (science) heldScienceExposure = true
 
-				const result = (science ? holdFirstExposure.then(() => write) : write).then(() => successfulOperationResult({ paths: path === undefined ? [] : [path], frameCount: path === undefined ? 0 : 1 }))
+				const work = science ? holdFirstExposure.then(() => write) : write
+				const started = Promise.withResolvers<OperationResult<undefined>>()
+				let startedSettled = false
+				const settleStarted = (result: OperationResult<undefined>) => {
+					if (startedSettled) return
+					startedSettled = true
+					started.resolve(result)
+				}
+				const handle = scope.start('cameraCapture', [{ key: resourceKey(camera), device: camera }], async () => {
+					push('camera.expose')
+					settleStarted(successfulOperationResult(undefined))
+					await work
+					return successfulOperationResult({ paths: path === undefined ? [] : [path], frameCount: path === undefined ? 0 : 1 })
+				})
 
-				return { id: 'capture-1', started: ok(undefined), result, cancel: () => Promise.resolve() }
+				void handle.result.then((result) => {
+					if (!result.ok) settleStarted(result)
+				})
+
+				return { id: handle.id, started: started.promise, result: handle.result, cancel: handle.cancel }
 			},
 		},
 		solver: {
@@ -630,16 +648,22 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 			},
 		},
 		autofocus: {
-			start: (_scope: unknown, _camera: Camera, focuser: Focuser) => {
-				push('autofocus.run')
-				clock.advance(30_000)
-				const focused = { outcome: 'focused' as const, position: focuser.position.value, message: 'best focus!', focusPoint: [focuser.position.value, 1] }
-				const result = holdFirstAutofocus === undefined || log.filter((entry) => entry.name === 'autofocus.run').length > 1 ? ok(focused) : holdFirstAutofocus.then(() => successfulOperationResult(focused))
+			start: (scope: OperationScope, camera: Camera, focuser: Focuser) => {
+				const focused = { outcome: 'focused' as const, position: focuser.position.value, message: 'best focus!', focusPoint: [focuser.position.value, 1] as const }
+				const handle = scope.start(
+					'autoFocus',
+					[
+						{ key: resourceKey(camera), device: camera },
+						{ key: resourceKey(focuser), device: focuser },
+					],
+					() => {
+						push('autofocus.run')
+						clock.advance(30_000)
+						return holdFirstAutofocus === undefined || log.filter((entry) => entry.name === 'autofocus.run').length > 1 ? successfulOperationResult(focused) : holdFirstAutofocus.then(() => successfulOperationResult(focused))
+					},
+				)
 
-				return {
-					handle: { id: 'af-1', kind: 'autoFocus', signal: new AbortController().signal, result, cancel: () => Promise.resolve() },
-					finish: () => undefined,
-				}
+				return { handle, finish: () => undefined }
 			},
 		},
 		guider: {

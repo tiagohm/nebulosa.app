@@ -631,4 +631,41 @@ describe('admission', () => {
 		expect(night.log.filter((entry) => entry.name === 'slew')).toHaveLength(1)
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
+
+	test('B.08 two camera operations still conflict inside the reservation', async () => {
+		let during: { readonly availability: string; readonly owners: number; readonly kind?: string; readonly type?: string; readonly exposure?: unknown } | undefined
+		let overlap: { readonly ok: boolean; readonly reason?: string; readonly error?: string } | undefined
+		const night = await runNight({
+			holdFirstExposure: true,
+			control: async (api) => {
+				const snapshot = await api.waitUntil((current) => current.capture.exposure !== undefined)
+				const camera = { key: api.devices.camera.hardwareId, device: api.devices.camera }
+				const focuser = { key: api.devices.focuser.hardwareId, device: api.devices.focuser }
+				const leased = api.arbiter.snapshot(camera.key)
+				const owner = leased.reservationOwner
+
+				during = { availability: leased.availability, owners: api.arbiter.ownersOf(camera.key).length, kind: leased.owner?.kind, type: snapshot.foreground?.type, exposure: snapshot.capture.exposure }
+
+				if (owner === undefined) return
+
+				const reserved = api.arbiter.reserve(owner, [camera])
+
+				if (!reserved.ok) return
+
+				overlap = await api.coordinator.reservedScope(reserved.reservation).start('autoFocus', [camera, focuser], () => ({ ok: true, value: undefined })).result
+
+				expect(api.arbiter.ownersOf(camera.key)).toHaveLength(1)
+			},
+		})
+
+		nights.push(night)
+
+		expect(during).toMatchObject({ availability: 'leased', owners: 1, kind: 'cameraCapture', type: 'capture.frame' })
+		expect(during?.exposure).toBeDefined()
+		expect(overlap).toMatchObject({ ok: false, reason: 'busy' })
+		expect(overlap?.error).toContain(`${night.devices.camera.hardwareId} is owned by cameraCapture`)
+		expect(night.session.state).toBe('completed')
+		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(4)
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+	}, 30_000)
 })

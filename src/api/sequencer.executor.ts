@@ -4,6 +4,7 @@ import type { SequencerFailureReason, SequencerFilterReference, SequencerGuiderS
 import type { SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanLoop, SequencerPlanPipeline, SequencerPlanSequence } from '#/sequencer.plan'
 import type { SequencerCaptureProgress, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerFailure, SequencerTriggerAnchors } from '#/sequencer.state'
 import { abortableDelay } from './operation.wait'
+import { sequencerActionFailure } from './sequencer.action'
 import { sequencerCadenceBoundary, sequencerExposureEnded, SEQUENCER_INITIAL_CADENCE_ANCHORS, waitForCadenceBoundary } from './sequencer.cadence'
 import type { SequencerCadenceAnchors } from './sequencer.cadence'
 import { SequencerCheckpointKeeper } from './sequencer.checkpoint'
@@ -16,7 +17,7 @@ import { sequencerPreExposureGuard, waitForFlipWindow } from './sequencer.guard'
 import type { SequencerFlipBoundary } from './sequencer.guard'
 import type { SequencerGuidingServices } from './sequencer.guiding'
 import { sequencerFrameDirectories, sequencerFrameFileName, sequencerLogicalSlotId } from './sequencer.identity'
-import { runGuidingInterlock } from './sequencer.interlock'
+import { runGuidingInterlock, sequencerAbandonGuiding } from './sequencer.interlock'
 import type { SequencerInterlockReport, SequencerInterlockState } from './sequencer.interlock'
 import { sequencerAuxiliaryDirectory, sequencerVerifiedArtifactPath } from './sequencer.path'
 import type { SequencerPathContext } from './sequencer.path'
@@ -541,7 +542,13 @@ async function runActionNode(execution: SequencerExecution, node: SequencerPlanA
 			continue
 		}
 
-		execution.events.push({ type: 'policyApplied', nodeId: node.id, detail: decision.kind })
+		execution.events.push({ type: 'policyApplied', nodeId: node.id, detail: policyAppliedOf(decision) })
+
+		if (decision.kind === 'continue' && !decision.guiding) {
+			const unguided = await continueUnguided(execution, node.id)
+
+			if (unguided !== undefined) return { outcome: unguided, completed: false }
+		}
 
 		return { outcome: decisionOutcome(decision, result.reason, result.detail), completed: false }
 	}
@@ -565,6 +572,38 @@ function waitsOf(host: SequencerExecutorHost): AbortSignal {
 function commandedBy(execution: SequencerExecution) {
 	const desired = execution.host.desiredState()
 	return desired === 'running' ? undefined : desired
+}
+
+// Event detail of a terminal policy decision. `continueUnguided` is a different decision from `continue`, and
+// flattening it to `continue` in the log would hide the one thing that separates the two.
+function policyAppliedOf(decision: ReturnType<typeof sequencerFailurePolicy>) {
+	return decision.kind === 'continue' && !decision.guiding ? 'continueUnguided' : decision.kind
+}
+
+// Stops the session's guider after a `continueUnguided` decision, so the rest of the night is actually
+// captured without corrections.
+//
+// The interlock marker is dropped first: a later safe point that still saw it would treat the stopped
+// guider as a suspension it owes a resume, and put the corrections back on the next frame. A stop that
+// fails is the session failing — continuing while still guiding would be the silent disagreement the
+// decision just forbade. Returns the failure, or undefined when there was nothing to stop or it stopped.
+async function continueUnguided(execution: SequencerExecution, nodeId: string): Promise<SequencerNodeOutcome | undefined> {
+	const context = execution.host.context(nodeId, 1, execution.host.waitSignal)
+	const guider = context.guider
+
+	if (guider === undefined) return undefined
+
+	sequencerAbandonGuiding(guider)
+
+	if (!execution.host.guiding.guiderCommander.running(guider)) return undefined
+
+	const stopped = await execution.host.guiding.guiderCommander.stopGuiding(guider, { signal: execution.host.waitSignal })
+
+	if (stopped.ok) return undefined
+
+	const failed = sequencerActionFailure(stopped, 'the session could not stop guiding after a continueUnguided decision')
+
+	return { kind: 'fail', reason: failed.reason, detail: failed.detail }
 }
 
 // Translates a terminal policy decision into what the rest of the plan does.
@@ -1136,7 +1175,13 @@ async function runInterlockedSafePoint(
 			continue
 		}
 
-		execution.events.push({ type: 'policyApplied', nodeId: frame.id, detail: decision.kind })
+		execution.events.push({ type: 'policyApplied', nodeId: frame.id, detail: policyAppliedOf(decision) })
+
+		if (decision.kind === 'continue' && !decision.guiding) {
+			const unguided = await continueUnguided(execution, frame.id)
+
+			if (unguided !== undefined) return { outcome: unguided }
+		}
 
 		// A `skip` is the only terminal answer that lets the walk go on after the bracket failed, and it flattens
 		// into the same `continue` a successful bracket returns. The caller has to tell them apart: the optical

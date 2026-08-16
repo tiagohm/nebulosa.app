@@ -105,6 +105,15 @@ export interface SequencerInterlockOutcome<T> {
 // does not survive the process, which is the same lifetime the V1 sessions have.
 const suspendedGuiders = new Map<string, boolean>()
 
+// Forgets that this interlock left `guider` looping, so the next safe point does not treat a stopped or
+// abandoned session as a suspension it still owes a resume.
+//
+// The policy decision `continueUnguided` is what calls this: the corrections are being given up on, not
+// paused, and the next bracket must not put them back on the strength of a marker this one left behind.
+export function sequencerAbandonGuiding(guider: string) {
+	suspendedGuiders.delete(guider)
+}
+
 // Puts the guider back to work at the end of a bracket, reporting which of the two ways it is being done.
 //
 // `recalibrate` asks for the calibration to be redone instead of guiding on the existing solution, which is

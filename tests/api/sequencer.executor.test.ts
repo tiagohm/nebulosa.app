@@ -74,7 +74,7 @@ interface Harness {
 	refuseCommit?: () => boolean
 }
 
-function guidingServices(loop: () => OperationResult<unknown>, dither?: () => OperationResult<unknown>): SequencerGuidingServices {
+function guidingServices(loop: () => OperationResult<unknown>, dither?: () => OperationResult<unknown>, stop?: () => OperationResult<unknown>): SequencerGuidingServices {
 	return {
 		guiderCommander: {
 			running: () => true,
@@ -82,6 +82,7 @@ function guidingServices(loop: () => OperationResult<unknown>, dither?: () => Op
 			loop: () => Promise.resolve(loop()),
 			startGuiding: () => Promise.resolve(successfulOperationResult(undefined)),
 			calibrate: () => Promise.resolve(successfulOperationResult(undefined)),
+			stopGuiding: () => Promise.resolve(stop === undefined ? successfulOperationResult(undefined) : stop()),
 			dither: () => Promise.resolve(dither === undefined ? successfulOperationResult(undefined) : dither()),
 		},
 	} as unknown as SequencerGuidingServices
@@ -844,6 +845,34 @@ describe('plan walk', () => {
 		expect(outcome.terminal.state).toBe('completed')
 		expect(state.executed.filter((it) => it.nodeId.endsWith('.trigger.meridianFlip'))).toHaveLength(1)
 		expect(state.executed.filter((it) => it.nodeId.endsWith('.trigger.autofocus'))).toBeEmpty()
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
+	})
+
+	test('stops the guider when the policy continues unguided', async () => {
+		const base = definition()
+		const autofocus = { ...base.autofocus, enabled: true, onFailure: 'continueUnguided' as const, retry: { ...retry(), maxAttempts: 1 } }
+		let stopped = 0
+		const state = harness(
+			planOf({
+				autofocus: autofocus as typeof base.autofocus,
+				guiding: { ...base.guiding, enabled: true },
+				startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding', required: true })] },
+			}),
+			(context) => (context.nodeId.endsWith('.trigger.autofocus') ? Promise.resolve({ type: 'retryableFailure', reason: 'commandFailed', detail: 'the focuser did not move' }) : Promise.resolve({ type: 'completed', value: undefined })),
+			guidingServices(
+				() => successfulOperationResult(undefined),
+				undefined,
+				() => {
+					stopped++
+					return successfulOperationResult(undefined)
+				},
+			),
+		)
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('completed')
+		expect(stopped).toBe(2)
+		expect(state.events.filter((event) => event.type === 'policyApplied' && event.detail === 'continueUnguided')).toHaveLength(2)
 		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
 	})
 

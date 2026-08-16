@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { SequencerDitherTrigger } from 'src/api/sequencer.compiler'
 import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
-import { runGuidingInterlock } from 'src/api/sequencer.interlock'
+import { runGuidingInterlock, sequencerAbandonGuiding } from 'src/api/sequencer.interlock'
 import type { SequencerInterlockRequest } from 'src/api/sequencer.interlock'
 import type { SequencerActionContext, SequencerActionResult } from 'src/api/sequencer.registry'
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
@@ -218,6 +218,21 @@ describe('guiding interlock', () => {
 
 		expect(guided).toEqual({ type: 'completed', value: { value: 'centered', suspended: true, recalibrated: false } })
 		expect(later.map((command) => command.name)).toEqual(['loop', 'body', 'startGuiding'])
+	})
+
+	test('a continueUnguided abandon does not resume a guider the last bracket left looping', async () => {
+		const stranded: Command[] = []
+		const abandoned = await runGuidingInterlock(interlockServices(stranded, true, { startGuiding: 'timeout' }), actionContext('guider-unguided'), interlockRequest(), body(stranded))
+
+		expect(abandoned).toMatchObject({ type: 'retryableFailure', reason: 'timeout' })
+
+		sequencerAbandonGuiding('guider-unguided')
+
+		const commands: Command[] = []
+		const result = await runGuidingInterlock(interlockServices(commands, false, {}, true), actionContext('guider-unguided'), interlockRequest(), body(commands))
+
+		expect(result).toEqual({ type: 'completed', value: { value: 'centered', suspended: false, recalibrated: false } })
+		expect(commands.map((command) => command.name)).toEqual(['body'])
 	})
 
 	test('stops treating a resumed guider as a suspension of its own', async () => {

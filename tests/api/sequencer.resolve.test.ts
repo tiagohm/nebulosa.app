@@ -86,7 +86,7 @@ describe('resource resolution', () => {
 	test('a remote guider adds its logical key and no device', () => {
 		const setup = observatory()
 		const definition = canonical()
-		const remote = { ...definition, guiding: { ...definition.guiding, enabled: true, connection: { mode: 'remote', host: 'PHD2.local', port: 4400, owned: true } as const } }
+		const remote = { ...definition, guiding: { ...definition.guiding, enabled: true, connection: { mode: 'remote', host: 'PHD2.local', port: 4400 } as const } }
 		const resolution = resolveResources(plan(remote), devices(setup.camera, setup.mount, setup.focuser))
 
 		expect(resolution.ok).toBe(true)

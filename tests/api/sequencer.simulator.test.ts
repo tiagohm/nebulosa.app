@@ -823,6 +823,44 @@ describe('admission', () => {
 			expect(night.arbiter.ownersOf(key)).toHaveLength(0)
 		}
 	}, 30_000)
+
+	test('B.13 camera and wheel on the same hardware share one reservation key', async () => {
+		let reserved: readonly string[] | undefined
+		const night = await runNight({
+			sim: { wheel: { hardwareId: 'hw-camera' } },
+			holdFirstExposure: true,
+			control: async (api) => {
+				await api.waitUntil((current) => current.capture.exposure !== undefined)
+
+				const key = api.devices.camera.hardwareId
+				const owner = api.arbiter.snapshot(key).reservationOwner
+
+				expect(api.devices.wheel.hardwareId).toBe(key)
+
+				if (owner === undefined) return
+
+				const extended = api.arbiter.reserve(owner, [{ key, device: api.devices.camera }])
+
+				if (!extended.ok) return
+
+				reserved = extended.reservation.resources
+			},
+		})
+
+		nights.push(night)
+
+		const key = night.devices.camera.hardwareId
+
+		expect(night.devices.wheel.hardwareId).toBe(key)
+		expect(reserved?.filter((item) => item === key)).toEqual([key])
+		expect(reserved?.includes('hw-wheel')).toBeFalse()
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(night.log.filter((entry) => entry.name === 'wheel.move').map((entry) => entry.detail)).toEqual(['L', 'R', 'G', 'B'])
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+		expect(night.arbiter.availability(key)).toBe('available')
+		expect(night.arbiter.availability('hw-wheel')).toBe('available')
+	}, 30_000)
 })
 
 function assertNoReservationToken(...values: readonly unknown[]) {

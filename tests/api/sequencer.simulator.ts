@@ -97,6 +97,7 @@ export interface NightOptions {
 		readonly mount?: Partial<Mount> & { readonly hourAngle?: number }
 		readonly camera?: Partial<Camera>
 		readonly cover?: Partial<Cover>
+		readonly wheel?: Partial<Wheel>
 	}
 	readonly control?: (api: NightControl) => void | Promise<void>
 	// Existing storage root to reuse. When omitted, the night creates and owns a temporary directory.
@@ -389,7 +390,7 @@ function observatory(sim?: NightOptions['sim'], tag?: string): SimulatorDevices 
 	Object.assign(guideCamera, { id: `guide-camera-1${id}`, hardwareId: `hw-guide-camera${id}`, name: `Guide Camera Simulator${suffix}`, connected: true })
 
 	const wheel = structuredClone(DEFAULT_WHEEL)
-	Object.assign(wheel, { id: `wheel-1${id}`, hardwareId: `hw-wheel${id}`, name: `Wheel Simulator${suffix}`, connected: true, count: FILTERS.length, position: FILTERS.length - 1, names: [...FILTERS] })
+	Object.assign(wheel, { id: `wheel-1${id}`, hardwareId: `hw-wheel${id}`, name: `Wheel Simulator${suffix}`, connected: true, count: FILTERS.length, position: FILTERS.length - 1, names: [...FILTERS], ...sim?.wheel })
 
 	const focuser = structuredClone(DEFAULT_FOCUSER)
 	Object.assign(focuser, { id: `focuser-1${id}`, hardwareId: `hw-focuser${id}`, name: `Focuser Simulator${suffix}`, connected: true, position: { value: 25000, min: 0, max: 50000, step: 1 } })

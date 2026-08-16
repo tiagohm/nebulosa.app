@@ -190,10 +190,11 @@ export interface SequencerGroupProgress {
 	readonly abandoned: number
 	// Accumulated exposure time of the accepted frames of this cycle, in seconds.
 	readonly integration: number
-	// Physical attempt the current attempt window opened at. Attempts spent in the window are `attempt -
-	// attemptWindowStart`, exhaustion is that difference reaching the maximum, and granting a new window after
-	// a pause is writing the next physical attempt here. Only the window start is stored: the physical attempt
-	// itself is derived from the artifact registry, so the two can never disagree after a crash.
+	// Physical attempt the current attempt window opened at, 0-based. Attempts spent in the window are
+	// `attempt - attemptWindowStart + 1`, because the attempt that opened the window counts as the first.
+	// Exhaustion is that spent count reaching `retry.maxAttempts`, and granting a new window after a pause is
+	// writing the next physical attempt here. Only the window start is stored: the physical attempt itself is
+	// derived from the artifact registry, so the two can never disagree after a crash.
 	readonly attemptWindowStart: number
 }
 

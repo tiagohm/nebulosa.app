@@ -9,10 +9,12 @@ export interface Sequencer {
 	// Schema revision of this serialized contract.
 	readonly schemaVersion: 1
 
-	// Stable definition identifier assigned by persistence.
+	// Optional client-supplied identifier of this recipe. The server copies it onto the session as a label
+	// and does not assign or persist a library of definitions.
 	readonly id?: string
 
-	// Optimistic-concurrency revision of the persisted definition.
+	// Optional client-supplied revision of this recipe. The session copies it as a label; the server does
+	// not increment it.
 	readonly revision?: number
 
 	// Human-readable name shown in lists and editors.

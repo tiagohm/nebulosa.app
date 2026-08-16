@@ -167,9 +167,9 @@ export interface SequencerPlanStorage {
 
 // Everything a session executes, snapshotted at compilation and immutable for its whole life.
 export interface SequencerPlan {
-	// Definition the plan was lowered from.
+	// Optional recipe id the compiled Sequencer carried, empty when the client sent none.
 	readonly definitionId: string
-	// Definition revision snapshotted for the session; a later edit does not affect a running one.
+	// Optional recipe revision the compiled Sequencer carried, zero when the client sent none.
 	readonly definitionRevision: number
 	// Human-readable name of the definition, shown wherever a session is listed.
 	readonly name: string

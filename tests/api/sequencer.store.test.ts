@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
 import type { SequencerCheckpoint } from '#/sequencer.state'
-import { canonical } from './sequencer.fixture'
 
 function store(start: number = 1000) {
 	let now = start
@@ -261,78 +260,5 @@ describe('in memory sequencer store', () => {
 
 		expect(late.ok && late.session.endedAt).toBe(1020)
 		expect(late.ok && late.session.failure?.reason).toBe('commandFailed')
-	})
-})
-
-describe('definition storage', () => {
-	test('assigns an id to a definition that never was stored and starts it at revision 1', () => {
-		const { store: instance } = store()
-		const created = instance.createDefinition({ ...canonical(), id: undefined, revision: 99 })
-
-		expect(created).toBeDefined()
-
-		if (created === undefined) return
-
-		expect(created.id).not.toBeEmpty()
-		expect(created.revision).toBe(1)
-		expect(created.definition.id).toBe(created.id)
-		expect(created.definition.revision).toBe(1)
-		expect(created.createdAt).toBe(1000)
-		expect(created.updatedAt).toBe(1000)
-		expect(instance.definition(created.id)).toEqual(created)
-		expect(instance.definitions()).toEqual([created])
-	})
-
-	test('refuses to create a definition over an id that is already stored', () => {
-		const { store: instance } = store()
-
-		expect(instance.createDefinition(canonical())).toBeDefined()
-		expect(instance.createDefinition(canonical())).toBeUndefined()
-		expect(instance.definitions()).toHaveLength(1)
-	})
-
-	test('assigns the next revision on every update and ignores the one the payload carries', () => {
-		const { store: instance, tick } = store()
-
-		instance.createDefinition(canonical())
-		tick(50)
-
-		const updated = instance.updateDefinition('definition-1', { ...canonical(), name: 'M31', revision: 7 })
-
-		expect(updated?.revision).toBe(2)
-		expect(updated?.definition.revision).toBe(2)
-		expect(updated?.definition.name).toBe('M31')
-		expect(updated?.createdAt).toBe(1000)
-		expect(updated?.updatedAt).toBe(1050)
-		expect(instance.updateDefinition('definition-2', canonical())).toBeUndefined()
-	})
-
-	test('stores an independent copy of the definition', () => {
-		const { store: instance } = store()
-		const definition = canonical()
-		const created = instance.createDefinition(definition)
-
-		expect(created).toBeDefined()
-
-		if (created === undefined) return
-
-		expect(created.definition).not.toBe(definition)
-		expect(created.definition.capture.frames).not.toBe(definition.capture.frames)
-	})
-
-	test('refuses to remove a definition a non-terminal session executes', () => {
-		const { store: instance } = store()
-
-		instance.createDefinition(canonical())
-
-		const created = instance.createSession({ definitionId: 'definition-1', definitionRevision: 1, handlerVersions: {} })
-
-		expect(instance.deleteDefinition('definition-1')).toEqual({ ok: false, reason: 'inUse', sessionId: created.id })
-
-		instance.commit({ sessionId: created.id, expectedRevision: 0, state: 'completed' })
-
-		expect(instance.deleteDefinition('definition-1')).toEqual({ ok: true })
-		expect(instance.definition('definition-1')).toBeUndefined()
-		expect(instance.deleteDefinition('definition-1')).toEqual({ ok: false, reason: 'unknownDefinition' })
 	})
 })

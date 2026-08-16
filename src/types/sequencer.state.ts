@@ -1,5 +1,5 @@
 import type { FrameType } from 'nebulosa/src/devices/indi/device'
-import type { Sequencer, SequencerDeviceRole, SequencerFailureReason } from './sequencer'
+import type { SequencerDeviceRole, SequencerFailureReason } from './sequencer'
 
 // Durable execution state of a sequencer session: what the runtime persists, what it reloads after a
 // restart, and what the UI reads. Configuration lives in `sequencer.ts` and never appears here.
@@ -37,32 +37,14 @@ export interface SequencerFailure {
 	readonly detail?: string
 }
 
-// Stored definition, which is the request contract plus what persistence assigns to it.
-//
-// The id and the revision are optional on the definition itself, because a definition being edited has not
-// been stored yet and has neither. A stored one always has both, so they are reported here as the total values
-// they are; the stored definition carries the same two, written from this record and never from the payload.
-export interface SequencerDefinitionRecord {
-	// Identifier assigned by persistence.
-	readonly id: string
-	// Revision of this version, starting at 1 and incremented by every update.
-	readonly revision: number
-	// Definition as stored, with its id and revision filled in.
-	readonly definition: Sequencer
-	// Instant the definition was first stored.
-	readonly createdAt: number
-	// Instant of the last update.
-	readonly updatedAt: number
-}
-
 // Persisted session record. `revision` is the optimistic-concurrency guard: every commit checks the
 // revision it expected and increments it, so two writers racing over one session cannot interleave.
 export interface SequencerSession {
 	// Stable session identifier.
 	readonly id: string
-	// Definition this session executes.
+	// Optional recipe id the start payload carried, empty when the client sent none.
 	readonly definitionId: string
-	// Immutable definition revision snapshotted when the session was created; later edits do not affect it.
+	// Optional recipe revision the start payload carried, zero when the client sent none.
 	readonly definitionRevision: number
 	// Optimistic-concurrency revision of this record, starting at 0 and incremented by every commit.
 	readonly revision: number
@@ -107,7 +89,7 @@ export interface SequencerCheckpoint {
 	// Instants and counters the safe-point triggers are evaluated against. Always present, because a resume
 	// that found them absent would fire every trigger again on the first frame after the restart.
 	readonly anchors: SequencerTriggerAnchors
-	// Definition revision this checkpoint was produced from; a resume against another revision is invalid.
+	// Recipe revision copied from the start payload; a resume against another label is invalid.
 	readonly definitionRevision: number
 	// Handler version per block type, as resolved when the session started. A resume against a registry
 	// that no longer offers the same versions is refused rather than silently executed by another handler.
@@ -459,9 +441,9 @@ export interface SequencerMonitorSnapshot {
 export interface SequencerSessionSnapshot {
 	// Session being described.
 	readonly id: string
-	// Definition it executes.
+	// Optional recipe id the start payload carried, empty when the client sent none.
 	readonly definitionId: string
-	// Definition revision it snapshotted at creation.
+	// Optional recipe revision the start payload carried, zero when the client sent none.
 	readonly definitionRevision: number
 	// Revision of the session record this snapshot was derived from, which is what makes two snapshots of the
 	// same session comparable.

@@ -72,26 +72,7 @@ function environment(execute?: AnySequencerActionHandler['execute'], devices?: P
 	return { arbiter, coordinator, registry, store, runtime, handler: new SequencerHandler({ store, runtime, registry }) }
 }
 
-function stored(instance: SequencerHandler, overrides?: Partial<Sequencer>) {
-	return instance.create({ ...canonical(), ...overrides })!
-}
-
 describe('definitions', () => {
-	test('assigns the identity and reports the stored revisions', () => {
-		const { handler: instance } = environment()
-		const created = stored(instance)
-
-		expect(created.revision).toBe(1)
-		expect(created.definition.id).toBe(created.id)
-		expect(instance.definitions()).toEqual([created])
-
-		const updated = instance.update(created.id, { ...canonical(), name: 'M43' })!
-
-		expect(updated.revision).toBe(2)
-		expect(instance.definition(created.id)?.definition.name).toBe('M43')
-		expect(instance.update('missing', canonical())).toBeUndefined()
-	})
-
 	test('validates a definition against the handlers that would execute it', () => {
 		const { handler: instance, registry } = environment()
 
@@ -107,42 +88,12 @@ describe('definitions', () => {
 		expect(refused.ok).toBeFalse()
 		expect(refused.diagnostics.some((diagnostic) => diagnostic.message.includes('no handler is registered'))).toBeTrue()
 	})
-
-	test('refuses to remove a definition a live session still names', () => {
-		const { handler: instance } = environment()
-		const created = stored(instance)
-		const session = instance.createSession(created.id)
-
-		expect(session.ok).toBeTrue()
-		expect(instance.remove(created.id)).toEqual({ ok: false, reason: 'inUse', sessionId: session.ok ? session.session.id : '' })
-	})
-
-	test('removes a definition once the session that named it was discarded', async () => {
-		const { handler: instance } = environment()
-		const created = stored(instance)
-		const session = instance.createSession(created.id)
-
-		expect(session.ok).toBeTrue()
-
-		if (!session.ok) return
-
-		// A session that never started ends on the spot: nothing is running, so there is nothing to wait for.
-		const stop = await instance.stop(session.session.id)
-
-		expect(stop).toMatchObject({ ok: true, effect: 'stop' })
-		expect(stop.ok && stop.session.state).toBe('stopped')
-		expect(stop.ok && stop.session.startedAt).toBeUndefined()
-		expect(stop.ok && stop.session.endedAt).toBeDefined()
-		expect(instance.snapshot(session.session.id)?.converging).toBeFalse()
-		expect(instance.remove(created.id)).toEqual({ ok: true })
-	})
 })
 
 describe('sessions', () => {
 	test('creates a session and keeps the lowering it will run', () => {
 		const { handler: instance } = environment()
-		const created = stored(instance)
-		const result = instance.createSession(created.id)
+		const result = instance.createSession(canonical())
 
 		expect(result.ok).toBeTrue()
 
@@ -151,27 +102,23 @@ describe('sessions', () => {
 		const snapshot = result.session
 
 		expect(snapshot.state).toBe('created')
-		expect(snapshot.definitionId).toBe(created.id)
-		expect(snapshot.definitionRevision).toBe(1)
+		expect(snapshot.definitionId).toBe('definition-1')
+		expect(snapshot.definitionRevision).toBe(7)
 		expect(snapshot.target).toEqual({ id: 'm42', name: 'Orion Nebula' })
 		expect(snapshot.capture.requiredSlots).toBe(20)
 
 		const plan = instance.plan(snapshot.id)
 
-		expect(plan?.plan.definitionId).toBe(created.id)
+		expect(plan?.plan.definitionId).toBe('definition-1')
 		expect(plan?.preflight.repeat).toBe(2)
 		expect(plan?.preflight.requiredSlots).toBe(40)
 		expect(instance.plan('missing')).toBeUndefined()
 		expect(instance.sessions()).toHaveLength(1)
 	})
 
-	test('reports the lowering that refused a definition instead of storing a session', () => {
+	test('reports the lowering that refused a definition instead of storing a session', async () => {
 		const { handler: instance } = environment()
-		const created = stored(instance, { capture: { ...canonical().capture, repeat: 0 } })
-
-		expect(instance.createSession('missing')).toEqual({ ok: false, reason: 'unknownDefinition' })
-
-		const refused = instance.createSession(created.id)
+		const refused = await instance.start({ ...canonical(), capture: { ...canonical().capture, repeat: 0 } })
 
 		expect(refused.ok).toBeFalse()
 
@@ -185,19 +132,16 @@ describe('sessions', () => {
 	test('delegates the admission to the gate instead of deciding it', async () => {
 		const started = Promise.withResolvers<void>()
 		const { handler: instance } = environment(() => started.promise.then(() => ({ type: 'completed', value: undefined })))
-		const first = instance.createSession(stored(instance).id)
-		const second = instance.createSession(stored(instance, { id: 'definition-2' }).id)
+		const first = await instance.start(canonical())
+		const second = await instance.start({ ...canonical(), id: 'definition-2' })
 
 		expect(first.ok).toBeTrue()
-		expect(second.ok).toBeTrue()
+		expect(second).toMatchObject({ ok: false, reason: 'busy' })
 
-		if (!first.ok || !second.ok) return
+		if (!first.ok) return
 
-		const admitted = instance.start(first.session.id)
-		const refused = instance.start(second.session.id)
-
-		expect(admitted).toMatchObject({ ok: true, reentrant: false })
-		expect(refused).toMatchObject({ ok: false, reason: 'busy', sessionId: first.session.id })
+		expect(first).toMatchObject({ ok: true, reentrant: false })
+		expect(second).toMatchObject({ ok: false, reason: 'busy', sessionId: first.session.id })
 		expect(instance.snapshot(first.session.id)?.state).toBe('running')
 
 		started.resolve()
@@ -210,15 +154,13 @@ describe('sessions', () => {
 	test('records a pause without ending the session and a stop that does', async () => {
 		const started = Promise.withResolvers<void>()
 		const { handler: instance } = environment(() => started.promise.then(() => ({ type: 'completed', value: undefined })))
-		const created = instance.createSession(stored(instance).id)
+		const created = await instance.start(canonical())
 
 		expect(created.ok).toBeTrue()
 
 		if (!created.ok) return
 
 		const id = created.session.id
-
-		instance.start(id)
 
 		const paused = await instance.pause(id)
 
@@ -247,6 +189,7 @@ describe('sessions', () => {
 	test('publishes the session as finalizing while the terminal pipeline runs', async () => {
 		let observed: SequencerSessionState | undefined
 		let refused: unknown
+		let id = ''
 
 		const { handler: instance } = environment(async (context) => {
 			if (context.nodeId === 'finalize.action[park]') {
@@ -256,15 +199,13 @@ describe('sessions', () => {
 
 			return { type: 'completed', value: undefined }
 		})
-		const created = instance.createSession(stored(instance).id)
+		const created = await instance.start(canonical())
 
 		expect(created.ok).toBeTrue()
 
 		if (!created.ok) return
 
-		const id = created.session.id
-
-		instance.start(id)
+		id = created.session.id
 
 		await instance.stop(id)
 
@@ -285,13 +226,11 @@ describe('sessions', () => {
 			},
 			{ mount: device },
 		)
-		const created = instance.createSession(stored(instance, { capture: brief() }).id)
+		const created = await instance.start({ ...canonical(), capture: brief() })
 
 		expect(created.ok).toBeTrue()
 
 		if (!created.ok) return
-
-		instance.start(created.session.id)
 
 		await runtime.settled(created.session.id)
 
@@ -307,13 +246,11 @@ describe('sessions', () => {
 			},
 			{ mount: mount(-0.05, 'EAST') },
 		)
-		const created = instance.createSession(stored(instance, { capture: brief() }).id)
+		const created = await instance.start({ ...canonical(), capture: brief() })
 
 		expect(created.ok).toBeTrue()
 
 		if (!created.ok) return
-
-		instance.start(created.session.id)
 
 		await runtime.settled(created.session.id)
 
@@ -329,13 +266,11 @@ describe('sessions', () => {
 			},
 			{ mount: mount(-0.05, 'EAST') },
 		)
-		const created = instance.createSession(stored(instance, { capture: brief() }).id)
+		const created = await instance.start({ ...canonical(), capture: brief() })
 
 		expect(created.ok).toBeTrue()
 
 		if (!created.ok) return
-
-		instance.start(created.session.id)
 
 		expect((await runtime.settled(created.session.id))?.state).toBe('completed')
 		expect(guiders).toEqual(new Set(['guider-1']))
@@ -351,13 +286,11 @@ describe('sessions', () => {
 			undefined,
 			guiding(() => failedOperationResult('disconnected', 'the guider server refused the connection')),
 		)
-		const created = instance.createSession(stored(instance, { capture: brief() }).id)
+		const created = await instance.start({ ...canonical(), capture: brief() })
 
 		expect(created.ok).toBeTrue()
 
 		if (!created.ok) return
-
-		instance.start(created.session.id)
 
 		const settled = await runtime.settled(created.session.id)
 
@@ -368,15 +301,13 @@ describe('sessions', () => {
 
 	test('recovers only the events beyond a sequence the caller already has', async () => {
 		const { handler: instance } = environment()
-		const created = instance.createSession(stored(instance).id)
+		const created = await instance.start(canonical())
 
 		expect(created.ok).toBeTrue()
 
 		if (!created.ok) return
 
 		const id = created.session.id
-
-		instance.start(id)
 
 		await instance.stop(id)
 

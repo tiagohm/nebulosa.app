@@ -78,7 +78,7 @@ describe('fanout', () => {
 
 		wsm.open(client)
 
-		const created = handler.createSession(handler.create(canonical())!.id)
+		const created = await handler.start(canonical())
 
 		expect(created.ok).toBeTrue()
 
@@ -88,15 +88,12 @@ describe('fanout', () => {
 
 		const announced = types(received, 'sequencer:session')
 
-		expect(announced).toHaveLength(1)
-		expect(types(received, 'sequencer:progress')).toBeEmpty()
-		// The announcement of a creation is derived through the same plan the answer of that same call carries, so
+		expect(announced.length).toBeGreaterThanOrEqual(1)
+		// The announcement of a start is derived through the same plan the answer of that same call carries, so
 		// it names the target and the work of the session instead of describing a session with no plan behind it.
 		expect(created.session.target).toBeDefined()
 		expect(created.session.capture.requiredSlots).toBeGreaterThan(0)
 		expect(announced[0].payload).toMatchObject({ id, target: created.session.target, capture: { requiredSlots: created.session.capture.requiredSlots } })
-
-		handler.start(id)
 
 		await Bun.sleep(50)
 
@@ -127,17 +124,19 @@ describe('fanout', () => {
 
 	test('greets a socket with the sessions that have not ended and never replays progress', async () => {
 		const { received, wsm, handler, channel, client } = environment(() => Promise.resolve({ type: 'completed', value: undefined }))
-		const first = handler.createSession(handler.create(canonical())!.id)
-		const second = handler.createSession(handler.create({ ...canonical(), id: 'definition-2' })!.id)
+		const first = await handler.start(canonical())
 
 		expect(first.ok).toBeTrue()
-		expect(second.ok).toBeTrue()
 
-		if (!first.ok || !second.ok) return
-
-		handler.start(first.session.id)
+		if (!first.ok) return
 
 		await handler.stop(first.session.id)
+
+		const second = handler.createSession({ ...canonical(), id: 'definition-2' })
+
+		expect(second.ok).toBeTrue()
+
+		if (!second.ok) return
 
 		received.length = 0
 

@@ -481,4 +481,46 @@ describe('admission', () => {
 		expect(process.arbiter.availability(key)).toBe('available')
 		expect(process.runtime.activeSessionId).toBeUndefined()
 	}, 30_000)
+
+	test('B.04 an idle guider session refuses start before any dither', async () => {
+		const process = await openProcess()
+
+		processes.push(process)
+
+		const observatory = process.addObservatory('east')
+		const created = process.handler.createSession(
+			process.definition(observatory, {
+				id: 'east',
+				autofocus: { enabled: false },
+				meridianFlip: { enabled: false },
+				target: { center: { enabled: false } },
+				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 2, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				dither: { everyFrames: 1 },
+			}),
+		)
+
+		expect(created.ok).toBeTrue()
+
+		if (!created.ok) return
+
+		const key = remoteGuiderKey('127.0.0.1', 4400)
+		const idle = process.arbiter.acquire({ id: 'phd2', kind: 'guiderSession' }, [{ key }])
+
+		expect(idle.ok).toBeTrue()
+
+		if (!idle.ok) return
+
+		const refused = process.runtime.start(created.session.id)
+
+		expect(refused).toEqual({ ok: false, reason: 'resourcesUnavailable', detail: `${key} is held by guiderSession phd2` })
+		expect(process.runtime.activeSessionId).toBeUndefined()
+		expect(process.store.session(created.session.id)?.state).toBe('created')
+		expect(process.log.filter((entry) => entry.name === 'unpark')).toHaveLength(0)
+		expect(process.log.filter((entry) => entry.name === 'camera.expose')).toHaveLength(0)
+		expect(process.log.filter((entry) => entry.name === 'guider.dither')).toHaveLength(0)
+		expect(process.arbiter.availability(observatory.camera.hardwareId)).toBe('available')
+		expect(process.arbiter.availability(key)).toBe('leased')
+
+		idle.lease.release()
+	}, 30_000)
 })

@@ -149,9 +149,13 @@ async function runCrossing(services: SequencerMeridianFlipServices, context: Seq
 		return { type: 'fatalFailure', reason: 'unexpectedState', detail: `the mount did not confirm a pier side change, reporting ${flipped.value.pierSide}` }
 	}
 
-	const settled = await sequencerSettle(context, configuration.settle)
+	// The interlock of a guided session settles the resume of the same safe point. Paying this wait as
+	// well would stand still twice for one crossing — once here and once when the corrections come back.
+	if (configuration.deferSettle !== true) {
+		const settled = await sequencerSettle(context, configuration.settle)
 
-	if (!settled.ok) return sequencerActionFailure(settled, 'the settle after the flip was interrupted')
+		if (!settled.ok) return sequencerActionFailure(settled, 'the settle after the flip was interrupted')
+	}
 
 	return {
 		type: 'completed',

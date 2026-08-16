@@ -159,6 +159,17 @@ describe('meridian flip block', () => {
 		expect(handler.validate(flipConfiguration({ focusing: focusingFilter }), { nodeId: 'target[m42].trigger.meridianFlip', devices: { mount: 'Mount Simulator', camera: 'Camera Simulator', focuser: 'Focuser Simulator' } }).ok).toBe(true)
 	})
 
+	test('skips its own settle when the interlock of the same safe point will wait', async () => {
+		const commands: Command[] = []
+		const started = performance.now()
+		const handler = sequencerMeridianFlipHandler(flipServices(commands))
+		const result = await handler.execute(actionContext({ mount: { device: mount() } }), flipConfiguration({ settle: 2, deferSettle: true }))
+
+		expect(result.type).toBe('completed')
+		expect(performance.now() - started).toBeLessThan(200)
+		expect(commands.map((command) => command.name)).toEqual(['flip'])
+	})
+
 	test('crosses towards where the mount is pointing rather than where the night started', async () => {
 		const commands: Command[] = []
 		const handler = sequencerMeridianFlipHandler(flipServices(commands))

@@ -15,6 +15,7 @@ import { sequencerConvergence, sequencerEndReached } from './sequencer.control'
 import type { SequencerSafePoint } from './sequencer.control'
 import { sequencerPreExposureGuard, waitForFlipWindow } from './sequencer.guard'
 import type { SequencerFlipBoundary } from './sequencer.guard'
+import { fuseGuidingSettle } from './sequencer.guiding'
 import type { SequencerGuidingServices } from './sequencer.guiding'
 import { sequencerFrameDirectories, sequencerFrameFileName, sequencerLogicalSlotId } from './sequencer.identity'
 import { runGuidingInterlock, sequencerAbandonGuiding } from './sequencer.interlock'
@@ -973,6 +974,14 @@ function triggerPoliciesOf(loop: SequencerPlanLoop): SequencerTriggerPolicies {
 	return { meridianFlip, autofocus, dither }
 }
 
+// Whether the session is guiding right now, which is what lets a flip drop its own settle: the interlock
+// of this safe point will resume the corrections and wait there.
+function guidingNow(execution: SequencerExecution, frame: SequencerPlanAction) {
+	const guider = execution.host.context(frame.id, 1, execution.host.signal).guider
+
+	return guider !== undefined && execution.host.guiding.guiderCommander.running(guider)
+}
+
 // Trigger node of one kind inside the loop body.
 function triggerNodeOf(loop: SequencerPlanLoop, kind: 'meridianFlip' | 'autofocus'): SequencerPlanAction | undefined {
 	const type = kind === 'meridianFlip' ? SEQUENCER_BLOCK_TYPE.meridianFlip : SEQUENCER_BLOCK_TYPE.autofocus
@@ -1056,7 +1065,18 @@ async function runInterlockedSafePoint(
 			// the node resume at the recovery instead of commanding a second crossing. The plan is not rewritten for
 			// it: the fact belongs to this night and is handed to the one execution of the node that needs it.
 			const resumed = kind === 'meridianFlip' ? execution.flipRecovery : undefined
-			const running = resumed === undefined ? node : { ...node, configuration: { ...(node.configuration as SequencerMeridianFlipTrigger), crossedFrom: resumed } }
+			const flip = kind === 'meridianFlip' ? (node.configuration as SequencerMeridianFlipTrigger) : undefined
+			const running =
+				flip === undefined
+					? node
+					: {
+							...node,
+							configuration: {
+								...flip,
+								...(resumed === undefined ? {} : { crossedFrom: resumed }),
+								...(guidingNow(execution, frame) ? { deferSettle: true } : {}),
+							},
+						}
 			const { outcome, completed } = await runActionNode(execution, running, host.signal)
 
 			if (outcome.kind !== 'continue') {
@@ -1116,8 +1136,10 @@ async function runInterlockedSafePoint(
 		const idle = decisions.length === 0 && !sequencerFramePreparationPending(context, preparation)
 
 		// A session that guides has a settle policy for it; one that does not never enters the bracket, and the
-		// request is then only the carrier of the dither the interlock still emits.
-		const request = { settle: guider?.settle ?? SEQUENCER_UNGUIDED_SETTLE, recalibrateAfterMeridianFlip: guider?.recalibrateAfterMeridianFlip ?? false, dither, idle }
+		// request is then only the carrier of the dither the interlock still emits. A flip in the same safe
+		// point raises that settle to its own declared wait, so the resume is the one standstill for both.
+		const flipSettle = decisions.some((decision) => decision.kind === 'meridianFlip') ? policies.meridianFlip?.settle : undefined
+		const request = { settle: fuseGuidingSettle(guider?.settle ?? SEQUENCER_UNGUIDED_SETTLE, flipSettle), recalibrateAfterMeridianFlip: guider?.recalibrateAfterMeridianFlip ?? false, dither, idle }
 		const result = await runGuidingInterlock(host.guiding, context, request, body, report)
 
 		// A trigger that ended the plan spent its own budget already, so it is carried out of the bracket as it

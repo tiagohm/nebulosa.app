@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { SequencerDitherTrigger } from 'src/api/sequencer.compiler'
-import { sequencerDitherHandler } from 'src/api/sequencer.guiding'
+import { fuseGuidingSettle, sequencerDitherHandler } from 'src/api/sequencer.guiding'
 import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
 import type { SequencerActionContext } from 'src/api/sequencer.registry'
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
@@ -62,6 +62,17 @@ function guidingServices(commands: Command[], running: boolean, failure?: Operat
 		} as unknown as SequencerGuidingServices['guiderCommander'],
 	}
 }
+
+describe('settle fusion', () => {
+	test('raises the session settle to a longer flip wait and leaves a shorter one alone', () => {
+		const base = { tolerance: 1.5, time: 10, timeout: 120 }
+
+		expect(fuseGuidingSettle(base, 30)).toEqual({ tolerance: 1.5, time: 30, timeout: 120 })
+		expect(fuseGuidingSettle(base, 5)).toEqual(base)
+		expect(fuseGuidingSettle(base, 0)).toEqual(base)
+		expect(fuseGuidingSettle(base)).toEqual(base)
+	})
+})
 
 describe('dither block', () => {
 	test('holds no lease and accepts a definition with no guiding role of its own', () => {

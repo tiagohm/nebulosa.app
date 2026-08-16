@@ -92,6 +92,10 @@ export interface SequencerMeridianFlipTrigger extends Omit<SequencerMeridianFlip
 	// It is what makes the re-entry resume at the recentering and the refocusing instead of commanding a second
 	// crossing, which would take a mount that is already across back to the side the flip existed to leave.
 	readonly crossedFrom?: PierSide
+	// Set when the guiding interlock of this safe point will settle the resume, so the flip must not pay a
+	// second wall-clock wait after the crossing. Absent when the session is not guiding, which is when this
+	// settle is the only one the mount gets.
+	readonly deferSettle?: boolean
 }
 
 // Configuration of one capture action, which is the frame group plus the settling the capture plan requires

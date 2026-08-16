@@ -49,6 +49,16 @@ export function sequencerGuiderSettle(settle: SequencerGuiderSettle): PHD2Settle
 	return { pixels: settle.tolerance, time: settle.time, timeout: settle.timeout }
 }
 
+// Strongest guiding settle of one safe point: the session policy, raised to any wall-clock settle that
+// also has to be paid here — typically the meridian flip's. The interlock resume is the one wait the
+// safe point takes for all of them, so the longer time and the longer timeout win and the others are
+// dropped.
+export function fuseGuidingSettle(base: SequencerGuiderSettle, extra?: number): SequencerGuiderSettle {
+	if (extra === undefined || extra <= 0) return base
+
+	return { ...base, time: Math.max(base.time, extra), timeout: Math.max(base.timeout, extra) }
+}
+
 // Dither block: displaces the guide star and returns only once the guider has settled again.
 export function sequencerDitherHandler(services: SequencerGuidingServices): SequencerActionHandler<SequencerDitherTrigger, SequencerDitherOutcome> {
 	return {

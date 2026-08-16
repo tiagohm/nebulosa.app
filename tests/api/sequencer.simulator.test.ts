@@ -138,4 +138,28 @@ describe('canonical night', () => {
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(4)
 		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(1)
 	}, 30_000)
+
+	test('A.06 without a cover or flat panel', async () => {
+		const night = await runNight({
+			patch: {
+				devices: { cover: undefined, flatPanel: undefined },
+				cover: { enabled: false },
+				flatPanel: { enabled: false },
+				startup: {
+					actions: [action('unpark', { type: 'unparkMount', required: true }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
+				},
+				shutdown: {
+					actions: [action('stopGuide', { type: 'stopGuiding', required: true }), action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('warm', { type: 'warmCamera' })],
+				},
+			},
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(names.some((name) => name.startsWith('cover.') || name.startsWith('panel.'))).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+	}, 30_000)
 })

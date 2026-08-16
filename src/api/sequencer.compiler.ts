@@ -2,7 +2,7 @@ import { isAbsolute } from 'path'
 import type { MountTargetCoordinate, PierSide } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 // oxfmt-ignore
-import type { Sequencer, SequencerAutofocus, SequencerAuxiliaryCapture, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGoto, SequencerGuiderSettle, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
+import type { Sequencer, SequencerAutofocus, SequencerAuxiliaryCapture, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDevices, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGoto, SequencerGuiderSettle, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanGuider, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { sequencerUnknownPlaceholders } from './sequencer.identity'
 import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
@@ -481,6 +481,9 @@ interface RoleRequirement {
 	readonly role: SequencerDeviceRole
 	// Property path of the feature requiring it.
 	readonly path: string
+	// When true, the role is commanded only if the definition declares it. A missing device is then not a
+	// refusal: the block runs without that dimension, which is how a field rig omits a cover or a panel.
+	readonly optional?: boolean
 }
 
 // Collects every role the lowered plan commands. The camera is always required: a definition that exposes
@@ -612,9 +615,13 @@ function checkStorage(context: CompilerContext, definition: Sequencer) {
 	}
 }
 
-// Reports every role the plan commands without a device declared for it.
+// Reports every required role the plan commands without a device declared for it.
+//
+// An optional binding is a device the block uses when the definition carries it. A definition without that
+// role is a session that does not command it, which is what optional means at reservation time too.
 function checkRoles(context: CompilerContext, definition: Sequencer, requirements: readonly RoleRequirement[]) {
 	for (const requirement of requirements) {
+		if (requirement.optional) continue
 		if (definition.devices[requirement.role] === undefined) context.diagnostics.push({ path: `devices.${requirement.role}`, message: `${requirement.path} requires the ${requirement.role} role, which the definition does not declare` })
 	}
 }
@@ -754,7 +761,7 @@ function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistr
 		// the narrowed value rather than the one the lowering produced.
 		configurations.set(node.id, result.configuration)
 
-		for (const binding of handler.resources(result.configuration)) requirements.push({ role: binding.role, path: node.id })
+		for (const binding of handler.resources(result.configuration)) requirements.push({ role: binding.role, path: node.id, optional: binding.optional })
 	}
 
 	return { versions, requirements, configurations }
@@ -1023,9 +1030,15 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 
 // Deduplicates the required roles and returns them in the fixed role order, which is what the session
 // reserves at start. Two features requiring the same role reserve it once.
-function rolesOf(requirements: readonly RoleRequirement[]): SequencerDeviceRole[] {
-	const required = new Set(requirements.map((requirement) => requirement.role))
-	return SEQUENCER_ROLE_ORDER.filter((role) => required.has(role))
+function rolesOf(requirements: readonly RoleRequirement[], devices: SequencerDevices): SequencerDeviceRole[] {
+	const selected = new Set<SequencerDeviceRole>()
+
+	for (const requirement of requirements) {
+		if (requirement.optional && devices[requirement.role] === undefined) continue
+		selected.add(requirement.role)
+	}
+
+	return SEQUENCER_ROLE_ORDER.filter((role) => selected.has(role))
 }
 
 // Options of a compilation, all of them optional so a definition can be checked before a session exists.
@@ -1109,7 +1122,7 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 		target: { id: target.id, name: target.name },
 		execution: { start: definition.execution.start, end: definition.execution.end, pauseMode: definition.execution.pauseMode, stopMode: definition.execution.stopMode, defaultRetry: definition.execution.defaultRetry, checkpoint: definition.execution.checkpoint },
 		devices: definition.devices,
-		roles: rolesOf(requirements),
+		roles: rolesOf(requirements, definition.devices),
 		root: { kind: 'sequence', id: sequencerNodeId.root(), children },
 		groups,
 		startup: lowered && { continueOnFailure: startup.continueOnFailure },
@@ -1152,5 +1165,5 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 
 	const rewrite: Rewrite = { configurations, groups: rewritten }
 
-	return { ok: true, plan: { ...plan, roles: rolesOf(requirements), root: withConfigurationsIn(plan.root, rewrite), groups: withGroups(groups, rewrite), handlers: handlers.versions }, removals: context.removals }
+	return { ok: true, plan: { ...plan, roles: rolesOf(requirements, definition.devices), root: withConfigurationsIn(plan.root, rewrite), groups: withGroups(groups, rewrite), handlers: handlers.versions }, removals: context.removals }
 }

@@ -552,6 +552,25 @@ describe('structural validation', () => {
 		if (compilation.ok) expect(compilation.plan.roles).toEqual(['camera', 'mount', 'wheel', 'focuser'])
 	})
 
+	test('an optional handler role the definition does not declare is not required', () => {
+		const registry = new SequencerBlockRegistry()
+
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+			registry.register({
+				type,
+				version: 1,
+				validate: (configuration) => ({ ok: true, configuration }),
+				resources: () => (type === 'capture.frame' ? [{ role: 'camera' as const }, { role: 'cover' as const, optional: true }, { role: 'flatPanel' as const, optional: true }] : []),
+				execute: () => Promise.resolve({ type: 'completed', value: undefined } as const),
+			})
+		}
+
+		const compilation = compile(canonical(), { registry })
+
+		expect(compilation.ok).toBe(true)
+		if (compilation.ok) expect(compilation.plan.roles).toEqual(['camera', 'mount', 'focuser'])
+	})
+
 	test('the configuration a handler returns replaces the lowered one', () => {
 		const registry = new SequencerBlockRegistry()
 

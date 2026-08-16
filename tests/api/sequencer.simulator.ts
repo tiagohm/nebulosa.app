@@ -21,6 +21,7 @@ import type { PlateSolverHandler } from 'src/api/platesolver'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import type { RotatorCommander } from 'src/api/rotator.commander'
 import { SequencerHandler } from 'src/api/sequencer'
+import type { SequencerSessionStart } from 'src/api/sequencer'
 import { sequencerCaptureHandler } from 'src/api/sequencer.capture'
 import { sequencerMeridianFlipHandler } from 'src/api/sequencer.flip'
 import { sequencerAutofocusHandler } from 'src/api/sequencer.focus'
@@ -36,7 +37,7 @@ import type { WheelCommander } from 'src/api/wheel.commander'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import type { Sequencer, SequencerAuxiliaryCapture, SequencerCamera, SequencerRetryPolicy } from '#/sequencer'
-import type { SequencerArtifact, SequencerSession, SequencerSessionSnapshot } from '#/sequencer.state'
+import type { SequencerArtifact, SequencerEvent, SequencerSession, SequencerSessionSnapshot } from '#/sequencer.state'
 import { action, camera, frame } from './sequencer.fixture'
 
 export interface SimulatorCommand {
@@ -72,6 +73,8 @@ export interface NightResult {
 	readonly files: readonly string[]
 	readonly arbiter: ResourceArbiter
 	readonly root: string
+	readonly events: readonly SequencerEvent[]
+	readonly started: SequencerSessionStart
 }
 
 export interface NightControl {
@@ -81,6 +84,7 @@ export interface NightControl {
 	readonly coordinator: OperationCoordinator
 	readonly devices: SimulatorDevices
 	readonly log: readonly SimulatorCommand[]
+	readonly events: () => readonly SequencerEvent[]
 }
 
 export interface NightOptions {
@@ -267,7 +271,7 @@ export async function runNight(options: NightOptions = {}): Promise<NightResult>
 			throw new Error('session vanished before it settled')
 		}
 
-		return { session, log, devices, artifacts: store.artifacts(session.id), files: await listFiles(root), arbiter, root }
+		return { session, log, devices, artifacts: store.artifacts(session.id), files: await listFiles(root), arbiter, root, events: store.events(session.id), started }
 	} finally {
 		delay.mockRestore()
 	}
@@ -487,6 +491,7 @@ function nightControl(handler: SequencerHandler, sessionId: string, arbiter: Res
 		coordinator,
 		devices,
 		log,
+		events: (afterSequence?: number) => handler.events(sessionId, afterSequence),
 		snapshot,
 		waitUntil: async (predicate) => {
 			const deadline = Date.now() + 5_000

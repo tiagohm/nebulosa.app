@@ -60,6 +60,12 @@ describe('slot attempts', () => {
 		expect(sequencerSlotFailure(failure({ group: lum, attempt: 2, detail: 'cooler' }))).toEqual({ kind: 'hold', cause: { reason: 'timeout', detail: 'cooler' }, exhausted: true })
 	})
 
+	test('a policy pause before the window is spent does not report the slot as exhausted', () => {
+		const lum = group(undefined, { onExhausted: 'pause', retryOn: ['timeout'] })
+
+		expect(sequencerSlotFailure(failure({ group: lum, reason: 'commandFailed', attempt: 0, detail: 'cooler' }))).toEqual({ kind: 'hold', cause: { reason: 'commandFailed', detail: 'cooler' }, exhausted: false })
+	})
+
 	test('an abort commanded by a pause holds the slot without spending its window', () => {
 		expect(sequencerSlotFailure(failure({ reason: 'aborted', commandedBy: 'paused', detail: 'operator' }))).toEqual({ kind: 'hold', cause: { reason: 'aborted', detail: 'operator' }, exhausted: false })
 	})

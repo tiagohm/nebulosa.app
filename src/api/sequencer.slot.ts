@@ -3,7 +3,7 @@ import type { SequencerPlanFrameGroup } from '#/sequencer.plan'
 import type { SequencerCaptureProgress } from '#/sequencer.state'
 import type { SequencerPolicyDecision, SequencerPolicyFailure } from './sequencer.policy'
 import { sequencerFailurePolicy } from './sequencer.policy'
-import { abandonSlot, attemptsSpent } from './sequencer.progress'
+import { abandonSlot, attemptWindowExhausted, attemptsSpent } from './sequencer.progress'
 import { frameGroupDegraded, frameGroupReachedTarget, groupProgressOf, targetProgressOf } from './sequencer.scheduler'
 
 // What a failed capture does to the slot it was filling (§8.3).
@@ -105,8 +105,11 @@ function slotDecisionOf(decision: SequencerPolicyDecision, failure: SequencerSlo
 			return { kind: 'abandon', progress: abandonSlot(failure.progress, failure.targetId, failure.group), cause }
 		case 'pause':
 			// An operator pausing mid-exposure and a slot that ran out of attempts both hold the slot on the
-			// cursor, and only the second one owes it a new attempt window on resume.
-			return { kind: 'hold', cause, exhausted: failure.commandedBy === undefined }
+			// cursor, and only the second one owes it a new attempt window on resume. A policy pause that
+			// arrived before the window was spent — a reason outside `retryOn` on the first attempt — must
+			// not be read as exhaustion: granting a window there would hand the slot a budget the policy
+			// never allowed.
+			return { kind: 'hold', cause, exhausted: failure.commandedBy === undefined && attemptWindowExhausted(failure.group, groupProgressOf(targetProgressOf(failure.progress, failure.targetId), failure.group.id), failure.attempt) }
 		case 'stop':
 			return { kind: 'stop' }
 		default:

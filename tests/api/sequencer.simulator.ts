@@ -94,7 +94,7 @@ export const RETRY: SequencerRetryPolicy = { maxAttempts: 3, delay: 0, backoff: 
 const AUX_3S: SequencerAuxiliaryCapture = { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false }
 const AUX_5S: SequencerAuxiliaryCapture = { ...AUX_3S, exposureTime: 5 }
 const T0 = 1_700_000_000_000
-const FILTERS = ['L', 'R', 'G', 'B', 'Ha', 'Dark'] as const
+const FILTERS = ['L', 'R', 'G', 'B', 'Ha', 'O3', 'S2', 'Dark'] as const
 
 export function defaultSequencer(root: string): Sequencer {
 	const defaults: SequencerCamera = camera()

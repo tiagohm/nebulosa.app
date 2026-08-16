@@ -259,4 +259,42 @@ describe('canonical night', () => {
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(8)
 		expect(night.devices.mount.parked).toBeFalse()
 	}, 30_000)
+
+	test('A.10 narrowband Ha OIII SII night', async () => {
+		const night = await runNight({
+			patch: {
+				capture: {
+					frames: [
+						frame('ha', { name: 'Hydrogen-alpha', count: 2, exposureTime: 2, filter: { type: 'name', name: 'Ha' } }),
+						frame('o3', { name: 'Oxygen-III', count: 2, exposureTime: 2, filter: { type: 'name', name: 'O3' } }),
+						frame('s2', { name: 'Sulfur-II', count: 2, exposureTime: 2, filter: { type: 'name', name: 'S2' } }),
+					],
+				},
+				autofocus: {
+					capture: { filter: { type: 'name', name: 'L' } },
+					filterOffsets: [
+						{ filter: { type: 'name', name: 'L' }, offset: 0 },
+						{ filter: { type: 'name', name: 'Ha' }, offset: 100 },
+						{ filter: { type: 'name', name: 'O3' }, offset: 200 },
+						{ filter: { type: 'name', name: 'S2' }, offset: 300 },
+					],
+				},
+			},
+		})
+
+		nights.push(night)
+
+		const wheelMoves = night.log.filter((entry) => entry.name === 'wheel.move')
+		const focusMoves = night.log.filter((entry) => entry.name === 'focuser.move')
+		const lights = night.files.filter((path) => path.includes('/LIGHT/') && path.endsWith('.fits'))
+
+		expect(night.session.state).toBe('completed')
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(6)
+		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(3)
+		expect(wheelMoves.map((entry) => entry.detail)).toEqual(['L', 'Dark', 'Ha', 'L', 'Ha', 'O3', 'L', 'O3', 'S2'])
+		expect(focusMoves.map((entry) => entry.detail)).toEqual(['25100', '25000', '25100', '25200', '25000', '25200', '25300'])
+		expect(lights.filter((path) => path.includes('-Ha-'))).toHaveLength(2)
+		expect(lights.filter((path) => path.includes('-O3-'))).toHaveLength(2)
+		expect(lights.filter((path) => path.includes('-S2-'))).toHaveLength(2)
+	}, 30_000)
 })

@@ -80,6 +80,7 @@ export interface NightControl {
 	readonly arbiter: ResourceArbiter
 	readonly coordinator: OperationCoordinator
 	readonly devices: SimulatorDevices
+	readonly log: readonly SimulatorCommand[]
 }
 
 export interface NightOptions {
@@ -253,7 +254,7 @@ export async function runNight(options: NightOptions = {}): Promise<NightResult>
 		}
 
 		try {
-			if (options.control !== undefined) await options.control(nightControl(handler, started.session.id, arbiter, coordinator, devices))
+			if (options.control !== undefined) await options.control(nightControl(handler, started.session.id, arbiter, coordinator, devices, log))
 		} finally {
 			firstAutofocus?.resolve()
 			firstExposure?.resolve()
@@ -478,13 +479,14 @@ function environment(definition: Sequencer, devices: SimulatorDevices, log: Simu
 	return { arbiter, coordinator, registry, store, runtime, handler: new SequencerHandler({ store, runtime, registry, now: () => clock.now, observe: (sessionId) => runtime.observation(sessionId) }) }
 }
 
-function nightControl(handler: SequencerHandler, sessionId: string, arbiter: ResourceArbiter, coordinator: OperationCoordinator, devices: SimulatorDevices): NightControl {
+function nightControl(handler: SequencerHandler, sessionId: string, arbiter: ResourceArbiter, coordinator: OperationCoordinator, devices: SimulatorDevices, log: readonly SimulatorCommand[]): NightControl {
 	const snapshot = () => handler.snapshot(sessionId)
 
 	return {
 		arbiter,
 		coordinator,
 		devices,
+		log,
 		snapshot,
 		waitUntil: async (predicate) => {
 			const deadline = Date.now() + 5_000

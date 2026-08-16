@@ -668,4 +668,55 @@ describe('admission', () => {
 		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(4)
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
+
+	test('B.09 distinct resources may lease in parallel but V1 does not', async () => {
+		let during: Record<string, string> | undefined
+		let parallel: { readonly camera: string; readonly mount: string } | undefined
+		let commands = 0
+		const night = await runNight({
+			holdFirstExposure: true,
+			control: async (api) => {
+				await api.waitUntil((current) => current.capture.exposure !== undefined)
+
+				const camera = { key: api.devices.camera.hardwareId, device: api.devices.camera }
+				const mount = { key: api.devices.mount.hardwareId, device: api.devices.mount }
+				const owner = api.arbiter.snapshot(camera.key).reservationOwner
+
+				during = {
+					camera: api.arbiter.availability(camera.key),
+					mount: api.arbiter.availability(mount.key),
+					wheel: api.arbiter.availability(api.devices.wheel.hardwareId),
+					focuser: api.arbiter.availability(api.devices.focuser.hardwareId),
+					rotator: api.arbiter.availability(api.devices.rotator.hardwareId),
+					cover: api.arbiter.availability(api.devices.cover.hardwareId),
+					flatPanel: api.arbiter.availability(api.devices.flatPanel.hardwareId),
+				}
+				commands = api.log.length
+
+				if (owner === undefined) return
+
+				const reserved = api.arbiter.reserve(owner, [camera])
+
+				if (!reserved.ok) return
+
+				const probe = api.arbiter.acquire({ id: 'probe', kind: 'slew' }, [mount], reserved.reservation.token)
+
+				if (!probe.ok) return
+
+				parallel = { camera: api.arbiter.availability(camera.key), mount: api.arbiter.availability(mount.key) }
+				probe.lease.release()
+
+				expect(api.arbiter.availability(mount.key)).toBe('reserved')
+				expect(api.log).toHaveLength(commands)
+			},
+		})
+
+		nights.push(night)
+
+		expect(during).toEqual({ camera: 'leased', mount: 'reserved', wheel: 'reserved', focuser: 'reserved', rotator: 'reserved', cover: 'reserved', flatPanel: 'reserved' })
+		expect(parallel).toEqual({ camera: 'leased', mount: 'leased' })
+		expect(night.session.state).toBe('completed')
+		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(4)
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+	}, 30_000)
 })

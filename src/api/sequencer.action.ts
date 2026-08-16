@@ -22,9 +22,9 @@ import type { SequencerActionContext, SequencerActionResult } from './sequencer.
 // Everything else — a timeout, an Alert, a driver that refused, a resource momentarily busy — is a transient
 // condition of the observatory, and whether it is worth another attempt is the retry policy's decision rather
 // than the handler's.
-export function sequencerActionFailure(result: FailedOperationResult, detail?: string): SequencerActionResult<never> {
+export function sequencerActionFailure(result: FailedOperationResult, detail?: string) {
 	const type = result.reason === 'aborted' || result.reason === 'removed' ? 'fatalFailure' : 'retryableFailure'
-	return { type, reason: result.reason, detail: detail === undefined ? result.error : result.error === undefined ? detail : `${detail}: ${result.error}` }
+	return { type, reason: result.reason, detail: detail === undefined ? result.error : result.error === undefined ? detail : `${detail}: ${result.error}` } as const
 }
 
 // Issues one device command, unless the action was already cancelled when it was reached.

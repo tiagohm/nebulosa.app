@@ -606,7 +606,7 @@ describe('plan walk', () => {
 		const state = harness(
 			planOf({
 				capture: { ...base.capture, retry: { ...retry(), maxAttempts: 1, onExhausted: 'skip' } },
-				execution: { ...base.execution, defaultRetry: { ...retry(), maxAttempts: 9, onExhausted: 'continue' } },
+				execution: { ...base.execution, defaultRetry: { ...retry(), maxAttempts: 9, onExhausted: 'fail' } },
 			}),
 			undefined,
 			undefined,
@@ -863,7 +863,7 @@ describe('plan walk', () => {
 		let stopped = 0
 		const state = harness(
 			planOf({
-				autofocus: autofocus as typeof base.autofocus,
+				autofocus: autofocus as never,
 				guiding: { ...base.guiding, enabled: true },
 				startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding', required: true })] },
 			}),

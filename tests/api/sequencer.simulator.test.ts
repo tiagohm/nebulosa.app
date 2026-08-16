@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { action, frame } from './sequencer.fixture'
-import { commandNames, disposeNight, runNight } from './sequencer.simulator'
-import type { NightResult } from './sequencer.simulator'
+import { commandNames, disposeNight, disposeProcess, openProcess, runNight } from './sequencer.simulator'
+import type { NightResult, SimulatorProcess } from './sequencer.simulator'
 
 const nights: NightResult[] = []
+const processes: SimulatorProcess[] = []
 
 afterEach(async () => {
 	await Promise.all(nights.splice(0).map((night) => disposeNight(night)))
+	await Promise.all(processes.splice(0).map((process) => disposeProcess(process)))
 })
 
 describe('canonical night', () => {
@@ -328,5 +330,57 @@ describe('canonical night', () => {
 		expect(names.includes('flip')).toBeFalse()
 		expect(names.includes('solve')).toBeFalse()
 		expect(night.log.filter((entry) => entry.name === 'wheel.move')).toHaveLength(1)
+	}, 30_000)
+})
+
+describe('admission', () => {
+	test('B.01 one start per process with disjoint resources', async () => {
+		const process = await openProcess()
+
+		processes.push(process)
+
+		const east = process.addObservatory('east')
+		const west = process.addObservatory('west')
+		const short = {
+			guiding: { enabled: false },
+			dither: { enabled: false },
+			autofocus: { enabled: false },
+			meridianFlip: { enabled: false },
+			target: { center: { enabled: false } },
+			capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+			startup: { actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true })] },
+			shutdown: { actions: [action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('close', { type: 'closeCover' }), action('warm', { type: 'warmCamera' })] },
+		} as const
+		const created = [process.handler.createSession(process.definition(east, { id: 'east', ...short })), process.handler.createSession(process.definition(west, { id: 'west', ...short }))]
+
+		expect(created.every((session) => session.ok)).toBeTrue()
+
+		if (!created[0].ok || !created[1].ok) return
+
+		const starts = [process.runtime.start(created[0].session.id), process.runtime.start(created[1].session.id)]
+		const admitted = starts.find((start) => start.ok)
+		const refused = starts.find((start) => !start.ok)
+
+		expect(starts.filter((start) => start.ok)).toHaveLength(1)
+		expect(refused).toMatchObject({ ok: false, reason: 'busy', sessionId: admitted && admitted.ok ? admitted.session.id : undefined })
+
+		if (admitted === undefined || !admitted.ok || refused === undefined || refused.ok) return
+
+		const admittedDevices = admitted.session.id === created[0].session.id ? east : west
+		const refusedDevices = admitted.session.id === created[0].session.id ? west : east
+
+		const refusedId = admitted.session.id === created[0].session.id ? created[1].session.id : created[0].session.id
+
+		expect(['reserved', 'leased']).toContain(process.arbiter.availability(admittedDevices.camera.hardwareId))
+		expect(process.arbiter.snapshot(admittedDevices.camera.hardwareId).reservationOwner).toEqual({ id: admitted.session.id, kind: 'sequencer' })
+		expect(process.arbiter.availability(refusedDevices.camera.hardwareId)).toBe('available')
+		expect(process.arbiter.snapshot(refusedDevices.camera.hardwareId).reservationOwner).toBeUndefined()
+		expect(process.store.session(refusedId)?.state).toBe('created')
+
+		const session = await process.runtime.settled(admitted.session.id)
+
+		expect(session?.state).toBe('completed')
+		expect(process.arbiter.availability(admittedDevices.camera.hardwareId)).toBe('available')
+		expect(process.arbiter.availability(refusedDevices.camera.hardwareId)).toBe('available')
 	}, 30_000)
 })

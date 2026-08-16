@@ -89,6 +89,23 @@ export interface NightOptions {
 	readonly root?: string
 }
 
+// One Sequencer process with a shared runtime, arbiter, and device registry. Admission cases start more
+// than one session against this handle so the process gate, not a second harness, is what refuses.
+export interface SimulatorProcess {
+	readonly handler: SequencerHandler
+	readonly runtime: SequencerRuntime
+	readonly arbiter: ResourceArbiter
+	readonly store: InMemorySequencerStore
+	readonly root: string
+	readonly log: SimulatorCommand[]
+	// Registers another physical observatory under unique device names and hardware ids.
+	readonly addObservatory: (tag: string, sim?: NightOptions['sim']) => SimulatorDevices
+	// Builds a Sequencer whose device names resolve to the given observatory, then applies `patch`.
+	readonly definition: (devices: SimulatorDevices, patch?: DeepPartial<Sequencer>) => Sequencer
+	// Restores the virtual-clock spy. `disposeProcess` calls this.
+	readonly restore: VoidFunction
+}
+
 export const RETRY: SequencerRetryPolicy = { maxAttempts: 3, delay: 0, backoff: 1, maximumDelay: 0, retryOn: ['timeout', 'commandFailed'], onExhausted: 'fail' }
 
 const AUX_3S: SequencerAuxiliaryCapture = { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false }
@@ -250,17 +267,88 @@ export async function disposeNight(night: NightResult) {
 	await rm(night.root, { recursive: true, force: true })
 }
 
+// Opens a process that can register several disjoint observatories and start more than one session.
+export async function openProcess(options: { readonly root?: string } = {}): Promise<SimulatorProcess> {
+	const root = options.root ?? (await mkdtemp(join(tmpdir(), 'sequencer-sim-')))
+	const clock: SimulatorClock = {
+		now: T0,
+		advance(ms: number) {
+			clock.now += Math.max(0, ms)
+		},
+	}
+	const wait = await import('src/api/operation.wait')
+	const delay = spyOn(wait, 'abortableDelay').mockImplementation((ms: number, signal: AbortSignal) => {
+		if (signal.aborted) return Promise.resolve(failedOperationResult('aborted'))
+
+		clock.advance(ms)
+		return Promise.resolve(successfulOperationResult(undefined))
+	})
+	const log: SimulatorCommand[] = []
+	const frameBytes = await syntheticFits()
+	const byName: Record<string, Device> = {}
+	const { arbiter, runtime, handler, store } = environment(defaultSequencer(root), observatory(undefined, 'host'), log, clock, frameBytes, undefined, byName)
+
+	return {
+		handler,
+		runtime,
+		arbiter,
+		store,
+		root,
+		log,
+		addObservatory(tag, sim) {
+			const devices = observatory(sim, tag)
+
+			registerDevices(byName, devices)
+
+			return devices
+		},
+		definition(devices, patch) {
+			return mergeSequencer(
+				mergeSequencer(defaultSequencer(root), {
+					devices: {
+						camera: devices.camera.name,
+						mount: devices.mount.name,
+						wheel: devices.wheel.name,
+						focuser: devices.focuser.name,
+						rotator: devices.rotator.name,
+						guideCamera: devices.guideCamera.name,
+						guideOutput: devices.guideOutput.name,
+						cover: devices.cover.name,
+						flatPanel: devices.flatPanel.name,
+					},
+				}),
+				patch,
+			)
+		},
+		restore: () => delay.mockRestore(),
+	}
+}
+
+// Stops the admitted session if it is still live, restores the clock spy, and deletes the process root.
+export async function disposeProcess(process: SimulatorProcess) {
+	try {
+		const active = process.runtime.activeSessionId
+
+		if (active !== undefined) await process.runtime.stop(active)
+	} finally {
+		process.restore()
+		await rm(process.root, { recursive: true, force: true })
+	}
+}
+
 export function commandNames(log: readonly SimulatorCommand[]) {
 	return log.map((entry) => entry.name)
 }
 
-function observatory(sim?: NightOptions['sim']): SimulatorDevices {
+function observatory(sim?: NightOptions['sim'], tag?: string): SimulatorDevices {
+	const suffix = tag === undefined ? '' : ` ${tag}`
+	const id = tag === undefined ? '' : `-${tag}`
 	const mount = structuredClone(DEFAULT_MOUNT)
 
 	Object.assign(mount, {
-		id: 'mount-1',
-		hardwareId: 'hw-mount',
-		name: 'Mount Simulator',
+		id: `mount-1${id}`,
+		hardwareId: `hw-mount${id}`,
+		name: `Mount Simulator${suffix}`,
 		connected: true,
 		parked: true,
 		tracking: false,
@@ -278,31 +366,31 @@ function observatory(sim?: NightOptions['sim']): SimulatorDevices {
 
 	const imaging = structuredClone(DEFAULT_CAMERA)
 
-	Object.assign(imaging, { id: 'camera-1', hardwareId: 'hw-camera', name: 'Camera Simulator', connected: true, hasCooler: true, hasCoolerControl: true, hasThermometer: true, cooler: false, temperature: 20, canSetTemperature: true, ...sim?.camera })
+	Object.assign(imaging, { id: `camera-1${id}`, hardwareId: `hw-camera${id}`, name: `Camera Simulator${suffix}`, connected: true, hasCooler: true, hasCoolerControl: true, hasThermometer: true, cooler: false, temperature: 20, canSetTemperature: true, ...sim?.camera })
 
 	const guideCamera = structuredClone(DEFAULT_CAMERA)
 
-	Object.assign(guideCamera, { id: 'guide-camera-1', hardwareId: 'hw-guide-camera', name: 'Guide Camera Simulator', connected: true })
+	Object.assign(guideCamera, { id: `guide-camera-1${id}`, hardwareId: `hw-guide-camera${id}`, name: `Guide Camera Simulator${suffix}`, connected: true })
 
 	const wheel = structuredClone(DEFAULT_WHEEL)
 
-	Object.assign(wheel, { id: 'wheel-1', hardwareId: 'hw-wheel', name: 'Wheel Simulator', connected: true, count: FILTERS.length, position: FILTERS.length - 1, names: [...FILTERS] })
+	Object.assign(wheel, { id: `wheel-1${id}`, hardwareId: `hw-wheel${id}`, name: `Wheel Simulator${suffix}`, connected: true, count: FILTERS.length, position: FILTERS.length - 1, names: [...FILTERS] })
 
 	const focuser = structuredClone(DEFAULT_FOCUSER)
 
-	Object.assign(focuser, { id: 'focuser-1', hardwareId: 'hw-focuser', name: 'Focuser Simulator', connected: true, position: { value: 25000, min: 0, max: 50000, step: 1 } })
+	Object.assign(focuser, { id: `focuser-1${id}`, hardwareId: `hw-focuser${id}`, name: `Focuser Simulator${suffix}`, connected: true, position: { value: 25000, min: 0, max: 50000, step: 1 } })
 
 	const rotator = structuredClone(DEFAULT_ROTATOR)
 
-	Object.assign(rotator, { id: 'rotator-1', hardwareId: 'hw-rotator', name: 'Rotator Simulator', connected: true, angle: { value: 0, min: 0, max: 360, step: 0.1 } })
+	Object.assign(rotator, { id: `rotator-1${id}`, hardwareId: `hw-rotator${id}`, name: `Rotator Simulator${suffix}`, connected: true, angle: { value: 0, min: 0, max: 360, step: 0.1 } })
 
 	const cover = structuredClone(DEFAULT_COVER)
 
-	Object.assign(cover, { id: 'cover-1', hardwareId: 'hw-cover', name: 'Cover Simulator', connected: true, parked: true, canPark: true, canUnpark: true, ...sim?.cover })
+	Object.assign(cover, { id: `cover-1${id}`, hardwareId: `hw-cover${id}`, name: `Cover Simulator${suffix}`, connected: true, parked: true, canPark: true, canUnpark: true, ...sim?.cover })
 
 	const flatPanel = structuredClone(DEFAULT_FLAT_PANEL)
 
-	Object.assign(flatPanel, { id: 'flat-1', hardwareId: 'hw-flat', name: 'Flat Panel Simulator', connected: true, enabled: false, intensity: { value: 0, min: 0, max: 255, step: 1 } })
+	Object.assign(flatPanel, { id: `flat-1${id}`, hardwareId: `hw-flat${id}`, name: `Flat Panel Simulator${suffix}`, connected: true, enabled: false, intensity: { value: 0, min: 0, max: 255, step: 1 } })
 
 	return {
 		camera: imaging,
@@ -313,29 +401,32 @@ function observatory(sim?: NightOptions['sim']): SimulatorDevices {
 		cover,
 		flatPanel,
 		guideCamera,
-		guideOutput: { type: 'guideOutput', id: 'guide-output-1', hardwareId: 'hw-guide-output', name: 'Guide Output Simulator', connected: true } as Device,
+		guideOutput: { type: 'guideOutput', id: `guide-output-1${id}`, hardwareId: `hw-guide-output${id}`, name: `Guide Output Simulator${suffix}`, connected: true } as Device,
 		guiderConnected: false,
 		guiderRunning: false,
 		guiderLooping: false,
 	}
 }
 
-function environment(definition: Sequencer, devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>) {
+function registerDevices(byName: Record<string, Device>, devices: SimulatorDevices) {
+	byName[devices.camera.name] = devices.camera
+	byName[devices.mount.name] = devices.mount
+	byName[devices.wheel.name] = devices.wheel
+	byName[devices.focuser.name] = devices.focuser
+	byName[devices.rotator.name] = devices.rotator
+	byName[devices.cover.name] = devices.cover
+	byName[devices.flatPanel.name] = devices.flatPanel
+	byName[devices.guideCamera.name] = devices.guideCamera
+	byName[devices.guideOutput.name] = devices.guideOutput
+}
+
+function environment(definition: Sequencer, devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>, byName: Record<string, Device> = {}) {
 	const arbiter = new ResourceArbiter()
 	const coordinator = new OperationCoordinator(arbiter)
 	const registry = new SequencerBlockRegistry()
 	const store = new InMemorySequencerStore()
-	const byName: Record<string, Device> = {
-		[devices.camera.name]: devices.camera,
-		[devices.mount.name]: devices.mount,
-		[devices.wheel.name]: devices.wheel,
-		[devices.focuser.name]: devices.focuser,
-		[devices.rotator.name]: devices.rotator,
-		[devices.cover.name]: devices.cover,
-		[devices.flatPanel.name]: devices.flatPanel,
-		[devices.guideCamera.name]: devices.guideCamera,
-		[devices.guideOutput.name]: devices.guideOutput,
-	}
+
+	registerDevices(byName, devices)
 	const commanders = simulatedCommanders(devices, log, clock, frameBytes, holdFirstAutofocus)
 	const runtime = new SequencerRuntime({
 		store,

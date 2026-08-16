@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import { remoteGuiderKey } from 'src/api/guider.session'
 import { action, frame } from './sequencer.fixture'
 import { commandNames, disposeNight, disposeProcess, openProcess, runNight } from './sequencer.simulator'
 import type { NightResult, SimulatorProcess } from './sequencer.simulator'
@@ -429,5 +430,55 @@ describe('admission', () => {
 		expect(process.log.filter((entry) => entry.name === 'unpark')).toHaveLength(1)
 		expect(process.log.filter((entry) => entry.name === 'camera.expose')).toHaveLength(1)
 		expect(process.arbiter.availability(observatory.camera.hardwareId)).toBe('available')
+	}, 30_000)
+
+	test('B.03 a reservation failure releases the process gate', async () => {
+		const process = await openProcess()
+
+		processes.push(process)
+
+		const observatory = process.addObservatory('east')
+		const created = process.handler.createSession(
+			process.definition(observatory, {
+				id: 'east',
+				dither: { enabled: false },
+				autofocus: { enabled: false },
+				meridianFlip: { enabled: false },
+				target: { center: { enabled: false } },
+				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+			}),
+		)
+
+		expect(created.ok).toBeTrue()
+
+		if (!created.ok) return
+
+		const key = remoteGuiderKey('127.0.0.1', 4400)
+		const third = process.arbiter.reserve({ id: 'phd2', kind: 'guider' }, [{ key }])
+
+		expect(third.ok).toBeTrue()
+
+		if (!third.ok) return
+
+		const refused = process.runtime.start(created.session.id)
+
+		expect(refused).toEqual({ ok: false, reason: 'resourcesUnavailable', detail: `${key} is held by guider phd2` })
+		expect(process.runtime.activeSessionId).toBeUndefined()
+		expect(process.store.session(created.session.id)?.state).toBe('created')
+		expect(process.arbiter.availability(observatory.camera.hardwareId)).toBe('available')
+		expect(process.arbiter.snapshot(key).reservationOwner).toEqual({ id: 'phd2', kind: 'guider' })
+
+		third.reservation.release()
+
+		const admitted = process.runtime.start(created.session.id)
+
+		expect(admitted).toMatchObject({ ok: true, reentrant: false })
+		expect(process.arbiter.snapshot(key).reservationOwner).toEqual({ id: created.session.id, kind: 'sequencer' })
+
+		const session = await process.runtime.settled(created.session.id)
+
+		expect(session?.state).toBe('completed')
+		expect(process.arbiter.availability(key)).toBe('available')
+		expect(process.runtime.activeSessionId).toBeUndefined()
 	}, 30_000)
 })

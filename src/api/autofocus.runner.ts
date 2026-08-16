@@ -123,7 +123,7 @@ class AutoFocusRun {
 
 		capture.delay = 0
 		capture.count = 1
-		capture.autoSave = false
+		capture.autoSave = this.destination !== undefined
 		capture.savePath = undefined
 		capture.focuser = this.focuser.name
 		capture.frameType = 'LIGHT'

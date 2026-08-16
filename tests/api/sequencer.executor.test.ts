@@ -909,6 +909,22 @@ describe('plan walk', () => {
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 	})
 
+	test('fails the session when the cadence wait is cancelled without a control command', async () => {
+		const base = definition()
+		const state: Harness = harness(planOf({ capture: { ...base.capture, delay: 2 } }), (context) => {
+			if (context.frame !== undefined && state.executed.filter((it) => it.slot !== undefined).length === 1) {
+				setTimeout(() => state.action.abort(), 20)
+			}
+
+			return Promise.resolve({ type: 'completed', value: undefined })
+		})
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('failed')
+		expect(outcome.terminal.failure?.reason).toBe('aborted')
+		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(1)
+	})
+
 	test('wakes the wait for the minimum spacing when a pause cancels the action', async () => {
 		const base = definition()
 		const state: Harness = harness(planOf({ capture: { ...base.capture, delay: 2 } }), (context) => {

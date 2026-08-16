@@ -1237,8 +1237,18 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 		const held = await waitForCadenceBoundary(host.context(node.id, attempt, waitsOf(host)), boundary)
 
 		// A cancellation the operator paused with is a pause and not a stop: the loop holds on the slot the wait
-		// was taken for and hands it back on the resume, so the frame is retaken instead of lost.
-		if (held.type !== 'completed') return held.type === 'pause' || commandedBy(execution) === 'paused' ? { kind: 'pause' } : { kind: 'stop' }
+		// was taken for and hands it back on the resume, so the frame is retaken instead of lost. A stop is the
+		// only other commanded origin; anything else — a disconnect, a removal, a wait that died on its own —
+		// is a failure, the same reading the flip-window wait already applies. Flattening those into a stop
+		// records a human decision nobody made and selects the wrong terminal pipeline.
+		if (held.type !== 'completed') {
+			const commanded = commandedBy(execution)
+
+			if (held.type === 'pause' || commanded === 'paused') return { kind: 'pause' }
+			if (commanded === 'stopped') return { kind: 'stop' }
+
+			return { kind: 'fail', reason: held.type === 'suspend' ? 'unexpectedState' : held.reason, detail: held.detail }
+		}
 
 		// The spacing may have taken an arbitrary part of the cadence, so the boundary is asked again before the
 		// camera is commanded: a stop or a pause that arrived while the session was spacing frames must not be

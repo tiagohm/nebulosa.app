@@ -297,4 +297,36 @@ describe('canonical night', () => {
 		expect(lights.filter((path) => path.includes('-O3-'))).toHaveLength(2)
 		expect(lights.filter((path) => path.includes('-S2-'))).toHaveLength(2)
 	}, 30_000)
+
+	test('A.11 lucky imaging planetary night', async () => {
+		const night = await runNight({
+			patch: {
+				guiding: { enabled: false },
+				dither: { enabled: false },
+				autofocus: { enabled: false },
+				meridianFlip: { enabled: false },
+				target: { center: { enabled: false } },
+				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 40, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				startup: {
+					actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true })],
+				},
+				shutdown: {
+					actions: [action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('close', { type: 'closeCover' }), action('warm', { type: 'warmCamera' })],
+				},
+			},
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.log.filter((entry) => entry.name === 'camera.expose')).toHaveLength(40)
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(40)
+		expect(names.some((name) => name.startsWith('guider.'))).toBeFalse()
+		expect(names.includes('autofocus.run')).toBeFalse()
+		expect(names.includes('flip')).toBeFalse()
+		expect(names.includes('solve')).toBeFalse()
+		expect(night.log.filter((entry) => entry.name === 'wheel.move')).toHaveLength(1)
+	}, 30_000)
 })

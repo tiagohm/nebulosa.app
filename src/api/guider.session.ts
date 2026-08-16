@@ -1,4 +1,5 @@
 import { join } from 'path'
+import { errorMessage } from 'nebulosa/src/core/util'
 import { DEFAULT_PHD2_SETTLE, PHD2Client } from 'nebulosa/src/devices/guiding/phd2'
 import type { PHD2AppState, PHD2Command, PHD2CommandResult, PHD2Events } from 'nebulosa/src/devices/guiding/phd2'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
@@ -21,7 +22,6 @@ import type { OperationContext, OperationCoordinator, OperationHandle, Operation
 import { abortReason, waitForDeviceState } from './operation.wait'
 import { resourceKey } from './resource'
 import type { ReservationToken, ResourceKey, ResourceRequest } from './resource'
-import { errorMessage } from './util'
 
 // Either transport driving a guider: a remote PHD2 server or the in-process client over INDI devices.
 export type GuiderTransport = PHD2Client | GuiderClient

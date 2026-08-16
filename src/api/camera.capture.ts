@@ -1,6 +1,7 @@
 import { mkdir } from 'fs/promises'
 import { isAbsolute, join } from 'path'
 import { formatTemporal, TIMEZONE, temporalAdd, temporalGet, temporalSubtract } from 'nebulosa/src/astronomy/time/temporal'
+import { errorMessage } from 'nebulosa/src/core/util'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import type { CameraManager } from 'nebulosa/src/devices/indi/manager'
 import type { BlobEncoding, PropertyState } from 'nebulosa/src/devices/indi/types'
@@ -16,7 +17,7 @@ import type { ImageProcessor } from './image.processor'
 import type { OperationContext, OperationScope } from './operation'
 import { abortableDelay, abortReason } from './operation.wait'
 import { ResourceArbiter, resourceKey } from './resource'
-import { directoryExists, errorMessage, isPathSegment } from './util'
+import { directoryExists, isPathSegment } from './util'
 
 // Minimum inter-frame delay that produces progress updates, in microseconds.
 const MINIMUM_WAITING_TIME = 1000000

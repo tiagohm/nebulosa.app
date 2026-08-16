@@ -2,6 +2,7 @@ import { basename, dirname } from 'path'
 import { isCamera } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraCaptureStart } from '#/camera'
+import { failedOperationResult } from '#/orchestration'
 import type { SequencerDeviceRole } from '#/sequencer'
 import type { SequencerPlanFrameGroup } from '#/sequencer.plan'
 import type { CameraHandler } from './camera'
@@ -179,6 +180,14 @@ async function runCapture(services: SequencerCaptureServices, context: Sequencer
 	} catch (e) {
 		return { type: 'retryableFailure', reason: 'commandFailed', detail: `the frame directory could not be created: ${e instanceof Error ? e.message : String(e)}` }
 	}
+
+	// The classification and the staging above are filesystem work, and an immediate pause or stop landing inside
+	// them finds no camera operation to drain: the reservation is reopened and the command below would start an
+	// exposure after the pause was acknowledged, or alongside the finalization of the stop. The cancellation is
+	// therefore read here, in front of the command, the same way `sequencerCommand` fronts every other block —
+	// and in front of the pending record too, so a frame that was never exposed leaves no artifact claiming it
+	// was. The orphan temporary the staging left is discarded by the classification of the next attempt.
+	if (context.signal.aborted) return sequencerActionFailure(failedOperationResult('aborted', 'the frame was cancelled before the camera was commanded'))
 
 	// The pending record is durable when this returns, which is the whole point of registering it before the
 	// exposure: a crash between here and the rename leaves a record for the attempt that was in flight instead

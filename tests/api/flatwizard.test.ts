@@ -114,8 +114,8 @@ function flatWizardEvents() {
 	return flatWizardMessages().map((message) => message.body)
 }
 
-function waitForFlatWizardState(state: FlatWizardEvent['state'], id: string) {
-	return waitUntil(() => flatWizardEvents().some((event) => event.id === id && event.state === state))
+function waitForFlatWizardState(state: FlatWizardEvent['state'], id: string, timeout?: number) {
+	return waitUntil(() => flatWizardEvents().some((event) => event.id === id && event.state === state), timeout)
 }
 
 describe('flat wizard handler', () => {
@@ -342,7 +342,7 @@ describe('flat wizard handler', () => {
 
 		const id = await startRun(startRequest(camera, request))
 
-		await waitForFlatWizardState('idle', id)
+		await waitForFlatWizardState('idle', id, 10000)
 		expect(flatWizardEvents().at(-1)?.message).toBe('unable to find an optimal exposure time')
 	}, 20000)
 

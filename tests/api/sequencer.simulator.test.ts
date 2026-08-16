@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import { action } from './sequencer.fixture'
 import { commandNames, disposeNight, runNight } from './sequencer.simulator'
 import type { NightResult } from './sequencer.simulator'
 
@@ -94,4 +95,36 @@ describe('canonical night', () => {
 		expect(firstPaths.every((path) => path !== undefined && second.files.includes(path))).toBeTrue()
 		expect(secondPaths.every((path) => path !== undefined && second.files.includes(path))).toBeTrue()
 	}, 60_000)
+
+	test('A.04 without guiding', async () => {
+		const night = await runNight({
+			patch: {
+				guiding: { enabled: false },
+				dither: { enabled: false },
+				startup: {
+					actions: [
+						action('connect', { type: 'connectDevices', devices: ['camera', 'mount', 'wheel', 'focuser', 'rotator', 'cover', 'flatPanel'], required: true }),
+						action('unpark', { type: 'unparkMount', required: true }),
+						action('open', { type: 'openCover' }),
+						action('cool', { type: 'coolCamera', required: true }),
+					],
+				},
+				shutdown: {
+					actions: [action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('close', { type: 'closeCover' }), action('warm', { type: 'warmCamera' })],
+				},
+			},
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+		const committed = night.artifacts.filter((artifact) => artifact.status === 'committed')
+
+		expect(night.session.state).toBe('completed')
+		expect(names.some((name) => name.startsWith('guider.'))).toBeFalse()
+		expect(committed).toHaveLength(9)
+		expect(names.indexOf('park')).toBeGreaterThan(names.lastIndexOf('camera.expose'))
+		expect(night.devices.mount.parked).toBeTrue()
+		expect(night.devices.guiderConnected).toBeFalse()
+	}, 30_000)
 })

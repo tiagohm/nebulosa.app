@@ -79,7 +79,11 @@ export interface NightControl {
 
 export interface NightOptions {
 	readonly patch?: DeepPartial<Sequencer>
-	readonly sim?: { readonly mount?: Partial<Mount> & { readonly hourAngle?: number } }
+	readonly sim?: {
+		readonly mount?: Partial<Mount> & { readonly hourAngle?: number }
+		readonly camera?: Partial<Camera>
+		readonly cover?: Partial<Cover>
+	}
 	readonly control?: (api: NightControl) => void | Promise<void>
 	// Existing storage root to reuse. When omitted, the night creates and owns a temporary directory.
 	readonly root?: string
@@ -274,7 +278,7 @@ function observatory(sim?: NightOptions['sim']): SimulatorDevices {
 
 	const imaging = structuredClone(DEFAULT_CAMERA)
 
-	Object.assign(imaging, { id: 'camera-1', hardwareId: 'hw-camera', name: 'Camera Simulator', connected: true, hasCooler: true, hasCoolerControl: true, hasThermometer: true, cooler: false, temperature: 20, canSetTemperature: true })
+	Object.assign(imaging, { id: 'camera-1', hardwareId: 'hw-camera', name: 'Camera Simulator', connected: true, hasCooler: true, hasCoolerControl: true, hasThermometer: true, cooler: false, temperature: 20, canSetTemperature: true, ...sim?.camera })
 
 	const guideCamera = structuredClone(DEFAULT_CAMERA)
 
@@ -294,7 +298,7 @@ function observatory(sim?: NightOptions['sim']): SimulatorDevices {
 
 	const cover = structuredClone(DEFAULT_COVER)
 
-	Object.assign(cover, { id: 'cover-1', hardwareId: 'hw-cover', name: 'Cover Simulator', connected: true, parked: true, canPark: true, canUnpark: true })
+	Object.assign(cover, { id: 'cover-1', hardwareId: 'hw-cover', name: 'Cover Simulator', connected: true, parked: true, canPark: true, canUnpark: true, ...sim?.cover })
 
 	const flatPanel = structuredClone(DEFAULT_FLAT_PANEL)
 

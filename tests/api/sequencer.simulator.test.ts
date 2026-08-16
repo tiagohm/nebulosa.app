@@ -162,4 +162,39 @@ describe('canonical night', () => {
 		expect(names.some((name) => name.startsWith('cover.') || name.startsWith('panel.'))).toBeFalse()
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
+
+	test('A.07 with startup and shutdown disabled', async () => {
+		const night = await runNight({
+			patch: {
+				guiding: { enabled: false },
+				dither: { enabled: false },
+				cooling: { enabled: false },
+				startup: { enabled: false },
+				shutdown: { enabled: false },
+			},
+			sim: {
+				mount: { parked: false, tracking: true },
+				camera: { cooler: true, temperature: -10 },
+				cover: { parked: false },
+			},
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+		const committed = night.artifacts.filter((artifact) => artifact.status === 'committed')
+
+		expect(night.session.state).toBe('completed')
+		expect(names.some((name) => name === 'connect' || name.endsWith('.connect'))).toBeFalse()
+		expect(names.includes('unpark')).toBeFalse()
+		expect(names.includes('park')).toBeFalse()
+		expect(names.some((name) => name === 'cooler.set' || name === 'cooler.off' || name === 'cooler.on')).toBeFalse()
+		expect(committed).toHaveLength(9)
+		expect(night.devices.mount.parked).toBeFalse()
+		expect(night.devices.cover.parked).toBeFalse()
+		expect(night.devices.camera.temperature).toBe(-10)
+		expect(night.devices.camera.cooler).toBeTrue()
+		expect(night.arbiter.availability('hw-camera')).toBe('available')
+		expect(night.arbiter.availability('hw-mount')).toBe('available')
+	}, 30_000)
 })

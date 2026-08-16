@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import type { DeepPartial } from 'nebulosa/src/core/types'
-import type { Camera, Cover, Device, FlatPanel, Focuser, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_CAMERA, DEFAULT_COVER, DEFAULT_FLAT_PANEL, DEFAULT_FOCUSER, DEFAULT_MOUNT, DEFAULT_ROTATOR, DEFAULT_WHEEL } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Cover, Device, FlatPanel, Focuser, GuideOutput, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
+import { DEFAULT_CAMERA, DEFAULT_COVER, DEFAULT_FLAT_PANEL, DEFAULT_FOCUSER, DEFAULT_GUIDE_OUTPUT, DEFAULT_MOUNT, DEFAULT_ROTATOR, DEFAULT_WHEEL } from 'nebulosa/src/devices/indi/device'
 import { writeImageToFits } from 'nebulosa/src/imaging/model/image'
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import { bufferSink } from 'nebulosa/src/io/io'
@@ -56,7 +56,7 @@ export interface SimulatorDevices {
 	readonly cover: Cover
 	readonly flatPanel: FlatPanel
 	readonly guideCamera: Camera
-	readonly guideOutput: Device
+	readonly guideOutput: GuideOutput
 	guiderConnected: boolean
 	guiderRunning: boolean
 	guiderLooping: boolean
@@ -343,8 +343,8 @@ export function commandNames(log: readonly SimulatorCommand[]) {
 function observatory(sim?: NightOptions['sim'], tag?: string): SimulatorDevices {
 	const suffix = tag === undefined ? '' : ` ${tag}`
 	const id = tag === undefined ? '' : `-${tag}`
-	const mount = structuredClone(DEFAULT_MOUNT)
 
+	const mount = structuredClone(DEFAULT_MOUNT)
 	Object.assign(mount, {
 		id: `mount-1${id}`,
 		hardwareId: `hw-mount${id}`,
@@ -365,32 +365,28 @@ function observatory(sim?: NightOptions['sim'], tag?: string): SimulatorDevices 
 	})
 
 	const imaging = structuredClone(DEFAULT_CAMERA)
-
 	Object.assign(imaging, { id: `camera-1${id}`, hardwareId: `hw-camera${id}`, name: `Camera Simulator${suffix}`, connected: true, hasCooler: true, hasCoolerControl: true, hasThermometer: true, cooler: false, temperature: 20, canSetTemperature: true, ...sim?.camera })
 
 	const guideCamera = structuredClone(DEFAULT_CAMERA)
-
 	Object.assign(guideCamera, { id: `guide-camera-1${id}`, hardwareId: `hw-guide-camera${id}`, name: `Guide Camera Simulator${suffix}`, connected: true })
 
 	const wheel = structuredClone(DEFAULT_WHEEL)
-
 	Object.assign(wheel, { id: `wheel-1${id}`, hardwareId: `hw-wheel${id}`, name: `Wheel Simulator${suffix}`, connected: true, count: FILTERS.length, position: FILTERS.length - 1, names: [...FILTERS] })
 
 	const focuser = structuredClone(DEFAULT_FOCUSER)
-
 	Object.assign(focuser, { id: `focuser-1${id}`, hardwareId: `hw-focuser${id}`, name: `Focuser Simulator${suffix}`, connected: true, position: { value: 25000, min: 0, max: 50000, step: 1 } })
 
 	const rotator = structuredClone(DEFAULT_ROTATOR)
-
 	Object.assign(rotator, { id: `rotator-1${id}`, hardwareId: `hw-rotator${id}`, name: `Rotator Simulator${suffix}`, connected: true, angle: { value: 0, min: 0, max: 360, step: 0.1 } })
 
 	const cover = structuredClone(DEFAULT_COVER)
-
 	Object.assign(cover, { id: `cover-1${id}`, hardwareId: `hw-cover${id}`, name: `Cover Simulator${suffix}`, connected: true, parked: true, canPark: true, canUnpark: true, ...sim?.cover })
 
 	const flatPanel = structuredClone(DEFAULT_FLAT_PANEL)
-
 	Object.assign(flatPanel, { id: `flat-1${id}`, hardwareId: `hw-flat${id}`, name: `Flat Panel Simulator${suffix}`, connected: true, enabled: false, intensity: { value: 0, min: 0, max: 255, step: 1 } })
+
+	const guideOutput = structuredClone(DEFAULT_GUIDE_OUTPUT)
+	Object.assign(guideOutput, { id: `guide-output-1${id}`, hardwareId: `hw-mount${id}`, name: `Guide Output Simulator${suffix}`, connected: true, canPulseGuide: true })
 
 	return {
 		camera: imaging,
@@ -401,7 +397,7 @@ function observatory(sim?: NightOptions['sim'], tag?: string): SimulatorDevices 
 		cover,
 		flatPanel,
 		guideCamera,
-		guideOutput: { type: 'guideOutput', id: `guide-output-1${id}`, hardwareId: `hw-guide-output${id}`, name: `Guide Output Simulator${suffix}`, connected: true } as Device,
+		guideOutput,
 		guiderConnected: false,
 		guiderRunning: false,
 		guiderLooping: false,

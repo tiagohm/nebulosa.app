@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { remoteGuiderKey } from 'src/api/guider.session'
+import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
 import { action, frame } from './sequencer.fixture'
 import { commandNames, disposeNight, disposeProcess, openProcess, runNight } from './sequencer.simulator'
 import type { NightResult, SimulatorProcess } from './sequencer.simulator'
@@ -522,5 +522,63 @@ describe('admission', () => {
 		expect(process.arbiter.availability(key)).toBe('leased')
 
 		idle.lease.release()
+	}, 30_000)
+
+	test('B.05 a distinct guide camera is reserved with the imaging camera', async () => {
+		const process = await openProcess()
+
+		processes.push(process)
+
+		const observatory = process.addObservatory('east')
+		const created = process.handler.createSession(
+			process.definition(observatory, {
+				id: 'east',
+				autofocus: { enabled: false },
+				meridianFlip: { enabled: false },
+				target: { center: { enabled: false } },
+				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				guiding: {
+					connection: {
+						mode: 'local',
+						focalLength: 200,
+						capture: { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false },
+					},
+				},
+			}),
+		)
+
+		expect(created.ok).toBeTrue()
+		expect(observatory.camera.hardwareId).not.toBe(observatory.guideCamera.hardwareId)
+
+		if (!created.ok) return
+
+		const started = process.runtime.start(created.session.id)
+		const cameraKey = observatory.camera.hardwareId
+		const guideCameraKey = observatory.guideCamera.hardwareId
+		const logicalCamera = localGuiderCameraKey(observatory.guideCamera)
+		const logicalOutput = localGuiderOutputKey(observatory.guideOutput)
+		const manual = process.arbiter.acquire({ id: 'manual', kind: 'capture' }, [{ key: cameraKey, device: observatory.camera }])
+
+		expect(started).toMatchObject({ ok: true, reentrant: false })
+		expect(['reserved', 'leased']).toContain(process.arbiter.availability(cameraKey))
+		expect(['reserved', 'leased']).toContain(process.arbiter.availability(guideCameraKey))
+		expect(process.arbiter.snapshot(cameraKey).reservationOwner).toEqual({ id: created.session.id, kind: 'sequencer' })
+		expect(process.arbiter.snapshot(guideCameraKey).reservationOwner).toEqual({ id: created.session.id, kind: 'sequencer' })
+		expect(['reserved', 'leased']).toContain(process.arbiter.availability(logicalCamera))
+		expect(['reserved', 'leased']).toContain(process.arbiter.availability(logicalOutput))
+		expect(process.arbiter.availability(remoteGuiderKey('127.0.0.1', 4400))).toBe('available')
+		expect(manual.ok).toBeFalse()
+
+		if (manual.ok) return
+
+		expect(manual.conflicts).toEqual([{ key: cameraKey, by: 'reservation', ownerId: created.session.id, ownerKind: 'sequencer', causes: [] }])
+
+		const session = await process.runtime.settled(created.session.id)
+
+		expect(session?.state).toBe('completed')
+		expect(process.arbiter.availability(cameraKey)).toBe('available')
+		expect(process.arbiter.availability(guideCameraKey)).toBe('available')
+		expect(process.arbiter.availability(logicalCamera)).toBe('available')
+		expect(process.arbiter.availability(logicalOutput)).toBe('available')
 	}, 30_000)
 })

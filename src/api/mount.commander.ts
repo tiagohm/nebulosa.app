@@ -2,7 +2,6 @@ import { angularDistance } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { timeNow } from 'nebulosa/src/astronomy/time/time'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
-import { errorMessage } from 'nebulosa/src/core/util'
 import type { GPS, Mount, MountTargetCoordinate, NameAndLabel, PierSide, TrackMode } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, MountManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
@@ -15,6 +14,7 @@ import type { OperationContext, OperationScope } from './operation'
 import { abortReason, waitForDeviceState } from './operation.wait'
 import { resourceKey } from './resource'
 import type { ResourceKey } from './resource'
+import { errorMessage } from './util'
 
 // Axis direction of an open-ended manual motion. North/south and west/east are independent INDI vectors,
 // so one direction of each pair may be active at the same time.

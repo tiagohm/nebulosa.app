@@ -1,7 +1,6 @@
-import { errorMessage } from 'nebulosa/src/core/util'
-import { settlesWithin } from 'src/api/util'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
+import { errorMessage, settlesWithin } from './util'
 
 // Everything needed to command a device and wait for the physical state that proves the command took
 // effect. The device itself is not a field: subscribe, current, and command already close over it.

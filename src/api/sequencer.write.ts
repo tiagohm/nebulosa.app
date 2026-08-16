@@ -1,10 +1,10 @@
 import { mkdir, open, rename, rm, stat } from 'fs/promises'
 import { basename, dirname, extname, join } from 'path'
-import { errorMessage } from 'nebulosa/src/core/util'
 import { readFits } from 'nebulosa/src/io/formats/fits/fits'
 import { readXisf } from 'nebulosa/src/io/formats/xisf/xisf'
 import { fileHandleSource } from 'nebulosa/src/io/io'
 import { SEQUENCER_NAME_LIMIT, sequencerBoundedName } from './sequencer.identity'
+import { errorMessage } from './util'
 
 // Write protocol of a captured frame and the classification of what a previous run left on disk.
 //

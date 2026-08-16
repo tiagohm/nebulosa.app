@@ -3,6 +3,13 @@ import { readdir } from 'fs/promises'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 
+// Human-readable detail of an unknown failure. An `Error` contributes its message; anything else is
+// stringified. Operation results persist this verbatim, so inventing a second format here would split
+// the same night's history.
+export function errorMessage(error: unknown) {
+	return error instanceof Error ? error.message : String(error)
+}
+
 export function makeTime(utc: number | 'now', location?: GeographicCoordinate) {
 	utc = utc === 'now' ? Date.now() : utc
 	const time = timeUnix(utc / 1000, true)

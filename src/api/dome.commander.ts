@@ -1,4 +1,3 @@
-import { errorMessage } from 'nebulosa/src/core/util'
 import type { DomeDirection, Dome, DomeShutterState } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, DomeManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
@@ -11,6 +10,7 @@ import type { ResourceKey } from 'src/api/resource'
 import { successfulOperationResult, failedOperationResult } from '#/orchestration'
 import type { OperationResult, FailedOperationResult } from '#/orchestration'
 import { clamp } from '#/util'
+import { errorMessage } from './util'
 
 // Coordinated mutations of an INDI dome.
 // Angles are radians in the shared device model, speeds are in the driver's RPM units, backlash values

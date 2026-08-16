@@ -219,8 +219,8 @@ describe('plan walk', () => {
 		expect(frames.map((it) => it.attempt)).toEqual([0, 0])
 		expect(new Set(frames.map((it) => it.slot!.path)).size).toBe(2)
 		expect(state.artifacts()).toHaveLength(2)
-		expect(outcome.capture.m42?.cycle).toBe(1)
-		expect(outcome.capture.m42?.groups).toBeEmpty()
+		expect(outcome.capture.m42?.cycle).toBe(0)
+		expect(outcome.capture.m42?.groups.lum?.accepted).toBe(2)
 	})
 
 	test('runs the slew and the centering before the first frame', async () => {
@@ -433,6 +433,19 @@ describe('plan walk', () => {
 		expect(outcome.terminal.state).toBe('completed')
 		expect(entries).toEqual([undefined, 'WEST'])
 		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
+	})
+
+	test('ends the plan when a flip is enabled and the mount publishes no hour angle', async () => {
+		const base = definition()
+		const state = harness(planOf({ meridianFlip: { ...base.meridianFlip, enabled: true } }))
+
+		state.observation = { pierSide: 'WEST', preFlipPierSide: 'WEST' }
+
+		const outcome = await runSequencerPlan(state.host)
+
+		expect(outcome.terminal.state).toBe('failed')
+		expect(outcome.terminal.failure?.reason).toBe('unexpectedState')
+		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 	})
 
 	test('ends the plan at the meridian boundary of a mount that publishes no pier side', async () => {

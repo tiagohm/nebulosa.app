@@ -137,7 +137,9 @@ export async function waitForFlipWindow(context: SequencerActionContext, boundar
 	for (;;) {
 		const current = hourAngle()
 
-		if (current === undefined) break
+		if (current === undefined) {
+			return { type: 'fatalFailure', reason: 'unexpectedState', detail: 'the mount stopped publishing an hour angle while waiting for the meridian flip window' }
+		}
 
 		const remaining = sequencerFlipWindowDelay(boundary, current)
 

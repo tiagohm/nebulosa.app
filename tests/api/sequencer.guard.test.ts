@@ -120,14 +120,14 @@ describe('flip window wait', () => {
 		expect(reads).toBe(3)
 	})
 
-	test('stops waiting for a mount that publishes no hour angle', async () => {
+	test('fails the wait when the mount publishes no hour angle', async () => {
 		const result = await waitForFlipWindow(
 			actionContext(() => 1_000_000),
 			boundary(),
 			() => undefined,
 		)
 
-		expect(result).toEqual({ type: 'completed', value: 0 })
+		expect(result).toMatchObject({ type: 'fatalFailure', reason: 'unexpectedState' })
 	})
 
 	test('reports a cancelled wait as the abort it is', async () => {

@@ -1168,7 +1168,9 @@ async function runExposureGuard(execution: SequencerExecution, policies: Sequenc
 
 	const reading = execution.host.observe()
 
-	if (reading.hourAngle === undefined) return SEQUENCER_EXPOSE
+	if (reading.hourAngle === undefined) {
+		return { kind: 'ended', outcome: { kind: 'fail', reason: 'unexpectedState', detail: 'the mount publishes no hour angle, so whether the exposure fits ahead of the meridian cannot be decided' } }
+	}
 
 	const boundary: SequencerFlipBoundary = { minimumHourAngle: meridianFlip.minimumHourAngle, maximumHourAngle: meridianFlip.maximumHourAngle, safetyMargin: meridianFlip.safetyMargin }
 	const now = execution.host.now()
@@ -1281,26 +1283,26 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 
 		const result = await runNode(execution, node.id, node.type, configuration, attempt, host.signal, slot)
 
-		if (result.type === 'completed' || result.type === 'skipped') {
+		if (result.type === 'skipped') {
+			return { kind: 'fail', reason: 'unexpectedState', detail: `the capture of ${logicalSlotId} skipped a slot it was selected to fill` }
+		}
+
+		if (result.type === 'completed') {
 			execution.cadence = sequencerExposureEnded(host.now())
-			execution.capture = result.type === 'completed' ? acceptFrame(execution.capture, targetId, group) : abandonSlot(execution.capture, targetId, group)
+			execution.capture = acceptFrame(execution.capture, targetId, group)
 
 			// Only an accepted frame integrates, and it integrates the exposure the group declares rather than the
 			// time the node spent: the declared time is what the group counters are stated in, and a session ending
 			// on integration must not have the read-out and the safe point of every frame counted into its target.
-			if (result.type === 'completed') execution.integration += group.exposureTime
+			execution.integration += group.exposureTime
 
 			execution.anchors = sequencerFrameCounted(execution.anchors, group.frameType)
 			execution.keeper.capture(execution.capture)
 			execution.keeper.anchors(execution.anchors)
 
-			// Every terminating path of the capture block registers a terminal artifact row — committed for the frame
-			// it published, rejected for the one it lost — so the progress that counts this slot and the row that
-			// records it are one unit (§13.2), and the checkpoint carrying the progress is written as the `artifact`
-			// it belongs to rather than as a `frame` the policy may space out. Written apart, a restart finds a
-			// committed artifact no progress counted and exposes the slot a second time, or progress for a frame no
-			// row records. A `skipped` result registered nothing, so it stays on the cadence the policy declares.
-			await checkpointDue(execution, result.type === 'completed' ? 'artifact' : 'frame')
+			// The terminating path of the capture block registers a committed artifact row, so the progress that
+			// counts this slot and the row that records it are one unit (§13.2).
+			await checkpointDue(execution, 'artifact')
 
 			// The frame is durable, which is the boundary `afterCurrentExposure` is attended at. Asking it only
 			// at the next `beforeFrame` would work for a pause that arrived during the write, and would miss one

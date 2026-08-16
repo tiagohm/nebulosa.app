@@ -1401,7 +1401,10 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 				continue
 			}
 			case 'abandon':
-				execution.capture = abandonSlot(execution.capture, targetId, group)
+				// The slot decision already applied the abandonment to the progress it was given. Recomputing
+				// it here would be a second source of truth, and the two would drift the moment one of them
+				// changed what an abandoned slot counts.
+				execution.capture = decision.progress
 				execution.cause = decision.cause
 				execution.keeper.capture(execution.capture)
 				// The attempt that gave up the slot registered a rejected row, so this write carries the same unit the

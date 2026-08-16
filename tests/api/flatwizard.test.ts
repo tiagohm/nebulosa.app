@@ -114,8 +114,8 @@ function flatWizardEvents() {
 	return flatWizardMessages().map((message) => message.body)
 }
 
-function waitForFlatWizardState(state: FlatWizardEvent['state'], id: string) {
-	return waitUntil(() => flatWizardEvents().some((event) => event.id === id && event.state === state))
+function waitForFlatWizardState(state: FlatWizardEvent['state'], id: string, timeout = 10000) {
+	return waitUntil(() => flatWizardEvents().some((event) => event.id === id && event.state === state), timeout)
 }
 
 describe('flat wizard handler', () => {

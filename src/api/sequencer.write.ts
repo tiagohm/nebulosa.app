@@ -139,6 +139,49 @@ async function writeTemporary(temporary: string, data: Uint8Array) {
 	}
 }
 
+// Creates the directories the protocol writes into and answers the temporary path the frame belongs in.
+//
+// It exists because the producer of the bytes is not always this module. A camera writes the frame itself, and
+// the only way to keep it from ever publishing a non-final path is to command it straight into the temporary —
+// which requires both directories to exist before the exposure starts, since the driver creates neither. The
+// caller then finishes the protocol with `commitSequencerFrame`, so the validation and the atomic rename stay
+// owned here.
+//
+// It throws whatever the filesystem throws, because a directory that cannot be created is not a frame that
+// failed to write: nothing has been exposed yet.
+export async function sequencerStagedFramePath(finalPath: string, environment: SequencerWriteEnvironment = {}) {
+	await mkdir(dirname(finalPath), { recursive: true })
+	if (environment.temporaryDirectory !== undefined) await mkdir(environment.temporaryDirectory, { recursive: true })
+
+	return sequencerTemporaryPath(finalPath, environment)
+}
+
+// Finishes the protocol for a temporary that is already on disk: validates it and renames it into `finalPath`.
+//
+// This is the half that makes the final path meaningful, and it is separated from the write so that a frame
+// produced by the camera goes through exactly the same validation and the same atomic rename as one produced
+// here. An invalid frame leaves nothing behind: the temporary is removed and the final path is untouched, so
+// the caller recaptures under a new attempt.
+export async function commitSequencerFrame(finalPath: string, environment: SequencerWriteEnvironment = {}): Promise<SequencerFrameWrite> {
+	const temporary = sequencerTemporaryPath(finalPath, environment)
+	const valid = environment.valid ?? readableFrame
+
+	try {
+		if (!(await valid(temporary, formatOf(finalPath)))) {
+			await rm(temporary, { force: true })
+			return { ok: false, reason: 'invalidFrame', error: `the frame written for ${basename(finalPath)} is not a readable image` }
+		}
+
+		await rename(temporary, finalPath)
+		return { ok: true, path: finalPath }
+	} catch (error) {
+		// The temporary would be classified as an orphan later anyway; removing it now keeps the failure from
+		// costing disk until then.
+		await rm(temporary, { force: true }).catch(() => {})
+		return { ok: false, reason: 'writeFailed', error: errorMessage(error) }
+	}
+}
+
 // Writes one frame through the protocol: temporary file, validation, atomic rename into the final path.
 //
 // The caller registers the artifact as pending before calling and confirms it with the checkpoint in one
@@ -149,27 +192,19 @@ async function writeTemporary(temporary: string, data: Uint8Array) {
 // An invalid frame leaves nothing behind: the temporary is removed, the final path is untouched, and the
 // caller recaptures under a new attempt. Returns the final path on success.
 export async function writeSequencerFrame(data: Uint8Array, finalPath: string, environment: SequencerWriteEnvironment = {}): Promise<SequencerFrameWrite> {
-	const temporary = sequencerTemporaryPath(finalPath, environment)
-	const valid = environment.valid ?? readableFrame
+	let temporary: string
 
 	try {
-		await mkdir(dirname(finalPath), { recursive: true })
-		if (environment.temporaryDirectory !== undefined) await mkdir(environment.temporaryDirectory, { recursive: true })
+		temporary = await sequencerStagedFramePath(finalPath, environment)
 		await writeTemporary(temporary, data)
-
-		if (!(await valid(temporary, formatOf(finalPath)))) {
-			await rm(temporary, { force: true })
-			return { ok: false, reason: 'invalidFrame', error: `the frame written for ${basename(finalPath)} is not a readable image` }
-		}
-
-		await rename(temporary, finalPath)
-		return { ok: true, path: finalPath }
 	} catch (error) {
 		// The temporary is the only thing this function created, and leaving it behind would be classified as an
 		// orphan later anyway; removing it now keeps the failure from costing disk until then.
-		await rm(temporary, { force: true }).catch(() => {})
+		await rm(sequencerTemporaryPath(finalPath, environment), { force: true }).catch(() => {})
 		return { ok: false, reason: 'writeFailed', error: errorMessage(error) }
 	}
+
+	return commitSequencerFrame(finalPath, environment)
 }
 
 // Classifies what is on disk for one predicted final path, leaving the directory in the state the

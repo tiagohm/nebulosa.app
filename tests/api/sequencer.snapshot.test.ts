@@ -200,7 +200,7 @@ describe('snapshot derivation', () => {
 			observation({
 				session: session({ checkpoint: { ...session().checkpoint, anchors } }),
 				triggers: {
-					autofocus: { triggers: { onStart: true, onFilterChange: true, afterMeridianFlip: true, afterRecovery: true, everyFrames: 20, everyTime: 3600, temperatureChange: 1, starSizeChange: 0, minimumTimeBetweenRuns: 600 } } as never,
+					autofocus: { triggers: { onStart: true, onFilterChange: true, afterMeridianFlip: true, afterRecovery: true, everyFrames: 20, everyTime: 3600, temperatureChange: 1, minimumTimeBetweenRuns: 600 } } as never,
 					dither: { everyFrames: 1, everyTime: 0 } as never,
 					meridianFlip: {} as never,
 				},

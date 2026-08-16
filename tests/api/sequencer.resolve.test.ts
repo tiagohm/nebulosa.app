@@ -41,7 +41,7 @@ function guided(): Sequencer {
 	return {
 		...definition,
 		devices: { ...definition.devices, guideCamera: 'Guide Camera Simulator', guideOutput: 'Guide Output Simulator' },
-		guiding: { ...definition.guiding, enabled: true, connection: { mode: 'local', focalLength: 0.24, capture: { exposureTime: 2, frameType: 'LIGHT', binX: 1, binY: 1, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false }, owned: true } },
+		guiding: { ...definition.guiding, enabled: true, connection: { mode: 'local', focalLength: 0.24, capture: { exposureTime: 2, frameType: 'LIGHT', binX: 1, binY: 1, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false } } },
 	}
 }
 
@@ -86,7 +86,7 @@ describe('resource resolution', () => {
 	test('a remote guider adds its logical key and no device', () => {
 		const setup = observatory()
 		const definition = canonical()
-		const remote = { ...definition, guiding: { ...definition.guiding, enabled: true, connection: { mode: 'remote', host: 'PHD2.local', port: 4400, owned: true } as const } }
+		const remote = { ...definition, guiding: { ...definition.guiding, enabled: true, connection: { mode: 'remote', host: 'PHD2.local', port: 4400 } as const } }
 		const resolution = resolveResources(plan(remote), devices(setup.camera, setup.mount, setup.focuser))
 
 		expect(resolution.ok).toBe(true)
@@ -128,7 +128,7 @@ describe('session start resolution', () => {
 	function registry(version = 1) {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 			registry.register({ type, version, validate: (configuration) => ({ ok: true, configuration }), resources: () => [], execute: () => Promise.resolve({ type: 'completed', value: undefined } as const) })
 		}
 
@@ -229,22 +229,6 @@ describe('session start resolution', () => {
 })
 
 describe('guider ownership', () => {
-	test('a guider session owned by another component is refused at compilation', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, guiding: { ...definition.guiding, enabled: true, connection: { mode: 'existing', guider: 'phd2', owned: false } } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.connection.mode', message: 'a guider session owned by another component cannot be reserved by this session' }])
-	})
-
-	test('an unowned remote guider is refused at compilation', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, guiding: { ...definition.guiding, enabled: true, connection: { mode: 'remote', host: 'localhost', port: 4400, owned: false } } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.connection.owned', message: 'the session must own the guider session it reserves' }])
-	})
-
 	test('a plan that does not guide reserves no logical key', () => {
 		const setup = observatory()
 		const resolution = resolveResources(plan(unguided()), devices(setup.camera, setup.mount, setup.focuser))

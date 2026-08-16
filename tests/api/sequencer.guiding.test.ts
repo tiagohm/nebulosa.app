@@ -1,13 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { sequencerDitherHandler } from 'src/api/sequencer.guiding'
+import type { SequencerDitherTrigger } from 'src/api/sequencer.compiler'
+import { fuseGuidingSettle, sequencerDitherHandler } from 'src/api/sequencer.guiding'
 import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
 import type { SequencerActionContext } from 'src/api/sequencer.registry'
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason } from '#/orchestration'
-import type { SequencerDevices, SequencerDither } from '#/sequencer'
+import type { SequencerDevices } from '#/sequencer'
 
-type DitherConfiguration = Omit<SequencerDither, 'enabled'>
+type DitherConfiguration = SequencerDitherTrigger
 
 interface Command {
 	readonly name: string
@@ -19,11 +20,10 @@ function ditherConfiguration(overrides?: Partial<DitherConfiguration>): DitherCo
 		amount: 3,
 		raOnly: false,
 		beforeFirstFrame: false,
-		afterMeridianFlip: true,
 		afterFilterChange: false,
 		everyFrames: 1,
 		everyTime: 0,
-		settle: { tolerance: 1.5, time: 10, timeout: 60, minimumFrames: 3 },
+		settle: { tolerance: 1.5, time: 10, timeout: 60 },
 		retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' },
 		onFailure: 'continue',
 		...overrides,
@@ -62,6 +62,17 @@ function guidingServices(commands: Command[], running: boolean, failure?: Operat
 		} as unknown as SequencerGuidingServices['guiderCommander'],
 	}
 }
+
+describe('settle fusion', () => {
+	test('raises the session settle to a longer flip wait and leaves a shorter one alone', () => {
+		const base = { tolerance: 1.5, time: 10, timeout: 120 }
+
+		expect(fuseGuidingSettle(base, 30)).toEqual({ tolerance: 1.5, time: 30, timeout: 120 })
+		expect(fuseGuidingSettle(base, 5)).toEqual(base)
+		expect(fuseGuidingSettle(base, 0)).toEqual(base)
+		expect(fuseGuidingSettle(base)).toEqual(base)
+	})
+})
 
 describe('dither block', () => {
 	test('holds no lease and accepts a definition with no guiding role of its own', () => {

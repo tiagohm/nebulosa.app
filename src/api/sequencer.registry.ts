@@ -1,9 +1,10 @@
 import type { OperationFailureReason } from '#/orchestration'
 import type { SequencerDeviceRole, SequencerDevices } from '#/sequencer'
-import type { SequencerArtifactDraft, SequencerCheckpoint } from '#/sequencer.state'
+import type { SequencerArtifactDraft, SequencerCheckpoint, SequencerWaitSnapshot } from '#/sequencer.state'
 import type { OperationScope } from './operation'
 import type { ResourceRequest } from './resource'
 import type { SequencerAuxiliaryKind } from './sequencer.path'
+import type { SequencerWriteEnvironment } from './sequencer.write'
 
 // Registry of executable block handlers, and the contract every one of them implements.
 //
@@ -56,6 +57,11 @@ export interface SequencerActionProgress {
 	readonly fraction?: number
 	// Short human-readable description of the current step.
 	readonly detail?: string
+	// Requested exposure duration, in seconds, present exactly while the sensor is integrating. It is what
+	// the live snapshot reads as the capture block rather than as one more foreground action.
+	readonly exposure?: number
+	// Condition the action is standing still on, present while the action is waiting rather than executing.
+	readonly wait?: SequencerWaitSnapshot
 }
 
 // Destination of one image that is not a frame of the plan, reserved by the runtime for the action about to
@@ -68,6 +74,27 @@ export interface SequencerAuxiliaryTarget {
 	readonly fileName: string
 	// Composed absolute path, which is `directory` joined with `fileName`.
 	readonly path: string
+}
+
+// Slot one frame of the plan is captured into, reserved by the runtime for the action about to expose it.
+//
+// The identity of a frame — which group, which cycle, which position inside it — is decided by the scheduler
+// and not by the block, so the handler is handed the answer instead of composing it. The runtime keeps
+// ownership of the slot numbering and of the artifact registry; the handler owns the exposure and the write
+// protocol, which is why it receives the predicted final path and the environment that protocol runs in
+// rather than a directory to invent a name in.
+export interface SequencerFrameSlot {
+	// Logical slot the frame fills, stable across attempts and across a resume.
+	readonly logicalSlotId: string
+	// Iteration of the capture loop this frame belongs to, starting at 1.
+	readonly cycle: number
+	// Position of the frame inside its group within the cycle, starting at 1.
+	readonly ordinal: number
+	// Absolute path the frame ends up at when it is committed, already composed from the naming template and
+	// proven contained in the approved root.
+	readonly path: string
+	// Filesystem and validation boundary the write protocol of this frame runs against.
+	readonly write: SequencerWriteEnvironment
 }
 
 // Everything an action is allowed to touch while it runs. Device managers are deliberately absent: an
@@ -108,6 +135,10 @@ export interface SequencerActionContext {
 	readonly guider?: string
 	// Read-only view of the current checkpoint. An action reads it and never writes it: the runtime owns it.
 	readonly checkpoint: SequencerCheckpoint
+	// Slot the frame of this node is captured into, present exactly for the frame blocks the scheduler drives.
+	// A block that fills no slot never receives one, and a frame block that receives none cannot capture: the
+	// destination is the runtime's answer and inventing one would write outside the namespace of the session.
+	readonly frame?: SequencerFrameSlot
 }
 
 // Decision an action reports back to the runtime. It is deliberately not an `OperationResult`: an operation

@@ -23,16 +23,11 @@ function mount(pierSide: PierSide = 'EAST'): Mount {
 function centering(): SequencerMeridianFlipTrigger['centering'] {
 	return {
 		coordinates: TARGET,
-		solver: { type: 'astap', timeout: 60, blind: false, searchRadius: 0.05, downsample: 2, maximumStars: 500, minimumSNR: 10 },
+		solver: { type: 'astap', timeout: 60, blind: false, searchRadius: 0.05, downsample: 2 },
 		tolerance: 0.0001,
 		maximumAttempts: 3,
 		settle: 0,
 		syncMount: true,
-		finalSolve: true,
-		recenterAfterDrift: false,
-		driftTolerance: 0,
-		checkEveryFrames: 0,
-		checkEveryTime: 0,
 		capture: { exposureTime: 5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false },
 		retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' },
 	}
@@ -40,7 +35,7 @@ function centering(): SequencerMeridianFlipTrigger['centering'] {
 
 function focusing(): SequencerMeridianFlipTrigger['focusing'] {
 	return {
-		triggers: { onStart: true, onFilterChange: false, afterMeridianFlip: true, afterRecovery: false, everyFrames: 0, everyTime: 0, temperatureChange: 0, starSizeChange: 0, minimumTimeBetweenRuns: 0 },
+		triggers: { onStart: true, onFilterChange: false, afterMeridianFlip: true, everyFrames: 0, everyTime: 0, temperatureChange: 0, minimumTimeBetweenRuns: 0 },
 		algorithm: { initialOffsetSteps: 4, stepSize: 100, fittingMode: 'HYPERBOLIC', rmsdThreshold: 0.5, reversed: false, maximumPosition: 50000, backlash: { enabled: false, mode: 'overshoot', steps: 0 } },
 		capture: { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 15, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false },
 		starDetection: { type: 'astap', timeout: 30, minimumSNR: 8, maximumStars: 400 },
@@ -56,16 +51,7 @@ function flipConfiguration(overrides?: Partial<SequencerMeridianFlipTrigger>): S
 		minimumHourAngle: 0.01,
 		maximumHourAngle: 0.05,
 		safetyMargin: 60,
-		waitForCurrentExposure: true,
-		stopGuiding: true,
-		pauseDomeSlaving: false,
 		settle: 0,
-		verifyPierSide: true,
-		recenter: false,
-		autofocus: false,
-		restoreGuiding: true,
-		restoreRotator: false,
-		maximumAttempts: 2,
 		timeout: 600,
 		retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' },
 		onFailure: 'pause',
@@ -173,6 +159,17 @@ describe('meridian flip block', () => {
 		expect(handler.validate(flipConfiguration({ focusing: focusingFilter }), { nodeId: 'target[m42].trigger.meridianFlip', devices: { mount: 'Mount Simulator', camera: 'Camera Simulator', focuser: 'Focuser Simulator' } }).ok).toBe(true)
 	})
 
+	test('skips its own settle when the interlock of the same safe point will wait', async () => {
+		const commands: Command[] = []
+		const started = performance.now()
+		const handler = sequencerMeridianFlipHandler(flipServices(commands))
+		const result = await handler.execute(actionContext({ mount: { device: mount() } }), flipConfiguration({ settle: 2, deferSettle: true }))
+
+		expect(result.type).toBe('completed')
+		expect(performance.now() - started).toBeLessThan(200)
+		expect(commands.map((command) => command.name)).toEqual(['flip'])
+	})
+
 	test('crosses towards where the mount is pointing rather than where the night started', async () => {
 		const commands: Command[] = []
 		const handler = sequencerMeridianFlipHandler(flipServices(commands))
@@ -191,14 +188,6 @@ describe('meridian flip block', () => {
 		expect(commands.filter((command) => command.name === 'flip')).toHaveLength(1)
 	})
 
-	test('accepts an unverified crossing when the definition does not demand the evidence', async () => {
-		const commands: Command[] = []
-		const handler = sequencerMeridianFlipHandler(flipServices(commands, { pierSideVerified: false }))
-		const result = await handler.execute(actionContext({ mount: { device: mount() } }), flipConfiguration({ verifyPierSide: false }))
-
-		expect(result).toMatchObject({ type: 'completed', value: { verified: false, pierSide: 'EAST' } })
-	})
-
 	test('re-establishes the pointing before the focus, both under the same node', async () => {
 		const commands: Command[] = []
 		const handler = sequencerMeridianFlipHandler(flipServices(commands))
@@ -209,6 +198,18 @@ describe('meridian flip block', () => {
 
 		expect(commands.map((command) => command.name)).toEqual(['flip', 'capture', 'solve', 'autofocus'])
 		expect(result).toMatchObject({ type: 'completed', value: { verified: true, centering: { attempts: 1, verified: true }, focusing: { position: 12500, measured: 12500 } } })
+	})
+
+	test('resumes at the recovery of a crossing that already happened, without crossing again', async () => {
+		const commands: Command[] = []
+		const handler = sequencerMeridianFlipHandler(flipServices(commands))
+		const result = await handler.execute(
+			actionContext({ mount: { device: mount('WEST') }, camera: { device: { type: 'camera', name: 'Camera Simulator', connected: true } }, focuser: { device: { type: 'focuser', name: 'Focuser Simulator', connected: true, position: { value: 12500, min: 0, max: 50000 } } } }),
+			flipConfiguration({ centering: centering(), focusing: focusing(), crossedFrom: 'EAST' }),
+		)
+
+		expect(commands.map((command) => command.name)).toEqual(['capture', 'solve', 'autofocus'])
+		expect(result).toMatchObject({ type: 'completed', value: { pierSide: 'WEST', initialPierSide: 'EAST', verified: true, centering: { attempts: 1 }, focusing: { position: 12500 } } })
 	})
 
 	test('reports a recovery that did not finish instead of a flip that completed', async () => {

@@ -1,14 +1,20 @@
 import { describe, expect, test } from 'bun:test'
+import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
+import type { Device, Mount, PierSide } from 'nebulosa/src/devices/indi/device'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter } from 'src/api/resource'
 import { SequencerHandler } from 'src/api/sequencer'
 import { compile, sequencerPlanNodes } from 'src/api/sequencer.compiler'
+import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { AnySequencerActionHandler } from 'src/api/sequencer.registry'
 import { SequencerRuntime } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
-import type { Sequencer } from '#/sequencer'
-import { canonical } from './sequencer.fixture'
+import { makeTime } from 'src/api/util'
+import { failedOperationResult } from '#/orchestration'
+import type { Sequencer, SequencerDeviceRole } from '#/sequencer'
+import type { SequencerSessionState } from '#/sequencer.state'
+import { canonical, frame, guiding, services } from './sequencer.fixture'
 
 function blockTypes() {
 	const compilation = compile(canonical())
@@ -24,41 +30,49 @@ function blockTypes() {
 }
 
 function handler(type: string, execute: AnySequencerActionHandler['execute']): AnySequencerActionHandler {
-	return { type, version: 1, validate: (configuration) => ({ ok: true, configuration }), resources: () => [{ role: 'camera' }], execute }
+	return { type, version: 1, validate: (configuration) => ({ ok: true, configuration }), resources: () => [{ role: 'camera' }, { role: 'mount' }], execute }
 }
 
-function environment(execute?: AnySequencerActionHandler['execute']) {
+function mount(hourAngle: number, pierSide: PierSide = 'WEST'): Mount & { hourAngle: number } {
+	const geographicCoordinate = { longitude: 0, latitude: 0, elevation: 0 }
+	const device = {
+		type: 'mount',
+		name: 'Mount Simulator',
+		id: 'mount-1',
+		connected: true,
+		client: { id: 'indi-1' },
+		tracking: true,
+		trackMode: 'SIDEREAL',
+		canFlip: true,
+		hasPierSide: true,
+		pierSide,
+		hourAngle,
+		geographicCoordinate,
+		get equatorialCoordinate() {
+			return { rightAscension: localSiderealTime(makeTime(Date.now(), geographicCoordinate), geographicCoordinate, true) - device.hourAngle, declination: -0.09 }
+		},
+	}
+
+	return device as unknown as Mount & { hourAngle: number }
+}
+
+function brief(): Sequencer['capture'] {
+	return { ...canonical().capture, repeat: 1, delay: 0, frames: [frame('lum', { count: 2 })] }
+}
+
+function environment(execute?: AnySequencerActionHandler['execute'], devices?: Partial<Record<SequencerDeviceRole, Device>>, guidingServices?: SequencerGuidingServices) {
 	const arbiter = new ResourceArbiter()
 	const coordinator = new OperationCoordinator(arbiter)
 	const registry = new SequencerBlockRegistry()
 	const store = new InMemorySequencerStore()
-	const runtime = new SequencerRuntime({ store, registry, coordinator, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) })
+	const runtime = new SequencerRuntime({ store, registry, coordinator, ...services(), ...(guidingServices === undefined ? {} : { guiding: guidingServices }), resolve: (role, deviceId) => ({ key: `logical:${deviceId}`, device: devices?.[role] }) })
 
 	for (const type of blockTypes()) registry.register(handler(type, execute ?? (() => Promise.resolve({ type: 'completed', value: undefined }))))
 
 	return { arbiter, coordinator, registry, store, runtime, handler: new SequencerHandler({ store, runtime, registry }) }
 }
 
-function stored(instance: SequencerHandler, overrides?: Partial<Sequencer>) {
-	return instance.create({ ...canonical(), ...overrides })!
-}
-
 describe('definitions', () => {
-	test('assigns the identity and reports the stored revisions', () => {
-		const { handler: instance } = environment()
-		const created = stored(instance)
-
-		expect(created.revision).toBe(1)
-		expect(created.definition.id).toBe(created.id)
-		expect(instance.definitions()).toEqual([created])
-
-		const updated = instance.update(created.id, { ...canonical(), name: 'M43' })!
-
-		expect(updated.revision).toBe(2)
-		expect(instance.definition(created.id)?.definition.name).toBe('M43')
-		expect(instance.update('missing', canonical())).toBeUndefined()
-	})
-
 	test('validates a definition against the handlers that would execute it', () => {
 		const { handler: instance, registry } = environment()
 
@@ -74,42 +88,12 @@ describe('definitions', () => {
 		expect(refused.ok).toBeFalse()
 		expect(refused.diagnostics.some((diagnostic) => diagnostic.message.includes('no handler is registered'))).toBeTrue()
 	})
-
-	test('refuses to remove a definition a live session still names', () => {
-		const { handler: instance } = environment()
-		const created = stored(instance)
-		const session = instance.createSession(created.id)
-
-		expect(session.ok).toBeTrue()
-		expect(instance.remove(created.id)).toEqual({ ok: false, reason: 'inUse', sessionId: session.ok ? session.session.id : '' })
-	})
-
-	test('removes a definition once the session that named it was discarded', async () => {
-		const { handler: instance } = environment()
-		const created = stored(instance)
-		const session = instance.createSession(created.id)
-
-		expect(session.ok).toBeTrue()
-
-		if (!session.ok) return
-
-		// A session that never started ends on the spot: nothing is running, so there is nothing to wait for.
-		const stop = await instance.stop(session.session.id)
-
-		expect(stop).toMatchObject({ ok: true, effect: 'stop' })
-		expect(stop.ok && stop.session.state).toBe('stopped')
-		expect(stop.ok && stop.session.startedAt).toBeUndefined()
-		expect(stop.ok && stop.session.endedAt).toBeDefined()
-		expect(instance.snapshot(session.session.id)?.converging).toBeFalse()
-		expect(instance.remove(created.id)).toEqual({ ok: true })
-	})
 })
 
 describe('sessions', () => {
 	test('creates a session and keeps the lowering it will run', () => {
 		const { handler: instance } = environment()
-		const created = stored(instance)
-		const result = instance.createSession(created.id)
+		const result = instance.createSession(canonical())
 
 		expect(result.ok).toBeTrue()
 
@@ -118,27 +102,23 @@ describe('sessions', () => {
 		const snapshot = result.session
 
 		expect(snapshot.state).toBe('created')
-		expect(snapshot.definitionId).toBe(created.id)
-		expect(snapshot.definitionRevision).toBe(1)
+		expect(snapshot.definitionId).toBe('definition-1')
+		expect(snapshot.definitionRevision).toBe(7)
 		expect(snapshot.target).toEqual({ id: 'm42', name: 'Orion Nebula' })
 		expect(snapshot.capture.requiredSlots).toBe(20)
 
 		const plan = instance.plan(snapshot.id)
 
-		expect(plan?.plan.definitionId).toBe(created.id)
+		expect(plan?.plan.definitionId).toBe('definition-1')
 		expect(plan?.preflight.repeat).toBe(2)
 		expect(plan?.preflight.requiredSlots).toBe(40)
 		expect(instance.plan('missing')).toBeUndefined()
 		expect(instance.sessions()).toHaveLength(1)
 	})
 
-	test('reports the lowering that refused a definition instead of storing a session', () => {
+	test('reports the lowering that refused a definition instead of storing a session', async () => {
 		const { handler: instance } = environment()
-		const created = stored(instance, { capture: { ...canonical().capture, repeat: 0 } })
-
-		expect(instance.createSession('missing')).toEqual({ ok: false, reason: 'unknownDefinition' })
-
-		const refused = instance.createSession(created.id)
+		const refused = await instance.start({ ...canonical(), capture: { ...canonical().capture, repeat: 0 } })
 
 		expect(refused.ok).toBeFalse()
 
@@ -152,40 +132,35 @@ describe('sessions', () => {
 	test('delegates the admission to the gate instead of deciding it', async () => {
 		const started = Promise.withResolvers<void>()
 		const { handler: instance } = environment(() => started.promise.then(() => ({ type: 'completed', value: undefined })))
-		const first = instance.createSession(stored(instance).id)
-		const second = instance.createSession(stored(instance, { id: 'definition-2' }).id)
+		const first = await instance.start(canonical())
+		const second = await instance.start({ ...canonical(), id: 'definition-2' })
 
 		expect(first.ok).toBeTrue()
-		expect(second.ok).toBeTrue()
+		expect(second).toMatchObject({ ok: false, reason: 'busy' })
 
-		if (!first.ok || !second.ok) return
+		if (!first.ok) return
 
-		const admitted = instance.start(first.session.id)
-		const refused = instance.start(second.session.id)
-
-		expect(admitted).toMatchObject({ ok: true, reentrant: false })
-		expect(refused).toMatchObject({ ok: false, reason: 'busy', sessionId: first.session.id })
+		expect(first).toMatchObject({ ok: true, reentrant: false })
+		expect(second).toMatchObject({ ok: false, reason: 'busy', sessionId: first.session.id })
 		expect(instance.snapshot(first.session.id)?.state).toBe('running')
 
 		started.resolve()
 
 		await instance.stop(first.session.id)
 
-		expect(instance.snapshot(first.session.id)?.state).toBe('completed')
+		expect(instance.snapshot(first.session.id)?.state).toBe('stopped')
 	})
 
 	test('records a pause without ending the session and a stop that does', async () => {
 		const started = Promise.withResolvers<void>()
 		const { handler: instance } = environment(() => started.promise.then(() => ({ type: 'completed', value: undefined })))
-		const created = instance.createSession(stored(instance).id)
+		const created = await instance.start(canonical())
 
 		expect(created.ok).toBeTrue()
 
 		if (!created.ok) return
 
 		const id = created.session.id
-
-		instance.start(id)
 
 		const paused = await instance.pause(id)
 
@@ -211,17 +186,128 @@ describe('sessions', () => {
 		expect(await instance.pause('missing')).toEqual({ ok: false, reason: 'unknownSession' })
 	})
 
+	test('publishes the session as finalizing while the terminal pipeline runs', async () => {
+		let observed: SequencerSessionState | undefined
+		let refused: unknown
+		let id = ''
+
+		const { handler: instance } = environment(async (context) => {
+			if (context.nodeId === 'finalize.action[park]') {
+				observed = instance.snapshot(id)?.state
+				refused = await instance.pause(id)
+			}
+
+			return { type: 'completed', value: undefined }
+		})
+		const created = await instance.start(canonical())
+
+		expect(created.ok).toBeTrue()
+
+		if (!created.ok) return
+
+		id = created.session.id
+
+		await instance.stop(id)
+
+		expect(observed).toBe('finalizing')
+		expect(refused).toMatchObject({ ok: true, effect: 'none', noop: 'finalizing' })
+		expect(instance.snapshot(id)?.state).toBe('stopped')
+		expect(instance.events(id).filter((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toHaveLength(1)
+	})
+
+	test('commands the meridian flip once the mount reports the target past the boundary', async () => {
+		const nodes: string[] = []
+		const device = mount(-0.05, 'WEST')
+		const { handler: instance, runtime } = environment(
+			(context) => {
+				nodes.push(context.nodeId)
+				if (context.frame !== undefined) device.hourAngle = 0.05
+				return Promise.resolve({ type: 'completed', value: undefined })
+			},
+			{ mount: device },
+		)
+		const created = await instance.start({ ...canonical(), capture: brief() })
+
+		expect(created.ok).toBeTrue()
+
+		if (!created.ok) return
+
+		await runtime.settled(created.session.id)
+
+		expect(nodes.some((nodeId) => nodeId.endsWith('.trigger.meridianFlip'))).toBeTrue()
+	})
+
+	test('commands no meridian flip while the mount reports the target east of the meridian', async () => {
+		const nodes: string[] = []
+		const { handler: instance, runtime } = environment(
+			(context) => {
+				nodes.push(context.nodeId)
+				return Promise.resolve({ type: 'completed', value: undefined })
+			},
+			{ mount: mount(-0.05, 'EAST') },
+		)
+		const created = await instance.start({ ...canonical(), capture: brief() })
+
+		expect(created.ok).toBeTrue()
+
+		if (!created.ok) return
+
+		await runtime.settled(created.session.id)
+
+		expect(nodes.some((nodeId) => nodeId.endsWith('.trigger.meridianFlip'))).toBeFalse()
+	})
+
+	test('opens the guider the plan declares and hands it to every action', async () => {
+		const guiders = new Set<string | undefined>()
+		const { handler: instance, runtime } = environment(
+			(context) => {
+				guiders.add(context.guider)
+				return Promise.resolve({ type: 'completed', value: undefined })
+			},
+			{ mount: mount(-0.05, 'EAST') },
+		)
+		const created = await instance.start({ ...canonical(), capture: brief() })
+
+		expect(created.ok).toBeTrue()
+
+		if (!created.ok) return
+
+		expect((await runtime.settled(created.session.id))?.state).toBe('completed')
+		expect(guiders).toEqual(new Set(['guider-1']))
+	})
+
+	test('fails the session when the guider the plan declares cannot be opened', async () => {
+		let executed = 0
+		const { handler: instance, runtime } = environment(
+			() => {
+				executed++
+				return Promise.resolve({ type: 'completed', value: undefined })
+			},
+			undefined,
+			guiding(() => failedOperationResult('disconnected', 'the guider server refused the connection')),
+		)
+		const created = await instance.start({ ...canonical(), capture: brief() })
+
+		expect(created.ok).toBeTrue()
+
+		if (!created.ok) return
+
+		const settled = await runtime.settled(created.session.id)
+
+		expect(settled?.state).toBe('failed')
+		expect(settled?.failure).toEqual({ reason: 'disconnected', detail: 'the guider server refused the connection' })
+		expect(executed).toBe(0)
+	})
+
 	test('recovers only the events beyond a sequence the caller already has', async () => {
 		const { handler: instance } = environment()
-		const created = instance.createSession(stored(instance).id)
+		const created = await instance.start(canonical())
 
 		expect(created.ok).toBeTrue()
 
 		if (!created.ok) return
 
 		const id = created.session.id
-
-		instance.start(id)
 
 		await instance.stop(id)
 

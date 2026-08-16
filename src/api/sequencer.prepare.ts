@@ -202,6 +202,47 @@ export function sequencerFrameContext(preparation: SequencerFramePreparation, de
 	}
 }
 
+// Whether the reconciliation of the selected frame still has anything to command.
+//
+// It answers the conditions `runFramePreparation` decides its steps on, read from the same live devices, and
+// commands nothing itself: a frame taken right after another one of the same group finds every dimension
+// already where it belongs and reports false. It exists so a safe point that moves nothing can be recognized
+// before it runs, since bracketing an empty preparation costs a guider suspension and a settle per frame.
+//
+// It is deliberately conservative: a dimension it cannot resolve, such as a filter the wheel does not carry,
+// reports true and is left for the preparation itself to decide. A true answer therefore only means the
+// preparation may command something, while a false answer means it will not.
+export function sequencerFramePreparationPending(context: SequencerActionContext, preparation: SequencerFramePreparation): boolean {
+	const camera = sequencerDeviceOf(context, 'camera', isCamera)
+	const wheel = sequencerDeviceOf(context, 'wheel', isWheel)
+	const cover = sequencerDeviceOf(context, 'cover', isCover)
+	const panel = sequencerDeviceOf(context, 'flatPanel', isFlatPanel)
+	const rotator = sequencerDeviceOf(context, 'rotator', isRotator)
+	const mount = sequencerDeviceOf(context, 'mount', isMount)
+
+	const required = sequencerFrameContext(preparation, { wheel, cover: cover !== undefined, flatPanel: panel !== undefined })
+
+	// Tracking is pending when the mount is stopped or follows a rate other than the declared one, which is the
+	// same pair of differences the step reconciles as one.
+	if (required.tracking === true && mount !== undefined && (!mount.tracking || (preparation.tracking !== undefined && mount.trackMode !== preparation.tracking.mode))) return true
+
+	// A lit panel is always commanded, since the brightness is installed on every frame that requires it; an
+	// unlit one is only turned off when it is on.
+	if (panel !== undefined && required.panel !== undefined && (required.panel.lit || panel.enabled)) return true
+
+	if (cover !== undefined && required.cover !== undefined && cover.parked !== (required.cover === 'closed')) return true
+
+	// An unresolvable filter reports pending, which leaves the fatal failure of a wheel that does not carry it
+	// to the preparation. The focus offset follows the wheel, so it needs no condition of its own.
+	if (wheel !== undefined && required.filter !== undefined && wheel.position !== sequencerFilterSlot(wheel, required.filter)) return true
+
+	if (rotator !== undefined && required.angle !== undefined && preparation.rotator !== undefined && angularDistance(rotator.angle.value, toDeg(required.angle)) > toDeg(preparation.rotator.tolerance)) return true
+
+	if (camera !== undefined && camera.hasThermometer && required.temperature !== undefined && preparation.cooling !== undefined && Math.abs(camera.temperature - required.temperature) > preparation.cooling.tolerance) return true
+
+	return false
+}
+
 // Reconciles the optical path with the context of the selected frame, commanding only the differences.
 //
 // A preparation that fails is a failure of the safe point and consumes an attempt of the slot: the frame

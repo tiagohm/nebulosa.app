@@ -76,41 +76,13 @@ export function groupProgressOf(progress: SequencerTargetProgress, groupId: stri
 	return Object.hasOwn(progress.groups, groupId) ? progress.groups[groupId] : SEQUENCER_INITIAL_GROUP_PROGRESS
 }
 
-// Relative slack absorbing the rounding error accumulated by the integration sum.
+// Whether a group reached the frame count it was asked for in the current cycle.
 //
-// `integration` grows by repeatedly adding the same exposure, and a decimal duration is not exact in binary:
-// ten accepted 0.3-second frames sum to 2.9999999999999996, which never reaches a 3-second target compared
-// exactly, while the compiler snapped the same quotient to the ten slots it gave the group. Without the slack a
-// group that captured every frame it needed is classified as degraded when it has no abandonment budget, and
-// spends a slot of that budget on an eleventh frame the target does not need when it has one.
-//
-// The bound is orders of magnitude above the error of summing any number of exposures a night can hold, and it
-// is capped below so that it never reaches the length of one exposure.
-const SEQUENCER_INTEGRATION_TOLERANCE = 1e-9
-
-// Fraction of one exposure the slack may never exceed. A relative slack grows with the target while the
-// exposure does not, and past a target of about a million times the tolerance it stops absorbing a rounding
-// error and starts forgiving whole frames: with 0.0004-second exposures and a target of 1000000 seconds the
-// relative slack alone is 0.001 seconds, so a group two frames short of its target would be reported as having
-// reached it. Half an exposure cannot forgive a frame by construction, and it is still far above the error of
-// summing the exposures that reach any target of that size.
-const SEQUENCER_INTEGRATION_TOLERANCE_LIMIT = 0.5
-
-// Whether a group reached the target it was asked for in the current cycle.
-//
-// A group concludes on whichever criterion is reached first, and a configured `0` disables that criterion, so
-// a group is compared only against the criteria it declares. Both targets are per cycle, which is what makes
-// `repeat: 3` of a group of ten frames three blocks of ten rather than one block of thirty.
-//
-// The integration target is compared with the tolerance of the accumulated sum, matching the tolerance the
-// compiler applied to the same target when it derived the slots the group was given, and capped in exposures
-// like the compiler caps its own in slots.
+// The count is the only completion criterion of a group, and it is per cycle, which is what makes `repeat: 3`
+// of a group of ten frames three blocks of ten rather than one block of thirty. Accepted frames are counted,
+// so a rejected or failed frame does not advance the group towards its target.
 export function frameGroupReachedTarget(group: SequencerPlanFrameGroup, progress: SequencerGroupProgress) {
-	if (group.count > 0 && progress.accepted >= group.count) return true
-	if (group.integrationTime <= 0) return false
-
-	const slack = Math.min(group.integrationTime * SEQUENCER_INTEGRATION_TOLERANCE, group.exposureTime * SEQUENCER_INTEGRATION_TOLERANCE_LIMIT)
-	return progress.integration >= group.integrationTime - slack
+	return progress.accepted >= group.count
 }
 
 // Whether a group concluded the current cycle without reaching its target, having spent every slot the

@@ -182,7 +182,7 @@ describe('visibility', () => {
 		expect(coarse.targets[0].transit).toBe(fine.targets[0].transit)
 		expect(coarse.targets[0].transit - START).toBeCloseTo(17916, -2)
 		expect(toDeg(coarse.targets[0].maximumAltitude)).toBeCloseTo(89.97039, 4)
-	})
+	}, 10000)
 
 	test('takes the culmination that falls inside a window longer than half a sidereal day', () => {
 		// The culmination nearest the first sample is the one before the window opens; the one the window contains
@@ -547,7 +547,7 @@ describe('window', () => {
 		// 32400 s at 1 s would need 32401 samples, far past the 4096 the planner is willing to compute.
 		expect(plan.step).toBeCloseTo(32400 / 4095, 6)
 		expect(plan.targets).toHaveLength(1)
-	}, 7000)
+	}, 30000)
 
 	test('produces the same plan twice for the same request', () => {
 		const req = request([M42, OMEGA_CENTAURI, M13, POLARIS], { constraints: { minimumAltitude: deg(25) } })

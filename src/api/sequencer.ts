@@ -1,24 +1,26 @@
 import type { Sequencer } from '#/sequencer'
 import type { SequencerPlan, SequencerPreflight } from '#/sequencer.plan'
-import type { SequencerArtifact, SequencerDefinitionRecord, SequencerEvent, SequencerSessionSnapshot } from '#/sequencer.state'
+import type { SequencerArtifact, SequencerEvent, SequencerSessionSnapshot } from '#/sequencer.state'
 import { query, response } from './http'
 import type { Endpoints } from './http'
-import { compile, sequencerPlanNodes } from './sequencer.compiler'
+import { compile } from './sequencer.compiler'
 import { preflight } from './sequencer.preflight'
 import type { SequencerBlockRegistry } from './sequencer.registry'
-import type { SequencerControlResult, SequencerRuntime, SequencerRuntimePlanDraft, SequencerStartResult } from './sequencer.runtime'
+import type { SequencerControlResult, SequencerRuntime, SequencerRuntimePlanDraft, SequencerStartFailureReason } from './sequencer.runtime'
 import { deriveSequencerSnapshot } from './sequencer.snapshot'
 import type { SequencerSnapshotObservation } from './sequencer.snapshot'
-import type { SequencerDefinitionRemoval, SequencerStore } from './sequencer.store'
+import type { SequencerStore } from './sequencer.store'
 
-// HTTP surface of the Sequencer (§16.1): the definitions an editor writes, the sessions they are run as, and
-// everything a session leaves behind.
+// HTTP surface of the Sequencer (§16.1): validate a recipe the editor is writing, start a session from that
+// object, and everything a session leaves behind.
 //
-// The handler owns no decision of its own. Storage is the store's, admission is the runtime's gate, lowering
-// is the compiler's, and what the UI sees is derived by the snapshot module. What lives here is the transport
-// shape and one thing the layers below deliberately do not do: it holds the lowered plan of every session it
-// created, because the runtime executes a single action of it and the pre-flight view of §16.1 has to keep
-// answering "why is it doing this?" for the whole plan, not for that action.
+// Recipes are not stored. The UI edits a Sequencer, optionally posts it to validate on every change, and
+// posts the same object to start. The handler owns no decision of its own. Storage is the store's, admission
+// is the runtime's gate, lowering is the compiler's, and what the UI sees is derived by the snapshot module.
+// What lives here is the transport shape and one thing the layers below deliberately do not do: it holds the
+// lowered plan of every session it created, because the runtime executes a single action of it and the
+// pre-flight view of §16.1 has to keep answering "why is it doing this?" for the whole plan, not for that
+// action.
 //
 // Instants are milliseconds since the Unix epoch.
 
@@ -28,14 +30,12 @@ import type { SequencerDefinitionRemoval, SequencerStore } from './sequencer.sto
 // the ordinary case for a session nobody is executing — leaves the snapshot to the durable state alone.
 export type SequencerLiveObservation = (sessionId: string) => Omit<Partial<SequencerSnapshotObservation>, 'session' | 'plan' | 'now'> | undefined
 
-// Why a definition could not be turned into a session.
-// - unknownDefinition: no definition with that id is stored.
+// Why a Sequencer could not be turned into a session.
 // - invalidDefinition: the lowering refused it; the pre-flight view carries the diagnostics.
-// - emptyPlan: the definition compiled to a plan with no action, so a session would have nothing to execute.
-// - unresolvedHandler: no handler is registered for the block the session would run.
-export type SequencerSessionCreationFailure = 'unknownDefinition' | 'invalidDefinition' | 'emptyPlan' | 'unresolvedHandler'
+// - unresolvedHandler: no handler is registered for a block the session would run.
+export type SequencerSessionCreationFailure = 'invalidDefinition' | 'unresolvedHandler'
 
-// Outcome of creating a session from a stored definition.
+// Outcome of compiling a Sequencer into a session without admitting it.
 export type SequencerSessionCreation =
 	| {
 			readonly ok: true
@@ -51,6 +51,31 @@ export type SequencerSessionCreation =
 			readonly preflight?: SequencerPreflight
 	  }
 
+// Why a Sequencer could not be started. Compilation failures and admission failures share this surface
+// because `POST /sequencer/sessions` does both in one call.
+export type SequencerSessionStartFailure = SequencerSessionCreationFailure | SequencerStartFailureReason
+
+// Outcome of starting a session from a Sequencer posted by the editor.
+export type SequencerSessionStart =
+	| {
+			readonly ok: true
+			// Session as observed after admission.
+			readonly session: SequencerSessionSnapshot
+			// True when the session was already running and this start did nothing, as an idempotent retry.
+			readonly reentrant: boolean
+	  }
+	| {
+			readonly ok: false
+			// Cause of the refusal.
+			readonly reason: SequencerSessionStartFailure
+			// Pre-flight view of the refused lowering, present for `invalidDefinition`.
+			readonly preflight?: SequencerPreflight
+			// Diagnostic naming what exactly could not be resolved.
+			readonly detail?: string
+			// Session holding the claim, for a busy refusal.
+			readonly sessionId?: string
+	  }
+
 // Executable plan of one session together with its pre-flight view (§16.1). Both are the compilation the
 // session actually runs and never a recompilation of the current definition, which may already have been
 // edited into something else.
@@ -63,7 +88,7 @@ export interface SequencerSessionPlan {
 
 // Collaborators the HTTP surface is wired with.
 export interface SequencerHandlerOptions {
-	// Durable definitions, sessions, events, and artifacts.
+	// Durable sessions, events, and artifacts.
 	readonly store: SequencerStore
 	// Owner of the session lifecycle, including the admission gate `start` delegates to.
 	readonly runtime: SequencerRuntime
@@ -92,32 +117,6 @@ export class SequencerHandler {
 		this.#now = options.now ?? Date.now
 	}
 
-	// Every stored definition, newest revision of each.
-	definitions(): readonly SequencerDefinitionRecord[] {
-		return this.#store.definitions()
-	}
-
-	// One stored definition, or undefined when no definition has that id.
-	definition(id: string) {
-		return this.#store.definition(id)
-	}
-
-	// Stores a new definition, assigning its id and its first revision. Returns undefined when the id the
-	// payload carries is already taken, which is the only way this fails.
-	create(definition: Sequencer) {
-		return this.#store.createDefinition(definition)
-	}
-
-	// Replaces a stored definition with a new revision of it. Returns undefined for an unknown id.
-	update(id: string, definition: Sequencer) {
-		return this.#store.updateDefinition(id, definition)
-	}
-
-	// Removes a stored definition. Refused while a session that has not ended still names it.
-	remove(id: string) {
-		return this.#store.deleteDefinition(id)
-	}
-
 	// Lowers a definition and returns its pre-flight view: the diagnostics that refuse it, the fields removed
 	// from the executable plan, and the slots, limits and projected integration of every group. No session is
 	// created and no device is reserved, which is what makes it safe to call on every keystroke.
@@ -128,39 +127,20 @@ export class SequencerHandler {
 		return preflight(compile(definition, { registry: this.#registry }))
 	}
 
-	// Pre-flight view of a stored definition, which is `validate` over the revision as stored.
-	validateStored(id: string): SequencerPreflight | undefined {
-		const record = this.#store.definition(id)
-		return record === undefined ? undefined : this.validate(record.definition)
-	}
-
-	// Creates a session for a stored definition, snapshotting the lowering it will run.
+	// Compiles a Sequencer and stores a session for the lowering it will run. No device is reserved and
+	// nothing is admitted; that is `start`.
 	//
-	// The plan is compiled here and kept, so a later edit of the definition changes nothing about a session
-	// already created: the session records the revision it was compiled from, and the plan it executes is the
-	// one that revision produced. No device is reserved and nothing is admitted; that is `start`.
-	createSession(definitionId: string): SequencerSessionCreation {
-		const record = this.#store.definition(definitionId)
-
-		if (record === undefined) return { ok: false, reason: 'unknownDefinition' }
-
-		const compilation = compile(record.definition, { registry: this.#registry })
+	// The plan is compiled here and kept, so a later edit of the object the editor still holds changes
+	// nothing about a session already created: the session copies the optional id and revision as labels,
+	// and the plan it executes is the one this call produced.
+	createSession(definition: Sequencer): SequencerSessionCreation {
+		const compilation = compile(definition, { registry: this.#registry })
 		const view = preflight(compilation)
 
 		if (!compilation.ok) return { ok: false, reason: 'invalidDefinition', preflight: view }
 
 		const { plan } = compilation
-		const action = firstActionOf(plan)
-
-		if (action === undefined) return { ok: false, reason: 'emptyPlan' }
-
-		const draft: SequencerRuntimePlanDraft = {
-			definitionId: record.id,
-			definitionRevision: record.revision,
-			devices: plan.devices,
-			storage: { root: plan.storage.root, autoSubFolderMode: plan.storage.autoSubFolderMode },
-			action: { id: action.id, type: action.type, configuration: action.configuration },
-		}
+		const draft: SequencerRuntimePlanDraft = { compiled: plan }
 
 		// The plan is kept before the creation is announced: the announcement is a snapshot derived through this
 		// very map, and one taken without it would publish a session with no target and no estimate while the
@@ -208,10 +188,34 @@ export class SequencerHandler {
 		return this.#plans.get(sessionId)
 	}
 
-	// Starts a session. The handler decides nothing about whether it may start: the check "is another session
-	// active?" made here is exactly the race the admission gate of the runtime exists to remove.
-	start(sessionId: string): SequencerStartResult {
-		return this.#runtime.start(sessionId)
+	// Compiles a Sequencer, creates a session, and admits it. The handler decides nothing about whether it
+	// may start: the check "is another session active?" made here is exactly the race the admission gate of
+	// the runtime exists to remove.
+	//
+	// A session that was created and then refused at admission is stopped, so a failed start does not leave
+	// a `created` record that HTTP cannot start again.
+	async start(definition: Sequencer): Promise<SequencerSessionStart> {
+		const active = this.#runtime.activeSessionId
+
+		if (active !== undefined) return { ok: false, reason: 'busy', sessionId: active }
+
+		const created = this.createSession(definition)
+
+		if (!created.ok) return created
+
+		try {
+			const started = this.#runtime.start(created.session.id)
+
+			if (!started.ok) {
+				await this.stop(created.session.id)
+				return started
+			}
+
+			return { ok: true, session: this.snapshot(created.session.id)!, reentrant: started.reentrant }
+		} catch (e) {
+			await this.stop(created.session.id)
+			throw e
+		}
 	}
 
 	// Asks the session to converge to `paused`, at the safe point its pause mode selects.
@@ -243,16 +247,6 @@ export class SequencerHandler {
 	}
 }
 
-// First action node of a plan in execution order, or undefined when the plan has none. It is what the V1
-// runtime executes, while the plan the handler keeps stays whole for the pre-flight view.
-function firstActionOf(plan: SequencerPlan) {
-	for (const node of sequencerPlanNodes(plan.root)) {
-		if (node.kind === 'action') return node
-	}
-
-	return undefined
-}
-
 // Parses the `afterSequence` query parameter, ignoring anything that is not a number so a malformed cursor
 // returns the whole history instead of nothing at all.
 function afterSequenceOf(value: string | undefined) {
@@ -265,22 +259,13 @@ function afterSequenceOf(value: string | undefined) {
 
 export function sequencer(handler: SequencerHandler) {
 	return {
-		'/sequencer/definitions': {
-			GET: () => response(handler.definitions()),
-			POST: async (req) => response(handler.create((await req.json()) as Sequencer)),
+		'/sequencer/validate': { POST: async (req) => response(handler.validate(await req.json())) },
+		'/sequencer/sessions': {
+			GET: () => response(handler.sessions()),
+			POST: async (req) => response<SequencerSessionStart>(await handler.start(await req.json())),
 		},
-		'/sequencer/definitions/validate': { POST: async (req) => response(handler.validate((await req.json()) as Sequencer)) },
-		'/sequencer/definitions/:id': {
-			GET: (req) => response(handler.definition(req.params.id)),
-			PUT: async (req) => response(handler.update(req.params.id, (await req.json()) as Sequencer)),
-			DELETE: (req) => response<SequencerDefinitionRemoval>(handler.remove(req.params.id)),
-		},
-		'/sequencer/definitions/:id/validate': { POST: (req) => response(handler.validateStored(req.params.id)) },
-		'/sequencer/definitions/:id/sessions': { POST: (req) => response<SequencerSessionCreation>(handler.createSession(req.params.id)) },
-		'/sequencer/sessions': { GET: () => response(handler.sessions()) },
 		'/sequencer/sessions/:id': { GET: (req) => response(handler.snapshot(req.params.id)) },
 		'/sequencer/sessions/:id/plan': { GET: (req) => response(handler.plan(req.params.id)) },
-		'/sequencer/sessions/:id/start': { POST: (req) => response<SequencerStartResult>(handler.start(req.params.id)) },
 		'/sequencer/sessions/:id/pause': { POST: async (req) => response<SequencerControlResult>(await handler.pause(req.params.id)) },
 		'/sequencer/sessions/:id/resume': { POST: async (req) => response<SequencerControlResult>(await handler.resume(req.params.id)) },
 		'/sequencer/sessions/:id/stop': { POST: async (req) => response<SequencerControlResult>(await handler.stop(req.params.id)) },

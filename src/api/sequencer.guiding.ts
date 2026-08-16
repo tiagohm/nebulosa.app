@@ -1,6 +1,8 @@
-import type { SequencerDither } from '#/sequencer'
+import type { PHD2Settle } from 'nebulosa/src/devices/guiding/phd2'
+import type { SequencerGuiderSettle } from '#/sequencer'
 import type { GuiderCommander } from './guider.session'
 import { sequencerActionFailure } from './sequencer.action'
+import type { SequencerDitherTrigger } from './sequencer.compiler'
 import { SEQUENCER_BLOCK_TYPE } from './sequencer.compiler'
 import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerValidationContext, SequencerValidationResult } from './sequencer.registry'
 
@@ -39,8 +41,23 @@ export interface SequencerGuidingServices {
 // execution changes, which refuses a session compiled against the older meaning instead of running it here.
 const SEQUENCER_GUIDING_VERSION = 1
 
-// Configuration of the dither block, which is the feature without the flag that enabled it.
-export type SequencerDitherTrigger = Omit<SequencerDither, 'enabled'>
+// Translates a declared settle into the settle the guider transport understands.
+//
+// The tolerance is guider pixels on both sides, and the time and the timeout are seconds on both sides, so
+// only the names change.
+export function sequencerGuiderSettle(settle: SequencerGuiderSettle): PHD2Settle {
+	return { pixels: settle.tolerance, time: settle.time, timeout: settle.timeout }
+}
+
+// Strongest guiding settle of one safe point: the session policy, raised to any wall-clock settle that
+// also has to be paid here — typically the meridian flip's. The interlock resume is the one wait the
+// safe point takes for all of them, so the longer time and the longer timeout win and the others are
+// dropped.
+export function fuseGuidingSettle(base: SequencerGuiderSettle, extra?: number): SequencerGuiderSettle {
+	if (extra === undefined || extra <= 0) return base
+
+	return { ...base, time: Math.max(base.time, extra), timeout: Math.max(base.timeout, extra) }
+}
 
 // Dither block: displaces the guide star and returns only once the guider has settled again.
 export function sequencerDitherHandler(services: SequencerGuidingServices): SequencerActionHandler<SequencerDitherTrigger, SequencerDitherOutcome> {

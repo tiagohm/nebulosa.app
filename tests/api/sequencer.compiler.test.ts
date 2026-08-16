@@ -4,12 +4,12 @@ import { compile, sequencerNodeId, sequencerPlanNodes } from 'src/api/sequencer.
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { Sequencer, SequencerDeviceRole } from '#/sequencer'
 import type { SequencerPlanAction, SequencerPlanLoop, SequencerPlanSequence } from '#/sequencer.plan'
-import { action, camera, canonical, frame, retry } from './sequencer.fixture'
+import { action, camera, canonical, complete, frame, retry, unguided } from './sequencer.fixture'
 
 function handlers(roles: Record<string, readonly SequencerDeviceRole[]> = {}) {
 	const registry = new SequencerBlockRegistry()
 
-	for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
+	for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 		const declared = (roles[type] ?? []).map((role) => ({ role }))
 
 		registry.register({
@@ -68,7 +68,7 @@ describe('lowering', () => {
 		expect(loop.body.children.map((node) => node.id)).toEqual(['target[m42].trigger.autofocus', 'target[m42].capture.frame[lum]', 'target[m42].capture.frame[red]'])
 	})
 
-	test('a flip that recenters carries the centering of the target', () => {
+	test('a flip carries the centering the target declares', () => {
 		const { plan } = ok(canonical())
 		const target = plan.root.children[1] as SequencerPlanSequence
 		const loop = target.children[2] as SequencerPlanLoop
@@ -78,11 +78,20 @@ describe('lowering', () => {
 		expect((flip.configuration as SequencerMeridianFlipTrigger).centering).toEqual(center.configuration as SequencerCenter)
 	})
 
-	test('a flip that does not recenter carries no centering', () => {
-		const definition = canonical()
-		const { plan } = ok({ ...definition, meridianFlip: { ...definition.meridianFlip, recenter: false } })
+	test('a rotator that moves before centering travels with the centering node', () => {
+		const definition = complete()
+		const { plan } = ok({ ...definition, rotator: { ...definition.rotator, enabled: true, restoreAfterMeridianFlip: false, reverse: false, moveBeforeCentering: true } })
 		const target = plan.root.children[1] as SequencerPlanSequence
-		const loop = target.children[2] as SequencerPlanLoop
+		const center = target.children[1] as SequencerPlanAction
+
+		expect((center.configuration as SequencerCenter).rotator).toEqual({ angle: definition.rotator.angle, tolerance: definition.rotator.tolerance, settle: definition.rotator.settle })
+	})
+
+	test('a flip carries no centering when the target declares none', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, target: { ...definition.target, center: { ...definition.target.center, enabled: false } } })
+		const target = plan.root.children[1] as SequencerPlanSequence
+		const loop = target.children[1] as SequencerPlanLoop
 		const flip = loop.body.children[0] as SequencerPlanAction
 
 		expect((flip.configuration as SequencerMeridianFlipTrigger).centering).toBeUndefined()
@@ -90,7 +99,7 @@ describe('lowering', () => {
 
 	test('a flip that focuses carries the autofocus policy of the definition', () => {
 		const definition = canonical()
-		const { plan } = ok({ ...definition, meridianFlip: { ...definition.meridianFlip, autofocus: true } })
+		const { plan } = ok(definition)
 		const target = plan.root.children[1] as SequencerPlanSequence
 		const loop = target.children[2] as SequencerPlanLoop
 		const flip = loop.body.children[0] as SequencerPlanAction
@@ -101,7 +110,7 @@ describe('lowering', () => {
 
 	test('a flip that does not focus carries no autofocus policy', () => {
 		const definition = canonical()
-		const { plan } = ok(definition)
+		const { plan } = ok({ ...definition, autofocus: { ...definition.autofocus, triggers: { ...definition.autofocus.triggers, afterMeridianFlip: false } } })
 		const target = plan.root.children[1] as SequencerPlanSequence
 		const loop = target.children[2] as SequencerPlanLoop
 		const flip = loop.body.children[0] as SequencerPlanAction
@@ -109,25 +118,19 @@ describe('lowering', () => {
 		expect((flip.configuration as SequencerMeridianFlipTrigger).focusing).toBeUndefined()
 	})
 
-	test('a flip that focuses is refused when the definition disables autofocus', () => {
+	test('a flip carries no focusing when the definition disables autofocus', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, autofocus: { ...definition.autofocus, enabled: false }, meridianFlip: { ...definition.meridianFlip, autofocus: true } })
+		const { plan } = ok({ ...definition, autofocus: { ...definition.autofocus, enabled: false } })
+		const target = plan.root.children[1] as SequencerPlanSequence
+		const loop = target.children[2] as SequencerPlanLoop
+		const flip = loop.body.children[0] as SequencerPlanAction
 
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'meridianFlip.autofocus', message: 'the flip focuses after crossing, and the definition disables the autofocus block that declares how to focus' }])
-	})
-
-	test('a flip that recenters is refused when the target does not center', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, target: { ...definition.target, center: { ...definition.target.center, enabled: false } } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'meridianFlip.recenter', message: 'the flip recenters after crossing, and the target declares no centering it could re-establish the pointing with' }])
+		expect((flip.configuration as SequencerMeridianFlipTrigger).focusing).toBeUndefined()
 	})
 
 	test('a disabled slew or centering produces no node', () => {
 		const definition = canonical()
-		const { plan } = ok({ ...definition, meridianFlip: { ...definition.meridianFlip, recenter: false }, target: { ...definition.target, tracking: { ...definition.target.tracking, enabled: false }, goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } } })
+		const { plan } = ok({ ...definition, target: { ...definition.target, tracking: { ...definition.target.tracking, enabled: false }, goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } } })
 		const target = plan.root.children[1] as SequencerPlanSequence
 
 		expect(target.children.map((node) => node.id)).toEqual(['target[m42].capture.loop'])
@@ -138,7 +141,7 @@ describe('lowering', () => {
 		const startup = plan.root.children[0] as SequencerPlanSequence
 		const finalize = plan.root.children[2] as SequencerPlanSequence
 
-		expect(startup.children.map((node) => node.id)).toEqual(['startup.action[connect]', 'startup.action[unpark]', 'startup.action[cool]'])
+		expect(startup.children.map((node) => node.id)).toEqual(['startup.action[connect]', 'startup.action[unpark]', 'startup.action[cool]', 'startup.action[guide]'])
 		expect(finalize.children.map((node) => node.id)).toEqual(['finalize.action[park]', 'finalize.action[warm]'])
 		expect(startup.children.every((node) => !node.id.includes('target['))).toBe(true)
 		expect(finalize.children.every((node) => !node.id.includes('target['))).toBe(true)
@@ -160,11 +163,48 @@ describe('lowering', () => {
 		const { enabled, ...tracking } = definition.target.tracking
 		const { plan } = ok({ ...definition, startup: { ...definition.startup, actions: [...definition.startup.actions, action('track', { type: 'startTracking' })] } })
 		const startup = plan.root.children[0] as SequencerPlanSequence
-		const track = startup.children[3] as SequencerPlanAction
+		const track = startup.children[4] as SequencerPlanAction
 		const unpark = startup.children[1] as SequencerPlanAction
 
 		expect((track.configuration as SequencerLifecycle).tracking).toEqual(tracking)
 		expect((unpark.configuration as SequencerLifecycle).tracking).toBeUndefined()
+	})
+
+	test('restore after interruption is observably dropped from the plan', () => {
+		const compilation = compile(canonical())
+
+		expect(compilation.ok).toBe(true)
+		if (!compilation.ok) return
+		expect(compilation.plan.guider).toEqual({
+			connection: canonical().guiding.connection,
+			calibrateBeforeStart: false,
+			recalibrateAfterMeridianFlip: true,
+			settle: canonical().guiding.settle,
+			retry: canonical().guiding.retry,
+		})
+		expect(compilation.removals).toContainEqual({ path: 'guiding.restoreAfterInterruption', reason: 'guiding is resumed by the interlock of each safe point, so a restore-after-interruption flag has no path of its own' })
+	})
+
+	test('an action starting guiding carries the calibration and the settle the guiding block declares', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, guiding: { ...definition.guiding, calibrateBeforeStart: true } })
+		const startup = plan.root.children[0] as SequencerPlanSequence
+		const guide = startup.children[3] as SequencerPlanAction
+		const unpark = startup.children[1] as SequencerPlanAction
+
+		expect((guide.configuration as SequencerLifecycle).guiding).toEqual({ calibrateBeforeStart: true, settle: definition.guiding.settle })
+		expect((unpark.configuration as SequencerLifecycle).guiding).toBeUndefined()
+	})
+
+	test('an action starting guiding carries the guide-camera recipe of a local guider', () => {
+		const definition = complete()
+		const capture = { exposureTime: 2.5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 30, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false } as const
+		const connection = { mode: 'local', focalLength: 200, capture } as const
+		const { plan } = ok({ ...definition, guiding: { ...definition.guiding, connection } })
+		const startup = plan.root.children[0] as SequencerPlanSequence
+		const guide = startup.children[2] as SequencerPlanAction
+
+		expect((guide.configuration as SequencerLifecycle).guiding).toEqual({ calibrateBeforeStart: false, settle: definition.guiding.settle, capture })
 	})
 
 	test('an action starting tracking is refused when the target declares no tracking', () => {
@@ -176,7 +216,7 @@ describe('lowering', () => {
 	})
 
 	test('a disabled pipeline or a pipeline with no enabled action produces no block', () => {
-		const definition = canonical()
+		const definition = unguided()
 		const { plan } = ok({ ...definition, cooling: { ...definition.cooling, enabled: false }, startup: { ...definition.startup, enabled: false }, shutdown: { ...definition.shutdown, actions: [action('park', { type: 'parkMount', enabled: false })] } })
 
 		expect(plan.root.children.map((node) => node.id)).toEqual(['target[m42]'])
@@ -212,6 +252,21 @@ describe('lowering', () => {
 		expect(plan.groups.map((group) => group.id)).toEqual(['lum'])
 	})
 
+	test('a frame weight other than 1 is refused while only sequential order is executed', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { weight: 2 })] } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0].weight', message: 'this version schedules frames in the declaration order of the groups, so a weight other than 1 is not executed' }])
+	})
+
+	test('a disabled frame may carry an unused weight', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum'), frame('red', { enabled: false, weight: 3 })] } })
+
+		expect(plan.groups.map((group) => group.id)).toEqual(['lum'])
+	})
+
 	test('the plan collects the roles it commands', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { filter: { type: 'position', position: 1 } })] } })
@@ -219,10 +274,24 @@ describe('lowering', () => {
 		expect(plan.roles).toEqual(['camera', 'mount', 'wheel', 'focuser'])
 	})
 
+	test('an enabled cover, rotator and panel reserve those roles', () => {
+		const definition = complete()
+		const { plan } = ok({
+			...definition,
+			cover: { ...definition.cover, enabled: true, closeOnUnsafe: false },
+			rotator: { ...definition.rotator, enabled: true, restoreAfterMeridianFlip: false, reverse: false },
+			flatPanel: { ...definition.flatPanel, enabled: true },
+		})
+
+		expect(plan.roles).toContain('cover')
+		expect(plan.roles).toContain('rotator')
+		expect(plan.roles).toContain('flatPanel')
+	})
+
 	test('storage decisions are carried into the plan', () => {
 		const { plan } = ok(canonical())
 
-		expect(plan.storage).toEqual({ root: '/data/nebulosa', fileNameTemplate: '{target}-{filter}-{exposure}', directoryTemplate: '{target}/{frameType}', temporaryDirectory: undefined, checksum: 'sha256', autoSubFolderMode: 'noon' })
+		expect(plan.storage).toEqual({ root: '/data/nebulosa', fileNameTemplate: '{target}-{filter}-{exposure}', directoryTemplate: '{target}/{frameType}', temporaryDirectory: undefined, autoSubFolderMode: 'noon' })
 	})
 
 	test('compiling the same definition twice produces an identical plan', () => {
@@ -278,7 +347,6 @@ describe('structural validation', () => {
 		const definition = canonical()
 		const compilation = compile({
 			...definition,
-			meridianFlip: { ...definition.meridianFlip, recenter: false },
 			target: { ...definition.target, type: 'JNOW', tracking: { ...definition.target.tracking, enabled: false }, goto: { ...definition.target.goto, enabled: false }, center: { ...definition.target.center, enabled: false } },
 		})
 
@@ -311,8 +379,8 @@ describe('structural validation', () => {
 	})
 
 	test('a dither without a guider is refused', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, guiding: { ...definition.guiding, enabled: false }, dither: { ...definition.dither, enabled: true } })
+		const definition = unguided()
+		const compilation = compile({ ...definition, dither: { ...definition.dither, enabled: true } })
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'dither.enabled', message: 'a dither is a guider command, and the definition declares no guider to send it to' }])
@@ -345,6 +413,43 @@ describe('structural validation', () => {
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled startup action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' }])
+	})
+
+	test('a guiding block no startup action starts is refused', () => {
+		const definition = canonical()
+		const actions = definition.startup.actions.filter((action) => action.type !== 'startGuiding')
+		const compilation = compile({ ...definition, dither: { ...definition.dither, enabled: false }, startup: { ...definition.startup, actions } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and no enabled startup action starts guiding, so every frame would be captured unguided' }])
+	})
+
+	test('a guiding block only a shutdown action starts is refused', () => {
+		const definition = canonical()
+		const startup = definition.startup.actions.filter((action) => action.type !== 'startGuiding')
+		const shutdown = [action('guide', { type: 'startGuiding' }), ...definition.shutdown.actions]
+		const compilation = compile({ ...definition, dither: { ...definition.dither, enabled: false }, startup: { ...definition.startup, actions: startup }, shutdown: { ...definition.shutdown, actions: shutdown } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and no enabled startup action starts guiding, so every frame would be captured unguided' }])
+	})
+
+	test('a startup action starting guiding without failing the session is refused', () => {
+		const definition = canonical()
+		const actions = definition.startup.actions.map((it) => (it.type === 'startGuiding' ? { ...it, required: false } : it))
+		const compilation = compile({ ...definition, startup: { ...definition.startup, actions } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'startup.actions[3].required', message: 'the guiding block declares the guider the capture runs under, and this action does not fail the session when it cannot start guiding, so every frame would be captured unguided' }])
+	})
+
+	test('a disabled startup action starting guiding is not asked to fail the session', () => {
+		const definition = canonical()
+		const actions = definition.startup.actions.map((it) => (it.type === 'startGuiding' ? { ...it, enabled: false, required: false } : it))
+		const compilation = compile({ ...definition, dither: { ...definition.dither, enabled: false }, startup: { ...definition.startup, actions } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and no enabled startup action starts guiding, so every frame would be captured unguided' }])
 	})
 
 	test('a lifecycle action commanding the cooler is refused without a cooling block', () => {
@@ -424,7 +529,7 @@ describe('structural validation', () => {
 	test('a handler issue is addressed below the node it came from', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 			registry.register({
 				type,
 				version: 1,
@@ -450,7 +555,7 @@ describe('structural validation', () => {
 	test('the configuration a handler returns replaces the lowered one', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 			registry.register({
 				type,
 				version: 1,
@@ -477,7 +582,7 @@ describe('structural validation', () => {
 	test('a group a capture handler rebuilt is the group the scheduler follows', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 			registry.register({
 				type,
 				version: 1,
@@ -508,7 +613,7 @@ describe('structural validation', () => {
 	test('a group a capture handler rebuilt keeps the bounds the compiler derived', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 			registry.register({
 				type,
 				version: 1,
@@ -546,7 +651,7 @@ describe('structural validation', () => {
 	test('a group a capture handler rebuilt keeps the identifiers of the node that captures it', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 			registry.register({
 				type,
 				version: 1,
@@ -577,10 +682,10 @@ describe('structural validation', () => {
 		}
 	})
 
-	test('a capture handler cannot shorten the exposure the slots of an integration target were derived from', () => {
+	test('a capture handler cannot shorten the exposure the projected integration was derived from', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera']) {
+		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
 			registry.register({
 				type,
 				version: 1,
@@ -595,7 +700,7 @@ describe('structural validation', () => {
 		}
 
 		const definition = canonical()
-		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 600, exposureTime: 60 })] } }, { registry })
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 10, exposureTime: 60 })] } }, { registry })
 
 		expect(compilation.ok).toBe(true)
 
@@ -603,7 +708,6 @@ describe('structural validation', () => {
 			const group = compilation.plan.groups[0]
 
 			expect(group.exposureTime).toBe(60)
-			expect(group.integrationTime).toBe(600)
 			expect(group.requiredSlots).toBe(10)
 			expect(group.projectedIntegration).toBe(600)
 		}
@@ -627,46 +731,6 @@ describe('termination', () => {
 		expect(plan.groups[0].projectedIntegration).toBe(600)
 	})
 
-	test('an integration time alone decides the slots, rounded up', () => {
-		const definition = canonical()
-		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 500, exposureTime: 60 })] } })
-
-		expect(plan.groups[0].requiredSlots).toBe(9)
-		expect(plan.groups[0].projectedIntegration).toBe(540)
-	})
-
-	test('an integration time that divides exactly in decimal schedules no extra slot', () => {
-		const definition = canonical()
-		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 0.07, exposureTime: 0.01 })] } })
-
-		expect(0.07 / 0.01).toBeGreaterThan(7)
-		expect(plan.groups[0].requiredSlots).toBe(7)
-		expect(plan.groups[0].projectedIntegration).toBeCloseTo(0.07, 12)
-	})
-
-	test('a partial slot of a large integration target is not snapped away', () => {
-		const definition = canonical()
-		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 500000.0004, exposureTime: 0.001 })] } })
-
-		expect(500000.0004 / 0.001).toBeGreaterThan(500000000)
-		expect(plan.groups[0].requiredSlots).toBe(500000001)
-	})
-
-	test('a large integration target still absorbs the rounding error of its division', () => {
-		const definition = canonical()
-		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 1234.56, exposureTime: 0.01 })] } })
-
-		expect(1234.56 / 0.01).toBeLessThan(123456)
-		expect(plan.groups[0].requiredSlots).toBe(123456)
-	})
-
-	test('with both criteria active the cheaper one decides the slots', () => {
-		const definition = canonical()
-		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 10, integrationTime: 300, exposureTime: 60 }), frame('red', { count: 3, integrationTime: 600, exposureTime: 60 })] } })
-
-		expect(plan.groups.map((group) => group.requiredSlots)).toEqual([5, 3])
-	})
-
 	test('the abandonment budget raises the slot limit without raising the target', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 10, abandonmentBudget: 2 })] } })
@@ -683,43 +747,19 @@ describe('termination', () => {
 		expect(group.slotLimit * group.retry.maxAttempts).toBe(30)
 	})
 
-	test('a group with neither criterion is disabled', () => {
+	test('a group asking for no frame at all is disabled', () => {
 		const definition = canonical()
-		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum'), frame('red', { count: 0, integrationTime: 0 })] } })
+		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum'), frame('red', { count: 0 })] } })
 
 		expect(plan.groups.map((group) => group.id)).toEqual(['lum'])
 	})
 
-	test('a definition whose every group is disabled by its criteria is refused', () => {
+	test('a definition whose every group asks for no frame is refused', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 0 })] } })
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0 })] } })
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames', message: 'the definition has no enabled frame group to capture' }])
-	})
-
-	test('an integration time with a zero exposure time is refused', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: 600, exposureTime: 0 })] } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0].exposureTime', message: 'a frame group with an integration time requires a positive exposure time' }])
-	})
-
-	test('an integration target that overflows its slot count is refused', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 0, integrationTime: Number.MAX_VALUE, exposureTime: Number.MIN_VALUE })] } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0].integrationTime', message: 'the integration target needs more exposures of this length than a number can count, so the group has no slot limit to stop at' }])
-	})
-
-	test('an integration target that overflows is bounded by a frame count', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 5, integrationTime: Number.MAX_VALUE, exposureTime: Number.MIN_VALUE })] } })
-
-		expect(compilation.ok).toBe(true)
-		if (compilation.ok) expect(compilation.plan.groups[0].requiredSlots).toBe(5)
 	})
 
 	test('a slot limit above the safe counting range is refused', () => {
@@ -960,7 +1000,7 @@ describe('failure policies', () => {
 
 	test('exhausting a policy into a suspension is refused', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('unpark', { retry: { ...retry(), onExhausted: 'suspend' } }), action('cool', { type: 'coolCamera' })] } })
+		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('unpark', { retry: { ...retry(), onExhausted: 'suspend' } }), action('cool', { type: 'coolCamera' }), action('guide', { type: 'startGuiding', required: true })] } })
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'startup.actions[0].retry.onExhausted', message: 'this version has no suspended state to exhaust a policy into' }])
@@ -992,14 +1032,6 @@ describe('failure policies', () => {
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'target.center.maximumAttempts', message: 'the attempt budget is above the range a number counts one by one, so a counter of failed attempts would stop advancing before exhausting it' }])
 	})
 
-	test('a flip budget above the counting range is refused', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, meridianFlip: { ...definition.meridianFlip, maximumAttempts: Number.MAX_SAFE_INTEGER + 2 } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'meridianFlip.maximumAttempts', message: 'the attempt budget is above the range a number counts one by one, so a counter of failed attempts would stop advancing before exhausting it' }])
-	})
-
 	test('the budget of a disabled centering is not reported', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, meridianFlip: { ...definition.meridianFlip, enabled: false }, target: { ...definition.target, center: { ...definition.target.center, enabled: false, maximumAttempts: Number.POSITIVE_INFINITY } } })
@@ -1008,8 +1040,8 @@ describe('failure policies', () => {
 	})
 
 	test('the policy of a disabled feature is not reported', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, dither: { ...definition.dither, enabled: false }, guiding: { ...definition.guiding, enabled: false, retry: { ...retry(), retryOn: ['disconnected'] } } })
+		const definition = unguided()
+		const compilation = compile({ ...definition, guiding: { ...definition.guiding, retry: { ...retry(), retryOn: ['disconnected'] } } })
 
 		expect(compilation.ok).toBe(true)
 	})
@@ -1036,9 +1068,9 @@ describe('failure policies', () => {
 		expect(compilation.ok).toBe(true)
 	})
 
-	test('an unsupported trigger of a disabled feature is not reported', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, autofocus: { ...definition.autofocus, enabled: false, triggers: { ...definition.autofocus.triggers, starSizeChange: 0.2 } } })
+	test('an unsupported option of a disabled feature is not reported', () => {
+		const definition = unguided()
+		const compilation = compile({ ...definition, quality: { ...definition.quality, enabled: false, rejectFrame: true } })
 
 		expect(compilation.ok).toBe(true)
 	})
@@ -1049,14 +1081,6 @@ describe('failure policies', () => {
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'meridianFlip.maximumHourAngle', message: 'the flip window is empty, because it ends before the hour angle it may start at' }])
-	})
-
-	test('a meridian flip interrupting the current exposure is refused', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, meridianFlip: { ...definition.meridianFlip, waitForCurrentExposure: false } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics.map((diagnostic) => diagnostic.path)).toEqual(['meridianFlip.waitForCurrentExposure'])
 	})
 
 	test('a window of a disabled meridian flip is not reported', () => {

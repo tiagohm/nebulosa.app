@@ -1,4 +1,4 @@
-import type { SequencerExecution } from '#/sequencer'
+import type { SequencerEndCondition, SequencerExecution } from '#/sequencer'
 import type { SequencerCheckpoint, SequencerDesiredState, SequencerSessionState } from '#/sequencer.state'
 import { isSequencerTerminalState } from '#/sequencer.state'
 
@@ -20,47 +20,50 @@ import { isSequencerTerminalState } from '#/sequencer.state'
 
 // Boundaries at which the runtime is between nodes and can honor a pending pause or stop (§11.3).
 //
-// They are ordered by how much already-started work has finished, which is what the modes select over:
+// They are not a single timeline. `afterAction` is the gap between two plan nodes — two startup steps, the
+// slew and the centering — and `beforeExposure` is the gap after the triggers of a capture safe point and
+// before the shutter. Ranking those two as if the second were later than the write is what made
+// `afterCurrentExposure` skip the frame the operator asked to finish.
+//
 // - afterExposure: the sensor is done and nothing is on disk yet.
 // - afterArtifact: the frame is written and its artifact registered, so the frame is durable.
-// - afterAction: the node that was running reached a terminal decision, safe-point triggers included.
+// - afterAction: the node that was running reached a terminal decision.
+// - beforeExposure: the triggers of this frame have finished and the shutter has not opened.
 // - beforeFrame: the next frame has not started.
-export type SequencerSafePoint = 'afterExposure' | 'afterArtifact' | 'afterAction' | 'beforeFrame'
+export type SequencerSafePoint = 'afterExposure' | 'afterArtifact' | 'afterAction' | 'beforeExposure' | 'beforeFrame'
 
-// Rank of a safe point in that order, used to compare it with the earliest boundary a mode accepts.
-const SEQUENCER_SAFE_POINT_RANK: Readonly<Record<SequencerSafePoint, number>> = {
-	afterExposure: 0,
-	afterArtifact: 1,
-	afterAction: 2,
-	beforeFrame: 3,
-}
-
-// Earliest safe point each pause mode is attended at.
+// Safe points each pause mode is attended at.
 //
-// `immediate` accepts the first boundary of all and, unlike the other two, does not wait to reach one: it
-// cancels the active action and waits for its cleanups (§11.3).
+// These are not a single timeline. `afterAction` in the capture walk sits *before* the shutter — it is the
+// boundary after the triggers of this frame — while `afterArtifact` sits after the write. A rank that put
+// `afterAction` later than `afterArtifact` made `afterCurrentExposure` hold in the middle of the safe point
+// and skip the frame the operator asked to finish.
 //
-// `afterCurrentExposure` is attended once the frame is durable and not once the sensor is done. Pausing in
-// between would hold a session with an exposed frame that exists nowhere, and the write is the same node
-// finishing rather than a new node starting, which is what `paused` forbids (§7.2).
+// `immediate` accepts every boundary and, unlike the other two, does not wait to reach one: it cancels the
+// active action and waits for its cleanups (§11.3).
 //
-// `afterCurrentAction` waits for the whole safe point, the triggers it selected included, so the session
+// `afterCurrentExposure` is attended once the frame is durable and at the start of the next one, never
+// before the shutter. Pausing between the sensor and the write would hold a session with an exposed frame
+// that exists nowhere.
+//
+// `afterCurrentAction` waits for the triggers of the current safe point and then holds, so the session
 // pauses with focus and dithering already applied. That is the more conservative boundary and not the more
 // useful one: the post-frame work prepares the *next* frame, and a session that then sits paused for an hour
 // will have to redo it. The choice is the operator's, which is why both exist.
-const SEQUENCER_PAUSE_BOUNDARY: Readonly<Record<SequencerExecution['pauseMode'], SequencerSafePoint>> = {
-	immediate: 'afterExposure',
-	afterCurrentExposure: 'afterArtifact',
-	afterCurrentAction: 'afterAction',
+const SEQUENCER_PAUSE_ATTENDED: Readonly<Record<SequencerExecution['pauseMode'], readonly SequencerSafePoint[]>> = {
+	immediate: ['afterExposure', 'afterArtifact', 'afterAction', 'beforeExposure', 'beforeFrame'],
+	afterCurrentExposure: ['afterAction', 'afterArtifact', 'beforeFrame'],
+	afterCurrentAction: ['afterAction', 'beforeExposure', 'beforeFrame'],
 }
 
 // Whether a pending pause is attended at this safe point under the configured mode.
-//
-// A mode that is attended at one boundary is attended at every later one: a pause that arrived after its own
-// boundary had passed still has to take effect, and never at the same boundary of the *next* frame.
 export function sequencerPauseAttended(mode: SequencerExecution['pauseMode'], safePoint: SequencerSafePoint) {
-	return SEQUENCER_SAFE_POINT_RANK[safePoint] >= SEQUENCER_SAFE_POINT_RANK[SEQUENCER_PAUSE_BOUNDARY[mode]]
+	return SEQUENCER_PAUSE_ATTENDED[mode].includes(safePoint)
 }
+
+// Fields of the execution policy a convergence is decided from. It is the pair and not the whole block
+// because the plan snapshots the execution policy into a shape of its own, and both carry these two.
+export type SequencerConvergencePolicy = Pick<SequencerExecution, 'pauseMode' | 'stopMode'>
 
 // What the runtime does when it reaches a safe point.
 // - continue: take the next step of the plan.
@@ -74,10 +77,37 @@ export type SequencerConvergence = 'continue' | 'pause' | 'stop'
 // would consume the focus or the dither the rest of the safe point would produce, so waiting for a broader
 // boundary would only spend devices on work nothing reads. `graceful` shows up as the absence of a
 // cancellation and never as a later boundary.
-export function sequencerConvergence(desiredState: SequencerDesiredState, execution: SequencerExecution, safePoint: SequencerSafePoint): SequencerConvergence {
+export function sequencerConvergence(desiredState: SequencerDesiredState, execution: SequencerConvergencePolicy, safePoint: SequencerSafePoint): SequencerConvergence {
 	if (desiredState === 'stopped') return 'stop'
 	if (desiredState === 'paused') return sequencerPauseAttended(execution.pauseMode, safePoint) ? 'pause' : 'continue'
 	return 'continue'
+}
+
+// Whether the declared end condition of the session has been reached, asked in front of every frame.
+//
+// The condition bounds the night from outside the plan: the loop stops selecting frames as soon as it holds,
+// and the session completes normally with whatever it captured, exactly as if the sequence had run out. It is
+// evaluated in front of a frame and never during one, so the frame that is on the sensor when the boundary
+// passes is always finished and written.
+//
+// `at` is the instant of the evaluation and `end.time` of the `at` condition an absolute instant, both in
+// milliseconds since the Unix epoch. `integration` is the exposure time the accepted frames of the session
+// have accumulated and `end.time` of the `integrationTime` condition the target, both in seconds; the
+// accumulation counts the whole session and not the cycle, because the condition ends the session and not the
+// cycle.
+//
+// `afterSequence` ends with the plan itself and therefore never holds here. The two altitude conditions need
+// the ephemeris this version does not compute, and the compiler refuses a definition that declares one, so
+// they cannot reach a running session.
+export function sequencerEndReached(end: SequencerEndCondition, at: number, integration: number) {
+	switch (end.type) {
+		case 'at':
+			return at >= end.time
+		case 'integrationTime':
+			return integration >= end.time
+		default:
+			return false
+	}
 }
 
 // Whether converging to the desired state requires cancelling the action that is running, instead of letting
@@ -89,7 +119,7 @@ export function sequencerConvergence(desiredState: SequencerDesiredState, execut
 //
 // A graceful stop lets the running node finish precisely so a frame that was already exposed becomes durable
 // rather than being thrown away.
-export function sequencerCancelsActiveAction(desiredState: SequencerDesiredState, execution: SequencerExecution) {
+export function sequencerCancelsActiveAction(desiredState: SequencerDesiredState, execution: SequencerConvergencePolicy) {
 	if (desiredState === 'stopped') return execution.stopMode === 'immediate'
 	return desiredState === 'paused' && execution.pauseMode === 'immediate'
 }

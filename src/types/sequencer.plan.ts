@@ -69,10 +69,8 @@ export interface SequencerPlanFrameGroup {
 	readonly frameType: FrameType
 	// Exposure duration of every frame of the group, in seconds.
 	readonly exposureTime: number
-	// Requested number of accepted frames per cycle; 0 disables the frame-count criterion.
+	// Requested number of accepted frames per cycle; a group reaching the plan always declares at least one.
 	readonly count: number
-	// Requested accumulated accepted exposure time per cycle, in seconds; 0 disables the criterion.
-	readonly integrationTime: number
 	// Minimum spacing between the end of one exposure and the start of the next, in seconds. Resolved from
 	// the frame delay when declared and from the capture delay otherwise, so the runtime never sees undefined.
 	readonly delay: number
@@ -84,8 +82,8 @@ export interface SequencerPlanFrameGroup {
 	readonly camera: SequencerCamera
 	// Failure policy of the capture action, which is also the attempt budget of every slot of the group.
 	readonly retry: SequencerRetryPolicy
-	// Slots the group needs to reach its target in one cycle, derived from whichever completion criteria are
-	// active; always >= 1, since a group needing no slot is a disabled group and never reaches the plan.
+	// Slots the group needs to reach its target in one cycle, which is its declared count; always >= 1, since a
+	// group needing no slot is a disabled group and never reaches the plan.
 	readonly requiredSlots: number
 	// Extra slots the group may spend on abandoned exposures and still reach its target, `0` when the
 	// definition declares none. It is slack, not a stop trigger: it never ends the group by itself.
@@ -129,8 +127,6 @@ export interface SequencerPlanGuider {
 	readonly calibrateBeforeStart: boolean
 	// Whether guiding recalibrates after a meridian flip, where the calibration no longer matches the sky.
 	readonly recalibrateAfterMeridianFlip: boolean
-	// Whether guiding is restored after an interruption that stopped it.
-	readonly restoreAfterInterruption: boolean
 	// Settling required after guiding starts or resumes, before an exposure may begin.
 	readonly settle: SequencerGuiderSettle
 	// Failure policy of the guiding commands.
@@ -165,22 +161,18 @@ export interface SequencerPlanStorage {
 	readonly directoryTemplate: string
 	// Directory of the temporary file of the atomic write, when the definition declares one.
 	readonly temporaryDirectory?: string
-	// Checksum computed and recorded for every committed artifact.
-	readonly checksum: SequencerStorage['checksum']
 	// Boundary of the automatic per-night subdirectory, resolved once at session start.
 	readonly autoSubFolderMode: SequencerStorage['autoSubFolderMode']
 }
 
 // Everything a session executes, snapshotted at compilation and immutable for its whole life.
 export interface SequencerPlan {
-	// Definition the plan was lowered from.
+	// Optional recipe id the compiled Sequencer carried, empty when the client sent none.
 	readonly definitionId: string
-	// Definition revision snapshotted for the session; a later edit does not affect a running one.
+	// Optional recipe revision the compiled Sequencer carried, zero when the client sent none.
 	readonly definitionRevision: number
 	// Human-readable name of the definition, shown wherever a session is listed.
 	readonly name: string
-	// Human-readable explanation of the observing plan, empty when the definition declares none.
-	readonly description: string
 	// Target the session observes.
 	readonly target: SequencerPlanTarget
 	// Execution policy of the session.

@@ -20,7 +20,6 @@ function group(overrides?: Partial<SequencerPlanFrameGroup>, retryOverrides?: Pa
 		frameType: 'LIGHT',
 		exposureTime: 60,
 		count,
-		integrationTime: 0,
 		delay: 0,
 		weight: 1,
 		camera: camera(),
@@ -59,6 +58,12 @@ describe('slot attempts', () => {
 		const lum = group(undefined, { onExhausted: 'pause' })
 
 		expect(sequencerSlotFailure(failure({ group: lum, attempt: 2, detail: 'cooler' }))).toEqual({ kind: 'hold', cause: { reason: 'timeout', detail: 'cooler' }, exhausted: true })
+	})
+
+	test('a policy pause before the window is spent does not report the slot as exhausted', () => {
+		const lum = group(undefined, { onExhausted: 'pause', retryOn: ['timeout'] })
+
+		expect(sequencerSlotFailure(failure({ group: lum, reason: 'commandFailed', attempt: 0, detail: 'cooler' }))).toEqual({ kind: 'hold', cause: { reason: 'commandFailed', detail: 'cooler' }, exhausted: false })
 	})
 
 	test('an abort commanded by a pause holds the slot without spending its window', () => {
@@ -117,8 +122,8 @@ describe('group outcome', () => {
 		expect(sequencerGroupOutcome(lum, progress, 'm42')).toBe('degraded')
 	})
 
-	test('an integration target reached by the accepted frames completes', () => {
-		const lum = group({ count: 0, integrationTime: 120, requiredSlots: 2 })
+	test('a count reached by the accepted frames completes', () => {
+		const lum = group({ count: 2, requiredSlots: 2 })
 		const progress = { m42: { cycle: 0, groups: { lum: { cursor: 2, accepted: 2, captured: 2, rejected: 0, abandoned: 0, integration: 120, attemptWindowStart: 0 } } } }
 
 		expect(sequencerGroupOutcome(lum, progress, 'm42')).toBe('completed')

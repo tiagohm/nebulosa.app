@@ -32,7 +32,8 @@ import type { SequencerActionResult } from './sequencer.registry'
 // - skipped: the handler declared the action does not apply to this session.
 // - failed: every attempt the policy allowed was spent without success.
 // - notRun: the action did not take effect, because `continueOnFailure: false` interrupted the chain of
-//   optional actions or a commanded stop ended the pipeline. Outside a commanded stop it is only possible for
+//   optional actions, or the session left the plan — through a stop that cancelled the action or through the
+//   convergence asked in front of it. Outside a session leaving the plan it is only possible for
 //   an optional action, since a required one is always attempted; a required action reported this way is a
 //   defect, which is exactly why the composition of §8.6 converts it into a failure instead of assuming it
 //   cannot happen.
@@ -85,7 +86,8 @@ export interface SequencerPipelineReport {
 	// session — a night without a dew heater is still a night. A required action that never ran carries no
 	// failure of its own and is composed from its result by §8.6, which is where the primary outcome is known.
 	readonly failure?: SequencerPipelineFailure
-	// Whether a commanded stop interrupted the pipeline.
+	// Whether the pipeline was interrupted by the session leaving the plan, which is a stop that cancelled the
+	// running action or a convergence that refused the next one.
 	readonly stopped: boolean
 }
 
@@ -103,6 +105,22 @@ export interface SequencerPipelineExecutor {
 	// keeps holding its devices long after the operator ended it. It is the session signal and never the
 	// deadline of an attempt, because no attempt is running between two of them.
 	delay(delay: number, signal: AbortSignal): Promise<void>
+	// Asked between two actions, and never while one is running, whether the pipeline may command the next one.
+	// It is not asked in front of the first action, which the walk already decided to enter the pipeline for.
+	// Absent for a pipeline that runs to its end whatever the session is converging to, which is what the
+	// finalize pipeline does: it runs *because* the session ended.
+	//
+	// A pause or a stop commanded while an action runs is not visible on `signal` under every mode, and without
+	// this the rest of the list would keep opening covers, starting tracking and cooling cameras for a session
+	// the operator already paused or stopped, until the walk reached its first boundary. It is asked between two
+	// actions and never inside one: an action that has begun moving hardware is finished rather than abandoned
+	// halfway, and the deadline of an attempt is armed around `run`.
+	//
+	// A pause is attended inside this call, which is why it is asynchronous and why it has no answer of its own:
+	// a pipeline has no paused state (§11.3), so it either continues once the session resumes or is stopped. A
+	// `false` answer therefore means the session is leaving the plan, and it ends the pipeline exactly as a
+	// commanded stop does.
+	converge?(step: SequencerPipelineStep): Promise<boolean>
 }
 
 // Failed attempt of one action, before the policy decides what to do about it.
@@ -120,7 +138,7 @@ interface AttemptFailure {
 // A larger value does not schedule a later timer: it overflows and is scheduled as `1`, so an action declaring
 // a deadline of a month would be aborted in the first millisecond and reported as having timed out. A deadline
 // beyond this is therefore reached in chunks rather than handed to one timer.
-const MAXIMUM_TIMER_DELAY = 2_147_483_647
+export const SEQUENCER_MAXIMUM_TIMER_DELAY = 2_147_483_647
 
 // Retry policy of a fatal cause: the same budget and spacing, with nothing left to consider recoverable.
 //
@@ -161,11 +179,20 @@ interface SequencerAttempt {
 // boundary — can be told apart from an answer and a stop that truly happened together. Attributing the tie to
 // the stop is the deliberate choice, because the session is leaving the plan either way and the alternative
 // invents a device failure to explain a night the operator ended.
+//
+// An attempt is never *started* under a cancellation the session already commanded, and the handler is declined
+// rather than entered with an aborted signal. Handing it one only helps a handler that consults it, and the
+// lifecycle handlers command the mount, the cover and the cooler through the scope of the session without
+// consulting anything: entering one after a stop opens a cover, unparks a mount or ramps a cooler for a session
+// that is already leaving the plan, and the convergence that would have refused it is only asked between two
+// actions. Declining reports the same `aborted` the running attempt would have, so the caller composes it
+// exactly as it composes a stop that landed while the action was running.
 async function runAttempt(executor: SequencerPipelineExecutor, step: SequencerPipelineStep, attempt: number, signal: AbortSignal): Promise<SequencerAttempt> {
+	if (signal.aborted) return { result: { type: 'fatalFailure', reason: 'aborted', detail: 'the session was stopped before the attempt started' }, commanded: true }
+
 	const timeout = step.configuration.timeout * 1000
-	// A cancellation already in place is the stop of a session that is leaving the plan, whatever this attempt
-	// answers; anything later counts only if it preceded the answer.
-	let commanded = signal.aborted
+	// The cancellation of the session counts only if it preceded the answer of the attempt.
+	let commanded = false
 	let settled = false
 
 	// Records the cancellation of the session against the progress of the attempt.
@@ -206,25 +233,20 @@ async function runAttempt(executor: SequencerPipelineExecutor, step: SequencerPi
 	const schedule = (remaining: number) => {
 		timer = setTimeout(
 			() => {
-				const left = remaining - MAXIMUM_TIMER_DELAY
+				const left = remaining - SEQUENCER_MAXIMUM_TIMER_DELAY
 
 				if (left > 0) return schedule(left)
 
 				expired = !commanded
 				controller.abort()
 			},
-			Math.min(remaining, MAXIMUM_TIMER_DELAY),
+			Math.min(remaining, SEQUENCER_MAXIMUM_TIMER_DELAY),
 		)
 	}
 
 	schedule(timeout)
 
-	// A signal that is already aborted never dispatches the event again, so a stop that landed before this
-	// attempt started — during the retry delay of the previous one, or before the pipeline was entered at all —
-	// has to be carried over by hand. Without it the attempt runs uncancelled for its whole timeout, or
-	// succeeds and lets the pipeline keep commanding devices for a session that is already leaving the plan.
-	if (signal.aborted) controller.abort()
-	else signal.addEventListener('abort', abort, { once: true })
+	signal.addEventListener('abort', abort, { once: true })
 
 	try {
 		const result = await executor.run(step, attempt, controller.signal)
@@ -268,6 +290,14 @@ async function runStep(executor: SequencerPipelineExecutor, step: SequencerPipel
 	const base = { nodeId: step.nodeId, type: step.type, required: configuration.required }
 
 	for (let attempt = 1; ; attempt++) {
+		// A stop that landed before this attempt started ends the action here, spending nothing. The wait between
+		// two attempts resolves as soon as the session cancels, so without this the backoff of a failed action
+		// would be answered by starting the next one: a cover reopened, a mount unparked or a cooler ramped for a
+		// session the operator already ended, and the convergence that refuses the rest of the list is only asked
+		// once this action is over. The count is the attempts actually spent, which is one fewer than the one this
+		// iteration would have been.
+		if (signal.aborted) return { ...base, outcome: 'notRun', attempts: attempt - 1 }
+
 		const { result, commanded: cancellation } = await runAttempt(executor, step, attempt, signal)
 		const failure = attemptFailure(result)
 
@@ -320,9 +350,20 @@ export async function runSequencerPipeline(pipeline: SequencerPlanPipeline, step
 	let failure: SequencerPipelineFailure | undefined
 	let halted = false
 	let stopped = false
+	// Whether an action of this list has already been attempted, which is what makes the next boundary a boundary
+	// *between* two actions.
+	let entered = false
 
 	for (const step of steps) {
 		const { configuration } = step
+
+		// Only the action that was already running is allowed to finish: a session converging to `paused` or to
+		// `stopped` holds or leaves here, in front of the next one, instead of commanding the rest of the list and
+		// honoring the command at the first boundary of the walk.
+		//
+		// It is asked between two actions and not in front of the first: entering the pipeline is the decision the
+		// walk already took, and the boundary in front of it belongs to the walk rather than to this list.
+		if (entered && !stopped && executor.converge !== undefined && !(await executor.converge(step))) stopped = true
 
 		if (stopped || (halted && !configuration.required)) {
 			results.push({ nodeId: step.nodeId, type: step.type, required: configuration.required, outcome: 'notRun', attempts: 0 })
@@ -331,6 +372,7 @@ export async function runSequencerPipeline(pipeline: SequencerPlanPipeline, step
 
 		const result = await runStep(executor, step, signal)
 		results.push(result)
+		entered = true
 
 		if (result.outcome === 'notRun') {
 			stopped = true

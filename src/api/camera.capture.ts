@@ -678,15 +678,20 @@ class CameraCaptureSession {
 	}
 
 	// Decodes, buffers, and optionally writes one BLOB while retaining the camera lease.
+	//
+	// The file is written to `path`. The image is published under `publishPath` when the caller asked for
+	// one, which is how a sequencer frame can land in a temporary without the UI ever seeing that name.
 	async #processBlob(blob: CameraBlob, path: string): Promise<OperationResult<string>> {
 		try {
 			const buffer = blob.encoding === 'raw' ? blob.data : await this.sessionContext.io.decode(blob.data)
 			if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
 
-			this.sessionContext.imageProcessor.save(buffer, path, this.camera)
+			const published = this.#request.publishPath ?? path
+
+			this.sessionContext.imageProcessor.save(buffer, published, this.camera)
 			if (this.#request.autoSave) await this.sessionContext.io.write(path, buffer)
 			if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
-			return successfulOperationResult(path)
+			return successfulOperationResult(published)
 		} catch (error) {
 			return failedOperationResult('commandFailed', errorMessage(error))
 		}

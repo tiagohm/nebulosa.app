@@ -20,7 +20,7 @@ function observation(overrides?: Partial<SequencerGuardObservation>): SequencerG
 	return { hourAngle: hourAngleOf(-600), exposureTime: 300, now: 1_000_000, startsAt: 1_000_000, flipPending: true, ...overrides }
 }
 
-function actionContext(now: () => number, signal = new AbortController().signal): SequencerActionContext {
+function actionContext(now: () => number, signal = new AbortController().signal, progress: SequencerActionContext['progress'] = () => {}): SequencerActionContext {
 	return {
 		sessionId: 'session-1',
 		nodeId: 'target:m42/frame:lum',
@@ -29,7 +29,7 @@ function actionContext(now: () => number, signal = new AbortController().signal)
 		signal,
 		now,
 		request: () => undefined,
-		progress: () => {},
+		progress,
 		artifact: () => {},
 		auxiliary: () => undefined,
 		checkpoint: { containers: [], attempts: {}, completed: [], capture: {}, anchors: sequencerInitialTriggerAnchors(1_000_000), definitionRevision: 1, handlerVersions: {} },
@@ -108,6 +108,22 @@ describe('flip window wait', () => {
 		expect(result).toMatchObject({ type: 'completed' })
 	})
 
+	test('reports the wait as the foreground action with the instant it ends', async () => {
+		const reported: { readonly detail?: string; readonly wait?: { readonly reason: string; readonly until?: number } }[] = []
+		const context = actionContext(
+			() => 1_000_000,
+			new AbortController().signal,
+			(progress) => void reported.push(progress),
+		)
+		let reads = 0
+		const result = await waitForFlipWindow(context, boundary({ minimumHourAngle: hourAngleOf(0.02) }), () => hourAngleOf(++reads > 1 ? 1 : 0))
+
+		expect(result).toMatchObject({ type: 'completed' })
+		expect(reported[0]?.detail).toBe('waiting for the meridian flip window to open')
+		expect(reported[0]?.wait?.reason).toBe('waiting for the meridian flip window')
+		expect(reported[0]?.wait?.until).toBeGreaterThan(1_000_000)
+	})
+
 	test('ends the wait on the hour angle the mount reports rather than on elapsed time', async () => {
 		let reads = 0
 		const result = await waitForFlipWindow(
@@ -120,14 +136,27 @@ describe('flip window wait', () => {
 		expect(reads).toBe(3)
 	})
 
-	test('stops waiting for a mount that publishes no hour angle', async () => {
+	test('fails the wait when the mount publishes no hour angle', async () => {
 		const result = await waitForFlipWindow(
 			actionContext(() => 1_000_000),
 			boundary(),
 			() => undefined,
 		)
 
-		expect(result).toEqual({ type: 'completed', value: 0 })
+		expect(result).toMatchObject({ type: 'fatalFailure', reason: 'unexpectedState' })
+	})
+
+	test('fails the wait when the hour angle vanishes after the refusal already started it', async () => {
+		let reads = 0
+		const result = await waitForFlipWindow(
+			actionContext(() => 1_000_000),
+			boundary({ minimumHourAngle: hourAngleOf(0.02) }),
+			() => (++reads === 1 ? hourAngleOf(0) : undefined),
+		)
+
+		expect(result).toMatchObject({ type: 'fatalFailure', reason: 'unexpectedState' })
+		expect(result.type === 'fatalFailure' && result.detail).toContain('stopped publishing an hour angle')
+		expect(reads).toBe(2)
 	})
 
 	test('reports a cancelled wait as the abort it is', async () => {

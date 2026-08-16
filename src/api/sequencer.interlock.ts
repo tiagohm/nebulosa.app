@@ -1,8 +1,8 @@
-import type { PHD2Settle } from 'nebulosa/src/devices/guiding/phd2'
 import type { SequencerGuiderSettle } from '#/sequencer'
 import { sequencerActionFailure } from './sequencer.action'
-import { runDither } from './sequencer.guiding'
-import type { SequencerDitherOutcome, SequencerDitherTrigger, SequencerGuidingServices } from './sequencer.guiding'
+import type { SequencerDitherTrigger } from './sequencer.compiler'
+import { runDither, sequencerGuiderSettle } from './sequencer.guiding'
+import type { SequencerDitherOutcome, SequencerGuidingServices } from './sequencer.guiding'
 import type { SequencerActionContext, SequencerActionResult } from './sequencer.registry'
 
 // The guiding interlock of a safe point: the steps that move pointing, focus or angle run with the guiding
@@ -25,9 +25,9 @@ import type { SequencerActionContext, SequencerActionResult } from './sequencer.
 // previous calibration has the wrong sign, and the recalibration happens here, inside the bracket of that
 // safe point, rather than as a step of its own.
 //
-// Settles are fused instead of accumulated. The settle installed on the session is the strongest of the ones
-// in play at this safe point, and the dither is emitted immediately after the resume, inside the bracket, so
-// the safe point stands still for the settles the guider itself pays and for none of its own. What is never
+// Settling is not accumulated. One guiding settle is installed on the session, and the dither is emitted
+// immediately after the resume, inside the bracket, so the safe point stands still for the settles the guider
+// itself pays under that one policy and for none of its own. What is never
 // done is suppressing the dither because a centering "already moved" the field: a centering corrects drift
 // back to the reference position, which is exactly where the previous frames were taken, so it removes the
 // positional diversity a dither exists to provide.
@@ -43,6 +43,10 @@ export interface SequencerInterlockRequest {
 	// Dither that won this safe point, absent when none did. It is emitted with the resume rather than as a
 	// step after it, and it is emitted whatever the bracketed steps did.
 	readonly dither?: SequencerDitherTrigger
+	// Whether the bracketed steps command nothing at all: no trigger fired, no dither is in play and the optical
+	// path already stands where the frame requires it. It is what lets the bracket be left unopened, and it is
+	// asserted by the caller because only it can tell, before the body runs, that the body has nothing to do.
+	readonly idle: boolean
 }
 
 // What the bracketed steps report back to the bracket while they run.
@@ -55,6 +59,18 @@ export interface SequencerInterlockState {
 
 // The steps of the safe point that run with the corrections suspended, in their own fixed order.
 export type SequencerInterlockBody<T> = (state: SequencerInterlockState) => Promise<SequencerActionResult<T>>
+
+// Step of the bracket a failure came out of. The bracket runs steps of three different origins around the body
+// it was given, and a failure of each of them means something different to the caller.
+export type SequencerInterlockPhase = 'suspension' | 'body' | 'resume' | 'dither'
+
+// Mutable record of what the bracket did, filled as it runs so the caller can attribute the failure it returns.
+export interface SequencerInterlockReport {
+	// Phase the returned failure came from, absent while nothing failed. It is what lets the caller apply the
+	// terminal policy of the step that actually failed: the dither is emitted by the bracket rather than walked
+	// by the plan, and it carries its own retry budget and `onFailure` (§10).
+	phase?: SequencerInterlockPhase
+}
 
 // What one bracket did, around what its steps produced.
 export interface SequencerInterlockOutcome<T> {
@@ -89,30 +105,13 @@ export interface SequencerInterlockOutcome<T> {
 // does not survive the process, which is the same lifetime the V1 sessions have.
 const suspendedGuiders = new Map<string, boolean>()
 
-// Strongest of two settle policies, field by field.
+// Forgets that this interlock left `guider` looping, so the next safe point does not treat a stopped or
+// abandoned session as a suspension it still owes a resume.
 //
-// Strongest means hardest to satisfy for the accuracy fields and most patient for the waiting ones: the
-// smallest tolerated error, the longest time it has to be held, the largest number of guide frames observed,
-// and the longest the guider may take to get there. Fusing this way keeps a safe point where a dither and the
-// bracket are both in play from settling twice, once loosely and once strictly, while never settling to a
-// weaker criterion than either of them asked for.
-export function sequencerFuseGuiderSettle(settle: SequencerGuiderSettle, other?: SequencerGuiderSettle): SequencerGuiderSettle {
-	if (other === undefined) return settle
-
-	return {
-		tolerance: Math.min(settle.tolerance, other.tolerance),
-		time: Math.max(settle.time, other.time),
-		timeout: Math.max(settle.timeout, other.timeout),
-		minimumFrames: Math.max(settle.minimumFrames, other.minimumFrames),
-	}
-}
-
-// Translates a declared settle into the settle the guider transport understands.
-//
-// `minimumFrames` has no counterpart in the transport, which counts frames by its own settling rule, so it
-// survives only in the fused policy the session keeps and not in the command.
-function guiderSettle(settle: SequencerGuiderSettle): PHD2Settle {
-	return { pixels: settle.tolerance, time: settle.time, timeout: settle.timeout }
+// The policy decision `continueUnguided` is what calls this: the corrections are being given up on, not
+// paused, and the next bracket must not put them back on the strength of a marker this one left behind.
+export function sequencerAbandonGuiding(guider: string) {
+	suspendedGuiders.delete(guider)
 }
 
 // Puts the guider back to work at the end of a bracket, reporting which of the two ways it is being done.
@@ -130,33 +129,46 @@ function resumeGuiding(services: SequencerGuidingServices, context: SequencerAct
 // A session whose guider is neither guiding nor looping runs the body with no bracket at all: there are no
 // corrections to stop, and suspending a guider that is idle would only wait for a state it is already in. The
 // dither still goes through, because deciding it has nothing to displace belongs to the dither and not to the
-// bracket.
+// bracket. A safe point the caller declares idle is left unbracketed for the opposite reason — the corrections
+// are running and nothing is going to disturb them.
 //
 // The resume is attempted even when the body failed, so a safe point that ends badly does not leave the
 // session looping without corrections until the next one. The failure of the body is what gets reported,
 // since it is the one that explains the safe point.
-export async function runGuidingInterlock<T>(services: SequencerGuidingServices, context: SequencerActionContext, request: SequencerInterlockRequest, body: SequencerInterlockBody<T>): Promise<SequencerActionResult<SequencerInterlockOutcome<T>>> {
+//
+// `report` is filled in place with the phase a returned failure came from, and is left untouched by a bracket
+// that completed. A body that throws reports nothing, because the exception is what explains the safe point
+// and it never reaches the caller as a result.
+export async function runGuidingInterlock<T>(services: SequencerGuidingServices, context: SequencerActionContext, request: SequencerInterlockRequest, body: SequencerInterlockBody<T>, report?: SequencerInterlockReport): Promise<SequencerActionResult<SequencerInterlockOutcome<T>>> {
 	// A guider looping under the marker of this interlock is a suspension a previous bracket could not resume,
 	// and bracketing it is what ends it: leaving it out because it is not guiding right now runs the body
 	// unbracketed and, more importantly, never resumes, so the session keeps exposing uncorrected for the rest
 	// of the night with the guider still dutifully looping. Looping without the marker belongs to whoever asked
 	// for it and is left exactly as it is.
-	const guider = context.guider !== undefined && (services.guiderCommander.running(context.guider) || (suspendedGuiders.has(context.guider) && services.guiderCommander.looping(context.guider))) ? context.guider : undefined
+	const bracketable = context.guider !== undefined && (services.guiderCommander.running(context.guider) || (suspendedGuiders.has(context.guider) && services.guiderCommander.looping(context.guider))) ? context.guider : undefined
+	// A safe point that commands nothing is not bracketed: there is nothing for the corrections to be suspended
+	// around, and suspending anyway would stop the corrections, resume them and pay the settle of the resume
+	// before every frame of a sequence that never moves anything — on a short exposure that is a large part of
+	// the night spent reacquiring guiding that was never disturbed. The one guider an idle safe point still
+	// brackets is one a previous bracket left looping, because the bracket is what puts it back to guiding.
+	const guider = bracketable !== undefined && request.idle && !suspendedGuiders.has(bracketable) ? undefined : bracketable
 	// Recalibration a previous bracket of this guider could not complete, which this one has to pay before the
 	// corrections come back, whether or not anything crosses the meridian inside it.
 	const owed = guider !== undefined && suspendedGuiders.get(guider) === true
 	const state: SequencerInterlockState = { flipped: false }
-	const settle = sequencerFuseGuiderSettle(request.settle, request.dither?.settle)
 
 	if (guider !== undefined) {
 		context.progress({ detail: 'suspending the guiding corrections' })
 
 		// Looping is the suspension: the exposures continue, so the star stays acquired and the resume has
-		// something to guide on, while no correction reaches the mount. The fused settle is installed with the
-		// same command, which is what makes the resume and the dither after it settle under one policy.
-		const suspended = await services.guiderCommander.loop(guider, { settle: guiderSettle(settle) }, { signal: context.signal })
+		// something to guide on, while no correction reaches the mount. The settle is installed with the same
+		// command, which is what makes the resume and the dither after it settle under one policy.
+		const suspended = await services.guiderCommander.loop(guider, { settle: sequencerGuiderSettle(request.settle) }, { signal: context.signal })
 
-		if (!suspended.ok) return sequencerActionFailure(suspended, 'the guiding corrections could not be suspended')
+		if (!suspended.ok) {
+			if (report !== undefined) report.phase = 'suspension'
+			return sequencerActionFailure(suspended, 'the guiding corrections could not be suspended')
+		}
 
 		suspendedGuiders.set(guider, owed)
 	}
@@ -190,9 +202,20 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 
 		if (resumed.ok) suspendedGuiders.delete(guider)
 		else suspendedGuiders.set(guider, recalibrated)
-		if (executed.type !== 'completed') return executed
-		if (!resumed.ok) return sequencerActionFailure(resumed, 'the guiding corrections could not be resumed')
-	} else if (executed.type !== 'completed') return executed
+
+		if (executed.type !== 'completed') {
+			if (report !== undefined) report.phase = 'body'
+			return executed
+		}
+
+		if (!resumed.ok) {
+			if (report !== undefined) report.phase = 'resume'
+			return sequencerActionFailure(resumed, 'the guiding corrections could not be resumed')
+		}
+	} else if (executed.type !== 'completed') {
+		if (report !== undefined) report.phase = 'body'
+		return executed
+	}
 
 	const outcome: SequencerInterlockOutcome<T> = { value: executed.value, suspended: guider !== undefined, recalibrated }
 
@@ -200,7 +223,10 @@ export async function runGuidingInterlock<T>(services: SequencerGuidingServices,
 
 	const dithered = await runDither(services, context, request.dither)
 
-	if (dithered.type !== 'completed' && dithered.type !== 'skipped') return dithered
+	if (dithered.type !== 'completed' && dithered.type !== 'skipped') {
+		if (report !== undefined) report.phase = 'dither'
+		return dithered
+	}
 
 	return { type: 'completed', value: dithered.type === 'completed' ? { ...outcome, dither: dithered.value } : outcome }
 }

@@ -95,42 +95,21 @@ function flipResources(configuration: SequencerMeridianFlipTrigger): ResourceBin
 }
 
 // Runs one meridian flip at a safe point: the crossing, the settle, and the recovery the definition declared.
+//
+// A node carrying `crossedFrom` resumes at the recovery, because the crossing it names already happened and is
+// the one step of this block that cannot be commanded twice. Nothing about the mount is re-verified there: the
+// side it is on is the one the crossing left it on, and the movement the recovery is about to correct is the
+// same one whether it ended a minute or an hour ago.
 export async function runMeridianFlip(services: SequencerMeridianFlipServices, context: SequencerActionContext, configuration: SequencerMeridianFlipTrigger): Promise<SequencerActionResult<SequencerMeridianFlipOutcome>> {
 	const mount = sequencerDeviceOf(context, 'mount', isMount)
 
 	if (mount === undefined) return sequencerMissingRole('mount')
 
-	context.progress({ detail: 'flipping the mount' })
+	const crossing = configuration.crossedFrom === undefined ? await runCrossing(services, context, configuration, mount) : { type: 'completed' as const, value: crossedOutcome(mount, configuration.crossedFrom) }
 
-	const flipped = await services.mountCommander.flip(context.scope, mount, currentTarget(mount), { timeout: configuration.timeout * 1000 })
+	if (crossing.type !== 'completed') return crossing
 
-	if (!flipped.ok) return sequencerActionFailure(flipped, 'the mount did not cross the meridian')
-
-	// A driver that publishes no pier side still performs the movement, and the definition decides what that is
-	// worth. Demanding the verification and not getting it is a failure of the flip and not of the mount: the
-	// session cannot tell a crossing apart from a slew that went back to the same side, and every frame after
-	// it would be exposed on an unknown side of the pier.
-	//
-	// It is terminal for the same reason a failed recovery is: the movement was commanded and completed, so the
-	// mount may well be physically across, and what is missing is only the evidence. A retry would command the
-	// crossing again and take a mount that did cross back to the side the flip existed to leave, with the hour
-	// angle already past the meridian. The session stops instead, on a side it cannot name but has not made
-	// worse.
-	if (configuration.verifyPierSide && !flipped.value.pierSideVerified) {
-		return { type: 'fatalFailure', reason: 'unexpectedState', detail: `the mount did not confirm a pier side change, reporting ${flipped.value.pierSide}` }
-	}
-
-	const settled = await sequencerSettle(context, configuration.settle)
-
-	if (!settled.ok) return sequencerActionFailure(settled, 'the settle after the flip was interrupted')
-
-	const outcome: SequencerMeridianFlipOutcome = {
-		pierSide: flipped.value.pierSide,
-		initialPierSide: flipped.value.initialPierSide,
-		verified: flipped.value.pierSideVerified,
-		rightAscension: flipped.value.rightAscension,
-		declination: flipped.value.declination,
-	}
+	const outcome = crossing.value
 
 	// The recovery runs in the order the safe point runs it outside a flip: the pointing first, because the
 	// focus routine assumes the field it is going to measure, and the focus after it.
@@ -143,6 +122,68 @@ export async function runMeridianFlip(services: SequencerMeridianFlipServices, c
 	}
 
 	return await refocus(services, context, configuration, outcome)
+}
+
+// Commands the crossing and the settle after it, answering with what the mount ended up on.
+//
+// Everything here is the part of the flip that moves the mount, which is exactly the part a re-entry must not
+// run a second time. Failures are left retryable: nothing has crossed yet when they are reported, except the
+// unverified crossing below, which says so itself.
+async function runCrossing(services: SequencerMeridianFlipServices, context: SequencerActionContext, configuration: SequencerMeridianFlipTrigger, mount: Mount): Promise<SequencerActionResult<SequencerMeridianFlipOutcome>> {
+	context.progress({ detail: 'flipping the mount' })
+
+	const flipped = await services.mountCommander.flip(context.scope, mount, currentTarget(mount), { timeout: configuration.timeout * 1000 })
+
+	if (!flipped.ok) return sequencerActionFailure(flipped, 'the mount did not cross the meridian')
+
+	// A driver that publishes no pier side still performs the movement, and the crossing is refused all the same:
+	// the session cannot tell a crossing apart from a slew that went back to the same side, and every frame after
+	// it would be exposed on an unknown side of the pier.
+	//
+	// It is terminal for the same reason a failed recovery is: the movement was commanded and completed, so the
+	// mount may well be physically across, and what is missing is only the evidence. A retry would command the
+	// crossing again and take a mount that did cross back to the side the flip existed to leave, with the hour
+	// angle already past the meridian. The session stops instead, on a side it cannot name but has not made
+	// worse.
+	if (!flipped.value.pierSideVerified) {
+		return { type: 'fatalFailure', reason: 'unexpectedState', detail: `the mount did not confirm a pier side change, reporting ${flipped.value.pierSide}` }
+	}
+
+	// The interlock of a guided session settles the resume of the same safe point. Paying this wait as
+	// well would stand still twice for one crossing — once here and once when the corrections come back.
+	if (configuration.deferSettle !== true) {
+		const settled = await sequencerSettle(context, configuration.settle)
+
+		if (!settled.ok) return sequencerActionFailure(settled, 'the settle after the flip was interrupted')
+	}
+
+	return {
+		type: 'completed',
+		value: {
+			pierSide: flipped.value.pierSide,
+			initialPierSide: flipped.value.initialPierSide,
+			verified: flipped.value.pierSideVerified,
+			rightAscension: flipped.value.rightAscension,
+			declination: flipped.value.declination,
+		},
+	}
+}
+
+// Rebuilds the outcome of a crossing that already happened, for a node re-entered to finish its recovery.
+//
+// The crossing is not re-commanded and not re-verified: `initialPierSide` is the side the executor recorded the
+// mount on before it moved, and everything else is read from the mount as it stands now. The coordinates are
+// therefore where the mount is currently pointing rather than where the crossing left it, which is the same
+// thing for a mount that has been tracking the target since, and is in any case the pointing the recentering is
+// about to correct.
+function crossedOutcome(mount: Mount, crossedFrom: PierSide): SequencerMeridianFlipOutcome {
+	return {
+		pierSide: mount.pierSide,
+		initialPierSide: crossedFrom,
+		verified: mount.pierSide !== 'NEITHER' && mount.pierSide !== crossedFrom,
+		rightAscension: mount.equatorialCoordinate.rightAscension,
+		declination: mount.equatorialCoordinate.declination,
+	}
 }
 
 // Reports a recovery failure of a flip whose crossing already happened, refusing to let it be retried.

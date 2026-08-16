@@ -1,4 +1,5 @@
 import type { Device } from 'nebulosa/src/devices/indi/device'
+import { failedOperationResult } from '#/orchestration'
 import type { FailedOperationResult, OperationResult } from '#/orchestration'
 import type { SequencerDeviceRole } from '#/sequencer'
 import { abortableDelay } from './operation.wait'
@@ -21,9 +22,30 @@ import type { SequencerActionContext, SequencerActionResult } from './sequencer.
 // Everything else — a timeout, an Alert, a driver that refused, a resource momentarily busy — is a transient
 // condition of the observatory, and whether it is worth another attempt is the retry policy's decision rather
 // than the handler's.
-export function sequencerActionFailure(result: FailedOperationResult, detail?: string): SequencerActionResult<never> {
+export function sequencerActionFailure(result: FailedOperationResult, detail?: string) {
 	const type = result.reason === 'aborted' || result.reason === 'removed' ? 'fatalFailure' : 'retryableFailure'
-	return { type, reason: result.reason, detail: detail === undefined ? result.error : result.error === undefined ? detail : `${detail}: ${result.error}` }
+	return { type, reason: result.reason, detail: detail === undefined ? result.error : result.error === undefined ? detail : `${detail}: ${result.error}` } as const
+}
+
+// Issues one device command, unless the action was already cancelled when it was reached.
+//
+// A commander does not consult the cancellation of its caller: it opens its own operation under the scope of
+// the session, and that scope stays authorized for as long as the reservation does. A block that awaited
+// anything before commanding — a previous command of the same action, a settle, a device sample — therefore
+// goes on commanding hardware across the stop that was supposed to end it, and the refusal only arrives at the
+// next boundary of the walk. That is a cover reopened, a mount unparked or a cooler ramped for a session the
+// operator already ended.
+//
+// It fronts the commands a block issues on its way *in*, and never a compensating one: a block that undoes its
+// own optical path on the way out commands precisely because it was cancelled, and routing that through here
+// would leave the wheel on the autofocus filter and the focuser on its offset.
+//
+// Returns whatever the command answered, or an `aborted` failure when nothing was commanded, which
+// `sequencerActionFailure` already reads as the stop it is.
+export async function sequencerCommand<T>(context: SequencerActionContext, command: () => Promise<OperationResult<T>>): Promise<OperationResult<T>> {
+	if (context.signal.aborted) return failedOperationResult('aborted', 'the action was cancelled before the device was commanded')
+
+	return await command()
 }
 
 // Reports a block that cannot run at all because the role it commands is not part of the session.

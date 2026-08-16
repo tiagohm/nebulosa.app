@@ -2,6 +2,7 @@ import type { SequencerDeviceRole } from '#/sequencer'
 import type { SequencerPlan, SequencerPlanFrameGroup, SequencerPlanNode } from '#/sequencer.plan'
 import type { SequencerActivitySnapshot, SequencerActivityState, SequencerCaptureSnapshot, SequencerDeviceSnapshot, SequencerGroupSnapshot, SequencerSession, SequencerSessionSnapshot, SequencerTriggerAnchor, SequencerTriggerAnchors, SequencerTriggerSnapshot, SequencerWaitSnapshot } from '#/sequencer.state'
 import { isSequencerTerminalState } from '#/sequencer.state'
+import { groupProgressOf, targetProgressOf } from './sequencer.scheduler'
 import type { SequencerTriggerPolicies } from './sequencer.trigger'
 
 // Derivation of the value the UI observes, the meter behind its completion estimate, and the cadence it is
@@ -167,7 +168,7 @@ export function deriveSequencerSnapshot(observation: SequencerSnapshotObservatio
 	const checkpoint = session.checkpoint
 	const terminal = isSequencerTerminalState(session.state)
 	const targetId = plan?.target.id
-	const progress = targetId === undefined ? undefined : checkpoint.capture[targetId]
+	const progress = targetId === undefined ? undefined : targetProgressOf(checkpoint.capture, targetId)
 	const groups: SequencerGroupSnapshot[] = []
 
 	let accepted = 0
@@ -179,7 +180,7 @@ export function deriveSequencerSnapshot(observation: SequencerSnapshotObservatio
 	const overhead = observation.overhead ?? 0
 
 	for (const group of plan?.groups ?? []) {
-		const counters = progress?.groups[group.id]
+		const counters = progress === undefined ? undefined : groupProgressOf(progress, group.id)
 		const groupAccepted = counters?.accepted ?? 0
 
 		groups.push({

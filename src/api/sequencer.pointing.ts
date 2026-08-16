@@ -2,9 +2,10 @@ import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
-import { isCamera, isMount, isWheel } from 'nebulosa/src/devices/indi/device'
+import { isCamera, isMount, isRotator, isWheel } from 'nebulosa/src/devices/indi/device'
 import type { Camera, Mount, MountTargetCoordinate, PierSide, Wheel } from 'nebulosa/src/devices/indi/device'
 import { sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
+import { toDeg } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraCaptureStart } from '#/camera'
@@ -13,6 +14,7 @@ import type { SequencerAuxiliaryCapture, SequencerPlateSolver } from '#/sequence
 import type { CameraHandler } from './camera'
 import type { MountCommander } from './mount.commander'
 import type { PlateSolverHandler } from './platesolver'
+import type { RotatorCommander } from './rotator.commander'
 import { sequencerActionFailure, sequencerDeviceOf, sequencerMissingRole, sequencerSettle } from './sequencer.action'
 import type { SequencerCenter, SequencerSlew } from './sequencer.compiler'
 import { SEQUENCER_BLOCK_TYPE } from './sequencer.compiler'
@@ -53,8 +55,8 @@ export interface SequencerCenterOutcome {
 	// Solved declination in radians, J2000, of the last frame.
 	readonly declination: Angle
 	// True when the reported separation was measured after the last correction, which is what proves the field
-	// is where it was asked to be. It is false for a centering that corrected without solving again, which is
-	// what `finalSolve: false` asks for.
+	// is where it was asked to be. The centering loop always solves again after correcting, so a completed
+	// centering reports it true.
 	readonly verified: boolean
 	// Whether the mount model was synchronized to a solved position during the loop.
 	readonly synced: boolean
@@ -68,6 +70,8 @@ export interface SequencerCenteringServices {
 	readonly mountCommander: MountCommander
 	// Owner of the wheel, used only when the centering recipe names a filter of its own.
 	readonly wheelCommander: WheelCommander
+	// Owner of the rotator, used when the centering must happen after the field angle is already in place.
+	readonly rotatorCommander?: RotatorCommander
 	// Backend solving each auxiliary frame.
 	readonly plateSolver: PlateSolverHandler
 }
@@ -129,7 +133,7 @@ function auxiliaryCapture(recipe: SequencerAuxiliaryCapture, directory: string, 
 		height: recipe.subframe.height,
 		transferFormat: recipe.transferFormat,
 		compressed: recipe.compressed,
-		autoSave: false,
+		autoSave: true,
 		outputPath: directory,
 		outputName: fileName,
 		mount: mount.name,
@@ -163,10 +167,9 @@ function solveRequest(solver: SequencerPlateSolver, path: string, id: string, ri
 // tracking the target asked for.
 //
 // The arrival check belongs to the commander, which compares the position the mount publishes once it has
-// stopped against `arrivalTolerance` and refuses a slew that ended somewhere else. `skipWhenAlreadyAtTarget`
-// is expressed as the commander's `tolerance`, which is the separation below which nothing is commanded at
-// all; a definition that turns the skip off asks for the movement to be commanded unconditionally, which is a
-// tolerance of zero.
+// stopped against `arrivalTolerance` and refuses a slew that ended somewhere else. The declared `skipTolerance`
+// is the separation below which nothing is commanded at all; a definition that wants the movement commanded
+// unconditionally declares a skip tolerance of zero.
 export function sequencerSlewHandler(mountCommander: MountCommander): SequencerActionHandler<SequencerSlew, SequencerSlewOutcome> {
 	return {
 		type: SEQUENCER_BLOCK_TYPE.slew,
@@ -180,7 +183,7 @@ export function sequencerSlewHandler(mountCommander: MountCommander): SequencerA
 
 			context.progress({ detail: 'slewing to the target' })
 
-			const options = { timeout: configuration.timeout * 1000, tolerance: configuration.skipWhenAlreadyAtTarget ? configuration.tolerance : 0, arrivalTolerance: configuration.arrivalTolerance }
+			const options = { timeout: configuration.timeout * 1000, tolerance: configuration.skipTolerance, arrivalTolerance: configuration.arrivalTolerance }
 			const slewed = await mountCommander.goTo(context.scope, mount, configuration.coordinates, options)
 
 			if (!slewed.ok) return sequencerActionFailure(slewed, 'the mount did not reach the target')
@@ -219,6 +222,7 @@ function centeringResources(configuration: SequencerCenter): ResourceBinding[] {
 	const roles: ResourceBinding[] = [{ role: 'mount' }, { role: 'camera' }]
 
 	if (configuration.capture.filter !== undefined) roles.push({ role: 'wheel', optional: true })
+	if (configuration.rotator !== undefined) roles.push({ role: 'rotator', optional: true })
 
 	return roles
 }
@@ -227,10 +231,9 @@ function centeringResources(configuration: SequencerCenter): ResourceBinding[] {
 // target or the attempts run out.
 //
 // The loop always measures before it corrects, so the first exposure of a mount that is already centred ends
-// it without commanding anything. `finalSolve` decides what happens after a correction: with it, the loop
-// solves again and only stops once the separation it measured was measured on the corrected position, which is
-// what makes the reported outcome a verified one; without it, the first correction ends the centering and the
-// outcome reports the separation that motivated the correction rather than the one that followed it.
+// it without commanding anything. A correction is always followed by another solve, so the loop only stops
+// once the separation it reports was measured on the corrected position, which is what makes the outcome a
+// verified one; the last attempt therefore reports the miss instead of correcting blindly.
 //
 // `syncMount` corrects the mount's own model before commanding it back to the target, which is what turns a
 // pointing error into a corrected slew instead of repeating the same wrong movement; without it, the loop still
@@ -258,6 +261,10 @@ export async function runCentering(services: SequencerCenteringServices, context
 	const camera = sequencerDeviceOf(context, 'camera', isCamera)
 
 	if (camera === undefined) return sequencerMissingRole('camera')
+
+	const rotated = await rotateBeforeCentering(services, context, configuration)
+
+	if (rotated !== undefined && rotated.type !== 'completed') return rotated
 
 	const transition = centeringFilter(context, configuration)
 
@@ -309,14 +316,10 @@ async function runCenteringLoop(services: SequencerCenteringServices, context: S
 
 		if (separation <= configuration.tolerance) return { type: 'completed', value: outcome }
 
-		// The last attempt of a verifying centering has no solve left to prove the correction with, so
-		// correcting here would end the action reporting a field nothing measured. Reporting the miss instead
-		// lets the retry policy decide, with the separation that was actually observed.
-		//
-		// A centering that does not verify makes the opposite trade on purpose: the correction is what ends it,
-		// and the outcome says so with `verified: false`. Stopping it here would leave `maximumAttempts: 1`
-		// unable to correct at all, failing every time on a field it was one slew away from fixing.
-		if (attempt === configuration.maximumAttempts && configuration.finalSolve) {
+		// The last attempt has no solve left to prove the correction with, so correcting here would end the action
+		// reporting a field nothing measured. Reporting the miss instead lets the retry policy decide, with the
+		// separation that was actually observed.
+		if (attempt === configuration.maximumAttempts) {
 			return { type: 'retryableFailure', reason: 'unexpectedState', detail: `centering stopped ${(separation * RAD2DEG).toFixed(4)}° from the target after ${attempt} attempts` }
 		}
 
@@ -337,14 +340,41 @@ async function runCenteringLoop(services: SequencerCenteringServices, context: S
 		const settled = await sequencerSettle(context, configuration.settle)
 
 		if (!settled.ok) return sequencerActionFailure(settled, 'the settle after the correcting slew was interrupted')
-
-		if (!configuration.finalSolve) {
-			return { type: 'completed', value: { ...outcome, verified: false, synced } }
-		}
 	}
 
 	// Unreachable for a positive attempt limit, and the honest answer for a definition that asked for none.
 	return { type: 'fatalFailure', reason: 'unexpectedState', detail: 'the centering was allowed no attempt' }
+}
+
+// Moves the rotator to the declared field angle before the plate-solve, when the definition asked for that
+// order. Absent configuration, missing commander or a rotator already inside tolerance are no-ops.
+async function rotateBeforeCentering(services: SequencerCenteringServices, context: SequencerActionContext, configuration: SequencerCenter): Promise<SequencerActionResult<undefined> | undefined> {
+	const policy = configuration.rotator
+	const commander = services.rotatorCommander
+
+	if (policy === undefined || commander === undefined) return undefined
+
+	const rotator = sequencerDeviceOf(context, 'rotator', isRotator)
+
+	if (rotator === undefined) return sequencerMissingRole('rotator')
+
+	const target = toDeg(policy.angle)
+	const delta = Math.abs(rotator.angle.value - target) % 360
+	const distance = delta > 180 ? 360 - delta : delta
+
+	if (distance <= toDeg(policy.tolerance)) return { type: 'completed', value: undefined }
+
+	context.progress({ detail: 'rotating the field before centering' })
+
+	const rotated = await commander.moveTo(context.scope, rotator, target)
+
+	if (!rotated.ok) return sequencerActionFailure(rotated, 'the rotator did not reach the angle the centering requires')
+
+	const settled = await sequencerSettle(context, policy.settle)
+
+	if (!settled.ok) return sequencerActionFailure(settled, 'the settle after the rotation was interrupted')
+
+	return { type: 'completed', value: undefined }
 }
 
 // Filter transition the centering has to make, or undefined when it has to make none.

@@ -26,7 +26,7 @@ describe('preflight', () => {
 
 		expect(view.ok).toBe(true)
 		expect(view.diagnostics).toEqual([])
-		expect(view.removals.map((removal) => removal.path)).toEqual(['notification'])
+		expect(view.removals.map((removal) => removal.path)).toEqual(['dither.retry.onExhausted', 'autofocus.retry.onExhausted', 'meridianFlip.retry.onExhausted', 'guiding.restoreAfterInterruption', 'notification'])
 	})
 
 	test('every group reports the slots and the integration the lowering derived', () => {

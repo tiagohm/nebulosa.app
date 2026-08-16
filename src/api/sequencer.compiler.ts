@@ -1,8 +1,9 @@
 import { isAbsolute } from 'path'
-import type { MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
+import type { MountTargetCoordinate, PierSide } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-import type { Sequencer, SequencerAutofocus, SequencerCamera, SequencerCentering, SequencerCooling, SequencerDeviceRole, SequencerFailureReason, SequencerFrame, SequencerGoto, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerTargetTracking } from '#/sequencer'
-import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
+// oxfmt-ignore
+import type { Sequencer, SequencerAutofocus, SequencerAuxiliaryCapture, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGoto, SequencerGuiderSettle, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
+import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanGuider, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { sequencerUnknownPlaceholders } from './sequencer.identity'
 import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
 import type { SequencerBlockRegistry } from './sequencer.registry'
@@ -53,6 +54,18 @@ export interface SequencerSlew extends Omit<SequencerGoto, 'enabled'> {
 export interface SequencerCenter extends Omit<SequencerCentering, 'enabled'> {
 	// Coordinates the solved field is compared against.
 	readonly coordinates: MountTargetCoordinate<Angle>
+	// Rotator position to reach before the plate-solve, present when `moveBeforeCentering` is set. Rotating
+	// after the solve undoes the field the centering just verified.
+	readonly rotator?: Pick<SequencerRotator, 'angle' | 'tolerance' | 'settle'>
+}
+
+// Configuration of the dither trigger: the declared dither policy without its enablement flag, plus the
+// settle the lowering resolved for it.
+export interface SequencerDitherTrigger extends Omit<SequencerDither, 'enabled'> {
+	// Guiding settle the dither waits under, which is the settle of the session. A dither is a displacement of
+	// the guiding, so what counts as settled after it is what counts as settled after any other transition of
+	// the same guider.
+	readonly settle: SequencerGuiderSettle
 }
 
 // Configuration of the autofocus trigger, which is the declared autofocus policy without its enablement flag:
@@ -73,6 +86,16 @@ export interface SequencerMeridianFlipTrigger extends Omit<SequencerMeridianFlip
 	// the routine, the capture recipe, the star detection, and the filter offsets live in the autofocus block,
 	// and the execution context of a handler does not carry the plan to read them from.
 	readonly focusing?: SequencerFocus
+	// Side the mount was on before a crossing that already happened, present only when the executor re-enters
+	// this node to finish a recovery an interruption cut short, and never lowered by the compiler: the plan
+	// describes a whole flip, and this is the one fact about a particular night the node cannot rediscover.
+	// It is what makes the re-entry resume at the recentering and the refocusing instead of commanding a second
+	// crossing, which would take a mount that is already across back to the side the flip existed to leave.
+	readonly crossedFrom?: PierSide
+	// Set when the guiding interlock of this safe point will settle the resume, so the flip must not pay a
+	// second wall-clock wait after the crossing. Absent when the session is not guiding, which is when this
+	// settle is the only one the mount gets.
+	readonly deferSettle?: boolean
 }
 
 // Configuration of one capture action, which is the frame group plus the settling the capture plan requires
@@ -80,8 +103,31 @@ export interface SequencerMeridianFlipTrigger extends Omit<SequencerMeridianFlip
 export interface SequencerCapture {
 	// Group this action exposes for.
 	readonly group: SequencerPlanFrameGroup
-	// Stable time required before the first or a resumed exposure, in seconds.
-	readonly settle: number
+	// Optical-path policies the safe point in front of this exposure reconciles against.
+	readonly preparation: SequencerCapturePreparation
+}
+
+// Policies the frame preparation of a capture node reconciles the optical path against, carried on the node
+// so the runtime never has to reach back into the definition to run a safe point.
+//
+// It is declared here rather than imported from the preparation module because the compiler is pure and that
+// module owns device commanders. The shape is deliberately the preparation input without its group, which the
+// capture node already carries.
+export interface SequencerCapturePreparation {
+	// Cover policy, absent when the definition declares no cover feature.
+	readonly cover?: Omit<SequencerCover, 'enabled'>
+	// Flat panel policy, absent when the definition declares no panel feature.
+	readonly flatPanel?: Omit<SequencerFlatPanel, 'enabled'>
+	// Rotator policy, absent when the definition declares no rotator feature.
+	readonly rotator?: Omit<SequencerRotator, 'enabled'>
+	// Thermal policy, absent when the definition declares no cooling feature. The preparation only waits on it.
+	readonly cooling?: Omit<SequencerCooling, 'enabled'>
+	// Tracking policy of the target, absent when the definition does not track.
+	readonly tracking?: Omit<SequencerTargetTracking, 'enabled'>
+	// Focuser offsets per filter, in device steps, applied when the reconciliation moves the wheel. They are
+	// carried whether or not autofocus is enabled: a filter change displaces focus by an amount the definition
+	// measured, and compensating for it is not an autofocus run.
+	readonly filterOffsets: readonly SequencerFilterFocusOffset[]
 }
 
 // Configuration of one lifecycle action: the declared action without the fields the pipeline itself consumes.
@@ -104,6 +150,21 @@ export interface SequencerLifecycle {
 	// mount tracks — and a handler cannot read the target from its execution context, so the mode and the
 	// non-sidereal rates travel with the node that commands them: rates are radians per second.
 	readonly tracking?: Omit<SequencerTargetTracking, 'enabled'>
+	// Guiding policy the action establishes, present only on the action that starts guiding and undefined on
+	// every other one. The action declares nothing of it on its own — the guiding block is the single authority
+	// for how the session guides — and a handler cannot read the plan from its execution context, so the policy
+	// travels with the node that commands it.
+	readonly guiding?: SequencerLifecycleGuiding
+}
+
+// What the action that starts guiding establishes on the guiding session, taken from the guiding block of the
+// definition. It is the part of the guider the start of the night writes; the connection, the retry policy and
+// the recalibration rules are commanded elsewhere and are deliberately not repeated here.
+export interface SequencerLifecycleGuiding extends Pick<SequencerPlanGuider, 'calibrateBeforeStart' | 'settle'> {
+	// Recipe the guide camera exposes with, present only for a guider this session owns locally and absent for
+	// a remote one, whose exposures belong to the program running it. The filter is not part of it: a local
+	// guider drives its guide camera alone. Exposure time is seconds.
+	readonly capture?: Omit<SequencerAuxiliaryCapture, 'filter'>
 }
 
 // Mutable accumulator threaded through the lowering, so every stage reports against the same definition
@@ -170,66 +231,24 @@ function cameraSettingsOf(frame: SequencerFrame, defaults: SequencerCamera): Seq
 
 // Whether a frame group contributes anything to the plan.
 //
-// A group concludes on whichever completion criterion is reached first, and `0` disables each criterion, so a
-// group that declares neither a frame count nor an integration time concludes on nothing. Following the
-// contract, disabling both criteria disables the group, with exactly the effect of `enabled: false`; the
-// alternative reading is a group that captures forever, which no operator writes on purpose.
+// The frame count is the only completion criterion, and `0` disables it, so a group asking for no frame
+// concludes on nothing. Following the contract, a zero count disables the group, with exactly the effect of
+// `enabled: false`; the alternative reading is a group that captures forever, which no operator writes on
+// purpose.
 function frameGroupEnabled(frame: SequencerFrame) {
-	return frame.enabled && (frame.count > 0 || frame.integrationTime > 0)
+	return frame.enabled && frame.count > 0
 }
 
-// Relative tolerance snapping an integration quotient to the integer it is a rounding error away from. Two
-// decimal durations rarely divide exactly in binary: `0.07 / 0.01` is `7.000000000000001`, and the ceiling of
-// that schedules an eighth exposure for a target seven of them reach. The bound is orders of magnitude above
-// the representation error of a realistic quotient and orders of magnitude below any spacing an operator can
-// express in seconds, so it snaps only what is a rounding error and never a genuinely partial slot.
-const SEQUENCER_SLOT_TOLERANCE = 1e-9
-
-// Widest distance, in slots, at which a quotient is still taken for the integer beside it. The relative
-// tolerance grows with the quotient and reaches half a slot around five hundred million exposures, where it
-// stops correcting a rounding error and becomes plain rounding: a target needing 500000000.4 exposures would
-// be answered with 500000000 and the group would end before reaching it. A millionth of an exposure is orders
-// of magnitude below any partial slot a declared duration produces and still absorbs the binary error of the
-// quotients an operator writes. Above the magnitude where the error of the division itself exceeds this cap
-// the quotient is rounded up instead, which overshoots the target by one exposure rather than missing it.
-const SEQUENCER_SLOT_TOLERANCE_LIMIT = 1e-6
-
-// Slots needed to accumulate `integrationTime` seconds in exposures of `exposureTime` seconds, rounded up
-// because a partial exposure does not reach the target. A quotient within the tolerance of an integer is
-// taken as that integer. Requires `exposureTime > 0`.
-function integrationSlotsOf(integrationTime: number, exposureTime: number) {
-	const quotient = integrationTime / exposureTime
-	const rounded = Math.round(quotient)
-	const tolerance = Math.min(SEQUENCER_SLOT_TOLERANCE * rounded, SEQUENCER_SLOT_TOLERANCE_LIMIT)
-	return Math.abs(quotient - rounded) <= tolerance ? rounded : Math.ceil(quotient)
-}
-
-// Slots one group needs to reach its target in one cycle.
-//
-// With both criteria active the group concludes at the cheaper of the two, so the smaller demand is the one
-// that decides. The integration criterion divides exactly rather than approximately: every slot of a group
-// exposes for the same `exposureTime` and, in V1, an accepted frame is every captured frame, so the
-// accumulated integration grows in identical steps. For an enabled group the result is >= 1, and it is
-// infinite when the only active criterion is an integration target whose ratio to the exposure overflows,
-// which is what `checkTermination` refuses before a plan is built.
-function requiredSlotsOf(frame: SequencerFrame) {
-	const byCount = frame.count > 0 ? frame.count : Number.POSITIVE_INFINITY
-	const byIntegration = frame.integrationTime > 0 ? integrationSlotsOf(frame.integrationTime, frame.exposureTime) : Number.POSITIVE_INFINITY
-	return Math.min(byCount, byIntegration)
-}
-
-// Reports the five ways the capture plan makes its loop unbounded, which is one of the only situations this
+// Reports the three ways the capture plan makes its loop unbounded, which is one of the only situations this
 // project checks at runtime.
 //
-// An integration target with a zero exposure divides by zero and yields an infinite slot limit, which is the
-// infinite loop coming back through another door, and an integration target so much larger than its exposure
-// that their ratio overflows arrives at the same infinity by a longer road. A finite slot limit above
-// `Number.MAX_SAFE_INTEGER` is the same failure once more: a scheduler counting slots one at a time stops
-// changing its counter there, so it never reaches the bound and the supposedly bounded loop runs forever. A
-// repetition count of zero would have to be read as "no cycle at all", and silently disabling the whole
-// capture through the repetition counter is precisely the quiet acceptance the compatibility rule forbids.
-// The repetition count is bounded from above for the same reason the slot limit is: the loop counts the
-// cycles it completed, and a bound the counter cannot reach is a loop with no end.
+// A slot limit above `Number.MAX_SAFE_INTEGER` is an infinite loop coming through another door: a scheduler
+// counting slots one at a time stops changing its counter there, so it never reaches the bound and the
+// supposedly bounded loop runs forever. A repetition count of zero would have to be read as "no cycle at
+// all", and silently disabling the whole capture through the repetition counter is precisely the quiet
+// acceptance the compatibility rule forbids. The repetition count is bounded from above for the same reason
+// the slot limit is: the loop counts the cycles it completed, and a bound the counter cannot reach is a loop
+// with no end.
 //
 // The projection derived from those bounded counters is checked here as well, because it is derived from the
 // same numbers: slots that terminate can still multiply by an exposure into a value outside the range of a
@@ -247,12 +266,10 @@ function checkTermination(context: CompilerContext, definition: Sequencer) {
 
 		if (!frameGroupEnabled(frame)) continue
 
-		const slots = requiredSlotsOf(frame)
+		const slots = frame.count
 		const integration = slots * frame.exposureTime
 
-		if (frame.integrationTime > 0 && frame.exposureTime <= 0) context.diagnostics.push({ path: `capture.frames[${i}].exposureTime`, message: 'a frame group with an integration time requires a positive exposure time' })
-		else if (!Number.isFinite(slots)) context.diagnostics.push({ path: `capture.frames[${i}].integrationTime`, message: 'the integration target needs more exposures of this length than a number can count, so the group has no slot limit to stop at' })
-		else if (slots + (frame.abandonmentBudget ?? 0) > Number.MAX_SAFE_INTEGER) context.diagnostics.push({ path: `capture.frames[${i}]`, message: 'the slot limit of the group is above the range a number counts one by one, so a scheduler counting slots would stop advancing before reaching it' })
+		if (slots + (frame.abandonmentBudget ?? 0) > Number.MAX_SAFE_INTEGER) context.diagnostics.push({ path: `capture.frames[${i}]`, message: 'the slot limit of the group is above the range a number counts one by one, so a scheduler counting slots would stop advancing before reaching it' })
 		else if (!Number.isFinite(integration)) context.diagnostics.push({ path: `capture.frames[${i}].exposureTime`, message: 'the slots of the group exposing for this long overflow the range of a number, so the plan would report no projected integration for it' })
 		else projected += integration
 	}
@@ -267,7 +284,7 @@ function checkTermination(context: CompilerContext, definition: Sequencer) {
 // declares one and from the capture plan otherwise, so the scheduler never sees an undefined spacing.
 function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): SequencerPlanFrameGroup {
 	const { capture, target } = definition
-	const requiredSlots = requiredSlotsOf(frame)
+	const requiredSlots = frame.count
 	const abandonmentBudget = frame.abandonmentBudget ?? 0
 
 	return {
@@ -277,7 +294,6 @@ function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): Sequence
 		frameType: frame.frameType,
 		exposureTime: frame.exposureTime,
 		count: frame.count,
-		integrationTime: frame.integrationTime,
 		delay: frame.delay ?? capture.delay,
 		weight: frame.weight,
 		filter: frame.filter,
@@ -308,22 +324,31 @@ const SEQUENCER_COOLER_ACTION: ReadonlySet<SequencerLifecycleAction['type']> = n
 //
 // `cooling` is the thermal policy of the definition, or undefined when it declares none; it reaches only the
 // actions that command the cooler, which is the whole reason the policy is carried into a node. `tracking` is
-// the tracking policy of the target, carried the same way and reaching only the action that starts tracking.
-function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction, cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined): SequencerPlanAction {
-	const configuration: SequencerLifecycle = { action, required: action.required ?? false, timeout: action.timeout, retry: action.retry, cooling: SEQUENCER_COOLER_ACTION.has(action.type) ? cooling : undefined, tracking: action.type === 'startTracking' ? tracking : undefined }
+// the tracking policy of the target, carried the same way and reaching only the action that starts tracking,
+// and `guiding` is the guiding policy of the definition, reaching only the action that starts guiding.
+function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction, cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined, guiding: SequencerLifecycleGuiding | undefined): SequencerPlanAction {
+	const configuration: SequencerLifecycle = {
+		action,
+		required: action.required ?? false,
+		timeout: action.timeout,
+		retry: action.retry,
+		cooling: SEQUENCER_COOLER_ACTION.has(action.type) ? cooling : undefined,
+		tracking: action.type === 'startTracking' ? tracking : undefined,
+		guiding: action.type === 'startGuiding' ? guiding : undefined,
+	}
 	return { kind: 'action', id: sequencerNodeId.pipelineAction(pipeline, action.id), type: `${SEQUENCER_LIFECYCLE_BLOCK_PREFIX}${action.type}`, configuration }
 }
 
 // Lowers an ordered lifecycle pipeline. Returns undefined when the pipeline is disabled or declares no
 // enabled action: an empty container would be a node the runtime enters and leaves for nothing, and it would
 // still show up in the checkpoint as a place the session had been.
-function lowerPipeline(pipeline: 'startup' | 'finalize', enabled: boolean, actions: readonly SequencerLifecycleAction[], cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined): SequencerPlanSequence | undefined {
+function lowerPipeline(pipeline: 'startup' | 'finalize', enabled: boolean, actions: readonly SequencerLifecycleAction[], cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined, guiding: SequencerLifecycleGuiding | undefined): SequencerPlanSequence | undefined {
 	if (!enabled) return undefined
 
 	const children: SequencerPlanAction[] = []
 
 	for (const action of actions) {
-		if (action.enabled) children.push(lowerLifecycleAction(pipeline, action, cooling, tracking))
+		if (action.enabled) children.push(lowerLifecycleAction(pipeline, action, cooling, tracking, guiding))
 	}
 
 	return children.length > 0 ? { kind: 'sequence', id: sequencerNodeId.pipeline(pipeline), children } : undefined
@@ -337,8 +362,9 @@ function lowerCentering(definition: Sequencer): SequencerCenter | undefined {
 	if (!target.center.enabled) return undefined
 
 	const { enabled, ...center } = target.center
+	const rotator = definition.rotator.enabled && definition.rotator.moveBeforeCentering ? { angle: definition.rotator.angle, tolerance: definition.rotator.tolerance, settle: definition.rotator.settle } : undefined
 
-	return { ...center, coordinates: { type: target.type, [target.type]: { ...target[target.type] } } }
+	return { ...center, coordinates: { type: target.type, [target.type]: { ...target[target.type] } }, rotator }
 }
 
 // Lowers the safe-point triggers of the capture loop, in the order they are evaluated before a frame: the
@@ -347,13 +373,17 @@ function lowerCentering(definition: Sequencer): SequencerCenter | undefined {
 //
 // `centering` is the lowered centering of the target, which the flip carries when it recenters.
 function lowerTriggers(definition: Sequencer, targetId: string, centering: SequencerCenter | undefined): SequencerPlanAction[] {
-	const { autofocus, dither, meridianFlip } = definition
+	const { autofocus, dither, guiding, meridianFlip } = definition
 	const triggers: SequencerPlanAction[] = []
 	const { enabled: focusable, ...focusing } = autofocus
 
+	// What the flip re-establishes is derived from the blocks that own those dimensions instead of being declared
+	// a second time: the pointing is re-established when the target declares a centering, and the focus when the
+	// autofocus block is enabled and asks to focus after a flip. A flag of its own would be a second source of
+	// truth that can disagree with the block it depends on.
 	if (meridianFlip.enabled) {
 		const { enabled, ...flip } = meridianFlip
-		const configuration: SequencerMeridianFlipTrigger = { ...flip, centering: meridianFlip.recenter ? centering : undefined, focusing: meridianFlip.autofocus ? focusing : undefined }
+		const configuration: SequencerMeridianFlipTrigger = { ...flip, centering, focusing: focusable && autofocus.triggers.afterMeridianFlip ? focusing : undefined }
 		triggers.push({ kind: 'action', id: sequencerNodeId.trigger(targetId, 'meridianFlip'), type: SEQUENCER_BLOCK_TYPE.meridianFlip, configuration })
 	}
 
@@ -361,12 +391,31 @@ function lowerTriggers(definition: Sequencer, targetId: string, centering: Seque
 		triggers.push({ kind: 'action', id: sequencerNodeId.trigger(targetId, 'autofocus'), type: SEQUENCER_BLOCK_TYPE.autofocus, configuration: focusing })
 	}
 
+	// The dither waits under the settle of the guiding session: a dither is a displacement of the guiding, and
+	// a settle of its own would be a second policy for the same guider.
 	if (dither.enabled) {
-		const { enabled, ...configuration } = dither
+		const { enabled, ...policy } = dither
+		const configuration: SequencerDitherTrigger = { ...policy, settle: guiding.settle }
 		triggers.push({ kind: 'action', id: sequencerNodeId.trigger(targetId, 'dither'), type: SEQUENCER_BLOCK_TYPE.dither, configuration })
 	}
 
 	return triggers
+}
+
+// Lowers the optical-path policies every capture node of the plan is prepared against. A feature the
+// definition disabled is dropped rather than carried disabled, so the preparation reads absence as "the
+// session does not command this dimension" and never has to re-check a flag.
+function lowerPreparation(definition: Sequencer): SequencerCapturePreparation {
+	const { cover, flatPanel, rotator, cooling, autofocus } = definition
+
+	return {
+		cover: cover.enabled ? cover : undefined,
+		flatPanel: flatPanel.enabled ? flatPanel : undefined,
+		rotator: rotator.enabled ? rotator : undefined,
+		cooling: cooling.enabled ? cooling : undefined,
+		tracking: lowerTracking(definition),
+		filterOffsets: autofocus.filterOffsets,
+	}
 }
 
 // Lowers the target block: the slew, the optional centering, and the capture loop, in that order.
@@ -391,8 +440,10 @@ function lowerTarget(definition: Sequencer, groups: readonly SequencerPlanFrameG
 		children.push({ kind: 'action', id: sequencerNodeId.center(target.id), type: SEQUENCER_BLOCK_TYPE.center, configuration: centering })
 	}
 
+	const preparation = lowerPreparation(definition)
+
 	const frames = groups.map<SequencerPlanAction>((group) => {
-		const configuration: SequencerCapture = { group, settle: capture.settle }
+		const configuration: SequencerCapture = { group, preparation }
 		return { kind: 'action', id: group.nodeId, type: SEQUENCER_BLOCK_TYPE.captureFrame, configuration }
 	})
 
@@ -442,6 +493,9 @@ function roleRequirements(definition: Sequencer, groups: readonly SequencerPlanF
 	if (target.tracking.enabled) requirements.push({ role: 'mount', path: 'target.tracking' })
 	if (target.center.enabled) requirements.push({ role: 'mount', path: 'target.center' })
 	if (meridianFlip.enabled) requirements.push({ role: 'mount', path: 'meridianFlip' })
+	if (definition.cover.enabled) requirements.push({ role: 'cover', path: 'cover' })
+	if (definition.rotator.enabled) requirements.push({ role: 'rotator', path: 'rotator' })
+	if (definition.flatPanel.enabled) requirements.push({ role: 'flatPanel', path: 'flatPanel' })
 	if (groups.some((group) => group.filter !== undefined)) requirements.push({ role: 'wheel', path: 'capture.frames' })
 
 	// An auxiliary capture selects its own filter, so it commands the wheel even when no frame group does.
@@ -606,11 +660,9 @@ function capturedGroupOf(configuration: unknown): SequencerPlanFrameGroup | unde
 // A handler normalizes how a group is captured: its camera settings, its spacing, the filter it selects. What
 // the group is, and what it has to capture, is not its to change. The counters were derived from the
 // definition and proved finite before any handler ran, so a returned `slotLimit` of `Infinity` would put an
-// endless loop in the plan after every termination check had already passed. The criteria they were derived
-// from are restored with them: `requiredSlots` of an integration-only group is `integrationTime /
-// exposureTime`, so a handler that halves the exposure while the slot count stays behind ends the group at
-// half the integration the definition asked for. Restoring both keeps the group and its bounds describing the
-// same capture.
+// endless loop in the plan after every termination check had already passed. The count they were derived from
+// is restored with them, and so is the exposure the projection is stated in, which keeps the group and its
+// bounds describing the same capture.
 //
 // The two identifiers are restored for the same reason. `nodeId` is what ties the group to the capture action
 // that produces it — it keys this rewrite, addresses the checkpoints and the artifacts of the group, and is
@@ -618,7 +670,7 @@ function capturedGroupOf(configuration: unknown): SequencerPlanFrameGroup | unde
 // storage path is composed from. A handler returning either one changed would hand the scheduler a group
 // pointing at a node that does not run it.
 function withCompilerOwned(captured: SequencerPlanFrameGroup, group: SequencerPlanFrameGroup): SequencerPlanFrameGroup {
-	return { ...captured, id: group.id, nodeId: group.nodeId, exposureTime: group.exposureTime, count: group.count, integrationTime: group.integrationTime, requiredSlots: group.requiredSlots, abandonmentBudget: group.abandonmentBudget, slotLimit: group.slotLimit, projectedIntegration: group.projectedIntegration }
+	return { ...captured, id: group.id, nodeId: group.nodeId, exposureTime: group.exposureTime, count: group.count, requiredSlots: group.requiredSlots, abandonmentBudget: group.abandonmentBudget, slotLimit: group.slotLimit, projectedIntegration: group.projectedIntegration }
 }
 
 // Rebuilds a node with the configuration its handler returned in place of the one the lowering produced.
@@ -714,26 +766,15 @@ function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistr
 
 // Lowers the guider the session will create and own, or undefined when the plan does not guide.
 //
-// V1 has a single guiding mode, creating and owning the session, and it is not a policy preference: the
-// session reserves the logical keys of the guider at start, so a guider session already open holds a lease on
-// exactly those keys and the reservation fails before any guiding policy is consulted. A mode that reuses a
-// session someone else owns therefore describes a path no session can reach.
-function lowerGuider(context: CompilerContext, definition: Sequencer) {
+// The session always creates and owns its guider session, and that is not a policy preference: the session
+// reserves the logical keys of the guider at start, so a guider session already open holds a lease on exactly
+// those keys and the reservation fails before any guiding policy is consulted.
+function lowerGuider(definition: Sequencer) {
 	const { guiding } = definition
 
 	if (!guiding.enabled) return undefined
 
-	if (guiding.connection.mode === 'existing') {
-		context.diagnostics.push({ path: 'guiding.connection.mode', message: 'a guider session owned by another component cannot be reserved by this session' })
-		return undefined
-	}
-
-	if (!guiding.connection.owned) {
-		context.diagnostics.push({ path: 'guiding.connection.owned', message: 'the session must own the guider session it reserves' })
-		return undefined
-	}
-
-	return { connection: guiding.connection, calibrateBeforeStart: guiding.calibrateBeforeStart, recalibrateAfterMeridianFlip: guiding.recalibrateAfterMeridianFlip, restoreAfterInterruption: guiding.restoreAfterInterruption, settle: guiding.settle, retry: guiding.retry }
+	return { connection: guiding.connection, calibrateBeforeStart: guiding.calibrateBeforeStart, recalibrateAfterMeridianFlip: guiding.recalibrateAfterMeridianFlip, settle: guiding.settle, retry: guiding.retry }
 }
 
 // Schema revision this compiler understands. A definition serialized against another revision may have moved
@@ -823,22 +864,26 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 	if (dither.enabled) {
 		checkRetry(context, dither.retry, 'dither.retry')
 		checkOnFailure(context, dither.onFailure, 'dither.onFailure')
+		// `onFailure` is the terminal decision of this feature (§10). Leaving `onExhausted` in the executable
+		// plan would be the silent acceptance the compatibility rule forbids: `onExhausted: 'fail'` next to
+		// `onFailure: 'continue'` would look like a night-ending policy and never end the night.
+		context.removals.push({ path: 'dither.retry.onExhausted', reason: 'onFailure is the terminal decision of this feature, so onExhausted is not consulted' })
 	}
 
 	if (autofocus.enabled) {
 		checkRetry(context, autofocus.retry, 'autofocus.retry')
 		checkOnFailure(context, autofocus.onFailure, 'autofocus.onFailure')
+		context.removals.push({ path: 'autofocus.retry.onExhausted', reason: 'onFailure is the terminal decision of this feature, so onExhausted is not consulted' })
 	}
 
 	if (meridianFlip.enabled) {
 		checkRetry(context, meridianFlip.retry, 'meridianFlip.retry')
-		checkAttempts(context, meridianFlip.maximumAttempts, 'meridianFlip.maximumAttempts')
 		checkOnFailure(context, meridianFlip.onFailure, 'meridianFlip.onFailure')
+		context.removals.push({ path: 'meridianFlip.retry.onExhausted', reason: 'onFailure is the terminal decision of this feature, so onExhausted is not consulted' })
 
 		// An empty window leaves the safe point with no hour angle at which an exposure may resume: the pre-exposure
 		// guard already refuses to start and the flip is not permitted yet, which is a wait that never ends.
 		if (meridianFlip.maximumHourAngle < meridianFlip.minimumHourAngle) context.diagnostics.push({ path: 'meridianFlip.maximumHourAngle', message: 'the flip window is empty, because it ends before the hour angle it may start at' })
-		if (!meridianFlip.waitForCurrentExposure) context.diagnostics.push({ path: 'meridianFlip.waitForCurrentExposure', message: 'the exposure in progress when the window opens is always finished first, and the pre-exposure guard is not switchable' })
 	}
 
 	for (const pipeline of [
@@ -865,21 +910,12 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 // Rejection is the default and removal is reserved for a field that is inert: the two removals below change
 // nothing about what the session does, while everything rejected here would change what it does.
 function checkCompatibility(context: CompilerContext, definition: Sequencer) {
-	const { autofocus, calibration, capture, cooling, cover, dither, dome, execution, flatPanel, guiding, meridianFlip, monitoring, notification, quality, rotator, safety, shutdown, startup, storage, target } = definition
+	const { capture, cooling, cover, dither, dome, execution, flatPanel, guiding, monitoring, notification, quality, rotator, safety, shutdown, startup, target } = definition
 	const { diagnostics, removals } = context
 
 	if (definition.schemaVersion !== SEQUENCER_SCHEMA_VERSION) diagnostics.push({ path: 'schemaVersion', message: `the definition declares schema version ${definition.schemaVersion}, and this version compiles ${SEQUENCER_SCHEMA_VERSION}` })
-	if (!definition.enabled) diagnostics.push({ path: 'enabled', message: 'the definition is disabled and a disabled definition has nothing to execute' })
 
 	if (target.constraints.enabled) diagnostics.push({ path: 'target.constraints.enabled', message: 'target constraints require the ephemeris and the monitor lane this version does not have' })
-	if (target.center.enabled && target.center.recenterAfterDrift) diagnostics.push({ path: 'target.center.recenterAfterDrift', message: 'recentering on drift is a safe-point trigger of the capture loop, and this version centers once before the loop and lowers no centering into it' })
-
-	// The flip carries the centering of the target, because a handler is given its node configuration and a
-	// context that does not carry the plan. A target that does not center therefore leaves the flip nothing to
-	// re-establish the pointing with, and the trigger would come back from the other side of the meridian on
-	// whatever field the slew alone landed on.
-	if (meridianFlip.enabled && meridianFlip.recenter && !target.center.enabled) diagnostics.push({ path: 'meridianFlip.recenter', message: 'the flip recenters after crossing, and the target declares no centering it could re-establish the pointing with' })
-	if (meridianFlip.enabled && meridianFlip.autofocus && !autofocus.enabled) diagnostics.push({ path: 'meridianFlip.autofocus', message: 'the flip focuses after crossing, and the definition disables the autofocus block that declares how to focus' })
 
 	// The action that starts tracking declares no mode of its own and carries the policy of the target, which is
 	// the single authority for how the mount tracks. A disabled tracking block leaves it nothing to carry, and
@@ -888,25 +924,64 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 
 	// The capture order selects the scheduler implementation, and this version implements the sequential one
 	// only. Lowering another order would produce a plan captured in an order other than the one that was asked
-	// for, with no way for the operator to notice it from the result of the night.
+	// for, which is the silent acceptance the compatibility rule forbids.
 	if (capture.order !== 'sequential') diagnostics.push({ path: 'capture.order', message: 'this version schedules frames in the declaration order of the groups, so no other capture order is executed' })
 
-	if (capture.abortOnDeviceAlert) diagnostics.push({ path: 'capture.abortOnDeviceAlert', message: 'this version has no device alert source, so the flag would promise a protection that does not exist' })
+	// Weight is the input of the weighted round-robin order, and the sequential scheduler never reads it.
+	// Equal weight is the sequential equivalent and is consumed honestly; any other value would change which
+	// group is selected next if it were honored, and accepting it here would be the silent disagreement the
+	// compatibility rule exists to prevent.
+	for (let i = 0; i < capture.frames.length; i++) {
+		const frame = capture.frames[i]
+
+		if (frame.enabled && frame.weight !== 1) diagnostics.push({ path: `capture.frames[${i}].weight`, message: 'this version schedules frames in the declaration order of the groups, so a weight other than 1 is not executed' })
+	}
+
 	if (capture.continueAfterRejectedFrame) removals.push({ path: 'capture.continueAfterRejectedFrame', reason: 'quality evaluation is not executed, so no frame is ever rejected and the flag has no path to take effect' })
 
 	if (guiding.thresholds.enabled) diagnostics.push({ path: 'guiding.thresholds.enabled', message: 'guiding thresholds require the continuous monitor lane this version does not have' })
 	if (guiding.recovery.enabled) diagnostics.push({ path: 'guiding.recovery.enabled', message: 'guiding recovery requires the continuous monitor lane this version does not have' })
+	// The interlock of each safe point is what puts the corrections back after a suspension, and a pause
+	// re-enters that same safe point. There is no second restore path for an interruption that stopped the
+	// guider itself, so the flag would change nothing about the night whether it is set or not.
+	if (guiding.enabled) removals.push({ path: 'guiding.restoreAfterInterruption', reason: 'guiding is resumed by the interlock of each safe point, so a restore-after-interruption flag has no path of its own' })
 	if (!guiding.enabled && commands(definition, ['startGuiding', 'stopGuiding'])) diagnostics.push({ path: 'guiding.enabled', message: 'a lifecycle action commands guiding, which the definition disables' })
 	if (!guiding.enabled && dither.enabled) diagnostics.push({ path: 'dither.enabled', message: 'a dither is a guider command, and the definition declares no guider to send it to' })
 
-	// Only an enabled autofocus is lowered into a trigger node, so the trigger settings of a disabled one are
-	// inert and reporting them would address the operator to a field that changes nothing.
-	if (autofocus.enabled && autofocus.triggers.starSizeChange !== 0) diagnostics.push({ path: 'autofocus.triggers.starSizeChange', message: 'triggering on star size requires measuring the star size of every frame, which this version does not do' })
+	// The other half of the same pair, for the same reason cooling has one. The runtime opens the guider session
+	// before the plan, but opening is a connection and not a correction: nothing calibrates, nothing loops and
+	// nothing guides until an action commands it. The interlock brackets a guider that is running and leaves an
+	// idle one alone precisely because a session that never issued `startGuiding` is unguided by configuration,
+	// and the dither is skipped for the same reason. So an enabled guiding block with no action that starts it
+	// captures every frame unguided while reporting a guided plan, which is the silent disagreement the
+	// compatibility rule exists to prevent. Only a startup action counts: `shutdown` runs after the last frame,
+	// so guiding started there guides nothing.
+	if (guiding.enabled && !commands(definition, ['startGuiding'], ['startup'])) diagnostics.push({ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and no enabled startup action starts guiding, so every frame would be captured unguided' })
 
-	if (rotator.enabled) diagnostics.push({ path: 'rotator.enabled', message: 'no action of this version commands the rotator, so an enabled rotator would never reach its angle' })
+	// Existing is not enough: the action has to be terminal too. `required` is what turns a startup failure into
+	// a session failure, and it defaults to false, so a guiding start that exhausted its retries otherwise lets
+	// the walk continue into the target. The rest of the session then behaves exactly as a session configured
+	// without a guider — the interlock leaves the idle guider alone, the dither skips — and every frame of the
+	// night is exposed unguided on a definition that declares guiding, which is the same silent disagreement the
+	// check above prevents, reached at runtime instead of at edit time.
+	//
+	// It is refused rather than forced during the lowering: an operator who really wants the night captured
+	// unguided when the guider does not come up says so by disabling the guiding block, and rewriting a declared
+	// `required: false` into `true` would be the compiler quietly disagreeing with the definition instead.
+	if (guiding.enabled && startup.enabled) {
+		for (let i = 0; i < startup.actions.length; i++) {
+			const action = startup.actions[i]
+
+			if (action.enabled && action.type === 'startGuiding' && action.required !== true) {
+				diagnostics.push({ path: `startup.actions[${i}].required`, message: 'the guiding block declares the guider the capture runs under, and this action does not fail the session when it cannot start guiding, so every frame would be captured unguided' })
+			}
+		}
+	}
+
 	if (dome.enabled) diagnostics.push({ path: 'dome.enabled', message: 'the device layer of this version has no dome' })
-	if (cover.enabled) diagnostics.push({ path: 'cover.enabled', message: 'the cover block only declares automatic behaviors this version does not perform; the cover is commanded by the lifecycle actions, which carry their own timeout and retry' })
-	if (flatPanel.enabled) diagnostics.push({ path: 'flatPanel.enabled', message: 'the flat panel is lit only for flat frames, which this version does not capture' })
+	if (cover.enabled && cover.closeOnUnsafe) diagnostics.push({ path: 'cover.closeOnUnsafe', message: 'closing the cover on an unsafe condition requires the safety monitor this version does not have' })
+	if (rotator.enabled && rotator.restoreAfterMeridianFlip) diagnostics.push({ path: 'rotator.restoreAfterMeridianFlip', message: 'restoring the rotator after a flip is not commanded, so the flag would change nothing about the night' })
+	if (rotator.enabled && rotator.reverse) diagnostics.push({ path: 'rotator.reverse', message: 'the rotator is commanded to the declared angle, so reversing it would change nothing about the night' })
 
 	// The two halves of the thermal policy are not interchangeable: only `coolCamera` drives the sensor to
 	// `cooling.temperature`, and `warmCamera` is the terminal action that gives it back to the ambient. A
@@ -922,11 +997,6 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	if (!cooling.enabled && cooled) diagnostics.push({ path: 'cooling.enabled', message: 'a lifecycle action commands the camera cooler, and the cooling block it reads the temperature from is disabled' })
 	if (cooling.enabled && !cools) diagnostics.push({ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled startup action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' })
 
-	if (calibration.dark.enabled) diagnostics.push({ path: 'calibration.dark.enabled', message: 'calibration frames are not lowered by this version' })
-	if (calibration.bias.enabled) diagnostics.push({ path: 'calibration.bias.enabled', message: 'calibration frames are not lowered by this version' })
-	if (calibration.flat.enabled) diagnostics.push({ path: 'calibration.flat.enabled', message: 'calibration frames are not lowered by this version' })
-	if (calibration.darkFlat.enabled) diagnostics.push({ path: 'calibration.darkFlat.enabled', message: 'calibration frames are not lowered by this version' })
-
 	if (monitoring.enabled) diagnostics.push({ path: 'monitoring.enabled', message: 'the monitor lane is not part of this version' })
 	if (safety.enabled) diagnostics.push({ path: 'safety.enabled', message: 'there is no safety monitor in this version' })
 	if (quality.enabled) diagnostics.push({ path: 'quality.enabled', message: 'frame quality evaluation is not part of this version' })
@@ -934,17 +1004,6 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 
 	if (execution.start.type === 'sunAltitude' || execution.start.type === 'targetAltitude') diagnostics.push({ path: 'execution.start.type', message: `starting on ${execution.start.type} requires the ephemeris this version does not compute` })
 	if (execution.end.type === 'sunAltitude' || execution.end.type === 'targetAltitude') diagnostics.push({ path: 'execution.end.type', message: `ending on ${execution.end.type} requires the ephemeris this version does not compute` })
-	if (!execution.checkpoint.enabled) diagnostics.push({ path: 'execution.checkpoint.enabled', message: 'the checkpoint is how a session knows what it already did, and this version always writes it' })
-	if (execution.maximumParallelActions !== 1) diagnostics.push({ path: 'execution.maximumParallelActions', message: 'this version executes one action at a time' })
-	if (execution.releaseResourcesWhilePaused) diagnostics.push({ path: 'execution.releaseResourcesWhilePaused', message: 'the reservation is held through a pause, which is the entire reason it exists' })
-	if (execution.releaseResourcesWhileSuspended) diagnostics.push({ path: 'execution.releaseResourcesWhileSuspended', message: 'the reservation is held through a suspension, which is the entire reason it exists' })
-	if (execution.continueAfterApplicationRestart) diagnostics.push({ path: 'execution.continueAfterApplicationRestart', message: 'a session of this version does not survive the process it runs in' })
-
-	if (!storage.enabled) diagnostics.push({ path: 'storage.enabled', message: 'a session with storage disabled would expose and discard every frame it captures' })
-	if (!storage.atomicWrite) diagnostics.push({ path: 'storage.atomicWrite', message: 'the write protocol is what keeps a partial file out of the final path, and this version always applies it' })
-	if (storage.overwrite) diagnostics.push({ path: 'storage.overwrite', message: 'an existing file is classified and never overwritten in silence' })
-
-	if (shutdown.runOnUnsafe) diagnostics.push({ path: 'shutdown.runOnUnsafe', message: 'there is no safety monitor in this version to declare a session unsafe' })
 
 	for (const pipeline of [
 		{ name: 'startup', actions: startup.actions, enabled: startup.enabled },
@@ -1024,8 +1083,16 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	const children: SequencerPlanNode[] = []
 	const cooling = definition.cooling.enabled ? definition.cooling : undefined
 	const tracking = lowerTracking(definition)
-	const lowered = lowerPipeline('startup', startup.enabled, startup.actions, cooling, tracking)
-	const finalized = lowerPipeline('finalize', shutdown.enabled, shutdown.actions, cooling, tracking)
+	const guider = lowerGuider(definition)
+	// Only what the start of the guiding establishes reaches the node: the calibration it runs under, the settle
+	// it installs on the guider session for the rest of the night, and — for a guider this session owns — the
+	// recipe its guide camera exposes with. The rest of the guider is the connection and the policy the session
+	// itself commands through, and copying it into every guiding action would carry a second, staler authority
+	// for what the plan already states once. A remote guider exposes under the program that runs it, so it
+	// carries no recipe of ours.
+	const guiding = guider === undefined ? undefined : { calibrateBeforeStart: guider.calibrateBeforeStart, settle: guider.settle, capture: guider.connection.mode === 'local' ? guider.connection.capture : undefined }
+	const lowered = lowerPipeline('startup', startup.enabled, startup.actions, cooling, tracking, guiding)
+	const finalized = lowerPipeline('finalize', shutdown.enabled, shutdown.actions, cooling, tracking, guiding)
 
 	if (lowered) children.push(lowered)
 	children.push(lowerTarget(definition, groups))
@@ -1038,13 +1105,11 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	if (shutdown.runOnFailure) runOn.push('failed')
 
 	const requirements = roleRequirements(definition, groups)
-	const guider = lowerGuider(context, definition)
 
 	const plan: SequencerPlan = {
 		definitionId: definition.id ?? '',
 		definitionRevision: definition.revision ?? 0,
 		name: definition.name,
-		description: definition.description,
 		target: { id: target.id, name: target.name },
 		execution: { start: definition.execution.start, end: definition.execution.end, pauseMode: definition.execution.pauseMode, stopMode: definition.execution.stopMode, defaultRetry: definition.execution.defaultRetry, checkpoint: definition.execution.checkpoint },
 		devices: definition.devices,
@@ -1055,7 +1120,7 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 		finalize: finalized && { continueOnFailure: shutdown.continueOnFailure, runOn },
 		guider,
 		cooling,
-		storage: { root: storage.root, fileNameTemplate: storage.fileNameTemplate, directoryTemplate: storage.directoryTemplate, temporaryDirectory: storage.temporaryDirectory, checksum: storage.checksum, autoSubFolderMode: storage.autoSubFolderMode },
+		storage: { root: storage.root, fileNameTemplate: storage.fileNameTemplate, directoryTemplate: storage.directoryTemplate, temporaryDirectory: storage.temporaryDirectory, autoSubFolderMode: storage.autoSubFolderMode },
 	}
 
 	// The handlers run before the roles are checked, because a role a handler declares is as required as one

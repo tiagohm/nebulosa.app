@@ -1,6 +1,5 @@
 import type { FrameType } from 'nebulosa/src/devices/indi/device'
-import type { OperationFailureReason } from './orchestration'
-import type { Sequencer, SequencerDeviceRole } from './sequencer'
+import type { SequencerDeviceRole, SequencerFailureReason } from './sequencer'
 
 // Durable execution state of a sequencer session: what the runtime persists, what it reloads after a
 // restart, and what the UI reads. Configuration lives in `sequencer.ts` and never appears here.
@@ -30,28 +29,12 @@ export function isSequencerTerminalState(state: SequencerSessionState) {
 
 // Definitive cause of a failed session, normalized from the operation that produced it.
 export interface SequencerFailure {
-	// Normalized terminal cause.
-	readonly reason: OperationFailureReason
+	// Normalized terminal cause. It is the sequencer's own set rather than the operation one, because a session
+	// also fails for causes no device operation has: a frame refused by the quality gate, an unsafe condition,
+	// or storage that went away mid-night.
+	readonly reason: SequencerFailureReason
 	// Human-readable diagnostic, when the failing operation carried one.
 	readonly detail?: string
-}
-
-// Stored definition, which is the request contract plus what persistence assigns to it.
-//
-// The id and the revision are optional on the definition itself, because a definition being edited has not
-// been stored yet and has neither. A stored one always has both, so they are reported here as the total values
-// they are; the stored definition carries the same two, written from this record and never from the payload.
-export interface SequencerDefinitionRecord {
-	// Identifier assigned by persistence.
-	readonly id: string
-	// Revision of this version, starting at 1 and incremented by every update.
-	readonly revision: number
-	// Definition as stored, with its id and revision filled in.
-	readonly definition: Sequencer
-	// Instant the definition was first stored.
-	readonly createdAt: number
-	// Instant of the last update.
-	readonly updatedAt: number
 }
 
 // Persisted session record. `revision` is the optimistic-concurrency guard: every commit checks the
@@ -59,9 +42,9 @@ export interface SequencerDefinitionRecord {
 export interface SequencerSession {
 	// Stable session identifier.
 	readonly id: string
-	// Definition this session executes.
+	// Optional recipe id the start payload carried, empty when the client sent none.
 	readonly definitionId: string
-	// Immutable definition revision snapshotted when the session was created; later edits do not affect it.
+	// Optional recipe revision the start payload carried, zero when the client sent none.
 	readonly definitionRevision: number
 	// Optimistic-concurrency revision of this record, starting at 0 and incremented by every commit.
 	readonly revision: number
@@ -106,7 +89,7 @@ export interface SequencerCheckpoint {
 	// Instants and counters the safe-point triggers are evaluated against. Always present, because a resume
 	// that found them absent would fire every trigger again on the first frame after the restart.
 	readonly anchors: SequencerTriggerAnchors
-	// Definition revision this checkpoint was produced from; a resume against another revision is invalid.
+	// Recipe revision copied from the start payload; a resume against another label is invalid.
 	readonly definitionRevision: number
 	// Handler version per block type, as resolved when the session started. A resume against a registry
 	// that no longer offers the same versions is refused rather than silently executed by another handler.
@@ -136,11 +119,10 @@ export interface SequencerTriggerAnchor {
 
 // Condition of a safe point that happens once and is never observable again.
 //
-// A flip is over as soon as the mount reports the other side of the pier, and a recovery is over as soon as
-// the safe point that followed it ends. Everything else a trigger is stated over — frames, elapsed time,
-// temperature, the filter the frame needs — is still there to be measured at the next safe point, which is
-// why only these two have to be remembered when the run they selected did not focus.
-export type SequencerTriggerEventReason = 'afterMeridianFlip' | 'afterRecovery'
+// A flip is over as soon as the mount reports the other side of the pier. Everything else a trigger is stated
+// over — frames, elapsed time, temperature, the filter the frame needs — is still there to be measured at the
+// next safe point, which is why only this one has to be remembered when the run it selected did not focus.
+export type SequencerTriggerEventReason = 'afterMeridianFlip'
 
 // Every anchor of the session, which is the whole input the trigger evaluator reads besides the selection.
 //
@@ -168,9 +150,9 @@ export interface SequencerTriggerAnchors {
 
 // Counters of one frame group inside the current cycle.
 //
-// Every counter is per cycle and resets when the cycle advances, because `count` and `integrationTime` are
-// per-cycle targets: `repeat: 3` of a group asking for ten frames is three blocks of ten, not thirty frames
-// in one block. Accumulating across cycles would make `repeat` indistinguishable from multiplying `count`.
+// Every counter is per cycle and resets when the cycle advances, because `count` is a per-cycle target:
+// `repeat: 3` of a group asking for ten frames is three blocks of ten, not thirty frames in one block.
+// Accumulating across cycles would make `repeat` indistinguishable from multiplying `count`.
 //
 // The three outcome counters exist separately even though two of them are constant in V1, where a physically
 // completed frame is always accepted and only an abandoned slot is ever rejected. Quality evaluation only has
@@ -180,7 +162,7 @@ export interface SequencerGroupProgress {
 	// Slots already emitted in this cycle, which is also the ordinal of the next slot. It never reaches beyond
 	// the `slotLimit` of the group, which is what bounds the cycle.
 	readonly cursor: number
-	// Frames accepted, which is the counter the completion criteria are stated in.
+	// Frames accepted, which is the counter the completion criterion is stated in.
 	readonly accepted: number
 	// Frames physically completed. In V1 this equals `accepted`, since nothing rejects a completed frame.
 	readonly captured: number
@@ -190,10 +172,11 @@ export interface SequencerGroupProgress {
 	readonly abandoned: number
 	// Accumulated exposure time of the accepted frames of this cycle, in seconds.
 	readonly integration: number
-	// Physical attempt the current attempt window opened at. Attempts spent in the window are `attempt -
-	// attemptWindowStart`, exhaustion is that difference reaching the maximum, and granting a new window after
-	// a pause is writing the next physical attempt here. Only the window start is stored: the physical attempt
-	// itself is derived from the artifact registry, so the two can never disagree after a crash.
+	// Physical attempt the current attempt window opened at, 0-based. Attempts spent in the window are
+	// `attempt - attemptWindowStart + 1`, because the attempt that opened the window counts as the first.
+	// Exhaustion is that spent count reaching `retry.maxAttempts`, and granting a new window after a pause is
+	// writing the next physical attempt here. Only the window start is stored: the physical attempt itself is
+	// derived from the artifact registry, so the two can never disagree after a crash.
 	readonly attemptWindowStart: number
 }
 
@@ -458,9 +441,9 @@ export interface SequencerMonitorSnapshot {
 export interface SequencerSessionSnapshot {
 	// Session being described.
 	readonly id: string
-	// Definition it executes.
+	// Optional recipe id the start payload carried, empty when the client sent none.
 	readonly definitionId: string
-	// Definition revision it snapshotted at creation.
+	// Optional recipe revision the start payload carried, zero when the client sent none.
 	readonly definitionRevision: number
 	// Revision of the session record this snapshot was derived from, which is what makes two snapshots of the
 	// same session comparable.

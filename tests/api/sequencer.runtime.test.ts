@@ -1,12 +1,23 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import { join } from 'path'
+import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
+import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
 import { OperationCoordinator } from 'src/api/operation'
-import { ResourceArbiter } from 'src/api/resource'
+import type { OperationContext, OperationHandle } from 'src/api/operation'
+import { ResourceArbiter, resourceKey } from 'src/api/resource'
+import type { ReservationToken } from 'src/api/resource'
+import { sequencerNodeId } from 'src/api/sequencer.compiler'
+import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
+import type { SequencerPreparationServices } from 'src/api/sequencer.prepare'
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { SequencerActionContext, SequencerActionHandler, SequencerActionResult, SequencerAuxiliaryTarget } from 'src/api/sequencer.registry'
 import { SequencerRuntime, SessionAdmissionGate, SessionTeardown } from 'src/api/sequencer.runtime'
-import type { SequencerRuntimePlanDraft } from 'src/api/sequencer.runtime'
+import type { SequencerDeviceResolver, SequencerRuntimePlanDraft } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
+import { failedOperationResult, successfulOperationResult } from '#/orchestration'
+import type { OperationResult } from '#/orchestration'
+import type { SequencerDevices, SequencerRetryPolicy } from '#/sequencer'
+import type { SequencerPlan, SequencerPlanAction, SequencerPlanGuider, SequencerPlanSequence, SequencerPlanStorage } from '#/sequencer.plan'
 
 describe('session admission gate', () => {
 	test('admits the first session and refuses another one naming the holder', () => {
@@ -141,11 +152,61 @@ function exposeHandler(execute: (context: SequencerActionContext, configuration:
 	}
 }
 
-function plan(): SequencerRuntimePlanDraft {
-	return { definitionId: 'definition-1', definitionRevision: 1, devices: { camera: 'camera-1' }, action: { id: 'node-1', type: 'expose', configuration: { exposureTime: 2 } } }
+const RETRY: SequencerRetryPolicy = { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' }
+
+const SERVICES = { preparation: {} as SequencerPreparationServices, guiding: {} as SequencerGuidingServices }
+
+function compiled(overrides?: {
+	readonly devices?: SequencerDevices
+	readonly storage?: Partial<SequencerPlanStorage>
+	readonly configuration?: unknown
+	readonly execution?: Partial<SequencerPlan['execution']>
+	readonly nodes?: number
+	readonly guider?: SequencerPlan['guider']
+	readonly startup?: SequencerPlan['startup']
+	readonly finalize?: SequencerPlan['finalize']
+}): SequencerPlan {
+	const configuration = overrides?.configuration ?? { exposureTime: 2 }
+	const actions: SequencerPlanAction[] = []
+
+	for (let i = 1; i <= (overrides?.nodes ?? 1); i++) actions.push({ kind: 'action', id: `node-${i}`, type: 'expose', configuration })
+
+	const target: SequencerPlanSequence = { kind: 'sequence', id: sequencerNodeId.target('m42'), children: actions }
+	const children: SequencerPlanSequence[] = []
+
+	if (overrides?.startup !== undefined) children.push({ kind: 'sequence', id: sequencerNodeId.pipeline('startup'), children: [{ kind: 'action', id: 'startup-1', type: 'expose', configuration: { exposureTime: 2, required: true, timeout: 30, retry: RETRY } }] })
+
+	children.push(target)
+
+	if (overrides?.finalize !== undefined) children.push({ kind: 'sequence', id: sequencerNodeId.pipeline('finalize'), children: [{ kind: 'action', id: 'finalize-1', type: 'expose', configuration }] })
+
+	return {
+		definitionId: 'definition-1',
+		definitionRevision: 1,
+		name: 'M42',
+		target: { id: 'm42', name: 'Orion Nebula' },
+		execution: { start: { type: 'manual' }, end: { type: 'afterSequence' }, pauseMode: 'afterCurrentExposure', stopMode: 'graceful', defaultRetry: RETRY, checkpoint: { afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 60 }, ...overrides?.execution },
+		devices: overrides?.devices ?? { camera: 'camera-1' },
+		roles: ['camera'],
+		root: { kind: 'sequence', id: sequencerNodeId.root(), children },
+		groups: [],
+		handlers: { expose: 1 },
+		storage: { root: '/data/nebulosa', fileNameTemplate: '{target}', directoryTemplate: '{target}', autoSubFolderMode: 'noon', ...overrides?.storage },
+		guider: overrides?.guider,
+		startup: overrides?.startup,
+		finalize: overrides?.finalize,
+	}
 }
 
-function runtime(handler: SequencerActionHandler<ExposeConfiguration, number>, now?: () => number) {
+function guiderPlan(connection: SequencerPlanGuider['connection']): SequencerPlanGuider {
+	return { connection, calibrateBeforeStart: false, recalibrateAfterMeridianFlip: false, settle: { tolerance: 1.5, time: 10, timeout: 120 }, retry: RETRY }
+}
+
+function plan(overrides?: Parameters<typeof compiled>[0]): SequencerRuntimePlanDraft {
+	return { compiled: compiled(overrides) }
+}
+
+function runtime(handler: SequencerActionHandler<ExposeConfiguration, number>, now?: () => number, overrides?: { readonly resolve?: SequencerDeviceResolver; readonly guiding?: SequencerGuidingServices }) {
 	const arbiter = new ResourceArbiter()
 	const coordinator = new OperationCoordinator(arbiter)
 	const registry = new SequencerBlockRegistry()
@@ -153,7 +214,7 @@ function runtime(handler: SequencerActionHandler<ExposeConfiguration, number>, n
 
 	registry.register(handler)
 
-	return { arbiter, coordinator, registry, store, runtime: new SequencerRuntime({ store, registry, coordinator, now, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) }) }
+	return { arbiter, coordinator, registry, store, runtime: new SequencerRuntime({ store, registry, coordinator, now, ...SERVICES, ...overrides, resolve: overrides?.resolve ?? ((_, deviceId) => ({ key: `logical:${deviceId}` })) }) }
 }
 
 describe('sequencer runtime', () => {
@@ -193,14 +254,173 @@ describe('sequencer runtime', () => {
 		expect(session?.endedAt).toBeDefined()
 		expect(session?.checkpoint.completed).toEqual(['node-1'])
 		expect(session?.checkpoint.cursor).toBeUndefined()
-		expect(store.events(created.id).map((event) => event.type)).toEqual(['stateChanged', 'stateChanged', 'artifactCommitted', 'stateChanged'])
-		expect(store.events(created.id).map((event) => event.state)).toEqual(['running', 'finalizing', undefined, 'completed'])
-		expect(store.events(created.id)[2]).toMatchObject({ nodeId: 'node-1', detail: 'slot-1' })
+		expect(store.events(created.id).map((event) => event.type)).toEqual(['stateChanged', 'artifactCommitted', 'stateChanged', 'stateChanged'])
+		expect(store.events(created.id).map((event) => event.state)).toEqual(['running', undefined, 'finalizing', 'completed'])
+		expect(store.events(created.id)[1]).toMatchObject({ nodeId: 'node-1', detail: 'slot-1' })
 		expect(store.artifacts(created.id)).toMatchObject([{ logicalSlotId: 'slot-1', attempt: 1, status: 'committed' }])
 
 		// The reservation and the claim are gone only after the action and its cleanups finished.
 		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 		expect(instance.activeSessionId).toBeUndefined()
+	})
+
+	test('publishes the live half of the snapshot while an action is running', async () => {
+		const exposing = Promise.withResolvers<void>()
+		const hold = Promise.withResolvers<void>()
+		const waiting = Promise.withResolvers<void>()
+		const release = Promise.withResolvers<void>()
+		const now = 10_000
+		const { runtime: instance } = runtime(
+			exposeHandler(async (context) => {
+				context.progress({ fraction: 0, detail: 'exposing lum', exposure: 30 })
+				exposing.resolve()
+				await hold.promise
+				context.progress({ detail: 'waiting for the meridian flip window to open', wait: { reason: 'waiting for the meridian flip window', until: 70_000 } })
+				waiting.resolve()
+				await release.promise
+				context.progress({ fraction: 1, detail: 'publishing the frame' })
+				return { type: 'completed', value: 1 }
+			}),
+			() => now,
+		)
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+		await exposing.promise
+
+		const live = instance.observation(created.id)
+
+		expect(live?.resolved).toEqual({ camera: 'camera-1' })
+		expect(live?.exposure).toEqual({ startedAt: 10_000, total: 30 })
+		expect(live?.foreground).toMatchObject({ nodeId: 'node-1', type: 'expose', state: 'running', detail: 'exposing lum', progress: 0 })
+		expect(live?.overhead).toBeUndefined()
+
+		hold.resolve()
+		await waiting.promise
+
+		const held = instance.observation(created.id)
+
+		expect(held?.foreground?.state).toBe('waiting')
+		expect(held?.foreground?.wait).toEqual({ reason: 'waiting for the meridian flip window', until: 70_000 })
+		expect(held?.exposure).toEqual({ startedAt: 10_000, total: 30 })
+
+		release.resolve()
+		await instance.settled(created.id)
+
+		expect(instance.observation(created.id)).toBeUndefined()
+	})
+
+	test('reserves the logical key of the remote guider the plan declares', async () => {
+		let connected: unknown
+		let availability: string | undefined
+
+		const { runtime: instance, arbiter } = runtime(
+			exposeHandler(() => {
+				availability = arbiter.availability(remoteGuiderKey('localhost', 4400))
+				return Promise.resolve({ type: 'completed', value: 1 })
+			}),
+			undefined,
+			{
+				guiding: {
+					guiderCommander: {
+						connect: (request: unknown) => {
+							connected = request
+							return Promise.resolve(successfulOperationResult({ id: 'guider-1' }))
+						},
+					},
+				} as unknown as SequencerGuidingServices,
+			},
+		)
+
+		const created = instance.create(plan({ guider: guiderPlan({ mode: 'remote', host: 'localhost', port: 4400 }) }))!
+
+		instance.start(created.id)
+
+		const session = await instance.settled(created.id)
+
+		expect(session?.state).toBe('completed')
+		expect(connected).toEqual({ mode: 'remote', host: 'localhost', port: 4400 })
+		expect(availability).not.toBe('available')
+		expect(arbiter.availability(remoteGuiderKey('localhost', 4400))).toBe('available')
+	})
+
+	test('reserves the devices and the logical keys of the local guider the plan declares', async () => {
+		const camera = { id: 'guide-camera-1', type: 'camera', hardwareId: 'hw-guide-camera', connected: true, client: { id: 'client-1' } } as unknown as Camera
+		const guideOutput = { id: 'guide-output-1', canPulseGuide: true, hardwareId: 'hw-guide-output', connected: true, client: { id: 'client-1' } } as unknown as GuideOutput
+		let connected: unknown
+		const held: string[] = []
+
+		const { runtime: instance, arbiter } = runtime(
+			exposeHandler(() => {
+				for (const key of [localGuiderCameraKey(camera), localGuiderOutputKey(guideOutput), 'hw-guide-camera', 'hw-guide-output']) {
+					if (arbiter.availability(key) !== 'available') held.push(key)
+				}
+
+				return Promise.resolve({ type: 'completed', value: 1 })
+			}),
+			undefined,
+			{
+				resolve: (role, deviceId) => {
+					if (role === 'guideCamera') return { key: resourceKey(camera), device: camera }
+					if (role === 'guideOutput') return { key: resourceKey(guideOutput), device: guideOutput }
+					return { key: `logical:${deviceId}` }
+				},
+				guiding: {
+					guiderCommander: {
+						connect: (request: unknown) => {
+							connected = request
+							return Promise.resolve(successfulOperationResult({ id: 'guider-1' }))
+						},
+					},
+				} as unknown as SequencerGuidingServices,
+			},
+		)
+
+		const created = instance.create(
+			plan({
+				devices: { camera: 'camera-1', guideCamera: 'guide-camera-1', guideOutput: 'guide-output-1' },
+				guider: guiderPlan({ mode: 'local', focalLength: 200, capture: { exposureTime: 2, frameType: 'LIGHT', binX: 1, binY: 1, gain: 0, offset: 0, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false } }),
+			}),
+		)!
+
+		instance.start(created.id)
+
+		const session = await instance.settled(created.id)
+
+		expect(session?.state).toBe('completed')
+		expect(connected).toEqual({ mode: 'local', focalLength: 200, camera: 'guide-camera-1', guideOutput: 'guide-output-1' })
+		expect(held).toEqual([localGuiderCameraKey(camera), localGuiderOutputKey(guideOutput), 'hw-guide-camera', 'hw-guide-output'])
+	})
+
+	test('fails the session through the finalize pipeline when the guider the plan declares cannot be opened', async () => {
+		const executed: string[] = []
+
+		const { runtime: instance, arbiter } = runtime(
+			exposeHandler((context) => {
+				executed.push(context.nodeId)
+				return Promise.resolve({ type: 'completed', value: 1 })
+			}),
+			undefined,
+			{
+				guiding: {
+					guiderCommander: {
+						connect: () => Promise.resolve(failedOperationResult('disconnected', 'the guider is unreachable')),
+					},
+				} as unknown as SequencerGuidingServices,
+			},
+		)
+
+		const created = instance.create(plan({ guider: guiderPlan({ mode: 'remote', host: 'localhost', port: 4400 }), finalize: { continueOnFailure: true, runOn: ['failed'] } }))!
+
+		instance.start(created.id)
+
+		const session = await instance.settled(created.id)
+
+		expect(executed).toEqual(['finalize-1'])
+		expect(session?.state).toBe('failed')
+		expect(session?.failure).toEqual({ reason: 'disconnected', detail: 'the guider is unreachable' })
+		expect(arbiter.availability(remoteGuiderKey('localhost', 4400))).toBe('available')
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 	})
 
 	test('runs the action inside the reservation while refusing an operation outside it', async () => {
@@ -282,11 +502,12 @@ describe('sequencer runtime', () => {
 			}),
 		)
 
-		const mutable = { definitionId: 'definition-1', definitionRevision: 1, devices: { camera: 'camera-1' }, action: { id: 'node-1', type: 'expose', configuration: { exposureTime: 2 } } }
+		const configuration = { exposureTime: 2 }
+		const mutable = plan({ configuration, devices: { camera: 'camera-1' } })
 		const created = instance.create(mutable)!
 
-		mutable.action.configuration.exposureTime = 600
-		mutable.devices.camera = 'camera-2'
+		configuration.exposureTime = 600
+		;(mutable.compiled.devices as { camera: string }).camera = 'camera-2'
 
 		instance.start(created.id)
 
@@ -312,6 +533,7 @@ describe('sequencer runtime', () => {
 			store,
 			registry,
 			coordinator,
+			...SERVICES,
 			resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }),
 			progress: (_, __, progress) => {
 				reported.push(progress.fraction!)
@@ -377,7 +599,7 @@ describe('sequencer runtime', () => {
 
 		registry.register(exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 })))
 
-		const instance = new SequencerRuntime({ store, registry, coordinator, resolve: () => undefined })
+		const instance = new SequencerRuntime({ store, registry, coordinator, ...SERVICES, resolve: () => undefined })
 		const created = instance.create(plan())!
 
 		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'device camera-1 of role camera is not available' })
@@ -394,7 +616,7 @@ describe('sequencer runtime', () => {
 
 		registry.register({ ...handler, resources: () => [{ role: 'camera' }, { role: 'wheel' }] })
 
-		const instance = new SequencerRuntime({ store, registry, coordinator, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) })
+		const instance = new SequencerRuntime({ store, registry, coordinator, ...SERVICES, resolve: (_, deviceId) => ({ key: `logical:${deviceId}` }) })
 		const created = instance.create(plan())!
 
 		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'role wheel is not available' })
@@ -410,8 +632,8 @@ describe('sequencer runtime', () => {
 
 		registry.register({ ...handler, resources: () => [{ role: 'camera' }, { role: 'wheel', optional: true }] })
 
-		const instance = new SequencerRuntime({ store, registry, coordinator, resolve: (role, deviceId) => (role === 'wheel' ? undefined : { key: `logical:${deviceId}` }) })
-		const created = instance.create({ ...plan(), devices: { camera: 'camera-1', wheel: 'wheel-1' } })!
+		const instance = new SequencerRuntime({ store, registry, coordinator, ...SERVICES, resolve: (role, deviceId) => (role === 'wheel' ? undefined : { key: `logical:${deviceId}` }) })
+		const created = instance.create(plan({ devices: { camera: 'camera-1', wheel: 'wheel-1' } }))!
 
 		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'device wheel-1 of role wheel is not available' })
 		expect(instance.activeSessionId).toBeUndefined()
@@ -600,7 +822,7 @@ describe('sequencer runtime', () => {
 			}),
 		)
 
-		const created = instance.create(plan())!
+		const created = instance.create(plan({ execution: { stopMode: 'immediate' } }))!
 
 		instance.start(created.id)
 
@@ -609,9 +831,358 @@ describe('sequencer runtime', () => {
 		const session = await instance.stop(created.id)
 
 		expect(cleaned).toEqual(['expose'])
-		expect(session?.state).toBe('failed')
+		expect(session?.state).toBe('stopped')
 		expect(session?.desiredState).toBe('stopped')
-		expect(session?.failure?.reason).toBe('aborted')
+		expect(session?.failure).toBeUndefined()
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+		expect(instance.activeSessionId).toBeUndefined()
+	})
+
+	test('lets a graceful stop finish the running action and ends before the next node', async () => {
+		const running = Promise.withResolvers<void>()
+		const release = Promise.withResolvers<void>()
+		const executed: string[] = []
+		const aborted: boolean[] = []
+
+		const { runtime: instance } = runtime(
+			exposeHandler(async (context, configuration) => {
+				executed.push(context.nodeId)
+
+				if (executed.length === 1) {
+					running.resolve()
+					await release.promise
+					aborted.push(context.signal.aborted)
+				}
+
+				return { type: 'completed', value: configuration.exposureTime }
+			}),
+		)
+
+		const created = instance.create(plan({ nodes: 2 }))!
+
+		instance.start(created.id)
+
+		await running.promise
+
+		const stopped = instance.stop(created.id)
+
+		release.resolve()
+
+		const session = await stopped
+
+		expect(aborted).toEqual([false])
+		expect(executed).toEqual(['node-1'])
+		expect(session?.state).toBe('stopped')
+		expect(session?.failure).toBeUndefined()
+	})
+
+	test('cancels the running action on an immediate pause and runs it again on the resume', async () => {
+		const running = Promise.withResolvers<void>()
+		const executed: string[] = []
+
+		const {
+			runtime: instance,
+			store,
+			arbiter,
+		} = runtime(
+			exposeHandler(async (context, configuration) => {
+				executed.push(context.nodeId)
+
+				if (executed.length > 1) {
+					const handle = context.scope.start('expose', [context.request('camera')!], () => successfulOperationResult(configuration.exposureTime))
+					const result = await handle.result
+
+					return result.ok ? { type: 'completed', value: result.value } : { type: 'fatalFailure', reason: result.reason }
+				}
+
+				running.resolve()
+
+				await new Promise<void>((resolve) => {
+					context.signal.addEventListener('abort', () => resolve(), { once: true })
+				})
+
+				return { type: 'fatalFailure', reason: 'aborted' }
+			}),
+		)
+
+		const created = instance.create(plan({ execution: { pauseMode: 'immediate' } }))!
+
+		instance.start(created.id)
+
+		await running.promise
+		await instance.control(created.id, 'pause')
+
+		while (store.session(created.id)?.state !== 'paused') await Bun.sleep(1)
+
+		expect(arbiter.availability(CAMERA_KEY)).toBe('reserved')
+
+		await instance.control(created.id, 'resume')
+
+		const session = await instance.settled(created.id)
+
+		expect(executed).toEqual(['node-1', 'node-1'])
+		expect(session?.state).toBe('completed')
+	})
+
+	test('keeps the guiding session open across an immediate pause of the target block', async () => {
+		const running = Promise.withResolvers<void>()
+		const executed: string[] = []
+		const opened: { coordinator?: OperationCoordinator; session?: OperationHandle<void> } = {}
+
+		const { runtime: instance, coordinator } = runtime(
+			exposeHandler(async (context, configuration) => {
+				executed.push(context.nodeId)
+
+				if (executed.length > 1) return { type: 'completed', value: configuration.exposureTime }
+
+				running.resolve()
+
+				await new Promise<void>((resolve) => {
+					context.signal.addEventListener('abort', () => resolve(), { once: true })
+				})
+
+				return { type: 'fatalFailure', reason: 'aborted' }
+			}),
+			undefined,
+			{
+				guiding: {
+					guiderCommander: {
+						connect: (_: unknown, token: ReservationToken) => {
+							const executor = (operation: OperationContext) =>
+								new Promise<OperationResult<void>>((resolve) => {
+									operation.signal.addEventListener('abort', () => resolve(failedOperationResult('aborted')), { once: true })
+								})
+
+							const handle = opened.coordinator!.tokenScope(token).start<void>('guiderSession', [], executor)
+
+							opened.session = handle
+
+							return Promise.resolve(successfulOperationResult({ id: handle.id }))
+						},
+					},
+				} as unknown as SequencerGuidingServices,
+			},
+		)
+
+		opened.coordinator = coordinator
+
+		const created = instance.create(plan({ execution: { pauseMode: 'immediate' }, guider: guiderPlan({ mode: 'remote', host: 'localhost', port: 4400 }) }))!
+
+		instance.start(created.id)
+
+		await running.promise
+		await instance.control(created.id, 'pause')
+
+		expect(opened.session?.signal.aborted).toBeFalse()
+
+		await instance.control(created.id, 'resume')
+
+		const stored = await instance.settled(created.id)
+
+		expect(executed).toEqual(['node-1', 'node-1'])
+		expect(stored?.state).toBe('completed')
+		expect(opened.session?.signal.aborted).toBeTrue()
+	})
+
+	test('cancels no startup operation on an immediate pause the phase cannot attribute', async () => {
+		const running = Promise.withResolvers<void>()
+		const release = Promise.withResolvers<void>()
+		const executed: string[] = []
+
+		const { runtime: instance } = runtime(
+			exposeHandler(async (context, configuration) => {
+				executed.push(context.nodeId)
+
+				if (context.nodeId !== 'startup-1') return { type: 'completed', value: configuration.exposureTime }
+
+				const handle = context.scope.start('expose', [context.request('camera')!], async (operation) => {
+					running.resolve()
+
+					await new Promise<void>((resolve) => {
+						operation.signal.addEventListener('abort', () => resolve(), { once: true })
+						void release.promise.then(resolve)
+					})
+
+					return operation.signal.aborted ? failedOperationResult('aborted') : successfulOperationResult(configuration.exposureTime)
+				})
+
+				const result = await handle.result
+
+				return result.ok ? { type: 'completed', value: result.value } : { type: 'fatalFailure', reason: result.reason }
+			}),
+		)
+
+		const created = instance.create(plan({ execution: { pauseMode: 'immediate' }, startup: { continueOnFailure: false } }))!
+
+		instance.start(created.id)
+
+		await running.promise
+		await instance.control(created.id, 'pause')
+
+		release.resolve()
+
+		await instance.control(created.id, 'resume')
+
+		const session = await instance.settled(created.id)
+
+		expect(executed).toEqual(['startup-1', 'node-1'])
+		expect(session?.state).toBe('completed')
+	})
+
+	test('takes the whole effect of an immediate pause before folding the resume that follows it', async () => {
+		const running = Promise.withResolvers<void>()
+		const observed: (string | undefined)[] = []
+		const executed: string[] = []
+		let sessionId = ''
+
+		const { runtime: instance, store } = runtime(
+			exposeHandler(async (context, configuration) => {
+				executed.push(context.nodeId)
+
+				if (executed.length > 1) return { type: 'completed', value: configuration.exposureTime }
+
+				const handle = context.scope.start('expose', [context.request('camera')!], async (operation) => {
+					operation.onCleanup(async () => {
+						await Bun.sleep(5)
+						observed.push(store.session(sessionId)?.desiredState)
+					})
+
+					running.resolve()
+
+					await new Promise<void>((resolve) => {
+						operation.signal.addEventListener('abort', () => resolve(), { once: true })
+					})
+
+					return failedOperationResult('aborted')
+				})
+
+				await handle.result
+
+				return { type: 'fatalFailure', reason: 'aborted' }
+			}),
+		)
+
+		const created = instance.create(plan({ execution: { pauseMode: 'immediate' } }))!
+
+		sessionId = created.id
+
+		instance.start(created.id)
+
+		await running.promise
+
+		const commanded = Promise.all([instance.control(created.id, 'pause'), instance.control(created.id, 'resume')])
+
+		expect(await commanded).toMatchObject([{ ok: true }, { ok: true }])
+
+		const session = await instance.settled(created.id)
+
+		expect(observed).toEqual(['paused'])
+		expect(executed).toEqual(['node-1', 'node-1'])
+		expect(session?.state).toBe('completed')
+	})
+
+	test('holds the walk when a handler asks to pause without an operator command', async () => {
+		let held = false
+
+		const {
+			runtime: instance,
+			store,
+			arbiter,
+		} = runtime(
+			exposeHandler((context, configuration) => {
+				if (held) return Promise.resolve({ type: 'completed', value: configuration.exposureTime })
+
+				held = true
+
+				return Promise.resolve({ type: 'pause' })
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		while (store.session(created.id)?.state !== 'paused') await Bun.sleep(1)
+
+		expect(store.session(created.id)?.desiredState).toBe('paused')
+		expect(arbiter.availability(CAMERA_KEY)).toBe('reserved')
+
+		await instance.control(created.id, 'resume')
+
+		const session = await instance.settled(created.id)
+
+		expect(session?.state).toBe('completed')
+		expect(
+			store
+				.events(created.id)
+				.filter((event) => event.type === 'stateChanged')
+				.map((event) => event.state),
+		).toEqual(['running', 'paused', 'running', 'finalizing', 'completed'])
+	})
+
+	test('holds a paused session without releasing anything and runs the node again on the resume', async () => {
+		let held = false
+
+		const {
+			runtime: instance,
+			store,
+			arbiter,
+		} = runtime(
+			exposeHandler(async (context, configuration) => {
+				if (held) return { type: 'completed', value: configuration.exposureTime }
+
+				held = true
+
+				await instance.control(context.sessionId, 'pause')
+
+				return { type: 'pause' }
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		while (store.session(created.id)?.state !== 'paused') await Bun.sleep(1)
+
+		expect(arbiter.availability(CAMERA_KEY)).toBe('reserved')
+
+		await instance.control(created.id, 'resume')
+
+		const session = await instance.settled(created.id)
+
+		expect(session?.state).toBe('completed')
+		expect(
+			store
+				.events(created.id)
+				.filter((event) => event.type === 'stateChanged')
+				.map((event) => event.state),
+		).toEqual(['running', 'paused', 'running', 'finalizing', 'completed'])
+		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+	})
+
+	test('ends a held session when the operator stops it instead of resuming it', async () => {
+		const {
+			runtime: instance,
+			store,
+			arbiter,
+		} = runtime(
+			exposeHandler(async (context) => {
+				await instance.control(context.sessionId, 'pause')
+				return { type: 'pause' }
+			}),
+		)
+
+		const created = instance.create(plan())!
+
+		instance.start(created.id)
+
+		while (store.session(created.id)?.state !== 'paused') await Bun.sleep(1)
+
+		const session = await instance.stop(created.id)
+
+		expect(session?.state).toBe('stopped')
+		expect(session?.desiredState).toBe('stopped')
 		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 		expect(instance.activeSessionId).toBeUndefined()
 	})
@@ -673,7 +1244,7 @@ describe('sequencer runtime', () => {
 			}),
 		)
 
-		const created = instance.create(plan())!
+		const created = instance.create(plan({ execution: { stopMode: 'immediate' } }))!
 
 		instance.start(created.id)
 
@@ -681,7 +1252,7 @@ describe('sequencer runtime', () => {
 
 		const session = await instance.stop(created.id)
 
-		expect(session?.state).toBe('failed')
+		expect(session?.state).toBe('stopped')
 		expect(session?.desiredState).toBe('stopped')
 		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
 		expect(instance.activeSessionId).toBeUndefined()
@@ -702,7 +1273,7 @@ describe('sequencer runtime', () => {
 			() => clock,
 		)
 
-		const created = instance.create({ ...plan(), storage: { root: '/data/nebulosa', autoSubFolderMode: 'midnight' } })!
+		const created = instance.create(plan({ storage: { autoSubFolderMode: 'midnight' } }))!
 
 		clock = new Date(2026, 7, 13, 0, 10).getTime()
 
@@ -714,25 +1285,6 @@ describe('sequencer runtime', () => {
 		expect(targets.map((target) => target?.fileName)).toEqual(['centering-00001.fits', 'autofocus-00001.fits', 'centering-00002.fits'])
 		expect(targets[0]?.directory).toEndWith(join('2026-08-13', created.id, '.auxiliary', 'centering'))
 		expect(targets[0]?.path).toBe(join(targets[0]!.directory, 'centering-00001.fits'))
-	})
-
-	test('reports no auxiliary destination when the session has no storage', async () => {
-		let target: SequencerAuxiliaryTarget | undefined | 'unset' = 'unset'
-
-		const { runtime: instance } = runtime(
-			exposeHandler((context, configuration) => {
-				target = context.auxiliary('guider', 'fits')
-				return Promise.resolve({ type: 'completed', value: configuration.exposureTime })
-			}),
-		)
-
-		const created = instance.create(plan())!
-
-		instance.start(created.id)
-
-		await instance.settled(created.id)
-
-		expect(target).toBeUndefined()
 	})
 
 	test('ends the running session before releasing its reservation and admits no other one', async () => {

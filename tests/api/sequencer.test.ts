@@ -33,10 +33,9 @@ function handler(type: string, execute: AnySequencerActionHandler['execute']): A
 	return { type, version: 1, validate: (configuration) => ({ ok: true, configuration }), resources: () => [{ role: 'camera' }, { role: 'mount' }], execute }
 }
 
-function mount(hourAngle: number, pierSide: PierSide = 'WEST'): Mount {
+function mount(hourAngle: number, pierSide: PierSide = 'WEST'): Mount & { hourAngle: number } {
 	const geographicCoordinate = { longitude: 0, latitude: 0, elevation: 0 }
-
-	return {
+	const device = {
 		type: 'mount',
 		name: 'Mount Simulator',
 		id: 'mount-1',
@@ -47,11 +46,14 @@ function mount(hourAngle: number, pierSide: PierSide = 'WEST'): Mount {
 		canFlip: true,
 		hasPierSide: true,
 		pierSide,
+		hourAngle,
 		geographicCoordinate,
 		get equatorialCoordinate() {
-			return { rightAscension: localSiderealTime(makeTime(Date.now(), geographicCoordinate), geographicCoordinate, true) - hourAngle, declination: -0.09 }
+			return { rightAscension: localSiderealTime(makeTime(Date.now(), geographicCoordinate), geographicCoordinate, true) - device.hourAngle, declination: -0.09 }
 		},
-	} as unknown as Mount
+	}
+
+	return device as unknown as Mount & { hourAngle: number }
 }
 
 function brief(): Sequencer['capture'] {
@@ -274,12 +276,14 @@ describe('sessions', () => {
 
 	test('commands the meridian flip once the mount reports the target past the boundary', async () => {
 		const nodes: string[] = []
+		const device = mount(-0.05, 'WEST')
 		const { handler: instance, runtime } = environment(
 			(context) => {
 				nodes.push(context.nodeId)
+				if (context.frame !== undefined) device.hourAngle = 0.05
 				return Promise.resolve({ type: 'completed', value: undefined })
 			},
-			{ mount: mount(0.05) },
+			{ mount: device },
 		)
 		const created = instance.createSession(stored(instance, { capture: brief() }).id)
 
@@ -318,10 +322,13 @@ describe('sessions', () => {
 
 	test('opens the guider the plan declares and hands it to every action', async () => {
 		const guiders = new Set<string | undefined>()
-		const { handler: instance, runtime } = environment((context) => {
-			guiders.add(context.guider)
-			return Promise.resolve({ type: 'completed', value: undefined })
-		})
+		const { handler: instance, runtime } = environment(
+			(context) => {
+				guiders.add(context.guider)
+				return Promise.resolve({ type: 'completed', value: undefined })
+			},
+			{ mount: mount(-0.05, 'EAST') },
+		)
 		const created = instance.createSession(stored(instance, { capture: brief() }).id)
 
 		expect(created.ok).toBeTrue()

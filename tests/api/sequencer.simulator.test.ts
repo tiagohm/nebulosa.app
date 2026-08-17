@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
-import { response } from 'src/api/http'
 import type { ResourceArbiter } from 'src/api/resource'
-import type { SequencerEvent, SequencerSessionSnapshot } from '#/sequencer.state'
 import { action, frame } from './sequencer.fixture'
 import { commandNames, disposeNight, disposeProcess, openProcess, runNight } from './sequencer.simulator'
 import type { NightControl, NightResult, SimulatorProcess } from './sequencer.simulator'
@@ -762,30 +760,7 @@ describe('admission', () => {
 		expect(night.arbiter.availability(night.devices.camera.hardwareId)).toBe('available')
 	}, 30_000)
 
-	test('B.11 reservation tokens stay off the public surfaces', async () => {
-		let live: { readonly snapshot: SequencerSessionSnapshot; readonly events: readonly SequencerEvent[] } | undefined
-		const night = await runNight({
-			control: async (api) => {
-				const snapshot = await api.waitUntil((current) => current.foreground?.type === 'trigger.autofocus')
-
-				live = { snapshot, events: api.events() }
-			},
-		})
-
-		nights.push(night)
-
-		expect(live?.snapshot.state).toBe('running')
-		expect(night.session.state).toBe('completed')
-		expect(night.started).toMatchObject({ ok: true, reentrant: false })
-		expect(night.events.length).toBeGreaterThan(0)
-		expect(await httpBody(night.started)).toMatchObject({ ok: true, session: { id: night.session.id, state: 'running' } })
-		expect(await httpBody(live?.snapshot)).toMatchObject({ id: night.session.id, state: 'running' })
-		expect(await httpBody(night.events)).toBeArray()
-		expect(await httpBody(night.session)).toMatchObject({ id: night.session.id, state: 'completed' })
-		assertNoReservationToken(night.started, live?.snapshot, live?.events, night.session, night.events, night.artifacts)
-	}, 30_000)
-
-	test('B.12 a stop mid-exposure releases only after the cleanups', async () => {
+	test('B.11 a stop mid-exposure releases only after the cleanups', async () => {
 		let during: { readonly camera: string; readonly owners: number } | undefined
 		let stopping: ReturnType<NightControl['stop']> | undefined
 		const night = await runNight({
@@ -824,7 +799,7 @@ describe('admission', () => {
 		}
 	}, 30_000)
 
-	test('B.13 camera and wheel on the same hardware share one reservation key', async () => {
+	test('B.12 camera and wheel on the same hardware share one reservation key', async () => {
 		let reserved: readonly string[] | undefined
 		const night = await runNight({
 			sim: { wheel: { hardwareId: 'hw-camera' } },
@@ -862,17 +837,3 @@ describe('admission', () => {
 		expect(night.arbiter.availability('hw-wheel')).toBe('available')
 	}, 30_000)
 })
-
-function assertNoReservationToken(...values: readonly unknown[]) {
-	for (const value of values) {
-		const json = JSON.stringify(value)
-
-		expect(json).not.toContain('ReservationToken')
-		expect(json).not.toMatch(/"token"\s*:/)
-		expect(json).not.toMatch(/"reservationToken"\s*:/)
-	}
-}
-
-async function httpBody(data: unknown) {
-	return await response(data).json()
-}

@@ -1227,4 +1227,32 @@ describe('startup', () => {
 		expect(process.store.sessions().some((session) => session.state === 'failed')).toBeFalse()
 		expect(process.store.sessions().every((session) => session.state === 'created' || session.state === 'stopped')).toBeTrue()
 	}, 30_000)
+
+	test('D.19 a disabled startup does not unpark a parked mount', async () => {
+		const night = await runNight({
+			patch: {
+				guiding: { enabled: false },
+				dither: { enabled: false },
+				cooling: { enabled: false },
+				startup: { enabled: false },
+				shutdown: {
+					runOnFailure: true,
+					actions: [action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('close', { type: 'closeCover' })],
+				},
+			},
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'unexpectedState', detail: 'the mount did not reach the target: mount Mount Simulator is parked' })
+		expect(names.includes('unpark')).toBeFalse()
+		expect(names.includes('slew')).toBeTrue()
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.devices.mount.parked).toBeTrue()
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+	}, 30_000)
 })

@@ -101,6 +101,7 @@ export interface NightOptions {
 		readonly options?: {
 			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' }>
 			readonly camera?: Readonly<{ temperature?: 'timeout' }>
+			readonly guider?: Readonly<{ start?: 'fail' }>
 		}
 	}
 	readonly control?: (api: NightControl) => void | Promise<void>
@@ -717,6 +718,9 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 			},
 			startGuiding: () => {
 				push('guider.start')
+
+				if (sim?.options?.guider?.start === 'fail') return Promise.resolve(failedOperationResult('commandFailed', 'the guider refused to start'))
+
 				devices.guiderRunning = true
 				devices.guiderLooping = true
 				return ok(undefined)

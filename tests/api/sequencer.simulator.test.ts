@@ -1026,4 +1026,23 @@ describe('startup', () => {
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
 		expect(names.includes('guider.disconnect')).toBeTrue()
 	}, 30_000)
+
+	test('D.10 a required startGuiding failure stops the night before the target', async () => {
+		const night = await runNight({ sim: { options: { guider: { start: 'fail' } } } })
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'commandFailed', detail: 'the guider did not start guiding: the guider refused to start' })
+		expect(night.log.filter((entry) => entry.name === 'guider.start')).toHaveLength(3)
+		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(names.includes('guider.stop')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.devices.guiderRunning).toBeFalse()
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+		expect(names.includes('guider.disconnect')).toBeTrue()
+	}, 30_000)
 })

@@ -526,11 +526,16 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 		mount: {
 			goTo: (_scope: unknown, mount: Mount, target: { readonly type?: string; readonly J2000?: { readonly x: number; readonly y: number } }) => {
 				push('slew')
+
+				if (mount.parked) return Promise.resolve(failedOperationResult('unexpectedState', `mount ${mount.name} is parked`))
+
 				mount.parked = false
+
 				if (target.J2000 !== undefined) {
 					mount.equatorialCoordinate.rightAscension = target.J2000.x
 					mount.equatorialCoordinate.declination = target.J2000.y
 				}
+
 				return ok({ rightAscension: mount.equatorialCoordinate.rightAscension, declination: mount.equatorialCoordinate.declination, pierSide: mount.pierSide })
 			},
 			sync: () => {

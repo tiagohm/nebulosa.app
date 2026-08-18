@@ -905,4 +905,32 @@ describe('startup', () => {
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
 		expect(names.includes('guider.disconnect')).toBeTrue()
 	}, 30_000)
+
+	test('D.05 an optional unpark failure still runs later required actions', async () => {
+		const night = await runNight({
+			patch: {
+				startup: {
+					actions: [action('unpark', { type: 'unparkMount' }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
+				},
+			},
+			sim: { options: { mount: { unpark: 'fail' } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'unexpectedState', detail: 'the mount did not reach the target: mount Mount Simulator is parked' })
+		expect(night.log.filter((entry) => entry.name === 'unpark')).toHaveLength(3)
+		expect(names.includes('cover.open')).toBeFalse()
+		expect(names.includes('cooler.set')).toBeTrue()
+		expect(names.includes('guider.start')).toBeTrue()
+		expect(names.includes('slew')).toBeTrue()
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.devices.mount.parked).toBeTrue()
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+		expect(names.includes('guider.disconnect')).toBeTrue()
+	}, 30_000)
 })

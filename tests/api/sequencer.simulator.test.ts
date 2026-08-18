@@ -1285,7 +1285,7 @@ describe('startup', () => {
 		expect(night.session.state).toBe('completed')
 		expect(night.session.failure).toBeUndefined()
 		expect(firstSlew).toBeGreaterThan(-1)
-		expect(startup.some((entry) => entry.name === 'guider.start' || entry.name === 'guider.loop' || entry.name === 'guider.calibrate')).toBeFalse()
+		expect(startup.some((entry) => entry.name === 'guider.start' || entry.name === 'guider.calibrate')).toBeFalse()
 		expect(names.includes('guider.calibrate')).toBeFalse()
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
@@ -1375,5 +1375,40 @@ describe('startup', () => {
 			expect(minutes).toBeGreaterThan(0)
 			expect(Math.abs(current.temperature - previous.temperature) / minutes).toBeLessThanOrEqual(2 + 1e-9)
 		}
+	}, 30_000)
+
+	test('D.25 initial slew and center run under the guiding interlock', async () => {
+		const night = await runNight({
+			patch: {
+				autofocus: { enabled: false },
+				dither: { enabled: false },
+				meridianFlip: { enabled: false },
+				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+			},
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+		const firstStart = names.indexOf('guider.start')
+		const firstSlew = names.indexOf('slew')
+		const firstSolve = names.indexOf('solve')
+		const lastSolve = names.lastIndexOf('solve')
+		const suspend = names.indexOf('guider.loop', firstStart)
+		const resume = names.indexOf('guider.start', lastSolve)
+		const light = names.indexOf('camera.expose', lastSolve)
+
+		expect(night.session.state).toBe('completed')
+		expect(firstStart).toBeGreaterThan(-1)
+		expect(firstStart).toBeLessThan(firstSlew)
+		expect(suspend).toBeGreaterThan(firstStart)
+		expect(suspend).toBeLessThan(firstSlew)
+		expect(suspend).toBeLessThan(firstSolve)
+		expect(lastSolve).toBeGreaterThan(firstSlew)
+		expect(resume).toBeGreaterThan(lastSolve)
+		expect(light).toBeGreaterThan(resume)
+		expect(names.indexOf('guider.start', suspend + 1)).toBe(resume)
+		expect(names.indexOf('guider.calibrate')).toBe(-1)
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(1)
 	}, 30_000)
 })

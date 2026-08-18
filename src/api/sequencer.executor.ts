@@ -53,7 +53,9 @@ import type { SequencerWriteEnvironment } from './sequencer.write'
 // preparation, the dither is emitted with the resume of that interlock, the pre-exposure guard decides whether
 // the exposure fits ahead of the meridian, the cadence boundary is waited for, and only then is the frame
 // exposed. Nothing between the guard and the exposure moves the mount, which is what makes the projection the
-// guard accepted still true when the shutter opens.
+// guard accepted still true when the shutter opens. The initial slew and centering of the target block are the
+// same kind of move and run inside the same interlock: `startGuiding` in the startup pipeline leaves the
+// corrections running, and a guider that stays on through the first pointing fights the slew.
 //
 // The finalize pipeline runs under its own signal. A stop aborts everything the plan is doing, and the whole
 // point of the terminal pipeline is to run after that and leave the observatory safe, so it must not be
@@ -715,43 +717,139 @@ async function runTargetBlock(execution: SequencerExecution): Promise<SequencerN
 
 	if (block === undefined) return { kind: 'fail', reason: 'unexpectedState', detail: 'the plan carries no target block' }
 
-	const nodes = actionsOf(block)
-	let index = 0
+	const pointed = await runInterlockedPointing(execution, actionsOf(block))
 
-	while (index < nodes.length) {
-		const node = nodes[index]
-
-		// The previous node reached its terminal decision and this one has not started, which is the boundary a
-		// pause is attended at while the target is still being pointed at. Waiting for the capture loop instead
-		// would slew and center a target the operator asked the session to stop short of. It is taken before the
-		// node rather than after it so a plan that has run out of nodes ends as what it did, not as a stop that
-		// interrupted nothing.
-		const converged = await convergeAt(execution, 'afterAction', node.id)
-
-		if (converged.outcome.kind !== 'continue') return converged.outcome
-
-		const { outcome } = await runActionNode(execution, node, execution.host.signal)
-
-		if (outcome.kind === 'pause') {
-			const held = await holdWalk(execution, node.id)
-
-			if (held.kind !== 'continue') return held
-
-			// The node that asked for the hold is the one that runs again. It never reached a terminal decision,
-			// and running what comes after it would point at a target the slew never finished reaching.
-			continue
-		}
-
-		if (outcome.kind !== 'continue') return outcome
-
-		index++
-	}
+	if (pointed.kind !== 'continue') return pointed
 
 	const loop = loopOf(block)
 
 	if (loop === undefined) return SEQUENCER_CONTINUE
 
 	return await runCaptureLoop(execution, plan.target.id, loop)
+}
+
+// Runs the initial slew and centering inside one guiding bracket.
+//
+// `startGuiding` in the startup pipeline leaves the corrections running, and the first thing the target
+// block does is move the mount — and, when centering is on, the rotator and the field. Those steps
+// displace what the guider is watching, so they run with the loop suspended and the corrections come
+// back once, settled, before the first light. One bracket for the whole pointing walk pays one settle
+// rather than one per node, which is the same reason the frame safe point is a single bracket.
+//
+// Nodes that already reached a terminal decision are not commanded again when the bracket is retried
+// for a failed suspension or resume: repeating a finished slew would move a field the centering just
+// closed. A pause is attended inside the body so the corrections stay off for the hold instead of
+// being put back on only to be taken off again when the same node retries.
+async function runInterlockedPointing(execution: SequencerExecution, nodes: readonly SequencerPlanAction[]): Promise<SequencerNodeOutcome> {
+	if (nodes.length === 0) return SEQUENCER_CONTINUE
+
+	const { host } = execution
+	const guider = host.plan.guider
+	const retry = host.plan.execution.defaultRetry
+	const completed = new Set<string>()
+	let interrupted: SequencerNodeOutcome | undefined
+	let attempt = 1
+
+	const body = async (_state: SequencerInterlockState): Promise<SequencerActionResult<undefined>> => {
+		let index = 0
+
+		while (index < nodes.length) {
+			const node = nodes[index]
+
+			if (completed.has(node.id)) {
+				index++
+				continue
+			}
+
+			// The previous node reached its terminal decision and this one has not started, which is the boundary a
+			// pause is attended at while the target is still being pointed at. Waiting for the capture loop instead
+			// would slew and center a target the operator asked the session to stop short of. It is taken before the
+			// node rather than after it so a plan that has run out of nodes ends as what it did, not as a stop that
+			// interrupted nothing.
+			const converged = await convergeAt(execution, 'afterAction', node.id)
+
+			if (converged.outcome.kind !== 'continue') {
+				interrupted = converged.outcome
+				return { type: 'fatalFailure', reason: 'unexpectedState', detail: 'the target pointing ended the plan' }
+			}
+
+			const { outcome } = await runActionNode(execution, node, host.signal)
+
+			if (outcome.kind === 'pause') {
+				const held = await holdWalk(execution, node.id)
+
+				if (held.kind !== 'continue') {
+					interrupted = held
+					return { type: 'fatalFailure', reason: 'unexpectedState', detail: 'the target pointing ended the plan' }
+				}
+
+				// The node that asked for the hold is the one that runs again. It never reached a terminal decision,
+				// and running what comes after it would point at a target the slew never finished reaching.
+				continue
+			}
+
+			if (outcome.kind !== 'continue') {
+				interrupted = outcome
+				return { type: 'fatalFailure', reason: 'unexpectedState', detail: 'the target pointing ended the plan' }
+			}
+
+			completed.add(node.id)
+			index++
+		}
+
+		return { type: 'completed', value: undefined }
+	}
+
+	for (;;) {
+		interrupted = undefined
+
+		const report: SequencerInterlockReport = {}
+		const context = host.context(nodes[0].id, attempt, host.signal)
+		const request = { settle: guider?.settle ?? SEQUENCER_UNGUIDED_SETTLE, recalibrateAfterMeridianFlip: guider?.recalibrateAfterMeridianFlip ?? false, idle: false }
+		const result = await runGuidingInterlock(host.guiding, context, request, body, report)
+
+		if (interrupted !== undefined) return interrupted
+		if (result.type === 'completed' || result.type === 'skipped') return SEQUENCER_CONTINUE
+		if (result.type === 'pause') {
+			const held = await holdWalk(execution, nodes[0].id)
+
+			if (held.kind !== 'continue') return held
+
+			continue
+		}
+
+		if (result.type === 'suspend') return { kind: 'fail', reason: 'unexpectedState', detail: result.detail }
+
+		const budget = report.phase === 'suspension' || report.phase === 'resume' ? (guider?.retry ?? retry) : retry
+		const decision = sequencerFailurePolicy({
+			reason: result.reason,
+			detail: result.detail,
+			attempt,
+			retry: result.type === 'fatalFailure' ? { ...budget, maxAttempts: 1 } : budget,
+			commandedBy: commandedBy(execution),
+		})
+
+		if (decision.kind === 'retry') {
+			await host.delay(decision.delay, host.waitSignal)
+
+			const converged = await convergeAt(execution, 'afterAction', nodes[0].id)
+
+			if (converged.outcome.kind !== 'continue') return converged.outcome
+
+			attempt = decision.attempt
+			continue
+		}
+
+		execution.events.push({ type: 'policyApplied', nodeId: nodes[0].id, detail: policyAppliedOf(decision) })
+
+		if (decision.kind === 'continue' && !decision.guiding) {
+			const unguided = await continueUnguided(execution, nodes[0].id)
+
+			if (unguided !== undefined) return unguided
+		}
+
+		return decisionOutcome(decision, result.reason, result.detail)
+	}
 }
 
 // Runs the capture loop for the declared number of cycles.

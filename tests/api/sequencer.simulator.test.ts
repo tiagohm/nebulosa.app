@@ -1070,4 +1070,21 @@ describe('startup', () => {
 		expect(process.log).toHaveLength(0)
 		expect(process.runtime.activeSessionId).toBeUndefined()
 	}, 30_000)
+
+	test('D.12 calibrateBeforeStart calibrates before the first light', async () => {
+		const night = await runNight({ patch: { guiding: { calibrateBeforeStart: true } } })
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(names.indexOf('guider.calibrate')).toBeGreaterThan(-1)
+		expect(names.indexOf('guider.calibrate')).toBeGreaterThan(names.indexOf('cooler.set'))
+		expect(names.indexOf('guider.calibrate')).toBeLessThan(names.indexOf('slew'))
+		if (names.includes('guider.start')) expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('guider.calibrate'))
+		expect(names.indexOf('guider.calibrate')).toBeLessThan(names.indexOf('camera.expose'))
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+	}, 30_000)
 })

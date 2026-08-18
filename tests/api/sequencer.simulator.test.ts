@@ -837,3 +837,20 @@ describe('admission', () => {
 		expect(night.arbiter.availability('hw-wheel')).toBe('available')
 	}, 30_000)
 })
+
+describe('startup', () => {
+	test('D.01 startup actions run in declared order', async () => {
+		const night = await runNight()
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(names.indexOf('unpark')).toBeGreaterThan(-1)
+		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('unpark'))
+		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('cover.open'))
+		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cooler.set'))
+		expect(names.indexOf('slew')).toBeGreaterThan(names.indexOf('guider.start'))
+	}, 30_000)
+})

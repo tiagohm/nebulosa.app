@@ -94,10 +94,13 @@ export interface NightControl {
 export interface NightOptions {
 	readonly patch?: DeepPartial<Sequencer>
 	readonly sim?: {
-		readonly mount?: Partial<Mount> & { readonly hourAngle?: number }
+		readonly mount?: Partial<Mount>
 		readonly camera?: Partial<Camera>
 		readonly cover?: Partial<Cover>
 		readonly wheel?: Partial<Wheel>
+		readonly options?: {
+			readonly mount: Readonly<{ hourAngle?: number; unpark?: 'fail' }>
+		}
 	}
 	readonly control?: (api: NightControl) => void | Promise<void>
 	// Existing storage root to reuse. When omitted, the night creates and owns a temporary directory.
@@ -251,7 +254,7 @@ export async function runNight(options: NightOptions = {}): Promise<NightResult>
 		const frameBytes = await syntheticFits()
 		const firstAutofocus = options.control === undefined || options.holdFirstExposure ? undefined : Promise.withResolvers<void>()
 		const firstExposure = options.holdFirstExposure ? Promise.withResolvers<void>() : undefined
-		const { arbiter, coordinator, runtime, handler, store } = environment(definition, devices, log, clock, frameBytes, firstAutofocus?.promise, undefined, firstExposure?.promise)
+		const { arbiter, coordinator, runtime, handler, store } = environment(definition, devices, log, clock, frameBytes, firstAutofocus?.promise, undefined, firstExposure?.promise, options.sim)
 		const started = await handler.start(definition)
 
 		if (!started.ok) {
@@ -372,7 +375,6 @@ function observatory(sim?: NightOptions['sim'], tag?: string): SimulatorDevices 
 		canFlip: true,
 		hasPierSide: true,
 		pierSide: 'WEST',
-		hourAngle: -0.2,
 		trackMode: 'SIDEREAL',
 		canPark: true,
 		canUnpark: true,
@@ -433,14 +435,14 @@ function registerDevices(byName: Record<string, Device>, devices: SimulatorDevic
 	byName[devices.guideOutput.name] = devices.guideOutput
 }
 
-function environment(definition: Sequencer, devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>, byName: Record<string, Device> = {}, holdFirstExposure?: Promise<void>) {
+function environment(definition: Sequencer, devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>, byName: Record<string, Device> = {}, holdFirstExposure?: Promise<void>, sim?: NightOptions['sim']) {
 	const arbiter = new ResourceArbiter()
 	const coordinator = new OperationCoordinator(arbiter)
 	const registry = new SequencerBlockRegistry()
 	const store = new InMemorySequencerStore()
 
 	registerDevices(byName, devices)
-	const commanders = simulatedCommanders(devices, log, clock, frameBytes, holdFirstAutofocus, holdFirstExposure)
+	const commanders = simulatedCommanders(devices, log, clock, frameBytes, holdFirstAutofocus, holdFirstExposure, sim)
 	const runtime = new SequencerRuntime({
 		store,
 		registry,
@@ -515,7 +517,7 @@ function nightControl(handler: SequencerHandler, sessionId: string, arbiter: Res
 	}
 }
 
-function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>, holdFirstExposure?: Promise<void>) {
+function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>, holdFirstExposure?: Promise<void>, sim?: NightOptions['sim']) {
 	const push = (name: string, detail?: string) => log.push(detail === undefined ? { name } : { name, detail })
 	const ok = <T>(value: T) => Promise.resolve(successfulOperationResult(value))
 	let heldScienceExposure = false
@@ -543,6 +545,9 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 			},
 			unpark: (_scope: unknown, mount: Mount) => {
 				push('unpark')
+
+				if (sim?.options?.mount?.unpark === 'fail') return Promise.resolve(failedOperationResult('commandFailed', 'the mount refused to unpark'))
+
 				mount.parked = false
 				return ok(undefined)
 			},

@@ -1104,4 +1104,26 @@ describe('startup', () => {
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 		expect(night.devices.cover.parked).toBeTrue()
 	}, 30_000)
+
+	test('D.14 a disabled openCover is skipped and light opens the cover', async () => {
+		const night = await runNight({
+			patch: {
+				startup: {
+					actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover', enabled: false }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
+				},
+			},
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(night.log.filter((entry) => entry.name === 'cover.open')).toHaveLength(1)
+		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('slew'))
+		expect(names.indexOf('cover.open')).toBeLessThan(names.lastIndexOf('camera.expose'))
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+		expect(night.devices.cover.parked).toBeTrue()
+	}, 30_000)
 })

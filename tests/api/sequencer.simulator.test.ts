@@ -1045,4 +1045,29 @@ describe('startup', () => {
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
 		expect(names.includes('guider.disconnect')).toBeTrue()
 	}, 30_000)
+
+	test('D.11 an optional startGuiding action is refused when guiding is enabled', async () => {
+		const process = await openProcess()
+
+		processes.push(process)
+
+		const started = await process.handler.start(
+			process.definition(process.addObservatory('d11'), {
+				dither: { enabled: false },
+				startup: {
+					continueOnFailure: true,
+					actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding' })],
+				},
+			}),
+		)
+
+		expect(started.ok).toBeFalse()
+
+		if (started.ok) return
+
+		expect(started.reason).toBe('invalidDefinition')
+		expect(started.preflight?.diagnostics).toEqual([{ path: 'startup.actions[3].required', message: 'the guiding block declares the guider the capture runs under, and this action does not fail the session when it cannot start guiding, so every frame would be captured unguided' }])
+		expect(process.log).toHaveLength(0)
+		expect(process.runtime.activeSessionId).toBeUndefined()
+	}, 30_000)
 })

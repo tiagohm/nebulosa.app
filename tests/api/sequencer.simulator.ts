@@ -101,7 +101,7 @@ export interface NightOptions {
 		readonly options?: {
 			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' | number }>
 			readonly camera?: Readonly<{ temperature?: 'timeout' }>
-			readonly guider?: Readonly<{ start?: 'fail' }>
+			readonly guider?: Readonly<{ start?: 'fail'; running?: boolean }>
 		}
 	}
 	readonly control?: (api: NightControl) => void | Promise<void>
@@ -420,8 +420,8 @@ function observatory(sim?: NightOptions['sim'], tag?: string): SimulatorDevices 
 		guideCamera,
 		guideOutput,
 		guiderConnected: false,
-		guiderRunning: false,
-		guiderLooping: false,
+		guiderRunning: sim?.options?.guider?.running === true,
+		guiderLooping: sim?.options?.guider?.running === true,
 	}
 }
 

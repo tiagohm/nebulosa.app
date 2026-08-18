@@ -1272,4 +1272,21 @@ describe('startup', () => {
 		expect(night.devices.cover.connected).toBeTrue()
 		expect(names.some((name) => name === 'connect' || (name.endsWith('.connect') && name !== 'guider.connect'))).toBeFalse()
 	}, 30_000)
+
+	test('D.21 startGuiding succeeds when the guider is already running', async () => {
+		const night = await runNight({ sim: { options: { guider: { running: true } } } })
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+		const firstSlew = names.indexOf('slew')
+		const startup = night.log.slice(0, firstSlew)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(firstSlew).toBeGreaterThan(-1)
+		expect(startup.some((entry) => entry.name === 'guider.start' || entry.name === 'guider.loop' || entry.name === 'guider.calibrate')).toBeFalse()
+		expect(names.includes('guider.calibrate')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+	}, 30_000)
 })

@@ -999,4 +999,31 @@ describe('startup', () => {
 		expect(startupCooling).toHaveLength(0)
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
+
+	test('D.09 a required coolCamera timeout stops the night before the target', async () => {
+		const night = await runNight({
+			patch: {
+				startup: {
+					actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true, timeout: 1 }), action('guide', { type: 'startGuiding', required: true })],
+				},
+			},
+			sim: { options: { camera: { temperature: 'timeout' } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'timeout', detail: 'the sensor setpoint could not be commanded: the cooler never reached the setpoint' })
+		expect(night.log.filter((entry) => entry.name === 'cooler.set')).toHaveLength(6)
+		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(names.indexOf('park')).toBeGreaterThan(names.indexOf('unpark'))
+		expect(names.lastIndexOf('cooler.set')).toBeGreaterThan(names.indexOf('park'))
+		expect(night.devices.camera.temperature).toBe(20)
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+		expect(names.includes('guider.disconnect')).toBeTrue()
+	}, 30_000)
 })

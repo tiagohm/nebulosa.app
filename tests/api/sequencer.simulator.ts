@@ -99,7 +99,8 @@ export interface NightOptions {
 		readonly cover?: Partial<Cover>
 		readonly wheel?: Partial<Wheel>
 		readonly options?: {
-			readonly mount: Readonly<{ hourAngle?: number; unpark?: 'fail' }>
+			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' }>
+			readonly camera?: Readonly<{ temperature?: 'timeout' }>
 		}
 	}
 	readonly control?: (api: NightControl) => void | Promise<void>
@@ -625,6 +626,9 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 			},
 			temperature: (_scope: unknown, camera: Camera, value: number) => {
 				push('cooler.set', String(value))
+
+				if (sim?.options?.camera?.temperature === 'timeout') return Promise.resolve(failedOperationResult('timeout', 'the cooler never reached the setpoint'))
+
 				camera.temperature = value
 				return ok(undefined)
 			},

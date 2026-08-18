@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
 import type { ResourceArbiter } from 'src/api/resource'
 import { action, frame } from './sequencer.fixture'
-import { commandNames, disposeNight, disposeProcess, openProcess, runNight } from './sequencer.simulator'
+import { commandNames, disposeNight, disposeProcess, openProcess, RETRY, runNight } from './sequencer.simulator'
 import type { NightControl, NightResult, SimulatorProcess } from './sequencer.simulator'
 
 const nights: NightResult[] = []
@@ -1140,5 +1140,41 @@ describe('startup', () => {
 		expect(names.includes('slew')).toBeTrue()
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 		expect(night.devices.mount.parked).toBeTrue()
+	}, 30_000)
+
+	test('D.16 exhausting startup retry fails the night and shuts down once', async () => {
+		const night = await runNight({
+			patch: {
+				startup: {
+					actions: [action('unpark', { type: 'unparkMount', required: true, retry: RETRY }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
+				},
+			},
+			sim: { options: { mount: { unpark: 'fail' } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+		const lastUnpark = names.lastIndexOf('unpark')
+		const afterUnpark = night.log.slice(lastUnpark + 1)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'commandFailed', detail: 'the mount did not unpark: the mount refused to unpark' })
+		expect(night.log.filter((entry) => entry.name === 'unpark')).toHaveLength(3)
+		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('cover.open')).toBeFalse()
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.devices.mount.parked).toBeTrue()
+		expect(night.events.filter((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toHaveLength(1)
+		expect(afterUnpark.filter((entry) => entry.name === 'guider.stop')).toHaveLength(1)
+		expect(afterUnpark.filter((entry) => entry.name === 'park')).toHaveLength(0)
+		expect(afterUnpark.filter((entry) => entry.name === 'cooler.off')).toHaveLength(1)
+		expect(afterUnpark.filter((entry) => entry.name === 'guider.disconnect')).toHaveLength(1)
+		expect(night.log.filter((entry) => entry.name === 'guider.stop')).toHaveLength(1)
+		expect(night.log.filter((entry) => entry.name === 'guider.disconnect')).toHaveLength(1)
+		expect(names.indexOf('guider.stop')).toBeGreaterThan(lastUnpark)
+		expect(names.indexOf('guider.disconnect')).toBeGreaterThan(names.indexOf('guider.stop'))
+		expect(names.lastIndexOf('cooler.off')).toBeGreaterThan(names.indexOf('guider.stop'))
 	}, 30_000)
 })

@@ -1255,4 +1255,21 @@ describe('startup', () => {
 		expect(night.devices.mount.parked).toBeTrue()
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
 	}, 30_000)
+
+	test('D.20 a start with every device connected is admitted without connecting them', async () => {
+		const night = await runNight()
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.started.ok).toBeTrue()
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(night.devices.camera.connected).toBeTrue()
+		expect(night.devices.mount.connected).toBeTrue()
+		expect(night.devices.wheel.connected).toBeTrue()
+		expect(night.devices.cover.connected).toBeTrue()
+		expect(names.some((name) => name === 'connect' || (name.endsWith('.connect') && name !== 'guider.connect'))).toBeFalse()
+	}, 30_000)
 })

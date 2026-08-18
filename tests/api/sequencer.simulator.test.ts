@@ -1205,4 +1205,26 @@ describe('startup', () => {
 		expect(night.devices.mount.trackMode).toBe('SIDEREAL')
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
+
+	test('D.18 a disconnected required device refuses start before the night begins', async () => {
+		const process = await openProcess()
+
+		processes.push(process)
+
+		const devices = process.addObservatory('d18', { camera: { connected: false } })
+		const started = await process.handler.start(process.definition(devices))
+
+		expect(started.ok).toBeFalse()
+
+		if (started.ok) return
+
+		expect(started.reason).toBe('disconnected')
+		expect(started.detail).toBe(`device ${devices.camera.name} of role camera is not connected`)
+		expect(process.log).toHaveLength(0)
+		expect(process.runtime.activeSessionId).toBeUndefined()
+		expect(process.arbiter.availability(devices.camera.hardwareId)).toBe('available')
+		expect(process.arbiter.snapshot(devices.camera.hardwareId).reservationOwner).toBeUndefined()
+		expect(process.store.sessions().some((session) => session.state === 'failed')).toBeFalse()
+		expect(process.store.sessions().every((session) => session.state === 'created' || session.state === 'stopped')).toBeTrue()
+	}, 30_000)
 })

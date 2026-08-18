@@ -1331,4 +1331,49 @@ describe('startup', () => {
 		expect(night.devices.mount.parked).toBeTrue()
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
 	}, 30_000)
+
+	test('D.24 coolCamera ramps the setpoint at the declared rate', async () => {
+		const night = await runNight({
+			patch: {
+				cooling: { ramp: 2, temperature: -10 },
+				guiding: { enabled: false },
+				dither: { enabled: false },
+				autofocus: { enabled: false },
+				meridianFlip: { enabled: false },
+				target: { center: { enabled: false } },
+				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				startup: { actions: [action('unpark', { type: 'unparkMount', required: true }), action('cool', { type: 'coolCamera', required: true })] },
+				shutdown: { actions: [action('park', { type: 'parkMount', required: true })] },
+			},
+			sim: { camera: { temperature: 20 } },
+		})
+
+		nights.push(night)
+
+		const startup: { readonly temperature: number; readonly at: number }[] = []
+
+		for (const entry of night.log) {
+			if (entry.name !== 'cooler.set' || entry.detail === undefined) continue
+
+			const temperature = Number(entry.detail)
+
+			startup.push({ temperature, at: entry.at })
+			if (temperature === -10) break
+		}
+
+		expect(night.session.state).toBe('completed')
+		expect(startup.length).toBeGreaterThan(1)
+		expect(startup[0]?.temperature).toBeLessThan(20)
+		expect(startup.at(-1)?.temperature).toBe(-10)
+
+		for (let i = 1; i < startup.length; i++) {
+			const previous = startup[i - 1]
+			const current = startup[i]
+			const minutes = (current.at - previous.at) / 60_000
+
+			expect(current.temperature).toBeLessThan(previous.temperature)
+			expect(minutes).toBeGreaterThan(0)
+			expect(Math.abs(current.temperature - previous.temperature) / minutes).toBeLessThanOrEqual(2 + 1e-9)
+		}
+	}, 30_000)
 })

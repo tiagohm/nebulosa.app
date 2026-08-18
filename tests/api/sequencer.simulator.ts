@@ -44,6 +44,7 @@ import { action, camera, frame } from './sequencer.fixture'
 export interface SimulatorCommand {
 	readonly name: string
 	readonly detail?: string
+	readonly at: number
 }
 
 export interface SimulatorClock {
@@ -520,7 +521,7 @@ function nightControl(handler: SequencerHandler, sessionId: string, arbiter: Res
 }
 
 function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>, holdFirstExposure?: Promise<void>, sim?: NightOptions['sim']) {
-	const push = (name: string, detail?: string) => log.push(detail === undefined ? { name } : { name, detail })
+	const push = (name: string, detail?: string) => log.push(detail === undefined ? { name, at: clock.now } : { name, detail, at: clock.now })
 	const ok = <T>(value: T) => Promise.resolve(successfulOperationResult(value))
 	let heldScienceExposure = false
 	let remainingUnparkFailures = sim?.options?.mount?.unpark === 'fail' ? Number.POSITIVE_INFINITY : typeof sim?.options?.mount?.unpark === 'number' ? sim.options.mount.unpark : 0

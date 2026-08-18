@@ -1087,4 +1087,21 @@ describe('startup', () => {
 		expect(names.indexOf('guider.calibrate')).toBeLessThan(names.indexOf('camera.expose'))
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
+
+	test('D.13 openCover runs before slew and light does not reopen it', async () => {
+		const night = await runNight()
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.log.filter((entry) => entry.name === 'cover.open')).toHaveLength(1)
+		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('unpark'))
+		expect(names.indexOf('cover.open')).toBeLessThan(names.indexOf('slew'))
+		expect(names.indexOf('cover.open')).toBeLessThan(names.indexOf('solve'))
+		expect(names.indexOf('cover.close')).toBeGreaterThan(names.lastIndexOf('camera.expose'))
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+		expect(night.devices.cover.parked).toBeTrue()
+	}, 30_000)
 })

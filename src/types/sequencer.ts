@@ -1,6 +1,9 @@
-import type { TrackMode, FrameType, CameraTransferFormat, MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
+import type { TrackMode, FrameType, MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
+import type { CameraCaptureStart } from '#/camera'
+import { DEFAULT_PLATE_SOLVE_START } from '#/platesolver'
+import type { PlateSolveStart } from '#/platesolver'
 
 // Complete, versioned, serializable definition submitted by the UI for one astronomical sequencing workflow.
 
@@ -161,7 +164,7 @@ export interface SequencerTimeWindow {
 
 // Discriminated union of target coordinate representations accepted by the Sequencer.
 // The coordinateType property selects the active representation.
-export interface SequencerTarget extends MountTargetCoordinate<Angle> {
+export interface SequencerTarget extends MountTargetCoordinate<Angle | string> {
 	// Stable identifier used by definitions, checkpoints, events, or ordered actions.
 	// Use a non-empty value unique within its owning collection.
 	// It is a component of every node id below the target and therefore of artifact identity and file names, so renaming the target must not change it.
@@ -227,7 +230,7 @@ export interface SequencerCentering {
 	// Controls whether this feature or definition is active.
 	readonly enabled: boolean
 	// Configuration value for solver.
-	readonly solver: SequencerPlateSolver
+	readonly solver: Omit<PlateSolveStart, 'id' | 'path'>
 
 	// Maximum plate-solved separation accepted from the target, commonly a few arcseconds.
 	readonly tolerance: Angle
@@ -242,25 +245,6 @@ export interface SequencerCentering {
 	readonly capture: SequencerAuxiliaryCapture
 	// Retry policy applied when this operation fails.
 	readonly retry: SequencerRetryPolicy
-}
-
-// Selects and configures the plate-solving backend used by centering and verification.
-// Backend-specific values belong in options; common limits are kept in the typed properties.
-export interface SequencerPlateSolver {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'astap' | 'astrometryNet'
-	// Optional executable path for an external backend.
-	readonly executable?: string
-	// Maximum time, in seconds, allowed for the operation to reach its terminal state.
-	readonly timeout: number
-	// Controls whether blind is applied.
-	readonly blind: boolean
-	// Angular radius around the hint searched by the solver.
-	// Radians in [0, π]; 0 may request backend default or blind behavior.
-	readonly searchRadius: Angle
-	// Integer image downsampling factor used before solving.
-	// Use an integer >= 1; values from 1 to 4 are common.
-	readonly downsample: number
 }
 
 // Defines environmental and geometric conditions under which the target may be observed.
@@ -303,7 +287,7 @@ export interface SequencerTargetConstraint {
 
 // Defines the frame groups and capture scheduling strategy of the primary imaging plan.
 // The frames array contains the actual exposure recipes executed by the Sequencer.
-export interface SequencerCapture {
+export interface SequencerCapture extends SequencerCamera {
 	// Controls when or in what order this plan executes relative to related work.
 	readonly order: 'sequential' | 'interleaved' | 'roundRobin' | 'weightedRoundRobin'
 	// Number of times the complete frame plan is repeated.
@@ -311,9 +295,6 @@ export interface SequencerCapture {
 	// Ordered collection of frames.
 	// The array may be empty unless the containing feature requires at least one item.
 	readonly frames: readonly SequencerFrame[]
-
-	// Configuration value for defaults.
-	readonly defaults: SequencerCamera
 	// Default delay, in seconds, inserted between primary frames.
 	readonly delay: number
 	// Controls whether continue after rejected frame is applied.
@@ -381,64 +362,17 @@ export type SequencerFilterReference =
 
 // Contains reusable camera settings shared by primary and auxiliary captures.
 // Gain, offset, format, binning, and limits remain device-dependent.
-export interface SequencerCamera {
-	// Horizontal hardware/software binning factor.
-	readonly binX: number
-	// Vertical hardware/software binning factor.
-	readonly binY: number
-	// Camera gain setting.
-	readonly gain: number
-	// Camera pedestal/offset setting.
-	readonly offset: number
-	// Driver-specific sensor frame or pixel format.
-	readonly frameFormat: string
-	// Image transport container selected for camera BLOB transfer.
-	readonly transferFormat: CameraTransferFormat
-	// Controls whether the camera transport uses its supported compression mode.
-	readonly compressed: boolean
-	// Region-of-interest configuration applied to the capture.
-	readonly subframe: SequencerSubframe
-}
-
-// Defines an optional rectangular sensor region of interest.
-// Coordinates and dimensions are integer pixels and must remain inside the current sensor frame.
-export interface SequencerSubframe {
-	// Controls whether this feature or definition is active.
-	readonly enabled: boolean
-
-	// Horizontal origin of the subframe.
-	readonly x: number
-	// Vertical origin of the subframe.
-	readonly y: number
-	// Width of the subframe.
-	readonly width: number
-	// Height of the subframe.
-	readonly height: number
-}
+export type SequencerCamera = Pick<CameraCaptureStart, 'binX' | 'binY' | 'gain' | 'offset' | 'frameFormat' | 'transferFormat' | 'compressed' | 'x' | 'y' | 'width' | 'height' | 'subframe'>
 
 // Defines a single-frame capture recipe used by autofocus, centering, guiding, and other supporting routines.
 // Unlike the main capture plan, it does not include repetition or integration targets.
-export interface SequencerAuxiliaryCapture {
+export interface SequencerAuxiliaryCapture extends SequencerCamera {
 	// Exposure duration, in seconds, used by the supporting routine.
 	readonly exposureTime: number
 	// Camera frame classification written to the image metadata.
 	readonly frameType: FrameType
-	// Numeric value for bin x.
-	readonly binX: number
-	// Numeric value for bin y.
-	readonly binY: number
-	// Numeric value for gain.
-	readonly gain: number
-	// Numeric value for offset.
-	readonly offset: number
 	// Filter reference associated with this configuration.
 	readonly filter?: SequencerFilterReference
-	// Region-of-interest configuration applied to the capture.
-	readonly subframe: SequencerSubframe
-	// Image transport container selected for camera BLOB transfer.
-	readonly transferFormat: CameraTransferFormat
-	// Controls whether the camera transport uses its supported compression mode.
-	readonly compressed: boolean
 }
 
 // Guiding and dither
@@ -1711,3 +1645,305 @@ export type SequencerNotificationChannel =
 			// Keys and values must be valid header strings and must not expose secrets to untrusted destinations.
 			readonly headers: Readonly<Record<string, string>>
 	  }
+
+export const DEFAULT_SEQUENCER_RETRY_POLICY: SequencerRetryPolicy = {
+	maxAttempts: 3,
+	delay: 0,
+	backoff: 1,
+	maximumDelay: 0,
+	retryOn: ['timeout', 'commandFailed'],
+	onExhausted: 'fail',
+}
+
+export const DEFAULT_SEQUENCER_CAMERA: SequencerCamera = {
+	binX: 1,
+	binY: 1,
+	gain: 0,
+	offset: 0,
+	frameFormat: '',
+	transferFormat: 'FITS',
+	compressed: false,
+	x: 0,
+	y: 0,
+	width: 0,
+	height: 0,
+	subframe: false,
+}
+
+export const DEFAULT_SEQUENCER_AUXILIARY_CAPTURE: SequencerAuxiliaryCapture = {
+	...DEFAULT_SEQUENCER_CAMERA,
+	exposureTime: 1,
+	frameType: 'LIGHT',
+}
+
+export const DEFAULT_SEQUENCER: Sequencer = {
+	schemaVersion: 1,
+	id: '',
+	revision: 1,
+	name: '',
+	devices: {
+		camera: '',
+	},
+	target: {
+		id: '',
+		name: '',
+		enabled: false,
+		type: 'JNOW',
+		JNOW: {
+			x: '00 00 00.00',
+			y: '00 00 00.00',
+		},
+		tracking: {
+			enabled: false,
+			mode: 'SIDEREAL',
+			retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
+		},
+		goto: {
+			enabled: false,
+			skipTolerance: 0.001,
+			arrivalTolerance: 0.0005,
+			timeout: 300,
+			settle: 2,
+			retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
+		},
+		center: {
+			enabled: false,
+			solver: structuredClone(DEFAULT_PLATE_SOLVE_START),
+			tolerance: 0.0001,
+			maximumAttempts: 3,
+			settle: 1,
+			syncMount: true,
+			capture: structuredClone(DEFAULT_SEQUENCER_AUXILIARY_CAPTURE),
+			retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
+		},
+		constraints: {
+			enabled: false,
+			window: {
+				enabled: false,
+			},
+			onViolation: 'wait',
+			stableFor: 60,
+		},
+	},
+	capture: {
+		order: 'sequential',
+		repeat: 1,
+		delay: 1,
+		continueAfterRejectedFrame: false,
+		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
+		frames: [],
+		...DEFAULT_SEQUENCER_CAMERA,
+	},
+	guiding: {
+		enabled: false,
+		connection: {
+			mode: 'remote',
+			host: '127.0.0.1',
+			port: 4400,
+		},
+		calibrateBeforeStart: false,
+		recalibrateAfterMeridianFlip: true,
+		restoreAfterInterruption: true,
+		settle: {
+			tolerance: 1.5,
+			time: 2,
+			timeout: 30,
+		},
+		thresholds: {
+			enabled: false,
+			pauseCaptureWhenExceeded: false,
+		},
+		recovery: {
+			enabled: false,
+			maximumAttempts: 3,
+			stopBeforeRetry: true,
+			findStarBeforeRetry: true,
+			recalibrate: false,
+			settle: {
+				tolerance: 1.5,
+				time: 2,
+				timeout: 30,
+			},
+			onFailure: 'pause',
+		},
+		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
+	},
+	dither: {
+		enabled: false,
+		amount: 3,
+		raOnly: false,
+		beforeFirstFrame: false,
+		afterFilterChange: false,
+		everyFrames: 2,
+		everyTime: 0,
+		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
+		onFailure: 'continue',
+	},
+	autofocus: {
+		enabled: false,
+		triggers: {
+			onStart: true,
+			onFilterChange: true,
+			afterMeridianFlip: true,
+			everyFrames: 0,
+			everyTime: 0,
+			temperatureChange: 0,
+			minimumTimeBetweenRuns: 30,
+		},
+		algorithm: {
+			initialOffsetSteps: 3,
+			stepSize: 50,
+			fittingMode: 'TREND_HYPERBOLIC',
+			rmsdThreshold: 0.5,
+			reversed: false,
+			maximumPosition: 50000,
+			backlash: {
+				enabled: false,
+				mode: 'overshoot',
+				steps: 0,
+			},
+		},
+		capture: structuredClone(DEFAULT_SEQUENCER_AUXILIARY_CAPTURE),
+		starDetection: {
+			type: 'nebulosa',
+			timeout: 10,
+			minimumSNR: 10,
+			maximumStars: 200,
+		},
+		filterOffsets: [],
+		settle: 1,
+		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
+		onFailure: 'continue',
+	},
+	rotator: {
+		enabled: false,
+		angle: 0.5,
+		tolerance: 0.001,
+		settle: 1,
+		moveBeforeCentering: true,
+		restoreAfterMeridianFlip: false,
+		reverse: false,
+		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
+	},
+	meridianFlip: {
+		enabled: false,
+		minimumHourAngle: 0.01,
+		maximumHourAngle: 0.08,
+		safetyMargin: 10,
+		settle: 2,
+		timeout: 120,
+		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
+		onFailure: 'pause',
+	},
+	cooling: {
+		enabled: false,
+		temperature: -10,
+		tolerance: 1,
+		ramp: 2,
+		waitForTarget: true,
+		timeout: 60,
+		warmTemperature: 15,
+		warmRamp: 2,
+		turnCoolerOffAfterWarm: true,
+	},
+	dome: {
+		enabled: false,
+		closeOnUnsafe: true,
+		slaving: false,
+		synchronizeBeforeCapture: false,
+		settle: 5,
+		timeout: 300,
+		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
+		onFailure: 'pause',
+	},
+	cover: {
+		enabled: false,
+		closeOnUnsafe: false,
+		openBeforeCapture: true,
+		closeForDarkFrames: true,
+		timeout: 30,
+		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
+	},
+	flatPanel: {
+		enabled: false,
+		brightness: 80,
+		brightnessByFilter: [],
+		timeout: 20,
+		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
+	},
+	monitoring: {
+		enabled: false,
+		interval: 30,
+		monitors: [],
+	},
+	safety: {
+		enabled: false,
+		triggerOnWarning: false,
+		abortCurrentExposure: true,
+		actions: [],
+		recovery: {
+			enabled: false,
+			automatic: true,
+			stableFor: 600,
+			maximumWait: 3600,
+			reconnectDevices: true,
+			unparkMount: true,
+			restoreTracking: true,
+			resumeCapture: true,
+			onFailure: 'pause',
+		},
+	},
+	quality: {
+		enabled: false,
+		starDetection: {
+			type: 'nebulosa',
+			timeout: 10,
+			minimumSNR: 10,
+			maximumStars: 200,
+		},
+		evaluateEveryFrames: 1,
+		rejectFrame: false,
+	},
+	execution: {
+		start: {
+			type: 'manual',
+		},
+		end: {
+			type: 'afterSequence',
+		},
+		pauseMode: 'afterCurrentExposure',
+		stopMode: 'graceful',
+		defaultRetry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
+		checkpoint: {
+			afterEveryAction: true,
+			afterEveryFrame: true,
+			afterEveryArtifact: true,
+			interval: 30,
+		},
+	},
+	storage: {
+		root: '',
+		fileNameTemplate: '{target}-{filter}-{exposure}',
+		directoryTemplate: '{target}/{frameType}',
+		autoSubFolderMode: 'off',
+	},
+	startup: {
+		enabled: false,
+		continueOnFailure: false,
+		actions: [],
+	},
+	shutdown: {
+		enabled: false,
+		runOnCompletion: true,
+		runOnStop: true,
+		runOnFailure: true,
+		continueOnFailure: true,
+		actions: [],
+	},
+	notification: {
+		enabled: false,
+		events: [],
+		channels: [],
+		minimumSeverity: 'warning',
+	},
+}

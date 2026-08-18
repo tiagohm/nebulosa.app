@@ -29,7 +29,7 @@ export function retry(): SequencerRetryPolicy {
 }
 
 export function camera(): SequencerCamera {
-	return { binX: 1, binY: 1, gain: 100, offset: 10, frameFormat: 'RAW16', transferFormat: 'FITS', compressed: false, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 } }
+	return { binX: 1, binY: 1, gain: 100, offset: 10, frameFormat: 'RAW16', transferFormat: 'FITS', compressed: false, subframe: false, x: 0, y: 0, width: 0, height: 0 }
 }
 
 export function frame(id: string, overrides?: Partial<SequencerFrame>): SequencerFrame {
@@ -85,17 +85,17 @@ export function canonical(): Sequencer {
 			goto: { enabled: true, skipTolerance: 0.001, arrivalTolerance: 0.0005, timeout: 300, settle: 5, retry: retry() },
 			center: {
 				enabled: true,
-				solver: { type: 'astap', timeout: 60, blind: false, searchRadius: 0.05, downsample: 2 },
+				solver: { type: 'astap', executable: '', focalLength: 0, pixelSize: 0, fov: 0, blind: true, rightAscension: '00 00 00', declination: '+00 00 00', radius: 4, downsample: 0, timeout: 300000, apiUrl: '', apiKey: '' },
 				tolerance: 0.0001,
 				maximumAttempts: 5,
 				settle: 3,
 				syncMount: true,
-				capture: { exposureTime: 5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false },
+				capture: { exposureTime: 5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false },
 				retry: retry(),
 			},
 			constraints: { enabled: false, window: { enabled: false }, onViolation: 'wait', stableFor: 60 },
 		},
-		capture: { order: 'sequential', repeat: 2, frames: [frame('lum'), frame('red')], defaults: camera(), delay: 4, continueAfterRejectedFrame: false, retry: retry() },
+		capture: { order: 'sequential', repeat: 2, frames: [frame('lum'), frame('red')], ...camera(), delay: 4, continueAfterRejectedFrame: false, retry: retry() },
 		guiding: {
 			enabled: true,
 			connection: { mode: 'remote', host: 'localhost', port: 4400 },
@@ -112,7 +112,7 @@ export function canonical(): Sequencer {
 			enabled: true,
 			triggers: { onStart: true, onFilterChange: true, afterMeridianFlip: true, everyFrames: 20, everyTime: 3600, temperatureChange: 1, minimumTimeBetweenRuns: 600 },
 			algorithm: { initialOffsetSteps: 4, stepSize: 100, fittingMode: 'TREND_HYPERBOLIC', rmsdThreshold: 0.5, reversed: false, maximumPosition: 50000, backlash: { enabled: false, mode: 'overshoot', steps: 0 } },
-			capture: { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false },
+			capture: { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false },
 			starDetection: { type: 'nebulosa', timeout: 30, minimumSNR: 10, maximumStars: 500 },
 			filterOffsets: [],
 			settle: 2,

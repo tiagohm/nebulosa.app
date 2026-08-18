@@ -198,7 +198,7 @@ describe('lowering', () => {
 
 	test('an action starting guiding carries the guide-camera recipe of a local guider', () => {
 		const definition = complete()
-		const capture = { exposureTime: 2.5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 30, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false } as const
+		const capture = { exposureTime: 2.5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 30, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false } as const
 		const connection = { mode: 'local', focalLength: 200, capture } as const
 		const { plan } = ok({ ...definition, guiding: { ...definition.guiding, connection } })
 		const startup = plan.root.children[0] as SequencerPlanSequence

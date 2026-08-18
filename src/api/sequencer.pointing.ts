@@ -10,7 +10,8 @@ import type { Angle } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraCaptureStart } from '#/camera'
 import { coordinateInfo } from '#/mount'
-import type { SequencerAuxiliaryCapture, SequencerPlateSolver } from '#/sequencer'
+import type { PlateSolveStart } from '#/platesolver'
+import type { SequencerAuxiliaryCapture, SequencerCentering } from '#/sequencer'
 import type { CameraHandler } from './camera'
 import type { MountCommander } from './mount.commander'
 import type { PlateSolverHandler } from './platesolver'
@@ -126,11 +127,11 @@ function auxiliaryCapture(recipe: SequencerAuxiliaryCapture, directory: string, 
 		binY: recipe.binY,
 		gain: recipe.gain,
 		offset: recipe.offset,
-		subframe: recipe.subframe.enabled,
-		x: recipe.subframe.x,
-		y: recipe.subframe.y,
-		width: recipe.subframe.width,
-		height: recipe.subframe.height,
+		subframe: recipe.subframe,
+		x: recipe.x,
+		y: recipe.y,
+		width: recipe.width,
+		height: recipe.height,
 		transferFormat: recipe.transferFormat,
 		compressed: recipe.compressed,
 		autoSave: true,
@@ -145,22 +146,8 @@ function auxiliaryCapture(recipe: SequencerAuxiliaryCapture, directory: string, 
 // The hint is the target rather than where the mount believes it is pointing: a mount whose model is wrong is
 // exactly the case centering exists for, and hinting with its own error would search around the wrong place.
 // A blind solve ignores both, and its search radius is dropped so the backend does not narrow itself.
-function solveRequest(solver: SequencerPlateSolver, path: string, id: string, rightAscension: Angle, declination: Angle) {
-	return {
-		id,
-		type: solver.type,
-		executable: solver.executable ?? '',
-		path,
-		focalLength: 0,
-		pixelSize: 0,
-		fov: 0,
-		blind: solver.blind,
-		rightAscension,
-		declination,
-		radius: solver.blind ? 0 : solver.searchRadius * RAD2DEG,
-		downsample: solver.downsample,
-		timeout: solver.timeout * 1000,
-	}
+function solveRequest(solver: SequencerCentering['solver'], path: string, id: string, rightAscension: Angle, declination: Angle): PlateSolveStart {
+	return { ...solver, id, path, rightAscension, declination }
 }
 
 // Slew block: sends the mount to the target coordinates, verifies where it stopped, and establishes the

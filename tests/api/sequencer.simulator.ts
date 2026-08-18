@@ -37,7 +37,7 @@ import { InMemorySequencerStore } from 'src/api/sequencer.store'
 import type { WheelCommander } from 'src/api/wheel.commander'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
-import type { Sequencer, SequencerAuxiliaryCapture, SequencerCamera, SequencerRetryPolicy } from '#/sequencer'
+import type { Sequencer, SequencerAuxiliaryCapture, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerArtifact, SequencerEvent, SequencerSession, SequencerSessionSnapshot } from '#/sequencer.state'
 import { action, camera, frame } from './sequencer.fixture'
 
@@ -125,14 +125,12 @@ export interface SimulatorProcess {
 
 export const RETRY: SequencerRetryPolicy = { maxAttempts: 3, delay: 0, backoff: 1, maximumDelay: 0, retryOn: ['timeout', 'commandFailed'], onExhausted: 'fail' }
 
-const AUX_3S: SequencerAuxiliaryCapture = { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false }
+const AUX_3S: SequencerAuxiliaryCapture = { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false }
 const AUX_5S: SequencerAuxiliaryCapture = { ...AUX_3S, exposureTime: 5 }
 const T0 = 1_700_000_000_000
 const FILTERS = ['L', 'R', 'G', 'B', 'Ha', 'O3', 'S2', 'Dark'] as const
 
 export function defaultSequencer(root: string): Sequencer {
-	const defaults: SequencerCamera = camera()
-
 	return {
 		schemaVersion: 1,
 		id: 'simulator-default',
@@ -157,7 +155,7 @@ export function defaultSequencer(root: string): Sequencer {
 			J2000: { x: 1.4, y: -0.09 },
 			tracking: { enabled: true, mode: 'SIDEREAL', retry: RETRY },
 			goto: { enabled: true, skipTolerance: 0.001, arrivalTolerance: 0.0005, timeout: 300, settle: 2, retry: RETRY },
-			center: { enabled: true, solver: { type: 'astap', timeout: 60, blind: false, searchRadius: 0.05, downsample: 2 }, tolerance: 0.0001, maximumAttempts: 3, settle: 1, syncMount: true, capture: AUX_5S, retry: RETRY },
+			center: { enabled: true, solver: { type: 'astap', rightAscension: 0, declination: 0, executable: '', focalLength: 490, pixelSize: 4.8, fov: 0, timeout: 60, blind: false, radius: 4, downsample: 2 }, tolerance: 0.0001, maximumAttempts: 3, settle: 1, syncMount: true, capture: AUX_5S, retry: RETRY },
 			constraints: { enabled: false, window: { enabled: false }, onViolation: 'wait', stableFor: 60 },
 		},
 		capture: {
@@ -166,7 +164,7 @@ export function defaultSequencer(root: string): Sequencer {
 			delay: 1,
 			continueAfterRejectedFrame: false,
 			retry: RETRY,
-			defaults,
+			...camera(),
 			frames: [
 				frame('lum', { name: 'Luminance', count: 3, exposureTime: 2, filter: { type: 'name', name: 'L' } }),
 				frame('red', { name: 'Red', count: 2, exposureTime: 2, filter: { type: 'name', name: 'R' } }),

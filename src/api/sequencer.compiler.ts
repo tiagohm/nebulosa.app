@@ -226,7 +226,21 @@ export function* sequencerPlanNodes(node: SequencerPlanNode): Generator<Sequence
 // Applies the per-frame camera overrides over the capture defaults, so the capture action never has to merge
 // anything at exposure time. Only properties the frame actually declares override the default.
 function cameraSettingsOf(frame: SequencerFrame, defaults: SequencerCamera): SequencerCamera {
-	return { ...defaults, ...frame.camera, subframe: frame.camera.subframe ?? defaults.subframe }
+	return {
+		binX: defaults.binX,
+		binY: defaults.binY,
+		gain: defaults.gain,
+		offset: defaults.offset,
+		frameFormat: defaults.frameFormat,
+		transferFormat: defaults.transferFormat,
+		compressed: defaults.compressed,
+		x: defaults.x,
+		y: defaults.y,
+		width: defaults.width,
+		height: defaults.height,
+		...frame.camera,
+		subframe: frame.camera.subframe ?? defaults.subframe,
+	}
 }
 
 // Whether a frame group contributes anything to the plan.
@@ -297,7 +311,7 @@ function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): Sequence
 		delay: frame.delay ?? capture.delay,
 		weight: frame.weight,
 		filter: frame.filter,
-		camera: cameraSettingsOf(frame, capture.defaults),
+		camera: cameraSettingsOf(frame, capture),
 		retry: capture.retry,
 		requiredSlots,
 		abandonmentBudget,

@@ -853,4 +853,25 @@ describe('startup', () => {
 		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cooler.set'))
 		expect(names.indexOf('slew')).toBeGreaterThan(names.indexOf('guider.start'))
 	}, 30_000)
+
+	test('D.02 inverted startup actions keep the declared order', async () => {
+		const night = await runNight({
+			patch: {
+				startup: {
+					actions: [action('unpark', { type: 'unparkMount', required: true }), action('cool', { type: 'coolCamera', required: true }), action('open', { type: 'openCover' }), action('guide', { type: 'startGuiding', required: true })],
+				},
+			},
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(names.indexOf('unpark')).toBeGreaterThan(-1)
+		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('unpark'))
+		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('cooler.set'))
+		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cover.open'))
+		expect(names.indexOf('slew')).toBeGreaterThan(names.indexOf('guider.start'))
+	}, 30_000)
 })

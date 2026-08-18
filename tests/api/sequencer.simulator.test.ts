@@ -1289,4 +1289,20 @@ describe('startup', () => {
 		expect(names.includes('guider.calibrate')).toBeFalse()
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
+
+	test('D.22 openCover succeeds when the cover is already open', async () => {
+		const night = await runNight({ sim: { cover: { parked: false } } })
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(night.log.filter((entry) => entry.name === 'cover.open')).toHaveLength(0)
+		expect(night.log.filter((entry) => entry.name === 'cover.close')).toHaveLength(1)
+		expect(names.indexOf('cover.close')).toBeGreaterThan(names.lastIndexOf('camera.expose'))
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+		expect(night.devices.cover.parked).toBeTrue()
+	}, 30_000)
 })

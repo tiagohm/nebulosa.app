@@ -984,4 +984,19 @@ describe('startup', () => {
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 		expect(night.devices.camera.temperature).toBe(15)
 	}, 30_000)
+
+	test('D.08 coolCamera succeeds when the cooler is already at the target', async () => {
+		const night = await runNight({ sim: { camera: { temperature: -10, cooler: true } } })
+
+		nights.push(night)
+
+		const firstExpose = night.log.findIndex((entry) => entry.name === 'camera.expose')
+		const startupCooling = night.log.slice(0, firstExpose).filter((entry) => entry.name === 'cooler.set' || entry.name === 'cooler.on')
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(firstExpose).toBeGreaterThan(-1)
+		expect(startupCooling).toHaveLength(0)
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+	}, 30_000)
 })

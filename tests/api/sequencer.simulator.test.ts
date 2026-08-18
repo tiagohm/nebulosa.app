@@ -1126,4 +1126,19 @@ describe('startup', () => {
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 		expect(night.devices.cover.parked).toBeTrue()
 	}, 30_000)
+
+	test('D.15 a transient unpark failure is retried and the night completes', async () => {
+		const night = await runNight({ sim: { options: { mount: { unpark: 2 } } } })
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(night.log.filter((entry) => entry.name === 'unpark')).toHaveLength(3)
+		expect(names.includes('slew')).toBeTrue()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+		expect(night.devices.mount.parked).toBeTrue()
+	}, 30_000)
 })

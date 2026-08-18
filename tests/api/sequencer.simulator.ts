@@ -99,7 +99,7 @@ export interface NightOptions {
 		readonly cover?: Partial<Cover>
 		readonly wheel?: Partial<Wheel>
 		readonly options?: {
-			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' }>
+			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' | number }>
 			readonly camera?: Readonly<{ temperature?: 'timeout' }>
 			readonly guider?: Readonly<{ start?: 'fail' }>
 		}
@@ -523,6 +523,7 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 	const push = (name: string, detail?: string) => log.push(detail === undefined ? { name } : { name, detail })
 	const ok = <T>(value: T) => Promise.resolve(successfulOperationResult(value))
 	let heldScienceExposure = false
+	let remainingUnparkFailures = sim?.options?.mount?.unpark === 'fail' ? Number.POSITIVE_INFINITY : typeof sim?.options?.mount?.unpark === 'number' ? sim.options.mount.unpark : 0
 
 	return {
 		mount: {
@@ -553,7 +554,10 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 			unpark: (_scope: unknown, mount: Mount) => {
 				push('unpark')
 
-				if (sim?.options?.mount?.unpark === 'fail') return Promise.resolve(failedOperationResult('commandFailed', 'the mount refused to unpark'))
+				if (remainingUnparkFailures > 0) {
+					remainingUnparkFailures--
+					return Promise.resolve(failedOperationResult('commandFailed', 'the mount refused to unpark'))
+				}
 
 				mount.parked = false
 				return ok(undefined)

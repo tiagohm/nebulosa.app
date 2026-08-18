@@ -30,6 +30,7 @@ export type HomePanelType =
 	| 'planet'
 	| 'planetarium'
 	| 'satellite'
+	| 'sequencer'
 	| 'settings'
 	| 'solarEclipse'
 	| 'sun'
@@ -67,6 +68,7 @@ const panels: Record<HomePanelType, IDockviewPanel[]> = {
 	rotator: [],
 	safetyMonitor: [],
 	satellite: [],
+	sequencer: [],
 	settings: [],
 	solarEclipse: [],
 	sun: [],
@@ -285,6 +287,10 @@ function addSatellite() {
 	dockview.addSinglePanel(api, 'satellite', { title: 'Satellite' }, main)
 }
 
+function addSequencer() {
+	dockview.addSinglePanel(api, 'sequencer', { title: 'Sequencer' }, main)
+}
+
 function save() {
 	dockview.saveLayout(api)
 }
@@ -315,4 +321,5 @@ export const homeStore = {
 	addAsteroid,
 	addDSO,
 	addSatellite,
+	addSequencer,
 } as const

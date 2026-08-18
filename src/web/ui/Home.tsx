@@ -35,6 +35,7 @@ import { Planet } from '@ui/Planet'
 import { Planetarium } from '@ui/Planetarium'
 import { Rotator } from '@ui/Rotator'
 import { Satellite } from '@ui/Satellite'
+import { Sequencer } from '@ui/Sequencer'
 import { Settings } from '@ui/Settings'
 import { SolarEclipseMap } from '@ui/SolarEclipseMap'
 import { Sun } from '@ui/Sun'
@@ -86,6 +87,7 @@ const components = {
 	rotator: Rotator,
 	safetyMonitor: Dummy,
 	satellite: Satellite,
+	sequencer: Sequencer,
 	settings: Settings,
 	solarEclipse: SolarEclipseMap,
 	sun: Sun,
@@ -123,6 +125,7 @@ const MAIN_GROUP_ACTIONS = [
 	{ label: 'TPPA', icon: homeIcons.tppa, action: () => homeStore.addTppa() },
 	{ label: 'Flat Wizard', icon: homeIcons.flatPanel, action: () => homeStore.addFlatWizard() },
 	{ label: 'Framing', icon: homeIcons.framing, action: () => homeStore.addFraming() },
+	{ label: 'Sequencer', icon: homeIcons.sequencer, action: () => homeStore.addSequencer() },
 	{ label: 'Calculator', icon: homeIcons.calculator, action: () => homeStore.addCalculator() },
 	{ label: 'Planetarium', icon: homeIcons.planetarium, action: () => homeStore.addPlanetarium() },
 	{ label: 'Sun', icon: homeIcons.sun, action: () => homeStore.addSun() },

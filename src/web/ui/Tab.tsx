@@ -43,6 +43,7 @@ import rotatorIcon from '@assets/rotator.webp'
 import satelliteIcon from '@assets/satellite.webp'
 import saveIcon from '@assets/save.webp'
 import scnrIcon from '@assets/scnr.webp'
+import sequencerIcon from '@assets/sequencer.webp'
 import settingsIcon from '@assets/settings.webp'
 import solarEclipseIcon from '@assets/solar.eclipse.webp'
 import starDetectionIcon from '@assets/star.detection.webp'
@@ -90,6 +91,7 @@ export const homeIcons = {
 	rotator: rotatorIcon,
 	safetyMonitor: '',
 	satellite: satelliteIcon,
+	sequencer: sequencerIcon,
 	settings: settingsIcon,
 	solarEclipse: solarEclipseIcon,
 	sun: sunIcon,

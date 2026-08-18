@@ -965,4 +965,23 @@ describe('startup', () => {
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
 		expect(names.includes('guider.disconnect')).toBeTrue()
 	}, 30_000)
+
+	test('D.07 coolCamera commands the SequencerCooling setpoint', async () => {
+		const night = await runNight({ patch: { cooling: { temperature: -15 } } })
+
+		nights.push(night)
+
+		const firstExpose = night.log.findIndex((entry) => entry.name === 'camera.expose')
+		const startupSetpoints = night.log
+			.slice(0, firstExpose)
+			.filter((entry) => entry.name === 'cooler.set')
+			.map((entry) => entry.detail)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(firstExpose).toBeGreaterThan(-1)
+		expect(startupSetpoints.at(-1)).toBe('-15')
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+		expect(night.devices.camera.temperature).toBe(15)
+	}, 30_000)
 })

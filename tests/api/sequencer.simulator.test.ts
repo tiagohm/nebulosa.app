@@ -1177,4 +1177,32 @@ describe('startup', () => {
 		expect(names.indexOf('guider.disconnect')).toBeGreaterThan(names.indexOf('guider.stop'))
 		expect(names.lastIndexOf('cooler.off')).toBeGreaterThan(names.indexOf('guider.stop'))
 	}, 30_000)
+
+	test('D.17 startTracking uses the target tracking mode before the slew', async () => {
+		const night = await runNight({
+			patch: {
+				startup: {
+					actions: [action('unpark', { type: 'unparkMount', required: true }), action('track', { type: 'startTracking', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
+				},
+			},
+			sim: { mount: { trackMode: 'LUNAR' } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+		const modes = night.log.filter((entry) => entry.name === 'track.mode').map((entry) => entry.detail)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(modes.length).toBeGreaterThan(0)
+		expect(modes.every((mode) => mode === 'SIDEREAL')).toBeTrue()
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('unpark'))
+		expect(names.indexOf('track.mode')).toBeLessThan(names.indexOf('slew'))
+		expect(names.indexOf('track')).toBeGreaterThan(names.indexOf('unpark'))
+		expect(names.indexOf('track')).toBeLessThan(names.indexOf('slew'))
+		expect(night.log.find((entry) => entry.name === 'track')?.detail).toBe('on')
+		expect(night.devices.mount.trackMode).toBe('SIDEREAL')
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+	}, 30_000)
 })

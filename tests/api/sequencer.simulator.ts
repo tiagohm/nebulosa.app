@@ -568,6 +568,7 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 				return ok(undefined)
 			},
 			setTrackMode: (_scope: unknown, mount: Mount, mode: Mount['trackMode']) => {
+				push('track.mode', mode)
 				mount.trackMode = mode
 				return ok(undefined)
 			},

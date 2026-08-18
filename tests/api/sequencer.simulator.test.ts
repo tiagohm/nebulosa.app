@@ -874,4 +874,16 @@ describe('startup', () => {
 		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cover.open'))
 		expect(names.indexOf('slew')).toBeGreaterThan(names.indexOf('guider.start'))
 	}, 30_000)
+
+	test('D.03 unpark succeeds when the mount is already unparked', async () => {
+		const night = await runNight({ sim: { mount: { parked: false } } })
+
+		nights.push(night)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(night.log.filter((entry) => entry.name === 'unpark')).toHaveLength(0)
+		expect(night.log.filter((entry) => entry.name === 'park')).toHaveLength(1)
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+	}, 30_000)
 })

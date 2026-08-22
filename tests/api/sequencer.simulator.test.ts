@@ -1516,4 +1516,26 @@ describe('startup', () => {
 		expect(names.includes('slew')).toBeFalse()
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
+
+	test('D.34 startTracking does not inherit the mount timeout', async () => {
+		const night = await runNight({
+			patch: {
+				mount: { timeout: 1 },
+				meridianFlip: { enabled: false },
+				target: { goto: { enabled: false }, center: { enabled: false } },
+			},
+			sim: { mount: { trackMode: 'LUNAR' }, options: { mount: { trackMode: 2_000 } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('unpark'))
+		expect(names.indexOf('track.mode')).toBeLessThan(names.indexOf('cover.open'))
+		expect(night.devices.mount.trackMode).toBe('SIDEREAL')
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+	}, 30_000)
 })

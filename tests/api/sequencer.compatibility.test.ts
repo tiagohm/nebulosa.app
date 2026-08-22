@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { compile } from 'src/api/sequencer.compiler'
 import type { Sequencer } from '#/sequencer'
-import { action, complete } from './sequencer.fixture'
+import { complete } from './sequencer.fixture'
 
 const CONSUMED = [
 	'schemaVersion',
@@ -26,6 +26,7 @@ const CONSUMED = [
 	'target.J2000.y',
 	'target.tracking.enabled',
 	'target.tracking.mode',
+	'target.tracking.stopOnShutdown',
 	'target.tracking.retry.maxAttempts',
 	'target.tracking.retry.delay',
 	'target.tracking.retry.backoff',
@@ -133,6 +134,7 @@ const CONSUMED = [
 	'guiding.connection.profile',
 	'guiding.calibrateBeforeStart',
 	'guiding.recalibrateAfterMeridianFlip',
+	'guiding.stopOnShutdown',
 	'guiding.settle.tolerance',
 	'guiding.settle.time',
 	'guiding.settle.timeout',
@@ -210,6 +212,16 @@ const CONSUMED = [
 	'meridianFlip.retry.maximumDelay',
 	'meridianFlip.retry.retryOn[]',
 	'meridianFlip.onFailure',
+	'mount.enabled',
+	'mount.unparkOnStartup',
+	'mount.parkOnShutdown',
+	'mount.timeout',
+	'mount.retry.maxAttempts',
+	'mount.retry.delay',
+	'mount.retry.backoff',
+	'mount.retry.maximumDelay',
+	'mount.retry.retryOn[]',
+	'mount.retry.onExhausted',
 	'cooling.enabled',
 	'cooling.temperature',
 	'cooling.tolerance',
@@ -219,6 +231,13 @@ const CONSUMED = [
 	'cooling.warmTemperature',
 	'cooling.warmRamp',
 	'cooling.turnCoolerOffAfterWarm',
+	'cooling.warmOnShutdown',
+	'cooling.retry.maxAttempts',
+	'cooling.retry.delay',
+	'cooling.retry.backoff',
+	'cooling.retry.maximumDelay',
+	'cooling.retry.retryOn[]',
+	'cooling.retry.onExhausted',
 	'rotator.enabled',
 	'rotator.angle',
 	'rotator.tolerance',
@@ -233,6 +252,8 @@ const CONSUMED = [
 	'rotator.retry.retryOn[]',
 	'rotator.retry.onExhausted',
 	'cover.enabled',
+	'cover.openOnStartup',
+	'cover.closeOnShutdown',
 	'cover.closeOnUnsafe',
 	'cover.openBeforeCapture',
 	'cover.closeForDarkFrames',
@@ -273,33 +294,11 @@ const CONSUMED = [
 	'storage.autoSubFolderMode',
 	'storage.temporaryDirectory',
 	'startup.enabled',
-	'startup.actions[].id',
-	'startup.actions[].enabled',
-	'startup.actions[].timeout',
-	'startup.actions[].retry.maxAttempts',
-	'startup.actions[].retry.delay',
-	'startup.actions[].retry.backoff',
-	'startup.actions[].retry.maximumDelay',
-	'startup.actions[].retry.retryOn[]',
-	'startup.actions[].retry.onExhausted',
-	'startup.actions[].type',
-	'startup.actions[].required',
 	'startup.continueOnFailure',
 	'shutdown.enabled',
 	'shutdown.runOnCompletion',
 	'shutdown.runOnStop',
 	'shutdown.runOnFailure',
-	'shutdown.actions[].id',
-	'shutdown.actions[].enabled',
-	'shutdown.actions[].timeout',
-	'shutdown.actions[].retry.maxAttempts',
-	'shutdown.actions[].retry.delay',
-	'shutdown.actions[].retry.backoff',
-	'shutdown.actions[].retry.maximumDelay',
-	'shutdown.actions[].retry.retryOn[]',
-	'shutdown.actions[].retry.onExhausted',
-	'shutdown.actions[].type',
-	'shutdown.actions[].required',
 	'shutdown.continueOnFailure',
 ]
 
@@ -422,25 +421,17 @@ describe('compatibility rule', () => {
 		if (!end.ok) expect(end.diagnostics.map((diagnostic) => diagnostic.path)).toContain('execution.end.type')
 	})
 
-	test('a dome lifecycle action is rejected', () => {
+	test('an enabled dome is rejected', () => {
 		const definition = complete()
-		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('open', { type: 'openDome' })] } })
+		const compilation = compile({ ...definition, dome: { ...definition.dome, enabled: true } })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics.map((diagnostic) => diagnostic.path)).toContain('startup.actions[0].type')
+		if (!compilation.ok) expect(compilation.diagnostics.map((diagnostic) => diagnostic.path)).toContain('dome.enabled')
 	})
 
-	test('a switch lifecycle action is rejected', () => {
+	test('a disabled dome is not rejected', () => {
 		const definition = complete()
-		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('flip', { type: 'switch', device: 'Power Box', switch: 'DEW_HEATER', value: true })] } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics.map((diagnostic) => diagnostic.path)).toContain('startup.actions[0].type')
-	})
-
-	test('a disabled dome lifecycle action is not rejected', () => {
-		const definition = complete()
-		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('open', { type: 'openDome', enabled: false }), action('unpark'), action('cool', { type: 'coolCamera' }), action('guide', { type: 'startGuiding', required: true })] } })
+		const compilation = compile({ ...definition, dome: { ...definition.dome, enabled: false, unparkOnStartup: true, openOnStartup: true } })
 
 		expect(compilation.ok).toBe(true)
 	})

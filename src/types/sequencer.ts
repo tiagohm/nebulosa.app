@@ -42,6 +42,9 @@ export interface Sequencer {
 	// Meridian-flip trigger and recovery workflow.
 	// This feature is relevant to equatorial mounts that can change pier side.
 	readonly meridianFlip: SequencerMeridianFlip
+	// Mount parking commanded around the session.
+	// Tracking, slew, and the meridian flip live on their own blocks; this one only parks and unparks.
+	readonly mount: SequencerMount
 	// Camera cooling and controlled warm-up configuration.
 	// Set enabled to false for uncooled cameras or manually managed thermal control.
 	readonly cooling: SequencerCooling
@@ -69,11 +72,12 @@ export interface Sequencer {
 	// Artifact paths, naming templates, and metadata.
 	// The host validates all paths before execution.
 	readonly storage: SequencerStorage
-	// Ordered preparation actions executed before target acquisition.
+	// Whether the derived preparation pipeline runs before target acquisition.
+	// The steps themselves are declared on the equipment blocks; this flag only arms the pipeline.
 	// Set enabled to false when equipment is prepared externally.
 	readonly startup: SequencerStartup
-	// Ordered terminal actions executed for selected completion or failure states.
-	// Use it to leave equipment and the observatory in a defined safe state.
+	// Whether the derived terminal pipeline runs for selected completion or failure states.
+	// The steps themselves are declared on the equipment blocks; this flag only arms the pipeline.
 	readonly shutdown: SequencerShutdown
 	// Events, channels, and severity threshold used for user notifications.
 	// Notification delivery is best-effort and does not replace persisted session events.
@@ -192,6 +196,8 @@ export interface SequencerTargetTracking {
 	readonly enabled: boolean
 	// Selects the operating mode for this configuration.
 	readonly mode: TrackMode
+	// Controls whether tracking is stopped after the session ends.
+	readonly stopOnShutdown: boolean
 
 	// Optional non-sidereal correction rate along right ascension.
 	readonly rightAscensionRate?: Angle
@@ -391,6 +397,8 @@ export interface SequencerGuiding {
 	readonly recalibrateAfterMeridianFlip: boolean
 	// Controls whether restore after interruption is applied.
 	readonly restoreAfterInterruption: boolean
+	// Controls whether guiding is stopped after the session ends.
+	readonly stopOnShutdown: boolean
 
 	// Stable delay or settling policy required after a state transition.
 	readonly settle: SequencerGuiderSettle
@@ -679,6 +687,21 @@ export interface SequencerMeridianFlip {
 	readonly onFailure: 'pause' | 'suspend' | 'stop' | 'fail'
 }
 
+// Configures mount parking commanded around the session.
+// How the mount tracks and where it points live on the target; this block only parks and unparks.
+export interface SequencerMount {
+	// Controls whether this feature or definition is active.
+	readonly enabled: boolean
+	// Controls whether the mount is unparked before target acquisition.
+	readonly unparkOnStartup: boolean
+	// Controls whether the mount is parked after the session ends.
+	readonly parkOnShutdown: boolean
+	// Maximum time, in seconds, allowed for park or unpark to finish.
+	readonly timeout: number
+	// Retry policy applied when park or unpark fails.
+	readonly retry: SequencerRetryPolicy
+}
+
 // Thermal control
 
 // Controls camera cooling before capture and controlled warm-up during shutdown.
@@ -710,16 +733,30 @@ export interface SequencerCooling {
 
 	// Controls whether turn cooler off after warm is applied.
 	readonly turnCoolerOffAfterWarm: boolean
+	// Controls whether the camera is warmed after the session ends.
+	// Cooling to `temperature` on startup is implied by enabled.
+	readonly warmOnShutdown: boolean
+	// Retry policy applied when cooling or warming fails.
+	readonly retry: SequencerRetryPolicy
 }
 
 // Dome, cover and flat panel
 
 // Configures dome or roll-off-roof slaving, synchronization, and failure behavior.
-// Opening, closing, parking, and unparking are ordered lifecycle actions, not flags declared here.
+// Opening, closing, parking, and unparking are flags on this block; the compiler emits them in the only
+// physically valid order, and parks before closing when both shutdown flags are set.
 // Device capabilities determine which requested actions are valid.
 export interface SequencerDome {
 	// Controls whether this feature or definition is active.
 	readonly enabled: boolean
+	// Controls whether the dome is unparked before target acquisition.
+	readonly unparkOnStartup: boolean
+	// Controls whether the shutter or roof is opened before target acquisition.
+	readonly openOnStartup: boolean
+	// Controls whether the dome is parked after the session ends.
+	readonly parkOnShutdown: boolean
+	// Controls whether the shutter or roof is closed after the session ends.
+	readonly closeOnShutdown: boolean
 
 	// Controls whether close on unsafe is applied.
 	readonly closeOnUnsafe: boolean
@@ -742,11 +779,16 @@ export interface SequencerDome {
 }
 
 // Configures dust-cap or cover behavior for unsafe conditions and for the frame types being captured.
-// Opening on startup and closing on shutdown are ordered lifecycle actions, not flags declared here.
+// Opening on startup and closing on shutdown are flags on this block; opening before each light and closing
+// for darks remain capture-time policies.
 // Open/close commands are executed only when device interlocks permit them.
 export interface SequencerCover {
 	// Controls whether this feature or definition is active.
 	readonly enabled: boolean
+	// Controls whether the cover is opened before target acquisition.
+	readonly openOnStartup: boolean
+	// Controls whether the cover is closed after the session ends.
+	readonly closeOnShutdown: boolean
 	// Controls whether close on unsafe is applied.
 	readonly closeOnUnsafe: boolean
 	// Controls whether open before capture is applied.
@@ -1182,7 +1224,7 @@ export interface SequencerCloseDomeSafetyAction extends SequencerSafetyActionBas
 export interface SequencerWarmCameraSafetyAction extends SequencerSafetyActionBase {
 	// Discriminator selecting the concrete variant represented by this object.
 	// The setpoint, the ramp, and the cooler switch-off are not declared here: SequencerCooling is the single
-	// authority for the thermal targets, exactly as for the warmCamera lifecycle action.
+	// authority for the thermal targets, exactly as for the derived warmCamera lifecycle step.
 	readonly type: 'warmCamera'
 }
 
@@ -1389,21 +1431,18 @@ export interface SequencerStorage {
 
 // Startup and shutdown
 
-// Defines the ordered preparation pipeline executed before the target sequence.
-// Examples include connecting devices, opening the observatory, cooling, and starting guiding.
+// Arms the derived preparation pipeline executed before the target sequence.
+// The steps are declared on the equipment blocks and lowered in a fixed physical order.
 export interface SequencerStartup {
 	// Controls whether this feature or definition is active.
 	readonly enabled: boolean
-	// Ordered actions executed by this pipeline.
-	// The array may be empty when the pipeline is enabled only for future configuration.
-	readonly actions: readonly SequencerLifecycleAction[]
 	// Controls whether later ordered actions execute after this action fails.
 	// true provides best-effort continuation; false stops the containing pipeline.
 	readonly continueOnFailure: boolean
 }
 
-// Defines the ordered shutdown pipeline and the terminal states that trigger it.
-// The pipeline should leave the observatory in a physically safe state.
+// Arms the derived shutdown pipeline and the terminal states that trigger it.
+// The steps are declared on the equipment blocks; the pipeline should leave the observatory in a physically safe state.
 export interface SequencerShutdown {
 	// Controls whether this feature or definition is active.
 	readonly enabled: boolean
@@ -1413,175 +1452,14 @@ export interface SequencerShutdown {
 	readonly runOnStop: boolean
 	// Controls whether run on failure is applied.
 	readonly runOnFailure: boolean
-	// Ordered actions executed by this pipeline.
-	// The array may be empty when the pipeline is enabled only for future configuration.
-	readonly actions: readonly SequencerLifecycleAction[]
 	// Controls whether later ordered actions execute after this action fails.
 	// true provides best-effort continuation; false stops the containing pipeline.
 	readonly continueOnFailure: boolean
 }
 
-// Discriminated union of actions available in startup and shutdown pipelines.
-// Actions execute in list order and are independent from the main capture sequence.
-export type SequencerLifecycleAction =
-	| SequencerUnparkDomeLifecycleAction
-	| SequencerOpenDomeLifecycleAction
-	| SequencerUnparkMountLifecycleAction
-	| SequencerStartTrackingLifecycleAction
-	| SequencerOpenCoverLifecycleAction
-	| SequencerCoolCameraLifecycleAction
-	| SequencerStartGuidingLifecycleAction
-	| SequencerStopGuidingLifecycleAction
-	| SequencerStopTrackingLifecycleAction
-	| SequencerParkMountLifecycleAction
-	| SequencerCloseCoverLifecycleAction
-	| SequencerParkDomeLifecycleAction
-	| SequencerCloseDomeLifecycleAction
-	| SequencerWarmCameraLifecycleAction
-	| SequencerSwitchLifecycleAction
-	| SequencerCustomLifecycleAction
-
-// Shared identity, timeout, and retry policy for one startup or shutdown action.
-// Timeout is seconds and should cover the slowest expected physical transition.
-export interface SequencerLifecycleActionBase {
-	// Stable identifier used by definitions, checkpoints, events, or ordered actions.
-	// Use a non-empty value unique within its owning collection.
-	readonly id: string
-	// Controls whether this feature or definition is active.
-	readonly enabled: boolean
-	// Maximum time, in seconds, allowed for the operation to reach its terminal state.
-	// Seconds; use a finite value > 0 unless the consumer explicitly supports 0 as unlimited.
-	readonly timeout: number
-	// Retry policy applied when this operation fails.
-	readonly retry: SequencerRetryPolicy
-	// Whether the terminal state of the session must reflect a failure of this action.
-	// Omit for false, which lets the pipeline continue and report the failure without failing the session.
-	readonly required?: boolean
-}
-
-// Configures the UnparkDome step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-export interface SequencerUnparkDomeLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'unparkDome'
-}
-
-// Configures the OpenDome step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-export interface SequencerOpenDomeLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'openDome'
-}
-
-// Configures the UnparkMount step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-export interface SequencerUnparkMountLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'unparkMount'
-}
-
-// Configures the StartTracking step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-// The tracking mode and any non-sidereal rates come from the target's SequencerTargetTracking, which stays the single authority for how the mount tracks.
-export interface SequencerStartTrackingLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'startTracking'
-}
-
-// Configures the OpenCover step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-export interface SequencerOpenCoverLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'openCover'
-}
-
-// Configures the CoolCamera step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-// The setpoint, tolerance, and ramp are not declared here: this action commands the cooling policy in SequencerCooling, which is the single authority for the thermal target the frame preparation later waits against.
-export interface SequencerCoolCameraLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'coolCamera'
-}
-
-// Configures the StartGuiding step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-export interface SequencerStartGuidingLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'startGuiding'
-}
-
-// Configures the StopGuiding step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-export interface SequencerStopGuidingLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'stopGuiding'
-}
-
-// Configures the StopTracking step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-export interface SequencerStopTrackingLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'stopTracking'
-}
-
-// Configures the ParkMount step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-export interface SequencerParkMountLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'parkMount'
-}
-
-// Configures the CloseCover step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-export interface SequencerCloseCoverLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'closeCover'
-}
-
-// Configures the ParkDome step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-// Domes that must be parked at a home azimuth before the shutter can close are served by placing this action before closeDome in the list.
-export interface SequencerParkDomeLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'parkDome'
-}
-
-// Configures the CloseDome step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-export interface SequencerCloseDomeLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'closeDome'
-}
-
-// Configures the WarmCamera step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-// The warm target, ramp, and cooler-off behavior are not declared here: this action commands warmTemperature, warmRamp, and turnCoolerOffAfterWarm from SequencerCooling, which is the single authority for the thermal policy.
-export interface SequencerWarmCameraLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'warmCamera'
-}
-
-// Configures the Switch step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-export interface SequencerSwitchLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'switch'
-	// Serialized value for device.
-	readonly device: string
-	// Name or identifier of the switch/property to change.
-	readonly switch: string
-	// Value written by the switch or custom action.
-	readonly value: boolean | number | string
-}
-
-// Configures the Custom step used by a startup or shutdown pipeline.
-// It inherits identity, timeout, and retry behavior from SequencerLifecycleActionBase.
-export interface SequencerCustomLifecycleAction extends SequencerLifecycleActionBase {
-	// Discriminator selecting the concrete variant represented by this object.
-	readonly type: 'custom'
-	// Identifier of the custom host-side action handler.
-	readonly handler: string
-}
+// Names of the device reconciliations the compiler may emit into a startup or shutdown pipeline.
+// The definition never lists these; each one is derived from a flag on the block that owns the device.
+export type SequencerLifecycleActionType = 'unparkDome' | 'openDome' | 'unparkMount' | 'startTracking' | 'openCover' | 'coolCamera' | 'startGuiding' | 'stopGuiding' | 'stopTracking' | 'parkMount' | 'closeCover' | 'parkDome' | 'closeDome' | 'warmCamera'
 
 // Notifications
 
@@ -1696,6 +1574,7 @@ export const DEFAULT_SEQUENCER: Sequencer = {
 		tracking: {
 			enabled: false,
 			mode: 'SIDEREAL',
+			stopOnShutdown: false,
 			retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
 		},
 		goto: {
@@ -1744,6 +1623,7 @@ export const DEFAULT_SEQUENCER: Sequencer = {
 		calibrateBeforeStart: false,
 		recalibrateAfterMeridianFlip: true,
 		restoreAfterInterruption: true,
+		stopOnShutdown: false,
 		settle: {
 			tolerance: 1.5,
 			time: 2,
@@ -1835,6 +1715,13 @@ export const DEFAULT_SEQUENCER: Sequencer = {
 		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
 		onFailure: 'pause',
 	},
+	mount: {
+		enabled: false,
+		unparkOnStartup: false,
+		parkOnShutdown: false,
+		timeout: 300,
+		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
+	},
 	cooling: {
 		enabled: false,
 		temperature: -10,
@@ -1845,9 +1732,15 @@ export const DEFAULT_SEQUENCER: Sequencer = {
 		warmTemperature: 15,
 		warmRamp: 2,
 		turnCoolerOffAfterWarm: true,
+		warmOnShutdown: false,
+		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
 	},
 	dome: {
 		enabled: false,
+		unparkOnStartup: false,
+		openOnStartup: false,
+		parkOnShutdown: false,
+		closeOnShutdown: false,
 		closeOnUnsafe: true,
 		slaving: false,
 		synchronizeBeforeCapture: false,
@@ -1858,6 +1751,8 @@ export const DEFAULT_SEQUENCER: Sequencer = {
 	},
 	cover: {
 		enabled: false,
+		openOnStartup: false,
+		closeOnShutdown: false,
 		closeOnUnsafe: false,
 		openBeforeCapture: true,
 		closeForDarkFrames: true,
@@ -1930,7 +1825,6 @@ export const DEFAULT_SEQUENCER: Sequencer = {
 	startup: {
 		enabled: false,
 		continueOnFailure: false,
-		actions: [],
 	},
 	shutdown: {
 		enabled: false,
@@ -1938,7 +1832,6 @@ export const DEFAULT_SEQUENCER: Sequencer = {
 		runOnStop: true,
 		runOnFailure: true,
 		continueOnFailure: true,
-		actions: [],
 	},
 	notification: {
 		enabled: false,

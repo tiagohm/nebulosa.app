@@ -16,7 +16,7 @@ import type { OperationResult } from '#/orchestration'
 import type { Sequencer } from '#/sequencer'
 import type { SequencerPlan } from '#/sequencer.plan'
 import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerFailure } from '#/sequencer.state'
-import { action, camera, canonical, frame, retry, services } from './sequencer.fixture'
+import { camera, canonical, frame, retry, services } from './sequencer.fixture'
 
 interface Executed {
 	readonly nodeId: string
@@ -34,9 +34,8 @@ function definition(overrides?: Partial<Sequencer>): Sequencer {
 		autofocus: { ...base.autofocus, enabled: false },
 		meridianFlip: { ...base.meridianFlip, enabled: false },
 		cooling: { ...base.cooling, enabled: false },
+		mount: { ...base.mount, unparkOnStartup: false, parkOnShutdown: false },
 		capture: { ...base.capture, order: 'sequential', repeat: 1, delay: 0, frames: [frame('lum', { count: 2, camera: camera() })], retry: retry() },
-		startup: { ...base.startup, actions: [] },
-		shutdown: { ...base.shutdown, actions: [] },
 		...overrides,
 	}
 }
@@ -52,7 +51,7 @@ function planOf(overrides?: Partial<Sequencer>): SequencerPlan {
 function guided(): SequencerPlan {
 	const base = definition()
 
-	return planOf({ guiding: { ...base.guiding, enabled: true }, dither: { ...base.dither, enabled: true, everyFrames: 1, beforeFirstFrame: true }, startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding', required: true })] } })
+	return planOf({ guiding: { ...base.guiding, enabled: true }, dither: { ...base.dither, enabled: true, everyFrames: 1, beforeFirstFrame: true } })
 }
 
 interface Harness {
@@ -576,7 +575,6 @@ describe('plan walk', () => {
 			planOf({
 				guiding: { ...base.guiding, enabled: true, retry: { ...retry(), maxAttempts: 2 } },
 				dither: { ...base.dither, enabled: true, everyFrames: 1, beforeFirstFrame: true },
-				startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding', required: true })] },
 			}),
 			undefined,
 			guidingServices(() => {
@@ -802,8 +800,7 @@ describe('plan walk', () => {
 
 	test('attends a pause pending in front of the first startup action instead of commanding it', async () => {
 		const base = definition()
-		const startup = { ...base.startup, actions: [{ id: 'unpark', enabled: true, timeout: 30, retry: retry(), type: 'unparkMount' as const }], continueOnFailure: false }
-		const state: Harness = harness(planOf({ startup }))
+		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true } }))
 
 		state.desired = 'paused'
 
@@ -816,13 +813,12 @@ describe('plan walk', () => {
 
 	test('runs the finalize pipeline after the plan and never reaches the target when startup refuses it', async () => {
 		const base = definition()
-		const startup = { ...base.startup, actions: [{ id: 'park', enabled: true, timeout: 30, retry: retry(), type: 'parkMount' as const, required: true }], continueOnFailure: false }
-		const state = harness(planOf({ startup }), (context) => (context.nodeId.startsWith('startup.') ? Promise.resolve({ type: 'fatalFailure', reason: 'commandFailed', detail: 'the mount did not park' }) : Promise.resolve({ type: 'completed', value: undefined })))
+		const state = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true } }), (context) => (context.nodeId.startsWith('startup.') ? Promise.resolve({ type: 'fatalFailure', reason: 'commandFailed', detail: 'the mount did not unpark' }) : Promise.resolve({ type: 'completed', value: undefined })))
 		const outcome = await runSequencerPlan(state.host)
 
 		expect(outcome.terminal.state).toBe('failed')
-		expect(state.executed.map((it) => it.nodeId)).toEqual(['startup.action[park]'])
-		expect(outcome.checkpoint.completed).not.toContain('startup.action[park]')
+		expect(state.executed.map((it) => it.nodeId)).toEqual(['startup.action[unparkMount]'])
+		expect(outcome.checkpoint.completed).not.toContain('startup.action[unparkMount]')
 		expect(state.phases).toBeEmpty()
 	})
 
@@ -865,7 +861,6 @@ describe('plan walk', () => {
 			planOf({
 				autofocus: autofocus as never,
 				guiding: { ...base.guiding, enabled: true },
-				startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding', required: true })] },
 			}),
 			(context) => (context.nodeId.endsWith('.trigger.autofocus') ? Promise.resolve({ type: 'retryableFailure', reason: 'commandFailed', detail: 'the focuser did not move' }) : Promise.resolve({ type: 'completed', value: undefined })),
 			guidingServices(
@@ -901,7 +896,7 @@ describe('plan walk', () => {
 		const dither = { ...base.dither, enabled: true, onFailure: 'continue' as const, retry: { ...retry(), maxAttempts: 1 } }
 		let dithers = 0
 		const state = harness(
-			planOf({ dither, guiding: { ...base.guiding, enabled: true }, startup: { ...base.startup, actions: [action('guide', { type: 'startGuiding', required: true })] } }),
+			planOf({ dither, guiding: { ...base.guiding, enabled: true } }),
 			undefined,
 			guidingServices(
 				() => successfulOperationResult(undefined),
@@ -973,14 +968,13 @@ describe('plan walk', () => {
 
 	test('holds the whole session until the declared start instant', async () => {
 		const base = definition()
-		const startup = { ...base.startup, actions: [{ id: 'unpark', enabled: true, timeout: 30, retry: retry(), type: 'unparkMount' as const, required: true }] }
 		const at = Date.now() + 200
-		const state = harness(planOf({ startup, execution: { ...base.execution, start: { type: 'at', time: at } } }))
+		const state = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, execution: { ...base.execution, start: { type: 'at', time: at } } }))
 		const outcome = await runSequencerPlan(state.host)
 
 		expect(outcome.terminal.state).toBe('completed')
 		expect(Date.now()).toBeGreaterThanOrEqual(at)
-		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[unpark]')
+		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[unparkMount]')
 		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
 	})
 
@@ -998,8 +992,7 @@ describe('plan walk', () => {
 
 	test('ends as stopped when a stop cancels the guider the walk was opening', async () => {
 		const base = definition()
-		const shutdown = { ...base.shutdown, actions: [{ id: 'park', enabled: true, timeout: 30, retry: retry(), type: 'parkMount' as const, required: true }] }
-		const state: Harness = harness(planOf({ shutdown }), (context) => {
+		const state: Harness = harness(planOf({ mount: { ...base.mount, parkOnShutdown: true } }), (context) => {
 			state.phases.push(context.nodeId)
 
 			return Promise.resolve({ type: 'completed', value: undefined })
@@ -1014,7 +1007,7 @@ describe('plan walk', () => {
 
 		expect(outcome.terminal.state).toBe('stopped')
 		expect(outcome.terminal.failure).toBeUndefined()
-		expect(state.phases).toEqual(['finalizing', 'finalize.action[park]'])
+		expect(state.phases).toEqual(['finalizing', 'finalize.action[parkMount]'])
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 	})
 
@@ -1057,16 +1050,8 @@ describe('plan walk', () => {
 
 	test('keeps the startup pipeline running when a pause cancels the action', async () => {
 		const base = definition()
-		const startup = {
-			...base.startup,
-			actions: [
-				{ id: 'park', enabled: true, timeout: 30, retry: retry(), type: 'parkMount' as const, required: true },
-				{ id: 'unpark', enabled: true, timeout: 30, retry: retry(), type: 'unparkMount' as const, required: true },
-			],
-			continueOnFailure: false,
-		}
-		const state: Harness = harness(planOf({ startup }), (context) => {
-			if (context.nodeId === 'startup.action[park]') {
+		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, target: { ...base.target, goto: { ...base.target.goto, enabled: false } } }), (context) => {
+			if (context.nodeId === 'startup.action[unparkMount]') {
 				state.action.abort()
 
 				if (context.signal.aborted) return Promise.resolve({ type: 'retryableFailure', reason: 'aborted', detail: 'the pause cancelled the action' })
@@ -1076,22 +1061,15 @@ describe('plan walk', () => {
 		})
 		const outcome = await runSequencerPlan(state.host)
 
-		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[unpark]')
-		expect(outcome.checkpoint.completed).toContain('startup.action[park]')
-		expect(outcome.checkpoint.completed).toContain('startup.action[unpark]')
+		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[startTracking]')
+		expect(outcome.checkpoint.completed).toContain('startup.action[unparkMount]')
+		expect(outcome.checkpoint.completed).toContain('startup.action[startTracking]')
 	})
 
 	test('holds the startup pipeline between two actions when the session is paused', async () => {
 		const base = definition()
-		const startup = {
-			...base.startup,
-			actions: [
-				{ id: 'unpark', enabled: true, timeout: 30, retry: retry(), type: 'unparkMount' as const, required: true },
-				{ id: 'track', enabled: true, timeout: 30, retry: retry(), type: 'startTracking' as const, required: true },
-			],
-		}
-		const state: Harness = harness(planOf({ startup }), (context) => {
-			if (context.nodeId === 'startup.action[unpark]') state.desired = 'paused'
+		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, target: { ...base.target, goto: { ...base.target.goto, enabled: false } } }), (context) => {
+			if (context.nodeId === 'startup.action[unparkMount]') state.desired = 'paused'
 
 			return Promise.resolve({ type: 'completed', value: undefined })
 		})
@@ -1100,50 +1078,41 @@ describe('plan walk', () => {
 
 		const outcome = await runSequencerPlan(state.host)
 
-		expect(state.holds).toContain('startup.action[track]')
-		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[track]')
+		expect(state.holds).toContain('startup.action[startTracking]')
+		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[startTracking]')
 		expect(outcome.terminal.state).toBe('completed')
 	})
 
 	test('commands no further startup action once the session is stopping', async () => {
 		const base = definition()
-		const startup = {
-			...base.startup,
-			actions: [
-				{ id: 'unpark', enabled: true, timeout: 30, retry: retry(), type: 'unparkMount' as const, required: true },
-				{ id: 'track', enabled: true, timeout: 30, retry: retry(), type: 'startTracking' as const, required: true },
-			],
-		}
-		const state: Harness = harness(planOf({ startup }), (context) => {
-			if (context.nodeId === 'startup.action[unpark]') state.desired = 'stopped'
+		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, target: { ...base.target, goto: { ...base.target.goto, enabled: false } } }), (context) => {
+			if (context.nodeId === 'startup.action[unparkMount]') state.desired = 'stopped'
 
 			return Promise.resolve({ type: 'completed', value: undefined })
 		})
 		const outcome = await runSequencerPlan(state.host)
 
-		expect(state.executed.map((it) => it.nodeId)).not.toContain('startup.action[track]')
+		expect(state.executed.map((it) => it.nodeId)).not.toContain('startup.action[startTracking]')
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 		expect(outcome.terminal.state).toBe('stopped')
 	})
 
 	test('publishes the finalizing phase before the first terminal action runs', async () => {
-		const base = canonical()
-		const shutdown = { ...base.shutdown, actions: [{ id: 'park', enabled: true, timeout: 30, retry: retry(), type: 'parkMount' as const, required: true }] }
-		const state: Harness = harness(planOf({ shutdown }), (context) => {
-			if (context.nodeId === 'finalize.action[park]') state.phases.push(context.nodeId)
+		const base = definition()
+		const state: Harness = harness(planOf({ mount: { ...base.mount, parkOnShutdown: true } }), (context) => {
+			if (context.nodeId === 'finalize.action[parkMount]') state.phases.push(context.nodeId)
 
 			return Promise.resolve({ type: 'completed', value: undefined })
 		})
 		const outcome = await runSequencerPlan(state.host)
 
 		expect(outcome.terminal.state).toBe('completed')
-		expect(state.phases).toEqual(['capturing', 'finalizing', 'finalize.action[park]'])
+		expect(state.phases).toEqual(['capturing', 'finalizing', 'finalize.action[parkMount]'])
 	})
 
 	test('publishes no finalizing phase when no terminal pipeline runs', async () => {
-		const base = canonical()
-		const shutdown = { ...base.shutdown, enabled: false, actions: [] }
-		const state = harness(planOf({ shutdown }))
+		const base = definition()
+		const state = harness(planOf({ shutdown: { ...base.shutdown, enabled: false } }))
 		const outcome = await runSequencerPlan(state.host)
 
 		expect(outcome.terminal.state).toBe('completed')
@@ -1152,19 +1121,13 @@ describe('plan walk', () => {
 
 	test('records a lifecycle step as completed only when it ran', async () => {
 		const base = definition()
-		const startup = {
-			...base.startup,
-			actions: [
-				{ id: 'park', enabled: true, timeout: 30, retry: retry(), type: 'parkMount' as const, required: false },
-				{ id: 'unpark', enabled: true, timeout: 30, retry: retry(), type: 'unparkMount' as const, required: false },
-			],
-			continueOnFailure: true,
-		}
-		const state = harness(planOf({ startup }), (context) => (context.nodeId === 'startup.action[park]' ? Promise.resolve({ type: 'fatalFailure', reason: 'commandFailed', detail: 'the mount did not park' }) : Promise.resolve({ type: 'completed', value: undefined })))
+		const state = harness(planOf({ cooling: { ...base.cooling, enabled: true }, mount: { ...base.mount, parkOnShutdown: true } }), (context) =>
+			context.nodeId === 'finalize.action[parkMount]' ? Promise.resolve({ type: 'fatalFailure', reason: 'commandFailed', detail: 'the mount did not park' }) : Promise.resolve({ type: 'completed', value: undefined }),
+		)
 		const outcome = await runSequencerPlan(state.host)
 
 		expect(outcome.terminal.state).toBe('completed')
-		expect(outcome.checkpoint.completed).not.toContain('startup.action[park]')
-		expect(outcome.checkpoint.completed).toContain('startup.action[unpark]')
+		expect(outcome.checkpoint.completed).not.toContain('finalize.action[parkMount]')
+		expect(outcome.checkpoint.completed).toContain('finalize.action[warmCamera]')
 	})
 })

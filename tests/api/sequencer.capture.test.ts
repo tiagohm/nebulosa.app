@@ -23,8 +23,7 @@ function captureConfiguration(): SequencerCapture {
 		meridianFlip: { ...base.meridianFlip, enabled: false },
 		cooling: { ...base.cooling, enabled: false },
 		capture: { ...base.capture, order: 'sequential', repeat: 1, delay: 0, frames: [frame('lum', { count: 1, camera: camera() })], retry: retry() },
-		startup: { ...base.startup, actions: [] },
-		shutdown: { ...base.shutdown, actions: [] },
+		mount: { ...base.mount, unparkOnStartup: false, parkOnShutdown: false },
 	})
 
 	expect(compilation.ok).toBeTrue()

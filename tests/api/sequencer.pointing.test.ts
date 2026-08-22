@@ -142,7 +142,7 @@ describe('slew block', () => {
 		}
 
 		const handler = sequencerSlewHandler(commander as never)
-		const configuration = slewConfiguration({ tracking: { mode: 'SIDEREAL', retry: slewConfiguration().retry } })
+		const configuration = slewConfiguration({ tracking: { mode: 'SIDEREAL', stopOnShutdown: false, retry: slewConfiguration().retry } })
 		const result = await handler.execute(actionContext({ mount: { device } }), configuration)
 
 		expect(result).toEqual({ type: 'completed', value: { rightAscension: 1.4, declination: -0.09, pierSide: 'WEST', tracking: true } })

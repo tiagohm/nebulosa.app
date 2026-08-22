@@ -1473,4 +1473,27 @@ describe('startup', () => {
 		expect(night.devices.mount.parked).toBeTrue()
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
 	}, 30_000)
+
+	test('D.32 an enabled cooler with the startup pipeline disarmed is refused', async () => {
+		const process = await openProcess()
+
+		processes.push(process)
+
+		const started = await process.handler.start(
+			process.definition(process.addObservatory('d32'), {
+				guiding: { enabled: false },
+				dither: { enabled: false },
+				startup: { enabled: false },
+			}),
+		)
+
+		expect(started.ok).toBeFalse()
+
+		if (started.ok) return
+
+		expect(started.reason).toBe('invalidDefinition')
+		expect(started.preflight?.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and the startup pipeline that cools the camera to it is disabled, so the session would capture at whatever temperature the sensor is already at' }])
+		expect(process.log).toHaveLength(0)
+		expect(process.runtime.activeSessionId).toBeUndefined()
+	}, 30_000)
 })

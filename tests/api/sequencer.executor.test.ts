@@ -528,7 +528,7 @@ describe('plan walk', () => {
 		const outcome = await runSequencerPlan(state.host)
 
 		expect(outcome.terminal.state).toBe('completed')
-		expect(suspensions).toBe(3)
+		expect(suspensions).toBe(4)
 		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
 	})
 
@@ -634,7 +634,7 @@ describe('plan walk', () => {
 		const outcome = await runSequencerPlan(state.host)
 
 		expect(outcome.terminal.state).toBe('completed')
-		expect(suspensions).toBe(0)
+		expect(suspensions).toBe(1)
 		expect(state.executed.filter((it) => it.slot !== undefined)).toHaveLength(2)
 	})
 

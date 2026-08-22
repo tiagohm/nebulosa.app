@@ -323,6 +323,8 @@ describe('sequencer runtime', () => {
 			{
 				guiding: {
 					guiderCommander: {
+						running: () => false,
+						looping: () => false,
 						connect: (request: unknown) => {
 							connected = request
 							return Promise.resolve(successfulOperationResult({ id: 'guider-1' }))
@@ -368,6 +370,8 @@ describe('sequencer runtime', () => {
 				},
 				guiding: {
 					guiderCommander: {
+						running: () => false,
+						looping: () => false,
 						connect: (request: unknown) => {
 							connected = request
 							return Promise.resolve(successfulOperationResult({ id: 'guider-1' }))
@@ -967,6 +971,8 @@ describe('sequencer runtime', () => {
 			{
 				guiding: {
 					guiderCommander: {
+						running: () => false,
+						looping: () => false,
 						connect: (_: unknown, token: ReservationToken) => {
 							const executor = (operation: OperationContext) =>
 								new Promise<OperationResult<void>>((resolve) => {

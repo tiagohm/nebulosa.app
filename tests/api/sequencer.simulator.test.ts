@@ -1564,4 +1564,32 @@ describe('startup', () => {
 		expect(night.devices.mount.parked).toBeTrue()
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
 	}, 30_000)
+
+	test('D.36 openCover times out on the cover deadline and light still opens', async () => {
+		const night = await runNight({
+			patch: { cover: { timeout: 1 } },
+			sim: { options: { cover: { unpark: 3 } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+		const firstSlew = names.indexOf('slew')
+		const startupOpens = night.log.slice(0, firstSlew).filter((entry) => entry.name === 'cover.open')
+		const laterOpens = night.log.slice(firstSlew).filter((entry) => entry.name === 'cover.open')
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(firstSlew).toBeGreaterThan(-1)
+		expect(startupOpens).toHaveLength(3)
+		expect(laterOpens).toHaveLength(1)
+		expect(names.includes('cooler.set')).toBeTrue()
+		expect(names.includes('guider.start')).toBeTrue()
+		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('cover.open'))
+		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cooler.set'))
+		expect(names.indexOf('cover.open', firstSlew)).toBeGreaterThan(firstSlew)
+		expect(names.indexOf('cover.open', firstSlew)).toBeLessThan(names.lastIndexOf('camera.expose'))
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+		expect(night.devices.cover.parked).toBeTrue()
+	}, 30_000)
 })

@@ -102,7 +102,7 @@ export interface NightOptions {
 		readonly options?: {
 			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' | 'timeout' | number; trackMode?: 'fail' | number }>
 			readonly camera?: Readonly<{ temperature?: 'timeout' }>
-			readonly cover?: Readonly<{ unpark?: 'fail' | 'timeout' }>
+			readonly cover?: Readonly<{ unpark?: 'fail' | 'timeout' | number }>
 			readonly guider?: Readonly<{ start?: 'fail' | 'timeout'; running?: boolean }>
 		}
 	}
@@ -542,6 +542,7 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 	let heldScienceExposure = false
 	let remainingUnparkFailures = sim?.options?.mount?.unpark === 'fail' ? Number.POSITIVE_INFINITY : typeof sim?.options?.mount?.unpark === 'number' ? sim.options.mount.unpark : 0
 	let remainingCoverOpenFailures = sim?.options?.cover?.unpark === 'fail' ? Number.POSITIVE_INFINITY : 0
+	let remainingCoverOpenTimeouts = sim?.options?.cover?.unpark === 'timeout' ? Number.POSITIVE_INFINITY : typeof sim?.options?.cover?.unpark === 'number' ? sim.options.cover.unpark : 0
 
 	return {
 		mount: {
@@ -617,7 +618,8 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 			unpark: async (_scope: unknown, cover: Cover, options?: { readonly timeout?: number }) => {
 				push('cover.open')
 
-				if (sim?.options?.cover?.unpark === 'timeout') {
+				if (remainingCoverOpenTimeouts > 0) {
+					remainingCoverOpenTimeouts--
 					const ended = await stall(options?.timeout === undefined ? undefined : options.timeout + 50)
 					return failedOperationResult(ended, ended === 'timeout' ? 'the cover never opened' : undefined)
 				}

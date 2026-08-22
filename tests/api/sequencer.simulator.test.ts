@@ -1451,4 +1451,26 @@ describe('startup', () => {
 		expect(night.devices.mount.parked).toBeTrue()
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
 	}, 30_000)
+
+	test('D.31 a disabled mount feature omits unpark even when the flag is on', async () => {
+		const night = await runNight({
+			patch: { mount: { enabled: false, unparkOnStartup: true } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'unexpectedState', detail: 'the mount did not reach the target: mount Mount Simulator is parked' })
+		expect(night.session.failure?.detail?.includes('did not run')).toBeFalse()
+		expect(names.includes('unpark')).toBeFalse()
+		expect(names.includes('cooler.set')).toBeTrue()
+		expect(names.includes('guider.start')).toBeTrue()
+		expect(names.includes('slew')).toBeTrue()
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.devices.mount.parked).toBeTrue()
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+	}, 30_000)
 })

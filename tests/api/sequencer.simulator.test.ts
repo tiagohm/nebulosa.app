@@ -1406,4 +1406,26 @@ describe('startup', () => {
 		expect(night.devices.mount.trackMode).toBe('LUNAR')
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
 	}, 30_000)
+
+	test('D.29 startGuiding times out on the guiding settle deadline', async () => {
+		const night = await runNight({
+			patch: { guiding: { settle: { timeout: 1 } } },
+			sim: { options: { guider: { start: 'timeout' } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'timeout', detail: 'the action did not finish within 1s' })
+		expect(night.log.filter((entry) => entry.name === 'guider.start')).toHaveLength(3)
+		expect(names.includes('unpark')).toBeTrue()
+		expect(names.includes('cooler.set')).toBeTrue()
+		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.devices.guiderRunning).toBeFalse()
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+	}, 30_000)
 })

@@ -43,6 +43,12 @@ jobs:
             - name: Install Dependencies
               run: bun i --omit=dev
 
+            - name: Cache Data Files
+              uses: actions/cache@v6
+              with:
+                  path: src/data/*.sqlite
+                  key: nebulosa-app
+
             - name: Build Database
               run: bun run bin/nebulosa.sqlite.ts
 

@@ -91,6 +91,7 @@ const components = {
 	sun: Sun,
 	thermometer: Thermometer,
 	tppa: Tppa,
+	weather: Dummy,
 	wheel: Wheel,
 } as const satisfies Record<HomePanelType, React.FunctionComponent<IDockviewPanelProps>>
 

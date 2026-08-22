@@ -100,9 +100,10 @@ export interface NightOptions {
 		readonly cover?: Partial<Cover>
 		readonly wheel?: Partial<Wheel>
 		readonly options?: {
-			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' | number }>
+			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' | 'timeout' | number; trackMode?: 'fail' | number }>
 			readonly camera?: Readonly<{ temperature?: 'timeout' }>
-			readonly guider?: Readonly<{ start?: 'fail'; running?: boolean }>
+			readonly cover?: Readonly<{ unpark?: 'fail' | 'timeout' }>
+			readonly guider?: Readonly<{ start?: 'fail' | 'timeout'; running?: boolean }>
 		}
 	}
 	readonly control?: (api: NightControl) => void | Promise<void>
@@ -511,11 +512,36 @@ function nightControl(handler: SequencerHandler, sessionId: string, arbiter: Res
 	}
 }
 
+// Waits until a commander deadline or abort fires. Used by timeout injectors so the pipeline, not the
+// virtual clock, is what expires the attempt: abortableDelay is mocked to complete instantly.
+function stall(ms?: number, signal?: AbortSignal) {
+	return new Promise<'timeout' | 'aborted'>((resolve) => {
+		let settled = false
+		const done = (reason: 'timeout' | 'aborted') => {
+			if (settled) return
+			settled = true
+			if (timer !== undefined) clearTimeout(timer)
+			signal?.removeEventListener('abort', onAbort)
+			resolve(reason)
+		}
+		const onAbort = () => done('aborted')
+		const timer = ms !== undefined && ms > 0 ? setTimeout(() => done('timeout'), ms) : undefined
+
+		if (signal?.aborted) {
+			done('aborted')
+			return
+		}
+
+		signal?.addEventListener('abort', onAbort, { once: true })
+	})
+}
+
 function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>, holdFirstExposure?: Promise<void>, sim?: NightOptions['sim']) {
 	const push = (name: string, detail?: string) => log.push(detail === undefined ? { name, at: clock.now } : { name, detail, at: clock.now })
 	const ok = <T>(value: T) => Promise.resolve(successfulOperationResult(value))
 	let heldScienceExposure = false
 	let remainingUnparkFailures = sim?.options?.mount?.unpark === 'fail' ? Number.POSITIVE_INFINITY : typeof sim?.options?.mount?.unpark === 'number' ? sim.options.mount.unpark : 0
+	let remainingCoverOpenFailures = sim?.options?.cover?.unpark === 'fail' ? Number.POSITIVE_INFINITY : 0
 
 	return {
 		mount: {
@@ -543,12 +569,17 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 				mount.tracking = false
 				return ok(undefined)
 			},
-			unpark: (_scope: unknown, mount: Mount) => {
+			unpark: async (_scope: unknown, mount: Mount, options?: { readonly timeout?: number }) => {
 				push('unpark')
+
+				if (sim?.options?.mount?.unpark === 'timeout') {
+					const ended = await stall(options?.timeout)
+					return failedOperationResult(ended, ended === 'timeout' ? 'the mount never unparked' : undefined)
+				}
 
 				if (remainingUnparkFailures > 0) {
 					remainingUnparkFailures--
-					return Promise.resolve(failedOperationResult('commandFailed', 'the mount refused to unpark'))
+					return failedOperationResult('commandFailed', 'the mount refused to unpark')
 				}
 
 				mount.parked = false
@@ -559,8 +590,15 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 				mount.tracking = enabled
 				return ok(undefined)
 			},
-			setTrackMode: (_scope: unknown, mount: Mount, mode: Mount['trackMode']) => {
+			setTrackMode: async (_scope: unknown, mount: Mount, mode: Mount['trackMode']) => {
 				push('track.mode', mode)
+
+				if (sim?.options?.mount?.trackMode === 'fail') return failedOperationResult('commandFailed', 'the mount refused the track mode')
+
+				const delay = typeof sim?.options?.mount?.trackMode === 'number' ? sim.options.mount.trackMode : 0
+
+				if (delay > 0) await stall(delay)
+
 				mount.trackMode = mode
 				return ok(undefined)
 			},
@@ -576,8 +614,19 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 				cover.parked = true
 				return ok(undefined)
 			},
-			unpark: (_scope: unknown, cover: Cover) => {
+			unpark: async (_scope: unknown, cover: Cover, options?: { readonly timeout?: number }) => {
 				push('cover.open')
+
+				if (sim?.options?.cover?.unpark === 'timeout') {
+					const ended = await stall(options?.timeout)
+					return failedOperationResult(ended, ended === 'timeout' ? 'the cover never opened' : undefined)
+				}
+
+				if (remainingCoverOpenFailures > 0) {
+					remainingCoverOpenFailures--
+					return failedOperationResult('commandFailed', 'the cover refused to open')
+				}
+
 				cover.parked = false
 				return ok(undefined)
 			},
@@ -713,10 +762,15 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 				devices.guiderRunning = false
 				return ok(undefined)
 			},
-			startGuiding: () => {
+			startGuiding: async (_guider?: unknown, options?: { readonly signal?: AbortSignal }) => {
 				push('guider.start')
 
-				if (sim?.options?.guider?.start === 'fail') return Promise.resolve(failedOperationResult('commandFailed', 'the guider refused to start'))
+				if (sim?.options?.guider?.start === 'fail') return failedOperationResult('commandFailed', 'the guider refused to start')
+
+				if (sim?.options?.guider?.start === 'timeout') {
+					const ended = await stall(undefined, options?.signal)
+					return failedOperationResult(ended, ended === 'timeout' ? 'the guider never settled' : undefined)
+				}
 
 				devices.guiderRunning = true
 				devices.guiderLooping = true

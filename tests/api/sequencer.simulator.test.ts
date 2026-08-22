@@ -1340,4 +1340,27 @@ describe('startup', () => {
 		expect(names.indexOf('guider.calibrate')).toBe(-1)
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(1)
 	}, 30_000)
+
+	test('D.26 a required openCover failure stops the night before the target', async () => {
+		const night = await runNight({
+			patch: { cover: { openBeforeCapture: false } },
+			sim: { options: { cover: { unpark: 'fail' } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'commandFailed', detail: 'the cover did not open: the cover refused to open' })
+		expect(night.log.filter((entry) => entry.name === 'cover.open')).toHaveLength(3)
+		expect(names.includes('unpark')).toBeTrue()
+		expect(names.includes('cooler.set')).toBeTrue()
+		expect(names.includes('guider.start')).toBeTrue()
+		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.devices.cover.parked).toBeTrue()
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+	}, 30_000)
 })

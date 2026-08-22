@@ -35,8 +35,11 @@ describe('canonical night', () => {
 		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(4)
 		expect(wheelMoves.map((entry) => entry.detail)).toEqual(['L', 'R', 'G', 'B'])
 		expect(night.log.filter((entry) => entry.name === 'guider.dither')).toHaveLength(4)
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('slew'))
 		expect(names.indexOf('guider.stop')).toBeGreaterThan(names.lastIndexOf('camera.expose'))
-		expect(names.indexOf('cover.close')).toBeGreaterThan(names.indexOf('guider.stop'))
+		const shutdownTrackOff = night.log.findIndex((entry, index) => index > names.lastIndexOf('camera.expose') && entry.name === 'track' && entry.detail === 'off')
+		expect(shutdownTrackOff).toBeGreaterThan(names.indexOf('guider.stop'))
+		expect(names.indexOf('cover.close')).toBeGreaterThan(shutdownTrackOff)
 		expect(names.indexOf('park')).toBeGreaterThan(names.indexOf('cover.close'))
 		expect(names.indexOf('cooler.off')).toBeGreaterThan(names.indexOf('park'))
 		expect(committed).toHaveLength(9)
@@ -817,28 +820,44 @@ describe('startup', () => {
 		nights.push(night)
 
 		const names = commandNames(night.log)
+		const firstSlew = names.indexOf('slew')
+		const startup = night.log.slice(0, firstSlew)
 
 		expect(night.session.state).toBe('completed')
+		expect(firstSlew).toBeGreaterThan(-1)
 		expect(names.indexOf('unpark')).toBeGreaterThan(-1)
 		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('unpark'))
 		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('cover.open'))
 		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cooler.set'))
-		expect(names.indexOf('slew')).toBeGreaterThan(names.indexOf('guider.start'))
+		expect(firstSlew).toBeGreaterThan(names.indexOf('guider.start'))
+		expect(startup.some((entry) => entry.name === 'track.mode' || (entry.name === 'track' && entry.detail === 'on'))).toBeFalse()
+		expect(startup.some((entry) => entry.name === 'connect' || (entry.name.endsWith('.connect') && entry.name !== 'guider.connect'))).toBeFalse()
 	}, 30_000)
 
-	test('D.02 startup order is the derived physical order', async () => {
-		const night = await runNight()
+	test('D.02 omitted and inserted startup steps keep their physical slots', async () => {
+		const night = await runNight({
+			patch: {
+				cover: { openOnStartup: false },
+				meridianFlip: { enabled: false },
+				target: { goto: { enabled: false }, center: { enabled: false } },
+			},
+			sim: { mount: { trackMode: 'LUNAR' } },
+		})
 
 		nights.push(night)
 
 		const names = commandNames(night.log)
 
 		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(names.includes('slew')).toBeFalse()
 		expect(names.indexOf('unpark')).toBeGreaterThan(-1)
-		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('unpark'))
-		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('cover.open'))
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('unpark'))
+		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('track.mode'))
 		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cooler.set'))
-		expect(names.indexOf('slew')).toBeGreaterThan(names.indexOf('guider.start'))
+		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('guider.start'))
+		expect(night.devices.mount.trackMode).toBe('SIDEREAL')
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
 
 	test('D.03 unpark succeeds when the mount is already unparked', async () => {

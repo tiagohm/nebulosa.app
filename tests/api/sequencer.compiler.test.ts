@@ -162,6 +162,8 @@ describe('lowering', () => {
 
 		expect(startup.children.map((node) => node.id)).toEqual(['startup.action[unparkMount]', 'startup.action[coolCamera]', 'startup.action[startGuiding]'])
 		expect(finalize.children.map((node) => node.id)).toEqual(['finalize.action[parkMount]', 'finalize.action[warmCamera]'])
+		expect(startup.children.every((node) => node.kind === 'action' && (node.configuration as SequencerLifecycle).required)).toBe(true)
+		expect(finalize.children.every((node) => node.kind === 'action' && !(node.configuration as SequencerLifecycle).required)).toBe(true)
 		expect(startup.children.every((node) => !node.id.includes('target['))).toBe(true)
 		expect(finalize.children.every((node) => !node.id.includes('target['))).toBe(true)
 	})
@@ -186,6 +188,8 @@ describe('lowering', () => {
 		const unpark = startup.children[0] as SequencerPlanAction
 
 		expect((track.configuration as SequencerLifecycle).type).toBe('startTracking')
+		expect((track.configuration as SequencerLifecycle).required).toBe(true)
+		expect((track.configuration as SequencerLifecycle).timeout).toBe(0)
 		expect((track.configuration as SequencerLifecycle).tracking).toEqual(tracking)
 		expect((unpark.configuration as SequencerLifecycle).tracking).toBeUndefined()
 	})
@@ -223,9 +227,10 @@ describe('lowering', () => {
 		const connection = { mode: 'local', focalLength: 200, capture } as const
 		const { plan } = ok({ ...definition, guiding: { ...definition.guiding, connection } })
 		const startup = plan.root.children[0] as SequencerPlanSequence
-		const guide = startup.children[1] as SequencerPlanAction
+		const guide = startup.children.find((node) => node.kind === 'action' && node.id === 'startup.action[startGuiding]') as SequencerPlanAction
 
 		expect((guide.configuration as SequencerLifecycle).type).toBe('startGuiding')
+		expect((guide.configuration as SequencerLifecycle).timeout).toBe(definition.guiding.settle.timeout)
 		expect((guide.configuration as SequencerLifecycle).guiding).toEqual({ calibrateBeforeStart: false, settle: definition.guiding.settle, capture })
 	})
 
@@ -235,6 +240,7 @@ describe('lowering', () => {
 		const startup = plan.root.children[0] as SequencerPlanSequence
 
 		expect(startup.children.map((node) => node.id)).toEqual(['startup.action[unparkMount]', 'startup.action[startTracking]', 'startup.action[coolCamera]', 'startup.action[startGuiding]'])
+		expect((startup.children[1] as SequencerPlanAction).configuration).toMatchObject({ type: 'startTracking', required: true, timeout: 0 })
 	})
 
 	test('a disabled pipeline or a pipeline with no derived step produces no block', () => {
@@ -411,6 +417,17 @@ describe('structural validation', () => {
 		const open = startup.children.find((node) => node.kind === 'action' && node.id === 'startup.action[openCover]') as SequencerPlanAction
 
 		expect((open.configuration as SequencerLifecycle).required).toBe(false)
+		expect((open.configuration as SequencerLifecycle).timeout).toBe(definition.cover.timeout)
+	})
+
+	test('opening the cover on startup is required when capture will not open it', () => {
+		const definition = complete()
+		const { plan } = ok({ ...definition, cover: { ...definition.cover, enabled: true, openOnStartup: true, closeOnUnsafe: false, openBeforeCapture: false } })
+		const startup = plan.root.children[0] as SequencerPlanSequence
+		const open = startup.children.find((node) => node.kind === 'action' && node.id === 'startup.action[openCover]') as SequencerPlanAction
+
+		expect((open.configuration as SequencerLifecycle).required).toBe(true)
+		expect((open.configuration as SequencerLifecycle).timeout).toBe(definition.cover.timeout)
 	})
 
 	test('a session that does not cool the camera needs no cooling block', () => {

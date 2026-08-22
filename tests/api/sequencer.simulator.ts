@@ -573,7 +573,7 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 				push('unpark')
 
 				if (sim?.options?.mount?.unpark === 'timeout') {
-					const ended = await stall(options?.timeout)
+					const ended = await stall(options?.timeout === undefined ? undefined : options.timeout + 50)
 					return failedOperationResult(ended, ended === 'timeout' ? 'the mount never unparked' : undefined)
 				}
 
@@ -618,7 +618,7 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 				push('cover.open')
 
 				if (sim?.options?.cover?.unpark === 'timeout') {
-					const ended = await stall(options?.timeout)
+					const ended = await stall(options?.timeout === undefined ? undefined : options.timeout + 50)
 					return failedOperationResult(ended, ended === 'timeout' ? 'the cover never opened' : undefined)
 				}
 

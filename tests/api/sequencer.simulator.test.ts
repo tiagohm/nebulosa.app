@@ -1496,4 +1496,24 @@ describe('startup', () => {
 		expect(process.log).toHaveLength(0)
 		expect(process.runtime.activeSessionId).toBeUndefined()
 	}, 30_000)
+
+	test('D.33 a target that does not track does not emit startTracking', async () => {
+		const night = await runNight({
+			patch: {
+				meridianFlip: { enabled: false },
+				target: { tracking: { enabled: false }, goto: { enabled: false }, center: { enabled: false } },
+			},
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(names.includes('track.mode')).toBeFalse()
+		expect(night.log.some((entry) => entry.name === 'track' && entry.detail === 'on')).toBeFalse()
+		expect(names.includes('slew')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+	}, 30_000)
 })

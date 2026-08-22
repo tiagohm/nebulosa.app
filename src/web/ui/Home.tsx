@@ -84,6 +84,7 @@ const components = {
 	planetarium: Planetarium,
 	power: Dummy,
 	rotator: Rotator,
+	safetyMonitor: Dummy,
 	satellite: Satellite,
 	settings: Settings,
 	solarEclipse: SolarEclipseMap,

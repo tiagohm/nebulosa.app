@@ -88,6 +88,7 @@ export const homeIcons = {
 	planetarium: planetariumIcon,
 	power: '',
 	rotator: rotatorIcon,
+	safetyMonitor: '',
 	satellite: satelliteIcon,
 	settings: settingsIcon,
 	solarEclipse: solarEclipseIcon,

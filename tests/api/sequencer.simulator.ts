@@ -39,7 +39,7 @@ import { failedOperationResult, successfulOperationResult } from '#/orchestratio
 import type { OperationResult } from '#/orchestration'
 import type { Sequencer, SequencerAuxiliaryCapture, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerArtifact, SequencerEvent, SequencerSession, SequencerSessionSnapshot } from '#/sequencer.state'
-import { action, camera, frame } from './sequencer.fixture'
+import { camera, frame } from './sequencer.fixture'
 
 export interface SimulatorCommand {
 	readonly name: string
@@ -100,9 +100,10 @@ export interface NightOptions {
 		readonly cover?: Partial<Cover>
 		readonly wheel?: Partial<Wheel>
 		readonly options?: {
-			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' | number }>
+			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' | 'timeout' | number; trackMode?: 'fail' | number }>
 			readonly camera?: Readonly<{ temperature?: 'timeout' }>
-			readonly guider?: Readonly<{ start?: 'fail'; running?: boolean }>
+			readonly cover?: Readonly<{ unpark?: 'fail' | 'timeout' | number }>
+			readonly guider?: Readonly<{ start?: 'fail' | 'timeout'; running?: boolean }>
 		}
 	}
 	readonly control?: (api: NightControl) => void | Promise<void>
@@ -159,7 +160,7 @@ export function defaultSequencer(root: string): Sequencer {
 			enabled: true,
 			type: 'J2000',
 			J2000: { x: 1.4, y: -0.09 },
-			tracking: { enabled: true, mode: 'SIDEREAL', retry: RETRY },
+			tracking: { enabled: true, mode: 'SIDEREAL', stopOnShutdown: true, retry: RETRY },
 			goto: { enabled: true, skipTolerance: 0.001, arrivalTolerance: 0.0005, timeout: 300, settle: 2, retry: RETRY },
 			center: { enabled: true, solver: { type: 'astap', rightAscension: 0, declination: 0, executable: '', focalLength: 490, pixelSize: 4.8, fov: 0, timeout: 60, blind: false, radius: 4, downsample: 2 }, tolerance: 0.0001, maximumAttempts: 3, settle: 1, syncMount: true, capture: AUX_5S, retry: RETRY },
 			constraints: { enabled: false, window: { enabled: false }, onViolation: 'wait', stableFor: 60 },
@@ -184,6 +185,7 @@ export function defaultSequencer(root: string): Sequencer {
 			calibrateBeforeStart: false,
 			recalibrateAfterMeridianFlip: true,
 			restoreAfterInterruption: true,
+			stopOnShutdown: true,
 			settle: { tolerance: 1.5, time: 2, timeout: 30 },
 			thresholds: { enabled: false, pauseCaptureWhenExceeded: false },
 			recovery: { enabled: false, maximumAttempts: 3, stopBeforeRetry: true, findStarBeforeRetry: true, recalibrate: false, settle: { tolerance: 1.5, time: 2, timeout: 30 }, onFailure: 'pause' },
@@ -203,28 +205,18 @@ export function defaultSequencer(root: string): Sequencer {
 		},
 		rotator: { enabled: true, angle: 0.5, tolerance: 0.001, settle: 1, moveBeforeCentering: true, restoreAfterMeridianFlip: false, reverse: false, retry: RETRY },
 		meridianFlip: { enabled: true, minimumHourAngle: 0.01, maximumHourAngle: 0.08, safetyMargin: 10, settle: 2, timeout: 120, retry: RETRY, onFailure: 'pause' },
-		cooling: { enabled: true, temperature: -10, tolerance: 1, ramp: 2, waitForTarget: true, timeout: 60, warmTemperature: 15, warmRamp: 2, turnCoolerOffAfterWarm: true },
-		dome: { enabled: false, closeOnUnsafe: true, slaving: false, synchronizeBeforeCapture: false, settle: 5, timeout: 300, retry: RETRY, onFailure: 'pause' },
-		cover: { enabled: true, closeOnUnsafe: false, openBeforeCapture: true, closeForDarkFrames: true, timeout: 30, retry: RETRY },
+		mount: { enabled: true, unparkOnStartup: true, parkOnShutdown: true, timeout: 30, retry: RETRY },
+		cooling: { enabled: true, temperature: -10, tolerance: 1, ramp: 2, waitForTarget: true, timeout: 60, warmTemperature: 15, warmRamp: 2, turnCoolerOffAfterWarm: true, warmOnShutdown: true, retry: RETRY },
+		dome: { enabled: false, unparkOnStartup: false, openOnStartup: false, parkOnShutdown: false, closeOnShutdown: false, closeOnUnsafe: true, slaving: false, synchronizeBeforeCapture: false, settle: 5, timeout: 300, retry: RETRY, onFailure: 'pause' },
+		cover: { enabled: true, openOnStartup: true, closeOnShutdown: true, closeOnUnsafe: false, openBeforeCapture: true, closeForDarkFrames: true, timeout: 30, retry: RETRY },
 		flatPanel: { enabled: true, brightness: 80, brightnessByFilter: [{ filter: { type: 'name', name: 'L' }, brightness: 40 }], timeout: 20, retry: RETRY },
 		monitoring: { enabled: false, interval: 30, monitors: [] },
 		safety: { enabled: false, triggerOnWarning: false, abortCurrentExposure: true, actions: [], recovery: { enabled: false, automatic: true, stableFor: 600, maximumWait: 3600, reconnectDevices: true, unparkMount: true, restoreTracking: true, resumeCapture: true, onFailure: 'pause' } },
 		quality: { enabled: false, starDetection: { type: 'nebulosa', timeout: 10, minimumSNR: 10, maximumStars: 200 }, evaluateEveryFrames: 1, rejectFrame: false },
 		execution: { start: { type: 'manual' }, end: { type: 'afterSequence' }, pauseMode: 'afterCurrentExposure', stopMode: 'graceful', defaultRetry: RETRY, checkpoint: { afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 30 } },
 		storage: { root, fileNameTemplate: '{target}-{filter}-{exposure}', directoryTemplate: '{target}/{frameType}', autoSubFolderMode: 'off' },
-		startup: {
-			enabled: true,
-			continueOnFailure: false,
-			actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
-		},
-		shutdown: {
-			enabled: true,
-			runOnCompletion: true,
-			runOnStop: true,
-			runOnFailure: true,
-			continueOnFailure: true,
-			actions: [action('stopGuide', { type: 'stopGuiding', required: true }), action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('close', { type: 'closeCover' }), action('warm', { type: 'warmCamera' })],
-		},
+		startup: { enabled: true, continueOnFailure: false },
+		shutdown: { enabled: true, runOnCompletion: true, runOnStop: true, runOnFailure: true, continueOnFailure: true },
 		notification: { enabled: false, events: [], channels: [], minimumSeverity: 'warning' },
 	}
 }
@@ -520,11 +512,37 @@ function nightControl(handler: SequencerHandler, sessionId: string, arbiter: Res
 	}
 }
 
+// Waits until a commander deadline or abort fires. Used by timeout injectors so the pipeline, not the
+// virtual clock, is what expires the attempt: abortableDelay is mocked to complete instantly.
+function stall(ms?: number, signal?: AbortSignal) {
+	return new Promise<'timeout' | 'aborted'>((resolve) => {
+		let settled = false
+		const done = (reason: 'timeout' | 'aborted') => {
+			if (settled) return
+			settled = true
+			if (timer !== undefined) clearTimeout(timer)
+			signal?.removeEventListener('abort', onAbort)
+			resolve(reason)
+		}
+		const onAbort = () => done('aborted')
+		const timer = ms !== undefined && ms > 0 ? setTimeout(() => done('timeout'), ms) : undefined
+
+		if (signal?.aborted) {
+			done('aborted')
+			return
+		}
+
+		signal?.addEventListener('abort', onAbort, { once: true })
+	})
+}
+
 function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[], clock: SimulatorClock, frameBytes: Uint8Array, holdFirstAutofocus?: Promise<void>, holdFirstExposure?: Promise<void>, sim?: NightOptions['sim']) {
 	const push = (name: string, detail?: string) => log.push(detail === undefined ? { name, at: clock.now } : { name, detail, at: clock.now })
 	const ok = <T>(value: T) => Promise.resolve(successfulOperationResult(value))
 	let heldScienceExposure = false
 	let remainingUnparkFailures = sim?.options?.mount?.unpark === 'fail' ? Number.POSITIVE_INFINITY : typeof sim?.options?.mount?.unpark === 'number' ? sim.options.mount.unpark : 0
+	let remainingCoverOpenFailures = sim?.options?.cover?.unpark === 'fail' ? Number.POSITIVE_INFINITY : 0
+	let remainingCoverOpenTimeouts = sim?.options?.cover?.unpark === 'timeout' ? Number.POSITIVE_INFINITY : typeof sim?.options?.cover?.unpark === 'number' ? sim.options.cover.unpark : 0
 
 	return {
 		mount: {
@@ -552,12 +570,17 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 				mount.tracking = false
 				return ok(undefined)
 			},
-			unpark: (_scope: unknown, mount: Mount) => {
+			unpark: async (_scope: unknown, mount: Mount, options?: { readonly timeout?: number }) => {
 				push('unpark')
+
+				if (sim?.options?.mount?.unpark === 'timeout') {
+					const ended = await stall(options?.timeout === undefined ? undefined : options.timeout + 50)
+					return failedOperationResult(ended, ended === 'timeout' ? 'the mount never unparked' : undefined)
+				}
 
 				if (remainingUnparkFailures > 0) {
 					remainingUnparkFailures--
-					return Promise.resolve(failedOperationResult('commandFailed', 'the mount refused to unpark'))
+					return failedOperationResult('commandFailed', 'the mount refused to unpark')
 				}
 
 				mount.parked = false
@@ -568,8 +591,15 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 				mount.tracking = enabled
 				return ok(undefined)
 			},
-			setTrackMode: (_scope: unknown, mount: Mount, mode: Mount['trackMode']) => {
+			setTrackMode: async (_scope: unknown, mount: Mount, mode: Mount['trackMode']) => {
 				push('track.mode', mode)
+
+				if (sim?.options?.mount?.trackMode === 'fail') return failedOperationResult('commandFailed', 'the mount refused the track mode')
+
+				const delay = typeof sim?.options?.mount?.trackMode === 'number' ? sim.options.mount.trackMode : 0
+
+				if (delay > 0) await stall(delay)
+
 				mount.trackMode = mode
 				return ok(undefined)
 			},
@@ -585,8 +615,20 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 				cover.parked = true
 				return ok(undefined)
 			},
-			unpark: (_scope: unknown, cover: Cover) => {
+			unpark: async (_scope: unknown, cover: Cover, options?: { readonly timeout?: number }) => {
 				push('cover.open')
+
+				if (remainingCoverOpenTimeouts > 0) {
+					remainingCoverOpenTimeouts--
+					const ended = await stall(options?.timeout === undefined ? undefined : options.timeout + 50)
+					return failedOperationResult(ended, ended === 'timeout' ? 'the cover never opened' : undefined)
+				}
+
+				if (remainingCoverOpenFailures > 0) {
+					remainingCoverOpenFailures--
+					return failedOperationResult('commandFailed', 'the cover refused to open')
+				}
+
 				cover.parked = false
 				return ok(undefined)
 			},
@@ -722,10 +764,15 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 				devices.guiderRunning = false
 				return ok(undefined)
 			},
-			startGuiding: () => {
+			startGuiding: async (_guider?: unknown, options?: { readonly signal?: AbortSignal }) => {
 				push('guider.start')
 
-				if (sim?.options?.guider?.start === 'fail') return Promise.resolve(failedOperationResult('commandFailed', 'the guider refused to start'))
+				if (sim?.options?.guider?.start === 'fail') return failedOperationResult('commandFailed', 'the guider refused to start')
+
+				if (sim?.options?.guider?.start === 'timeout') {
+					const ended = await stall(undefined, options?.signal)
+					return failedOperationResult(ended, ended === 'timeout' ? 'the guider never settled' : undefined)
+				}
 
 				devices.guiderRunning = true
 				devices.guiderLooping = true

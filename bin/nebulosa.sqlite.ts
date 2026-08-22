@@ -11,6 +11,7 @@ import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Distance } from 'nebulosa/src/math/units/distance'
 import { kilometerPerSecond } from 'nebulosa/src/math/units/velocity'
 import type { Velocity } from 'nebulosa/src/math/units/velocity'
+import { exit } from 'process'
 
 const NAME = 0
 const NGC = 1
@@ -838,6 +839,13 @@ const GITHUB_FILES: Readonly<Record<string, string>> = {
 	'names.dat': 'https://github.com/tiagohm/nebulosa.data/raw/refs/heads/main/names.dat',
 }
 
+const file = Bun.file('src/data/nebulosa.sqlite')
+
+if (!process.argv.includes('--force') && await file.exists()) {
+	console.info('nebulosa.sqlite already exists!')
+	exit(0)
+}
+
 for (const [name, url] of Object.entries(GITHUB_FILES)) {
 	const file = Bun.file(`src/data/${name}`)
 
@@ -845,8 +853,6 @@ for (const [name, url] of Object.entries(GITHUB_FILES)) {
 		await Bun.write(file, await (await fetch(url)).blob())
 	}
 }
-
-const file = Bun.file('src/data/nebulosa.sqlite')
 
 if (await file.exists()) await file.delete()
 

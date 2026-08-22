@@ -5,7 +5,7 @@ import type { CameraCaptureStart } from '#/camera'
 import type { GuiderLoopStart } from '#/guider'
 import { successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
-import type { SequencerAuxiliaryCapture, SequencerDeviceRole, SequencerLifecycleAction } from '#/sequencer'
+import type { SequencerAuxiliaryCapture, SequencerDeviceRole, SequencerLifecycleActionType } from '#/sequencer'
 import type { CameraCommander } from './camera.commander'
 import type { CoverCommander } from './cover.commander'
 import type { GuiderCommander } from './guider.session'
@@ -67,7 +67,7 @@ const SEQUENCER_LIFECYCLE_CANCELLED: SequencerActionResult<SequencerLifecycleOut
 // What one lifecycle action did.
 export interface SequencerLifecycleOutcome {
 	// Declared action type, so a report says which reconciliation this was without reading the node id.
-	readonly action: SequencerLifecycleAction['type']
+	readonly action: SequencerLifecycleActionType
 	// Whether anything was actually commanded. A device already in the required state reports false, which is
 	// the ordinary case of a resumed pipeline.
 	readonly commanded: boolean
@@ -92,7 +92,7 @@ export interface SequencerLifecycleServices {
 // It mirrors the map the compiler checks the definition against, so a block never asks for a role the
 // compilation did not require the definition to declare. The guiding actions are absent because they command
 // the guiding session rather than a device of the session.
-const SEQUENCER_LIFECYCLE_ROLE: Partial<Record<SequencerLifecycleAction['type'], SequencerDeviceRole>> = {
+const SEQUENCER_LIFECYCLE_ROLE: Partial<Record<SequencerLifecycleActionType, SequencerDeviceRole>> = {
 	unparkMount: 'mount',
 	parkMount: 'mount',
 	startTracking: 'mount',
@@ -108,11 +108,9 @@ type SequencerLifecycleRunner = (services: SequencerLifecycleServices, context: 
 
 // Every lifecycle action this version executes, mapped to what it commands.
 //
-// The dome actions and the `switch` action are absent on purpose: the compiler refuses a definition that asks
-// for them rather than letting them silently do nothing, and registering a handler here would take that refusal
-// away. `custom` is absent for the opposite reason — it addresses a handler the host registers by name, and the
-// registry is where that handler arrives.
-const SEQUENCER_LIFECYCLE_RUNNER: Partial<Record<SequencerLifecycleAction['type'], SequencerLifecycleRunner>> = {
+// The dome actions are absent on purpose: the compiler refuses a definition that enables the dome rather than
+// letting those steps silently do nothing, and registering a handler here would take that refusal away.
+const SEQUENCER_LIFECYCLE_RUNNER: Partial<Record<SequencerLifecycleActionType, SequencerLifecycleRunner>> = {
 	unparkMount: (services, context, configuration) => runMountPark(services, context, configuration, false),
 	parkMount: (services, context, configuration) => runMountPark(services, context, configuration, true),
 	startTracking: runStartTracking,
@@ -139,7 +137,7 @@ const SEQUENCER_LIFECYCLE_RUNNER: Partial<Record<SequencerLifecycleAction['type'
 export function sequencerLifecycleHandlers(services: SequencerLifecycleServices): readonly SequencerActionHandler<SequencerLifecycle, SequencerLifecycleOutcome>[] {
 	const handlers: SequencerActionHandler<SequencerLifecycle, SequencerLifecycleOutcome>[] = []
 
-	for (const [type, run] of Object.entries(SEQUENCER_LIFECYCLE_RUNNER) as [SequencerLifecycleAction['type'], SequencerLifecycleRunner][]) {
+	for (const [type, run] of Object.entries(SEQUENCER_LIFECYCLE_RUNNER) as [SequencerLifecycleActionType, SequencerLifecycleRunner][]) {
 		handlers.push({
 			type: `${SEQUENCER_LIFECYCLE_BLOCK_PREFIX}${type}`,
 			version: SEQUENCER_LIFECYCLE_VERSION,
@@ -156,7 +154,7 @@ export function sequencerLifecycleHandlers(services: SequencerLifecycleServices)
 //
 // Every action binds the one role of the map as a required binding, because an action commanding a device the
 // session does not have is a definition the compiler already refused.
-function resourcesOf(type: SequencerLifecycleAction['type']): readonly ResourceBinding[] {
+function resourcesOf(type: SequencerLifecycleActionType): readonly ResourceBinding[] {
 	const role = SEQUENCER_LIFECYCLE_ROLE[type]
 
 	return role === undefined ? [] : [{ role }]

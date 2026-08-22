@@ -3,16 +3,15 @@ import type { SequencerLifecycle } from 'src/api/sequencer.compiler'
 import type { SequencerPipelineExecutor, SequencerPipelineStep } from 'src/api/sequencer.pipeline'
 import { runSequencerPipeline } from 'src/api/sequencer.pipeline'
 import type { SequencerActionResult } from 'src/api/sequencer.registry'
-import type { SequencerLifecycleAction, SequencerRetryPolicy } from '#/sequencer'
+import type { SequencerRetryPolicy } from '#/sequencer'
 import { retry } from './sequencer.fixture'
 
 type Answer = SequencerActionResult<unknown> | ((attempt: number, signal: AbortSignal) => SequencerActionResult<unknown> | Promise<SequencerActionResult<unknown>>)
 
 function step(id: string, overrides?: Partial<SequencerLifecycle>, retryOverrides?: Partial<SequencerRetryPolicy>): SequencerPipelineStep {
-	const action = { id, type: 'parkMount', enabled: true, timeout: 30, retry: retry() } as unknown as SequencerLifecycleAction
-	const configuration: SequencerLifecycle = { action, required: false, timeout: 0, retry: { ...retry(), ...retryOverrides }, ...overrides }
+	const configuration: SequencerLifecycle = { type: 'parkMount', required: false, timeout: 0, retry: { ...retry(), ...retryOverrides }, ...overrides }
 
-	return { nodeId: `finalize.action[${id}]`, type: `sequencer.lifecycle.${configuration.action.type}`, configuration }
+	return { nodeId: `finalize.action[${id}]`, type: `lifecycle.${configuration.type}`, configuration }
 }
 
 function executor(answers: Readonly<Record<string, Answer>>, log?: string[]): SequencerPipelineExecutor {
@@ -44,8 +43,8 @@ describe('ordered execution', () => {
 
 		expect(log).toEqual([nodeId('a') + '#1', nodeId('b') + '#1'])
 		expect(report.results).toEqual([
-			{ nodeId: nodeId('a'), type: 'sequencer.lifecycle.parkMount', required: false, outcome: 'succeeded', detail: undefined, attempts: 1 },
-			{ nodeId: nodeId('b'), type: 'sequencer.lifecycle.parkMount', required: false, outcome: 'succeeded', detail: undefined, attempts: 1 },
+			{ nodeId: nodeId('a'), type: 'lifecycle.parkMount', required: false, outcome: 'succeeded', detail: undefined, attempts: 1 },
+			{ nodeId: nodeId('b'), type: 'lifecycle.parkMount', required: false, outcome: 'succeeded', detail: undefined, attempts: 1 },
 		])
 		expect(report.failure).toBeUndefined()
 		expect(report.stopped).toBeFalse()

@@ -339,9 +339,9 @@ async function runStep(executor: SequencerPipelineExecutor, step: SequencerPipel
 // Executes an ordered lifecycle pipeline, running each action under its own timeout and retry policy (§8.5,
 // §8.6).
 //
-// `steps` are the enabled actions of the pipeline in declaration order, which is the order that decides
-// whether the cover closes before or after the cooler warms — the reason the list is the authority and a set
-// of per-feature booleans is not.
+// `steps` are the derived actions of the pipeline in the order the compiler emitted them, which is the only
+// physically valid one: the cover closes while the sky is still open, the mount parks next, and the cooler
+// warms last.
 //
 // The pipeline runs under the reservation the session already holds and never acquires one of its own, which
 // is what keeps a device from being commanded between two actions of the same list.

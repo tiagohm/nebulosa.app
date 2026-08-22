@@ -51,6 +51,7 @@ import statisticsIcon from '@assets/statistics.webp'
 import stretchIcon from '@assets/stretch.webp'
 import sunIcon from '@assets/sun.webp'
 import thermometerIcon from '@assets/thermometer.webp'
+import weatherIcon from '@assets/weather.webp'
 import type { HomePanelType } from '@stores/home.store'
 import type { ImagePanelType } from '@stores/image.home.store'
 import { Tooltip } from '@ui/components/Tooltip'
@@ -97,6 +98,7 @@ export const homeIcons = {
 	sun: sunIcon,
 	thermometer: thermometerIcon,
 	tppa: alignmentIcon,
+	weather: weatherIcon,
 	wheel: filterWheelIcon,
 } as const satisfies Record<HomePanelType, string>
 

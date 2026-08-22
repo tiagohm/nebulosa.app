@@ -75,6 +75,7 @@ const panels: Record<HomePanelType, IDockviewPanel[]> = {
 	thermometer: [],
 	tppa: [],
 	wheel: [],
+	weather: [],
 }
 
 const dockview = dockviewStore(panels, { layoutSchemaVersion: 1, layoutStorageKey: 'home.workspace.layout' })

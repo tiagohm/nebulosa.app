@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
 import type { ResourceArbiter } from 'src/api/resource'
-import { action, frame } from './sequencer.fixture'
-import { commandNames, disposeNight, disposeProcess, openProcess, RETRY, runNight } from './sequencer.simulator'
+import { frame } from './sequencer.fixture'
+import { commandNames, disposeNight, disposeProcess, openProcess, runNight } from './sequencer.simulator'
 import type { NightControl, NightResult, SimulatorProcess } from './sequencer.simulator'
 
 const nights: NightResult[] = []
@@ -35,10 +35,13 @@ describe('canonical night', () => {
 		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(4)
 		expect(wheelMoves.map((entry) => entry.detail)).toEqual(['L', 'R', 'G', 'B'])
 		expect(night.log.filter((entry) => entry.name === 'guider.dither')).toHaveLength(4)
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('slew'))
 		expect(names.indexOf('guider.stop')).toBeGreaterThan(names.lastIndexOf('camera.expose'))
-		expect(names.indexOf('park')).toBeGreaterThan(names.indexOf('guider.stop'))
-		expect(names.indexOf('cover.close')).toBeGreaterThan(names.indexOf('park'))
-		expect(names.indexOf('cooler.off')).toBeGreaterThan(names.indexOf('cover.close'))
+		const shutdownTrackOff = night.log.findIndex((entry, index) => index > names.lastIndexOf('camera.expose') && entry.name === 'track' && entry.detail === 'off')
+		expect(shutdownTrackOff).toBeGreaterThan(names.indexOf('guider.stop'))
+		expect(names.indexOf('cover.close')).toBeGreaterThan(shutdownTrackOff)
+		expect(names.indexOf('park')).toBeGreaterThan(names.indexOf('cover.close'))
+		expect(names.indexOf('cooler.off')).toBeGreaterThan(names.indexOf('park'))
 		expect(committed).toHaveLength(9)
 		expect(lights).toHaveLength(9)
 		expect(committed.every((artifact) => artifact.path !== undefined && lights.includes(artifact.path))).toBeTrue()
@@ -105,12 +108,6 @@ describe('canonical night', () => {
 			patch: {
 				guiding: { enabled: false },
 				dither: { enabled: false },
-				startup: {
-					actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true })],
-				},
-				shutdown: {
-					actions: [action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('close', { type: 'closeCover' }), action('warm', { type: 'warmCamera' })],
-				},
 			},
 		})
 
@@ -149,12 +146,6 @@ describe('canonical night', () => {
 				devices: { cover: undefined, flatPanel: undefined },
 				cover: { enabled: false },
 				flatPanel: { enabled: false },
-				startup: {
-					actions: [action('unpark', { type: 'unparkMount', required: true }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
-				},
-				shutdown: {
-					actions: [action('stopGuide', { type: 'stopGuiding', required: true }), action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('warm', { type: 'warmCamera' })],
-				},
 			},
 		})
 
@@ -210,12 +201,6 @@ describe('canonical night', () => {
 				cover: { enabled: false },
 				flatPanel: { enabled: false },
 				capture: { frames: [frame('lum', { name: 'Luminance', count: 4, exposureTime: 2 })] },
-				startup: {
-					actions: [action('unpark', { type: 'unparkMount', required: true }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
-				},
-				shutdown: {
-					actions: [action('stopGuide', { type: 'stopGuiding', required: true }), action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('warm', { type: 'warmCamera' })],
-				},
 			},
 		})
 
@@ -311,12 +296,6 @@ describe('canonical night', () => {
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
 				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 40, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
-				startup: {
-					actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true })],
-				},
-				shutdown: {
-					actions: [action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('close', { type: 'closeCover' }), action('warm', { type: 'warmCamera' })],
-				},
 			},
 		})
 
@@ -350,8 +329,6 @@ describe('admission', () => {
 			meridianFlip: { enabled: false },
 			target: { center: { enabled: false } },
 			capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
-			startup: { actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true })] },
-			shutdown: { actions: [action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('close', { type: 'closeCover' }), action('warm', { type: 'warmCamera' })] },
 		} as const
 		const created = [process.handler.createSession(process.definition(east, { id: 'east', ...short })), process.handler.createSession(process.definition(west, { id: 'west', ...short }))]
 
@@ -401,8 +378,6 @@ describe('admission', () => {
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
 				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
-				startup: { actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true })] },
-				shutdown: { actions: [action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('close', { type: 'closeCover' }), action('warm', { type: 'warmCamera' })] },
 			}),
 		)
 
@@ -787,9 +762,9 @@ describe('admission', () => {
 		expect(night.files.filter((path) => path.includes('/LIGHT/') && path.endsWith('.fits'))).toHaveLength(1)
 		expect(names.lastIndexOf('camera.done')).toBeGreaterThan(names.lastIndexOf('camera.expose'))
 		expect(names.indexOf('guider.stop')).toBeGreaterThan(names.lastIndexOf('camera.done'))
-		expect(names.indexOf('park')).toBeGreaterThan(names.indexOf('guider.stop'))
-		expect(names.indexOf('cover.close')).toBeGreaterThan(names.indexOf('park'))
-		expect(names.indexOf('cooler.off')).toBeGreaterThan(names.indexOf('cover.close'))
+		expect(names.indexOf('cover.close')).toBeGreaterThan(names.indexOf('guider.stop'))
+		expect(names.indexOf('park')).toBeGreaterThan(names.indexOf('cover.close'))
+		expect(names.indexOf('cooler.off')).toBeGreaterThan(names.indexOf('park'))
 		expect(names.indexOf('guider.disconnect')).toBeGreaterThan(names.indexOf('cooler.off'))
 		expect(night.devices.guiderConnected).toBeFalse()
 
@@ -839,28 +814,34 @@ describe('admission', () => {
 })
 
 describe('startup', () => {
-	test('D.01 startup actions run in declared order', async () => {
+	test('D.01 startup actions run in canonical order', async () => {
 		const night = await runNight()
 
 		nights.push(night)
 
 		const names = commandNames(night.log)
+		const firstSlew = names.indexOf('slew')
+		const startup = night.log.slice(0, firstSlew)
 
 		expect(night.session.state).toBe('completed')
+		expect(firstSlew).toBeGreaterThan(-1)
 		expect(names.indexOf('unpark')).toBeGreaterThan(-1)
 		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('unpark'))
 		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('cover.open'))
 		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cooler.set'))
-		expect(names.indexOf('slew')).toBeGreaterThan(names.indexOf('guider.start'))
+		expect(firstSlew).toBeGreaterThan(names.indexOf('guider.start'))
+		expect(startup.some((entry) => entry.name === 'track.mode' || (entry.name === 'track' && entry.detail === 'on'))).toBeFalse()
+		expect(startup.some((entry) => entry.name === 'connect' || (entry.name.endsWith('.connect') && entry.name !== 'guider.connect'))).toBeFalse()
 	}, 30_000)
 
-	test('D.02 inverted startup actions keep the declared order', async () => {
+	test('D.02 omitted and inserted startup steps keep their physical slots', async () => {
 		const night = await runNight({
 			patch: {
-				startup: {
-					actions: [action('unpark', { type: 'unparkMount', required: true }), action('cool', { type: 'coolCamera', required: true }), action('open', { type: 'openCover' }), action('guide', { type: 'startGuiding', required: true })],
-				},
+				cover: { openOnStartup: false },
+				meridianFlip: { enabled: false },
+				target: { goto: { enabled: false }, center: { enabled: false } },
 			},
+			sim: { mount: { trackMode: 'LUNAR' } },
 		})
 
 		nights.push(night)
@@ -868,11 +849,15 @@ describe('startup', () => {
 		const names = commandNames(night.log)
 
 		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(names.includes('slew')).toBeFalse()
 		expect(names.indexOf('unpark')).toBeGreaterThan(-1)
-		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('unpark'))
-		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('cooler.set'))
-		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cover.open'))
-		expect(names.indexOf('slew')).toBeGreaterThan(names.indexOf('guider.start'))
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('unpark'))
+		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('track.mode'))
+		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cooler.set'))
+		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('guider.start'))
+		expect(night.devices.mount.trackMode).toBe('SIDEREAL')
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
 
 	test('D.03 unpark succeeds when the mount is already unparked', async () => {
@@ -906,27 +891,20 @@ describe('startup', () => {
 		expect(names.includes('guider.disconnect')).toBeTrue()
 	}, 30_000)
 
-	test('D.05 an optional unpark failure still runs later required actions', async () => {
-		const night = await runNight({
-			patch: {
-				startup: {
-					actions: [action('unpark', { type: 'unparkMount' }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
-				},
-			},
-			sim: { options: { mount: { unpark: 'fail' } } },
-		})
+	test('D.05 a required unpark failure still runs later required startup actions', async () => {
+		const night = await runNight({ sim: { options: { mount: { unpark: 'fail' } } } })
 
 		nights.push(night)
 
 		const names = commandNames(night.log)
 
 		expect(night.session.state).toBe('failed')
-		expect(night.session.failure).toMatchObject({ reason: 'unexpectedState', detail: 'the mount did not reach the target: mount Mount Simulator is parked' })
+		expect(night.session.failure).toMatchObject({ reason: 'commandFailed', detail: 'the mount did not unpark: the mount refused to unpark' })
 		expect(night.log.filter((entry) => entry.name === 'unpark')).toHaveLength(3)
 		expect(names.includes('cover.open')).toBeFalse()
 		expect(names.includes('cooler.set')).toBeTrue()
 		expect(names.includes('guider.start')).toBeTrue()
-		expect(names.includes('slew')).toBeTrue()
+		expect(names.includes('slew')).toBeFalse()
 		expect(names.includes('camera.expose')).toBeFalse()
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
 		expect(night.devices.mount.parked).toBeTrue()
@@ -934,14 +912,9 @@ describe('startup', () => {
 		expect(names.includes('guider.disconnect')).toBeTrue()
 	}, 30_000)
 
-	test('D.06 an optional unpark failure still runs later optional actions when continueOnFailure is true', async () => {
+	test('D.06 a required unpark failure still runs later optional actions when continueOnFailure is true', async () => {
 		const night = await runNight({
-			patch: {
-				startup: {
-					continueOnFailure: true,
-					actions: [action('unpark', { type: 'unparkMount' }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
-				},
-			},
+			patch: { startup: { continueOnFailure: true } },
 			sim: { options: { mount: { unpark: 'fail' } } },
 		})
 
@@ -950,7 +923,7 @@ describe('startup', () => {
 		const names = commandNames(night.log)
 
 		expect(night.session.state).toBe('failed')
-		expect(night.session.failure).toMatchObject({ reason: 'unexpectedState', detail: 'the mount did not reach the target: mount Mount Simulator is parked' })
+		expect(night.session.failure).toMatchObject({ reason: 'commandFailed', detail: 'the mount did not unpark: the mount refused to unpark' })
 		expect(night.log.filter((entry) => entry.name === 'unpark')).toHaveLength(3)
 		expect(names.includes('cover.open')).toBeTrue()
 		expect(names.includes('cooler.set')).toBeTrue()
@@ -958,7 +931,7 @@ describe('startup', () => {
 		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('unpark'))
 		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('cover.open'))
 		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cooler.set'))
-		expect(names.includes('slew')).toBeTrue()
+		expect(names.includes('slew')).toBeFalse()
 		expect(names.includes('camera.expose')).toBeFalse()
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
 		expect(night.devices.mount.parked).toBeTrue()
@@ -1002,11 +975,7 @@ describe('startup', () => {
 
 	test('D.09 a required coolCamera timeout stops the night before the target', async () => {
 		const night = await runNight({
-			patch: {
-				startup: {
-					actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true, timeout: 1 }), action('guide', { type: 'startGuiding', required: true })],
-				},
-			},
+			patch: { cooling: { timeout: 1 } },
 			sim: { options: { camera: { temperature: 'timeout' } } },
 		})
 
@@ -1046,7 +1015,7 @@ describe('startup', () => {
 		expect(names.includes('guider.disconnect')).toBeTrue()
 	}, 30_000)
 
-	test('D.11 an optional startGuiding action is refused when guiding is enabled', async () => {
+	test('D.11 an enabled guider with the startup pipeline disarmed is refused', async () => {
 		const process = await openProcess()
 
 		processes.push(process)
@@ -1054,10 +1023,8 @@ describe('startup', () => {
 		const started = await process.handler.start(
 			process.definition(process.addObservatory('d11'), {
 				dither: { enabled: false },
-				startup: {
-					continueOnFailure: true,
-					actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding' })],
-				},
+				cooling: { enabled: false },
+				startup: { enabled: false },
 			}),
 		)
 
@@ -1066,7 +1033,7 @@ describe('startup', () => {
 		if (started.ok) return
 
 		expect(started.reason).toBe('invalidDefinition')
-		expect(started.preflight?.diagnostics).toEqual([{ path: 'startup.actions[3].required', message: 'the guiding block declares the guider the capture runs under, and this action does not fail the session when it cannot start guiding, so every frame would be captured unguided' }])
+		expect(started.preflight?.diagnostics).toEqual([{ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and the startup pipeline that starts it is disabled, so every frame would be captured unguided' }])
 		expect(process.log).toHaveLength(0)
 		expect(process.runtime.activeSessionId).toBeUndefined()
 	}, 30_000)
@@ -1107,11 +1074,7 @@ describe('startup', () => {
 
 	test('D.14 a disabled openCover is skipped and light opens the cover', async () => {
 		const night = await runNight({
-			patch: {
-				startup: {
-					actions: [action('unpark', { type: 'unparkMount', required: true }), action('open', { type: 'openCover', enabled: false }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
-				},
-			},
+			patch: { cover: { openOnStartup: false } },
 		})
 
 		nights.push(night)
@@ -1144,11 +1107,6 @@ describe('startup', () => {
 
 	test('D.16 exhausting startup retry fails the night and shuts down once', async () => {
 		const night = await runNight({
-			patch: {
-				startup: {
-					actions: [action('unpark', { type: 'unparkMount', required: true, retry: RETRY }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
-				},
-			},
 			sim: { options: { mount: { unpark: 'fail' } } },
 		})
 
@@ -1178,12 +1136,11 @@ describe('startup', () => {
 		expect(names.lastIndexOf('cooler.off')).toBeGreaterThan(names.indexOf('guider.stop'))
 	}, 30_000)
 
-	test('D.17 startTracking uses the target tracking mode before the slew', async () => {
+	test('D.17 startTracking uses the target tracking mode when the target does not slew', async () => {
 		const night = await runNight({
 			patch: {
-				startup: {
-					actions: [action('unpark', { type: 'unparkMount', required: true }), action('track', { type: 'startTracking', required: true }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
-				},
+				meridianFlip: { enabled: false },
+				target: { goto: { enabled: false }, center: { enabled: false } },
 			},
 			sim: { mount: { trackMode: 'LUNAR' } },
 		})
@@ -1198,9 +1155,9 @@ describe('startup', () => {
 		expect(modes.length).toBeGreaterThan(0)
 		expect(modes.every((mode) => mode === 'SIDEREAL')).toBeTrue()
 		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('unpark'))
-		expect(names.indexOf('track.mode')).toBeLessThan(names.indexOf('slew'))
+		expect(names.indexOf('track.mode')).toBeLessThan(names.indexOf('cover.open'))
 		expect(names.indexOf('track')).toBeGreaterThan(names.indexOf('unpark'))
-		expect(names.indexOf('track')).toBeLessThan(names.indexOf('slew'))
+		expect(names.indexOf('track')).toBeLessThan(names.indexOf('cover.open'))
 		expect(night.log.find((entry) => entry.name === 'track')?.detail).toBe('on')
 		expect(night.devices.mount.trackMode).toBe('SIDEREAL')
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
@@ -1235,10 +1192,7 @@ describe('startup', () => {
 				dither: { enabled: false },
 				cooling: { enabled: false },
 				startup: { enabled: false },
-				shutdown: {
-					runOnFailure: true,
-					actions: [action('stopTrack', { type: 'stopTracking' }), action('park', { type: 'parkMount', required: true }), action('close', { type: 'closeCover' })],
-				},
+				shutdown: { runOnFailure: true },
 			},
 		})
 
@@ -1308,11 +1262,7 @@ describe('startup', () => {
 
 	test('D.23 a disabled required unpark is dropped and does not fail as notRun', async () => {
 		const night = await runNight({
-			patch: {
-				startup: {
-					actions: [action('unpark', { type: 'unparkMount', required: true, enabled: false }), action('open', { type: 'openCover' }), action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })],
-				},
-			},
+			patch: { mount: { unparkOnStartup: false } },
 		})
 
 		nights.push(night)
@@ -1342,8 +1292,6 @@ describe('startup', () => {
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
 				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
-				startup: { actions: [action('unpark', { type: 'unparkMount', required: true }), action('cool', { type: 'coolCamera', required: true })] },
-				shutdown: { actions: [action('park', { type: 'parkMount', required: true })] },
 			},
 			sim: { camera: { temperature: 20 } },
 		})
@@ -1410,5 +1358,257 @@ describe('startup', () => {
 		expect(names.indexOf('guider.start', suspend + 1)).toBe(resume)
 		expect(names.indexOf('guider.calibrate')).toBe(-1)
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(1)
+	}, 30_000)
+
+	test('D.26 a required openCover failure stops the night before the target', async () => {
+		const night = await runNight({
+			patch: { cover: { openBeforeCapture: false } },
+			sim: { options: { cover: { unpark: 'fail' } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'commandFailed', detail: 'the cover did not open: the cover refused to open' })
+		expect(night.log.filter((entry) => entry.name === 'cover.open')).toHaveLength(3)
+		expect(names.includes('unpark')).toBeTrue()
+		expect(names.includes('cooler.set')).toBeTrue()
+		expect(names.includes('guider.start')).toBeTrue()
+		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.devices.cover.parked).toBeTrue()
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+	}, 30_000)
+
+	test('D.27 a required openCover that succeeds is not repeated by light', async () => {
+		const night = await runNight({
+			patch: { cover: { openBeforeCapture: false } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(night.log.filter((entry) => entry.name === 'cover.open')).toHaveLength(1)
+		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('unpark'))
+		expect(names.indexOf('cover.open')).toBeLessThan(names.indexOf('slew'))
+		expect(names.indexOf('cover.close')).toBeGreaterThan(names.lastIndexOf('camera.expose'))
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+		expect(night.devices.cover.parked).toBeTrue()
+	}, 30_000)
+
+	test('D.28 a required startTracking failure stops the night before the target', async () => {
+		const night = await runNight({
+			patch: { target: { goto: { enabled: false } } },
+			sim: { mount: { trackMode: 'LUNAR' }, options: { mount: { trackMode: 'fail' } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'commandFailed', detail: 'the mount did not accept the SIDEREAL track mode: the mount refused the track mode' })
+		expect(night.log.filter((entry) => entry.name === 'track.mode')).toHaveLength(3)
+		expect(names.includes('unpark')).toBeTrue()
+		expect(names.includes('cover.open')).toBeFalse()
+		expect(names.includes('cooler.set')).toBeTrue()
+		expect(names.includes('guider.start')).toBeTrue()
+		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.devices.mount.trackMode).toBe('LUNAR')
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+	}, 30_000)
+
+	test('D.29 startGuiding times out on the guiding settle deadline', async () => {
+		const night = await runNight({
+			patch: { guiding: { settle: { timeout: 1 } } },
+			sim: { options: { guider: { start: 'timeout' } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'timeout', detail: 'the action did not finish within 1s' })
+		expect(night.log.filter((entry) => entry.name === 'guider.start')).toHaveLength(3)
+		expect(names.includes('unpark')).toBeTrue()
+		expect(names.includes('cooler.set')).toBeTrue()
+		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.devices.guiderRunning).toBeFalse()
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+	}, 30_000)
+
+	test('D.30 unpark times out on the mount deadline', async () => {
+		const night = await runNight({
+			patch: { mount: { timeout: 1 } },
+			sim: { options: { mount: { unpark: 'timeout' } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'timeout', detail: 'the action did not finish within 1s' })
+		expect(night.log.filter((entry) => entry.name === 'unpark')).toHaveLength(3)
+		expect(names.includes('cover.open')).toBeFalse()
+		expect(names.includes('cooler.set')).toBeTrue()
+		expect(names.includes('guider.start')).toBeTrue()
+		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.devices.mount.parked).toBeTrue()
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+	}, 30_000)
+
+	test('D.31 a disabled mount feature omits unpark even when the flag is on', async () => {
+		const night = await runNight({
+			patch: { mount: { enabled: false, unparkOnStartup: true } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'unexpectedState', detail: 'the mount did not reach the target: mount Mount Simulator is parked' })
+		expect(night.session.failure?.detail?.includes('did not run')).toBeFalse()
+		expect(names.includes('unpark')).toBeFalse()
+		expect(names.includes('cooler.set')).toBeTrue()
+		expect(names.includes('guider.start')).toBeTrue()
+		expect(names.includes('slew')).toBeTrue()
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.devices.mount.parked).toBeTrue()
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+	}, 30_000)
+
+	test('D.32 an enabled cooler with the startup pipeline disarmed is refused', async () => {
+		const process = await openProcess()
+
+		processes.push(process)
+
+		const started = await process.handler.start(
+			process.definition(process.addObservatory('d32'), {
+				guiding: { enabled: false },
+				dither: { enabled: false },
+				startup: { enabled: false },
+			}),
+		)
+
+		expect(started.ok).toBeFalse()
+
+		if (started.ok) return
+
+		expect(started.reason).toBe('invalidDefinition')
+		expect(started.preflight?.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and the startup pipeline that cools the camera to it is disabled, so the session would capture at whatever temperature the sensor is already at' }])
+		expect(process.log).toHaveLength(0)
+		expect(process.runtime.activeSessionId).toBeUndefined()
+	}, 30_000)
+
+	test('D.33 a target that does not track does not emit startTracking', async () => {
+		const night = await runNight({
+			patch: {
+				meridianFlip: { enabled: false },
+				target: { tracking: { enabled: false }, goto: { enabled: false }, center: { enabled: false } },
+			},
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(names.includes('track.mode')).toBeFalse()
+		expect(night.log.some((entry) => entry.name === 'track' && entry.detail === 'on')).toBeFalse()
+		expect(names.includes('slew')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+	}, 30_000)
+
+	test('D.34 startTracking does not inherit the mount timeout', async () => {
+		const night = await runNight({
+			patch: {
+				mount: { timeout: 1 },
+				meridianFlip: { enabled: false },
+				target: { goto: { enabled: false }, center: { enabled: false } },
+			},
+			sim: { mount: { trackMode: 'LUNAR' }, options: { mount: { trackMode: 2_000 } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('unpark'))
+		expect(names.indexOf('track.mode')).toBeLessThan(names.indexOf('cover.open'))
+		expect(night.devices.mount.trackMode).toBe('SIDEREAL')
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+	}, 30_000)
+
+	test('D.35 unpark retries use the mount policy not the session default', async () => {
+		const night = await runNight({
+			patch: {
+				mount: { retry: { maxAttempts: 2 } },
+				execution: { defaultRetry: { maxAttempts: 5 } },
+			},
+			sim: { options: { mount: { unpark: 'fail' } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'commandFailed', detail: 'the mount did not unpark: the mount refused to unpark' })
+		expect(night.log.filter((entry) => entry.name === 'unpark')).toHaveLength(2)
+		expect(names.includes('cover.open')).toBeFalse()
+		expect(names.includes('cooler.set')).toBeTrue()
+		expect(names.includes('guider.start')).toBeTrue()
+		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.devices.mount.parked).toBeTrue()
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+	}, 30_000)
+
+	test('D.36 openCover times out on the cover deadline and light still opens', async () => {
+		const night = await runNight({
+			patch: { cover: { timeout: 1 } },
+			sim: { options: { cover: { unpark: 3 } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+		const firstSlew = names.indexOf('slew')
+		const startupOpens = night.log.slice(0, firstSlew).filter((entry) => entry.name === 'cover.open')
+		const laterOpens = night.log.slice(firstSlew).filter((entry) => entry.name === 'cover.open')
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(firstSlew).toBeGreaterThan(-1)
+		expect(startupOpens).toHaveLength(3)
+		expect(laterOpens).toHaveLength(1)
+		expect(names.includes('cooler.set')).toBeTrue()
+		expect(names.includes('guider.start')).toBeTrue()
+		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('cover.open'))
+		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cooler.set'))
+		expect(names.indexOf('cover.open', firstSlew)).toBeGreaterThan(firstSlew)
+		expect(names.indexOf('cover.open', firstSlew)).toBeLessThan(names.lastIndexOf('camera.expose'))
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+		expect(night.devices.cover.parked).toBeTrue()
 	}, 30_000)
 })

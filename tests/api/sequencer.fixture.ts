@@ -3,7 +3,7 @@ import type { SequencerPreparationServices } from 'src/api/sequencer.prepare'
 import type { GuiderSessionInfo } from '#/guider'
 import { successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
-import type { Sequencer, SequencerCamera, SequencerFrame, SequencerLifecycleAction, SequencerRetryPolicy } from '#/sequencer'
+import type { Sequencer, SequencerCamera, SequencerFrame, SequencerRetryPolicy } from '#/sequencer'
 
 // Device services the runtime hands the executor, absent in the tests that never reach the optical path.
 // The guider commander is the exception: a canonical session declares a guider and opens it before its first
@@ -36,10 +36,6 @@ export function frame(id: string, overrides?: Partial<SequencerFrame>): Sequence
 	return { id, name: id, enabled: true, frameType: 'LIGHT', exposureTime: 60, count: 10, weight: 1, camera: {}, ...overrides }
 }
 
-export function action(id: string, overrides?: Partial<SequencerLifecycleAction>): SequencerLifecycleAction {
-	return { id, enabled: true, timeout: 30, retry: retry(), type: 'unparkMount', ...overrides } as SequencerLifecycleAction
-}
-
 // Canonical definition with every optional property of the contract declared, which is what the compatibility
 // test walks: a property absent from this object is a property no case classifies.
 export function complete(): Sequencer {
@@ -63,8 +59,7 @@ export function complete(): Sequencer {
 		capture: { ...definition.capture, frames: [frame('lum', { abandonmentBudget: 2, delay: 8, filter: { type: 'name', name: 'L' }, camera: camera() })] },
 		guiding: { ...definition.guiding, connection: { mode: 'remote', host: 'localhost', port: 4400, profile: 'default' } },
 		storage: { ...definition.storage, temporaryDirectory: '/data/nebulosa/.tmp' },
-		startup: { ...definition.startup, actions: [action('cool', { type: 'coolCamera', required: true }), action('guide', { type: 'startGuiding', required: true })] },
-		shutdown: { ...definition.shutdown, actions: [action('park', { type: 'parkMount', required: true }), action('warm', { type: 'warmCamera' })] },
+		mount: { ...definition.mount, unparkOnStartup: false },
 	}
 }
 
@@ -81,7 +76,7 @@ export function canonical(): Sequencer {
 			enabled: true,
 			type: 'J2000',
 			J2000: { x: 1.4, y: -0.09 },
-			tracking: { enabled: true, mode: 'SIDEREAL', retry: retry() },
+			tracking: { enabled: true, mode: 'SIDEREAL', stopOnShutdown: false, retry: retry() },
 			goto: { enabled: true, skipTolerance: 0.001, arrivalTolerance: 0.0005, timeout: 300, settle: 5, retry: retry() },
 			center: {
 				enabled: true,
@@ -102,6 +97,7 @@ export function canonical(): Sequencer {
 			calibrateBeforeStart: false,
 			recalibrateAfterMeridianFlip: true,
 			restoreAfterInterruption: true,
+			stopOnShutdown: false,
 			settle: { tolerance: 1.5, time: 10, timeout: 120 },
 			thresholds: { enabled: false, pauseCaptureWhenExceeded: false },
 			recovery: { enabled: false, maximumAttempts: 3, stopBeforeRetry: true, findStarBeforeRetry: true, recalibrate: false, settle: { tolerance: 1.5, time: 10, timeout: 120 }, onFailure: 'pause' },
@@ -130,9 +126,10 @@ export function canonical(): Sequencer {
 			retry: retry(),
 			onFailure: 'pause',
 		},
-		cooling: { enabled: true, temperature: -10, tolerance: 1, ramp: 2, waitForTarget: true, timeout: 900, warmTemperature: 15, warmRamp: 2, turnCoolerOffAfterWarm: true },
-		dome: { enabled: false, closeOnUnsafe: true, slaving: false, synchronizeBeforeCapture: false, settle: 5, timeout: 300, retry: retry(), onFailure: 'pause' },
-		cover: { enabled: false, closeOnUnsafe: true, openBeforeCapture: true, closeForDarkFrames: true, timeout: 120, retry: retry() },
+		mount: { enabled: true, unparkOnStartup: true, parkOnShutdown: true, timeout: 30, retry: retry() },
+		cooling: { enabled: true, temperature: -10, tolerance: 1, ramp: 2, waitForTarget: true, timeout: 900, warmTemperature: 15, warmRamp: 2, turnCoolerOffAfterWarm: true, warmOnShutdown: true, retry: retry() },
+		dome: { enabled: false, unparkOnStartup: false, openOnStartup: false, parkOnShutdown: false, closeOnShutdown: false, closeOnUnsafe: true, slaving: false, synchronizeBeforeCapture: false, settle: 5, timeout: 300, retry: retry(), onFailure: 'pause' },
+		cover: { enabled: false, openOnStartup: false, closeOnShutdown: false, closeOnUnsafe: true, openBeforeCapture: true, closeForDarkFrames: true, timeout: 120, retry: retry() },
 		flatPanel: { enabled: false, brightness: 100, brightnessByFilter: [], timeout: 60, retry: retry() },
 		monitoring: { enabled: false, interval: 30, monitors: [] },
 		safety: {
@@ -162,14 +159,14 @@ export function canonical(): Sequencer {
 			checkpoint: { afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 60 },
 		},
 		storage: { root: '/data/nebulosa', fileNameTemplate: '{target}-{filter}-{exposure}', directoryTemplate: '{target}/{frameType}', autoSubFolderMode: 'noon' },
-		startup: { enabled: true, actions: [action('unpark'), action('cool', { type: 'coolCamera' }), action('guide', { type: 'startGuiding', required: true })], continueOnFailure: false },
-		shutdown: { enabled: true, runOnCompletion: true, runOnStop: true, runOnFailure: false, actions: [action('park', { type: 'parkMount' }), action('warm', { type: 'warmCamera' })], continueOnFailure: true },
+		startup: { enabled: true, continueOnFailure: false },
+		shutdown: { enabled: true, runOnCompletion: true, runOnStop: true, runOnFailure: false, continueOnFailure: true },
 		notification: { enabled: false, events: [], channels: [], minimumSeverity: 'warning' },
 	}
 }
 
-// Canonical definition without a guider, and therefore without the dither and the startup action that command one.
+// Canonical definition without a guider, and therefore without the dither and the derived startup step that command one.
 export function unguided(): Sequencer {
 	const definition = canonical()
-	return { ...definition, guiding: { ...definition.guiding, enabled: false }, dither: { ...definition.dither, enabled: false }, startup: { ...definition.startup, actions: definition.startup.actions.filter((action) => action.type !== 'startGuiding') } }
+	return { ...definition, guiding: { ...definition.guiding, enabled: false }, dither: { ...definition.dither, enabled: false } }
 }

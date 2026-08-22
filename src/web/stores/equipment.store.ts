@@ -1,6 +1,7 @@
 import { Api } from '@shared/api'
 import { cameraBus, coverBus, deviceBus, flatPanelBus, focuserBus, guiderBus, mountBus, rotatorBus, wheelBus } from '@shared/bus'
-import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, SafetyMonitor, Thermometer, Wheel } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, SafetyMonitor, Thermometer, Weather, Wheel } from 'nebulosa/src/devices/indi/device'
+import type { EventBus } from 'src/shared/bus'
 import { proxy } from 'valtio'
 import type { DeviceUpdated } from '#/device'
 import type { GuiderSessionInfo } from '#/guider'
@@ -34,6 +35,7 @@ export interface EquipmentState {
 	readonly power: DeviceState<Power>[]
 	readonly guider: GuiderSessionInfo[]
 	readonly safetyMonitor: DeviceState<SafetyMonitor>[]
+	readonly weather: DeviceState<Weather>[]
 }
 
 const state = proxy<EquipmentState>({
@@ -52,6 +54,7 @@ const state = proxy<EquipmentState>({
 	power: [],
 	guider: [],
 	safetyMonitor: [],
+	weather: [],
 })
 
 function get<T extends DeviceType>(type: T, id: string) {
@@ -85,7 +88,8 @@ const BUS = {
 	dome: deviceBus,
 	gps: deviceBus,
 	safetyMonitor: deviceBus,
-} as const
+	weather: deviceBus,
+} as const satisfies Record<DeviceType, EventBus<any>>
 
 function emitAddOrRemove(device: DeviceState<Device>, action: 'add' | 'remove') {
 	deviceBus.emit(action, device)

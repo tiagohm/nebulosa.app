@@ -58,7 +58,7 @@ function mount(tracking: boolean, trackMode: Mount['trackMode'] = 'SIDEREAL'): M
 }
 
 function coverPolicy(overrides?: Partial<Omit<SequencerCover, 'enabled'>>): Omit<SequencerCover, 'enabled'> {
-	return { closeOnUnsafe: true, openBeforeCapture: true, closeForDarkFrames: true, timeout: 60, retry: retry(), ...overrides }
+	return { openOnStartup: false, closeOnShutdown: false, closeOnUnsafe: true, openBeforeCapture: true, closeForDarkFrames: true, timeout: 60, retry: retry(), ...overrides }
 }
 
 function panelPolicy(overrides?: Partial<Omit<SequencerFlatPanel, 'enabled'>>): Omit<SequencerFlatPanel, 'enabled'> {
@@ -70,11 +70,11 @@ function rotatorPolicy(overrides?: Partial<Omit<SequencerRotator, 'enabled'>>): 
 }
 
 function coolingPolicy(overrides?: Partial<Omit<SequencerCooling, 'enabled'>>): Omit<SequencerCooling, 'enabled'> {
-	return { temperature: -10, tolerance: 1, ramp: 0, waitForTarget: true, timeout: 60, warmTemperature: 15, warmRamp: 0, turnCoolerOffAfterWarm: false, ...overrides }
+	return { temperature: -10, tolerance: 1, ramp: 0, waitForTarget: true, timeout: 60, warmTemperature: 15, warmRamp: 0, turnCoolerOffAfterWarm: false, warmOnShutdown: true, retry: retry(), ...overrides }
 }
 
 function trackingPolicy(overrides?: Partial<Omit<SequencerTargetTracking, 'enabled'>>): Omit<SequencerTargetTracking, 'enabled'> {
-	return { mode: 'SIDEREAL', retry: retry(), ...overrides }
+	return { mode: 'SIDEREAL', stopOnShutdown: false, retry: retry(), ...overrides }
 }
 
 function group(overrides?: Partial<SequencerPlanFrameGroup>): SequencerPlanFrameGroup {

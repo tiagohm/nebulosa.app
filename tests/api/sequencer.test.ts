@@ -192,7 +192,7 @@ describe('sessions', () => {
 		let id = ''
 
 		const { handler: instance } = environment(async (context) => {
-			if (context.nodeId === 'finalize.action[park]') {
+			if (context.nodeId === 'finalize.action[parkMount]') {
 				observed = instance.snapshot(id)?.state
 				refused = await instance.pause(id)
 			}

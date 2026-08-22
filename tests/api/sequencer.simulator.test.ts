@@ -1363,4 +1363,23 @@ describe('startup', () => {
 		expect(night.devices.cover.parked).toBeTrue()
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
 	}, 30_000)
+
+	test('D.27 a required openCover that succeeds is not repeated by light', async () => {
+		const night = await runNight({
+			patch: { cover: { openBeforeCapture: false } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(night.log.filter((entry) => entry.name === 'cover.open')).toHaveLength(1)
+		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('unpark'))
+		expect(names.indexOf('cover.open')).toBeLessThan(names.indexOf('slew'))
+		expect(names.indexOf('cover.close')).toBeGreaterThan(names.lastIndexOf('camera.expose'))
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
+		expect(night.devices.cover.parked).toBeTrue()
+	}, 30_000)
 })

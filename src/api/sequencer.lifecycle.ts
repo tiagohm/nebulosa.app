@@ -374,7 +374,7 @@ function guideCameraCapture(recipe: Omit<SequencerAuxiliaryCapture, 'filter'>): 
 	return {
 		...DEFAULT_CAMERA_CAPTURE_START,
 		exposureTime: recipe.exposureTime,
-		exposureTimeUnit: 'second',
+		exposureTimeUnit: recipe.exposureTimeUnit,
 		frameType: recipe.frameType,
 		binX: recipe.binX,
 		binY: recipe.binY,

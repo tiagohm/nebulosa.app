@@ -424,11 +424,7 @@ export function Select<T>({
 					{hasStartContent && <div className={tw(styles.startContent(), contentClassName, classNames?.startContent)}>{startContent}</div>}
 					<div className={tw(styles.field(), classNames?.field)}>
 						<div className={tw(styles.value(), hasStartContent && 'pl-0', classNames?.value)}>{selectedItem !== undefined && selectedItem !== null ? selectedContent : <span className={tw(styles.description(), descriptionClassName, classNames?.description)}>{selectedContent}</span>}</div>
-						{hasLabel && (
-							<span className={tw(styles.labelSizer(), hasStartContent && 'pl-0', classNames?.labelSizer)}>
-								{label}
-							</span>
-						)}
+						{hasLabel && <span className={tw(styles.labelSizer(), hasStartContent && 'pl-0', classNames?.labelSizer)}>{label}</span>}
 						{hasLabel && <span className={tw(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</span>}
 					</div>
 					{hasEndContent && <div className={tw(styles.endContent(), contentClassName, classNames?.endContent)}>{endContent}</div>}

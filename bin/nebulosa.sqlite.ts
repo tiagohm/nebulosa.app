@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite'
 import fs from 'fs/promises'
+import { exit } from 'process'
 import { simbadQuery } from 'nebulosa/src/adapters/catalogs/simbad'
 import { CONSTELLATION_LIST, constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
 import type { Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
@@ -11,7 +12,6 @@ import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Distance } from 'nebulosa/src/math/units/distance'
 import { kilometerPerSecond } from 'nebulosa/src/math/units/velocity'
 import type { Velocity } from 'nebulosa/src/math/units/velocity'
-import { exit } from 'process'
 
 const NAME = 0
 const NGC = 1
@@ -841,7 +841,7 @@ const GITHUB_FILES: Readonly<Record<string, string>> = {
 
 const file = Bun.file('src/data/nebulosa.sqlite')
 
-if (!process.argv.includes('--force') && await file.exists()) {
+if (!process.argv.includes('--force') && (await file.exists())) {
 	console.info('nebulosa.sqlite already exists!')
 	exit(0)
 }

@@ -7,7 +7,7 @@ import type { Camera, Mount, MountTargetCoordinate, PierSide, Wheel } from 'nebu
 import { sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
 import { toDeg } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
+import { DEFAULT_CAMERA_CAPTURE_START, exposureTimeInMilliseconds } from '#/camera'
 import type { CameraCaptureStart } from '#/camera'
 import { coordinateInfo } from '#/mount'
 import type { PlateSolveStart } from '#/platesolver'
@@ -118,7 +118,7 @@ function auxiliaryCapture(recipe: SequencerAuxiliaryCapture, directory: string, 
 	return {
 		...DEFAULT_CAMERA_CAPTURE_START,
 		exposureTime: recipe.exposureTime,
-		exposureTimeUnit: 'second',
+		exposureTimeUnit: recipe.exposureTimeUnit,
 		frameType: recipe.frameType,
 		exposureMode: 'single',
 		count: 1,
@@ -150,13 +150,14 @@ function solveRequest(solver: SequencerCentering['solver'], path: string, id: st
 	return { ...solver, id, path, rightAscension, declination }
 }
 
-// Slew block: sends the mount to the target coordinates, verifies where it stopped, and establishes the
-// tracking the target asked for.
+// Slew block: sends the mount to the target coordinates, verifies where it stopped, establishes the
+// tracking the target asked for, and waits the declared settle.
 //
-// The arrival check belongs to the commander, which compares the position the mount publishes once it has
-// stopped against `arrivalTolerance` and refuses a slew that ended somewhere else. The declared `skipTolerance`
-// is the separation below which nothing is commanded at all; a definition that wants the movement commanded
-// unconditionally declares a skip tolerance of zero.
+// There is no skip tolerance: the commander is told zero, so it commands the movement whenever the mount
+// does not already report the target coordinates. Arrival is the commander's own check that the mount
+// stopped where it was sent, not a pointing-accuracy budget; precision is the centering block. The settle
+// is mechanical: the next action does not start until the mount has had that many seconds to stop
+// vibrating.
 export function sequencerSlewHandler(mountCommander: MountCommander): SequencerActionHandler<SequencerSlew, SequencerSlewOutcome> {
 	return {
 		type: SEQUENCER_BLOCK_TYPE.slew,
@@ -170,7 +171,7 @@ export function sequencerSlewHandler(mountCommander: MountCommander): SequencerA
 
 			context.progress({ detail: 'slewing to the target' })
 
-			const options = { timeout: configuration.timeout * 1000, tolerance: configuration.skipTolerance, arrivalTolerance: configuration.arrivalTolerance }
+			const options = { timeout: configuration.timeout * 1000, tolerance: 0 }
 			const slewed = await mountCommander.goTo(context.scope, mount, configuration.coordinates, options)
 
 			if (!slewed.ok) return sequencerActionFailure(slewed, 'the mount did not reach the target')
@@ -412,7 +413,7 @@ async function solveOneFrame(services: SequencerCenteringServices, context: Sequ
 
 	// Epoch of the frame this attempt measures with. Every attempt has one of its own, because a solve, a
 	// settle and a correction all advance the clock between one frame and the next.
-	const observedAt = context.now() + configuration.capture.exposureTime * 500
+	const observedAt = context.now() + exposureTimeInMilliseconds(configuration.capture.exposureTime, configuration.capture.exposureTimeUnit) * 0.5
 	const captured = await handle.result
 
 	if (!captured.ok) return sequencerActionFailure(captured, 'the centering exposure failed')

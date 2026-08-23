@@ -1,8 +1,9 @@
 import { isAbsolute } from 'path'
 import type { MountTargetCoordinate, PierSide } from 'nebulosa/src/devices/indi/device'
+import { parseAngle } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 // oxfmt-ignore
-import type { Sequencer, SequencerAutofocus, SequencerAuxiliaryCapture, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDevices, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGoto, SequencerGuiderSettle, SequencerLifecycleActionType, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
+import type { Sequencer, SequencerAutofocus, SequencerAuxiliaryCapture, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDevices, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGuiderSettle, SequencerLifecycleActionType, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTarget, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanGuider, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { sequencerUnknownPlaceholders } from './sequencer.identity'
 import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
@@ -42,12 +43,21 @@ export const SEQUENCER_BLOCK_TYPE = {
 // Prefix of every lifecycle block type; the suffix is the declared action type, such as `lifecycle.openCover`.
 export const SEQUENCER_LIFECYCLE_BLOCK_PREFIX = 'lifecycle.'
 
-// Configuration of the slew action, with the tracking policy the mount must hold once it arrives.
-export interface SequencerSlew extends Omit<SequencerGoto, 'enabled'> {
+// Configuration of the slew action. A session that names a mount always slews; the commander skips the
+// command only when the mount already reports the target coordinates, with no skip tolerance. Tracking is
+// established on arrival, settle is the declared wait after that, and pointing precision is the centering
+// block.
+export interface SequencerSlew {
 	// Where to point.
 	readonly coordinates: MountTargetCoordinate<Angle>
 	// Tracking to establish after arrival, absent when the target does not command tracking.
 	readonly tracking?: Omit<SequencerTargetTracking, 'enabled'>
+	// Maximum time allowed for the slew, in seconds, copied from the target.
+	readonly timeout: number
+	// Seconds to wait after arrival before the next action, copied from the target.
+	readonly settle: number
+	// Retry policy applied when the slew fails, copied from the target.
+	readonly retry: SequencerRetryPolicy
 }
 
 // Configuration of the centering action.
@@ -379,15 +389,15 @@ function lowerPipeline(pipeline: 'startup' | 'finalize', steps: readonly Sequenc
 }
 
 // Derives the startup pipeline from the equipment flags. The order is the only physically valid one and is
-// not configurable: unpark the mount, start tracking when no slew will, open the cover, cool, then guide.
+// not configurable: unpark the mount, open the cover, cool, then guide. Tracking is established by the slew
+// on arrival, not by a startup step, because a session that names a mount always slews.
 function deriveStartup(definition: Sequencer): SequencerDerivedLifecycle[] {
 	if (!definition.startup.enabled) return []
 
-	const { cooling, cover, guiding, mount, target } = definition
+	const { cooling, cover, guiding, mount } = definition
 	const steps: SequencerDerivedLifecycle[] = []
 
 	if (mount.enabled && mount.unparkOnStartup) steps.push({ type: 'unparkMount', required: true, timeout: mount.timeout, retry: mount.retry })
-	if (target.tracking.enabled && !target.goto.enabled) steps.push({ type: 'startTracking', required: true, timeout: 0, retry: target.tracking.retry })
 	if (cover.enabled && cover.openOnStartup) steps.push({ type: 'openCover', required: !cover.openBeforeCapture, timeout: cover.timeout, retry: cover.retry })
 	if (cooling.enabled) steps.push({ type: 'coolCamera', required: true, timeout: cooling.timeout, retry: cooling.retry })
 	if (guiding.enabled) steps.push({ type: 'startGuiding', required: true, timeout: guiding.settle.timeout, retry: guiding.retry })
@@ -412,6 +422,22 @@ function deriveShutdown(definition: Sequencer): SequencerDerivedLifecycle[] {
 	return steps
 }
 
+// Reduces the declared target pointing to radians. The recipe stores sexagesimal strings from the UI, or
+// already-reduced angles in tests; numbers are left as radians, strings are parsed with RA as hours in the
+// equatorial frames. Returns undefined when the active frame is missing or does not parse to a finite angle.
+function targetCoordinates(target: SequencerTarget): MountTargetCoordinate<Angle> | undefined {
+	const type = target.type
+	const point = target[type]
+	if (point === undefined) return undefined
+
+	const hours = type === 'J2000' || type === 'JNOW' ? true : undefined
+	const x = typeof point.x === 'string' ? parseAngle(point.x, hours) : point.x
+	const y = typeof point.y === 'string' ? parseAngle(point.y) : point.y
+	if (x === undefined || y === undefined) return undefined
+
+	return { type, [type]: { x, y } }
+}
+
 // Lowers the centering of the target, or undefined when the target does not center. The coordinates are the
 // ones the target points at, so the node carries the pointing the solved field is compared against.
 function lowerCentering(definition: Sequencer): SequencerCenter | undefined {
@@ -422,7 +448,7 @@ function lowerCentering(definition: Sequencer): SequencerCenter | undefined {
 	const { enabled, ...center } = target.center
 	const rotator = definition.rotator.enabled && definition.rotator.moveBeforeCentering ? { angle: definition.rotator.angle, tolerance: definition.rotator.tolerance, settle: definition.rotator.settle } : undefined
 
-	return { ...center, coordinates: { type: target.type, [target.type]: { ...target[target.type] } }, rotator }
+	return { ...center, coordinates: targetCoordinates(target)!, rotator }
 }
 
 // Lowers the safe-point triggers of the capture loop, in the order they are evaluated before a frame: the
@@ -482,12 +508,13 @@ function lowerTarget(definition: Sequencer, groups: readonly SequencerPlanFrameG
 	const id = sequencerNodeId.target(target.id)
 	const children: SequencerPlanNode[] = []
 
-	if (target.goto.enabled) {
-		const { enabled, ...goto } = target.goto
+	if (definition.devices.mount !== undefined) {
 		const configuration: SequencerSlew = {
-			...goto,
-			coordinates: { type: target.type, [target.type]: { ...target[target.type] } },
+			coordinates: targetCoordinates(target)!,
 			tracking: lowerTracking(definition),
+			timeout: target.timeout,
+			settle: target.settle,
+			retry: target.retry,
 		}
 		children.push({ kind: 'action', id: sequencerNodeId.slew(target.id), type: SEQUENCER_BLOCK_TYPE.slew, configuration })
 	}
@@ -534,7 +561,7 @@ function roleRequirements(definition: Sequencer, groups: readonly SequencerPlanF
 	const { autofocus, guiding, meridianFlip, mount, target } = definition
 	const requirements: RoleRequirement[] = [{ role: 'camera', path: 'capture.frames' }]
 
-	if (target.goto.enabled) requirements.push({ role: 'mount', path: 'target.goto' })
+	if (definition.devices.mount !== undefined) requirements.push({ role: 'mount', path: 'target' })
 	if (target.tracking.enabled) requirements.push({ role: 'mount', path: 'target.tracking' })
 	if (target.center.enabled) requirements.push({ role: 'mount', path: 'target.center' })
 	if (meridianFlip.enabled) requirements.push({ role: 'mount', path: 'meridianFlip' })
@@ -864,8 +891,8 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 
 	checkRetry(context, execution.defaultRetry, 'execution.defaultRetry')
 	checkRetry(context, capture.retry, 'capture.retry')
+	if (definition.devices.mount !== undefined) checkRetry(context, target.retry, 'target.retry')
 	if (target.tracking.enabled) checkRetry(context, target.tracking.retry, 'target.tracking.retry')
-	if (target.goto.enabled) checkRetry(context, target.goto.retry, 'target.goto.retry')
 	if (target.center.enabled) {
 		checkRetry(context, target.center.retry, 'target.center.retry')
 		checkAttempts(context, target.center.maximumAttempts, 'target.center.maximumAttempts')
@@ -1011,16 +1038,15 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 
 	checkUniqueIds(context, capture.frames, 'capture.frames', 'frame')
 
-	if (!target.enabled) context.diagnostics.push({ path: 'target.enabled', message: 'the definition has no enabled target to observe' })
 	if (target.id.length === 0) context.diagnostics.push({ path: 'target.id', message: 'the target id is empty and cannot address a node' })
 	// The coordinate of the declared frame is optional in the transport type, and only a pointing action reads
-	// it: without it the slew would be commanded with an undefined right ascension and declination.
-	if ((target.goto.enabled || target.center.enabled) && target[target.type] === undefined) context.diagnostics.push({ path: `target.${target.type}`, message: `the target points in ${target.type} and declares no ${target.type} coordinate to point at` })
-	// Two nodes carry the tracking policy and command it: the slew, which establishes it on arrival, and the
-	// derived startup step that starts tracking when there is no slew, which is how a session captures the field
-	// the mount is already on. With neither of them there is no node carrying the mode and the rates, so an
-	// enabled tracking would be a policy the session declares and never commands.
-	if (target.tracking.enabled && !target.goto.enabled && !startup.enabled) context.diagnostics.push({ path: 'target.tracking.enabled', message: 'tracking is established by the slew on arrival or, when the target does not slew, by the startup pipeline, and the definition declares neither' })
+	// it: without it the slew would be commanded with an undefined right ascension and declination. Sexagesimal
+	// strings from the UI must parse to a finite angle; an unreadable token would otherwise become NaN in the
+	// plan and look like a pointing the mount can execute.
+	if (definition.devices.mount !== undefined || target.center.enabled) {
+		if (target[target.type] === undefined) context.diagnostics.push({ path: `target.${target.type}`, message: `the target points in ${target.type} and declares no ${target.type} coordinate to point at` })
+		else if (targetCoordinates(target) === undefined) context.diagnostics.push({ path: `target.${target.type}`, message: `the ${target.type} coordinate is not a finite angle the session can point at` })
+	}
 	if (groups.length === 0) context.diagnostics.push({ path: 'capture.frames', message: 'the definition has no enabled frame group to capture' })
 
 	checkStorage(context, definition)

@@ -839,7 +839,7 @@ describe('startup', () => {
 			patch: {
 				cover: { openOnStartup: false },
 				meridianFlip: { enabled: false },
-				target: { goto: { enabled: false }, center: { enabled: false } },
+				target: { center: { enabled: false } },
 			},
 			sim: { mount: { trackMode: 'LUNAR' } },
 		})
@@ -850,12 +850,13 @@ describe('startup', () => {
 
 		expect(night.session.state).toBe('completed')
 		expect(night.session.failure).toBeUndefined()
-		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('slew')).toBeTrue()
 		expect(names.indexOf('unpark')).toBeGreaterThan(-1)
-		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('unpark'))
-		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('track.mode'))
+		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('unpark'))
 		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cooler.set'))
-		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('guider.start'))
+		expect(names.indexOf('slew')).toBeGreaterThan(names.indexOf('guider.start'))
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('slew'))
+		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('track.mode'))
 		expect(night.devices.mount.trackMode).toBe('SIDEREAL')
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
@@ -1136,11 +1137,11 @@ describe('startup', () => {
 		expect(names.lastIndexOf('cooler.off')).toBeGreaterThan(names.indexOf('guider.stop'))
 	}, 30_000)
 
-	test('D.17 startTracking uses the target tracking mode when the target does not slew', async () => {
+	test('D.17 the slew establishes the target tracking mode', async () => {
 		const night = await runNight({
 			patch: {
 				meridianFlip: { enabled: false },
-				target: { goto: { enabled: false }, center: { enabled: false } },
+				target: { center: { enabled: false } },
 			},
 			sim: { mount: { trackMode: 'LUNAR' } },
 		})
@@ -1149,15 +1150,16 @@ describe('startup', () => {
 
 		const names = commandNames(night.log)
 		const modes = night.log.filter((entry) => entry.name === 'track.mode').map((entry) => entry.detail)
+		const startupTrack = names.findIndex((name, index) => index < names.indexOf('slew') && (name === 'track.mode' || name === 'track'))
 
 		expect(night.session.state).toBe('completed')
 		expect(night.session.failure).toBeUndefined()
+		expect(names.includes('slew')).toBeTrue()
 		expect(modes.length).toBeGreaterThan(0)
 		expect(modes.every((mode) => mode === 'SIDEREAL')).toBeTrue()
-		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('unpark'))
-		expect(names.indexOf('track.mode')).toBeLessThan(names.indexOf('cover.open'))
-		expect(names.indexOf('track')).toBeGreaterThan(names.indexOf('unpark'))
-		expect(names.indexOf('track')).toBeLessThan(names.indexOf('cover.open'))
+		expect(startupTrack).toBe(-1)
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('slew'))
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('cover.open'))
 		expect(night.log.find((entry) => entry.name === 'track')?.detail).toBe('on')
 		expect(night.devices.mount.trackMode).toBe('SIDEREAL')
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
@@ -1402,9 +1404,8 @@ describe('startup', () => {
 		expect(night.devices.cover.parked).toBeTrue()
 	}, 30_000)
 
-	test('D.28 a required startTracking failure stops the night before the target', async () => {
+	test('D.28 a required tracking failure on the slew stops the night before frames', async () => {
 		const night = await runNight({
-			patch: { target: { goto: { enabled: false } } },
 			sim: { mount: { trackMode: 'LUNAR' }, options: { mount: { trackMode: 'fail' } } },
 		})
 
@@ -1416,10 +1417,10 @@ describe('startup', () => {
 		expect(night.session.failure).toMatchObject({ reason: 'commandFailed', detail: 'the mount did not accept the SIDEREAL track mode: the mount refused the track mode' })
 		expect(night.log.filter((entry) => entry.name === 'track.mode')).toHaveLength(3)
 		expect(names.includes('unpark')).toBeTrue()
-		expect(names.includes('cover.open')).toBeFalse()
+		expect(names.includes('cover.open')).toBeTrue()
 		expect(names.includes('cooler.set')).toBeTrue()
 		expect(names.includes('guider.start')).toBeTrue()
-		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('slew')).toBeTrue()
 		expect(names.includes('camera.expose')).toBeFalse()
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
 		expect(night.devices.mount.trackMode).toBe('LUNAR')
@@ -1516,11 +1517,11 @@ describe('startup', () => {
 		expect(process.runtime.activeSessionId).toBeUndefined()
 	}, 30_000)
 
-	test('D.33 a target that does not track does not emit startTracking', async () => {
+	test('D.33 a target that does not track still slews', async () => {
 		const night = await runNight({
 			patch: {
 				meridianFlip: { enabled: false },
-				target: { tracking: { enabled: false }, goto: { enabled: false }, center: { enabled: false } },
+				target: { tracking: { enabled: false }, center: { enabled: false } },
 			},
 		})
 
@@ -1532,16 +1533,16 @@ describe('startup', () => {
 		expect(night.session.failure).toBeUndefined()
 		expect(names.includes('track.mode')).toBeFalse()
 		expect(night.log.some((entry) => entry.name === 'track' && entry.detail === 'on')).toBeFalse()
-		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('slew')).toBeTrue()
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
 
-	test('D.34 startTracking does not inherit the mount timeout', async () => {
+	test('D.34 tracking on the slew does not inherit the mount timeout', async () => {
 		const night = await runNight({
 			patch: {
 				mount: { timeout: 1 },
 				meridianFlip: { enabled: false },
-				target: { goto: { enabled: false }, center: { enabled: false } },
+				target: { timeout: 30, center: { enabled: false } },
 			},
 			sim: { mount: { trackMode: 'LUNAR' }, options: { mount: { trackMode: 2_000 } } },
 		})
@@ -1552,8 +1553,7 @@ describe('startup', () => {
 
 		expect(night.session.state).toBe('completed')
 		expect(night.session.failure).toBeUndefined()
-		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('unpark'))
-		expect(names.indexOf('track.mode')).toBeLessThan(names.indexOf('cover.open'))
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('slew'))
 		expect(night.devices.mount.trackMode).toBe('SIDEREAL')
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
@@ -1610,5 +1610,86 @@ describe('startup', () => {
 		expect(names.indexOf('cover.open', firstSlew)).toBeLessThan(names.lastIndexOf('camera.expose'))
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 		expect(night.devices.cover.parked).toBeTrue()
+	}, 30_000)
+})
+
+describe('target acquisition', () => {
+	test('E.15 a slew that never arrives fails on the target timeout', async () => {
+		const night = await runNight({
+			patch: {
+				target: { timeout: 1, retry: { maxAttempts: 1 }, center: { enabled: false } },
+				execution: { defaultRetry: { maxAttempts: 5 } },
+				meridianFlip: { enabled: false },
+				autofocus: { enabled: false },
+				dither: { enabled: false },
+				guiding: { enabled: false },
+			},
+			sim: { options: { mount: { slew: 'timeout' } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'timeout', detail: 'the mount did not reach the target: the mount never arrived' })
+		expect(night.log.filter((entry) => entry.name === 'slew')).toHaveLength(1)
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+	}, 30_000)
+
+	test('E.27 the slew waits the target settle before the next action and not between lights', async () => {
+		const night = await runNight({
+			patch: {
+				target: { settle: 5, center: { enabled: false }, tracking: { enabled: false } },
+				guiding: { enabled: false },
+				dither: { enabled: false },
+				autofocus: { enabled: false },
+				meridianFlip: { enabled: false },
+				rotator: { enabled: false },
+				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 2, exposureTime: 2 })] },
+			},
+		})
+
+		nights.push(night)
+
+		const slew = night.log.find((entry) => entry.name === 'slew')
+		const afterSlew = slew === undefined ? undefined : night.log.find((entry) => entry.at > slew.at)
+		const exposes = night.log.filter((entry) => entry.name === 'camera.expose')
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(slew).toBeDefined()
+		expect(afterSlew).toBeDefined()
+		expect(afterSlew!.at - slew!.at).toBe(5_000)
+		expect(exposes).toHaveLength(2)
+		expect(exposes[1].at - exposes[0].at).toBeLessThan(5_000)
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(2)
+	}, 30_000)
+
+	test('E.28 slew retries use the target policy not the session default', async () => {
+		const night = await runNight({
+			patch: {
+				target: { timeout: 1, retry: { maxAttempts: 2 }, center: { enabled: false } },
+				execution: { defaultRetry: { maxAttempts: 5 } },
+				meridianFlip: { enabled: false },
+				autofocus: { enabled: false },
+				dither: { enabled: false },
+				guiding: { enabled: false },
+			},
+			sim: { options: { mount: { slew: 'timeout' } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'timeout', detail: 'the mount did not reach the target: the mount never arrived' })
+		expect(night.log.filter((entry) => entry.name === 'slew')).toHaveLength(2)
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
 	}, 30_000)
 })

@@ -79,6 +79,12 @@ export const RotatorDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'ro
 
 export const GuideOutputDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'guideOutput'>>, 'type'>) => <DeviceDropdown icon={Icons.Pulse} tooltipContent="Guide Output" type="guideOutput" {...props} />)
 
+export const CoverDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'cover'>>, 'type'>) => <DeviceDropdown icon={Icons.Lock} tooltipContent="Cover" type="cover" {...props} />)
+
+export const FlatPanelDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'flatPanel'>>, 'type'>) => <DeviceDropdown icon={Icons.Sun} tooltipContent="Flat Panel" type="flatPanel" {...props} />)
+
+export const DomeDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'dome'>>, 'type'>) => <DeviceDropdown icon={Icons.Home} tooltipContent="Dome" type="dome" {...props} />)
+
 const DeviceDropdownStartContent = memo(({ isConnected }: { readonly isConnected: boolean | undefined }) => <Icons.Circle color={deviceStatusColor(isConnected)} />)
 
 interface DeviceDropdownEndContentProps {

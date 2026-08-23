@@ -95,7 +95,7 @@ function autofocusCapture(recipe: SequencerAuxiliaryCapture) {
 	return {
 		...DEFAULT_CAMERA_CAPTURE_START,
 		exposureTime: recipe.exposureTime,
-		exposureTimeUnit: 'second' as const,
+		exposureTimeUnit: recipe.exposureTimeUnit,
 		binX: recipe.binX,
 		binY: recipe.binY,
 		gain: recipe.gain,

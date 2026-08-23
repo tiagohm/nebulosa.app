@@ -212,7 +212,7 @@ describe('start guiding', () => {
 	test('exposes the guide camera with the recipe a local guider declares', async () => {
 		const commands: string[] = []
 		const services = lifecycleServices(commands)
-		const capture: Omit<SequencerAuxiliaryCapture, 'filter'> = { exposureTime: 2.5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 30, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false }
+		const capture: Omit<SequencerAuxiliaryCapture, 'filter'> = { exposureTime: 2.5, exposureTimeUnit: 'second', frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 30, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false }
 		const guiding = { ...guidingPolicy(false), capture }
 
 		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding }))

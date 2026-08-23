@@ -443,14 +443,8 @@ export function NumberInput({
 						type="text"
 						value={draft}
 					/>
-					<span className={tw(styles.valueSizer(), hasStartContent && 'pl-0', hasEndContent && 'pr-0', classNames?.valueSizer)}>
-						{draft.length > 0 ? draft : (placeholder ?? EMPTY_VALUE_SIZER)}
-					</span>
-					{label && (
-						<span className={tw(styles.labelSizer(), hasStartContent && 'pl-0', classNames?.labelSizer)}>
-							{label}
-						</span>
-					)}
+					<span className={tw(styles.valueSizer(), hasStartContent && 'pl-0', hasEndContent && 'pr-0', classNames?.valueSizer)}>{draft.length > 0 ? draft : (placeholder ?? EMPTY_VALUE_SIZER)}</span>
+					{label && <span className={tw(styles.labelSizer(), hasStartContent && 'pl-0', classNames?.labelSizer)}>{label}</span>}
 					{label && <label className={tw(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</label>}
 				</div>
 				{hasEndContent && <div className={tw(styles.content(), contentClassName, classNames?.endContent)}>{endContent}</div>}

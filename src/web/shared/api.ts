@@ -40,6 +40,9 @@ import type { CoordinateInfo, MountRemoteControlStart, MountRemoteControlProtoco
 import type { PlanetariumSearch } from '#/planetarium'
 import type { PlateSolveStart } from '#/platesolver'
 import type { SearchSatellite, Satellite } from '#/satellite'
+import type { Sequencer } from '#/sequencer'
+import type { SequencerPlan, SequencerPreflight } from '#/sequencer.plan'
+import type { SequencerArtifact, SequencerEvent, SequencerSessionSnapshot } from '#/sequencer.state'
 import type { StarDetection } from '#/stardetection'
 import type { ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, FindSolarEclipse, SolarEclipseMap, SolarSeasons, Twilight } from '#/sun'
 import type { TppaStart } from '#/tppa'
@@ -47,6 +50,37 @@ import type { TppaStart } from '#/tppa'
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 
 export const CLIENT_ID = nanoid()
+
+// Outcome of posting a Sequencer definition to start a session.
+export type SequencerSessionStart =
+	| {
+			readonly ok: true
+			readonly session: SequencerSessionSnapshot
+			readonly reentrant: boolean
+	  }
+	| {
+			readonly ok: false
+			readonly reason: string
+			readonly preflight?: SequencerPreflight
+			readonly detail?: string
+			readonly sessionId?: string
+	  }
+
+// Compiled plan and pre-flight view returned for one live session.
+export interface SequencerSessionPlan {
+	readonly plan: SequencerPlan
+	readonly preflight: SequencerPreflight
+}
+
+// Outcome of pause, resume, or stop. The UI only needs the success flag.
+export type SequencerControlResult =
+	| {
+			readonly ok: true
+	  }
+	| {
+			readonly ok: false
+			readonly reason: string
+	  }
 
 const DEFAULT_HEADERS: HeadersInit = {
 	'Content-Type': 'application/json',
@@ -640,6 +674,49 @@ export namespace Api {
 
 		export function stop(id: string) {
 			return res(`/darv/${id}/stop`, 'post')
+		}
+	}
+
+	export namespace Sequencer {
+		export function validate(req: Sequencer) {
+			return json<SequencerPreflight>('/sequencer/validate', 'post', req)
+		}
+
+		export function sessions() {
+			return json<readonly SequencerSessionSnapshot[]>('/sequencer/sessions', 'get')
+		}
+
+		export function start(req: Sequencer) {
+			return json<SequencerSessionStart>('/sequencer/sessions', 'post', req)
+		}
+
+		export function snapshot(id: string) {
+			return json<SequencerSessionSnapshot>(`/sequencer/sessions/${id}`, 'get')
+		}
+
+		export function plan(id: string) {
+			return json<SequencerSessionPlan>(`/sequencer/sessions/${id}/plan`, 'get')
+		}
+
+		export function pause(id: string) {
+			return json<SequencerControlResult>(`/sequencer/sessions/${id}/pause`, 'post')
+		}
+
+		export function resume(id: string) {
+			return json<SequencerControlResult>(`/sequencer/sessions/${id}/resume`, 'post')
+		}
+
+		export function stop(id: string) {
+			return json<SequencerControlResult>(`/sequencer/sessions/${id}/stop`, 'post')
+		}
+
+		export function events(id: string, afterSequence?: number) {
+			const query = afterSequence === undefined ? '' : `?afterSequence=${afterSequence}`
+			return json<readonly SequencerEvent[]>(`/sequencer/sessions/${id}/events${query}`, 'get')
+		}
+
+		export function artifacts(id: string) {
+			return json<readonly SequencerArtifact[]>(`/sequencer/sessions/${id}/artifacts`, 'get')
 		}
 	}
 

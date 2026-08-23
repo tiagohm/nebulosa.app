@@ -41,7 +41,11 @@ function guided(): Sequencer {
 	return {
 		...definition,
 		devices: { ...definition.devices, guideCamera: 'Guide Camera Simulator', guideOutput: 'Guide Output Simulator' },
-		guiding: { ...definition.guiding, enabled: true, connection: { mode: 'local', focalLength: 0.24, capture: { exposureTime: 2, frameType: 'LIGHT', binX: 1, binY: 1, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false } } },
+		guiding: {
+			...definition.guiding,
+			enabled: true,
+			connection: { mode: 'local', focalLength: 0.24, capture: { exposureTime: 2, exposureTimeUnit: 'second', frameType: 'LIGHT', binX: 1, binY: 1, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false } },
+		},
 	}
 }
 

@@ -26,7 +26,8 @@ export interface Sequencer {
 	// Devices used by the whole session, declared once and referenced by role everywhere else.
 	readonly devices: SequencerDevices
 
-	// Target definition, tracking, slew, centering, and observability constraints.
+	// Target definition, slew timeout, settle and retry, tracking, centering, and observability constraints.
+	// A session that names a mount always slews to this target; pointing precision is the centering block.
 	readonly target: SequencerTarget
 	// Primary imaging plan containing camera bindings, scheduling order, defaults, and frame groups.
 	readonly capture: SequencerCapture
@@ -127,19 +128,15 @@ export interface SequencerRetryPolicy {
 	// Maximum number of total attempts, including the initial execution.
 	// Use an integer >= 1; 1 disables retries.
 	readonly maxAttempts: number
-
 	// Delay before the first retry.
 	// Seconds; use a finite value >= 0.
 	readonly delay: number
-
 	// Multiplier applied to the delay after each failed retry.
 	// Use a finite value >= 1; 1 produces constant-delay retries.
 	readonly backoff: number
-
 	// Upper bound for any computed retry delay.
 	// Seconds; use a finite value >= 0 and normally >= delay.
 	readonly maximumDelay: number
-
 	// Failure reasons eligible for retry.
 	// Use an empty array to disable reason-based retries.
 	readonly retryOn: readonly SequencerFailureReason[]
@@ -168,7 +165,7 @@ export interface SequencerTimeWindow {
 
 // Discriminated union of target coordinate representations accepted by the Sequencer.
 // The coordinateType property selects the active representation.
-export interface SequencerTarget extends MountTargetCoordinate<Angle | string> {
+export interface SequencerTarget extends MountTargetCoordinate {
 	// Stable identifier used by definitions, checkpoints, events, or ordered actions.
 	// Use a non-empty value unique within its owning collection.
 	// It is a component of every node id below the target and therefore of artifact identity and file names, so renaming the target must not change it.
@@ -176,13 +173,16 @@ export interface SequencerTarget extends MountTargetCoordinate<Angle | string> {
 	// Human-readable label for this object.
 	// Use a non-empty value suitable for logs and UI display.
 	readonly name: string
-	// Controls whether this feature or definition is active.
-	readonly enabled: boolean
+
+	// Maximum time allowed for the slew, in seconds.
+	readonly timeout: number
+	// Seconds to wait after the slew arrives before the next action, so the mount can stop vibrating.
+	readonly settle: number
+	// Retry policy applied when the slew fails.
+	readonly retry: SequencerRetryPolicy
 
 	// Configuration value for tracking.
 	readonly tracking: SequencerTargetTracking
-	// Configuration value for goto.
-	readonly goto: SequencerGoto
 	// Configuration value for center.
 	readonly center: SequencerCentering
 	// Configuration value for constraints.
@@ -198,34 +198,6 @@ export interface SequencerTargetTracking {
 	readonly mode: TrackMode
 	// Controls whether tracking is stopped after the session ends.
 	readonly stopOnShutdown: boolean
-
-	// Optional non-sidereal correction rate along right ascension.
-	readonly rightAscensionRate?: Angle
-	// Optional non-sidereal correction rate along declination.
-	readonly declinationRate?: Angle
-
-	// Retry policy applied when this operation fails.
-	readonly retry: SequencerRetryPolicy
-}
-
-// Configures the initial mount slew and its position verification.
-// Angular tolerances are radians; timeout and settle are seconds.
-export interface SequencerGoto {
-	// Controls whether this feature or definition is active.
-	readonly enabled: boolean
-
-	// Angular distance below which the current position is considered already on target, which skips the slew.
-	// Radians; use a finite value >= 0 and typically a few arcseconds to arcminutes; 0 always slews.
-	readonly skipTolerance: Angle
-
-	// Maximum angular error accepted after the slew completes.
-	// Radians; use a finite value >= 0 and normally >= the mount pointing repeatability.
-	readonly arrivalTolerance: Angle
-
-	// Maximum time in seconds allowed for the operation to reach its terminal state.
-	readonly timeout: number
-	// Stable delay or settling policy, in seconds, required after a state transition.
-	readonly settle: number
 	// Retry policy applied when this operation fails.
 	readonly retry: SequencerRetryPolicy
 }
@@ -237,10 +209,8 @@ export interface SequencerCentering {
 	readonly enabled: boolean
 	// Configuration value for solver.
 	readonly solver: Omit<PlateSolveStart, 'id' | 'path'>
-
 	// Maximum plate-solved separation accepted from the target, commonly a few arcseconds.
 	readonly tolerance: Angle
-
 	// Maximum number of attempts allowed for this operation or recovery.
 	readonly maximumAttempts: number
 	// Stable delay or settling policy, in seconds, required after a state transition.
@@ -372,11 +342,7 @@ export type SequencerCamera = Pick<CameraCaptureStart, 'binX' | 'binY' | 'gain' 
 
 // Defines a single-frame capture recipe used by autofocus, centering, guiding, and other supporting routines.
 // Unlike the main capture plan, it does not include repetition or integration targets.
-export interface SequencerAuxiliaryCapture extends SequencerCamera {
-	// Exposure duration, in seconds, used by the supporting routine.
-	readonly exposureTime: number
-	// Camera frame classification written to the image metadata.
-	readonly frameType: FrameType
+export interface SequencerAuxiliaryCapture extends SequencerCamera, Pick<CameraCaptureStart, 'exposureTime' | 'exposureTimeUnit' | 'frameType'> {
 	// Filter reference associated with this configuration.
 	readonly filter?: SequencerFilterReference
 }
@@ -1551,6 +1517,7 @@ export const DEFAULT_SEQUENCER_CAMERA: SequencerCamera = {
 export const DEFAULT_SEQUENCER_AUXILIARY_CAPTURE: SequencerAuxiliaryCapture = {
 	...DEFAULT_SEQUENCER_CAMERA,
 	exposureTime: 1,
+	exposureTimeUnit: 'second',
 	frameType: 'LIGHT',
 }
 
@@ -1565,24 +1532,34 @@ export const DEFAULT_SEQUENCER: Sequencer = {
 	target: {
 		id: '',
 		name: '',
-		enabled: false,
 		type: 'JNOW',
+		J2000: {
+			x: '00 00 00.00',
+			y: '00 00 00.00',
+		},
 		JNOW: {
 			x: '00 00 00.00',
 			y: '00 00 00.00',
 		},
+		ALTAZ: {
+			x: '00 00 00.00',
+			y: '00 00 00.00',
+		},
+		ECLIPTIC: {
+			x: '00 00 00.00',
+			y: '00 00 00.00',
+		},
+		GALACTIC: {
+			x: '00 00 00.00',
+			y: '00 00 00.00',
+		},
+		timeout: 300,
+		settle: 2,
+		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
 		tracking: {
 			enabled: false,
 			mode: 'SIDEREAL',
 			stopOnShutdown: false,
-			retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
-		},
-		goto: {
-			enabled: false,
-			skipTolerance: 0.001,
-			arrivalTolerance: 0.0005,
-			timeout: 300,
-			settle: 2,
 			retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
 		},
 		center: {

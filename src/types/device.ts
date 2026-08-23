@@ -1,5 +1,5 @@
 import type { RequiredOnly } from 'nebulosa/src/core/types'
-import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, Thermometer, Wheel } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Cover, Device, DeviceType, DewHeater, Dome, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, SafetyMonitor, Thermometer, Weather, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 
 export interface DeviceAdded<D extends Device = Device> {
@@ -28,9 +28,12 @@ export interface DeviceTypeMap {
 	readonly guideOutput: GuideOutput
 	readonly dewHeater: DewHeater
 	readonly power: Power
+	readonly dome: Dome
+	readonly safetyMonitor: SafetyMonitor
+	readonly weather: Weather
 }
 
-export const DEVICE_TYPES = new Set<DeviceType>(['camera', 'mount', 'focuser', 'wheel', 'cover', 'flatPanel', 'rotator', 'guideOutput', 'thermometer', 'dewHeater'])
+export const DEVICE_TYPES = new Set<DeviceType>(['camera', 'mount', 'focuser', 'wheel', 'cover', 'flatPanel', 'rotator', 'guideOutput', 'thermometer', 'dewHeater', 'dome'])
 
 export function isDeviceType(type: unknown): type is DeviceType {
 	return typeof type === 'string' && DEVICE_TYPES.has(type as never)

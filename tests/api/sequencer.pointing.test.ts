@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { Camera, Mount, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { SequencerCenter, SequencerSlew } from 'src/api/sequencer.compiler'
@@ -31,7 +31,7 @@ function wheel(names: readonly string[], position: number): Wheel {
 }
 
 function slewConfiguration(overrides?: Partial<SequencerSlew>): SequencerSlew {
-	return { coordinates: TARGET, skipTolerance: 0.001, arrivalTolerance: 0.01, timeout: 300, settle: 0, retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' }, ...overrides }
+	return { coordinates: TARGET, timeout: 300, settle: 0, retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' }, ...overrides }
 }
 
 function centerConfiguration(overrides?: Partial<SequencerCenter>): SequencerCenter {
@@ -42,7 +42,7 @@ function centerConfiguration(overrides?: Partial<SequencerCenter>): SequencerCen
 		maximumAttempts: 3,
 		settle: 0,
 		syncMount: true,
-		capture: { exposureTime: 5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false },
+		capture: { exposureTime: 5, exposureTimeUnit: 'second', frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false },
 		retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' },
 		...overrides,
 	}
@@ -121,7 +121,7 @@ describe('slew block', () => {
 		expect(handler.validate(slewConfiguration(), { nodeId: 'target[m42].slew', devices }).ok).toBe(true)
 	})
 
-	test('slews with the declared tolerances and establishes the tracking of the target', async () => {
+	test('slews without a skip tolerance and establishes the tracking of the target', async () => {
 		const commands: Command[] = []
 		const device = mount()
 		const commander = {
@@ -142,18 +142,58 @@ describe('slew block', () => {
 		}
 
 		const handler = sequencerSlewHandler(commander as never)
-		const configuration = slewConfiguration({ tracking: { mode: 'SIDEREAL', stopOnShutdown: false, retry: slewConfiguration().retry } })
+		const configuration = slewConfiguration({ timeout: 12, tracking: { mode: 'SIDEREAL', stopOnShutdown: false, retry: slewConfiguration().retry } })
 		const result = await handler.execute(actionContext({ mount: { device } }), configuration)
 
 		expect(result).toEqual({ type: 'completed', value: { rightAscension: 1.4, declination: -0.09, pierSide: 'WEST', tracking: true } })
 		expect(commands).toEqual([
-			{ name: 'goTo', detail: { timeout: 300000, tolerance: 0.001, arrivalTolerance: 0.01 } },
+			{ name: 'goTo', detail: { timeout: 12000, tolerance: 0 } },
 			{ name: 'setTrackMode', detail: 'SIDEREAL' },
 			{ name: 'setTracking', detail: true },
 		])
 	})
 
-	test('commands the movement unconditionally when the skip is turned off', async () => {
+	test('settles after arrival for the duration declared on the slew', async () => {
+		const delays: number[] = []
+		const wait = await import('src/api/operation.wait')
+		const delay = spyOn(wait, 'abortableDelay').mockImplementation((ms: number) => {
+			delays.push(ms)
+			return Promise.resolve(successfulOperationResult(undefined))
+		})
+		const commander = {
+			goTo: () => Promise.resolve(successfulOperationResult({ rightAscension: 1.4, declination: -0.09, pierSide: 'WEST' })),
+			setTrackMode: () => Promise.resolve(successfulOperationResult(undefined)),
+			setTracking: (_scope: unknown, target: Mount, enabled: boolean) => {
+				target.tracking = enabled
+				return Promise.resolve(successfulOperationResult(undefined))
+			},
+		}
+
+		try {
+			const handler = sequencerSlewHandler(commander as never)
+			const configuration = slewConfiguration({ settle: 5, tracking: { mode: 'SIDEREAL', stopOnShutdown: false, retry: slewConfiguration().retry } })
+			const result = await handler.execute(actionContext({ mount: { device: mount() } }), configuration)
+
+			expect(result).toMatchObject({ type: 'completed' })
+			expect(delays).toEqual([5000])
+		} finally {
+			delay.mockRestore()
+		}
+	})
+
+	test('maps an interrupted settle to a terminal failure', async () => {
+		const wait = await import('src/api/operation.wait')
+		const delay = spyOn(wait, 'abortableDelay').mockImplementation(() => Promise.resolve(failedOperationResult('aborted', 'stopped')))
+
+		try {
+			const handler = sequencerSlewHandler({ goTo: () => Promise.resolve(successfulOperationResult({ rightAscension: 1.4, declination: -0.09, pierSide: 'WEST' })) } as never)
+			expect(await handler.execute(actionContext({ mount: { device: mount() } }), slewConfiguration({ settle: 2 }))).toEqual({ type: 'fatalFailure', reason: 'aborted', detail: 'the settle after the slew was interrupted: stopped' })
+		} finally {
+			delay.mockRestore()
+		}
+	})
+
+	test('commands the movement whenever the mount is not already on the target', async () => {
 		const commands: Command[] = []
 		const commander = {
 			goTo: (_scope: unknown, _mount: Mount, _target: unknown, options: { tolerance: number }) => {
@@ -163,7 +203,7 @@ describe('slew block', () => {
 		}
 
 		const handler = sequencerSlewHandler(commander as never)
-		await handler.execute(actionContext({ mount: { device: mount() } }), slewConfiguration({ skipTolerance: 0 }))
+		await handler.execute(actionContext({ mount: { device: mount() } }), slewConfiguration())
 
 		expect(commands).toEqual([{ name: 'goTo', detail: 0 }])
 	})

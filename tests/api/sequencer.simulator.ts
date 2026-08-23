@@ -100,7 +100,7 @@ export interface NightOptions {
 		readonly cover?: Partial<Cover>
 		readonly wheel?: Partial<Wheel>
 		readonly options?: {
-			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' | 'timeout' | number; trackMode?: 'fail' | number }>
+			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' | 'timeout' | number; trackMode?: 'fail' | number; slew?: 'timeout' }>
 			readonly camera?: Readonly<{ temperature?: 'timeout' }>
 			readonly cover?: Readonly<{ unpark?: 'fail' | 'timeout' | number }>
 			readonly guider?: Readonly<{ start?: 'fail' | 'timeout'; running?: boolean }>
@@ -132,7 +132,7 @@ export interface SimulatorProcess {
 
 export const RETRY: SequencerRetryPolicy = { maxAttempts: 3, delay: 0, backoff: 1, maximumDelay: 0, retryOn: ['timeout', 'commandFailed'], onExhausted: 'fail' }
 
-const AUX_3S: SequencerAuxiliaryCapture = { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false }
+const AUX_3S: SequencerAuxiliaryCapture = { exposureTime: 3, exposureTimeUnit: 'second', frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false }
 const AUX_5S: SequencerAuxiliaryCapture = { ...AUX_3S, exposureTime: 5 }
 const T0 = 1_700_000_000_000
 const FILTERS = ['L', 'R', 'G', 'B', 'Ha', 'O3', 'S2', 'Dark'] as const
@@ -157,11 +157,12 @@ export function defaultSequencer(root: string): Sequencer {
 		target: {
 			id: 'm42',
 			name: 'Orion Nebula',
-			enabled: true,
 			type: 'J2000',
-			J2000: { x: 1.4, y: -0.09 },
+			J2000: { x: '05 20 51.38', y: '05 09 23.83' },
+			timeout: 300,
+			settle: 2,
+			retry: RETRY,
 			tracking: { enabled: true, mode: 'SIDEREAL', stopOnShutdown: true, retry: RETRY },
-			goto: { enabled: true, skipTolerance: 0.001, arrivalTolerance: 0.0005, timeout: 300, settle: 2, retry: RETRY },
 			center: { enabled: true, solver: { type: 'astap', rightAscension: 0, declination: 0, executable: '', focalLength: 490, pixelSize: 4.8, fov: 0, timeout: 60, blind: false, radius: 4, downsample: 2 }, tolerance: 0.0001, maximumAttempts: 3, settle: 1, syncMount: true, capture: AUX_5S, retry: RETRY },
 			constraints: { enabled: false, window: { enabled: false }, onViolation: 'wait', stableFor: 60 },
 		},
@@ -546,10 +547,15 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 
 	return {
 		mount: {
-			goTo: (_scope: unknown, mount: Mount, target: { readonly type?: string; readonly J2000?: { readonly x: number; readonly y: number } }) => {
+			goTo: async (_scope: unknown, mount: Mount, target: { readonly type?: string; readonly J2000?: { readonly x: number; readonly y: number } }, options?: { readonly timeout?: number }) => {
 				push('slew')
 
-				if (mount.parked) return Promise.resolve(failedOperationResult('unexpectedState', `mount ${mount.name} is parked`))
+				if (sim?.options?.mount?.slew === 'timeout') {
+					const ended = await stall(options?.timeout === undefined ? undefined : options.timeout + 50)
+					return failedOperationResult(ended, ended === 'timeout' ? 'the mount never arrived' : undefined)
+				}
+
+				if (mount.parked) return failedOperationResult('unexpectedState', `mount ${mount.name} is parked`)
 
 				mount.parked = false
 

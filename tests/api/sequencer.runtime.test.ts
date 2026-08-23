@@ -385,7 +385,7 @@ describe('sequencer runtime', () => {
 		const created = instance.create(
 			plan({
 				devices: { camera: 'camera-1', guideCamera: 'guide-camera-1', guideOutput: 'guide-output-1' },
-				guider: guiderPlan({ mode: 'local', focalLength: 200, capture: { exposureTime: 2, frameType: 'LIGHT', binX: 1, binY: 1, gain: 0, offset: 0, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false } }),
+				guider: guiderPlan({ mode: 'local', focalLength: 200, capture: { exposureTime: 2, exposureTimeUnit: 'second', frameType: 'LIGHT', binX: 1, binY: 1, gain: 0, offset: 0, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false } }),
 			}),
 		)!
 

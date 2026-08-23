@@ -824,7 +824,7 @@ describe('plan walk', () => {
 
 	test('spends nothing on a safe point that moved nothing', async () => {
 		const base = definition()
-		const target = { ...base.target, goto: { ...base.target.goto, enabled: false }, center: { ...base.target.center, enabled: false }, tracking: { ...base.target.tracking, enabled: false } }
+		const target = { ...base.target, center: { ...base.target.center, enabled: false }, tracking: { ...base.target.tracking, enabled: false } }
 		const state = harness(planOf({ target }))
 		const started = performance.now()
 		const outcome = await runSequencerPlan(state.host)
@@ -1050,7 +1050,7 @@ describe('plan walk', () => {
 
 	test('keeps the startup pipeline running when a pause cancels the action', async () => {
 		const base = definition()
-		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, target: { ...base.target, goto: { ...base.target.goto, enabled: false } } }), (context) => {
+		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, cooling: { ...base.cooling, enabled: true } }), (context) => {
 			if (context.nodeId === 'startup.action[unparkMount]') {
 				state.action.abort()
 
@@ -1061,14 +1061,14 @@ describe('plan walk', () => {
 		})
 		const outcome = await runSequencerPlan(state.host)
 
-		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[startTracking]')
+		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[coolCamera]')
 		expect(outcome.checkpoint.completed).toContain('startup.action[unparkMount]')
-		expect(outcome.checkpoint.completed).toContain('startup.action[startTracking]')
+		expect(outcome.checkpoint.completed).toContain('startup.action[coolCamera]')
 	})
 
 	test('holds the startup pipeline between two actions when the session is paused', async () => {
 		const base = definition()
-		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, target: { ...base.target, goto: { ...base.target.goto, enabled: false } } }), (context) => {
+		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, cooling: { ...base.cooling, enabled: true } }), (context) => {
 			if (context.nodeId === 'startup.action[unparkMount]') state.desired = 'paused'
 
 			return Promise.resolve({ type: 'completed', value: undefined })
@@ -1078,21 +1078,21 @@ describe('plan walk', () => {
 
 		const outcome = await runSequencerPlan(state.host)
 
-		expect(state.holds).toContain('startup.action[startTracking]')
-		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[startTracking]')
+		expect(state.holds).toContain('startup.action[coolCamera]')
+		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[coolCamera]')
 		expect(outcome.terminal.state).toBe('completed')
 	})
 
 	test('commands no further startup action once the session is stopping', async () => {
 		const base = definition()
-		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, target: { ...base.target, goto: { ...base.target.goto, enabled: false } } }), (context) => {
+		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, cooling: { ...base.cooling, enabled: true } }), (context) => {
 			if (context.nodeId === 'startup.action[unparkMount]') state.desired = 'stopped'
 
 			return Promise.resolve({ type: 'completed', value: undefined })
 		})
 		const outcome = await runSequencerPlan(state.host)
 
-		expect(state.executed.map((it) => it.nodeId)).not.toContain('startup.action[startTracking]')
+		expect(state.executed.map((it) => it.nodeId)).not.toContain('startup.action[coolCamera]')
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 		expect(outcome.terminal.state).toBe('stopped')
 	})

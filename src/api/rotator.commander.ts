@@ -1,7 +1,6 @@
 import type { Rotator } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, RotatorManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
-import { clamp } from 'nebulosa/src/math/numerical/math'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import type { OperationContext, OperationScope } from './operation'
@@ -240,6 +239,26 @@ export class RotatorCommander implements DeviceHandler<Rotator> {
 // Resolves a requested angle, in degrees, to one the rotator can be commanded to and will report back. An
 // angle outside the driver's limits is silently clipped by it, and waiting for the requested one would only
 // end in a timeout.
+//
+// The angle of a rotator is a direction and not a position on a rail: it repeats every 360°, and which
+// representative of a direction the driver publishes is a convention of that driver. So an angle outside the
+// published interval is first offered its equivalent inside it — 350° to a rotator reporting -180..180 is the
+// same orientation as -10°, and clipping it to 180° would leave the field about 170° from what was asked for
+// while every check reported success. A driver publishing less than a full turn leaves an arc no orientation
+// of it can reach, and a request inside that arc is answered with the limit closest to the direction asked
+// for, measured the way the mechanism turns rather than on the number line: the excluded arc is bounded by
+// the two limits, so the nearest of the two is the one the requested direction is fewer degrees away from.
+// Ties go to the maximum, which is the endpoint a driver publishing 0..180 answers a 270° request with.
 export function rotatorAngle(rotator: Rotator, angle: number) {
-	return clamp(angle, rotator.angle.min, rotator.angle.max)
+	const { min, max } = rotator.angle
+
+	if (angle >= min && angle <= max) return angle
+
+	// Representative of the requested direction inside one turn starting at the lower limit, which is either
+	// inside the published interval or inside the arc the driver excludes.
+	const wrapped = angle - 360 * Math.floor((angle - min) / 360)
+
+	if (wrapped <= max) return wrapped
+
+	return wrapped - max <= min + 360 - wrapped ? max : min
 }

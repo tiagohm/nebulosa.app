@@ -42,6 +42,17 @@ export interface CameraCaptureStart extends Size {
 	autoSave: boolean
 	savePath?: string
 	autoSubFolderMode: CameraAutoSubFolderMode
+	// Directory the frame is written into, replacing `savePath` and the automatic subfolder. A caller that
+	// already decided the destination — the sequencer, from the storage template of its definition — passes it
+	// so the path exists before the exposure does, which is what lets an interrupted frame be recognized later.
+	outputPath?: string
+	// File name of the frame, including its extension, replacing the timestamp of a manual capture. It names one
+	// frame, so a capture asking for several frames under one name is refused instead of rewriting the same file.
+	outputName?: string
+	// Path the processed frame is published under, when it is not the file that was written. The sequencer
+	// writes the camera into a temporary and only then renames it onto the final name; publishing the
+	// temporary would show a `.partial` that the rename then deletes.
+	publishPath?: string
 	mount?: string
 	wheel?: string
 	focuser?: string

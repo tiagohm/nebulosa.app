@@ -92,18 +92,12 @@ function getFocuser() {
 	return device
 }
 
-function connectDevices() {
+async function connectedDevices() {
 	const camera = getCamera()
 	const focuser = getFocuser()
 
 	cameraManager.connect(camera)
 	focuserManager.connect(focuser)
-
-	return { camera, focuser }
-}
-
-async function connectedDevices() {
-	const { camera, focuser } = connectDevices()
 
 	await waitUntil(() => camera.connected && focuser.connected)
 	resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })

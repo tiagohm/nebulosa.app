@@ -164,6 +164,42 @@ describe('remote session', () => {
 		expect(commander.list()).toHaveLength(1)
 	})
 
+	test('opens inside the reservation holding its resource, which refuses a session opened outside it', async () => {
+		const key = remoteGuiderKey('127.0.0.1', port)
+		const reserved = arbiter.reserve({ id: 'session-1', kind: 'sequencer' }, [{ key }])
+
+		expect(reserved.ok).toBeTrue()
+		if (!reserved.ok) return
+
+		const outside = await commander.connect(remote())
+
+		expect(outside.ok).toBeFalse()
+		expect(outside.ok || outside.reason).toBe('busy')
+
+		const inside = await commander.connect(remote(), reserved.reservation.token)
+
+		expect(inside.ok).toBeTrue()
+		expect(arbiter.availability(key)).toBe('leased')
+	})
+
+	test('keeps a session opened under a reservation reachable as a root of that reservation', async () => {
+		const key = remoteGuiderKey('127.0.0.1', port)
+		const reserved = arbiter.reserve({ id: 'session-2', kind: 'sequencer' }, [{ key }])
+
+		expect(reserved.ok).toBeTrue()
+		if (!reserved.ok) return
+
+		expect((await commander.connect(remote(), reserved.reservation.token)).ok).toBeTrue()
+
+		await coordinator.cancelByReservationOwner(reserved.reservation.token.owner)
+
+		expect(commander.list()).toBeEmpty()
+
+		reserved.reservation.release()
+
+		expect(arbiter.availability(key)).toBe('available')
+	})
+
 	test('keeps two sessions on different servers apart', async () => {
 		const [other, otherPort] = await startServer()
 		const first = await connected()
@@ -372,6 +408,25 @@ describe('remote session', () => {
 
 		expect((await looped).ok).toBeTrue()
 		expect(commander.looping(id)).toBeTrue()
+	})
+
+	test('installs the settle of a loop that carries no exposure of its own', async () => {
+		const id = await connected()
+
+		const looped = commander.loop(id, { settle: { pixels: 0.4, time: 7, timeout: 90 } })
+
+		await waitUntil(() => server.received('loop'))
+		server.push({ Event: 'LoopingExposures', Frame: 1, StarMass: 100, SNR: 20, HFD: 3 })
+		expect((await looped).ok).toBeTrue()
+
+		const guided = commander.startGuiding(id)
+
+		await waitUntil(() => server.received('guide'))
+		server.push({ Event: 'StartGuiding' })
+		server.push({ Event: 'SettleDone', Status: 0, TotalFrames: 5, DroppedFrames: 0 })
+
+		expect((await guided).ok).toBeTrue()
+		expect(server.commands.find((command) => command.method === 'guide')?.params).toMatchObject({ recalibrate: false, settle: { pixels: 0.4, time: 7, timeout: 90 } })
 	})
 
 	test('fails a refused command instead of waiting for a state the guider will never reach', async () => {

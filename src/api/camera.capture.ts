@@ -1,5 +1,5 @@
 import { mkdir } from 'fs/promises'
-import { join } from 'path'
+import { isAbsolute, join } from 'path'
 import { formatTemporal, TIMEZONE, temporalAdd, temporalGet, temporalSubtract } from 'nebulosa/src/astronomy/time/temporal'
 import { errorMessage } from 'nebulosa/src/core/util'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
@@ -17,7 +17,7 @@ import type { ImageProcessor } from './image.processor'
 import type { OperationContext, OperationScope } from './operation'
 import { abortableDelay, abortReason } from './operation.wait'
 import { ResourceArbiter, resourceKey } from './resource'
-import { directoryExists } from './util'
+import { directoryExists, isPathSegment } from './util'
 
 // Minimum inter-frame delay that produces progress updates, in microseconds.
 const MINIMUM_WAITING_TIME = 1000000
@@ -145,6 +145,8 @@ interface CameraCaptureSessionContext {
 interface FrameAttempt {
 	// Monotonic generation within the session.
 	readonly generation: number
+	// Final path of the frame, resolved before the exposure was dispatched.
+	readonly path: string
 	// Terminal exposure state observed for this generation.
 	readonly exposureCompleted: PromiseWithResolvers<PropertyState>
 	// First BLOB observed for this generation.
@@ -381,6 +383,13 @@ class CameraCaptureSession {
 	async run(): Promise<OperationResult<CameraCaptureResult>> {
 		if (!this.camera.connected) return this.#finishFailure('disconnected')
 		if (this.#request.exposureTime <= 0 || this.#reporter.remainingCount <= 0) return this.#finishFailure('commandFailed', 'exposure time and frame count must be positive')
+		// One name is one frame. Several frames under it would leave one file on disk while every frame reported
+		// the path it was supposedly written to, which is a capture that looks complete and is not.
+		if (this.#request.outputName && this.#reporter.remainingCount > 1) return this.#finishFailure('commandFailed', 'a fixed output name captures a single frame')
+
+		const destination = destinationFailure(this.#request)
+
+		if (destination !== undefined) return this.#finishFailure('commandFailed', destination)
 		try {
 			this.sessionContext.prepare?.()
 		} catch (error) {
@@ -550,10 +559,24 @@ class CameraCaptureSession {
 	async #captureFrame(): Promise<OperationResult<string>> {
 		if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
 
+		// The destination is resolved before the exposure is commanded, so the identity of the frame exists
+		// before its data does: a caller that has to recognize an interrupted frame afterwards can only do it
+		// against a path it already knew, and a path invented when the BLOB arrives was never knowable.
+		let path: string
+
+		try {
+			path = await this.#resolveFramePath()
+		} catch (error) {
+			return failedOperationResult('commandFailed', errorMessage(error))
+		}
+
+		if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
+
 		const attempt: FrameAttempt = {
 			// The rendezvous exists before the frame is opened, because the attempt has to be routable the
 			// moment the exposure is dispatched. Opening it below is what makes this the current generation.
 			generation: this.#reporter.generation + 1,
+			path,
 			exposureCompleted: Promise.withResolvers<PropertyState>(),
 			blobReceived: Promise.withResolvers<CameraBlob>(),
 			terminal: false,
@@ -587,7 +610,7 @@ class CameraCaptureSession {
 		}
 
 		this.#state = 'processingFrame'
-		const processed = await this.#processBlob(rendezvous.value)
+		const processed = await this.#processBlob(rendezvous.value, attempt.path)
 		attempt.terminal = true
 
 		if (!processed.ok) return processed
@@ -629,21 +652,46 @@ class CameraCaptureSession {
 		}
 	}
 
+	// Resolves the final path of the next frame, creating the directory it is written into.
+	//
+	// A caller that decided the destination provides both halves and nothing here is derived. Otherwise the
+	// automatic capture directory and the timestamp name are used, and the timestamp is now the instant the
+	// exposure is commanded rather than the instant its payload arrived: a name has to exist before the data.
+	async #resolveFramePath() {
+		const request = this.#request
+		let path: string
+
+		if (request.outputPath && request.outputName) {
+			path = join(request.outputPath, request.outputName)
+		} else {
+			const name = request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : this.camera.name
+			const extension = request.transferFormat === 'XISF' ? 'xisf' : 'fit'
+			path = join(request.outputPath ?? (await makePathFor(request)), request.outputName ?? `${name}.${extension}`)
+		}
+
+		// A caller-supplied name addresses one specific file, and the frame has to be what creates it. Silently
+		// overwriting turns a capture request into a write over a file that was never a frame, and it is the same
+		// rule the sequencer follows for its own paths: a pre-existing file is classified, never overwritten.
+		if (request.outputName !== undefined && (await Bun.file(path).exists())) throw new Error(`the output file "${path}" already exists`)
+
+		return path
+	}
+
 	// Decodes, buffers, and optionally writes one BLOB while retaining the camera lease.
-	async #processBlob(blob: CameraBlob): Promise<OperationResult<string>> {
+	//
+	// The file is written to `path`. The image is published under `publishPath` when the caller asked for
+	// one, which is how a sequencer frame can land in a temporary without the UI ever seeing that name.
+	async #processBlob(blob: CameraBlob, path: string): Promise<OperationResult<string>> {
 		try {
 			const buffer = blob.encoding === 'raw' ? blob.data : await this.sessionContext.io.decode(blob.data)
 			if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
 
-			const name = this.#request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : this.camera.name
-			const extension = this.#request.transferFormat === 'XISF' ? 'xisf' : 'fit'
-			const path = join(await makePathFor(this.#request), `${name}.${extension}`)
-			if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
+			const published = this.#request.publishPath ?? path
 
-			this.sessionContext.imageProcessor.save(buffer, path, this.camera)
+			this.sessionContext.imageProcessor.save(buffer, published, this.camera)
 			if (this.#request.autoSave) await this.sessionContext.io.write(path, buffer)
 			if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
-			return successfulOperationResult(path)
+			return successfulOperationResult(published)
 		} catch (error) {
 			return failedOperationResult('commandFailed', errorMessage(error))
 		}
@@ -729,6 +777,20 @@ class CameraCaptureSession {
 		this.#reporter.terminal(!result.ok)
 		return result.ok ? successfulOperationResult({ paths: this.#paths, frameCount: this.#paths.length }) : result
 	}
+}
+
+// Why a caller-supplied destination cannot be used, or undefined when it can.
+//
+// `outputPath` and `outputName` arrive over HTTP on the start route, and they are the only part of a capture
+// request that names where bytes land instead of deriving it, so this is the boundary where they are checked.
+// A relative directory resolves against the working directory of the process rather than against anything the
+// caller named, and a name that is not a single segment climbs out of the directory it was given: an
+// `outputName` of `../../etc/cron.d/job` turns an approved directory into an arbitrary write.
+function destinationFailure(request: CameraCaptureStart) {
+	if (request.outputPath !== undefined && !isAbsolute(request.outputPath)) return `the output path "${request.outputPath}" is not an absolute path`
+	if (request.outputName !== undefined && !isPathSegment(request.outputName)) return `the output name "${request.outputName}" is not a valid file name`
+
+	return undefined
 }
 
 // Resolves the output directory while preserving existing automatic subfolder behavior.

@@ -289,7 +289,7 @@ export function isDeviceQuiescent(device: Device) {
 			return !(device as Cover).parking
 		case 'dome': {
 			const dome = device as Dome
-			return !dome.slewing && !dome.moving && !dome.homing && !dome.parking
+			return !dome.slewing && !dome.moving && !dome.homing && !dome.parking && dome.shutterState !== 'OPENING' && dome.shutterState !== 'CLOSING'
 		}
 		default:
 			return true

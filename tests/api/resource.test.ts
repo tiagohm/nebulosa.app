@@ -6,13 +6,17 @@ import { GuideOutputManager, MountManager } from 'nebulosa/src/devices/indi/mana
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { ResourceArbiter, resourceDevice, resourceKey } from 'src/api/resource'
-import type { ResourceOwner } from 'src/api/resource'
+import type { ResourceOwner, ResourceReservationOwner } from 'src/api/resource'
 
 const CAMERA = 'camera-1'
 const MOUNT = 'mount-1'
 
 function owner(id: string): ResourceOwner {
 	return { id, kind: 'test' }
+}
+
+function session(id: string): ResourceReservationOwner {
+	return { id, kind: 'sequencer' }
 }
 
 function camera(connected: boolean): Camera {
@@ -96,8 +100,8 @@ describe('resource arbiter', () => {
 		expect(conflicted).toEqual({
 			ok: false,
 			conflicts: [
-				{ key: CAMERA, ownerId: 'camera-owner', ownerKind: 'test', causes: [] },
-				{ key: MOUNT, ownerId: 'mount-owner', ownerKind: 'test', causes: [] },
+				{ key: CAMERA, by: 'lease', ownerId: 'camera-owner', ownerKind: 'test', causes: [] },
+				{ key: MOUNT, by: 'lease', ownerId: 'mount-owner', ownerKind: 'test', causes: [] },
 			],
 		})
 		expect(arbiter.availability(CAMERA)).toBe('leased')
@@ -116,7 +120,7 @@ describe('resource arbiter', () => {
 		expect(first.ok).toBeTrue()
 		expect(conflicted).toEqual({
 			ok: false,
-			conflicts: [{ key: CAMERA, ownerId: 'owner-1', ownerKind: 'test', causes: [] }],
+			conflicts: [{ key: CAMERA, by: 'lease', ownerId: 'owner-1', ownerKind: 'test', causes: [] }],
 		})
 		expect(arbiter.owns(secondOwner, MOUNT)).toBeFalse()
 
@@ -160,7 +164,7 @@ describe('resource arbiter', () => {
 		expect(arbiter.availability(CAMERA)).toBe('unavailable')
 		expect(arbiter.acquire(owner('owner-2'), [{ key: CAMERA }])).toEqual({
 			ok: false,
-			conflicts: [{ key: CAMERA, ownerId: 'resource-arbiter', ownerKind: 'unavailable', causes: ['lifecycle'] }],
+			conflicts: [{ key: CAMERA, by: 'unavailable', ownerId: 'resource-arbiter', ownerKind: 'unavailable', causes: ['lifecycle'] }],
 		})
 
 		arbiter.markAvailable(CAMERA)
@@ -194,7 +198,7 @@ describe('resource arbiter', () => {
 		expect(arbiter.ownersOf(CAMERA)).toEqual([context])
 		expect(arbiter.acquire(owner('owner-2'), [{ key: CAMERA, device }])).toEqual({
 			ok: false,
-			conflicts: [{ key: CAMERA, ownerId: 'resource-arbiter', ownerKind: 'unavailable', causes: ['lifecycle'] }],
+			conflicts: [{ key: CAMERA, by: 'unavailable', ownerId: 'resource-arbiter', ownerKind: 'unavailable', causes: ['lifecycle'] }],
 		})
 
 		arbiter.markClientAvailable(device.client.id)
@@ -255,7 +259,7 @@ describe('resource arbiter', () => {
 		expect(acquired.ok).toBeTrue()
 		expect(conflicted).toEqual({
 			ok: false,
-			conflicts: [{ key: logicalKey, ownerId: 'owner-1', ownerKind: 'test', causes: [] }],
+			conflicts: [{ key: logicalKey, by: 'lease', ownerId: 'owner-1', ownerKind: 'test', causes: [] }],
 		})
 		expect(arbiter.ownersOfDevice(resourceKey(device))).toEqual([context])
 		expect(arbiter.ownersOfDevice(resourceKey(contender))).toEqual([])
@@ -287,7 +291,7 @@ describe('resource arbiter', () => {
 
 		expect(conflicted).toEqual({
 			ok: false,
-			conflicts: [{ key: CAMERA, ownerId: 'resource-arbiter', ownerKind: 'unavailable', causes: ['lifecycle', 'quarantine'] }],
+			conflicts: [{ key: CAMERA, by: 'unavailable', ownerId: 'resource-arbiter', ownerKind: 'unavailable', causes: ['lifecycle', 'quarantine'] }],
 		})
 	})
 
@@ -304,7 +308,7 @@ describe('resource arbiter', () => {
 
 		expect(arbiter.acquire(owner('owner-2'), [{ key: CAMERA, device: disconnected }])).toEqual({
 			ok: false,
-			conflicts: [{ key: CAMERA, ownerId: 'resource-arbiter', ownerKind: 'unavailable', causes: ['lifecycle'] }],
+			conflicts: [{ key: CAMERA, by: 'unavailable', ownerId: 'resource-arbiter', ownerKind: 'unavailable', causes: ['lifecycle'] }],
 		})
 
 		arbiter.markAvailable(CAMERA)
@@ -385,7 +389,7 @@ describe('resource arbiter', () => {
 		const contended = arbiter.acquire(second, [{ key: resourceKey(rotating), device: rotating }])
 
 		expect(contended.ok).toBeFalse()
-		expect(!contended.ok && contended.conflicts).toEqual([{ key, ownerId: 'owner-1', ownerKind: 'test', causes: [] }])
+		expect(!contended.ok && contended.conflicts).toEqual([{ key, by: 'lease', ownerId: 'owner-1', ownerKind: 'test', causes: [] }])
 	})
 
 	test('resolves the physical parent from a real manager proxy', () => {
@@ -403,5 +407,267 @@ describe('resource arbiter', () => {
 		expect(proxy.parentId).toBe(parent.id)
 		expect(resourceKey(proxy)).toBe(resourceKey(parent))
 		expect(resourceDevice(proxy)).toBe(parent)
+	})
+})
+
+describe('resource reservation', () => {
+	test('reserves every requested resource and releases it once', () => {
+		const arbiter = new ResourceArbiter()
+		const reserved = arbiter.reserve(session('session-1'), [{ key: MOUNT }, { key: CAMERA }, { key: MOUNT }])
+
+		expect(reserved.ok).toBeTrue()
+
+		if (!reserved.ok) return
+
+		expect(reserved.reservation.ownerId).toBe('session-1')
+		expect(reserved.reservation.resources).toEqual([CAMERA, MOUNT])
+		expect(arbiter.availability(CAMERA)).toBe('reserved')
+		expect(arbiter.reservationOwnerOf(MOUNT)?.id).toBe('session-1')
+
+		reserved.reservation.release()
+		reserved.reservation.release()
+
+		expect(arbiter.availability(CAMERA)).toBe('available')
+		expect(arbiter.reservationOwnerOf(MOUNT)).toBeUndefined()
+	})
+
+	test('refuses a third party and admits the reservation token', () => {
+		const arbiter = new ResourceArbiter()
+		const reserved = arbiter.reserve(session('session-1'), [{ key: CAMERA }])
+
+		expect(reserved.ok).toBeTrue()
+
+		if (!reserved.ok) return
+
+		expect(arbiter.acquire(owner('manual'), [{ key: CAMERA }])).toEqual({
+			ok: false,
+			conflicts: [{ key: CAMERA, by: 'reservation', ownerId: 'session-1', ownerKind: 'sequencer', causes: [] }],
+		})
+
+		const inside = arbiter.acquire(owner('action-1'), [{ key: CAMERA }], reserved.reservation.token)
+
+		expect(inside.ok).toBeTrue()
+		expect(arbiter.availability(CAMERA)).toBe('leased')
+
+		if (inside.ok) inside.lease.release()
+
+		expect(arbiter.availability(CAMERA)).toBe('reserved')
+	})
+
+	test('keeps two operations of one reservation exclusive over the same resource', () => {
+		const arbiter = new ResourceArbiter()
+		const reserved = arbiter.reserve(session('session-1'), [{ key: CAMERA }, { key: MOUNT }])
+
+		expect(reserved.ok).toBeTrue()
+
+		if (!reserved.ok) return
+
+		const token = reserved.reservation.token
+		const first = arbiter.acquire(owner('action-1'), [{ key: CAMERA }], token)
+		const second = arbiter.acquire(owner('action-2'), [{ key: CAMERA }], token)
+		const other = arbiter.acquire(owner('action-3'), [{ key: MOUNT }], token)
+
+		expect(first.ok).toBeTrue()
+		expect(second).toEqual({
+			ok: false,
+			conflicts: [{ key: CAMERA, by: 'lease', ownerId: 'action-1', ownerKind: 'test', causes: [] }],
+		})
+		expect(other.ok).toBeTrue()
+	})
+
+	test('rejects a reservation without reserving anything when one resource is taken', () => {
+		const arbiter = new ResourceArbiter()
+		const guiding = arbiter.acquire(owner('guider-session'), [{ key: 'logical:guider:camera' }])
+		const first = arbiter.reserve(session('session-1'), [{ key: CAMERA }])
+		const contender = arbiter.reserve(session('session-2'), [{ key: MOUNT }, { key: CAMERA }, { key: 'logical:guider:camera' }])
+
+		expect(guiding.ok).toBeTrue()
+		expect(first.ok).toBeTrue()
+		expect(contender).toEqual({
+			ok: false,
+			conflicts: [
+				{ key: CAMERA, by: 'reservation', ownerId: 'session-1', ownerKind: 'sequencer', causes: [] },
+				{ key: 'logical:guider:camera', by: 'lease', ownerId: 'guider-session', ownerKind: 'test', causes: [] },
+			],
+		})
+		expect(arbiter.availability(MOUNT)).toBe('available')
+	})
+
+	test('extends the same reservation when the owner reserves again', () => {
+		const arbiter = new ResourceArbiter()
+		const owner = session('session-1')
+		const first = arbiter.reserve(owner, [{ key: CAMERA }])
+		const second = arbiter.reserve(owner, [{ key: CAMERA }, { key: MOUNT }])
+
+		expect(first.ok).toBeTrue()
+		expect(second.ok).toBeTrue()
+
+		if (!first.ok || !second.ok) return
+
+		expect(second.reservation).toBe(first.reservation)
+		expect(first.reservation.resources).toEqual([CAMERA, MOUNT])
+
+		second.reservation.release()
+
+		expect(arbiter.availability(MOUNT)).toBe('available')
+	})
+
+	test('extends a reservation while its own operation holds the lease', () => {
+		const arbiter = new ResourceArbiter()
+		const reservationOwner = session('session-1')
+		const first = arbiter.reserve(reservationOwner, [{ key: CAMERA }])
+
+		expect(first.ok).toBeTrue()
+
+		if (!first.ok) return
+
+		const acquired = arbiter.acquire(owner('action-1'), [{ key: CAMERA }], first.reservation.token)
+
+		expect(acquired.ok).toBeTrue()
+
+		const second = arbiter.reserve(reservationOwner, [{ key: CAMERA }, { key: MOUNT }])
+
+		expect(second.ok).toBeTrue()
+
+		if (!second.ok) return
+
+		expect(second.reservation).toBe(first.reservation)
+		expect(second.reservation.resources).toEqual([CAMERA, MOUNT])
+	})
+
+	test('refuses a reservation over a resource leased outside of it', () => {
+		const arbiter = new ResourceArbiter()
+		const acquired = arbiter.acquire(owner('manual'), [{ key: CAMERA }])
+
+		expect(acquired.ok).toBeTrue()
+		expect(arbiter.reserve(session('session-1'), [{ key: CAMERA }])).toEqual({
+			ok: false,
+			conflicts: [{ key: CAMERA, by: 'lease', ownerId: 'manual', ownerKind: 'test', causes: [] }],
+		})
+	})
+
+	test('reserves a disconnected device without making it acquirable', () => {
+		const arbiter = new ResourceArbiter()
+		const device = camera(false)
+		const reserved = arbiter.reserve(session('session-1'), [{ key: CAMERA, device }])
+
+		expect(reserved.ok).toBeTrue()
+		expect(arbiter.availability(CAMERA)).toBe('unavailable')
+
+		if (!reserved.ok) return
+
+		expect(arbiter.acquire(owner('action-1'), [{ key: CAMERA }], reserved.reservation.token)).toEqual({
+			ok: false,
+			conflicts: [{ key: CAMERA, by: 'unavailable', ownerId: 'resource-arbiter', ownerKind: 'unavailable', causes: ['lifecycle'] }],
+		})
+
+		arbiter.markAvailable(CAMERA)
+
+		expect(arbiter.acquire(owner('action-1'), [{ key: CAMERA }], reserved.reservation.token).ok).toBeTrue()
+	})
+
+	test('stops authorizing acquisitions after the reservation is released', () => {
+		const arbiter = new ResourceArbiter()
+		const reserved = arbiter.reserve(session('session-1'), [{ key: CAMERA }])
+
+		expect(reserved.ok).toBeTrue()
+
+		if (!reserved.ok) return
+
+		const token = reserved.reservation.token
+		reserved.reservation.release()
+
+		const contender = arbiter.reserve(session('session-2'), [{ key: CAMERA }])
+
+		expect(contender.ok).toBeTrue()
+
+		// The dead token is the refusal, and it names the reservation that no longer exists rather than the
+		// one that took its place: the caller acquiring with it is the thing that has to be fixed.
+		expect(arbiter.acquire(owner('action-1'), [{ key: CAMERA }], token)).toEqual({
+			ok: false,
+			conflicts: [{ key: CAMERA, by: 'reservation', ownerId: 'session-1', ownerKind: 'sequencer', causes: [] }],
+		})
+
+		// An acquisition with no token still meets the reservation that actually holds the resource.
+		expect(arbiter.acquire(owner('action-1'), [{ key: CAMERA }])).toEqual({
+			ok: false,
+			conflicts: [{ key: CAMERA, by: 'reservation', ownerId: 'session-2', ownerKind: 'sequencer', causes: [] }],
+		})
+	})
+
+	test('refuses a released token even when the resource is free', () => {
+		const arbiter = new ResourceArbiter()
+		const reserved = arbiter.reserve(session('session-1'), [{ key: CAMERA }])
+
+		expect(reserved.ok).toBeTrue()
+
+		if (!reserved.ok) return
+
+		const token = reserved.reservation.token
+		reserved.reservation.release()
+
+		expect(arbiter.availability(CAMERA)).toBe('available')
+		expect(arbiter.acquire(owner('action-1'), [{ key: CAMERA }], token)).toEqual({
+			ok: false,
+			conflicts: [{ key: CAMERA, by: 'reservation', ownerId: 'session-1', ownerKind: 'sequencer', causes: [] }],
+		})
+
+		// The refusal retained nothing, so the resource is still free for an unreserved acquisition.
+		expect(arbiter.acquire(owner('action-2'), [{ key: CAMERA }]).ok).toBeTrue()
+	})
+
+	test('survives the removal and the re-addition of the reserved device', () => {
+		const arbiter = new ResourceArbiter()
+		const device = camera(true)
+		const reserved = arbiter.reserve(session('session-1'), [{ key: CAMERA, device }])
+
+		expect(reserved.ok).toBeTrue()
+
+		if (!reserved.ok) return
+
+		// Removal as the lifecycle performs it: block the resource, then drop the physical association.
+		arbiter.markUnavailable({ key: CAMERA, device })
+		expect(arbiter.disassociate(CAMERA, device)).toBeTrue()
+		expect(arbiter.reservationOwnerOf(CAMERA)?.id).toBe('session-1')
+
+		// Clearing the cause with no device left must not hand the reserved key to a third party.
+		arbiter.markAvailable(CAMERA)
+		expect(arbiter.availability(CAMERA)).toBe('reserved')
+		expect(arbiter.reserve(session('session-2'), [{ key: CAMERA }]).ok).toBeFalse()
+
+		const readded = camera(true)
+
+		expect(arbiter.acquire(owner('action-1'), [{ key: CAMERA, device: readded }], reserved.reservation.token).ok).toBeTrue()
+
+		reserved.reservation.release()
+	})
+
+	test('projects availability, ownership, causes, and association into a snapshot', () => {
+		const arbiter = new ResourceArbiter()
+		const device = camera(true)
+		const reservationOwner = session('session-1')
+		const reserved = arbiter.reserve(reservationOwner, [{ key: CAMERA, device }])
+
+		expect(reserved.ok).toBeTrue()
+
+		if (!reserved.ok) return
+
+		expect(arbiter.snapshot(MOUNT)).toEqual({ key: MOUNT, availability: 'available', causes: [] })
+		expect(arbiter.snapshot(CAMERA)).toEqual({
+			key: CAMERA,
+			availability: 'reserved',
+			owner: undefined,
+			reservationOwner,
+			causes: [],
+			hardwareId: device.hardwareId,
+			clientId: device.client.id,
+		})
+
+		const context = owner('action-1')
+		const acquired = arbiter.acquire(context, [{ key: CAMERA }], reserved.reservation.token)
+		arbiter.markUnavailable(CAMERA, 'quarantine')
+
+		expect(acquired.ok).toBeTrue()
+		expect(arbiter.snapshot(CAMERA)).toMatchObject({ availability: 'unavailable', owner: context, reservationOwner, causes: ['quarantine'] })
 	})
 })

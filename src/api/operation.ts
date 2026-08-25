@@ -1,7 +1,7 @@
 import { errorMessage } from 'nebulosa/src/core/util'
 import { failedOperationResult } from '#/orchestration'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
-import type { ResourceConflict, ResourceKey, ResourceLease, ResourceOwner, ResourceRequest } from './resource'
+import type { ReservationToken, ResourceConflict, ResourceKey, ResourceLease, ResourceOwner, ResourceRequest, ResourceReservation, ResourceReservationOwner } from './resource'
 import { ResourceArbiter } from './resource'
 
 // Anything able to start an operation. The coordinator opens a new tree; a context nests inside its own,
@@ -75,6 +75,8 @@ interface ActiveOperation<T> {
 	readonly cleanups: CleanupRegistration[]
 	// Completion resolver used by idempotent cancellation calls.
 	readonly completion: PromiseWithResolvers<void>
+	// Reservation this tree runs inside, retained on the root and inherited by every nested scope.
+	readonly token?: ReservationToken
 	// Atomic resource lease, absent only for busy operations.
 	lease?: ResourceLease
 	// First cancellation cause reported after the executor has stopped.
@@ -93,6 +95,20 @@ export class OperationCoordinator {
 	// Roots only, keyed by the context the arbiter holds as owner token. This is what turns an arbiter
 	// answer such as "who owns this camera" back into an operation the coordinator can cancel.
 	readonly #operationsByOwner = new Map<ResourceOwner, ActiveOperation<unknown>>()
+	// Roots started inside a reservation, grouped by reservation owner. A session cannot cancel "its"
+	// operations through the handles it kept, because a service such as the guider owns a root of its own;
+	// the reservation owner is the only criterion that reaches every one of them.
+	readonly #operationsByReservationOwner = new Map<ResourceReservationOwner, Set<ActiveOperation<unknown>>>()
+	// Tokens of the reservations that have been cancelled. Cancelling one closes it to new roots for good: a
+	// root opened during the drain would not be in the set that cancellation is awaiting, and one opened after
+	// it would be awaited and aborted by nobody, since the caller cancels precisely because it is done with
+	// the reservation. Weakly held so a token forgotten with its session does not stay here for the life of
+	// the process.
+	readonly #cancelledReservations = new WeakSet<ReservationToken>()
+	// Token each reservation owner is currently running under, recorded when its scope is built so that a
+	// cancellation closes the reservation even when it has not started a single tree yet. Weakly held for the
+	// same reason.
+	readonly #reservationTokens = new WeakMap<ResourceReservationOwner, ReservationToken>()
 
 	// Creates a coordinator over the process-wide resource arbiter.
 	constructor(readonly arbiter: ResourceArbiter) {}
@@ -102,8 +118,31 @@ export class OperationCoordinator {
 		return this.#start(undefined, kind, resources, executor)
 	}
 
+	// Builds a scope whose operations run inside one reservation, so they acquire resources the reservation
+	// already holds instead of competing for them. The scope is passed to services exactly like any other,
+	// and a service composed under it cannot tell the difference.
+	reservedScope(reservation: ResourceReservation): OperationScope {
+		return this.tokenScope(reservation.token)
+	}
+
+	// Builds the same scope from the token alone, for a service that keeps a root operation of its own.
+	//
+	// The guider session is the declared exception to the operation tree: a connection outlives every command
+	// issued through it, so it is a root owned by the commander rather than a scope nested in whoever asked
+	// for it. Such a service cannot be handed the reservation scope of its caller — it does not open its
+	// operation inside the caller's tree — but it still has to acquire under the reservation, and the token is
+	// exactly that credential. Nested operations inherit it from the root, so every later command acquires the
+	// physical devices with no further plumbing.
+	tokenScope(token: ReservationToken): OperationScope {
+		this.#reservationTokens.set(token.owner, token)
+
+		return Object.freeze({
+			start: <T>(kind: string, resources: readonly ResourceRequest[], executor: OperationExecutor<T>) => this.#start(undefined, kind, resources, executor, token),
+		})
+	}
+
 	// Opens one scope, nested when a parent is given, and runs its executor after atomic acquisition.
-	#start<T>(parent: ActiveOperation<unknown> | undefined, kind: string, resources: readonly ResourceRequest[], executor: OperationExecutor<T>): OperationHandle<T> {
+	#start<T>(parent: ActiveOperation<unknown> | undefined, kind: string, resources: readonly ResourceRequest[], executor: OperationExecutor<T>, reservationToken?: ReservationToken): OperationHandle<T> {
 		const id = Bun.randomUUIDv7()
 		const controller = new AbortController()
 		const result = Promise.withResolvers<OperationResult<T>>()
@@ -125,6 +164,16 @@ export class OperationCoordinator {
 		}
 
 		const root = parent === undefined ? undefined : rootOf(parent)
+		// A nested scope commands the same devices as its tree, so it inherits the authorization of the root
+		// rather than taking one from the caller.
+		const token = root === undefined ? reservationToken : root.token
+
+		// Same rule one level up: a cancelled reservation must not gain new work either. A tree opened now
+		// commands devices under a token whose holder has already given them up, and nothing is left to wait
+		// for its cleanup — an executor that opened one and awaited it would hang the stop that cancelled it.
+		if (token !== undefined && this.#cancelledReservations.has(token)) {
+			return rejected(failedOperationResult('aborted', 'reservation has been cancelled'))
+		}
 
 		const context: OperationContext = Object.freeze({
 			id,
@@ -168,6 +217,7 @@ export class OperationCoordinator {
 		const operation: ActiveOperation<T> = {
 			context,
 			parent,
+			token,
 			children: new Set(),
 			holders: new Map(),
 			controller,
@@ -191,7 +241,7 @@ export class OperationCoordinator {
 		if (siblingConflicts.length > 0) return rejected(failedOperationResult('busy', formatConflicts(siblingConflicts)))
 
 		// Every scope of a tree acquires under the root's context, so the arbiter sees one owner per operation.
-		const acquired = this.arbiter.acquire(root?.context ?? context, resources)
+		const acquired = this.arbiter.acquire(root?.context ?? context, resources, token)
 
 		if (!acquired.ok) return rejected(failedOperationResult('busy', formatConflicts(acquired.conflicts)))
 
@@ -206,7 +256,20 @@ export class OperationCoordinator {
 		}
 
 		// Only the root context is an arbiter owner, so it is the only one lifecycle cancellation resolves.
-		if (parent === undefined) this.#operationsByOwner.set(context, node)
+		if (parent === undefined) {
+			this.#operationsByOwner.set(context, node)
+
+			if (token !== undefined) {
+				let roots = this.#operationsByReservationOwner.get(token.owner)
+
+				if (roots === undefined) {
+					roots = new Set()
+					this.#operationsByReservationOwner.set(token.owner, roots)
+				}
+
+				roots.add(node)
+			}
+		}
 
 		void (async () => {
 			try {
@@ -248,6 +311,87 @@ export class OperationCoordinator {
 	// Aborts every distinct owner associated with a client, then waits for all cleanup.
 	cancelByClient(clientId: string, reason: OperationFailureReason = 'aborted') {
 		return this.#cancelOwners(this.arbiter.ownersOfClient(clientId), reason)
+	}
+
+	// Aborts every operation tree started inside one reservation, then waits for all cleanup, and closes the
+	// reservation to further starts. This is what a session releasing its reservation has to use: releasing
+	// before these cleanups finish would hand the devices to a third party while the session is still
+	// quiescing them.
+	//
+	// Cancelling is terminal for the reservation, not a pass over the trees that exist right now: it is called
+	// by a holder that is giving the devices up, and reopening it afterwards would only admit work nothing is
+	// waiting for. A reservation that must run again is a new reservation, and its token is a new token.
+	cancelByReservationOwner(owner: ResourceReservationOwner, reason: OperationFailureReason = 'aborted') {
+		return this.#drainReservation(owner, reason, true)
+	}
+
+	// Aborts every operation tree started inside one reservation and waits for all cleanup, leaving the
+	// reservation open to the work that comes after.
+	//
+	// This is the non-terminal half of `cancelByReservationOwner`, for a holder interrupting its own work and
+	// keeping the devices. The sequencer has two such moments and neither gives the reservation up: an immediate
+	// pause cancels the action and resumes into the same reservation, and an immediate stop cancels the action
+	// and then runs its terminal pipeline under it. Closing the reservation for good at either point refuses
+	// everything the session does next with `reservation has been cancelled` — a pause that can never resume,
+	// and a stop whose mount is never parked and whose camera is never warmed.
+	//
+	// The tokens are still closed for the duration of the drain, for the reason the terminal form closes them:
+	// an executor resuming from its abort must not open one more tree behind the snapshot being awaited. They
+	// are reopened once every cleanup resolved, which is the instant nothing of the cancelled work is left
+	// running. A token another caller had already closed for good stays closed.
+	//
+	// `preserve` is the id of one root the drain leaves running, for the collaborator whose lifetime is the
+	// holder's and not the work being interrupted. The sequencer's guiding session is exactly that: it is a
+	// root of the reservation because a connection outlives every command issued through it, so a drain that
+	// tore it down for an interruption the holder resumes from would leave the session pointing at a session
+	// that no longer exists, with nothing on the resume path reconnecting it. It has no effect on the terminal
+	// form, which is called by a holder that is giving the devices up.
+	drainByReservationOwner(owner: ResourceReservationOwner, reason: OperationFailureReason = 'aborted', preserve?: string) {
+		return this.#drainReservation(owner, reason, false, preserve)
+	}
+
+	// Cancels the trees of one reservation and awaits their cleanups, closing the reservation permanently when
+	// `terminal` and reopening exactly the tokens this call closed otherwise. `preserve` names a root that is
+	// left running, and is ignored when `terminal`.
+	async #drainReservation(owner: ResourceReservationOwner, reason: OperationFailureReason, terminal: boolean, preserve?: string) {
+		const token = this.#reservationTokens.get(owner)
+		const roots = this.#operationsByReservationOwner.get(owner)
+		// Tokens closed by this call, which are the only ones a non-terminal drain may reopen: one that was
+		// already closed belongs to a caller that gave the reservation up, and reopening it would readmit work
+		// nothing is waiting for.
+		const closed: ReservationToken[] = []
+
+		// Closing the reservation is synchronous and happens before the first await, so the snapshot below is
+		// complete: an executor resuming from its abort cannot open one more tree behind it. Draining in a loop
+		// instead would let a cleanup that starts a compensating operation on every pass never terminate. The
+		// roots are closed by their own token too, which is the current one unless the owner reserved again.
+		if (token !== undefined && !this.#cancelledReservations.has(token)) {
+			this.#cancelledReservations.add(token)
+			closed.push(token)
+		}
+
+		const snapshot = roots === undefined ? [] : roots.values().toArray()
+
+		for (const operation of snapshot) {
+			if (operation.token !== undefined && !this.#cancelledReservations.has(operation.token)) {
+				this.#cancelledReservations.add(operation.token)
+				closed.push(operation.token)
+			}
+		}
+
+		// The preserved root is excluded from the cancellation only, never from the closing above: its token is
+		// the reservation's, and leaving it open during the drain would readmit the trees the snapshot is meant
+		// to be complete against.
+		const cancelling = terminal || preserve === undefined ? snapshot : snapshot.filter((operation) => operation.context.id !== preserve)
+
+		try {
+			// Roots leave the set only in their own finalization, which cannot run before this snapshot is taken.
+			await Promise.all(cancelling.map((operation) => this.#cancel(operation, reason)))
+		} finally {
+			// A cleanup that threw still leaves the reservation usable: the drain is over either way, and holding
+			// it closed would strand the pause or the terminal pipeline the caller is about to run.
+			if (!terminal) for (const each of closed) this.#cancelledReservations.delete(each)
+		}
 	}
 
 	// Aborts every operation tree synchronously and waits for all cleanup; roots cascade to their scopes.
@@ -337,7 +481,15 @@ export class OperationCoordinator {
 			operation.lease?.release()
 			this.#operations.delete(operation.context.id)
 			operation.parent?.children.delete(operation as ActiveOperation<unknown>)
-			if (operation.parent === undefined) this.#operationsByOwner.delete(operation.context)
+			if (operation.parent === undefined) {
+				this.#operationsByOwner.delete(operation.context)
+
+				if (operation.token !== undefined) {
+					const roots = this.#operationsByReservationOwner.get(operation.token.owner)
+
+					if (roots?.delete(operation as ActiveOperation<unknown>) && roots.size === 0) this.#operationsByReservationOwner.delete(operation.token.owner)
+				}
+			}
 		}
 
 		// An exception is a defect rather than an operational outcome, so the raw value is logged here and
@@ -398,7 +550,7 @@ function treeConflicts(holders: Map<ResourceKey, ActiveOperation<unknown>[]>, pa
 
 		if (holder !== undefined && !isSelfOrAncestor(holder, parent)) {
 			reported.add(request.key)
-			conflicts.push({ key: request.key, ownerId: holder.context.id, ownerKind: holder.context.kind, causes: [] })
+			conflicts.push({ key: request.key, by: 'lease', ownerId: holder.context.id, ownerKind: holder.context.kind, causes: [] })
 		}
 	}
 
@@ -412,5 +564,11 @@ function detailOf<T>(result: OperationResult<T>) {
 
 // Produces a compact diagnostic for an atomic busy result, naming why each resource was refused.
 function formatConflicts(conflicts: readonly ResourceConflict[]) {
-	return conflicts.map((conflict) => (conflict.causes.length > 0 ? `${conflict.key} is unavailable (${conflict.causes.join(', ')})` : `${conflict.key} is owned by ${conflict.ownerKind} ${conflict.ownerId}`)).join(', ')
+	return conflicts
+		.map((conflict) => {
+			if (conflict.by === 'unavailable') return `${conflict.key} is unavailable (${conflict.causes.join(', ')})`
+			if (conflict.by === 'reservation') return `${conflict.key} is reserved by ${conflict.ownerKind} ${conflict.ownerId}`
+			return `${conflict.key} is owned by ${conflict.ownerKind} ${conflict.ownerId}`
+		})
+		.join(', ')
 }

@@ -4,7 +4,7 @@ import fs from 'fs/promises'
 import os from 'os'
 import { join } from 'path'
 import { parseArgs } from 'util'
-import type { Client, DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/devices/indi/device'
+import type { Client, Device, DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/devices/indi/device'
 import { CameraManager, CoverManager, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
 import type { DeviceProvider } from 'nebulosa/src/devices/indi/manager'
 import { default as openDefaultApp } from 'open'
@@ -38,7 +38,7 @@ import { MountHandler, MountRemoteControlHandler, mount } from 'src/api/mount'
 import { MountCommander } from 'src/api/mount.commander'
 import { NotificationHandler } from 'src/api/notification'
 import { OperationCoordinator } from 'src/api/operation'
-import { ResourceArbiter } from 'src/api/resource'
+import { ResourceArbiter, resourceDevice, resourceKey } from 'src/api/resource'
 import { RotatorHandler, rotator } from 'src/api/rotator'
 import { RotatorCommander } from 'src/api/rotator.commander'
 import { storage, StorageHandler } from 'src/api/storage'
@@ -47,12 +47,26 @@ import { TppaHandler, tppa } from 'src/api/tppa'
 import { WheelHandler, wheel } from 'src/api/wheel'
 import { WheelCommander } from 'src/api/wheel.commander'
 import { speedUpTime } from 'src/shared/util'
+import type { SequencerDeviceRole } from '#/sequencer'
 import { ConfirmationHandler, confirmation } from './src/api/confirmation'
 import { FileSystemHandler, fileSystem } from './src/api/filesystem'
 import { FramingHandler, framing } from './src/api/framing'
 import { ImageHandler, image } from './src/api/image'
 import { ImageProcessor } from './src/api/image.processor'
 import { PlateSolverHandler, plateSolver } from './src/api/platesolver'
+import { SequencerHandler, sequencer } from './src/api/sequencer'
+import { sequencerCaptureHandler } from './src/api/sequencer.capture'
+import { SequencerChannel } from './src/api/sequencer.channel'
+import { sequencerMeridianFlipHandler } from './src/api/sequencer.flip'
+import { sequencerAutofocusHandler } from './src/api/sequencer.focus'
+import { sequencerDitherHandler } from './src/api/sequencer.guiding'
+import { sequencerLifecycleHandlers } from './src/api/sequencer.lifecycle'
+import { SequencerPlannerHandler, sequencerPlanner } from './src/api/sequencer.planner'
+import { sequencerCenterHandler, sequencerSlewHandler } from './src/api/sequencer.pointing'
+import { SequencerBlockRegistry } from './src/api/sequencer.registry'
+import { SequencerRuntime } from './src/api/sequencer.runtime'
+import type { SequencerDeviceResolver } from './src/api/sequencer.runtime'
+import { InMemorySequencerStore } from './src/api/sequencer.store'
 import { StarDetectionHandler, starDetection } from './src/api/stardetection'
 import homeHtml from './src/web/pages/home/index.html'
 
@@ -198,19 +212,25 @@ const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinato
 // Shared terminal path that cancels operations before lifecycle disposal and process exit.
 let shutdownTask: Promise<void> | undefined
 
-// Cancels active operations while transports are live, then releases observers and transient files.
+// Ends the running session, cancels active operations while transports are live, then releases observers and
+// transient files.
+//
+// The sequencer goes first and in one piece (§20.2): it refuses new sessions, records the one it is running as
+// interrupted, cancels every operation owned by that session's reservation, waits for their cleanups and only
+// then releases the reservation. Doing that before `cancelAll` is what keeps the order observable — a session
+// torn down by `cancelAll` would lose the state that was never written, and the owned guiding session, whose
+// handle lives in the guider commander rather than in the runtime, would escape past the release. The
+// sequencer is wired further down, so `shutdown` is only ever called once it exists.
 function shutdown() {
 	return (shutdownTask ??= (async () => {
+		await sequencerRuntime.shutdown()
+		sequencerChannel.close()
 		await operationCoordinator.cancelAll('aborted')
 		deviceLifecycle.dispose()
 		clearTemporaryDirectories()
 		process.exit(0)
 	})())
 }
-
-process.once('beforeExit', shutdown)
-process.once('SIGINT', shutdown)
-process.once('SIGTERM', shutdown)
 
 deviceLifecycle.observe(cameraManager)
 deviceLifecycle.observe(mountManager)
@@ -259,6 +279,7 @@ const fileSystemHandler = new FileSystemHandler()
 const starDetectionHandler = new StarDetectionHandler(imageProcessor)
 const plateSolverHandler = new PlateSolverHandler(notificationHandler, imageProcessor)
 const atlasHandler = new AtlasHandler(notificationHandler)
+const sequencerPlannerHandler = new SequencerPlannerHandler()
 const imageHandler = new ImageHandler(imageProcessor, notificationHandler)
 const tppaHandler = new TppaHandler(wsm, cameraHandler, mountHandler, plateSolverHandler, operationCoordinator)
 const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutputHandler, operationCoordinator)
@@ -273,6 +294,72 @@ const alpacaManagers = coordinatedAlpacaManagers(
 )
 const alpacaHandler = new AlpacaHandler(wsm, alpacaManagers, alpacaDiscoveryPort)
 const storageHandler = new StorageHandler(false)
+
+// Sequencer (§20.1)
+//
+// The store is the durable state of every definition and session, the registry is the catalog of blocks a
+// definition may be compiled against, and the runtime is the only thing that admits, executes and finalizes a
+// session. They are created here, in this order, because each one is a collaborator of the next.
+const sequencerStore = new InMemorySequencerStore()
+const sequencerRegistry = new SequencerBlockRegistry()
+
+// Managers a declared role is looked up in. `guideCamera` resolves against the cameras and `guideOutput`
+// against the guide outputs, which is where a mount that pulses publishes itself; a role with no manager —
+// the dome, which no device layer implements yet — resolves to nothing and refuses the session that asks for
+// it, rather than starting one that would command a device the process cannot reach.
+const sequencerDeviceManagers: Readonly<Partial<Record<SequencerDeviceRole, DeviceProvider<Device>>>> = {
+	camera: cameraManager,
+	guideCamera: cameraManager,
+	mount: mountManager,
+	wheel: wheelManager,
+	focuser: focuserManager,
+	rotator: rotatorManager,
+	guideOutput: guideOutputManager,
+	cover: coverManager,
+	flatPanel: flatPanelManager,
+}
+
+// Turns a declared role into the physical resource the arbiter arbitrates. It runs at session start and not
+// at compile time, because the key is the `hardwareId` of a device that has to be present to have one: a
+// definition naming a camera that is not connected is compiled just fine and refused when it would take it.
+const sequencerDeviceResolver: SequencerDeviceResolver = (role, deviceId) => {
+	const device = sequencerDeviceManagers[role]?.get(undefined, deviceId)
+	return device === undefined ? undefined : { key: resourceKey(resourceDevice(device)), device }
+}
+
+// Services the safe point in front of every exposure commands: the optical path the frame preparation
+// reconciles, and the guider the interlock suspends and the dither displaces. They are not blocks and are
+// therefore not registered: they run inside the capture node rather than as nodes of their own.
+const sequencerPreparationServices = { wheelCommander, focuserCommander, coverCommander, flatPanelCommander, rotatorCommander, mountCommander }
+const sequencerGuidingServices = { guiderCommander }
+
+// The three references close over each other on purpose: the runtime reports what it wrote to the channel,
+// the channel derives the snapshot it publishes through the handler, and the handler reads the live half back
+// from the runtime. Every one of those calls happens after all three exist.
+const sequencerRuntime = new SequencerRuntime({ store: sequencerStore, registry: sequencerRegistry, coordinator: operationCoordinator, resolve: sequencerDeviceResolver, preparation: sequencerPreparationServices, guiding: sequencerGuidingServices, observe: (change) => sequencerChannel.changed(change) })
+const sequencerHandler = new SequencerHandler({ store: sequencerStore, runtime: sequencerRuntime, registry: sequencerRegistry, observe: (sessionId) => sequencerRuntime.observation(sessionId) })
+const sequencerChannel = new SequencerChannel({ wsm, snapshot: (sessionId) => sequencerHandler.snapshot(sessionId), sessions: () => sequencerStore.sessions() })
+
+// Blocks the compiler resolves and the runtime executes. Registering them here rather than inside the
+// registry is what keeps the domain modules free of the services they command: each one is a pure function of
+// the collaborators it is given.
+sequencerRegistry.register(sequencerSlewHandler(mountCommander))
+sequencerRegistry.register(sequencerCenterHandler({ cameraHandler, mountCommander, wheelCommander, rotatorCommander, plateSolver: plateSolverHandler }))
+sequencerRegistry.register(sequencerAutofocusHandler({ runner: autoFocusHandler.runner, focuserCommander, wheelCommander }))
+sequencerRegistry.register(sequencerDitherHandler({ guiderCommander }))
+sequencerRegistry.register(sequencerMeridianFlipHandler({ cameraHandler, mountCommander, wheelCommander, rotatorCommander, plateSolver: plateSolverHandler, runner: autoFocusHandler.runner, focuserCommander }))
+sequencerRegistry.register(sequencerCaptureHandler({ cameraHandler }))
+
+for (const handler of sequencerLifecycleHandlers({ mountCommander, coverCommander, cameraCommander, guiderCommander })) {
+	sequencerRegistry.register(handler)
+}
+
+// Registered here and not next to `shutdown` itself: the terminal path ends the sequencer session first, so a
+// signal arriving before the sequencer exists would reach a handler that cannot run. Nothing before this point
+// holds a device or a reservation, and an interrupt there ends the process the way it always did.
+process.once('beforeExit', shutdown)
+process.once('SIGINT', shutdown)
+process.once('SIGTERM', shutdown)
 
 void atlasHandler.refreshImageOfSun()
 void atlasHandler.refreshSatellites()
@@ -330,6 +417,8 @@ const server = Bun.serve({
 		...alpaca(alpacaHandler, alpacaPort, hasAlpaca),
 		...guider(guiderHandler),
 		...storage(storageHandler),
+		...sequencerPlanner(sequencerPlannerHandler),
+		...sequencer(sequencerHandler),
 	},
 	websocket: {
 		open: (socket) => wsm.open(socket),

@@ -10,6 +10,16 @@ export function makeTime(utc: number | 'now', location?: GeographicCoordinate) {
 	return time
 }
 
+// Whether a value can be used as a single path segment. Rejects the empty name, the two relative names,
+// anything carrying either host separator, and NUL, which most filesystems reject and some truncate on. `..`
+// is the one that escapes the directory a caller named; the others address a directory it did not name.
+//
+// This is the check every caller-supplied name goes through before it reaches the filesystem, whether it
+// arrived in a sequencer definition or in a capture request.
+export function isPathSegment(value: string) {
+	return value.length > 0 && value !== '.' && value !== '..' && !value.includes('/') && !value.includes('\\') && !value.includes('\0')
+}
+
 export async function directoryExists(path: PathLike): Promise<boolean> {
 	try {
 		await readdir(path)

@@ -53,14 +53,10 @@ const TARGET_POSITION_INTERVAL = 5000
 
 export function sequencerStore(api: DockviewPanelApi) {
 	const { id } = api
+
 	const request = structuredClone(DEFAULT_SEQUENCER) as DeepWritable<Sequencer>
 
 	const targetCenteringSolver = plateSolverStore()
-	request.target.center.solver = targetCenteringSolver.state
-
-	if (request.capture.frames.length === 0) {
-		request.capture.frames.push(createFrame('Light'))
-	}
 
 	const state = proxy<SequencerState>({
 		request,
@@ -71,6 +67,7 @@ export function sequencerStore(api: DockviewPanelApi) {
 	})
 
 	const u: VoidFunction[] = []
+	const frameUnsubscribers: VoidFunction[] = []
 	let mounted = false
 	let validateTimer: number | undefined
 	let positionTimer: number | undefined
@@ -86,26 +83,23 @@ export function sequencerStore(api: DockviewPanelApi) {
 		u[0] = initProxy(state, id, ['o:request'])
 
 		state.request.target.id ||= nanoid()
+		state.request.target.center.solver = targetCenteringSolver.state
 
-		hydrateDevices()
-		updateTitle()
-		startTargetPositionUpdate()
-		void updateTargetPosition()
-		void validate()
+		if (request.capture.frames.length === 0) addFrame()
 
 		u[1] = subscribe(state.request, scheduleValidate)
 		u[2] = subscribeKey(state, 'mount', updateTitle)
-
-		u[3] = subscribeKey(state, 'camera', (camera) => {
+		u[3] = subscribeKey(state, 'camera', () => {
 			updateTitle()
-
-			if (camera !== undefined) {
-				unsubscribe(u.slice(4, 5))
-
-				updateCameraCaptureStartFromCamera(camera, state.request.target.center.capture)
-				u[4] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.request.target.center.capture)
-			}
+			bindCameraCaptures()
 		})
+
+		hydrateDevices()
+		updateTitle()
+		bindCameraCaptures()
+		startTargetPositionUpdate()
+		void updateTargetPosition()
+		void validate()
 
 		const buses = [cameraBus, mountBus, focuserBus, wheelBus, rotatorBus, guideOutputBus, coverBus, flatPanelBus]
 
@@ -125,6 +119,7 @@ export function sequencerStore(api: DockviewPanelApi) {
 		clearInterval(positionTimer)
 		clearInterval(snapshotTimer)
 		unsubscribe(u)
+		unsubscribe(frameUnsubscribers)
 		mounted = false
 	}
 
@@ -133,7 +128,6 @@ export function sequencerStore(api: DockviewPanelApi) {
 	}
 
 	function hydrateDevices() {
-		console.info('hhhh')
 		const { devices } = state.request
 		const camera = findDevice('camera', devices.camera)
 		const mount = findDevice('mount', devices.mount)
@@ -285,11 +279,38 @@ export function sequencerStore(api: DockviewPanelApi) {
 		state.request.devices.dome = value?.id
 	}
 
+	// Applies the connected camera's frame, format, and exposure limits to every capture recipe this store
+	// owns, and re-subscribes so later device updates keep those recipes inside the live range.
+	function bindCameraCaptures() {
+		unsubscribe(frameUnsubscribers)
+		frameUnsubscribers.length = 0
+		unsubscribe(u.slice(4, 5))
+
+		const camera = state.camera
+
+		if (!camera) return
+
+		updateCameraCaptureStartFromCamera(camera, state.request.target.center.capture)
+		u[4] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.request.target.center.capture)
+
+		for (const frame of state.request.capture.frames) {
+			updateCameraCaptureStartFromCamera(camera, frame.capture)
+			frameUnsubscribers.push(subscribeToUpdateCameraCaptureStartFromCamera(camera, frame.capture))
+		}
+	}
+
 	function addFrame() {
-		state.request.capture.frames.push(createFrame(`Frame ${state.request.capture.frames.length + 1}`))
+		const index = state.request.capture.frames.length
+		const frame: SequencerFrame = { id: nanoid(), name: `Frame ${index + 1}`, enabled: true, count: 10, weight: 1, capture: structuredClone(DEFAULT_SEQUENCER_AUXILIARY_CAPTURE) }
+		state.request.capture.frames.push(frame)
+		if (!state.camera) return
+		updateCameraCaptureStartFromCamera(state.camera, frame.capture)
+		frameUnsubscribers[index] = subscribeToUpdateCameraCaptureStartFromCamera(state.camera, frame.capture)
 	}
 
 	function removeFrame(index: number) {
+		frameUnsubscribers[index]?.()
+		frameUnsubscribers.splice(index, 1)
 		state.request.capture.frames.splice(index, 1)
 	}
 
@@ -301,28 +322,26 @@ export function sequencerStore(api: DockviewPanelApi) {
 
 		const [frame] = frames.splice(index, 1)
 		frames.splice(next, 0, frame)
+		const [unsubscriber] = frameUnsubscribers.splice(index, 1)
+		frameUnsubscribers.splice(next, 0, unsubscriber)
 	}
 
 	function updateFrame<K extends keyof SequencerFrame>(index: number, key: K, value: SequencerFrame[K]) {
 		const frame = state.request.capture.frames[index]
 		if (frame === undefined) return
 		frame[key] = value as never
-
-		if (key === 'name' && typeof value === 'string' && (!frame.id || frame.id.startsWith('frame-'))) {
-			frame.id = pathSegment(value) || frame.id
-		}
 	}
 
-	function updateFrameCamera<K extends keyof SequencerFrame['camera']>(index: number, key: K, value: SequencerFrame['camera'][K]) {
+	function updateFrameCapture<K extends keyof SequencerFrame['capture']>(index: number, key: K, value: SequencerFrame['capture'][K]) {
 		const frame = state.request.capture.frames[index]
 		if (frame === undefined) return
-		frame.camera[key] = value
+		frame.capture[key] = value
 	}
 
 	function updateFrameFilter(index: number, value: SequencerFilterReference | undefined) {
 		const frame = state.request.capture.frames[index]
 		if (frame === undefined) return
-		frame.filter = value
+		frame.capture.filter = value
 	}
 
 	function setGuidingConnectionMode(mode: SequencerGuiderConnection['mode']) {
@@ -1569,7 +1588,7 @@ export function sequencerStore(api: DockviewPanelApi) {
 		removeFrame,
 		moveFrame,
 		updateFrame,
-		updateFrameCamera,
+		updateFrameCapture,
 		updateFrameFilter,
 		setGuidingConnectionMode,
 		setGuidingRemoteHost,
@@ -1846,19 +1865,6 @@ function pathSegment(value: string) {
 		.slice(0, 64)
 
 	return slug === '.' || slug === '..' ? '' : slug
-}
-
-function createFrame(name: string): DeepWritable<SequencerFrame> {
-	return {
-		id: pathSegment(name) || nanoid(8),
-		name,
-		enabled: true,
-		frameType: 'LIGHT',
-		exposureTime: 60,
-		count: 10,
-		weight: 1,
-		camera: {},
-	}
 }
 
 function startCondition(type: SequencerStartCondition['type'], current: SequencerStartCondition): SequencerStartCondition {

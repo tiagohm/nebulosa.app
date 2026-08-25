@@ -38,7 +38,7 @@ describe('preflight', () => {
 
 	test('the totals scale the groups by the cycle count', () => {
 		const definition = canonical()
-		const view = validate({ ...definition, capture: { ...definition.capture, repeat: 3, frames: [frame('lum', { count: 4, abandonmentBudget: 2 }), frame('red', { count: 2, exposureTime: 30 })] } })
+		const view = validate({ ...definition, capture: { ...definition.capture, repeat: 3, frames: [frame('lum', { count: 4, abandonmentBudget: 2 }), frame('red', { count: 2 }, { exposureTime: 30 })] } })
 
 		expect(view.repeat).toBe(3)
 		expect(view.requiredSlots).toBe(18)

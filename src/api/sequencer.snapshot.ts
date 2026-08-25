@@ -1,3 +1,4 @@
+import { sequencerCaptureExposureInSeconds } from '#/sequencer'
 import type { SequencerDeviceRole } from '#/sequencer'
 import type { SequencerPlan, SequencerPlanFrameGroup, SequencerPlanNode } from '#/sequencer.plan'
 import type { SequencerActivitySnapshot, SequencerActivityState, SequencerCaptureSnapshot, SequencerDeviceSnapshot, SequencerGroupSnapshot, SequencerSession, SequencerSessionSnapshot, SequencerTriggerAnchor, SequencerTriggerAnchors, SequencerTriggerSnapshot, SequencerWaitSnapshot } from '#/sequencer.state'
@@ -186,8 +187,8 @@ export function deriveSequencerSnapshot(observation: SequencerSnapshotObservatio
 		groups.push({
 			id: group.id,
 			name: group.name,
-			frameType: group.frameType,
-			exposureTime: group.exposureTime,
+			frameType: group.capture.frameType,
+			exposureTime: sequencerCaptureExposureInSeconds(group.capture),
 			filter: filterLabel(group),
 			cursor: counters?.cursor ?? 0,
 			accepted: groupAccepted,
@@ -207,7 +208,7 @@ export function deriveSequencerSnapshot(observation: SequencerSnapshotObservatio
 
 		// Only the slots still to be accepted are projected, and only the required ones: the abandonment budget
 		// is margin the plan hopes not to spend, so counting it would present slack as scheduled work.
-		cycleRemaining += Math.max(0, group.requiredSlots - groupAccepted) * (group.exposureTime + overhead)
+		cycleRemaining += Math.max(0, group.requiredSlots - groupAccepted) * (sequencerCaptureExposureInSeconds(group.capture) + overhead)
 	}
 
 	const capture: SequencerCaptureSnapshot = {
@@ -228,7 +229,7 @@ export function deriveSequencerSnapshot(observation: SequencerSnapshotObservatio
 		const cycles = Math.max(0, planRepeat(plan.root) - (progress?.cycle ?? 0) - 1)
 		let remaining = cycleRemaining
 
-		for (const group of plan.groups) remaining += cycles * group.requiredSlots * (group.exposureTime + overhead)
+		for (const group of plan.groups) remaining += cycles * group.requiredSlots * (sequencerCaptureExposureInSeconds(group.capture) + overhead)
 
 		return { ...header(observation, terminal), capture: { ...capture, remaining, estimatedCompletion: now + remaining * 1000 }, ...tail(observation) }
 	}
@@ -330,7 +331,7 @@ function exposureOf(exposure: SequencerExposureObservation, now: number) {
 // A reference by position is rendered as the position itself: the wheel is what maps it to a name, and the
 // snapshot reports what the definition asked for rather than resolving it against a device it does not read.
 function filterLabel(group: SequencerPlanFrameGroup) {
-	const filter = group.filter
+	const { filter } = group.capture
 
 	if (filter === undefined) return undefined
 

@@ -35,7 +35,7 @@ function definition(overrides?: Partial<Sequencer>): Sequencer {
 		meridianFlip: { ...base.meridianFlip, enabled: false },
 		cooling: { ...base.cooling, enabled: false },
 		mount: { ...base.mount, unparkOnStartup: false, parkOnShutdown: false },
-		capture: { ...base.capture, order: 'sequential', repeat: 1, delay: 0, frames: [frame('lum', { count: 2, camera: camera() })], retry: retry() },
+		capture: { ...base.capture, order: 'sequential', repeat: 1, delay: 0, frames: [frame('lum', { count: 2, capture: camera() })], retry: retry() },
 		...overrides,
 	}
 }
@@ -389,7 +389,7 @@ describe('plan walk', () => {
 
 	test('leaves the plan stopped when a stop ends the wait for the flip window', async () => {
 		const base = definition()
-		const capture = { ...base.capture, frames: [frame('lum', { count: 2, exposureTime: 1300, camera: camera() })] }
+		const capture = { ...base.capture, frames: [frame('lum', { count: 2 }, { exposureTime: 1300 })] }
 		const state = harness(planOf({ capture, meridianFlip: { ...base.meridianFlip, enabled: true } }))
 		let readings = 0
 
@@ -463,7 +463,7 @@ describe('plan walk', () => {
 
 	test('exposes a calibration frame past the meridian boundary instead of waiting for a flip it will not run', async () => {
 		const base = definition()
-		const capture = { ...base.capture, frames: [frame('dark', { count: 2, frameType: 'DARK', camera: camera() })] }
+		const capture = { ...base.capture, frames: [frame('dark', { count: 2 }, { frameType: 'DARK' })] }
 		const state = harness(planOf({ capture, meridianFlip: { ...base.meridianFlip, enabled: true } }))
 
 		state.observation = { hourAngle: 0.15, pierSide: 'WEST', preFlipPierSide: 'WEST' }
@@ -489,7 +489,7 @@ describe('plan walk', () => {
 
 	test('guards the exposure against the sky as it stands after the safe point instead of before it', async () => {
 		const base = definition()
-		const capture = { ...base.capture, frames: [frame('lum', { count: 1, camera: camera() })] }
+		const capture = { ...base.capture, frames: [frame('lum', { count: 1, capture: camera() })] }
 		const state: Harness = harness(planOf({ capture, autofocus: { ...base.autofocus, enabled: true }, meridianFlip: { ...base.meridianFlip, enabled: true } }), (context) => {
 			if (context.nodeId.endsWith('.trigger.autofocus')) state.observation = { ...state.observation, hourAngle: 0.095 }
 			if (context.nodeId.endsWith('.trigger.meridianFlip')) state.observation = { ...state.observation, pierSide: 'EAST' }
@@ -663,7 +663,7 @@ describe('plan walk', () => {
 	test('bounds skip exposures by the slot limit times the attempts per slot', async () => {
 		const base = definition()
 		const retry = { ...base.capture.retry, maxAttempts: 2, onExhausted: 'skip' as const }
-		const plan = planOf({ capture: { ...base.capture, frames: [frame('lum', { count: 1, abandonmentBudget: 1, camera: camera() })], retry } })
+		const plan = planOf({ capture: { ...base.capture, frames: [frame('lum', { count: 1, abandonmentBudget: 1, capture: camera() })], retry } })
 		const state = harness(plan, (context) => (context.frame === undefined ? Promise.resolve({ type: 'completed', value: undefined }) : Promise.resolve({ type: 'retryableFailure', reason: 'commandFailed', detail: 'the camera did not answer' })))
 		const outcome = await runSequencerPlan(state.host)
 		const frames = state.executed.filter((it) => it.slot !== undefined)

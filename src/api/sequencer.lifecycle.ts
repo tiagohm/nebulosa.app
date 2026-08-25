@@ -372,7 +372,7 @@ async function rampSetpoint(services: SequencerLifecycleServices, context: Seque
 // exposure time is seconds, which the unit states rather than a conversion.
 function guideCameraCapture(recipe: Omit<SequencerAuxiliaryCapture, 'filter'>): CameraCaptureStart {
 	return {
-		...DEFAULT_CAMERA_CAPTURE_START,
+		...structuredClone(DEFAULT_CAMERA_CAPTURE_START),
 		exposureTime: recipe.exposureTime,
 		exposureTimeUnit: recipe.exposureTimeUnit,
 		frameType: recipe.frameType,

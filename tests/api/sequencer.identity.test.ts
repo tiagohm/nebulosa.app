@@ -3,27 +3,26 @@ import { sequencerNodeId } from 'src/api/sequencer.compiler'
 import { SEQUENCER_TEMPLATE_PLACEHOLDERS, sequencerArtifactId, sequencerAuxiliaryFileName, sequencerFrameDirectories, sequencerFrameFileName, sequencerLogicalSlotId, sequencerSlotAttempt, sequencerSlotToken, sequencerUnknownPlaceholders } from 'src/api/sequencer.identity'
 import type { SequencerFrameNaming } from 'src/api/sequencer.identity'
 import { isPathSegment } from 'src/api/util'
+import type { SequencerCameraCapture } from '#/sequencer'
 import type { SequencerPlanFrameGroup } from '#/sequencer.plan'
 import type { SequencerArtifact, SequencerArtifactStatus } from '#/sequencer.state'
 import { camera, retry } from './sequencer.fixture'
 
-function group(id: string, overrides?: Partial<SequencerPlanFrameGroup>): SequencerPlanFrameGroup {
+function group(id: string, group?: Partial<SequencerPlanFrameGroup>, capture?: Partial<SequencerCameraCapture>): SequencerPlanFrameGroup {
 	return {
 		id,
 		name: id,
 		nodeId: sequencerNodeId.captureFrame('m42', id),
-		frameType: 'LIGHT',
-		exposureTime: 60,
 		count: 3,
 		delay: 0,
 		weight: 1,
-		camera: camera(),
+		capture: camera(capture),
 		retry: retry(),
 		requiredSlots: 3,
 		abandonmentBudget: 0,
 		slotLimit: 3,
 		projectedIntegration: 180,
-		...overrides,
+		...group,
 	}
 }
 
@@ -126,7 +125,7 @@ describe('frame naming', () => {
 
 	test('encodes an interpolated value that would escape the directory', () => {
 		const slot = sequencerLogicalSlotId(sequencerNodeId.captureFrame('..', 'lum'), 'lum', 0, 0)
-		const escaping = naming({ targetId: '../../etc', group: group('lum', { frameType: 'DARK' }) })
+		const escaping = naming({ targetId: '../../etc', group: group('lum', undefined, { frameType: 'DARK' }) })
 		const name = sequencerFrameFileName('{target}', escaping, slot, 'fit')
 
 		expect(isPathSegment(name)).toBeTrue()
@@ -150,17 +149,24 @@ describe('frame naming', () => {
 	test('renders a fractional exposure without trailing noise', () => {
 		const slot = sequencerLogicalSlotId(sequencerNodeId.captureFrame('m42', 'bias'), 'bias', 0, 0)
 
-		expect(sequencerFrameFileName('{exposure}', naming({ group: group('bias', { exposureTime: 0.5 }) }), slot, 'fit')).toStartWith('0.5-')
-		expect(sequencerFrameFileName('{exposure}', naming({ group: group('lum', { exposureTime: 60 }) }), slot, 'fit')).toStartWith('60-')
-		expect(sequencerFrameFileName('{exposure}', naming({ group: group('lum', { exposureTime: 1.23456 }) }), slot, 'fit')).toStartWith('1.235-')
+		expect(sequencerFrameFileName('{exposure}', naming({ group: group('bias', undefined, { exposureTime: 0.5 }) }), slot, 'fit')).toStartWith('0.5-')
+		expect(sequencerFrameFileName('{exposure}', naming({ group: group('lum', undefined, { exposureTime: 60 }) }), slot, 'fit')).toStartWith('60-')
+		expect(sequencerFrameFileName('{exposure}', naming({ group: group('lum', undefined, { exposureTime: 1.23456 }) }), slot, 'fit')).toStartWith('1.235-')
+	})
+
+	test('renders an exposure declared in milliseconds as seconds', () => {
+		const slot = sequencerLogicalSlotId(sequencerNodeId.captureFrame('m42', 'lum'), 'lum', 0, 0)
+
+		expect(sequencerFrameFileName('{exposure}', naming({ group: group('lum', undefined, { exposureTime: 500, exposureTimeUnit: 'millisecond' }) }), slot, 'fit')).toStartWith('0.5-')
+		expect(sequencerFrameFileName('{exposure}', naming({ group: group('lum', undefined, { exposureTime: 60000, exposureTimeUnit: 'millisecond' }) }), slot, 'fit')).toStartWith('60-')
 	})
 
 	test('keeps a sub-millisecond exposure readable in the name', () => {
 		const slot = sequencerLogicalSlotId(sequencerNodeId.captureFrame('jupiter', 'lucky'), 'lucky', 0, 0)
 
-		expect(sequencerFrameFileName('{exposure}', naming({ group: group('lucky', { exposureTime: 0.0004 }) }), slot, 'fit')).toStartWith('0.0004-')
-		expect(sequencerFrameFileName('{exposure}', naming({ group: group('lucky', { exposureTime: 0.0005 }) }), slot, 'fit')).toStartWith('0.0005-')
-		expect(sequencerFrameFileName('{exposure}', naming({ group: group('lucky', { exposureTime: 0.0015 }) }), slot, 'fit')).toStartWith('0.0015-')
+		expect(sequencerFrameFileName('{exposure}', naming({ group: group('lucky', undefined, { exposureTime: 0.0004 }) }), slot, 'fit')).toStartWith('0.0004-')
+		expect(sequencerFrameFileName('{exposure}', naming({ group: group('lucky', undefined, { exposureTime: 0.0005 }) }), slot, 'fit')).toStartWith('0.0005-')
+		expect(sequencerFrameFileName('{exposure}', naming({ group: group('lucky', undefined, { exposureTime: 0.0015 }) }), slot, 'fit')).toStartWith('0.0015-')
 	})
 
 	test('keeps a name of long identifiers inside the component budget', () => {

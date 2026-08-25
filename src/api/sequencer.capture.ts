@@ -3,6 +3,7 @@ import { isCamera } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraCaptureStart } from '#/camera'
 import { failedOperationResult } from '#/orchestration'
+import { sequencerCaptureExposureInSeconds } from '#/sequencer'
 import type { SequencerDeviceRole } from '#/sequencer'
 import type { SequencerPlanFrameGroup } from '#/sequencer.plan'
 import type { CameraHandler } from './camera'
@@ -27,8 +28,8 @@ import { classifySequencerFrame, commitSequencerFrame, sequencerStagedFramePath 
 // answer. The bytes are the camera's, the validation and the atomic rename stay in `sequencer.write.ts`, and
 // the identity of the slot stays in the runtime.
 //
-// Exposure times are seconds as the definition declares them, and the camera request carries the unit
-// explicitly; instants are milliseconds since the Unix epoch.
+// Exposure times in the capture recipe keep the unit the editor declared; the camera request forwards both
+// fields, and outcomes report the duration in seconds. Instants are milliseconds since the Unix epoch.
 
 // Handler version of the capture block. It changes whenever the meaning of its configuration or of its
 // execution changes, which refuses a session compiled against the older meaning instead of running it here.
@@ -64,9 +65,7 @@ export interface SequencerCaptureServices {
 // does not declare is simply not part of the session, which is what optional means here.
 function captureResources(configuration: SequencerCapture): readonly ResourceBinding[] {
 	const roles: ResourceBinding[] = [{ role: 'camera' }, { role: 'mount', optional: true }, { role: 'focuser', optional: true }, { role: 'rotator', optional: true }, { role: 'cover', optional: true }, { role: 'flatPanel', optional: true }]
-
-	if (configuration.group.filter !== undefined) roles.push({ role: 'wheel', optional: true })
-
+	if (configuration.group.capture.filter !== undefined) roles.push({ role: 'wheel', optional: true })
 	return roles
 }
 
@@ -80,28 +79,28 @@ function captureResources(configuration: SequencerCapture): readonly ResourceBin
 // One name is one frame, which is why the request always asks for a single exposure with no delay of its own —
 // the spacing between frames is the cadence of the loop and is waited for outside the exposure.
 function frameCapture(group: SequencerPlanFrameGroup, staged: string, published: string, devices: SequencerCaptureDevices): CameraCaptureStart {
-	const { camera } = group
+	const { capture } = group
 
 	return {
-		...DEFAULT_CAMERA_CAPTURE_START,
-		exposureTime: group.exposureTime,
-		exposureTimeUnit: 'second',
-		frameType: group.frameType,
+		...structuredClone(DEFAULT_CAMERA_CAPTURE_START),
+		exposureTime: capture.exposureTime,
+		exposureTimeUnit: capture.exposureTimeUnit,
+		frameType: capture.frameType,
 		exposureMode: 'single',
 		count: 1,
 		delay: 0,
-		binX: camera.binX,
-		binY: camera.binY,
-		gain: camera.gain,
-		offset: camera.offset,
-		frameFormat: camera.frameFormat,
-		subframe: camera.subframe,
-		x: camera.x,
-		y: camera.y,
-		width: camera.width,
-		height: camera.height,
-		transferFormat: camera.transferFormat,
-		compressed: camera.compressed,
+		binX: capture.binX,
+		binY: capture.binY,
+		gain: capture.gain,
+		offset: capture.offset,
+		frameFormat: capture.frameFormat,
+		subframe: capture.subframe,
+		x: capture.x,
+		y: capture.y,
+		width: capture.width,
+		height: capture.height,
+		transferFormat: capture.transferFormat,
+		compressed: capture.compressed,
 		autoSave: true,
 		outputPath: dirname(staged),
 		outputName: basename(staged),
@@ -171,7 +170,7 @@ async function runCapture(services: SequencerCaptureServices, context: Sequencer
 
 		const at = context.now()
 
-		return { type: 'completed', value: { path: slot.path, exposureTime: configuration.group.exposureTime, startedAt: at, endedAt: at, resumed: true } }
+		return { type: 'completed', value: { path: slot.path, exposureTime: sequencerCaptureExposureInSeconds(configuration.group.capture), startedAt: at, endedAt: at, resumed: true } }
 	}
 
 	// The directories are created before the artifact is registered, because a destination that cannot be
@@ -204,7 +203,8 @@ async function runCapture(services: SequencerCaptureServices, context: Sequencer
 
 	const startedAt = context.now()
 
-	context.progress({ fraction: 0, detail: `exposing ${configuration.group.name} for ${configuration.group.exposureTime}s`, exposure: configuration.group.exposureTime })
+	const exposureInSeconds = sequencerCaptureExposureInSeconds(configuration.group.capture)
+	context.progress({ fraction: 0, detail: `exposing ${configuration.group.name} for ${exposureInSeconds}s`, exposure: exposureInSeconds })
 
 	const handle = services.cameraHandler.capture(context.scope, camera, frameCapture(configuration.group, staged, slot.path, captureDevices(context)))
 	const started = await handle.started
@@ -234,5 +234,5 @@ async function runCapture(services: SequencerCaptureServices, context: Sequencer
 
 	context.artifact(sequencerCommittedArtifact(slot.logicalSlotId, context.attempt, written.path))
 
-	return { type: 'completed', value: { path: written.path, exposureTime: configuration.group.exposureTime, startedAt, endedAt: context.now(), resumed: false } }
+	return { type: 'completed', value: { path: written.path, exposureTime: exposureInSeconds, startedAt, endedAt: context.now(), resumed: false } }
 }

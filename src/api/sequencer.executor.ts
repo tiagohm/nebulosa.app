@@ -1,5 +1,6 @@
 import type { PierSide } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
+import { sequencerCaptureExposureInSeconds } from '#/sequencer'
 import type { SequencerFailureReason, SequencerFilterReference, SequencerGuiderSettle, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanLoop, SequencerPlanPipeline, SequencerPlanSequence } from '#/sequencer.plan'
 import type { SequencerCaptureProgress, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerFailure, SequencerTriggerAnchors } from '#/sequencer.state'
@@ -971,10 +972,10 @@ async function runSafePoint(execution: SequencerExecution, targetId: string, loo
 	let reentries = 0
 
 	for (;;) {
-		const reading = host.observe(group.filter)
+		const reading = host.observe(group.capture.filter)
 		const observation: SequencerTriggerObservation = {
 			instant: at,
-			frameType: group.frameType,
+			frameType: group.capture.frameType,
 			filter: reading.filter,
 			installedFilter: reading.installedFilter,
 			hourAngle: reading.hourAngle,
@@ -1331,7 +1332,7 @@ async function runExposureGuard(execution: SequencerExecution, policies: Sequenc
 	// The guard exists to reorder around a flip. Calibration frames never evaluate sky triggers, so there
 	// is no flip for the refusal to wait on: admitting them past the boundary is the only way the walk
 	// advances, and refusing them is a loop that takes no frame and then fails the re-entry budget.
-	if (meridianFlip === undefined || group.frameType !== 'LIGHT') return SEQUENCER_EXPOSE
+	if (meridianFlip === undefined || group.capture.frameType !== 'LIGHT') return SEQUENCER_EXPOSE
 
 	const reading = execution.host.observe()
 
@@ -1351,7 +1352,7 @@ async function runExposureGuard(execution: SequencerExecution, policies: Sequenc
 	const flipPending = determined ? reading.pierSide === reading.preFlipPierSide : true
 	const decision = sequencerPreExposureGuard(boundary, {
 		hourAngle: reading.hourAngle,
-		exposureTime: group.exposureTime,
+		exposureTime: sequencerCaptureExposureInSeconds(group.capture),
 		now,
 		startsAt: sequencerCadenceBoundary(execution.cadence, group.delay),
 		flipPending,
@@ -1462,9 +1463,9 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 			// Only an accepted frame integrates, and it integrates the exposure the group declares rather than the
 			// time the node spent: the declared time is what the group counters are stated in, and a session ending
 			// on integration must not have the read-out and the safe point of every frame counted into its target.
-			execution.integration += group.exposureTime
+			execution.integration += sequencerCaptureExposureInSeconds(group.capture)
 
-			execution.anchors = sequencerFrameCounted(execution.anchors, group.frameType)
+			execution.anchors = sequencerFrameCounted(execution.anchors, group.capture.frameType)
 			execution.keeper.capture(execution.capture)
 			execution.keeper.anchors(execution.anchors)
 
@@ -1581,7 +1582,7 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 // left behind, and the whole path is proven contained before anything is written to it.
 function frameSlotOf(execution: SequencerExecution, targetId: string, group: SequencerPlanFrameGroup, selection: FrameSelection, attempt: number, logicalSlotId: string): SequencerFrameSlot | undefined {
 	const { storage } = execution.host.plan
-	const naming = { targetId, group, cycle: selection.cycle, ordinal: selection.ordinal, attempt, filter: execution.host.observe(group.filter).installedFilter }
+	const naming = { targetId, group, cycle: selection.cycle, ordinal: selection.ordinal, attempt, filter: execution.host.observe(group.capture.filter).installedFilter }
 	const directories = sequencerFrameDirectories(storage.directoryTemplate, naming)
 	const fileName = sequencerFrameFileName(storage.fileNameTemplate, naming, logicalSlotId, frameExtension(group))
 	const resolution = sequencerVerifiedArtifactPath(execution.host.storage, directories, fileName)
@@ -1601,5 +1602,5 @@ function frameSlotOf(execution: SequencerExecution, targetId: string, group: Seq
 //
 // `NATIVE` is written as FITS, which is the container the driver delivers it in.
 function frameExtension(group: SequencerPlanFrameGroup) {
-	return group.camera.transferFormat === 'XISF' ? 'xisf' : 'fits'
+	return group.capture.transferFormat === 'XISF' ? 'xisf' : 'fits'
 }

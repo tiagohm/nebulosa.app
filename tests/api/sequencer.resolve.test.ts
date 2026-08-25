@@ -66,7 +66,7 @@ describe('resource resolution', () => {
 		const setup = observatory()
 		const wheel = device<Wheel>(DEFAULT_WHEEL, 'Wheel Simulator', setup.camera.hardwareId)
 		const definition = unguided()
-		const compiled = plan({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { filter: { type: 'position', position: 1 } })] } })
+		const compiled = plan({ ...definition, capture: { ...definition.capture, frames: [frame('lum', undefined, { filter: { type: 'position', position: 1 } })] } })
 		const resolution = resolveResources(compiled, devices(setup.camera, setup.mount, wheel, setup.focuser))
 
 		expect(resolution.ok).toBe(true)

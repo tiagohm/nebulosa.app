@@ -1,6 +1,6 @@
 import type { CameraTransferFormat, FrameType } from 'nebulosa/src/devices/indi/device'
 // oxfmt-ignore
-import type { SequencerCamera, SequencerCapture, SequencerCheckpoint, SequencerCooling, SequencerDeviceRole, SequencerDevices, SequencerEndCondition, SequencerExecution, SequencerFilterReference, SequencerGuiderSettle, SequencerLocalGuider, SequencerRemoteGuider, SequencerRetryPolicy, SequencerStartCondition, SequencerStorage } from './sequencer'
+import type { SequencerCameraCapture, SequencerCapture, SequencerCheckpoint, SequencerCooling, SequencerDeviceRole, SequencerDevices, SequencerEndCondition, SequencerExecution, SequencerGuiderSettle, SequencerLocalGuider, SequencerRemoteGuider, SequencerRetryPolicy, SequencerStartCondition, SequencerStorage } from './sequencer'
 
 // Executable plan produced by lowering a definition, and the diagnostics that lowering emits instead of a
 // plan. The definition in `sequencer.ts` is declarative and per feature; this is the node tree the runtime
@@ -65,10 +65,6 @@ export interface SequencerPlanFrameGroup {
 	readonly name: string
 	// Node id of the capture action of this group.
 	readonly nodeId: string
-	// Frame classification written to the image metadata.
-	readonly frameType: FrameType
-	// Exposure duration of every frame of the group, in seconds.
-	readonly exposureTime: number
 	// Requested number of accepted frames per cycle; a group reaching the plan always declares at least one.
 	readonly count: number
 	// Minimum spacing between the end of one exposure and the start of the next, in seconds. Resolved from
@@ -76,10 +72,8 @@ export interface SequencerPlanFrameGroup {
 	readonly delay: number
 	// Relative scheduling weight used by the weighted round-robin order.
 	readonly weight: number
-	// Filter the group requires, absent when the group does not command the wheel.
-	readonly filter?: SequencerFilterReference
-	// Camera settings of the group, with the per-frame overrides already applied over the capture defaults.
-	readonly camera: SequencerCamera
+	// Camera settings of the group, copied from the frame the definition declared.
+	readonly capture: SequencerCameraCapture
 	// Failure policy of the capture action, which is also the attempt budget of every slot of the group.
 	readonly retry: SequencerRetryPolicy
 	// Slots the group needs to reach its target in one cycle, which is its declared count; always >= 1, since a

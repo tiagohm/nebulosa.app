@@ -3,12 +3,12 @@ import { abandonSlot, grantAttemptWindow, SEQUENCER_INITIAL_CAPTURE_PROGRESS } f
 import { groupProgressOf, targetProgressOf } from 'src/api/sequencer.scheduler'
 import type { SequencerSlotFailure } from 'src/api/sequencer.slot'
 import { sequencerDegradedCause, sequencerGroupOutcome, sequencerSlotFailure } from 'src/api/sequencer.slot'
-import type { SequencerRetryPolicy } from '#/sequencer'
+import type { SequencerCameraCapture, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerPlanFrameGroup } from '#/sequencer.plan'
 import type { SequencerCaptureProgress } from '#/sequencer.state'
 import { camera, retry } from './sequencer.fixture'
 
-function group(overrides?: Partial<SequencerPlanFrameGroup>, retryOverrides?: Partial<SequencerRetryPolicy>): SequencerPlanFrameGroup {
+function group(overrides?: Partial<SequencerPlanFrameGroup>, policy?: Partial<SequencerRetryPolicy>, capture?: Partial<SequencerCameraCapture>): SequencerPlanFrameGroup {
 	const count = overrides?.count ?? 3
 	const requiredSlots = overrides?.requiredSlots ?? count
 	const abandonmentBudget = overrides?.abandonmentBudget ?? 0
@@ -17,13 +17,11 @@ function group(overrides?: Partial<SequencerPlanFrameGroup>, retryOverrides?: Pa
 		id: 'lum',
 		name: 'lum',
 		nodeId: 'target:m42/frame:lum',
-		frameType: 'LIGHT',
-		exposureTime: 60,
 		count,
 		delay: 0,
 		weight: 1,
-		camera: camera(),
-		retry: { ...retry(), ...retryOverrides },
+		capture: camera(capture),
+		retry: retry(policy),
 		requiredSlots,
 		abandonmentBudget,
 		slotLimit: requiredSlots + abandonmentBudget,

@@ -2,8 +2,9 @@ import { isAbsolute } from 'path'
 import type { MountTargetCoordinate, PierSide } from 'nebulosa/src/devices/indi/device'
 import { parseAngle } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
+import { sequencerCaptureExposureInSeconds } from '#/sequencer'
 // oxfmt-ignore
-import type { Sequencer, SequencerAutofocus, SequencerAuxiliaryCapture, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDevices, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGuiderSettle, SequencerLifecycleActionType, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTarget, SequencerTargetTracking } from '#/sequencer'
+import type { Sequencer, SequencerAutofocus, SequencerAuxiliaryCapture, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDevices, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGuiderSettle, SequencerLifecycleActionType, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTarget, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanGuider, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { sequencerUnknownPlaceholders } from './sequencer.identity'
 import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
@@ -237,26 +238,6 @@ export function* sequencerPlanNodes(node: SequencerPlanNode): Generator<Sequence
 	}
 }
 
-// Applies the per-frame camera overrides over the capture defaults, so the capture action never has to merge
-// anything at exposure time. Only properties the frame actually declares override the default.
-function cameraSettingsOf(frame: SequencerFrame, defaults: SequencerCamera): SequencerCamera {
-	return {
-		binX: defaults.binX,
-		binY: defaults.binY,
-		gain: defaults.gain,
-		offset: defaults.offset,
-		frameFormat: defaults.frameFormat,
-		transferFormat: defaults.transferFormat,
-		compressed: defaults.compressed,
-		x: defaults.x,
-		y: defaults.y,
-		width: defaults.width,
-		height: defaults.height,
-		...frame.camera,
-		subframe: frame.camera.subframe ?? defaults.subframe,
-	}
-}
-
 // Whether a frame group contributes anything to the plan.
 //
 // The frame count is the only completion criterion, and `0` disables it, so a group asking for no frame
@@ -295,10 +276,10 @@ function checkTermination(context: CompilerContext, definition: Sequencer) {
 		if (!frameGroupEnabled(frame)) continue
 
 		const slots = frame.count
-		const integration = slots * frame.exposureTime
+		const integration = slots * sequencerCaptureExposureInSeconds(frame.capture)
 
 		if (slots + (frame.abandonmentBudget ?? 0) > Number.MAX_SAFE_INTEGER) context.diagnostics.push({ path: `capture.frames[${i}]`, message: 'the slot limit of the group is above the range a number counts one by one, so a scheduler counting slots would stop advancing before reaching it' })
-		else if (!Number.isFinite(integration)) context.diagnostics.push({ path: `capture.frames[${i}].exposureTime`, message: 'the slots of the group exposing for this long overflow the range of a number, so the plan would report no projected integration for it' })
+		else if (!Number.isFinite(integration)) context.diagnostics.push({ path: `capture.frames[${i}].capture.exposureTime`, message: 'the slots of the group exposing for this long overflow the range of a number, so the plan would report no projected integration for it' })
 		else projected += integration
 	}
 
@@ -319,18 +300,15 @@ function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): Sequence
 		id: frame.id,
 		name: frame.name,
 		nodeId: sequencerNodeId.captureFrame(target.id, frame.id),
-		frameType: frame.frameType,
-		exposureTime: frame.exposureTime,
 		count: frame.count,
 		delay: frame.delay ?? capture.delay,
 		weight: frame.weight,
-		filter: frame.filter,
-		camera: cameraSettingsOf(frame, capture),
+		capture: frame.capture,
 		retry: capture.retry,
 		requiredSlots,
 		abandonmentBudget,
 		slotLimit: requiredSlots + abandonmentBudget,
-		projectedIntegration: requiredSlots * frame.exposureTime,
+		projectedIntegration: requiredSlots * sequencerCaptureExposureInSeconds(frame.capture),
 	}
 }
 
@@ -569,7 +547,7 @@ function roleRequirements(definition: Sequencer, groups: readonly SequencerPlanF
 	if (definition.cover.enabled) requirements.push({ role: 'cover', path: 'cover' })
 	if (definition.rotator.enabled) requirements.push({ role: 'rotator', path: 'rotator' })
 	if (definition.flatPanel.enabled) requirements.push({ role: 'flatPanel', path: 'flatPanel' })
-	if (groups.some((group) => group.filter !== undefined)) requirements.push({ role: 'wheel', path: 'capture.frames' })
+	if (groups.some((group) => group.capture.filter !== undefined)) requirements.push({ role: 'wheel', path: 'capture.frames' })
 
 	// An auxiliary capture selects its own filter, so it commands the wheel even when no frame group does.
 	if (target.center.enabled && target.center.capture.filter !== undefined) requirements.push({ role: 'wheel', path: 'target.center.capture.filter' })
@@ -726,7 +704,17 @@ function capturedGroupOf(configuration: unknown): SequencerPlanFrameGroup | unde
 // storage path is composed from. A handler returning either one changed would hand the scheduler a group
 // pointing at a node that does not run it.
 function withCompilerOwned(captured: SequencerPlanFrameGroup, group: SequencerPlanFrameGroup): SequencerPlanFrameGroup {
-	return { ...captured, id: group.id, nodeId: group.nodeId, exposureTime: group.exposureTime, count: group.count, requiredSlots: group.requiredSlots, abandonmentBudget: group.abandonmentBudget, slotLimit: group.slotLimit, projectedIntegration: group.projectedIntegration }
+	return {
+		...captured,
+		id: group.id,
+		nodeId: group.nodeId,
+		count: group.count,
+		requiredSlots: group.requiredSlots,
+		abandonmentBudget: group.abandonmentBudget,
+		slotLimit: group.slotLimit,
+		projectedIntegration: group.projectedIntegration,
+		capture: { ...captured.capture, exposureTime: group.capture.exposureTime, exposureTimeUnit: group.capture.exposureTimeUnit },
+	}
 }
 
 // Rebuilds a node with the configuration its handler returned in place of the one the lowering produced.

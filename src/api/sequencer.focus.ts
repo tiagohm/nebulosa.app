@@ -3,6 +3,7 @@ import type { Focuser, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { AutoFocusStart } from '#/autofocus'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
+import type { CameraCaptureStart } from '#/camera'
 import { successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import type { SequencerAutofocus, SequencerAuxiliaryCapture, SequencerStarDetection } from '#/sequencer'
@@ -91,9 +92,9 @@ function starDetectionOf(starDetection: SequencerStarDetection) {
 // Everything the search owns — frame count, delay, frame type, exposure mode, auto-save — is normalized by the
 // search itself, so only what the recipe decides is set here. The destination is left out and reserved one
 // frame at a time, because a fixed output name refuses to overwrite and a search exposes many frames.
-function autofocusCapture(recipe: SequencerAuxiliaryCapture) {
+function autofocusCapture(recipe: SequencerAuxiliaryCapture): CameraCaptureStart {
 	return {
-		...DEFAULT_CAMERA_CAPTURE_START,
+		...structuredClone(DEFAULT_CAMERA_CAPTURE_START),
 		exposureTime: recipe.exposureTime,
 		exposureTimeUnit: recipe.exposureTimeUnit,
 		binX: recipe.binX,

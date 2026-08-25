@@ -22,7 +22,7 @@ function captureConfiguration(): SequencerCapture {
 		autofocus: { ...base.autofocus, enabled: false },
 		meridianFlip: { ...base.meridianFlip, enabled: false },
 		cooling: { ...base.cooling, enabled: false },
-		capture: { ...base.capture, order: 'sequential', repeat: 1, delay: 0, frames: [frame('lum', { count: 1, camera: camera() })], retry: retry() },
+		capture: { ...base.capture, order: 'sequential', repeat: 1, delay: 0, frames: [frame('lum', { count: 1, capture: camera() })], retry: retry() },
 		mount: { ...base.mount, unparkOnStartup: false, parkOnShutdown: false },
 	})
 

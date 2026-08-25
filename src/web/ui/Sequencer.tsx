@@ -384,51 +384,93 @@ const Capture = memo(() => {
 
 	return (
 		<div className="grid w-full grid-cols-12 items-center gap-2">
-			<SequencerCaptureOrderSelect className="col-span-4" disabled={blocked} onValueChange={sequencer.setCaptureOrder} value={capture.order} />
-			<NumberInput className="col-span-4" disabled={blocked} label="Repeat" minValue={1} onValueChange={sequencer.setCaptureRepeat} value={capture.repeat} />
-			<NumberInput className="col-span-4" disabled={blocked} endContent="s" label="Delay" minValue={0} onValueChange={sequencer.setCaptureDelay} value={capture.delay} />
-			<Checkbox className="col-span-8" disabled={blocked} label="Continue after rejected frame" onValueChange={sequencer.setCaptureContinueAfterRejectedFrame} value={capture.continueAfterRejectedFrame} />
-			<div className="col-span-4">
-				<SequencerRetry retry={sequencer.state.request.capture.retry} disabled={blocked} />
-			</div>
-			<span className="col-span-full text-sm font-bold">DEFAULT CAMERA:</span>
-			<CameraFields camera={sequencer.state.request.capture} disabled={blocked} />
-			<div className="col-span-full flex items-center justify-between">
-				<span className="text-sm font-bold">FRAMES:</span>
-				<Button color="success" disabled={blocked} label="Add frame" onClick={sequencer.addFrame} startContent={<Icons.Plus />} />
-			</div>
-			{frames.map((frame, index) => (
-				<FrameEditor disabled={blocked} index={index} key={frame.id} />
-			))}
+			<CaptureMode />
+			<CaptureFrames />
 		</div>
 	)
 })
 
-const FrameEditor = memo(({ index, disabled }: { readonly index: number; readonly disabled?: boolean }) => {
+const CaptureMode = memo(() => {
 	const sequencer = useContext(SequencerStoreContext)
-	const { wheel } = useSnapshot(sequencer.state)
+	const { busy, camera } = useSnapshot(sequencer.state)
+	const capture = useSnapshot(sequencer.state.request.capture)
+	const blocked = busy || !camera?.connected
+
+	return (
+		<div className="col-span-full flex flex-wrap items-center gap-2 text-sm">
+			<span className="font-bold">MODE:</span>
+			<SequencerCaptureOrderSelect disabled={blocked} onValueChange={sequencer.setCaptureOrder} value={capture.order} />
+			<NumberInput disabled={blocked} label="Repeat" minValue={1} onValueChange={sequencer.setCaptureRepeat} value={capture.repeat} />
+			<NumberInput disabled={blocked} endContent="s" label="Delay" minValue={0} onValueChange={sequencer.setCaptureDelay} value={capture.delay} />
+			<Checkbox disabled={blocked} label="Continue after rejected frame" onValueChange={sequencer.setCaptureContinueAfterRejectedFrame} value={capture.continueAfterRejectedFrame} />
+			<SequencerRetry retry={sequencer.state.request.capture.retry} disabled={blocked} />
+		</div>
+	)
+})
+
+const CaptureFrames = memo(() => {
+	const sequencer = useContext(SequencerStoreContext)
+	const { busy, camera } = useSnapshot(sequencer.state)
+	const capture = useSnapshot(sequencer.state.request.capture)
+	const frames = capture.frames
+	const blocked = busy || !camera?.connected
+
+	return (
+		<div className="col-span-full flex flex-wrap items-center gap-2 text-sm">
+			<span className="font-bold">FRAMES:</span>
+			<div className="flex flex-1 flex-row items-center justify-end">
+				<Button color="success" disabled={blocked} label="Add frame" onClick={sequencer.addFrame} startContent={<Icons.Plus />} />
+			</div>
+			<div className="flex flex-col items-center gap-2">
+				{frames.map((frame, index) => (
+					<FrameEditor disabled={blocked} index={index} key={frame.id} />
+				))}
+			</div>
+		</div>
+	)
+})
+
+interface FrameEditorProps {
+	readonly index: number
+	readonly disabled?: boolean
+}
+
+const FrameEditor = memo(({ index, disabled }: FrameEditorProps) => {
+	const sequencer = useContext(SequencerStoreContext)
+	const { camera, wheel } = useSnapshot(sequencer.state)
 	const frame = useSnapshot(sequencer.state.request.capture.frames[index])
-	const count = useSnapshot(sequencer.state.request.capture.frames).length
+	const { length: count } = useSnapshot(sequencer.state.request.capture.frames)
 
 	if (!frame) return null
 
+	const blocked = disabled || !frame.enabled
+
 	return (
-		<div className="col-span-full grid grid-cols-12 items-center gap-2 rounded-lg bg-neutral-900/70 p-2">
-			<Switch className="col-span-2" disabled={disabled} label="On" onValueChange={(value) => sequencer.updateFrame(index, 'enabled', value)} value={frame.enabled} />
-			<TextInput className="col-span-6" disabled={disabled || !frame.enabled} label="Name" onValueChange={(value) => sequencer.updateFrame(index, 'name', value)} value={frame.name} />
-			<TextInput className="col-span-4" disabled={disabled || !frame.enabled} label="Id" onValueChange={(value) => sequencer.updateFrame(index, 'id', value)} value={frame.id} />
-			<FrameTypeSelect className="col-span-3" disabled={disabled || !frame.enabled} onValueChange={(value) => sequencer.updateFrame(index, 'frameType', value)} value={frame.frameType} />
-			<NumberInput className="col-span-3" disabled={disabled || !frame.enabled} endContent="s" fractionDigits={3} label="Exposure" minValue={0} onValueChange={(value) => sequencer.updateFrame(index, 'exposureTime', value)} value={frame.exposureTime} />
-			<NumberInput className="col-span-3" disabled={disabled || !frame.enabled} label="Count" minValue={0} onValueChange={(value) => sequencer.updateFrame(index, 'count', value)} value={frame.count} />
-			<NumberInput className="col-span-3" disabled={disabled || !frame.enabled} label="Weight" minValue={0} onValueChange={(value) => sequencer.updateFrame(index, 'weight', value)} value={frame.weight} />
-			<NumberInput className="col-span-3" disabled={disabled || !frame.enabled} label="Abandonment budget" minValue={0} onValueChange={(value) => sequencer.updateFrame(index, 'abandonmentBudget', value)} value={frame.abandonmentBudget ?? 0} />
-			<NumberInput className="col-span-3" disabled={disabled || !frame.enabled} endContent="s" label="Delay" minValue={0} onValueChange={(value) => sequencer.updateFrame(index, 'delay', value)} value={frame.delay ?? sequencer.state.request.capture.delay} />
-			<FilterReferenceInput className="col-span-6" disabled={disabled || !frame.enabled || !wheel} onValueChange={(value) => sequencer.updateFrameFilter(index, value)} value={frame.filter} wheel={wheel} />
-			<CameraFields camera={sequencer.state.request.capture.frames[index].camera} disabled={disabled || !frame.enabled} />
+		<div className="flex flex-row flex-wrap items-center gap-2 rounded-lg bg-neutral-900/70 p-2">
+			<Switch disabled={disabled} label="On" onValueChange={(value) => sequencer.updateFrame(index, 'enabled', value)} value={frame.enabled} />
+			<TextInput className="min-w-80" disabled={blocked} label="Name" onValueChange={(value) => sequencer.updateFrame(index, 'name', value)} value={frame.name} />
+			<FrameTypeSelect disabled={blocked} onValueChange={(value) => sequencer.updateFrameCapture(index, 'frameType', value)} value={frame.capture.frameType} />
+			<CameraExposureTimeInput
+				disabled={blocked || frame.capture.frameType === 'BIAS'}
+				maxValue={camera?.exposure.max ?? 0}
+				maxValueUnit="second"
+				minValue={camera?.exposure.min ?? 0}
+				minValueUnit="second"
+				onUnitChange={(value) => sequencer.updateFrameCapture(index, 'exposureTimeUnit', value)}
+				onValueChange={(value) => sequencer.updateFrameCapture(index, 'exposureTime', value)}
+				unit={frame.capture.exposureTimeUnit}
+				value={frame.capture.exposureTime}
+			/>
+			<NumberInput disabled={blocked} label="Count" minValue={0} onValueChange={(value) => sequencer.updateFrame(index, 'count', value)} value={frame.count} />
+			<NumberInput disabled={blocked} endContent="s" label="Delay" minValue={0} onValueChange={(value) => sequencer.updateFrame(index, 'delay', value)} value={frame.delay ?? sequencer.state.request.capture.delay} />
+			<NumberInput disabled={blocked} label="Weight" minValue={0} onValueChange={(value) => sequencer.updateFrame(index, 'weight', value)} value={frame.weight} />
+			<NumberInput disabled={blocked} label="Abandonment budget" minValue={0} onValueChange={(value) => sequencer.updateFrame(index, 'abandonmentBudget', value)} value={frame.abandonmentBudget ?? 0} />
+			<CameraFields camera={sequencer.state.request.capture.frames[index].capture} disabled={blocked} />
+			<FilterReferenceInput disabled={blocked || !wheel?.connected} onValueChange={(value) => sequencer.updateFrameFilter(index, value)} value={frame.capture.filter} wheel={wheel} />
 			<div className="col-span-full flex justify-end gap-1">
-				<IconButton color="secondary" disabled={disabled || index === 0} icon={Icons.ChevronUp} onClick={() => sequencer.moveFrame(index, -1)} size="sm" tooltipContent="Move up" />
-				<IconButton color="secondary" disabled={disabled || index === count - 1} icon={Icons.ChevronDown} onClick={() => sequencer.moveFrame(index, 1)} size="sm" tooltipContent="Move down" />
-				<IconButton color="danger" disabled={disabled} icon={Icons.Trash} onClick={() => sequencer.removeFrame(index)} size="sm" tooltipContent="Remove" />
+				<IconButton color="secondary" disabled={disabled || index === 0} icon={Icons.ChevronUp} onClick={() => sequencer.moveFrame(index, -1)} tooltipContent="Move up" />
+				<IconButton color="secondary" disabled={disabled || index === count - 1} icon={Icons.ChevronDown} onClick={() => sequencer.moveFrame(index, 1)} tooltipContent="Move down" />
+				<IconButton color="danger" disabled={disabled} icon={Icons.Trash} onClick={() => sequencer.removeFrame(index)} tooltipContent="Remove" />
 			</div>
 		</div>
 	)

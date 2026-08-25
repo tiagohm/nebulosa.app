@@ -3,7 +3,7 @@ import type { SequencerPreparationServices } from 'src/api/sequencer.prepare'
 import type { GuiderSessionInfo } from '#/guider'
 import { successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
-import type { Sequencer, SequencerCamera, SequencerFrame, SequencerRetryPolicy } from '#/sequencer'
+import type { Sequencer, SequencerCameraCapture, SequencerFrame, SequencerRetryPolicy } from '#/sequencer'
 
 // Device services the runtime hands the executor, absent in the tests that never reach the optical path.
 // The guider commander is the exception: a canonical session declares a guider and opens it before its first
@@ -24,16 +24,16 @@ export function guiding(connect?: () => OperationResult<GuiderSessionInfo>): Seq
 
 // Canonical sequencer definition shared by the compiler and resolution tests: every feature the V1 lowering
 // understands is enabled, so a test only has to override the property it is about.
-export function retry(): SequencerRetryPolicy {
-	return { maxAttempts: 3, delay: 5, backoff: 2, maximumDelay: 60, retryOn: ['timeout', 'commandFailed'], onExhausted: 'fail' }
+export function retry(policy?: Partial<SequencerRetryPolicy>): SequencerRetryPolicy {
+	return { maxAttempts: 3, delay: 5, backoff: 2, maximumDelay: 60, retryOn: ['timeout', 'commandFailed'], onExhausted: 'fail', ...policy }
 }
 
-export function camera(): SequencerCamera {
-	return { binX: 1, binY: 1, gain: 100, offset: 10, frameFormat: 'RAW16', transferFormat: 'FITS', compressed: false, subframe: false, x: 0, y: 0, width: 0, height: 0 }
+export function camera(capture?: Partial<SequencerCameraCapture>): SequencerCameraCapture {
+	return { exposureTime: 60, exposureTimeUnit: 'second', frameType: 'LIGHT', binX: 1, binY: 1, gain: 100, offset: 10, frameFormat: 'RAW16', transferFormat: 'FITS', compressed: false, subframe: false, x: 0, y: 0, width: 0, height: 0, ...capture }
 }
 
-export function frame(id: string, overrides?: Partial<SequencerFrame>): SequencerFrame {
-	return { id, name: id, enabled: true, frameType: 'LIGHT', exposureTime: 60, count: 10, weight: 1, camera: {}, ...overrides }
+export function frame(id: string, frame?: Partial<SequencerFrame>, capture?: Partial<SequencerCameraCapture>): SequencerFrame {
+	return { id, name: id, enabled: true, count: 10, weight: 1, ...frame, capture: { ...camera(), ...frame?.capture, ...capture } }
 }
 
 // Canonical definition with every optional property of the contract declared, which is what the compatibility
@@ -56,7 +56,7 @@ export function complete(): Sequencer {
 			dome: 'Dome Simulator',
 		},
 		target: { ...definition.target, tracking: { ...definition.target.tracking } },
-		capture: { ...definition.capture, frames: [frame('lum', { abandonmentBudget: 2, delay: 8, filter: { type: 'name', name: 'L' }, camera: camera() })] },
+		capture: { ...definition.capture, frames: [frame('lum', { abandonmentBudget: 2, delay: 8, capture: camera({ filter: { type: 'name', name: 'L' } }) })] },
 		guiding: { ...definition.guiding, connection: { mode: 'remote', host: 'localhost', port: 4400, profile: 'default' } },
 		storage: { ...definition.storage, temporaryDirectory: '/data/nebulosa/.tmp' },
 		mount: { ...definition.mount, unparkOnStartup: false },
@@ -91,7 +91,7 @@ export function canonical(): Sequencer {
 			},
 			constraints: { enabled: false, window: { enabled: false }, onViolation: 'wait', stableFor: 60 },
 		},
-		capture: { order: 'sequential', repeat: 2, frames: [frame('lum'), frame('red')], ...camera(), delay: 4, continueAfterRejectedFrame: false, retry: retry() },
+		capture: { order: 'sequential', repeat: 2, frames: [frame('lum'), frame('red')], delay: 4, continueAfterRejectedFrame: false, retry: retry() },
 		guiding: {
 			enabled: true,
 			connection: { mode: 'remote', host: 'localhost', port: 4400 },

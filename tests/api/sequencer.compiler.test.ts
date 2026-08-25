@@ -309,15 +309,14 @@ describe('lowering', () => {
 
 	test('frame groups resolve the camera overrides and the delay', () => {
 		const definition = canonical()
-		const frames = [frame('lum'), frame('red', { delay: 12, camera: { binX: 2, binY: 2 }, filter: { type: 'name', name: 'R' } })]
+		const frames = [frame('lum'), frame('red', { delay: 12 }, { binX: 2, binY: 2, filter: { type: 'name', name: 'R' } })]
 		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames } })
 
 		expect(plan.groups.map((group) => group.id)).toEqual(['lum', 'red'])
 		expect(plan.groups[0].delay).toBe(4)
-		expect(plan.groups[0].camera).toEqual(camera())
+		expect(plan.groups[0].capture).toEqual(camera())
 		expect(plan.groups[1].delay).toBe(12)
-		expect(plan.groups[1].camera).toEqual({ ...camera(), binX: 2, binY: 2 })
-		expect(plan.groups[1].filter).toEqual({ type: 'name', name: 'R' })
+		expect(plan.groups[1].capture).toEqual(camera({ binX: 2, binY: 2, filter: { type: 'name', name: 'R' } }))
 		expect(plan.groups[1].nodeId).toBe('target[m42].capture.frame[red]')
 	})
 
@@ -345,7 +344,7 @@ describe('lowering', () => {
 
 	test('the plan collects the roles it commands', () => {
 		const definition = canonical()
-		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { filter: { type: 'position', position: 1 } })] } })
+		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', undefined, { filter: { type: 'position', position: 1 } })] } })
 
 		expect(plan.roles).toEqual(['camera', 'mount', 'wheel', 'focuser'])
 	})
@@ -661,7 +660,7 @@ describe('structural validation', () => {
 				validate: (configuration) => {
 					if (type !== 'capture.frame') return { ok: true, configuration }
 					const capture = configuration as SequencerCapture
-					return { ok: true, configuration: { ...capture, group: { ...capture.group, exposureTime: 30, requiredSlots: Number.POSITIVE_INFINITY, abandonmentBudget: Number.MAX_VALUE, slotLimit: Number.POSITIVE_INFINITY, projectedIntegration: Number.POSITIVE_INFINITY } } }
+					return { ok: true, configuration: { ...capture, group: { ...capture.group, capture: { ...capture.group.capture, exposureTime: 30 }, requiredSlots: Number.POSITIVE_INFINITY, abandonmentBudget: Number.MAX_VALUE, slotLimit: Number.POSITIVE_INFINITY, projectedIntegration: Number.POSITIVE_INFINITY } } }
 				},
 				resources: () => [],
 				execute: () => Promise.resolve({ type: 'completed', value: undefined } as const),
@@ -678,7 +677,7 @@ describe('structural validation', () => {
 			const capture = loop.body.children.find((node) => node.kind === 'action' && node.type === 'capture.frame') as SequencerPlanAction
 			const group = compilation.plan.groups[0]
 
-			expect(group.exposureTime).toBe(60)
+			expect(group.capture.exposureTime).toBe(60)
 			expect(group.count).toBe(10)
 			expect(group.requiredSlots).toBe(10)
 			expect(group.abandonmentBudget).toBe(0)
@@ -733,7 +732,7 @@ describe('structural validation', () => {
 				validate: (configuration) => {
 					if (type !== 'capture.frame') return { ok: true, configuration }
 					const capture = configuration as SequencerCapture
-					return { ok: true, configuration: { ...capture, group: { ...capture.group, exposureTime: 30 } } }
+					return { ok: true, configuration: { ...capture, group: { ...capture.group, capture: { ...capture.group.capture, exposureTime: 30, exposureTimeUnit: 'millisecond' } } } }
 				},
 				resources: () => [],
 				execute: () => Promise.resolve({ type: 'completed', value: undefined } as const),
@@ -741,14 +740,14 @@ describe('structural validation', () => {
 		}
 
 		const definition = canonical()
-		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 10, exposureTime: 60 })] } }, { registry })
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 10 }, { exposureTime: 60 })] } }, { registry })
 
 		expect(compilation.ok).toBe(true)
 
 		if (compilation.ok) {
 			const group = compilation.plan.groups[0]
 
-			expect(group.exposureTime).toBe(60)
+			expect(group.capture.exposureTime).toBe(60)
 			expect(group.requiredSlots).toBe(10)
 			expect(group.projectedIntegration).toBe(600)
 		}
@@ -769,6 +768,13 @@ describe('termination', () => {
 		expect(plan.groups[0].requiredSlots).toBe(10)
 		expect(plan.groups[0].abandonmentBudget).toBe(0)
 		expect(plan.groups[0].slotLimit).toBe(10)
+		expect(plan.groups[0].projectedIntegration).toBe(600)
+	})
+
+	test('projects integration in seconds regardless of the declared exposure unit', () => {
+		const definition = canonical()
+		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 10 }, { exposureTime: 60000, exposureTimeUnit: 'millisecond' })] } })
+
 		expect(plan.groups[0].projectedIntegration).toBe(600)
 	})
 
@@ -821,15 +827,15 @@ describe('termination', () => {
 
 	test('a group whose projected integration overflows is refused', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 2, exposureTime: Number.MAX_VALUE })] } })
+		const compilation = compile({ ...definition, capture: { ...definition.capture, frames: [frame('lum', { count: 2 }, { exposureTime: Number.MAX_VALUE })] } })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0].exposureTime', message: 'the slots of the group exposing for this long overflow the range of a number, so the plan would report no projected integration for it' }])
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[0].capture.exposureTime', message: 'the slots of the group exposing for this long overflow the range of a number, so the plan would report no projected integration for it' }])
 	})
 
 	test('a sequence whose projected integration overflows over the cycles is refused', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, capture: { ...definition.capture, repeat: 1000, frames: [frame('lum', { count: 1, exposureTime: Number.MAX_VALUE / 2 })] } })
+		const compilation = compile({ ...definition, capture: { ...definition.capture, repeat: 1000, frames: [frame('lum', { count: 1 }, { exposureTime: Number.MAX_VALUE / 2 })] } })
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.repeat', message: 'the projected integration of the whole sequence overflows the range of a number, so the plan would report no projection for it' }])

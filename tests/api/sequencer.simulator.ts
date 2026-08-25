@@ -39,7 +39,7 @@ import { failedOperationResult, successfulOperationResult } from '#/orchestratio
 import type { OperationResult } from '#/orchestration'
 import type { Sequencer, SequencerAuxiliaryCapture, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerArtifact, SequencerEvent, SequencerSession, SequencerSessionSnapshot } from '#/sequencer.state'
-import { camera, frame } from './sequencer.fixture'
+import { frame } from './sequencer.fixture'
 
 export interface SimulatorCommand {
 	readonly name: string
@@ -172,12 +172,11 @@ export function defaultSequencer(root: string): Sequencer {
 			delay: 1,
 			continueAfterRejectedFrame: false,
 			retry: RETRY,
-			...camera(),
 			frames: [
-				frame('lum', { name: 'Luminance', count: 3, exposureTime: 2, filter: { type: 'name', name: 'L' } }),
-				frame('red', { name: 'Red', count: 2, exposureTime: 2, filter: { type: 'name', name: 'R' } }),
-				frame('green', { name: 'Green', count: 2, exposureTime: 2, filter: { type: 'name', name: 'G' } }),
-				frame('blue', { name: 'Blue', count: 2, exposureTime: 2, filter: { type: 'name', name: 'B' } }),
+				frame('lum', { name: 'Luminance', count: 3 }, { exposureTime: 2, filter: { type: 'name', name: 'L' } }),
+				frame('red', { name: 'Red', count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'R' } }),
+				frame('green', { name: 'Green', count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'G' } }),
+				frame('blue', { name: 'Blue', count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'B' } }),
 			],
 		},
 		guiding: {

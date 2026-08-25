@@ -1,31 +1,30 @@
 import { describe, expect, test } from 'bun:test'
 import { captureCycleCompleted, frameGroupCompleted, frameGroupDegraded, frameGroupReachedTarget, frameScheduler, groupProgressOf, SEQUENCER_INITIAL_GROUP_PROGRESS, SEQUENCER_INITIAL_TARGET_PROGRESS, targetProgressOf } from 'src/api/sequencer.scheduler'
 import type { FrameSchedulingContext } from 'src/api/sequencer.scheduler'
+import type { SequencerCameraCapture } from '#/sequencer'
 import type { SequencerPlanFrameGroup, SequencerPlanLoop, SequencerPlanSequence } from '#/sequencer.plan'
 import type { SequencerCaptureProgress, SequencerGroupProgress } from '#/sequencer.state'
 import { camera, retry } from './sequencer.fixture'
 
-function group(id: string, overrides?: Partial<SequencerPlanFrameGroup>): SequencerPlanFrameGroup {
-	const count = overrides?.count ?? 3
-	const requiredSlots = overrides?.requiredSlots ?? count
-	const abandonmentBudget = overrides?.abandonmentBudget ?? 0
+function group(id: string, group?: Partial<SequencerPlanFrameGroup>, capture?: Partial<SequencerCameraCapture>): SequencerPlanFrameGroup {
+	const count = group?.count ?? 3
+	const requiredSlots = group?.requiredSlots ?? count
+	const abandonmentBudget = group?.abandonmentBudget ?? 0
 
 	return {
 		id,
 		name: id,
 		nodeId: `target:m42/frame:${id}`,
-		frameType: 'LIGHT',
-		exposureTime: 60,
 		count,
 		delay: 0,
 		weight: 1,
-		camera: camera(),
+		capture: camera(capture),
 		retry: retry(),
 		requiredSlots,
 		abandonmentBudget,
 		slotLimit: requiredSlots + abandonmentBudget,
 		projectedIntegration: requiredSlots * 60,
-		...overrides,
+		...group,
 	}
 }
 

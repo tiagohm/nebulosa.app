@@ -116,7 +116,7 @@ function j2000Of(coordinates: MountTargetCoordinate<Angle>, location: Geographic
 // the namespace of the slots.
 function auxiliaryCapture(recipe: SequencerAuxiliaryCapture, directory: string, fileName: string, mount: Mount): CameraCaptureStart {
 	return {
-		...DEFAULT_CAMERA_CAPTURE_START,
+		...structuredClone(DEFAULT_CAMERA_CAPTURE_START),
 		exposureTime: recipe.exposureTime,
 		exposureTimeUnit: recipe.exposureTimeUnit,
 		frameType: recipe.frameType,

@@ -7,9 +7,9 @@ import type { SequencerActionContext } from 'src/api/sequencer.registry'
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason } from '#/orchestration'
-import type { SequencerCooling, SequencerCover, SequencerFlatPanel, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
+import type { SequencerCameraCapture, SequencerCooling, SequencerCover, SequencerFlatPanel, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerPlanFrameGroup } from '#/sequencer.plan'
-import { camera as cameraSettings, retry } from './sequencer.fixture'
+import { camera as cameraCapture, retry } from './sequencer.fixture'
 
 interface Command {
 	readonly name: string
@@ -77,17 +77,15 @@ function trackingPolicy(overrides?: Partial<Omit<SequencerTargetTracking, 'enabl
 	return { mode: 'SIDEREAL', stopOnShutdown: false, retry: retry(), ...overrides }
 }
 
-function group(overrides?: Partial<SequencerPlanFrameGroup>): SequencerPlanFrameGroup {
+function group(overrides?: Partial<SequencerPlanFrameGroup>, capture?: Partial<SequencerCameraCapture>): SequencerPlanFrameGroup {
 	return {
 		id: 'lum',
 		name: 'lum',
 		nodeId: 'target:m42/frame:lum',
-		frameType: 'LIGHT',
-		exposureTime: 60,
 		count: 3,
 		delay: 0,
 		weight: 1,
-		camera: cameraSettings(),
+		capture: cameraCapture(capture),
 		retry: retry(),
 		requiredSlots: 3,
 		abandonmentBudget: 0,
@@ -185,9 +183,9 @@ describe('frame context', () => {
 
 	test('derives the cover, the panel and the tracking from the frame type', () => {
 		const light = sequencerFrameContext(preparation({ cover: coverPolicy(), flatPanel: panelPolicy() }), present)
-		const dark = sequencerFrameContext(preparation({ group: group({ frameType: 'DARK' }), cover: coverPolicy(), flatPanel: panelPolicy() }), present)
-		const bias = sequencerFrameContext(preparation({ group: group({ frameType: 'BIAS' }), cover: coverPolicy(), flatPanel: panelPolicy() }), present)
-		const flat = sequencerFrameContext(preparation({ group: group({ frameType: 'FLAT' }), cover: coverPolicy(), flatPanel: panelPolicy() }), present)
+		const dark = sequencerFrameContext(preparation({ group: group(undefined, { frameType: 'DARK' }), cover: coverPolicy(), flatPanel: panelPolicy() }), present)
+		const bias = sequencerFrameContext(preparation({ group: group(undefined, { frameType: 'BIAS' }), cover: coverPolicy(), flatPanel: panelPolicy() }), present)
+		const flat = sequencerFrameContext(preparation({ group: group(undefined, { frameType: 'FLAT' }), cover: coverPolicy(), flatPanel: panelPolicy() }), present)
 
 		expect(light).toMatchObject({ cover: 'open', panel: { lit: false, brightness: 0 }, tracking: true })
 		expect(dark).toMatchObject({ cover: 'closed', panel: { lit: false, brightness: 0 }, tracking: undefined })
@@ -197,7 +195,7 @@ describe('frame context', () => {
 
 	test('requires nothing of a dimension whose policy is disabled', () => {
 		const context = sequencerFrameContext(preparation({ cover: coverPolicy({ openBeforeCapture: false }), flatPanel: panelPolicy() }), present)
-		const dark = sequencerFrameContext(preparation({ group: group({ frameType: 'DARK' }), cover: coverPolicy({ closeForDarkFrames: false }) }), present)
+		const dark = sequencerFrameContext(preparation({ group: group(undefined, { frameType: 'DARK' }), cover: coverPolicy({ closeForDarkFrames: false }) }), present)
 
 		expect(context.cover).toBeUndefined()
 		expect(dark.cover).toBeUndefined()
@@ -213,7 +211,7 @@ describe('frame context', () => {
 	})
 
 	test('takes a flat as a sky flat when no panel lights it', () => {
-		const context = sequencerFrameContext(preparation({ group: group({ frameType: 'FLAT' }), cover: coverPolicy(), flatPanel: panelPolicy() }), { cover: true, flatPanel: false })
+		const context = sequencerFrameContext(preparation({ group: group(undefined, { frameType: 'FLAT' }), cover: coverPolicy(), flatPanel: panelPolicy() }), { cover: true, flatPanel: false })
 
 		expect(context.cover).toBe('open')
 		expect(context.panel).toBeUndefined()
@@ -222,7 +220,7 @@ describe('frame context', () => {
 	test('opens the cover a preceding dark closed before a sky flat', async () => {
 		const commands: Command[] = []
 		const shutter = cover(true)
-		const request = preparation({ group: group({ frameType: 'FLAT' }), cover: coverPolicy(), flatPanel: panelPolicy() })
+		const request = preparation({ group: group(undefined, { frameType: 'FLAT' }), cover: coverPolicy(), flatPanel: panelPolicy() })
 		const result = await runFramePreparation(prepareServices(commands), actionContext({ camera: { device: camera() }, cover: { device: shutter }, mount: { device: mount(true) } }), request)
 
 		expect(result).toMatchObject({ type: 'completed', value: { commanded: ['cover'] } })
@@ -231,7 +229,7 @@ describe('frame context', () => {
 	})
 
 	test('leaves the cover alone for a sky flat the policy never opens it for', () => {
-		const context = sequencerFrameContext(preparation({ group: group({ frameType: 'FLAT' }), cover: coverPolicy({ openBeforeCapture: false }), flatPanel: panelPolicy() }), { cover: true, flatPanel: false })
+		const context = sequencerFrameContext(preparation({ group: group(undefined, { frameType: 'FLAT' }), cover: coverPolicy({ openBeforeCapture: false }), flatPanel: panelPolicy() }), { cover: true, flatPanel: false })
 
 		expect(context.cover).toBeUndefined()
 	})
@@ -239,8 +237,8 @@ describe('frame context', () => {
 	test('lights a panel flat at the brightness declared for its own filter', () => {
 		const carousel = wheel(['L', 'Ha'], 0)
 		const panel = panelPolicy({ brightnessByFilter: [{ filter: { type: 'name', name: 'Ha' }, brightness: 210 }] })
-		const broadband = sequencerFrameContext(preparation({ group: group({ frameType: 'FLAT', filter: { type: 'name', name: 'L' } }), flatPanel: panel }), { wheel: carousel, cover: false, flatPanel: true })
-		const narrowband = sequencerFrameContext(preparation({ group: group({ frameType: 'FLAT', filter: { type: 'name', name: 'Ha' } }), flatPanel: panel }), { wheel: carousel, cover: false, flatPanel: true })
+		const broadband = sequencerFrameContext(preparation({ group: group(undefined, { frameType: 'FLAT', filter: { type: 'name', name: 'L' } }), flatPanel: panel }), { wheel: carousel, cover: false, flatPanel: true })
+		const narrowband = sequencerFrameContext(preparation({ group: group(undefined, { frameType: 'FLAT', filter: { type: 'name', name: 'Ha' } }), flatPanel: panel }), { wheel: carousel, cover: false, flatPanel: true })
 
 		expect(broadband.panel).toEqual({ lit: true, brightness: 80 })
 		expect(narrowband.panel).toEqual({ lit: true, brightness: 210 })
@@ -255,7 +253,7 @@ describe('frame preparation', () => {
 	test('commands nothing when the devices already report the context of the frame', async () => {
 		const commands: Command[] = []
 		const devices = { camera: { device: camera(-10.4) }, wheel: { device: wheel(['L', 'Ha'], 0) }, cover: { device: cover(false) }, flatPanel: { device: flatPanel(false) }, rotator: { device: rotator(30) }, mount: { device: mount(true) } }
-		const request = preparation({ group: group({ filter: { type: 'name', name: 'L' } }), cover: coverPolicy(), flatPanel: panelPolicy(), rotator: rotatorPolicy(), cooling: coolingPolicy() })
+		const request = preparation({ group: group(undefined, { filter: { type: 'name', name: 'L' } }), cover: coverPolicy(), flatPanel: panelPolicy(), rotator: rotatorPolicy(), cooling: coolingPolicy() })
 		const result = await runFramePreparation(prepareServices(commands), actionContext(devices), request)
 
 		expect(result).toMatchObject({ type: 'completed', value: { commanded: [], slot: 0, focusShift: undefined, temperature: undefined } })
@@ -273,7 +271,7 @@ describe('frame preparation', () => {
 
 		const flat: Command[] = []
 		const closed = flatPanel(false)
-		const result = await runFramePreparation(prepareServices(flat), actionContext({ ...devices, flatPanel: { device: closed } }), preparation({ group: group({ frameType: 'FLAT' }), cover: coverPolicy(), flatPanel: panelPolicy() }))
+		const result = await runFramePreparation(prepareServices(flat), actionContext({ ...devices, flatPanel: { device: closed } }), preparation({ group: group(undefined, { frameType: 'FLAT' }), cover: coverPolicy(), flatPanel: panelPolicy() }))
 
 		expect(result).toMatchObject({ type: 'completed', value: { commanded: ['cover', 'panelOn'] } })
 		expect(flat.map((command) => command.name)).toEqual(['park', 'intensity', 'enable'])
@@ -290,7 +288,7 @@ describe('frame preparation', () => {
 
 		const dark: Command[] = []
 		const parked = mount(false)
-		const result = await runFramePreparation(prepareServices(dark), actionContext({ camera: { device: camera() }, mount: { device: parked } }), preparation({ group: group({ frameType: 'DARK' }) }))
+		const result = await runFramePreparation(prepareServices(dark), actionContext({ camera: { device: camera() }, mount: { device: parked } }), preparation({ group: group(undefined, { frameType: 'DARK' }) }))
 
 		expect(result).toMatchObject({ type: 'completed', value: { commanded: [] } })
 		expect(parked.tracking).toBeFalse()
@@ -356,7 +354,7 @@ describe('frame preparation', () => {
 			{ filter: { type: 'name' as const, name: 'L' }, offset: 100 },
 			{ filter: { type: 'name' as const, name: 'Ha' }, offset: 350 },
 		]
-		const request = preparation({ group: group({ filter: { type: 'name', name: 'Ha' } }), filterOffsets: offsets })
+		const request = preparation({ group: group(undefined, { filter: { type: 'name', name: 'Ha' } }), filterOffsets: offsets })
 		const result = await runFramePreparation(prepareServices(commands), actionContext({ camera: { device: camera() }, wheel: { device: carousel }, focuser: { device: optics }, mount: { device: mount(true) } }), request)
 
 		expect(result).toMatchObject({ type: 'completed', value: { commanded: ['filter', 'focusOffset'], slot: 1, focusShift: 250 } })
@@ -374,7 +372,7 @@ describe('frame preparation', () => {
 			{ filter: { type: 'name' as const, name: 'L' }, offset: 100 },
 			{ filter: { type: 'name' as const, name: 'Ha' }, offset: 350 },
 		]
-		const request = preparation({ group: group({ filter: { type: 'name', name: 'Ha' } }), filterOffsets: offsets })
+		const request = preparation({ group: group(undefined, { filter: { type: 'name', name: 'Ha' } }), filterOffsets: offsets })
 		const services = prepareServices(commands, { focuserMoveTo: 'timeout' })
 		const context = actionContext({ camera: { device: camera() }, wheel: { device: carousel }, focuser: { device: optics }, mount: { device: mount(true) } })
 		const result = await runFramePreparation(services, context, request)
@@ -403,7 +401,7 @@ describe('frame preparation', () => {
 			{ filter: { type: 'name' as const, name: 'L' }, offset: 100 },
 			{ filter: { type: 'name' as const, name: 'Ha' }, offset: 350 },
 		]
-		const request = preparation({ group: group({ filter: { type: 'name', name: 'Ha' } }), filterOffsets: offsets })
+		const request = preparation({ group: group(undefined, { filter: { type: 'name', name: 'Ha' } }), filterOffsets: offsets })
 		const services: SequencerPreparationServices = {
 			...prepareServices(commands),
 			focuserCommander: {
@@ -429,7 +427,7 @@ describe('frame preparation', () => {
 			{ filter: { type: 'name' as const, name: 'L' }, offset: 100 },
 			{ filter: { type: 'name' as const, name: 'Ha' }, offset: 350 },
 		]
-		const request = preparation({ group: group({ filter: { type: 'name', name: 'Ha' } }), filterOffsets: offsets })
+		const request = preparation({ group: group(undefined, { filter: { type: 'name', name: 'Ha' } }), filterOffsets: offsets })
 		let moves = 0
 		const services: SequencerPreparationServices = {
 			...prepareServices(commands, { focuserMoveTo: 'timeout' }),
@@ -457,7 +455,7 @@ describe('frame preparation', () => {
 		const commands: Command[] = []
 		const carousel = wheel(['L', 'R'], 0)
 		const request = preparation({
-			group: group({ filter: { type: 'name', name: 'R' } }),
+			group: group(undefined, { filter: { type: 'name', name: 'R' } }),
 			filterOffsets: [
 				{ filter: { type: 'name', name: 'L' }, offset: 100 },
 				{ filter: { type: 'name', name: 'R' }, offset: 100 },
@@ -471,7 +469,7 @@ describe('frame preparation', () => {
 
 	test('refuses a frame whose filter the wheel does not carry', async () => {
 		const commands: Command[] = []
-		const request = preparation({ group: group({ filter: { type: 'name', name: 'SII' } }) })
+		const request = preparation({ group: group(undefined, { filter: { type: 'name', name: 'SII' } }) })
 		const result = await runFramePreparation(prepareServices(commands), actionContext({ camera: { device: camera() }, wheel: { device: wheel(['L', 'Ha'], 0) }, mount: { device: mount(true) } }), request)
 
 		expect(result).toEqual({ type: 'fatalFailure', reason: 'unexpectedState', detail: 'the wheel does not carry the filter the frame requires' })
@@ -579,7 +577,7 @@ describe('frame preparation', () => {
 	test('stops at the first refusal instead of commanding the steps that follow it', async () => {
 		const commands: Command[] = []
 		const devices = { camera: { device: camera() }, wheel: { device: wheel(['L', 'Ha'], 0) }, cover: { device: cover(true) }, rotator: { device: rotator(45) }, mount: { device: mount(true) } }
-		const request = preparation({ group: group({ filter: { type: 'name', name: 'Ha' } }), cover: coverPolicy(), rotator: rotatorPolicy() })
+		const request = preparation({ group: group(undefined, { filter: { type: 'name', name: 'Ha' } }), cover: coverPolicy(), rotator: rotatorPolicy() })
 		const result = await runFramePreparation(prepareServices(commands, { wheelMoveTo: 'alert' }), actionContext(devices), request)
 
 		expect(result).toMatchObject({ type: 'retryableFailure', reason: 'alert' })
@@ -590,14 +588,14 @@ describe('frame preparation', () => {
 describe('pending preparation', () => {
 	test('reports nothing pending on a path that already matches the frame', () => {
 		const devices = { camera: { device: camera() }, wheel: { device: wheel(['L', 'Ha'], 1) }, cover: { device: cover(false) }, flatPanel: { device: flatPanel(false) }, rotator: { device: rotator(30) }, mount: { device: mount(true) } }
-		const request = preparation({ group: group({ filter: { type: 'name', name: 'Ha' } }), cover: coverPolicy(), flatPanel: panelPolicy(), rotator: rotatorPolicy(), cooling: coolingPolicy() })
+		const request = preparation({ group: group(undefined, { filter: { type: 'name', name: 'Ha' } }), cover: coverPolicy(), flatPanel: panelPolicy(), rotator: rotatorPolicy(), cooling: coolingPolicy() })
 
 		expect(sequencerFramePreparationPending(actionContext(devices), request)).toBe(false)
 	})
 
 	test('reports every dimension the frame still requires', () => {
 		const devices = { camera: { device: camera() }, wheel: { device: wheel(['L', 'Ha'], 1) }, cover: { device: cover(false) }, flatPanel: { device: flatPanel(false) }, rotator: { device: rotator(30) }, mount: { device: mount(true) } }
-		const request = preparation({ group: group({ filter: { type: 'name', name: 'Ha' } }), cover: coverPolicy(), flatPanel: panelPolicy(), rotator: rotatorPolicy(), cooling: coolingPolicy() })
+		const request = preparation({ group: group(undefined, { filter: { type: 'name', name: 'Ha' } }), cover: coverPolicy(), flatPanel: panelPolicy(), rotator: rotatorPolicy(), cooling: coolingPolicy() })
 
 		expect(sequencerFramePreparationPending(actionContext({ ...devices, mount: { device: mount(false) } }), request)).toBe(true)
 		expect(sequencerFramePreparationPending(actionContext({ ...devices, mount: { device: mount(true, 'LUNAR') } }), request)).toBe(true)
@@ -610,14 +608,14 @@ describe('pending preparation', () => {
 
 	test('reports a filter the wheel does not carry as pending and leaves the refusal to the preparation', () => {
 		const devices = { camera: { device: camera() }, wheel: { device: wheel(['L', 'Ha'], 0) }, mount: { device: mount(true) } }
-		const request = preparation({ group: group({ filter: { type: 'name', name: 'OIII' } }) })
+		const request = preparation({ group: group(undefined, { filter: { type: 'name', name: 'OIII' } }) })
 
 		expect(sequencerFramePreparationPending(actionContext(devices), request)).toBe(true)
 	})
 
 	test('reports the lit panel of a flat as pending on every frame', () => {
 		const devices = { camera: { device: camera() }, flatPanel: { device: flatPanel(true, 80) }, mount: { device: mount(true) } }
-		const request = preparation({ group: group({ frameType: 'FLAT' }), flatPanel: panelPolicy() })
+		const request = preparation({ group: group(undefined, { frameType: 'FLAT' }), flatPanel: panelPolicy() })
 
 		expect(sequencerFramePreparationPending(actionContext(devices), request)).toBe(true)
 	})

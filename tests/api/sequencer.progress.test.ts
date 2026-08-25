@@ -1,31 +1,30 @@
 import { describe, expect, test } from 'bun:test'
 import { abandonSlot, acceptFrame, advanceCaptureCycle, attemptsSpent, attemptWindowExhausted, grantAttemptWindow, SEQUENCER_INITIAL_CAPTURE_PROGRESS } from 'src/api/sequencer.progress'
 import { captureCycleCompleted, frameGroupCompleted, frameGroupDegraded, frameScheduler, groupProgressOf, SEQUENCER_INITIAL_GROUP_PROGRESS, targetProgressOf } from 'src/api/sequencer.scheduler'
+import type { SequencerCameraCapture } from '#/sequencer'
 import type { SequencerPlanFrameGroup, SequencerPlanLoop, SequencerPlanSequence } from '#/sequencer.plan'
 import type { SequencerCaptureProgress } from '#/sequencer.state'
 import { camera, retry } from './sequencer.fixture'
 
-function group(id: string, overrides?: Partial<SequencerPlanFrameGroup>): SequencerPlanFrameGroup {
-	const count = overrides?.count ?? 3
-	const requiredSlots = overrides?.requiredSlots ?? count
-	const abandonmentBudget = overrides?.abandonmentBudget ?? 0
+function group(id: string, group?: Partial<SequencerPlanFrameGroup>, capture?: Partial<SequencerCameraCapture>): SequencerPlanFrameGroup {
+	const count = group?.count ?? 3
+	const requiredSlots = group?.requiredSlots ?? count
+	const abandonmentBudget = group?.abandonmentBudget ?? 0
 
 	return {
 		id,
 		name: id,
 		nodeId: `target:m42/frame:${id}`,
-		frameType: 'LIGHT',
-		exposureTime: 60,
 		count,
 		delay: 0,
 		weight: 1,
-		camera: camera(),
+		capture: camera(capture),
 		retry: retry(),
 		requiredSlots,
 		abandonmentBudget,
 		slotLimit: requiredSlots + abandonmentBudget,
 		projectedIntegration: requiredSlots * 60,
-		...overrides,
+		...group,
 	}
 }
 
@@ -114,6 +113,13 @@ describe('capture progress', () => {
 
 		expect(counters(progress, 'lum').integration).toBe(180)
 		expect(frameGroupCompleted(lum, counters(progress, 'lum'))).toBeTrue()
+	})
+
+	test('converts an accepted exposure into seconds before integrating it', () => {
+		const lum = group('lum', { count: 2 }, { exposureTime: 60000, exposureTimeUnit: 'millisecond' })
+		const progress = acceptFrame(SEQUENCER_INITIAL_CAPTURE_PROGRESS, 'm42', lum)
+
+		expect(counters(progress, 'lum').integration).toBe(60)
 	})
 })
 

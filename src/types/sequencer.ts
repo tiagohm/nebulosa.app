@@ -278,9 +278,6 @@ export interface SequencerFrame {
 	// Stable identifier used by definitions, checkpoints, events, or ordered actions.
 	// Use a non-empty value unique within its owning collection.
 	readonly id: string
-	// Human-readable label for this object.
-	// Use a non-empty value suitable for logs and UI display.
-	readonly name: string
 	// Controls whether this feature or definition is active.
 	readonly enabled: boolean
 	// Requested number of accepted frames in this group.

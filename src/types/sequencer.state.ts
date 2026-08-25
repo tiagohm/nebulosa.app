@@ -302,8 +302,6 @@ export interface SequencerExposureSnapshot {
 export interface SequencerGroupSnapshot {
 	// Frame group id within the plan.
 	readonly id: string
-	// Human-readable label of the group, absent when the definition declared none.
-	readonly name?: string
 	// Classification of the frames the group captures.
 	readonly frameType: FrameType
 	// Exposure duration of every frame of the group, in seconds.
@@ -390,8 +388,6 @@ export interface SequencerActivitySnapshot {
 	// Block type of the node, as registered. The UI reads it to tell a trigger — autofocus, dither, flip,
 	// recentering — from the capture itself.
 	readonly type: string
-	// Human-readable label of the node, falling back to its type when the plan declares none.
-	readonly name: string
 	// What the action is doing.
 	readonly state: SequencerActivityState
 	// Attempt in progress, starting at 1, so a retry is visible before it fails again.
@@ -429,8 +425,6 @@ export interface SequencerTriggerSnapshot {
 export interface SequencerMonitorSnapshot {
 	// Monitor id.
 	readonly id: string
-	// Human-readable label.
-	readonly name: string
 	// Whether the condition the monitor watches currently holds.
 	readonly triggered: boolean
 	// Short human-readable detail of the last reading.

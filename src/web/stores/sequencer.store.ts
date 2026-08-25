@@ -301,7 +301,7 @@ export function sequencerStore(api: DockviewPanelApi) {
 
 	function addFrame() {
 		const index = state.request.capture.frames.length
-		const frame: SequencerFrame = { id: nanoid(), name: `Frame ${index + 1}`, enabled: true, count: 10, weight: 1, capture: structuredClone(DEFAULT_SEQUENCER_AUXILIARY_CAPTURE) }
+		const frame: SequencerFrame = { id: nanoid(), enabled: true, count: 10, weight: 1, capture: structuredClone(DEFAULT_SEQUENCER_AUXILIARY_CAPTURE) }
 		state.request.capture.frames.push(frame)
 		if (!state.camera) return
 		updateCameraCaptureStartFromCamera(state.camera, frame.capture)

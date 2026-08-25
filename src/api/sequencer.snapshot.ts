@@ -103,8 +103,6 @@ export interface SequencerActivityObservation {
 	readonly nodeId: string
 	// Block type of the node, as registered.
 	readonly type: string
-	// Human-readable label of the node, falling back to the block type when the plan declares none.
-	readonly name?: string
 	// What the action is doing.
 	readonly state: SequencerActivityState
 	// Attempt in progress, starting at 1.
@@ -186,7 +184,6 @@ export function deriveSequencerSnapshot(observation: SequencerSnapshotObservatio
 
 		groups.push({
 			id: group.id,
-			name: group.name,
 			frameType: group.capture.frameType,
 			exposureTime: sequencerCaptureExposureInSeconds(group.capture),
 			filter: filterLabel(group),
@@ -314,7 +311,7 @@ function devicesOf(observation: SequencerSnapshotObservation): readonly Sequence
 
 // One action as the snapshot reports it, with the block type standing in for a node the plan does not name.
 function activityOf(activity: SequencerActivityObservation): SequencerActivitySnapshot {
-	return { nodeId: activity.nodeId, type: activity.type, name: activity.name ?? activity.type, state: activity.state, attempt: activity.attempt, progress: activity.progress, detail: activity.detail, startedAt: activity.startedAt, wait: activity.wait }
+	return { nodeId: activity.nodeId, type: activity.type, state: activity.state, attempt: activity.attempt, progress: activity.progress, detail: activity.detail, startedAt: activity.startedAt, wait: activity.wait }
 }
 
 // Exposure in progress, with the elapsed time clamped to the requested duration.

@@ -33,7 +33,7 @@ describe('preflight', () => {
 		const definition = canonical()
 		const view = validate({ ...definition, capture: { ...definition.capture, repeat: 3, frames: [frame('lum', { count: 4, abandonmentBudget: 2 })] } })
 
-		expect(view.groups).toEqual([{ id: 'lum', name: 'lum', frameType: 'LIGHT', exposureTime: 60, requiredSlots: 4, abandonmentBudget: 2, slotLimit: 6, projectedIntegration: 240 }])
+		expect(view.groups).toEqual([{ id: 'lum', frameType: 'LIGHT', exposureTime: 60, requiredSlots: 4, abandonmentBudget: 2, slotLimit: 6, projectedIntegration: 240 }])
 	})
 
 	test('the totals scale the groups by the cycle count', () => {

@@ -120,7 +120,7 @@ const Status = memo(() => {
 				)}
 				{foreground && (
 					<Chip color="secondary" size="sm">
-						{foreground.name}: {foreground.state}
+						{foreground.state}
 					</Chip>
 				)}
 				{session?.failure && (
@@ -448,7 +448,6 @@ const FrameEditor = memo(({ index, disabled }: FrameEditorProps) => {
 	return (
 		<div className="flex flex-row flex-wrap items-center gap-2 rounded-lg bg-neutral-900/70 p-2">
 			<Switch disabled={disabled} label="On" onValueChange={(value) => sequencer.updateFrame(index, 'enabled', value)} value={frame.enabled} />
-			<TextInput className="min-w-80" disabled={blocked} label="Name" onValueChange={(value) => sequencer.updateFrame(index, 'name', value)} value={frame.name} />
 			<FrameTypeSelect disabled={blocked} onValueChange={(value) => sequencer.updateFrameCapture(index, 'frameType', value)} value={frame.capture.frameType} />
 			<CameraExposureTimeInput
 				disabled={blocked || frame.capture.frameType === 'BIAS'}

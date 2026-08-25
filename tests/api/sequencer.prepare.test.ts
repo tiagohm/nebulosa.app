@@ -80,7 +80,6 @@ function trackingPolicy(overrides?: Partial<Omit<SequencerTargetTracking, 'enabl
 function group(overrides?: Partial<SequencerPlanFrameGroup>, capture?: Partial<SequencerCameraCapture>): SequencerPlanFrameGroup {
 	return {
 		id: 'lum',
-		name: 'lum',
 		nodeId: 'target:m42/frame:lum',
 		count: 3,
 		delay: 0,

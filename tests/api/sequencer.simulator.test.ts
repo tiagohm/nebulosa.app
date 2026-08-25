@@ -57,18 +57,18 @@ describe('canonical night', () => {
 	}, 30_000)
 
 	test('A.02 snapshot during the first autofocus', async () => {
-		let duringAutofocus: { readonly state: string; readonly exposure?: unknown; readonly type?: string; readonly name?: string } | undefined
+		let duringAutofocus: { readonly state: string; readonly exposure?: unknown; readonly type?: string } | undefined
 		const night = await runNight({
 			control: async (api) => {
 				const snapshot = await api.waitUntil((current) => current.foreground?.type === 'trigger.autofocus')
 
-				duringAutofocus = { state: snapshot.state, exposure: snapshot.capture.exposure, type: snapshot.foreground?.type, name: snapshot.foreground?.name }
+				duringAutofocus = { state: snapshot.state, exposure: snapshot.capture.exposure, type: snapshot.foreground?.type }
 			},
 		})
 
 		nights.push(night)
 
-		expect(duringAutofocus).toEqual({ state: 'running', exposure: undefined, type: 'trigger.autofocus', name: 'trigger.autofocus' })
+		expect(duringAutofocus).toEqual({ state: 'running', exposure: undefined, type: 'trigger.autofocus' })
 		expect(night.session.state).toBe('completed')
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(4)
@@ -128,7 +128,7 @@ describe('canonical night', () => {
 		const night = await runNight({
 			patch: {
 				devices: { wheel: undefined },
-				capture: { frames: [frame('lum', { name: 'Luminance', count: 4 }, { exposureTime: 2 })] },
+				capture: { frames: [frame('lum', { count: 4 }, { exposureTime: 2 })] },
 			},
 		})
 
@@ -200,7 +200,7 @@ describe('canonical night', () => {
 				rotator: { enabled: false },
 				cover: { enabled: false },
 				flatPanel: { enabled: false },
-				capture: { frames: [frame('lum', { name: 'Luminance', count: 4 }, { exposureTime: 2 })] },
+				capture: { frames: [frame('lum', { count: 4 }, { exposureTime: 2 })] },
 			},
 		})
 
@@ -224,7 +224,7 @@ describe('canonical night', () => {
 				dither: { enabled: false },
 				cooling: { enabled: false },
 				meridianFlip: { enabled: false },
-				capture: { frames: [frame('lum', { name: 'Luminance', count: 8 }, { exposureTime: 0.5 })] },
+				capture: { frames: [frame('lum', { count: 8 }, { exposureTime: 0.5 })] },
 				startup: { enabled: false },
 				shutdown: { enabled: false },
 			},
@@ -253,11 +253,7 @@ describe('canonical night', () => {
 		const night = await runNight({
 			patch: {
 				capture: {
-					frames: [
-						frame('ha', { name: 'Hydrogen-alpha', count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'Ha' } }),
-						frame('o3', { name: 'Oxygen-III', count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'O3' } }),
-						frame('s2', { name: 'Sulfur-II', count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'S2' } }),
-					],
+					frames: [frame('ha', { count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'Ha' } }), frame('o3', { count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'O3' } }), frame('s2', { count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'S2' } })],
 				},
 				autofocus: {
 					capture: { filter: { type: 'name', name: 'L' } },
@@ -295,7 +291,7 @@ describe('canonical night', () => {
 				autofocus: { enabled: false },
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 40 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				capture: { delay: 0, frames: [frame('lum', { count: 40 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
 			},
 		})
 
@@ -328,7 +324,7 @@ describe('admission', () => {
 			autofocus: { enabled: false },
 			meridianFlip: { enabled: false },
 			target: { center: { enabled: false } },
-			capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+			capture: { delay: 0, frames: [frame('lum', { count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
 		} as const
 		const created = [process.handler.createSession(process.definition(east, { id: 'east', ...short })), process.handler.createSession(process.definition(west, { id: 'west', ...short }))]
 
@@ -377,7 +373,7 @@ describe('admission', () => {
 				autofocus: { enabled: false },
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				capture: { delay: 0, frames: [frame('lum', { count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
 			}),
 		)
 
@@ -421,7 +417,7 @@ describe('admission', () => {
 				autofocus: { enabled: false },
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				capture: { delay: 0, frames: [frame('lum', { count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
 			}),
 		)
 
@@ -470,7 +466,7 @@ describe('admission', () => {
 				autofocus: { enabled: false },
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 2 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				capture: { delay: 0, frames: [frame('lum', { count: 2 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
 				dither: { everyFrames: 1 },
 			}),
 		)
@@ -512,7 +508,7 @@ describe('admission', () => {
 				autofocus: { enabled: false },
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				capture: { delay: 0, frames: [frame('lum', { count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
 				guiding: {
 					connection: {
 						mode: 'local',
@@ -1293,7 +1289,7 @@ describe('startup', () => {
 				autofocus: { enabled: false },
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				capture: { delay: 0, frames: [frame('lum', { count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
 			},
 			sim: { camera: { temperature: 20 } },
 		})
@@ -1333,7 +1329,7 @@ describe('startup', () => {
 				autofocus: { enabled: false },
 				dither: { enabled: false },
 				meridianFlip: { enabled: false },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1 }, { filter: { type: 'name', name: 'L' } })] },
+				capture: { delay: 0, frames: [frame('lum', { count: 1 }, { filter: { type: 'name', name: 'L' } })] },
 			},
 		})
 
@@ -1648,7 +1644,7 @@ describe('target acquisition', () => {
 				autofocus: { enabled: false },
 				meridianFlip: { enabled: false },
 				rotator: { enabled: false },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 2 }, { exposureTime: 2 })] },
+				capture: { delay: 0, frames: [frame('lum', { count: 2 }, { exposureTime: 2 })] },
 			},
 		})
 

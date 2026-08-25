@@ -298,7 +298,6 @@ function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): Sequence
 
 	return {
 		id: frame.id,
-		name: frame.name,
 		nodeId: sequencerNodeId.captureFrame(target.id, frame.id),
 		count: frame.count,
 		delay: frame.delay ?? capture.delay,

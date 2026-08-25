@@ -60,9 +60,6 @@ export interface SequencerPlanLoop {
 export interface SequencerPlanFrameGroup {
 	// Frame id as declared, unique within the capture plan.
 	readonly id: string
-	// Human-readable label of the group, carried so the pre-flight view names a group the same way the editor
-	// does instead of showing the id it addresses nodes with.
-	readonly name: string
 	// Node id of the capture action of this group.
 	readonly nodeId: string
 	// Requested number of accepted frames per cycle; a group reaching the plan always declares at least one.
@@ -237,8 +234,6 @@ export type SequencerCompilation =
 export interface SequencerPreflightGroup {
 	// Frame group the numbers belong to.
 	readonly id: string
-	// Human-readable label of the group, as the editor shows it.
-	readonly name: string
 	// Frame classification of the group.
 	readonly frameType: FrameType
 	// Exposure duration of every frame of the group, in seconds.

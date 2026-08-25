@@ -11,7 +11,6 @@ import { camera, retry } from './sequencer.fixture'
 function group(id: string, group?: Partial<SequencerPlanFrameGroup>, capture?: Partial<SequencerCameraCapture>): SequencerPlanFrameGroup {
 	return {
 		id,
-		name: id,
 		nodeId: sequencerNodeId.captureFrame('m42', id),
 		count: 3,
 		delay: 0,

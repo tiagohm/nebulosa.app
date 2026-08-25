@@ -81,7 +81,6 @@ const CONSUMED = [
 	'target.center.retry.onExhausted',
 	'capture.repeat',
 	'capture.frames[].id',
-	'capture.frames[].name',
 	'capture.frames[].enabled',
 	'capture.frames[].count',
 	'capture.frames[].weight',

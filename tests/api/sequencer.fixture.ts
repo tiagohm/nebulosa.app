@@ -33,7 +33,7 @@ export function camera(capture?: Partial<SequencerCameraCapture>): SequencerCame
 }
 
 export function frame(id: string, frame?: Partial<SequencerFrame>, capture?: Partial<SequencerCameraCapture>): SequencerFrame {
-	return { id, name: id, enabled: true, count: 10, weight: 1, ...frame, capture: { ...camera(), ...frame?.capture, ...capture } }
+	return { id, enabled: true, count: 10, weight: 1, ...frame, capture: { ...camera(), ...frame?.capture, ...capture } }
 }
 
 // Canonical definition with every optional property of the contract declared, which is what the compatibility

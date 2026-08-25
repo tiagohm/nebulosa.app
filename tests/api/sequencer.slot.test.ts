@@ -15,7 +15,6 @@ function group(overrides?: Partial<SequencerPlanFrameGroup>, policy?: Partial<Se
 
 	return {
 		id: 'lum',
-		name: 'lum',
 		nodeId: 'target:m42/frame:lum',
 		count,
 		delay: 0,

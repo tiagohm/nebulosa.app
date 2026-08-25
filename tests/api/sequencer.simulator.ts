@@ -173,10 +173,10 @@ export function defaultSequencer(root: string): Sequencer {
 			continueAfterRejectedFrame: false,
 			retry: RETRY,
 			frames: [
-				frame('lum', { name: 'Luminance', count: 3 }, { exposureTime: 2, filter: { type: 'name', name: 'L' } }),
-				frame('red', { name: 'Red', count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'R' } }),
-				frame('green', { name: 'Green', count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'G' } }),
-				frame('blue', { name: 'Blue', count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'B' } }),
+				frame('lum', { count: 3 }, { exposureTime: 2, filter: { type: 'name', name: 'L' } }),
+				frame('red', { count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'R' } }),
+				frame('green', { count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'G' } }),
+				frame('blue', { count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'B' } }),
 			],
 		},
 		guiding: {

@@ -13,7 +13,6 @@ function group(id: string, group?: Partial<SequencerPlanFrameGroup>, capture?: P
 
 	return {
 		id,
-		name: id,
 		nodeId: `target:m42/frame:${id}`,
 		count,
 		delay: 0,

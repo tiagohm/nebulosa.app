@@ -375,20 +375,12 @@ const TargetConstraints = memo(() => {
 	)
 })
 
-const Capture = memo(() => {
-	const sequencer = useContext(SequencerStoreContext)
-	const { busy, camera } = useSnapshot(sequencer.state)
-	const capture = useSnapshot(sequencer.state.request.capture)
-	const frames = capture.frames
-	const blocked = busy || !camera
-
-	return (
-		<div className="grid w-full grid-cols-12 items-center gap-2">
-			<CaptureMode />
-			<CaptureFrames />
-		</div>
-	)
-})
+const Capture = memo(() => (
+	<div className="grid w-full grid-cols-12 items-center gap-2">
+		<CaptureMode />
+		<CaptureFrames />
+	</div>
+))
 
 const CaptureMode = memo(() => {
 	const sequencer = useContext(SequencerStoreContext)
@@ -416,12 +408,12 @@ const CaptureFrames = memo(() => {
 	const blocked = busy || !camera?.connected
 
 	return (
-		<div className="col-span-full flex flex-wrap items-center gap-2 text-sm">
-			<span className="font-bold">FRAMES:</span>
-			<div className="flex flex-1 flex-row items-center justify-end">
+		<div className="col-span-full flex flex-col flex-wrap items-center gap-2 text-sm">
+			<div className="flex w-full flex-row items-center justify-between gap-2">
+				<span className="font-bold">FRAMES:</span>
 				<Button color="success" disabled={blocked} label="Add frame" onClick={sequencer.addFrame} startContent={<Icons.Plus />} />
 			</div>
-			<div className="flex flex-col items-center gap-2">
+			<div className="flex w-full flex-col items-center gap-2">
 				{frames.map((frame, index) => (
 					<FrameEditor disabled={blocked} index={index} key={frame.id} />
 				))}
@@ -446,7 +438,7 @@ const FrameEditor = memo(({ index, disabled }: FrameEditorProps) => {
 	const blocked = disabled || !frame.enabled
 
 	return (
-		<div className="flex flex-row flex-wrap items-center gap-2 rounded-lg bg-neutral-900/70 p-2">
+		<div className="flex w-full flex-row flex-wrap items-center gap-2 rounded-lg bg-neutral-900/70 p-2">
 			<Switch disabled={disabled} label="On" onValueChange={(value) => sequencer.updateFrame(index, 'enabled', value)} value={frame.enabled} />
 			<FrameTypeSelect disabled={blocked} onValueChange={(value) => sequencer.updateFrameCapture(index, 'frameType', value)} value={frame.capture.frameType} />
 			<CameraExposureTimeInput
@@ -466,9 +458,10 @@ const FrameEditor = memo(({ index, disabled }: FrameEditorProps) => {
 			<NumberInput disabled={blocked} label="Abandonment budget" minValue={0} onValueChange={(value) => sequencer.updateFrame(index, 'abandonmentBudget', value)} value={frame.abandonmentBudget ?? 0} />
 			<CameraFields camera={sequencer.state.request.capture.frames[index].capture} disabled={blocked} />
 			<FilterReferenceInput disabled={blocked || !wheel?.connected} onValueChange={(value) => sequencer.updateFrameFilter(index, value)} value={frame.capture.filter} wheel={wheel} />
-			<div className="col-span-full flex justify-end gap-1">
+			<div className="flex flex-1 justify-end gap-1">
 				<IconButton color="secondary" disabled={disabled || index === 0} icon={Icons.ChevronUp} onClick={() => sequencer.moveFrame(index, -1)} tooltipContent="Move up" />
 				<IconButton color="secondary" disabled={disabled || index === count - 1} icon={Icons.ChevronDown} onClick={() => sequencer.moveFrame(index, 1)} tooltipContent="Move down" />
+				<IconButton color="primary" disabled={disabled} icon={Icons.Copy} onClick={() => sequencer.duplicateFrame(index)} tooltipContent="Duplicate" />
 				<IconButton color="danger" disabled={disabled} icon={Icons.Trash} onClick={() => sequencer.removeFrame(index)} tooltipContent="Remove" />
 			</div>
 		</div>

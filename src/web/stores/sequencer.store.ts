@@ -13,7 +13,7 @@ import type { Camera, Cover, Dome, FlatPanel, Focuser, GuideOutput, Mount, Mount
 import { guideOutputBus } from 'src/api/guideoutput'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, subscribe } from 'valtio'
-import { subscribeKey } from 'valtio/utils'
+import { deepClone, subscribeKey } from 'valtio/utils'
 import { DEFAULT_COORDINATE_INFO } from '#/mount'
 import type { CoordinateInfo } from '#/mount'
 import { DEFAULT_SEQUENCER, DEFAULT_SEQUENCER_AUXILIARY_CAPTURE, DEFAULT_SEQUENCER_RETRY_POLICY } from '#/sequencer'
@@ -306,6 +306,12 @@ export function sequencerStore(api: DockviewPanelApi) {
 		if (!state.camera) return
 		updateCameraCaptureStartFromCamera(state.camera, frame.capture)
 		frameUnsubscribers[index] = subscribeToUpdateCameraCaptureStartFromCamera(state.camera, frame.capture)
+	}
+
+	function duplicateFrame(index: number) {
+		const frame = deepClone(state.request.capture.frames[index])
+		frame.id = nanoid()
+		state.request.capture.frames.splice(index + 1, 0, frame)
 	}
 
 	function removeFrame(index: number) {
@@ -1585,6 +1591,7 @@ export function sequencerStore(api: DockviewPanelApi) {
 		setFlatPanel,
 		setDome,
 		addFrame,
+		duplicateFrame,
 		removeFrame,
 		moveFrame,
 		updateFrame,

@@ -4,12 +4,31 @@ import { compile, sequencerNodeId, sequencerPlanNodes } from 'src/api/sequencer.
 import { SequencerBlockRegistry } from 'src/api/sequencer.registry'
 import type { Sequencer, SequencerDeviceRole } from '#/sequencer'
 import type { SequencerPlanAction, SequencerPlanLoop, SequencerPlanSequence } from '#/sequencer.plan'
-import { action, camera, canonical, complete, frame, retry, unguided } from './sequencer.fixture'
+import { camera, canonical, complete, frame, retry, unguided } from './sequencer.fixture'
+
+const BLOCK_TYPES = [
+	'slew',
+	'center',
+	'capture.frame',
+	'trigger.autofocus',
+	'trigger.dither',
+	'trigger.meridianFlip',
+	'lifecycle.unparkMount',
+	'lifecycle.startTracking',
+	'lifecycle.openCover',
+	'lifecycle.coolCamera',
+	'lifecycle.startGuiding',
+	'lifecycle.stopGuiding',
+	'lifecycle.stopTracking',
+	'lifecycle.parkMount',
+	'lifecycle.closeCover',
+	'lifecycle.warmCamera',
+] as const
 
 function handlers(roles: Record<string, readonly SequencerDeviceRole[]> = {}) {
 	const registry = new SequencerBlockRegistry()
 
-	for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+	for (const type of BLOCK_TYPES) {
 		const declared = (roles[type] ?? []).map((role) => ({ role }))
 
 		registry.register({
@@ -136,13 +155,15 @@ describe('lowering', () => {
 		expect(target.children.map((node) => node.id)).toEqual(['target[m42].capture.loop'])
 	})
 
-	test('lifecycle actions keep the declared order and carry no target segment', () => {
+	test('lifecycle actions keep the derived physical order and carry no target segment', () => {
 		const { plan } = ok(canonical())
 		const startup = plan.root.children[0] as SequencerPlanSequence
 		const finalize = plan.root.children[2] as SequencerPlanSequence
 
-		expect(startup.children.map((node) => node.id)).toEqual(['startup.action[connect]', 'startup.action[unpark]', 'startup.action[cool]', 'startup.action[guide]'])
-		expect(finalize.children.map((node) => node.id)).toEqual(['finalize.action[park]', 'finalize.action[warm]'])
+		expect(startup.children.map((node) => node.id)).toEqual(['startup.action[unparkMount]', 'startup.action[coolCamera]', 'startup.action[startGuiding]'])
+		expect(finalize.children.map((node) => node.id)).toEqual(['finalize.action[parkMount]', 'finalize.action[warmCamera]'])
+		expect(startup.children.every((node) => node.kind === 'action' && (node.configuration as SequencerLifecycle).required)).toBe(true)
+		expect(finalize.children.every((node) => node.kind === 'action' && !(node.configuration as SequencerLifecycle).required)).toBe(true)
 		expect(startup.children.every((node) => !node.id.includes('target['))).toBe(true)
 		expect(finalize.children.every((node) => !node.id.includes('target['))).toBe(true)
 	})
@@ -161,11 +182,14 @@ describe('lowering', () => {
 	test('an action starting tracking carries the tracking policy of the target', () => {
 		const definition = canonical()
 		const { enabled, ...tracking } = definition.target.tracking
-		const { plan } = ok({ ...definition, startup: { ...definition.startup, actions: [...definition.startup.actions, action('track', { type: 'startTracking' })] } })
+		const { plan } = ok({ ...definition, target: { ...definition.target, goto: { ...definition.target.goto, enabled: false } } })
 		const startup = plan.root.children[0] as SequencerPlanSequence
-		const track = startup.children[4] as SequencerPlanAction
-		const unpark = startup.children[1] as SequencerPlanAction
+		const track = startup.children[1] as SequencerPlanAction
+		const unpark = startup.children[0] as SequencerPlanAction
 
+		expect((track.configuration as SequencerLifecycle).type).toBe('startTracking')
+		expect((track.configuration as SequencerLifecycle).required).toBe(true)
+		expect((track.configuration as SequencerLifecycle).timeout).toBe(0)
 		expect((track.configuration as SequencerLifecycle).tracking).toEqual(tracking)
 		expect((unpark.configuration as SequencerLifecycle).tracking).toBeUndefined()
 	})
@@ -189,8 +213,9 @@ describe('lowering', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, guiding: { ...definition.guiding, calibrateBeforeStart: true } })
 		const startup = plan.root.children[0] as SequencerPlanSequence
-		const guide = startup.children[3] as SequencerPlanAction
-		const unpark = startup.children[1] as SequencerPlanAction
+		const guide = startup.children[2] as SequencerPlanAction
+		expect((guide.configuration as SequencerLifecycle).type).toBe('startGuiding')
+		const unpark = startup.children[0] as SequencerPlanAction
 
 		expect((guide.configuration as SequencerLifecycle).guiding).toEqual({ calibrateBeforeStart: true, settle: definition.guiding.settle })
 		expect((unpark.configuration as SequencerLifecycle).guiding).toBeUndefined()
@@ -198,26 +223,29 @@ describe('lowering', () => {
 
 	test('an action starting guiding carries the guide-camera recipe of a local guider', () => {
 		const definition = complete()
-		const capture = { exposureTime: 2.5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 30, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false } as const
+		const capture = { exposureTime: 2.5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 30, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false } as const
 		const connection = { mode: 'local', focalLength: 200, capture } as const
 		const { plan } = ok({ ...definition, guiding: { ...definition.guiding, connection } })
 		const startup = plan.root.children[0] as SequencerPlanSequence
-		const guide = startup.children[2] as SequencerPlanAction
+		const guide = startup.children.find((node) => node.kind === 'action' && node.id === 'startup.action[startGuiding]') as SequencerPlanAction
 
+		expect((guide.configuration as SequencerLifecycle).type).toBe('startGuiding')
+		expect((guide.configuration as SequencerLifecycle).timeout).toBe(definition.guiding.settle.timeout)
 		expect((guide.configuration as SequencerLifecycle).guiding).toEqual({ calibrateBeforeStart: false, settle: definition.guiding.settle, capture })
 	})
 
-	test('an action starting tracking is refused when the target declares no tracking', () => {
+	test('tracking without a slew is started by the startup pipeline', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, target: { ...definition.target, tracking: { ...definition.target.tracking, enabled: false } }, startup: { ...definition.startup, actions: [...definition.startup.actions, action('track', { type: 'startTracking' })] } })
+		const { plan } = ok({ ...definition, target: { ...definition.target, goto: { ...definition.target.goto, enabled: false } } })
+		const startup = plan.root.children[0] as SequencerPlanSequence
 
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'target.tracking.enabled', message: 'a lifecycle action starts tracking, and the target block it reads the tracking mode and rates from is disabled' }])
+		expect(startup.children.map((node) => node.id)).toEqual(['startup.action[unparkMount]', 'startup.action[startTracking]', 'startup.action[coolCamera]', 'startup.action[startGuiding]'])
+		expect((startup.children[1] as SequencerPlanAction).configuration).toMatchObject({ type: 'startTracking', required: true, timeout: 0 })
 	})
 
-	test('a disabled pipeline or a pipeline with no enabled action produces no block', () => {
+	test('a disabled pipeline or a pipeline with no derived step produces no block', () => {
 		const definition = unguided()
-		const { plan } = ok({ ...definition, cooling: { ...definition.cooling, enabled: false }, startup: { ...definition.startup, enabled: false }, shutdown: { ...definition.shutdown, actions: [action('park', { type: 'parkMount', enabled: false })] } })
+		const { plan } = ok({ ...definition, cooling: { ...definition.cooling, enabled: false }, mount: { ...definition.mount, unparkOnStartup: false, parkOnShutdown: false }, startup: { ...definition.startup, enabled: false }, shutdown: { ...definition.shutdown, enabled: false } })
 
 		expect(plan.root.children.map((node) => node.id)).toEqual(['target[m42]'])
 		expect(plan.startup).toBeUndefined()
@@ -327,14 +355,6 @@ describe('structural validation', () => {
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'capture.frames[1].id', message: 'the frame id "lum" is declared more than once' }])
 	})
 
-	test('an empty lifecycle action id is refused', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, shutdown: { ...definition.shutdown, actions: [action('', { type: 'parkMount' })] } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'shutdown.actions[0].id', message: 'the shutdown action id is empty and cannot address a node' }])
-	})
-
 	test('a target pointing in a frame it declares no coordinate for is refused', () => {
 		const definition = canonical()
 		const compilation = compile({ ...definition, target: { ...definition.target, type: 'JNOW' } })
@@ -354,28 +374,16 @@ describe('structural validation', () => {
 	})
 
 	test('a target tracking with nothing to establish it is refused', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, target: { ...definition.target, goto: { ...definition.target.goto, enabled: false } } })
+		const definition = unguided()
+		const compilation = compile({
+			...definition,
+			cooling: { ...definition.cooling, enabled: false },
+			startup: { ...definition.startup, enabled: false },
+			target: { ...definition.target, goto: { ...definition.target.goto, enabled: false } },
+		})
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'target.tracking.enabled', message: 'tracking is established by the slew on arrival or by a startup action that starts it, and the definition declares neither' }])
-	})
-
-	test('a startup action that starts tracking establishes it without a slew', () => {
-		const definition = canonical()
-		const startup = { ...definition.startup, actions: [...definition.startup.actions, action('track', { type: 'startTracking' })] }
-		const compilation = compile({ ...definition, startup, target: { ...definition.target, goto: { ...definition.target.goto, enabled: false } } })
-
-		expect(compilation.ok).toBe(true)
-	})
-
-	test('a shutdown action that starts tracking does not establish it for the capture', () => {
-		const definition = canonical()
-		const shutdown = { ...definition.shutdown, actions: [action('track', { type: 'startTracking' }), ...definition.shutdown.actions] }
-		const compilation = compile({ ...definition, shutdown, target: { ...definition.target, goto: { ...definition.target.goto, enabled: false } } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics.map((diagnostic) => diagnostic.path)).toEqual(['target.tracking.enabled'])
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'target.tracking.enabled', message: 'tracking is established by the slew on arrival or, when the target does not slew, by the startup pipeline, and the definition declares neither' }])
 	})
 
 	test('a dither without a guider is refused', () => {
@@ -386,85 +394,45 @@ describe('structural validation', () => {
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'dither.enabled', message: 'a dither is a guider command, and the definition declares no guider to send it to' }])
 	})
 
-	test('a cooling block no lifecycle action commands is refused', () => {
-		const definition = canonical()
-		const startup = definition.startup.actions.filter((action) => action.type !== 'coolCamera')
-		const shutdown = definition.shutdown.actions.filter((action) => action.type !== 'warmCamera')
-		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: startup }, shutdown: { ...definition.shutdown, actions: shutdown } })
+	test('a cooling block with the startup pipeline disarmed is refused', () => {
+		const definition = unguided()
+		const compilation = compile({ ...definition, startup: { ...definition.startup, enabled: false } })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled startup action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' }])
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and the startup pipeline that cools the camera to it is disabled, so the session would capture at whatever temperature the sensor is already at' }])
 	})
 
-	test('a cooling block only a warming action commands is refused', () => {
+	test('a guiding block with the startup pipeline disarmed is refused', () => {
 		const definition = canonical()
-		const actions = definition.startup.actions.filter((action) => action.type !== 'coolCamera')
-		const compilation = compile({ ...definition, startup: { ...definition.startup, actions } })
+		const compilation = compile({ ...definition, cooling: { ...definition.cooling, enabled: false }, dither: { ...definition.dither, enabled: false }, startup: { ...definition.startup, enabled: false } })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled startup action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' }])
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and the startup pipeline that starts it is disabled, so every frame would be captured unguided' }])
 	})
 
-	test('a cooling block only a shutdown action commands is refused', () => {
-		const definition = canonical()
-		const startup = definition.startup.actions.filter((action) => action.type !== 'coolCamera')
-		const shutdown = [action('cool', { type: 'coolCamera' }), ...definition.shutdown.actions]
-		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: startup }, shutdown: { ...definition.shutdown, actions: shutdown } })
+	test('opening the cover on startup is optional when capture will open it', () => {
+		const definition = complete()
+		const { plan } = ok({ ...definition, cover: { ...definition.cover, enabled: true, openOnStartup: true, closeOnUnsafe: false, openBeforeCapture: true } })
+		const startup = plan.root.children[0] as SequencerPlanSequence
+		const open = startup.children.find((node) => node.kind === 'action' && node.id === 'startup.action[openCover]') as SequencerPlanAction
 
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled startup action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' }])
+		expect((open.configuration as SequencerLifecycle).required).toBe(false)
+		expect((open.configuration as SequencerLifecycle).timeout).toBe(definition.cover.timeout)
 	})
 
-	test('a guiding block no startup action starts is refused', () => {
-		const definition = canonical()
-		const actions = definition.startup.actions.filter((action) => action.type !== 'startGuiding')
-		const compilation = compile({ ...definition, dither: { ...definition.dither, enabled: false }, startup: { ...definition.startup, actions } })
+	test('opening the cover on startup is required when capture will not open it', () => {
+		const definition = complete()
+		const { plan } = ok({ ...definition, cover: { ...definition.cover, enabled: true, openOnStartup: true, closeOnUnsafe: false, openBeforeCapture: false } })
+		const startup = plan.root.children[0] as SequencerPlanSequence
+		const open = startup.children.find((node) => node.kind === 'action' && node.id === 'startup.action[openCover]') as SequencerPlanAction
 
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and no enabled startup action starts guiding, so every frame would be captured unguided' }])
-	})
-
-	test('a guiding block only a shutdown action starts is refused', () => {
-		const definition = canonical()
-		const startup = definition.startup.actions.filter((action) => action.type !== 'startGuiding')
-		const shutdown = [action('guide', { type: 'startGuiding' }), ...definition.shutdown.actions]
-		const compilation = compile({ ...definition, dither: { ...definition.dither, enabled: false }, startup: { ...definition.startup, actions: startup }, shutdown: { ...definition.shutdown, actions: shutdown } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and no enabled startup action starts guiding, so every frame would be captured unguided' }])
-	})
-
-	test('a startup action starting guiding without failing the session is refused', () => {
-		const definition = canonical()
-		const actions = definition.startup.actions.map((it) => (it.type === 'startGuiding' ? { ...it, required: false } : it))
-		const compilation = compile({ ...definition, startup: { ...definition.startup, actions } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'startup.actions[3].required', message: 'the guiding block declares the guider the capture runs under, and this action does not fail the session when it cannot start guiding, so every frame would be captured unguided' }])
-	})
-
-	test('a disabled startup action starting guiding is not asked to fail the session', () => {
-		const definition = canonical()
-		const actions = definition.startup.actions.map((it) => (it.type === 'startGuiding' ? { ...it, enabled: false, required: false } : it))
-		const compilation = compile({ ...definition, dither: { ...definition.dither, enabled: false }, startup: { ...definition.startup, actions } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and no enabled startup action starts guiding, so every frame would be captured unguided' }])
-	})
-
-	test('a lifecycle action commanding the cooler is refused without a cooling block', () => {
-		const definition = canonical()
-		const compilation = compile({ ...definition, cooling: { ...definition.cooling, enabled: false } })
-
-		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'cooling.enabled', message: 'a lifecycle action commands the camera cooler, and the cooling block it reads the temperature from is disabled' }])
+		expect((open.configuration as SequencerLifecycle).required).toBe(true)
+		expect((open.configuration as SequencerLifecycle).timeout).toBe(definition.cover.timeout)
 	})
 
 	test('a session that does not cool the camera needs no cooling block', () => {
 		const definition = canonical()
-		const startup = definition.startup.actions.filter((action) => action.type !== 'coolCamera')
-		const shutdown = definition.shutdown.actions.filter((action) => action.type !== 'warmCamera')
-		const compilation = compile({ ...definition, cooling: { ...definition.cooling, enabled: false }, startup: { ...definition.startup, actions: startup }, shutdown: { ...definition.shutdown, actions: shutdown } })
+		const compilation = compile({ ...definition, cooling: { ...definition.cooling, enabled: false } })
 
 		expect(compilation.ok).toBe(true)
 		if (compilation.ok) expect(compilation.plan.cooling).toBeUndefined()
@@ -478,18 +446,18 @@ describe('structural validation', () => {
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.focuser', message: 'autofocus requires the focuser role, which the definition does not declare' }])
 	})
 
-	test('a lifecycle action commanding a missing role names the role', () => {
+	test('an enabled cover without a cover device is refused', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, shutdown: { ...definition.shutdown, actions: [action('cover', { type: 'openCover' })] } })
+		const compilation = compile({ ...definition, cover: { ...definition.cover, enabled: true, closeOnUnsafe: false } })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.cover', message: 'shutdown.actions[0] requires the cover role, which the definition does not declare' }])
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.cover', message: 'cover requires the cover role, which the definition does not declare' }])
 	})
 
-	test('a disabled lifecycle action requires no role', () => {
+	test('a disabled cover requires no role', () => {
 		const definition = canonical()
 
-		expect(ok({ ...definition, shutdown: { ...definition.shutdown, actions: [action('close', { type: 'closeCover', enabled: false })] } }).plan.roles).not.toContain('cover')
+		expect(ok(definition).plan.roles).not.toContain('cover')
 	})
 
 	test('a role required twice is reserved once', () => {
@@ -523,13 +491,13 @@ describe('structural validation', () => {
 		const compilation = compile(canonical(), { registry })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics[0]).toEqual({ path: 'startup.action[connect]', message: 'no handler is registered for the block type "lifecycle.connectDevices"' })
+		if (!compilation.ok) expect(compilation.diagnostics[0]).toEqual({ path: 'startup.action[unparkMount]', message: 'no handler is registered for the block type "lifecycle.unparkMount"' })
 	})
 
 	test('a handler issue is addressed below the node it came from', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+		for (const type of BLOCK_TYPES) {
 			registry.register({
 				type,
 				version: 1,
@@ -552,10 +520,29 @@ describe('structural validation', () => {
 		if (compilation.ok) expect(compilation.plan.roles).toEqual(['camera', 'mount', 'wheel', 'focuser'])
 	})
 
+	test('an optional handler role the definition does not declare is not required', () => {
+		const registry = new SequencerBlockRegistry()
+
+		for (const type of BLOCK_TYPES) {
+			registry.register({
+				type,
+				version: 1,
+				validate: (configuration) => ({ ok: true, configuration }),
+				resources: () => (type === 'capture.frame' ? [{ role: 'camera' as const }, { role: 'cover' as const, optional: true }, { role: 'flatPanel' as const, optional: true }] : []),
+				execute: () => Promise.resolve({ type: 'completed', value: undefined } as const),
+			})
+		}
+
+		const compilation = compile(canonical(), { registry })
+
+		expect(compilation.ok).toBe(true)
+		if (compilation.ok) expect(compilation.plan.roles).toEqual(['camera', 'mount', 'focuser'])
+	})
+
 	test('the configuration a handler returns replaces the lowered one', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+		for (const type of BLOCK_TYPES) {
 			registry.register({
 				type,
 				version: 1,
@@ -571,18 +558,18 @@ describe('structural validation', () => {
 
 		if (compilation.ok) {
 			const nodes = [...sequencerPlanNodes(compilation.plan.root)]
-			const parked = nodes.find((node) => node.id === 'finalize.action[park]')
-			const connected = nodes.find((node) => node.id === 'startup.action[connect]')
+			const parked = nodes.find((node) => node.id === 'finalize.action[parkMount]')
+			const unparked = nodes.find((node) => node.id === 'startup.action[unparkMount]')
 
 			expect(parked?.kind === 'action' && parked.configuration).toEqual({ normalized: true })
-			expect(connected?.kind === 'action' && connected.configuration).toMatchObject({ action: { id: 'connect', type: 'connectDevices' }, timeout: 30 })
+			expect(unparked?.kind === 'action' && unparked.configuration).toMatchObject({ type: 'unparkMount', timeout: 30 })
 		}
 	})
 
 	test('a group a capture handler rebuilt is the group the scheduler follows', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+		for (const type of BLOCK_TYPES) {
 			registry.register({
 				type,
 				version: 1,
@@ -613,7 +600,7 @@ describe('structural validation', () => {
 	test('a group a capture handler rebuilt keeps the bounds the compiler derived', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+		for (const type of BLOCK_TYPES) {
 			registry.register({
 				type,
 				version: 1,
@@ -651,7 +638,7 @@ describe('structural validation', () => {
 	test('a group a capture handler rebuilt keeps the identifiers of the node that captures it', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+		for (const type of BLOCK_TYPES) {
 			registry.register({
 				type,
 				version: 1,
@@ -685,7 +672,7 @@ describe('structural validation', () => {
 	test('a capture handler cannot shorten the exposure the projected integration was derived from', () => {
 		const registry = new SequencerBlockRegistry()
 
-		for (const type of ['slew', 'center', 'capture.frame', 'trigger.autofocus', 'trigger.dither', 'trigger.meridianFlip', 'lifecycle.connectDevices', 'lifecycle.unparkMount', 'lifecycle.parkMount', 'lifecycle.coolCamera', 'lifecycle.warmCamera', 'lifecycle.startGuiding']) {
+		for (const type of BLOCK_TYPES) {
 			registry.register({
 				type,
 				version: 1,
@@ -717,7 +704,7 @@ describe('structural validation', () => {
 		const compilation = compile(canonical(), { registry: handlers({ 'lifecycle.parkMount': ['rotator'] }) })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.rotator', message: 'finalize.action[park] requires the rotator role, which the definition does not declare' }])
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.rotator', message: 'finalize.action[parkMount] requires the rotator role, which the definition does not declare' }])
 	})
 })
 
@@ -829,14 +816,13 @@ describe('node identity', () => {
 		expect(new Set(ids).size).toBe(ids.length)
 	})
 
-	test('inserting an action does not rename any other node', () => {
+	test('turning on a derived startup step does not rename any other node', () => {
 		const definition = canonical()
 		const before = [...sequencerPlanNodes(ok(definition).plan.root)].map((node) => node.id)
-		const actions = [definition.startup.actions[0], action('stop', { type: 'stopTracking' }), ...definition.startup.actions.slice(1)]
-		const after = [...sequencerPlanNodes(ok({ ...definition, startup: { ...definition.startup, actions } }).plan.root)].map((node) => node.id)
+		const after = [...sequencerPlanNodes(ok({ ...definition, target: { ...definition.target, goto: { ...definition.target.goto, enabled: false } } }).plan.root)].map((node) => node.id)
 
-		expect(after).toContain('startup.action[stop]')
-		expect(after.filter((id) => id !== 'startup.action[stop]')).toEqual(before)
+		expect(after).toContain('startup.action[startTracking]')
+		expect(after.filter((id) => id !== 'startup.action[startTracking]')).toEqual(before.filter((id) => id !== 'target[m42].slew'))
 	})
 
 	test('inserting a frame does not rename any other capture node', () => {
@@ -880,7 +866,7 @@ describe('node identity', () => {
 		const ids = [...sequencerPlanNodes(plan.root)].map((node) => node.id)
 
 		expect(ids).toContain('target[m31].capture.frame[lum]')
-		expect(ids).toContain('startup.action[connect]')
+		expect(ids).toContain('startup.action[unparkMount]')
 		expect(ids.some((id) => id.includes('m42'))).toBe(false)
 	})
 
@@ -1000,10 +986,10 @@ describe('failure policies', () => {
 
 	test('exhausting a policy into a suspension is refused', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, startup: { ...definition.startup, actions: [action('unpark', { retry: { ...retry(), onExhausted: 'suspend' } }), action('cool', { type: 'coolCamera' }), action('guide', { type: 'startGuiding', required: true })] } })
+		const compilation = compile({ ...definition, mount: { ...definition.mount, retry: { ...retry(), onExhausted: 'suspend' } } })
 
 		expect(compilation.ok).toBe(false)
-		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'startup.actions[0].retry.onExhausted', message: 'this version has no suspended state to exhaust a policy into' }])
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'mount.retry.onExhausted', message: 'this version has no suspended state to exhaust a policy into' }])
 	})
 
 	test('an attempt budget above the counting range is refused', () => {

@@ -177,12 +177,12 @@ describe('visibility', () => {
 		// points: the boundary is the highest point the grid can offer at every step, and reporting it costs
 		// 0.045 degrees. The instant comes from the hour angle instead, so the step no longer decides it.
 		const coarse = handler.planTargets(request([ZENITH_GRAZING], { step: 3600 }))
-		const fine = handler.planTargets(request([ZENITH_GRAZING], { step: 10 }))
+		const fine = handler.planTargets(request([ZENITH_GRAZING], { step: 100 }))
 
 		expect(coarse.targets[0].transit).toBe(fine.targets[0].transit)
 		expect(coarse.targets[0].transit - START).toBeCloseTo(17916, -2)
 		expect(toDeg(coarse.targets[0].maximumAltitude)).toBeCloseTo(89.97039, 4)
-	}, 10000)
+	}, 4000)
 
 	test('takes the culmination that falls inside a window longer than half a sidereal day', () => {
 		// The culmination nearest the first sample is the one before the window opens; the one the window contains

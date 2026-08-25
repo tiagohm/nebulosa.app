@@ -2,7 +2,7 @@ import { isAbsolute } from 'path'
 import type { MountTargetCoordinate, PierSide } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 // oxfmt-ignore
-import type { Sequencer, SequencerAutofocus, SequencerAuxiliaryCapture, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGoto, SequencerGuiderSettle, SequencerLifecycleAction, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
+import type { Sequencer, SequencerAutofocus, SequencerAuxiliaryCapture, SequencerCamera, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDevices, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGoto, SequencerGuiderSettle, SequencerLifecycleActionType, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanGuider, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { sequencerUnknownPlaceholders } from './sequencer.identity'
 import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
@@ -130,15 +130,18 @@ export interface SequencerCapturePreparation {
 	readonly filterOffsets: readonly SequencerFilterFocusOffset[]
 }
 
-// Configuration of one lifecycle action: the declared action without the fields the pipeline itself consumes.
+// Configuration of one derived lifecycle step: the type the handler commands, plus the timeout, retry and
+// requiredness taken from the equipment block that owns that step.
 export interface SequencerLifecycle {
-	// Declared action, verbatim, so the handler reads its own variant fields.
-	readonly action: SequencerLifecycleAction
-	// Whether a failure of this action must make the session terminal, normalized from the optional flag.
+	// Reconciliation this step performs.
+	readonly type: SequencerLifecycleActionType
+	// Whether a failure of this action must make the session terminal.
+	// Startup steps are required except for opening the cover when capture will open it anyway; shutdown steps are not.
 	readonly required: boolean
 	// Maximum time allowed for the action to reach its terminal state, in seconds.
+	// Zero runs without a deadline of its own.
 	readonly timeout: number
-	// Failure policy of the action.
+	// Failure policy of the action, taken from the owning equipment block.
 	readonly retry: SequencerRetryPolicy
 	// Thermal policy the action commands, present only on the actions that command the cooler and undefined on
 	// every other one. The cooler actions declare no setpoint of their own, and a handler is given its
@@ -180,8 +183,9 @@ interface CompilerContext {
 //
 // A node id is not a label: it is the key of the checkpoint, of the artifact, and of the readable part of the
 // file name, so an id that moved would orphan the frames already on disk and make a resume execute the wrong
-// node. Inserting an action, reordering the list, or renaming a target therefore has to leave every id that
-// already existed untouched, which positional ids cannot promise and declared ids give for free.
+// node. Inserting a frame or renaming a target therefore has to leave every id that already existed untouched,
+// which positional ids cannot promise and declared ids give for free. Lifecycle steps are addressed by their
+// action type, which is unique within a pipeline and does not move when another flag is turned on.
 //
 // The target segment appears in every node below the target, because those nodes exist once per target and
 // their artifacts belong to it. Startup and finalize carry no target segment: they run once per session, and
@@ -191,7 +195,7 @@ export const sequencerNodeId = {
 	root: () => 'plan',
 	// Startup or finalize block.
 	pipeline: (pipeline: 'startup' | 'finalize') => pipeline,
-	// One lifecycle action of a pipeline, addressed by its declared action id.
+	// One lifecycle action of a pipeline, addressed by its action type, which is unique within a pipeline.
 	pipelineAction: (pipeline: 'startup' | 'finalize', actionId: string) => `${pipeline}.action[${actionId}]`,
 	// Target block, addressed by its declared target id.
 	target: (targetId: string) => `target[${targetId}]`,
@@ -226,7 +230,21 @@ export function* sequencerPlanNodes(node: SequencerPlanNode): Generator<Sequence
 // Applies the per-frame camera overrides over the capture defaults, so the capture action never has to merge
 // anything at exposure time. Only properties the frame actually declares override the default.
 function cameraSettingsOf(frame: SequencerFrame, defaults: SequencerCamera): SequencerCamera {
-	return { ...defaults, ...frame.camera, subframe: frame.camera.subframe ?? defaults.subframe }
+	return {
+		binX: defaults.binX,
+		binY: defaults.binY,
+		gain: defaults.gain,
+		offset: defaults.offset,
+		frameFormat: defaults.frameFormat,
+		transferFormat: defaults.transferFormat,
+		compressed: defaults.compressed,
+		x: defaults.x,
+		y: defaults.y,
+		width: defaults.width,
+		height: defaults.height,
+		...frame.camera,
+		subframe: frame.camera.subframe ?? defaults.subframe,
+	}
 }
 
 // Whether a frame group contributes anything to the plan.
@@ -297,7 +315,7 @@ function lowerFrameGroup(definition: Sequencer, frame: SequencerFrame): Sequence
 		delay: frame.delay ?? capture.delay,
 		weight: frame.weight,
 		filter: frame.filter,
-		camera: cameraSettingsOf(frame, capture.defaults),
+		camera: cameraSettingsOf(frame, capture),
 		retry: capture.retry,
 		requiredSlots,
 		abandonmentBudget,
@@ -316,9 +334,21 @@ function lowerTracking(definition: Sequencer): Omit<SequencerTargetTracking, 'en
 }
 
 // Lifecycle actions that command the camera cooler and therefore carry the thermal policy of the definition.
-const SEQUENCER_COOLER_ACTION: ReadonlySet<SequencerLifecycleAction['type']> = new Set(['coolCamera', 'warmCamera'])
+const SEQUENCER_COOLER_ACTION: ReadonlySet<SequencerLifecycleActionType> = new Set(['coolCamera', 'warmCamera'])
 
-// Lowers one lifecycle action into its action node. The node id comes from the declared action id and the
+// One derived lifecycle step, before it is lowered into a plan node.
+interface SequencerDerivedLifecycle {
+	// Reconciliation this step performs.
+	readonly type: SequencerLifecycleActionType
+	// Whether a failure of this step must make the session terminal.
+	readonly required: boolean
+	// Maximum time allowed for the step, in seconds. Zero runs without a deadline of its own.
+	readonly timeout: number
+	// Failure policy taken from the owning equipment block.
+	readonly retry: SequencerRetryPolicy
+}
+
+// Lowers one derived lifecycle step into its action node. The node id comes from the action type and the
 // pipeline it belongs to, with no target segment: startup and finalize are siblings of the target block and
 // run once per session, so a target segment there would claim a relationship that does not exist.
 //
@@ -326,32 +356,60 @@ const SEQUENCER_COOLER_ACTION: ReadonlySet<SequencerLifecycleAction['type']> = n
 // actions that command the cooler, which is the whole reason the policy is carried into a node. `tracking` is
 // the tracking policy of the target, carried the same way and reaching only the action that starts tracking,
 // and `guiding` is the guiding policy of the definition, reaching only the action that starts guiding.
-function lowerLifecycleAction(pipeline: 'startup' | 'finalize', action: SequencerLifecycleAction, cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined, guiding: SequencerLifecycleGuiding | undefined): SequencerPlanAction {
+function lowerLifecycleAction(pipeline: 'startup' | 'finalize', step: SequencerDerivedLifecycle, cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined, guiding: SequencerLifecycleGuiding | undefined): SequencerPlanAction {
 	const configuration: SequencerLifecycle = {
-		action,
-		required: action.required ?? false,
-		timeout: action.timeout,
-		retry: action.retry,
-		cooling: SEQUENCER_COOLER_ACTION.has(action.type) ? cooling : undefined,
-		tracking: action.type === 'startTracking' ? tracking : undefined,
-		guiding: action.type === 'startGuiding' ? guiding : undefined,
+		type: step.type,
+		required: step.required,
+		timeout: step.timeout,
+		retry: step.retry,
+		cooling: SEQUENCER_COOLER_ACTION.has(step.type) ? cooling : undefined,
+		tracking: step.type === 'startTracking' ? tracking : undefined,
+		guiding: step.type === 'startGuiding' ? guiding : undefined,
 	}
-	return { kind: 'action', id: sequencerNodeId.pipelineAction(pipeline, action.id), type: `${SEQUENCER_LIFECYCLE_BLOCK_PREFIX}${action.type}`, configuration }
+	return { kind: 'action', id: sequencerNodeId.pipelineAction(pipeline, step.type), type: `${SEQUENCER_LIFECYCLE_BLOCK_PREFIX}${step.type}`, configuration }
 }
 
-// Lowers an ordered lifecycle pipeline. Returns undefined when the pipeline is disabled or declares no
-// enabled action: an empty container would be a node the runtime enters and leaves for nothing, and it would
-// still show up in the checkpoint as a place the session had been.
-function lowerPipeline(pipeline: 'startup' | 'finalize', enabled: boolean, actions: readonly SequencerLifecycleAction[], cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined, guiding: SequencerLifecycleGuiding | undefined): SequencerPlanSequence | undefined {
-	if (!enabled) return undefined
-
-	const children: SequencerPlanAction[] = []
-
-	for (const action of actions) {
-		if (action.enabled) children.push(lowerLifecycleAction(pipeline, action, cooling, tracking, guiding))
-	}
+// Lowers an ordered lifecycle pipeline. Returns undefined when the pipeline declares no step: an empty
+// container would be a node the runtime enters and leaves for nothing, and it would still show up in the
+// checkpoint as a place the session had been.
+function lowerPipeline(pipeline: 'startup' | 'finalize', steps: readonly SequencerDerivedLifecycle[], cooling: SequencerCooling | undefined, tracking: Omit<SequencerTargetTracking, 'enabled'> | undefined, guiding: SequencerLifecycleGuiding | undefined): SequencerPlanSequence | undefined {
+	const children = steps.map((step) => lowerLifecycleAction(pipeline, step, cooling, tracking, guiding))
 
 	return children.length > 0 ? { kind: 'sequence', id: sequencerNodeId.pipeline(pipeline), children } : undefined
+}
+
+// Derives the startup pipeline from the equipment flags. The order is the only physically valid one and is
+// not configurable: unpark the mount, start tracking when no slew will, open the cover, cool, then guide.
+function deriveStartup(definition: Sequencer): SequencerDerivedLifecycle[] {
+	if (!definition.startup.enabled) return []
+
+	const { cooling, cover, guiding, mount, target } = definition
+	const steps: SequencerDerivedLifecycle[] = []
+
+	if (mount.enabled && mount.unparkOnStartup) steps.push({ type: 'unparkMount', required: true, timeout: mount.timeout, retry: mount.retry })
+	if (target.tracking.enabled && !target.goto.enabled) steps.push({ type: 'startTracking', required: true, timeout: 0, retry: target.tracking.retry })
+	if (cover.enabled && cover.openOnStartup) steps.push({ type: 'openCover', required: !cover.openBeforeCapture, timeout: cover.timeout, retry: cover.retry })
+	if (cooling.enabled) steps.push({ type: 'coolCamera', required: true, timeout: cooling.timeout, retry: cooling.retry })
+	if (guiding.enabled) steps.push({ type: 'startGuiding', required: true, timeout: guiding.settle.timeout, retry: guiding.retry })
+
+	return steps
+}
+
+// Derives the shutdown pipeline from the equipment flags. The order is the reverse of startup, with the
+// mount parked while the sky is still open and the camera warmed last.
+function deriveShutdown(definition: Sequencer): SequencerDerivedLifecycle[] {
+	if (!definition.shutdown.enabled) return []
+
+	const { cooling, cover, guiding, mount, target } = definition
+	const steps: SequencerDerivedLifecycle[] = []
+
+	if (guiding.enabled && guiding.stopOnShutdown) steps.push({ type: 'stopGuiding', required: false, timeout: 0, retry: guiding.retry })
+	if (target.tracking.enabled && target.tracking.stopOnShutdown) steps.push({ type: 'stopTracking', required: false, timeout: 0, retry: target.tracking.retry })
+	if (cover.enabled && cover.closeOnShutdown) steps.push({ type: 'closeCover', required: false, timeout: cover.timeout, retry: cover.retry })
+	if (mount.enabled && mount.parkOnShutdown) steps.push({ type: 'parkMount', required: false, timeout: mount.timeout, retry: mount.retry })
+	if (cooling.enabled && cooling.warmOnShutdown) steps.push({ type: 'warmCamera', required: false, timeout: cooling.timeout, retry: cooling.retry })
+
+	return steps
 }
 
 // Lowers the centering of the target, or undefined when the target does not center. The coordinates are the
@@ -458,22 +516,6 @@ function lowerTarget(definition: Sequencer, groups: readonly SequencerPlanFrameG
 // regardless of the order the features that need them were inspected in.
 const SEQUENCER_ROLE_ORDER: readonly SequencerDeviceRole[] = ['camera', 'mount', 'wheel', 'focuser', 'rotator', 'guideCamera', 'guideOutput', 'cover', 'flatPanel', 'dome']
 
-// Role each lifecycle action commands, so an action that needs a device the definition never declared is
-// refused at compile time instead of failing halfway through the pipeline, with the observatory already
-// half open. `connectDevices` is absent because it declares its roles explicitly, `custom` is absent because
-// it addresses a host handler, which declares its own roles through the registry, and the dome and switch
-// actions are absent because the compatibility rule refuses them before a role could be required for them.
-const SEQUENCER_LIFECYCLE_ROLE: Partial<Record<SequencerLifecycleAction['type'], SequencerDeviceRole>> = {
-	unparkMount: 'mount',
-	parkMount: 'mount',
-	startTracking: 'mount',
-	stopTracking: 'mount',
-	openCover: 'cover',
-	closeCover: 'cover',
-	coolCamera: 'camera',
-	warmCamera: 'camera',
-}
-
 // One role the plan needs, together with the definition property that needs it, so a missing device can be
 // reported against the feature that would have commanded it rather than against the device map alone.
 interface RoleRequirement {
@@ -481,18 +523,22 @@ interface RoleRequirement {
 	readonly role: SequencerDeviceRole
 	// Property path of the feature requiring it.
 	readonly path: string
+	// When true, the role is commanded only if the definition declares it. A missing device is then not a
+	// refusal: the block runs without that dimension, which is how a field rig omits a cover or a panel.
+	readonly optional?: boolean
 }
 
 // Collects every role the lowered plan commands. The camera is always required: a definition that exposes
 // nothing is refused before this runs.
 function roleRequirements(definition: Sequencer, groups: readonly SequencerPlanFrameGroup[]): RoleRequirement[] {
-	const { autofocus, guiding, meridianFlip, shutdown, startup, target } = definition
+	const { autofocus, guiding, meridianFlip, mount, target } = definition
 	const requirements: RoleRequirement[] = [{ role: 'camera', path: 'capture.frames' }]
 
 	if (target.goto.enabled) requirements.push({ role: 'mount', path: 'target.goto' })
 	if (target.tracking.enabled) requirements.push({ role: 'mount', path: 'target.tracking' })
 	if (target.center.enabled) requirements.push({ role: 'mount', path: 'target.center' })
 	if (meridianFlip.enabled) requirements.push({ role: 'mount', path: 'meridianFlip' })
+	if (mount.enabled) requirements.push({ role: 'mount', path: 'mount' })
 	if (definition.cover.enabled) requirements.push({ role: 'cover', path: 'cover' })
 	if (definition.rotator.enabled) requirements.push({ role: 'rotator', path: 'rotator' })
 	if (definition.flatPanel.enabled) requirements.push({ role: 'flatPanel', path: 'flatPanel' })
@@ -509,27 +555,6 @@ function roleRequirements(definition: Sequencer, groups: readonly SequencerPlanF
 	if (guiding.enabled && guiding.connection.mode === 'local') {
 		requirements.push({ role: 'guideCamera', path: 'guiding.connection' })
 		requirements.push({ role: 'guideOutput', path: 'guiding.connection' })
-	}
-
-	for (const pipeline of [
-		{ name: 'startup', actions: startup.actions, enabled: startup.enabled },
-		{ name: 'shutdown', actions: shutdown.actions, enabled: shutdown.enabled },
-	]) {
-		if (!pipeline.enabled) continue
-
-		for (let i = 0; i < pipeline.actions.length; i++) {
-			const action = pipeline.actions[i]
-			if (!action.enabled) continue
-
-			const path = `${pipeline.name}.actions[${i}]`
-
-			if (action.type === 'connectDevices') {
-				for (const role of action.devices) requirements.push({ role, path: `${path}.devices` })
-			} else {
-				const role = SEQUENCER_LIFECYCLE_ROLE[action.type]
-				if (role) requirements.push({ role, path })
-			}
-		}
 	}
 
 	return requirements
@@ -616,9 +641,13 @@ function checkStorage(context: CompilerContext, definition: Sequencer) {
 	}
 }
 
-// Reports every role the plan commands without a device declared for it.
+// Reports every required role the plan commands without a device declared for it.
+//
+// An optional binding is a device the block uses when the definition carries it. A definition without that
+// role is a session that does not command it, which is what optional means at reservation time too.
 function checkRoles(context: CompilerContext, definition: Sequencer, requirements: readonly RoleRequirement[]) {
 	for (const requirement of requirements) {
+		if (requirement.optional) continue
 		if (definition.devices[requirement.role] === undefined) context.diagnostics.push({ path: `devices.${requirement.role}`, message: `${requirement.path} requires the ${requirement.role} role, which the definition does not declare` })
 	}
 }
@@ -758,7 +787,7 @@ function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistr
 		// the narrowed value rather than the one the lowering produced.
 		configurations.set(node.id, result.configuration)
 
-		for (const binding of handler.resources(result.configuration)) requirements.push({ role: binding.role, path: node.id })
+		for (const binding of handler.resources(result.configuration)) requirements.push({ role: binding.role, path: node.id, optional: binding.optional })
 	}
 
 	return { versions, requirements, configurations }
@@ -780,24 +809,6 @@ function lowerGuider(definition: Sequencer) {
 // Schema revision this compiler understands. A definition serialized against another revision may have moved
 // a field this lowering reads, so it is refused instead of interpreted with the current reading.
 const SEQUENCER_SCHEMA_VERSION = 1
-
-// Lifecycle actions commanding a device the device layer of this version does not implement.
-const SEQUENCER_UNSUPPORTED_ACTION: ReadonlySet<SequencerLifecycleAction['type']> = new Set(['openDome', 'closeDome', 'parkDome', 'unparkDome'])
-
-// Whether one of the named pipelines has an enabled action of one of the given types. `pipelines` selects
-// where to look, which matters for an action whose effect is only useful before the capture: an action found
-// in `shutdown` runs after the last frame and cannot have prepared anything the capture depended on.
-function commands(definition: Sequencer, types: readonly SequencerLifecycleAction['type'][], pipelines: readonly ('startup' | 'shutdown')[] = ['startup', 'shutdown']) {
-	for (const pipeline of pipelines.map((name) => definition[name])) {
-		if (!pipeline.enabled) continue
-
-		for (const action of pipeline.actions) {
-			if (action.enabled && types.includes(action.type)) return true
-		}
-	}
-
-	return false
-}
 
 // Failure reasons a retry cannot recover from. A disconnected or removed device is not a transient command
 // failure: retrying only repeats it until the attempts are exhausted, because there is nowhere to wait for the
@@ -849,7 +860,7 @@ function checkOnFailure(context: CompilerContext, onFailure: 'continue' | 'pause
 // enabled has nothing to execute, so the policy it declares is inert and reporting it would address the
 // operator to a field that changes nothing.
 function checkPolicies(context: CompilerContext, definition: Sequencer) {
-	const { autofocus, capture, dither, execution, guiding, meridianFlip, shutdown, startup, target } = definition
+	const { autofocus, capture, cooling, cover, dither, execution, guiding, meridianFlip, mount, target } = definition
 
 	checkRetry(context, execution.defaultRetry, 'execution.defaultRetry')
 	checkRetry(context, capture.retry, 'capture.retry')
@@ -861,6 +872,9 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 	}
 
 	if (guiding.enabled) checkRetry(context, guiding.retry, 'guiding.retry')
+	if (mount.enabled) checkRetry(context, mount.retry, 'mount.retry')
+	if (cooling.enabled) checkRetry(context, cooling.retry, 'cooling.retry')
+	if (cover.enabled) checkRetry(context, cover.retry, 'cover.retry')
 	if (dither.enabled) {
 		checkRetry(context, dither.retry, 'dither.retry')
 		checkOnFailure(context, dither.onFailure, 'dither.onFailure')
@@ -885,18 +899,6 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 		// guard already refuses to start and the flip is not permitted yet, which is a wait that never ends.
 		if (meridianFlip.maximumHourAngle < meridianFlip.minimumHourAngle) context.diagnostics.push({ path: 'meridianFlip.maximumHourAngle', message: 'the flip window is empty, because it ends before the hour angle it may start at' })
 	}
-
-	for (const pipeline of [
-		{ name: 'startup', actions: startup.actions, enabled: startup.enabled },
-		{ name: 'shutdown', actions: shutdown.actions, enabled: shutdown.enabled },
-	]) {
-		if (!pipeline.enabled) continue
-
-		for (let i = 0; i < pipeline.actions.length; i++) {
-			const action = pipeline.actions[i]
-			if (action.enabled) checkRetry(context, action.retry, `${pipeline.name}.actions[${i}].retry`)
-		}
-	}
 }
 
 // Reports every declared field this version does not execute.
@@ -910,17 +912,12 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 // Rejection is the default and removal is reserved for a field that is inert: the two removals below change
 // nothing about what the session does, while everything rejected here would change what it does.
 function checkCompatibility(context: CompilerContext, definition: Sequencer) {
-	const { capture, cooling, cover, dither, dome, execution, flatPanel, guiding, monitoring, notification, quality, rotator, safety, shutdown, startup, target } = definition
+	const { capture, cooling, cover, dither, dome, execution, flatPanel, guiding, monitoring, notification, quality, rotator, safety, startup, target } = definition
 	const { diagnostics, removals } = context
 
 	if (definition.schemaVersion !== SEQUENCER_SCHEMA_VERSION) diagnostics.push({ path: 'schemaVersion', message: `the definition declares schema version ${definition.schemaVersion}, and this version compiles ${SEQUENCER_SCHEMA_VERSION}` })
 
 	if (target.constraints.enabled) diagnostics.push({ path: 'target.constraints.enabled', message: 'target constraints require the ephemeris and the monitor lane this version does not have' })
-
-	// The action that starts tracking declares no mode of its own and carries the policy of the target, which is
-	// the single authority for how the mount tracks. A disabled tracking block leaves it nothing to carry, and
-	// the mount would be told to track without being told at which rate.
-	if (!target.tracking.enabled && commands(definition, ['startTracking'])) diagnostics.push({ path: 'target.tracking.enabled', message: 'a lifecycle action starts tracking, and the target block it reads the tracking mode and rates from is disabled' })
 
 	// The capture order selects the scheduler implementation, and this version implements the sequential one
 	// only. Lowering another order would produce a plan captured in an order other than the one that was asked
@@ -945,57 +942,25 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	// re-enters that same safe point. There is no second restore path for an interruption that stopped the
 	// guider itself, so the flag would change nothing about the night whether it is set or not.
 	if (guiding.enabled) removals.push({ path: 'guiding.restoreAfterInterruption', reason: 'guiding is resumed by the interlock of each safe point, so a restore-after-interruption flag has no path of its own' })
-	if (!guiding.enabled && commands(definition, ['startGuiding', 'stopGuiding'])) diagnostics.push({ path: 'guiding.enabled', message: 'a lifecycle action commands guiding, which the definition disables' })
 	if (!guiding.enabled && dither.enabled) diagnostics.push({ path: 'dither.enabled', message: 'a dither is a guider command, and the definition declares no guider to send it to' })
 
-	// The other half of the same pair, for the same reason cooling has one. The runtime opens the guider session
-	// before the plan, but opening is a connection and not a correction: nothing calibrates, nothing loops and
-	// nothing guides until an action commands it. The interlock brackets a guider that is running and leaves an
-	// idle one alone precisely because a session that never issued `startGuiding` is unguided by configuration,
-	// and the dither is skipped for the same reason. So an enabled guiding block with no action that starts it
-	// captures every frame unguided while reporting a guided plan, which is the silent disagreement the
-	// compatibility rule exists to prevent. Only a startup action counts: `shutdown` runs after the last frame,
-	// so guiding started there guides nothing.
-	if (guiding.enabled && !commands(definition, ['startGuiding'], ['startup'])) diagnostics.push({ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and no enabled startup action starts guiding, so every frame would be captured unguided' })
-
-	// Existing is not enough: the action has to be terminal too. `required` is what turns a startup failure into
-	// a session failure, and it defaults to false, so a guiding start that exhausted its retries otherwise lets
-	// the walk continue into the target. The rest of the session then behaves exactly as a session configured
-	// without a guider — the interlock leaves the idle guider alone, the dither skips — and every frame of the
-	// night is exposed unguided on a definition that declares guiding, which is the same silent disagreement the
-	// check above prevents, reached at runtime instead of at edit time.
-	//
-	// It is refused rather than forced during the lowering: an operator who really wants the night captured
-	// unguided when the guider does not come up says so by disabling the guiding block, and rewriting a declared
-	// `required: false` into `true` would be the compiler quietly disagreeing with the definition instead.
-	if (guiding.enabled && startup.enabled) {
-		for (let i = 0; i < startup.actions.length; i++) {
-			const action = startup.actions[i]
-
-			if (action.enabled && action.type === 'startGuiding' && action.required !== true) {
-				diagnostics.push({ path: `startup.actions[${i}].required`, message: 'the guiding block declares the guider the capture runs under, and this action does not fail the session when it cannot start guiding, so every frame would be captured unguided' })
-			}
-		}
-	}
+	// The runtime opens the guider session before the plan, but opening is a connection and not a correction:
+	// nothing calibrates, nothing loops and nothing guides until the derived startup step commands it. The
+	// interlock brackets a guider that is running and leaves an idle one alone precisely because a session that
+	// never issued `startGuiding` is unguided by configuration, and the dither is skipped for the same reason.
+	// So an enabled guiding block with the startup pipeline disarmed captures every frame unguided while
+	// reporting a guided plan, which is the silent disagreement the compatibility rule exists to prevent.
+	if (guiding.enabled && !startup.enabled) diagnostics.push({ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and the startup pipeline that starts it is disabled, so every frame would be captured unguided' })
 
 	if (dome.enabled) diagnostics.push({ path: 'dome.enabled', message: 'the device layer of this version has no dome' })
 	if (cover.enabled && cover.closeOnUnsafe) diagnostics.push({ path: 'cover.closeOnUnsafe', message: 'closing the cover on an unsafe condition requires the safety monitor this version does not have' })
 	if (rotator.enabled && rotator.restoreAfterMeridianFlip) diagnostics.push({ path: 'rotator.restoreAfterMeridianFlip', message: 'restoring the rotator after a flip is not commanded, so the flag would change nothing about the night' })
 	if (rotator.enabled && rotator.reverse) diagnostics.push({ path: 'rotator.reverse', message: 'the rotator is commanded to the declared angle, so reversing it would change nothing about the night' })
 
-	// The two halves of the thermal policy are not interchangeable: only `coolCamera` drives the sensor to
-	// `cooling.temperature`, and `warmCamera` is the terminal action that gives it back to the ambient. A
-	// definition whose only cooler action is the usual shutdown warming therefore declares a setpoint nothing
-	// ever reaches, and the whole session would capture at the sensor temperature it started at.
-	//
-	// Only a startup action counts as cooling the camera. `shutdown` runs after the last frame, so a cooling
-	// action placed there reaches the setpoint exactly once the frames that needed it have all been captured,
-	// which is the same session as no cooling at all. The reverse check still looks at both pipelines: a cooler
-	// commanded anywhere reads a temperature the disabled block does not declare.
-	const cools = commands(definition, ['coolCamera'], ['startup'])
-	const cooled = commands(definition, ['coolCamera', 'warmCamera'])
-	if (!cooling.enabled && cooled) diagnostics.push({ path: 'cooling.enabled', message: 'a lifecycle action commands the camera cooler, and the cooling block it reads the temperature from is disabled' })
-	if (cooling.enabled && !cools) diagnostics.push({ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and no enabled startup action cools the camera to it, so the session would capture at whatever temperature the sensor is already at' })
+	// Cooling to the capture setpoint is implied by the cooling block being enabled, and it is the startup
+	// pipeline that commands it. A disabled startup leaves the setpoint at whatever the sensor already is, which
+	// is the same session as no cooling at all.
+	if (cooling.enabled && !startup.enabled) diagnostics.push({ path: 'cooling.enabled', message: 'the cooling block declares the temperature the capture runs at, and the startup pipeline that cools the camera to it is disabled, so the session would capture at whatever temperature the sensor is already at' })
 
 	if (monitoring.enabled) diagnostics.push({ path: 'monitoring.enabled', message: 'the monitor lane is not part of this version' })
 	if (safety.enabled) diagnostics.push({ path: 'safety.enabled', message: 'there is no safety monitor in this version' })
@@ -1004,32 +969,19 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 
 	if (execution.start.type === 'sunAltitude' || execution.start.type === 'targetAltitude') diagnostics.push({ path: 'execution.start.type', message: `starting on ${execution.start.type} requires the ephemeris this version does not compute` })
 	if (execution.end.type === 'sunAltitude' || execution.end.type === 'targetAltitude') diagnostics.push({ path: 'execution.end.type', message: `ending on ${execution.end.type} requires the ephemeris this version does not compute` })
-
-	for (const pipeline of [
-		{ name: 'startup', actions: startup.actions, enabled: startup.enabled },
-		{ name: 'shutdown', actions: shutdown.actions, enabled: shutdown.enabled },
-	]) {
-		if (!pipeline.enabled) continue
-
-		for (let i = 0; i < pipeline.actions.length; i++) {
-			const action = pipeline.actions[i]
-
-			if (!action.enabled) continue
-
-			if (SEQUENCER_UNSUPPORTED_ACTION.has(action.type)) diagnostics.push({ path: `${pipeline.name}.actions[${i}].type`, message: `the device layer of this version has no dome, so the ${action.type} action cannot be executed` })
-			// A switch names the device it writes to, and a session reserves devices by role: there is no role for
-			// the switch to require, no way for its handler to request the device from the scope, and therefore no
-			// reservation standing between the action and a concurrent command to the same device.
-			else if (action.type === 'switch') diagnostics.push({ path: `${pipeline.name}.actions[${i}].type`, message: 'a switch action addresses a device directly, and a session reserves devices by role, so the switch would be written without holding the device it writes to' })
-		}
-	}
 }
 
 // Deduplicates the required roles and returns them in the fixed role order, which is what the session
 // reserves at start. Two features requiring the same role reserve it once.
-function rolesOf(requirements: readonly RoleRequirement[]): SequencerDeviceRole[] {
-	const required = new Set(requirements.map((requirement) => requirement.role))
-	return SEQUENCER_ROLE_ORDER.filter((role) => required.has(role))
+function rolesOf(requirements: readonly RoleRequirement[], devices: SequencerDevices): SequencerDeviceRole[] {
+	const selected = new Set<SequencerDeviceRole>()
+
+	for (const requirement of requirements) {
+		if (requirement.optional && devices[requirement.role] === undefined) continue
+		selected.add(requirement.role)
+	}
+
+	return SEQUENCER_ROLE_ORDER.filter((role) => selected.has(role))
 }
 
 // Options of a compilation, all of them optional so a definition can be checked before a session exists.
@@ -1058,8 +1010,6 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	}
 
 	checkUniqueIds(context, capture.frames, 'capture.frames', 'frame')
-	checkUniqueIds(context, startup.actions, 'startup.actions', 'startup action')
-	checkUniqueIds(context, shutdown.actions, 'shutdown.actions', 'shutdown action')
 
 	if (!target.enabled) context.diagnostics.push({ path: 'target.enabled', message: 'the definition has no enabled target to observe' })
 	if (target.id.length === 0) context.diagnostics.push({ path: 'target.id', message: 'the target id is empty and cannot address a node' })
@@ -1067,11 +1017,10 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	// it: without it the slew would be commanded with an undefined right ascension and declination.
 	if ((target.goto.enabled || target.center.enabled) && target[target.type] === undefined) context.diagnostics.push({ path: `target.${target.type}`, message: `the target points in ${target.type} and declares no ${target.type} coordinate to point at` })
 	// Two nodes carry the tracking policy and command it: the slew, which establishes it on arrival, and the
-	// startup action that starts tracking, which is how a session captures the field the mount is already on.
-	// With neither of them there is no node carrying the mode and the rates, so an enabled tracking would be a
-	// policy the session declares and never commands. Only a startup action counts: one placed in `shutdown`
-	// runs after the last frame, so it would start tracking for a capture that is already over.
-	if (target.tracking.enabled && !target.goto.enabled && !commands(definition, ['startTracking'], ['startup'])) context.diagnostics.push({ path: 'target.tracking.enabled', message: 'tracking is established by the slew on arrival or by a startup action that starts it, and the definition declares neither' })
+	// derived startup step that starts tracking when there is no slew, which is how a session captures the field
+	// the mount is already on. With neither of them there is no node carrying the mode and the rates, so an
+	// enabled tracking would be a policy the session declares and never commands.
+	if (target.tracking.enabled && !target.goto.enabled && !startup.enabled) context.diagnostics.push({ path: 'target.tracking.enabled', message: 'tracking is established by the slew on arrival or, when the target does not slew, by the startup pipeline, and the definition declares neither' })
 	if (groups.length === 0) context.diagnostics.push({ path: 'capture.frames', message: 'the definition has no enabled frame group to capture' })
 
 	checkStorage(context, definition)
@@ -1091,8 +1040,8 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	// for what the plan already states once. A remote guider exposes under the program that runs it, so it
 	// carries no recipe of ours.
 	const guiding = guider === undefined ? undefined : { calibrateBeforeStart: guider.calibrateBeforeStart, settle: guider.settle, capture: guider.connection.mode === 'local' ? guider.connection.capture : undefined }
-	const lowered = lowerPipeline('startup', startup.enabled, startup.actions, cooling, tracking, guiding)
-	const finalized = lowerPipeline('finalize', shutdown.enabled, shutdown.actions, cooling, tracking, guiding)
+	const lowered = lowerPipeline('startup', deriveStartup(definition), cooling, tracking, guiding)
+	const finalized = lowerPipeline('finalize', deriveShutdown(definition), cooling, tracking, guiding)
 
 	if (lowered) children.push(lowered)
 	children.push(lowerTarget(definition, groups))
@@ -1113,7 +1062,7 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 		target: { id: target.id, name: target.name },
 		execution: { start: definition.execution.start, end: definition.execution.end, pauseMode: definition.execution.pauseMode, stopMode: definition.execution.stopMode, defaultRetry: definition.execution.defaultRetry, checkpoint: definition.execution.checkpoint },
 		devices: definition.devices,
-		roles: rolesOf(requirements),
+		roles: rolesOf(requirements, definition.devices),
 		root: { kind: 'sequence', id: sequencerNodeId.root(), children },
 		groups,
 		startup: lowered && { continueOnFailure: startup.continueOnFailure },
@@ -1156,5 +1105,5 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 
 	const rewrite: Rewrite = { configurations, groups: rewritten }
 
-	return { ok: true, plan: { ...plan, roles: rolesOf(requirements), root: withConfigurationsIn(plan.root, rewrite), groups: withGroups(groups, rewrite), handlers: handlers.versions }, removals: context.removals }
+	return { ok: true, plan: { ...plan, roles: rolesOf(requirements, definition.devices), root: withConfigurationsIn(plan.root, rewrite), groups: withGroups(groups, rewrite), handlers: handlers.versions }, removals: context.removals }
 }

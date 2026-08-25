@@ -7,7 +7,7 @@ import type { SequencerActionContext, SequencerActionHandler } from 'src/api/seq
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
 import type { GuiderLoopStart } from '#/guider'
 import { successfulOperationResult } from '#/orchestration'
-import type { SequencerAuxiliaryCapture, SequencerCooling, SequencerGuiderSettle, SequencerLifecycleAction, SequencerTargetTracking } from '#/sequencer'
+import type { SequencerAuxiliaryCapture, SequencerCooling, SequencerGuiderSettle, SequencerLifecycleActionType, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerPlanGuider } from '#/sequencer.plan'
 import { retry } from './sequencer.fixture'
 
@@ -20,11 +20,11 @@ function camera(overrides?: Partial<Camera>): Camera {
 }
 
 function coolingPolicy(overrides?: Partial<SequencerCooling>): SequencerCooling {
-	return { enabled: true, temperature: -10, tolerance: 1, ramp: 0, waitForTarget: true, timeout: 60, warmTemperature: 15, warmRamp: 0, turnCoolerOffAfterWarm: false, ...overrides }
+	return { enabled: true, temperature: -10, tolerance: 1, ramp: 0, waitForTarget: true, timeout: 60, warmTemperature: 15, warmRamp: 0, turnCoolerOffAfterWarm: false, warmOnShutdown: true, retry: retry(), ...overrides }
 }
 
 function trackingPolicy(): Omit<SequencerTargetTracking, 'enabled'> {
-	return { mode: 'SIDEREAL', retry: retry() }
+	return { mode: 'SIDEREAL', stopOnShutdown: false, retry: retry() }
 }
 
 const GUIDER_SETTLE: SequencerGuiderSettle = { tolerance: 1.5, time: 10, timeout: 120 }
@@ -33,10 +33,8 @@ function guidingPolicy(calibrateBeforeStart: boolean, settle = GUIDER_SETTLE): P
 	return { calibrateBeforeStart, settle }
 }
 
-function configuration(type: SequencerLifecycleAction['type'], overrides?: Partial<SequencerLifecycle>): SequencerLifecycle {
-	const action = { id: type, type, enabled: true, timeout: 30, retry: retry() } as SequencerLifecycleAction
-
-	return { action, required: false, timeout: 0, retry: retry(), ...overrides }
+function configuration(type: SequencerLifecycleActionType, overrides?: Partial<SequencerLifecycle>): SequencerLifecycle {
+	return { type, required: false, timeout: 0, retry: retry(), ...overrides }
 }
 
 function actionContext(devices: Record<string, unknown>, signal: AbortSignal, guider?: string): SequencerActionContext {
@@ -90,7 +88,7 @@ function lifecycleServices(commands: string[], onCommand?: (name: string) => voi
 	} as unknown as SequencerLifecycleServices
 }
 
-function handlerOf(services: SequencerLifecycleServices, type: SequencerLifecycleAction['type']): SequencerActionHandler<SequencerLifecycle, unknown> {
+function handlerOf(services: SequencerLifecycleServices, type: SequencerLifecycleActionType): SequencerActionHandler<SequencerLifecycle, unknown> {
 	return sequencerLifecycleHandlers(services).find((handler) => handler.type === `lifecycle.${type}`) as SequencerActionHandler<SequencerLifecycle, unknown>
 }
 
@@ -214,7 +212,7 @@ describe('start guiding', () => {
 	test('exposes the guide camera with the recipe a local guider declares', async () => {
 		const commands: string[] = []
 		const services = lifecycleServices(commands)
-		const capture: Omit<SequencerAuxiliaryCapture, 'filter'> = { exposureTime: 2.5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 30, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false }
+		const capture: Omit<SequencerAuxiliaryCapture, 'filter'> = { exposureTime: 2.5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 30, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false }
 		const guiding = { ...guidingPolicy(false), capture }
 
 		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding }))

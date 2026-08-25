@@ -323,10 +323,13 @@ describe('sequencer runtime', () => {
 			{
 				guiding: {
 					guiderCommander: {
+						running: () => false,
+						looping: () => false,
 						connect: (request: unknown) => {
 							connected = request
 							return Promise.resolve(successfulOperationResult({ id: 'guider-1' }))
 						},
+						disconnect: () => Promise.resolve(successfulOperationResult(undefined)),
 					},
 				} as unknown as SequencerGuidingServices,
 			},
@@ -367,10 +370,13 @@ describe('sequencer runtime', () => {
 				},
 				guiding: {
 					guiderCommander: {
+						running: () => false,
+						looping: () => false,
 						connect: (request: unknown) => {
 							connected = request
 							return Promise.resolve(successfulOperationResult({ id: 'guider-1' }))
 						},
+						disconnect: () => Promise.resolve(successfulOperationResult(undefined)),
 					},
 				} as unknown as SequencerGuidingServices,
 			},
@@ -379,7 +385,7 @@ describe('sequencer runtime', () => {
 		const created = instance.create(
 			plan({
 				devices: { camera: 'camera-1', guideCamera: 'guide-camera-1', guideOutput: 'guide-output-1' },
-				guider: guiderPlan({ mode: 'local', focalLength: 200, capture: { exposureTime: 2, frameType: 'LIGHT', binX: 1, binY: 1, gain: 0, offset: 0, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false } }),
+				guider: guiderPlan({ mode: 'local', focalLength: 200, capture: { exposureTime: 2, frameType: 'LIGHT', binX: 1, binY: 1, gain: 0, offset: 0, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false } }),
 			}),
 		)!
 
@@ -621,6 +627,24 @@ describe('sequencer runtime', () => {
 
 		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'roleUnresolved', detail: 'role wheel is not available' })
 		expect(instance.activeSessionId).toBeUndefined()
+	})
+
+	test('refuses to start when a commanded device is not connected', () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const registry = new SequencerBlockRegistry()
+		const store = new InMemorySequencerStore()
+		const camera = { id: 'camera-1', type: 'camera', hardwareId: 'hw-camera', connected: false } as Camera
+
+		registry.register(exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 })))
+
+		const instance = new SequencerRuntime({ store, registry, coordinator, ...SERVICES, resolve: () => ({ key: resourceKey(camera), device: camera }) })
+		const created = instance.create(plan())!
+
+		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'disconnected', detail: 'device camera-1 of role camera is not connected' })
+		expect(instance.activeSessionId).toBeUndefined()
+		expect(store.session(created.id)?.state).toBe('created')
+		expect(arbiter.availability(resourceKey(camera))).toBe('available')
 	})
 
 	test('refuses to start when an optional role the session carries cannot be resolved', () => {
@@ -947,6 +971,8 @@ describe('sequencer runtime', () => {
 			{
 				guiding: {
 					guiderCommander: {
+						running: () => false,
+						looping: () => false,
 						connect: (_: unknown, token: ReservationToken) => {
 							const executor = (operation: OperationContext) =>
 								new Promise<OperationResult<void>>((resolve) => {
@@ -959,6 +985,7 @@ describe('sequencer runtime', () => {
 
 							return Promise.resolve(successfulOperationResult({ id: handle.id }))
 						},
+						disconnect: () => Promise.resolve(successfulOperationResult(undefined)),
 					},
 				} as unknown as SequencerGuidingServices,
 			},

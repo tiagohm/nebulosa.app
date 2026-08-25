@@ -7,6 +7,7 @@ import type { SequencerActionContext } from 'src/api/sequencer.registry'
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason } from '#/orchestration'
+import { DEFAULT_PLATE_SOLVE_START } from '#/platesolver'
 import type { SequencerDevices } from '#/sequencer'
 
 const TARGET = { type: 'J2000' as const, J2000: { x: 1.4, y: -0.09 } }
@@ -23,12 +24,12 @@ function mount(pierSide: PierSide = 'EAST'): Mount {
 function centering(): SequencerMeridianFlipTrigger['centering'] {
 	return {
 		coordinates: TARGET,
-		solver: { type: 'astap', timeout: 60, blind: false, searchRadius: 0.05, downsample: 2 },
+		solver: DEFAULT_PLATE_SOLVE_START,
 		tolerance: 0.0001,
 		maximumAttempts: 3,
 		settle: 0,
 		syncMount: true,
-		capture: { exposureTime: 5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false },
+		capture: { exposureTime: 5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false },
 		retry: { maxAttempts: 1, delay: 0, backoff: 1, maximumDelay: 0, retryOn: [], onExhausted: 'fail' },
 	}
 }
@@ -37,7 +38,7 @@ function focusing(): SequencerMeridianFlipTrigger['focusing'] {
 	return {
 		triggers: { onStart: true, onFilterChange: false, afterMeridianFlip: true, everyFrames: 0, everyTime: 0, temperatureChange: 0, minimumTimeBetweenRuns: 0 },
 		algorithm: { initialOffsetSteps: 4, stepSize: 100, fittingMode: 'HYPERBOLIC', rmsdThreshold: 0.5, reversed: false, maximumPosition: 50000, backlash: { enabled: false, mode: 'overshoot', steps: 0 } },
-		capture: { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 15, subframe: { enabled: false, x: 0, y: 0, width: 0, height: 0 }, transferFormat: 'FITS', compressed: false },
+		capture: { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 15, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false },
 		starDetection: { type: 'astap', timeout: 30, minimumSNR: 8, maximumStars: 400 },
 		filterOffsets: [],
 		settle: 0,

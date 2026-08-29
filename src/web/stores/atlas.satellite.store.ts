@@ -165,6 +165,8 @@ async function updateChart(force: boolean = false) {
 }
 
 async function tick(time: UTCTime, dateHasChanged: boolean) {
+	if (!mounted) return
+
 	let changed = false
 
 	if (isLocationChanged(settingsStore.state.location, state.request.location)) {

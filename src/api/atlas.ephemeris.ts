@@ -536,7 +536,7 @@ class HorizonsEphemerisProvider implements EphemerisProvider {
 
 		console.info(`fetching ephemeris for ${horizonsFingerprint(input)} at time [${formatTemporal(startTime, undefined, 0)} - ${formatTemporal(endTime, undefined, 0)}] and location [${toDeg(latitude)}, ${toDeg(longitude)}, ${toMeter(elevation).toFixed(0)}]`)
 
-		const pending = this.observer(input, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES as never, { stepSize: 1, stepSizeUnit: 'm' })
+		const pending = this.observer(input, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1, stepSizeUnit: 'm' })
 		void pending.catch(() => {})
 
 		const rows = await raceHorizonsTimeout(pending, this.timeoutMs)

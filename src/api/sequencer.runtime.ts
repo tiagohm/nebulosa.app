@@ -644,7 +644,7 @@ export class SequencerRuntime {
 			roles,
 			types,
 			done: Promise.withResolvers<SequencerSession | undefined>(),
-			resolved: resolvedDevices(devices, roles),
+			resolved: resolvedDevices(devices, roles, bound.guider),
 			meter: new SequencerOverheadMeter(),
 			revision: stored.revision,
 			capturing: false,
@@ -1478,15 +1478,17 @@ export class SequencerRuntime {
 	}
 }
 
-// Names the device bound to each role the action actually reserved.
+// Names the device bound to each role the session actually took.
 //
-// `devices` is what the definition declared and `roles` is what the start resolved, so the intersection is the
+// `devices` is what the definition declared and `roles` is what the start reserved, so the intersection is the
 // honest answer: an optional role the block skipped is declared and commands nothing, and reporting it as
-// resolved would show a device the session never took.
-function resolvedDevices(devices: SequencerDevices, roles: ReadonlyMap<SequencerDeviceRole, ResourceRequest>) {
+// resolved would show a device the session never took. The guider is not reserved; it is bound separately and
+// named here so a snapshot does not report it as missing while the session is commanding it.
+function resolvedDevices(devices: SequencerDevices, roles: ReadonlyMap<SequencerDeviceRole, ResourceRequest>, guider?: string) {
 	const resolved: Partial<Record<SequencerDeviceRole, string>> = {}
 
 	for (const role of roles.keys()) resolved[role] = devices[role]
+	if (guider !== undefined) resolved.guider = guider
 
 	return resolved
 }

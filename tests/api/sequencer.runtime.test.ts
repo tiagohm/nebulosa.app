@@ -321,9 +321,11 @@ describe('sequencer runtime', () => {
 
 	test('binds the already-connected guider and does not reserve its logical key', async () => {
 		const guiders = new Set<string | undefined>()
+		let resolved: Partial<Record<string, string>> | undefined
 		const { runtime: instance, arbiter } = runtime(
 			exposeHandler((context) => {
 				guiders.add(context.guider)
+				resolved = instance.observation(instance.activeSessionId!)?.resolved
 				return Promise.resolve({ type: 'completed', value: 1 })
 			}),
 			undefined,
@@ -339,6 +341,7 @@ describe('sequencer runtime', () => {
 
 		expect(session?.state).toBe('completed')
 		expect(guiders).toEqual(new Set(['guider-1']))
+		expect(resolved).toEqual({ camera: 'camera-1', guider: 'guider-1' })
 		expect(arbiter.availability(remoteGuiderKey('localhost', 4400))).toBe('available')
 	})
 

@@ -61,10 +61,10 @@ describe('preflight', () => {
 		expect(view.integrationLimit).toBeUndefined()
 	})
 
-	test('the view reports the roles the session reserves', () => {
+	test('the view reports the roles the session commands', () => {
 		const view = validate(canonical())
 
-		expect(view.roles).toEqual(['camera', 'mount', 'focuser'])
+		expect(view.roles).toEqual(['camera', 'mount', 'focuser', 'guider'])
 	})
 
 	test('a compilation is projected without being compiled again', () => {

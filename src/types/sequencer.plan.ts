@@ -276,7 +276,8 @@ export interface SequencerPreflight {
 	// every other end condition. Below `projectedIntegration` it is the limit the session actually reaches,
 	// which is what keeps the totals above readable as the upper bound they are.
 	readonly integrationLimit?: number
-	// Roles the session reserves at start, empty when the definition was refused.
+	// Roles the session commands, empty when the definition was refused. Physical ones are reserved at start;
+	// the guider is bound to the session already connected for that role.
 	readonly roles: readonly SequencerDeviceRole[]
 }
 

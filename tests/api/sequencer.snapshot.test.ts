@@ -120,6 +120,7 @@ describe('snapshot derivation', () => {
 			{ role: 'mount', declaredId: 'Mount Simulator', deviceId: 'Mount Simulator' },
 			{ role: 'wheel', declaredId: 'Wheel Simulator', deviceId: undefined },
 			{ role: 'focuser', declaredId: 'Focuser Simulator', deviceId: undefined },
+			{ role: 'guider', declaredId: 'guider-1', deviceId: undefined },
 		])
 	})
 

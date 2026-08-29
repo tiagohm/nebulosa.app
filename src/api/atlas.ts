@@ -157,8 +157,7 @@ export class AtlasHandler {
 		const [startTime, endTime] = this.computeStartAndEndTime(req.time)
 		const offset = req.time.offset * 60000
 		const sun = series.samples
-		const interpolateReq = { ...req, horizontal: true as const }
-
+		const interpolateReq = { ...req, horizontal: true }
 		const twilight = structuredClone(EMPTY_TWILIGHT)
 
 		twilight.start = [startTime + offset, 0]

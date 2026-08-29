@@ -62,8 +62,8 @@ export function BodyCoordinateInfo({ position, hideEquatorialJ2000, hideEquatori
 				{!hidePierSide && <Extra label="PIER SIDE" value={position.pierSide} />}
 				{!hideIlluminated && 'illuminated' in position && <Extra label="ILLUM (%)" value={position.illuminated.toFixed(2)} />}
 				{!hideElongation && 'elongation' in position && <Extra label="ELON (°)" value={toDeg(position.elongation).toFixed(2)} />}
-				{'source' in position && position.source && <Extra label="SRC" value={formatEphemerisSource(position.source, position.fallbackReason)} />}
 			</div>
+			<div className="col-span-full flex flex-row justify-center text-sm">{'source' in position && position.source && <span>Source: {formatEphemerisSource(position.source, position.fallbackReason)}</span>}</div>
 		</div>
 	)
 }
@@ -92,10 +92,10 @@ function formatCoordinateLatitude(type: CoordinateType, angle: Angle) {
 	return type === 'horizontal' ? formatALT(angle, true) : formatDEC(angle, true)
 }
 
-// Short parenthetical for SRC when an accurate request fell back to a local model.
+// Short parenthetical for source when an accurate request fell back to a local model.
 const EPHEMERIS_FALLBACK_LABEL = {
 	timeout: 'timeout',
-	'breaker-open': 'unavailable',
+	breakerOpen: 'unavailable',
 	http: 'HTTP',
 	network: 'network',
 } as const satisfies Record<EphemerisFallbackReason, string>
@@ -103,7 +103,7 @@ const EPHEMERIS_FALLBACK_LABEL = {
 // Discrete origin label for Atlas positions. Fallback reasons are only shown when Horizons was
 // requested and a local model answered instead.
 function formatEphemerisSource(source: BodyPosition['source'], fallbackReason?: EphemerisFallbackReason) {
-	if (source === 'horizons') return 'Horizons'
+	if (source === 'horizons') return 'NASA JPL Horizons'
 	if (fallbackReason) return `Offline (${EPHEMERIS_FALLBACK_LABEL[fallbackReason]})`
 	return 'Offline'
 }

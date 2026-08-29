@@ -102,7 +102,7 @@ export type EphemerisSource = 'offline' | 'horizons'
 
 // Why an accurate request used a local model instead of Horizons. Omitted when Horizons succeeded
 // or when `fast` asked for the local model on purpose.
-export type EphemerisFallbackReason = 'breaker-open' | 'timeout' | 'http' | 'network'
+export type EphemerisFallbackReason = 'breakerOpen' | 'timeout' | 'http' | 'network'
 
 export interface BodyPosition extends CoordinateInfo {
 	readonly names?: readonly string[]

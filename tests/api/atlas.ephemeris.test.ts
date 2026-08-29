@@ -809,7 +809,7 @@ describe('Horizons fallback and circuit breaker', () => {
 		expect(calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD)
 		expect(offline.calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD + 1)
 		expect(position.source).toBe('offline')
-		expect(position.fallbackReason).toBe('breaker-open')
+		expect(position.fallbackReason).toBe('breakerOpen')
 	})
 
 	test('an open breaker without an offline model still calls Horizons when fast is true', async () => {

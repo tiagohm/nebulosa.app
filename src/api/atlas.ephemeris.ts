@@ -44,7 +44,7 @@ import type { BodyPosition, BodyPositionFlags, EphemerisFallbackReason, Ephemeri
 import type { SkyObject } from '#/galaxy'
 import { coordinateInfo } from '#/mount'
 import type { Satellite } from '#/satellite'
-import { makeTime } from './util'
+import { abortReasonOf, makeTime, settleWithSignal } from './util'
 
 // Atlas ephemeris service: provider selection, Horizons observer-table tiles, and local models
 // (VSOP87E, ELPMPP02, Meeus Pluto, MARSSAT/L12/TASS17/GUST86, SGP4, Kepler, stars, sky points).
@@ -91,8 +91,6 @@ export type PlanetHorizonsCode = '199' | '299' | '499' | '599' | '699' | '799' |
 
 // Requested calculation path. `fast` on PositionOfBody maps to `'fast'`; omitted/`false` is `'accurate'`.
 export type EphemerisMode = 'fast' | 'accurate'
-
-export type { EphemerisFallbackReason, EphemerisSource }
 
 // Discriminated target. The handler translates route/UI ids; the service does not take opaque strings.
 export type EphemerisTarget =
@@ -414,37 +412,6 @@ async function raceHorizonsTimeout<T>(promise: Promise<T>, ms: number): Promise<
 	}
 }
 
-// Rejects with the signal's reason when `signal` aborts before `promise` settles. One waiter can
-// leave a shared Horizons fetch without aborting it for the remaining waiters.
-function settleWithSignal<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
-	if (!signal) return promise
-	if (signal.aborted) return Promise.reject(abortReasonOf(signal))
-
-	return new Promise((resolve, reject) => {
-		const onAbort = () => {
-			signal.removeEventListener('abort', onAbort)
-			reject(abortReasonOf(signal))
-		}
-
-		signal.addEventListener('abort', onAbort, { once: true })
-		promise.then(
-			(value) => {
-				signal.removeEventListener('abort', onAbort)
-				resolve(value)
-			},
-			(error: unknown) => {
-				signal.removeEventListener('abort', onAbort)
-				reject(error instanceof Error ? error : abortReasonOf(signal))
-			},
-		)
-	})
-}
-
-// Reason stored on `signal`, or an AbortError DOMException when the runtime left it empty.
-function abortReasonOf(signal: AbortSignal): Error {
-	return signal.reason instanceof Error ? signal.reason : new DOMException('The operation was aborted.', 'AbortError')
-}
-
 // Maps a `/atlas/planets/:code` COMMAND to an EphemerisTarget. `10` and `301` are accepted if someone
 // hits those routes. `elements` attach only to `minorBody`; they are ignored for planets, moons, and
 // opaque Horizons codes.
@@ -594,6 +561,7 @@ class HorizonsEphemerisProvider implements EphemerisProvider {
 					clearTimeout(timer)
 					this.inflight.delete(seriesKey)
 				})
+
 			entry = { promise, consumers: 0, abort }
 			this.inflight.set(seriesKey, entry)
 		}
@@ -602,15 +570,19 @@ class HorizonsEphemerisProvider implements EphemerisProvider {
 	}
 
 	// Attaches `signal` to a shared in-flight tile. The last waiter to abort cancels observer().
-	private followInflight(seriesKey: string, entry: HorizonsInflight, signal?: AbortSignal): Promise<HorizonsSampleMap> {
+	private async followInflight(seriesKey: string, entry: HorizonsInflight, signal?: AbortSignal): Promise<HorizonsSampleMap> {
 		entry.consumers++
-		return settleWithSignal(entry.promise, signal).finally(() => {
+
+		try {
+			return await settleWithSignal(entry.promise, signal)
+		} finally {
 			entry.consumers--
+
 			if (entry.consumers === 0 && this.inflight.get(seriesKey) === entry) {
 				this.inflight.delete(seriesKey)
 				entry.abort.abort()
 			}
-		})
+		}
 	}
 
 	// Fetches one Horizons observer table and parses it into a frozen sample map. Does not touch the cache.
@@ -792,6 +764,7 @@ export function observeSolarSystemBody(target: PositionAndVelocityOverTime, time
 
 	const direction = topocentricDirection(target, observerBarycentric, time, LIGHT_TIME_ITERATIONS)
 	let equatorialJ2000: readonly [Angle, Angle] | undefined
+
 	if (wantJ2000) {
 		const eq = equatorial(direction)
 		equatorialJ2000 = [eq[0], eq[1]]
@@ -1147,8 +1120,8 @@ export class AtlasEphemeris {
 
 		if (this.breaker.isOpen()) {
 			if (useOffline) {
-				console.info({ event: 'ephemeris-fallback', target: request.target.type, source: 'offline', reason: 'breaker-open' })
-				return withFallbackReason(await this.offline.samples(pointRequest(request, utc)), 'breaker-open')
+				console.info('ephemerisFallback', request.target.type, 'offline', 'breakerOpen')
+				return withFallbackReason(await this.offline.samples(pointRequest(request, utc)), 'breakerOpen')
 			}
 			if (skipWhenOpen) throw new HorizonsEphemerisError('horizons circuit breaker open')
 		}
@@ -1165,7 +1138,7 @@ export class AtlasEphemeris {
 				this.breaker.recordTransient(retryAfterMsOf(error))
 
 				if (useOffline) {
-					console.info({ event: 'ephemeris-fallback', target: request.target.type, source: 'offline', reason: error instanceof Error ? error.name : 'transient' })
+					console.info('ephemerisFallback', request.target.type, 'offline', error instanceof Error ? error.name : 'transient')
 					return withFallbackReason(await this.offline.samples(pointRequest(request, utc)), fallbackReasonFromError(error))
 				}
 

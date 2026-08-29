@@ -25,7 +25,7 @@ import { asteroid, comet, KeplerOrbit } from 'nebulosa/src/astronomy/orbits/aste
 import { parseTLE, sgp4 } from 'nebulosa/src/astronomy/orbits/propagation/sgp4'
 import { formatTemporal, parseTemporal, temporalAdd, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract } from 'nebulosa/src/astronomy/time/temporal'
 import type { Temporal } from 'nebulosa/src/astronomy/time/temporal'
-import { time, timeShift, timeUnix, Timescale, tt } from 'nebulosa/src/astronomy/time/time'
+import { time, timeShift, timeUnix, Timescale, toJulianEpoch } from 'nebulosa/src/astronomy/time/time'
 import type { Time } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, GM_SUN_PITJEVA_2005, ONE_KILOPARSEC, SPEED_OF_LIGHT } from 'nebulosa/src/core/constants'
 import type { Writable } from 'nebulosa/src/core/types'
@@ -33,6 +33,7 @@ import type { UTCTime } from 'nebulosa/src/devices/indi/device'
 import type { CsvRow } from 'nebulosa/src/io/csv'
 import { vecAngle, vecLength } from 'nebulosa/src/math/linear-algebra/vec3'
 import type { Vec3 } from 'nebulosa/src/math/linear-algebra/vec3'
+import { lerp } from 'nebulosa/src/math/numerical/math'
 import { normalizeAngle, normalizePI, parseAngle, toDeg } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { toMeter } from 'nebulosa/src/math/units/distance'
@@ -129,8 +130,8 @@ export interface EphemerisSampleSeries {
 // Internal provider. `supports` is a static table, never "try and see if it throws".
 export interface EphemerisProvider {
 	readonly source: EphemerisSource
-	supports(target: EphemerisTarget): boolean
-	samples(request: EphemerisSampleRequest): Promise<EphemerisSampleSeries>
+	readonly supports: (target: EphemerisTarget) => boolean
+	readonly samples: (request: EphemerisSampleRequest) => Promise<EphemerisSampleSeries>
 }
 
 // Horizons observer() used by the service. Tests inject a mock so they do not need NASA.
@@ -157,7 +158,7 @@ export type HorizonsEphemerisInput = string | Omit<Satellite, 'name' | 'groups'>
 
 // Quantities requested from Horizons: astrometric RA/Dec, apparent RA/Dec, Az/El, visual magnitude,
 // one-way light-time, illuminated fraction, solar elongation, and constellation.
-const HORIZONS_QUANTITIES: Quantity[] = [1, 2, 4, 9, 21, 10, 23, 29]
+const HORIZONS_QUANTITIES: readonly Quantity[] = [1, 2, 4, 9, 21, 10, 23, 29]
 
 // Horizons COMMAND → Mallama/VSOP planet name. `'999'` is Pluto, not in this table.
 const PLANET_BY_CODE: Readonly<Record<PlanetHorizonsCode, Planet>> = {
@@ -328,11 +329,13 @@ class HorizonsCircuitBreaker {
 	// True while the breaker is open. An expired window closes it and resets the failure count.
 	isOpen(): boolean {
 		if (this.openUntil === 0) return false
+
 		if (this.now() >= this.openUntil) {
 			this.openUntil = 0
 			this.failures = 0
 			return false
 		}
+
 		return true
 	}
 
@@ -341,22 +344,25 @@ class HorizonsCircuitBreaker {
 		const wasOpen = this.openUntil !== 0
 		this.failures = 0
 		this.openUntil = 0
-		if (wasOpen) console.info({ event: 'horizons-breaker-close' })
+		if (wasOpen) console.info('horizons breaker close')
 	}
 
 	// A transient failure. `retryAfterMs` opens immediately (429); otherwise the threshold opens
 	// for HORIZONS_BREAKER_OPEN_MS.
 	recordTransient(retryAfterMs?: number) {
 		this.failures++
+
 		const now = this.now()
+
 		if (retryAfterMs !== undefined) {
 			this.openUntil = now + retryAfterMs
-			console.info({ event: 'horizons-breaker-open', failures: this.failures, openMs: retryAfterMs, reason: 'retry-after' })
+			console.info('horizons breaker open:', this.failures, retryAfterMs, 'retry-after')
 			return
 		}
+
 		if (this.failures >= HORIZONS_BREAKER_FAILURE_THRESHOLD && this.openUntil === 0) {
 			this.openUntil = now + HORIZONS_BREAKER_OPEN_MS
-			console.info({ event: 'horizons-breaker-open', failures: this.failures, openMs: HORIZONS_BREAKER_OPEN_MS })
+			console.info('horizons breaker open:', this.failures, HORIZONS_BREAKER_OPEN_MS)
 		}
 	}
 }
@@ -364,14 +370,16 @@ class HorizonsCircuitBreaker {
 // Rejects with HorizonsTimeoutError when `promise` does not settle within `ms`. The loser is not
 // cancelled: observer() has no AbortSignal.
 async function raceHorizonsTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-	let timeoutId: ReturnType<typeof setTimeout> | undefined
+	let timer: Timer | undefined
+
 	const timeout = new Promise<never>((_, reject) => {
-		timeoutId = setTimeout(() => reject(new HorizonsTimeoutError()), ms)
+		timer = setTimeout(() => reject(new HorizonsTimeoutError()), ms)
 	})
+
 	try {
 		return await Promise.race([promise, timeout])
 	} finally {
-		clearTimeout(timeoutId)
+		clearTimeout(timer)
 	}
 }
 
@@ -394,20 +402,22 @@ function isPlanetHorizonsCode(code: string): code is PlanetHorizonsCode {
 	return code in PLANET_BY_CODE
 }
 
+const MINOR_BODY_COMMAND_REGEX = /^\d+;$/
+
 // Horizons small-body COMMAND: `DES=…;`, a trailing-semicolon id (`1;`), or `';'` (elements-only).
 function isMinorBodyCommand(code: string): boolean {
-	return code === ';' || code.startsWith('DES=') || /^\d+;$/.test(code)
+	return code === ';' || code.startsWith('DES=') || MINOR_BODY_COMMAND_REGEX.test(code)
 }
 
-// LRU of frozen Horizons series. Get promotes; set evicts the oldest when over `limit`.
-class SeriesLruCache {
-	private readonly entries = new Map<string, HorizonsSampleMap>()
+// Generic LRU. Get promotes; set evicts the oldest when over `limit`.
+class LruCache<T> {
+	private readonly entries = new Map<string, T>()
 
-	// `limit` is the maximum number of series, not samples.
+	// `limit` is the maximum number of entry, not samples.
 	constructor(private readonly limit: number) {}
 
-	// Cached series for `key`, or undefined on miss. A hit becomes most-recently used.
-	get(key: string): HorizonsSampleMap | undefined {
+	// Cached entry for `key`, or undefined on miss. A hit becomes most-recently used.
+	get(key: string): T | undefined {
 		const value = this.entries.get(key)
 		if (value === undefined) return undefined
 		this.entries.delete(key)
@@ -415,8 +425,20 @@ class SeriesLruCache {
 		return value
 	}
 
-	// Stores `value` as most-recently used and evicts the oldest series while size exceeds `limit`.
-	set(key: string, value: HorizonsSampleMap) {
+	// Stores the cached entry for `key` as most-recently used.
+	refresh(key: string) {
+		const cached = this.entries.get(key)
+
+		if (cached !== undefined) {
+			this.entries.delete(key)
+			this.entries.set(key, cached)
+		}
+
+		return cached
+	}
+
+	// Stores `value` as most-recently used and evicts the oldest entry while size exceeds `limit`.
+	set(key: string, value: T) {
 		if (this.entries.has(key)) this.entries.delete(key)
 		this.entries.set(key, value)
 
@@ -430,9 +452,9 @@ class SeriesLruCache {
 
 // Horizons observer-table provider. Does not fall back to offline.
 class HorizonsEphemerisProvider implements EphemerisProvider {
-	readonly source = 'horizons' as const
+	readonly source = 'horizons'
 	private readonly observer: HorizonsObserver
-	private readonly cache: SeriesLruCache
+	private readonly cache: LruCache<HorizonsSampleMap>
 	private readonly timeoutMs: number
 	private readonly inflight = new Map<string, Promise<HorizonsSampleMap>>()
 
@@ -440,7 +462,7 @@ class HorizonsEphemerisProvider implements EphemerisProvider {
 	// the wall-clock budget around observer().
 	constructor(observer: HorizonsObserver, cacheLimit: number, timeoutMs: number) {
 		this.observer = observer
-		this.cache = new SeriesLruCache(cacheLimit)
+		this.cache = new LruCache(cacheLimit)
 		this.timeoutMs = timeoutMs
 	}
 
@@ -511,23 +533,28 @@ class HorizonsEphemerisProvider implements EphemerisProvider {
 	// Empty tables and parse failures are semantic HorizonsEphemerisError; timeouts are transient.
 	private async fetchHorizonsSeries(input: HorizonsEphemerisInput, location: GeographicCoordinate, startTime: Temporal, endTime: Temporal): Promise<HorizonsSampleMap> {
 		const { longitude, latitude, elevation } = location
+
 		console.info(`fetching ephemeris for ${horizonsFingerprint(input)} at time [${formatTemporal(startTime, undefined, 0)} - ${formatTemporal(endTime, undefined, 0)}] and location [${toDeg(latitude)}, ${toDeg(longitude)}, ${toMeter(elevation).toFixed(0)}]`)
-		const pending = this.observer(input, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1, stepSizeUnit: 'm' })
+
+		const pending = this.observer(input, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES as never, { stepSize: 1, stepSizeUnit: 'm' })
 		void pending.catch(() => {})
+
 		const rows = await raceHorizonsTimeout(pending, this.timeoutMs)
 		if (rows.length === 0) throw new HorizonsEphemerisError('empty ephemeris')
 		const samples: HorizonsSampleMap = new Map()
+
 		try {
 			makeBodyPositionFromHorizons(rows, samples)
 		} catch (error) {
 			throw new HorizonsEphemerisError(error instanceof Error ? error.message : 'horizons parse failed', { cause: error })
 		}
+
 		return samples
 	}
 }
 
 // Sum of two barycentric states. Allocates a fresh pair so VSOP/moon buffers are not aliased.
-function addPv(a: PositionAndVelocity, b: PositionAndVelocity): PositionAndVelocity {
+function sumPositionAndVelocity(a: PositionAndVelocity, b: PositionAndVelocity): PositionAndVelocity {
 	return [
 		[a[0][0] + b[0][0], a[0][1] + b[0][1], a[0][2] + b[0][2]],
 		[a[1][0] + b[1][0], a[1][1] + b[1][1], a[1][2] + b[1][2]],
@@ -749,27 +776,15 @@ function barycentricTarget(target: EphemerisTarget): PositionAndVelocityOverTime
 				return [[sun[0][0] + helio[0], sun[0][1] + helio[1], sun[0][2] + helio[2]], sun[1]]
 			}
 		case 'moon':
-			return (t) => addPv(vsop.earth(t), elpmpp02.moon(t))
+			return (t) => sumPositionAndVelocity(vsop.earth(t), elpmpp02.moon(t))
 		case 'naturalSatellite': {
 			const model = NATURAL_SATELLITE_MODEL[target.code]
 			if (!model) return undefined
-			return (t) => addPv(model.planet(t), model.moon(t))
+			return (t) => sumPositionAndVelocity(model.planet(t), model.moon(t))
 		}
 		default:
 			return undefined
 	}
-}
-
-// Julian Date split into ERFA day + fraction, TDB.
-function timeFromJd(jd: number): Time {
-	const day = Math.trunc(jd)
-	return time(day, jd - day, Timescale.TDB)
-}
-
-// Julian calendar year of `time` (TT), used by Neptune's Mallama secular term.
-function julianYear(time: Time): number {
-	const t = tt(time)
-	return 2000 + (t.day - 2451545 + t.fraction) / 365.25
 }
 
 // IAU HG phase correction in magnitudes for phase angle `phase` (radians) and slope `g`.
@@ -806,19 +821,19 @@ function keplerFromElements(elements: OsculatingElementsInput): KeplerOrbit {
 	const { tpqr, ec, i, om, w } = elements
 	if (ec >= 1 || 'qr' in tpqr) {
 		if (!('qr' in tpqr)) throw new OfflineEphemerisUnavailableError('parabolic or hyperbolic Kepler needs perihelion distance and time')
-		return comet(tpqr.qr * (1 + ec), ec, i, om, w, timeFromJd(tpqr.tp))
+		return comet(tpqr.qr * (1 + ec), ec, i, om, w, time(tpqr.tp, 0, Timescale.TDB))
 	}
 
-	if ('a' in tpqr) return asteroid(tpqr.a, ec, i, om, w, tpqr.ma, timeFromJd(elements.epoch))
+	if ('a' in tpqr) return asteroid(tpqr.a, ec, i, om, w, tpqr.ma, time(elements.epoch, 0, Timescale.TDB))
 	const a = Math.cbrt(GM_SUN_PITJEVA_2005 / (tpqr.n * tpqr.n))
-	return asteroid(a, ec, i, om, w, tpqr.ma, timeFromJd(elements.epoch))
+	return asteroid(a, ec, i, om, w, tpqr.ma, time(elements.epoch, 0, Timescale.TDB))
 }
 
 // Local models: stars, sky points, VSOP/ELP/Pluto, natural satellites, SGP4, and Kepler when elements
 // are present. Point samples are evaluated at `request.start` (the requested utc).
 class OfflineEphemerisProvider implements EphemerisProvider {
-	readonly source = 'offline' as const
-	private readonly keplerOrbits = new Map<string, KeplerOrbit>()
+	readonly source = 'offline'
+	private readonly keplerOrbits = new LruCache<KeplerOrbit>(KEPLER_ORBIT_CACHE_LIMIT)
 
 	// True when a local model exists for `target`. Charon, B1950 elements, and command-only minor
 	// bodies are false.
@@ -859,7 +874,7 @@ class OfflineEphemerisProvider implements EphemerisProvider {
 
 		if (target.type === 'satellite') {
 			const tle = parseTLE(target.satellite.line1, target.satellite.line2, target.satellite.name)
-			return observeSolarSystemBody((t) => addPv(vsop.earth(t), temeStateToGcrs(sgp4(t, tle), t)), time, null, req)
+			return observeSolarSystemBody((t) => sumPositionAndVelocity(vsop.earth(t), temeStateToGcrs(sgp4(t, tle), t)), time, null, req)
 		}
 
 		if (target.type === 'minorBody') {
@@ -867,7 +882,7 @@ class OfflineEphemerisProvider implements EphemerisProvider {
 			const orbit = this.keplerOrbit(target.elements)
 			const elements = target.elements
 			return observeSolarSystemBody(
-				(t) => addPv(vsop.sun(t), orbit.at(t)),
+				(t) => sumPositionAndVelocity(vsop.sun(t), orbit.at(t)),
 				time,
 				(geometry) => minorBodyMagnitude(elements, geometry),
 				req,
@@ -884,7 +899,7 @@ class OfflineEphemerisProvider implements EphemerisProvider {
 				barycentric,
 				time,
 				(geometry) => {
-					const mag = planetMagnitude(name, geometry.sunToBody, geometry.observerToBody, { year: julianYear(time) })
+					const mag = planetMagnitude(name, geometry.sunToBody, geometry.observerToBody, { year: toJulianEpoch(time) })
 					return Number.isFinite(mag) ? mag : null
 				},
 				req,
@@ -897,20 +912,14 @@ class OfflineEphemerisProvider implements EphemerisProvider {
 	// Cached KeplerOrbit for `elements`, evicting the oldest entry past KEPLER_ORBIT_CACHE_LIMIT.
 	private keplerOrbit(elements: OsculatingElementsInput): KeplerOrbit {
 		const key = elementsFingerprint(elements)
-		const cached = this.keplerOrbits.get(key)
-		if (cached) {
-			this.keplerOrbits.delete(key)
-			this.keplerOrbits.set(key, cached)
+		const cached = this.keplerOrbits.refresh(key)
+
+		if (cached !== undefined) {
 			return cached
 		}
 
 		const orbit = keplerFromElements(elements)
 		this.keplerOrbits.set(key, orbit)
-		while (this.keplerOrbits.size > KEPLER_ORBIT_CACHE_LIMIT) {
-			const oldest = this.keplerOrbits.keys().next().value
-			if (oldest === undefined) break
-			this.keplerOrbits.delete(oldest)
-		}
 		return orbit
 	}
 }
@@ -924,11 +933,11 @@ export class AtlasEphemeris {
 
 	// `options.observer` replaces the NASA client; `options.horizons` / `options.offline` replace the
 	// providers used by `position` so selection can be tested without models or NASA.
-	constructor(options: AtlasEphemerisOptions = {}) {
-		this.horizonsTiles = new HorizonsEphemerisProvider(options.observer ?? horizonsObserver, options.cacheLimit ?? ATLAS_EPHEMERIS_CACHE_LIMIT, options.horizonsTimeoutMs ?? HORIZONS_TIMEOUT_MS)
-		this.horizons = options.horizons ?? this.horizonsTiles
-		this.offline = options.offline ?? new OfflineEphemerisProvider()
-		this.breaker = new HorizonsCircuitBreaker(options.now ?? Date.now)
+	constructor(options?: AtlasEphemerisOptions) {
+		this.horizonsTiles = new HorizonsEphemerisProvider(options?.observer ?? horizonsObserver, options?.cacheLimit ?? ATLAS_EPHEMERIS_CACHE_LIMIT, options?.horizonsTimeoutMs ?? HORIZONS_TIMEOUT_MS)
+		this.horizons = options?.horizons ?? this.horizonsTiles
+		this.offline = options?.offline ?? new OfflineEphemerisProvider()
+		this.breaker = new HorizonsCircuitBreaker(options?.now ?? Date.now)
 	}
 
 	// BodyPosition for `target` at `req`. `fast` prefers offline when it supports the target; otherwise
@@ -1017,26 +1026,26 @@ export class AtlasEphemeris {
 		}
 
 		const mode: EphemerisMode = req.fast ? 'fast' : 'accurate'
-		const offlineOk = this.offline.supports(target)
-		const horizonsOk = this.horizons.supports(target)
+		const useOffline = this.offline.supports(target)
+		const useHorizons = this.horizons.supports(target)
 
 		if (mode === 'fast') {
-			if (offlineOk) return this.offline.samples(pointRequest(request, req.time.utc))
-			if (horizonsOk) return this.fetchHorizonsOrFallback(request, req.time.utc, false, false)
+			if (useOffline) return this.offline.samples(pointRequest(request, req.time.utc))
+			if (useHorizons) return this.fetchHorizonsOrFallback(request, req.time.utc, false, false)
 			throw new EphemerisUnavailableError()
 		}
 
-		if (horizonsOk) return this.fetchHorizonsOrFallback(request, req.time.utc, allowOfflineFallback && offlineOk, true)
-		if (offlineOk) return this.offline.samples(pointRequest(request, req.time.utc))
+		if (useHorizons) return this.fetchHorizonsOrFallback(request, req.time.utc, allowOfflineFallback && useOffline, true)
+		if (useOffline) return this.offline.samples(pointRequest(request, req.time.utc))
 		throw new EphemerisUnavailableError()
 	}
 
-	// Horizons tile, with at most one offline hop on a transient failure when `offlineOk`.
+	// Horizons tile, with at most one offline hop on a transient failure when `useOffline`.
 	// `skipWhenOpen` is true for accurate mode: an open breaker uses offline immediately or throws
 	// without waiting. Fast Horizons-only targets still call Horizons while the breaker is open.
-	private async fetchHorizonsOrFallback(request: EphemerisSampleRequest, utc: number, offlineOk: boolean, skipWhenOpen: boolean): Promise<EphemerisSampleSeries> {
+	private async fetchHorizonsOrFallback(request: EphemerisSampleRequest, utc: number, useOffline: boolean, skipWhenOpen: boolean): Promise<EphemerisSampleSeries> {
 		if (this.breaker.isOpen()) {
-			if (offlineOk) {
+			if (useOffline) {
 				console.info({ event: 'ephemeris-fallback', target: request.target.type, source: 'offline', reason: 'breaker-open' })
 				return this.offline.samples(pointRequest(request, utc))
 			}
@@ -1049,14 +1058,18 @@ export class AtlasEphemeris {
 			return series
 		} catch (error) {
 			const kind = classifyHorizonsFailure(error)
+
 			if (kind === 'transient') {
 				this.breaker.recordTransient(retryAfterMsOf(error))
-				if (offlineOk) {
+
+				if (useOffline) {
 					console.info({ event: 'ephemeris-fallback', target: request.target.type, source: 'offline', reason: error instanceof Error ? error.name : 'transient' })
 					return this.offline.samples(pointRequest(request, utc))
 				}
+
 				throw new EphemerisUnavailableError('horizons unavailable', { cause: error })
 			}
+
 			if (error instanceof HorizonsEphemerisError) throw error
 			throw new HorizonsEphemerisError(error instanceof Error ? error.message : 'horizons ephemeris failed', { cause: error })
 		}
@@ -1117,7 +1130,7 @@ function horizonsInputFromTarget(target: EphemerisTarget): HorizonsEphemerisInpu
 		case 'naturalSatellite':
 			return target.code
 		case 'minorBody':
-			return target.command ?? ';'
+			return target.command || ';'
 		case 'horizons':
 			return target.command
 		case 'satellite':
@@ -1179,6 +1192,7 @@ function projectHorizonsPosition(sample: BodyPosition, req: PositionOfBody): Bod
 export function horizonsPositionAt(samples: ReadonlyMap<number, BodyPosition>, req: PositionOfBody): BodyPosition {
 	const utcSec = req.time.utc / 1000
 	const bracket = bracketingHorizonsSamples(samples, utcSec)
+
 	if (!('t1' in bracket)) {
 		const sample = samples.get(bracket.t0)
 		if (!sample) throw new EphemerisInterpolationError(`ephemeris not found at ${formatTemporal(req.time.utc, undefined, 0)}`)
@@ -1204,6 +1218,7 @@ function bracketingHorizonsSamples(samples: ReadonlyMap<number, BodyPosition>, u
 
 	let t0 = Number.NEGATIVE_INFINITY
 	let t1 = Number.POSITIVE_INFINITY
+
 	for (const key of samples.keys()) {
 		if (key <= utcSec && key > t0) t0 = key
 		if (key >= utcSec && key < t1) t1 = key
@@ -1213,6 +1228,7 @@ function bracketingHorizonsSamples(samples: ReadonlyMap<number, BodyPosition>, u
 	if (!Number.isFinite(t0) || !Number.isFinite(t1) || t1 === Number.POSITIVE_INFINITY || t0 === Number.NEGATIVE_INFINITY || t0 === t1) {
 		throw new EphemerisInterpolationError('ephemeris interpolation out of range')
 	}
+
 	return { t0, t1 }
 }
 
@@ -1223,7 +1239,7 @@ function interpolateHorizonsSamples(a: BodyPosition, b: BodyPosition, t0: number
 	const query = timeUnix(req.time.utc / 1000)
 	const tA = timeUnix(t0)
 	const tB = timeUnix(t1)
-	const options = { outOfRange: 'throw' as const }
+	const options = { outOfRange: 'throw' } as const
 	const frac = (req.time.utc / 1000 - t0) / (t1 - t0)
 	const time = makeTime(req.time.utc, req.location)
 	const nearer = frac < 0.5 ? a : b
@@ -1267,7 +1283,7 @@ function interpolateHorizonsSamples(a: BodyPosition, b: BodyPosition, t0: number
 	const derived = derivedFrames(time, req.location.longitude, wantApparent ? { rightAscension, declination } : undefined, wantJ2000 ? [rightAscensionJ2000, declinationJ2000] : undefined, want)
 
 	return bodyPositionWithFlags(want, {
-		magnitude: lerpNullable(a.magnitude, b.magnitude, frac),
+		magnitude: a.magnitude && b.magnitude && lerp(a.magnitude, b.magnitude, frac),
 		distance: lerp(a.distance, b.distance, frac),
 		illuminated: lerp(a.illuminated, b.illuminated, frac),
 		elongation: lerp(a.elongation, b.elongation, frac),
@@ -1277,17 +1293,6 @@ function interpolateHorizonsSamples(a: BodyPosition, b: BodyPosition, t0: number
 		horizontal: [azimuth, altitude],
 		...derived,
 	})
-}
-
-// Linear interpolation of two scalars.
-function lerp(a: number, b: number, t: number) {
-	return a + (b - a) * t
-}
-
-// Linear interpolation that stays null when either sample is null.
-function lerpNullable(a: number | null, b: number | null, t: number) {
-	if (a === null || b === null) return null
-	return lerp(a, b, t)
 }
 
 // Shortest-arc interpolation of an angle, normalized to 0..TAU.
@@ -1333,6 +1338,7 @@ function positionOfStar(dso: SkyObject, req: PositionOfBody): BodyPosition {
 			horizontal[1] = ob.altitude
 		} else {
 			Object.assign(equatorial, equatorialFromJ2000(dso.rightAscension, dso.declination, time))
+
 			if (want.horizontal) {
 				const { azimuth, altitude } = cirsToObserved(equatorial, time)
 				horizontal[0] = azimuth
@@ -1366,8 +1372,8 @@ function positionOfSkyPoint(rightAscension: Angle, declination: Angle, req: Posi
 	const equatorial = [rightAscension, declination] as const
 	const wantJ2000 = want.equatorialJ2000 || want.galactic
 	const equatorialJ2000 = wantJ2000 ? equatorialToJ2000(rightAscension, declination, time) : undefined
-
 	const horizontal: Writable<BodyPosition['horizontal']> = [0, 0]
+
 	if (want.horizontal) {
 		const { azimuth, altitude } = cirsToObserved(eraS2p(rightAscension, declination, ONE_KILOPARSEC), time)
 		horizontal[0] = azimuth
@@ -1405,22 +1411,22 @@ function makeBodyPositionFromHorizons(ephemeris: CsvRow[], output: Map<number, B
 		const distance = lightTime * ((SPEED_OF_LIGHT * 0.06) / AU_KM) // AU
 
 		const position = {
-			equatorial: Object.freeze([parseAngle(e[5])!, parseAngle(e[6])!]),
-			equatorialJ2000: Object.freeze([parseAngle(e[3])!, parseAngle(e[4])!]),
-			horizontal: Object.freeze([parseAngle(e[7])!, parseAngle(e[8])!]),
+			equatorial: [parseAngle(e[5])!, parseAngle(e[6])!],
+			equatorialJ2000: [parseAngle(e[3])!, parseAngle(e[4])!],
+			horizontal: [parseAngle(e[7])!, parseAngle(e[8])!],
 			magnitude: e[9] === 'n.a.' ? null : Number.parseFloat(e[9]),
 			constellation: e[15].toUpperCase() as never,
 			distance,
 			illuminated: Number.parseFloat(e[12]),
 			elongation: parseAngle(e[13])!,
 			leading: e[14] === '/L',
-			galactic: Object.freeze([0, 0]),
-			ecliptic: Object.freeze([0, 0]),
+			galactic: [0, 0],
+			ecliptic: [0, 0],
 			pierSide: 'NEITHER',
 			lst: 0,
 			meridianTimeIn: 0,
 		} satisfies BodyPosition
 
-		output.set(seconds + i * 60, Object.freeze(position))
+		output.set(seconds + i * 60, position)
 	}
 }

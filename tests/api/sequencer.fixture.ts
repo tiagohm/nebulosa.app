@@ -1,21 +1,19 @@
 import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
 import type { SequencerPreparationServices } from 'src/api/sequencer.prepare'
 import type { GuiderSessionInfo } from '#/guider'
-import { successfulOperationResult } from '#/orchestration'
-import type { OperationResult } from '#/orchestration'
 import type { Sequencer, SequencerCameraCapture, SequencerFrame, SequencerRetryPolicy } from '#/sequencer'
 
 // Device services the runtime hands the executor, absent in the tests that never reach the optical path.
-// The guider commander is the exception: a canonical session declares a guider and opens it before its first
-// node, so it answers the connect with a session that is open and not guiding.
+// The guider commander is the exception: a canonical session declares a guider that must already be
+// connected, so it answers `info` with a session that is open and not guiding.
 export function services(): { readonly preparation: SequencerPreparationServices; readonly guiding: SequencerGuidingServices } {
 	return { preparation: {} as SequencerPreparationServices, guiding: guiding() }
 }
 
-export function guiding(connect?: () => OperationResult<GuiderSessionInfo>): SequencerGuidingServices {
+export function guiding(info?: () => GuiderSessionInfo | undefined): SequencerGuidingServices {
 	return {
 		guiderCommander: {
-			connect: () => Promise.resolve(connect === undefined ? successfulOperationResult({ id: 'guider-1', mode: 'remote', key: 'logical:guider:remote:localhost:4400', target: 'localhost:4400', state: 'idle', connected: true, looping: false, running: false }) : connect()),
+			info: () => (info === undefined ? { id: 'guider-1', mode: 'remote', key: 'logical:guider:remote:localhost:4400', target: 'localhost:4400', state: 'idle', connected: true, looping: false, running: false } : info()),
 			running: () => false,
 			looping: () => false,
 		},
@@ -54,10 +52,10 @@ export function complete(): Sequencer {
 			cover: 'Cover Simulator',
 			flatPanel: 'Flat Panel Simulator',
 			dome: 'Dome Simulator',
+			guider: 'guider-1',
 		},
 		target: { ...definition.target, tracking: { ...definition.target.tracking } },
 		capture: { ...definition.capture, frames: [frame('lum', { abandonmentBudget: 2, delay: 8, capture: camera({ filter: { type: 'name', name: 'L' } }) })] },
-		guiding: { ...definition.guiding, connection: { mode: 'remote', host: 'localhost', port: 4400, profile: 'default' } },
 		storage: { ...definition.storage, temporaryDirectory: '/data/nebulosa/.tmp' },
 		mount: { ...definition.mount, unparkOnStartup: false },
 	}
@@ -69,7 +67,7 @@ export function canonical(): Sequencer {
 		id: 'definition-1',
 		revision: 7,
 		name: 'M42',
-		devices: { camera: 'Camera Simulator', mount: 'Mount Simulator', wheel: 'Wheel Simulator', focuser: 'Focuser Simulator' },
+		devices: { camera: 'Camera Simulator', mount: 'Mount Simulator', wheel: 'Wheel Simulator', focuser: 'Focuser Simulator', guider: 'guider-1' },
 		target: {
 			id: 'm42',
 			name: 'Orion Nebula',
@@ -94,7 +92,6 @@ export function canonical(): Sequencer {
 		capture: { order: 'sequential', repeat: 2, frames: [frame('lum'), frame('red')], delay: 4, continueAfterRejectedFrame: false, retry: retry() },
 		guiding: {
 			enabled: true,
-			connection: { mode: 'remote', host: 'localhost', port: 4400 },
 			calibrateBeforeStart: false,
 			recalibrateAfterMeridianFlip: true,
 			restoreAfterInterruption: true,

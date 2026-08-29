@@ -14,10 +14,11 @@ import { guideOutputBus } from 'src/api/guideoutput'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, subscribe } from 'valtio'
 import { deepClone, subscribeKey } from 'valtio/utils'
+import type { GuiderSessionInfo } from '#/guider'
 import { DEFAULT_COORDINATE_INFO } from '#/mount'
 import type { CoordinateInfo } from '#/mount'
 import { DEFAULT_SEQUENCER, DEFAULT_SEQUENCER_AUXILIARY_CAPTURE, DEFAULT_SEQUENCER_RETRY_POLICY } from '#/sequencer'
-import type { Sequencer, SequencerAuxiliaryCapture, SequencerCamera, SequencerEndCondition, SequencerFilterReference, SequencerFrame, SequencerGuiderConnection, SequencerGuiderSettle, SequencerMonitor, SequencerMonitorBase, SequencerRetryPolicy, SequencerSafetyAction, SequencerStartCondition } from '#/sequencer'
+import type { Sequencer, SequencerAuxiliaryCapture, SequencerCamera, SequencerEndCondition, SequencerFilterReference, SequencerFrame, SequencerGuiderSettle, SequencerMonitor, SequencerMonitorBase, SequencerRetryPolicy, SequencerSafetyAction, SequencerStartCondition } from '#/sequencer'
 import type { SequencerPreflight } from '#/sequencer.plan'
 import { isSequencerTerminalState } from '#/sequencer.state'
 import type { SequencerSessionSnapshot } from '#/sequencer.state'
@@ -350,39 +351,8 @@ export function sequencerStore(api: DockviewPanelApi) {
 		frame.capture.filter = value
 	}
 
-	function setGuidingConnectionMode(mode: SequencerGuiderConnection['mode']) {
-		if (mode === 'remote') {
-			state.request.guiding.connection = { mode: 'remote', host: '127.0.0.1', port: 4400 }
-			return
-		}
-
-		const { filter: _, ...capture } = structuredClone(DEFAULT_SEQUENCER_AUXILIARY_CAPTURE)
-		state.request.guiding.connection = { mode: 'local', focalLength: 200, capture }
-	}
-
-	function setGuidingRemoteHost(value: string) {
-		const connection = state.request.guiding.connection
-		if (connection.mode === 'remote') connection.host = value
-	}
-
-	function setGuidingRemotePort(value: number) {
-		const connection = state.request.guiding.connection
-		if (connection.mode === 'remote') connection.port = value
-	}
-
-	function setGuidingRemoteProfile(value: string) {
-		const connection = state.request.guiding.connection
-		if (connection.mode === 'remote') connection.profile = value || undefined
-	}
-
-	function setGuidingLocalFocalLength(value: number) {
-		const connection = state.request.guiding.connection
-		if (connection.mode === 'local') connection.focalLength = value
-	}
-
-	function setGuidingLocalPixelSize(value: number) {
-		const connection = state.request.guiding.connection
-		if (connection.mode === 'local') connection.pixelSize = value || undefined
+	function setGuider(value?: GuiderSessionInfo) {
+		state.request.devices.guider = value?.id
 	}
 
 	function addFilterOffset() {
@@ -1597,12 +1567,7 @@ export function sequencerStore(api: DockviewPanelApi) {
 		updateFrame,
 		updateFrameCapture,
 		updateFrameFilter,
-		setGuidingConnectionMode,
-		setGuidingRemoteHost,
-		setGuidingRemotePort,
-		setGuidingRemoteProfile,
-		setGuidingLocalFocalLength,
-		setGuidingLocalPixelSize,
+		setGuider,
 		addFilterOffset,
 		removeFilterOffset,
 		updateFilterOffsetFilter,

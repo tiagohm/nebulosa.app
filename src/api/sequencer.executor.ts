@@ -3,7 +3,7 @@ import type { Angle } from 'nebulosa/src/math/units/angle'
 import { sequencerCaptureExposureInSeconds } from '#/sequencer'
 import type { SequencerFailureReason, SequencerFilterReference, SequencerGuiderSettle, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanLoop, SequencerPlanPipeline, SequencerPlanSequence } from '#/sequencer.plan'
-import type { SequencerCaptureProgress, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerFailure, SequencerTriggerAnchors } from '#/sequencer.state'
+import type { SequencerCaptureProgress, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerTriggerAnchors } from '#/sequencer.state'
 import { abortableDelay } from './operation.wait'
 import { sequencerActionFailure } from './sequencer.action'
 import { sequencerCadenceBoundary, sequencerExposureEnded, SEQUENCER_INITIAL_CADENCE_ANCHORS, waitForCadenceBoundary } from './sequencer.cadence'
@@ -141,11 +141,11 @@ export interface SequencerExecutorHost {
 	readonly finalizing: () => void
 	// Announces that the walk is entering the target block, called once and only when it actually enters it.
 	//
-	// It is the boundary between the phases that run outside the action signal — the guider being opened, the
-	// startup pipeline, both attended on the wait signal — and the one whose nodes run under it. An immediate
-	// pause is expressed as the cancellation of what is running (§11.3), and only the target block has something
-	// that answer means anything for: cancelling the guider connection or a startup action produces an `aborted`
-	// nothing attributes to the operator, which fails the session instead of holding it for the resume.
+	// It is the boundary between the phases that run outside the action signal — the startup pipeline, attended
+	// on the wait signal — and the one whose nodes run under it. An immediate pause is expressed as the
+	// cancellation of what is running (§11.3), and only the target block has something that answer means
+	// anything for: cancelling a startup action produces an `aborted` nothing attributes to the operator, which
+	// fails the session instead of holding it for the resume.
 	readonly capturing: () => void
 	// Persists the checkpoint together with the events produced since the last write, answering whether the
 	// store accepted the write. It is best-effort: a refused write leaves the checkpoint dirty and the next one
@@ -153,10 +153,6 @@ export interface SequencerExecutorHost {
 	readonly commit: (checkpoint: SequencerCheckpoint, events: readonly SequencerEventDraft[]) => boolean
 	// Waits `delay` milliseconds, resolving early when the signal aborts.
 	readonly delay: (delay: number, signal: AbortSignal) => Promise<void>
-	// Opens the collaborators the walk cannot open for itself, which is the guiding session the plan declares,
-	// and answers with the failure that ends the session or undefined when there was nothing to open or it
-	// opened. A host with nothing to open omits it.
-	readonly open?: () => Promise<SequencerFailure | undefined>
 }
 
 // What one execution of a plan produced.
@@ -279,23 +275,6 @@ export async function runSequencerPlan(host: SequencerExecutorHost): Promise<Seq
 	// runs when the definition asks it to run on a stop, which is what leaves an observatory that was opened for
 	// the session closed again.
 	let primary: SequencerPrimaryOutcome | undefined = scheduled ? undefined : { kind: 'stopped' }
-
-	// The guider is the one collaborator the walk cannot open for itself, and a session that declared one and
-	// could not reach it is not a session that captures unguided: it fails here, before any action. It is opened
-	// inside the walk rather than in front of it so the failure is an ordinary primary outcome, which is what
-	// leaves the finalize pipeline running for a definition that asked it to run on a failure — an observatory
-	// opened for a session whose guider was unreachable is closed again instead of left open until morning. It
-	// runs after the scheduled wait for the same reason the startup pipeline does: a session waiting for midnight
-	// would otherwise hold a guider connection through the whole evening.
-	if (primary === undefined) {
-		const refusal = await host.open?.()
-
-		// An immediate stop is expressed as the cancellation of everything the reservation owns, and the connection
-		// in flight is one of those operations, so the refusal it answers with is the stop itself rather than an
-		// unreachable guider. It ends the session the way the operator commanded instead of recording a failure the
-		// night did not have and running the failure finalization in place of the stop one.
-		if (refusal !== undefined) primary = refusal.reason === 'aborted' && commandedBy(execution) === 'stopped' ? { kind: 'stopped' } : { kind: 'failed', reason: refusal.reason, detail: refusal.detail }
-	}
 
 	const startup = pipelineOf(plan.root, 'startup')
 

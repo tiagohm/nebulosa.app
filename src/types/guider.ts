@@ -70,7 +70,7 @@ export interface GuiderStatus {
 // One open guider session, as the transport enumerates and identifies it. Several may exist at once, so
 // every event and every command names one through its id.
 export interface GuiderSessionInfo {
-	// Stable identifier of the session, which is the id of the operation holding it.
+	// Stable identifier of the session, which is the deterministic id of its transport.
 	readonly id: string
 	// Whether the session drives local devices or talks to a remote server.
 	readonly mode: GuiderClientMode

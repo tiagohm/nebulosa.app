@@ -15,7 +15,7 @@ import { failedOperationResult, successfulOperationResult } from '#/orchestratio
 import type { OperationResult } from '#/orchestration'
 import type { Sequencer } from '#/sequencer'
 import type { SequencerPlan } from '#/sequencer.plan'
-import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerFailure } from '#/sequencer.state'
+import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft } from '#/sequencer.state'
 import { camera, canonical, frame, retry, services } from './sequencer.fixture'
 
 interface Executed {
@@ -68,7 +68,6 @@ interface Harness {
 	devices?: Record<string, { readonly device: unknown }>
 	onHold?: (nodeId: string) => SequencerDesiredState
 	onObserve?: () => void
-	onOpen?: () => SequencerFailure | undefined
 	clock?: () => number
 	refuseCommit?: () => boolean
 }
@@ -184,7 +183,6 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 
 				return Promise.resolve(converged)
 			},
-			open: () => Promise.resolve(state.onOpen?.()),
 			capturing: () => void state.phases.push('capturing'),
 			finalizing: () => void state.phases.push('finalizing'),
 			commit: (_, drafts) => {
@@ -988,27 +986,6 @@ describe('plan walk', () => {
 
 		expect(outcome.terminal.state).toBe('stopped')
 		expect(state.executed).toBeEmpty()
-	})
-
-	test('ends as stopped when a stop cancels the guider the walk was opening', async () => {
-		const base = definition()
-		const state: Harness = harness(planOf({ mount: { ...base.mount, parkOnShutdown: true } }), (context) => {
-			state.phases.push(context.nodeId)
-
-			return Promise.resolve({ type: 'completed', value: undefined })
-		})
-
-		state.onOpen = () => {
-			state.desired = 'stopped'
-			return { reason: 'aborted' }
-		}
-
-		const outcome = await runSequencerPlan(state.host)
-
-		expect(outcome.terminal.state).toBe('stopped')
-		expect(outcome.terminal.failure).toBeUndefined()
-		expect(state.phases).toEqual(['finalizing', 'finalize.action[parkMount]'])
-		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 	})
 
 	test('fails the session when the cadence wait is cancelled without a control command', async () => {

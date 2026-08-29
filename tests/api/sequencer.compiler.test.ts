@@ -249,7 +249,6 @@ describe('lowering', () => {
 		expect(compilation.ok).toBe(true)
 		if (!compilation.ok) return
 		expect(compilation.plan.guider).toEqual({
-			connection: canonical().guiding.connection,
 			calibrateBeforeStart: false,
 			recalibrateAfterMeridianFlip: true,
 			settle: canonical().guiding.settle,
@@ -268,19 +267,6 @@ describe('lowering', () => {
 
 		expect((guide.configuration as SequencerLifecycle).guiding).toEqual({ calibrateBeforeStart: true, settle: definition.guiding.settle })
 		expect((unpark.configuration as SequencerLifecycle).guiding).toBeUndefined()
-	})
-
-	test('an action starting guiding carries the guide-camera recipe of a local guider', () => {
-		const definition = complete()
-		const capture = { exposureTime: 2.5, exposureTimeUnit: 'second', frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 30, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false } as const
-		const connection = { mode: 'local', focalLength: 200, capture } as const
-		const { plan } = ok({ ...definition, guiding: { ...definition.guiding, connection } })
-		const startup = plan.root.children[0] as SequencerPlanSequence
-		const guide = startup.children.find((node) => node.kind === 'action' && node.id === 'startup.action[startGuiding]') as SequencerPlanAction
-
-		expect((guide.configuration as SequencerLifecycle).type).toBe('startGuiding')
-		expect((guide.configuration as SequencerLifecycle).timeout).toBe(definition.guiding.settle.timeout)
-		expect((guide.configuration as SequencerLifecycle).guiding).toEqual({ calibrateBeforeStart: false, settle: definition.guiding.settle, capture })
 	})
 
 	test('startup does not start tracking because the slew establishes it', () => {
@@ -346,7 +332,7 @@ describe('lowering', () => {
 		const definition = canonical()
 		const { plan } = ok({ ...definition, capture: { ...definition.capture, frames: [frame('lum', undefined, { filter: { type: 'position', position: 1 } })] } })
 
-		expect(plan.roles).toEqual(['camera', 'mount', 'wheel', 'focuser'])
+		expect(plan.roles).toEqual(['camera', 'mount', 'wheel', 'focuser', 'guider'])
 	})
 
 	test('an enabled cover, rotator and panel reserve those roles', () => {
@@ -493,10 +479,18 @@ describe('structural validation', () => {
 
 	test('a feature commanding a role the definition does not declare is refused', () => {
 		const definition = canonical()
-		const compilation = compile({ ...definition, devices: { camera: 'Camera Simulator', mount: 'Mount Simulator', wheel: 'Wheel Simulator' } })
+		const compilation = compile({ ...definition, devices: { camera: 'Camera Simulator', mount: 'Mount Simulator', wheel: 'Wheel Simulator', guider: 'guider-1' } })
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.focuser', message: 'autofocus requires the focuser role, which the definition does not declare' }])
+	})
+
+	test('an enabled guiding block without a guider is refused', () => {
+		const definition = canonical()
+		const compilation = compile({ ...definition, devices: { camera: 'Camera Simulator', mount: 'Mount Simulator', wheel: 'Wheel Simulator', focuser: 'Focuser Simulator' } })
+
+		expect(compilation.ok).toBe(false)
+		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.guider', message: 'guiding requires the guider role, which the definition does not declare' }])
 	})
 
 	test('an enabled cover without a cover device is refused', () => {
@@ -516,7 +510,7 @@ describe('structural validation', () => {
 	test('a role required twice is reserved once', () => {
 		const { plan } = ok(canonical())
 
-		expect(plan.roles).toEqual(['camera', 'mount', 'focuser'])
+		expect(plan.roles).toEqual(['camera', 'mount', 'focuser', 'guider'])
 	})
 
 	test('an auxiliary capture selecting a filter reserves the wheel', () => {
@@ -529,7 +523,7 @@ describe('structural validation', () => {
 	test('an auxiliary capture selecting a filter is refused without a wheel', () => {
 		const definition = canonical()
 		const center = { ...definition.target.center, capture: { ...definition.target.center.capture, filter: { type: 'name', name: 'L' } as const } }
-		const compilation = compile({ ...definition, devices: { camera: 'Camera Simulator', mount: 'Mount Simulator', focuser: 'Focuser Simulator' }, target: { ...definition.target, center } })
+		const compilation = compile({ ...definition, devices: { camera: 'Camera Simulator', mount: 'Mount Simulator', focuser: 'Focuser Simulator', guider: 'guider-1' }, target: { ...definition.target, center } })
 
 		expect(compilation.ok).toBe(false)
 		if (!compilation.ok) expect(compilation.diagnostics).toEqual([{ path: 'devices.wheel', message: 'target.center.capture.filter requires the wheel role, which the definition does not declare' }])
@@ -570,7 +564,7 @@ describe('structural validation', () => {
 		const compilation = compile(canonical(), { registry: handlers({ 'lifecycle.parkMount': ['wheel'] }) })
 
 		expect(compilation.ok).toBe(true)
-		if (compilation.ok) expect(compilation.plan.roles).toEqual(['camera', 'mount', 'wheel', 'focuser'])
+		if (compilation.ok) expect(compilation.plan.roles).toEqual(['camera', 'mount', 'wheel', 'focuser', 'guider'])
 	})
 
 	test('an optional handler role the definition does not declare is not required', () => {
@@ -589,7 +583,7 @@ describe('structural validation', () => {
 		const compilation = compile(canonical(), { registry })
 
 		expect(compilation.ok).toBe(true)
-		if (compilation.ok) expect(compilation.plan.roles).toEqual(['camera', 'mount', 'focuser'])
+		if (compilation.ok) expect(compilation.plan.roles).toEqual(['camera', 'mount', 'focuser', 'guider'])
 	})
 
 	test('the configuration a handler returns replaces the lowered one', () => {

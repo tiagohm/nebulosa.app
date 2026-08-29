@@ -103,7 +103,7 @@ export interface NightOptions {
 			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' | 'timeout' | number; trackMode?: 'fail' | number; slew?: 'timeout' }>
 			readonly camera?: Readonly<{ temperature?: 'timeout' }>
 			readonly cover?: Readonly<{ unpark?: 'fail' | 'timeout' | number }>
-			readonly guider?: Readonly<{ start?: 'fail' | 'timeout'; running?: boolean }>
+			readonly guider?: Readonly<{ start?: 'fail' | 'timeout'; running?: boolean; connected?: boolean }>
 		}
 	}
 	readonly control?: (api: NightControl) => void | Promise<void>
@@ -122,6 +122,8 @@ export interface SimulatorProcess {
 	readonly store: InMemorySequencerStore
 	readonly root: string
 	readonly log: SimulatorCommand[]
+	// Host observatory the process commanders drive, including the independently connected guider.
+	readonly devices: SimulatorDevices
 	// Registers another physical observatory under unique device names and hardware ids.
 	readonly addObservatory: (tag: string, sim?: NightOptions['sim']) => SimulatorDevices
 	// Builds a Sequencer whose device names resolve to the given observatory, then applies `patch`.
@@ -153,6 +155,7 @@ export function defaultSequencer(root: string): Sequencer {
 			guideOutput: 'Guide Output Simulator',
 			cover: 'Cover Simulator',
 			flatPanel: 'Flat Panel Simulator',
+			guider: 'guider-1',
 		},
 		target: {
 			id: 'm42',
@@ -181,7 +184,6 @@ export function defaultSequencer(root: string): Sequencer {
 		},
 		guiding: {
 			enabled: true,
-			connection: { mode: 'remote', host: '127.0.0.1', port: 4400 },
 			calibrateBeforeStart: false,
 			recalibrateAfterMeridianFlip: true,
 			restoreAfterInterruption: true,
@@ -301,7 +303,8 @@ export async function openProcess(options: { readonly root?: string } = {}): Pro
 	const log: SimulatorCommand[] = []
 	const frameBytes = await syntheticFits()
 	const byName: Record<string, Device> = {}
-	const { arbiter, runtime, handler, store } = environment(defaultSequencer(root), observatory(undefined, 'host'), log, clock, frameBytes, undefined, byName)
+	const devices = observatory(undefined, 'host')
+	const { arbiter, runtime, handler, store } = environment(defaultSequencer(root), devices, log, clock, frameBytes, undefined, byName)
 
 	return {
 		handler,
@@ -310,6 +313,7 @@ export async function openProcess(options: { readonly root?: string } = {}): Pro
 		store,
 		root,
 		log,
+		devices,
 		addObservatory(tag, sim) {
 			const devices = observatory(sim, tag)
 
@@ -330,6 +334,7 @@ export async function openProcess(options: { readonly root?: string } = {}): Pro
 						guideOutput: devices.guideOutput.name,
 						cover: devices.cover.name,
 						flatPanel: devices.flatPanel.name,
+						guider: 'guider-1',
 					},
 				}),
 				patch,
@@ -412,7 +417,7 @@ function observatory(sim?: NightOptions['sim'], tag?: string): SimulatorDevices 
 		flatPanel,
 		guideCamera,
 		guideOutput,
-		guiderConnected: false,
+		guiderConnected: sim?.options?.guider?.connected !== false,
 		guiderRunning: sim?.options?.guider?.running === true,
 		guiderLooping: sim?.options?.guider?.running === true,
 	}
@@ -751,17 +756,19 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 		guider: {
 			running: () => devices.guiderRunning,
 			looping: () => devices.guiderLooping,
-			connect: () => {
-				push('guider.connect')
-				devices.guiderConnected = true
-				return ok({ id: 'guider-1', mode: 'remote', key: 'logical:guider:remote:127.0.0.1:4400', target: '127.0.0.1:4400', state: 'idle', connected: true, looping: false, running: false })
-			},
-			disconnect: () => {
-				push('guider.disconnect')
-				devices.guiderConnected = false
-				devices.guiderRunning = false
-				devices.guiderLooping = false
-				return ok(undefined)
+			info: (guider: string) => {
+				if (!devices.guiderConnected) return undefined
+
+				return {
+					id: guider,
+					mode: 'remote' as const,
+					key: 'logical:guider:remote:127.0.0.1:4400',
+					target: '127.0.0.1:4400',
+					state: devices.guiderRunning ? ('guiding' as const) : devices.guiderLooping ? ('looping' as const) : ('idle' as const),
+					connected: true,
+					looping: devices.guiderLooping,
+					running: devices.guiderRunning,
+				}
 			},
 			loop: () => {
 				push('guider.loop')

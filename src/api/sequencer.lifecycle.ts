@@ -1,11 +1,9 @@
 import { isCamera, isCover, isMount } from 'nebulosa/src/devices/indi/device'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
-import type { CameraCaptureStart } from '#/camera'
 import type { GuiderLoopStart } from '#/guider'
 import { successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
-import type { SequencerAuxiliaryCapture, SequencerDeviceRole, SequencerLifecycleActionType } from '#/sequencer'
+import type { SequencerDeviceRole, SequencerLifecycleActionType } from '#/sequencer'
 import type { CameraCommander } from './camera.commander'
 import type { CoverCommander } from './cover.commander'
 import type { GuiderCommander } from './guider.session'
@@ -364,41 +362,15 @@ async function rampSetpoint(services: SequencerLifecycleServices, context: Seque
 	return successfulOperationResult(true)
 }
 
-// Builds the guide-camera request of a locally owned guider from the recipe the definition declared for it.
-//
-// Only the fields the guiding session applies to the camera are carried: the exposure, the binning, the gain,
-// the offset, the subframe and the transfer. The frames of a guider are never saved and never named — they are
-// consumed by the star tracker and discarded — so the destination fields keep their defaults. The declared
-// exposure time is seconds, which the unit states rather than a conversion.
-function guideCameraCapture(recipe: Omit<SequencerAuxiliaryCapture, 'filter'>): CameraCaptureStart {
-	return {
-		...structuredClone(DEFAULT_CAMERA_CAPTURE_START),
-		exposureTime: recipe.exposureTime,
-		exposureTimeUnit: recipe.exposureTimeUnit,
-		frameType: recipe.frameType,
-		binX: recipe.binX,
-		binY: recipe.binY,
-		gain: recipe.gain,
-		offset: recipe.offset,
-		subframe: recipe.subframe,
-		x: recipe.x,
-		y: recipe.y,
-		width: recipe.width,
-		height: recipe.height,
-		transferFormat: recipe.transferFormat,
-		compressed: recipe.compressed,
-	}
-}
-
 // Starts the guiding corrections of the session's guider, or reports that there is nothing to guide.
 //
 // A session guiding through no guider is a session that was configured that way, so the action is skipped
 // rather than failed, exactly as the dither is.
 //
-// The declared settle and, for a locally owned guider, the recipe its guide camera exposes with are installed
-// here, with the loop that precedes the guide, because the transport keeps both as session state and reads
-// them back on every guide, recalibration and dither that follows. This is the first of them, so nothing else
-// can have installed them.
+// The declared settle is installed here, with the loop that precedes the guide, because the transport keeps
+// it as session state and reads it back on every guide, recalibration and dither that follows. This is the
+// first write of the night, so nothing else can have installed it. The guide camera already exposes under
+// the configuration of the connected guider; this session does not re-own that recipe.
 //
 // `calibrateBeforeStart` decides which command establishes the run. The plain start reuses whatever solution
 // the guider carries, which is the one it computed for the last target it guided; the flag is the declaration
@@ -418,22 +390,20 @@ async function runStartGuiding(services: SequencerLifecycleServices, context: Se
 
 	const guiding = configuration.guiding
 
-	// The declared settle and the guide-camera recipe are installed on the guider session before it is asked to
-	// guide anything. Both are session state and not command arguments — the guide, the calibration and every
-	// dither of the night read the settle back from the session, and the recipe is applied to the guide camera
-	// itself — and the only command that writes either is the loop, which is why the interlock installs the
-	// settle with the suspension of every safe point. The session that never loops before its first guide
-	// exposes and settles under the transport defaults instead of the declared policy: a tolerance, a timeout,
-	// an exposure time, a binning and a gain nobody in this observatory chose, and on a guide camera the
-	// exposure is what decides whether there is a star to lock on at all.
+	// The declared settle is installed on the guider session before it is asked to guide anything. It is session
+	// state and not a command argument — the guide, the calibration and every dither of the night read it back
+	// from the session — and the only command that writes it is the loop, which is why the interlock installs
+	// the settle with the suspension of every safe point. The session that never loops before its first guide
+	// settles under the transport defaults instead of the declared policy: a tolerance, a time and a timeout
+	// nobody in this observatory chose.
 	//
-	// They are installed after the guider was found not to be guiding already, because a loop command is what
+	// It is installed after the guider was found not to be guiding already, because a loop command is what
 	// stops the corrections: paying it against a run that is already established would suspend the very guiding
 	// this action exists to have.
 	if (guiding !== undefined) {
 		context.progress({ detail: 'looping the guide camera' })
 
-		const request: GuiderLoopStart = { capture: guiding.capture === undefined ? undefined : guideCameraCapture(guiding.capture), settle: sequencerGuiderSettle(guiding.settle) }
+		const request: GuiderLoopStart = { settle: sequencerGuiderSettle(guiding.settle) }
 		const looping = await services.guiderCommander.loop(guider, request, { signal: context.signal })
 
 		if (!looping.ok) return sequencerActionFailure(looping, 'the guide camera did not start looping')

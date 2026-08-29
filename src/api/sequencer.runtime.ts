@@ -1,14 +1,12 @@
 import { statSync } from 'fs'
 import { dirname, resolve } from 'path'
 import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
-import { isCamera, isGuideOutput, isMount, isWheel } from 'nebulosa/src/devices/indi/device'
+import { isCamera, isMount, isWheel } from 'nebulosa/src/devices/indi/device'
 import type { PierSide } from 'nebulosa/src/devices/indi/device'
 import { normalizePI } from 'nebulosa/src/math/units/angle'
-import type { GuiderConnect } from '#/guider'
 import type { SequencerDeviceRole, SequencerDevices, SequencerFilterReference } from '#/sequencer'
 import type { SequencerPlan, SequencerPlanAction } from '#/sequencer.plan'
 import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEvent, SequencerEventDraft, SequencerFailure, SequencerSession, SequencerSessionState } from '#/sequencer.state'
-import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from './guider.session'
 import type { OperationCoordinator, OperationScope } from './operation'
 import { abortableDelay } from './operation.wait'
 import type { ResourceArbiter, ResourceRequest, ResourceReservation, ResourceReservationOwner } from './resource'
@@ -357,8 +355,8 @@ interface ActiveSession {
 	// Last revision this runtime committed, used as the optimistic guard of the next commit.
 	revision: number
 	// Set while the walk is inside the target block, which is the only phase whose actions run under the action
-	// signal. The guider connection and the startup pipeline run outside it, and the terminal pipeline runs after
-	// it, so a cancellation issued during either of them is an `aborted` no command explains (§11.3).
+	// signal. The startup pipeline runs outside it, and the terminal pipeline runs after it, so a cancellation
+	// issued during either of them is an `aborted` no command explains (§11.3).
 	capturing: boolean
 	// Set once finalization began, so a stop arriving during it does not start a second one.
 	finalizing: boolean
@@ -371,8 +369,8 @@ interface ActiveSession {
 	// because the side the mount takes after it flips is precisely what must stop matching it.
 	preFlipPierSide?: PierSide
 	// Guiding session every action of this session commands, absent while the plan declares no guider. It is
-	// session state and not plan configuration: a remote or local guider only has an id once its connection is
-	// open, which happens after the reservation exists and before the first node runs.
+	// the id selected in `devices.guider`, bound at start because the session commands a guider that is already
+	// connected rather than opening one of its own.
 	guider?: string
 }
 
@@ -613,11 +611,11 @@ export class SequencerRuntime {
 			}
 		}
 
-		const guiderRefusal = this.#reserveGuider(plan.compiled, devices, roles, requests)
+		const bound = this.#bindGuider(plan.compiled, devices)
 
-		if (guiderRefusal !== undefined) {
+		if (bound.refusal !== undefined) {
 			teardown.run()
-			return guiderRefusal
+			return bound.refusal
 		}
 
 		const owner: ResourceReservationOwner = { id: sessionId, kind: 'sequencer' }
@@ -652,6 +650,7 @@ export class SequencerRuntime {
 			capturing: false,
 			finalizing: false,
 			finalized: false,
+			guider: bound.guider,
 		}
 
 		this.#active = active
@@ -671,6 +670,9 @@ export class SequencerRuntime {
 	// session holds for its whole life everything any of its nodes will ever touch.
 	#reserveRoles(bindings: readonly ResourceBinding[], devices: SequencerDevices, roles: Map<SequencerDeviceRole, ResourceRequest>, requests: ResourceRequest[]): SequencerStartResult | undefined {
 		for (const binding of bindings) {
+			// The guider is a session, not a device: `#bindGuider` is what verifies it is connected, and the
+			// logical keys it already holds would conflict if this path reserved them again.
+			if (binding.role === 'guider') continue
 			if (roles.has(binding.role)) continue
 
 			const deviceId = devices[binding.role]
@@ -703,50 +705,26 @@ export class SequencerRuntime {
 		return undefined
 	}
 
-	// Reserves what the guiding session of the plan occupies, accumulating into the same role map and request
-	// set the blocks charge. Returns the refusal that stops the start, or undefined when the plan declares no
-	// guider or everything it declares resolved.
+	// Binds the already-connected guider the plan commands, the same way a camera must already be connected
+	// before the session starts. Returns a refusal that stops the start, or the session id to command.
 	//
-	// No block declares any of this, which is why it cannot come from `handler.resources`: the session opens the
-	// guider itself, between the reservation and its first node, and there are two halves to take.
-	//
-	// The physical roles of a local guider are what `#openGuider` names in its connect request, and no lifecycle
-	// action binds them — `startGuiding` commands a session, not a device — so a local guider without this
-	// resolves to nothing in `roles` and refuses every start as disconnected.
-	//
-	// The logical `logical:guider:*` keys are the other half. `guider.session.ts` reserves a guiding session by
-	// those keys and deliberately leaves the physical device acquirable so the guider's own operations can lease
-	// it, so reserving only the physical half produces a state worse than a clean failure: a guider opened by
-	// hand during the session connects, because the logical keys are free, and only fails at its first command.
-	// A local guider takes one key per device rather than one naming the pair, because a combined key would
-	// differ for every combination and two sessions sharing only the camera would both be accepted.
-	#reserveGuider(plan: SequencerPlan, devices: SequencerDevices, roles: Map<SequencerDeviceRole, ResourceRequest>, requests: ResourceRequest[]): SequencerStartResult | undefined {
-		const guider = plan.guider
+	// Nothing is reserved here. The guider session already holds its `logical:guider:*` keys, and a local one
+	// leaves the physical camera and guide output acquirable on purpose so its own operations can lease them.
+	// Reserving either half would compete with the session this start is supposed to use: the logical keys
+	// conflict with the open guider, and the physical devices would then refuse the pulses and exposures the
+	// guider issues under a different owner.
+	#bindGuider(plan: SequencerPlan, devices: SequencerDevices): { readonly refusal?: SequencerStartResult; readonly guider?: string } {
+		if (plan.guider === undefined) return {}
 
-		if (guider === undefined) return undefined
+		const guider = devices.guider
 
-		const { connection } = guider
+		if (guider === undefined) return { refusal: { ok: false, reason: 'roleUnresolved', detail: 'role guider is not available' } }
 
-		if (connection.mode === 'remote') {
-			requests.push({ key: remoteGuiderKey(connection.host, connection.port) })
-			return undefined
-		}
+		const session = this.#guiding.guiderCommander.info(guider)
 
-		const refusal = this.#reserveRoles([{ role: 'guideCamera' }, { role: 'guideOutput' }], devices, roles, requests)
+		if (session === undefined || !session.connected) return { refusal: { ok: false, reason: 'disconnected', detail: `guider ${guider} is not connected` } }
 
-		if (refusal !== undefined) return refusal
-
-		const camera = roles.get('guideCamera')?.device
-		const guideOutput = roles.get('guideOutput')?.device
-
-		// The resolver already refused a device that cannot do what its role requires, so these narrowings only
-		// restate what the bindings above guarantee.
-		if (camera === undefined || !isCamera(camera)) return { ok: false, reason: 'roleUnresolved', detail: 'device of role guideCamera is not a camera' }
-		if (guideOutput === undefined || !isGuideOutput(guideOutput)) return { ok: false, reason: 'roleUnresolved', detail: 'device of role guideOutput is not a guide output' }
-
-		requests.push({ key: localGuiderCameraKey(camera) }, { key: localGuiderOutputKey(guideOutput) })
-
-		return undefined
+		return { guider }
 	}
 
 	// Requests the active session to stop and resolves once it is fully torn down. Stopping an unknown or
@@ -794,17 +772,9 @@ export class SequencerRuntime {
 	// here would refuse the resumed action and every park and warm of the finalize as `reservation has been
 	// cancelled`. The reservation is released by the finalization and by the shutdown, which is where the
 	// terminal form belongs and where it stayed.
-	//
-	// The guiding session is the one root the drain leaves alone, for the same reason. It is a root of this
-	// reservation rather than a tree of the action, because a connection outlives every command issued through
-	// it, so draining it would disconnect the guider of a session that is only being interrupted: the binding
-	// left behind names a session that no longer exists, and nothing on the resume path reconnects it, which is
-	// a night whose remaining frames are exposed unguided while the interlock and the dither silently find
-	// nothing to command. It is released where every other resource of the session is, by the finalization and
-	// by the shutdown.
 	async #cancelActiveAction(active: ActiveSession) {
 		active.action.abort('aborted')
-		await this.#coordinator.drainByReservationOwner(active.owner, 'aborted', active.guider)
+		await this.#coordinator.drainByReservationOwner(active.owner, 'aborted')
 		active.action = new AbortController()
 	}
 
@@ -818,10 +788,9 @@ export class SequencerRuntime {
 	// The steps are ordered against each other, not merely listed. New sessions are refused first, so nothing
 	// starts behind the shutdown; the state is written before anything is cancelled, because the caller's
 	// `cancelAll` would otherwise tear down operations whose session was never recorded; the cancellation is by
-	// reservation owner and not by the handles this runtime keeps, which is what catches the owned guiding
-	// session whose handle lives in the guider commander and which would otherwise escape past the release;
-	// and the reservation is released only after those cleanups ran, so no third party is handed a device that
-	// is still moving.
+	// reservation owner and not by the handles this runtime keeps, which is what catches an operation tree the
+	// walk started and no longer holds a handle for; and the reservation is released only after those cleanups
+	// ran, so no third party is handed a device that is still moving.
 	//
 	// Resolves once the session let go of everything. A runtime with nothing running resolves immediately, and
 	// calling it twice waits for the first one instead of starting a second.
@@ -989,12 +958,11 @@ export class SequencerRuntime {
 			// paused or already converging to it.
 			//
 			// Only the target block is cancelled, because it is the only phase that carries the attribution. The
-			// guider connection runs under no action signal at all and the startup pipeline runs under the wait
-			// signal, which a pause deliberately never aborts: the drain would still reach their operations through
-			// the reservation, and the `aborted` they answered with would be read as an ordinary failure — the
-			// guider becoming an unreachable one that fails the session, a required startup action failing the
-			// night instead of holding it for the resume. Both phases are attended anyway, at the `afterAction`
-			// boundary the walk takes in front of every step, so the pause is honored without cancelling anything.
+			// startup pipeline runs under the wait signal, which a pause deliberately never aborts: the drain would
+			// still reach those operations through the reservation, and the `aborted` they answered with would be
+			// read as an ordinary failure — a required startup action failing the night instead of holding it for
+			// the resume. The startup is attended anyway, at the `afterAction` boundary the walk takes in front of
+			// every step, so the pause is honored without cancelling anything.
 			await this.#cancelActiveAction(active)
 		}
 
@@ -1021,69 +989,6 @@ export class SequencerRuntime {
 	settled(sessionId: string): Promise<SequencerSession | undefined> {
 		const active = this.#active
 		return active === undefined || active.id !== sessionId ? Promise.resolve(this.#store.session(sessionId)) : active.done.promise
-	}
-
-	// Closes the guiding session this runtime opened, before the reservation is released.
-	//
-	// The connection is a root under the reservation token and is not an action of the plan, so the terminal
-	// pipeline's `stopGuiding` leaves it attached. Releasing the reservation while it is still open would keep
-	// the logical guider keys occupied and refuse the next start the way an idle PHD2 session does.
-	async #closeGuider(active: ActiveSession) {
-		if (active.guider === undefined) return
-
-		const disconnect = this.#guiding.guiderCommander.disconnect?.bind(this.#guiding.guiderCommander)
-
-		if (disconnect !== undefined) {
-			const closed = await disconnect(active.guider)
-
-			if (!closed.ok) console.error('sequencer guider disconnect failed:', active.id, closed.reason, closed.error)
-		}
-
-		active.guider = undefined
-	}
-
-	// Opens the guiding session the plan declares and binds it to every action of the session.
-	//
-	// This is the `open` hook of the executor host, so the walk calls it after the scheduled wait and before its
-	// first action, which is the only window that works: the connection acquires the guider resources under the
-	// reservation token, so it takes the very keys the session already reserved for it instead of competing with
-	// itself for them, and a guider bound after the walk started would leave the first frames exposed with the
-	// corrections off. A refusal is an ordinary primary outcome of the walk, which is what keeps the finalize
-	// pipeline running for it.
-	//
-	// A session whose plan declares no guider opens nothing and leaves the binding absent, which is what the
-	// dither and the guiding interlock read as "this session guides through no guider".
-	//
-	// Returns the failure that stops the session, or undefined when there was nothing to open or it opened.
-	async #openGuider(active: ActiveSession): Promise<SequencerFailure | undefined> {
-		const declared = active.plan.compiled.guider
-
-		if (declared === undefined) return undefined
-
-		const { connection } = declared
-		let request: GuiderConnect
-
-		if (connection.mode === 'remote') {
-			request = { mode: 'remote', host: connection.host, port: connection.port }
-		} else {
-			const camera = active.roles.get('guideCamera')?.device
-			const guideOutput = active.roles.get('guideOutput')?.device
-
-			// The lowering requires both roles of a local guider and the bootstrap reserved them, so a session
-			// reaching this without them is one whose devices went away between the reservation and the first node.
-			if (camera === undefined || guideOutput === undefined) return { reason: 'disconnected', detail: 'the local guider devices are no longer available' }
-
-			// The focal length is millimetres on both sides, so it travels as declared.
-			request = { mode: 'local', focalLength: connection.focalLength, camera: camera.id, guideOutput: guideOutput.id }
-		}
-
-		const opened = await this.#guiding.guiderCommander.connect(request, active.reservation.token)
-
-		if (!opened.ok) return { reason: opened.reason, detail: opened.error ?? 'the guider session could not be opened' }
-
-		active.guider = opened.value.id
-
-		return undefined
 	}
 
 	// Walks the plan and finalizes on what it ended as.
@@ -1127,7 +1032,6 @@ export class SequencerRuntime {
 			finalizing: () => this.#enterFinalizing(active),
 			commit: (checkpoint, events) => this.#commitBestEffort(active, { checkpoint, events }) !== undefined,
 			delay: async (delay, signal) => void (await abortableDelay(delay, signal)),
-			open: () => this.#openGuider(active),
 		}
 	}
 
@@ -1339,7 +1243,6 @@ export class SequencerRuntime {
 			active.controller.abort('aborted')
 			active.action.abort('aborted')
 			await this.#coordinator.cancelByReservationOwner(active.owner, 'aborted')
-			await this.#closeGuider(active)
 
 			// A walk that threw produced no outcome at all, which is a defect of this process and not a night that
 			// ended: it fails the session with the cause the exception was normalized to.

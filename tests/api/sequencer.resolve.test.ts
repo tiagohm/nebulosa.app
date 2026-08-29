@@ -35,20 +35,6 @@ function plan(definition: Sequencer): SequencerPlan {
 	return compilation.plan
 }
 
-function guided(): Sequencer {
-	const definition = canonical()
-
-	return {
-		...definition,
-		devices: { ...definition.devices, guideCamera: 'Guide Camera Simulator', guideOutput: 'Guide Output Simulator' },
-		guiding: {
-			...definition.guiding,
-			enabled: true,
-			connection: { mode: 'local', focalLength: 0.24, capture: { exposureTime: 2, exposureTimeUnit: 'second', frameType: 'LIGHT', binX: 1, binY: 1, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false } },
-		},
-	}
-}
-
 describe('resource resolution', () => {
 	test('every role resolves to the hardware key of its device', () => {
 		const setup = observatory()
@@ -77,29 +63,16 @@ describe('resource resolution', () => {
 		expect(resolution.resources.requests.map((request) => request.key)).toEqual(['hardware-camera', 'hardware-mount', 'hardware-focuser'])
 	})
 
-	test('a local guider adds one logical key per guided device', () => {
+	test('a guided plan does not reserve the guider', () => {
 		const setup = observatory()
-		const resolution = resolveResources(plan(guided()), devices(setup.camera, setup.mount, setup.focuser, setup.guideCamera, setup.guideOutput))
+		const resolution = resolveResources(plan(canonical()), devices(setup.camera, setup.mount, setup.focuser))
 
 		expect(resolution.ok).toBe(true)
 		if (!resolution.ok) return
 
-		expect(resolution.resources.requests.map((request) => request.key)).toEqual(['hardware-camera', 'hardware-mount', 'hardware-focuser', 'hardware-guide-camera', 'hardware-guide-output', 'logical:guider:local:camera:hardware-guide-camera', 'logical:guider:local:output:hardware-guide-output'])
-	})
-
-	test('a remote guider adds its logical key and no device', () => {
-		const setup = observatory()
-		const definition = canonical()
-		const remote = { ...definition, guiding: { ...definition.guiding, enabled: true, connection: { mode: 'remote', host: 'PHD2.local', port: 4400 } as const } }
-		const resolution = resolveResources(plan(remote), devices(setup.camera, setup.mount, setup.focuser))
-
-		expect(resolution.ok).toBe(true)
-		if (!resolution.ok) return
-
-		const guider = resolution.resources.requests.at(-1)
-
-		expect(guider?.key).toBe('logical:guider:remote:phd2.local:4400')
-		expect(guider?.device).toBeUndefined()
+		expect(plan(canonical()).roles).toContain('guider')
+		expect(resolution.resources.bindings.map((binding) => binding.role)).toEqual(['camera', 'mount', 'focuser'])
+		expect(resolution.resources.requests.map((request) => request.key)).toEqual(['hardware-camera', 'hardware-mount', 'hardware-focuser'])
 	})
 
 	test('a role no device answers for is refused', () => {

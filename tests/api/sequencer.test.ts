@@ -11,7 +11,6 @@ import type { AnySequencerActionHandler } from 'src/api/sequencer.registry'
 import { SequencerRuntime } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
 import { makeTime } from 'src/api/util'
-import { failedOperationResult } from '#/orchestration'
 import type { Sequencer, SequencerDeviceRole } from '#/sequencer'
 import type { SequencerSessionState } from '#/sequencer.state'
 import { canonical, frame, guiding, services } from './sequencer.fixture'
@@ -257,7 +256,7 @@ describe('sessions', () => {
 		expect(nodes.some((nodeId) => nodeId.endsWith('.trigger.meridianFlip'))).toBeFalse()
 	})
 
-	test('opens the guider the plan declares and hands it to every action', async () => {
+	test('binds the already-connected guider and hands it to every action', async () => {
 		const guiders = new Set<string | undefined>()
 		const { handler: instance, runtime } = environment(
 			(context) => {
@@ -276,26 +275,22 @@ describe('sessions', () => {
 		expect(guiders).toEqual(new Set(['guider-1']))
 	})
 
-	test('fails the session when the guider the plan declares cannot be opened', async () => {
+	test('refuses to start when the guider is not connected', async () => {
 		let executed = 0
-		const { handler: instance, runtime } = environment(
+		const { handler: instance } = environment(
 			() => {
 				executed++
 				return Promise.resolve({ type: 'completed', value: undefined })
 			},
 			undefined,
-			guiding(() => failedOperationResult('disconnected', 'the guider server refused the connection')),
+			guiding(() => undefined),
 		)
 		const created = await instance.start({ ...canonical(), capture: brief() })
 
-		expect(created.ok).toBeTrue()
-
-		if (!created.ok) return
-
-		const settled = await runtime.settled(created.session.id)
-
-		expect(settled?.state).toBe('failed')
-		expect(settled?.failure).toEqual({ reason: 'disconnected', detail: 'the guider server refused the connection' })
+		expect(created.ok).toBeFalse()
+		if (created.ok) return
+		expect(created.reason).toBe('disconnected')
+		expect(created.detail).toBe('guider guider-1 is not connected')
 		expect(executed).toBe(0)
 	})
 

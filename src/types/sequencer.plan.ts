@@ -1,6 +1,6 @@
 import type { CameraTransferFormat, FrameType } from 'nebulosa/src/devices/indi/device'
 // oxfmt-ignore
-import type { SequencerCameraCapture, SequencerCapture, SequencerCheckpoint, SequencerCooling, SequencerDeviceRole, SequencerDevices, SequencerEndCondition, SequencerExecution, SequencerGuiderSettle, SequencerLocalGuider, SequencerRemoteGuider, SequencerRetryPolicy, SequencerStartCondition, SequencerStorage } from './sequencer'
+import type { SequencerCameraCapture, SequencerCapture, SequencerCheckpoint, SequencerCooling, SequencerDeviceRole, SequencerDevices, SequencerEndCondition, SequencerExecution, SequencerGuiderSettle, SequencerRetryPolicy, SequencerStartCondition, SequencerStorage } from './sequencer'
 
 // Executable plan produced by lowering a definition, and the diagnostics that lowering emits instead of a
 // plan. The definition in `sequencer.ts` is declarative and per feature; this is the node tree the runtime
@@ -108,12 +108,9 @@ export interface SequencerPlanTarget {
 	readonly name: string
 }
 
-// Guider the session creates and owns, with the policy every guiding command runs under. The connection is
-// part of the plan because the session reserves the logical keys of that guider at start, before any guiding
-// command, and the policy travels with it so no handler has to read the definition again.
+// Guiding policy every guiding command of the session runs under. The guider itself is a role of the
+// definition, already connected at start, so the plan carries the policy and not a connection.
 export interface SequencerPlanGuider {
-	// How the session reaches the guider. V1 always creates and owns the session.
-	readonly connection: SequencerRemoteGuider | SequencerLocalGuider
 	// Whether guiding calibrates before the first exposure of the session.
 	readonly calibrateBeforeStart: boolean
 	// Whether guiding recalibrates after a meridian flip, where the calibration no longer matches the sky.
@@ -170,7 +167,8 @@ export interface SequencerPlan {
 	readonly execution: SequencerPlanExecution
 	// Device id per role declared by the definition.
 	readonly devices: SequencerDevices
-	// Roles the plan actually commands, which is what the session reserves at start.
+	// Roles the plan actually commands. Physical ones are reserved at start; the guider is bound to the
+	// session already connected for that role.
 	readonly roles: readonly SequencerDeviceRole[]
 	// Root of the node tree, whose children are the startup, target, and finalize blocks.
 	readonly root: SequencerPlanSequence
@@ -180,7 +178,7 @@ export interface SequencerPlan {
 	readonly startup?: SequencerPlanPipeline
 	// Finalize pipeline policy; absent when the definition declares no terminal action to run.
 	readonly finalize?: SequencerPlanFinalize
-	// Guider the session creates and owns, absent when the plan does not guide.
+	// Guiding policy the session commands, absent when the plan does not guide. The guider itself is a role.
 	readonly guider?: SequencerPlanGuider
 	// Cooling policy the camera is held at, absent when the definition does not cool. The cooling and warming
 	// lifecycle actions declare no temperature of their own, so this is where they read it from.

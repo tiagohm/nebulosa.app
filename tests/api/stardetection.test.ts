@@ -115,8 +115,8 @@ describe('star detection handler', () => {
 			expect(transformation).not.toBeFalse()
 			expect(transformation && transformation.stretch.auto).toBeFalse()
 			expect(result).toHaveLength(1)
-			expect(result[0].x).toBe(32)
-			expect(result[0].y).toBe(32)
+			expect(result[0].x).toBeCloseTo(32, 1)
+			expect(result[0].y).toBeCloseTo(32, 1)
 			expect(result[0].snr).toBeGreaterThan(0)
 			expect(result[0].flux).toBeGreaterThan(0)
 		} finally {

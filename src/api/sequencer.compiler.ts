@@ -4,7 +4,7 @@ import { parseAngle } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { sequencerCaptureExposureInSeconds } from '#/sequencer'
 // oxfmt-ignore
-import type { Sequencer, SequencerAutofocus, SequencerAuxiliaryCapture, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDevices, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGuiderSettle, SequencerLifecycleActionType, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTarget, SequencerTargetTracking } from '#/sequencer'
+import type { Sequencer, SequencerAutofocus, SequencerCentering, SequencerCooling, SequencerCover, SequencerDeviceRole, SequencerDevices, SequencerDither, SequencerFailureReason, SequencerFilterFocusOffset, SequencerFlatPanel, SequencerFrame, SequencerGuiderSettle, SequencerLifecycleActionType, SequencerMeridianFlip, SequencerRetryPolicy, SequencerRotator, SequencerTarget, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerCompilation, SequencerDiagnostic, SequencerPlan, SequencerPlanAction, SequencerPlanFrameGroup, SequencerPlanGuider, SequencerPlanNode, SequencerPlanSequence, SequencerRemoval } from '#/sequencer.plan'
 import { sequencerUnknownPlaceholders } from './sequencer.identity'
 import { SEQUENCER_AUXILIARY_SEGMENT, sequencerArtifactPath, sequencerPathSegments } from './sequencer.path'
@@ -172,14 +172,9 @@ export interface SequencerLifecycle {
 }
 
 // What the action that starts guiding establishes on the guiding session, taken from the guiding block of the
-// definition. It is the part of the guider the start of the night writes; the connection, the retry policy and
-// the recalibration rules are commanded elsewhere and are deliberately not repeated here.
-export interface SequencerLifecycleGuiding extends Pick<SequencerPlanGuider, 'calibrateBeforeStart' | 'settle'> {
-	// Recipe the guide camera exposes with, present only for a guider this session owns locally and absent for
-	// a remote one, whose exposures belong to the program running it. The filter is not part of it: a local
-	// guider drives its guide camera alone. Exposure time is seconds.
-	readonly capture?: Omit<SequencerAuxiliaryCapture, 'filter'>
-}
+// definition. It is the part of the guider the start of the night writes; the retry policy and the
+// recalibration rules are commanded elsewhere and are deliberately not repeated here.
+export interface SequencerLifecycleGuiding extends Pick<SequencerPlanGuider, 'calibrateBeforeStart' | 'settle'> {}
 
 // Mutable accumulator threaded through the lowering, so every stage reports against the same definition
 // without returning partial results up the call chain.
@@ -518,7 +513,7 @@ function lowerTarget(definition: Sequencer, groups: readonly SequencerPlanFrameG
 
 // Roles in the order of the role union, so the role list of a plan is comparable across compilations
 // regardless of the order the features that need them were inspected in.
-const SEQUENCER_ROLE_ORDER: readonly SequencerDeviceRole[] = ['camera', 'mount', 'wheel', 'focuser', 'rotator', 'guideCamera', 'guideOutput', 'cover', 'flatPanel', 'dome']
+const SEQUENCER_ROLE_ORDER: readonly SequencerDeviceRole[] = ['camera', 'mount', 'wheel', 'focuser', 'rotator', 'guideCamera', 'guideOutput', 'cover', 'flatPanel', 'dome', 'guider']
 
 // One role the plan needs, together with the definition property that needs it, so a missing device can be
 // reported against the feature that would have commanded it rather than against the device map alone.
@@ -556,10 +551,7 @@ function roleRequirements(definition: Sequencer, groups: readonly SequencerPlanF
 		if (autofocus.capture.filter !== undefined) requirements.push({ role: 'wheel', path: 'autofocus.capture.filter' })
 	}
 
-	if (guiding.enabled && guiding.connection.mode === 'local') {
-		requirements.push({ role: 'guideCamera', path: 'guiding.connection' })
-		requirements.push({ role: 'guideOutput', path: 'guiding.connection' })
-	}
+	if (guiding.enabled) requirements.push({ role: 'guider', path: 'guiding' })
 
 	return requirements
 }
@@ -770,7 +762,7 @@ function withGroups(groups: readonly SequencerPlanFrameGroup[], rewrite: Rewrite
 //
 // A handler also declares the roles its block commands, which the definition alone cannot know: the block
 // type is a stable name and the code behind it may command a device no field of the definition mentions.
-// Those roles join the ones the lowering derived, because the session reserves the union once at start and a
+// Those roles join the ones the lowering derived, because the session binds the union once at start and a
 // role missing from it is a device the action later commands without holding it.
 function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistry, plan: SequencerPlan): HandlerCheck {
 	const versions: Record<string, number> = Object.create(null)
@@ -807,17 +799,16 @@ function checkHandlers(context: CompilerContext, registry: SequencerBlockRegistr
 	return { versions, requirements, configurations }
 }
 
-// Lowers the guider the session will create and own, or undefined when the plan does not guide.
+// Lowers the guiding policy the session commands through, or undefined when the plan does not guide.
 //
-// The session always creates and owns its guider session, and that is not a policy preference: the session
-// reserves the logical keys of the guider at start, so a guider session already open holds a lease on exactly
-// those keys and the reservation fails before any guiding policy is consulted.
+// The guider itself is a role of the definition: it must already be connected when the session starts, the
+// same way a camera must, so the lowering neither opens a connection nor names one.
 function lowerGuider(definition: Sequencer) {
 	const { guiding } = definition
 
 	if (!guiding.enabled) return undefined
 
-	return { connection: guiding.connection, calibrateBeforeStart: guiding.calibrateBeforeStart, recalibrateAfterMeridianFlip: guiding.recalibrateAfterMeridianFlip, settle: guiding.settle, retry: guiding.retry }
+	return { calibrateBeforeStart: guiding.calibrateBeforeStart, recalibrateAfterMeridianFlip: guiding.recalibrateAfterMeridianFlip, settle: guiding.settle, retry: guiding.retry }
 }
 
 // Schema revision this compiler understands. A definition serialized against another revision may have moved
@@ -958,12 +949,12 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	if (guiding.enabled) removals.push({ path: 'guiding.restoreAfterInterruption', reason: 'guiding is resumed by the interlock of each safe point, so a restore-after-interruption flag has no path of its own' })
 	if (!guiding.enabled && dither.enabled) diagnostics.push({ path: 'dither.enabled', message: 'a dither is a guider command, and the definition declares no guider to send it to' })
 
-	// The runtime opens the guider session before the plan, but opening is a connection and not a correction:
-	// nothing calibrates, nothing loops and nothing guides until the derived startup step commands it. The
-	// interlock brackets a guider that is running and leaves an idle one alone precisely because a session that
-	// never issued `startGuiding` is unguided by configuration, and the dither is skipped for the same reason.
-	// So an enabled guiding block with the startup pipeline disarmed captures every frame unguided while
-	// reporting a guided plan, which is the silent disagreement the compatibility rule exists to prevent.
+	// The guider is already connected when the session starts, but a connection is not a correction: nothing
+	// calibrates, nothing loops and nothing guides until the derived startup step commands it. The interlock
+	// brackets a guider that is running and leaves an idle one alone precisely because a session that never
+	// issued `startGuiding` is unguided by configuration, and the dither is skipped for the same reason. So an
+	// enabled guiding block with the startup pipeline disarmed captures every frame unguided while reporting a
+	// guided plan, which is the silent disagreement the compatibility rule exists to prevent.
 	if (guiding.enabled && !startup.enabled) diagnostics.push({ path: 'guiding.enabled', message: 'the guiding block declares the guider the capture runs under, and the startup pipeline that starts it is disabled, so every frame would be captured unguided' })
 
 	if (dome.enabled) diagnostics.push({ path: 'dome.enabled', message: 'the device layer of this version has no dome' })
@@ -985,8 +976,8 @@ function checkCompatibility(context: CompilerContext, definition: Sequencer) {
 	if (execution.end.type === 'sunAltitude' || execution.end.type === 'targetAltitude') diagnostics.push({ path: 'execution.end.type', message: `ending on ${execution.end.type} requires the ephemeris this version does not compute` })
 }
 
-// Deduplicates the required roles and returns them in the fixed role order, which is what the session
-// reserves at start. Two features requiring the same role reserve it once.
+// Deduplicates the required roles and returns them in the fixed role order, which is the role union the
+// session binds at start. Two features requiring the same role appear once.
 function rolesOf(requirements: readonly RoleRequirement[], devices: SequencerDevices): SequencerDeviceRole[] {
 	const selected = new Set<SequencerDeviceRole>()
 
@@ -1046,13 +1037,11 @@ export function compile(definition: Sequencer, options?: SequencerCompilerOption
 	const cooling = definition.cooling.enabled ? definition.cooling : undefined
 	const tracking = lowerTracking(definition)
 	const guider = lowerGuider(definition)
-	// Only what the start of the guiding establishes reaches the node: the calibration it runs under, the settle
-	// it installs on the guider session for the rest of the night, and — for a guider this session owns — the
-	// recipe its guide camera exposes with. The rest of the guider is the connection and the policy the session
-	// itself commands through, and copying it into every guiding action would carry a second, staler authority
-	// for what the plan already states once. A remote guider exposes under the program that runs it, so it
-	// carries no recipe of ours.
-	const guiding = guider === undefined ? undefined : { calibrateBeforeStart: guider.calibrateBeforeStart, settle: guider.settle, capture: guider.connection.mode === 'local' ? guider.connection.capture : undefined }
+	// Only what the start of the guiding establishes reaches the node: the calibration it runs under and the
+	// settle it installs on the guider session for the rest of the night. The rest of the policy is commanded
+	// from the plan itself, and copying it into every guiding action would carry a second, staler authority
+	// for what the plan already states once.
+	const guiding = guider === undefined ? undefined : { calibrateBeforeStart: guider.calibrateBeforeStart, settle: guider.settle }
 	const lowered = lowerPipeline('startup', deriveStartup(definition), cooling, tracking, guiding)
 	const finalized = lowerPipeline('finalize', deriveShutdown(definition), cooling, tracking, guiding)
 

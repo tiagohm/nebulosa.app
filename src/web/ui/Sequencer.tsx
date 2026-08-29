@@ -1,5 +1,6 @@
 import { useStore } from '@hooks/store.hook'
 import { PlateSolverStoreContext, SequencerStoreContext } from '@shared/context'
+import { equipmentStore } from '@stores/equipment.store'
 import { sequencerStore } from '@stores/sequencer.store'
 import { AutoFocusFittingModeSelect } from '@ui/AutoFocusFittingModeSelect'
 import { BodyCoordinateInfo } from '@ui/BodyCoordinateInfo'
@@ -22,7 +23,7 @@ import { CameraDropdown, CoverDropdown, DomeDropdown, FlatPanelDropdown, Focuser
 import { FilePickerInput } from '@ui/FilePickerInput'
 import { FrameFormatSelect } from '@ui/FrameFormatSelect'
 import { FrameTypeSelect } from '@ui/FrameTypeSelect'
-import { GuiderClientModeRadioGroup } from '@ui/GuiderClientModeRadioGroup'
+import { GuiderDropdown } from '@ui/GuiderDropdown'
 import { Icons } from '@ui/Icon'
 import { MountTargetCoordinateTypeRadioGroup } from '@ui/MountTargetCoordinateTypeRadioGroup'
 import { PlateSolverTypeSelect } from '@ui/PlateSolverTypeSelect'
@@ -71,7 +72,7 @@ export const Sequencer = memo(({ api }: IDockviewPanelProps) => {
 
 const Equipment = memo(() => {
 	const sequencer = useContext(SequencerStoreContext)
-	const { busy, camera, mount, focuser, wheel, rotator, guideCamera, guideOutput, cover, flatPanel, dome } = useSnapshot(sequencer.state)
+	const { busy, camera, mount, focuser, wheel, rotator, guideOutput, cover, flatPanel, dome } = useSnapshot(sequencer.state)
 	const { name } = useSnapshot(sequencer.state.request)
 
 	return (
@@ -83,7 +84,6 @@ const Equipment = memo(() => {
 				<FocuserDropdown disabled={busy} onValueChange={sequencer.setFocuser} showLabel value={focuser} />
 				<WheelDropdown disabled={busy} onValueChange={sequencer.setWheel} showLabel value={wheel} />
 				<RotatorDropdown disabled={busy} onValueChange={sequencer.setRotator} showLabel value={rotator} />
-				<CameraDropdown disabled={busy} label="Guide camera" onValueChange={sequencer.setGuideCamera} showLabel tooltipContent="Guide camera" value={guideCamera} />
 				<GuideOutputDropdown disabled={busy} onValueChange={sequencer.setGuideOutput} showLabel value={guideOutput} />
 				<CoverDropdown disabled={busy} onValueChange={sequencer.setCover} showLabel value={cover} />
 				<FlatPanelDropdown disabled={busy} onValueChange={sequencer.setFlatPanel} showLabel value={flatPanel} />
@@ -468,58 +468,101 @@ const FrameEditor = memo(({ index, disabled }: FrameEditorProps) => {
 	)
 })
 
-const Guiding = memo(() => {
+const Guiding = memo(() => (
+	<div className="grid w-full grid-cols-12 items-center gap-2">
+		<GuiderOptions />
+		<GuidingSettle />
+		{/* <GuidingThresholds /> */}
+		{/* <GuidingRecovery /> */}
+	</div>
+))
+
+const GuiderOptions = memo(() => {
 	const sequencer = useContext(SequencerStoreContext)
-	const { busy, guideCamera, guideOutput } = useSnapshot(sequencer.state)
+	const { busy } = useSnapshot(sequencer.state)
 	const guiding = useSnapshot(sequencer.state.request.guiding)
-	const connection = sequencer.state.request.guiding.connection
 	const blocked = busy || !guiding.enabled
-	const localBlocked = blocked || guiding.connection.mode !== 'local' || !guideCamera || !guideOutput
 
 	return (
-		<div className="grid w-full grid-cols-12 items-center gap-2">
-			<Switch className="col-span-full" disabled={busy} label="Enable guiding" onValueChange={sequencer.setGuidingEnabled} value={guiding.enabled} />
-			<GuiderClientModeRadioGroup className="col-span-full" disabled={blocked} horizontal onValueChange={sequencer.setGuidingConnectionMode} value={guiding.connection.mode} />
-			{guiding.connection.mode === 'remote' ? (
-				<>
-					<TextInput className="col-span-8" disabled={blocked} label="Host" maxLength={128} onValueChange={sequencer.setGuidingRemoteHost} value={guiding.connection.host} />
-					<NumberInput className="col-span-4" disabled={blocked} label="Port" maxValue={65535} minValue={1} onValueChange={sequencer.setGuidingRemotePort} value={guiding.connection.port} />
-					<TextInput className="col-span-full" disabled={blocked} label="Profile" onValueChange={sequencer.setGuidingRemoteProfile} value={guiding.connection.profile ?? ''} />
-				</>
-			) : (
-				<>
-					<NumberInput className="col-span-6" disabled={localBlocked} label="Focal length" minValue={0} onValueChange={sequencer.setGuidingLocalFocalLength} value={guiding.connection.focalLength} />
-					<NumberInput className="col-span-6" disabled={localBlocked} fractionDigits={2} label="Pixel size" minValue={0} onValueChange={sequencer.setGuidingLocalPixelSize} value={guiding.connection.pixelSize ?? 0} />
-					{connection.mode === 'local' && <AuxiliaryCapture capture={connection.capture} disabled={localBlocked} hideFilter />}
-				</>
-			)}
-			<Checkbox className="col-span-4" disabled={blocked} label="Calibrate before start" onValueChange={sequencer.setGuidingCalibrateBeforeStart} value={guiding.calibrateBeforeStart} />
-			<Checkbox className="col-span-4" disabled={blocked} label="Recalibrate after flip" onValueChange={sequencer.setGuidingRecalibrateAfterMeridianFlip} value={guiding.recalibrateAfterMeridianFlip} />
-			<Checkbox className="col-span-4" disabled={blocked} label="Restore after interruption" onValueChange={sequencer.setGuidingRestoreAfterInterruption} value={guiding.restoreAfterInterruption} />
-			<Checkbox className="col-span-4" disabled={blocked} label="Stop on shutdown" onValueChange={sequencer.setGuidingStopOnShutdown} value={guiding.stopOnShutdown} />
-			<div className="col-span-8">
-				<SequencerRetry retry={sequencer.state.request.guiding.retry} disabled={blocked} />
-			</div>
-			<span className="col-span-full text-sm font-bold">SETTLE:</span>
+		<div className="col-span-full flex flex-wrap items-center gap-2 text-sm">
+			<Switch disabled={busy} label="Enable guiding" onValueChange={sequencer.setGuidingEnabled} value={guiding.enabled} />
+			<GuidingConnection />
+			<Checkbox disabled={blocked} label="Calibrate before start" onValueChange={sequencer.setGuidingCalibrateBeforeStart} value={guiding.calibrateBeforeStart} />
+			<Checkbox disabled={blocked} label="Recalibrate after flip" onValueChange={sequencer.setGuidingRecalibrateAfterMeridianFlip} value={guiding.recalibrateAfterMeridianFlip} />
+			<Checkbox disabled={blocked} label="Restore after interruption" onValueChange={sequencer.setGuidingRestoreAfterInterruption} value={guiding.restoreAfterInterruption} />
+			<Checkbox disabled={blocked} label="Stop on shutdown" onValueChange={sequencer.setGuidingStopOnShutdown} value={guiding.stopOnShutdown} />
+			<SequencerRetry retry={sequencer.state.request.guiding.retry} disabled={blocked} />
+		</div>
+	)
+})
+
+const GuidingConnection = memo(() => {
+	const sequencer = useContext(SequencerStoreContext)
+	const { busy } = useSnapshot(sequencer.state)
+	const { enabled } = useSnapshot(sequencer.state.request.guiding)
+	const { guider } = useSnapshot(sequencer.state.request.devices)
+	const blocked = busy || !enabled
+
+	return (
+		<div className="col-span-full flex flex-wrap items-center gap-2 text-sm">
+			<GuiderDropdown label="Guider" icon={Icons.Guider} showLabel disabled={blocked} value={equipmentStore.state.guider.find((e) => e.id === guider)} onValueChange={sequencer.setGuider} />
+		</div>
+	)
+})
+
+const GuidingSettle = memo(() => {
+	const sequencer = useContext(SequencerStoreContext)
+	const { busy } = useSnapshot(sequencer.state)
+	const { enabled } = useSnapshot(sequencer.state.request.guiding)
+	const blocked = busy || !enabled
+
+	return (
+		<div className="col-span-full flex flex-wrap items-center gap-2 text-sm">
+			<span className="font-bold">SETTLE:</span>
 			<GuiderSettle disabled={blocked} settle={sequencer.state.request.guiding.settle} />
-			<span className="col-span-full text-sm font-bold">THRESHOLDS:</span>
-			<Switch className="col-span-4" disabled={blocked} label="Enabled" onValueChange={sequencer.setGuidingThresholdsEnabled} value={guiding.thresholds.enabled} />
-			<Checkbox className="col-span-8" disabled={blocked || !guiding.thresholds.enabled} label="Pause capture when exceeded" onValueChange={sequencer.setGuidingThresholdsPauseCaptureWhenExceeded} value={guiding.thresholds.pauseCaptureWhenExceeded} />
-			<NumberInput className="col-span-4" disabled={blocked || !guiding.thresholds.enabled} fractionDigits={2} label="Max RMS" minValue={0} onValueChange={sequencer.setGuidingThresholdsMaximumRMS} value={guiding.thresholds.maximumRMS ?? 0} />
-			<NumberInput className="col-span-4" disabled={blocked || !guiding.thresholds.enabled} fractionDigits={2} label="Max RA RMS" minValue={0} onValueChange={sequencer.setGuidingThresholdsMaximumRightAscensionRMS} value={guiding.thresholds.maximumRightAscensionRMS ?? 0} />
-			<NumberInput className="col-span-4" disabled={blocked || !guiding.thresholds.enabled} fractionDigits={2} label="Max DEC RMS" minValue={0} onValueChange={sequencer.setGuidingThresholdsMaximumDeclinationRMS} value={guiding.thresholds.maximumDeclinationRMS ?? 0} />
-			<NumberInput className="col-span-4" disabled={blocked || !guiding.thresholds.enabled} label="Min SNR" minValue={0} onValueChange={sequencer.setGuidingThresholdsMinimumSNR} value={guiding.thresholds.minimumSNR ?? 0} />
-			<NumberInput className="col-span-4" disabled={blocked || !guiding.thresholds.enabled} label="Min star mass" minValue={0} onValueChange={sequencer.setGuidingThresholdsMinimumStarMass} value={guiding.thresholds.minimumStarMass ?? 0} />
-			<NumberInput className="col-span-4" disabled={blocked || !guiding.thresholds.enabled} endContent="s" label="Max lost star" minValue={0} onValueChange={sequencer.setGuidingThresholdsMaximumLostStarTime} value={guiding.thresholds.maximumLostStarTime ?? 0} />
-			<span className="col-span-full text-sm font-bold">RECOVERY:</span>
-			<Switch className="col-span-4" disabled={blocked} label="Enabled" onValueChange={sequencer.setGuidingRecoveryEnabled} value={guiding.recovery.enabled} />
-			<NumberInput className="col-span-4" disabled={blocked || !guiding.recovery.enabled} label="Max attempts" minValue={1} onValueChange={sequencer.setGuidingRecoveryMaximumAttempts} value={guiding.recovery.maximumAttempts} />
-			<SequencerOnFailureSelect className="col-span-4" disabled={blocked || !guiding.recovery.enabled} onValueChange={sequencer.setGuidingRecoveryOnFailure} value={guiding.recovery.onFailure} variant="continueUnguided" />
-			<Checkbox className="col-span-4" disabled={blocked || !guiding.recovery.enabled} label="Stop before retry" onValueChange={sequencer.setGuidingRecoveryStopBeforeRetry} value={guiding.recovery.stopBeforeRetry} />
-			<Checkbox className="col-span-4" disabled={blocked || !guiding.recovery.enabled} label="Find star before retry" onValueChange={sequencer.setGuidingRecoveryFindStarBeforeRetry} value={guiding.recovery.findStarBeforeRetry} />
-			<Checkbox className="col-span-4" disabled={blocked || !guiding.recovery.enabled} label="Recalibrate" onValueChange={sequencer.setGuidingRecoveryRecalibrate} value={guiding.recovery.recalibrate} />
-			<span className="col-span-full text-sm font-bold">RECOVERY SETTLE:</span>
-			<GuiderSettle disabled={blocked || !guiding.recovery.enabled} settle={sequencer.state.request.guiding.recovery.settle} />
+		</div>
+	)
+})
+
+const GuidingThresholds = memo(() => {
+	const sequencer = useContext(SequencerStoreContext)
+	const { busy } = useSnapshot(sequencer.state)
+	const guiding = useSnapshot(sequencer.state.request.guiding)
+	const { enabled, pauseCaptureWhenExceeded, maximumDeclinationRMS, maximumLostStarTime, maximumRMS, maximumRightAscensionRMS, minimumSNR, minimumStarMass } = useSnapshot(sequencer.state.request.guiding.thresholds)
+	const blocked = busy || !guiding.enabled
+
+	return (
+		<div className="col-span-full flex flex-wrap items-center gap-2 text-sm">
+			<span className="font-bold">THRESHOLDS:</span>
+			<Switch disabled={blocked} label="Enabled" onValueChange={sequencer.setGuidingThresholdsEnabled} value={enabled} />
+			<Checkbox disabled={blocked || !enabled} label="Pause capture when exceeded" onValueChange={sequencer.setGuidingThresholdsPauseCaptureWhenExceeded} value={pauseCaptureWhenExceeded} />
+			<NumberInput disabled={blocked || !enabled} fractionDigits={2} label="Max RMS" minValue={0} onValueChange={sequencer.setGuidingThresholdsMaximumRMS} value={maximumRMS ?? 0} />
+			<NumberInput disabled={blocked || !enabled} fractionDigits={2} label="Max RA RMS" minValue={0} onValueChange={sequencer.setGuidingThresholdsMaximumRightAscensionRMS} value={maximumRightAscensionRMS ?? 0} />
+			<NumberInput disabled={blocked || !enabled} fractionDigits={2} label="Max DEC RMS" minValue={0} onValueChange={sequencer.setGuidingThresholdsMaximumDeclinationRMS} value={maximumDeclinationRMS ?? 0} />
+			<NumberInput disabled={blocked || !enabled} label="Min SNR" minValue={0} onValueChange={sequencer.setGuidingThresholdsMinimumSNR} value={minimumSNR ?? 0} />
+			<NumberInput disabled={blocked || !enabled} label="Min star mass" minValue={0} onValueChange={sequencer.setGuidingThresholdsMinimumStarMass} value={minimumStarMass ?? 0} />
+			<NumberInput disabled={blocked || !enabled} endContent="s" label="Max lost star" minValue={0} onValueChange={sequencer.setGuidingThresholdsMaximumLostStarTime} value={maximumLostStarTime ?? 0} />
+		</div>
+	)
+})
+
+const GuidingRecovery = memo(() => {
+	const sequencer = useContext(SequencerStoreContext)
+	const { busy } = useSnapshot(sequencer.state)
+	const guiding = useSnapshot(sequencer.state.request.guiding)
+	const { enabled, maximumAttempts, onFailure, stopBeforeRetry, findStarBeforeRetry, recalibrate } = useSnapshot(sequencer.state.request.guiding.recovery)
+	const blocked = busy || !guiding.enabled
+
+	return (
+		<div className="col-span-full flex flex-wrap items-center gap-2 text-sm">
+			<span className="font-bold">RECOVERY:</span>
+			<Switch className="col-span-4" disabled={blocked} label="Enabled" onValueChange={sequencer.setGuidingRecoveryEnabled} value={enabled} />
+			<NumberInput className="col-span-4" disabled={blocked || !enabled} label="Max attempts" minValue={1} onValueChange={sequencer.setGuidingRecoveryMaximumAttempts} value={maximumAttempts} />
+			<SequencerOnFailureSelect className="col-span-4" disabled={blocked || !enabled} onValueChange={sequencer.setGuidingRecoveryOnFailure} value={onFailure} variant="continueUnguided" />
+			<Checkbox className="col-span-4" disabled={blocked || !enabled} label="Stop before retry" onValueChange={sequencer.setGuidingRecoveryStopBeforeRetry} value={stopBeforeRetry} />
+			<Checkbox className="col-span-4" disabled={blocked || !enabled} label="Find star before retry" onValueChange={sequencer.setGuidingRecoveryFindStarBeforeRetry} value={findStarBeforeRetry} />
+			<Checkbox className="col-span-4" disabled={blocked || !enabled} label="Recalibrate" onValueChange={sequencer.setGuidingRecoveryRecalibrate} value={recalibrate} />
+			<GuiderSettle disabled={blocked || !enabled} settle={sequencer.state.request.guiding.recovery.settle} />
 		</div>
 	)
 })

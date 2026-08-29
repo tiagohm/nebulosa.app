@@ -343,10 +343,15 @@ export class GuiderCommander {
 				return opened
 			}
 
+			// The transport id is what listings, commands and the sequencer persist: it is deterministic for
+			// a given server or device pair, so reconnecting the same guider keeps the same name.
+			const id = opened.value
+			session.event.id = id
+
 			// Registered before the teardown below so it runs last: the session is only forgotten once its
 			// devices are idle and the transport is gone.
 			context.onCleanup(() => {
-				if (this.#sessions.get(context.id)?.session === session) this.#sessions.delete(context.id)
+				if (this.#sessions.get(id)?.session === session) this.#sessions.delete(id)
 			})
 
 			context.onCleanup(() => session.shutdown())
@@ -357,7 +362,7 @@ export class GuiderCommander {
 			if (context.signal.aborted) session.end(failedOperationResult(abortReason(context.signal)))
 			else context.signal.addEventListener('abort', () => session.end(failedOperationResult(abortReason(context.signal))), { once: true })
 
-			this.#sessions.set(context.id, { session, operation })
+			this.#sessions.set(id, { session, operation })
 			guiderBus.emit('add', session.info)
 			started.resolve(successfulOperationResult(session.info))
 
@@ -547,7 +552,7 @@ class GuiderSession {
 	// Snapshot describing this session to transports and listings.
 	get info(): GuiderSessionInfo {
 		return {
-			id: this.context.id,
+			id: this.event.id,
 			mode: this.target.mode,
 			key: this.target.key,
 			target: this.target.label,
@@ -559,7 +564,7 @@ class GuiderSession {
 	}
 
 	// Attaches the transport and, for a local guider, configures its devices under a scope that owns them.
-	async open(): Promise<OperationResult<void>> {
+	async open() {
 		return this.request.mode === 'remote' ? await this.#openRemote(this.request.host, this.request.port) : await this.#openLocal()
 	}
 
@@ -883,7 +888,7 @@ class GuiderSession {
 	// events as soon as the socket is up, and an event dropped there would be an app state never applied.
 	// Everything after the socket is up is inside the same guard: the session is only given a cleanup that
 	// closes its transport once open() has succeeded, so anything failing here has to close its own socket.
-	async #openRemote(host: string, port: number): Promise<OperationResult<void>> {
+	async #openRemote(host: string, port: number): Promise<OperationResult<string>> {
 		const client = new PHD2Client({ handler: this.#handler })
 		this.#client = client
 
@@ -916,7 +921,13 @@ class GuiderSession {
 			// A server that will not report its scale is still usable; angular guide errors just fall back to
 			// being reported in pixels.
 			this.#pixelScale = (scale.value.success ? scale.value.result : 0) || 1
-			return successfulOperationResult(undefined)
+
+			if (client.id === undefined) {
+				this.#detach()
+				return failedOperationResult('unexpectedState', 'the PHD2 client has no id')
+			}
+
+			return successfulOperationResult(client.id)
 		} catch (error) {
 			this.#detach()
 			return failedOperationResult('commandFailed', errorMessage(error))
@@ -926,7 +937,7 @@ class GuiderSession {
 	// Attaches the in-process guider and applies its capture configuration under a scope owning both
 	// devices. The scope ends right after: an idle client only needs the logical resource, so the camera
 	// and the guide output stay acquirable until the guider is actually told to capture.
-	async #openLocal(): Promise<OperationResult<void>> {
+	async #openLocal(): Promise<OperationResult<string>> {
 		if (this.request.mode !== 'local') return failedOperationResult('unexpectedState', 'the request is not a local guider connection')
 
 		const request = this.request
@@ -965,7 +976,13 @@ class GuiderSession {
 		}
 
 		this.#pixelScale = configured.value.getPixelScale() || 1
-		return successfulOperationResult(undefined)
+
+		if (configured.value.id === undefined) {
+			this.#detach()
+			return failedOperationResult('unexpectedState', 'the local guider client has no id')
+		}
+
+		return successfulOperationResult(configured.value.id)
 	}
 
 	// Applies the capture configuration of a local guider to its camera and makes sure frames are delivered.
@@ -1155,7 +1172,7 @@ class GuiderSession {
 					const publisher = this.sessionContext.cameraPublisher
 
 					if (publisher !== undefined) {
-						this.#cameraFrames = new GuiderCameraFrames(this.context.id, camera, publisher, Math.max(0, client.getExposure()) * 1000)
+						this.#cameraFrames = new GuiderCameraFrames(this.event.id, camera, publisher, Math.max(0, client.getExposure()) * 1000)
 						activityContext.onCleanup(() => this.#stopCameraFrames())
 					}
 				}

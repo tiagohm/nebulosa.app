@@ -27,7 +27,7 @@ export interface Sequencer {
 	readonly target: SequencerTarget
 	// Primary imaging plan containing camera bindings, scheduling order, defaults, and frame groups.
 	readonly capture: SequencerCapture
-	// Guiding connection, startup, settling, quality, and recovery configuration.
+	// Guiding startup, settling, quality, and recovery configuration. The guider itself is a device role.
 	readonly guiding: SequencerGuiding
 	// Dither triggers, displacement, settling, retry, and failure behavior.
 	// Dithering requires an active guider and executes only at safe exposure boundaries.
@@ -83,7 +83,7 @@ export interface Sequencer {
 
 // Enumerates the device roles a session can occupy.
 // Features reference a role; only the root devices object maps a role to a concrete device id.
-export type SequencerDeviceRole = 'camera' | 'mount' | 'wheel' | 'focuser' | 'rotator' | 'guideCamera' | 'guideOutput' | 'cover' | 'flatPanel' | 'dome'
+export type SequencerDeviceRole = 'camera' | 'mount' | 'wheel' | 'focuser' | 'rotator' | 'guideCamera' | 'guideOutput' | 'cover' | 'flatPanel' | 'dome' | 'guider'
 
 // Maps each device role used by the session to a device id, exactly once for the whole definition.
 // A role omitted here is unavailable, and every feature requiring it is rejected at compilation.
@@ -108,6 +108,8 @@ export interface SequencerDevices {
 	readonly flatPanel?: string
 	// Device id of the dome or roll-off roof.
 	readonly dome?: string
+	// Id of the guider session. The session must already be connected when the sequencer starts.
+	readonly guider?: string
 }
 
 // Enumerates normalized failure causes understood by retry and terminal-action policies.
@@ -339,14 +341,10 @@ export function sequencerCaptureExposureInSeconds(capture: Pick<SequencerCameraC
 
 // Guiding and dither
 
-// Configures guider acquisition, startup, settling, quality thresholds, and recovery.
-// The connection union determines whether the session is reused, remote, or locally owned.
+// Configures guiding startup, settling, quality thresholds, and recovery. The guider itself is a device role.
 export interface SequencerGuiding {
 	// Controls whether this feature or definition is active.
 	readonly enabled: boolean
-	// Configuration value for connection.
-	readonly connection: SequencerGuiderConnection
-
 	// Controls whether calibrate before start is applied.
 	readonly calibrateBeforeStart: boolean
 	// Controls whether recalibrate after meridian flip is applied.
@@ -355,7 +353,6 @@ export interface SequencerGuiding {
 	readonly restoreAfterInterruption: boolean
 	// Controls whether guiding is stopped after the session ends.
 	readonly stopOnShutdown: boolean
-
 	// Stable delay or settling policy required after a state transition.
 	readonly settle: SequencerGuiderSettle
 	// Configuration value for thresholds.
@@ -364,42 +361,6 @@ export interface SequencerGuiding {
 	readonly recovery: SequencerGuidingRecovery
 	// Retry policy applied when this operation fails.
 	readonly retry: SequencerRetryPolicy
-}
-
-// Discriminated union describing how the Sequencer obtains a guider session.
-// The mode may connect to a remote guider or create a local one.
-export type SequencerGuiderConnection = SequencerRemoteGuider | SequencerLocalGuider
-
-// Defines a network connection to an external guider service such as PHD2.
-// TCP ports are integers from 1 to 65535; 4400 is the usual PHD2 default.
-export interface SequencerRemoteGuider {
-	// Selects the operating mode for this configuration.
-	readonly mode: 'remote'
-	// Network host name or IP address of the remote service.
-	readonly host: string
-	// TCP port of the remote guider service.
-	readonly port: number
-	// Optional named profile understood by the selected backend.
-	readonly profile?: string
-}
-
-// Defines a guider implemented locally from the session guideCamera and guideOutput devices.
-// Focal length and optional pixel size are used to derive image scale and guiding corrections.
-export interface SequencerLocalGuider {
-	// Selects the operating mode for this configuration.
-	readonly mode: 'local'
-
-	// Focal length (mm) of the guide optical system.
-	readonly focalLength: number
-
-	// Physical guide-camera pixel size in micrometers.
-	readonly pixelSize?: number
-
-	// Capture recipe used by this feature.
-	// The nested object must be valid for the selected camera.
-	// The filter reference is omitted: a local guider drives its guide camera alone, and the only wheel the
-	// session addresses is the imaging one, which a guide filter must never move.
-	readonly capture: Omit<SequencerAuxiliaryCapture, 'filter'>
 }
 
 // Defines when guiding is considered stable after start, recovery, or dither.
@@ -1581,11 +1542,6 @@ export const DEFAULT_SEQUENCER: Sequencer = {
 	},
 	guiding: {
 		enabled: false,
-		connection: {
-			mode: 'remote',
-			host: '127.0.0.1',
-			port: 4400,
-		},
 		calibrateBeforeStart: false,
 		recalibrateAfterMeridianFlip: true,
 		restoreAfterInterruption: true,

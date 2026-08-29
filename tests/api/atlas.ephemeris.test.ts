@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
+import * as coordinate from 'nebulosa/src/astronomy/coordinates/coordinate'
 import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { DEG2RAD, TAU } from 'nebulosa/src/core/constants'
@@ -9,7 +10,7 @@ import { AtlasEphemeris, EphemerisInterpolationError, EphemerisUnavailableError,
 import type { EphemerisProvider, EphemerisSampleRequest, EphemerisTarget, HorizonsObserver } from 'src/api/atlas.ephemeris'
 import { makeTime } from 'src/api/util'
 import type { OsculatingElementsInput } from '#/asteroid'
-import { DEFAULT_BODY_POSITION } from '#/atlas'
+import { DEFAULT_BODY_POSITION, resolveBodyPositionFlags } from '#/atlas'
 import type { BodyPosition, PositionOfBody } from '#/atlas'
 import type { SkyObject } from '#/galaxy'
 
@@ -502,5 +503,122 @@ describe('Horizons exact-time interpolation', () => {
 		expect(atMs.distance).toBeLessThan(1 + (1 / 60000) * 2)
 		expect(atMs.equatorial[0]).toBeGreaterThan(0)
 		expect(atMs.equatorial[0]).toBeLessThan(deg(1) / 1000)
+	})
+})
+
+describe('BodyPosition flags', () => {
+	test('omitted flags resolve to every field', () => {
+		expect(resolveBodyPositionFlags({})).toEqual({
+			equatorial: true,
+			equatorialJ2000: true,
+			horizontal: true,
+			ecliptic: true,
+			galactic: true,
+			constellation: true,
+			lst: true,
+			names: true,
+			magnitude: true,
+			distance: true,
+			illuminated: true,
+			elongation: true,
+			leading: true,
+		})
+	})
+
+	test('one true flag does not enable the others', () => {
+		expect(resolveBodyPositionFlags({ horizontal: true })).toMatchObject({
+			horizontal: true,
+			galactic: false,
+			ecliptic: false,
+			equatorial: false,
+			illuminated: false,
+			lst: false,
+		})
+	})
+
+	test('omitted flags still yield a complete BodyPosition', async () => {
+		const ephemeris = new AtlasEphemeris({ observer: recordingObserver().observer })
+		const position = await ephemeris.position({ type: 'sun' }, { ...REQ_A, fast: true })
+
+		expect(position.equatorial[0]).not.toBe(0)
+		expect(position.equatorialJ2000[0]).not.toBe(0)
+		expect(position.horizontal[1]).not.toBe(0)
+		expect(position.ecliptic[0]).not.toBe(0)
+		expect(position.galactic[0]).not.toBe(0)
+		expect(position.lst).not.toBe(0)
+		expect(position.constellation).not.toBe('AND')
+		expect(position.magnitude).toBe(-26.74)
+		expect(position.distance).toBeGreaterThan(0)
+		expect(position.illuminated).toBe(1)
+		expect(position.elongation).toBe(0)
+		expect(position.pierSide).not.toBe('NEITHER')
+	})
+
+	test('horizontal true does not compute galactic or ecliptic', async () => {
+		const galactic = spyOn(coordinate, 'equatorialToGalatic')
+		const ecliptic = spyOn(coordinate, 'equatorialToEcliptic')
+		const ephemeris = new AtlasEphemeris({ observer: recordingObserver().observer })
+
+		try {
+			const position = await ephemeris.position({ type: 'sun' }, { ...REQ_A, fast: true, horizontal: true })
+
+			expect(position.horizontal[1]).not.toBe(0)
+			expect(position.galactic).toEqual([0, 0])
+			expect(position.ecliptic).toEqual([0, 0])
+			expect(position.equatorial).toEqual([0, 0])
+			expect(position.lst).toBe(0)
+			expect(position.constellation).toBe('AND')
+			expect(position.magnitude).toBe(0)
+			expect(position.illuminated).toBe(0)
+			expect(galactic).not.toHaveBeenCalled()
+			expect(ecliptic).not.toHaveBeenCalled()
+		} finally {
+			galactic.mockRestore()
+			ecliptic.mockRestore()
+		}
+	})
+
+	test('galactic true fills galactic from J2000 and leaves horizontal at the default', async () => {
+		const ephemeris = new AtlasEphemeris({ observer: recordingObserver().observer })
+		const position = await ephemeris.position({ type: 'sun' }, { ...REQ_A, fast: true, galactic: true })
+
+		expect(position.galactic).not.toEqual([0, 0])
+		expect(position.horizontal).toEqual([0, 0])
+		expect(position.equatorial).toEqual([0, 0])
+		expect(position.ecliptic).toEqual([0, 0])
+		expect(position.lst).toBe(0)
+	})
+
+	test('illuminated true does not fill unrelated frames', async () => {
+		const galactic = spyOn(coordinate, 'equatorialToGalatic')
+		const ephemeris = new AtlasEphemeris({ observer: recordingObserver().observer })
+
+		try {
+			const position = await ephemeris.position({ type: 'sun' }, { ...REQ_A, fast: true, illuminated: true })
+
+			expect(position.illuminated).toBe(1)
+			expect(position.horizontal).toEqual([0, 0])
+			expect(position.galactic).toEqual([0, 0])
+			expect(position.ecliptic).toEqual([0, 0])
+			expect(position.equatorial).toEqual([0, 0])
+			expect(position.magnitude).toBe(0)
+			expect(galactic).not.toHaveBeenCalled()
+		} finally {
+			galactic.mockRestore()
+		}
+	})
+
+	test('different flags reuse the same Horizons series', async () => {
+		const { observer, calls } = recordingObserver()
+		const ephemeris = new AtlasEphemeris({ observer })
+
+		const horizontal = await ephemeris.position({ type: 'sun' }, { ...REQ_A, horizontal: true })
+		const galactic = await ephemeris.position({ type: 'sun' }, { ...REQ_A, galactic: true })
+
+		expect(calls).toHaveLength(1)
+		expect(horizontal.horizontal[0]).toBeCloseTo(REQ_A.location.latitude, 12)
+		expect(horizontal.galactic).toEqual([0, 0])
+		expect(galactic.galactic).not.toEqual([0, 0])
+		expect(galactic.horizontal).toEqual([0, 0])
 	})
 })

@@ -36,6 +36,7 @@ import { makeTime } from 'src/api/util'
 import nebulosa from 'src/data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import { DEFAULT_MINOR_PLANET } from '#/asteroid'
 import type { MinorPlanet, MinorPlanetParameter, FindCloseApproaches, CloseApproach, OsculatingElementsInput, SearchMinorPlanet } from '#/asteroid'
+import { resolveBodyPositionFlags } from '#/atlas'
 import type { BodyPosition, ChartOfBody, LocationAndTime, PositionOfBody } from '#/atlas'
 import type { SearchSkyObject, SkyObject, SkyObjectSearchItem } from '#/galaxy'
 import type { FindLunarEclipse, LunarEclipseMap, ComputeLunarEclipseLocalCircumstances, ComputeLunarEclipseLocalView, ApogeeAndPerigee, LunarPhaseTime } from '#/moon'
@@ -442,8 +443,9 @@ export class AtlasHandler {
 
 	async positionOfSkyObject(req: PositionOfBody, id: string | number | SkyObject): Promise<BodyPosition> {
 		const dso = typeof id === 'object' ? id : this.skyObject(id)
-		const names = nebulosa.query<{ name: string }, [number]>("SELECT (n.type || ':' || n.name) as name FROM names n WHERE n.dsoId = ?").all(dso.id)
 		const position = await this.ephemeris.position({ type: 'star', object: dso }, req)
+		if (!resolveBodyPositionFlags(req).names) return position
+		const names = nebulosa.query<{ name: string }, [number]>("SELECT (n.type || ':' || n.name) as name FROM names n WHERE n.dsoId = ?").all(dso.id)
 		return { ...position, names: names.map((n) => n.name) }
 	}
 

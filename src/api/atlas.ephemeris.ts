@@ -6,8 +6,8 @@ import { observeStar } from 'nebulosa/src/astronomy/bodies/star'
 import { equatorial, icrsToObserved, lightTime, phaseAngle, topocentricDirection } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import type { PositionAndVelocity, PositionAndVelocityOverTime } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { cirsToObserved } from 'nebulosa/src/astronomy/coordinates/astrometry'
-import { constellation, CONSTELLATION_LIST } from 'nebulosa/src/astronomy/coordinates/constellation'
-import { equatorialFromJ2000, equatorialToEcliptic, equatorialToGalatic, equatorialToJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import { CONSTELLATION_LIST } from 'nebulosa/src/astronomy/coordinates/constellation'
+import { equatorialFromJ2000, equatorialToJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { eraS2p } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { frameToFrame, ICRS, ITRS, TEME } from 'nebulosa/src/astronomy/coordinates/frame'
 import { itrs } from 'nebulosa/src/astronomy/coordinates/itrs'
@@ -21,7 +21,6 @@ import * as tass17 from 'nebulosa/src/astronomy/ephemeris/models/analytical/tass
 import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
 import { asteroidMagnitudeEstimate, cometMagnitudeEstimate } from 'nebulosa/src/astronomy/formulas'
 import type { GeographicCoordinate, GeographicPosition } from 'nebulosa/src/astronomy/observer/location'
-import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { asteroid, comet, KeplerOrbit } from 'nebulosa/src/astronomy/orbits/asteroid'
 import { parseTLE, sgp4 } from 'nebulosa/src/astronomy/orbits/propagation/sgp4'
 import { formatTemporal, parseTemporal, temporalAdd, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract } from 'nebulosa/src/astronomy/time/temporal'
@@ -30,7 +29,6 @@ import { time, timeShift, timeUnix, Timescale, tt } from 'nebulosa/src/astronomy
 import type { Time } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, GM_SUN_PITJEVA_2005, ONE_KILOPARSEC, SPEED_OF_LIGHT } from 'nebulosa/src/core/constants'
 import type { Writable } from 'nebulosa/src/core/types'
-import { expectedPierSide, meridianTimeIn } from 'nebulosa/src/devices/indi/device'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
 import type { CsvRow } from 'nebulosa/src/io/csv'
 import { vecAngle, vecLength } from 'nebulosa/src/math/linear-algebra/vec3'
@@ -39,7 +37,8 @@ import { normalizeAngle, normalizePI, parseAngle, toDeg } from 'nebulosa/src/mat
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { toMeter } from 'nebulosa/src/math/units/distance'
 import type { OsculatingElementsInput } from '#/asteroid'
-import type { BodyPosition, PositionOfBody } from '#/atlas'
+import { resolveBodyPositionFlags } from '#/atlas'
+import type { BodyPosition, BodyPositionFlags, PositionOfBody } from '#/atlas'
 import type { SkyObject } from '#/galaxy'
 import { coordinateInfo } from '#/mount'
 import type { Satellite } from '#/satellite'
@@ -50,7 +49,8 @@ import { makeTime } from './util'
 // `fast` prefers a local model when one exists; otherwise Horizons. Distances are AU, angles
 // radians, instants Unix milliseconds. Horizons is still sampled every 60 s over local noon-to-noon;
 // position at an off-grid utc interpolates apparent RA/Dec (unwrap) and scalars, and does not
-// extrapolate. Cheap offline position is evaluated at the requested utc.
+// extrapolate. Cheap offline position is evaluated at the requested utc. BodyPositionFlags skip
+// unrequested frames and photometry; omitted flags still yield a complete BodyPosition.
 
 // Maximum number of noon-to-noon Horizons series retained. Each tile is ~1441 samples; eviction is
 // LRU by series, not by sample count.
@@ -98,6 +98,9 @@ export interface EphemerisSampleRequest {
 	readonly start: number
 	readonly end: number
 	readonly stepSize: number
+	// Which BodyPosition fields to materialize. Omitted flags mean compute everything. Not part of
+	// the series cache key; Horizons tiles stay complete and projection applies flags later.
+	readonly flags?: BodyPositionFlags
 }
 
 // Cached or freshly computed samples for one physical identity. Keys are Unix seconds (Horizons,
@@ -394,67 +397,179 @@ export interface ObserveSolarSystemGeometry {
 // Magnitude supplied as a constant or derived from the light-time geometry.
 export type ObserveSolarSystemMagnitude = number | null | ((geometry: ObserveSolarSystemGeometry) => number | null)
 
+// BodyPositionFlags carried by a PositionOfBody, without location/time/fast/elements.
+//
+// - req: the position request; only the BodyPositionFlags fields are copied.
+function bodyPositionFlagsOf(req: PositionOfBody): BodyPositionFlags {
+	return {
+		equatorial: req.equatorial,
+		equatorialJ2000: req.equatorialJ2000,
+		horizontal: req.horizontal,
+		ecliptic: req.ecliptic,
+		galactic: req.galactic,
+		constellation: req.constellation,
+		lst: req.lst,
+		names: req.names,
+		magnitude: req.magnitude,
+		distance: req.distance,
+		illuminated: req.illuminated,
+		elongation: req.elongation,
+		leading: req.leading,
+	}
+}
+
+// Derived CoordinateInfo frames from an already-apparent equatorial and/or astrometric J2000.
+// Does not recompute Az/El: Horizons and icrsToObserved already produced horizontal in their own
+// refraction models. Galactic uses astrometric J2000 when provided; ecliptic, constellation, and
+// LST use the apparent place. Unrequested fields stay at the BodyPosition zeros.
+//
+// - time: instant of the conversions, carrying the observing site.
+// - longitude: site longitude in radians, used for LST.
+// - apparent: equinox-of-date RA/Dec when ecliptic, constellation, or LST is requested.
+// - j2000: astrometric ICRS RA/Dec when galactic is requested.
+// - flags: resolved BodyPositionFlags; only the derived-frame members are read here.
+function derivedFrames(time: Time, longitude: Angle, apparent: { rightAscension: Angle; declination: Angle } | undefined, j2000: readonly [Angle, Angle] | undefined, flags: Required<BodyPositionFlags>): Pick<BodyPosition, 'ecliptic' | 'galactic' | 'constellation' | 'lst' | 'pierSide' | 'meridianTimeIn'> {
+	const wantApparentDerived = flags.ecliptic || flags.constellation || flags.lst
+	const result: Writable<Pick<BodyPosition, 'ecliptic' | 'galactic' | 'constellation' | 'lst' | 'pierSide' | 'meridianTimeIn'>> = {
+		ecliptic: [0, 0],
+		galactic: [0, 0],
+		constellation: 'AND',
+		lst: 0,
+		pierSide: 'NEITHER',
+		meridianTimeIn: 0,
+	}
+
+	if (wantApparentDerived && apparent) {
+		const frames = coordinateInfo(time, longitude, apparent, {
+			equatorial: false,
+			equatorialJ2000: false,
+			horizontal: false,
+			ecliptic: flags.ecliptic,
+			galactic: flags.galactic && !j2000,
+			constellation: flags.constellation,
+			lst: flags.lst,
+		})
+		if (flags.ecliptic) result.ecliptic = frames.ecliptic
+		if (flags.constellation) result.constellation = frames.constellation
+		if (flags.lst) {
+			result.lst = frames.lst
+			result.pierSide = frames.pierSide
+			result.meridianTimeIn = frames.meridianTimeIn
+		}
+		if (flags.galactic && !j2000) result.galactic = frames.galactic
+	}
+
+	if (flags.galactic && j2000) {
+		result.galactic = coordinateInfo(time, longitude, { type: 'J2000', J2000: { x: j2000[0], y: j2000[1] } }, { galactic: true }).galactic
+	}
+
+	return result
+}
+
+// Copies requested BodyPosition fields from `computed`. Unrequested fields stay at the
+// DEFAULT_BODY_POSITION zeros (`0`, `false`, `'AND'`, `'NEITHER'`). Magnitude is `null` when
+// requested and the model has no formula, and `0` when the field was not requested.
+//
+// - flags: resolved BodyPositionFlags.
+// - computed: fields that were actually produced; missing keys are treated as absent.
+function bodyPositionWithFlags(flags: Required<BodyPositionFlags>, computed: Partial<BodyPosition>): BodyPosition {
+	return {
+		equatorial: flags.equatorial && computed.equatorial ? [computed.equatorial[0], computed.equatorial[1]] : [0, 0],
+		equatorialJ2000: flags.equatorialJ2000 && computed.equatorialJ2000 ? [computed.equatorialJ2000[0], computed.equatorialJ2000[1]] : [0, 0],
+		horizontal: flags.horizontal && computed.horizontal ? [computed.horizontal[0], computed.horizontal[1]] : [0, 0],
+		ecliptic: flags.ecliptic && computed.ecliptic ? [computed.ecliptic[0], computed.ecliptic[1]] : [0, 0],
+		galactic: flags.galactic && computed.galactic ? [computed.galactic[0], computed.galactic[1]] : [0, 0],
+		constellation: flags.constellation && computed.constellation !== undefined ? computed.constellation : 'AND',
+		lst: flags.lst && computed.lst !== undefined ? computed.lst : 0,
+		pierSide: flags.lst && computed.pierSide !== undefined ? computed.pierSide : 'NEITHER',
+		meridianTimeIn: flags.lst && computed.meridianTimeIn !== undefined ? computed.meridianTimeIn : 0,
+		magnitude: flags.magnitude ? (computed.magnitude !== undefined ? computed.magnitude : null) : 0,
+		distance: flags.distance && computed.distance !== undefined ? computed.distance : 0,
+		illuminated: flags.illuminated && computed.illuminated !== undefined ? computed.illuminated : 0,
+		elongation: flags.elongation && computed.elongation !== undefined ? computed.elongation : 0,
+		leading: flags.leading && computed.leading !== undefined ? computed.leading : false,
+		names: flags.names ? computed.names : undefined,
+	}
+}
+
 // Apparent topocentric BodyPosition of a barycentric ICRS target at `time`.
 //
 // Uses two light-time iterations (`topocentricDirection`), then `icrsToObserved` for apparent RA/Dec
 // and Az/El. Diurnal parallax is the ITRS site offset added to VSOP Earth. `time.location` is the
-// observer; angles radians, distance AU.
-export function observeSolarSystemBody(target: PositionAndVelocityOverTime, time: Time, magnitude: ObserveSolarSystemMagnitude): BodyPosition {
+// observer; angles radians, distance AU. `flags` skip unrequested frames and photometry; omitted
+// flags compute everything.
+export function observeSolarSystemBody(target: PositionAndVelocityOverTime, time: Time, magnitude: ObserveSolarSystemMagnitude, flags: BodyPositionFlags = {}): BodyPosition {
+	const want = resolveBodyPositionFlags(flags)
+	const wantApparent = want.equatorial || want.horizontal || want.ecliptic || want.constellation || want.lst || want.leading
+	const wantJ2000 = want.equatorialJ2000 || want.galactic
+	const wantMagnitudeFn = want.magnitude && typeof magnitude === 'function'
+	const wantGeometry = want.illuminated || want.elongation || want.leading || wantMagnitudeFn
+	const wantAnything = wantApparent || wantJ2000 || want.distance || wantGeometry || want.magnitude
+
+	if (!wantAnything) return bodyPositionWithFlags(want, {})
+
 	const direction = topocentricDirection(target, observerBarycentric, time, LIGHT_TIME_ITERATIONS)
-	const emission = timeShift(time, -lightTime(direction))
-	const body = target(emission)[0]
-	const sun = vsop.sun(emission)[0]
-	const observer = observerBarycentric(time)[0]
-	const earth = vsop.earth(time)
+	let equatorialJ2000: readonly [Angle, Angle] | undefined
+	if (wantJ2000) {
+		const eq = equatorial(direction)
+		equatorialJ2000 = [eq[0], eq[1]]
+	}
 
-	const sunToBody: Vec3 = [body[0] - sun[0], body[1] - sun[1], body[2] - sun[2]]
-	const observerToSun: Vec3 = [sun[0] - observer[0], sun[1] - observer[1], sun[2] - observer[2]]
-	const geometry: ObserveSolarSystemGeometry = { observerToBody: direction, sunToBody }
-	const mag = typeof magnitude === 'function' ? magnitude(geometry) : magnitude
+	let rightAscension = 0
+	let declination = 0
+	let azimuth = 0
+	let altitude = 0
+	let mag: number | null = want.magnitude && typeof magnitude !== 'function' ? magnitude : null
+	let illuminated = 0
+	let elongation = 0
+	let leading = false
+	let distance = 0
 
-	const equatorialJ2000 = equatorial(direction)
-	const observed = icrsToObserved(direction, time, earth)
-	const sunObserved = icrsToObserved(observerToSun, time, earth)
-	// eraAtioq RA is CIO/CIRS; Horizons and BodyPosition.equatorial use the equinox of date.
-	const rightAscension = normalizeAngle(observed.rightAscension - observed.equationOfOrigins)
-	const sunRightAscension = normalizeAngle(sunObserved.rightAscension - sunObserved.equationOfOrigins)
-	// The Sun has no unique phase geometry (body == sun); keep full illumination and zero elongation.
-	const self = vecLength(sunToBody) < 1e-12
-	const illuminated = self ? 1 : 0.5 * (1 + Math.cos(phaseAngle(body, sun, observer)))
-	const elongation = self ? 0 : vecAngle(observerToSun, direction)
-	const leading = self ? false : normalizePI(rightAscension - sunRightAscension) > 0
+	if (want.distance) distance = vecLength(direction)
 
-	const frames = coordinateInfo(
-		time,
-		time.location!.longitude,
-		{ rightAscension, declination: observed.declination },
-		{
-			equatorial: false,
-			equatorialJ2000: false,
-			horizontal: false,
-			ecliptic: true,
-			galactic: true,
-			constellation: true,
-			lst: true,
-		},
-	)
+	const earth = wantApparent ? vsop.earth(time) : undefined
+	if (wantApparent) {
+		const observed = icrsToObserved(direction, time, earth!)
+		// eraAtioq RA is CIO/CIRS; Horizons and BodyPosition.equatorial use the equinox of date.
+		rightAscension = normalizeAngle(observed.rightAscension - observed.equationOfOrigins)
+		declination = observed.declination
+		azimuth = observed.azimuth
+		altitude = observed.altitude
+	}
 
-	return {
+	if (wantGeometry) {
+		const emission = timeShift(time, -lightTime(direction))
+		const body = target(emission)[0]
+		const sun = vsop.sun(emission)[0]
+		const observer = observerBarycentric(time)[0]
+		const sunToBody: Vec3 = [body[0] - sun[0], body[1] - sun[1], body[2] - sun[2]]
+		const observerToSun: Vec3 = [sun[0] - observer[0], sun[1] - observer[1], sun[2] - observer[2]]
+		const geometry: ObserveSolarSystemGeometry = { observerToBody: direction, sunToBody }
+		if (wantMagnitudeFn) mag = magnitude(geometry)
+		// The Sun has no unique phase geometry (body == sun); keep full illumination and zero elongation.
+		const self = vecLength(sunToBody) < 1e-12
+		if (want.illuminated) illuminated = self ? 1 : 0.5 * (1 + Math.cos(phaseAngle(body, sun, observer)))
+		if (want.elongation) elongation = self ? 0 : vecAngle(observerToSun, direction)
+		if (want.leading && !self && earth) {
+			const sunObserved = icrsToObserved(observerToSun, time, earth)
+			const sunRightAscension = normalizeAngle(sunObserved.rightAscension - sunObserved.equationOfOrigins)
+			leading = normalizePI(rightAscension - sunRightAscension) > 0
+		}
+	}
+
+	const derived = derivedFrames(time, time.location!.longitude, wantApparent ? { rightAscension, declination } : undefined, equatorialJ2000, want)
+
+	return bodyPositionWithFlags(want, {
+		equatorial: [rightAscension, declination],
+		equatorialJ2000,
+		horizontal: [azimuth, altitude],
+		...derived,
 		magnitude: mag,
-		constellation: frames.constellation,
-		distance: vecLength(direction),
+		distance,
 		illuminated,
 		elongation,
 		leading,
-		equatorial: [rightAscension, observed.declination],
-		equatorialJ2000: [equatorialJ2000[0], equatorialJ2000[1]],
-		horizontal: [observed.azimuth, observed.altitude],
-		ecliptic: frames.ecliptic,
-		galactic: frames.galactic,
-		lst: frames.lst,
-		pierSide: frames.pierSide,
-		meridianTimeIn: frames.meridianTimeIn,
-	}
+	})
 }
 
 // Barycentric ICRS sampler for a solar-system target that has a local model. Undefined for stars,
@@ -566,8 +681,8 @@ class OfflineEphemerisProvider implements EphemerisProvider {
 
 	// One sample at `request.start` (the requested utc). Does not build a noon-to-noon tile.
 	samples(request: EphemerisSampleRequest): Promise<EphemerisSampleSeries> {
-		const { target, location, start } = request
-		const req: PositionOfBody = { location, time: { utc: start, offset: 0 } }
+		const { target, location, start, flags } = request
+		const req: PositionOfBody = { location, time: { utc: start, offset: 0 }, ...flags }
 		const position = this.positionAt(target, req)
 		const samples = new Map<number, BodyPosition>([[start, position]])
 		return Promise.resolve({ key: `offline|${target.type}|${start}`, source: 'offline', samples })
@@ -582,7 +697,7 @@ class OfflineEphemerisProvider implements EphemerisProvider {
 
 		if (target.type === 'satellite') {
 			const tle = parseTLE(target.satellite.line1, target.satellite.line2, target.satellite.name)
-			return observeSolarSystemBody((t) => addPv(vsop.earth(t), temeStateToGcrs(sgp4(t, tle), t)), time, null)
+			return observeSolarSystemBody((t) => addPv(vsop.earth(t), temeStateToGcrs(sgp4(t, tle), t)), time, null, req)
 		}
 
 		if (target.type === 'minorBody') {
@@ -593,22 +708,28 @@ class OfflineEphemerisProvider implements EphemerisProvider {
 				(t) => addPv(vsop.sun(t), orbit.at(t)),
 				time,
 				(geometry) => minorBodyMagnitude(elements, geometry),
+				req,
 			)
 		}
 
 		const barycentric = barycentricTarget(target)
 		if (!barycentric) throw new OfflineEphemerisUnavailableError(`offline ephemeris is not implemented for ${target.type}`)
 
-		if (target.type === 'sun') return observeSolarSystemBody(barycentric, time, SUN_VISUAL_MAGNITUDE)
+		if (target.type === 'sun') return observeSolarSystemBody(barycentric, time, SUN_VISUAL_MAGNITUDE, req)
 		if (target.type === 'planet') {
 			const name = target.name
-			return observeSolarSystemBody(barycentric, time, (geometry) => {
-				const mag = planetMagnitude(name, geometry.sunToBody, geometry.observerToBody, { year: julianYear(time) })
-				return Number.isFinite(mag) ? mag : null
-			})
+			return observeSolarSystemBody(
+				barycentric,
+				time,
+				(geometry) => {
+					const mag = planetMagnitude(name, geometry.sunToBody, geometry.observerToBody, { year: julianYear(time) })
+					return Number.isFinite(mag) ? mag : null
+				},
+				req,
+			)
 		}
 
-		return observeSolarSystemBody(barycentric, time, null)
+		return observeSolarSystemBody(barycentric, time, null, req)
 	}
 
 	// Cached KeplerOrbit for `elements`, evicting the oldest entry past KEPLER_ORBIT_CACHE_LIMIT.
@@ -649,6 +770,7 @@ export class AtlasEphemeris {
 	// BodyPosition for `target` at `req`. `fast` prefers offline when it supports the target; otherwise
 	// Horizons is used. Stars, sky points, and cheap offline models are evaluated at the requested utc.
 	// Horizons is interpolated at that utc inside the noon-to-noon tile; it is never extrapolated.
+	// Omitted BodyPositionFlags compute every field; a true flag materializes only that output.
 	async position(target: EphemerisTarget, req: PositionOfBody): Promise<BodyPosition> {
 		const series = await this.resolve(target, req)
 		if (series.source === 'horizons') return horizonsPositionAt(series.samples, req)
@@ -724,6 +846,7 @@ export class AtlasEphemeris {
 			start: point ? req.time.utc : start,
 			end: point ? req.time.utc : end,
 			stepSize: HORIZONS_STEP_SIZE_SECONDS,
+			flags: bodyPositionFlagsOf(req),
 		}
 
 		const mode: EphemerisMode = req.fast ? 'fast' : 'accurate'
@@ -830,29 +953,26 @@ function hashString(value: string): string {
 }
 
 // BodyPosition for `req` from a frozen Horizons sample. Coordinate tuples and derived frames are new
-// objects; the cached sample is not written.
+// objects; the cached sample is not written. Unrequested flags stay at the BodyPosition zeros.
+// Constellation is the Horizons CSV value, not recomputed.
 function projectHorizonsPosition(sample: BodyPosition, req: PositionOfBody): BodyPosition {
+	const want = resolveBodyPositionFlags(req)
 	const time = makeTime(req.time.utc, req.location)
-	const lst = localSiderealTime(time, req.location, true)
-	const [rightAscension, declination] = sample.equatorial
+	const derived = derivedFrames(time, req.location.longitude, { rightAscension: sample.equatorial[0], declination: sample.equatorial[1] }, sample.equatorialJ2000, { ...want, constellation: false })
 
-	return {
+	return bodyPositionWithFlags(want, {
 		magnitude: sample.magnitude,
-		constellation: sample.constellation,
 		distance: sample.distance,
 		illuminated: sample.illuminated,
 		elongation: sample.elongation,
 		leading: sample.leading,
 		names: sample.names,
-		equatorial: [rightAscension, declination],
-		equatorialJ2000: [sample.equatorialJ2000[0], sample.equatorialJ2000[1]],
-		horizontal: [sample.horizontal[0], sample.horizontal[1]],
-		ecliptic: equatorialToEcliptic(rightAscension, declination, time),
-		galactic: equatorialToGalatic(sample.equatorialJ2000[0], sample.equatorialJ2000[1]),
-		lst,
-		pierSide: expectedPierSide(rightAscension, declination, lst),
-		meridianTimeIn: meridianTimeIn(rightAscension, lst),
-	}
+		equatorial: sample.equatorial,
+		equatorialJ2000: sample.equatorialJ2000,
+		horizontal: sample.horizontal,
+		...derived,
+		constellation: sample.constellation,
+	})
 }
 
 // Horizons BodyPosition at `req.time.utc`. On a sample instant this is the frozen tile plus LST/frames;
@@ -899,49 +1019,66 @@ function bracketingHorizonsSamples(samples: ReadonlyMap<number, BodyPosition>, u
 }
 
 // Linear interpolation of two Horizons samples onto `req.time.utc`. RA/Dec use EphemerisInterpolator
-// with outOfRange throw; Az uses shortest-arc unwrap.
+// with outOfRange throw; Az uses shortest-arc unwrap. Unrequested flags skip unused interpolators.
 function interpolateHorizonsSamples(a: BodyPosition, b: BodyPosition, t0: number, t1: number, req: PositionOfBody): BodyPosition {
+	const want = resolveBodyPositionFlags(req)
 	const query = timeUnix(req.time.utc / 1000)
 	const tA = timeUnix(t0)
 	const tB = timeUnix(t1)
 	const options = { outOfRange: 'throw' as const }
-	const apparent = linearInterpolator(
-		[
-			{ time: tA, rightAscension: a.equatorial[0], declination: a.equatorial[1] },
-			{ time: tB, rightAscension: b.equatorial[0], declination: b.equatorial[1] },
-		],
-		options,
-	)
-	const j2000 = linearInterpolator(
-		[
-			{ time: tA, rightAscension: a.equatorialJ2000[0], declination: a.equatorialJ2000[1] },
-			{ time: tB, rightAscension: b.equatorialJ2000[0], declination: b.equatorialJ2000[1] },
-		],
-		options,
-	)
-	const [rightAscension, declination] = apparent.compute(query)
-	const [rightAscensionJ2000, declinationJ2000] = j2000.compute(query)
 	const frac = (req.time.utc / 1000 - t0) / (t1 - t0)
 	const time = makeTime(req.time.utc, req.location)
-	const lst = localSiderealTime(time, req.location, true)
 	const nearer = frac < 0.5 ? a : b
+	const wantApparent = want.equatorial || want.ecliptic || want.constellation || want.lst
+	const wantJ2000 = want.equatorialJ2000 || want.galactic
 
-	return {
+	let rightAscension = 0
+	let declination = 0
+	let rightAscensionJ2000 = 0
+	let declinationJ2000 = 0
+	let azimuth = 0
+	let altitude = 0
+
+	if (wantApparent) {
+		const apparent = linearInterpolator(
+			[
+				{ time: tA, rightAscension: a.equatorial[0], declination: a.equatorial[1] },
+				{ time: tB, rightAscension: b.equatorial[0], declination: b.equatorial[1] },
+			],
+			options,
+		)
+		;[rightAscension, declination] = apparent.compute(query)
+	}
+
+	if (wantJ2000) {
+		const j2000 = linearInterpolator(
+			[
+				{ time: tA, rightAscension: a.equatorialJ2000[0], declination: a.equatorialJ2000[1] },
+				{ time: tB, rightAscension: b.equatorialJ2000[0], declination: b.equatorialJ2000[1] },
+			],
+			options,
+		)
+		;[rightAscensionJ2000, declinationJ2000] = j2000.compute(query)
+	}
+
+	if (want.horizontal) {
+		azimuth = lerpAngle(a.horizontal[0], b.horizontal[0], frac)
+		altitude = lerp(a.horizontal[1], b.horizontal[1], frac)
+	}
+
+	const derived = derivedFrames(time, req.location.longitude, wantApparent ? { rightAscension, declination } : undefined, wantJ2000 ? [rightAscensionJ2000, declinationJ2000] : undefined, want)
+
+	return bodyPositionWithFlags(want, {
 		magnitude: lerpNullable(a.magnitude, b.magnitude, frac),
-		constellation: constellation(rightAscension, declination, time),
 		distance: lerp(a.distance, b.distance, frac),
 		illuminated: lerp(a.illuminated, b.illuminated, frac),
 		elongation: lerp(a.elongation, b.elongation, frac),
 		leading: nearer.leading,
 		equatorial: [rightAscension, declination],
 		equatorialJ2000: [rightAscensionJ2000, declinationJ2000],
-		horizontal: [lerpAngle(a.horizontal[0], b.horizontal[0], frac), lerp(a.horizontal[1], b.horizontal[1], frac)],
-		ecliptic: equatorialToEcliptic(rightAscension, declination, time),
-		galactic: equatorialToGalatic(rightAscensionJ2000, declinationJ2000),
-		lst,
-		pierSide: expectedPierSide(rightAscension, declination, lst),
-		meridianTimeIn: meridianTimeIn(rightAscension, lst),
-	}
+		horizontal: [azimuth, altitude],
+		...derived,
+	})
 }
 
 // Linear interpolation of two scalars.
@@ -976,33 +1113,40 @@ function altitudesFromSeries(series: EphemerisSampleSeries, req: PositionOfBody)
 }
 
 // Apparent place of a catalog object at `req.time.utc`. Proper motion uses observeStar; otherwise
-// J2000 → CIRS → observed. Names are catalog metadata and are left to the handler.
+// J2000 → CIRS → observed. Names are catalog metadata and are left to the handler. Constellation is
+// the catalog value. Unrequested flags stay at the BodyPosition zeros.
 function positionOfStar(dso: SkyObject, req: PositionOfBody): BodyPosition {
+	const want = resolveBodyPositionFlags(req)
 	const time = makeTime(req.time.utc, req.location)
-	const lst = localSiderealTime(time, req.location, true)
+	const equatorialJ2000 = [dso.rightAscension, dso.declination] as const
+	const wantApparent = want.equatorial || want.horizontal || want.ecliptic || want.lst
 
 	const horizontal: Writable<BodyPosition['horizontal']> = [0, 0]
 	const equatorial: Writable<BodyPosition['equatorial']> = [0, 0]
-	const equatorialJ2000 = [dso.rightAscension, dso.declination] as const
 
-	if (dso.pmRA && dso.pmDEC) {
-		const ebpv = vsop.earth(time)
-		const parallax = dso.distance > 0 ? 1 / dso.distance : 0
-		const ob = observeStar({ ...dso, parallax }, time, ebpv)
-		equatorial[0] = ob.rightAscension
-		equatorial[1] = ob.declination
-		horizontal[0] = ob.azimuth
-		horizontal[1] = ob.altitude
-	} else {
-		Object.assign(equatorial, equatorialFromJ2000(dso.rightAscension, dso.declination, time))
-		const { azimuth, altitude } = cirsToObserved(equatorial, time)
-		horizontal[0] = azimuth
-		horizontal[1] = altitude
+	if (wantApparent) {
+		if (dso.pmRA && dso.pmDEC) {
+			const ebpv = vsop.earth(time)
+			const parallax = dso.distance > 0 ? 1 / dso.distance : 0
+			const ob = observeStar({ ...dso, parallax }, time, ebpv)
+			equatorial[0] = ob.rightAscension
+			equatorial[1] = ob.declination
+			horizontal[0] = ob.azimuth
+			horizontal[1] = ob.altitude
+		} else {
+			Object.assign(equatorial, equatorialFromJ2000(dso.rightAscension, dso.declination, time))
+			if (want.horizontal) {
+				const { azimuth, altitude } = cirsToObserved(equatorial, time)
+				horizontal[0] = azimuth
+				horizontal[1] = altitude
+			}
+		}
 	}
 
-	return {
+	const derived = derivedFrames(time, req.location.longitude, wantApparent ? { rightAscension: equatorial[0], declination: equatorial[1] } : undefined, equatorialJ2000, { ...want, constellation: false })
+
+	return bodyPositionWithFlags(want, {
 		magnitude: dso.magnitude,
-		constellation: CONSTELLATION_LIST[dso.constellation],
 		distance: dso.distance,
 		illuminated: 0,
 		elongation: 0,
@@ -1010,31 +1154,32 @@ function positionOfStar(dso: SkyObject, req: PositionOfBody): BodyPosition {
 		equatorial,
 		equatorialJ2000,
 		horizontal,
-		ecliptic: equatorialToEcliptic(...equatorial, time),
-		galactic: equatorialToGalatic(...equatorialJ2000),
-		lst,
-		meridianTimeIn: meridianTimeIn(equatorial[0], lst),
-		pierSide: expectedPierSide(...equatorial, lst),
-	}
+		...derived,
+		constellation: CONSTELLATION_LIST[dso.constellation],
+	})
 }
 
 // Apparent place of an equatorial CIRS sky point at `req.time.utc`. `rightAscension`/`declination`
-// are radians; RA is the equinox-of-date value the caller already parsed.
+// are radians; RA is the equinox-of-date value the caller already parsed. Unrequested flags stay at
+// the BodyPosition zeros.
 function positionOfSkyPoint(rightAscension: Angle, declination: Angle, req: PositionOfBody): BodyPosition {
+	const want = resolveBodyPositionFlags(req)
 	const time = makeTime(req.time.utc, req.location)
-	const lst = localSiderealTime(time, req.location, true)
+	const equatorial = [rightAscension, declination] as const
+	const wantJ2000 = want.equatorialJ2000 || want.galactic
+	const equatorialJ2000 = wantJ2000 ? equatorialToJ2000(rightAscension, declination, time) : undefined
 
 	const horizontal: Writable<BodyPosition['horizontal']> = [0, 0]
-	const equatorial = [rightAscension, declination] as const
-	const equatorialJ2000 = equatorialToJ2000(rightAscension, declination, time)
+	if (want.horizontal) {
+		const { azimuth, altitude } = cirsToObserved(eraS2p(rightAscension, declination, ONE_KILOPARSEC), time)
+		horizontal[0] = azimuth
+		horizontal[1] = altitude
+	}
 
-	const { azimuth, altitude } = cirsToObserved(eraS2p(rightAscension, declination, ONE_KILOPARSEC), time)
-	horizontal[0] = azimuth
-	horizontal[1] = altitude
+	const derived = derivedFrames(time, req.location.longitude, { rightAscension, declination }, equatorialJ2000, want)
 
-	return {
+	return bodyPositionWithFlags(want, {
 		magnitude: 99,
-		constellation: constellation(rightAscension, declination, time),
 		distance: 0,
 		illuminated: 0,
 		elongation: 0,
@@ -1042,12 +1187,8 @@ function positionOfSkyPoint(rightAscension: Angle, declination: Angle, req: Posi
 		equatorial,
 		equatorialJ2000,
 		horizontal,
-		ecliptic: equatorialToEcliptic(rightAscension, declination, time),
-		galactic: equatorialToGalatic(...equatorialJ2000),
-		lst,
-		meridianTimeIn: meridianTimeIn(equatorial[0], lst),
-		pierSide: expectedPierSide(rightAscension, declination, lst),
-	}
+		...derived,
+	})
 }
 
 // Parses a Horizons observer CSV into `output`, keyed by Unix seconds on a uniform 1 min grid.

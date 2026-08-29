@@ -10,7 +10,7 @@ import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
 import type { CameraDeviceWatcher } from 'src/api/camera.capture'
-import { guiderBus, GuiderCommander, localGuiderCameraKey, localGuiderKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
+import { guiderBus, GuiderCommander, guiderSessionId, localGuiderCameraKey, localGuiderKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
 import type { ImageProcessor } from 'src/api/image.processor'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
@@ -46,6 +46,7 @@ class FakePhd2Server {
 
 	private listener?: Bun.TCPSocketListener
 	private socket?: Bun.Socket<unknown>
+	private readonly sockets = new Set<Bun.Socket<unknown>>()
 	private buffer = ''
 
 	async start() {
@@ -54,6 +55,7 @@ class FakePhd2Server {
 			port: 0,
 			socket: {
 				open: (socket) => {
+					this.sockets.add(socket)
 					this.socket = socket
 				},
 				data: (socket, data) => {
@@ -72,8 +74,9 @@ class FakePhd2Server {
 						else socket.write(`${JSON.stringify({ jsonrpc: '2.0', result: this.results.get(command.method) ?? 0, id: command.id })}\r\n`)
 					}
 				},
-				close: () => {
-					this.socket = undefined
+				close: (socket) => {
+					this.sockets.delete(socket)
+					if (this.socket === socket) this.socket = this.sockets.values().next().value
 				},
 			},
 		})
@@ -96,7 +99,9 @@ class FakePhd2Server {
 	}
 
 	stop() {
-		this.socket?.end()
+		for (const socket of this.sockets) socket.end()
+		this.sockets.clear()
+		this.socket = undefined
 		this.listener?.stop(true)
 		this.listener = undefined
 	}
@@ -149,9 +154,43 @@ describe('remote session', () => {
 		const id = await connected()
 
 		expect(commander.list()).toHaveLength(1)
+		expect(id).toBe(guiderSessionId(remoteGuiderKey('127.0.0.1', port)))
 		expect(commander.info(id)?.mode).toBe('remote')
 		expect(commander.info(id)?.key).toBe(remoteGuiderKey('127.0.0.1', port))
 		expect(arbiter.availability(remoteGuiderKey('127.0.0.1', port))).toBe('leased')
+	})
+
+	test('keeps the same id across reconnects of the same host and port', async () => {
+		const first = await connected()
+
+		expect((await commander.disconnect(first)).ok).toBeTrue()
+
+		const second = await connected()
+
+		expect(second).toBe(first)
+		expect(second).toBe(guiderSessionId(remoteGuiderKey('127.0.0.1', port)))
+	})
+
+	test('refuses a second session whose socket lands on a server already occupied', async () => {
+		const first = await commander.connect({ mode: 'remote', host: '127.0.0.1', port })
+		expect(first.ok).toBeTrue()
+		if (!first.ok) return
+
+		const removed: string[] = []
+		const unsubscribe = guiderBus.subscribe('remove', (event) => removed.push(event.id))
+
+		try {
+			const second = await commander.connect({ mode: 'remote', host: 'localhost', port })
+
+			expect(second.ok).toBeFalse()
+			expect(second.ok || second.reason).toBe('busy')
+			expect(commander.list()).toHaveLength(1)
+			expect(commander.info(first.value.id)).toBeDefined()
+			expect(removed).toBeEmpty()
+			expect(first.value.id).not.toBe(guiderSessionId(remoteGuiderKey('localhost', port)))
+		} finally {
+			unsubscribe()
+		}
 	})
 
 	test('refuses a second session on the same server', async () => {
@@ -1046,6 +1085,7 @@ describe('local session', () => {
 
 		expect(result.ok).toBeTrue()
 		expect(result.ok && result.value.mode).toBe('local')
+		expect(result.ok && result.value.id).toBe(guiderSessionId(localGuiderKey(camera, guideOutput)))
 		expect(result.ok && result.value.key).toBe(localGuiderKey(camera, guideOutput))
 		expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('leased')
 		expect(arbiter.availability(localGuiderOutputKey(guideOutput))).toBe('leased')

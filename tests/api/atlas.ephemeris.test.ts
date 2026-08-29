@@ -7,7 +7,7 @@ import type { CsvRow } from 'nebulosa/src/io/csv'
 import { deg, parseAngle, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter, toKilometer } from 'nebulosa/src/math/units/distance'
 // oxfmt-ignore
-import { AtlasEphemeris, classifyHorizonsFailure, EphemerisInterpolationError, EphemerisUnavailableError, HORIZONS_BREAKER_FAILURE_THRESHOLD, HORIZONS_BREAKER_OPEN_MS, HorizonsEphemerisError, HorizonsHttpError, HorizonsTimeoutError, horizonsPositionAt, observeSolarSystemBody, planetTargetFromCode } from 'src/api/atlas.ephemeris'
+import { AtlasEphemeris, classifyHorizonsFailure, EphemerisInterpolationError, EphemerisUnavailableError, findCrossing, HORIZONS_BREAKER_FAILURE_THRESHOLD, HORIZONS_BREAKER_OPEN_MS, HorizonsEphemerisError, HorizonsHttpError, HorizonsTimeoutError, horizonsPositionAt, observeSolarSystemBody, planetTargetFromCode } from 'src/api/atlas.ephemeris'
 import type { EphemerisProvider, EphemerisSampleRequest, EphemerisTarget, HorizonsObserver } from 'src/api/atlas.ephemeris'
 import { makeTime } from 'src/api/util'
 import type { OsculatingElementsInput } from '#/asteroid'
@@ -507,6 +507,57 @@ describe('Horizons exact-time interpolation', () => {
 		expect(atMs.distance).toBeLessThan(1 + (1 / 60000) * 2)
 		expect(atMs.equatorial[0]).toBeGreaterThan(0)
 		expect(atMs.equatorial[0]).toBeLessThan(deg(1) / 1000)
+	})
+})
+
+describe('findCrossing', () => {
+	test('refines a downward altitude zero to the midpoint of a linear pair', () => {
+		const t0 = REQ_A.time.utc / 1000
+		const samples = new Map<number, BodyPosition>([
+			[t0, frozenSample({ horizontal: [0, deg(1)] })],
+			[t0 + 60, frozenSample({ horizontal: [0, deg(-1)] })],
+		])
+		const crossing = findCrossing(samples, { ...REQ_A, horizontal: true }, REQ_A.time.utc, REQ_A.time.utc + 60_000, (position) => position.horizontal[1])
+
+		expect(crossing).toBeDefined()
+		expect(crossing!.time).toBeCloseTo(REQ_A.time.utc + 30_000, 0)
+		expect(crossing!.index).toBe(0)
+	})
+
+	test('uses origin to report the noon-to-noon chart index', () => {
+		const origin = REQ_A.time.utc
+		const t0 = origin / 1000 + 337 * 60
+		const samples = new Map<number, BodyPosition>([
+			[t0, frozenSample({ horizontal: [0, deg(1)] })],
+			[t0 + 60, frozenSample({ horizontal: [0, deg(-1)] })],
+		])
+		const crossing = findCrossing(samples, { ...REQ_A, horizontal: true }, t0 * 1000, (t0 + 60) * 1000, (position) => position.horizontal[1], { origin })
+
+		expect(crossing!.index).toBe(337)
+		expect(crossing!.time).toBeCloseTo(origin + 337 * 60_000 + 30_000, 0)
+	})
+
+	test('returns undefined when the scalar does not change sign', () => {
+		const t0 = REQ_A.time.utc / 1000
+		const samples = new Map<number, BodyPosition>([
+			[t0, frozenSample({ horizontal: [0, deg(10)] })],
+			[t0 + 60, frozenSample({ horizontal: [0, deg(8)] })],
+		])
+		const crossing = findCrossing(samples, { ...REQ_A, horizontal: true }, REQ_A.time.utc, REQ_A.time.utc + 60_000, (position) => position.horizontal[1])
+
+		expect(crossing).toBeUndefined()
+	})
+
+	test('finds a zero of altitude minus a twilight threshold', () => {
+		const t0 = REQ_A.time.utc / 1000
+		const nautical = deg(-6)
+		const samples = new Map<number, BodyPosition>([
+			[t0, frozenSample({ horizontal: [0, deg(-5)] })],
+			[t0 + 60, frozenSample({ horizontal: [0, deg(-7)] })],
+		])
+		const crossing = findCrossing(samples, { ...REQ_A, horizontal: true }, REQ_A.time.utc, REQ_A.time.utc + 60_000, (position) => position.horizontal[1] - nautical)
+
+		expect(crossing!.time).toBeCloseTo(REQ_A.time.utc + 30_000, 0)
 	})
 })
 

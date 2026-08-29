@@ -34,6 +34,7 @@ import type { CsvRow } from 'nebulosa/src/io/csv'
 import { vecAngle, vecLength } from 'nebulosa/src/math/linear-algebra/vec3'
 import type { Vec3 } from 'nebulosa/src/math/linear-algebra/vec3'
 import { lerp } from 'nebulosa/src/math/numerical/math'
+import { brentRoot } from 'nebulosa/src/math/numerical/optimization'
 import { normalizeAngle, normalizePI, parseAngle, toDeg } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { toMeter } from 'nebulosa/src/math/units/distance'
@@ -128,6 +129,25 @@ export interface EphemerisSampleSeries {
 	readonly samples: ReadonlyMap<number, BodyPosition>
 	// Why Horizons was not used. Set only on an accurate-path fallback to a local model.
 	readonly fallbackReason?: EphemerisFallbackReason
+}
+
+// First zero of `value` inside a sampled window, after refining the coarse 60 s bracket.
+export interface EphemerisCrossing {
+	// Crossing instant, Unix milliseconds UTC.
+	readonly time: number
+	// Chart sample index relative to `origin` (or `start` when origin is omitted), floor of the
+	// crossing. Matches the 1441-point noon-to-noon altitude chart.
+	readonly index: number
+}
+
+// Options for findCrossing. `stepMs` is only used to turn the refined instant into a chart index.
+export interface FindCrossingOptions {
+	// Chart origin, Unix milliseconds. Defaults to the search `start`.
+	readonly origin?: number
+	// Chart sample spacing, milliseconds. Defaults to 60_000.
+	readonly stepMs?: number
+	// Cancels the scan. Checked on each coarse sample pair.
+	readonly signal?: AbortSignal
 }
 
 // Internal provider. `supports` is a static table, never "try and see if it throws".
@@ -1285,6 +1305,73 @@ function projectHorizonsPosition(sample: BodyPosition, req: PositionOfBody): Bod
 		...derived,
 		constellation: sample.constellation,
 	})
+}
+
+// Noon-to-noon altitude-chart spacing used to turn a refined crossing into a sample index.
+const CROSSING_STEP_MS = 60_000
+
+// Time-axis tolerance for brentRoot on Unix milliseconds: 1 ms is below anything the UI can show.
+const CROSSING_TIME_TOLERANCE_MS = 1
+
+// Function-value tolerance for brentRoot on `value(position)`, in the same units as `value`.
+const CROSSING_VALUE_TOLERANCE = 1e-10
+
+// First sign change of `value` in [start, end], refined with Brent on interpolated samples.
+//
+// The coarse scan walks the sampled instants already in `samples`; it does not assume a uniform
+// grid. `value` is evaluated on frozen samples for bracketing and on horizonsPositionAt interpolants
+// while refining. No crossing, or a window with fewer than two samples, returns undefined.
+// `index` is floor((time - origin) / stepMs) so a dusk band still starts on the last chart sample
+// on the incoming side of the zero. Polar / no-event windows stay undefined.
+//
+// - samples: Horizons (or interpolated) series keyed by Unix seconds.
+// - req: observer used by interpolation; only `location` and `time.offset` are read besides flags.
+// - start: search window start, Unix milliseconds, inclusive.
+// - end: search window end, Unix milliseconds, inclusive of a sample sitting on `end`.
+// - value: scalar whose zero is the event; typical twilight use is `p => p.horizontal[1] - threshold`.
+// - options.origin: chart origin for `index`. Defaults to `start`.
+// - options.stepMs: chart spacing. Defaults to 60 s.
+// - options.signal: cancels the coarse scan.
+export function findCrossing(samples: ReadonlyMap<number, BodyPosition>, req: PositionOfBody, start: number, end: number, value: (position: BodyPosition) => number, options: FindCrossingOptions = {}): EphemerisCrossing | undefined {
+	options.signal?.throwIfAborted()
+	const stepMs = options.stepMs ?? CROSSING_STEP_MS
+	const origin = options.origin ?? start
+	const startSec = Math.trunc(start / 1000)
+	const endSec = Math.trunc(end / 1000)
+	const interpolateReq: PositionOfBody = { ...req, horizontal: true }
+
+	const times: number[] = []
+	for (const time of samples.keys()) {
+		if (time >= startSec && time <= endSec) times.push(time)
+	}
+	times.sort((a, b) => a - b)
+
+	for (let i = 0; i < times.length - 1; i++) {
+		options.signal?.throwIfAborted()
+		const t0 = times[i]
+		const t1 = times[i + 1]
+		const a = samples.get(t0)
+		const b = samples.get(t1)
+		if (!a || !b) continue
+
+		const v0 = value(a)
+		const v1 = value(b)
+		if (!Number.isFinite(v0) || !Number.isFinite(v1)) continue
+
+		const t0ms = t0 * 1000
+		if (v0 === 0) return { time: t0ms, index: Math.floor((t0ms - origin) / stepMs) }
+		if (v0 * v1 > 0) continue
+		if (v1 === 0) return { time: t1 * 1000, index: Math.floor((t1 * 1000 - origin) / stepMs) }
+
+		try {
+			const root = brentRoot((utc) => value(horizonsPositionAt(samples, { ...interpolateReq, time: { utc, offset: req.time.offset } })), t0ms, t1 * 1000, { tolerance: CROSSING_TIME_TOLERANCE_MS, functionTolerance: CROSSING_VALUE_TOLERANCE })
+			return { time: root.root, index: Math.floor((root.root - origin) / stepMs) }
+		} catch {
+			return { time: t0ms, index: Math.floor((t0ms - origin) / stepMs) }
+		}
+	}
+
+	return undefined
 }
 
 // Horizons BodyPosition at `req.time.utc`. On a sample instant this is the frozen tile plus LST/frames;

@@ -96,6 +96,14 @@ export interface PositionOfBody extends LocationAndTime, BodyPositionFlags {
 
 export interface ChartOfBody extends PositionOfBody {}
 
+// Provider that actually produced a position. Distinct from `fast`: a `fast` request may still
+// come from Horizons when no local model exists, and `fast=false` may fall back to offline.
+export type EphemerisSource = 'offline' | 'horizons'
+
+// Why an accurate request used a local model instead of Horizons. Omitted when Horizons succeeded
+// or when `fast` asked for the local model on purpose.
+export type EphemerisFallbackReason = 'breaker-open' | 'timeout' | 'http' | 'network'
+
 export interface BodyPosition extends CoordinateInfo {
 	readonly names?: readonly string[]
 	readonly magnitude: number | null
@@ -103,6 +111,10 @@ export interface BodyPosition extends CoordinateInfo {
 	readonly illuminated: number
 	readonly elongation: Angle
 	readonly leading: boolean
+	// Provider that produced this position. Omitted on the zero default before the first fetch.
+	readonly source?: EphemerisSource
+	// Present only when `fast` was false and Horizons was skipped or failed transiently.
+	readonly fallbackReason?: EphemerisFallbackReason
 }
 
 export const DEFAULT_GEOGRAPHIC_COORDINATE: GeographicCoordinate = {

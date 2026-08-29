@@ -39,7 +39,7 @@ import type { Angle } from 'nebulosa/src/math/units/angle'
 import { toMeter } from 'nebulosa/src/math/units/distance'
 import type { OsculatingElementsInput } from '#/asteroid'
 import { resolveBodyPositionFlags } from '#/atlas'
-import type { BodyPosition, BodyPositionFlags, PositionOfBody } from '#/atlas'
+import type { BodyPosition, BodyPositionFlags, EphemerisFallbackReason, EphemerisSource, PositionOfBody } from '#/atlas'
 import type { SkyObject } from '#/galaxy'
 import { coordinateInfo } from '#/mount'
 import type { Satellite } from '#/satellite'
@@ -91,9 +91,7 @@ export type PlanetHorizonsCode = '199' | '299' | '499' | '599' | '699' | '799' |
 // Requested calculation path. `fast` on PositionOfBody maps to `'fast'`; omitted/`false` is `'accurate'`.
 export type EphemerisMode = 'fast' | 'accurate'
 
-// Provider that actually produced a series. Distinct from EphemerisMode: a `fast` request may still
-// come from Horizons when no local model exists.
-export type EphemerisSource = 'offline' | 'horizons'
+export type { EphemerisFallbackReason, EphemerisSource }
 
 // Discriminated target. The handler translates route/UI ids; the service does not take opaque strings.
 export type EphemerisTarget =
@@ -128,6 +126,8 @@ export interface EphemerisSampleSeries {
 	readonly key: string
 	readonly source: EphemerisSource
 	readonly samples: ReadonlyMap<number, BodyPosition>
+	// Why Horizons was not used. Set only on an accurate-path fallback to a local model.
+	readonly fallbackReason?: EphemerisFallbackReason
 }
 
 // Internal provider. `supports` is a static table, never "try and see if it throws".
@@ -1021,10 +1021,10 @@ export class AtlasEphemeris {
 	// `signal` cancels this call. A shared Horizons tile stays in flight until every waiter has aborted.
 	async position(target: EphemerisTarget, req: PositionOfBody, signal?: AbortSignal): Promise<BodyPosition> {
 		const series = await this.resolve(target, req, true, signal)
-		if (series.source === 'horizons') return horizonsPositionAt(series.samples, req)
+		if (series.source === 'horizons') return withEphemerisOrigin(horizonsPositionAt(series.samples, req), series)
 		const sample = series.samples.get(sampleKey(target, req.time.utc, series.source))
 		if (!sample) throw new Error(`ephemeris not found for ${target.type} at ${formatTemporal(req.time.utc, undefined, 0)}`)
-		return sample
+		return withEphemerisOrigin(sample, series)
 	}
 
 	// Noon-to-noon Horizons tile, or the single offline sample, for `target` at `req`.
@@ -1128,7 +1128,7 @@ export class AtlasEphemeris {
 		if (this.breaker.isOpen()) {
 			if (useOffline) {
 				console.info({ event: 'ephemeris-fallback', target: request.target.type, source: 'offline', reason: 'breaker-open' })
-				return this.offline.samples(pointRequest(request, utc))
+				return withFallbackReason(await this.offline.samples(pointRequest(request, utc)), 'breaker-open')
 			}
 			if (skipWhenOpen) throw new HorizonsEphemerisError('horizons circuit breaker open')
 		}
@@ -1146,7 +1146,7 @@ export class AtlasEphemeris {
 
 				if (useOffline) {
 					console.info({ event: 'ephemeris-fallback', target: request.target.type, source: 'offline', reason: error instanceof Error ? error.name : 'transient' })
-					return this.offline.samples(pointRequest(request, utc))
+					return withFallbackReason(await this.offline.samples(pointRequest(request, utc)), fallbackReasonFromError(error))
 				}
 
 				throw new EphemerisUnavailableError('horizons unavailable', { cause: error })
@@ -1184,6 +1184,25 @@ function computeStartAndEndTime(time: UTCTime): readonly [Temporal, Temporal] {
 function sampleKey(target: EphemerisTarget, utc: number, source?: EphemerisSource): number {
 	if (source === 'offline' || target.type === 'star' || target.type === 'skyPoint') return utc
 	return Math.trunc(temporalSet(utc, 0, 's') / 1000)
+}
+
+// Copies `source` and `fallbackReason` onto a BodyPosition. Cached samples stay unmarked; the stamp
+// belongs to this response, not the tile.
+function withEphemerisOrigin(position: BodyPosition, series: EphemerisSampleSeries): BodyPosition {
+	if (position.source === series.source && position.fallbackReason === series.fallbackReason) return position
+	return series.fallbackReason === undefined ? { ...position, source: series.source } : { ...position, source: series.source, fallbackReason: series.fallbackReason }
+}
+
+// Marks a series as an accurate-path fallback so position() can expose why Horizons was not used.
+function withFallbackReason(series: EphemerisSampleSeries, fallbackReason: EphemerisFallbackReason): EphemerisSampleSeries {
+	return { ...series, fallbackReason }
+}
+
+// Maps a transient Horizons failure onto the public fallback reason.
+function fallbackReasonFromError(error: unknown): EphemerisFallbackReason {
+	if (error instanceof HorizonsTimeoutError || isAbortOrTimeoutError(error)) return 'timeout'
+	if (error instanceof HorizonsHttpError) return 'http'
+	return 'network'
 }
 
 // Single-instant sample request at `utc`. Cheap offline models do not build a noon-to-noon tile.

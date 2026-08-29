@@ -262,7 +262,7 @@ describe('provider selection', () => {
 
 		expect(calls).toHaveLength(0)
 		expect(offline.calls).toBe(1)
-		expect(position).toBe(DEFAULT_BODY_POSITION)
+		expect(position).toEqual({ ...DEFAULT_BODY_POSITION, source: 'offline' })
 	})
 
 	test('fast false uses Horizons when it supports the target', async () => {
@@ -275,6 +275,8 @@ describe('provider selection', () => {
 		expect(calls).toEqual(['599'])
 		expect(offline.calls).toBe(0)
 		expect(position).not.toBe(DEFAULT_BODY_POSITION)
+		expect(position.source).toBe('horizons')
+		expect(position.fallbackReason).toBeUndefined()
 	})
 
 	test('star and sky point stay offline when fast is false', async () => {
@@ -663,7 +665,8 @@ describe('Horizons fallback and circuit breaker', () => {
 		const position = await ephemeris.position(JUPITER, REQ_A)
 
 		expect(offline.calls).toBe(1)
-		expect(position).toBe(DEFAULT_BODY_POSITION)
+		expect(position.source).toBe('offline')
+		expect(position.fallbackReason).toBe('timeout')
 	})
 
 	test('network error with an offline model falls back', async () => {
@@ -671,9 +674,11 @@ describe('Horizons fallback and circuit breaker', () => {
 		const offline = stubProvider('offline', new Set(['planet']))
 		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider })
 
-		await ephemeris.position(JUPITER, REQ_A)
+		const position = await ephemeris.position(JUPITER, REQ_A)
 
 		expect(offline.calls).toBe(1)
+		expect(position.source).toBe('offline')
+		expect(position.fallbackReason).toBe('network')
 	})
 
 	test('HTTP 429 with an offline model falls back', async () => {
@@ -681,9 +686,11 @@ describe('Horizons fallback and circuit breaker', () => {
 		const offline = stubProvider('offline', new Set(['planet']))
 		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider })
 
-		await ephemeris.position(JUPITER, REQ_A)
+		const position = await ephemeris.position(JUPITER, REQ_A)
 
 		expect(offline.calls).toBe(1)
+		expect(position.source).toBe('offline')
+		expect(position.fallbackReason).toBe('http')
 	})
 
 	test('HTTP 500 with an offline model falls back', async () => {
@@ -747,9 +754,11 @@ describe('Horizons fallback and circuit breaker', () => {
 		for (let i = 0; i < HORIZONS_BREAKER_FAILURE_THRESHOLD; i++) await ephemeris.position(JUPITER, REQ_A)
 		expect(calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD)
 
-		await ephemeris.position(JUPITER, REQ_A)
+		const position = await ephemeris.position(JUPITER, REQ_A)
 		expect(calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD)
 		expect(offline.calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD + 1)
+		expect(position.source).toBe('offline')
+		expect(position.fallbackReason).toBe('breaker-open')
 	})
 
 	test('an open breaker without an offline model still calls Horizons when fast is true', async () => {

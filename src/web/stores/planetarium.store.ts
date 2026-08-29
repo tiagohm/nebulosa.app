@@ -346,9 +346,9 @@ async function positionOfMovingBody(body: MovingBody, time: Time | number): Prom
 	const req: PositionOfBody = {
 		time: { utc: typeof time === 'number' ? time : timeToUnixMillis(time), offset: settingsStore.state.time.offset },
 		location: settingsStore.state.location,
+		fast: true,
 	}
 
-	// TODO: Use fast mode
 	const position = body.id === '10' ? await Api.Atlas.positionOfSun(req) : body.id === '301' ? await Api.Atlas.positionOfMoon(req) : await Api.Atlas.positionOfPlanet(req, body.id)
 
 	if (position) {

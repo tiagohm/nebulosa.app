@@ -16,7 +16,10 @@ import type { Twilight } from '#/sun'
 
 export type AtlasStore = typeof atlasStore
 
-export type AtlasTab = 'sun' | 'moon' | 'planet' | 'asteroid' | 'galaxy' | 'satellite'
+export type AtlasTab = (typeof TABS)[number]
+
+const TABS = ['sun', 'moon', 'planet', 'asteroid', 'galaxy', 'satellite'] as const
+const TICK_INTERVAL = 10000
 
 export interface BookmarkItem {
 	readonly name: string
@@ -55,7 +58,7 @@ function mount() {
 
 	mounted = true
 
-	const timer = setInterval(tick, 60000)
+	const timer = setInterval(tick, TICK_INTERVAL)
 	u[0] = () => clearInterval(timer)
 
 	void tick()
@@ -71,6 +74,8 @@ function unmount() {
 }
 
 async function tick(tab?: AtlasTab, utc?: Temporal) {
+	if (!mounted) return
+
 	const { offset } = settingsStore.state.time
 
 	// utc ??= state.calendar.manual ? settingsStore.state.time.utc : Date.now()
@@ -92,6 +97,8 @@ async function tick(tab?: AtlasTab, utc?: Temporal) {
 
 	if (tab) {
 		void state[tab]?.tick(settingsStore.state.time, dateHasChanged)
+	} else {
+		for (const tab of TABS) void state[tab]?.tick(settingsStore.state.time, dateHasChanged)
 	}
 }
 
@@ -109,7 +116,7 @@ export function isLocationChanged(a: GeographicCoordinate, b: GeographicCoordina
 }
 
 export function isTimeChanged(a: UTCTime, b: UTCTime) {
-	return Math.abs(a.utc - b.utc) >= 60000 || a.offset !== b.offset
+	return Math.abs(a.utc - b.utc) >= TICK_INTERVAL || a.offset !== b.offset
 }
 
 function startTimeFrom(utc: number, offset: number) {

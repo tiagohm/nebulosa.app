@@ -276,14 +276,14 @@ test('twilight', async () => {
 	const twilight = await atlas.twilight(POSITION_OF_BODY)
 
 	expect(formatTemporal(twilight.start[0])).toBe('2025-07-27 12:00:00.000')
-	expect(formatTemporal(twilight.dusk.civil[0])).toBe('2025-07-27 17:37:00.000')
-	expect(formatTemporal(twilight.dusk.nautical[0])).toBe('2025-07-27 18:04:00.000')
-	expect(formatTemporal(twilight.dusk.astronomical[0])).toBe('2025-07-27 18:31:00.000')
-	expect(formatTemporal(twilight.night[0])).toBe('2025-07-27 18:58:00.000')
-	expect(formatTemporal(twilight.dawn.astronomical[0])).toBe('2025-07-28 05:14:00.000')
-	expect(formatTemporal(twilight.dawn.nautical[0])).toBe('2025-07-28 05:40:00.000')
-	expect(formatTemporal(twilight.dawn.civil[0])).toBe('2025-07-28 06:07:00.000')
-	expect(formatTemporal(twilight.day[0])).toBe('2025-07-28 06:35:00.000')
+	expect(formatTemporal(twilight.dusk.civil[0])).toBe('2025-07-27 17:37:11.537')
+	expect(formatTemporal(twilight.dusk.nautical[0])).toBe('2025-07-27 18:04:55.161')
+	expect(formatTemporal(twilight.dusk.astronomical[0])).toBe('2025-07-27 18:31:57.241')
+	expect(formatTemporal(twilight.night[0])).toBe('2025-07-27 18:58:42.326')
+	expect(formatTemporal(twilight.dawn.astronomical[0])).toBe('2025-07-28 05:14:14.919')
+	expect(formatTemporal(twilight.dawn.nautical[0])).toBe('2025-07-28 05:40:58.452')
+	expect(formatTemporal(twilight.dawn.civil[0])).toBe('2025-07-28 06:07:58.692')
+	expect(formatTemporal(twilight.day[0])).toBe('2025-07-28 06:35:40.071')
 	expect(formatTemporal(twilight.end[0])).toBe('2025-07-28 12:00:00.000')
 
 	expect(twilight.start[1]).toBe(0)
@@ -367,6 +367,12 @@ describe('minor planet', () => {
 			expect(result.orbitType).toBe('Main-belt Asteroid')
 			expect(result.parameters).toBeDefined()
 			expect(result.parameters).toHaveLength(25)
+			expect(result.elements).toBeDefined()
+			expect(result.elements!.ec).toBeCloseTo(0.07957631994408416, 12)
+			expect('a' in result.elements!.tpqr && result.elements!.tpqr.a).toBe(2.765615651508659)
+			expect(result.elements!.h).toBe(3.35)
+			expect(result.elements!.g).toBe(0.12)
+			expect(result.elements!.referenceEclipticFrame).toBe('J2000')
 		}
 	})
 
@@ -400,8 +406,8 @@ test('position of jupiter', async () => {
 	expect(position.names).toBeUndefined()
 })
 
-test('position of sky object', () => {
-	const position = atlas.positionOfSkyObject(POSITION_OF_BODY, '32263')
+test('position of sky object', async () => {
+	const position = await atlas.positionOfSkyObject(POSITION_OF_BODY, '32263')
 
 	expect(formatRA(position.equatorial[0], true)).toBe('06 44 58')
 	expect(formatRA(position.equatorialJ2000[0], true)).toBe('06 45 09')
@@ -427,8 +433,8 @@ test('chart of sky object', () => {
 	expect(formatALT(chart[1440], true)).toBe('+65 54 26')
 })
 
-test('position of sky point', () => {
-	const position = atlas.positionOfSkyPoint(POSITION_OF_BODY, '06 44 58', '-16 45 03')
+test('position of sky point', async () => {
+	const position = await atlas.positionOfSkyPoint(POSITION_OF_BODY, '06 44 58', '-16 45 03')
 
 	expect(formatRA(position.equatorial[0], true)).toBe('06 44 58')
 	expect(formatRA(position.equatorialJ2000[0], true)).toBe('06 43 49')

@@ -142,7 +142,7 @@ export class AtlasHandler {
 
 	async chartOfSun(req: ChartOfBody) {
 		await this.positionOfSun(req)
-		return this.ephemeris.chartFromHorizons('10', req.time)
+		return this.ephemeris.chartFromHorizons('10', req)
 	}
 
 	seasons(req: PositionOfBody): SolarSeasons {
@@ -159,7 +159,7 @@ export class AtlasHandler {
 
 		const [startTime, endTime] = this.computeStartAndEndTime(req.time)
 		const offset = req.time.offset * 60000
-		const sun = this.ephemeris.cachedPositions('10')
+		const sun = this.ephemeris.cachedPositions('10', req)
 		if (!sun) throw new Error('object not found: 10')
 
 		const twilight = structuredClone(EMPTY_TWILIGHT)
@@ -244,7 +244,7 @@ export class AtlasHandler {
 
 	async chartOfMoon(req: ChartOfBody) {
 		await this.positionOfMoon(req)
-		return this.ephemeris.chartFromHorizons('301', req.time)
+		return this.ephemeris.chartFromHorizons('301', req)
 	}
 
 	moonPhases(req: PositionOfBody) {
@@ -316,7 +316,7 @@ export class AtlasHandler {
 
 	async chartOfPlanet(code: string, req: ChartOfBody) {
 		await this.positionOfPlanet(code, req)
-		return this.ephemeris.chartFromHorizons(code, req.time)
+		return this.ephemeris.chartFromHorizons(code, req)
 	}
 
 	async searchMinorPlanet(req: SearchMinorPlanet): Promise<MinorPlanet | undefined> {
@@ -724,7 +724,7 @@ export class AtlasHandler {
 	async chartOfSatellite(id: string | number, req: ChartOfBody) {
 		const satellite = this.satellite(id)
 		await this.ephemeris.positionFromHorizons(satellite, req)
-		return this.ephemeris.chartFromHorizons(`TLE:${satellite.id}`, req.time)
+		return this.ephemeris.chartFromHorizons(satellite, req)
 	}
 
 	private skyObject(id: string | number) {

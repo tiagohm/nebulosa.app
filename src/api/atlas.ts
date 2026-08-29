@@ -1,8 +1,6 @@
 import { Database } from 'bun:sqlite'
 import type { SQLQueryBindings } from 'bun:sqlite'
 import { join } from 'path'
-import { observer } from 'nebulosa/src/adapters/ephemeris/horizons'
-import type { Quantity } from 'nebulosa/src/adapters/ephemeris/horizons'
 import { closeApproaches, search } from 'nebulosa/src/adapters/orbits/sbd'
 import { nearestLunarApsis, nearestLunarEclipse, nearestLunarPhase } from 'nebulosa/src/astronomy/bodies/moon'
 import type { LunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
@@ -25,22 +23,18 @@ import { computeLocalSolarEclipseCircumstances, computeLocalSolarEclipseViewGeom
 import { computePolynomialBesselianElements, computeSolarEclipseMapGeometry, solarEclipseMapToSvgPaths } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import type { PolynomialBesselianElements, SolarEclipseMapGeometryOptions } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
-import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { PlateCarree } from 'nebulosa/src/astronomy/projections/projection'
 import { iersb } from 'nebulosa/src/astronomy/time/iers'
-import { daysInMonth, formatTemporal, parseTemporal, temporalAdd, temporalFromTime, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/astronomy/time/temporal'
-import type { Temporal } from 'nebulosa/src/astronomy/time/temporal'
+import { daysInMonth, temporalAdd, temporalFromTime, temporalStartOfDay, temporalToDate } from 'nebulosa/src/astronomy/time/temporal'
 import { Timescale, time, timeNow, timeToUnixMillis, timeUnix, timeYMDHMS, toJulianDay, tt } from 'nebulosa/src/astronomy/time/time'
 import type { Time } from 'nebulosa/src/astronomy/time/time'
-import { AU_KM, DAYSEC, DEG2RAD, J2000, MOON_SYNODIC_DAYS, ONE_KILOPARSEC, PIOVERTWO, SPEED_OF_LIGHT, TAU } from 'nebulosa/src/core/constants'
+import { AU_KM, DAYSEC, DEG2RAD, J2000, MOON_SYNODIC_DAYS, ONE_KILOPARSEC, PIOVERTWO, TAU } from 'nebulosa/src/core/constants'
 import type { Writable } from 'nebulosa/src/core/types'
 import { expectedPierSide, meridianTimeIn } from 'nebulosa/src/devices/indi/device'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
-import type { CsvRow } from 'nebulosa/src/io/csv'
 import { bufferSource, readableStreamSource, readLines } from 'nebulosa/src/io/io'
-import { deg, parseAngle, toDeg } from 'nebulosa/src/math/units/angle'
+import { deg, parseAngle } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-import { toMeter } from 'nebulosa/src/math/units/distance'
 import { makeTime } from 'src/api/util'
 import nebulosa from 'src/data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import { DEFAULT_MINOR_PLANET } from '#/asteroid'
@@ -53,11 +47,10 @@ import { SATELLITE_GROUP_TYPES } from '#/satellite'
 import type { SatelliteGroupType, SearchSatellite, Satellite } from '#/satellite'
 import { EMPTY_TWILIGHT, SOLAR_IMAGE_SOURCE_URLS } from '#/sun'
 import type { ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, FindSolarEclipse, SolarEclipseMap, SolarImageSource, SolarSeasons } from '#/sun'
+import { AtlasEphemeris } from './atlas.ephemeris'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import type { NotificationHandler } from './notification'
-
-const HORIZONS_QUANTITIES: Quantity[] = [1, 2, 4, 9, 21, 10, 23, 29]
 
 const DEFAULT_SOLAR_IMAGE_SOURCE: SolarImageSource = 'HMI_INTENSITYGRAM_FLATTENED'
 const MAX_SEARCH_LIMIT = 100
@@ -112,8 +105,7 @@ export function preciseSunMoonPosition(time: Time) {
 }
 
 export class AtlasHandler {
-	private readonly ephemeris: Record<string, Map<number, BodyPosition>> & { location?: GeographicCoordinate } = {}
-	private readonly horizonsObserverTasks = new Map<string, Promise<CsvRow[]>>()
+	private readonly ephemeris = new AtlasEphemeris()
 	private readonly solarEclipsePolynomialBesselianElements = new Map<number, PolynomialBesselianElements>()
 
 	constructor(readonly notification?: NotificationHandler) {}
@@ -145,12 +137,12 @@ export class AtlasHandler {
 	}
 
 	positionOfSun(req: PositionOfBody) {
-		return this.computeFromHorizonsPositionAt('10', req)
+		return this.ephemeris.positionFromHorizons('10', req)
 	}
 
 	async chartOfSun(req: ChartOfBody) {
 		await this.positionOfSun(req)
-		return this.computeChart('10', req.time)
+		return this.ephemeris.chartFromHorizons('10', req.time)
 	}
 
 	seasons(req: PositionOfBody): SolarSeasons {
@@ -167,7 +159,8 @@ export class AtlasHandler {
 
 		const [startTime, endTime] = this.computeStartAndEndTime(req.time)
 		const offset = req.time.offset * 60000
-		const sun = this.ephemeris['10']
+		const sun = this.ephemeris.cachedPositions('10')
+		if (!sun) throw new Error('object not found: 10')
 
 		const twilight = structuredClone(EMPTY_TWILIGHT)
 
@@ -246,12 +239,12 @@ export class AtlasHandler {
 	}
 
 	positionOfMoon(req: PositionOfBody) {
-		return this.computeFromHorizonsPositionAt('301', req)
+		return this.ephemeris.positionFromHorizons('301', req)
 	}
 
 	async chartOfMoon(req: ChartOfBody) {
 		await this.positionOfMoon(req)
-		return this.computeChart('301', req.time)
+		return this.ephemeris.chartFromHorizons('301', req.time)
 	}
 
 	moonPhases(req: PositionOfBody) {
@@ -318,12 +311,12 @@ export class AtlasHandler {
 	}
 
 	positionOfPlanet(code: string, req: PositionOfBody) {
-		return this.computeFromHorizonsPositionAt(code, req)
+		return this.ephemeris.positionFromHorizons(code, req)
 	}
 
 	async chartOfPlanet(code: string, req: ChartOfBody) {
 		await this.positionOfPlanet(code, req)
-		return this.computeChart(code, req.time)
+		return this.ephemeris.chartFromHorizons(code, req.time)
 	}
 
 	async searchMinorPlanet(req: SearchMinorPlanet): Promise<MinorPlanet | undefined> {
@@ -725,13 +718,13 @@ export class AtlasHandler {
 
 	positionOfSatellite(id: string | number, req: PositionOfBody) {
 		const satellite = this.satellite(id)
-		return this.computeFromHorizonsPositionAt(satellite, req)
+		return this.ephemeris.positionFromHorizons(satellite, req)
 	}
 
 	async chartOfSatellite(id: string | number, req: ChartOfBody) {
 		const satellite = this.satellite(id)
-		await this.computeFromHorizonsPositionAt(satellite, req)
-		return this.computeChart(`TLE:${satellite.id}`, req.time)
+		await this.ephemeris.positionFromHorizons(satellite, req)
+		return this.ephemeris.chartFromHorizons(`TLE:${satellite.id}`, req.time)
 	}
 
 	private skyObject(id: string | number) {
@@ -775,82 +768,8 @@ export class AtlasHandler {
 		}
 	}
 
-	async computeFromHorizonsPositionAt(input: string | Omit<Satellite, 'name' | 'groups'>, req: PositionOfBody) {
-		const key = Math.trunc(temporalSet(req.time.utc, 0, 's') / 1000)
-		const id = typeof input === 'string' ? input : `TLE:${input.id}`
-		const [startTime, endTime] = this.computeStartAndEndTime(req.time)
-
-		const ephemeris = this.ephemeris[id]
-		let position: Writable<BodyPosition> | undefined = ephemeris?.get(key)
-		const { longitude, latitude, elevation } = req.location
-
-		if (!ephemeris || !position || latitude !== this.ephemeris.location?.latitude || longitude !== this.ephemeris.location?.longitude || elevation !== this.ephemeris.location?.elevation || !ephemeris.has(Math.trunc(startTime / 1000)) || !ephemeris.has(Math.trunc(endTime / 1000))) {
-			const taskId = `${id}${startTime}${endTime}${longitude}${latitude}${elevation}`
-			let horizonsObserverTask = this.horizonsObserverTasks.get(taskId)
-
-			if (!horizonsObserverTask) {
-				console.info(`fetching ephemeris for ${id} at time [${formatTemporal(startTime, undefined, 0)} - ${formatTemporal(endTime, undefined, 0)}] and location [${toDeg(latitude)}, ${toDeg(longitude)}, ${toMeter(elevation).toFixed(0)}]`)
-				horizonsObserverTask = observer(input, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1 })
-				this.horizonsObserverTasks.set(taskId, horizonsObserverTask)
-				const onCompleted = () => this.horizonsObserverTasks.delete(taskId)
-				horizonsObserverTask.then(onCompleted, onCompleted)
-			}
-
-			const map = ephemeris ?? new Map()
-			makeBodyPositionFromHorizons(await horizonsObserverTask, map)
-			this.ephemeris[id] = map
-			this.ephemeris.location = req.location
-			position = map.get(key)
-			if (!position) throw new Error(`ephemeris not found for ${id} at ${formatTemporal(req.time.utc, undefined, 0)}`)
-		}
-
-		const time = makeTime(req.time.utc, req.location)
-		const lst = localSiderealTime(time, req.location, true)
-
-		const [rightAscension, declination] = position.equatorial
-		position.pierSide = expectedPierSide(rightAscension, declination, lst)
-		position.meridianTimeIn = meridianTimeIn(rightAscension, lst)
-		position.lst = lst
-		Object.assign(position.ecliptic, equatorialToEcliptic(rightAscension, declination, time))
-		Object.assign(position.galactic, equatorialToGalatic(position.equatorialJ2000[0], position.equatorialJ2000[1]))
-
-		return position
-	}
-
-	computeChart(code: string, time: UTCTime) {
-		const positions = this.ephemeris[code]
-
-		if (!positions) throw new Error(`object not found: ${code}`)
-
-		const [startTime, endTime] = this.computeStartAndEndTime(time)
-		console.info(`generating chart for ${code} at time [${formatTemporal(startTime, undefined, 0)} - ${formatTemporal(endTime, undefined, 0)}]`)
-
-		const seconds = Math.trunc(startTime / 1000)
-		const chart = new Array<number>(1441)
-
-		for (let i = 0; i <= 1440; i++) {
-			const position = positions.get(seconds + i * 60)
-			if (!position) throw new Error(`ephemeris not found for ${code} at chart index ${i}`)
-			chart[i] = position.horizontal[1]
-		}
-
-		return chart
-	}
-
-	computeStartAndEndTime(time: UTCTime): readonly [Temporal, Temporal] {
-		const { utc, offset } = time
-		const local = temporalAdd(utc, offset, 'm')
-		const hour = temporalGet(local, 'h')
-
-		let startTime = temporalStartOfDay(local)
-		// if not passed noon, go to the previous day
-		if (hour < 12) startTime = temporalSubtract(startTime, 1, 'd')
-		// set to UTC noon + local offset (if enabled)
-		startTime = temporalAdd(startTime, 720 - offset, 'm')
-		// set end time to noon of the next day
-		const endTime = temporalAdd(startTime, 1, 'd')
-
-		return [startTime, endTime]
+	computeStartAndEndTime(time: UTCTime) {
+		return this.ephemeris.computeStartAndEndTime(time)
 	}
 
 	async refreshEarthOrientationData() {
@@ -968,36 +887,4 @@ function solarImageSource(source: unknown): SolarImageSource {
 
 function isSatelliteGroup(value: unknown): value is SatelliteGroupType {
 	return typeof value === 'string' && SATELLITE_GROUPS.has(value as SatelliteGroupType)
-}
-
-function makeBodyPositionFromHorizons(ephemeris: CsvRow[], output: Map<number, BodyPosition>) {
-	if (ephemeris.length === 0) throw new Error('empty ephemeris')
-
-	const seconds = Math.trunc(parseTemporal(ephemeris[0][0], 'YYYY-MMM-DD HH:mm') / 1000)
-
-	for (let i = 0; i < ephemeris.length; i++) {
-		const e = ephemeris[i]
-		const lightTime = Number.parseFloat(e[11]) || 0
-		const distance = lightTime * ((SPEED_OF_LIGHT * 0.06) / AU_KM) // AU
-
-		const position = {
-			equatorial: [parseAngle(e[5])!, parseAngle(e[6])!],
-			equatorialJ2000: [parseAngle(e[3])!, parseAngle(e[4])!],
-			horizontal: [parseAngle(e[7])!, parseAngle(e[8])!],
-			magnitude: e[9] === 'n.a.' ? null : Number.parseFloat(e[9]),
-			constellation: e[15].toUpperCase() as never,
-			distance,
-			illuminated: Number.parseFloat(e[12]),
-			elongation: parseAngle(e[13])!,
-			leading: e[14] === '/L',
-			// Computed on-demand
-			galactic: [0, 0],
-			ecliptic: [0, 0],
-			pierSide: 'NEITHER',
-			lst: 0,
-			meridianTimeIn: 0,
-		} satisfies BodyPosition
-
-		output.set(seconds + i * 60, position)
-	}
 }

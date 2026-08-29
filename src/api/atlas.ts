@@ -44,8 +44,8 @@ import type { PlanetariumSearch } from '#/planetarium'
 import { SATELLITE_GROUP_TYPES } from '#/satellite'
 import type { SatelliteGroupType, SearchSatellite, Satellite } from '#/satellite'
 import { EMPTY_TWILIGHT, SOLAR_IMAGE_SOURCE_URLS } from '#/sun'
-import type { ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, FindSolarEclipse, SolarEclipseMap, SolarImageSource, SolarSeasons } from '#/sun'
-import { AtlasEphemeris, planetTargetFromCode } from './atlas.ephemeris'
+import type { ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, FindSolarEclipse, SolarEclipseMap, SolarImageSource, SolarSeasons, TwilightTime } from '#/sun'
+import { AtlasEphemeris, findCrossing, planetTargetFromCode } from './atlas.ephemeris'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import type { NotificationHandler } from './notification'
@@ -157,6 +157,7 @@ export class AtlasHandler {
 		const [startTime, endTime] = this.computeStartAndEndTime(req.time)
 		const offset = req.time.offset * 60000
 		const sun = series.samples
+		const interpolateReq = { ...req, horizontal: true as const }
 
 		const twilight = structuredClone(EMPTY_TWILIGHT)
 
@@ -164,6 +165,7 @@ export class AtlasHandler {
 		twilight.end = [endTime + offset, 1441]
 
 		let step = 0
+		let lastTime = startTime
 
 		for (let time = startTime, i = 0; time <= endTime; time += 60000, i++) {
 			const position = sun.get(Math.trunc(time / 1000))
@@ -172,29 +174,69 @@ export class AtlasHandler {
 				const altitude = position.horizontal[1]
 
 				if (step === 0) {
-					if (altitude >= 0) twilight.dusk.civil = [time + offset, i]
-					else step = 1
+					if (altitude >= 0) {
+						twilight.dusk.civil = [time + offset, i]
+						lastTime = time
+					} else {
+						if (i > 0) twilight.dusk.civil = refineTwilightEvent(sun, interpolateReq, lastTime, time, 0, startTime, offset, signal)
+						step = 1
+					}
 				} else if (step === 1) {
-					if (altitude >= NAUTICAL_ALTITUDE) twilight.dusk.nautical = [time + offset, i]
-					else step = 2
+					if (altitude >= NAUTICAL_ALTITUDE) {
+						twilight.dusk.nautical = [time + offset, i]
+						lastTime = time
+					} else {
+						if (twilight.dusk.nautical[0] !== 0) twilight.dusk.nautical = refineTwilightEvent(sun, interpolateReq, lastTime, time, NAUTICAL_ALTITUDE, startTime, offset, signal)
+						step = 2
+					}
 				} else if (step === 2) {
-					if (altitude >= ASTRONOMICAL_ALTITUDE) twilight.dusk.astronomical = [time + offset, i]
-					else step = 3
+					if (altitude >= ASTRONOMICAL_ALTITUDE) {
+						twilight.dusk.astronomical = [time + offset, i]
+						lastTime = time
+					} else {
+						if (twilight.dusk.astronomical[0] !== 0) twilight.dusk.astronomical = refineTwilightEvent(sun, interpolateReq, lastTime, time, ASTRONOMICAL_ALTITUDE, startTime, offset, signal)
+						step = 3
+					}
 				} else if (step === 3) {
-					if (altitude >= NIGHT_ALTITUDE) twilight.night = [time + offset, i]
-					else step = 4
+					if (altitude >= NIGHT_ALTITUDE) {
+						twilight.night = [time + offset, i]
+						lastTime = time
+					} else {
+						if (twilight.night[0] !== 0) twilight.night = refineTwilightEvent(sun, interpolateReq, lastTime, time, NIGHT_ALTITUDE, startTime, offset, signal)
+						step = 4
+					}
 				} else if (step === 4) {
-					if (altitude < NIGHT_ALTITUDE) twilight.dawn.astronomical = [time + offset, i]
-					else step = 5
+					if (altitude < NIGHT_ALTITUDE) {
+						twilight.dawn.astronomical = [time + offset, i]
+						lastTime = time
+					} else {
+						if (twilight.dawn.astronomical[0] !== 0) twilight.dawn.astronomical = refineTwilightEvent(sun, interpolateReq, lastTime, time, NIGHT_ALTITUDE, startTime, offset, signal)
+						step = 5
+					}
 				} else if (step === 5) {
-					if (altitude < ASTRONOMICAL_ALTITUDE) twilight.dawn.nautical = [time + offset, i]
-					else step = 6
+					if (altitude < ASTRONOMICAL_ALTITUDE) {
+						twilight.dawn.nautical = [time + offset, i]
+						lastTime = time
+					} else {
+						if (twilight.dawn.nautical[0] !== 0) twilight.dawn.nautical = refineTwilightEvent(sun, interpolateReq, lastTime, time, ASTRONOMICAL_ALTITUDE, startTime, offset, signal)
+						step = 6
+					}
 				} else if (step === 6) {
-					if (altitude < NAUTICAL_ALTITUDE) twilight.dawn.civil = [time + offset, i]
-					else step = 7
+					if (altitude < NAUTICAL_ALTITUDE) {
+						twilight.dawn.civil = [time + offset, i]
+						lastTime = time
+					} else {
+						if (twilight.dawn.civil[0] !== 0) twilight.dawn.civil = refineTwilightEvent(sun, interpolateReq, lastTime, time, NAUTICAL_ALTITUDE, startTime, offset, signal)
+						step = 7
+					}
 				} else if (step === 7) {
-					if (altitude < 0) twilight.day = [time + offset, i]
-					else break
+					if (altitude < 0) {
+						twilight.day = [time + offset, i]
+						lastTime = time
+					} else {
+						if (twilight.day[0] !== 0) twilight.day = refineTwilightEvent(sun, interpolateReq, lastTime, time, 0, startTime, offset, signal)
+						break
+					}
 				}
 			}
 		}
@@ -760,6 +802,15 @@ export function atlas(atlas: AtlasHandler) {
 		'/atlas/planetarium': { POST: async (req) => response(atlas.planetarium(await req.json())) },
 		'/atlas/iers': { GET: async () => response(await atlas.iers()) },
 	} as const satisfies Endpoints
+}
+
+// Last-sample-in-region plus first-sample-out, refined to the altitude crossing. `t0`/`t1` are Unix
+// milliseconds on the 60 s grid; the returned timestamp includes the observer UTC offset, and the
+// index is the noon-to-noon chart sample of the incoming side of the zero.
+function refineTwilightEvent(samples: ReadonlyMap<number, BodyPosition>, req: PositionOfBody, t0: number, t1: number, threshold: Angle, origin: number, offset: number, signal?: AbortSignal): TwilightTime {
+	const crossing = findCrossing(samples, req, t0, t1, (position) => position.horizontal[1] - threshold, { origin, signal })
+	if (!crossing) return [t0 + offset, Math.floor((t0 - origin) / 60000)]
+	return [crossing.time + offset, crossing.index]
 }
 
 function finiteNumber(value: unknown): value is number {

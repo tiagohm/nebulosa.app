@@ -80,7 +80,7 @@ function ConnectionItem(item: Connection, index: number, selected: boolean, plac
 							</>
 						)}
 						<Icons.Clock />
-						<span className="shrink-0">{item.connectedAt ? formatTemporal(item.connectedAt, 'YYYY-MM-DD HH:mm:ss') : 'never'}</span>
+						<span className="shrink-0">{item.connectedAt ? formatTemporal(item.connectedAt, 'YYYY-MM-DD HH:mm:ss', true) : 'never'}</span>
 					</span>
 				</div>
 			</div>

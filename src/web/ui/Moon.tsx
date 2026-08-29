@@ -29,24 +29,22 @@ export const Moon = memo(({ api }: IDockviewPanelProps) => {
 	)
 })
 
-function mapLunarPhase(phase: LunarPhase, time: number, offset: number) {
-	if (phase === 'NEW') return <AstronomicalEvent format="DD HH:mm" icon={Icons.MoonNew} key={time} label="NEW MOON" offset={offset} time={time} />
-	if (phase === 'FIRST_QUARTER') return <AstronomicalEvent format="DD HH:mm" icon={Icons.MoonFirstQuarter} key={time} label="FIRST QUARTER" offset={offset} time={time} />
-	if (phase === 'FULL') return <AstronomicalEvent format="DD HH:mm" icon={Icons.MoonFull} key={time} label="FULL MOON" offset={offset} time={time} />
-	if (phase === 'LAST_QUARTER') return <AstronomicalEvent format="DD HH:mm" icon={Icons.MoonLastQuarter} key={time} label="LAST QUARTER" offset={offset} time={time} />
+function mapLunarPhase(phase: LunarPhase, time: number) {
+	if (phase === 'NEW') return <AstronomicalEvent format="DD HH:mm" icon={Icons.MoonNew} key={time} label="NEW MOON" time={time} />
+	if (phase === 'FIRST_QUARTER') return <AstronomicalEvent format="DD HH:mm" icon={Icons.MoonFirstQuarter} key={time} label="FIRST QUARTER" time={time} />
+	if (phase === 'FULL') return <AstronomicalEvent format="DD HH:mm" icon={Icons.MoonFull} key={time} label="FULL MOON" time={time} />
+	if (phase === 'LAST_QUARTER') return <AstronomicalEvent format="DD HH:mm" icon={Icons.MoonLastQuarter} key={time} label="LAST QUARTER" time={time} />
 	return null
 }
 
 const MoonPhases = memo(() => {
 	const { phases } = useSnapshot(moonStore.state)
-	const { offset } = useSnapshot(moonStore.state.request.time)
 
-	return <div className="flex flex-col gap-0 text-xs">{phases.map(([phase, time]) => mapLunarPhase(phase, time, offset))}</div>
+	return <div className="flex flex-col gap-0 text-xs">{phases.map(([phase, time]) => mapLunarPhase(phase, time))}</div>
 })
 
 const LunarEclipses = memo(() => {
 	const { eclipses } = useSnapshot(moonStore.state)
-	const { offset } = useSnapshot(moonStore.state.request.time)
 
 	if (eclipses.length === 0) return null
 
@@ -54,19 +52,18 @@ const LunarEclipses = memo(() => {
 
 	return (
 		<div className="flex flex-col gap-0 text-xs">
-			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} key={next.maximalTime.day} label={next.type} offset={offset} time={temporalFromTime(next.maximalTime)} onClick={moonStore.showLunarEclipse} />
+			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} key={next.maximalTime.day} label={next.type} time={temporalFromTime(next.maximalTime)} onClick={moonStore.showLunarEclipse} />
 		</div>
 	)
 })
 
 const LunarApsis = memo(() => {
 	const { apsis } = useSnapshot(moonStore.state)
-	const { offset } = useSnapshot(moonStore.state.request.time)
 
 	return (
 		<div className="flex flex-col gap-0 text-xs">
-			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} label={`APOGEE (${formatDistance(apsis[0].distance)})`} offset={offset} time={temporalFromTime(apsis[0].time)} />
-			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} label={`PERIGEE (${formatDistance(apsis[1].distance)})`} offset={offset} time={temporalFromTime(apsis[1].time)} />
+			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} label={`APOGEE (${formatDistance(apsis[0].distance)})`} time={temporalFromTime(apsis[0].time)} />
+			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} label={`PERIGEE (${formatDistance(apsis[1].distance)})`} time={temporalFromTime(apsis[1].time)} />
 		</div>
 	)
 })

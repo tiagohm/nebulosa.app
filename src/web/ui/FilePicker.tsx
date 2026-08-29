@@ -109,7 +109,7 @@ const Files = memo(() => {
 
 				const isSelected = selectedPaths.has(item.path)
 				const Icon = item.directory ? Icons.Folder : Icons.File
-				const updatedAt = formatTemporal(item.updatedAt, 'YYYY-MM-DD HH:mm:ss')
+				const updatedAt = formatTemporal(item.updatedAt, 'YYYY-MM-DD HH:mm:ss', true)
 				const metadata = item.directory ? updatedAt : `${updatedAt} | ${formatFileSize(item.size)}`
 
 				return (

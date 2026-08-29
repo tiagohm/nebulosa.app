@@ -69,7 +69,7 @@ export function imageSaveStore(viewer: ImageViewerStore) {
 			const response = await Api.Image.open({ path: viewer.state.path, transformation })
 
 			if (response) {
-				saveAs(response.blob, `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS')}.${state.format}`)
+				saveAs(response.blob, `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS', true)}.${state.format}`)
 			}
 		} finally {
 			state.loading = false

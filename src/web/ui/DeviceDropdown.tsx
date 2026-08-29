@@ -34,12 +34,13 @@ function DeviceItem(device: DeviceState<Device> | undefined) {
 
 export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onValueChange, disabled, disallowNoneSelection = false, label, showLabel = false, showLabelOnEmpty = showLabel, color, startContent, icon: Icon, ...props }: DeviceDropdownProps<T>) {
 	const state = equipmentStore.state[type]
-	const devices = useSnapshot(state)
+	const length = useSnapshot(state).length
 
-	const items = new Array<DeviceState<Device> | undefined>(devices.length + (disallowNoneSelection ? 0 : 1))
+	const items = new Array<DeviceState<Device> | undefined>(length + (disallowNoneSelection ? 0 : 1))
 
-	if (!disallowNoneSelection) items[0] = undefined
-	for (let i = disallowNoneSelection ? 0 : 1, p = 0; p < devices.length; i++, p++) items[i] = devices[p]
+	let i = 0
+	if (!disallowNoneSelection) items[i++] = undefined
+	for (let p = 0; p < length; i++, p++) items[i] = state[p]
 
 	function handleAction(index: number) {
 		if (index < 0 || index >= items.length) return

@@ -6,10 +6,11 @@ import { WorldMap, worldMapCoordinateToPoint } from '@ui/components/WorldMap'
 import { Icons } from '@ui/Icon'
 import { LocalViewOrientationModeButtonGroup } from '@ui/LocalViewOrientationModeButtonGroup'
 import { LunarEclipseContactKindButtonGroup } from '@ui/LunarEclipseContactKindButtonGroup'
+import type { EclipseGeoPoint } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
 import type { LocalLunarEclipseEvent, LocalLunarEclipseSvgShape } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
 import type { LunarEclipseContactKind } from 'nebulosa/src/astronomy/events/eclipse/lunar/map'
 import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
-import type { Point } from 'nebulosa/src/math/numerical/geometry'
+import { time } from 'nebulosa/src/astronomy/time/time'
 import { formatAZ, toDeg } from 'nebulosa/src/math/units/angle'
 import { Fragment, memo, useEffect } from 'react'
 import type { CSSProperties } from 'react'
@@ -21,7 +22,7 @@ export const LunarEclipseMap = memo(() => {
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<Header />
-			<div className="col-span-full flex flex-row items-center gap-2">
+			<div className="col-span-full flex flex-col gap-2">
 				<Map />
 				<Info />
 			</div>
@@ -35,14 +36,14 @@ const Header = memo(() => {
 	return (
 		<div className="col-span-full flex items-center justify-center gap-2">
 			<IconButton icon={Icons.ArrowLeft} onClick={lunarEclipseStore.prev} tooltipContent="Prev" />
-			<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">{eclipse && <span className="truncate">{formatTemporal(temporalFromTime(eclipse.maximalTime), 'YYYY-MM-DD')}</span>}</span>
+			<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">{eclipse && <span className="truncate">{formatTemporal(temporalFromTime(eclipse.maximalTime), 'YYYY-MM-DD', true)}</span>}</span>
 			<IconButton icon={Icons.ArrowRight} onClick={lunarEclipseStore.next} tooltipContent="Next" />
 		</div>
 	)
 })
 
 const Info = memo(() => (
-	<div className="flex flex-1 flex-col justify-start gap-2 self-start">
+	<div className="flex w-full flex-col justify-start gap-2 self-start">
 		<Tabs fullWidth>
 			<Tab id="details">Details</Tab>
 			<Tab id="contacts">Contacts</Tab>
@@ -93,7 +94,7 @@ const EclipseDetails = memo(() => {
 
 interface ContactPointProps {
 	readonly name: string
-	readonly point: Point
+	readonly point: EclipseGeoPoint
 	readonly color: string
 }
 
@@ -104,6 +105,7 @@ function ContactPoint({ point, name, color }: ContactPointProps) {
 				<span className="font-mono text-sm font-bold" style={{ color }}>
 					{name}
 				</span>
+				<span className="truncate font-mono text-neutral-300">{formatTemporal(temporalFromTime(time(point.jd!, 3)), 'YYYY-MM-DD HH:mm:ss', true)}</span>
 			</div>
 			<div className="flex min-w-0 flex-row flex-wrap gap-x-3 gap-y-1 font-mono text-neutral-400">
 				<span>
@@ -134,10 +136,9 @@ const Contacts = memo(() => {
 
 	return (
 		<div className="grid w-full grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-			{map.events.map((event) => {
-				const point = event.sublunar
-				return <ContactPoint color={CONTACT_POINT_COLORS[event.kind]} key={event.kind} point={point} name={event.kind} />
-			})}
+			{map.events.map((event) => (
+				<ContactPoint color={CONTACT_POINT_COLORS[event.kind]} key={event.kind} point={event.sublunar} name={event.kind} />
+			))}
 		</div>
 	)
 })
@@ -223,7 +224,7 @@ const LocalDetails = memo(() => {
 })
 
 function formatEventTime(event?: LocalLunarEclipseEvent | null) {
-	return event === null || event === undefined ? '--' : formatTemporal(temporalFromTime(event.time), 'MM-DD HH:mm:ss')
+	return event === null || event === undefined ? '--' : formatTemporal(temporalFromTime(event.time), 'MM-DD HH:mm:ss', true)
 }
 
 function formatSignedDegrees(value?: number | null) {
@@ -332,8 +333,8 @@ const LocalView = memo(() => {
 	}
 
 	return (
-		<div className="flex flex-col gap-2">
-			<div className="flex flex-row flex-wrap items-center justify-between gap-2">
+		<div className="relative flex flex-col gap-2">
+			<div className="absolute top-1 left-0 flex w-full flex-row flex-wrap items-center justify-between gap-2 px-1">
 				<LunarEclipseContactKindButtonGroup value={selectedEvent} onValueChange={lunarEclipseStore.setSelectedEvent} />
 				<LocalViewOrientationModeButtonGroup value={orientationMode} onValueChange={lunarEclipseStore.setOrientationMode} />
 			</div>
@@ -349,7 +350,7 @@ const LocalView = memo(() => {
 })
 
 const Map = memo(() => (
-	<WorldMap className="h-full flex-1" defaultScale={1} onCoordinateClick={lunarEclipseStore.handleCoordinateChange} onTransformChange={lunarEclipseStore.handleTransformChange}>
+	<WorldMap className="h-full max-h-80" defaultScale={2} onCoordinateClick={lunarEclipseStore.handleCoordinateChange} onTransformChange={lunarEclipseStore.handleTransformChange}>
 		<MapMarker />
 		<MapGeometry />
 	</WorldMap>
@@ -360,7 +361,7 @@ const MAP_MARKER_STYLE: CSSProperties = { fill: 'var(--danger)' }
 const MapMarker = memo(() => {
 	const { location, scale } = useSnapshot(lunarEclipseStore.state)
 	const point = worldMapCoordinateToPoint({ latitude: toDeg(location.latitude), longitude: toDeg(location.longitude) })
-	const size = 132 / scale
+	const size = 100 / scale
 
 	return <Icons.MapMarker width={size} height={size} style={{ ...MAP_MARKER_STYLE, transform: `translate(${point.x - size * 0.5}px, ${point.y - size}px)` }} />
 })

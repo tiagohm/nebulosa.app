@@ -11,6 +11,7 @@ import { equatorialFromJ2000, equatorialToEcliptic, equatorialToGalatic, equator
 import { eraS2p } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { frameToFrame, ICRS, ITRS, TEME } from 'nebulosa/src/astronomy/coordinates/frame'
 import { itrs } from 'nebulosa/src/astronomy/coordinates/itrs'
+import { linearInterpolator } from 'nebulosa/src/astronomy/ephemeris/interpolation/ephemeris'
 import * as elpmpp02 from 'nebulosa/src/astronomy/ephemeris/models/analytical/elpmpp02'
 import * as gust86 from 'nebulosa/src/astronomy/ephemeris/models/analytical/gust86'
 import * as l12 from 'nebulosa/src/astronomy/ephemeris/models/analytical/l12'
@@ -25,7 +26,7 @@ import { asteroid, comet, KeplerOrbit } from 'nebulosa/src/astronomy/orbits/aste
 import { parseTLE, sgp4 } from 'nebulosa/src/astronomy/orbits/propagation/sgp4'
 import { formatTemporal, parseTemporal, temporalAdd, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract } from 'nebulosa/src/astronomy/time/temporal'
 import type { Temporal } from 'nebulosa/src/astronomy/time/temporal'
-import { time, timeShift, Timescale, tt } from 'nebulosa/src/astronomy/time/time'
+import { time, timeShift, timeUnix, Timescale, tt } from 'nebulosa/src/astronomy/time/time'
 import type { Time } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, GM_SUN_PITJEVA_2005, ONE_KILOPARSEC, SPEED_OF_LIGHT } from 'nebulosa/src/core/constants'
 import type { Writable } from 'nebulosa/src/core/types'
@@ -47,8 +48,9 @@ import { makeTime } from './util'
 // Atlas ephemeris service: provider selection, Horizons observer-table tiles, and local models
 // (VSOP87E, ELPMPP02, Meeus Pluto, MARSSAT/L12/TASS17/GUST86, SGP4, Kepler, stars, sky points).
 // `fast` prefers a local model when one exists; otherwise Horizons. Distances are AU, angles
-// radians, instants Unix milliseconds. Horizons is still sampled every 60 s over local noon-to-noon
-// and truncated to the civil minute; cheap offline position is evaluated at the requested utc.
+// radians, instants Unix milliseconds. Horizons is still sampled every 60 s over local noon-to-noon;
+// position at an off-grid utc interpolates apparent RA/Dec (unwrap) and scalars, and does not
+// extrapolate. Cheap offline position is evaluated at the requested utc.
 
 // Maximum number of noon-to-noon Horizons series retained. Each tile is ~1441 samples; eviction is
 // LRU by series, not by sample count.
@@ -211,10 +213,10 @@ export class OfflineEphemerisUnavailableError extends Error {
 	}
 }
 
-// Interpolation asked for a time outside the sampled tile. Unused until exact-time interpolation lands.
+// Interpolation asked for a time outside the sampled tile. Never clamps or extrapolates.
 export class EphemerisInterpolationError extends Error {
-	constructor(message = 'ephemeris interpolation out of range') {
-		super(message)
+	constructor(message = 'ephemeris interpolation out of range', options?: ErrorOptions) {
+		super(message, options)
 		this.name = 'EphemerisInterpolationError'
 	}
 }
@@ -646,14 +648,24 @@ export class AtlasEphemeris {
 
 	// BodyPosition for `target` at `req`. `fast` prefers offline when it supports the target; otherwise
 	// Horizons is used. Stars, sky points, and cheap offline models are evaluated at the requested utc.
-	// Horizons times are truncated to the civil minute.
+	// Horizons is interpolated at that utc inside the noon-to-noon tile; it is never extrapolated.
 	async position(target: EphemerisTarget, req: PositionOfBody): Promise<BodyPosition> {
 		const series = await this.resolve(target, req)
-		const key = sampleKey(target, req.time.utc, series.source)
-		const sample = series.samples.get(key)
+		if (series.source === 'horizons') return horizonsPositionAt(series.samples, req)
+		const sample = series.samples.get(sampleKey(target, req.time.utc, series.source))
 		if (!sample) throw new Error(`ephemeris not found for ${target.type} at ${formatTemporal(req.time.utc, undefined, 0)}`)
-		if (series.source === 'horizons') return projectHorizonsPosition(sample, req)
 		return sample
+	}
+
+	// Noon-to-noon Horizons tile, or the single offline sample, for `target` at `req`.
+	series(target: EphemerisTarget, req: PositionOfBody): Promise<EphemerisSampleSeries> {
+		return this.resolve(target, { ...req, fast: false })
+	}
+
+	// 1441 altitudes (radians) at 1 min for `target`. Horizons uses the noon-to-noon tile 1:1.
+	async chart(target: EphemerisTarget, req: PositionOfBody): Promise<number[]> {
+		const series = await this.series(target, req)
+		return altitudesFromSeries(series, req)
 	}
 
 	// Apparent BodyPosition at the civil minute of `req.time.utc`, from a noon-to-noon Horizons series.
@@ -841,6 +853,126 @@ function projectHorizonsPosition(sample: BodyPosition, req: PositionOfBody): Bod
 		pierSide: expectedPierSide(rightAscension, declination, lst),
 		meridianTimeIn: meridianTimeIn(rightAscension, lst),
 	}
+}
+
+// Horizons BodyPosition at `req.time.utc`. On a sample instant this is the frozen tile plus LST/frames;
+// between samples, apparent RA/Dec and J2000 are linearly interpolated with unwrap, scalars are
+// lerped, and Az/El are lerped with angle unwrap. Out of range throws EphemerisInterpolationError.
+export function horizonsPositionAt(samples: ReadonlyMap<number, BodyPosition>, req: PositionOfBody): BodyPosition {
+	const utcSec = req.time.utc / 1000
+	const bracket = bracketingHorizonsSamples(samples, utcSec)
+	if (!('t1' in bracket)) {
+		const sample = samples.get(bracket.t0)
+		if (!sample) throw new EphemerisInterpolationError(`ephemeris not found at ${formatTemporal(req.time.utc, undefined, 0)}`)
+		return projectHorizonsPosition(sample, req)
+	}
+
+	const a = samples.get(bracket.t0)
+	const b = samples.get(bracket.t1)
+	if (!a || !b) throw new EphemerisInterpolationError(`ephemeris not found at ${formatTemporal(req.time.utc, undefined, 0)}`)
+
+	try {
+		return interpolateHorizonsSamples(a, b, bracket.t0, bracket.t1, req)
+	} catch (error) {
+		if (error instanceof RangeError) throw new EphemerisInterpolationError(error.message, { cause: error })
+		throw error
+	}
+}
+
+// Nearest sample keys that enclose `utcSec`. A lone `t0` is an exact hit. Throws when the instant is
+// outside the sampled tile (no extrapolation, no nearest-neighbor).
+function bracketingHorizonsSamples(samples: ReadonlyMap<number, BodyPosition>, utcSec: number): { t0: number } | { t0: number; t1: number } {
+	if (Number.isInteger(utcSec) && samples.has(utcSec)) return { t0: utcSec }
+
+	let t0 = Number.NEGATIVE_INFINITY
+	let t1 = Number.POSITIVE_INFINITY
+	for (const key of samples.keys()) {
+		if (key <= utcSec && key > t0) t0 = key
+		if (key >= utcSec && key < t1) t1 = key
+	}
+
+	if (t0 === utcSec && samples.has(t0)) return { t0 }
+	if (!Number.isFinite(t0) || !Number.isFinite(t1) || t1 === Number.POSITIVE_INFINITY || t0 === Number.NEGATIVE_INFINITY || t0 === t1) {
+		throw new EphemerisInterpolationError('ephemeris interpolation out of range')
+	}
+	return { t0, t1 }
+}
+
+// Linear interpolation of two Horizons samples onto `req.time.utc`. RA/Dec use EphemerisInterpolator
+// with outOfRange throw; Az uses shortest-arc unwrap.
+function interpolateHorizonsSamples(a: BodyPosition, b: BodyPosition, t0: number, t1: number, req: PositionOfBody): BodyPosition {
+	const query = timeUnix(req.time.utc / 1000)
+	const tA = timeUnix(t0)
+	const tB = timeUnix(t1)
+	const options = { outOfRange: 'throw' as const }
+	const apparent = linearInterpolator(
+		[
+			{ time: tA, rightAscension: a.equatorial[0], declination: a.equatorial[1] },
+			{ time: tB, rightAscension: b.equatorial[0], declination: b.equatorial[1] },
+		],
+		options,
+	)
+	const j2000 = linearInterpolator(
+		[
+			{ time: tA, rightAscension: a.equatorialJ2000[0], declination: a.equatorialJ2000[1] },
+			{ time: tB, rightAscension: b.equatorialJ2000[0], declination: b.equatorialJ2000[1] },
+		],
+		options,
+	)
+	const [rightAscension, declination] = apparent.compute(query)
+	const [rightAscensionJ2000, declinationJ2000] = j2000.compute(query)
+	const frac = (req.time.utc / 1000 - t0) / (t1 - t0)
+	const time = makeTime(req.time.utc, req.location)
+	const lst = localSiderealTime(time, req.location, true)
+	const nearer = frac < 0.5 ? a : b
+
+	return {
+		magnitude: lerpNullable(a.magnitude, b.magnitude, frac),
+		constellation: constellation(rightAscension, declination, time),
+		distance: lerp(a.distance, b.distance, frac),
+		illuminated: lerp(a.illuminated, b.illuminated, frac),
+		elongation: lerp(a.elongation, b.elongation, frac),
+		leading: nearer.leading,
+		equatorial: [rightAscension, declination],
+		equatorialJ2000: [rightAscensionJ2000, declinationJ2000],
+		horizontal: [lerpAngle(a.horizontal[0], b.horizontal[0], frac), lerp(a.horizontal[1], b.horizontal[1], frac)],
+		ecliptic: equatorialToEcliptic(rightAscension, declination, time),
+		galactic: equatorialToGalatic(rightAscensionJ2000, declinationJ2000),
+		lst,
+		pierSide: expectedPierSide(rightAscension, declination, lst),
+		meridianTimeIn: meridianTimeIn(rightAscension, lst),
+	}
+}
+
+// Linear interpolation of two scalars.
+function lerp(a: number, b: number, t: number) {
+	return a + (b - a) * t
+}
+
+// Linear interpolation that stays null when either sample is null.
+function lerpNullable(a: number | null, b: number | null, t: number) {
+	if (a === null || b === null) return null
+	return lerp(a, b, t)
+}
+
+// Shortest-arc interpolation of an angle, normalized to 0..TAU.
+function lerpAngle(a: Angle, b: Angle, t: number) {
+	return normalizeAngle(a + normalizePI(b - a) * t)
+}
+
+// 1441 altitudes from a noon-to-noon series whose samples sit on the 60 s grid.
+function altitudesFromSeries(series: EphemerisSampleSeries, req: PositionOfBody): number[] {
+	const [startTime] = computeStartAndEndTime(req.time)
+	const seconds = Math.trunc(startTime / 1000)
+	const chart = new Array<number>(1441)
+
+	for (let i = 0; i <= 1440; i++) {
+		const position = series.samples.get(seconds + i * 60)
+		if (!position) throw new Error(`ephemeris not found at chart index ${i}`)
+		chart[i] = position.horizontal[1]
+	}
+
+	return chart
 }
 
 // Apparent place of a catalog object at `req.time.utc`. Proper motion uses observeStar; otherwise

@@ -137,9 +137,8 @@ export class AtlasHandler {
 		return this.ephemeris.position({ type: 'sun' }, req)
 	}
 
-	async chartOfSun(req: ChartOfBody) {
-		await this.ephemeris.positionFromHorizons('10', req)
-		return this.ephemeris.chartFromHorizons('10', req)
+	chartOfSun(req: ChartOfBody) {
+		return this.ephemeris.chart({ type: 'sun' }, req)
 	}
 
 	seasons(req: PositionOfBody): SolarSeasons {
@@ -152,12 +151,11 @@ export class AtlasHandler {
 	}
 
 	async twilight(req: PositionOfBody) {
-		await this.ephemeris.positionFromHorizons('10', req)
+		const series = await this.ephemeris.series({ type: 'sun' }, req)
 
 		const [startTime, endTime] = this.computeStartAndEndTime(req.time)
 		const offset = req.time.offset * 60000
-		const sun = this.ephemeris.cachedPositions('10', req)
-		if (!sun) throw new Error('object not found: 10')
+		const sun = series.samples
 
 		const twilight = structuredClone(EMPTY_TWILIGHT)
 
@@ -239,9 +237,8 @@ export class AtlasHandler {
 		return this.ephemeris.position({ type: 'moon' }, req)
 	}
 
-	async chartOfMoon(req: ChartOfBody) {
-		await this.ephemeris.positionFromHorizons('301', req)
-		return this.ephemeris.chartFromHorizons('301', req)
+	chartOfMoon(req: ChartOfBody) {
+		return this.ephemeris.chart({ type: 'moon' }, req)
 	}
 
 	moonPhases(req: PositionOfBody) {
@@ -311,9 +308,8 @@ export class AtlasHandler {
 		return this.ephemeris.position(planetTargetFromCode(code, req.elements), req)
 	}
 
-	async chartOfPlanet(code: string, req: ChartOfBody) {
-		await this.ephemeris.positionFromHorizons(code, req)
-		return this.ephemeris.chartFromHorizons(code, req)
+	chartOfPlanet(code: string, req: ChartOfBody) {
+		return this.ephemeris.chart(planetTargetFromCode(code, req.elements), req)
 	}
 
 	async searchMinorPlanet(req: SearchMinorPlanet): Promise<MinorPlanet | undefined> {
@@ -630,10 +626,9 @@ export class AtlasHandler {
 		return this.ephemeris.position({ type: 'satellite', satellite }, req)
 	}
 
-	async chartOfSatellite(id: string | number, req: ChartOfBody) {
+	chartOfSatellite(id: string | number, req: ChartOfBody) {
 		const satellite = this.satellite(id)
-		await this.ephemeris.positionFromHorizons(satellite, req)
-		return this.ephemeris.chartFromHorizons(satellite, req)
+		return this.ephemeris.chart({ type: 'satellite', satellite }, req)
 	}
 
 	private skyObject(id: string | number) {

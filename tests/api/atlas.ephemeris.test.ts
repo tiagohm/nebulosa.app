@@ -1,16 +1,16 @@
 import { describe, expect, test } from 'bun:test'
 import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
-import { DEG2RAD } from 'nebulosa/src/core/constants'
+import { DEG2RAD, TAU } from 'nebulosa/src/core/constants'
 import type { CsvRow } from 'nebulosa/src/io/csv'
 import { deg, parseAngle, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter, toKilometer } from 'nebulosa/src/math/units/distance'
-import { AtlasEphemeris, EphemerisUnavailableError, observeSolarSystemBody, planetTargetFromCode } from 'src/api/atlas.ephemeris'
+import { AtlasEphemeris, EphemerisInterpolationError, EphemerisUnavailableError, horizonsPositionAt, observeSolarSystemBody, planetTargetFromCode } from 'src/api/atlas.ephemeris'
 import type { EphemerisProvider, EphemerisSampleRequest, EphemerisTarget, HorizonsObserver } from 'src/api/atlas.ephemeris'
 import { makeTime } from 'src/api/util'
 import type { OsculatingElementsInput } from '#/asteroid'
 import { DEFAULT_BODY_POSITION } from '#/atlas'
-import type { PositionOfBody } from '#/atlas'
+import type { BodyPosition, PositionOfBody } from '#/atlas'
 import type { SkyObject } from '#/galaxy'
 
 const REQ_A: PositionOfBody = {
@@ -445,5 +445,62 @@ describe('offline solar-system models', () => {
 		await ephemeris.position({ type: 'satellite', satellite }, { ...REQ_A, fast: true })
 
 		expect(calls).toHaveLength(0)
+	})
+})
+
+function frozenSample(overrides: Partial<BodyPosition>): BodyPosition {
+	return {
+		...DEFAULT_BODY_POSITION,
+		equatorial: [0, 0],
+		equatorialJ2000: [0, 0],
+		horizontal: [0, 0],
+		...overrides,
+	}
+}
+
+describe('Horizons exact-time interpolation', () => {
+	test('the on-grid instant still uses the frozen sample', async () => {
+		const { observer } = recordingObserver()
+		const ephemeris = new AtlasEphemeris({ observer })
+		const onGrid = await ephemeris.positionFromHorizons('10', REQ_A)
+
+		expect(onGrid.horizontal[0]).toBeCloseTo(REQ_A.location.latitude, 12)
+	})
+
+	test('RA wrapping through 0 is interpolated along the short arc', () => {
+		const t0 = REQ_A.time.utc / 1000
+		const samples = new Map<number, BodyPosition>([
+			[t0, frozenSample({ equatorial: [deg(359.9), 0], equatorialJ2000: [deg(359.9), 0], horizontal: [deg(359.9), 0] })],
+			[t0 + 60, frozenSample({ equatorial: [deg(0.1), 0], equatorialJ2000: [deg(0.1), 0], horizontal: [deg(0.1), 0] })],
+		])
+		const mid = horizonsPositionAt(samples, { ...REQ_A, time: { ...REQ_A.time, utc: REQ_A.time.utc + 30000 } })
+
+		expect(Math.min(mid.equatorial[0], TAU - mid.equatorial[0])).toBeLessThan(1e-9)
+		expect(Math.min(mid.horizontal[0], TAU - mid.horizontal[0])).toBeLessThan(1e-9)
+	})
+
+	test('an instant outside the tile throws EphemerisInterpolationError', () => {
+		const t0 = REQ_A.time.utc / 1000
+		const samples = new Map<number, BodyPosition>([
+			[t0, frozenSample({})],
+			[t0 + 60, frozenSample({})],
+		])
+
+		expect(() => horizonsPositionAt(samples, { ...REQ_A, time: { ...REQ_A.time, utc: REQ_A.time.utc - 1 } })).toThrow(EphemerisInterpolationError)
+		expect(() => horizonsPositionAt(samples, { ...REQ_A, time: { ...REQ_A.time, utc: REQ_A.time.utc + 120000 } })).toThrow(EphemerisInterpolationError)
+	})
+
+	test('a millisecond between samples is honoured', () => {
+		const t0 = REQ_A.time.utc / 1000
+		const samples = new Map<number, BodyPosition>([
+			[t0, frozenSample({ distance: 1, equatorial: [0, 0], equatorialJ2000: [0, 0] })],
+			[t0 + 60, frozenSample({ distance: 2, equatorial: [deg(1), 0], equatorialJ2000: [deg(1), 0] })],
+		])
+		const atMs = horizonsPositionAt(samples, { ...REQ_A, time: { ...REQ_A.time, utc: REQ_A.time.utc + 1 } })
+
+		expect(atMs.distance).toBeGreaterThan(1)
+		expect(atMs.distance).toBeLessThan(1 + (1 / 60000) * 2)
+		expect(atMs.equatorial[0]).toBeGreaterThan(0)
+		expect(atMs.equatorial[0]).toBeLessThan(deg(1) / 1000)
 	})
 })

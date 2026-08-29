@@ -134,12 +134,12 @@ export class AtlasHandler {
 		}
 	}
 
-	positionOfSun(req: PositionOfBody) {
-		return this.ephemeris.position({ type: 'sun' }, req)
+	positionOfSun(req: PositionOfBody, signal?: AbortSignal) {
+		return this.ephemeris.position({ type: 'sun' }, req, signal)
 	}
 
-	chartOfSun(req: ChartOfBody) {
-		return this.ephemeris.chart({ type: 'sun' }, req)
+	chartOfSun(req: ChartOfBody, signal?: AbortSignal) {
+		return this.ephemeris.chart({ type: 'sun' }, req, signal)
 	}
 
 	seasons(req: PositionOfBody): SolarSeasons {
@@ -151,8 +151,8 @@ export class AtlasHandler {
 		return { spring, summer, autumn, winter }
 	}
 
-	async twilight(req: PositionOfBody) {
-		const series = await this.ephemeris.series({ type: 'sun' }, req)
+	async twilight(req: PositionOfBody, signal?: AbortSignal) {
+		const series = await this.ephemeris.series({ type: 'sun' }, req, signal)
 
 		const [startTime, endTime] = this.computeStartAndEndTime(req.time)
 		const offset = req.time.offset * 60000
@@ -234,12 +234,12 @@ export class AtlasHandler {
 		return computeLocalSolarEclipseViewGeometry(req, req.options)
 	}
 
-	positionOfMoon(req: PositionOfBody) {
-		return this.ephemeris.position({ type: 'moon' }, req)
+	positionOfMoon(req: PositionOfBody, signal?: AbortSignal) {
+		return this.ephemeris.position({ type: 'moon' }, req, signal)
 	}
 
-	chartOfMoon(req: ChartOfBody) {
-		return this.ephemeris.chart({ type: 'moon' }, req)
+	chartOfMoon(req: ChartOfBody, signal?: AbortSignal) {
+		return this.ephemeris.chart({ type: 'moon' }, req, signal)
 	}
 
 	moonPhases(req: PositionOfBody) {
@@ -305,12 +305,12 @@ export class AtlasHandler {
 		]
 	}
 
-	positionOfPlanet(code: string, req: PositionOfBody) {
-		return this.ephemeris.position(planetTargetFromCode(code, req.elements), req)
+	positionOfPlanet(code: string, req: PositionOfBody, signal?: AbortSignal) {
+		return this.ephemeris.position(planetTargetFromCode(code, req.elements), req, signal)
 	}
 
-	chartOfPlanet(code: string, req: ChartOfBody) {
-		return this.ephemeris.chart(planetTargetFromCode(code, req.elements), req)
+	chartOfPlanet(code: string, req: ChartOfBody, signal?: AbortSignal) {
+		return this.ephemeris.chart(planetTargetFromCode(code, req.elements), req, signal)
 	}
 
 	async searchMinorPlanet(req: SearchMinorPlanet): Promise<MinorPlanet | undefined> {
@@ -441,22 +441,22 @@ export class AtlasHandler {
 		return nebulosa.query<SkyObjectSearchItem, SQLQueryBindings[]>(q).all(...selectParams, ...joinParams, ...whereParams, limit, offset)
 	}
 
-	async positionOfSkyObject(req: PositionOfBody, id: string | number | SkyObject): Promise<BodyPosition> {
+	async positionOfSkyObject(req: PositionOfBody, id: string | number | SkyObject, signal?: AbortSignal): Promise<BodyPosition> {
 		const dso = typeof id === 'object' ? id : this.skyObject(id)
-		const position = await this.ephemeris.position({ type: 'star', object: dso }, req)
+		const position = await this.ephemeris.position({ type: 'star', object: dso }, req, signal)
 		if (!resolveBodyPositionFlags(req).names) return position
 		const names = nebulosa.query<{ name: string }, [number]>("SELECT (n.type || ':' || n.name) as name FROM names n WHERE n.dsoId = ?").all(dso.id)
 		return { ...position, names: names.map((n) => n.name) }
 	}
 
-	chartOfSkyObject(req: ChartOfBody, id: string) {
-		return this.ephemeris.chartOfSkyObject(req, this.skyObject(id))
+	chartOfSkyObject(req: ChartOfBody, id: string, signal?: AbortSignal) {
+		return this.ephemeris.chartOfSkyObject(req, this.skyObject(id), signal)
 	}
 
-	positionOfSkyPoint(req: PositionOfBody, ra: Angle | string, dec: Angle | string) {
+	positionOfSkyPoint(req: PositionOfBody, ra: Angle | string, dec: Angle | string, signal?: AbortSignal) {
 		ra = typeof ra === 'string' ? parseAngle(ra, true)! : ra
 		dec = typeof dec === 'string' ? parseAngle(dec)! : dec
-		return this.ephemeris.position({ type: 'skyPoint', rightAscension: ra, declination: dec }, req)
+		return this.ephemeris.position({ type: 'skyPoint', rightAscension: ra, declination: dec }, req, signal)
 	}
 
 	planetarium(req: PlanetariumSearch) {
@@ -623,14 +623,14 @@ export class AtlasHandler {
 		return satellites
 	}
 
-	positionOfSatellite(id: string | number, req: PositionOfBody) {
+	positionOfSatellite(id: string | number, req: PositionOfBody, signal?: AbortSignal) {
 		const satellite = this.satellite(id)
-		return this.ephemeris.position({ type: 'satellite', satellite }, req)
+		return this.ephemeris.position({ type: 'satellite', satellite }, req, signal)
 	}
 
-	chartOfSatellite(id: string | number, req: ChartOfBody) {
+	chartOfSatellite(id: string | number, req: ChartOfBody, signal?: AbortSignal) {
 		const satellite = this.satellite(id)
-		return this.ephemeris.chart({ type: 'satellite', satellite }, req)
+		return this.ephemeris.chart({ type: 'satellite', satellite }, req, signal)
 	}
 
 	private skyObject(id: string | number) {
@@ -730,16 +730,16 @@ export class AtlasHandler {
 export function atlas(atlas: AtlasHandler) {
 	return {
 		'/atlas/sun/image': { GET: async (req) => new Response(await atlas.imageOfSun(solarImageSource(query(req).source))) },
-		'/atlas/sun/position': { POST: async (req) => response(await atlas.positionOfSun(await req.json())) },
-		'/atlas/sun/chart': { POST: async (req) => response(await atlas.chartOfSun(await req.json())) },
+		'/atlas/sun/position': { POST: async (req) => response(await atlas.positionOfSun(await req.json(), req.signal)) },
+		'/atlas/sun/chart': { POST: async (req) => response(await atlas.chartOfSun(await req.json(), req.signal)) },
 		'/atlas/sun/seasons': { POST: async (req) => response(atlas.seasons(await req.json())) },
-		'/atlas/sun/twilight': { POST: async (req) => response(await atlas.twilight(await req.json())) },
+		'/atlas/sun/twilight': { POST: async (req) => response(await atlas.twilight(await req.json(), req.signal)) },
 		'/atlas/sun/eclipses': { POST: async (req) => response(atlas.solarEclipses(await req.json())) },
 		'/atlas/sun/eclipses/map': { POST: async (req) => response(atlas.solarEclipseMap(await req.json())) },
 		'/atlas/sun/eclipses/local/circumstances': { POST: async (req) => response(atlas.solarEclipseLocalCircumstances(await req.json())) },
 		'/atlas/sun/eclipses/local/view': { POST: async (req) => response(atlas.solarEclipseLocalView(await req.json())) },
-		'/atlas/moon/position': { POST: async (req) => response(await atlas.positionOfMoon(await req.json())) },
-		'/atlas/moon/chart': { POST: async (req) => response(await atlas.chartOfMoon(await req.json())) },
+		'/atlas/moon/position': { POST: async (req) => response(await atlas.positionOfMoon(await req.json(), req.signal)) },
+		'/atlas/moon/chart': { POST: async (req) => response(await atlas.chartOfMoon(await req.json(), req.signal)) },
 		'/atlas/moon/phases': { POST: async (req) => response(atlas.moonPhases(await req.json())) },
 		'/atlas/moon/eclipses': { POST: async (req) => response(atlas.moonEclipses(await req.json())) },
 		'/atlas/moon/eclipses/map': { POST: async (req) => response(atlas.lunarEclipseMap(await req.json())) },
@@ -748,15 +748,15 @@ export function atlas(atlas: AtlasHandler) {
 		'/atlas/moon/apsis': { POST: async (req) => response(atlas.moonApsis(await req.json())) },
 		'/atlas/minorplanets/search': { POST: async (req) => response(await atlas.searchMinorPlanet(await req.json())) },
 		'/atlas/minorplanets/closeapproaches': { POST: async (req) => response(await atlas.findCloseApproaches(await req.json())) },
-		'/atlas/planets/:code/position': { POST: async (req) => response(await atlas.positionOfPlanet(req.params.code, await req.json())) },
-		'/atlas/planets/:code/chart': { POST: async (req) => response(await atlas.chartOfPlanet(req.params.code, await req.json())) },
+		'/atlas/planets/:code/position': { POST: async (req) => response(await atlas.positionOfPlanet(req.params.code, await req.json(), req.signal)) },
+		'/atlas/planets/:code/chart': { POST: async (req) => response(await atlas.chartOfPlanet(req.params.code, await req.json(), req.signal)) },
 		'/atlas/skyobjects/search': { POST: async (req) => response(atlas.searchSkyObject(await req.json())) },
-		'/atlas/skyobjects/:id/position': { POST: async (req) => response(await atlas.positionOfSkyObject(await req.json(), req.params.id)) },
-		'/atlas/skyobjects/:id/chart': { POST: async (req) => response(atlas.chartOfSkyObject(await req.json(), req.params.id)) },
-		'/atlas/skypoint/position': { POST: async (req) => response(await atlas.positionOfSkyPoint(await req.json(), query(req).ra, req.params.dec)) },
+		'/atlas/skyobjects/:id/position': { POST: async (req) => response(await atlas.positionOfSkyObject(await req.json(), req.params.id, req.signal)) },
+		'/atlas/skyobjects/:id/chart': { POST: async (req) => response(atlas.chartOfSkyObject(await req.json(), req.params.id, req.signal)) },
+		'/atlas/skypoint/position': { POST: async (req) => response(await atlas.positionOfSkyPoint(await req.json(), query(req).ra, req.params.dec, req.signal)) },
 		'/atlas/satellites/search': { POST: async (req) => response(atlas.searchSatellites(await req.json())) },
-		'/atlas/satellites/:id/position': { POST: async (req) => response(await atlas.positionOfSatellite(req.params.id, await req.json())) },
-		'/atlas/satellites/:id/chart': { POST: async (req) => response(await atlas.chartOfSatellite(req.params.id, await req.json())) },
+		'/atlas/satellites/:id/position': { POST: async (req) => response(await atlas.positionOfSatellite(req.params.id, await req.json(), req.signal)) },
+		'/atlas/satellites/:id/chart': { POST: async (req) => response(await atlas.chartOfSatellite(req.params.id, await req.json(), req.signal)) },
 		'/atlas/planetarium': { POST: async (req) => response(atlas.planetarium(await req.json())) },
 		'/atlas/iers': { GET: async () => response(await atlas.iers()) },
 	} as const satisfies Endpoints

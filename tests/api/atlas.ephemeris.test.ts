@@ -844,3 +844,138 @@ describe('Horizons fallback and circuit breaker', () => {
 		expect(calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD + 1)
 	})
 })
+
+describe('ephemeris abort', () => {
+	test('observer() is given an AbortSignal', async () => {
+		let signal: AbortSignal | undefined
+		const observer: HorizonsObserver = (_input, _center, coord, startTime, _end, _quantities, _options, fetchSignal) => {
+			signal = fetchSignal
+			const startMs = typeof startTime === 'number' ? startTime : 0
+			return Promise.resolve(horizonsRows(startMs, toDeg(observerLatitude(coord))))
+		}
+		const ephemeris = new AtlasEphemeris({ observer })
+
+		await ephemeris.positionFromHorizons('10', REQ_A)
+
+		expect(signal).toBeInstanceOf(AbortSignal)
+		expect(signal?.aborted).toBeFalse()
+	})
+
+	test('aborting one waiter does not cancel a shared Horizons fetch', async () => {
+		const gate = Promise.withResolvers<CsvRow[]>()
+		let signal: AbortSignal | undefined
+		const observer: HorizonsObserver = (_input, _center, _coord, _startTime, _end, _quantities, _options, fetchSignal) => {
+			signal = fetchSignal
+			return gate.promise
+		}
+		const ephemeris = new AtlasEphemeris({ observer })
+		const cancelled = new AbortController()
+
+		const first = ephemeris.positionFromHorizons('10', REQ_A, cancelled.signal)
+		const second = ephemeris.positionFromHorizons('10', REQ_A)
+		cancelled.abort()
+
+		try {
+			await first
+			throw new Error('expected abort')
+		} catch (error) {
+			expect(error).toMatchObject({ name: 'AbortError' })
+		}
+		expect(signal?.aborted).toBeFalse()
+
+		gate.resolve(horizonsRows(REQ_A.time.utc, toDeg(REQ_A.location.latitude)))
+		const position = await second
+		expect(position.horizontal[0]).toBeCloseTo(REQ_A.location.latitude, 12)
+		expect(signal?.aborted).toBeFalse()
+	})
+
+	test('aborting every waiter cancels observer()', async () => {
+		const gate = Promise.withResolvers<CsvRow[]>()
+		let signal: AbortSignal | undefined
+		const observer: HorizonsObserver = (_input, _center, _coord, _start, _end, _quantities, _options, fetchSignal) => {
+			signal = fetchSignal
+			return gate.promise
+		}
+		const ephemeris = new AtlasEphemeris({ observer })
+		const firstController = new AbortController()
+		const secondController = new AbortController()
+
+		const first = ephemeris.positionFromHorizons('10', REQ_A, firstController.signal)
+		const second = ephemeris.positionFromHorizons('10', REQ_A, secondController.signal)
+		firstController.abort()
+		try {
+			await first
+			throw new Error('expected abort')
+		} catch (error) {
+			expect(error).toMatchObject({ name: 'AbortError' })
+		}
+		expect(signal?.aborted).toBeFalse()
+
+		secondController.abort()
+		try {
+			await second
+			throw new Error('expected abort')
+		} catch (error) {
+			expect(error).toMatchObject({ name: 'AbortError' })
+		}
+		expect(signal?.aborted).toBeTrue()
+	})
+
+	test('an aborted request does not fall back to an offline model', async () => {
+		const observer: HorizonsObserver = () => new Promise(() => {})
+		const offline = stubProvider('offline', new Set(['planet']))
+		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider, horizonsTimeoutMs: 50 })
+		const controller = new AbortController()
+
+		const pending = ephemeris.position(JUPITER, REQ_A, controller.signal)
+		controller.abort()
+
+		try {
+			await pending
+			throw new Error('expected abort')
+		} catch (error) {
+			expect(error).toMatchObject({ name: 'AbortError' })
+		}
+		expect(offline.calls).toBe(0)
+	})
+
+	test('an aborted request does not trip the circuit breaker', async () => {
+		let calls = 0
+		let started = Promise.withResolvers<void>()
+		const observer: HorizonsObserver = () => {
+			calls++
+			started.resolve()
+			return new Promise(() => {})
+		}
+		const offline = stubProvider('offline', new Set(['planet']))
+		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider, horizonsTimeoutMs: 20 })
+
+		for (let i = 0; i < HORIZONS_BREAKER_FAILURE_THRESHOLD; i++) {
+			started = Promise.withResolvers<void>()
+			const controller = new AbortController()
+			const pending = ephemeris.position(JUPITER, REQ_A, controller.signal)
+			await started.promise
+			controller.abort()
+			try {
+				await pending
+				throw new Error('expected abort')
+			} catch (error) {
+				expect(error).toMatchObject({ name: 'AbortError' })
+			}
+			await Bun.sleep(0)
+		}
+
+		expect(calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD)
+		await ephemeris.position(JUPITER, REQ_A)
+		expect(calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD + 1)
+		expect(offline.calls).toBe(1)
+	})
+
+	test('chartOfSkyObject throws when the signal is already aborted', () => {
+		const ephemeris = new AtlasEphemeris({ observer: recordingObserver().observer })
+		const controller = new AbortController()
+		controller.abort()
+
+		expect(() => ephemeris.chartOfSkyObject(REQ_A, STUB_STAR, controller.signal)).toThrow()
+	})
+})

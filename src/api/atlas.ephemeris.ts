@@ -52,15 +52,16 @@ import { makeTime } from './util'
 // position at an off-grid utc interpolates apparent RA/Dec (unwrap) and scalars, and does not
 // extrapolate. Cheap offline position is evaluated at the requested utc. BodyPositionFlags skip
 // unrequested frames and photometry; omitted flags still yield a complete BodyPosition. Horizons
-// observer() is bounded by HORIZONS_TIMEOUT_MS; transient failures fall back once to a local model
-// when one exists, and a circuit breaker skips Horizons while it is open.
+// observer() is bounded by HORIZONS_TIMEOUT_MS and an AbortSignal; transient failures fall back once
+// to a local model when one exists, and a circuit breaker skips Horizons while it is open. Aborting
+// one consumer does not cancel a shared in-flight tile still needed by another.
 
 // Maximum number of noon-to-noon Horizons series retained. Each tile is ~1441 samples; eviction is
 // LRU by series, not by sample count.
 export const ATLAS_EPHEMERIS_CACHE_LIMIT = 64
 
-// Wall-clock budget around one Horizons observer() call. The adapter does not take AbortSignal, so
-// the race rejects the pipeline and the in-flight fetch is ignored.
+// Wall-clock budget around one Horizons observer() call. Passed to observer() as AbortSignal.timeout
+// and also raced so a mock that ignores the signal still unblocks the pipeline.
 export const HORIZONS_TIMEOUT_MS = 5_000
 
 // Consecutive transient Horizons failures that open the circuit breaker.
@@ -117,6 +118,8 @@ export interface EphemerisSampleRequest {
 	// Which BodyPosition fields to materialize. Omitted flags mean compute everything. Not part of
 	// the series cache key; Horizons tiles stay complete and projection applies flags later.
 	readonly flags?: BodyPositionFlags
+	// Cancels this consumer. A shared Horizons fetch is aborted only when every waiter has aborted.
+	readonly signal?: AbortSignal
 }
 
 // Cached or freshly computed samples for one physical identity. Keys are Unix seconds (Horizons,
@@ -211,6 +214,14 @@ const NATURAL_SATELLITE_MODEL: Readonly<Record<string, { readonly moon: Position
 
 // Cached noon-to-noon Horizons samples, keyed by truncated Unix seconds. Entries are frozen.
 type HorizonsSampleMap = Map<number, BodyPosition>
+
+// Shared in-flight Horizons tile. `abort` cancels observer() only when `consumers` drops to 0 before
+// the promise settles, so one aborted HTTP client does not cancel a fetch still needed by another.
+interface HorizonsInflight {
+	readonly promise: Promise<HorizonsSampleMap>
+	consumers: number
+	readonly abort: AbortController
+}
 
 // No provider accepted the target.
 export class EphemerisUnavailableError extends Error {
@@ -367,8 +378,8 @@ class HorizonsCircuitBreaker {
 	}
 }
 
-// Rejects with HorizonsTimeoutError when `promise` does not settle within `ms`. The loser is not
-// cancelled: observer() has no AbortSignal.
+// Rejects with HorizonsTimeoutError when `promise` does not settle within `ms`. observer() is also
+// given AbortSignal.timeout so a real fetch is cancelled; the race still unblocks mocks that ignore it.
 async function raceHorizonsTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 	let timer: Timer | undefined
 
@@ -381,6 +392,37 @@ async function raceHorizonsTimeout<T>(promise: Promise<T>, ms: number): Promise<
 	} finally {
 		clearTimeout(timer)
 	}
+}
+
+// Rejects with the signal's reason when `signal` aborts before `promise` settles. One waiter can
+// leave a shared Horizons fetch without aborting it for the remaining waiters.
+function settleWithSignal<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+	if (!signal) return promise
+	if (signal.aborted) return Promise.reject(abortReasonOf(signal))
+
+	return new Promise((resolve, reject) => {
+		const onAbort = () => {
+			signal.removeEventListener('abort', onAbort)
+			reject(abortReasonOf(signal))
+		}
+
+		signal.addEventListener('abort', onAbort, { once: true })
+		promise.then(
+			(value) => {
+				signal.removeEventListener('abort', onAbort)
+				resolve(value)
+			},
+			(error: unknown) => {
+				signal.removeEventListener('abort', onAbort)
+				reject(error instanceof Error ? error : abortReasonOf(signal))
+			},
+		)
+	})
+}
+
+// Reason stored on `signal`, or an AbortError DOMException when the runtime left it empty.
+function abortReasonOf(signal: AbortSignal): Error {
+	return signal.reason instanceof Error ? signal.reason : new DOMException('The operation was aborted.', 'AbortError')
 }
 
 // Maps a `/atlas/planets/:code` COMMAND to an EphemerisTarget. `10` and `301` are accepted if someone
@@ -456,7 +498,7 @@ class HorizonsEphemerisProvider implements EphemerisProvider {
 	private readonly observer: HorizonsObserver
 	private readonly cache: LruCache<HorizonsSampleMap>
 	private readonly timeoutMs: number
-	private readonly inflight = new Map<string, Promise<HorizonsSampleMap>>()
+	private readonly inflight = new Map<string, HorizonsInflight>()
 
 	// `observer` is the NASA client; `cacheLimit` caps retained noon-to-noon tiles; `timeoutMs` is
 	// the wall-clock budget around observer().
@@ -474,8 +516,9 @@ class HorizonsEphemerisProvider implements EphemerisProvider {
 
 	// Noon-to-noon Horizons tile for `request.target` at `request.location`.
 	async samples(request: EphemerisSampleRequest): Promise<EphemerisSampleSeries> {
+		request.signal?.throwIfAborted()
 		const input = horizonsInputFromTarget(request.target)
-		const samples = await this.horizonsSeries(input, request.location, request.start, request.end)
+		const samples = await this.horizonsSeries(input, request.location, request.start, request.end, request.signal)
 		return { key: horizonsSeriesKey(input, request.location, request.start, request.end), source: 'horizons', samples }
 	}
 
@@ -507,49 +550,79 @@ class HorizonsEphemerisProvider implements EphemerisProvider {
 		return this.cache.get(horizonsSeriesKey(input, req.location, startTime, endTime))
 	}
 
-	// Loads the noon-to-noon Horizons tile, sharing in-flight work on the same key.
-	private horizonsSeries(input: HorizonsEphemerisInput, location: GeographicCoordinate, startTime: number, endTime: number): Promise<HorizonsSampleMap> {
+	// Loads the noon-to-noon Horizons tile, sharing in-flight work on the same key. `signal` cancels
+	// this waiter; observer() is aborted only when every waiter has aborted.
+	private horizonsSeries(input: HorizonsEphemerisInput, location: GeographicCoordinate, startTime: number, endTime: number, signal?: AbortSignal): Promise<HorizonsSampleMap> {
+		signal?.throwIfAborted()
 		const seriesKey = horizonsSeriesKey(input, location, startTime, endTime)
 		const cached = this.cache.get(seriesKey)
 		if (cached) return Promise.resolve(cached)
 
-		const pending = this.inflight.get(seriesKey)
-		if (pending) return pending
+		let entry = this.inflight.get(seriesKey)
 
-		const task = this.fetchHorizonsSeries(input, location, startTime, endTime)
-			.then((samples) => {
-				this.cache.set(seriesKey, samples)
-				return samples
-			})
-			.finally(() => {
+		if (!entry) {
+			const abort = new AbortController()
+			const timeout = new AbortController()
+			const timer = setTimeout(() => timeout.abort(), this.timeoutMs)
+			const fetchSignal = AbortSignal.any([timeout.signal, abort.signal])
+			const promise = this.fetchHorizonsSeries(input, location, startTime, endTime, fetchSignal, abort.signal)
+				.then((samples) => {
+					this.cache.set(seriesKey, samples)
+					return samples
+				})
+				.finally(() => {
+					clearTimeout(timer)
+					this.inflight.delete(seriesKey)
+				})
+			entry = { promise, consumers: 0, abort }
+			this.inflight.set(seriesKey, entry)
+		}
+
+		return this.followInflight(seriesKey, entry, signal)
+	}
+
+	// Attaches `signal` to a shared in-flight tile. The last waiter to abort cancels observer().
+	private followInflight(seriesKey: string, entry: HorizonsInflight, signal?: AbortSignal): Promise<HorizonsSampleMap> {
+		entry.consumers++
+		return settleWithSignal(entry.promise, signal).finally(() => {
+			entry.consumers--
+			if (entry.consumers === 0 && this.inflight.get(seriesKey) === entry) {
 				this.inflight.delete(seriesKey)
-			})
-
-		this.inflight.set(seriesKey, task)
-		return task
+				entry.abort.abort()
+			}
+		})
 	}
 
 	// Fetches one Horizons observer table and parses it into a frozen sample map. Does not touch the cache.
 	// Empty tables and parse failures are semantic HorizonsEphemerisError; timeouts are transient.
-	private async fetchHorizonsSeries(input: HorizonsEphemerisInput, location: GeographicCoordinate, startTime: Temporal, endTime: Temporal): Promise<HorizonsSampleMap> {
+	// `fetchSignal` is timeout ∪ shared-abort; `consumerAbort` distinguishes client cancel from timeout.
+	private async fetchHorizonsSeries(input: HorizonsEphemerisInput, location: GeographicCoordinate, startTime: Temporal, endTime: Temporal, fetchSignal: AbortSignal, consumerAbort: AbortSignal): Promise<HorizonsSampleMap> {
 		const { longitude, latitude, elevation } = location
 
 		console.info(`fetching ephemeris for ${horizonsFingerprint(input)} at time [${formatTemporal(startTime, undefined, 0)} - ${formatTemporal(endTime, undefined, 0)}] and location [${toDeg(latitude)}, ${toDeg(longitude)}, ${toMeter(elevation).toFixed(0)}]`)
 
-		const pending = this.observer(input, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1, stepSizeUnit: 'm' })
+		const pending = this.observer(input, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1, stepSizeUnit: 'm' }, fetchSignal)
 		void pending.catch(() => {})
 
-		const rows = await raceHorizonsTimeout(pending, this.timeoutMs)
-		if (rows.length === 0) throw new HorizonsEphemerisError('empty ephemeris')
-		const samples: HorizonsSampleMap = new Map()
-
 		try {
-			makeBodyPositionFromHorizons(rows, samples)
-		} catch (error) {
-			throw new HorizonsEphemerisError(error instanceof Error ? error.message : 'horizons parse failed', { cause: error })
-		}
+			const rows = await raceHorizonsTimeout(pending, this.timeoutMs)
+			if (consumerAbort.aborted) throw abortReasonOf(consumerAbort)
+			if (rows.length === 0) throw new HorizonsEphemerisError('empty ephemeris')
+			const samples: HorizonsSampleMap = new Map()
 
-		return samples
+			try {
+				makeBodyPositionFromHorizons(rows, samples)
+			} catch (error) {
+				throw new HorizonsEphemerisError(error instanceof Error ? error.message : 'horizons parse failed', { cause: error })
+			}
+
+			return samples
+		} catch (error) {
+			if (consumerAbort.aborted) throw error
+			if (error instanceof HorizonsTimeoutError) throw error
+			if (isAbortOrTimeoutError(error)) throw new HorizonsTimeoutError('horizons timeout', { cause: error })
+			throw error
+		}
 	}
 }
 
@@ -858,6 +931,7 @@ class OfflineEphemerisProvider implements EphemerisProvider {
 
 	// One sample at `request.start` (the requested utc). Does not build a noon-to-noon tile.
 	samples(request: EphemerisSampleRequest): Promise<EphemerisSampleSeries> {
+		request.signal?.throwIfAborted()
 		const { target, location, start, flags } = request
 		const req: PositionOfBody = { location, time: { utc: start, offset: 0 }, ...flags }
 		const position = this.positionAt(target, req)
@@ -944,8 +1018,9 @@ export class AtlasEphemeris {
 	// Horizons is used. Stars, sky points, and cheap offline models are evaluated at the requested utc.
 	// Horizons is interpolated at that utc inside the noon-to-noon tile; it is never extrapolated.
 	// Omitted BodyPositionFlags compute every field; a true flag materializes only that output.
-	async position(target: EphemerisTarget, req: PositionOfBody): Promise<BodyPosition> {
-		const series = await this.resolve(target, req)
+	// `signal` cancels this call. A shared Horizons tile stays in flight until every waiter has aborted.
+	async position(target: EphemerisTarget, req: PositionOfBody, signal?: AbortSignal): Promise<BodyPosition> {
+		const series = await this.resolve(target, req, true, signal)
 		if (series.source === 'horizons') return horizonsPositionAt(series.samples, req)
 		const sample = series.samples.get(sampleKey(target, req.time.utc, series.source))
 		if (!sample) throw new Error(`ephemeris not found for ${target.type} at ${formatTemporal(req.time.utc, undefined, 0)}`)
@@ -954,20 +1029,20 @@ export class AtlasEphemeris {
 
 	// Noon-to-noon Horizons tile, or the single offline sample, for `target` at `req`.
 	// Does not fall back to a one-sample offline series: charts need the 1441-point tile.
-	series(target: EphemerisTarget, req: PositionOfBody): Promise<EphemerisSampleSeries> {
-		return this.resolve(target, { ...req, fast: false }, false)
+	series(target: EphemerisTarget, req: PositionOfBody, signal?: AbortSignal): Promise<EphemerisSampleSeries> {
+		return this.resolve(target, { ...req, fast: false }, false, signal)
 	}
 
 	// 1441 altitudes (radians) at 1 min for `target`. Horizons uses the noon-to-noon tile 1:1.
-	async chart(target: EphemerisTarget, req: PositionOfBody): Promise<number[]> {
-		const series = await this.series(target, req)
+	async chart(target: EphemerisTarget, req: PositionOfBody, signal?: AbortSignal): Promise<number[]> {
+		const series = await this.series(target, req, signal)
 		return altitudesFromSeries(series, req)
 	}
 
 	// Apparent BodyPosition at the civil minute of `req.time.utc`, from a noon-to-noon Horizons series.
 	// Ignores `fast`: this path is the Horizons tile used by charts and twilight.
-	positionFromHorizons(input: HorizonsEphemerisInput, req: PositionOfBody): Promise<BodyPosition> {
-		return this.position(targetFromHorizonsInput(input), { ...req, fast: false })
+	positionFromHorizons(input: HorizonsEphemerisInput, req: PositionOfBody, signal?: AbortSignal): Promise<BodyPosition> {
+		return this.position(targetFromHorizonsInput(input), { ...req, fast: false }, signal)
 	}
 
 	// 1441 altitudes (radians) at 1 min from the cached noon-to-noon Horizons series for `input` at `req`.
@@ -981,12 +1056,14 @@ export class AtlasEphemeris {
 	}
 
 	// 1441 altitudes (radians) at 1 min for a catalog object, computed locally noon-to-noon.
-	chartOfSkyObject(req: PositionOfBody, object: SkyObject): number[] {
+	chartOfSkyObject(req: PositionOfBody, object: SkyObject, signal?: AbortSignal): number[] {
+		signal?.throwIfAborted()
 		let [startTime] = computeStartAndEndTime(req.time)
 		const data = new Array<number>(1441)
 		let ebpv: PositionAndVelocity | undefined
 
 		for (let i = 0; i < data.length; i++) {
+			if ((i & 31) === 0) signal?.throwIfAborted()
 			const time = makeTime(startTime, req.location)
 
 			if (i === 0 || i === 720 || i === 1440) ebpv = vsop.earth(time)
@@ -1013,7 +1090,8 @@ export class AtlasEphemeris {
 	// Transient Horizons failures fall back to a local model when one exists. Semantic Horizons
 	// errors do not. `allowOfflineFallback` is false for series/chart: those need a noon-to-noon
 	// Horizons tile, not a single offline sample.
-	private resolve(target: EphemerisTarget, req: PositionOfBody, allowOfflineFallback = true): Promise<EphemerisSampleSeries> {
+	private resolve(target: EphemerisTarget, req: PositionOfBody, allowOfflineFallback = true, signal?: AbortSignal): Promise<EphemerisSampleSeries> {
+		signal?.throwIfAborted()
 		const [start, end] = computeStartAndEndTime(req.time)
 		const point = target.type === 'star' || target.type === 'skyPoint'
 		const request: EphemerisSampleRequest = {
@@ -1023,6 +1101,7 @@ export class AtlasEphemeris {
 			end: point ? req.time.utc : end,
 			stepSize: HORIZONS_STEP_SIZE_SECONDS,
 			flags: bodyPositionFlagsOf(req),
+			signal,
 		}
 
 		const mode: EphemerisMode = req.fast ? 'fast' : 'accurate'
@@ -1044,6 +1123,8 @@ export class AtlasEphemeris {
 	// `skipWhenOpen` is true for accurate mode: an open breaker uses offline immediately or throws
 	// without waiting. Fast Horizons-only targets still call Horizons while the breaker is open.
 	private async fetchHorizonsOrFallback(request: EphemerisSampleRequest, utc: number, useOffline: boolean, skipWhenOpen: boolean): Promise<EphemerisSampleSeries> {
+		request.signal?.throwIfAborted()
+
 		if (this.breaker.isOpen()) {
 			if (useOffline) {
 				console.info({ event: 'ephemeris-fallback', target: request.target.type, source: 'offline', reason: 'breaker-open' })
@@ -1057,6 +1138,7 @@ export class AtlasEphemeris {
 			this.breaker.recordSuccess()
 			return series
 		} catch (error) {
+			if (request.signal?.aborted) throw error
 			const kind = classifyHorizonsFailure(error)
 
 			if (kind === 'transient') {

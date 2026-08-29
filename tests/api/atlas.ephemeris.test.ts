@@ -1,10 +1,14 @@
 import { describe, expect, test } from 'bun:test'
+import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
+import { DEG2RAD } from 'nebulosa/src/core/constants'
 import type { CsvRow } from 'nebulosa/src/io/csv'
-import { deg, toDeg } from 'nebulosa/src/math/units/angle'
-import { meter } from 'nebulosa/src/math/units/distance'
-import { AtlasEphemeris, EphemerisUnavailableError, planetTargetFromCode } from 'src/api/atlas.ephemeris'
+import { deg, parseAngle, toDeg } from 'nebulosa/src/math/units/angle'
+import { meter, toKilometer } from 'nebulosa/src/math/units/distance'
+import { AtlasEphemeris, EphemerisUnavailableError, observeSolarSystemBody, planetTargetFromCode } from 'src/api/atlas.ephemeris'
 import type { EphemerisProvider, EphemerisSampleRequest, EphemerisTarget, HorizonsObserver } from 'src/api/atlas.ephemeris'
+import { makeTime } from 'src/api/util'
+import type { OsculatingElementsInput } from '#/asteroid'
 import { DEFAULT_BODY_POSITION } from '#/atlas'
 import type { PositionOfBody } from '#/atlas'
 import type { SkyObject } from '#/galaxy'
@@ -298,13 +302,13 @@ describe('provider selection', () => {
 		expect(calls).toEqual(['DES=20000001;'])
 	})
 
-	test('fast true on a VSOP planet still uses Horizons until local models exist', async () => {
+	test('fast true on a VSOP planet does not call observer', async () => {
 		const { observer, calls } = recordingObserver()
 		const ephemeris = new AtlasEphemeris({ observer })
 
 		await ephemeris.position(JUPITER, { ...REQ_A, fast: true })
 
-		expect(calls).toEqual(['599'])
+		expect(calls).toHaveLength(0)
 	})
 
 	test('a target with no provider throws EphemerisUnavailableError', () => {
@@ -321,5 +325,125 @@ describe('provider selection', () => {
 
 		expect(ephemeris.position(JUPITER, REQ_A)).rejects.toThrow('timeout')
 		expect(offline.calls).toBe(0)
+	})
+})
+
+function angularSeparationArcsec(a: readonly [number, number], b: readonly [number, number]) {
+	const dRa = (a[0] - b[0]) * Math.cos((a[1] + b[1]) / 2)
+	const dDec = a[1] - b[1]
+	return Math.hypot(dRa, dDec) * (180 / Math.PI) * 3600
+}
+
+const CERES_ELEMENTS: OsculatingElementsInput = {
+	epoch: 2461000.5,
+	referenceEclipticFrame: 'J2000',
+	ec: 0.07957631994408416,
+	tpqr: { ma: 231.5397330043706 * DEG2RAD, a: 2.765615651508659 },
+	om: 80.24963090816965 * DEG2RAD,
+	w: 73.29975464616518 * DEG2RAD,
+	i: 10.58788658206854 * DEG2RAD,
+	h: 3.35,
+	g: 0.12,
+}
+
+describe('offline solar-system models', () => {
+	test('observeSolarSystemBody sun stays within a few arcseconds of Horizons', () => {
+		const time = makeTime(REQ_A.time.utc, REQ_A.location)
+		const position = observeSolarSystemBody(vsop.sun, time, -26.74)
+		const horizons: readonly [number, number] = [parseAngle('08 28 44.08', true)!, parseAngle('19 02 29.5')!]
+
+		expect(angularSeparationArcsec(position.equatorial, horizons)).toBeLessThan(5)
+		expect(toKilometer(position.distance)).toBeCloseTo(151909927.865284, -4)
+		expect(position.magnitude).toBe(-26.74)
+		expect(position.illuminated).toBe(1)
+		expect(position.elongation).toBe(0)
+	})
+
+	test('fast true Jupiter and Moon stay within a few arcseconds of Horizons', async () => {
+		const ephemeris = new AtlasEphemeris({ observer: recordingObserver().observer })
+		const req = { ...REQ_A, fast: true }
+		const jupiter = await ephemeris.position(JUPITER, req)
+		const moon = await ephemeris.position({ type: 'moon' }, req)
+
+		expect(angularSeparationArcsec(jupiter.equatorial, [parseAngle('06 46 51.69', true)!, parseAngle('22 53 45.8')!])).toBeLessThan(5)
+		expect(jupiter.magnitude).toBeCloseTo(-1.908, 1)
+		expect(angularSeparationArcsec(moon.equatorial, [parseAngle('10 48 30.64', true)!, parseAngle('09 07 43.3')!])).toBeLessThan(10)
+		expect(moon.magnitude).toBeNull()
+	})
+
+	test('fast true uses local models for moon, pluto, phobos, and miranda', async () => {
+		const { observer, calls } = recordingObserver()
+		const ephemeris = new AtlasEphemeris({ observer })
+		const req = { ...REQ_A, fast: true }
+
+		await ephemeris.position({ type: 'moon' }, req)
+		await ephemeris.position({ type: 'pluto' }, req)
+		await ephemeris.position(planetTargetFromCode('401'), req)
+		await ephemeris.position(planetTargetFromCode('705'), req)
+
+		expect(calls).toHaveLength(0)
+	})
+
+	test('code 607 uses Hyperion, not Iapetus', async () => {
+		const { observer, calls } = recordingObserver()
+		const ephemeris = new AtlasEphemeris({ observer })
+		const req = { ...REQ_A, fast: true }
+
+		const hyperion = await ephemeris.position(planetTargetFromCode('607'), req)
+		const iapetus = await ephemeris.position(planetTargetFromCode('608'), req)
+
+		expect(calls).toHaveLength(0)
+		expect(angularSeparationArcsec(hyperion.equatorial, iapetus.equatorial)).toBeGreaterThan(60)
+	})
+
+	test('fast true with osculating elements uses Kepler and skips observer', async () => {
+		const { observer, calls } = recordingObserver()
+		const ephemeris = new AtlasEphemeris({ observer })
+		const target = planetTargetFromCode('DES=20000001;', CERES_ELEMENTS)
+
+		const position = await ephemeris.position(target, { ...REQ_A, fast: true })
+
+		expect(calls).toHaveLength(0)
+		expect(position.magnitude).not.toBeNull()
+	})
+
+	test('B1950 elements stay on Horizons even when fast is true', async () => {
+		const { observer, calls } = recordingObserver()
+		const ephemeris = new AtlasEphemeris({ observer })
+		const target = planetTargetFromCode(';', { ...CERES_ELEMENTS, referenceEclipticFrame: 'B1950' })
+
+		await ephemeris.position(target, { ...REQ_A, fast: true })
+
+		expect(calls).toEqual([';'])
+	})
+
+	test('eccentricity at or above 1 uses the perihelion Kepler branch', async () => {
+		const { observer, calls } = recordingObserver()
+		const ephemeris = new AtlasEphemeris({ observer })
+		const target = planetTargetFromCode(';', {
+			...CERES_ELEMENTS,
+			ec: 1.2,
+			tpqr: { qr: 0.5, tp: 2461000.5 },
+		})
+
+		await ephemeris.position(target, { ...REQ_A, fast: true })
+
+		expect(calls).toHaveLength(0)
+	})
+
+	test('SGP4 at the requested timestamp does not call observer', async () => {
+		const { observer, calls } = recordingObserver()
+		const ephemeris = new AtlasEphemeris({ observer })
+		const satellite = {
+			id: 25544,
+			name: 'ISS',
+			groups: [],
+			line1: '1 25544U 98067A   25200.00000000  .00000000  00000-0  00000-0 0  9990',
+			line2: '2 25544  51.6400 000.0000 0000000   0.0000   0.0000 15.50000000000000',
+		}
+
+		await ephemeris.position({ type: 'satellite', satellite }, { ...REQ_A, fast: true })
+
+		expect(calls).toHaveLength(0)
 	})
 })

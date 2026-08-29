@@ -2,6 +2,7 @@ import { Database } from 'bun:sqlite'
 import type { SQLQueryBindings } from 'bun:sqlite'
 import { join } from 'path'
 import { closeApproaches, search } from 'nebulosa/src/adapters/orbits/sbd'
+import type { SmallBodySearchFound, SmallBodySearchOrbitElement, SmallBodySearchPhyscalParameter } from 'nebulosa/src/adapters/orbits/sbd'
 import { nearestLunarApsis, nearestLunarEclipse, nearestLunarPhase } from 'nebulosa/src/astronomy/bodies/moon'
 import type { LunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
 import { nearestSolarEclipse, season } from 'nebulosa/src/astronomy/bodies/sun'
@@ -34,7 +35,7 @@ import type { Angle } from 'nebulosa/src/math/units/angle'
 import { makeTime } from 'src/api/util'
 import nebulosa from 'src/data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import { DEFAULT_MINOR_PLANET } from '#/asteroid'
-import type { MinorPlanet, MinorPlanetParameter, FindCloseApproaches, CloseApproach, SearchMinorPlanet } from '#/asteroid'
+import type { MinorPlanet, MinorPlanetParameter, FindCloseApproaches, CloseApproach, OsculatingElementsInput, SearchMinorPlanet } from '#/asteroid'
 import type { BodyPosition, ChartOfBody, LocationAndTime, PositionOfBody } from '#/atlas'
 import type { SearchSkyObject, SkyObject, SkyObjectSearchItem } from '#/galaxy'
 import type { FindLunarEclipse, LunarEclipseMap, ComputeLunarEclipseLocalCircumstances, ComputeLunarEclipseLocalView, ApogeeAndPerigee, LunarPhaseTime } from '#/moon'
@@ -137,7 +138,7 @@ export class AtlasHandler {
 	}
 
 	async chartOfSun(req: ChartOfBody) {
-		await this.positionOfSun(req)
+		await this.ephemeris.positionFromHorizons('10', req)
 		return this.ephemeris.chartFromHorizons('10', req)
 	}
 
@@ -151,7 +152,7 @@ export class AtlasHandler {
 	}
 
 	async twilight(req: PositionOfBody) {
-		await this.positionOfSun(req)
+		await this.ephemeris.positionFromHorizons('10', req)
 
 		const [startTime, endTime] = this.computeStartAndEndTime(req.time)
 		const offset = req.time.offset * 60000
@@ -239,7 +240,7 @@ export class AtlasHandler {
 	}
 
 	async chartOfMoon(req: ChartOfBody) {
-		await this.positionOfMoon(req)
+		await this.ephemeris.positionFromHorizons('301', req)
 		return this.ephemeris.chartFromHorizons('301', req)
 	}
 
@@ -307,11 +308,11 @@ export class AtlasHandler {
 	}
 
 	positionOfPlanet(code: string, req: PositionOfBody) {
-		return this.ephemeris.position(planetTargetFromCode(code), req)
+		return this.ephemeris.position(planetTargetFromCode(code, req.elements), req)
 	}
 
 	async chartOfPlanet(code: string, req: ChartOfBody) {
-		await this.positionOfPlanet(code, req)
+		await this.ephemeris.positionFromHorizons(code, req)
 		return this.ephemeris.chartFromHorizons(code, req)
 	}
 
@@ -336,7 +337,7 @@ export class AtlasHandler {
 
 			const { fullname: name, spkid: id, kind, pha, neo, orbit_class } = result.object
 
-			return { name, id, kind, pha, neo, orbitType: orbit_class.name, parameters }
+			return { name, id, kind, pha, neo, orbitType: orbit_class.name, parameters, elements: oscillatingElementsFromSbdb(result) }
 		}
 	}
 
@@ -766,6 +767,71 @@ export function atlas(atlas: AtlasHandler) {
 
 function finiteNumber(value: unknown): value is number {
 	return typeof value === 'number' && Number.isFinite(value)
+}
+
+// Numeric osculating elements from an SBDB match. Angles are converted from degrees to radians;
+// epoch and perihelion time stay JD TDB. Undefined when the published solution lacks e, i, om, w
+// and a size/anomaly pair.
+function oscillatingElementsFromSbdb(result: SmallBodySearchFound): OsculatingElementsInput | undefined {
+	const { elements } = result.orbit
+	const ec = sbdbNumber(elements, 'e')
+	const i = sbdbNumber(elements, 'i')
+	const om = sbdbNumber(elements, 'om')
+	const w = sbdbNumber(elements, 'w')
+	const epoch = Number.parseFloat(result.orbit.epoch)
+	if (ec === undefined || i === undefined || om === undefined || w === undefined || !Number.isFinite(epoch)) return undefined
+
+	const a = sbdbNumber(elements, 'a')
+	const ma = sbdbNumber(elements, 'ma')
+	const qr = sbdbNumber(elements, 'q')
+	const tp = sbdbNumber(elements, 'tp')
+	const n = sbdbNumber(elements, 'n')
+
+	let tpqr: OsculatingElementsInput['tpqr']
+	if (ec >= 1) {
+		if (qr === undefined || tp === undefined) return undefined
+		tpqr = { qr, tp }
+	} else if (a !== undefined && ma !== undefined) {
+		tpqr = { ma: ma * DEG2RAD, a }
+	} else if (n !== undefined && ma !== undefined) {
+		tpqr = { ma: ma * DEG2RAD, n: n * DEG2RAD }
+	} else if (qr !== undefined && tp !== undefined) {
+		tpqr = { qr, tp }
+	} else {
+		return undefined
+	}
+
+	const H = sbdbPhys(result.phys_par, 'H')
+	const G = sbdbPhys(result.phys_par, 'G')
+	const m1 = sbdbPhys(result.phys_par, 'M1')
+	const k1 = sbdbPhys(result.phys_par, 'K1')
+	const equinox = result.orbit.equinox.toUpperCase()
+
+	return {
+		epoch,
+		referenceEclipticFrame: equinox.includes('B1950') ? 'B1950' : 'J2000',
+		ec,
+		tpqr,
+		om: om * DEG2RAD,
+		w: w * DEG2RAD,
+		i: i * DEG2RAD,
+		h: H,
+		g: G,
+		m1,
+		k1,
+	}
+}
+
+// Named orbital element as a finite number, or undefined when missing.
+function sbdbNumber(elements: readonly SmallBodySearchOrbitElement[], name: SmallBodySearchOrbitElement['name']): number | undefined {
+	const value = Number.parseFloat(elements.find((e) => e.name === name)?.value ?? '')
+	return Number.isFinite(value) ? value : undefined
+}
+
+// Named physical parameter as a finite number, or undefined when missing.
+function sbdbPhys(parameters: readonly SmallBodySearchPhyscalParameter[], name: string): number | undefined {
+	const value = Number.parseFloat(parameters.find((e) => e.name === name)?.value ?? '')
+	return Number.isFinite(value) ? value : undefined
 }
 
 function normalizeCount(value: unknown) {

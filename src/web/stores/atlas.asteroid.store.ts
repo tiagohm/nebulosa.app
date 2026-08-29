@@ -149,7 +149,7 @@ function select(pdes: string) {
 
 async function updatePosition() {
 	const code = `DES=${state.selected!.id};`
-	const position = await Api.Atlas.positionOfPlanet(state.request, code)
+	const position = await Api.Atlas.positionOfPlanet({ ...state.request, elements: state.selected!.elements }, code)
 	if (position) Object.assign(state.position, position)
 }
 
@@ -157,7 +157,7 @@ async function updateChart(force: boolean = false) {
 	if (!chartUpdate && !force) return
 	chartUpdate = false
 	const code = `DES=${state.selected!.id};`
-	const chart = await Api.Atlas.chartOfPlanet(state.request, code)
+	const chart = await Api.Atlas.chartOfPlanet({ ...state.request, elements: state.selected!.elements }, code)
 	if (chart) state.chart = chart
 	else chartUpdate = true
 }

@@ -367,6 +367,12 @@ describe('minor planet', () => {
 			expect(result.orbitType).toBe('Main-belt Asteroid')
 			expect(result.parameters).toBeDefined()
 			expect(result.parameters).toHaveLength(25)
+			expect(result.elements).toBeDefined()
+			expect(result.elements!.ec).toBeCloseTo(0.07957631994408416, 12)
+			expect('a' in result.elements!.tpqr && result.elements!.tpqr.a).toBe(2.765615651508659)
+			expect(result.elements!.h).toBe(3.35)
+			expect(result.elements!.g).toBe(0.12)
+			expect(result.elements!.referenceEclipticFrame).toBe('J2000')
 		}
 	})
 

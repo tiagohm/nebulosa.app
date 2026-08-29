@@ -1,38 +1,54 @@
 import { observer as horizonsObserver } from 'nebulosa/src/adapters/ephemeris/horizons'
 import type { Quantity } from 'nebulosa/src/adapters/ephemeris/horizons'
+import { planetMagnitude } from 'nebulosa/src/astronomy/bodies/photometry'
 import type { Planet } from 'nebulosa/src/astronomy/bodies/photometry'
 import { observeStar } from 'nebulosa/src/astronomy/bodies/star'
-import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astronomy/coordinates/astrometry'
-import type { PositionAndVelocity } from 'nebulosa/src/astronomy/coordinates/astrometry'
+import { equatorial, icrsToObserved, lightTime, phaseAngle, topocentricDirection } from 'nebulosa/src/astronomy/coordinates/astrometry'
+import type { PositionAndVelocity, PositionAndVelocityOverTime } from 'nebulosa/src/astronomy/coordinates/astrometry'
+import { cirsToObserved } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { constellation, CONSTELLATION_LIST } from 'nebulosa/src/astronomy/coordinates/constellation'
 import { equatorialFromJ2000, equatorialToEcliptic, equatorialToGalatic, equatorialToJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { eraS2p } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
+import { frameToFrame, ICRS, ITRS, TEME } from 'nebulosa/src/astronomy/coordinates/frame'
+import { itrs } from 'nebulosa/src/astronomy/coordinates/itrs'
+import * as elpmpp02 from 'nebulosa/src/astronomy/ephemeris/models/analytical/elpmpp02'
+import * as gust86 from 'nebulosa/src/astronomy/ephemeris/models/analytical/gust86'
+import * as l12 from 'nebulosa/src/astronomy/ephemeris/models/analytical/l12'
+import * as marssat from 'nebulosa/src/astronomy/ephemeris/models/analytical/marssat'
+import { pluto } from 'nebulosa/src/astronomy/ephemeris/models/analytical/pluto'
+import * as tass17 from 'nebulosa/src/astronomy/ephemeris/models/analytical/tass17'
 import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
+import { asteroidMagnitudeEstimate, cometMagnitudeEstimate } from 'nebulosa/src/astronomy/formulas'
+import type { GeographicCoordinate, GeographicPosition } from 'nebulosa/src/astronomy/observer/location'
 import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
-import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
+import { asteroid, comet, KeplerOrbit } from 'nebulosa/src/astronomy/orbits/asteroid'
+import { parseTLE, sgp4 } from 'nebulosa/src/astronomy/orbits/propagation/sgp4'
 import { formatTemporal, parseTemporal, temporalAdd, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract } from 'nebulosa/src/astronomy/time/temporal'
 import type { Temporal } from 'nebulosa/src/astronomy/time/temporal'
-import { AU_KM, ONE_KILOPARSEC, SPEED_OF_LIGHT } from 'nebulosa/src/core/constants'
+import { time, timeShift, Timescale, tt } from 'nebulosa/src/astronomy/time/time'
+import type { Time } from 'nebulosa/src/astronomy/time/time'
+import { AU_KM, GM_SUN_PITJEVA_2005, ONE_KILOPARSEC, SPEED_OF_LIGHT } from 'nebulosa/src/core/constants'
 import type { Writable } from 'nebulosa/src/core/types'
 import { expectedPierSide, meridianTimeIn } from 'nebulosa/src/devices/indi/device'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
 import type { CsvRow } from 'nebulosa/src/io/csv'
-import { parseAngle, toDeg } from 'nebulosa/src/math/units/angle'
+import { vecAngle, vecLength } from 'nebulosa/src/math/linear-algebra/vec3'
+import type { Vec3 } from 'nebulosa/src/math/linear-algebra/vec3'
+import { normalizeAngle, normalizePI, parseAngle, toDeg } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { toMeter } from 'nebulosa/src/math/units/distance'
+import type { OsculatingElementsInput } from '#/asteroid'
 import type { BodyPosition, PositionOfBody } from '#/atlas'
 import type { SkyObject } from '#/galaxy'
+import { coordinateInfo } from '#/mount'
 import type { Satellite } from '#/satellite'
 import { makeTime } from './util'
 
-// Atlas ephemeris service: provider selection, Horizons observer-table tiles, and local star/sky-point
-// reduction. VSOP/ELP/SGP4/Kepler models are not wired yet; `fast` only prefers offline when the
-// offline provider currently supports the target (stars and sky points).
-//
-// Cached Horizons series are immutable and keyed by source, target fingerprint, model, window, step,
-// and observer. `fast`, flags, and `time.offset` are not part of the physical identity. Distances are
-// AU, angles radians, instants Unix milliseconds. Horizons is sampled every 60 s over local
-// noon-to-noon; the requested utc is still truncated to the civil minute.
+// Atlas ephemeris service: provider selection, Horizons observer-table tiles, and local models
+// (VSOP87E, ELPMPP02, Meeus Pluto, MARSSAT/L12/TASS17/GUST86, SGP4, Kepler, stars, sky points).
+// `fast` prefers a local model when one exists; otherwise Horizons. Distances are AU, angles
+// radians, instants Unix milliseconds. Horizons is still sampled every 60 s over local noon-to-noon
+// and truncated to the civil minute; cheap offline position is evaluated at the requested utc.
 
 // Maximum number of noon-to-noon Horizons series retained. Each tile is ~1441 samples; eviction is
 // LRU by series, not by sample count.
@@ -40,6 +56,15 @@ export const ATLAS_EPHEMERIS_CACHE_LIMIT = 64
 
 // Horizons observer-table sampling interval used by this extraction, in seconds.
 const HORIZONS_STEP_SIZE_SECONDS = 60
+
+// Apparent visual magnitude of the Sun used by the offline path (Mallama solar constant).
+const SUN_VISUAL_MAGNITUDE = -26.74
+
+// Maximum KeplerOrbit instances retained, keyed by the canonical element fingerprint.
+const KEPLER_ORBIT_CACHE_LIMIT = 16
+
+// Light-time fixed-point iterations, matching computeSunMoonPositionAt.
+const LIGHT_TIME_ITERATIONS = 2
 
 // Horizons COMMAND values for the eight VSOP87E planets. Pluto is not in this set.
 export type PlanetHorizonsCode = '199' | '299' | '499' | '599' | '699' | '799' | '899'
@@ -59,7 +84,7 @@ export type EphemerisTarget =
 	| { readonly type: 'pluto' }
 	| { readonly type: 'star'; readonly object: SkyObject }
 	| { readonly type: 'skyPoint'; readonly rightAscension: Angle; readonly declination: Angle }
-	| { readonly type: 'minorBody'; readonly command?: string }
+	| { readonly type: 'minorBody'; readonly command?: string; readonly elements?: OsculatingElementsInput }
 	| { readonly type: 'satellite'; readonly satellite: Satellite }
 	| { readonly type: 'naturalSatellite'; readonly code: string }
 	| { readonly type: 'horizons'; readonly command: string }
@@ -125,6 +150,40 @@ const PLANET_BY_CODE: Readonly<Record<PlanetHorizonsCode, Planet>> = {
 // code here is Horizons-only. Other moons in planetary.satellites.json go through `horizons`.
 const NATURAL_SATELLITE_CODES: ReadonlySet<string> = new Set(['401', '402', '501', '502', '503', '504', '601', '602', '603', '604', '605', '606', '607', '608', '701', '702', '703', '704', '705', '901', '902', '903', '904', '905'])
 
+// VSOP87E barycentric sampler for each planet COMMAND. Pluto is not in this table.
+const VSOP_BY_CODE: Readonly<Record<PlanetHorizonsCode, PositionAndVelocityOverTime>> = {
+	'199': vsop.mercury,
+	'299': vsop.venus,
+	'499': vsop.mars,
+	'599': vsop.jupiter,
+	'699': vsop.saturn,
+	'799': vsop.uranus,
+	'899': vsop.neptune,
+}
+
+// Planetocentric J2000 sampler plus the parent VSOP planet. 607 is Hyperion, not Iapetus.
+const NATURAL_SATELLITE_MODEL: Readonly<Record<string, { readonly moon: PositionAndVelocityOverTime; readonly planet: PositionAndVelocityOverTime }>> = {
+	'401': { moon: marssat.phobos, planet: vsop.mars },
+	'402': { moon: marssat.deimos, planet: vsop.mars },
+	'501': { moon: l12.io, planet: vsop.jupiter },
+	'502': { moon: l12.europa, planet: vsop.jupiter },
+	'503': { moon: l12.ganymede, planet: vsop.jupiter },
+	'504': { moon: l12.callisto, planet: vsop.jupiter },
+	'601': { moon: tass17.mimas, planet: vsop.saturn },
+	'602': { moon: tass17.enceladus, planet: vsop.saturn },
+	'603': { moon: tass17.tethys, planet: vsop.saturn },
+	'604': { moon: tass17.dione, planet: vsop.saturn },
+	'605': { moon: tass17.rhea, planet: vsop.saturn },
+	'606': { moon: tass17.titan, planet: vsop.saturn },
+	'607': { moon: tass17.hyperion, planet: vsop.saturn },
+	'608': { moon: tass17.iapetus, planet: vsop.saturn },
+	'701': { moon: gust86.ariel, planet: vsop.uranus },
+	'702': { moon: gust86.umbriel, planet: vsop.uranus },
+	'703': { moon: gust86.titania, planet: vsop.uranus },
+	'704': { moon: gust86.oberon, planet: vsop.uranus },
+	'705': { moon: gust86.miranda, planet: vsop.uranus },
+}
+
 // Cached noon-to-noon Horizons samples, keyed by truncated Unix seconds. Entries are frozen.
 type HorizonsSampleMap = Map<number, BodyPosition>
 
@@ -161,16 +220,16 @@ export class EphemerisInterpolationError extends Error {
 }
 
 // Maps a `/atlas/planets/:code` COMMAND to an EphemerisTarget. `10` and `301` are accepted if someone
-// hits those routes. At least one of `code` or future `elements` identifies the body; this phase only
-// reads the COMMAND.
-export function planetTargetFromCode(code: string): EphemerisTarget {
+// hits those routes. `elements` attach only to `minorBody`; they are ignored for planets, moons, and
+// opaque Horizons codes.
+export function planetTargetFromCode(code: string, elements?: OsculatingElementsInput): EphemerisTarget {
 	if (code === '10') return { type: 'sun' }
 	if (code === '301') return { type: 'moon' }
 	if (code === '999') return { type: 'pluto' }
 
 	if (isPlanetHorizonsCode(code)) return { type: 'planet', code, name: PLANET_BY_CODE[code] }
 	if (NATURAL_SATELLITE_CODES.has(code)) return { type: 'naturalSatellite', code }
-	if (isMinorBodyCommand(code)) return { type: 'minorBody', command: code }
+	if (isMinorBodyCommand(code)) return elements ? { type: 'minorBody', command: code, elements } : { type: 'minorBody', command: code }
 	return { type: 'horizons', command: code }
 }
 
@@ -300,28 +359,274 @@ class HorizonsEphemerisProvider implements EphemerisProvider {
 	}
 }
 
-// Local models. This phase only computes stars and sky points; solar-system bodies stay Horizons-only
-// until the cheap analytical models are wired.
+// Sum of two barycentric states. Allocates a fresh pair so VSOP/moon buffers are not aliased.
+function addPv(a: PositionAndVelocity, b: PositionAndVelocity): PositionAndVelocity {
+	return [
+		[a[0][0] + b[0][0], a[0][1] + b[0][1], a[0][2] + b[0][2]],
+		[a[1][0] + b[1][0], a[1][1] + b[1][1], a[1][2] + b[1][2]],
+	]
+}
+
+// Geocentric TEME state rotated into GCRS/ICRS, as a PositionAndVelocity offset from the geocenter.
+function temeStateToGcrs(teme: PositionAndVelocity, time: Time): PositionAndVelocity {
+	return frameToFrame(teme, TEME, ICRS, time)
+}
+
+// Barycentric ICRS state of the ground site: VSOP Earth plus the ITRS geodetic offset rotated to ICRS.
+function observerBarycentric(time: Time): PositionAndVelocity {
+	const location = time.location!
+	const site: GeographicPosition = { longitude: location.longitude, latitude: location.latitude, elevation: location.elevation }
+	const earth = vsop.earth(time)
+	const offset = frameToFrame(itrs(site), ITRS, ICRS, time)
+	return [[earth[0][0] + offset[0], earth[0][1] + offset[1], earth[0][2] + offset[2]], earth[1]]
+}
+
+// Light-time and illumination geometry of one topocentric observation.
+export interface ObserveSolarSystemGeometry {
+	// Observer-to-body vector at reception, light-time corrected, AU.
+	readonly observerToBody: Vec3
+	// Sun-to-body vector at the emission instant, AU.
+	readonly sunToBody: Vec3
+}
+
+// Magnitude supplied as a constant or derived from the light-time geometry.
+export type ObserveSolarSystemMagnitude = number | null | ((geometry: ObserveSolarSystemGeometry) => number | null)
+
+// Apparent topocentric BodyPosition of a barycentric ICRS target at `time`.
+//
+// Uses two light-time iterations (`topocentricDirection`), then `icrsToObserved` for apparent RA/Dec
+// and Az/El. Diurnal parallax is the ITRS site offset added to VSOP Earth. `time.location` is the
+// observer; angles radians, distance AU.
+export function observeSolarSystemBody(target: PositionAndVelocityOverTime, time: Time, magnitude: ObserveSolarSystemMagnitude): BodyPosition {
+	const direction = topocentricDirection(target, observerBarycentric, time, LIGHT_TIME_ITERATIONS)
+	const emission = timeShift(time, -lightTime(direction))
+	const body = target(emission)[0]
+	const sun = vsop.sun(emission)[0]
+	const observer = observerBarycentric(time)[0]
+	const earth = vsop.earth(time)
+
+	const sunToBody: Vec3 = [body[0] - sun[0], body[1] - sun[1], body[2] - sun[2]]
+	const observerToSun: Vec3 = [sun[0] - observer[0], sun[1] - observer[1], sun[2] - observer[2]]
+	const geometry: ObserveSolarSystemGeometry = { observerToBody: direction, sunToBody }
+	const mag = typeof magnitude === 'function' ? magnitude(geometry) : magnitude
+
+	const equatorialJ2000 = equatorial(direction)
+	const observed = icrsToObserved(direction, time, earth)
+	const sunObserved = icrsToObserved(observerToSun, time, earth)
+	// eraAtioq RA is CIO/CIRS; Horizons and BodyPosition.equatorial use the equinox of date.
+	const rightAscension = normalizeAngle(observed.rightAscension - observed.equationOfOrigins)
+	const sunRightAscension = normalizeAngle(sunObserved.rightAscension - sunObserved.equationOfOrigins)
+	// The Sun has no unique phase geometry (body == sun); keep full illumination and zero elongation.
+	const self = vecLength(sunToBody) < 1e-12
+	const illuminated = self ? 1 : 0.5 * (1 + Math.cos(phaseAngle(body, sun, observer)))
+	const elongation = self ? 0 : vecAngle(observerToSun, direction)
+	const leading = self ? false : normalizePI(rightAscension - sunRightAscension) > 0
+
+	const frames = coordinateInfo(
+		time,
+		time.location!.longitude,
+		{ rightAscension, declination: observed.declination },
+		{
+			equatorial: false,
+			equatorialJ2000: false,
+			horizontal: false,
+			ecliptic: true,
+			galactic: true,
+			constellation: true,
+			lst: true,
+		},
+	)
+
+	return {
+		magnitude: mag,
+		constellation: frames.constellation,
+		distance: vecLength(direction),
+		illuminated,
+		elongation,
+		leading,
+		equatorial: [rightAscension, observed.declination],
+		equatorialJ2000: [equatorialJ2000[0], equatorialJ2000[1]],
+		horizontal: [observed.azimuth, observed.altitude],
+		ecliptic: frames.ecliptic,
+		galactic: frames.galactic,
+		lst: frames.lst,
+		pierSide: frames.pierSide,
+		meridianTimeIn: frames.meridianTimeIn,
+	}
+}
+
+// Barycentric ICRS sampler for a solar-system target that has a local model. Undefined for stars,
+// sky points, TLE, and Horizons-only codes.
+function barycentricTarget(target: EphemerisTarget): PositionAndVelocityOverTime | undefined {
+	switch (target.type) {
+		case 'sun':
+			return vsop.sun
+		case 'planet':
+			return VSOP_BY_CODE[target.code]
+		case 'pluto':
+			return (t) => {
+				const sun = vsop.sun(t)
+				const helio = pluto(t)
+				return [[sun[0][0] + helio[0], sun[0][1] + helio[1], sun[0][2] + helio[2]], sun[1]]
+			}
+		case 'moon':
+			return (t) => addPv(vsop.earth(t), elpmpp02.moon(t))
+		case 'naturalSatellite': {
+			const model = NATURAL_SATELLITE_MODEL[target.code]
+			if (!model) return undefined
+			return (t) => addPv(model.planet(t), model.moon(t))
+		}
+		default:
+			return undefined
+	}
+}
+
+// Julian Date split into ERFA day + fraction, TDB.
+function timeFromJd(jd: number): Time {
+	const day = Math.trunc(jd)
+	return time(day, jd - day, Timescale.TDB)
+}
+
+// Julian calendar year of `time` (TT), used by Neptune's Mallama secular term.
+function julianYear(time: Time): number {
+	const t = tt(time)
+	return 2000 + (t.day - 2451545 + t.fraction) / 365.25
+}
+
+// IAU HG phase correction in magnitudes for phase angle `phase` (radians) and slope `g`.
+function asteroidHgPhaseCorrection(phase: Angle, g: number): number {
+	const t = Math.tan(Math.max(0, phase) / 2)
+	const phi1 = Math.exp(-3.33 * t ** 0.63)
+	const phi2 = Math.exp(-1.87 * t ** 1.22)
+	return -2.5 * Math.log10((1 - g) * phi1 + g * phi2)
+}
+
+// Apparent magnitude from osculating photometry. `null` when neither H nor m1 is present.
+function minorBodyMagnitude(elements: OsculatingElementsInput, geometry: ObserveSolarSystemGeometry): number | null {
+	const r = vecLength(geometry.sunToBody)
+	const delta = vecLength(geometry.observerToBody)
+	if (elements.m1 !== undefined) return cometMagnitudeEstimate(elements.m1, delta, r, elements.k1 ?? 10)
+	if (elements.h === undefined) return null
+	const phase = vecAngle(geometry.sunToBody, geometry.observerToBody)
+	const correction = elements.g === undefined ? 0 : asteroidHgPhaseCorrection(phase, elements.g)
+	return asteroidMagnitudeEstimate(elements.h, r, delta, correction)
+}
+
+// Canonical fingerprint of osculating elements. Not JSON.stringify: field order is fixed.
+function elementsFingerprint(elements: OsculatingElementsInput): string {
+	const frame = elements.referenceEclipticFrame ?? 'J2000'
+	const { tpqr } = elements
+	const anomaly = 'qr' in tpqr ? `qr:${tpqr.qr}|tp:${tpqr.tp}` : 'a' in tpqr ? `ma:${tpqr.ma}|a:${tpqr.a}` : `ma:${tpqr.ma}|n:${tpqr.n}`
+	return `${elements.epoch}|${frame}|${elements.ec}|${anomaly}|${elements.om}|${elements.w}|${elements.i}|${elements.h ?? ''}|${elements.g ?? ''}|${elements.m1 ?? ''}`
+}
+
+// KeplerOrbit from J2000 osculating elements. `e >= 1` uses the perihelion branch; B1950 is rejected.
+function keplerFromElements(elements: OsculatingElementsInput): KeplerOrbit {
+	if (elements.referenceEclipticFrame === 'B1950') throw new OfflineEphemerisUnavailableError('Kepler offline model requires J2000 elements')
+
+	const { tpqr, ec, i, om, w } = elements
+	if (ec >= 1 || 'qr' in tpqr) {
+		if (!('qr' in tpqr)) throw new OfflineEphemerisUnavailableError('parabolic or hyperbolic Kepler needs perihelion distance and time')
+		return comet(tpqr.qr * (1 + ec), ec, i, om, w, timeFromJd(tpqr.tp))
+	}
+
+	if ('a' in tpqr) return asteroid(tpqr.a, ec, i, om, w, tpqr.ma, timeFromJd(elements.epoch))
+	const a = Math.cbrt(GM_SUN_PITJEVA_2005 / (tpqr.n * tpqr.n))
+	return asteroid(a, ec, i, om, w, tpqr.ma, timeFromJd(elements.epoch))
+}
+
+// Local models: stars, sky points, VSOP/ELP/Pluto, natural satellites, SGP4, and Kepler when elements
+// are present. Point samples are evaluated at `request.start` (the requested utc).
 class OfflineEphemerisProvider implements EphemerisProvider {
 	readonly source = 'offline' as const
+	private readonly keplerOrbits = new Map<string, KeplerOrbit>()
 
-	// True for catalog stars and sky points. Solar-system offline models are not enabled yet.
+	// True when a local model exists for `target`. Charon, B1950 elements, and command-only minor
+	// bodies are false.
 	supports(target: EphemerisTarget): boolean {
-		return target.type === 'star' || target.type === 'skyPoint'
+		switch (target.type) {
+			case 'star':
+			case 'skyPoint':
+			case 'sun':
+			case 'moon':
+			case 'planet':
+			case 'pluto':
+			case 'satellite':
+				return true
+			case 'naturalSatellite':
+				return target.code in NATURAL_SATELLITE_MODEL
+			case 'minorBody':
+				return target.elements !== undefined && target.elements.referenceEclipticFrame !== 'B1950'
+			default:
+				return false
+		}
 	}
 
 	// One sample at `request.start` (the requested utc). Does not build a noon-to-noon tile.
 	samples(request: EphemerisSampleRequest): Promise<EphemerisSampleSeries> {
 		const { target, location, start } = request
 		const req: PositionOfBody = { location, time: { utc: start, offset: 0 } }
-		let position: BodyPosition
-
-		if (target.type === 'star') position = positionOfStar(target.object, req)
-		else if (target.type === 'skyPoint') position = positionOfSkyPoint(target.rightAscension, target.declination, req)
-		else throw new OfflineEphemerisUnavailableError(`offline ephemeris is not implemented for ${target.type}`)
-
+		const position = this.positionAt(target, req)
 		const samples = new Map<number, BodyPosition>([[start, position]])
 		return Promise.resolve({ key: `offline|${target.type}|${start}`, source: 'offline', samples })
+	}
+
+	// Apparent BodyPosition of `target` at `req.time.utc`.
+	private positionAt(target: EphemerisTarget, req: PositionOfBody): BodyPosition {
+		if (target.type === 'star') return positionOfStar(target.object, req)
+		if (target.type === 'skyPoint') return positionOfSkyPoint(target.rightAscension, target.declination, req)
+
+		const time = makeTime(req.time.utc, req.location)
+
+		if (target.type === 'satellite') {
+			const tle = parseTLE(target.satellite.line1, target.satellite.line2, target.satellite.name)
+			return observeSolarSystemBody((t) => addPv(vsop.earth(t), temeStateToGcrs(sgp4(t, tle), t)), time, null)
+		}
+
+		if (target.type === 'minorBody') {
+			if (!target.elements) throw new OfflineEphemerisUnavailableError('offline minor body needs osculating elements')
+			const orbit = this.keplerOrbit(target.elements)
+			const elements = target.elements
+			return observeSolarSystemBody(
+				(t) => addPv(vsop.sun(t), orbit.at(t)),
+				time,
+				(geometry) => minorBodyMagnitude(elements, geometry),
+			)
+		}
+
+		const barycentric = barycentricTarget(target)
+		if (!barycentric) throw new OfflineEphemerisUnavailableError(`offline ephemeris is not implemented for ${target.type}`)
+
+		if (target.type === 'sun') return observeSolarSystemBody(barycentric, time, SUN_VISUAL_MAGNITUDE)
+		if (target.type === 'planet') {
+			const name = target.name
+			return observeSolarSystemBody(barycentric, time, (geometry) => {
+				const mag = planetMagnitude(name, geometry.sunToBody, geometry.observerToBody, { year: julianYear(time) })
+				return Number.isFinite(mag) ? mag : null
+			})
+		}
+
+		return observeSolarSystemBody(barycentric, time, null)
+	}
+
+	// Cached KeplerOrbit for `elements`, evicting the oldest entry past KEPLER_ORBIT_CACHE_LIMIT.
+	private keplerOrbit(elements: OsculatingElementsInput): KeplerOrbit {
+		const key = elementsFingerprint(elements)
+		const cached = this.keplerOrbits.get(key)
+		if (cached) {
+			this.keplerOrbits.delete(key)
+			this.keplerOrbits.set(key, cached)
+			return cached
+		}
+
+		const orbit = keplerFromElements(elements)
+		this.keplerOrbits.set(key, orbit)
+		while (this.keplerOrbits.size > KEPLER_ORBIT_CACHE_LIMIT) {
+			const oldest = this.keplerOrbits.keys().next().value
+			if (oldest === undefined) break
+			this.keplerOrbits.delete(oldest)
+		}
+		return orbit
 	}
 }
 
@@ -340,11 +645,11 @@ export class AtlasEphemeris {
 	}
 
 	// BodyPosition for `target` at `req`. `fast` prefers offline when it supports the target; otherwise
-	// Horizons is used. Stars and sky points are always offline. Horizons times are truncated to the
-	// civil minute; star/sky-point times are the requested utc.
+	// Horizons is used. Stars, sky points, and cheap offline models are evaluated at the requested utc.
+	// Horizons times are truncated to the civil minute.
 	async position(target: EphemerisTarget, req: PositionOfBody): Promise<BodyPosition> {
 		const series = await this.resolve(target, req)
-		const key = sampleKey(target, req.time.utc)
+		const key = sampleKey(target, req.time.utc, series.source)
 		const sample = series.samples.get(key)
 		if (!sample) throw new Error(`ephemeris not found for ${target.type} at ${formatTemporal(req.time.utc, undefined, 0)}`)
 		if (series.source === 'horizons') return projectHorizonsPosition(sample, req)
@@ -352,8 +657,9 @@ export class AtlasEphemeris {
 	}
 
 	// Apparent BodyPosition at the civil minute of `req.time.utc`, from a noon-to-noon Horizons series.
+	// Ignores `fast`: this path is the Horizons tile used by charts and twilight.
 	positionFromHorizons(input: HorizonsEphemerisInput, req: PositionOfBody): Promise<BodyPosition> {
-		return this.position(targetFromHorizonsInput(input), req)
+		return this.position(targetFromHorizonsInput(input), { ...req, fast: false })
 	}
 
 	// 1441 altitudes (radians) at 1 min from the cached noon-to-noon Horizons series for `input` at `req`.
@@ -413,13 +719,13 @@ export class AtlasEphemeris {
 		const horizonsOk = this.horizons.supports(target)
 
 		if (mode === 'fast') {
-			if (offlineOk) return this.offline.samples(request)
+			if (offlineOk) return this.offline.samples(pointRequest(request, req.time.utc))
 			if (horizonsOk) return this.horizons.samples(request)
 			throw new EphemerisUnavailableError()
 		}
 
 		if (horizonsOk) return this.horizons.samples(request)
-		if (offlineOk) return this.offline.samples(request)
+		if (offlineOk) return this.offline.samples(pointRequest(request, req.time.utc))
 		throw new EphemerisUnavailableError()
 	}
 }
@@ -445,10 +751,17 @@ function computeStartAndEndTime(time: UTCTime): readonly [Temporal, Temporal] {
 	return [startTime, endTime]
 }
 
-// Lookup key in a series: exact utc for stars/sky points, truncated civil minute otherwise.
-function sampleKey(target: EphemerisTarget, utc: number): number {
-	if (target.type === 'star' || target.type === 'skyPoint') return utc
+// Lookup key in a series: exact utc for offline (including stars/sky points), truncated civil minute
+// for Horizons tiles.
+function sampleKey(target: EphemerisTarget, utc: number, source?: EphemerisSource): number {
+	if (source === 'offline' || target.type === 'star' || target.type === 'skyPoint') return utc
 	return Math.trunc(temporalSet(utc, 0, 's') / 1000)
+}
+
+// Single-instant sample request at `utc`. Cheap offline models do not build a noon-to-noon tile.
+function pointRequest(request: EphemerisSampleRequest, utc: number): EphemerisSampleRequest {
+	if (request.start === utc && request.end === utc) return request
+	return { ...request, start: utc, end: utc }
 }
 
 // EphemerisTarget for a Horizons COMMAND string or TLE, used by the leftover Horizons-shaped API.

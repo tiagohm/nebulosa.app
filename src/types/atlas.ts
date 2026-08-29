@@ -2,6 +2,7 @@ import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/locat
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Distance } from 'nebulosa/src/math/units/distance'
+import type { OsculatingElementsInput } from '#/asteroid'
 import { DEFAULT_COORDINATE_INFO } from '#/mount'
 import type { CoordinateInfo } from '#/mount'
 
@@ -13,6 +14,8 @@ export interface LocationAndTime {
 export interface PositionOfBody extends LocationAndTime {
 	// Prefer a local model when one exists. Default false keeps the Horizons path for Sun, Moon, planets, and satellites.
 	readonly fast?: boolean
+	// Osculating elements for a minor body. Ignored for Sun, Moon, stars, sky points, and TLEs.
+	readonly elements?: OsculatingElementsInput
 }
 
 export interface ChartOfBody extends PositionOfBody {}

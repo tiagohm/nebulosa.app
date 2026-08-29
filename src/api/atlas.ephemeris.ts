@@ -50,11 +50,26 @@ import { makeTime } from './util'
 // radians, instants Unix milliseconds. Horizons is still sampled every 60 s over local noon-to-noon;
 // position at an off-grid utc interpolates apparent RA/Dec (unwrap) and scalars, and does not
 // extrapolate. Cheap offline position is evaluated at the requested utc. BodyPositionFlags skip
-// unrequested frames and photometry; omitted flags still yield a complete BodyPosition.
+// unrequested frames and photometry; omitted flags still yield a complete BodyPosition. Horizons
+// observer() is bounded by HORIZONS_TIMEOUT_MS; transient failures fall back once to a local model
+// when one exists, and a circuit breaker skips Horizons while it is open.
 
 // Maximum number of noon-to-noon Horizons series retained. Each tile is ~1441 samples; eviction is
 // LRU by series, not by sample count.
 export const ATLAS_EPHEMERIS_CACHE_LIMIT = 64
+
+// Wall-clock budget around one Horizons observer() call. The adapter does not take AbortSignal, so
+// the race rejects the pipeline and the in-flight fetch is ignored.
+export const HORIZONS_TIMEOUT_MS = 5_000
+
+// Consecutive transient Horizons failures that open the circuit breaker.
+export const HORIZONS_BREAKER_FAILURE_THRESHOLD = 3
+
+// How long the breaker stays open after the failure threshold, in milliseconds.
+export const HORIZONS_BREAKER_OPEN_MS = 30_000
+
+// Open duration for HTTP 429 when Retry-After is absent, in milliseconds.
+export const HORIZONS_BREAKER_RETRY_AFTER_MS = 60_000
 
 // Horizons observer-table sampling interval used by this extraction, in seconds.
 const HORIZONS_STEP_SIZE_SECONDS = 60
@@ -131,6 +146,10 @@ export interface AtlasEphemerisOptions {
 	readonly horizons?: EphemerisProvider
 	// Offline provider. Tests inject a mock to assert selection without running models.
 	readonly offline?: EphemerisProvider
+	// Observer-table timeout in milliseconds. Defaults to HORIZONS_TIMEOUT_MS. Tests pass a shorter budget.
+	readonly horizonsTimeoutMs?: number
+	// Clock for the circuit breaker. Defaults to Date.now. Tests pass a fake clock.
+	readonly now?: () => number
 }
 
 // Horizons observer-table target: a COMMAND string or a TLE (id plus line hash is the fingerprint).
@@ -194,8 +213,8 @@ type HorizonsSampleMap = Map<number, BodyPosition>
 
 // No provider accepted the target.
 export class EphemerisUnavailableError extends Error {
-	constructor(message = 'ephemeris unavailable') {
-		super(message)
+	constructor(message = 'ephemeris unavailable', options?: ErrorOptions) {
+		super(message, options)
 		this.name = 'EphemerisUnavailableError'
 	}
 }
@@ -221,6 +240,138 @@ export class EphemerisInterpolationError extends Error {
 	constructor(message = 'ephemeris interpolation out of range', options?: ErrorOptions) {
 		super(message, options)
 		this.name = 'EphemerisInterpolationError'
+	}
+}
+
+// Horizons observer() exceeded HORIZONS_TIMEOUT_MS. Transient: fallback to offline when a local
+// model exists.
+export class HorizonsTimeoutError extends Error {
+	constructor(message = 'horizons timeout', options?: ErrorOptions) {
+		super(message, options)
+		this.name = 'HorizonsTimeoutError'
+	}
+}
+
+// Horizons HTTP failure. 429 and 5xx are transient; other 4xx are semantic and must not be masked
+// by an offline model. `retryAfterMs` is honoured by the breaker on 429.
+export class HorizonsHttpError extends Error {
+	readonly status: number
+	readonly retryAfterMs?: number
+
+	constructor(status: number, message = `horizons HTTP ${status}`, options?: ErrorOptions & { retryAfterMs?: number }) {
+		super(message, options)
+		this.name = 'HorizonsHttpError'
+		this.status = status
+		this.retryAfterMs = options?.retryAfterMs
+	}
+}
+
+// Whether a Horizons failure may be retried locally. Transient failures trip the breaker; semantic
+// failures (4xx except 429, empty CSV, parse) never fall back to an offline model.
+export type HorizonsFailureClass = 'transient' | 'semantic'
+
+// Classifies a rejected Horizons observer() / HTTP / parse failure.
+//
+// - error: the thrown value; AbortError / TimeoutError / TypeError / ECONNRESET / 429 / 5xx are
+//   transient, everything else is semantic (including unknown bugs).
+export function classifyHorizonsFailure(error: unknown): HorizonsFailureClass {
+	if (error instanceof HorizonsTimeoutError) return 'transient'
+	if (error instanceof TypeError) return 'transient'
+	if (isAbortOrTimeoutError(error)) return 'transient'
+	if (isConnectionError(error)) return 'transient'
+
+	const status = httpStatusOf(error)
+	if (status === 429 || (status !== undefined && status >= 500)) return 'transient'
+	if (status !== undefined && status >= 400) return 'semantic'
+	if (error instanceof HorizonsEphemerisError) return 'semantic'
+	return 'semantic'
+}
+
+// True when `error` is an AbortError or TimeoutError (DOMException or Error with that name).
+function isAbortOrTimeoutError(error: unknown): boolean {
+	if (!(error instanceof Error)) return false
+	return error.name === 'AbortError' || error.name === 'TimeoutError' || error.name === 'HorizonsTimeoutError'
+}
+
+// True when `error` looks like a socket/DNS failure from fetch.
+function isConnectionError(error: unknown): boolean {
+	if (!(error instanceof Error) || !('code' in error)) return false
+	const code = String(error.code)
+	return code === 'ECONNRESET' || code === 'ENOTFOUND' || code === 'ECONNREFUSED' || code === 'ETIMEDOUT' || code === 'EAI_AGAIN'
+}
+
+// HTTP status attached to `error`, if any.
+function httpStatusOf(error: unknown): number | undefined {
+	if (error instanceof HorizonsHttpError) return error.status
+	if (error && typeof error === 'object' && 'status' in error && typeof error.status === 'number') return error.status
+	return undefined
+}
+
+// Breaker open duration for a transient failure. 429 uses retryAfterMs or 60 s; other transients
+// do not open until HORIZONS_BREAKER_FAILURE_THRESHOLD consecutive failures.
+function retryAfterMsOf(error: unknown): number | undefined {
+	if (error instanceof HorizonsHttpError && error.retryAfterMs !== undefined) return error.retryAfterMs
+	if (error && typeof error === 'object' && 'retryAfterMs' in error && typeof error.retryAfterMs === 'number') return error.retryAfterMs
+	if (httpStatusOf(error) === 429) return HORIZONS_BREAKER_RETRY_AFTER_MS
+	return undefined
+}
+
+// Consecutive-failure circuit breaker for Horizons. Open: skip Horizons when an offline model
+// exists; Horizons-only targets in `fast` still go to the network; accurate Horizons-only throws
+// without waiting. A success closes. 429 opens immediately for Retry-After or 60 s.
+class HorizonsCircuitBreaker {
+	private failures = 0
+	private openUntil = 0
+
+	constructor(private readonly now: () => number) {}
+
+	// True while the breaker is open. An expired window closes it and resets the failure count.
+	isOpen(): boolean {
+		if (this.openUntil === 0) return false
+		if (this.now() >= this.openUntil) {
+			this.openUntil = 0
+			this.failures = 0
+			return false
+		}
+		return true
+	}
+
+	// A successful Horizons fetch closes the breaker.
+	recordSuccess() {
+		const wasOpen = this.openUntil !== 0
+		this.failures = 0
+		this.openUntil = 0
+		if (wasOpen) console.info({ event: 'horizons-breaker-close' })
+	}
+
+	// A transient failure. `retryAfterMs` opens immediately (429); otherwise the threshold opens
+	// for HORIZONS_BREAKER_OPEN_MS.
+	recordTransient(retryAfterMs?: number) {
+		this.failures++
+		const now = this.now()
+		if (retryAfterMs !== undefined) {
+			this.openUntil = now + retryAfterMs
+			console.info({ event: 'horizons-breaker-open', failures: this.failures, openMs: retryAfterMs, reason: 'retry-after' })
+			return
+		}
+		if (this.failures >= HORIZONS_BREAKER_FAILURE_THRESHOLD && this.openUntil === 0) {
+			this.openUntil = now + HORIZONS_BREAKER_OPEN_MS
+			console.info({ event: 'horizons-breaker-open', failures: this.failures, openMs: HORIZONS_BREAKER_OPEN_MS })
+		}
+	}
+}
+
+// Rejects with HorizonsTimeoutError when `promise` does not settle within `ms`. The loser is not
+// cancelled: observer() has no AbortSignal.
+async function raceHorizonsTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+	let timeoutId: ReturnType<typeof setTimeout> | undefined
+	const timeout = new Promise<never>((_, reject) => {
+		timeoutId = setTimeout(() => reject(new HorizonsTimeoutError()), ms)
+	})
+	try {
+		return await Promise.race([promise, timeout])
+	} finally {
+		clearTimeout(timeoutId)
 	}
 }
 
@@ -282,12 +433,15 @@ class HorizonsEphemerisProvider implements EphemerisProvider {
 	readonly source = 'horizons' as const
 	private readonly observer: HorizonsObserver
 	private readonly cache: SeriesLruCache
+	private readonly timeoutMs: number
 	private readonly inflight = new Map<string, Promise<HorizonsSampleMap>>()
 
-	// `observer` is the NASA client; `cacheLimit` caps retained noon-to-noon tiles.
-	constructor(observer: HorizonsObserver, cacheLimit: number) {
+	// `observer` is the NASA client; `cacheLimit` caps retained noon-to-noon tiles; `timeoutMs` is
+	// the wall-clock budget around observer().
+	constructor(observer: HorizonsObserver, cacheLimit: number, timeoutMs: number) {
 		this.observer = observer
 		this.cache = new SeriesLruCache(cacheLimit)
+		this.timeoutMs = timeoutMs
 	}
 
 	// True for every target Horizons can name: Sun, Moon, planets, Pluto, minor bodies, TLE, natural
@@ -354,12 +508,20 @@ class HorizonsEphemerisProvider implements EphemerisProvider {
 	}
 
 	// Fetches one Horizons observer table and parses it into a frozen sample map. Does not touch the cache.
+	// Empty tables and parse failures are semantic HorizonsEphemerisError; timeouts are transient.
 	private async fetchHorizonsSeries(input: HorizonsEphemerisInput, location: GeographicCoordinate, startTime: Temporal, endTime: Temporal): Promise<HorizonsSampleMap> {
 		const { longitude, latitude, elevation } = location
 		console.info(`fetching ephemeris for ${horizonsFingerprint(input)} at time [${formatTemporal(startTime, undefined, 0)} - ${formatTemporal(endTime, undefined, 0)}] and location [${toDeg(latitude)}, ${toDeg(longitude)}, ${toMeter(elevation).toFixed(0)}]`)
-		const rows = await this.observer(input, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1, stepSizeUnit: 'm' })
+		const pending = this.observer(input, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1, stepSizeUnit: 'm' })
+		void pending.catch(() => {})
+		const rows = await raceHorizonsTimeout(pending, this.timeoutMs)
+		if (rows.length === 0) throw new HorizonsEphemerisError('empty ephemeris')
 		const samples: HorizonsSampleMap = new Map()
-		makeBodyPositionFromHorizons(rows, samples)
+		try {
+			makeBodyPositionFromHorizons(rows, samples)
+		} catch (error) {
+			throw new HorizonsEphemerisError(error instanceof Error ? error.message : 'horizons parse failed', { cause: error })
+		}
 		return samples
 	}
 }
@@ -758,13 +920,15 @@ export class AtlasEphemeris {
 	private readonly horizons: EphemerisProvider
 	private readonly offline: EphemerisProvider
 	private readonly horizonsTiles: HorizonsEphemerisProvider
+	private readonly breaker: HorizonsCircuitBreaker
 
 	// `options.observer` replaces the NASA client; `options.horizons` / `options.offline` replace the
 	// providers used by `position` so selection can be tested without models or NASA.
 	constructor(options: AtlasEphemerisOptions = {}) {
-		this.horizonsTiles = new HorizonsEphemerisProvider(options.observer ?? horizonsObserver, options.cacheLimit ?? ATLAS_EPHEMERIS_CACHE_LIMIT)
+		this.horizonsTiles = new HorizonsEphemerisProvider(options.observer ?? horizonsObserver, options.cacheLimit ?? ATLAS_EPHEMERIS_CACHE_LIMIT, options.horizonsTimeoutMs ?? HORIZONS_TIMEOUT_MS)
 		this.horizons = options.horizons ?? this.horizonsTiles
 		this.offline = options.offline ?? new OfflineEphemerisProvider()
+		this.breaker = new HorizonsCircuitBreaker(options.now ?? Date.now)
 	}
 
 	// BodyPosition for `target` at `req`. `fast` prefers offline when it supports the target; otherwise
@@ -780,8 +944,9 @@ export class AtlasEphemeris {
 	}
 
 	// Noon-to-noon Horizons tile, or the single offline sample, for `target` at `req`.
+	// Does not fall back to a one-sample offline series: charts need the 1441-point tile.
 	series(target: EphemerisTarget, req: PositionOfBody): Promise<EphemerisSampleSeries> {
-		return this.resolve(target, { ...req, fast: false })
+		return this.resolve(target, { ...req, fast: false }, false)
 	}
 
 	// 1441 altitudes (radians) at 1 min for `target`. Horizons uses the noon-to-noon tile 1:1.
@@ -836,8 +1001,10 @@ export class AtlasEphemeris {
 	}
 
 	// One hop: `fast` prefers offline; otherwise Horizons if it supports the target, else offline.
-	// Transient Horizons fallback is not wired yet.
-	private resolve(target: EphemerisTarget, req: PositionOfBody): Promise<EphemerisSampleSeries> {
+	// Transient Horizons failures fall back to a local model when one exists. Semantic Horizons
+	// errors do not. `allowOfflineFallback` is false for series/chart: those need a noon-to-noon
+	// Horizons tile, not a single offline sample.
+	private resolve(target: EphemerisTarget, req: PositionOfBody, allowOfflineFallback = true): Promise<EphemerisSampleSeries> {
 		const [start, end] = computeStartAndEndTime(req.time)
 		const point = target.type === 'star' || target.type === 'skyPoint'
 		const request: EphemerisSampleRequest = {
@@ -855,13 +1022,44 @@ export class AtlasEphemeris {
 
 		if (mode === 'fast') {
 			if (offlineOk) return this.offline.samples(pointRequest(request, req.time.utc))
-			if (horizonsOk) return this.horizons.samples(request)
+			if (horizonsOk) return this.fetchHorizonsOrFallback(request, req.time.utc, false, false)
 			throw new EphemerisUnavailableError()
 		}
 
-		if (horizonsOk) return this.horizons.samples(request)
+		if (horizonsOk) return this.fetchHorizonsOrFallback(request, req.time.utc, allowOfflineFallback && offlineOk, true)
 		if (offlineOk) return this.offline.samples(pointRequest(request, req.time.utc))
 		throw new EphemerisUnavailableError()
+	}
+
+	// Horizons tile, with at most one offline hop on a transient failure when `offlineOk`.
+	// `skipWhenOpen` is true for accurate mode: an open breaker uses offline immediately or throws
+	// without waiting. Fast Horizons-only targets still call Horizons while the breaker is open.
+	private async fetchHorizonsOrFallback(request: EphemerisSampleRequest, utc: number, offlineOk: boolean, skipWhenOpen: boolean): Promise<EphemerisSampleSeries> {
+		if (this.breaker.isOpen()) {
+			if (offlineOk) {
+				console.info({ event: 'ephemeris-fallback', target: request.target.type, source: 'offline', reason: 'breaker-open' })
+				return this.offline.samples(pointRequest(request, utc))
+			}
+			if (skipWhenOpen) throw new HorizonsEphemerisError('horizons circuit breaker open')
+		}
+
+		try {
+			const series = await this.horizons.samples(request)
+			this.breaker.recordSuccess()
+			return series
+		} catch (error) {
+			const kind = classifyHorizonsFailure(error)
+			if (kind === 'transient') {
+				this.breaker.recordTransient(retryAfterMsOf(error))
+				if (offlineOk) {
+					console.info({ event: 'ephemeris-fallback', target: request.target.type, source: 'offline', reason: error instanceof Error ? error.name : 'transient' })
+					return this.offline.samples(pointRequest(request, utc))
+				}
+				throw new EphemerisUnavailableError('horizons unavailable', { cause: error })
+			}
+			if (error instanceof HorizonsEphemerisError) throw error
+			throw new HorizonsEphemerisError(error instanceof Error ? error.message : 'horizons ephemeris failed', { cause: error })
+		}
 	}
 }
 

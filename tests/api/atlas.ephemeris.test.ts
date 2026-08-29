@@ -6,7 +6,20 @@ import { DEG2RAD, TAU } from 'nebulosa/src/core/constants'
 import type { CsvRow } from 'nebulosa/src/io/csv'
 import { deg, parseAngle, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter, toKilometer } from 'nebulosa/src/math/units/distance'
-import { AtlasEphemeris, EphemerisInterpolationError, EphemerisUnavailableError, horizonsPositionAt, observeSolarSystemBody, planetTargetFromCode } from 'src/api/atlas.ephemeris'
+import {
+	AtlasEphemeris,
+	classifyHorizonsFailure,
+	EphemerisInterpolationError,
+	EphemerisUnavailableError,
+	HORIZONS_BREAKER_FAILURE_THRESHOLD,
+	HORIZONS_BREAKER_OPEN_MS,
+	HorizonsEphemerisError,
+	HorizonsHttpError,
+	HorizonsTimeoutError,
+	horizonsPositionAt,
+	observeSolarSystemBody,
+	planetTargetFromCode,
+} from 'src/api/atlas.ephemeris'
 import type { EphemerisProvider, EphemerisSampleRequest, EphemerisTarget, HorizonsObserver } from 'src/api/atlas.ephemeris'
 import { makeTime } from 'src/api/util'
 import type { OsculatingElementsInput } from '#/asteroid'
@@ -319,12 +332,12 @@ describe('provider selection', () => {
 		expect(ephemeris.position(JUPITER, REQ_A)).rejects.toBeInstanceOf(EphemerisUnavailableError)
 	})
 
-	test('a Horizons failure is not masked by an offline model', () => {
-		const observer: HorizonsObserver = () => Promise.reject(new Error('timeout'))
+	test('a semantic Horizons failure is not masked by an offline model', () => {
+		const observer: HorizonsObserver = () => Promise.reject(new HorizonsHttpError(400))
 		const offline = stubProvider('offline', new Set(['planet']))
 		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider })
 
-		expect(ephemeris.position(JUPITER, REQ_A)).rejects.toThrow('timeout')
+		expect(ephemeris.position(JUPITER, REQ_A)).rejects.toBeInstanceOf(HorizonsEphemerisError)
 		expect(offline.calls).toBe(0)
 	})
 })
@@ -620,5 +633,225 @@ describe('BodyPosition flags', () => {
 		expect(horizontal.galactic).toEqual([0, 0])
 		expect(galactic.galactic).not.toEqual([0, 0])
 		expect(galactic.horizontal).toEqual([0, 0])
+	})
+})
+
+function abortError() {
+	const error = new Error('aborted')
+	error.name = 'AbortError'
+	return error
+}
+
+function connectionError(code: string) {
+	const error = new Error(code) as Error & { code: string }
+	error.code = code
+	return error
+}
+
+describe('Horizons failure classification', () => {
+	test('timeout, abort, TypeError, connection reset, 429, and 5xx are transient', () => {
+		expect(classifyHorizonsFailure(new HorizonsTimeoutError())).toBe('transient')
+		expect(classifyHorizonsFailure(abortError())).toBe('transient')
+		expect(classifyHorizonsFailure(new TypeError('fetch failed'))).toBe('transient')
+		expect(classifyHorizonsFailure(connectionError('ECONNRESET'))).toBe('transient')
+		expect(classifyHorizonsFailure(new HorizonsHttpError(429))).toBe('transient')
+		expect(classifyHorizonsFailure(new HorizonsHttpError(503))).toBe('transient')
+	})
+
+	test('HTTP 400, empty ephemeris, and unknown errors are semantic', () => {
+		expect(classifyHorizonsFailure(new HorizonsHttpError(400))).toBe('semantic')
+		expect(classifyHorizonsFailure(new HorizonsEphemerisError('empty ephemeris'))).toBe('semantic')
+		expect(classifyHorizonsFailure(new Error('bug'))).toBe('semantic')
+	})
+})
+
+describe('Horizons fallback and circuit breaker', () => {
+	test('timeout with an offline model falls back', async () => {
+		const observer: HorizonsObserver = () => new Promise(() => {})
+		const offline = stubProvider('offline', new Set(['planet']))
+		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider, horizonsTimeoutMs: 20 })
+
+		const position = await ephemeris.position(JUPITER, REQ_A)
+
+		expect(offline.calls).toBe(1)
+		expect(position).toBe(DEFAULT_BODY_POSITION)
+	})
+
+	test('network error with an offline model falls back', async () => {
+		const observer: HorizonsObserver = () => Promise.reject(new TypeError('fetch failed'))
+		const offline = stubProvider('offline', new Set(['planet']))
+		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider })
+
+		await ephemeris.position(JUPITER, REQ_A)
+
+		expect(offline.calls).toBe(1)
+	})
+
+	test('HTTP 429 with an offline model falls back', async () => {
+		const observer: HorizonsObserver = () => Promise.reject(new HorizonsHttpError(429))
+		const offline = stubProvider('offline', new Set(['planet']))
+		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider })
+
+		await ephemeris.position(JUPITER, REQ_A)
+
+		expect(offline.calls).toBe(1)
+	})
+
+	test('HTTP 500 with an offline model falls back', async () => {
+		const observer: HorizonsObserver = () => Promise.reject(new HorizonsHttpError(500))
+		const offline = stubProvider('offline', new Set(['planet']))
+		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider })
+
+		await ephemeris.position(JUPITER, REQ_A)
+
+		expect(offline.calls).toBe(1)
+	})
+
+	test('HTTP 400 does not fall back even with elements', () => {
+		const observer: HorizonsObserver = () => Promise.reject(new HorizonsHttpError(400))
+		const ephemeris = new AtlasEphemeris({ observer })
+		const target = planetTargetFromCode('DES=20000001;', CERES_ELEMENTS)
+
+		expect(ephemeris.position(target, REQ_A)).rejects.toBeInstanceOf(HorizonsEphemerisError)
+	})
+
+	test('empty Horizons CSV does not fall back', () => {
+		const observer: HorizonsObserver = () => Promise.resolve([])
+		const offline = stubProvider('offline', new Set(['planet']))
+		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider })
+
+		expect(ephemeris.position(JUPITER, REQ_A)).rejects.toBeInstanceOf(HorizonsEphemerisError)
+		expect(offline.calls).toBe(0)
+	})
+
+	test('Horizons down without an offline model preserves the cause', () => {
+		const observer: HorizonsObserver = () => Promise.reject(new HorizonsTimeoutError())
+		const ephemeris = new AtlasEphemeris({ observer })
+
+		expect(ephemeris.position(planetTargetFromCode('901'), REQ_A)).rejects.toMatchObject({
+			name: 'EphemerisUnavailableError',
+			cause: expect.any(HorizonsTimeoutError),
+		})
+	})
+
+	test('fast true plus Horizons timeout without an offline model does not hop again', () => {
+		let calls = 0
+		const observer: HorizonsObserver = () => {
+			calls++
+			return Promise.reject(new HorizonsTimeoutError())
+		}
+		const ephemeris = new AtlasEphemeris({ observer })
+
+		expect(ephemeris.position(planetTargetFromCode('901'), { ...REQ_A, fast: true })).rejects.toBeInstanceOf(EphemerisUnavailableError)
+		expect(calls).toBe(1)
+	})
+
+	test('an open breaker with an offline model does not wait for Horizons', async () => {
+		let calls = 0
+		const observer: HorizonsObserver = () => {
+			calls++
+			return Promise.reject(new HorizonsTimeoutError())
+		}
+		const offline = stubProvider('offline', new Set(['planet']))
+		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider })
+
+		for (let i = 0; i < HORIZONS_BREAKER_FAILURE_THRESHOLD; i++) await ephemeris.position(JUPITER, REQ_A)
+		expect(calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD)
+
+		await ephemeris.position(JUPITER, REQ_A)
+		expect(calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD)
+		expect(offline.calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD + 1)
+	})
+
+	test('an open breaker without an offline model still calls Horizons when fast is true', async () => {
+		let calls = 0
+		const observer: HorizonsObserver = () => {
+			calls++
+			return Promise.reject(new HorizonsTimeoutError())
+		}
+		const ephemeris = new AtlasEphemeris({ observer })
+		const req = { ...REQ_A, fast: true }
+		const target = planetTargetFromCode('901')
+
+		for (let i = 0; i < HORIZONS_BREAKER_FAILURE_THRESHOLD; i++) {
+			try {
+				await ephemeris.position(target, req)
+				throw new Error('expected Horizons to fail')
+			} catch (error) {
+				expect(error).toBeInstanceOf(EphemerisUnavailableError)
+			}
+		}
+
+		expect(calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD)
+		try {
+			await ephemeris.position(target, req)
+			throw new Error('expected Horizons to fail')
+		} catch (error) {
+			expect(error).toBeInstanceOf(EphemerisUnavailableError)
+		}
+		expect(calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD + 1)
+	})
+
+	test('an open breaker without an offline model throws immediately when fast is false', async () => {
+		let calls = 0
+		const observer: HorizonsObserver = () => {
+			calls++
+			return Promise.reject(new HorizonsTimeoutError())
+		}
+		const ephemeris = new AtlasEphemeris({ observer })
+
+		for (let i = 0; i < HORIZONS_BREAKER_FAILURE_THRESHOLD; i++) await ephemeris.position(planetTargetFromCode('901'), REQ_A).catch(() => {})
+
+		expect(calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD)
+		expect(ephemeris.position(planetTargetFromCode('901'), REQ_A)).rejects.toBeInstanceOf(HorizonsEphemerisError)
+		expect(calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD)
+	})
+
+	test('HTTP 429 opens the breaker until Retry-After', async () => {
+		let now = 1_000
+		let calls = 0
+		const observer: HorizonsObserver = () => {
+			calls++
+			return Promise.reject(new HorizonsHttpError(429, 'too many requests', { retryAfterMs: 5_000 }))
+		}
+		const offline = stubProvider('offline', new Set(['planet']))
+		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider, now: () => now })
+
+		await ephemeris.position(JUPITER, REQ_A)
+		expect(calls).toBe(1)
+
+		await ephemeris.position(JUPITER, REQ_A)
+		expect(calls).toBe(1)
+
+		now += 5_000
+		await ephemeris.position(JUPITER, REQ_A)
+		expect(calls).toBe(2)
+	})
+
+	test('timeout plus elements falls back to Kepler', async () => {
+		const observer: HorizonsObserver = () => Promise.reject(new HorizonsTimeoutError())
+		const ephemeris = new AtlasEphemeris({ observer })
+		const target = planetTargetFromCode('DES=20000001;', CERES_ELEMENTS)
+
+		const position = await ephemeris.position(target, REQ_A)
+
+		expect(position.magnitude).not.toBeNull()
+		expect(position.equatorial[0]).not.toBe(0)
+	})
+
+	test('an expired breaker window tries Horizons again', async () => {
+		let now = 0
+		let calls = 0
+		const observer: HorizonsObserver = () => {
+			calls++
+			return Promise.reject(new HorizonsTimeoutError())
+		}
+		const offline = stubProvider('offline', new Set(['planet']))
+		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider, now: () => now })
+
+		for (let i = 0; i < HORIZONS_BREAKER_FAILURE_THRESHOLD; i++) await ephemeris.position(JUPITER, REQ_A)
+		now += HORIZONS_BREAKER_OPEN_MS
+		await ephemeris.position(JUPITER, REQ_A)
+		expect(calls).toBe(HORIZONS_BREAKER_FAILURE_THRESHOLD + 1)
 	})
 })

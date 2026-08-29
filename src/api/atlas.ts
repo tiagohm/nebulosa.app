@@ -4,14 +4,11 @@ import { join } from 'path'
 import { closeApproaches, search } from 'nebulosa/src/adapters/orbits/sbd'
 import { nearestLunarApsis, nearestLunarEclipse, nearestLunarPhase } from 'nebulosa/src/astronomy/bodies/moon'
 import type { LunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
-import { observeStar } from 'nebulosa/src/astronomy/bodies/star'
 import { nearestSolarEclipse, season } from 'nebulosa/src/astronomy/bodies/sun'
 import type { SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
-import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astronomy/coordinates/astrometry'
-import type { PositionAndVelocity } from 'nebulosa/src/astronomy/coordinates/astrometry'
-import { constellation, CONSTELLATION_LIST } from 'nebulosa/src/astronomy/coordinates/constellation'
-import { equatorialFromJ2000, equatorialToEcliptic, equatorialToGalatic, equatorialToJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
-import { eraS2p, eraStarpm } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
+import { CONSTELLATION_LIST } from 'nebulosa/src/astronomy/coordinates/constellation'
+import { equatorialFromJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import { eraStarpm } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { eraMoon98 } from 'nebulosa/src/astronomy/coordinates/erfa/moon'
 import * as elpmpp02 from 'nebulosa/src/astronomy/ephemeris/models/analytical/elpmpp02'
 import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
@@ -28,9 +25,8 @@ import { iersb } from 'nebulosa/src/astronomy/time/iers'
 import { daysInMonth, temporalAdd, temporalFromTime, temporalStartOfDay, temporalToDate } from 'nebulosa/src/astronomy/time/temporal'
 import { Timescale, time, timeNow, timeToUnixMillis, timeUnix, timeYMDHMS, toJulianDay, tt } from 'nebulosa/src/astronomy/time/time'
 import type { Time } from 'nebulosa/src/astronomy/time/time'
-import { AU_KM, DAYSEC, DEG2RAD, J2000, MOON_SYNODIC_DAYS, ONE_KILOPARSEC, PIOVERTWO, TAU } from 'nebulosa/src/core/constants'
+import { AU_KM, DAYSEC, DEG2RAD, J2000, MOON_SYNODIC_DAYS, PIOVERTWO, TAU } from 'nebulosa/src/core/constants'
 import type { Writable } from 'nebulosa/src/core/types'
-import { expectedPierSide, meridianTimeIn } from 'nebulosa/src/devices/indi/device'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
 import { bufferSource, readableStreamSource, readLines } from 'nebulosa/src/io/io'
 import { deg, parseAngle } from 'nebulosa/src/math/units/angle'
@@ -47,7 +43,7 @@ import { SATELLITE_GROUP_TYPES } from '#/satellite'
 import type { SatelliteGroupType, SearchSatellite, Satellite } from '#/satellite'
 import { EMPTY_TWILIGHT, SOLAR_IMAGE_SOURCE_URLS } from '#/sun'
 import type { ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, FindSolarEclipse, SolarEclipseMap, SolarImageSource, SolarSeasons } from '#/sun'
-import { AtlasEphemeris } from './atlas.ephemeris'
+import { AtlasEphemeris, planetTargetFromCode } from './atlas.ephemeris'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import type { NotificationHandler } from './notification'
@@ -137,7 +133,7 @@ export class AtlasHandler {
 	}
 
 	positionOfSun(req: PositionOfBody) {
-		return this.ephemeris.positionFromHorizons('10', req)
+		return this.ephemeris.position({ type: 'sun' }, req)
 	}
 
 	async chartOfSun(req: ChartOfBody) {
@@ -239,7 +235,7 @@ export class AtlasHandler {
 	}
 
 	positionOfMoon(req: PositionOfBody) {
-		return this.ephemeris.positionFromHorizons('301', req)
+		return this.ephemeris.position({ type: 'moon' }, req)
 	}
 
 	async chartOfMoon(req: ChartOfBody) {
@@ -311,7 +307,7 @@ export class AtlasHandler {
 	}
 
 	positionOfPlanet(code: string, req: PositionOfBody) {
-		return this.ephemeris.positionFromHorizons(code, req)
+		return this.ephemeris.position(planetTargetFromCode(code), req)
 	}
 
 	async chartOfPlanet(code: string, req: ChartOfBody) {
@@ -447,109 +443,21 @@ export class AtlasHandler {
 		return nebulosa.query<SkyObjectSearchItem, SQLQueryBindings[]>(q).all(...selectParams, ...joinParams, ...whereParams, limit, offset)
 	}
 
-	positionOfSkyObject(req: PositionOfBody, id: string | number | SkyObject): BodyPosition {
+	async positionOfSkyObject(req: PositionOfBody, id: string | number | SkyObject): Promise<BodyPosition> {
 		const dso = typeof id === 'object' ? id : this.skyObject(id)
 		const names = nebulosa.query<{ name: string }, [number]>("SELECT (n.type || ':' || n.name) as name FROM names n WHERE n.dsoId = ?").all(dso.id)
-
-		const time = makeTime(req.time.utc, req.location)
-		const lst = localSiderealTime(time, req.location, true)
-
-		const horizontal: Writable<BodyPosition['horizontal']> = [0, 0]
-		const equatorial: Writable<BodyPosition['equatorial']> = [0, 0]
-		const equatorialJ2000 = [dso.rightAscension, dso.declination] as const
-
-		if (dso.pmRA && dso.pmDEC) {
-			const ebpv = vsop.earth(time)
-			const parallax = dso.distance > 0 ? 1 / dso.distance : 0
-			const ob = observeStar({ ...dso, parallax }, time, ebpv)
-			equatorial[0] = ob.rightAscension
-			equatorial[1] = ob.declination
-			horizontal[0] = ob.azimuth
-			horizontal[1] = ob.altitude
-			// rightAscension -= ob.equationOfOrigins // RA CIO -> RA equinox
-		} else {
-			Object.assign(equatorial, equatorialFromJ2000(dso.rightAscension, dso.declination, time))
-			const { azimuth, altitude } = cirsToObserved(equatorial, time)
-			horizontal[0] = azimuth
-			horizontal[1] = altitude
-		}
-
-		return {
-			magnitude: dso.magnitude,
-			constellation: CONSTELLATION_LIST[dso.constellation],
-			distance: dso.distance,
-			illuminated: 0,
-			elongation: 0,
-			leading: false,
-			equatorial,
-			equatorialJ2000,
-			horizontal,
-			ecliptic: equatorialToEcliptic(...equatorial, time),
-			galactic: equatorialToGalatic(...equatorialJ2000),
-			lst,
-			meridianTimeIn: meridianTimeIn(equatorial[0], lst),
-			pierSide: expectedPierSide(...equatorial, lst),
-			names: names.map((n) => n.name),
-		}
+		const position = await this.ephemeris.position({ type: 'star', object: dso }, req)
+		return { ...position, names: names.map((n) => n.name) }
 	}
 
 	chartOfSkyObject(req: ChartOfBody, id: string) {
-		let [startTime] = this.computeStartAndEndTime(req.time)
-
-		const dso = this.skyObject(id)
-		const data = new Array<number>(1441)
-		let ebpv: PositionAndVelocity | undefined
-
-		// Generate chart data for each minute
-		for (let i = 0; i < data.length; i++) {
-			const time = makeTime(startTime, req.location)
-
-			if (i === 0 || i === 720 || i === 1440) ebpv = vsop.earth(time)
-
-			if (dso.pmRA && dso.pmDEC) {
-				const parallax = dso.distance > 0 ? 1 / dso.distance : 0
-				data[i] = observeStar({ ...dso, parallax }, time, ebpv!).altitude
-			} else {
-				data[i] = icrsToObserved([dso.rightAscension, dso.declination], time, ebpv!).altitude
-			}
-
-			startTime += 60000
-		}
-
-		return data
+		return this.ephemeris.chartOfSkyObject(req, this.skyObject(id))
 	}
 
-	positionOfSkyPoint(req: PositionOfBody, ra: Angle | string, dec: Angle | string): BodyPosition {
+	positionOfSkyPoint(req: PositionOfBody, ra: Angle | string, dec: Angle | string) {
 		ra = typeof ra === 'string' ? parseAngle(ra, true)! : ra
 		dec = typeof dec === 'string' ? parseAngle(dec)! : dec
-
-		const time = makeTime(req.time.utc, req.location)
-		const lst = localSiderealTime(time, req.location, true)
-
-		const horizontal: Writable<BodyPosition['horizontal']> = [0, 0]
-		const equatorial = [ra, dec] as const
-		const equatorialJ2000 = equatorialToJ2000(ra, dec, time)
-
-		const { azimuth, altitude } = cirsToObserved(eraS2p(ra, dec, ONE_KILOPARSEC), time)
-		horizontal[0] = azimuth
-		horizontal[1] = altitude
-
-		return {
-			magnitude: 99,
-			constellation: constellation(ra, dec, time),
-			distance: 0,
-			illuminated: 0,
-			elongation: 0,
-			leading: false,
-			equatorial,
-			equatorialJ2000,
-			horizontal,
-			ecliptic: equatorialToEcliptic(ra, dec, time),
-			galactic: equatorialToGalatic(...equatorialJ2000),
-			lst,
-			meridianTimeIn: meridianTimeIn(equatorial[0], lst),
-			pierSide: expectedPierSide(ra, dec, lst),
-		}
+		return this.ephemeris.position({ type: 'skyPoint', rightAscension: ra, declination: dec }, req)
 	}
 
 	planetarium(req: PlanetariumSearch) {
@@ -718,7 +626,7 @@ export class AtlasHandler {
 
 	positionOfSatellite(id: string | number, req: PositionOfBody) {
 		const satellite = this.satellite(id)
-		return this.ephemeris.positionFromHorizons(satellite, req)
+		return this.ephemeris.position({ type: 'satellite', satellite }, req)
 	}
 
 	async chartOfSatellite(id: string | number, req: ChartOfBody) {
@@ -845,9 +753,9 @@ export function atlas(atlas: AtlasHandler) {
 		'/atlas/planets/:code/position': { POST: async (req) => response(await atlas.positionOfPlanet(req.params.code, await req.json())) },
 		'/atlas/planets/:code/chart': { POST: async (req) => response(await atlas.chartOfPlanet(req.params.code, await req.json())) },
 		'/atlas/skyobjects/search': { POST: async (req) => response(atlas.searchSkyObject(await req.json())) },
-		'/atlas/skyobjects/:id/position': { POST: async (req) => response(atlas.positionOfSkyObject(await req.json(), req.params.id)) },
+		'/atlas/skyobjects/:id/position': { POST: async (req) => response(await atlas.positionOfSkyObject(await req.json(), req.params.id)) },
 		'/atlas/skyobjects/:id/chart': { POST: async (req) => response(atlas.chartOfSkyObject(await req.json(), req.params.id)) },
-		'/atlas/skypoint/position': { POST: async (req) => response(atlas.positionOfSkyPoint(await req.json(), query(req).ra, req.params.dec)) },
+		'/atlas/skypoint/position': { POST: async (req) => response(await atlas.positionOfSkyPoint(await req.json(), query(req).ra, req.params.dec)) },
 		'/atlas/satellites/search': { POST: async (req) => response(atlas.searchSatellites(await req.json())) },
 		'/atlas/satellites/:id/position': { POST: async (req) => response(await atlas.positionOfSatellite(req.params.id, await req.json())) },
 		'/atlas/satellites/:id/chart': { POST: async (req) => response(await atlas.chartOfSatellite(req.params.id, await req.json())) },

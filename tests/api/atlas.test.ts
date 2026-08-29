@@ -400,8 +400,8 @@ test('position of jupiter', async () => {
 	expect(position.names).toBeUndefined()
 })
 
-test('position of sky object', () => {
-	const position = atlas.positionOfSkyObject(POSITION_OF_BODY, '32263')
+test('position of sky object', async () => {
+	const position = await atlas.positionOfSkyObject(POSITION_OF_BODY, '32263')
 
 	expect(formatRA(position.equatorial[0], true)).toBe('06 44 58')
 	expect(formatRA(position.equatorialJ2000[0], true)).toBe('06 45 09')
@@ -427,8 +427,8 @@ test('chart of sky object', () => {
 	expect(formatALT(chart[1440], true)).toBe('+65 54 26')
 })
 
-test('position of sky point', () => {
-	const position = atlas.positionOfSkyPoint(POSITION_OF_BODY, '06 44 58', '-16 45 03')
+test('position of sky point', async () => {
+	const position = await atlas.positionOfSkyPoint(POSITION_OF_BODY, '06 44 58', '-16 45 03')
 
 	expect(formatRA(position.equatorial[0], true)).toBe('06 44 58')
 	expect(formatRA(position.equatorialJ2000[0], true)).toBe('06 43 49')

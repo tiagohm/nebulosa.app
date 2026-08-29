@@ -10,7 +10,10 @@ export interface LocationAndTime {
 	readonly time: UTCTime
 }
 
-export interface PositionOfBody extends LocationAndTime {}
+export interface PositionOfBody extends LocationAndTime {
+	// Prefer a local model when one exists. Default false keeps the Horizons path for Sun, Moon, planets, and satellites.
+	readonly fast?: boolean
+}
 
 export interface ChartOfBody extends PositionOfBody {}
 

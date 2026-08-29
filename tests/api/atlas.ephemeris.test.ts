@@ -3,9 +3,11 @@ import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import type { CsvRow } from 'nebulosa/src/io/csv'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
-import { AtlasEphemeris } from 'src/api/atlas.ephemeris'
-import type { HorizonsObserver } from 'src/api/atlas.ephemeris'
+import { AtlasEphemeris, EphemerisUnavailableError, planetTargetFromCode } from 'src/api/atlas.ephemeris'
+import type { EphemerisProvider, EphemerisSampleRequest, EphemerisTarget, HorizonsObserver } from 'src/api/atlas.ephemeris'
+import { DEFAULT_BODY_POSITION } from '#/atlas'
 import type { PositionOfBody } from '#/atlas'
+import type { SkyObject } from '#/galaxy'
 
 const REQ_A: PositionOfBody = {
 	time: {
@@ -175,5 +177,149 @@ describe('horizons series LRU', () => {
 
 		await ephemeris.positionFromHorizons('10', loc(0))
 		expect(calls).toHaveLength(4)
+	})
+})
+
+const JUPITER: EphemerisTarget = { type: 'planet', code: '599', name: 'jupiter' }
+
+const STUB_STAR: SkyObject = {
+	id: 1,
+	name: 'Stub',
+	type: 29,
+	rightAscension: 0,
+	declination: 0,
+	pmRA: 0,
+	pmDEC: 0,
+	magnitude: 5,
+	distance: 0,
+	rv: 0,
+	constellation: 0,
+}
+
+function stubSeries(source: 'offline' | 'horizons', request: EphemerisSampleRequest) {
+	const samples = new Map<number, typeof DEFAULT_BODY_POSITION>()
+	if (request.start === request.end) {
+		samples.set(request.start, DEFAULT_BODY_POSITION)
+	} else {
+		const startSec = Math.trunc(request.start / 1000)
+		const endSec = Math.trunc(request.end / 1000)
+		for (let s = startSec; s <= endSec; s += 60) samples.set(s, DEFAULT_BODY_POSITION)
+	}
+	return { key: `${source}|stub`, source, samples }
+}
+
+function stubProvider(source: 'offline' | 'horizons', types: ReadonlySet<EphemerisTarget['type']>) {
+	let calls = 0
+	const provider: EphemerisProvider = {
+		source,
+		supports: (target) => types.has(target.type),
+		samples: (request) => {
+			calls++
+			return Promise.resolve(stubSeries(source, request))
+		},
+	}
+	return {
+		provider,
+		get calls() {
+			return calls
+		},
+	}
+}
+
+describe('planetTargetFromCode', () => {
+	test('maps sun, moon, pluto, and VSOP planets', () => {
+		expect(planetTargetFromCode('10')).toEqual({ type: 'sun' })
+		expect(planetTargetFromCode('301')).toEqual({ type: 'moon' })
+		expect(planetTargetFromCode('999')).toEqual({ type: 'pluto' })
+		expect(planetTargetFromCode('199')).toEqual({ type: 'planet', code: '199', name: 'mercury' })
+		expect(planetTargetFromCode('599')).toEqual({ type: 'planet', code: '599', name: 'jupiter' })
+	})
+
+	test('maps natural satellites, minor-body commands, and opaque Horizons codes', () => {
+		expect(planetTargetFromCode('901')).toEqual({ type: 'naturalSatellite', code: '901' })
+		expect(planetTargetFromCode('401')).toEqual({ type: 'naturalSatellite', code: '401' })
+		expect(planetTargetFromCode('DES=20000001;')).toEqual({ type: 'minorBody', command: 'DES=20000001;' })
+		expect(planetTargetFromCode('1;')).toEqual({ type: 'minorBody', command: '1;' })
+		expect(planetTargetFromCode(';')).toEqual({ type: 'minorBody', command: ';' })
+		expect(planetTargetFromCode('505')).toEqual({ type: 'horizons', command: '505' })
+	})
+})
+
+describe('provider selection', () => {
+	test('fast true and offline available never calls observer', async () => {
+		const { observer, calls } = recordingObserver()
+		const offline = stubProvider('offline', new Set(['planet']))
+		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider })
+
+		const position = await ephemeris.position(JUPITER, { ...REQ_A, fast: true })
+
+		expect(calls).toHaveLength(0)
+		expect(offline.calls).toBe(1)
+		expect(position).toBe(DEFAULT_BODY_POSITION)
+	})
+
+	test('fast false uses Horizons when it supports the target', async () => {
+		const { observer, calls } = recordingObserver()
+		const offline = stubProvider('offline', new Set(['planet']))
+		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider })
+
+		const position = await ephemeris.position(JUPITER, REQ_A)
+
+		expect(calls).toEqual(['599'])
+		expect(offline.calls).toBe(0)
+		expect(position).not.toBe(DEFAULT_BODY_POSITION)
+	})
+
+	test('star and sky point stay offline when fast is false', async () => {
+		const { observer, calls } = recordingObserver()
+		const ephemeris = new AtlasEphemeris({ observer })
+
+		await ephemeris.position({ type: 'star', object: STUB_STAR }, REQ_A)
+		await ephemeris.position({ type: 'skyPoint', rightAscension: 0, declination: 0 }, REQ_A)
+
+		expect(calls).toHaveLength(0)
+	})
+
+	test('fast true still calls Horizons for Charon', async () => {
+		const { observer, calls } = recordingObserver()
+		const ephemeris = new AtlasEphemeris({ observer })
+
+		await ephemeris.position(planetTargetFromCode('901'), { ...REQ_A, fast: true })
+
+		expect(calls).toEqual(['901'])
+	})
+
+	test('fast true still calls Horizons for DES without elements', async () => {
+		const { observer, calls } = recordingObserver()
+		const ephemeris = new AtlasEphemeris({ observer })
+
+		await ephemeris.position(planetTargetFromCode('DES=20000001;'), { ...REQ_A, fast: true })
+
+		expect(calls).toEqual(['DES=20000001;'])
+	})
+
+	test('fast true on a VSOP planet still uses Horizons until local models exist', async () => {
+		const { observer, calls } = recordingObserver()
+		const ephemeris = new AtlasEphemeris({ observer })
+
+		await ephemeris.position(JUPITER, { ...REQ_A, fast: true })
+
+		expect(calls).toEqual(['599'])
+	})
+
+	test('a target with no provider throws EphemerisUnavailableError', () => {
+		const none = stubProvider('offline', new Set())
+		const ephemeris = new AtlasEphemeris({ horizons: none.provider, offline: none.provider })
+
+		expect(ephemeris.position(JUPITER, REQ_A)).rejects.toBeInstanceOf(EphemerisUnavailableError)
+	})
+
+	test('a Horizons failure is not masked by an offline model', () => {
+		const observer: HorizonsObserver = () => Promise.reject(new Error('timeout'))
+		const offline = stubProvider('offline', new Set(['planet']))
+		const ephemeris = new AtlasEphemeris({ observer, offline: offline.provider })
+
+		expect(ephemeris.position(JUPITER, REQ_A)).rejects.toThrow('timeout')
+		expect(offline.calls).toBe(0)
 	})
 })

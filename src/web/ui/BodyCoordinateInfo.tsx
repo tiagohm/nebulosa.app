@@ -2,7 +2,7 @@ import { formatDistance, tw } from '@shared/util'
 import { formatALT, formatAZ, formatDEC, formatHMS, formatRA, toDeg } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { ComponentProps } from 'react'
-import type { BodyPosition } from '#/atlas'
+import type { BodyPosition, EphemerisFallbackReason } from '#/atlas'
 import type { CoordinateInfo, CoordinateType } from '#/mount'
 
 export interface BodyCoordinateInfoProps extends ComponentProps<'div'> {
@@ -63,6 +63,7 @@ export function BodyCoordinateInfo({ position, hideEquatorialJ2000, hideEquatori
 				{!hideIlluminated && 'illuminated' in position && <Extra label="ILLUM (%)" value={position.illuminated.toFixed(2)} />}
 				{!hideElongation && 'elongation' in position && <Extra label="ELON (°)" value={toDeg(position.elongation).toFixed(2)} />}
 			</div>
+			<div className="col-span-full flex flex-row justify-center text-sm">{'source' in position && position.source && <span>Source: {formatEphemerisSource(position.source, position.fallbackReason)}</span>}</div>
 		</div>
 	)
 }
@@ -89,6 +90,22 @@ function formatCoordinateLongitude(type: CoordinateType, angle: Angle) {
 
 function formatCoordinateLatitude(type: CoordinateType, angle: Angle) {
 	return type === 'horizontal' ? formatALT(angle, true) : formatDEC(angle, true)
+}
+
+// Short parenthetical for source when an accurate request fell back to a local model.
+const EPHEMERIS_FALLBACK_LABEL = {
+	timeout: 'timeout',
+	breakerOpen: 'unavailable',
+	http: 'HTTP',
+	network: 'network',
+} as const satisfies Record<EphemerisFallbackReason, string>
+
+// Discrete origin label for Atlas positions. Fallback reasons are only shown when Horizons was
+// requested and a local model answered instead.
+function formatEphemerisSource(source: BodyPosition['source'], fallbackReason?: EphemerisFallbackReason) {
+	if (source === 'horizons') return 'NASA JPL Horizons'
+	if (fallbackReason) return `Offline (${EPHEMERIS_FALLBACK_LABEL[fallbackReason]})`
+	return 'Offline'
 }
 
 function formatSeconds(seconds: number) {

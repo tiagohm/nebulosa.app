@@ -45,3 +45,35 @@ export async function settlesWithin(promise: Promise<unknown>, timeout: number):
 		clearTimeout(timer)
 	}
 }
+
+// Rejects with the signal's reason when `signal` aborts before `promise` settles. One waiter can
+// leave a shared Horizons fetch without aborting it for the remaining waiters.
+export function settleWithSignal<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+	if (!signal) return promise
+	if (signal.aborted) return Promise.reject(abortReasonOf(signal))
+
+	return new Promise((resolve, reject) => {
+		const onAbort = () => {
+			signal.removeEventListener('abort', onAbort)
+			reject(abortReasonOf(signal))
+		}
+
+		signal.addEventListener('abort', onAbort, { once: true })
+
+		promise.then(
+			(value) => {
+				signal.removeEventListener('abort', onAbort)
+				resolve(value)
+			},
+			(error: unknown) => {
+				signal.removeEventListener('abort', onAbort)
+				reject(error instanceof Error ? error : abortReasonOf(signal))
+			},
+		)
+	})
+}
+
+// Reason stored on `signal`, or an AbortError DOMException when the runtime left it empty.
+export function abortReasonOf(signal: AbortSignal): Error {
+	return signal.reason instanceof Error ? signal.reason : new DOMException('The operation was aborted.', 'AbortError')
+}

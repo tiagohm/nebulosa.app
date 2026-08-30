@@ -1,6 +1,7 @@
 import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { Focuser } from 'nebulosa/src/devices/indi/device'
-import type { DeviceHandler, FocuserManager } from 'nebulosa/src/devices/indi/manager'
+import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
+import type { FocuserManager } from 'nebulosa/src/devices/indi/manager/focuser'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import type { OperationCoordinator } from 'src/api/operation'
 import { EventBus } from 'src/shared/bus'

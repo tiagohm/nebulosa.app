@@ -1,6 +1,7 @@
 import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { Thermometer } from 'nebulosa/src/devices/indi/device'
-import type { DeviceHandler, ThermometerManager } from 'nebulosa/src/devices/indi/manager'
+import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
+import type { ThermometerManager } from 'nebulosa/src/devices/indi/manager/thermometer'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
 import type { ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from '#/thermometer'

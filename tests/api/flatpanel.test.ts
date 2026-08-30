@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { FlatPanel } from 'nebulosa/src/devices/indi/device'
-import { FlatPanelManager } from 'nebulosa/src/devices/indi/manager'
+import { FlatPanelManager } from 'nebulosa/src/devices/indi/manager/flatpanel'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { FlatPanelSimulator } from 'nebulosa/src/devices/indi/simulator/flatpanel'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'

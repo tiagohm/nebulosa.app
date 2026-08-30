@@ -1,5 +1,6 @@
 import type { GuideDirection, GuideOutput } from 'nebulosa/src/devices/indi/device'
-import type { DeviceHandler, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
+import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
+import type { GuideOutputManager } from 'nebulosa/src/devices/indi/manager/guideoutput'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import type { GuidePulse } from '#/guideoutput'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'

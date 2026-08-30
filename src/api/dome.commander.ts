@@ -1,6 +1,7 @@
 import { errorMessage } from 'nebulosa/src/core/util'
 import type { DomeDirection, Dome, DomeShutterState } from 'nebulosa/src/devices/indi/device'
-import type { DeviceHandler, DomeManager } from 'nebulosa/src/devices/indi/manager'
+import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
+import type { DomeManager } from 'nebulosa/src/devices/indi/manager/dome'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import { normalizeAngle, safeAngularDifference } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'

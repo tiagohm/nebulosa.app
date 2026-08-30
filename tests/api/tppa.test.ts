@@ -2,7 +2,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from '
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
-import { CameraManager, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
+import { CameraManager } from 'nebulosa/src/devices/indi/manager/camera'
+import { FocuserManager } from 'nebulosa/src/devices/indi/manager/focuser'
+import { MountManager } from 'nebulosa/src/devices/indi/manager/mount'
+import { RotatorManager } from 'nebulosa/src/devices/indi/manager/rotator'
+import { WheelManager } from 'nebulosa/src/devices/indi/manager/wheel'
 import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
@@ -26,6 +30,7 @@ import type { OperationResult } from '#/orchestration'
 import { DEFAULT_TPPA_START } from '#/tppa'
 import type { TppaStart, TppaEvent } from '#/tppa'
 import { captureHandle, json, noContent, SocketMessager, waitUntil } from './util'
+
 type TppaStartOverrides = Omit<Partial<TppaStart>, 'capture' | 'solver' | 'refraction'> & {
 	readonly capture?: Partial<TppaStart['capture']>
 	readonly solver?: Partial<TppaStart['solver']>

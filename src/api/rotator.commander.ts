@@ -1,5 +1,6 @@
 import type { Rotator } from 'nebulosa/src/devices/indi/device'
-import type { DeviceHandler, RotatorManager } from 'nebulosa/src/devices/indi/manager'
+import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
+import type { RotatorManager } from 'nebulosa/src/devices/indi/manager/rotator'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'

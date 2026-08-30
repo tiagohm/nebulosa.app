@@ -1,5 +1,5 @@
 import type { DewHeater } from 'nebulosa/src/devices/indi/device'
-import type { DewHeaterManager } from 'nebulosa/src/devices/indi/manager'
+import type { DewHeaterManager } from 'nebulosa/src/devices/indi/manager/dewheater'
 import { clamp } from 'nebulosa/src/math/numerical/math'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'

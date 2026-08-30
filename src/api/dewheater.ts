@@ -1,6 +1,7 @@
 import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { DewHeater } from 'nebulosa/src/devices/indi/device'
-import type { DeviceHandler, DewHeaterManager } from 'nebulosa/src/devices/indi/manager'
+import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
+import type { DewHeaterManager } from 'nebulosa/src/devices/indi/manager/dewheater'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import type { OperationCoordinator } from 'src/api/operation'
 import { EventBus } from 'src/shared/bus'

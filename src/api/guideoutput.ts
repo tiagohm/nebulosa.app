@@ -1,6 +1,7 @@
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import type { Client, GuideOutput } from 'nebulosa/src/devices/indi/device'
-import type { DeviceHandler, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
+import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
+import type { GuideOutputManager } from 'nebulosa/src/devices/indi/manager/guideoutput'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import type { OperationCoordinator } from 'src/api/operation'
 import { EventBus } from 'src/shared/bus'

@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
-import { CameraManager } from 'nebulosa/src/devices/indi/manager'
+import { CameraManager } from 'nebulosa/src/devices/indi/manager/camera'
 import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { waitUntil } from 'root/tests/api/util'

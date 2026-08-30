@@ -7,7 +7,7 @@ import { groupProgressOf, targetProgressOf } from './sequencer.scheduler'
 import type { SequencerTriggerPolicies } from './sequencer.trigger'
 
 // Derivation of the value the UI observes, the meter behind its completion estimate, and the cadence it is
-// emitted at (§15.1, §15.2).
+// emitted.
 //
 // The snapshot is derived on every tick from the session record, its checkpoint, and what the runtime is doing
 // right now. It is never stored and never read back by the runtime: an execution decision that consulted it
@@ -17,7 +17,7 @@ import type { SequencerTriggerPolicies } from './sequencer.trigger'
 // interval is milliseconds.
 
 // Interval between two progress emissions when nothing changes, in milliseconds. A ten-minute exposure has to
-// keep the screen alive without producing ten minutes of traffic, and a transition never waits for it (§15.2).
+// keep the screen alive without producing ten minutes of traffic, and a transition never waits for it.
 export const SEQUENCER_PROGRESS_INTERVAL = 1000
 
 // Intervals the overhead average is taken over.
@@ -114,7 +114,7 @@ export interface SequencerActivityObservation {
 	// Instant the action started.
 	readonly startedAt: number
 	// Condition the action is standing still on, which is what keeps a long wait explainable instead of
-	// stalling the completion estimate with no reason attached (§15.1).
+	// stalling the completion estimate with no reason attached.
 	readonly wait?: SequencerWaitSnapshot
 }
 
@@ -157,7 +157,7 @@ export interface SequencerSnapshotObservation {
 	readonly now: number
 }
 
-// Derives everything the UI shows from the durable state and what the runtime is doing right now (§15.1).
+// Derives everything the UI shows from the durable state and what the runtime is doing right now.
 //
 // The derivation is total and pure: every session produces a snapshot, including one that never started and
 // one whose plan the process no longer holds, and nothing here reads a clock of its own — `now` is the instant
@@ -424,7 +424,7 @@ export interface SequencerProgressEmitterOptions {
 	readonly interval?: number
 }
 
-// Emits progress at a fixed cadence and immediately on every change (§15.2).
+// Emits progress at a fixed cadence and immediately on every change.
 //
 // The two halves answer different failures. Without the cadence a ten-minute exposure would leave the screen
 // frozen for ten minutes; without the immediate emission a transition would be shown up to a second after it

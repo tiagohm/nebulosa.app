@@ -6,9 +6,9 @@ import { sequencerFailurePolicy } from './sequencer.policy'
 import { abandonSlot, attemptWindowExhausted, attemptsSpent } from './sequencer.progress'
 import { frameGroupDegraded, frameGroupReachedTarget, groupProgressOf, targetProgressOf } from './sequencer.scheduler'
 
-// What a failed capture does to the slot it was filling (§8.3).
+// What a failed capture does to the slot it was filling.
 //
-// The failure policy of §10 decides how many attempts and what happens after them; this module is what
+// The failure policy decides how many attempts and what happens after them; this module is what
 // happens *to the slot*: the attempt window it spends, the abandonment that closes it, the exhaustion that
 // holds the session with the slot still on the cursor, and the completion that is degraded rather than
 // successful. The two are separate because they bound different things — one bounds attempts, the other
@@ -138,7 +138,7 @@ export function sequencerGroupOutcome(group: SequencerPlanFrameGroup, progress: 
 
 // Cause a degraded completion is reported with.
 //
-// Degraded completion is not success: it makes the plan outcome a failure (§8.6). The cause carried is the
+// Degraded completion is not success: it makes the plan outcome a failure. The cause carried is the
 // one of the last attempt that failed, and deliberately not "the slot limit was reached", which describes the
 // mechanism that stopped the group rather than the reason it never filled — an operator reading the session
 // afterwards needs the camera error, not the counter that noticed it.

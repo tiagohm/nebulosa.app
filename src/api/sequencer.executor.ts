@@ -49,7 +49,7 @@ import type { SequencerWriteEnvironment } from './sequencer.write'
 // ends. What is here is the order they are asked in and the state that flows between them, which is exactly
 // the part that cannot be a pure function: it commands devices and it writes files.
 //
-// The safe point of one frame runs in the fixed order of §8.5: the triggers are evaluated once against a
+// The safe point of one frame runs in the fixed order: the triggers are evaluated once against a
 // single reading of the observatory, the moving ones run inside the guiding interlock together with the frame
 // preparation, the dither is emitted with the resume of that interlock, the pre-exposure guard decides whether
 // the exposure fits ahead of the meridian, the cadence boundary is waited for, and only then is the frame
@@ -103,7 +103,7 @@ export interface SequencerExecutorHost {
 	readonly storage: SequencerPathContext
 	// Cancellation signal of the action that is running, aborted by a shutdown, by an immediate stop and by an
 	// immediate pause. A graceful stop deliberately does not abort it: the frame that is on the sensor is let
-	// finish and becomes durable instead of being thrown away (§11.3).
+	// finish and becomes durable instead of being thrown away.
 	readonly signal: AbortSignal
 	// Cancellation signal of the waits the walk takes between actions, aborted by every stop, graceful included.
 	// The spacing between two frames and the wait for a flip window hold nothing a stop should preserve, and a
@@ -132,18 +132,18 @@ export interface SequencerExecutorHost {
 	// Holds the walk at the safe point `nodeId` was reached on, publishing the session as `paused` for as long
 	// as the hold lasts, and resolves with the state the operator converged it to: `running` when it was
 	// resumed, `stopped` when it was stopped or the process is ending. Nothing is released while it holds —
-	// the reservation of a paused session is what makes the resume possible (§11.3).
+	// the reservation of a paused session is what makes the resume possible.
 	readonly hold: (nodeId: string) => Promise<SequencerDesiredState>
 	// Publishes the session as `finalizing`, called once and only when the terminal pipeline is about to run.
 	// Parking a mount and warming a camera take minutes, and a session that spent them published as `running`
 	// tells a reader the plan is still capturing and lets the control reduction accept a pause or a resume that
-	// nothing can act on any more — the terminal pipeline is never interrupted (§8.6).
+	// nothing can act on any more — the terminal pipeline is never interrupted.
 	readonly finalizing: () => void
 	// Announces that the walk is entering the target block, called once and only when it actually enters it.
 	//
 	// It is the boundary between the phases that run outside the action signal — the startup pipeline, attended
 	// on the wait signal — and the one whose nodes run under it. An immediate pause is expressed as the
-	// cancellation of what is running (§11.3), and only the target block has something that answer means
+	// cancellation of what is running, and only the target block has something that answer means
 	// anything for: cancelling a startup action produces an `aborted` nothing attributes to the operator, which
 	// fails the session instead of holding it for the resume.
 	readonly capturing: () => void
@@ -250,7 +250,7 @@ interface SequencerExecution {
 // runs for the outcomes the definition asked it to run on, under the terminal signal.
 //
 // Startup runs under the wait signal rather than the action one, so a pause never tears it down. A lifecycle
-// pipeline has no paused state (§11.3): a pause is honored at the safe points of the target block, and the
+// pipeline has no paused state: a pause is honored at the safe points of the target block, and the
 // immediate mode cancelling the running action would end the startup as a commanded stop — every remaining step
 // `notRun`, the session terminal and non-resumable — for an operator who only asked it to wait. A stop still
 // cancels it, gracefully included, because there is no frame in a lifecycle step worth preserving.
@@ -448,7 +448,7 @@ async function runPipelineBlock(execution: SequencerExecution, pipeline: Sequenc
 			delay: (delay, delaySignal) => host.delay(delay, delaySignal),
 			// The boundary between two lifecycle actions is `afterAction`: the step that was running reached its own
 			// terminal decision, so every pause mode is attended here and a pause holds instead of ending the
-			// pipeline, which is what keeps a session paused during startup resumable (§11.3).
+			// pipeline, which is what keeps a session paused during startup resumable.
 			...(attended ? { converge: async (step: SequencerPipelineStep) => (await convergeAt(execution, 'afterAction', step.nodeId)).outcome.kind === 'continue' } : {}),
 		},
 		signal,
@@ -479,7 +479,7 @@ function retryOf(configuration: unknown, fallback: SequencerRetryPolicy): Sequen
 
 // Terminal decision a block declares, absent for the blocks that only carry a retry policy. Of the nodes the
 // target block walks it is the three safe-point triggers that declare one — the flip, the autofocus and the
-// dither — and their answer is the more expressive of the two (§10), so it is what decides once the attempts
+// dither — and their answer is the more expressive of the two, so it is what decides once the attempts
 // are spent rather than the `onExhausted` of the retry policy.
 function onFailureOf(configuration: unknown): SequencerOnFailure | undefined {
 	return (configuration as { readonly onFailure?: SequencerOnFailure }).onFailure
@@ -541,7 +541,7 @@ async function runActionNode(execution: SequencerExecution, node: SequencerPlanA
 // immediate pause issues.
 //
 // The wait signal alone answers every stop and no pause, because a pause cancels the action that is running
-// (§11.3) and between two frames nothing is running. A session paused while it spaces frames, or while it
+// and between two frames nothing is running. A session paused while it spaces frames, or while it
 // stands in front of a closed flip window, would therefore keep waiting until the spacing elapsed or the sky
 // moved before noticing the command — minutes in one case and up to an hour in the other, for an operator who
 // asked for the pause that takes effect at once. Joining the two ends the wait immediately, and what the
@@ -620,7 +620,7 @@ async function holdWalk(execution: SequencerExecution, nodeId: string): Promise<
 	return SEQUENCER_CONTINUE
 }
 
-// Attends the state the session is converging to, at one boundary of the walk (§11.3).
+// Attends the state the session is converging to, at one boundary of the walk.
 //
 // The safe point is where this call sits, and the configured pause mode decides whether a pending pause is
 // attended here or at a later boundary: that is the whole difference between the modes on this side, since what
@@ -910,7 +910,7 @@ async function runCaptureLoop(execution: SequencerExecution, targetId: string, l
 // What the cycle that just closed ended as, evaluated while its cursors still hold what it spent.
 //
 // A group that spent its slot limit without reaching its target completed degraded, and a degraded completion
-// is a failure of the plan (§8.6), not a night that merely produced fewer frames: the session is what an
+// is a failure of the plan, not a night that merely produced fewer frames: the session is what an
 // operator reads in the morning to know whether the target is done, and reporting `completed` for a group that
 // lost every slot to a camera that stopped answering is the one answer that costs a whole night. The cause
 // reported is the one of the last slot lost, which is the camera error rather than the counter that noticed it
@@ -1178,7 +1178,7 @@ async function runInterlockedSafePoint(
 			ran.add(kind)
 
 			// A flip that refocuses does it inside its own node, and the trigger evaluator suppresses the standalone
-			// autofocus of that safe point precisely because of it (§8.4). The anchor has to advance on that sweep
+			// autofocus of that safe point precisely because of it. The anchor has to advance on that sweep
 			// too: leaving it where it was measures the next safe point against a focus two flips old and keeps the
 			// `afterMeridianFlip` condition owed by a run that already paid it, so the session refocuses again on the
 			// very next frame.
@@ -1449,7 +1449,7 @@ async function runExposure(execution: SequencerExecution, targetId: string, loop
 			execution.keeper.anchors(execution.anchors)
 
 			// The terminating path of the capture block registers a committed artifact row, so the progress that
-			// counts this slot and the row that records it are one unit (§13.2).
+			// counts this slot and the row that records it are one unit.
 			await checkpointDue(execution, 'artifact')
 
 			// The frame is durable, which is the boundary `afterCurrentExposure` is attended at. Asking it only

@@ -883,7 +883,7 @@ function checkPolicies(context: CompilerContext, definition: Sequencer) {
 	if (dither.enabled) {
 		checkRetry(context, dither.retry, 'dither.retry')
 		checkOnFailure(context, dither.onFailure, 'dither.onFailure')
-		// `onFailure` is the terminal decision of this feature (§10). Leaving `onExhausted` in the executable
+		// `onFailure` is the terminal decision of this feature. Leaving `onExhausted` in the executable
 		// plan would be the silent acceptance the compatibility rule forbids: `onExhausted: 'fail'` next to
 		// `onFailure: 'continue'` would look like a night-ending policy and never end the night.
 		context.removals.push({ path: 'dither.retry.onExhausted', reason: 'onFailure is the terminal decision of this feature, so onExhausted is not consulted' })

@@ -255,7 +255,7 @@ export interface SequencerArtifact extends SequencerArtifactDraft {
 }
 
 // Everything below describes what the UI observes, and nothing below is a source of truth: the snapshot is
-// derived from the runtime state and the checkpoint on every tick, and no execution decision reads it (§15.1).
+// derived from the runtime state and the checkpoint on every tick, and no execution decision reads it.
 // It is therefore not persisted and carries no revision of its own beyond the one of the session it describes.
 
 // One declared device role and what it resolved to when the session started.
@@ -281,7 +281,7 @@ export interface SequencerTargetSnapshot {
 // Exposure the sensor is integrating right now.
 //
 // It is a field of the capture block rather than one more foreground action on purpose: "capture is idle" is
-// the absence of an exposure, and the UI has to tell the two apart without inspecting action types (§15.1).
+// the absence of an exposure, and the UI has to tell the two apart without inspecting action types
 export interface SequencerExposureSnapshot {
 	// Instant the exposure started, in milliseconds since the Unix epoch.
 	readonly startedAt: number
@@ -298,7 +298,7 @@ export interface SequencerExposureSnapshot {
 //
 // `abandoned` and `slotLimit` are reported alongside the outcome counters because a degraded completion must
 // not appear only in the terminal state: the operator has to watch the margin being spent while intervening
-// is still possible (§15.1).
+// is still possible
 export interface SequencerGroupSnapshot {
 	// Frame group id within the plan.
 	readonly id: string
@@ -350,7 +350,7 @@ export interface SequencerCaptureSnapshot {
 	// Estimated work left, in seconds, absent while no plan backs the session. It is an estimate and never a
 	// firm forecast: it projects the required slots still to be accepted against the exposure time plus the
 	// measured average overhead, ignores flip and astronomical waits, counts no trigger it cannot predict, and
-	// is recomputed on every tick rather than persisted (§15.1).
+	// is recomputed on every tick rather than persisted.
 	readonly remaining?: number
 	// Instant the session is estimated to finish, in milliseconds since the Unix epoch, absent under the same
 	// conditions as `remaining` and carrying the same caveats.
@@ -361,11 +361,11 @@ export interface SequencerCaptureSnapshot {
 	readonly overhead?: number
 }
 
-// Why a session is standing still with a known end, such as the flip window of §8.4.
+// Why a session is standing still with a known end, such as the flip window.
 //
 // A long wait is never hidden behind the completion estimate: it is reported as the foreground action, with
 // the instant it ends and the reason it exists, because a frozen bar with no explanation is the worst thing
-// an operator can find at three in the morning (§15.1).
+// an operator can find at three in the morning.
 export interface SequencerWaitSnapshot {
 	// Why the session is waiting, phrased for the operator.
 	readonly reason: string
@@ -431,7 +431,7 @@ export interface SequencerMonitorSnapshot {
 	readonly detail?: string
 }
 
-// The single value that describes everything the UI shows (§15.1).
+// The single value that describes everything the UI shows.
 export interface SequencerSessionSnapshot {
 	// Session being described.
 	readonly id: string
@@ -467,8 +467,7 @@ export interface SequencerSessionSnapshot {
 	readonly capture: SequencerCaptureSnapshot
 	// Action the UI shows, absent when nothing is running. With the serialized V1 runtime there is at most one.
 	readonly foreground?: SequencerActivitySnapshot
-	// Actions running alongside the foreground one. Empty in practice in V1, where background is telemetry
-	// only (§11.2).
+	// Actions running alongside the foreground one. Empty in practice in V1, where background is telemetry only.
 	readonly background: readonly SequencerActivitySnapshot[]
 	// Node the plan takes next, absent whenever it is not determinable.
 	readonly next?: string

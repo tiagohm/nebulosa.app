@@ -13,12 +13,12 @@ import { isSequencerTerminalState } from '#/sequencer.state'
 // The one rule that spans every decision here: the reservation is retained in every non-terminal state,
 // paused and suspended included. Between the `release()` of a cancelled exposure's lease and the `acquire()`
 // of the next action there is a real window in which the device is free, and without the reservation a manual
-// HTTP command lands exactly in it (§11.3). With it the window still exists and is unreachable from outside
+// HTTP command lands exactly in it. With it the window still exists and is unreachable from outside
 // the session.
 //
 // Instants are milliseconds since the Unix epoch.
 
-// Boundaries at which the runtime is between nodes and can honor a pending pause or stop (§11.3).
+// Boundaries at which the runtime is between nodes and can honor a pending pause or stop.
 //
 // They are not a single timeline. `afterAction` is the gap between two plan nodes — two startup steps, the
 // slew and the centering — and `beforeExposure` is the gap after the triggers of a capture safe point and
@@ -40,7 +40,7 @@ export type SequencerSafePoint = 'afterExposure' | 'afterArtifact' | 'afterActio
 // and skip the frame the operator asked to finish.
 //
 // `immediate` accepts every boundary and, unlike the other two, does not wait to reach one: it cancels the
-// active action and waits for its cleanups (§11.3).
+// active action and waits for its cleanups.
 //
 // `afterCurrentExposure` is attended once the frame is durable and at the start of the next one, never
 // before the shutter. Pausing between the sensor and the write would hold a session with an exposed frame
@@ -115,7 +115,7 @@ export function sequencerEndReached(end: SequencerEndCondition, at: number, inte
 //
 // Only the two immediate modes do. The cancellation is a request and never a kill: the runtime waits for the
 // cleanups of the cancelled action before it reports the new state, because reporting early would leave a
-// device mid-command while the UI says nothing is running (§12).
+// device mid-command while the UI says nothing is running.
 //
 // A graceful stop lets the running node finish precisely so a frame that was already exposed becomes durable
 // rather than being thrown away.
@@ -124,12 +124,12 @@ export function sequencerCancelsActiveAction(desiredState: SequencerDesiredState
 	return desiredState === 'paused' && execution.pauseMode === 'immediate'
 }
 
-// Whether the session still holds its reservation in this state (§11.3).
+// Whether the session still holds its reservation in this state.
 //
 // Every non-terminal state retains it, `paused` and `suspended` included: a paused session is one that will
 // resume against the same devices, and releasing them would let another client take the camera and hand the
 // operator a resume that cannot happen. The reservation is released with the terminal state, after the
-// terminal pipeline ran (§8.6).
+// terminal pipeline ran.
 export function sequencerRetainsReservation(state: SequencerSessionState) {
 	return !isSequencerTerminalState(state)
 }
@@ -140,7 +140,7 @@ export function sequencerRetainsReservation(state: SequencerSessionState) {
 // - plan: nothing had started, and the walk begins at the root.
 export type SequencerResumePoint = { readonly at: 'node'; readonly nodeId: string; readonly containers: readonly string[]; readonly attempt: number } | { readonly at: 'nextNode'; readonly nodeId: string; readonly containers: readonly string[] } | { readonly at: 'plan' }
 
-// Derives the node a resume re-enters from the checkpoint (§13.3).
+// Derives the node a resume re-enters from the checkpoint.
 //
 // The checkpoint is the only input: the runtime holds the same cursor in memory, but reading the in-memory
 // copy here would make a resume after a restart take a different path from a resume after a pause, and the

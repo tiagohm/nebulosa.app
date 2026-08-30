@@ -323,8 +323,8 @@ interface ActiveSession {
 	// walk takes between actions and releases a hold, and it is deliberately not what cancels the running action:
 	// a graceful stop ends the session without taking the frame that is on the sensor away from it.
 	readonly controller: AbortController
-	// Cancellation source of the action that is running, aborted by an immediate stop and by an immediate pause
-	// (§11.3). It is replaced rather than reused after a cancelled action, because a signal that already fired
+	// Cancellation source of the action that is running, aborted by an immediate stop and by an immediate pause.
+	// It is replaced rather than reused after a cancelled action, because a signal that already fired
 	// cannot carry the next one and an immediate pause is followed by a resume that has to run again.
 	action: AbortController
 	// Cancellation source of the terminal pipeline, aborted only by a shutdown. A stop ends the plan and the
@@ -344,7 +344,7 @@ interface ActiveSession {
 	// that just reached its last state.
 	activity?: SequencerActivityObservation
 	// Exposure the sensor is integrating, absent whenever the shutter is not open. It is a field of its own
-	// so the snapshot can say "capture is idle" without inspecting the foreground action type (§15.1).
+	// so the snapshot can say "capture is idle" without inspecting the foreground action type.
 	exposure?: SequencerExposureObservation
 	// Moving average of the interval between two exposures, which is what the completion estimate projects.
 	readonly meter: SequencerOverheadMeter
@@ -356,7 +356,7 @@ interface ActiveSession {
 	revision: number
 	// Set while the walk is inside the target block, which is the only phase whose actions run under the action
 	// signal. The startup pipeline runs outside it, and the terminal pipeline runs after it, so a cancellation
-	// issued during either of them is an `aborted` no command explains (§11.3).
+	// issued during either of them is an `aborted` no command explains.
 	capturing: boolean
 	// Set once finalization began, so a stop arriving during it does not start a second one.
 	finalizing: boolean
@@ -456,7 +456,7 @@ export class SequencerRuntime {
 		return this.#gate.sessionId
 	}
 
-	// Live half of the snapshot of one session (§15.1), or undefined when that session is not the running one.
+	// Live half of the snapshot of one session, or undefined when that session is not the running one.
 	//
 	// It is deliberately not the whole observation: the session record, its plan and the instant of the reading
 	// belong to whoever derives the snapshot, and everything here is state only the runtime holds. A session
@@ -561,7 +561,7 @@ export class SequencerRuntime {
 		// The night segment is resolved here and never again, which is what fixes it for a session that runs
 		// past its own boundary. It is read at the start and not at the creation because the observing night is
 		// the one the session captures in: a session prepared before midnight and started after it belongs to
-		// the night it is actually observing, and it is also the instant the resolution of §14 dates it from.
+		// the night it is actually observing, and it is also the instant the resolution dates it from.
 		const storageIssue = sequencerTemporaryDirectoryIssue(pending.compiled.storage.root, pending.compiled.storage.temporaryDirectory)
 
 		if (storageIssue !== undefined) {
@@ -734,7 +734,7 @@ export class SequencerRuntime {
 
 		if (active === undefined || active.id !== sessionId) return this.#store.session(sessionId)
 
-		// The terminal pipeline is never interrupted (§8.6). A stop that arrived while it is already running
+		// The terminal pipeline is never interrupted. A stop that arrived while it is already running
 		// is recorded as a no-op by the reducer; a direct call must do the same instead of cancelling a park.
 		if (active.finalizing || active.finalized) return await active.done.promise
 
@@ -749,7 +749,7 @@ export class SequencerRuntime {
 
 		// The action itself is cancelled only under the immediate stop mode. A graceful stop exists precisely so
 		// the frame that is already on the sensor finishes and becomes durable, and the walk then leaves the plan
-		// at the next boundary of §11.3 instead of throwing the exposure away.
+		// at the next boundary instead of throwing the exposure away.
 		if (sequencerCancelsActiveAction('stopped', active.plan.compiled.execution)) await this.#cancelActiveAction(active)
 
 		return await active.done.promise
@@ -761,7 +761,7 @@ export class SequencerRuntime {
 	// Both halves are needed: the controller stops an action that is merely waiting, and the cancellation by
 	// reservation owner reaches every operation tree it started, including the ones the runtime holds no handle
 	// for. The latter resolves only after their cleanups ran, which is why the new state is never reported before
-	// it does — reporting early would leave a device mid-command while the UI says nothing is running (§12).
+	// it does — reporting early would leave a device mid-command while the UI says nothing is running.
 	//
 	// The replacement is what makes an immediate pause resumable: the walk that wakes up runs a node again, and a
 	// spent signal would abort it before it commanded anything. A session that is stopping never reaches for the
@@ -778,7 +778,7 @@ export class SequencerRuntime {
 		active.action = new AbortController()
 	}
 
-	// Ends the sequencer with the process (§20.2), in the only order that leaves no device commanded.
+	// Ends the sequencer with the process, in the only order that leaves no device commanded.
 	//
 	// It is not the finalization pipeline: shutting down ends the night, it does not conclude it, so no
 	// terminal state is written and nothing quiesces the way a completed session does. The session is recorded
@@ -854,7 +854,7 @@ export class SequencerRuntime {
 	// that decided instead would have to answer for the state machine, and it would answer late.
 	//
 	// A pause records the state the session converges to and does not itself stop anything: the walk observes
-	// the desired state at the boundaries §11.3 declares — before a frame and, under the immediate mode, at the
+	// the desired state at the boundaries declares — before a frame and, under the immediate mode, at the
 	// end of the exposure that is running — and holds there, keeping its cursor, its progress and its
 	// reservation until a resume or a stop arrives. The state therefore still says `running` between the command
 	// and the boundary the walk reaches. A stop is different and is carried through here, because the stop path
@@ -953,8 +953,8 @@ export class SequencerRuntime {
 			// An immediate pause does not wait for a boundary: it cancels what is running and the walk holds where
 			// the cancellation left it, which is the whole difference between the three pause modes. The cancelled
 			// action reports `aborted`, the desired state written above is what attributes it to this command, and
-			// the slot policy therefore holds the slot on the cursor without spending an attempt on the operator
-			// (§8.3). A command that changed nothing cancels nothing: the session it would interrupt is already
+			// the slot policy therefore holds the slot on the cursor without spending an attempt on the operator.
+			// A command that changed nothing cancels nothing: the session it would interrupt is already
 			// paused or already converging to it.
 			//
 			// Only the target block is cancelled, because it is the only phase that carries the attribution. The
@@ -1045,7 +1045,7 @@ export class SequencerRuntime {
 	// the loop the slot budget exists to rule out and which a policy pause is the opposite of.
 	//
 	// A stop already in place, or the abort of the session, is left alone. The reservation is kept for the whole
-	// hold — that is what makes the resume possible (§11.3) — and the state is published as `paused` so a reader
+	// hold — that is what makes the resume possible — and the state is published as `paused` so a reader
 	// sees a session that is waiting rather than one that is merely slow.
 	//
 	// The abort of the session releases the hold as surely as a resume does, and it has to: `stop` waits for the
@@ -1198,7 +1198,7 @@ export class SequencerRuntime {
 	// keeps `#finalize` from committing the same transition a second time once the walk returns.
 	#enterFinalizing(active: ActiveSession) {
 		// The target block is over whether or not the transition is written here, and what the flag decides is
-		// whether a command still cancels what is running: the terminal pipeline is never interrupted (§8.6).
+		// whether a command still cancels what is running: the terminal pipeline is never interrupted.
 		active.capturing = false
 
 		if (active.finalized) return

@@ -1,5 +1,5 @@
 import type { Camera } from 'nebulosa/src/devices/indi/device'
-import type { CameraManager } from 'nebulosa/src/devices/indi/manager'
+import type { CameraManager } from 'nebulosa/src/devices/indi/manager/camera'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import type { OperationScope } from './operation'

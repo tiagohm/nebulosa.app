@@ -1,6 +1,7 @@
 import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { Wheel } from 'nebulosa/src/devices/indi/device'
-import type { DeviceHandler, WheelManager } from 'nebulosa/src/devices/indi/manager'
+import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
+import type { WheelManager } from 'nebulosa/src/devices/indi/manager/wheel'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import type { OperationCoordinator } from 'src/api/operation'
 import { EventBus } from 'src/shared/bus'

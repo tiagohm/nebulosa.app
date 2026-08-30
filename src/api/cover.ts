@@ -1,6 +1,7 @@
 import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { Cover } from 'nebulosa/src/devices/indi/device'
-import type { CoverManager, DeviceHandler } from 'nebulosa/src/devices/indi/manager'
+import type { CoverManager } from 'nebulosa/src/devices/indi/manager/cover'
+import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import type { OperationCoordinator } from 'src/api/operation'
 import { EventBus } from 'src/shared/bus'

@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Cover } from 'nebulosa/src/devices/indi/device'
-import { CoverManager } from 'nebulosa/src/devices/indi/manager'
+import { CoverManager } from 'nebulosa/src/devices/indi/manager/cover'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { CoverSimulator } from 'nebulosa/src/devices/indi/simulator/cover'
 import { CoverHandler, coverBus, cover as coverEndpoints } from 'src/api/cover'

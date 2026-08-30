@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Mount, MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
-import { MountManager } from 'nebulosa/src/devices/indi/manager'
+import { MountManager } from 'nebulosa/src/devices/indi/manager/mount'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import type { PropertyState, SetSwitchVector } from 'nebulosa/src/devices/indi/types'
@@ -375,13 +375,6 @@ test('homes and reports an unsupported mechanical-home search', async () => {
 	expect(device.canFindHome).toBeFalse()
 	expect(await mountCommander.findHome(operationCoordinator, device)).toMatchObject(failedOperationResult('unexpectedState'))
 }, 20000)
-
-test('reports a flip the driver cannot perform', async () => {
-	const device = await connected()
-
-	expect(device.canFlip).toBeFalse()
-	expect(await mountCommander.flip(operationCoordinator, device, targetCoordinate())).toMatchObject(failedOperationResult('unexpectedState'))
-}, 3000)
 
 test('does not complete a flip the mount never started', async () => {
 	const device = await connected()

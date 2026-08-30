@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Dome } from 'nebulosa/src/devices/indi/device'
-import { DomeManager } from 'nebulosa/src/devices/indi/manager'
+import { DomeManager } from 'nebulosa/src/devices/indi/manager/dome'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { DomeSimulator } from 'nebulosa/src/devices/indi/simulator/dome'
 import { deg } from 'nebulosa/src/math/units/angle'

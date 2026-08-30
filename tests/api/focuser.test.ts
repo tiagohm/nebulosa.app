@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Focuser } from 'nebulosa/src/devices/indi/device'
-import { FocuserManager } from 'nebulosa/src/devices/indi/manager'
+import { FocuserManager } from 'nebulosa/src/devices/indi/manager/focuser'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'

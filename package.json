@@ -31,7 +31,7 @@
 		"dockview-react": "8.2.0",
 		"nanoid": "6.0.1",
 		"nebulosa": "github:tiagohm/nebulosa.ts",
-		"open": "11.0.1",
+		"open": "11.0.2",
 		"react": "19.2.8",
 		"react-dom": "19.2.8",
 		"recharts": "3.10.1",

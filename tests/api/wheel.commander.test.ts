@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Wheel } from 'nebulosa/src/devices/indi/device'
-import { WheelManager } from 'nebulosa/src/devices/indi/manager'
+import { WheelManager } from 'nebulosa/src/devices/indi/manager/wheel'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
 import { waitUntil } from 'root/tests/api/util'

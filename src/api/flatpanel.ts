@@ -1,6 +1,7 @@
 import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { FlatPanel } from 'nebulosa/src/devices/indi/device'
-import type { DeviceHandler, FlatPanelManager } from 'nebulosa/src/devices/indi/manager'
+import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
+import type { FlatPanelManager } from 'nebulosa/src/devices/indi/manager/flatpanel'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import type { OperationCoordinator } from 'src/api/operation'
 import { EventBus } from 'src/shared/bus'

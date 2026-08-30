@@ -1,7 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import type { Camera, Cover, Device, GuideOutput, Mount, SubDevice } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_CAMERA, DEFAULT_COVER, DEFAULT_GUIDE_OUTPUT, DEFAULT_MOUNT } from 'nebulosa/src/devices/indi/device'
-import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager'
+import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
 import { flushMicrotasks } from 'root/tests/api/util'
 import { DeviceLifecycle, isDeviceQuiescent } from 'src/api/device.lifecycle'
 import { OperationCoordinator } from 'src/api/operation'

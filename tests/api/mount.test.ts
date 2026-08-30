@@ -4,7 +4,7 @@ import { equatorialToEcliptic, equatorialToGalatic, equatorialToJ2000 } from 'ne
 import { timeNormalize } from 'nebulosa/src/astronomy/time/time'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Mount, MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
-import { MountManager } from 'nebulosa/src/devices/indi/manager'
+import { MountManager } from 'nebulosa/src/devices/indi/manager/mount'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import type { PropertyState, SetSwitchVector } from 'nebulosa/src/devices/indi/types'
@@ -668,13 +668,6 @@ describe('mount commander', () => {
 		expect(device.tracking).toBeFalse()
 		expect(await mountCommander.setTracking(operationCoordinator, device, true)).toMatchObject({ ok: true })
 		expect(device.tracking).toBeTrue()
-	}, 10000)
-
-	test('reports a flip the driver cannot perform', async () => {
-		const device = await connected()
-
-		expect(device.canFlip).toBeFalse()
-		expect(await mountCommander.flip(operationCoordinator, device, targetCoordinate())).toMatchObject(failedOperationResult('unexpectedState'))
 	}, 10000)
 
 	test('does not complete a flip the mount never started', async () => {

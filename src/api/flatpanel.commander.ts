@@ -1,5 +1,5 @@
 import type { FlatPanel } from 'nebulosa/src/devices/indi/device'
-import type { FlatPanelManager } from 'nebulosa/src/devices/indi/manager'
+import type { FlatPanelManager } from 'nebulosa/src/devices/indi/manager/flatpanel'
 import { clamp } from 'nebulosa/src/math/numerical/math'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'

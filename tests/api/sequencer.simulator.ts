@@ -39,7 +39,7 @@ import { failedOperationResult, successfulOperationResult } from '#/orchestratio
 import type { OperationResult } from '#/orchestration'
 import type { Sequencer, SequencerAuxiliaryCapture, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerArtifact, SequencerEvent, SequencerSession, SequencerSessionSnapshot } from '#/sequencer.state'
-import { camera, frame } from './sequencer.fixture'
+import { frame } from './sequencer.fixture'
 
 export interface SimulatorCommand {
 	readonly name: string
@@ -100,10 +100,10 @@ export interface NightOptions {
 		readonly cover?: Partial<Cover>
 		readonly wheel?: Partial<Wheel>
 		readonly options?: {
-			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' | 'timeout' | number; trackMode?: 'fail' | number }>
+			readonly mount?: Readonly<{ hourAngle?: number; unpark?: 'fail' | 'timeout' | number; trackMode?: 'fail' | number; slew?: 'timeout' }>
 			readonly camera?: Readonly<{ temperature?: 'timeout' }>
 			readonly cover?: Readonly<{ unpark?: 'fail' | 'timeout' | number }>
-			readonly guider?: Readonly<{ start?: 'fail' | 'timeout'; running?: boolean }>
+			readonly guider?: Readonly<{ start?: 'fail' | 'timeout'; running?: boolean; connected?: boolean }>
 		}
 	}
 	readonly control?: (api: NightControl) => void | Promise<void>
@@ -122,6 +122,8 @@ export interface SimulatorProcess {
 	readonly store: InMemorySequencerStore
 	readonly root: string
 	readonly log: SimulatorCommand[]
+	// Host observatory the process commanders drive, including the independently connected guider.
+	readonly devices: SimulatorDevices
 	// Registers another physical observatory under unique device names and hardware ids.
 	readonly addObservatory: (tag: string, sim?: NightOptions['sim']) => SimulatorDevices
 	// Builds a Sequencer whose device names resolve to the given observatory, then applies `patch`.
@@ -132,7 +134,7 @@ export interface SimulatorProcess {
 
 export const RETRY: SequencerRetryPolicy = { maxAttempts: 3, delay: 0, backoff: 1, maximumDelay: 0, retryOn: ['timeout', 'commandFailed'], onExhausted: 'fail' }
 
-const AUX_3S: SequencerAuxiliaryCapture = { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false }
+const AUX_3S: SequencerAuxiliaryCapture = { exposureTime: 3, exposureTimeUnit: 'second', frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false }
 const AUX_5S: SequencerAuxiliaryCapture = { ...AUX_3S, exposureTime: 5 }
 const T0 = 1_700_000_000_000
 const FILTERS = ['L', 'R', 'G', 'B', 'Ha', 'O3', 'S2', 'Dark'] as const
@@ -153,15 +155,17 @@ export function defaultSequencer(root: string): Sequencer {
 			guideOutput: 'Guide Output Simulator',
 			cover: 'Cover Simulator',
 			flatPanel: 'Flat Panel Simulator',
+			guider: 'guider-1',
 		},
 		target: {
 			id: 'm42',
 			name: 'Orion Nebula',
-			enabled: true,
 			type: 'J2000',
-			J2000: { x: 1.4, y: -0.09 },
+			J2000: { x: '05 20 51.38', y: '05 09 23.83' },
+			timeout: 300,
+			settle: 2,
+			retry: RETRY,
 			tracking: { enabled: true, mode: 'SIDEREAL', stopOnShutdown: true, retry: RETRY },
-			goto: { enabled: true, skipTolerance: 0.001, arrivalTolerance: 0.0005, timeout: 300, settle: 2, retry: RETRY },
 			center: { enabled: true, solver: { type: 'astap', rightAscension: 0, declination: 0, executable: '', focalLength: 490, pixelSize: 4.8, fov: 0, timeout: 60, blind: false, radius: 4, downsample: 2 }, tolerance: 0.0001, maximumAttempts: 3, settle: 1, syncMount: true, capture: AUX_5S, retry: RETRY },
 			constraints: { enabled: false, window: { enabled: false }, onViolation: 'wait', stableFor: 60 },
 		},
@@ -171,17 +175,15 @@ export function defaultSequencer(root: string): Sequencer {
 			delay: 1,
 			continueAfterRejectedFrame: false,
 			retry: RETRY,
-			...camera(),
 			frames: [
-				frame('lum', { name: 'Luminance', count: 3, exposureTime: 2, filter: { type: 'name', name: 'L' } }),
-				frame('red', { name: 'Red', count: 2, exposureTime: 2, filter: { type: 'name', name: 'R' } }),
-				frame('green', { name: 'Green', count: 2, exposureTime: 2, filter: { type: 'name', name: 'G' } }),
-				frame('blue', { name: 'Blue', count: 2, exposureTime: 2, filter: { type: 'name', name: 'B' } }),
+				frame('lum', { count: 3 }, { exposureTime: 2, filter: { type: 'name', name: 'L' } }),
+				frame('red', { count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'R' } }),
+				frame('green', { count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'G' } }),
+				frame('blue', { count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'B' } }),
 			],
 		},
 		guiding: {
 			enabled: true,
-			connection: { mode: 'remote', host: '127.0.0.1', port: 4400 },
 			calibrateBeforeStart: false,
 			recalibrateAfterMeridianFlip: true,
 			restoreAfterInterruption: true,
@@ -301,7 +303,8 @@ export async function openProcess(options: { readonly root?: string } = {}): Pro
 	const log: SimulatorCommand[] = []
 	const frameBytes = await syntheticFits()
 	const byName: Record<string, Device> = {}
-	const { arbiter, runtime, handler, store } = environment(defaultSequencer(root), observatory(undefined, 'host'), log, clock, frameBytes, undefined, byName)
+	const devices = observatory(undefined, 'host')
+	const { arbiter, runtime, handler, store } = environment(defaultSequencer(root), devices, log, clock, frameBytes, undefined, byName)
 
 	return {
 		handler,
@@ -310,6 +313,7 @@ export async function openProcess(options: { readonly root?: string } = {}): Pro
 		store,
 		root,
 		log,
+		devices,
 		addObservatory(tag, sim) {
 			const devices = observatory(sim, tag)
 
@@ -330,6 +334,7 @@ export async function openProcess(options: { readonly root?: string } = {}): Pro
 						guideOutput: devices.guideOutput.name,
 						cover: devices.cover.name,
 						flatPanel: devices.flatPanel.name,
+						guider: 'guider-1',
 					},
 				}),
 				patch,
@@ -412,7 +417,7 @@ function observatory(sim?: NightOptions['sim'], tag?: string): SimulatorDevices 
 		flatPanel,
 		guideCamera,
 		guideOutput,
-		guiderConnected: false,
+		guiderConnected: sim?.options?.guider?.connected !== false,
 		guiderRunning: sim?.options?.guider?.running === true,
 		guiderLooping: sim?.options?.guider?.running === true,
 	}
@@ -546,10 +551,15 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 
 	return {
 		mount: {
-			goTo: (_scope: unknown, mount: Mount, target: { readonly type?: string; readonly J2000?: { readonly x: number; readonly y: number } }) => {
+			goTo: async (_scope: unknown, mount: Mount, target: { readonly type?: string; readonly J2000?: { readonly x: number; readonly y: number } }, options?: { readonly timeout?: number }) => {
 				push('slew')
 
-				if (mount.parked) return Promise.resolve(failedOperationResult('unexpectedState', `mount ${mount.name} is parked`))
+				if (sim?.options?.mount?.slew === 'timeout') {
+					const ended = await stall(options?.timeout === undefined ? undefined : options.timeout + 50)
+					return failedOperationResult(ended, ended === 'timeout' ? 'the mount never arrived' : undefined)
+				}
+
+				if (mount.parked) return failedOperationResult('unexpectedState', `mount ${mount.name} is parked`)
 
 				mount.parked = false
 
@@ -746,17 +756,19 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 		guider: {
 			running: () => devices.guiderRunning,
 			looping: () => devices.guiderLooping,
-			connect: () => {
-				push('guider.connect')
-				devices.guiderConnected = true
-				return ok({ id: 'guider-1', mode: 'remote', key: 'logical:guider:remote:127.0.0.1:4400', target: '127.0.0.1:4400', state: 'idle', connected: true, looping: false, running: false })
-			},
-			disconnect: () => {
-				push('guider.disconnect')
-				devices.guiderConnected = false
-				devices.guiderRunning = false
-				devices.guiderLooping = false
-				return ok(undefined)
+			info: (guider: string) => {
+				if (!devices.guiderConnected) return undefined
+
+				return {
+					id: guider,
+					mode: 'remote' as const,
+					key: 'logical:guider:remote:127.0.0.1:4400',
+					target: '127.0.0.1:4400',
+					state: devices.guiderRunning ? ('guiding' as const) : devices.guiderLooping ? ('looping' as const) : ('idle' as const),
+					connected: true,
+					looping: devices.guiderLooping,
+					running: devices.guiderRunning,
+				}
 			},
 			loop: () => {
 				push('guider.loop')

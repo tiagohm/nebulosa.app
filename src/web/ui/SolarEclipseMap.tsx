@@ -22,7 +22,7 @@ export const SolarEclipseMap = memo(() => {
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<Header />
-			<div className="col-span-full flex flex-row items-center gap-2">
+			<div className="col-span-full flex flex-col gap-2">
 				<Map />
 				<Info />
 			</div>
@@ -36,14 +36,14 @@ const Header = memo(() => {
 	return (
 		<div className="col-span-full flex items-center justify-center gap-2">
 			<IconButton icon={Icons.ArrowLeft} onClick={solarEclipseStore.prev} tooltipContent="Prev" />
-			<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">{eclipse && <span className="truncate">{formatTemporal(temporalFromTime(eclipse.maximalTime), 'YYYY-MM-DD')}</span>}</span>
+			<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">{eclipse && <span className="truncate">{formatTemporal(temporalFromTime(eclipse.maximalTime), 'YYYY-MM-DD', true)}</span>}</span>
 			<IconButton icon={Icons.ArrowRight} onClick={solarEclipseStore.next} tooltipContent="Next" />
 		</div>
 	)
 })
 
 const Info = memo(() => (
-	<div className="flex flex-1 flex-col justify-start gap-2 self-start">
+	<div className="flex w-full flex-col justify-start gap-2 self-start">
 		<Tabs fullWidth>
 			<Tab id="details">Details</Tab>
 			<Tab id="contacts">Contacts</Tab>
@@ -109,7 +109,7 @@ function ContactPoint({ point, name, color }: ContactPointProps) {
 				<span className="font-mono text-sm font-bold" style={{ color }}>
 					{name}
 				</span>
-				<span className="truncate font-mono text-neutral-300">{formatTemporal(temporalFromTime(time(point.jd!, 0, 3)), 'YYYY-MM-DD HH:mm')}</span>
+				<span className="truncate font-mono text-neutral-300">{formatTemporal(temporalFromTime(time(point.jd!, 0, 3)), 'YYYY-MM-DD HH:mm', true)}</span>
 			</div>
 			<div className="flex min-w-0 flex-row flex-wrap gap-x-3 gap-y-1 font-mono text-neutral-400">
 				<span>
@@ -163,7 +163,7 @@ const BesselianElements = memo(() => {
 		<div className="overflow-x-auto rounded-lg bg-neutral-900/70 text-sm text-neutral-100">
 			<div className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2">
 				<span className="font-mono text-sm text-neutral-400">
-					t0 = {formatTemporal(astronomicEventTemporal(map.elements.time0), 'YYYY-MM-DD HH:mm', 0)} {Timescale[map.elements.time0.scale]}
+					t0 = {formatTemporal(astronomicEventTemporal(map.elements.time0), 'YYYY-MM-DD HH:mm')} {Timescale[map.elements.time0.scale]}
 				</span>
 				<span className="flex flex-row gap-3 font-mono text-sm text-neutral-400">
 					<span>ΔT = {map.elements.deltaT.toFixed(2)}</span>
@@ -305,7 +305,7 @@ function eventLabel(kind: LocalEclipseContactKind, event: LocalSolarEclipseEvent
 }
 
 function formatEventTime(event?: LocalSolarEclipseEvent) {
-	return event ? formatTemporal(temporalFromTime(event.time), 'HH:mm:ss') : '--'
+	return event ? formatTemporal(temporalFromTime(event.time), 'HH:mm:ss', true) : '--'
 }
 
 function formatSignedDegrees(value: number) {
@@ -397,8 +397,8 @@ const LocalView = memo(() => {
 	}
 
 	return (
-		<div className="flex flex-col gap-2">
-			<div className="flex flex-row flex-wrap items-center justify-between gap-2">
+		<div className="relative flex flex-col gap-2">
+			<div className="absolute top-1 left-0 flex flex-row flex-wrap items-center justify-between gap-2 px-1">
 				<LocalEclipseContactKindButtonGroup value={selectedEvent} onValueChange={solarEclipseStore.setSelectedEvent} />
 				<LocalViewOrientationModeButtonGroup value={orientationMode} onValueChange={solarEclipseStore.setOrientationMode} />
 			</div>
@@ -414,7 +414,7 @@ const LocalView = memo(() => {
 })
 
 const Map = memo(() => (
-	<WorldMap className="h-full flex-1" defaultScale={1} onCoordinateClick={solarEclipseStore.handleCoordinateChange} onTransformChange={solarEclipseStore.handleTransformChange}>
+	<WorldMap className="h-full max-h-80" defaultScale={2} onCoordinateClick={solarEclipseStore.handleCoordinateChange} onTransformChange={solarEclipseStore.handleTransformChange}>
 		<MapMarker />
 		<MapGeometry />
 	</WorldMap>
@@ -425,7 +425,7 @@ const MAP_MARKER_STYLE: CSSProperties = { fill: 'var(--danger)' }
 const MapMarker = memo(() => {
 	const { location, scale } = useSnapshot(solarEclipseStore.state)
 	const point = worldMapCoordinateToPoint({ latitude: toDeg(location.latitude), longitude: toDeg(location.longitude) })
-	const size = 32 / scale
+	const size = 100 / scale
 
 	return <Icons.MapMarker width={size} height={size} style={{ ...MAP_MARKER_STYLE, transform: `translate(${point.x - size * 0.5}px, ${point.y - size}px)` }} />
 })

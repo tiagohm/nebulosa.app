@@ -224,7 +224,7 @@ let shutdownTask: Promise<void> | undefined
 // Ends the running session, cancels active operations while transports are live, then releases observers and
 // transient files.
 //
-// The sequencer goes first and in one piece (§20.2): it refuses new sessions, records the one it is running as
+// The sequencer goes first and in one piece: it refuses new sessions, records the one it is running as
 // interrupted, cancels every operation owned by that session's reservation, waits for their cleanups and only
 // then releases the reservation. Doing that before `cancelAll` is what keeps the order observable — a session
 // torn down by `cancelAll` would lose the state that was never written, and the owned guiding session, whose
@@ -304,8 +304,8 @@ const alpacaManagers = coordinatedAlpacaManagers(
 const alpacaHandler = new AlpacaHandler(wsm, alpacaManagers, alpacaDiscoveryPort)
 const storageHandler = new StorageHandler(false)
 
-// Sequencer (§20.1)
-//
+// Sequencer
+
 // The store is the durable state of every definition and session, the registry is the catalog of blocks a
 // definition may be compiled against, and the runtime is the only thing that admits, executes and finalizes a
 // session. They are created here, in this order, because each one is a collaborator of the next.

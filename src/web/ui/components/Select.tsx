@@ -3,7 +3,7 @@ import { DEFAULT_FLOATING_OFFSET, Floating } from '@ui/components/Floating'
 import type { FloatingPlacement } from '@ui/components/Floating'
 import { List } from '@ui/components/List'
 import { Icons } from '@ui/Icon'
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
 
@@ -18,10 +18,11 @@ const selectStyles = tv({
 		base: 'relative inline-flex min-w-0 align-top',
 		trigger: 'flex w-full min-w-0 items-stretch overflow-hidden rounded-lg outline-none transition',
 		startContent: 'flex shrink-0 items-center whitespace-nowrap',
-		field: 'relative min-w-0 flex-1',
-		value: 'flex w-full min-w-0 items-center overflow-hidden',
+		field: 'relative grid min-w-0 flex-1',
+		value: 'col-start-1 row-start-1 flex w-full min-w-0 items-center overflow-hidden',
 		description: 'min-w-0 truncate',
-		label: 'pointer-events-none absolute origin-left truncate text-xs leading-none',
+		label: 'pointer-events-none absolute origin-left whitespace-nowrap text-xs leading-none',
+		labelSizer: 'col-start-1 row-start-1 pointer-events-none invisible h-0 w-max overflow-hidden whitespace-nowrap text-xs leading-none',
 		endContent: 'flex shrink-0 items-center whitespace-nowrap',
 		chevron: 'flex shrink-0 items-center justify-center transition',
 		panel: 'min-w-(--select-width) max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg bg-neutral-950 p-0 text-neutral-100 shadow-lg shadow-black/40',
@@ -40,7 +41,8 @@ const selectStyles = tv({
 				trigger: 'min-h-8 text-xs',
 				startContent: 'px-2 text-xs',
 				value: 'min-h-8 px-2 text-xs',
-				label: 'left-2 right-2 top-1',
+				label: 'left-2 top-1',
+				labelSizer: 'px-2',
 				endContent: 'px-2 text-xs',
 				chevron: 'w-8 text-xs',
 				option: 'px-2 text-xs',
@@ -50,7 +52,8 @@ const selectStyles = tv({
 				trigger: 'min-h-10 text-sm',
 				startContent: 'px-4 text-sm',
 				value: 'min-h-10 px-4 text-sm',
-				label: 'left-4 right-4 top-1.5',
+				label: 'left-4 top-1.5',
+				labelSizer: 'px-4',
 				endContent: 'px-4 text-sm',
 				chevron: 'w-10 text-sm',
 				option: 'px-3 text-sm',
@@ -60,7 +63,8 @@ const selectStyles = tv({
 				trigger: 'min-h-11 text-base',
 				startContent: 'px-4 text-base',
 				value: 'min-h-11 px-4 text-base',
-				label: 'left-5 right-5 top-1.5',
+				label: 'left-5 top-1.5',
+				labelSizer: 'px-5',
 				endContent: 'px-4 text-base',
 				chevron: 'w-11 text-base',
 				option: 'px-4 text-base',
@@ -95,10 +99,14 @@ const selectStyles = tv({
 		},
 		hasLabel: {
 			true: {
+				base: 'min-w-max',
+				trigger: 'min-w-max',
+				field: 'min-w-max',
 				value: 'items-end pt-5 pb-1.5',
 			},
 			false: {
 				label: 'hidden',
+				labelSizer: 'hidden',
 			},
 		},
 		open: {
@@ -139,6 +147,7 @@ export interface SelectClassNames {
 	readonly value?: ClassValue
 	readonly description?: ClassValue
 	readonly label?: ClassValue
+	readonly labelSizer?: ClassValue
 	readonly endContent?: ClassValue
 	readonly chevron?: ClassValue
 	readonly panel?: ClassValue
@@ -196,6 +205,17 @@ function selectItemHeight(size: NonNullable<SelectVariants['size']>, itemHeight:
 
 const CheckIcon = <Icons.Check color="var(--success)" />
 
+// Writes trigger and option widths onto the floating panel without scheduling a render.
+function applySelectPanelWidth(panel: HTMLElement | null, triggerWidth: number, optionWidth: number, style: React.CSSProperties) {
+	const width = Math.max(triggerWidth, optionWidth, 0)
+	const selectWidth = `${Math.max(triggerWidth, 0)}px`
+	style.minWidth = width
+	;(style as Record<string, unknown>)['--select-width'] = selectWidth
+	if (panel === null) return
+	panel.style.minWidth = `${width}px`
+	panel.style.setProperty('--select-width', selectWidth)
+}
+
 // Renders a controlled single-select trigger with a floating virtualized option list.
 export function Select<T>({
 	autoFlip = true,
@@ -234,19 +254,21 @@ export function Select<T>({
 }: SelectProps<T>) {
 	const [uncontrolledIsOpen, setUncontrolledIsOpen] = useState(false)
 	const [triggerElement, setTriggerElement] = useState<HTMLElement | null>(null)
-	const [triggerWidth, setTriggerWidth] = useState(0)
-	const [optionContentWidth, setOptionContentWidth] = useState(0)
+	const triggerWidthRef = useRef(0)
 	const optionContentWidthRef = useRef(0)
-	const selectedIndex = useMemo(() => selectedIndexOf(items, value, isItemEqual), [items, value, isItemEqual])
+	const floatingRef = useRef<HTMLDivElement | null>(null)
+	const panelStyleRef = useRef<React.CSSProperties>({ '--select-width': '0px', minWidth: 0 } as React.CSSProperties)
+	const selectedIndex = selectedIndexOf(items, value, isItemEqual)
 	const selectedItem = value === undefined || value === null ? undefined : selectedIndex >= 0 ? items[selectedIndex] : value
 	const isControlledOpen = open !== undefined
 	const isOpen = isControlledOpen ? open : uncontrolledIsOpen
 	const visible = isOpen && !disabled && !readOnly
 	const hasLabel = label !== undefined && label !== null
+	const hasStartContent = startContent !== undefined && startContent !== null
+	const hasEndContent = endContent !== undefined && endContent !== null
 	const optionHeight = selectItemHeight(size, itemHeight)
 	const styles = selectStyles({ fullWidth, hasLabel, open: visible, size, color, disabled })
 	const selectedContent = selectedItem !== undefined && selectedItem !== null ? children(selectedItem, selectedIndex, true, 'trigger') : description
-	const panelStyle = useMemo(() => ({ '--select-width': `${Math.max(triggerWidth, 0)}px`, minWidth: Math.max(triggerWidth, optionContentWidth, 0) }) as React.CSSProperties, [optionContentWidth, triggerWidth])
 	const hasColorVariant = color !== undefined && color !== null && color !== 'default'
 	const triggerClassName = disabled
 		? 'bg-neutral-900/35 text-neutral-500'
@@ -267,24 +289,58 @@ export function Select<T>({
 		onOpenChange?.(nextOpen)
 	})
 
-	// Keeps the floating panel width aligned to the trigger width.
-	useEffect(() => {
-		if (triggerElement === null) return
-		const observedTrigger = triggerElement
+	// Measures the trigger and writes the result to the floating panel.
+	const syncTriggerWidth = useEffectEvent((element: HTMLElement) => {
+		const width = Math.ceil(element.getBoundingClientRect().width)
+		if (width === triggerWidthRef.current && floatingRef.current !== null) return
+		triggerWidthRef.current = width
+		applySelectPanelWidth(floatingRef.current, width, optionContentWidthRef.current, panelStyleRef.current)
+	})
 
-		function updateTriggerWidth() {
-			setTriggerWidth(observedTrigger.getBoundingClientRect().width)
+	// Tracks the widest mounted option so the panel can fit visible content.
+	const measureOptionWidth = useEffectEvent((element: HTMLDivElement | null) => {
+		if (element === null) return
+
+		const width = Math.ceil(element.scrollWidth)
+		if (width <= optionContentWidthRef.current) return
+
+		optionContentWidthRef.current = width
+		applySelectPanelWidth(floatingRef.current, triggerWidthRef.current, width, panelStyleRef.current)
+	})
+
+	// Stores the trigger element while preserving the caller ref.
+	const handleTriggerRef = useEffectEvent((element: HTMLDivElement | null) => {
+		if (element !== null) setTriggerElement((current) => (current === element ? current : element))
+		assignRef(ref, element)
+	})
+
+	// Captures the floating root so panel width can be applied without a render.
+	const handleFloatingRef = useEffectEvent((element: HTMLDivElement | null) => {
+		floatingRef.current = element
+		if (element !== null) applySelectPanelWidth(element, triggerWidthRef.current, optionContentWidthRef.current, panelStyleRef.current)
+	})
+
+	// Keeps the floating panel width aligned to the trigger while the list is open.
+	useLayoutEffect(() => {
+		if (!visible) {
+			optionContentWidthRef.current = 0
+			triggerWidthRef.current = 0
+			applySelectPanelWidth(null, 0, 0, panelStyleRef.current)
+			return
 		}
 
-		updateTriggerWidth()
+		if (triggerElement === null) return
 
-		const observer = new ResizeObserver(updateTriggerWidth)
+		const observedTrigger = triggerElement
+		syncTriggerWidth(observedTrigger)
+
+		const observer = new ResizeObserver(() => syncTriggerWidth(observedTrigger))
 		observer.observe(observedTrigger)
 
 		return () => {
 			observer.disconnect()
 		}
-	}, [triggerElement])
+	}, [syncTriggerWidth, triggerElement, visible])
 
 	// Closes the floating panel when disabled or read-only state becomes active.
 	useEffect(() => {
@@ -293,39 +349,13 @@ export function Select<T>({
 		}
 	}, [disabled, isOpen, readOnly, setOpen])
 
-	// Clears mounted option measurements when the floating panel closes.
-	useEffect(() => {
-		if (visible) return
-
-		optionContentWidthRef.current = 0
-		setOptionContentWidth(0)
-	}, [visible])
-
-	// Tracks the widest mounted option so the panel can fit visible content.
-	function measureOptionWidth(element: HTMLDivElement | null) {
-		if (element === null) return
-
-		const width = Math.ceil(element.scrollWidth)
-		if (width <= optionContentWidthRef.current) return
-
-		optionContentWidthRef.current = width
-		setOptionContentWidth(width)
-	}
-
-	// Stores the trigger element while preserving the caller ref.
-	function handleTriggerRef(element: HTMLDivElement | null) {
-		if (element !== null) setTriggerElement(element)
-		assignRef(ref, element)
-	}
-
 	// Toggles the panel from pointer interaction on the trigger.
 	function handleClick(event: React.MouseEvent<HTMLDivElement>) {
 		onClick?.(event)
 
 		if (event.defaultPrevented || disabled || readOnly) return
 
-		setTriggerElement(event.currentTarget)
-		setTriggerWidth(event.currentTarget.getBoundingClientRect().width)
+		if (!isOpen) syncTriggerWidth(event.currentTarget)
 		setOpen(!isOpen)
 	}
 
@@ -342,6 +372,7 @@ export function Select<T>({
 
 		if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
 			event.preventDefault()
+			if (!isOpen) syncTriggerWidth(event.currentTarget)
 			setOpen(!isOpen)
 		}
 	}
@@ -374,19 +405,10 @@ export function Select<T>({
 		)
 	}
 
+	// Forwards a list action to the caller with the item at that index.
 	function handleAction(index: number) {
 		onAction!(items[index], index)
 	}
-
-	const PanelContent = (
-		<div className={tw(styles.panelContent(), classNames?.panelContent)}>
-			{headerContent !== undefined && headerContent !== null && <div className={tw(styles.header(), classNames?.header)}>{headerContent}</div>}
-			<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: tw(styles.listItem(), classNames?.listItem) }} emptyContent={emptyContent} itemCount={items.length} itemHeight={optionHeight} overscan={overscan} onAction={onAction && handleAction}>
-				{renderOption}
-			</List>
-			{footerContent !== undefined && footerContent !== null && <div className={tw(styles.footer(), classNames?.footer)}>{footerContent}</div>}
-		</div>
-	)
 
 	return (
 		<>
@@ -399,35 +421,45 @@ export function Select<T>({
 				ref={handleTriggerRef}
 				tabIndex={disabled ? undefined : (tabIndex ?? 0)}>
 				<div className={tw(styles.trigger(), triggerClassName, classNames?.trigger)}>
-					{startContent !== undefined && startContent !== null && <div className={tw(styles.startContent(), contentClassName, classNames?.startContent)}>{startContent}</div>}
+					{hasStartContent && <div className={tw(styles.startContent(), contentClassName, classNames?.startContent)}>{startContent}</div>}
 					<div className={tw(styles.field(), classNames?.field)}>
-						<div className={tw(styles.value(), startContent !== undefined && startContent !== null && 'pl-0', classNames?.value)}>
-							{selectedItem !== undefined && selectedItem !== null ? selectedContent : <span className={tw(styles.description(), descriptionClassName, classNames?.description)}>{selectedContent}</span>}
-						</div>
-						{hasLabel && <span className={tw(styles.label(), startContent !== undefined && startContent !== null && 'left-0', labelClassName, classNames?.label)}>{label}</span>}
+						<div className={tw(styles.value(), hasStartContent && 'pl-0', classNames?.value)}>{selectedItem !== undefined && selectedItem !== null ? selectedContent : <span className={tw(styles.description(), descriptionClassName, classNames?.description)}>{selectedContent}</span>}</div>
+						{hasLabel && <span className={tw(styles.labelSizer(), hasStartContent && 'pl-0', classNames?.labelSizer)}>{label}</span>}
+						{hasLabel && <span className={tw(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</span>}
 					</div>
-					{endContent !== undefined && endContent !== null && <div className={tw(styles.endContent(), contentClassName, classNames?.endContent)}>{endContent}</div>}
+					{hasEndContent && <div className={tw(styles.endContent(), contentClassName, classNames?.endContent)}>{endContent}</div>}
 					<div className={tw(styles.chevron(), chevronClassName, classNames?.chevron)}>
 						<Icons.ChevronDown />
 					</div>
 				</div>
 			</div>
-			<Floating
-				autoFlip={autoFlip}
-				classNames={{ content: tw(styles.panel(), classNames?.panel) }}
-				closeOnEscape
-				closeOnClickOutside
-				content={PanelContent}
-				hideArrow
-				interactive
-				offset={DEFAULT_FLOATING_OFFSET / 2}
-				onOpenChange={setOpen}
-				open={visible}
-				placement={placement}
-				portalContainer={portalContainer}
-				style={panelStyle}
-				triggerElement={triggerElement}
-			/>
+			{visible && (
+				<Floating
+					autoFlip={autoFlip}
+					classNames={{ content: tw(styles.panel(), classNames?.panel) }}
+					closeOnEscape
+					closeOnClickOutside
+					content={
+						<div className={tw(styles.panelContent(), classNames?.panelContent)}>
+							{headerContent !== undefined && headerContent !== null && <div className={tw(styles.header(), classNames?.header)}>{headerContent}</div>}
+							<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: tw(styles.listItem(), classNames?.listItem) }} emptyContent={emptyContent} itemCount={items.length} itemHeight={optionHeight} overscan={overscan} onAction={onAction && handleAction}>
+								{renderOption}
+							</List>
+							{footerContent !== undefined && footerContent !== null && <div className={tw(styles.footer(), classNames?.footer)}>{footerContent}</div>}
+						</div>
+					}
+					hideArrow
+					interactive
+					offset={DEFAULT_FLOATING_OFFSET / 2}
+					onOpenChange={setOpen}
+					open={visible}
+					placement={placement}
+					portalContainer={portalContainer}
+					ref={handleFloatingRef}
+					style={panelStyleRef.current}
+					triggerElement={triggerElement}
+				/>
+			)}
 		</>
 	)
 }

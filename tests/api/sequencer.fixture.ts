@@ -1,21 +1,19 @@
 import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
 import type { SequencerPreparationServices } from 'src/api/sequencer.prepare'
 import type { GuiderSessionInfo } from '#/guider'
-import { successfulOperationResult } from '#/orchestration'
-import type { OperationResult } from '#/orchestration'
-import type { Sequencer, SequencerCamera, SequencerFrame, SequencerRetryPolicy } from '#/sequencer'
+import type { Sequencer, SequencerCameraCapture, SequencerFrame, SequencerRetryPolicy } from '#/sequencer'
 
 // Device services the runtime hands the executor, absent in the tests that never reach the optical path.
-// The guider commander is the exception: a canonical session declares a guider and opens it before its first
-// node, so it answers the connect with a session that is open and not guiding.
+// The guider commander is the exception: a canonical session declares a guider that must already be
+// connected, so it answers `info` with a session that is open and not guiding.
 export function services(): { readonly preparation: SequencerPreparationServices; readonly guiding: SequencerGuidingServices } {
 	return { preparation: {} as SequencerPreparationServices, guiding: guiding() }
 }
 
-export function guiding(connect?: () => OperationResult<GuiderSessionInfo>): SequencerGuidingServices {
+export function guiding(info?: () => GuiderSessionInfo | undefined): SequencerGuidingServices {
 	return {
 		guiderCommander: {
-			connect: () => Promise.resolve(connect === undefined ? successfulOperationResult({ id: 'guider-1', mode: 'remote', key: 'logical:guider:remote:localhost:4400', target: 'localhost:4400', state: 'idle', connected: true, looping: false, running: false }) : connect()),
+			info: () => (info === undefined ? { id: 'guider-1', mode: 'remote', key: 'logical:guider:remote:localhost:4400', target: 'localhost:4400', state: 'idle', connected: true, looping: false, running: false } : info()),
 			running: () => false,
 			looping: () => false,
 		},
@@ -24,16 +22,16 @@ export function guiding(connect?: () => OperationResult<GuiderSessionInfo>): Seq
 
 // Canonical sequencer definition shared by the compiler and resolution tests: every feature the V1 lowering
 // understands is enabled, so a test only has to override the property it is about.
-export function retry(): SequencerRetryPolicy {
-	return { maxAttempts: 3, delay: 5, backoff: 2, maximumDelay: 60, retryOn: ['timeout', 'commandFailed'], onExhausted: 'fail' }
+export function retry(policy?: Partial<SequencerRetryPolicy>): SequencerRetryPolicy {
+	return { maxAttempts: 3, delay: 5, backoff: 2, maximumDelay: 60, retryOn: ['timeout', 'commandFailed'], onExhausted: 'fail', ...policy }
 }
 
-export function camera(): SequencerCamera {
-	return { binX: 1, binY: 1, gain: 100, offset: 10, frameFormat: 'RAW16', transferFormat: 'FITS', compressed: false, subframe: false, x: 0, y: 0, width: 0, height: 0 }
+export function camera(capture?: Partial<SequencerCameraCapture>): SequencerCameraCapture {
+	return { exposureTime: 60, exposureTimeUnit: 'second', frameType: 'LIGHT', binX: 1, binY: 1, gain: 100, offset: 10, frameFormat: 'RAW16', transferFormat: 'FITS', compressed: false, subframe: false, x: 0, y: 0, width: 0, height: 0, ...capture }
 }
 
-export function frame(id: string, overrides?: Partial<SequencerFrame>): SequencerFrame {
-	return { id, name: id, enabled: true, frameType: 'LIGHT', exposureTime: 60, count: 10, weight: 1, camera: {}, ...overrides }
+export function frame(id: string, frame?: Partial<SequencerFrame>, capture?: Partial<SequencerCameraCapture>): SequencerFrame {
+	return { id, enabled: true, count: 10, weight: 1, ...frame, capture: { ...camera(), ...frame?.capture, ...capture } }
 }
 
 // Canonical definition with every optional property of the contract declared, which is what the compatibility
@@ -54,10 +52,10 @@ export function complete(): Sequencer {
 			cover: 'Cover Simulator',
 			flatPanel: 'Flat Panel Simulator',
 			dome: 'Dome Simulator',
+			guider: 'guider-1',
 		},
-		target: { ...definition.target, tracking: { ...definition.target.tracking, rightAscensionRate: 0, declinationRate: 0 } },
-		capture: { ...definition.capture, frames: [frame('lum', { abandonmentBudget: 2, delay: 8, filter: { type: 'name', name: 'L' }, camera: camera() })] },
-		guiding: { ...definition.guiding, connection: { mode: 'remote', host: 'localhost', port: 4400, profile: 'default' } },
+		target: { ...definition.target, tracking: { ...definition.target.tracking } },
+		capture: { ...definition.capture, frames: [frame('lum', { abandonmentBudget: 2, delay: 8, capture: camera({ filter: { type: 'name', name: 'L' } }) })] },
 		storage: { ...definition.storage, temporaryDirectory: '/data/nebulosa/.tmp' },
 		mount: { ...definition.mount, unparkOnStartup: false },
 	}
@@ -69,15 +67,16 @@ export function canonical(): Sequencer {
 		id: 'definition-1',
 		revision: 7,
 		name: 'M42',
-		devices: { camera: 'Camera Simulator', mount: 'Mount Simulator', wheel: 'Wheel Simulator', focuser: 'Focuser Simulator' },
+		devices: { camera: 'Camera Simulator', mount: 'Mount Simulator', wheel: 'Wheel Simulator', focuser: 'Focuser Simulator', guider: 'guider-1' },
 		target: {
 			id: 'm42',
 			name: 'Orion Nebula',
-			enabled: true,
 			type: 'J2000',
-			J2000: { x: 1.4, y: -0.09 },
+			J2000: { x: '05 20 51.38', y: '05 09 23.83' },
+			timeout: 300,
+			settle: 5,
+			retry: retry(),
 			tracking: { enabled: true, mode: 'SIDEREAL', stopOnShutdown: false, retry: retry() },
-			goto: { enabled: true, skipTolerance: 0.001, arrivalTolerance: 0.0005, timeout: 300, settle: 5, retry: retry() },
 			center: {
 				enabled: true,
 				solver: { type: 'astap', executable: '', focalLength: 0, pixelSize: 0, fov: 0, blind: true, rightAscension: '00 00 00', declination: '+00 00 00', radius: 4, downsample: 0, timeout: 300000, apiUrl: '', apiKey: '' },
@@ -85,15 +84,14 @@ export function canonical(): Sequencer {
 				maximumAttempts: 5,
 				settle: 3,
 				syncMount: true,
-				capture: { exposureTime: 5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false },
+				capture: { exposureTime: 5, exposureTimeUnit: 'second', frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false },
 				retry: retry(),
 			},
 			constraints: { enabled: false, window: { enabled: false }, onViolation: 'wait', stableFor: 60 },
 		},
-		capture: { order: 'sequential', repeat: 2, frames: [frame('lum'), frame('red')], ...camera(), delay: 4, continueAfterRejectedFrame: false, retry: retry() },
+		capture: { order: 'sequential', repeat: 2, frames: [frame('lum'), frame('red')], delay: 4, continueAfterRejectedFrame: false, retry: retry() },
 		guiding: {
 			enabled: true,
-			connection: { mode: 'remote', host: 'localhost', port: 4400 },
 			calibrateBeforeStart: false,
 			recalibrateAfterMeridianFlip: true,
 			restoreAfterInterruption: true,
@@ -108,7 +106,7 @@ export function canonical(): Sequencer {
 			enabled: true,
 			triggers: { onStart: true, onFilterChange: true, afterMeridianFlip: true, everyFrames: 20, everyTime: 3600, temperatureChange: 1, minimumTimeBetweenRuns: 600 },
 			algorithm: { initialOffsetSteps: 4, stepSize: 100, fittingMode: 'TREND_HYPERBOLIC', rmsdThreshold: 0.5, reversed: false, maximumPosition: 50000, backlash: { enabled: false, mode: 'overshoot', steps: 0 } },
-			capture: { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false },
+			capture: { exposureTime: 3, exposureTimeUnit: 'second', frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false },
 			starDetection: { type: 'nebulosa', timeout: 30, minimumSNR: 10, maximumStars: 500 },
 			filterOffsets: [],
 			settle: 2,

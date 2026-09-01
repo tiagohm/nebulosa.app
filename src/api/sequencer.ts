@@ -11,7 +11,7 @@ import { deriveSequencerSnapshot } from './sequencer.snapshot'
 import type { SequencerSnapshotObservation } from './sequencer.snapshot'
 import type { SequencerStore } from './sequencer.store'
 
-// HTTP surface of the Sequencer (§16.1): validate a recipe the editor is writing, start a session from that
+// HTTP surface of the Sequencer: validate a recipe the editor is writing, start a session from that
 // object, and everything a session leaves behind.
 //
 // Recipes are not stored. The UI edits a Sequencer, optionally posts it to validate on every change, and
@@ -19,8 +19,7 @@ import type { SequencerStore } from './sequencer.store'
 // is the runtime's gate, lowering is the compiler's, and what the UI sees is derived by the snapshot module.
 // What lives here is the transport shape and one thing the layers below deliberately do not do: it holds the
 // lowered plan of every session it created, because the runtime executes a single action of it and the
-// pre-flight view of §16.1 has to keep answering "why is it doing this?" for the whole plan, not for that
-// action.
+// pre-flight view has to keep answering "why is it doing this?" for the whole plan, not for that action.
 //
 // Instants are milliseconds since the Unix epoch.
 
@@ -76,7 +75,7 @@ export type SequencerSessionStart =
 			readonly sessionId?: string
 	  }
 
-// Executable plan of one session together with its pre-flight view (§16.1). Both are the compilation the
+// Executable plan of one session together with its pre-flight view. Both are the compilation the
 // session actually runs and never a recompilation of the current definition, which may already have been
 // edited into something else.
 export interface SequencerSessionPlan {
@@ -165,7 +164,7 @@ export class SequencerHandler {
 		return snapshots
 	}
 
-	// Everything the UI observes about one session (§15), derived on the spot from the durable state, the plan
+	// Everything the UI observes about one session, derived on the spot from the durable state, the plan
 	// of the session, and whatever the runtime is doing right now. Nothing of it is stored, and no execution
 	// decision reads it back.
 	snapshot(sessionId: string): SequencerSessionSnapshot | undefined {

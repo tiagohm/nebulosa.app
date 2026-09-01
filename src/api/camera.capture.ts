@@ -664,7 +664,7 @@ class CameraCaptureSession {
 		if (request.outputPath && request.outputName) {
 			path = join(request.outputPath, request.outputName)
 		} else {
-			const name = request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : this.camera.name
+			const name = request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS', true) : this.camera.name
 			const extension = request.transferFormat === 'XISF' ? 'xisf' : 'fit'
 			path = join(request.outputPath ?? (await makePathFor(request)), request.outputName ?? `${name}.${extension}`)
 		}

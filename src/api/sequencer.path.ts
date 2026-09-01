@@ -89,7 +89,7 @@ export function sequencerSessionDirectory(context: SequencerPathContext) {
 //
 // Autofocus, centering, drift check and the guider all produce images, and none of them fills a slot: they
 // register no artifact, move no capture counter and advance no trigger anchor. Keeping them under a segment
-// of their own is what makes that separation hold on disk — the reconciliation of §14.5 walks the paths the
+// of their own is what makes that separation hold on disk — the reconciliation walks the paths the
 // session predicts, and an auxiliary image sharing that space would either collide with a slot name or be
 // read as a frame nobody asked for.
 //
@@ -99,9 +99,9 @@ export function sequencerSessionDirectory(context: SequencerPathContext) {
 export const SEQUENCER_AUXILIARY_SEGMENT = '.auxiliary'
 
 // What an auxiliary image was produced for. Each kind gets a directory of its own inside the auxiliary
-// segment, so the calibration library of §25 can index one kind without walking the others.
+// segment, so the calibration library can index one kind without walking the others.
 //
-// `quarantine` is not a capture: it is where §14.5 moves a final file that did not parse, when the definition
+// `quarantine` is not a capture: it is where moves a final file that did not parse, when the definition
 // asks for it to be preserved for diagnosis. It belongs here because the one thing it must not do is stay in
 // the namespace of the slots.
 export type SequencerAuxiliaryKind = 'autofocus' | 'centering' | 'driftCheck' | 'guider' | 'quarantine'

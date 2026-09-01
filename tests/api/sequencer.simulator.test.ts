@@ -51,25 +51,25 @@ describe('canonical night', () => {
 		expect(night.devices.cover.parked).toBeTrue()
 		expect(night.devices.camera.temperature).toBe(15)
 		expect(night.devices.camera.cooler).toBeFalse()
-		expect(night.devices.guiderConnected).toBeFalse()
+		expect(night.devices.guiderConnected).toBeTrue()
 		expect(night.arbiter.availability('hw-camera')).toBe('available')
 		expect(night.arbiter.availability('hw-mount')).toBe('available')
 		expect(JSON.stringify(night.session)).not.toContain('ReservationToken')
 	}, 30_000)
 
 	test('A.02 snapshot during the first autofocus', async () => {
-		let duringAutofocus: { readonly state: string; readonly exposure?: unknown; readonly type?: string; readonly name?: string } | undefined
+		let duringAutofocus: { readonly state: string; readonly exposure?: unknown; readonly type?: string } | undefined
 		const night = await runNight({
 			control: async (api) => {
 				const snapshot = await api.waitUntil((current) => current.foreground?.type === 'trigger.autofocus')
 
-				duringAutofocus = { state: snapshot.state, exposure: snapshot.capture.exposure, type: snapshot.foreground?.type, name: snapshot.foreground?.name }
+				duringAutofocus = { state: snapshot.state, exposure: snapshot.capture.exposure, type: snapshot.foreground?.type }
 			},
 		})
 
 		nights.push(night)
 
-		expect(duringAutofocus).toEqual({ state: 'running', exposure: undefined, type: 'trigger.autofocus', name: 'trigger.autofocus' })
+		expect(duringAutofocus).toEqual({ state: 'running', exposure: undefined, type: 'trigger.autofocus' })
 		expect(night.session.state).toBe('completed')
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 		expect(night.log.filter((entry) => entry.name === 'autofocus.run')).toHaveLength(4)
@@ -122,14 +122,14 @@ describe('canonical night', () => {
 		expect(committed).toHaveLength(9)
 		expect(names.indexOf('park')).toBeGreaterThan(names.lastIndexOf('camera.expose'))
 		expect(night.devices.mount.parked).toBeTrue()
-		expect(night.devices.guiderConnected).toBeFalse()
+		expect(night.devices.guiderConnected).toBeTrue()
 	}, 30_000)
 
 	test('A.05 without a wheel', async () => {
 		const night = await runNight({
 			patch: {
 				devices: { wheel: undefined },
-				capture: { frames: [frame('lum', { name: 'Luminance', count: 4, exposureTime: 2 })] },
+				capture: { frames: [frame('lum', { count: 4 }, { exposureTime: 2 })] },
 			},
 		})
 
@@ -201,7 +201,7 @@ describe('canonical night', () => {
 				rotator: { enabled: false },
 				cover: { enabled: false },
 				flatPanel: { enabled: false },
-				capture: { frames: [frame('lum', { name: 'Luminance', count: 4, exposureTime: 2 })] },
+				capture: { frames: [frame('lum', { count: 4 }, { exposureTime: 2 })] },
 			},
 		})
 
@@ -225,7 +225,7 @@ describe('canonical night', () => {
 				dither: { enabled: false },
 				cooling: { enabled: false },
 				meridianFlip: { enabled: false },
-				capture: { frames: [frame('lum', { name: 'Luminance', count: 8, exposureTime: 0.5 })] },
+				capture: { frames: [frame('lum', { count: 8 }, { exposureTime: 0.5 })] },
 				startup: { enabled: false },
 				shutdown: { enabled: false },
 			},
@@ -254,11 +254,7 @@ describe('canonical night', () => {
 		const night = await runNight({
 			patch: {
 				capture: {
-					frames: [
-						frame('ha', { name: 'Hydrogen-alpha', count: 2, exposureTime: 2, filter: { type: 'name', name: 'Ha' } }),
-						frame('o3', { name: 'Oxygen-III', count: 2, exposureTime: 2, filter: { type: 'name', name: 'O3' } }),
-						frame('s2', { name: 'Sulfur-II', count: 2, exposureTime: 2, filter: { type: 'name', name: 'S2' } }),
-					],
+					frames: [frame('ha', { count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'Ha' } }), frame('o3', { count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'O3' } }), frame('s2', { count: 2 }, { exposureTime: 2, filter: { type: 'name', name: 'S2' } })],
 				},
 				autofocus: {
 					capture: { filter: { type: 'name', name: 'L' } },
@@ -296,7 +292,7 @@ describe('canonical night', () => {
 				autofocus: { enabled: false },
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 40, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				capture: { delay: 0, frames: [frame('lum', { count: 40 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
 			},
 		})
 
@@ -329,7 +325,7 @@ describe('admission', () => {
 			autofocus: { enabled: false },
 			meridianFlip: { enabled: false },
 			target: { center: { enabled: false } },
-			capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+			capture: { delay: 0, frames: [frame('lum', { count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
 		} as const
 		const created = [process.handler.createSession(process.definition(east, { id: 'east', ...short })), process.handler.createSession(process.definition(west, { id: 'west', ...short }))]
 
@@ -378,7 +374,7 @@ describe('admission', () => {
 				autofocus: { enabled: false },
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				capture: { delay: 0, frames: [frame('lum', { count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
 			}),
 		)
 
@@ -422,7 +418,7 @@ describe('admission', () => {
 				autofocus: { enabled: false },
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				capture: { delay: 0, frames: [frame('lum', { count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
 			}),
 		)
 
@@ -430,8 +426,8 @@ describe('admission', () => {
 
 		if (!created.ok) return
 
-		const key = remoteGuiderKey('127.0.0.1', 4400)
-		const third = process.arbiter.reserve({ id: 'phd2', kind: 'guider' }, [{ key }])
+		const key = observatory.camera.hardwareId
+		const third = process.arbiter.reserve({ id: 'other', kind: 'capture' }, [{ key, device: observatory.camera }])
 
 		expect(third.ok).toBeTrue()
 
@@ -439,11 +435,10 @@ describe('admission', () => {
 
 		const refused = process.runtime.start(created.session.id)
 
-		expect(refused).toEqual({ ok: false, reason: 'resourcesUnavailable', detail: `${key} is held by guider phd2` })
+		expect(refused).toEqual({ ok: false, reason: 'resourcesUnavailable', detail: `${key} is held by capture other` })
 		expect(process.runtime.activeSessionId).toBeUndefined()
 		expect(process.store.session(created.session.id)?.state).toBe('created')
-		expect(process.arbiter.availability(observatory.camera.hardwareId)).toBe('available')
-		expect(process.arbiter.snapshot(key).reservationOwner).toEqual({ id: 'phd2', kind: 'guider' })
+		expect(process.arbiter.snapshot(key).reservationOwner).toEqual({ id: 'other', kind: 'capture' })
 
 		third.reservation.release()
 
@@ -459,10 +454,12 @@ describe('admission', () => {
 		expect(process.runtime.activeSessionId).toBeUndefined()
 	}, 30_000)
 
-	test('B.04 an idle guider session refuses start before any dither', async () => {
+	test('B.04 a disconnected guider refuses start before any command', async () => {
 		const process = await openProcess()
 
 		processes.push(process)
+
+		process.devices.guiderConnected = false
 
 		const observatory = process.addObservatory('east')
 		const created = process.handler.createSession(
@@ -471,7 +468,7 @@ describe('admission', () => {
 				autofocus: { enabled: false },
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 2, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				capture: { delay: 0, frames: [frame('lum', { count: 2 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
 				dither: { everyFrames: 1 },
 			}),
 		)
@@ -480,28 +477,18 @@ describe('admission', () => {
 
 		if (!created.ok) return
 
-		const key = remoteGuiderKey('127.0.0.1', 4400)
-		const idle = process.arbiter.acquire({ id: 'phd2', kind: 'guiderSession' }, [{ key }])
-
-		expect(idle.ok).toBeTrue()
-
-		if (!idle.ok) return
-
 		const refused = process.runtime.start(created.session.id)
 
-		expect(refused).toEqual({ ok: false, reason: 'resourcesUnavailable', detail: `${key} is held by guiderSession phd2` })
+		expect(refused).toEqual({ ok: false, reason: 'disconnected', detail: 'guider guider-1 is not connected' })
 		expect(process.runtime.activeSessionId).toBeUndefined()
 		expect(process.store.session(created.session.id)?.state).toBe('created')
 		expect(process.log.filter((entry) => entry.name === 'unpark')).toHaveLength(0)
 		expect(process.log.filter((entry) => entry.name === 'camera.expose')).toHaveLength(0)
 		expect(process.log.filter((entry) => entry.name === 'guider.dither')).toHaveLength(0)
 		expect(process.arbiter.availability(observatory.camera.hardwareId)).toBe('available')
-		expect(process.arbiter.availability(key)).toBe('leased')
-
-		idle.lease.release()
 	}, 30_000)
 
-	test('B.05 a distinct guide camera is reserved with the imaging camera', async () => {
+	test('B.05 the sequencer does not reserve the independent guider', async () => {
 		const process = await openProcess()
 
 		processes.push(process)
@@ -513,14 +500,7 @@ describe('admission', () => {
 				autofocus: { enabled: false },
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
-				guiding: {
-					connection: {
-						mode: 'local',
-						focalLength: 200,
-						capture: { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 100, offset: 10, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false },
-					},
-				},
+				capture: { delay: 0, frames: [frame('lum', { count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
 			}),
 		)
 
@@ -529,26 +509,39 @@ describe('admission', () => {
 
 		if (!created.ok) return
 
-		const started = process.runtime.start(created.session.id)
 		const cameraKey = observatory.camera.hardwareId
 		const guideCameraKey = observatory.guideCamera.hardwareId
 		const logicalCamera = localGuiderCameraKey(observatory.guideCamera)
 		const logicalOutput = localGuiderOutputKey(observatory.guideOutput)
-		const manual = process.arbiter.acquire({ id: 'manual', kind: 'capture' }, [{ key: cameraKey, device: observatory.camera }])
+		const remoteKey = remoteGuiderKey('127.0.0.1', 4400)
+		const held = process.arbiter.acquire({ id: 'phd2', kind: 'guiderSession' }, [{ key: remoteKey }, { key: logicalCamera }, { key: logicalOutput }])
+
+		expect(held.ok).toBeTrue()
+
+		if (!held.ok) return
+
+		const started = process.runtime.start(created.session.id)
 
 		expect(started).toMatchObject({ ok: true, reentrant: false })
 		expect(['reserved', 'leased']).toContain(process.arbiter.availability(cameraKey))
-		expect(['reserved', 'leased']).toContain(process.arbiter.availability(guideCameraKey))
 		expect(process.arbiter.snapshot(cameraKey).reservationOwner).toEqual({ id: created.session.id, kind: 'sequencer' })
-		expect(process.arbiter.snapshot(guideCameraKey).reservationOwner).toEqual({ id: created.session.id, kind: 'sequencer' })
-		expect(['reserved', 'leased']).toContain(process.arbiter.availability(logicalCamera))
-		expect(['reserved', 'leased']).toContain(process.arbiter.availability(logicalOutput))
-		expect(process.arbiter.availability(remoteGuiderKey('127.0.0.1', 4400))).toBe('available')
-		expect(manual.ok).toBeFalse()
+		expect(process.arbiter.availability(guideCameraKey)).toBe('available')
+		expect(process.arbiter.availability(logicalCamera)).toBe('leased')
+		expect(process.arbiter.availability(logicalOutput)).toBe('leased')
+		expect(process.arbiter.availability(remoteKey)).toBe('leased')
 
-		if (manual.ok) return
+		const imaging = process.arbiter.acquire({ id: 'manual', kind: 'capture' }, [{ key: cameraKey, device: observatory.camera }])
+		const guiding = process.arbiter.acquire({ id: 'manual', kind: 'capture' }, [{ key: guideCameraKey, device: observatory.guideCamera }])
 
-		expect(manual.conflicts).toEqual([{ key: cameraKey, by: 'reservation', ownerId: created.session.id, ownerKind: 'sequencer', causes: [] }])
+		expect(imaging.ok).toBeFalse()
+		expect(guiding.ok).toBeTrue()
+
+		if (imaging.ok) return
+
+		expect(imaging.conflicts).toEqual([{ key: cameraKey, by: 'reservation', ownerId: created.session.id, ownerKind: 'sequencer', causes: [] }])
+
+		if (guiding.ok) guiding.lease.release()
+		if (held.ok) held.lease.release()
 
 		const session = await process.runtime.settled(created.session.id)
 
@@ -557,6 +550,7 @@ describe('admission', () => {
 		expect(process.arbiter.availability(guideCameraKey)).toBe('available')
 		expect(process.arbiter.availability(logicalCamera)).toBe('available')
 		expect(process.arbiter.availability(logicalOutput)).toBe('available')
+		expect(process.arbiter.availability(remoteKey)).toBe('available')
 	}, 30_000)
 
 	test('B.06 the cover is reserved from the start', async () => {
@@ -753,7 +747,7 @@ describe('admission', () => {
 
 		const stopped = await stopping
 		const names = commandNames(night.log)
-		const keys = [night.devices.camera.hardwareId, night.devices.mount.hardwareId, night.devices.wheel.hardwareId, night.devices.focuser.hardwareId, night.devices.rotator.hardwareId, night.devices.cover.hardwareId, night.devices.flatPanel.hardwareId, remoteGuiderKey('127.0.0.1', 4400)]
+		const keys = [night.devices.camera.hardwareId, night.devices.mount.hardwareId, night.devices.wheel.hardwareId, night.devices.focuser.hardwareId, night.devices.rotator.hardwareId, night.devices.cover.hardwareId, night.devices.flatPanel.hardwareId]
 
 		expect(during).toEqual({ camera: 'leased', owners: 1 })
 		expect(stopped).toMatchObject({ ok: true, effect: 'stop' })
@@ -766,8 +760,7 @@ describe('admission', () => {
 		expect(names.indexOf('cover.close')).toBeGreaterThan(names.indexOf('guider.stop'))
 		expect(names.indexOf('park')).toBeGreaterThan(names.indexOf('cover.close'))
 		expect(names.indexOf('cooler.off')).toBeGreaterThan(names.indexOf('park'))
-		expect(names.indexOf('guider.disconnect')).toBeGreaterThan(names.indexOf('cooler.off'))
-		expect(night.devices.guiderConnected).toBeFalse()
+		expect(night.devices.guiderConnected).toBeTrue()
 
 		for (const key of keys) {
 			expect(night.arbiter.availability(key)).toBe('available')
@@ -832,7 +825,7 @@ describe('startup', () => {
 		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cooler.set'))
 		expect(firstSlew).toBeGreaterThan(names.indexOf('guider.start'))
 		expect(startup.some((entry) => entry.name === 'track.mode' || (entry.name === 'track' && entry.detail === 'on'))).toBeFalse()
-		expect(startup.some((entry) => entry.name === 'connect' || (entry.name.endsWith('.connect') && entry.name !== 'guider.connect'))).toBeFalse()
+		expect(startup.some((entry) => entry.name === 'connect' || entry.name.endsWith('.connect'))).toBeFalse()
 	}, 30_000)
 
 	test('D.02 omitted and inserted startup steps keep their physical slots', async () => {
@@ -840,7 +833,7 @@ describe('startup', () => {
 			patch: {
 				cover: { openOnStartup: false },
 				meridianFlip: { enabled: false },
-				target: { goto: { enabled: false }, center: { enabled: false } },
+				target: { center: { enabled: false } },
 			},
 			sim: { mount: { trackMode: 'LUNAR' } },
 		})
@@ -851,12 +844,13 @@ describe('startup', () => {
 
 		expect(night.session.state).toBe('completed')
 		expect(night.session.failure).toBeUndefined()
-		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('slew')).toBeTrue()
 		expect(names.indexOf('unpark')).toBeGreaterThan(-1)
-		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('unpark'))
-		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('track.mode'))
+		expect(names.indexOf('cooler.set')).toBeGreaterThan(names.indexOf('unpark'))
 		expect(names.indexOf('guider.start')).toBeGreaterThan(names.indexOf('cooler.set'))
-		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('guider.start'))
+		expect(names.indexOf('slew')).toBeGreaterThan(names.indexOf('guider.start'))
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('slew'))
+		expect(names.indexOf('cover.open')).toBeGreaterThan(names.indexOf('track.mode'))
 		expect(night.devices.mount.trackMode).toBe('SIDEREAL')
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
@@ -889,7 +883,6 @@ describe('startup', () => {
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
 		expect(night.devices.mount.parked).toBeTrue()
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
-		expect(names.includes('guider.disconnect')).toBeTrue()
 	}, 30_000)
 
 	test('D.05 a required unpark failure still runs later required startup actions', async () => {
@@ -910,7 +903,6 @@ describe('startup', () => {
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
 		expect(night.devices.mount.parked).toBeTrue()
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
-		expect(names.includes('guider.disconnect')).toBeTrue()
 	}, 30_000)
 
 	test('D.06 a required unpark failure still runs later optional actions when continueOnFailure is true', async () => {
@@ -937,7 +929,6 @@ describe('startup', () => {
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
 		expect(night.devices.mount.parked).toBeTrue()
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
-		expect(names.includes('guider.disconnect')).toBeTrue()
 	}, 30_000)
 
 	test('D.07 coolCamera commands the SequencerCooling setpoint', async () => {
@@ -994,7 +985,6 @@ describe('startup', () => {
 		expect(names.lastIndexOf('cooler.set')).toBeGreaterThan(names.indexOf('park'))
 		expect(night.devices.camera.temperature).toBe(20)
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
-		expect(names.includes('guider.disconnect')).toBeTrue()
 	}, 30_000)
 
 	test('D.10 a required startGuiding failure stops the night before the target', async () => {
@@ -1013,7 +1003,6 @@ describe('startup', () => {
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
 		expect(night.devices.guiderRunning).toBeFalse()
 		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
-		expect(names.includes('guider.disconnect')).toBeTrue()
 	}, 30_000)
 
 	test('D.11 an enabled guider with the startup pipeline disarmed is refused', async () => {
@@ -1129,19 +1118,16 @@ describe('startup', () => {
 		expect(afterUnpark.filter((entry) => entry.name === 'guider.stop')).toHaveLength(1)
 		expect(afterUnpark.filter((entry) => entry.name === 'park')).toHaveLength(0)
 		expect(afterUnpark.filter((entry) => entry.name === 'cooler.off')).toHaveLength(1)
-		expect(afterUnpark.filter((entry) => entry.name === 'guider.disconnect')).toHaveLength(1)
 		expect(night.log.filter((entry) => entry.name === 'guider.stop')).toHaveLength(1)
-		expect(night.log.filter((entry) => entry.name === 'guider.disconnect')).toHaveLength(1)
 		expect(names.indexOf('guider.stop')).toBeGreaterThan(lastUnpark)
-		expect(names.indexOf('guider.disconnect')).toBeGreaterThan(names.indexOf('guider.stop'))
 		expect(names.lastIndexOf('cooler.off')).toBeGreaterThan(names.indexOf('guider.stop'))
 	}, 30_000)
 
-	test('D.17 startTracking uses the target tracking mode when the target does not slew', async () => {
+	test('D.17 the slew establishes the target tracking mode', async () => {
 		const night = await runNight({
 			patch: {
 				meridianFlip: { enabled: false },
-				target: { goto: { enabled: false }, center: { enabled: false } },
+				target: { center: { enabled: false } },
 			},
 			sim: { mount: { trackMode: 'LUNAR' } },
 		})
@@ -1150,15 +1136,16 @@ describe('startup', () => {
 
 		const names = commandNames(night.log)
 		const modes = night.log.filter((entry) => entry.name === 'track.mode').map((entry) => entry.detail)
+		const startupTrack = names.findIndex((name, index) => index < names.indexOf('slew') && (name === 'track.mode' || name === 'track'))
 
 		expect(night.session.state).toBe('completed')
 		expect(night.session.failure).toBeUndefined()
+		expect(names.includes('slew')).toBeTrue()
 		expect(modes.length).toBeGreaterThan(0)
 		expect(modes.every((mode) => mode === 'SIDEREAL')).toBeTrue()
-		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('unpark'))
-		expect(names.indexOf('track.mode')).toBeLessThan(names.indexOf('cover.open'))
-		expect(names.indexOf('track')).toBeGreaterThan(names.indexOf('unpark'))
-		expect(names.indexOf('track')).toBeLessThan(names.indexOf('cover.open'))
+		expect(startupTrack).toBe(-1)
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('slew'))
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('cover.open'))
 		expect(night.log.find((entry) => entry.name === 'track')?.detail).toBe('on')
 		expect(night.devices.mount.trackMode).toBe('SIDEREAL')
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
@@ -1225,7 +1212,7 @@ describe('startup', () => {
 		expect(night.devices.mount.connected).toBeTrue()
 		expect(night.devices.wheel.connected).toBeTrue()
 		expect(night.devices.cover.connected).toBeTrue()
-		expect(names.some((name) => name === 'connect' || (name.endsWith('.connect') && name !== 'guider.connect'))).toBeFalse()
+		expect(names.some((name) => name === 'connect' || name.endsWith('.connect'))).toBeFalse()
 	}, 30_000)
 
 	test('D.21 startGuiding succeeds when the guider is already running', async () => {
@@ -1292,7 +1279,7 @@ describe('startup', () => {
 				autofocus: { enabled: false },
 				meridianFlip: { enabled: false },
 				target: { center: { enabled: false } },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				capture: { delay: 0, frames: [frame('lum', { count: 1 }, { exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
 			},
 			sim: { camera: { temperature: 20 } },
 		})
@@ -1332,7 +1319,7 @@ describe('startup', () => {
 				autofocus: { enabled: false },
 				dither: { enabled: false },
 				meridianFlip: { enabled: false },
-				capture: { delay: 0, frames: [frame('lum', { name: 'Luminance', count: 1, exposureTime: 0.5, filter: { type: 'name', name: 'L' } })] },
+				capture: { delay: 0, frames: [frame('lum', { count: 1 }, { filter: { type: 'name', name: 'L' } })] },
 			},
 		})
 
@@ -1403,9 +1390,8 @@ describe('startup', () => {
 		expect(night.devices.cover.parked).toBeTrue()
 	}, 30_000)
 
-	test('D.28 a required startTracking failure stops the night before the target', async () => {
+	test('D.28 a required tracking failure on the slew stops the night before frames', async () => {
 		const night = await runNight({
-			patch: { target: { goto: { enabled: false } } },
 			sim: { mount: { trackMode: 'LUNAR' }, options: { mount: { trackMode: 'fail' } } },
 		})
 
@@ -1417,10 +1403,10 @@ describe('startup', () => {
 		expect(night.session.failure).toMatchObject({ reason: 'commandFailed', detail: 'the mount did not accept the SIDEREAL track mode: the mount refused the track mode' })
 		expect(night.log.filter((entry) => entry.name === 'track.mode')).toHaveLength(3)
 		expect(names.includes('unpark')).toBeTrue()
-		expect(names.includes('cover.open')).toBeFalse()
+		expect(names.includes('cover.open')).toBeTrue()
 		expect(names.includes('cooler.set')).toBeTrue()
 		expect(names.includes('guider.start')).toBeTrue()
-		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('slew')).toBeTrue()
 		expect(names.includes('camera.expose')).toBeFalse()
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
 		expect(night.devices.mount.trackMode).toBe('LUNAR')
@@ -1517,11 +1503,11 @@ describe('startup', () => {
 		expect(process.runtime.activeSessionId).toBeUndefined()
 	}, 30_000)
 
-	test('D.33 a target that does not track does not emit startTracking', async () => {
+	test('D.33 a target that does not track still slews', async () => {
 		const night = await runNight({
 			patch: {
 				meridianFlip: { enabled: false },
-				target: { tracking: { enabled: false }, goto: { enabled: false }, center: { enabled: false } },
+				target: { tracking: { enabled: false }, center: { enabled: false } },
 			},
 		})
 
@@ -1533,16 +1519,16 @@ describe('startup', () => {
 		expect(night.session.failure).toBeUndefined()
 		expect(names.includes('track.mode')).toBeFalse()
 		expect(night.log.some((entry) => entry.name === 'track' && entry.detail === 'on')).toBeFalse()
-		expect(names.includes('slew')).toBeFalse()
+		expect(names.includes('slew')).toBeTrue()
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
 
-	test('D.34 startTracking does not inherit the mount timeout', async () => {
+	test('D.34 tracking on the slew does not inherit the mount timeout', async () => {
 		const night = await runNight({
 			patch: {
 				mount: { timeout: 1 },
 				meridianFlip: { enabled: false },
-				target: { goto: { enabled: false }, center: { enabled: false } },
+				target: { timeout: 30, center: { enabled: false } },
 			},
 			sim: { mount: { trackMode: 'LUNAR' }, options: { mount: { trackMode: 2_000 } } },
 		})
@@ -1553,8 +1539,7 @@ describe('startup', () => {
 
 		expect(night.session.state).toBe('completed')
 		expect(night.session.failure).toBeUndefined()
-		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('unpark'))
-		expect(names.indexOf('track.mode')).toBeLessThan(names.indexOf('cover.open'))
+		expect(names.indexOf('track.mode')).toBeGreaterThan(names.indexOf('slew'))
 		expect(night.devices.mount.trackMode).toBe('SIDEREAL')
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 	}, 30_000)
@@ -1611,5 +1596,86 @@ describe('startup', () => {
 		expect(names.indexOf('cover.open', firstSlew)).toBeLessThan(names.lastIndexOf('camera.expose'))
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(9)
 		expect(night.devices.cover.parked).toBeTrue()
+	}, 30_000)
+})
+
+describe('target acquisition', () => {
+	test('E.15 a slew that never arrives fails on the target timeout', async () => {
+		const night = await runNight({
+			patch: {
+				target: { timeout: 1, retry: { maxAttempts: 1 }, center: { enabled: false } },
+				execution: { defaultRetry: { maxAttempts: 5 } },
+				meridianFlip: { enabled: false },
+				autofocus: { enabled: false },
+				dither: { enabled: false },
+				guiding: { enabled: false },
+			},
+			sim: { options: { mount: { slew: 'timeout' } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'timeout', detail: 'the mount did not reach the target: the mount never arrived' })
+		expect(night.log.filter((entry) => entry.name === 'slew')).toHaveLength(1)
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
+	}, 30_000)
+
+	test('E.27 the slew waits the target settle before the next action and not between lights', async () => {
+		const night = await runNight({
+			patch: {
+				target: { settle: 5, center: { enabled: false }, tracking: { enabled: false } },
+				guiding: { enabled: false },
+				dither: { enabled: false },
+				autofocus: { enabled: false },
+				meridianFlip: { enabled: false },
+				rotator: { enabled: false },
+				capture: { delay: 0, frames: [frame('lum', { count: 2 }, { exposureTime: 2 })] },
+			},
+		})
+
+		nights.push(night)
+
+		const slew = night.log.find((entry) => entry.name === 'slew')
+		const afterSlew = slew === undefined ? undefined : night.log.find((entry) => entry.at > slew.at)
+		const exposes = night.log.filter((entry) => entry.name === 'camera.expose')
+
+		expect(night.session.state).toBe('completed')
+		expect(night.session.failure).toBeUndefined()
+		expect(slew).toBeDefined()
+		expect(afterSlew).toBeDefined()
+		expect(afterSlew!.at - slew!.at).toBe(5_000)
+		expect(exposes).toHaveLength(2)
+		expect(exposes[1].at - exposes[0].at).toBeLessThan(5_000)
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(2)
+	}, 30_000)
+
+	test('E.28 slew retries use the target policy not the session default', async () => {
+		const night = await runNight({
+			patch: {
+				target: { timeout: 1, retry: { maxAttempts: 2 }, center: { enabled: false } },
+				execution: { defaultRetry: { maxAttempts: 5 } },
+				meridianFlip: { enabled: false },
+				autofocus: { enabled: false },
+				dither: { enabled: false },
+				guiding: { enabled: false },
+			},
+			sim: { options: { mount: { slew: 'timeout' } } },
+		})
+
+		nights.push(night)
+
+		const names = commandNames(night.log)
+
+		expect(night.session.state).toBe('failed')
+		expect(night.session.failure).toMatchObject({ reason: 'timeout', detail: 'the mount did not reach the target: the mount never arrived' })
+		expect(night.log.filter((entry) => entry.name === 'slew')).toHaveLength(2)
+		expect(names.includes('camera.expose')).toBeFalse()
+		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(0)
+		expect(night.events.some((event) => event.type === 'stateChanged' && event.state === 'finalizing')).toBeTrue()
 	}, 30_000)
 })

@@ -15,7 +15,7 @@ import { failedOperationResult, successfulOperationResult } from '#/orchestratio
 import type { OperationResult } from '#/orchestration'
 import type { Sequencer } from '#/sequencer'
 import type { SequencerPlan } from '#/sequencer.plan'
-import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft, SequencerFailure } from '#/sequencer.state'
+import type { SequencerArtifact, SequencerArtifactDraft, SequencerCheckpoint, SequencerDesiredState, SequencerEventDraft } from '#/sequencer.state'
 import { camera, canonical, frame, retry, services } from './sequencer.fixture'
 
 interface Executed {
@@ -35,7 +35,7 @@ function definition(overrides?: Partial<Sequencer>): Sequencer {
 		meridianFlip: { ...base.meridianFlip, enabled: false },
 		cooling: { ...base.cooling, enabled: false },
 		mount: { ...base.mount, unparkOnStartup: false, parkOnShutdown: false },
-		capture: { ...base.capture, order: 'sequential', repeat: 1, delay: 0, frames: [frame('lum', { count: 2, camera: camera() })], retry: retry() },
+		capture: { ...base.capture, order: 'sequential', repeat: 1, delay: 0, frames: [frame('lum', { count: 2, capture: camera() })], retry: retry() },
 		...overrides,
 	}
 }
@@ -68,7 +68,6 @@ interface Harness {
 	devices?: Record<string, { readonly device: unknown }>
 	onHold?: (nodeId: string) => SequencerDesiredState
 	onObserve?: () => void
-	onOpen?: () => SequencerFailure | undefined
 	clock?: () => number
 	refuseCommit?: () => boolean
 }
@@ -184,7 +183,6 @@ function harness(plan: SequencerPlan, execute?: (context: SequencerActionContext
 
 				return Promise.resolve(converged)
 			},
-			open: () => Promise.resolve(state.onOpen?.()),
 			capturing: () => void state.phases.push('capturing'),
 			finalizing: () => void state.phases.push('finalizing'),
 			commit: (_, drafts) => {
@@ -389,7 +387,7 @@ describe('plan walk', () => {
 
 	test('leaves the plan stopped when a stop ends the wait for the flip window', async () => {
 		const base = definition()
-		const capture = { ...base.capture, frames: [frame('lum', { count: 2, exposureTime: 1300, camera: camera() })] }
+		const capture = { ...base.capture, frames: [frame('lum', { count: 2 }, { exposureTime: 1300 })] }
 		const state = harness(planOf({ capture, meridianFlip: { ...base.meridianFlip, enabled: true } }))
 		let readings = 0
 
@@ -463,7 +461,7 @@ describe('plan walk', () => {
 
 	test('exposes a calibration frame past the meridian boundary instead of waiting for a flip it will not run', async () => {
 		const base = definition()
-		const capture = { ...base.capture, frames: [frame('dark', { count: 2, frameType: 'DARK', camera: camera() })] }
+		const capture = { ...base.capture, frames: [frame('dark', { count: 2 }, { frameType: 'DARK' })] }
 		const state = harness(planOf({ capture, meridianFlip: { ...base.meridianFlip, enabled: true } }))
 
 		state.observation = { hourAngle: 0.15, pierSide: 'WEST', preFlipPierSide: 'WEST' }
@@ -489,7 +487,7 @@ describe('plan walk', () => {
 
 	test('guards the exposure against the sky as it stands after the safe point instead of before it', async () => {
 		const base = definition()
-		const capture = { ...base.capture, frames: [frame('lum', { count: 1, camera: camera() })] }
+		const capture = { ...base.capture, frames: [frame('lum', { count: 1, capture: camera() })] }
 		const state: Harness = harness(planOf({ capture, autofocus: { ...base.autofocus, enabled: true }, meridianFlip: { ...base.meridianFlip, enabled: true } }), (context) => {
 			if (context.nodeId.endsWith('.trigger.autofocus')) state.observation = { ...state.observation, hourAngle: 0.095 }
 			if (context.nodeId.endsWith('.trigger.meridianFlip')) state.observation = { ...state.observation, pierSide: 'EAST' }
@@ -663,7 +661,7 @@ describe('plan walk', () => {
 	test('bounds skip exposures by the slot limit times the attempts per slot', async () => {
 		const base = definition()
 		const retry = { ...base.capture.retry, maxAttempts: 2, onExhausted: 'skip' as const }
-		const plan = planOf({ capture: { ...base.capture, frames: [frame('lum', { count: 1, abandonmentBudget: 1, camera: camera() })], retry } })
+		const plan = planOf({ capture: { ...base.capture, frames: [frame('lum', { count: 1, abandonmentBudget: 1, capture: camera() })], retry } })
 		const state = harness(plan, (context) => (context.frame === undefined ? Promise.resolve({ type: 'completed', value: undefined }) : Promise.resolve({ type: 'retryableFailure', reason: 'commandFailed', detail: 'the camera did not answer' })))
 		const outcome = await runSequencerPlan(state.host)
 		const frames = state.executed.filter((it) => it.slot !== undefined)
@@ -824,7 +822,7 @@ describe('plan walk', () => {
 
 	test('spends nothing on a safe point that moved nothing', async () => {
 		const base = definition()
-		const target = { ...base.target, goto: { ...base.target.goto, enabled: false }, center: { ...base.target.center, enabled: false }, tracking: { ...base.target.tracking, enabled: false } }
+		const target = { ...base.target, center: { ...base.target.center, enabled: false }, tracking: { ...base.target.tracking, enabled: false } }
 		const state = harness(planOf({ target }))
 		const started = performance.now()
 		const outcome = await runSequencerPlan(state.host)
@@ -990,27 +988,6 @@ describe('plan walk', () => {
 		expect(state.executed).toBeEmpty()
 	})
 
-	test('ends as stopped when a stop cancels the guider the walk was opening', async () => {
-		const base = definition()
-		const state: Harness = harness(planOf({ mount: { ...base.mount, parkOnShutdown: true } }), (context) => {
-			state.phases.push(context.nodeId)
-
-			return Promise.resolve({ type: 'completed', value: undefined })
-		})
-
-		state.onOpen = () => {
-			state.desired = 'stopped'
-			return { reason: 'aborted' }
-		}
-
-		const outcome = await runSequencerPlan(state.host)
-
-		expect(outcome.terminal.state).toBe('stopped')
-		expect(outcome.terminal.failure).toBeUndefined()
-		expect(state.phases).toEqual(['finalizing', 'finalize.action[parkMount]'])
-		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
-	})
-
 	test('fails the session when the cadence wait is cancelled without a control command', async () => {
 		const base = definition()
 		const state: Harness = harness(planOf({ capture: { ...base.capture, delay: 2 } }), (context) => {
@@ -1050,7 +1027,7 @@ describe('plan walk', () => {
 
 	test('keeps the startup pipeline running when a pause cancels the action', async () => {
 		const base = definition()
-		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, target: { ...base.target, goto: { ...base.target.goto, enabled: false } } }), (context) => {
+		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, cooling: { ...base.cooling, enabled: true } }), (context) => {
 			if (context.nodeId === 'startup.action[unparkMount]') {
 				state.action.abort()
 
@@ -1061,14 +1038,14 @@ describe('plan walk', () => {
 		})
 		const outcome = await runSequencerPlan(state.host)
 
-		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[startTracking]')
+		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[coolCamera]')
 		expect(outcome.checkpoint.completed).toContain('startup.action[unparkMount]')
-		expect(outcome.checkpoint.completed).toContain('startup.action[startTracking]')
+		expect(outcome.checkpoint.completed).toContain('startup.action[coolCamera]')
 	})
 
 	test('holds the startup pipeline between two actions when the session is paused', async () => {
 		const base = definition()
-		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, target: { ...base.target, goto: { ...base.target.goto, enabled: false } } }), (context) => {
+		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, cooling: { ...base.cooling, enabled: true } }), (context) => {
 			if (context.nodeId === 'startup.action[unparkMount]') state.desired = 'paused'
 
 			return Promise.resolve({ type: 'completed', value: undefined })
@@ -1078,21 +1055,21 @@ describe('plan walk', () => {
 
 		const outcome = await runSequencerPlan(state.host)
 
-		expect(state.holds).toContain('startup.action[startTracking]')
-		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[startTracking]')
+		expect(state.holds).toContain('startup.action[coolCamera]')
+		expect(state.executed.map((it) => it.nodeId)).toContain('startup.action[coolCamera]')
 		expect(outcome.terminal.state).toBe('completed')
 	})
 
 	test('commands no further startup action once the session is stopping', async () => {
 		const base = definition()
-		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, target: { ...base.target, goto: { ...base.target.goto, enabled: false } } }), (context) => {
+		const state: Harness = harness(planOf({ mount: { ...base.mount, unparkOnStartup: true }, cooling: { ...base.cooling, enabled: true } }), (context) => {
 			if (context.nodeId === 'startup.action[unparkMount]') state.desired = 'stopped'
 
 			return Promise.resolve({ type: 'completed', value: undefined })
 		})
 		const outcome = await runSequencerPlan(state.host)
 
-		expect(state.executed.map((it) => it.nodeId)).not.toContain('startup.action[startTracking]')
+		expect(state.executed.map((it) => it.nodeId)).not.toContain('startup.action[coolCamera]')
 		expect(state.executed.filter((it) => it.slot !== undefined)).toBeEmpty()
 		expect(outcome.terminal.state).toBe('stopped')
 	})

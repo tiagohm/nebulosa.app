@@ -171,7 +171,7 @@ class FlatWizardRun {
 
 			if (median >= this.#mean.min && median <= this.#mean.max) {
 				const type = capture.transferFormat === 'XISF' ? 'xisf' : 'fits'
-				const saveAt = join(this.request.path || Bun.env.capturesDir, `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS')}.${type}`)
+				const saveAt = join(this.request.path || Bun.env.capturesDir, `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS', true)}.${type}`)
 				// The frame just captured is the source; the timestamped path is only where it goes.
 				const exported = await this.handler.imageProcessor.export(path, { ...DEFAULT_IMAGE_TRANSFORMATION, enabled: false, format: { ...DEFAULT_IMAGE_TRANSFORMATION.format, type } }, this.camera.name, saveAt)
 

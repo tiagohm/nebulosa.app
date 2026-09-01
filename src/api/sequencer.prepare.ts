@@ -181,22 +181,24 @@ function angularDistance(from: number, to: number): number {
 // never came from.
 export function sequencerFrameContext(preparation: SequencerFramePreparation, devices: SequencerFrameDevices): SequencerFrameContext {
 	const { group, cover, flatPanel, rotator, cooling, tracking } = preparation
-	const dark = group.frameType === 'DARK' || group.frameType === 'BIAS'
-	const light = group.frameType === 'LIGHT'
+	const { capture } = group
+
+	const dark = capture.frameType === 'DARK' || capture.frameType === 'BIAS'
+	const light = capture.frameType === 'LIGHT'
 
 	// A flat is a panel flat only when the session carries a panel to light it.
-	const lit = group.frameType === 'FLAT' && flatPanel !== undefined && devices.flatPanel
+	const lit = capture.frameType === 'FLAT' && flatPanel !== undefined && devices.flatPanel
 
 	// Frames whose light comes from the sky, which is the light and the flat no panel lights. The cover has to
 	// be open for both: a sky flat taken behind the cover the darks closed is a dark with a flat's name on it,
 	// and leaving the cover where it is only looks harmless when the frame before it was another flat.
-	const sky = light || (group.frameType === 'FLAT' && !lit)
+	const sky = light || (capture.frameType === 'FLAT' && !lit)
 
 	return {
 		cover: !devices.cover || cover === undefined ? undefined : lit || (dark && cover.closeForDarkFrames) ? 'closed' : sky && cover.openBeforeCapture ? 'open' : undefined,
-		panel: !devices.flatPanel || flatPanel === undefined ? undefined : { lit, brightness: lit ? panelBrightness(flatPanel, devices.wheel, group.filter) : 0 },
+		panel: !devices.flatPanel || flatPanel === undefined ? undefined : { lit, brightness: lit ? panelBrightness(flatPanel, devices.wheel, capture.filter) : 0 },
 		tracking: light && tracking !== undefined ? true : undefined,
-		filter: group.filter,
+		filter: capture.filter,
 		angle: rotator?.angle,
 		temperature: cooling === undefined || !cooling.waitForTarget ? undefined : cooling.temperature,
 	}

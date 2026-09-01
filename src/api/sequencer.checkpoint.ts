@@ -2,13 +2,13 @@ import type { SequencerCheckpoint as SequencerCheckpointPolicy } from '#/sequenc
 import type { SequencerCaptureProgress, SequencerCheckpoint, SequencerTriggerAnchors } from '#/sequencer.state'
 
 // The checkpoint of a running session: the value the runtime keeps in memory and the cadence at which it is
-// written (§13.2, §13.3).
+// written.
 //
 // The separation that makes this module necessary is between **keeping** and **persisting**. `execution.
 // checkpoint` exposes `enabled`, `afterEveryAction`, `afterEveryFrame`, `afterEveryArtifact` and `interval`,
 // and read as written they would allow turning the whole checkpoint off. That is not a setting, it is the
-// removal of state the runtime needs to work: the attempt window of the current slot (§8.3), the trigger
-// anchors (§8.4) and the capture progress live there, and without them the safe point has nothing to decide
+// removal of state the runtime needs to work: the attempt window of the current slot, the trigger
+// anchors and the capture progress live there, and without them the safe point has nothing to decide
 // against and the termination proof has no counter. So the checkpoint is kept unconditionally, always, and
 // the policy governs only how often it is written.
 //
@@ -26,7 +26,7 @@ export type SequencerCheckpointTrigger = 'action' | 'frame' | 'artifact' | 'tran
 //
 // A transition and an artifact are always written, whatever the policy declares, because neither is cadence.
 // A state change is the record of what the session *is*, and an artifact row is the durable half of a frame:
-// the progress that counted the frame and the artifact that records it are one unit (§13.2), and writing them
+// the progress that counted the frame and the artifact that records it are one unit, and writing them
 // apart lets a restart see a committed artifact with no progress counting it — which captures the slot twice
 // — or progress for a frame no artifact ever recorded. `afterEveryArtifact` is therefore honored and cannot
 // be turned off; it names a durability rule rather than a frequency.
@@ -93,7 +93,7 @@ export class SequencerCheckpointKeeper {
 	// Reopens the nodes of a container that is starting another pass, dropping them from `completed` and
 	// discarding the attempts they spent.
 	//
-	// Both blocks are keyed by node id alone, and the capture loop runs its body once per frame (§8.3). Without
+	// Both blocks are keyed by node id alone, and the capture loop runs its body once per frame. Without
 	// this, the second iteration re-enters a body whose nodes are all recorded as settled: `sequencerResumePoint`
 	// answers `nextNode` for every one of them, and the preparation, the safe-point triggers and the capture of
 	// that iteration are skipped. The stale attempt count is the same defect from the budget side — the node

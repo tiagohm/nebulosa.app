@@ -1,3 +1,4 @@
+import { sequencerCaptureExposureInSeconds } from '#/sequencer'
 import type { SequencerPlanFrameGroup } from '#/sequencer.plan'
 import type { SequencerCaptureProgress, SequencerGroupProgress } from '#/sequencer.state'
 import { groupProgressOf, targetProgressOf } from './sequencer.scheduler'
@@ -59,7 +60,7 @@ export function acceptFrame(progress: SequencerCaptureProgress, targetId: string
 		cursor: current.cursor + 1,
 		accepted: current.accepted + 1,
 		captured: current.captured + 1,
-		integration: current.integration + group.exposureTime,
+		integration: current.integration + sequencerCaptureExposureInSeconds(group.capture),
 		attemptWindowStart: 0,
 	})
 }

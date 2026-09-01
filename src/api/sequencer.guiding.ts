@@ -9,8 +9,8 @@ import type { SequencerActionContext, SequencerActionHandler, SequencerActionRes
 // Guiding as the capture loop uses it: the dither taken at a safe point, before the exposure that follows it.
 //
 // A dither is a command to the guider and not to a device of the session, so it takes no role and holds no
-// lease: the guiding session already owns the guide camera and the guide output for the whole night, and the
-// sequencer commands it through the same session it opened. What the block owns is the decision of what to do
+// lease: the guiding session already owns the guide camera and the guide output, and the sequencer commands
+// it through the session that was connected before start. What the block owns is the decision of what to do
 // when there is nothing to dither, which is to skip rather than to fail — a session guiding through nothing
 // is a session that was configured that way, not one whose guider misbehaved.
 //
@@ -33,7 +33,7 @@ export interface SequencerDitherOutcome {
 
 // Collaborators the dither block commands.
 export interface SequencerGuidingServices {
-	// Owner of every guiding session, including the one the sequencer opened.
+	// Owner of every guiding session, including the one the sequencer commands.
 	readonly guiderCommander: GuiderCommander
 }
 

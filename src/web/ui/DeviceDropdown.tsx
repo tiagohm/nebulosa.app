@@ -34,12 +34,13 @@ function DeviceItem(device: DeviceState<Device> | undefined) {
 
 export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onValueChange, disabled, disallowNoneSelection = false, label, showLabel = false, showLabelOnEmpty = showLabel, color, startContent, icon: Icon, ...props }: DeviceDropdownProps<T>) {
 	const state = equipmentStore.state[type]
-	const devices = useSnapshot(state)
+	const length = useSnapshot(state).length
 
-	const items = new Array<DeviceState<Device> | undefined>(devices.length + (disallowNoneSelection ? 0 : 1))
+	const items = new Array<DeviceState<Device> | undefined>(length + (disallowNoneSelection ? 0 : 1))
 
-	if (!disallowNoneSelection) items[0] = undefined
-	for (let i = disallowNoneSelection ? 0 : 1, p = 0; p < devices.length; i++, p++) items[i] = devices[p]
+	let i = 0
+	if (!disallowNoneSelection) items[i++] = undefined
+	for (let p = 0; p < length; i++, p++) items[i] = state[p]
 
 	function handleAction(index: number) {
 		if (index < 0 || index >= items.length) return
@@ -78,6 +79,12 @@ export const FocuserDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'fo
 export const RotatorDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'rotator'>>, 'type'>) => <DeviceDropdown icon={Icons.RotateRight} tooltipContent="Rotator" type="rotator" {...props} />)
 
 export const GuideOutputDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'guideOutput'>>, 'type'>) => <DeviceDropdown icon={Icons.Pulse} tooltipContent="Guide Output" type="guideOutput" {...props} />)
+
+export const CoverDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'cover'>>, 'type'>) => <DeviceDropdown icon={Icons.Lock} tooltipContent="Cover" type="cover" {...props} />)
+
+export const FlatPanelDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'flatPanel'>>, 'type'>) => <DeviceDropdown icon={Icons.Sun} tooltipContent="Flat Panel" type="flatPanel" {...props} />)
+
+export const DomeDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'dome'>>, 'type'>) => <DeviceDropdown icon={Icons.Home} tooltipContent="Dome" type="dome" {...props} />)
 
 const DeviceDropdownStartContent = memo(({ isConnected }: { readonly isConnected: boolean | undefined }) => <Icons.Circle color={deviceStatusColor(isConnected)} />)
 

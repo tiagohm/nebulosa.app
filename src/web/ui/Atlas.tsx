@@ -38,16 +38,15 @@ export interface AstronomicalEventProps extends Omit<React.ComponentProps<'div'>
 	readonly icon: Icon
 	readonly label: string
 	readonly time: number
-	readonly offset?: number
 	readonly format: string
 }
 
-export const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format, className, ...props }: AstronomicalEventProps) => (
+export const AstronomicalEvent = memo(({ icon: Icon, label, time, format, className, ...props }: AstronomicalEventProps) => (
 	<div className={tw('flex flex-row items-center gap-1 hover:bg-neutral-700 rounded-md p-2 cursor-pointer', className)} {...props}>
 		<Icon />
 		<div className="flex flex-col items-start justify-center gap-0 font-bold">
 			{label}
-			<span>{formatTemporal(time, format, offset)}</span>
+			<span>{formatTemporal(time, format, true)}</span>
 		</div>
 	</div>
 ))

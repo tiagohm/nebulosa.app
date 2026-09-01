@@ -470,42 +470,29 @@ const FrameEditor = memo(({ index, disabled }: FrameEditorProps) => {
 
 const Guiding = memo(() => (
 	<div className="grid w-full grid-cols-12 items-center gap-2">
-		<GuiderOptions />
+		<GuidingOptions />
 		<GuidingSettle />
 		{/* <GuidingThresholds /> */}
 		{/* <GuidingRecovery /> */}
 	</div>
 ))
 
-const GuiderOptions = memo(() => {
+const GuidingOptions = memo(() => {
 	const sequencer = useContext(SequencerStoreContext)
 	const { busy } = useSnapshot(sequencer.state)
-	const guiding = useSnapshot(sequencer.state.request.guiding)
-	const blocked = busy || !guiding.enabled
-
-	return (
-		<div className="col-span-full flex flex-wrap items-center gap-2 text-sm">
-			<Switch disabled={busy} label="Enable guiding" onValueChange={sequencer.setGuidingEnabled} value={guiding.enabled} />
-			<GuidingConnection />
-			<Checkbox disabled={blocked} label="Calibrate before start" onValueChange={sequencer.setGuidingCalibrateBeforeStart} value={guiding.calibrateBeforeStart} />
-			<Checkbox disabled={blocked} label="Recalibrate after flip" onValueChange={sequencer.setGuidingRecalibrateAfterMeridianFlip} value={guiding.recalibrateAfterMeridianFlip} />
-			<Checkbox disabled={blocked} label="Restore after interruption" onValueChange={sequencer.setGuidingRestoreAfterInterruption} value={guiding.restoreAfterInterruption} />
-			<Checkbox disabled={blocked} label="Stop on shutdown" onValueChange={sequencer.setGuidingStopOnShutdown} value={guiding.stopOnShutdown} />
-			<SequencerRetry retry={sequencer.state.request.guiding.retry} disabled={blocked} />
-		</div>
-	)
-})
-
-const GuidingConnection = memo(() => {
-	const sequencer = useContext(SequencerStoreContext)
-	const { busy } = useSnapshot(sequencer.state)
-	const { enabled } = useSnapshot(sequencer.state.request.guiding)
 	const { guider } = useSnapshot(sequencer.state.request.devices)
+	const { enabled, calibrateBeforeStart, recalibrateAfterMeridianFlip, restoreAfterInterruption, stopOnShutdown } = useSnapshot(sequencer.state.request.guiding)
 	const blocked = busy || !enabled
 
 	return (
 		<div className="col-span-full flex flex-wrap items-center gap-2 text-sm">
+			<Switch disabled={busy} label="Enable guiding" onValueChange={sequencer.setGuidingEnabled} value={enabled} />
 			<GuiderDropdown label="Guider" icon={Icons.Guider} showLabel disabled={blocked} value={equipmentStore.state.guider.find((e) => e.id === guider)} onValueChange={sequencer.setGuider} />
+			<Checkbox disabled={blocked || !guider} label="Calibrate before start" onValueChange={sequencer.setGuidingCalibrateBeforeStart} value={calibrateBeforeStart} />
+			<Checkbox disabled={blocked || !guider} label="Recalibrate after flip" onValueChange={sequencer.setGuidingRecalibrateAfterMeridianFlip} value={recalibrateAfterMeridianFlip} />
+			<Checkbox disabled={blocked || !guider} label="Restore after interruption" onValueChange={sequencer.setGuidingRestoreAfterInterruption} value={restoreAfterInterruption} />
+			<Checkbox disabled={blocked || !guider} label="Stop on shutdown" onValueChange={sequencer.setGuidingStopOnShutdown} value={stopOnShutdown} />
+			<SequencerRetry retry={sequencer.state.request.guiding.retry} disabled={blocked || !guider} />
 		</div>
 	)
 })
@@ -513,8 +500,9 @@ const GuidingConnection = memo(() => {
 const GuidingSettle = memo(() => {
 	const sequencer = useContext(SequencerStoreContext)
 	const { busy } = useSnapshot(sequencer.state)
+	const { guider } = useSnapshot(sequencer.state.request.devices)
 	const { enabled } = useSnapshot(sequencer.state.request.guiding)
-	const blocked = busy || !enabled
+	const blocked = busy || !enabled || !guider
 
 	return (
 		<div className="col-span-full flex flex-wrap items-center gap-2 text-sm">
@@ -570,23 +558,23 @@ const GuidingRecovery = memo(() => {
 const Dither = memo(() => {
 	const sequencer = useContext(SequencerStoreContext)
 	const { busy } = useSnapshot(sequencer.state)
-	const dither = useSnapshot(sequencer.state.request.dither)
-	const guidingEnabled = useSnapshot(sequencer.state.request.guiding).enabled
-	const blocked = busy || !dither.enabled || !guidingEnabled
+	const { guider } = useSnapshot(sequencer.state.request.devices)
+	const { enabled, afterFilterChange, amount, beforeFirstFrame, everyFrames, everyTime, onFailure, raOnly } = useSnapshot(sequencer.state.request.dither)
+	const guiding = useSnapshot(sequencer.state.request.guiding)
+	const guidingEnabled = guiding.enabled && !!guider
+	const blocked = busy || !enabled || !guidingEnabled
 
 	return (
-		<div className="grid w-full grid-cols-12 items-center gap-2">
-			<Switch className="col-span-full" disabled={busy || !guidingEnabled} label="Enable dither" onValueChange={sequencer.setDitherEnabled} value={dither.enabled} />
-			<NumberInput className="col-span-4" disabled={blocked} fractionDigits={1} label="Amount" minValue={0} onValueChange={sequencer.setDitherAmount} value={dither.amount} />
-			<NumberInput className="col-span-4" disabled={blocked} label="Every frames" minValue={0} onValueChange={sequencer.setDitherEveryFrames} value={dither.everyFrames} />
-			<NumberInput className="col-span-4" disabled={blocked} endContent="s" label="Every time" minValue={0} onValueChange={sequencer.setDitherEveryTime} value={dither.everyTime} />
-			<Checkbox className="col-span-4" disabled={blocked} label="RA only" onValueChange={sequencer.setDitherRaOnly} value={dither.raOnly} />
-			<Checkbox className="col-span-4" disabled={blocked} label="Before first frame" onValueChange={sequencer.setDitherBeforeFirstFrame} value={dither.beforeFirstFrame} />
-			<Checkbox className="col-span-4" disabled={blocked} label="After filter change" onValueChange={sequencer.setDitherAfterFilterChange} value={dither.afterFilterChange} />
-			<SequencerOnFailureSelect className="col-span-8" disabled={blocked} onValueChange={sequencer.setDitherOnFailure} value={dither.onFailure} variant="continue" />
-			<div className="col-span-4">
-				<SequencerRetry retry={sequencer.state.request.dither.retry} disabled={blocked} />
-			</div>
+		<div className="col-span-full flex flex-wrap items-center gap-2 text-sm">
+			<Switch disabled={busy || !guidingEnabled} label="Enable dither" onValueChange={sequencer.setDitherEnabled} value={enabled} />
+			<NumberInput disabled={blocked} fractionDigits={1} label="Amount" minValue={0} onValueChange={sequencer.setDitherAmount} value={amount} />
+			<NumberInput disabled={blocked} label="Every frames" minValue={0} onValueChange={sequencer.setDitherEveryFrames} value={everyFrames} />
+			<NumberInput disabled={blocked} endContent="s" label="Every time" minValue={0} onValueChange={sequencer.setDitherEveryTime} value={everyTime} />
+			<Checkbox disabled={blocked} label="RA only" onValueChange={sequencer.setDitherRaOnly} value={raOnly} />
+			<Checkbox disabled={blocked} label="Before first frame" onValueChange={sequencer.setDitherBeforeFirstFrame} value={beforeFirstFrame} />
+			<Checkbox disabled={blocked} label="After filter change" onValueChange={sequencer.setDitherAfterFilterChange} value={afterFilterChange} />
+			<SequencerOnFailureSelect disabled={blocked} onValueChange={sequencer.setDitherOnFailure} value={onFailure} variant="continue" />
+			<SequencerRetry retry={sequencer.state.request.dither.retry} disabled={blocked} />
 		</div>
 	)
 })

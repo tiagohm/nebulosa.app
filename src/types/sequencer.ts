@@ -1745,11 +1745,11 @@ export const DEFAULT_SEQUENCER: Sequencer = {
 		autoSubFolderMode: 'off',
 	},
 	startup: {
-		enabled: false,
+		enabled: true,
 		continueOnFailure: false,
 	},
 	shutdown: {
-		enabled: false,
+		enabled: true,
 		runOnCompletion: true,
 		runOnStop: true,
 		runOnFailure: true,

@@ -144,22 +144,21 @@ const Contacts = memo(() => {
 })
 
 const LocalCircumstances = memo(() => (
-	<div className="flex flex-col gap-2">
+	<div className="@container flex flex-col gap-2">
 		<LocalHeader />
-		<Tabs fullWidth>
-			<Tab id="details">Details</Tab>
-			<Tab id="instants">Instants</Tab>
-			<Tab id="view">View</Tab>
-			<TabPanel id="details">
-				<LocalDetails />
-			</TabPanel>
-			<TabPanel id="instants">
-				<LocalInstants />
-			</TabPanel>
-			<TabPanel id="view">
-				<LocalView />
-			</TabPanel>
-		</Tabs>
+		<div className="flex flex-col gap-2 @[780px]:flex-row">
+			<Tabs>
+				<Tab id="details">Details</Tab>
+				<Tab id="instants">Instants</Tab>
+				<TabPanel id="details">
+					<LocalDetails />
+				</TabPanel>
+				<TabPanel id="instants">
+					<LocalInstants />
+				</TabPanel>
+			</Tabs>
+			<LocalView />
+		</div>
 	</div>
 ))
 
@@ -291,8 +290,8 @@ const LocalInstants = memo(() => {
 })
 
 const LOCAL_VIEW_SHAPE_STYLES: Record<LocalLunarEclipseSvgShape['role'], CSSProperties> = {
-	penumbra: { fill: 'none', stroke: '#DDD', strokeWidth: 1, strokeDasharray: '4 4', opacity: 0.5 },
-	umbra: { fill: 'none', stroke: '#EEE', strokeWidth: 1, strokeDasharray: '4 4', opacity: 0.4 },
+	penumbra: { fill: 'rgba(0, 0, 0, 0.1)', stroke: '#DDD', strokeWidth: 1, strokeDasharray: '4 4', opacity: 0.5 },
+	umbra: { fill: 'rgba(0, 0, 0, 0.5)', stroke: '#EEE', strokeWidth: 1, strokeDasharray: '4 4', opacity: 0.4 },
 	moonDisk: { fill: '#FFF', stroke: 'none' },
 	ghostMoonDisk: { fill: 'none', stroke: '#EEE', strokeWidth: 1, opacity: 0.35 },
 	horizonLine: { fill: 'none', stroke: 'none', strokeWidth: 1 },
@@ -333,13 +332,13 @@ const LocalView = memo(() => {
 	}
 
 	return (
-		<div className="relative flex flex-col gap-2">
-			<div className="absolute top-1 left-0 flex w-full flex-row flex-wrap items-center justify-between gap-2 px-1">
-				<LunarEclipseContactKindButtonGroup value={selectedEvent} onValueChange={lunarEclipseStore.setSelectedEvent} />
-				<LocalViewOrientationModeButtonGroup value={orientationMode} onValueChange={lunarEclipseStore.setOrientationMode} />
+		<div className="flex flex-col gap-2">
+			<div className="flex w-full flex-row flex-wrap items-center justify-between gap-2 px-1">
+				<LunarEclipseContactKindButtonGroup color="secondary" value={selectedEvent} onValueChange={lunarEclipseStore.setSelectedEvent} />
+				<LocalViewOrientationModeButtonGroup color="secondary" value={orientationMode} onValueChange={lunarEclipseStore.setOrientationMode} />
 			</div>
 			<div className="overflow-hidden rounded-lg bg-neutral-950">
-				<svg width="100%" height="100%" className="aspect-2/ block bg-[#05054f]" viewBox={`0 0 ${localView.width} ${localView.height}`}>
+				<svg width="100%" height="100%" className="block aspect-2/1 bg-[#05054f]" viewBox={`0 0 ${localView.width} ${localView.height}`}>
 					{localView.shapes.map((shape, index) => (
 						<LocalViewShape key={localViewShapeKey(shape, index)} shape={shape} />
 					))}
@@ -350,7 +349,7 @@ const LocalView = memo(() => {
 })
 
 const Map = memo(() => (
-	<WorldMap className="h-full max-h-80" defaultScale={2} onCoordinateClick={lunarEclipseStore.handleCoordinateChange} onTransformChange={lunarEclipseStore.handleTransformChange}>
+	<WorldMap className="h-full max-h-120" defaultScale={2} onCoordinateClick={lunarEclipseStore.handleCoordinateChange} onTransformChange={lunarEclipseStore.handleTransformChange}>
 		<MapMarker />
 		<MapGeometry />
 	</WorldMap>

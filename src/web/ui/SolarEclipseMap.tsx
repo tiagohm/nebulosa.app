@@ -152,6 +152,12 @@ const Contacts = memo(() => {
 	)
 })
 
+const BESSELIAN_ELEMENT_PRECISION = 10
+
+function BesselianElementValue({ value }: { readonly value: number }) {
+	return <span className="border-t border-neutral-800 px-3 py-2 text-end">{Math.abs(value) === 0 ? '--' : value.toFixed(BESSELIAN_ELEMENT_PRECISION)}</span>
+}
+
 const N = [0, 1, 2, 3] as const
 
 const BesselianElements = memo(() => {
@@ -163,31 +169,31 @@ const BesselianElements = memo(() => {
 		<div className="overflow-x-auto rounded-lg bg-neutral-900/70 text-sm text-neutral-100">
 			<div className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2">
 				<span className="font-mono text-sm text-neutral-400">
-					t0 = {formatTemporal(astronomicEventTemporal(map.elements.time0), 'YYYY-MM-DD HH:mm')} {Timescale[map.elements.time0.scale]}
+					t0 = {formatTemporal(astronomicEventTemporal(map.elements.time0), 'YYYY-MM-DD HH:mm:ss')} {Timescale[map.elements.time0.scale]}
 				</span>
 				<span className="flex flex-row gap-3 font-mono text-sm text-neutral-400">
-					<span>ΔT = {map.elements.deltaT.toFixed(2)}</span>
-					<span>tan F1 = {map.elements.tanF1.toFixed(7)}</span>
-					<span>tan F2 = {map.elements.tanF2.toFixed(7)}</span>
+					<span>ΔT = {map.elements.deltaT.toFixed(4)}</span>
+					<span>tan F1 = {map.elements.tanF1.toFixed(BESSELIAN_ELEMENT_PRECISION)}</span>
+					<span>tan F2 = {map.elements.tanF2.toFixed(BESSELIAN_ELEMENT_PRECISION)}</span>
 				</span>
 			</div>
-			<div className="grid w-full grid-cols-[2.5rem_repeat(6,minmax(5.5rem,1fr))] font-mono">
-				<span className="bg-neutral-950/70 px-3 py-2 text-xs font-bold text-neutral-400 uppercase">n</span>
-				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-400 uppercase">x</span>
-				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-400 uppercase">y</span>
-				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-400 uppercase">D</span>
-				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-400 uppercase">L1</span>
-				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-400 uppercase">L2</span>
-				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-400 uppercase">u</span>
+			<div className="grid w-full grid-cols-[2.5rem_repeat(6,minmax(5.5rem,1fr))] font-mono text-xs">
+				<span className="bg-neutral-950/70 px-3 py-2 font-bold text-neutral-400 uppercase">n</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end font-bold text-neutral-400 uppercase">x</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end font-bold text-neutral-400 uppercase">y</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end font-bold text-neutral-400 uppercase">D</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end font-bold text-neutral-400 uppercase">L1</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end font-bold text-neutral-400 uppercase">L2</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end font-bold text-neutral-400 uppercase">u</span>
 				{N.map((n) => (
 					<Fragment key={n}>
 						<span className="border-t border-neutral-800 px-3 py-2 text-neutral-400">{n}</span>
-						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.x[n].toFixed(7)}</span>
-						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.y[n].toFixed(7)}</span>
-						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.d[n].toFixed(7)}</span>
-						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.l1[n].toFixed(7)}</span>
-						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.l2[n].toFixed(7)}</span>
-						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.mu[n].toFixed(7)}</span>
+						<BesselianElementValue value={map.elements.x[n]} />
+						<BesselianElementValue value={map.elements.y[n]} />
+						<BesselianElementValue value={map.elements.d[n]} />
+						<BesselianElementValue value={map.elements.l1[n]} />
+						<BesselianElementValue value={map.elements.l2[n]} />
+						<BesselianElementValue value={map.elements.mu[n]} />
 					</Fragment>
 				))}
 			</div>
@@ -196,22 +202,21 @@ const BesselianElements = memo(() => {
 })
 
 const LocalCircumstances = memo(() => (
-	<div className="flex flex-col gap-2">
+	<div className="@container flex flex-col gap-2">
 		<LocalHeader />
-		<Tabs fullWidth>
-			<Tab id="details">Details</Tab>
-			<Tab id="instants">Instants</Tab>
-			<Tab id="view">View</Tab>
-			<TabPanel id="details">
-				<LocalDetails />
-			</TabPanel>
-			<TabPanel id="instants">
-				<LocalInstants />
-			</TabPanel>
-			<TabPanel id="view">
-				<LocalView />
-			</TabPanel>
-		</Tabs>
+		<div className="flex flex-col gap-2 @[780px]:flex-row">
+			<Tabs>
+				<Tab id="details">Details</Tab>
+				<Tab id="instants">Instants</Tab>
+				<TabPanel id="details">
+					<LocalDetails />
+				</TabPanel>
+				<TabPanel id="instants">
+					<LocalInstants />
+				</TabPanel>
+			</Tabs>
+			<LocalView />
+		</div>
 	</div>
 ))
 
@@ -397,13 +402,13 @@ const LocalView = memo(() => {
 	}
 
 	return (
-		<div className="relative flex flex-col gap-2">
-			<div className="absolute top-1 left-0 flex flex-row flex-wrap items-center justify-between gap-2 px-1">
-				<LocalEclipseContactKindButtonGroup value={selectedEvent} onValueChange={solarEclipseStore.setSelectedEvent} />
-				<LocalViewOrientationModeButtonGroup value={orientationMode} onValueChange={solarEclipseStore.setOrientationMode} />
+		<div className="flex flex-col gap-2">
+			<div className="flex w-full flex-row flex-wrap items-center justify-between gap-2 px-1">
+				<LocalEclipseContactKindButtonGroup color="primary" value={selectedEvent} onValueChange={solarEclipseStore.setSelectedEvent} />
+				<LocalViewOrientationModeButtonGroup color="primary" value={orientationMode} onValueChange={solarEclipseStore.setOrientationMode} />
 			</div>
 			<div className="overflow-hidden rounded-lg bg-neutral-950">
-				<svg width="100%" height="100%" className="aspect-2/ block max-h-100 bg-(--primary)" viewBox={`0 0 ${localView.width} ${localView.height}`}>
+				<svg width="100%" height="100%" className="block aspect-2/1 bg-(--primary)" viewBox={`0 0 ${localView.width} ${localView.height}`}>
 					{localView.shapes.map((shape, index) => (
 						<LocalViewShape key={localViewShapeKey(shape, index)} shape={shape} />
 					))}
@@ -414,7 +419,7 @@ const LocalView = memo(() => {
 })
 
 const Map = memo(() => (
-	<WorldMap className="h-full max-h-80" defaultScale={2} onCoordinateClick={solarEclipseStore.handleCoordinateChange} onTransformChange={solarEclipseStore.handleTransformChange}>
+	<WorldMap className="h-full max-h-120" defaultScale={2} onCoordinateClick={solarEclipseStore.handleCoordinateChange} onTransformChange={solarEclipseStore.handleTransformChange}>
 		<MapMarker />
 		<MapGeometry />
 	</WorldMap>

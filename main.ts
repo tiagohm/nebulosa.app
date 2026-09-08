@@ -25,6 +25,9 @@ import { CameraHandler, camera } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
 import { CameraCommander } from 'src/api/camera.commander'
 import { ConnectionHandler, connection } from 'src/api/connection'
+import { startAlpacaConnection } from 'src/api/connection.alpaca'
+import { startIndiConnection } from 'src/api/connection.indi'
+import { startSimulatorConnection } from 'src/api/connection.simulator'
 import { CoverHandler, cover } from 'src/api/cover'
 import { CoverCommander } from 'src/api/cover.commander'
 import { DarvHandler, darv } from 'src/api/darv'
@@ -253,7 +256,6 @@ deviceLifecycle.observe(thermometerManager)
 deviceLifecycle.observe(dewHeaterManager)
 
 const notificationHandler = new NotificationHandler(wsm)
-const connectionHandler = new ConnectionHandler(wsm, notificationHandler, operationCoordinator)
 const confirmationHandler = new ConfirmationHandler(wsm)
 const guiderCommander = new GuiderCommander(operationCoordinator, cameraManager, guideOutputManager)
 const guiderHandler = new GuiderHandler(wsm, notificationHandler, guiderCommander)
@@ -281,6 +283,11 @@ const rotatorHandler = new RotatorHandler(wsm, rotatorManager, notificationHandl
 const dewHeaterCommander = new DewHeaterCommander(dewHeaterManager)
 const dewHeaterHandler = new DewHeaterHandler(wsm, dewHeaterManager, dewHeaterCommander, operationCoordinator)
 const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, rotatorManager, wsm)
+const connectionHandler = new ConnectionHandler(wsm, notificationHandler, operationCoordinator, {
+	INDI: (request) => startIndiConnection(request, indiHandler),
+	ALPACA: (request) => startAlpacaConnection(request, indiHandler),
+	SIMULATOR: () => startSimulatorConnection({ appDir: Bun.env.appDir, handler: indiHandler, mountManager, focuserManager, rotatorManager, guideOutputManager }),
+})
 const indiDevicePropertyHandler = new IndiDevicePropertyHandler(wsm, notificationHandler, indiHandler)
 const indiServerHandler = new IndiServerHandler(wsm)
 const framingHandler = new FramingHandler(imageProcessor)
@@ -400,7 +407,7 @@ const server = Bun.serve({
 	},
 	routes: {
 		'/': homeHtml,
-		...connection(connectionHandler, indiHandler, mountManager, focuserManager, rotatorManager, guideOutputManager),
+		...connection(connectionHandler),
 		...confirmation(confirmationHandler),
 		...indi(indiHandler, indiDevicePropertyHandler, indiServerHandler),
 		...camera(cameraHandler),

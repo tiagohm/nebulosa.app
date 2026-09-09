@@ -85,11 +85,11 @@ function Coordinate({ type, x, y }: CoordinateProps) {
 }
 
 function formatCoordinateLongitude(type: CoordinateType, angle: Angle) {
-	return type === 'equatorial' || type === 'equatorialJ2000' ? formatRA(angle, true) : formatAZ(angle, true)
+	return type === 'equatorial' || type === 'equatorialJ2000' ? formatRA(angle, false) : formatAZ(angle, false)
 }
 
 function formatCoordinateLatitude(type: CoordinateType, angle: Angle) {
-	return type === 'horizontal' ? formatALT(angle, true) : formatDEC(angle, true)
+	return type === 'horizontal' ? formatALT(angle, false) : formatDEC(angle, false)
 }
 
 // Short parenthetical for source when an accurate request fell back to a local model.

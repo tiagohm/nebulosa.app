@@ -57,7 +57,7 @@ const SelectedCoordinate = memo(() => {
 	return (
 		<span className="col-span-full flex flex-row items-center gap-1">
 			<Coordinate declination={selected.declination} pinned rightAscension={selected.rightAscension} x={selected.x} y={selected.y} />
-			<b>D:</b> {formatAZ(selected.distance, true)}
+			<b>D:</b> {formatAZ(selected.distance, false)}
 		</span>
 	)
 })
@@ -107,8 +107,8 @@ const SelectedCoordinateAction = memo(() => {
 	)
 })
 
-function formatAngle(value: number, format: (value: number, signed?: boolean) => string) {
-	return Number.isFinite(value) ? format(value, true) : '--'
+function formatAngle(value: number, format: (value: number, fractionDigits?: number | boolean) => string) {
+	return Number.isFinite(value) ? format(value, false) : '--'
 }
 
 function isValidCoordinate(coordinate: EquatorialCoordinate) {

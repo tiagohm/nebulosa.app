@@ -113,10 +113,10 @@ function ContactPoint({ point, name, color }: ContactPointProps) {
 			</div>
 			<div className="flex min-w-0 flex-row flex-wrap gap-x-3 gap-y-1 font-mono text-neutral-400">
 				<span>
-					<b className="text-neutral-500">LAT</b> {formatAZ(point.y, true)}
+					<b className="text-neutral-500">LAT</b> {formatAZ(point.y, false)}
 				</span>
 				<span>
-					<b className="text-neutral-500">LON</b> {formatAZ(point.x, true)}
+					<b className="text-neutral-500">LON</b> {formatAZ(point.x, false)}
 				</span>
 			</div>
 		</div>
@@ -229,10 +229,10 @@ const LocalHeader = memo(() => {
 		<div className="flex min-w-0 flex-col gap-2 rounded-lg bg-neutral-900/70 px-3 py-2">
 			<div className="flex min-w-0 flex-row flex-wrap gap-x-4 gap-y-1 font-mono text-sm text-neutral-400">
 				<span>
-					<b className="text-neutral-500">LAT</b> {formatAZ(location.latitude)}
+					<b className="text-neutral-500">LAT</b> {formatAZ(location.latitude, false)}
 				</span>
 				<span>
-					<b className="text-neutral-500">LON</b> {formatAZ(location.longitude)}
+					<b className="text-neutral-500">LON</b> {formatAZ(location.longitude, false)}
 				</span>
 			</div>
 			<span className="flex min-w-0 flex-row flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-100">

@@ -155,13 +155,13 @@ class FlatWizardRun {
 
 			if (!captured.ok) return captured
 
-			const path = captured.value.paths.at(-1)
+			const frame = captured.value.frames.at(-1)
 
-			if (path === undefined) return failedOperationResult('unexpectedState', 'the capture produced no frame')
+			if (frame === undefined) return failedOperationResult('unexpectedState', 'the capture produced no frame')
 
 			this.#publish('computing', '')
 
-			const transformed = await this.handler.imageProcessor.transform(path, false, this.camera.name)
+			const transformed = await this.handler.imageProcessor.transform(frame.path, false, this.camera.name)
 
 			if (context.signal.aborted) return failedOperationResult(abortReason(context.signal))
 			if (transformed === undefined) return failedOperationResult('commandFailed', 'failed to load captured flat frame')
@@ -173,7 +173,7 @@ class FlatWizardRun {
 				const type = capture.transferFormat === 'XISF' ? 'xisf' : 'fits'
 				const saveAt = join(this.request.path || Bun.env.capturesDir, `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS', true)}.${type}`)
 				// The frame just captured is the source; the timestamped path is only where it goes.
-				const exported = await this.handler.imageProcessor.export(path, { ...DEFAULT_IMAGE_TRANSFORMATION, enabled: false, format: { ...DEFAULT_IMAGE_TRANSFORMATION.format, type } }, this.camera.name, saveAt)
+				const exported = await this.handler.imageProcessor.export(frame.path, { ...DEFAULT_IMAGE_TRANSFORMATION, enabled: false, format: { ...DEFAULT_IMAGE_TRANSFORMATION.format, type } }, this.camera.name, saveAt)
 
 				if (exported === undefined) return failedOperationResult('commandFailed', 'failed to save flat frame')
 

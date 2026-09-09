@@ -136,8 +136,9 @@ export namespace Api {
 	}
 
 	export namespace Image {
-		export async function open(req: OpenImage) {
-			const response = await res('/image/open', 'post', req)
+		// Loads pixels and their metadata; signal cancels a viewer request when its panel is disposed.
+		export async function open(request: OpenImage, signal?: AbortSignal) {
+			const response = await req('/image/open', 'post', request, signal)
 			if (!response || response.status < 200 || response.status >= 300) return undefined
 			const blob = await response.blob()
 			const info = JSON.parse(decodeURIComponent(response.headers.get(X_IMAGE_INFO_HEADER)!)) as ImageInfo
@@ -831,8 +832,8 @@ export namespace Api {
 	}
 }
 
-async function req(path: string, method: 'get' | 'post' | 'put' | 'delete', body?: unknown) {
-	const options: RequestInit = { method, cache: 'no-cache', headers: DEFAULT_HEADERS, body: body === undefined ? undefined : JSON.stringify(body) }
+async function req(path: string, method: 'get' | 'post' | 'put' | 'delete', body?: unknown, signal?: AbortSignal) {
+	const options: RequestInit = { method, signal, cache: 'no-cache', headers: DEFAULT_HEADERS, body: body === undefined ? undefined : JSON.stringify(body) }
 
 	try {
 		return await fetch(`${API_URL}${path}`, options)

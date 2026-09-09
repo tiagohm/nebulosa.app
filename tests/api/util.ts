@@ -1,6 +1,8 @@
 import { expect, spyOn } from 'bun:test'
+import type { Camera } from 'nebulosa/src/devices/indi/device'
 import type { CameraCaptureHandle, CameraCaptureResult } from 'src/api/camera.capture'
 import type { Messager } from 'src/api/message'
+import type { CameraFrameEvent } from '#/camera'
 import { successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 
@@ -71,9 +73,13 @@ export function captureHandle(options: CaptureHandleOptions = {}): CameraCapture
 	return {
 		id: 'capture-handle',
 		started: options.started ?? Promise.resolve(successfulOperationResult(undefined)),
-		result: options.result ?? Promise.resolve(successfulOperationResult({ paths: [], frameCount: 0 })),
+		result: options.result ?? Promise.resolve(successfulOperationResult({ frames: [], frameCount: 0 })),
 		cancel: options.cancel ?? (() => Promise.resolve()),
 	}
+}
+
+export function cameraFrameEvent(path: string, frame?: Partial<CameraFrameEvent>, camera?: Camera): CameraFrameEvent {
+	return { path, generation: frame?.generation ?? 1, operation: frame?.operation ?? '', session: frame?.session ?? '', camera: frame?.camera ?? camera?.id ?? '' }
 }
 
 export function spyFetch<I extends URL | RequestInfo>(fetch: (input: I, init?: RequestInit) => Promise<Response>) {

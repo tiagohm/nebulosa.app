@@ -418,14 +418,14 @@ async function solveOneFrame(services: SequencerCenteringServices, context: Sequ
 
 	if (!captured.ok) return sequencerActionFailure(captured, 'the centering exposure failed')
 
-	const path = captured.value.paths.at(-1)
+	const frame = captured.value.frames.at(-1)
 
-	if (path === undefined) return { type: 'retryableFailure', reason: 'unexpectedState', detail: 'the centering exposure produced no frame' }
+	if (frame === undefined) return { type: 'retryableFailure', reason: 'unexpectedState', detail: 'the centering exposure produced no frame' }
 
 	context.progress({ detail: `solving the centering frame ${attempt}` })
 
 	const hint = j2000Of(configuration.coordinates, mount.geographicCoordinate, observedAt)
-	const request = solveRequest(configuration.solver, path, `${context.sessionId}:${context.nodeId}:${attempt}`, hint[0], hint[1])
+	const request = solveRequest(configuration.solver, frame.path, `${context.sessionId}:${context.nodeId}:${attempt}`, hint[0], hint[1])
 	const solution = await services.plateSolver.start(request, context.signal)
 
 	if (solution === undefined) {

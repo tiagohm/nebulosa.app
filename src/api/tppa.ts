@@ -1,6 +1,8 @@
+import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { timeNow } from 'nebulosa/src/astronomy/time/time'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { ThreePointPolarAlignment } from 'nebulosa/src/observation/alignment/polaralignment'
+import { computeThreePointPolarAlignmentOverlay, polarAlignmentReferenceFromPixel } from 'nebulosa/src/observation/alignment/polaralignment.overlay'
 import { EventBus } from 'src/shared/bus'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationFailureReason, OperationResult } from '#/orchestration'
@@ -127,6 +129,8 @@ class TppaRun {
 	readonly #event = structuredClone(DEFAULT_TPPA_EVENT)
 	// Alignment state machine turning three solved points into an azimuth/altitude error.
 	readonly #polarAlignment: ThreePointPolarAlignment
+	// Inertial guide coordinate initialized once, then reprojected through each exposure's WCS.
+	#reference?: EquatorialCoordinate
 
 	// Binds a run to its devices, its own copy of the request, and the handler publishing its events.
 	constructor(
@@ -191,14 +195,14 @@ class TppaRun {
 
 			if (!captured.ok) return captured
 
-			const path = captured.value.paths.at(-1)
+			const frame = captured.value.frames.at(-1)
 
-			if (path === undefined) return failedOperationResult('unexpectedState', 'the capture produced no frame')
+			if (frame === undefined) return failedOperationResult('unexpectedState', 'the capture produced no frame')
 
 			this.#publish('solving')
 
 			// The solver is bound to this run, so cancelling the operation stops the solve in flight.
-			const solution = await this.handler.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: SOLVER_RADIUS, path, id: context.id, blind: false }, context.signal)
+			const solution = await this.handler.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: SOLVER_RADIUS, path: frame.path, id: context.id, blind: false }, context.signal)
 
 			if (context.signal.aborted) return failedOperationResult(abortReason(context.signal))
 
@@ -207,7 +211,6 @@ class TppaRun {
 				this.#event.solved = true
 				this.#event.solver.rightAscension = solution.rightAscension
 				this.#event.solver.declination = solution.declination
-				this.#publish('aligning')
 
 				// The alignment needs the site the mount itself reports, since the error it computes is the one
 				// of that mount's polar axis at that place.
@@ -222,11 +225,25 @@ class TppaRun {
 					this.#event.attempts = 0
 					this.#event.error.azimuth = result.azimuthError
 					this.#event.error.altitude = result.altitudeError
+
+					// Keep the first projectable celestial reference even if the correction's target cannot
+					// be drawn yet; a later successful exposure must not silently choose a different star.
+					this.#reference ??= polarAlignmentReferenceFromPixel(solution, { x: (solution.widthInPixels + 1) / 2, y: (solution.heightInPixels + 1) / 2 })
+					const overlay = computeThreePointPolarAlignmentOverlay(result, solution, time, {
+						refraction: this.request.compensateRefraction && this.request.refraction,
+						reference: this.#reference ? { type: 'equatorial', ...this.#reference } : undefined,
+						frame: { x: 0.5, y: 0.5, width: solution.widthInPixels, height: solution.heightInPixels },
+						margin: 12,
+					})
+					this.#event.overlay = { frame, result: overlay }
 				} else if (this.#event.step >= ALIGNMENT_POINTS) {
 					// Every point was collected and the geometry still yields nothing, which is the alignment
 					// failing rather than a device failing, so it ends successfully with an explanation.
 					return successfulOperationResult('alignment failed')
 				}
+				// Publish after computing: an immediate next capture must not be the first snapshot carrying
+				// this exposure's result, and a waiting transition may not exist when the delay is zero.
+				this.#publish('aligning')
 			} else if (++this.#event.attempts < this.request.maxAttempts) {
 				// A frame that did not solve costs an attempt and nothing else: the mount stays where it is and
 				// the same point is exposed again.
@@ -267,6 +284,8 @@ class TppaRun {
 	// those the arbiter reported as unusable at that moment, and only a refused start reads them. The id is
 	// taken from the handle because a refused start never reaches the executor that would have bound it.
 	finish(id: string, result: OperationResult<string>, unavailable: readonly string[]) {
+		this.#event.overlay = undefined
+		this.#reference = undefined
 		this.#event.id = id
 		this.#publish('idle', result.ok ? result.value : terminalMessage(result.reason, result.error, unavailable))
 	}

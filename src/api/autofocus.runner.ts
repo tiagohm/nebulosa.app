@@ -166,13 +166,13 @@ class AutoFocusRun {
 
 			if (!captured.ok) return await this.#restored(context, initialPosition, captured)
 
-			const path = captured.value.paths.at(-1)
+			const frame = captured.value.frames.at(-1)
 
-			if (path === undefined) return await this.#restored(context, initialPosition, failedOperationResult('unexpectedState', 'the capture produced no frame'))
+			if (frame === undefined) return await this.#restored(context, initialPosition, failedOperationResult('unexpectedState', 'the capture produced no frame'))
 
 			this.#publish('computing', '')
 
-			const stars = await this.runner.starDetectionHandler.detect({ ...this.request.starDetection, path }, context.signal)
+			const stars = await this.runner.starDetectionHandler.detect({ ...this.request.starDetection, path: frame.path }, context.signal)
 
 			if (context.signal.aborted) return failedOperationResult(abortReason(context.signal))
 

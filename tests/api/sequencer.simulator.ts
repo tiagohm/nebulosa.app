@@ -8,6 +8,7 @@ import { DEFAULT_CAMERA, DEFAULT_COVER, DEFAULT_FLAT_PANEL, DEFAULT_FOCUSER, DEF
 import { writeImageToFits } from 'nebulosa/src/imaging/model/image'
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import { bufferSink } from 'nebulosa/src/io/io'
+import { cameraFrameEvent } from 'root/tests/api/util'
 import type { AutoFocusRunner } from 'src/api/autofocus.runner'
 import type { CameraHandler } from 'src/api/camera'
 import type { CameraCommander } from 'src/api/camera.commander'
@@ -715,7 +716,7 @@ function simulatedCommanders(devices: SimulatorDevices, log: SimulatorCommand[],
 					// The write finished and the lease is about to drop. Stop-order cases use this to see the
 					// exposure cleanup land before the terminal pipeline.
 					push('camera.done')
-					return successfulOperationResult({ paths: path === undefined ? [] : [path], frameCount: path === undefined ? 0 : 1 })
+					return successfulOperationResult({ frames: path === undefined ? [] : [cameraFrameEvent(path)], frameCount: path === undefined ? 0 : 1 })
 				})
 
 				void handle.result.then((result) => {

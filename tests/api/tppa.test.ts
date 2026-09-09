@@ -1,5 +1,9 @@
 import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
+import { plateSolutionFrom } from 'nebulosa/src/astrometry/solvers/platesolver'
+import { eraC2s, eraS2c } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
+import { geodeticLocation } from 'nebulosa/src/astronomy/observer/location'
+import * as clock from 'nebulosa/src/astronomy/time/time'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { CameraManager } from 'nebulosa/src/devices/indi/manager/camera'
@@ -10,6 +14,10 @@ import { WheelManager } from 'nebulosa/src/devices/indi/manager/wheel'
 import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
+import { vecRotateByRodrigues } from 'nebulosa/src/math/linear-algebra/vec3'
+import { arcmin, deg, toDeg } from 'nebulosa/src/math/units/angle'
+import { mountAdjustmentAxes } from 'nebulosa/src/observation/alignment/polaralignment'
+import { applyInverseMountAdjustment, celestialPoleVector } from 'nebulosa/src/observation/alignment/polaralignment.util'
 import { cameraBus, CameraHandler } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
 import type { CameraCaptureResult } from 'src/api/camera.capture'
@@ -25,11 +33,12 @@ import { OperationCoordinator } from 'src/api/operation'
 import { PlateSolverHandler } from 'src/api/platesolver'
 import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { tppaBus, tppa as tppaEndpoints, TppaHandler } from 'src/api/tppa'
+import type { CameraFrameEvent } from '#/camera'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
 import { DEFAULT_TPPA_START } from '#/tppa'
 import type { TppaStart, TppaEvent } from '#/tppa'
-import { captureHandle, json, noContent, SocketMessager, waitUntil } from './util'
+import { cameraFrameEvent, captureHandle, json, noContent, SocketMessager, waitUntil } from './util'
 
 type TppaStartOverrides = Omit<Partial<TppaStart>, 'capture' | 'solver' | 'refraction'> & {
 	readonly capture?: Partial<TppaStart['capture']>
@@ -166,11 +175,74 @@ function plateSolution(overrides: Partial<PlateSolution> = {}): PlateSolution {
 	}
 }
 
-function solvedFrame(path = 'plate.fit'): Promise<OperationResult<CameraCaptureResult>> {
-	return Promise.resolve(successfulOperationResult({ paths: [path], frameCount: 1 }))
+function solvedFrame(path = 'plate.fit', frame?: Partial<CameraFrameEvent>, camera?: Camera): Promise<OperationResult<CameraCaptureResult>> {
+	return Promise.resolve(successfulOperationResult({ frames: [cameraFrameEvent(path, frame, camera)], frameCount: 1 }))
 }
 
 describe('tppa handler', () => {
+	for (const compensateRefraction of [false, true]) {
+		test(`publishes exposure-bound overlays with persistent reference and refraction=${compensateRefraction}`, async () => {
+			const { camera, mount } = await connectedDevices()
+			const location = geodeticLocation(deg(-45), deg(35))
+			Object.assign(mount.geographicCoordinate, location)
+			const time = clock.timeYMDHMS(2026, 7, 12, 2, 0, 0)
+			time.location = location
+			const now = spyOn(clock, 'timeNow').mockReturnValue(time)
+			const request = tppaStartRequest({ compensateRefraction, moveDuration: 1, delayBeforeCapture: 0, maxAttempts: 1 })
+			const axes = mountAdjustmentAxes(time, location)
+			const pole = applyInverseMountAdjustment(celestialPoleVector(time, location, compensateRefraction && request.refraction), axes.upAxis, axes.eastAxis, arcmin(6), arcmin(-4))
+			const reference = eraS2c(deg(120), deg(30))
+			let count = 0
+			const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => {
+				count++
+				imageProcessor.save(Buffer.alloc(0), 'plate.fit', camera)
+				return captureHandle({ result: solvedFrame(undefined, { operation: `capture-operation-${count}`, session: `capture-${count}` }, camera) })
+			})
+			const solve = spyOn(solver, 'start').mockImplementation(() => {
+				if (count > 5) return Promise.resolve(undefined)
+				// Fixed clock isolates image geometry: the first three fields trace a small circle around
+				// a known displaced pole, then only CRPIX changes to exercise persistent celestial reference.
+				const vector = vecRotateByRodrigues(reference, pole, Math.min(count - 1, 2) * 0.15)
+				const [rightAscension, declination] = eraC2s(...vector)
+				if (count === 5) return Promise.resolve(plateSolution({ rightAscension, declination }))
+				return Promise.resolve(plateSolutionFrom({ NAXIS: 2, NAXIS1: 800, NAXIS2: 600, CTYPE1: 'RA---TAN', CTYPE2: 'DEC--TAN', CRPIX1: count === 4 ? 425.5 : 400.5, CRPIX2: 300.5, CRVAL1: toDeg(rightAscension), CRVAL2: toDeg(declination), CD1_1: -0.001, CD1_2: 0, CD2_1: 0, CD2_2: 0.001 }))
+			})
+
+			try {
+				wsm.open(socket)
+				const id = await startRun(startRequest(camera, mount, request))
+				await waitForTppaState('idle', id, 15000)
+				const events = tppaEvents().filter((event) => event.id === id)
+				const aligned = events.filter((event) => event.state === 'aligning')
+				expect(aligned).toHaveLength(5)
+				expect(aligned[0].overlay).toBeUndefined()
+				expect(aligned[1].overlay).toBeUndefined()
+				const third = aligned[2].overlay!
+				const fourth = aligned[3].overlay!
+				expect(third.frame).toEqual({ camera: camera.id, operation: 'capture-operation-3', session: 'capture-3', generation: 1, path: 'plate.fit' })
+				expect(fourth.frame.session).toBe('capture-4')
+				expect(third.result.success).toBeTrue()
+				expect(fourth.result.success).toBeTrue()
+				if (third.result.success && fourth.result.success) {
+					expect(third.result.overlay.frame).toEqual({ x: 0.5, y: 0.5, width: 800, height: 600 })
+					expect(third.result.overlay.currentPoint.position.x).toBeCloseTo(400.5, 7)
+					expect(fourth.result.overlay.reference).toEqual(third.result.overlay.reference)
+					expect(fourth.result.overlay.currentPoint.position.x).toBeCloseTo(425.5, 7)
+					expect(third.result.overlay.correction.azimuth).toBeCloseTo(arcmin(6), 7)
+					expect(third.result.overlay.correction.altitude).toBeCloseTo(arcmin(-4), 7)
+				}
+				expect(aligned[4].overlay?.result).toEqual({ success: false, reason: 'invalidWcs', warnings: [] })
+				expect(events.some((event) => event.state === 'waiting')).toBeFalse()
+				expect(events.at(-1)?.overlay).toBeUndefined()
+				expect(events.at(-1)?.message).toBe('solving failed')
+			} finally {
+				solve.mockRestore()
+				capture.mockRestore()
+				now.mockRestore()
+			}
+		}, 20000)
+	}
+
 	test('normalizes the capture into a full frame light exposure and enables tracking', async () => {
 		const { camera, mount } = await connectedDevices()
 		const pending = Promise.withResolvers<OperationResult<CameraCaptureResult>>()
@@ -236,7 +308,7 @@ describe('tppa handler', () => {
 				},
 			])
 		} finally {
-			pending.resolve(successfulOperationResult({ paths: [], frameCount: 0 }))
+			pending.resolve(successfulOperationResult({ frames: [], frameCount: 0 }))
 			await tppaHandler.stop(id)
 			capture.mockRestore()
 		}
@@ -261,7 +333,7 @@ describe('tppa handler', () => {
 			expect((await cameraIntruder.result).ok).toBeFalse()
 			expect((await mountIntruder.result).ok).toBeFalse()
 		} finally {
-			pending.resolve(successfulOperationResult({ paths: [], frameCount: 0 }))
+			pending.resolve(successfulOperationResult({ frames: [], frameCount: 0 }))
 			await tppaHandler.stop(id)
 			capture.mockRestore()
 		}
@@ -318,7 +390,7 @@ describe('tppa handler', () => {
 			await waitForTppaState('idle', refused)
 			expect(tppaEvents().some((event) => event.id === id && event.state === 'idle')).toBeFalse()
 		} finally {
-			pending.resolve(successfulOperationResult({ paths: [], frameCount: 0 }))
+			pending.resolve(successfulOperationResult({ frames: [], frameCount: 0 }))
 			await tppaHandler.stop(id)
 			capture.mockRestore()
 		}

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Mount, PierSide } from 'nebulosa/src/devices/indi/device'
+import { cameraFrameEvent } from 'root/tests/api/util'
 import type { SequencerMeridianFlipTrigger } from 'src/api/sequencer.compiler'
 import { sequencerMeridianFlipHandler } from 'src/api/sequencer.flip'
 import type { SequencerMeridianFlipServices } from 'src/api/sequencer.flip'
@@ -105,7 +106,7 @@ function flipServices(commands: Command[], overrides?: Partial<{ pierSideVerifie
 		cameraHandler: {
 			capture: (_scope: unknown, _camera: unknown, request: { outputName: string }) => {
 				commands.push({ name: 'capture', detail: request.outputName })
-				return { started: Promise.resolve(successfulOperationResult(undefined)), result: Promise.resolve(successfulOperationResult({ paths: [`/frames/${request.outputName}`] })) }
+				return { started: Promise.resolve(successfulOperationResult(undefined)), result: Promise.resolve(successfulOperationResult({ frames: [cameraFrameEvent(`/frames/${request.outputName}`)] })) }
 			},
 		} as unknown as SequencerMeridianFlipServices['cameraHandler'],
 		plateSolver: {

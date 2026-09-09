@@ -13,6 +13,7 @@ import { PlateSolveStartPopover } from '@ui/PlateSolveStartPopover'
 import { TppaDirectionSelect } from '@ui/TppaDirectionSelect'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
+import type { PolarAlignmentOverlayWarning, ThreePointPolarAlignmentOverlayFailureReason } from 'nebulosa/src/observation/alignment/polaralignment.overlay'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
@@ -26,6 +27,7 @@ export const Tppa = memo(({ api }: IDockviewPanelProps) => {
 				<Status />
 				<Inputs />
 				<Result />
+				<OverlayOptions />
 				<Footer />
 			</div>
 		</TppaStoreContext>
@@ -114,6 +116,50 @@ const Result = memo(() => {
 				<span className="text-3xl">{formatDEC(event.error.altitude)}</span>
 			</div>
 		</>
+	)
+})
+
+// User-facing explanations of nonfatal geometry limitations; they never replace the run's status.
+const OVERLAY_DIAGNOSTICS: Record<PolarAlignmentOverlayWarning | ThreePointPolarAlignmentOverlayFailureReason, string> = {
+	invalidOptions: 'Overlay settings are unavailable',
+	invalidFrame: 'Image dimensions are unavailable',
+	invalidWcs: 'The plate solution has no usable image projection',
+	missingLocation: 'Observing location is unavailable',
+	invalidPole: 'The mount pole could not be determined',
+	invalidReference: 'The reference coordinate is unavailable',
+	unprojectableReference: 'The reference is outside the projectable sky',
+	unprojectableTarget: 'The target is outside the projectable sky',
+	degenerateCorrection: 'The correction geometry is unstable',
+	correctionNotConverged: 'The correction is approximate',
+	correctionIllConditioned: 'The correction geometry is unstable',
+	referenceOutsideFrame: 'The reference is outside the image',
+	contourOmitted: 'Some tolerance contours are unavailable',
+	contourIllConditioned: 'Some tolerance contours are unstable',
+}
+
+function WarningItem(item: PolarAlignmentOverlayWarning) {
+	return (
+		<span className="text-warning text-xs" key={item}>
+			{OVERLAY_DIAGNOSTICS[item]}
+		</span>
+	)
+}
+
+// Visibility remains editable while running; colors and tolerance units match the SVG guidance.
+const OverlayOptions = memo(() => {
+	const tppa = useContext(TppaStoreContext)
+	const { show } = useSnapshot(tppa.state.overlay)
+	const { overlay } = useSnapshot(tppa.state.event)
+
+	const result = overlay?.result
+	const warnings = result?.success ? result.overlay.diagnostics.warnings : result?.warnings
+
+	return (
+		<div className="col-span-full flex flex-col gap-1">
+			<Checkbox label="Show overlay" value={show} onValueChange={tppa.setShowOverlay} />
+			{result && !result.success && <span className="text-warning text-xs">{OVERLAY_DIAGNOSTICS[result.reason]}</span>}
+			{warnings?.map(WarningItem)}
+		</div>
 	)
 })
 

@@ -1,6 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { Camera, Mount, Wheel } from 'nebulosa/src/devices/indi/device'
+import { cameraFrameEvent } from 'root/tests/api/util'
 import type { SequencerCenter, SequencerSlew } from 'src/api/sequencer.compiler'
 import { sequencerCenterHandler, sequencerSlewHandler } from 'src/api/sequencer.pointing'
 import type { SequencerCenteringServices } from 'src/api/sequencer.pointing'
@@ -82,7 +83,7 @@ function centeringServices(commands: Command[], solutions: readonly (PlateSoluti
 		cameraHandler: {
 			capture: (_scope: unknown, _camera: Camera, request: { outputName: string }) => {
 				commands.push({ name: 'capture', detail: request.outputName })
-				return { started: Promise.resolve(successfulOperationResult(undefined)), result: Promise.resolve(successfulOperationResult({ paths: [`/frames/${request.outputName}`] })) }
+				return { started: Promise.resolve(successfulOperationResult(undefined)), result: Promise.resolve(successfulOperationResult({ frames: [cameraFrameEvent(`/frames/${request.outputName}`)] })) }
 			},
 		} as unknown as SequencerCenteringServices['cameraHandler'],
 		mountCommander: {
@@ -281,7 +282,7 @@ describe('centering block', () => {
 						return successfulOperationResult(undefined)
 					})
 
-					return { started, result: Promise.resolve(successfulOperationResult({ paths: [`/frames/${request.outputName}`] })) }
+					return { started, result: Promise.resolve(successfulOperationResult({ frames: [cameraFrameEvent(`/frames/${request.outputName}`)] })) }
 				},
 			} as unknown as SequencerCenteringServices['cameraHandler'],
 		}

@@ -1,5 +1,6 @@
 import { useStore } from '@hooks/store.hook'
 import { CameraCaptureStoreContext, PlateSolverStoreContext, TppaStoreContext } from '@shared/context'
+import { tw } from '@shared/util'
 import { tppaStore } from '@stores/tppa.store'
 import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
 import { Button } from '@ui/components/Button'
@@ -12,7 +13,7 @@ import { PlateSolverTypeSelect } from '@ui/PlateSolverTypeSelect'
 import { PlateSolveStartPopover } from '@ui/PlateSolveStartPopover'
 import { TppaDirectionSelect } from '@ui/TppaDirectionSelect'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
+import { arcsec, formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import type { PolarAlignmentOverlayWarning, ThreePointPolarAlignmentOverlayFailureReason } from 'nebulosa/src/observation/alignment/polaralignment.overlay'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
@@ -101,17 +102,27 @@ const PlateSolverSelectEndContent = memo(() => {
 	)
 })
 
+const POOR_ERROR = arcsec(300)
+const FAIR_ERROR = arcsec(30)
+const GOOD_ERROR = arcsec(1)
+
 const Result = memo(() => {
 	const tppa = useContext(TppaStoreContext)
 	const { event } = useSnapshot(tppa.state)
 
+	const total = Math.hypot(event.error.azimuth, event.error.altitude)
+
 	return (
 		<>
-			<div className="col-span-6 mt-3 flex flex-col items-center gap-0">
+			<div className="col-span-4 mt-3 flex flex-col items-center gap-0">
 				<span className="font-bold">Azimuth</span>
 				<span className="text-3xl">{formatDEC(event.error.azimuth)}</span>
 			</div>
-			<div className="col-span-6 mt-3 flex flex-col items-center gap-0">
+			<div className={tw('col-span-4 mt-3 flex flex-col items-center gap-0', total <= 0 ? 'text-neutral-500' : total <= GOOD_ERROR ? 'text-green-500' : total <= FAIR_ERROR ? 'text-yellow-500' : total <= POOR_ERROR ? 'text-orange-500' : 'text-red-500')}>
+				<span className="font-bold">Total</span>
+				<span className="text-3xl">{formatDEC(total)}</span>
+			</div>
+			<div className="col-span-4 mt-3 flex flex-col items-center gap-0">
 				<span className="font-bold">Altitude</span>
 				<span className="text-3xl">{formatDEC(event.error.altitude)}</span>
 			</div>

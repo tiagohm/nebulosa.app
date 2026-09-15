@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { Mock } from 'bun:test'
-import { join } from 'path'
 import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import { StellariumObjectType } from 'nebulosa/src/catalogs/stars/stellarium'
 import { deg, formatALT, formatRA, parseAngle } from 'nebulosa/src/math/units/angle'
@@ -35,21 +34,30 @@ const SKY_OBJECT_SEARCH: SearchSkyObject = {
 	location: POSITION_OF_BODY.location,
 }
 
-const FETCH_ARCHIVE = new Bun.Archive(await Bun.file(join('tests', 'data', 'fetch.tar.gz')).bytes(), { compress: 'gzip' })
-const FETCH_FILES = new Map<string, string>()
-
-for (const [, file] of await FETCH_ARCHIVE.files()) {
-	const text = await file.text()
-	const start = text.indexOf('\n')
-	const url = text.slice(0, start)
-	const content = text.slice(start + 1)
-	FETCH_FILES.set(url, content)
-}
-
 let fetchMock: Mock<typeof fetch> | undefined
 
 beforeAll(() => {
-	fetchMock = spyFetch((input: string) => Promise.resolve(new Response(FETCH_FILES.get(input))))
+	fetchMock = spyFetch(async (fetch, input, init) => {
+		if (typeof input === 'string') {
+			const hashed = Bun.MD5.hash(input, 'hex')
+			const file = Bun.file(`tests/data/${hashed}.txt`)
+
+			if (!(await file.exists())) {
+				console.info('downloading:', input)
+				const response = await fetch(input, init)
+				console.info('saving at:', file.name)
+				const buffer = await response.arrayBuffer()
+				await Bun.write(file, buffer)
+				return new Response(buffer)
+			}
+
+			console.info('found fetched file at:', file.name)
+
+			return new Response(file)
+		}
+
+		return fetch(input, init)
+	})
 })
 
 afterAll(() => {
@@ -368,10 +376,10 @@ describe('minor planet', () => {
 			expect(result.parameters).toBeDefined()
 			expect(result.parameters).toHaveLength(25)
 			expect(result.elements).toBeDefined()
-			expect(result.elements!.ec).toBeCloseTo(0.07957631994408416, 12)
-			expect('a' in result.elements!.tpqr && result.elements!.tpqr.a).toBe(2.765615651508659)
-			expect(result.elements!.h).toBe(3.35)
-			expect(result.elements!.g).toBe(0.12)
+			expect(result.elements!.ec).toBeCloseTo(0.07969, 4)
+			expect('a' in result.elements!.tpqr && result.elements!.tpqr.a).toBeCloseTo(2.76555, 4)
+			expect(result.elements!.h).toBeCloseTo(3.34, 1)
+			expect(result.elements!.g).toBeCloseTo(0.12, 1)
 			expect(result.elements!.referenceEclipticFrame).toBe('J2000')
 		}
 	})

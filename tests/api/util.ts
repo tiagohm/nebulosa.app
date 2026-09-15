@@ -82,8 +82,12 @@ export function cameraFrameEvent(path: string, frame?: Partial<CameraFrameEvent>
 	return { path, generation: frame?.generation ?? 1, operation: frame?.operation ?? '', session: frame?.session ?? '', camera: frame?.camera ?? camera?.id ?? '' }
 }
 
-export function spyFetch<I extends URL | RequestInfo>(fetch: (input: I, init?: RequestInit) => Promise<Response>) {
-	return spyOn(globalThis, 'fetch').mockImplementation(fetch as never)
+export type SpiedFetch<I extends URL | RequestInfo> = (input: I, init?: RequestInit) => Promise<Response>
+
+export function spyFetch<I extends URL | RequestInfo>(fetch: (fetch: SpiedFetch<I>, input: I, init?: RequestInit) => Promise<Response>) {
+	const globalFetch = globalThis.fetch
+	const mockedFetch: SpiedFetch<I> = (input, init) => fetch(globalFetch, input, init)
+	return spyOn(globalThis, 'fetch').mockImplementation(mockedFetch as never)
 }
 
 export async function flushMicrotasks() {

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import { sep } from 'path'
 import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
 import type { ResourceArbiter } from 'src/api/resource'
 import { frame } from './sequencer.fixture'
@@ -7,6 +8,10 @@ import type { NightControl, NightResult, SimulatorProcess } from './sequencer.si
 
 const nights: NightResult[] = []
 const processes: SimulatorProcess[] = []
+
+function lightFiles(files: readonly string[]) {
+	return files.filter((path) => path.split(sep).includes('LIGHT') && path.endsWith('.fits'))
+}
 
 afterEach(async () => {
 	await Promise.all(nights.splice(0).map((night) => disposeNight(night)))
@@ -22,7 +27,7 @@ describe('canonical night', () => {
 		const names = commandNames(night.log)
 		const committed = night.artifacts.filter((artifact) => artifact.status === 'committed')
 		const wheelMoves = night.log.filter((entry) => entry.name === 'wheel.move')
-		const lights = night.files.filter((path) => path.includes('/LIGHT/') && path.endsWith('.fits'))
+		const lights = lightFiles(night.files)
 
 		expect(night.session.state).toBe('completed')
 		expect(names.indexOf('unpark')).toBeGreaterThan(-1)
@@ -87,7 +92,7 @@ describe('canonical night', () => {
 		const secondCommitted = second.artifacts.filter((artifact) => artifact.status === 'committed')
 		const firstPaths = firstCommitted.map((artifact) => artifact.path)
 		const secondPaths = secondCommitted.map((artifact) => artifact.path)
-		const lights = second.files.filter((path) => path.includes('/LIGHT/') && path.endsWith('.fits'))
+		const lights = lightFiles(second.files)
 
 		expect(first.session.state).toBe('completed')
 		expect(second.session.state).toBe('completed')
@@ -271,7 +276,7 @@ describe('canonical night', () => {
 
 		const wheelMoves = night.log.filter((entry) => entry.name === 'wheel.move')
 		const focusMoves = night.log.filter((entry) => entry.name === 'focuser.move')
-		const lights = night.files.filter((path) => path.includes('/LIGHT/') && path.endsWith('.fits'))
+		const lights = lightFiles(night.files)
 
 		expect(night.session.state).toBe('completed')
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(6)
@@ -753,7 +758,7 @@ describe('admission', () => {
 		expect(night.session.state).toBe('stopped')
 		expect(night.session.failure).toBeUndefined()
 		expect(night.artifacts.filter((artifact) => artifact.status === 'committed')).toHaveLength(1)
-		expect(night.files.filter((path) => path.includes('/LIGHT/') && path.endsWith('.fits'))).toHaveLength(1)
+		expect(lightFiles(night.files)).toHaveLength(1)
 		expect(names.lastIndexOf('camera.done')).toBeGreaterThan(names.lastIndexOf('camera.expose'))
 		expect(names.indexOf('guider.stop')).toBeGreaterThan(names.lastIndexOf('camera.done'))
 		expect(names.indexOf('cover.close')).toBeGreaterThan(names.indexOf('guider.stop'))

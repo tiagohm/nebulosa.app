@@ -1,4 +1,4 @@
-import { tw } from '@shared/util'
+import { cn } from 'cn'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
 
@@ -109,8 +109,8 @@ export function Link({ label, className, classNames, children, color, disabled =
 	const styles = linkStyles({ color, disabled, fullWidth, readOnly: !disabled && readOnly, size, underline })
 
 	return (
-		<span className={tw(styles.base(), className, classNames?.base)}>
-			<a {...props} className={tw(styles.anchor(), classNames?.anchor)} href={blocked ? undefined : href} ref={ref} rel={secureRel(linkTarget, rel)} target={linkTarget}>
+		<span className={cn(styles.base(), className, classNames?.base)}>
+			<a {...props} className={cn(styles.anchor(), classNames?.anchor)} href={blocked ? undefined : href} ref={ref} rel={secureRel(linkTarget, rel)} target={linkTarget}>
 				{children ?? label}
 			</a>
 		</span>

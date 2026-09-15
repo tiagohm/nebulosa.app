@@ -1,6 +1,5 @@
 import { useStore } from '@hooks/store.hook'
 import { CameraCaptureStoreContext, PlateSolverStoreContext, TppaStoreContext } from '@shared/context'
-import { tw } from '@shared/util'
 import { tppaStore } from '@stores/tppa.store'
 import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
 import { Button } from '@ui/components/Button'
@@ -12,6 +11,7 @@ import { Icons } from '@ui/Icon'
 import { PlateSolverTypeSelect } from '@ui/PlateSolverTypeSelect'
 import { PlateSolveStartPopover } from '@ui/PlateSolveStartPopover'
 import { TppaDirectionSelect } from '@ui/TppaDirectionSelect'
+import { cn } from 'cn'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { arcsec, formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import type { PolarAlignmentOverlayWarning, ThreePointPolarAlignmentOverlayFailureReason } from 'nebulosa/src/observation/alignment/polaralignment.overlay'
@@ -118,7 +118,7 @@ const Result = memo(() => {
 				<span className="font-bold">Azimuth</span>
 				<span className="text-3xl">{formatDEC(event.error.azimuth)}</span>
 			</div>
-			<div className={tw('col-span-4 mt-3 flex flex-col items-center gap-0', total <= 0 ? 'text-neutral-500' : total <= GOOD_ERROR ? 'text-green-500' : total <= FAIR_ERROR ? 'text-yellow-500' : total <= POOR_ERROR ? 'text-orange-500' : 'text-red-500')}>
+			<div className={cn('col-span-4 mt-3 flex flex-col items-center gap-0', total <= 0 ? 'text-neutral-500' : total <= GOOD_ERROR ? 'text-green-500' : total <= FAIR_ERROR ? 'text-yellow-500' : total <= POOR_ERROR ? 'text-orange-500' : 'text-red-500')}>
 				<span className="font-bold">Total</span>
 				<span className="text-3xl">{formatDEC(total)}</span>
 			</div>

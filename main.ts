@@ -1,7 +1,6 @@
 import { existsSync, rmSync } from 'fs'
-import type { MakeDirectoryOptions } from 'fs'
-import fs from 'fs/promises'
-import os from 'os'
+import { mkdir, access, constants } from 'fs/promises'
+import { homedir } from 'os'
 import { join } from 'path'
 import { parseArgs } from 'util'
 import type { Client, Device, DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/devices/indi/device'
@@ -84,8 +83,6 @@ import homeHtml from './src/web/pages/home/index.html'
 
 speedUpTime()
 
-const CREATE_RECURSIVE_DIRECTORY: MakeDirectoryOptions = { recursive: true }
-
 // Arguments
 
 const args = parseArgs({
@@ -127,7 +124,7 @@ async function checkDirAccess(...paths: string[]) {
 	const path = join(...paths)
 
 	try {
-		await fs.access(path, fs.constants.R_OK | fs.constants.W_OK)
+		await access(path, constants.R_OK | constants.W_OK)
 	} catch {
 		console.error('unable to access the app directory at', Bun.env.homeDir)
 		process.exit(0)
@@ -139,7 +136,7 @@ async function checkDirAccess(...paths: string[]) {
 if (appDir) {
 	await checkDirAccess(appDir)
 } else {
-	Bun.env.homeDir = await checkDirAccess(os.homedir())
+	Bun.env.homeDir = await checkDirAccess(homedir())
 }
 
 if (process.platform === 'linux') {
@@ -155,10 +152,7 @@ if (process.platform === 'linux') {
 	Bun.env.satellitesDir = join(Bun.env.appDir, 'Satellites')
 }
 
-await fs.mkdir(Bun.env.appDir, CREATE_RECURSIVE_DIRECTORY)
-await fs.mkdir(Bun.env.tmpDir, CREATE_RECURSIVE_DIRECTORY)
-await fs.mkdir(Bun.env.capturesDir, CREATE_RECURSIVE_DIRECTORY)
-await fs.mkdir(Bun.env.satellitesDir, CREATE_RECURSIVE_DIRECTORY)
+await Promise.all([mkdir(Bun.env.appDir, { recursive: true }), mkdir(Bun.env.tmpDir, { recursive: true }), mkdir(Bun.env.capturesDir, { recursive: true }), mkdir(Bun.env.satellitesDir, { recursive: true })])
 
 console.info('app directory is located at', Bun.env.appDir)
 console.info('captures directory is located at', Bun.env.capturesDir)

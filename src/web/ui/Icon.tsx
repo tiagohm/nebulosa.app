@@ -1,4 +1,4 @@
-import { tw } from '@shared/util'
+import { cn } from 'cn'
 import { memo } from 'react'
 
 // https://pictogrammers.com/library/mdi/icon
@@ -20,7 +20,7 @@ const PathItem = (path: string, i: number) => <path d={path} key={i} />
 
 export function mdiIcon(...paths: string[]) {
 	return memo(({ stroke = 1, color = 'currentColor', className, ...props }: IconProps) => (
-		<svg className={tw('size-[1.4em]', className)} fill={color} strokeWidth={stroke} viewBox="0 0 24 24" {...props}>
+		<svg className={cn('size-[1.4em]', className)} fill={color} strokeWidth={stroke} viewBox="0 0 24 24" {...props}>
 			{paths.map(PathItem)}
 		</svg>
 	))
@@ -28,7 +28,7 @@ export function mdiIcon(...paths: string[]) {
 
 export function lucideIcon(...paths: string[]) {
 	return memo(({ stroke = 2, color = 'currentColor', className, ...props }: IconProps) => (
-		<svg className={tw('size-[1.4em]', className)} fill="none" stroke={color} strokeWidth={stroke} viewBox="0 0 24 24" {...props}>
+		<svg className={cn('size-[1.4em]', className)} fill="none" stroke={color} strokeWidth={stroke} viewBox="0 0 24 24" {...props}>
 			{paths.map(PathItem)}
 		</svg>
 	))

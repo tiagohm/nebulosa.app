@@ -1,4 +1,3 @@
-import { tw } from '@shared/util'
 import { lunarEclipseStore } from '@stores/lunar.eclipse.store'
 import { IconButton } from '@ui/components/IconButton'
 import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
@@ -6,6 +5,7 @@ import { WorldMap, worldMapCoordinateToPoint } from '@ui/components/WorldMap'
 import { Icons } from '@ui/Icon'
 import { LocalViewOrientationModeButtonGroup } from '@ui/LocalViewOrientationModeButtonGroup'
 import { LunarEclipseContactKindButtonGroup } from '@ui/LunarEclipseContactKindButtonGroup'
+import { cn } from 'cn'
 import type { EclipseGeoPoint } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
 import type { LocalLunarEclipseEvent, LocalLunarEclipseSvgShape } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
 import type { LunarEclipseContactKind } from 'nebulosa/src/astronomy/events/eclipse/lunar/map'
@@ -70,9 +70,9 @@ interface MetricCardProps {
 
 function MetricCard({ className, label, value, valueClassName }: MetricCardProps) {
 	return (
-		<div className={tw('flex min-w-0 flex-col gap-0 rounded-lg bg-neutral-900/70 px-3 py-2', className)}>
+		<div className={cn('flex min-w-0 flex-col gap-0 rounded-lg bg-neutral-900/70 px-3 py-2', className)}>
 			<span className="truncate text-xs font-bold text-neutral-500 uppercase">{label}</span>
-			<span className={tw('min-w-0 truncate font-mono text-sm text-neutral-100', valueClassName)}>{value}</span>
+			<span className={cn('min-w-0 truncate font-mono text-sm text-neutral-100', valueClassName)}>{value}</span>
 		</div>
 	)
 }
@@ -272,11 +272,11 @@ const LocalInstants = memo(() => {
 				<span className="bg-neutral-950/70 px-3 py-2 text-xs font-bold text-neutral-500 uppercase">Z</span>
 				{LOCAL_CONTACT_KINDS.map((kind) => {
 					const event = circumstances.events[kind]
-					const cellClassName = tw('min-h-10 border-t border-neutral-800 px-3 py-2 font-mono', event ? 'text-neutral-100' : 'text-neutral-500')
+					const cellClassName = cn('min-h-10 border-t border-neutral-800 px-3 py-2 font-mono', event ? 'text-neutral-100' : 'text-neutral-500')
 
 					return (
 						<Fragment key={kind}>
-							<span className={tw(cellClassName, 'whitespace-normal font-sans')}>{eventLabel(kind)}</span>
+							<span className={cn(cellClassName, 'whitespace-normal font-sans')}>{eventLabel(kind)}</span>
 							<span className={cellClassName}>{formatEventTime(event)}</span>
 							<span className={cellClassName}>{formatSignedDegrees(event?.altitude)}</span>
 							<span className={cellClassName}>{formatDegrees(event?.positionAngle)}</span>

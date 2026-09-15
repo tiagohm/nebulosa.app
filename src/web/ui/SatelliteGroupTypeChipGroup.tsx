@@ -1,6 +1,6 @@
-import { tw } from '@shared/util'
 import { Chip } from '@ui/components/Chip'
 import type { ChipProps } from '@ui/components/Chip'
+import { cn } from 'cn'
 import { useMemo } from 'react'
 import { SATELLITE_GROUP_TYPES } from '#/satellite'
 import type { SatelliteGroupType, SatelliteCategory } from '#/satellite'
@@ -26,7 +26,7 @@ export function SatelliteGroupTypeChipGroup({ value, category, onValueChange, si
 	}
 
 	return (
-		<div className={tw('flex w-full flex-wrap gap-2', className)} {...props}>
+		<div className={cn('flex w-full flex-wrap gap-2', className)} {...props}>
 			{types.map(([key, item]) => {
 				const selected = value.includes(key as never)
 				return <Chip className="cursor-pointer" color={selected ? 'success' : 'secondary'} key={key} label={item.description} onClick={() => handleClick(key as never, selected)} size={size} />

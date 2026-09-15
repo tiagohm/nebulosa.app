@@ -1,6 +1,5 @@
 import { useStore } from '@hooks/store.hook'
 import { FilePickerStoreContext } from '@shared/context'
-import { tw } from '@shared/util'
 import { filePicker } from '@stores/filepicker.store'
 import type { FilePickerScope } from '@stores/filepicker.store'
 import { Badge } from '@ui/components/Badge'
@@ -10,6 +9,7 @@ import { IconButton } from '@ui/components/IconButton'
 import { List } from '@ui/components/List'
 import { TextInput } from '@ui/components/TextInput'
 import { Icons } from '@ui/Icon'
+import { cn } from 'cn'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { memo, useContext, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -113,8 +113,8 @@ const Files = memo(() => {
 				const metadata = item.directory ? updatedAt : `${updatedAt} | ${formatFileSize(item.size)}`
 
 				return (
-					<div className={tw('flex h-full min-w-0 cursor-pointer flex-row items-center gap-2 border-e-2 px-2 py-1 text-sm transition hover:bg-neutral-800/80', isSelected ? '[--color-variant:var(--success)] border-(--color-variant) bg-(--color-variant)/10' : 'border-transparent')}>
-						<Icon className={tw('shrink-0', item.directory ? 'text-(--warning)' : 'text-neutral-500')} />
+					<div className={cn('flex h-full min-w-0 cursor-pointer flex-row items-center gap-2 border-e-2 px-2 py-1 text-sm transition hover:bg-neutral-800/80', isSelected ? '[--color-variant:var(--success)] border-(--color-variant) bg-(--color-variant)/10' : 'border-transparent')}>
+						<Icon className={cn('shrink-0', item.directory ? 'text-(--warning)' : 'text-neutral-500')} />
 						<div className="flex min-w-0 flex-1 flex-col justify-center gap-0">
 							<span className="min-w-0 truncate text-neutral-100">{item.name}</span>
 							<span className="min-w-0 truncate text-xs text-neutral-500">{metadata}</span>

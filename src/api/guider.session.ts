@@ -8,6 +8,7 @@ import type { GuideOutputManager } from 'nebulosa/src/devices/indi/manager/guide
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
 import type { GuideFrameImage } from 'nebulosa/src/observation/guiding/client'
+import { StarTracker } from 'nebulosa/src/observation/guiding/tracker.star'
 import { EventBus } from 'src/shared/bus'
 import { DEFAULT_CAMERA_CAPTURE_START, exposureTimeInMilliseconds } from '#/camera'
 import type { CameraCaptureStart } from '#/camera'
@@ -1011,7 +1012,7 @@ class GuiderSession {
 				{ key: resourceKey(guideOutput), device: guideOutput },
 			],
 			() => {
-				const client = new GuiderClient(cameraManager, guideOutputManager, { handler: this.#handler })
+				const client = new GuiderClient(cameraManager, guideOutputManager, new StarTracker(), { handler: this.#handler })
 				this.#client = client
 
 				if (!client.connect(camera, guideOutput, request)) {

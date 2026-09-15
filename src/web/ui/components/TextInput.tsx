@@ -1,5 +1,5 @@
-import { tw } from '@shared/util'
 import { Icons } from '@ui/Icon'
+import { cn } from 'cn'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
@@ -178,8 +178,8 @@ export function TextInput({
 		: readOnly
 			? 'cursor-default text-neutral-200 placeholder:text-neutral-500'
 			: hasColorVariant
-				? tw('text-lighter-(--color-variant)/85', !label && 'placeholder:text-lighter-(--color-variant)/45')
-				: tw('text-neutral-100', !label && 'placeholder:text-neutral-500')
+				? cn('text-lighter-(--color-variant)/85', !label && 'placeholder:text-lighter-(--color-variant)/45')
+				: cn('text-neutral-100', !label && 'placeholder:text-neutral-500')
 	const contentClassName = disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : hasColorVariant ? 'text-lighter-(--color-variant)/60' : 'text-neutral-400'
 	const clearClassName = disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-red-500'
 	const labelClassName = disabled
@@ -254,17 +254,17 @@ export function TextInput({
 	}
 
 	return (
-		<div className={tw(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90', classNames?.base)}>
-			<div className={tw(styles.surface(), surfaceClassName, classNames?.surface)}>
-				{hasStartContent && <div className={tw(styles.content(), disabled && 'pointer-events-none', contentClassName, classNames?.startContent)}>{startContent}</div>}
-				<div className={tw(styles.field(), classNames?.field)}>
+		<div className={cn(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90', classNames?.base)}>
+			<div className={cn(styles.surface(), surfaceClassName, classNames?.surface)}>
+				{hasStartContent && <div className={cn(styles.content(), disabled && 'pointer-events-none', contentClassName, classNames?.startContent)}>{startContent}</div>}
+				<div className={cn(styles.field(), classNames?.field)}>
 					<input
 						{...props}
 						autoCapitalize={autoCapitalize}
 						autoComplete={autoComplete}
 						autoCorrect={autoCorrect}
 						autoFocus={autoFocus}
-						className={tw(styles.input(), label ? sizeStyles.inputWithLabel : sizeStyles.inputWithoutLabel, hasStartContent && 'pl-0', hasEndContent && 'pr-0', disabled && 'pointer-events-none', inputClassName, classNames?.input)}
+						className={cn(styles.input(), label ? sizeStyles.inputWithLabel : sizeStyles.inputWithoutLabel, hasStartContent && 'pl-0', hasEndContent && 'pr-0', disabled && 'pointer-events-none', inputClassName, classNames?.input)}
 						disabled={disabled}
 						inputMode={inputMode}
 						maxLength={maxLength}
@@ -285,12 +285,12 @@ export function TextInput({
 						type="text"
 						value={draft}
 					/>
-					<span className={tw(styles.valueSizer(), hasStartContent && 'pl-0', hasEndContent && 'pr-0', classNames?.valueSizer)}>{draft.length > 0 ? draft : (placeholder ?? EMPTY_VALUE_SIZER)}</span>
-					{label && <span className={tw(styles.labelSizer(), hasStartContent && 'pl-0', classNames?.labelSizer)}>{label}</span>}
-					{label && <label className={tw(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</label>}
+					<span className={cn(styles.valueSizer(), hasStartContent && 'pl-0', hasEndContent && 'pr-0', classNames?.valueSizer)}>{draft.length > 0 ? draft : (placeholder ?? EMPTY_VALUE_SIZER)}</span>
+					{label && <span className={cn(styles.labelSizer(), hasStartContent && 'pl-0', classNames?.labelSizer)}>{label}</span>}
+					{label && <label className={cn(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</label>}
 				</div>
-				{hasEndContent && <div className={tw(styles.content(), disabled && 'pointer-events-none', contentClassName, classNames?.endContent)}>{endContent}</div>}
-				{hasClearButton && <Icons.CloseCircle className={tw(styles.clearButton(), disabled && 'pointer-events-none', clearClassName, classNames?.clearButton)} onClick={handleClearClick} />}
+				{hasEndContent && <div className={cn(styles.content(), disabled && 'pointer-events-none', contentClassName, classNames?.endContent)}>{endContent}</div>}
+				{hasClearButton && <Icons.CloseCircle className={cn(styles.clearButton(), disabled && 'pointer-events-none', clearClassName, classNames?.clearButton)} onClick={handleClearClick} />}
 			</div>
 		</div>
 	)

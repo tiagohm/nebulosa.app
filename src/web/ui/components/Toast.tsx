@@ -1,7 +1,8 @@
 import { dismissToast, readToasts, subscribeToasts, TOAST_PLACEMENTS, toast, updateToastDefaults } from '@shared/toast'
 import type { ToastPlacement, ToastProviderDefaults, ToastRecord } from '@shared/toast'
-import { hasRootInteraction, tw } from '@shared/util'
+import { hasRootInteraction } from '@shared/util'
 import { Icons } from '@ui/Icon'
+import { cn } from 'cn'
 import { useEffect, useSyncExternalStore } from 'react'
 import { tv } from 'tailwind-variants'
 
@@ -108,15 +109,15 @@ function ToastItem({ className, color, delay, description, endContent, id, onClo
 	}
 
 	return (
-		<div {...props} className={tw(styles.toast(), className, hasRootInteraction(props) ? 'cursor-pointer' : undefined)}>
-			{startContent !== undefined && startContent !== null && <div className={tw(styles.startContent())}>{startContent}</div>}
-			<div className={tw(styles.content())}>
-				{title !== undefined && title !== null && <div className={tw(styles.title())}>{title}</div>}
-				{description !== undefined && description !== null && <div className={tw(styles.description(), (title === undefined || title === null) && 'mt-0')}>{description}</div>}
+		<div {...props} className={cn(styles.toast(), className, hasRootInteraction(props) ? 'cursor-pointer' : undefined)}>
+			{startContent !== undefined && startContent !== null && <div className={cn(styles.startContent())}>{startContent}</div>}
+			<div className={cn(styles.content())}>
+				{title !== undefined && title !== null && <div className={cn(styles.title())}>{title}</div>}
+				{description !== undefined && description !== null && <div className={cn(styles.description(), (title === undefined || title === null) && 'mt-0')}>{description}</div>}
 			</div>
-			{endContent !== undefined && endContent !== null && <div className={tw(styles.endContent())}>{endContent}</div>}
+			{endContent !== undefined && endContent !== null && <div className={cn(styles.endContent())}>{endContent}</div>}
 			{closeButtonVisible && (
-				<button className={tw(styles.closeButton())} onClick={handleClose} type="button">
+				<button className={cn(styles.closeButton())} onClick={handleClose} type="button">
 					<Icons.Close />
 				</button>
 			)}
@@ -131,7 +132,7 @@ function ToastViewport({ maxVisible, placement, toasts }: { readonly maxVisible?
 	if (visibleToasts.length === 0) return null
 
 	return (
-		<div className={tw('pointer-events-none fixed z-10000002 flex flex-col w-[min(calc(100vw-1rem),24rem)] max-w-full gap-2 p-2 sm:p-4', toastViewportClasses[placement])}>
+		<div className={cn('pointer-events-none fixed z-10000002 flex flex-col w-[min(calc(100vw-1rem),24rem)] max-w-full gap-2 p-2 sm:p-4', toastViewportClasses[placement])}>
 			{visibleToasts.map((toast) => (
 				<ToastItem key={toast.id} {...toast} />
 			))}

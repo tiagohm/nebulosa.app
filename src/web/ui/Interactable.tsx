@@ -1,6 +1,7 @@
-import { clamp, preventDefault, tw } from '@shared/util'
+import { clamp, preventDefault } from '@shared/util'
 import { createUseGesture, dragAction, pinchAction, wheelAction } from '@use-gesture/react'
 import type { GestureHandlers } from '@use-gesture/react'
+import { cn } from 'cn'
 import { memo, useEffectEvent, useImperativeHandle, useLayoutEffect, useRef } from 'react'
 
 export type InteractType = 'drag' | 'pinch' | 'wheel' | 'none'
@@ -468,7 +469,7 @@ export const Interactable = memo(({ ref, className, children, onGesture, onTap, 
 	)
 
 	return (
-		<div className={tw('wrapper absolute inline-block cursor-crosshair active:cursor-grabbing', className)} onPointerUp={handleTap} ref={wrapperRef}>
+		<div className={cn('wrapper absolute inline-block cursor-crosshair active:cursor-grabbing', className)} onPointerUp={handleTap} ref={wrapperRef}>
 			{children}
 		</div>
 	)

@@ -1,7 +1,7 @@
-import { tw } from '@shared/util'
 import { Chip } from '@ui/components/Chip'
 import type { ChipProps } from '@ui/components/Chip'
 import { Icons } from '@ui/Icon'
+import { cn } from 'cn'
 import { useState } from 'react'
 import type { CameraCaptureEvent, CameraCaptureState, CameraCaptureTime } from '#/camera'
 
@@ -37,7 +37,7 @@ export function CameraExposureTimeProgress({ progress, className = '', ...props 
 	const countLabel = progress.loop ? progress.elapsedCount.toFixed(0) : `${progress.elapsedCount} / ${progress.count}`
 
 	return (
-		<div {...props} className={tw('flex flex-row items-center gap-2 overflow-hidden', className)}>
+		<div {...props} className={cn('flex flex-row items-center gap-2 overflow-hidden', className)}>
 			<Chip size="sm" className="lowercase" color={CAPTURE_STATE_COLORS[progress.state]} label={CAPTURE_STATE_LABELS[progress.state] ?? progress.state} />
 			<Chip size="sm" color="warning" label={countLabel} startContent={<Icons.Counter />} />
 			<Chip size="sm" color="secondary" label={progress.loop ? formatTime(progress.totalProgress.elapsedTime) : formatProgressTime(progress.totalProgress, showRemainingTime)} onClick={toggleShowRemaining} startContent={<Icons.TimerSand />} />

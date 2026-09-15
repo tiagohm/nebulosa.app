@@ -1,4 +1,5 @@
-import { formatDistance, tw } from '@shared/util'
+import { formatDistance } from '@shared/util'
+import { cn } from 'cn'
 import { formatALT, formatAZ, formatDEC, formatHMS, formatRA, toDeg } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { ComponentProps } from 'react'
@@ -43,7 +44,7 @@ export function BodyCoordinateInfo({ position, hideEquatorialJ2000, hideEquatori
 	}
 
 	return (
-		<div {...props} className={tw('grid w-full grid-cols-20 gap-2', className)}>
+		<div {...props} className={cn('grid w-full grid-cols-20 gap-2', className)}>
 			<div className="col-span-12 flex flex-col justify-start gap-0">
 				{COORDINATE_TYPES.map((type) => {
 					if (!isCoordinateTypeVisible(type)) return null
@@ -63,7 +64,7 @@ export function BodyCoordinateInfo({ position, hideEquatorialJ2000, hideEquatori
 				{!hideIlluminated && 'illuminated' in position && <Extra label="ILLUM (%)" value={position.illuminated.toFixed(2)} />}
 				{!hideElongation && 'elongation' in position && <Extra label="ELON (°)" value={toDeg(position.elongation).toFixed(2)} />}
 			</div>
-			<div className="col-span-full flex flex-row justify-center text-sm">{'source' in position && position.source && <span>Source: {formatEphemerisSource(position.source, position.fallbackReason)}</span>}</div>
+			<div className="col-span-full flex flex-row justify-center text-xs text-neutral-400">{'source' in position && position.source && <span>Source: {formatEphemerisSource(position.source, position.fallbackReason)}</span>}</div>
 		</div>
 	)
 }
@@ -122,7 +123,7 @@ interface ExtraProps extends ComponentProps<'div'> {
 
 function Extra({ label, value, className, ...props }: ExtraProps) {
 	return (
-		<div {...props} className={tw('flex flex-row items-center justify-between text-sm leading-3', className)}>
+		<div {...props} className={cn('flex flex-row items-center justify-between text-sm leading-3', className)}>
 			<span className="text-xs font-bold">{label}:</span>
 			<span className="whitespace-nowrap tabular-nums">{value}</span>
 		</div>

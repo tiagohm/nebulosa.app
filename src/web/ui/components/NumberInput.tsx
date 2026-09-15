@@ -1,5 +1,6 @@
-import { assignRef, clamp, tw } from '@shared/util'
+import { assignRef, clamp } from '@shared/util'
 import { Icons } from '@ui/Icon'
+import { cn } from 'cn'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
@@ -258,8 +259,8 @@ export function NumberInput({
 		: readOnly
 			? 'cursor-default text-neutral-200 placeholder:text-neutral-500'
 			: hasColorVariant
-				? tw('text-lighter-(--color-variant)/85', !label && 'placeholder:text-lighter-(--color-variant)/45')
-				: tw('text-neutral-100', !label && 'placeholder:text-neutral-500')
+				? cn('text-lighter-(--color-variant)/85', !label && 'placeholder:text-lighter-(--color-variant)/45')
+				: cn('text-neutral-100', !label && 'placeholder:text-neutral-500')
 	const contentClassName = disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : hasColorVariant ? 'text-lighter-(--color-variant)/60' : 'text-neutral-400'
 	const labelClassName = disabled
 		? 'text-neutral-600 peer-placeholder-shown:text-neutral-600 peer-focus:text-neutral-600'
@@ -414,17 +415,17 @@ export function NumberInput({
 	}
 
 	return (
-		<div className={tw(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90 pointer-events-none', classNames?.base)}>
-			<div className={tw(styles.surface(), surfaceClassName, classNames?.surface)}>
-				{hasStartContent && <div className={tw(styles.content(), contentClassName, classNames?.startContent)}>{startContent}</div>}
-				<div className={tw(styles.field(), classNames?.field)}>
+		<div className={cn(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90 pointer-events-none', classNames?.base)}>
+			<div className={cn(styles.surface(), surfaceClassName, classNames?.surface)}>
+				{hasStartContent && <div className={cn(styles.content(), contentClassName, classNames?.startContent)}>{startContent}</div>}
+				<div className={cn(styles.field(), classNames?.field)}>
 					<input
 						{...props}
 						autoCapitalize={autoCapitalize}
 						autoComplete={autoComplete}
 						autoCorrect={autoCorrect}
 						autoFocus={autoFocus}
-						className={tw(styles.input(), label ? sizeStyles.inputWithLabel : sizeStyles.inputWithoutLabel, hasStartContent && 'pl-0', hasEndContent && 'pr-0', inputClassName, classNames?.input)}
+						className={cn(styles.input(), label ? sizeStyles.inputWithLabel : sizeStyles.inputWithoutLabel, hasStartContent && 'pl-0', hasEndContent && 'pr-0', inputClassName, classNames?.input)}
 						disabled={disabled}
 						inputMode={digits === 0 ? 'numeric' : 'decimal'}
 						name={name}
@@ -443,18 +444,18 @@ export function NumberInput({
 						type="text"
 						value={draft}
 					/>
-					<span className={tw(styles.valueSizer(), hasStartContent && 'pl-0', hasEndContent && 'pr-0', classNames?.valueSizer)}>{draft.length > 0 ? draft : (placeholder ?? EMPTY_VALUE_SIZER)}</span>
-					{label && <span className={tw(styles.labelSizer(), hasStartContent && 'pl-0', classNames?.labelSizer)}>{label}</span>}
-					{label && <label className={tw(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</label>}
+					<span className={cn(styles.valueSizer(), hasStartContent && 'pl-0', hasEndContent && 'pr-0', classNames?.valueSizer)}>{draft.length > 0 ? draft : (placeholder ?? EMPTY_VALUE_SIZER)}</span>
+					{label && <span className={cn(styles.labelSizer(), hasStartContent && 'pl-0', classNames?.labelSizer)}>{label}</span>}
+					{label && <label className={cn(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</label>}
 				</div>
-				{hasEndContent && <div className={tw(styles.content(), contentClassName, classNames?.endContent)}>{endContent}</div>}
+				{hasEndContent && <div className={cn(styles.content(), contentClassName, classNames?.endContent)}>{endContent}</div>}
 				{hasStepper && (
-					<div className={tw(styles.stepper(), classNames?.stepper)}>
-						<button className={tw(styles.stepButton(), stepButtonClassName, 'rounded-tr-md', classNames?.stepButton)} onClick={() => stepValue(1)} onMouseDown={handleStepMouseDown} tabIndex={-1} type="button">
-							<Icons.ChevronUp className={tw(styles.stepIcon(), classNames?.stepIcon)} />
+					<div className={cn(styles.stepper(), classNames?.stepper)}>
+						<button className={cn(styles.stepButton(), stepButtonClassName, 'rounded-tr-md', classNames?.stepButton)} onClick={() => stepValue(1)} onMouseDown={handleStepMouseDown} tabIndex={-1} type="button">
+							<Icons.ChevronUp className={cn(styles.stepIcon(), classNames?.stepIcon)} />
 						</button>
-						<button className={tw(styles.stepButton(), stepButtonClassName, 'rounded-br-md', classNames?.stepButton)} onClick={() => stepValue(-1)} onMouseDown={handleStepMouseDown} tabIndex={-1} type="button">
-							<Icons.ChevronDown className={tw(styles.stepIcon(), classNames?.stepIcon)} />
+						<button className={cn(styles.stepButton(), stepButtonClassName, 'rounded-br-md', classNames?.stepButton)} onClick={() => stepValue(-1)} onMouseDown={handleStepMouseDown} tabIndex={-1} type="button">
+							<Icons.ChevronDown className={cn(styles.stepIcon(), classNames?.stepIcon)} />
 						</button>
 					</div>
 				)}

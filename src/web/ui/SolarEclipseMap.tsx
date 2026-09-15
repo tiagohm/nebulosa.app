@@ -1,5 +1,4 @@
 import { astronomicEventTemporal } from '@shared/time'
-import { tw } from '@shared/util'
 import { solarEclipseStore } from '@stores/solar.eclipse.store'
 import { IconButton } from '@ui/components/IconButton'
 import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
@@ -7,6 +6,7 @@ import { WorldMap, worldMapCoordinateToPoint } from '@ui/components/WorldMap'
 import { Icons } from '@ui/Icon'
 import { LocalEclipseContactKindButtonGroup } from '@ui/LocalEclipseContactKindButtonGroup'
 import { LocalViewOrientationModeButtonGroup } from '@ui/LocalViewOrientationModeButtonGroup'
+import { cn } from 'cn'
 import type { LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipseEvent, LocalSolarEclipseSvgShape } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
 import type { SolarEclipseGeoPoint } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
@@ -74,9 +74,9 @@ interface MetricCardProps {
 
 function MetricCard({ className, label, value, valueClassName }: MetricCardProps) {
 	return (
-		<div className={tw('flex min-w-0 flex-col gap-0 rounded-lg bg-neutral-900/70 px-3 py-2', className)}>
+		<div className={cn('flex min-w-0 flex-col gap-0 rounded-lg bg-neutral-900/70 px-3 py-2', className)}>
 			<span className="truncate text-xs font-bold text-neutral-500 uppercase">{label}</span>
-			<span className={tw('min-w-0 truncate font-mono text-sm text-neutral-100', valueClassName)}>{value}</span>
+			<span className={cn('min-w-0 truncate font-mono text-sm text-neutral-100', valueClassName)}>{value}</span>
 		</div>
 	)
 }
@@ -337,11 +337,11 @@ const LocalInstants = memo(() => {
 				<span className="bg-neutral-950/70 px-3 py-2 text-xs font-bold text-neutral-500 uppercase">Z</span>
 				{LOCAL_CONTACT_KINDS.map((kind) => {
 					const event = circumstances.events[kind]
-					const cellClassName = tw('min-h-10 border-t border-neutral-800 px-3 py-2 font-mono', !event ? 'text-neutral-500' : event.observable ? 'text-neutral-100' : 'text-neutral-400')
+					const cellClassName = cn('min-h-10 border-t border-neutral-800 px-3 py-2 font-mono', !event ? 'text-neutral-500' : event.observable ? 'text-neutral-100' : 'text-neutral-400')
 
 					return (
 						<Fragment key={kind}>
-							<span className={tw(cellClassName, 'whitespace-normal font-sans')}>{eventLabel(kind, event, circumstances.visibility.centralPhaseKind)}</span>
+							<span className={cn(cellClassName, 'whitespace-normal font-sans')}>{eventLabel(kind, event, circumstances.visibility.centralPhaseKind)}</span>
 							<span className={cellClassName}>{formatEventTime(event)}</span>
 							<span className={cellClassName}>{event === undefined ? '--' : formatSignedDegrees(event.sunAltitude)}</span>
 							<span className={cellClassName}>{event === undefined ? '--' : formatDegrees(event.positionAngle)}</span>

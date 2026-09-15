@@ -1,6 +1,6 @@
-import { tw } from '@shared/util'
 import { Chip } from '@ui/components/Chip'
 import type { ChipProps } from '@ui/components/Chip'
+import { cn } from 'cn'
 import type { SatelliteCategory } from '#/satellite'
 
 export interface SatelliteCategoryChipGroupProps extends React.ComponentProps<'div'> {
@@ -22,7 +22,7 @@ export function SatelliteCategoryChipGroup({ value, onValueChange, size = 'sm', 
 	}
 
 	return (
-		<div className={tw('flex w-full flex-wrap gap-2', className)} {...props}>
+		<div className={cn('flex w-full flex-wrap gap-2', className)} {...props}>
 			{ENTRIES.map((item) => {
 				const selected = value.includes(item)
 				return <Chip className="cursor-pointer" color={selected ? 'success' : 'secondary'} key={item} label={item} onClick={() => handleClick(item, selected)} size={size} />

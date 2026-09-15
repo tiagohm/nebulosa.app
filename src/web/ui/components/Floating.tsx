@@ -1,4 +1,5 @@
-import { assignRef, clamp, tw } from '@shared/util'
+import { assignRef, clamp } from '@shared/util'
+import { cn } from 'cn'
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { tv } from 'tailwind-variants'
@@ -295,7 +296,7 @@ export function Floating({
 	return createPortal(
 		<div
 			{...props}
-			className={tw(styles.base(), className, classNames?.base)}
+			className={cn(styles.base(), className, classNames?.base)}
 			data-placement={position?.placement ?? placement}
 			id={id}
 			onClick={handleClick}
@@ -313,8 +314,8 @@ export function Floating({
 				top: position?.top ?? 0,
 				visibility: position ? 'visible' : 'hidden',
 			}}>
-			{hideArrow !== true && <span className={tw(styles.arrow(), classNames?.arrow)} style={position?.arrowStyle} />}
-			<div className={tw(styles.content(), classNames?.content)}>{content}</div>
+			{hideArrow !== true && <span className={cn(styles.arrow(), classNames?.arrow)} style={position?.arrowStyle} />}
+			<div className={cn(styles.content(), classNames?.content)}>{content}</div>
 		</div>,
 		contentContainer,
 	)

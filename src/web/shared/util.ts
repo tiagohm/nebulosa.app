@@ -1,13 +1,6 @@
-import { clsx } from 'clsx'
-import type { ClassValue } from 'clsx'
 import { ONE_GIGAPARSEC, ONE_KILOPARSEC, ONE_MEGAPARSEC } from 'nebulosa/src/core/constants'
 import { toKilometer, toLightYear } from 'nebulosa/src/math/units/distance'
 import type { Distance } from 'nebulosa/src/math/units/distance'
-import { twMerge } from 'tailwind-merge'
-
-export function tw(...inputs: ClassValue[]) {
-	return twMerge(clsx(inputs))
-}
 
 export function assignRef<T>(ref: React.Ref<T> | undefined, value: T) {
 	if (typeof ref === 'function') {

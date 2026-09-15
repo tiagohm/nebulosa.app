@@ -1,8 +1,9 @@
-import { assignRef, tw } from '@shared/util'
+import { assignRef } from '@shared/util'
 import { DEFAULT_FLOATING_OFFSET, Floating } from '@ui/components/Floating'
 import type { FloatingPlacement } from '@ui/components/Floating'
 import { List } from '@ui/components/List'
 import { Icons } from '@ui/Icon'
+import { cn } from 'cn'
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
@@ -275,8 +276,8 @@ export function Select<T>({
 		: readOnly
 			? 'bg-neutral-900/55 text-neutral-300'
 			: hasColorVariant
-				? tw('bg-(--color-variant)/15 text-lighter-(--color-variant)/85 hover:bg-(--color-variant)/20', visible && 'bg-(--color-variant)/25')
-				: tw('bg-neutral-900/70 text-neutral-100 hover:bg-neutral-800', visible && 'bg-neutral-800')
+				? cn('bg-(--color-variant)/15 text-lighter-(--color-variant)/85 hover:bg-(--color-variant)/20', visible && 'bg-(--color-variant)/25')
+				: cn('bg-neutral-900/70 text-neutral-100 hover:bg-neutral-800', visible && 'bg-neutral-800')
 	const contentClassName = disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : hasColorVariant ? 'text-lighter-(--color-variant)/60' : 'text-neutral-400'
 	const descriptionClassName = disabled ? 'text-neutral-600' : readOnly ? 'text-neutral-500' : hasColorVariant ? 'text-lighter-(--color-variant)/45' : 'text-neutral-500'
 	const labelClassName = disabled ? 'text-neutral-600' : readOnly ? 'text-neutral-400' : hasColorVariant ? 'text-lighter-(--color-variant)/65' : 'text-neutral-400'
@@ -395,12 +396,12 @@ export function Select<T>({
 
 		return (
 			<div
-				className={tw(styles.option(), selected ? 'bg-(--color-variant)/15 text-lighter-(--color-variant)/75' : 'text-neutral-200 hover:bg-neutral-800 hover:text-neutral-100 active:bg-neutral-700', classNames?.option)}
+				className={cn(styles.option(), selected ? 'bg-(--color-variant)/15 text-lighter-(--color-variant)/75' : 'text-neutral-200 hover:bg-neutral-800 hover:text-neutral-100 active:bg-neutral-700', classNames?.option)}
 				onClick={(event) => selectItem(event, item, index, selected)}
 				ref={measureOptionWidth}
 				role="button">
-				<span className={tw(styles.optionContent(), classNames?.optionContent)}>{children(item, index, selected, 'list')}</span>
-				<span className={tw(styles.selectedIcon(), selected ? 'opacity-100' : 'opacity-0', classNames?.selectedIcon)} children={CheckIcon} />
+				<span className={cn(styles.optionContent(), classNames?.optionContent)}>{children(item, index, selected, 'list')}</span>
+				<span className={cn(styles.selectedIcon(), selected ? 'opacity-100' : 'opacity-0', classNames?.selectedIcon)} children={CheckIcon} />
 			</div>
 		)
 	}
@@ -414,21 +415,21 @@ export function Select<T>({
 		<>
 			<div
 				{...props}
-				className={tw(styles.base(), disabled && 'cursor-not-allowed opacity-40', readOnly && !disabled && 'cursor-default opacity-90 pointer-events-none', className, classNames?.base)}
+				className={cn(styles.base(), disabled && 'cursor-not-allowed opacity-40', readOnly && !disabled && 'cursor-default opacity-90 pointer-events-none', className, classNames?.base)}
 				id={id}
 				onKeyDown={handleKeyDown}
 				onClick={handleClick}
 				ref={handleTriggerRef}
 				tabIndex={disabled ? undefined : (tabIndex ?? 0)}>
-				<div className={tw(styles.trigger(), triggerClassName, classNames?.trigger)}>
-					{hasStartContent && <div className={tw(styles.startContent(), contentClassName, classNames?.startContent)}>{startContent}</div>}
-					<div className={tw(styles.field(), classNames?.field)}>
-						<div className={tw(styles.value(), hasStartContent && 'pl-0', classNames?.value)}>{selectedItem !== undefined && selectedItem !== null ? selectedContent : <span className={tw(styles.description(), descriptionClassName, classNames?.description)}>{selectedContent}</span>}</div>
-						{hasLabel && <span className={tw(styles.labelSizer(), hasStartContent && 'pl-0', classNames?.labelSizer)}>{label}</span>}
-						{hasLabel && <span className={tw(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</span>}
+				<div className={cn(styles.trigger(), triggerClassName, classNames?.trigger)}>
+					{hasStartContent && <div className={cn(styles.startContent(), contentClassName, classNames?.startContent)}>{startContent}</div>}
+					<div className={cn(styles.field(), classNames?.field)}>
+						<div className={cn(styles.value(), hasStartContent && 'pl-0', classNames?.value)}>{selectedItem !== undefined && selectedItem !== null ? selectedContent : <span className={cn(styles.description(), descriptionClassName, classNames?.description)}>{selectedContent}</span>}</div>
+						{hasLabel && <span className={cn(styles.labelSizer(), hasStartContent && 'pl-0', classNames?.labelSizer)}>{label}</span>}
+						{hasLabel && <span className={cn(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</span>}
 					</div>
-					{hasEndContent && <div className={tw(styles.endContent(), contentClassName, classNames?.endContent)}>{endContent}</div>}
-					<div className={tw(styles.chevron(), chevronClassName, classNames?.chevron)}>
+					{hasEndContent && <div className={cn(styles.endContent(), contentClassName, classNames?.endContent)}>{endContent}</div>}
+					<div className={cn(styles.chevron(), chevronClassName, classNames?.chevron)}>
 						<Icons.ChevronDown />
 					</div>
 				</div>
@@ -436,16 +437,16 @@ export function Select<T>({
 			{visible && (
 				<Floating
 					autoFlip={autoFlip}
-					classNames={{ content: tw(styles.panel(), classNames?.panel) }}
+					classNames={{ content: cn(styles.panel(), classNames?.panel) }}
 					closeOnEscape
 					closeOnClickOutside
 					content={
-						<div className={tw(styles.panelContent(), classNames?.panelContent)}>
-							{headerContent !== undefined && headerContent !== null && <div className={tw(styles.header(), classNames?.header)}>{headerContent}</div>}
-							<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: tw(styles.listItem(), classNames?.listItem) }} emptyContent={emptyContent} itemCount={items.length} itemHeight={optionHeight} overscan={overscan} onAction={onAction && handleAction}>
+						<div className={cn(styles.panelContent(), classNames?.panelContent)}>
+							{headerContent !== undefined && headerContent !== null && <div className={cn(styles.header(), classNames?.header)}>{headerContent}</div>}
+							<List className={cn(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: cn(styles.listItem(), classNames?.listItem) }} emptyContent={emptyContent} itemCount={items.length} itemHeight={optionHeight} overscan={overscan} onAction={onAction && handleAction}>
 								{renderOption}
 							</List>
-							{footerContent !== undefined && footerContent !== null && <div className={tw(styles.footer(), classNames?.footer)}>{footerContent}</div>}
+							{footerContent !== undefined && footerContent !== null && <div className={cn(styles.footer(), classNames?.footer)}>{footerContent}</div>}
 						</div>
 					}
 					hideArrow

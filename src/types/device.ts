@@ -31,9 +31,10 @@ export interface DeviceTypeMap {
 	readonly dome: Dome
 	readonly safetyMonitor: SafetyMonitor
 	readonly weather: Weather
+	readonly gps: Device
 }
 
-export const DEVICE_TYPES = new Set<DeviceType>(['camera', 'mount', 'focuser', 'wheel', 'cover', 'flatPanel', 'rotator', 'guideOutput', 'thermometer', 'dewHeater', 'dome'])
+export const DEVICE_TYPES = new Set<DeviceType>(['camera', 'mount', 'wheel', 'focuser', 'rotator', 'gps', 'dome', 'guideOutput', 'flatPanel', 'cover', 'power', 'thermometer', 'dewHeater', 'safetyMonitor', 'weather'])
 
 export function isDeviceType(type: unknown): type is DeviceType {
 	return typeof type === 'string' && DEVICE_TYPES.has(type as never)

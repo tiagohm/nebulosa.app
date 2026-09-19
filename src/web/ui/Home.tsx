@@ -1,4 +1,5 @@
 import { atlasStore } from '@stores/atlas.store'
+import { equipmentStatusBarStore } from '@stores/equipment.statusbar.store'
 import { homeStore } from '@stores/home.store'
 import type { HomePanelType } from '@stores/home.store'
 import { settingsStore } from '@stores/settings.store'
@@ -38,6 +39,7 @@ import { Satellite } from '@ui/Satellite'
 import { Sequencer } from '@ui/Sequencer'
 import { Settings } from '@ui/Settings'
 import { SolarEclipseMap } from '@ui/SolarEclipseMap'
+import { StatusBar } from '@ui/StatusBar'
 import { Sun } from '@ui/Sun'
 import { homeIcons, Tab } from '@ui/Tab'
 import { Thermometer } from '@ui/Thermometer'
@@ -102,6 +104,7 @@ export const Home = memo(() => {
 	useEffect(settingsStore.mount, [])
 	useEffect(atlasStore.mount, [])
 	useEffect(homeStore.mount, [])
+	useEffect(equipmentStatusBarStore.mount, [])
 
 	return (
 		<div className="grid h-dvh grid-rows-[auto_minmax(0,1fr)] p-1 text-white">
@@ -109,6 +112,9 @@ export const Home = memo(() => {
 			<div className="min-h-0">
 				<DockviewReact hideBorders rightHeaderActionsComponent={RightHeaderAction} defaultTabComponent={Tab} theme={themeGithubDark} className="h-full w-full" tabComponents={tabComponents} components={components} onReady={homeStore.handleReady} />
 				<Confirmation />
+			</div>
+			<div className="min-h-6 p-1">
+				<StatusBar />
 			</div>
 		</div>
 	)

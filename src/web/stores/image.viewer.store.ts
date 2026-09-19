@@ -43,6 +43,7 @@ import { imageStatisticsStore } from '@stores/image.statistics.store'
 import type { ImageStatisticsStore } from '@stores/image.statistics.store'
 import { imageStretchStore } from '@stores/image.stretch.store'
 import type { ImageStretchStore } from '@stores/image.stretch.store'
+import type { SlideMenuItem, SlideMenuProps } from '@ui/components/SlideMenu'
 import type { InteractableMethods } from '@ui/Interactable'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import type { Writable } from 'nebulosa/src/core/types'
@@ -91,6 +92,7 @@ export interface ImageViewerStore {
 	readonly toggleClass: (token: string, force?: boolean) => void
 	readonly remove: VoidFunction
 	readonly close: () => Promise<unknown>
+	readonly handleAction: SlideMenuProps['onAction']
 	readonly adjustment: ImageAdjustmentStore
 	readonly annotation: ImageAnnotationStore
 	readonly calibration: ImageCalibrationStore
@@ -284,6 +286,20 @@ export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewe
 		}
 	}
 
+	function handleAction(id: React.Key, item: SlideMenuItem) {
+		switch (id) {
+			case 'invert':
+				void toggleInvert()
+				break
+			case 'verticalMirror':
+				void toggleVerticalMirror()
+				break
+			case 'horizontalMirror':
+				void toggleHorizontalMirror()
+				break
+		}
+	}
+
 	// Clears failed image metadata and releases its blob URL.
 	function handleError(event: React.SyntheticEvent<HTMLImageElement>) {
 		loader.handleError(event.currentTarget)
@@ -337,6 +353,7 @@ export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewe
 		syncMountHere,
 		frameAt,
 		handleLoad,
+		handleAction,
 		handleError,
 		detach,
 		toggleClass,

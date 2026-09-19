@@ -11,8 +11,10 @@ import { Icons } from '@ui/Icon'
 import { PlateSolverTypeSelect } from '@ui/PlateSolverTypeSelect'
 import { PlateSolveStartPopover } from '@ui/PlateSolveStartPopover'
 import { TppaDirectionSelect } from '@ui/TppaDirectionSelect'
+import { cn } from 'cn'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
+import { arcsec, formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
+import type { PolarAlignmentOverlayWarning, ThreePointPolarAlignmentOverlayFailureReason } from 'nebulosa/src/observation/alignment/polaralignment.overlay'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
@@ -26,6 +28,7 @@ export const Tppa = memo(({ api }: IDockviewPanelProps) => {
 				<Status />
 				<Inputs />
 				<Result />
+				<OverlayOptions />
 				<Footer />
 			</div>
 		</TppaStoreContext>
@@ -99,21 +102,75 @@ const PlateSolverSelectEndContent = memo(() => {
 	)
 })
 
+const POOR_ERROR = arcsec(300)
+const FAIR_ERROR = arcsec(30)
+const GOOD_ERROR = arcsec(1)
+
 const Result = memo(() => {
 	const tppa = useContext(TppaStoreContext)
 	const { event } = useSnapshot(tppa.state)
 
+	const total = Math.hypot(event.error.azimuth, event.error.altitude)
+
 	return (
 		<>
-			<div className="col-span-6 mt-3 flex flex-col items-center gap-0">
+			<div className="col-span-4 mt-3 flex flex-col items-center gap-0">
 				<span className="font-bold">Azimuth</span>
 				<span className="text-3xl">{formatDEC(event.error.azimuth)}</span>
 			</div>
-			<div className="col-span-6 mt-3 flex flex-col items-center gap-0">
+			<div className={cn('col-span-4 mt-3 flex flex-col items-center gap-0', total <= 0 ? 'text-neutral-500' : total <= GOOD_ERROR ? 'text-green-500' : total <= FAIR_ERROR ? 'text-yellow-500' : total <= POOR_ERROR ? 'text-orange-500' : 'text-red-500')}>
+				<span className="font-bold">Total</span>
+				<span className="text-3xl">{formatDEC(total)}</span>
+			</div>
+			<div className="col-span-4 mt-3 flex flex-col items-center gap-0">
 				<span className="font-bold">Altitude</span>
 				<span className="text-3xl">{formatDEC(event.error.altitude)}</span>
 			</div>
 		</>
+	)
+})
+
+// User-facing explanations of nonfatal geometry limitations; they never replace the run's status.
+const OVERLAY_DIAGNOSTICS: Record<PolarAlignmentOverlayWarning | ThreePointPolarAlignmentOverlayFailureReason, string> = {
+	invalidOptions: 'Overlay settings are unavailable',
+	invalidFrame: 'Image dimensions are unavailable',
+	invalidWcs: 'The plate solution has no usable image projection',
+	missingLocation: 'Observing location is unavailable',
+	invalidPole: 'The mount pole could not be determined',
+	invalidReference: 'The reference coordinate is unavailable',
+	unprojectableReference: 'The reference is outside the projectable sky',
+	unprojectableTarget: 'The target is outside the projectable sky',
+	degenerateCorrection: 'The correction geometry is unstable',
+	correctionNotConverged: 'The correction is approximate',
+	correctionIllConditioned: 'The correction geometry is unstable',
+	referenceOutsideFrame: 'The reference is outside the image',
+	contourOmitted: 'Some tolerance contours are unavailable',
+	contourIllConditioned: 'Some tolerance contours are unstable',
+}
+
+function WarningItem(item: PolarAlignmentOverlayWarning) {
+	return (
+		<span className="text-warning text-xs" key={item}>
+			{OVERLAY_DIAGNOSTICS[item]}
+		</span>
+	)
+}
+
+// Visibility remains editable while running; colors and tolerance units match the SVG guidance.
+const OverlayOptions = memo(() => {
+	const tppa = useContext(TppaStoreContext)
+	const { show } = useSnapshot(tppa.state.overlay)
+	const { overlay } = useSnapshot(tppa.state.event)
+
+	const result = overlay?.result
+	const warnings = result?.success ? result.overlay.diagnostics.warnings : result?.warnings
+
+	return (
+		<div className="col-span-full flex flex-col gap-1">
+			<Checkbox label="Show overlay" value={show} onValueChange={tppa.setShowOverlay} />
+			{result && !result.success && <span className="text-warning text-xs">{OVERLAY_DIAGNOSTICS[result.reason]}</span>}
+			{warnings?.map(WarningItem)}
+		</div>
 	)
 })
 

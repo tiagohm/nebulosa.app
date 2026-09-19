@@ -1,4 +1,5 @@
-import { clamp, tw } from '@shared/util'
+import { clamp } from '@shared/util'
+import { cn } from 'cn'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
 
@@ -117,13 +118,13 @@ export function ProgressBar({ className, classNames, color, disabled = false, en
 	const hasEndContent = endContent !== undefined && endContent !== null
 
 	return (
-		<div {...props} className={tw(styles.base(), stateClassName, className, classNames?.base)} ref={ref} style={style}>
-			<div className={tw(styles.body(), classNames?.body)}>
-				{hasStartContent && <div className={tw(styles.content(), contentClassName, classNames?.startContent)}>{startContent}</div>}
-				<div className={tw(styles.track(), trackClassName, classNames?.track)}>
-					<div className={tw(styles.fill(), indeterminate && 'progress-bar-indeterminate w-2/5 transition-none', classNames?.fill)} style={indeterminate ? undefined : { width: `${fillRatio * 100}%` }} />
+		<div {...props} className={cn(styles.base(), stateClassName, className, classNames?.base)} ref={ref} style={style}>
+			<div className={cn(styles.body(), classNames?.body)}>
+				{hasStartContent && <div className={cn(styles.content(), contentClassName, classNames?.startContent)}>{startContent}</div>}
+				<div className={cn(styles.track(), trackClassName, classNames?.track)}>
+					<div className={cn(styles.fill(), indeterminate && 'progress-bar-indeterminate w-2/5 transition-none', classNames?.fill)} style={indeterminate ? undefined : { width: `${fillRatio * 100}%` }} />
 				</div>
-				{hasEndContent && <div className={tw(styles.content(), contentClassName, classNames?.endContent)}>{endContent}</div>}
+				{hasEndContent && <div className={cn(styles.content(), contentClassName, classNames?.endContent)}>{endContent}</div>}
 			</div>
 		</div>
 	)

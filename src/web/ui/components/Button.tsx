@@ -1,7 +1,8 @@
-import { stopPropagationForAll, tw } from '@shared/util'
+import { stopPropagationForAll } from '@shared/util'
 import { Tooltip } from '@ui/components/Tooltip'
 import type { TooltipPlacement } from '@ui/components/Tooltip'
 import { Icons } from '@ui/Icon'
+import { cn } from 'cn'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
 
@@ -124,14 +125,14 @@ export function Button({ children, className, classNames, color, disabled = fals
 	const blocked = disabled || loading || readOnly
 	const stateClassName = disabled ? 'cursor-not-allowed opacity-40 pointer-events-none' : loading ? 'cursor-progress opacity-40 pointer-events-none' : readOnly ? 'cursor-default opacity-90 pointer-events-none' : 'cursor-pointer'
 	const showContent = !(loading && hideChildrenOnLoading)
-	const labelContent = showContent && content !== undefined && content !== null && content !== '' ? hasChildren ? content : <span className={tw(styles.label(), classNames?.label)}>{content}</span> : undefined
+	const labelContent = showContent && content !== undefined && content !== null && content !== '' ? hasChildren ? content : <span className={cn(styles.label(), classNames?.label)}>{content}</span> : undefined
 
 	return (
 		<Tooltip content={tooltipContent} disabled={blocked || tooltipDisabled} placement={tooltipPlacement}>
-			<div className={tw(styles.base(), stateClassName, className, classNames?.base)} ref={ref} role="button" tabIndex={blocked ? undefined : (tabIndex ?? 0)} {...stopPropagationForAll(props)}>
-				{loading ? <Icons.Loading className={tw(styles.loadingIcon(), classNames?.loadingIcon)} /> : startContent !== undefined && startContent !== null && <span className={tw(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
+			<div className={cn(styles.base(), stateClassName, className, classNames?.base)} ref={ref} role="button" tabIndex={blocked ? undefined : (tabIndex ?? 0)} {...stopPropagationForAll(props)}>
+				{loading ? <Icons.Loading className={cn(styles.loadingIcon(), classNames?.loadingIcon)} /> : startContent !== undefined && startContent !== null && <span className={cn(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
 				{labelContent}
-				{endContent !== undefined && endContent !== null && <span className={tw(styles.endContent(), classNames?.endContent)}>{endContent}</span>}
+				{endContent !== undefined && endContent !== null && <span className={cn(styles.endContent(), classNames?.endContent)}>{endContent}</span>}
 			</div>
 		</Tooltip>
 	)

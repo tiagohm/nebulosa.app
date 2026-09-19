@@ -1,5 +1,4 @@
 import { ImageViewerStoreContext } from '@shared/context'
-import { tw } from '@shared/util'
 import { hasScaledSolution } from '@stores/image.solver.store'
 import { AstroBinEquipmentPopover } from '@ui/AstroBinEquipmentPopover'
 import { Checkbox } from '@ui/components/Checkbox'
@@ -7,6 +6,7 @@ import { IconButton } from '@ui/components/IconButton'
 import { List } from '@ui/components/List'
 import { NumberInput } from '@ui/components/NumberInput'
 import { Icons } from '@ui/Icon'
+import { cn } from 'cn'
 import { memo, useContext, useEffect } from 'react'
 import cameras from 'src/data/astrobin.cameras.json'
 import telescopes from 'src/data/astrobin.telescopes.json'
@@ -120,7 +120,7 @@ const FovList = memo(() => {
 				const isSelected = i === selected
 
 				return (
-					<div data-index={i} onClick={handleClick} className={tw('flex h-full min-w-0 flex-row items-center justify-between gap-0 border-e-2 ps-3 transition hover:bg-neutral-800/80', isSelected && 'bg-neutral-800/70')} style={{ borderColor: item.color }}>
+					<div data-index={i} onClick={handleClick} className={cn('flex h-full min-w-0 flex-row items-center justify-between gap-0 border-e-2 ps-3 transition hover:bg-neutral-800/80', isSelected && 'bg-neutral-800/70')} style={{ borderColor: item.color }}>
 						<Checkbox onValueChange={(value) => fov.setVisible(item.id, value)} value={item.visible} />
 						<ComputedFovItem {...item} />
 					</div>

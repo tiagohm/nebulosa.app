@@ -1,4 +1,5 @@
 import { atlasStore } from '@stores/atlas.store'
+import { equipmentStatusBarStore } from '@stores/equipment.statusbar.store'
 import { homeStore } from '@stores/home.store'
 import type { HomePanelType } from '@stores/home.store'
 import { settingsStore } from '@stores/settings.store'
@@ -35,8 +36,10 @@ import { Planet } from '@ui/Planet'
 import { Planetarium } from '@ui/Planetarium'
 import { Rotator } from '@ui/Rotator'
 import { Satellite } from '@ui/Satellite'
+import { Sequencer } from '@ui/Sequencer'
 import { Settings } from '@ui/Settings'
 import { SolarEclipseMap } from '@ui/SolarEclipseMap'
+import { StatusBar } from '@ui/StatusBar'
 import { Sun } from '@ui/Sun'
 import { homeIcons, Tab } from '@ui/Tab'
 import { Thermometer } from '@ui/Thermometer'
@@ -86,6 +89,7 @@ const components = {
 	rotator: Rotator,
 	safetyMonitor: Dummy,
 	satellite: Satellite,
+	sequencer: Sequencer,
 	settings: Settings,
 	solarEclipse: SolarEclipseMap,
 	sun: Sun,
@@ -100,6 +104,7 @@ export const Home = memo(() => {
 	useEffect(settingsStore.mount, [])
 	useEffect(atlasStore.mount, [])
 	useEffect(homeStore.mount, [])
+	useEffect(equipmentStatusBarStore.mount, [])
 
 	return (
 		<div className="grid h-dvh grid-rows-[auto_minmax(0,1fr)] p-1 text-white">
@@ -107,6 +112,9 @@ export const Home = memo(() => {
 			<div className="min-h-0">
 				<DockviewReact hideBorders rightHeaderActionsComponent={RightHeaderAction} defaultTabComponent={Tab} theme={themeGithubDark} className="h-full w-full" tabComponents={tabComponents} components={components} onReady={homeStore.handleReady} />
 				<Confirmation />
+			</div>
+			<div className="min-h-6 p-1">
+				<StatusBar />
 			</div>
 		</div>
 	)
@@ -124,6 +132,7 @@ const MAIN_GROUP_ACTIONS = [
 	{ label: 'TPPA', icon: homeIcons.tppa, action: () => homeStore.addTppa() },
 	{ label: 'Flat Wizard', icon: homeIcons.flatPanel, action: () => homeStore.addFlatWizard() },
 	{ label: 'Framing', icon: homeIcons.framing, action: () => homeStore.addFraming() },
+	{ label: 'Sequencer', icon: homeIcons.sequencer, action: () => homeStore.addSequencer() },
 	{ label: 'Calculator', icon: homeIcons.calculator, action: () => homeStore.addCalculator() },
 	{ label: 'Planetarium', icon: homeIcons.planetarium, action: () => homeStore.addPlanetarium() },
 	{ label: 'Sun', icon: homeIcons.sun, action: () => homeStore.addSun() },

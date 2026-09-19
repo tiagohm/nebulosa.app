@@ -1,5 +1,5 @@
-import { tw } from '@shared/util'
 import { Icons } from '@ui/Icon'
+import { cn } from 'cn'
 import { Children, Fragment, isValidElement, useEffect, useState } from 'react'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
@@ -328,12 +328,12 @@ export function Tabs<T extends TabId = string>({ children, className, classNames
 		}
 
 		return (
-			<div key={tab.key ?? index} {...tabProps} className={tw(tabVariantStyles.base(), classNames?.tab, tabClassName, tabClassNames?.base)} onKeyDown={handleKeyDown} onClick={handleClick} ref={tabRef} tabIndex={blocked ? undefined : (tabIndex ?? 0)}>
-				{startContent !== undefined && startContent !== null && <span className={tw(tabVariantStyles.startContent(), classNames?.tabStartContent, tabClassNames?.startContent)}>{startContent}</span>}
-				{content !== undefined && content !== null && <span className={tw(tabVariantStyles.label(), classNames?.tabLabel, tabClassNames?.label)}>{content}</span>}
-				{endContent !== undefined && endContent !== null && <span className={tw(tabVariantStyles.endContent(), classNames?.tabEndContent, tabClassNames?.endContent)}>{endContent}</span>}
+			<div key={tab.key ?? index} {...tabProps} className={cn(tabVariantStyles.base(), classNames?.tab, tabClassName, tabClassNames?.base)} onKeyDown={handleKeyDown} onClick={handleClick} ref={tabRef} tabIndex={blocked ? undefined : (tabIndex ?? 0)}>
+				{startContent !== undefined && startContent !== null && <span className={cn(tabVariantStyles.startContent(), classNames?.tabStartContent, tabClassNames?.startContent)}>{startContent}</span>}
+				{content !== undefined && content !== null && <span className={cn(tabVariantStyles.label(), classNames?.tabLabel, tabClassNames?.label)}>{content}</span>}
+				{endContent !== undefined && endContent !== null && <span className={cn(tabVariantStyles.endContent(), classNames?.tabEndContent, tabClassNames?.endContent)}>{endContent}</span>}
 				{onClose !== undefined && (
-					<button className={tw(tabVariantStyles.closeButton(), classNames?.closeButton, tabClassNames?.closeButton)} onClick={handleClose} type="button">
+					<button className={cn(tabVariantStyles.closeButton(), classNames?.closeButton, tabClassNames?.closeButton)} onClick={handleClose} type="button">
 						<Icons.Close />
 					</button>
 				)}
@@ -348,20 +348,20 @@ export function Tabs<T extends TabId = string>({ children, className, classNames
 		const { children: panelChildren, className: panelClassName, id: panelId, ref: panelRef, ...panelProps } = selectedPanel.props
 
 		return (
-			<div {...panelProps} className={tw(styles.panel(), classNames?.panel, panelClassName)} key={selectedPanel.key} ref={panelRef}>
+			<div {...panelProps} className={cn(styles.panel(), classNames?.panel, panelClassName)} key={selectedPanel.key} ref={panelRef}>
 				{panelChildren}
 			</div>
 		)
 	}
 
 	return (
-		<div {...props} className={tw(styles.base(), disabled && 'opacity-40 pointer-events-none', className, classNames?.base)} ref={ref}>
-			<div className={tw(styles.tabListContainer(), classNames?.tabListContainer)}>
-				{startContent !== undefined && startContent !== null && <span className={tw(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
-				<div className={tw(styles.tabList(), classNames?.tabList)}>{tabs.map(renderTab)}</div>
-				{endContent !== undefined && endContent !== null && <span className={tw(styles.endContent(), classNames?.endContent)}>{endContent}</span>}
+		<div {...props} className={cn(styles.base(), disabled && 'opacity-40 pointer-events-none', className, classNames?.base)} ref={ref}>
+			<div className={cn(styles.tabListContainer(), classNames?.tabListContainer)}>
+				{startContent !== undefined && startContent !== null && <span className={cn(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
+				<div className={cn(styles.tabList(), classNames?.tabList)}>{tabs.map(renderTab)}</div>
+				{endContent !== undefined && endContent !== null && <span className={cn(styles.endContent(), classNames?.endContent)}>{endContent}</span>}
 			</div>
-			<div className={tw(styles.panelContainer(), classNames?.panelContainer)}>{renderSelectedPanel()}</div>
+			<div className={cn(styles.panelContainer(), classNames?.panelContainer)}>{renderSelectedPanel()}</div>
 		</div>
 	)
 }

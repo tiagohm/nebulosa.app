@@ -1,6 +1,7 @@
-import type { TrackMode, FrameType, MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
+import type { TrackMode, MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
+import { exposureTimeInSeconds } from '#/camera'
 import type { CameraCaptureStart } from '#/camera'
 import { DEFAULT_PLATE_SOLVE_START } from '#/platesolver'
 import type { PlateSolveStart } from '#/platesolver'
@@ -11,26 +12,22 @@ import type { PlateSolveStart } from '#/platesolver'
 export interface Sequencer {
 	// Schema revision of this serialized contract.
 	readonly schemaVersion: 1
-
 	// Optional client-supplied identifier of this recipe. The server copies it onto the session as a label
 	// and does not assign or persist a library of definitions.
 	readonly id?: string
-
 	// Optional client-supplied revision of this recipe. The session copies it as a label; the server does
 	// not increment it.
 	readonly revision?: number
-
 	// Human-readable name shown in lists and editors.
 	readonly name: string
-
 	// Devices used by the whole session, declared once and referenced by role everywhere else.
 	readonly devices: SequencerDevices
-
-	// Target definition, tracking, slew, centering, and observability constraints.
+	// Target definition, slew timeout, settle and retry, tracking, centering, and observability constraints.
+	// A session that names a mount always slews to this target; pointing precision is the centering block.
 	readonly target: SequencerTarget
 	// Primary imaging plan containing camera bindings, scheduling order, defaults, and frame groups.
 	readonly capture: SequencerCapture
-	// Guiding connection, startup, settling, quality, and recovery configuration.
+	// Guiding startup, settling, quality, and recovery configuration. The guider itself is a device role.
 	readonly guiding: SequencerGuiding
 	// Dither triggers, displacement, settling, retry, and failure behavior.
 	// Dithering requires an active guider and executes only at safe exposure boundaries.
@@ -86,7 +83,7 @@ export interface Sequencer {
 
 // Enumerates the device roles a session can occupy.
 // Features reference a role; only the root devices object maps a role to a concrete device id.
-export type SequencerDeviceRole = 'camera' | 'mount' | 'wheel' | 'focuser' | 'rotator' | 'guideCamera' | 'guideOutput' | 'cover' | 'flatPanel' | 'dome'
+export type SequencerDeviceRole = 'camera' | 'mount' | 'wheel' | 'focuser' | 'rotator' | 'guideCamera' | 'guideOutput' | 'cover' | 'flatPanel' | 'dome' | 'guider'
 
 // Maps each device role used by the session to a device id, exactly once for the whole definition.
 // A role omitted here is unavailable, and every feature requiring it is rejected at compilation.
@@ -111,6 +108,8 @@ export interface SequencerDevices {
 	readonly flatPanel?: string
 	// Device id of the dome or roll-off roof.
 	readonly dome?: string
+	// Id of the guider session. The session must already be connected when the sequencer starts.
+	readonly guider?: string
 }
 
 // Enumerates normalized failure causes understood by retry and terminal-action policies.
@@ -127,19 +126,15 @@ export interface SequencerRetryPolicy {
 	// Maximum number of total attempts, including the initial execution.
 	// Use an integer >= 1; 1 disables retries.
 	readonly maxAttempts: number
-
 	// Delay before the first retry.
 	// Seconds; use a finite value >= 0.
 	readonly delay: number
-
 	// Multiplier applied to the delay after each failed retry.
 	// Use a finite value >= 1; 1 produces constant-delay retries.
 	readonly backoff: number
-
 	// Upper bound for any computed retry delay.
 	// Seconds; use a finite value >= 0 and normally >= delay.
 	readonly maximumDelay: number
-
 	// Failure reasons eligible for retry.
 	// Use an empty array to disable reason-based retries.
 	readonly retryOn: readonly SequencerFailureReason[]
@@ -168,7 +163,7 @@ export interface SequencerTimeWindow {
 
 // Discriminated union of target coordinate representations accepted by the Sequencer.
 // The coordinateType property selects the active representation.
-export interface SequencerTarget extends MountTargetCoordinate<Angle | string> {
+export interface SequencerTarget extends MountTargetCoordinate {
 	// Stable identifier used by definitions, checkpoints, events, or ordered actions.
 	// Use a non-empty value unique within its owning collection.
 	// It is a component of every node id below the target and therefore of artifact identity and file names, so renaming the target must not change it.
@@ -176,13 +171,14 @@ export interface SequencerTarget extends MountTargetCoordinate<Angle | string> {
 	// Human-readable label for this object.
 	// Use a non-empty value suitable for logs and UI display.
 	readonly name: string
-	// Controls whether this feature or definition is active.
-	readonly enabled: boolean
-
+	// Maximum time allowed for the slew, in seconds.
+	readonly timeout: number
+	// Seconds to wait after the slew arrives before the next action, so the mount can stop vibrating.
+	readonly settle: number
+	// Retry policy applied when the slew fails.
+	readonly retry: SequencerRetryPolicy
 	// Configuration value for tracking.
 	readonly tracking: SequencerTargetTracking
-	// Configuration value for goto.
-	readonly goto: SequencerGoto
 	// Configuration value for center.
 	readonly center: SequencerCentering
 	// Configuration value for constraints.
@@ -198,34 +194,6 @@ export interface SequencerTargetTracking {
 	readonly mode: TrackMode
 	// Controls whether tracking is stopped after the session ends.
 	readonly stopOnShutdown: boolean
-
-	// Optional non-sidereal correction rate along right ascension.
-	readonly rightAscensionRate?: Angle
-	// Optional non-sidereal correction rate along declination.
-	readonly declinationRate?: Angle
-
-	// Retry policy applied when this operation fails.
-	readonly retry: SequencerRetryPolicy
-}
-
-// Configures the initial mount slew and its position verification.
-// Angular tolerances are radians; timeout and settle are seconds.
-export interface SequencerGoto {
-	// Controls whether this feature or definition is active.
-	readonly enabled: boolean
-
-	// Angular distance below which the current position is considered already on target, which skips the slew.
-	// Radians; use a finite value >= 0 and typically a few arcseconds to arcminutes; 0 always slews.
-	readonly skipTolerance: Angle
-
-	// Maximum angular error accepted after the slew completes.
-	// Radians; use a finite value >= 0 and normally >= the mount pointing repeatability.
-	readonly arrivalTolerance: Angle
-
-	// Maximum time in seconds allowed for the operation to reach its terminal state.
-	readonly timeout: number
-	// Stable delay or settling policy, in seconds, required after a state transition.
-	readonly settle: number
 	// Retry policy applied when this operation fails.
 	readonly retry: SequencerRetryPolicy
 }
@@ -237,10 +205,8 @@ export interface SequencerCentering {
 	readonly enabled: boolean
 	// Configuration value for solver.
 	readonly solver: Omit<PlateSolveStart, 'id' | 'path'>
-
 	// Maximum plate-solved separation accepted from the target, commonly a few arcseconds.
 	readonly tolerance: Angle
-
 	// Maximum number of attempts allowed for this operation or recovery.
 	readonly maximumAttempts: number
 	// Stable delay or settling policy, in seconds, required after a state transition.
@@ -260,7 +226,6 @@ export interface SequencerTargetConstraint {
 	readonly enabled: boolean
 	// Configuration value for window.
 	readonly window: SequencerTimeWindow
-
 	// Minimum target altitude required for observation.
 	// Radians in [-π/2, π/2]; omit to disable the lower limit.
 	readonly minimumAltitude?: Angle
@@ -293,7 +258,7 @@ export interface SequencerTargetConstraint {
 
 // Defines the frame groups and capture scheduling strategy of the primary imaging plan.
 // The frames array contains the actual exposure recipes executed by the Sequencer.
-export interface SequencerCapture extends SequencerCamera {
+export interface SequencerCapture {
 	// Controls when or in what order this plan executes relative to related work.
 	readonly order: 'sequential' | 'interleaved' | 'roundRobin' | 'weightedRoundRobin'
 	// Number of times the complete frame plan is repeated.
@@ -315,39 +280,22 @@ export interface SequencerFrame {
 	// Stable identifier used by definitions, checkpoints, events, or ordered actions.
 	// Use a non-empty value unique within its owning collection.
 	readonly id: string
-	// Human-readable label for this object.
-	// Use a non-empty value suitable for logs and UI display.
-	readonly name: string
 	// Controls whether this feature or definition is active.
 	readonly enabled: boolean
-	// Camera frame classification written to the image metadata.
-	readonly frameType: FrameType
-
-	// Exposure duration for each frame in this group.
-	// Seconds; use a finite value > 0 within the camera exposure range.
-	readonly exposureTime: number
-
 	// Requested number of accepted frames in this group.
 	// Use an integer >= 0; 0 makes the group execute nothing.
 	readonly count: number
-
 	// Extra slots this group may lose to abandoned frames and still reach its target.
 	// Use an integer >= 0; omit for 0, which makes the group execute exactly the slots it needs.
 	readonly abandonmentBudget?: number
-
-	// Filter reference associated with this configuration.
-	// The referenced name or position must exist on the selected wheel.
-	readonly filter?: SequencerFilterReference
 	// Relative scheduling weight used by weightedRoundRobin order.
 	// Use a finite value > 0; 1 gives equal weight.
 	readonly weight: number
 	// Optional per-frame delay overriding the capture-level delay.
 	// Seconds; use a finite value >= 0; omit to inherit capture.delay.
 	readonly delay?: number
-
-	// Per-frame camera-setting overrides applied over capture.defaults.
-	// Only supplied properties override defaults; this field is not a camera device reference.
-	readonly camera: Partial<SequencerCamera>
+	// Camera settings of this group, including exposure, frame type, and filter.
+	readonly capture: SequencerCameraCapture
 }
 
 // Identifies a filter either by its configured name or by its zero/one-based wheel position, according to the driver convention.
@@ -372,25 +320,31 @@ export type SequencerCamera = Pick<CameraCaptureStart, 'binX' | 'binY' | 'gain' 
 
 // Defines a single-frame capture recipe used by autofocus, centering, guiding, and other supporting routines.
 // Unlike the main capture plan, it does not include repetition or integration targets.
-export interface SequencerAuxiliaryCapture extends SequencerCamera {
-	// Exposure duration, in seconds, used by the supporting routine.
-	readonly exposureTime: number
-	// Camera frame classification written to the image metadata.
-	readonly frameType: FrameType
+export interface SequencerAuxiliaryCapture extends SequencerCamera, Pick<CameraCaptureStart, 'exposureTime' | 'exposureTimeUnit' | 'frameType'> {
 	// Filter reference associated with this configuration.
 	readonly filter?: SequencerFilterReference
 }
 
+// Primary imaging capture of a frame group. Same shape as an auxiliary capture: the camera settings plus
+// exposure, unit, frame type, and optional filter. Unlike the former capture-level defaults, every field is
+// present here — the compiler copies this object onto the plan group instead of merging overrides.
+export interface SequencerCameraCapture extends SequencerAuxiliaryCapture {}
+
+// Exposure duration of a sequencer capture, in seconds.
+//
+// The capture keeps the value the editor declared together with its unit, which is what the camera request
+// consumes. Integration, remaining time, file names, and the meridian guard are all stated in seconds, so
+// every one of those paths converts through here instead of reading `exposureTime` as if the unit were fixed.
+export function sequencerCaptureExposureInSeconds(capture: Pick<SequencerCameraCapture, 'exposureTime' | 'exposureTimeUnit'>) {
+	return exposureTimeInSeconds(capture.exposureTime, capture.exposureTimeUnit)
+}
+
 // Guiding and dither
 
-// Configures guider acquisition, startup, settling, quality thresholds, and recovery.
-// The connection union determines whether the session is reused, remote, or locally owned.
+// Configures guiding startup, settling, quality thresholds, and recovery. The guider itself is a device role.
 export interface SequencerGuiding {
 	// Controls whether this feature or definition is active.
 	readonly enabled: boolean
-	// Configuration value for connection.
-	readonly connection: SequencerGuiderConnection
-
 	// Controls whether calibrate before start is applied.
 	readonly calibrateBeforeStart: boolean
 	// Controls whether recalibrate after meridian flip is applied.
@@ -399,7 +353,6 @@ export interface SequencerGuiding {
 	readonly restoreAfterInterruption: boolean
 	// Controls whether guiding is stopped after the session ends.
 	readonly stopOnShutdown: boolean
-
 	// Stable delay or settling policy required after a state transition.
 	readonly settle: SequencerGuiderSettle
 	// Configuration value for thresholds.
@@ -408,42 +361,6 @@ export interface SequencerGuiding {
 	readonly recovery: SequencerGuidingRecovery
 	// Retry policy applied when this operation fails.
 	readonly retry: SequencerRetryPolicy
-}
-
-// Discriminated union describing how the Sequencer obtains a guider session.
-// The mode may connect to a remote guider or create a local one.
-export type SequencerGuiderConnection = SequencerRemoteGuider | SequencerLocalGuider
-
-// Defines a network connection to an external guider service such as PHD2.
-// TCP ports are integers from 1 to 65535; 4400 is the usual PHD2 default.
-export interface SequencerRemoteGuider {
-	// Selects the operating mode for this configuration.
-	readonly mode: 'remote'
-	// Network host name or IP address of the remote service.
-	readonly host: string
-	// TCP port of the remote guider service.
-	readonly port: number
-	// Optional named profile understood by the selected backend.
-	readonly profile?: string
-}
-
-// Defines a guider implemented locally from the session guideCamera and guideOutput devices.
-// Focal length and optional pixel size are used to derive image scale and guiding corrections.
-export interface SequencerLocalGuider {
-	// Selects the operating mode for this configuration.
-	readonly mode: 'local'
-
-	// Focal length (mm) of the guide optical system.
-	readonly focalLength: number
-
-	// Physical guide-camera pixel size in micrometers.
-	readonly pixelSize?: number
-
-	// Capture recipe used by this feature.
-	// The nested object must be valid for the selected camera.
-	// The filter reference is omitted: a local guider drives its guide camera alone, and the only wheel the
-	// session addresses is the imaging one, which a guide filter must never move.
-	readonly capture: Omit<SequencerAuxiliaryCapture, 'filter'>
 }
 
 // Defines when guiding is considered stable after start, recovery, or dither.
@@ -1551,6 +1468,7 @@ export const DEFAULT_SEQUENCER_CAMERA: SequencerCamera = {
 export const DEFAULT_SEQUENCER_AUXILIARY_CAPTURE: SequencerAuxiliaryCapture = {
 	...DEFAULT_SEQUENCER_CAMERA,
 	exposureTime: 1,
+	exposureTimeUnit: 'second',
 	frameType: 'LIGHT',
 }
 
@@ -1565,24 +1483,34 @@ export const DEFAULT_SEQUENCER: Sequencer = {
 	target: {
 		id: '',
 		name: '',
-		enabled: false,
 		type: 'JNOW',
+		J2000: {
+			x: '00 00 00.00',
+			y: '00 00 00.00',
+		},
 		JNOW: {
 			x: '00 00 00.00',
 			y: '00 00 00.00',
 		},
+		ALTAZ: {
+			x: '00 00 00.00',
+			y: '00 00 00.00',
+		},
+		ECLIPTIC: {
+			x: '00 00 00.00',
+			y: '00 00 00.00',
+		},
+		GALACTIC: {
+			x: '00 00 00.00',
+			y: '00 00 00.00',
+		},
+		timeout: 300,
+		settle: 2,
+		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
 		tracking: {
 			enabled: false,
 			mode: 'SIDEREAL',
 			stopOnShutdown: false,
-			retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
-		},
-		goto: {
-			enabled: false,
-			skipTolerance: 0.001,
-			arrivalTolerance: 0.0005,
-			timeout: 300,
-			settle: 2,
 			retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
 		},
 		center: {
@@ -1611,15 +1539,9 @@ export const DEFAULT_SEQUENCER: Sequencer = {
 		continueAfterRejectedFrame: false,
 		retry: structuredClone(DEFAULT_SEQUENCER_RETRY_POLICY),
 		frames: [],
-		...DEFAULT_SEQUENCER_CAMERA,
 	},
 	guiding: {
 		enabled: false,
-		connection: {
-			mode: 'remote',
-			host: '127.0.0.1',
-			port: 4400,
-		},
 		calibrateBeforeStart: false,
 		recalibrateAfterMeridianFlip: true,
 		restoreAfterInterruption: true,
@@ -1823,11 +1745,11 @@ export const DEFAULT_SEQUENCER: Sequencer = {
 		autoSubFolderMode: 'off',
 	},
 	startup: {
-		enabled: false,
+		enabled: true,
 		continueOnFailure: false,
 	},
 	shutdown: {
-		enabled: false,
+		enabled: true,
 		runOnCompletion: true,
 		runOnStop: true,
 		runOnFailure: true,

@@ -68,7 +68,7 @@ export type SequencerInterlockPhase = 'suspension' | 'body' | 'resume' | 'dither
 export interface SequencerInterlockReport {
 	// Phase the returned failure came from, absent while nothing failed. It is what lets the caller apply the
 	// terminal policy of the step that actually failed: the dither is emitted by the bracket rather than walked
-	// by the plan, and it carries its own retry budget and `onFailure` (§10).
+	// by the plan, and it carries its own retry budget and `onFailure`.
 	phase?: SequencerInterlockPhase
 }
 

@@ -130,8 +130,8 @@ export interface SequencerActionContext {
 	// than writing somewhere it did not prove.
 	readonly auxiliary: (kind: SequencerAuxiliaryKind, extension: string) => SequencerAuxiliaryTarget | undefined
 	// Guiding session this sequencer session commands, absent when it guides through none. It is session
-	// state and not configuration: a remote or local guider only has an id once it has been connected, which
-	// is something the session does when it starts and the compiler cannot know.
+	// state and not configuration: the id is the already-connected guider the operator named on the devices,
+	// which the compiler cannot know and the runtime binds at start.
 	readonly guider?: string
 	// Read-only view of the current checkpoint. An action reads it and never writes it: the runtime owns it.
 	readonly checkpoint: SequencerCheckpoint

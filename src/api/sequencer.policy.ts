@@ -1,7 +1,7 @@
 import type { SequencerFailureReason, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerDesiredState } from '#/sequencer.state'
 
-// What a session does when one action did not succeed (§10).
+// What a session does when one action did not succeed.
 //
 // The decision is a pure function of the declared policy, the attempt that failed, the normalized reason and
 // whether a control command explains the failure. Nothing here reads a clock, a device or the session state:
@@ -117,7 +117,7 @@ function retryable(failure: SequencerPolicyFailure) {
 	return failure.attempt < failure.retry.maxAttempts && failure.retry.retryOn.includes(failure.reason)
 }
 
-// Decides what the session does about one failed action (§10).
+// Decides what the session does about one failed action.
 //
 // An `aborted` outcome is decided by its origin rather than by the policy, because the origin is part of the
 // reason. A cancellation a control command explains is intentional and converges to the state that command
@@ -129,7 +129,7 @@ function retryable(failure: SequencerPolicyFailure) {
 // the information.
 //
 // The commanded origin carries *which* state it converged to, and the two are not interchangeable: an
-// immediate pause cancels the running action exactly like an immediate stop does (§11.3), so reading every
+// immediate pause cancels the running action exactly like an immediate stop does, so reading every
 // commanded cancellation as a stop would shut a session down because the operator asked it to wait.
 //
 // It is also why an aborted action is never retried: no origin leaves anything to retry against, the stopped

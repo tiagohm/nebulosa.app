@@ -1,32 +1,9 @@
-import { join } from 'path'
-import { VizierGaiaCatalog } from 'nebulosa/src/adapters/catalogs/vizier'
-import type { VizierGaiaCatalogEntry } from 'nebulosa/src/adapters/catalogs/vizier'
-import { findHnsky290Stars } from 'nebulosa/src/catalogs/stars/hnsky'
-import type { Hnsky290Database, Hnsky290Files } from 'nebulosa/src/catalogs/stars/hnsky'
-import type { Writable } from 'nebulosa/src/core/types'
 import { AlpacaClient } from 'nebulosa/src/devices/alpaca/client'
 import { IndiClient } from 'nebulosa/src/devices/indi/client'
-import type { IndiClientHandler } from 'nebulosa/src/devices/indi/client'
-import type { Client, Device } from 'nebulosa/src/devices/indi/device'
-import type { DeviceProvider } from 'nebulosa/src/devices/indi/manager/device'
-import type { FocuserManager } from 'nebulosa/src/devices/indi/manager/focuser'
-import type { GuideOutputManager } from 'nebulosa/src/devices/indi/manager/guideoutput'
-import type { MountManager } from 'nebulosa/src/devices/indi/manager/mount'
-import type { RotatorManager } from 'nebulosa/src/devices/indi/manager/rotator'
-import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
-import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
-import { CoverSimulator } from 'nebulosa/src/devices/indi/simulator/cover'
-import { FlatPanelSimulator } from 'nebulosa/src/devices/indi/simulator/flatpanel'
-import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
-import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
-import { RotatorSimulator } from 'nebulosa/src/devices/indi/simulator/rotator'
-import type { CatalogSource, CatalogSourceStar, DeviceSimulatorOptions } from 'nebulosa/src/devices/indi/simulator/types'
-import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
-import type { AstronomicalImageStar } from 'nebulosa/src/imaging/synthetic/generator'
-import { clamp } from 'nebulosa/src/math/numerical/math'
-import type { Angle } from 'nebulosa/src/math/units/angle'
+import type { Client } from 'nebulosa/src/devices/indi/device'
 import { EventBus } from 'src/shared/bus'
 import type { ConnectionEvent, Connect, ConnectionStatus } from '#/connection'
+import type { ConnectionInitializers, ConnectionStart } from './connection.start'
 import { response } from './http'
 import type { Endpoints } from './http'
 import { indiBus } from './indi'
@@ -35,99 +12,48 @@ import type { NotificationHandler } from './notification'
 import type { OperationCoordinator } from './operation'
 import { settlesWithin } from './util'
 
+// Owns pending and active connections, publishes their status and coordinates cleanup before disposal.
+
+// Public connection lifecycle notifications forwarded to browser clients.
 export interface ConnectionBusEvents {
+	// Fully initialized new or reused connection.
 	readonly open: ConnectionEvent
+	// Final status of a removed connection.
 	readonly close: ConnectionEvent
 }
 
+// Shared connection event channel.
 export const connectionBus = new EventBus<ConnectionBusEvents>()
 
 // Maximum milliseconds an expected client disconnect waits for operational cleanup.
 const DEFAULT_DISCONNECT_CLEANUP_TIMEOUT = 5000
 
-function save(name: string, properties: unknown) {
-	const path = join(Bun.env.appDir, `${name}.config.json`)
-	return Bun.write(path, JSON.stringify(properties))
+// One initialization shared by concurrent requests; cancellation prevents late publication.
+interface PendingConnection {
+	// Exact client whose partial resources are owned by this attempt.
+	readonly client: Client
+	// Completion including cleanup; resolves undefined on failure or cancellation.
+	readonly result: Promise<ConnectionStatus | undefined>
+	// Set by disconnect or an unexpected transport close while initialization is pending.
+	cancelled: boolean
 }
 
-async function load(name: string) {
-	const file = Bun.file(join(Bun.env.appDir, `${name}.config.json`))
-	if (await file.exists()) return file.json()
-	return []
-}
-
-const DEFAULT_ASTRONOMICAL_IMAGE_STAR: Partial<Readonly<AstronomicalImageStar>> = { hfd: 2.5, snr: 130, flux: 0.55 }
-
-let HNSKY_290_G14_FILES: Hnsky290Files | undefined
-let HNSKY_290_G16_FILES: Hnsky290Files | undefined
-
-async function loadHnskyDatabase(database: Hnsky290Database) {
-	if (database === 'g14' && HNSKY_290_G14_FILES !== undefined) return true
-	if (database === 'g16' && HNSKY_290_G16_FILES !== undefined) return true
-
-	const file = Bun.file(join(Bun.env.appDir, `HNSKY_${database}.tar`))
-
-	if (await file.exists()) {
-		const archive = new Bun.Archive(await file.arrayBuffer())
-		const files = await archive.files()
-		if (database === 'g14') HNSKY_290_G14_FILES = files
-		else HNSKY_290_G16_FILES = files
-		return true
-	} else {
-		console.warn('HNSKY database not found at', file.name)
-	}
-
-	return false
-}
-
-async function hnskyCatalogSource(files: Hnsky290Files, rightAscension: Angle, declination: Angle, radius: Angle): Promise<readonly CatalogSourceStar[]> {
-	const database = files === HNSKY_290_G14_FILES ? 'g14' : 'g16'
-	const stars = await findHnsky290Stars(files, database, { rightAscension, declination, radius })
-	for (const star of stars) Object.assign(star, DEFAULT_ASTRONOMICAL_IMAGE_STAR)
-	return stars as never
-}
-
-// Queries VizieR around the active mount and projects the stars onto the sensor.
-async function vizierCatalogSource(centerRightAscension: Angle, centerDeclination: Angle, radius: Angle) {
-	const catalog = new VizierGaiaCatalog()
-
-	const stars = (await catalog.queryCone(centerRightAscension, centerDeclination, radius)) as unknown as Writable<CatalogSourceStar & VizierGaiaCatalogEntry>[]
-
-	if (stars.length === 0) return []
-
-	const hfdSpread = 0.5
-	const maxBrightness = 10 ** (-0.4 * -1.46)
-	const invMaxBrightness = 1 / maxBrightness
-
-	try {
-		for (let i = 0; i < stars.length; i++) {
-			const star = stars[i]
-
-			const brightness = 10 ** (-0.4 * star.magnitude)
-			star.colorIndex = clamp(star.colorIndex || 0.65, -0.25, 1.9)
-			const normalized = clamp(brightness * invMaxBrightness, 0, 1)
-
-			star.flux = 0.2 + 0.848 * normalized
-			star.hfd = 1.2 + 2.4 * clamp((1 - normalized) * (0.35 + hfdSpread * 0.65), 0, 1)
-			star.snr = 12 + normalized * 180
-		}
-	} catch (e) {
-		console.error('failed to generate stars from vizier', e)
-		return []
-	}
-
-	return stars
+// Groups equivalent connection requests before a transport identity is available. ALPACA includes TLS.
+function connectionKey(request: Readonly<Connect>) {
+	return request.type === 'SIMULATOR' ? request.type : JSON.stringify([request.type, request.host, request.port, request.type === 'ALPACA' && request.secured])
 }
 
 // Owns client transports and coordinates their operational cleanup before disposal.
 export class ConnectionHandler {
 	private readonly clients = new Map<string, Client>()
+	private readonly pending = new Map<string, PendingConnection>()
 
 	// Subscribes to unexpected transport closes and retains the coordinator used during disconnect.
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
 		readonly notificationHandler: NotificationHandler,
 		readonly operationCoordinator: OperationCoordinator,
+		readonly initializers: ConnectionInitializers,
 		readonly disconnectCleanupTimeout = DEFAULT_DISCONNECT_CLEANUP_TIMEOUT,
 	) {
 		indiBus.subscribe('close', (client) => {
@@ -138,6 +64,7 @@ export class ConnectionHandler {
 		connectionBus.subscribe('close', (event) => wsm.send('connection:close', event))
 	}
 
+	// Returns the client with id, or the first active client; notifies when there is no active connection.
 	get(id?: string) {
 		let client: Client | undefined
 		if (!id) client = this.clients.values().next().value
@@ -146,98 +73,117 @@ export class ConnectionHandler {
 		return client!
 	}
 
-	async connect(req: Connect & { id?: string }, indi: IndiClientHandler & DeviceProvider<Device>, mountManager: MountManager, focuserManager: FocuserManager, rotatorManager: RotatorManager, guideOutputManager: GuideOutputManager): Promise<ConnectionStatus | undefined> {
-		for (const [, client] of this.clients) {
+	// Starts or reuses a trusted connection request. Equivalent pending requests share one completion;
+	// only fully initialized clients enter the active map. Failures notify and return undefined.
+	async connect(req: Connect & { id?: string }): Promise<ConnectionStatus | undefined> {
+		for (const client of this.clients.values()) {
+			if (client.type !== req.type) continue
 			if (
-				(client.type === 'SIMULATOR' && req.type === client.type) ||
+				client.type === 'SIMULATOR' ||
 				client.id === req.id ||
 				(client instanceof IndiClient && client.remotePort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host)) ||
-				(client instanceof AlpacaClient && client.remotePort === req.port && client.remoteHost === req.host)
+				(client instanceof AlpacaClient && client.remotePort === req.port && client.remoteHost === req.host && client.url.startsWith(req.secured ? 'https:' : 'http:'))
 			) {
-				console.info('reusing existing connection:', client.id, client.description)
-				this.operationCoordinator.arbiter.markClientAvailable(client.id)
-				const status = this.status(client)!
-				connectionBus.emit('open', { status, reused: true })
-				return status
+				return this.#opened(client, true)
 			}
 		}
 
-		if (req.type === 'INDI') {
-			const client = new IndiClient({ handler: indi })
+		const key = connectionKey(req)
+		const existing = this.pending.get(key)
+		if (existing) return await existing.result
 
-			try {
-				if (await client.connect(req.host, req.port)) {
-					this.operationCoordinator.arbiter.markClientAvailable(client.id)
-					this.clients.set(client.id, client)
+		const initializer = this.initializers[req.type]
+		if (initializer === undefined) {
+			this.notificationHandler.send({ title: 'CONNECTION', description: 'Unsupported connection type: ' + req.type, color: 'danger' })
+			return undefined
+		}
 
-					console.info('new connection to:', client.id, client.description)
+		let prepared: ConnectionStart
 
-					const status = this.status(client)!
-					connectionBus.emit('open', { status, reused: false })
-					return status
-				} else {
-					this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to INDI server', color: 'danger' })
-				}
-			} catch (e) {
-				this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to INDI server', color: 'danger' })
+		try {
+			prepared = initializer({ ...req })
+		} catch (error) {
+			this.#failed(req.type, error)
+			return undefined
+		}
+
+		// INDI learns its id when TCP connects; other clients are blocked before they publish devices.
+		if (prepared.client.id) this.operationCoordinator.arbiter.markClientUnavailable(prepared.client.id)
+
+		const pending: PendingConnection = {
+			client: prepared.client,
+			cancelled: false,
+			result: Promise.resolve().then(() => this.#start(key, req.type, prepared, pending)),
+		}
+
+		this.pending.set(key, pending)
+		return await pending.result
+	}
+
+	// Completes one prepared attempt. Failure or cancellation disposes partial resources before retry is allowed.
+	async #start(key: string, type: Connect['type'], prepared: ConnectionStart, pending: PendingConnection): Promise<ConnectionStatus | undefined> {
+		const client = prepared.client
+		let accepted = false
+
+		try {
+			if (pending.cancelled) return undefined
+
+			const started = await prepared.start()
+			if (pending.cancelled) return undefined
+
+			if (!started) {
+				this.#failed(type)
+				return undefined
 			}
-		} else if (req.type === 'ALPACA') {
-			const client = new AlpacaClient(`http${req.secured ? 's' : ''}://${req.host}:${req.port}`, { handler: indi }, indi)
-			this.operationCoordinator.arbiter.markClientAvailable(client.id)
 
-			try {
-				if (await client.start()) {
-					this.clients.set(client.id, client)
+			// Different INDI host aliases can resolve to the same transport identity.
+			const existing = this.clients.get(client.id)
+			if (existing) return this.#opened(existing, true)
 
-					console.info('new connection to:', client.id, client.description)
-
-					const status = this.status(client)!
-					connectionBus.emit('open', { status, reused: false })
-					return status
-				} else {
-					this.operationCoordinator.arbiter.markClientUnavailable(client.id)
-					this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to Alpaca server', color: 'danger' })
-				}
-			} catch (e) {
-				this.operationCoordinator.arbiter.markClientUnavailable(client.id)
-				this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to Alpaca server', color: 'danger' })
-			}
-		} else {
-			const client = new ClientSimulator('client.simulator', indi)
-			this.operationCoordinator.arbiter.markClientAvailable(client.id)
 			this.clients.set(client.id, client)
-
-			const g14 = await loadHnskyDatabase('g14')
-			const g16 = await loadHnskyDatabase('g16')
-
-			const catalogSources: Record<string, CatalogSource | undefined> = {
-				VIZIER: vizierCatalogSource,
-				HNSKY_G14: g14 ? (rightAscension, declination, radius) => hnskyCatalogSource(HNSKY_290_G14_FILES!, rightAscension, declination, radius) : undefined,
-				HNSKY_G16: g16 ? (rightAscension, declination, radius) => hnskyCatalogSource(HNSKY_290_G16_FILES!, rightAscension, declination, radius) : undefined,
-			} as const
-
-			const options: DeviceSimulatorOptions = { save, load }
-			const mount = new MountSimulator('Mount Simulator', client, options)
-			const camera = new CameraSimulator('Camera Simulator', client, { ...options, mountManager, guideOutputManager, focuserManager, rotatorManager, catalogSources })
-			const guideCamera = new CameraSimulator('Guide Camera Simulator', client, { ...options, mountManager, guideOutputManager, focuserManager, rotatorManager, catalogSources })
-			const focuser = new FocuserSimulator('Focuser Simulator', client, options)
-			const wheel = new WheelSimulator('Wheel Simulator', client, options)
-			const rotator = new RotatorSimulator('Rotator Simulator', client, options)
-			const flatPanel = new FlatPanelSimulator('Flat Panel Simulator', client, options)
-			const cover = new CoverSimulator('Dust Cap Simulator', client, options)
-
-			console.info('new connection to:', client.id, client.description)
-
-			const status = this.status(client)!
-			connectionBus.emit('open', { status, reused: false })
-			return status
+			accepted = true
+			return this.#opened(client, false)
+		} catch (error) {
+			if (!pending.cancelled) this.#failed(type, error)
+			return undefined
+		} finally {
+			try {
+				if (!accepted) {
+					if (client.id && !this.clients.has(client.id)) this.operationCoordinator.arbiter.markClientUnavailable(client.id)
+					client[Symbol.dispose]()
+				}
+			} finally {
+				this.pending.delete(key)
+			}
 		}
+	}
 
-		return undefined
+	// Publishes a fully initialized client and enables its resources; reused identifies an existing connection.
+	#opened(client: Client, reused: boolean): ConnectionStatus {
+		this.operationCoordinator.arbiter.markClientAvailable(client.id)
+		console.info(reused ? 'reusing existing connection:' : 'new connection to:', client.id, client.description)
+		const status = this.status(client)!
+		connectionBus.emit('open', { status, reused })
+		return status
+	}
+
+	// Reports a protocol startup failure; unexpected causes are logged without exposing transport details to the UI.
+	#failed(type: Connect['type'], error?: unknown) {
+		if (error !== undefined) console.error('failed to start connection:', type, error)
+		this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to start ' + type + ' connection', color: 'danger' })
 	}
 
 	// Blocks a client, waits bounded operational cleanup, then disposes its live transport.
 	async disconnect(id: string | Client) {
+		for (const pending of this.pending.values()) {
+			if (typeof id === 'string' ? pending.client.id === id : pending.client === id) {
+				pending.cancelled = true
+				if (pending.client.id) this.operationCoordinator.arbiter.markClientUnavailable(pending.client.id)
+				await pending.result
+				return
+			}
+		}
+
 		const entry = this.#entry(id)
 
 		if (entry === undefined) return
@@ -253,8 +199,14 @@ export class ConnectionHandler {
 
 	// Blocks and cancels operations after an unexpected close without waiting on an unavailable transport.
 	#unexpectedClose(client: Client) {
-		const entry = this.#entry(client)
+		for (const pending of this.pending.values()) {
+			if (pending.client === client) {
+				pending.cancelled = true
+				return
+			}
+		}
 
+		const entry = this.#entry(client)
 		if (entry === undefined) return
 
 		const [key] = entry
@@ -286,6 +238,7 @@ export class ConnectionHandler {
 		connectionBus.emit('close', { status })
 	}
 
+	// Returns transport metadata for a client or active id, or undefined when the id is not registered.
 	status(client?: string | Client): ConnectionStatus | undefined {
 		if (client === undefined) return undefined
 
@@ -301,6 +254,7 @@ export class ConnectionHandler {
 		}
 	}
 
+	// Allocates the statuses of active connections, excluding pending attempts.
 	list() {
 		return Array.from(this.clients.values())
 			.map((e) => this.status(e))
@@ -308,9 +262,10 @@ export class ConnectionHandler {
 	}
 }
 
-export function connection(connectionHandler: ConnectionHandler, indi: IndiClientHandler & DeviceProvider<Device>, mountManager: MountManager, focuserManager: FocuserManager, rotatorManager: RotatorManager, guideOutputManager: GuideOutputManager) {
+// Creates HTTP routes over the configured connection owner; runtime dependencies are injected at startup.
+export function connection(connectionHandler: ConnectionHandler) {
 	return {
-		'/connections': { GET: () => response(connectionHandler.list()), POST: async (req) => response(await connectionHandler.connect(await req.json(), indi, mountManager, focuserManager, rotatorManager, guideOutputManager)) },
+		'/connections': { GET: () => response(connectionHandler.list()), POST: async (req) => response(await connectionHandler.connect(await req.json())) },
 		'/connections/:id': { GET: (req) => response(connectionHandler.status(req.params.id)), DELETE: async (req) => response(await connectionHandler.disconnect(req.params.id)) },
 	} as const satisfies Endpoints
 }

@@ -1,4 +1,4 @@
-import { tw } from '@shared/util'
+import { cn } from 'cn'
 import { nanoid } from 'nanoid'
 import type { ClassValue } from 'tailwind-variants'
 
@@ -56,7 +56,7 @@ function emitToastChange() {
 
 // Resolves the complete toast payload from provider defaults and toast overrides.
 function resolveToastRecord(options: ToastOptions): ToastRecord {
-	const mergedOptions = { ...toastDefaults, ...options, className: tw(toastDefaults.className, options.className) }
+	const mergedOptions = { ...toastDefaults, ...options, className: cn(toastDefaults.className, options.className) }
 
 	return {
 		...mergedOptions,

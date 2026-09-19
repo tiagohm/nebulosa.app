@@ -171,7 +171,7 @@ Use `uv` only as a development-time reference tool for Astropy, ERFA, NumPy, Sky
 - Use `Icons` from `src/web/ui/Icon.tsx` and `IconButton` for icon-only actions. Do not add an icon library without an explicit requirement.
 - Add a primitive only when existing ones cannot express the product need. Keep it generic, controlled where practical, ref-capable, and in one file under `src/web/ui/components`.
 - Match existing APIs and semantic variants such as `variant`, `color`, `size`, `disabled`, `readOnly`, `loading`, `fullWidth`, `startContent`, and `endContent`. Style supported states inside the primitive.
-- Use local `tv()` definitions, typed slots or class overrides, and `tw()` from `src/web/shared/util.ts` where composition benefits from them.
+- Use local `tv()` definitions, typed slots or class overrides, and `cn()` from `cn` package where composition benefits from them.
 - Keep Tailwind classes statically discoverable and sorted by OXC. Prefer CSS variables and `@theme` tokens; avoid dynamic partial utility names and arbitrary values without a measured reason.
 - Preserve established geometry and focus treatment. Use neutral dark surfaces by default and accents for action, selection, or emphasis.
 - Flatten fragments in compound child APIs. For large collections, prefer `itemCount` plus a renderer, following `List` and `Table`.

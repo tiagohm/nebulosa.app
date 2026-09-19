@@ -28,7 +28,7 @@ import { StarDetectionHandler } from 'src/api/stardetection'
 import { DEFAULT_AUTO_FOCUS_START } from '#/autofocus'
 import type { AutoFocusEvent } from '#/autofocus'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
-import { captureHandle, waitUntil } from './util'
+import { cameraFrameEvent, captureHandle, waitUntil } from './util'
 
 cameraBus.forceSync = true
 
@@ -117,7 +117,7 @@ function vCurve(focuser: Focuser, best: number, stepSize: number) {
 }
 
 function frame() {
-	return captureHandle({ result: Promise.resolve(successfulOperationResult({ paths: ['focus.fit'], frameCount: 1 })) })
+	return captureHandle({ result: Promise.resolve(successfulOperationResult({ frames: [cameraFrameEvent('focus.fit')], frameCount: 1 })) })
 }
 
 describe('auto focus runner', () => {

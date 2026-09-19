@@ -367,6 +367,8 @@ describe('mount handler', () => {
 				port: status.stellarium ? status.stellarium.port : 0,
 				socket: { data() {} },
 			})
+			message.writeUInt16LE(20, 0)
+			message.writeUInt16LE(0, 2)
 			client.write(message)
 			client.flush()
 

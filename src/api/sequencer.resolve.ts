@@ -1,10 +1,9 @@
 import { statSync } from 'fs'
 import { dirname, resolve } from 'path'
 import { isCamera, isCover, isDome, isFlatPanel, isFocuser, isGuideOutput, isMount, isRotator, isWheel } from 'nebulosa/src/devices/indi/device'
-import type { Camera, Device, GuideOutput } from 'nebulosa/src/devices/indi/device'
+import type { Device } from 'nebulosa/src/devices/indi/device'
 import type { SequencerDeviceRole } from '#/sequencer'
 import type { SequencerDiagnostic, SequencerPlan } from '#/sequencer.plan'
-import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from './guider.session'
 import type { ResourceKey, ResourceRequest } from './resource'
 import { resourceKey } from './resource'
 import { sequencerPlanNodes } from './sequencer.compiler'
@@ -52,7 +51,7 @@ export type SequencerDeviceLookup = (id: string) => Device | undefined
 // Interface each role requires the resolved device to advertise. A device that does not advertise it cannot
 // execute the commands the role exists to issue, and finding that out at the first command means finding it
 // out with the observatory already open.
-const SEQUENCER_ROLE_INTERFACE: Record<SequencerDeviceRole, (device: Device) => boolean> = {
+const SEQUENCER_ROLE_INTERFACE = {
 	camera: isCamera,
 	mount: isMount,
 	wheel: isWheel,
@@ -63,45 +62,7 @@ const SEQUENCER_ROLE_INTERFACE: Record<SequencerDeviceRole, (device: Device) => 
 	cover: isCover,
 	flatPanel: isFlatPanel,
 	dome: isDome,
-}
-
-// Narrowed guide camera of a resolved binding set. The interface check of the resolution already refused
-// anything that is not a camera, so the narrowing only restates what the binding guarantees.
-function guideCameraOf(bindings: readonly SequencerRoleBinding[]): Camera | undefined {
-	const device = bindings.find((binding) => binding.role === 'guideCamera')?.device
-	return device !== undefined && isCamera(device) ? device : undefined
-}
-
-// Narrowed guide output of a resolved binding set, for the same reason as the camera above.
-function guideOutputOf(bindings: readonly SequencerRoleBinding[]): GuideOutput | undefined {
-	const device = bindings.find((binding) => binding.role === 'guideOutput')?.device
-	return device !== undefined && isGuideOutput(device) ? device : undefined
-}
-
-// Logical keys of the guider the plan owns, which the session reserves alongside the physical ones.
-//
-// `guider.session.ts` reserves a guiding session by `logical:guider:*` keys and deliberately leaves the
-// physical device acquirable, so the guider's own operations can lease it. Reserving only the physical half
-// therefore produces a half state that is worse than a clean failure: a guider opened by hand during the
-// session connects successfully, because the logical keys are free, and only fails at its first command.
-// A local guider is reserved one device at a time rather than as a pair, because a key naming both would
-// differ for every combination and two sessions sharing only the camera would both be accepted.
-function guiderKeysOf(plan: SequencerPlan, bindings: readonly SequencerRoleBinding[]): ResourceRequest[] {
-	if (plan.guider === undefined) return []
-
-	const { connection } = plan.guider
-
-	if (connection.mode === 'remote') return [{ key: remoteGuiderKey(connection.host, connection.port) }]
-
-	const camera = guideCameraOf(bindings)
-	const guideOutput = guideOutputOf(bindings)
-	const requests: ResourceRequest[] = []
-
-	if (camera !== undefined) requests.push({ key: localGuiderCameraKey(camera) })
-	if (guideOutput !== undefined) requests.push({ key: localGuiderOutputKey(guideOutput) })
-
-	return requests
-}
+} as const satisfies Partial<Record<SequencerDeviceRole, (device: Device) => boolean>>
 
 // Resolves every role of a plan into the key set the session reserves.
 //
@@ -122,6 +83,10 @@ export function resolveResources(plan: SequencerPlan, lookup: SequencerDeviceLoo
 			diagnostics.push({ path: `devices.${role}`, message: `the plan commands the ${role} role, which the definition does not declare` })
 			continue
 		}
+
+		// The guider is a session already connected before start, not an INDI device. Its logical keys are
+		// held by that session; reserving them here would conflict with the guider the plan is supposed to use.
+		if (role === 'guider') continue
 
 		const device = lookup(id)
 
@@ -147,12 +112,6 @@ export function resolveResources(plan: SequencerPlan, lookup: SequencerDeviceLoo
 		if (keys.has(binding.key)) continue
 		keys.add(binding.key)
 		requests.push({ key: binding.key, device: binding.device })
-	}
-
-	for (const request of guiderKeysOf(plan, bindings)) {
-		if (keys.has(request.key)) continue
-		keys.add(request.key)
-		requests.push(request)
 	}
 
 	return { ok: true, resources: { bindings, requests } }

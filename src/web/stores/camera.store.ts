@@ -283,6 +283,7 @@ export function updateCameraExposureTime(request: Pick<CameraCaptureStart, 'expo
 }
 
 export function updateCameraCaptureStartFromCamera(camera: Camera, capture: Pick<CameraCaptureStart, 'exposureTime' | 'exposureTimeUnit' | 'frameFormat' | 'x' | 'y' | 'width' | 'height'>) {
+	if (!camera.connected) return
 	updateCameraFrameFormat(capture, camera.frameFormats)
 	updateCameraFrame(capture, camera.frame)
 	!camera.exposuring && updateCameraExposureTime(capture, camera.exposure)

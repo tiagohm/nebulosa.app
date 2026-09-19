@@ -3189,16 +3189,9 @@ function drawMovingBodySymbol(ctx: CanvasRenderingContext2D, type: MovingBodyTyp
 		return
 	}
 
-	if (type !== 'asteroid') {
-		ctx.beginPath()
-		ctx.arc(x, y, 4.5, 0, TAU)
-		ctx.fill()
-		return
-	}
-
 	ctx.beginPath()
-	ctx.rect(x - 2.5, y - 2.5, 5, 5)
-	ctx.stroke()
+	ctx.arc(x, y, type === 'asteroid' ? 3 : 4.5, 0, TAU)
+	ctx.fill()
 }
 
 const OBJECT_HIGLIGHT_POINT = new Float32Array(2)
@@ -4751,7 +4744,7 @@ export class Celestial {
 		const element = this.#renderer.element
 		element.addEventListener('pointermove', this.handlePointerMove)
 		element.addEventListener('click', this.handleClick)
-		select(element).call(behavior)
+		select(element).call(behavior).on('dblclick.zoom', null)
 		this.#d3ZoomBehavior = behavior
 		this.#d3ZoomBound = true
 	}

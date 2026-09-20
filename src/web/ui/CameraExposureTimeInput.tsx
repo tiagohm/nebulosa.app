@@ -1,7 +1,7 @@
-import { tw } from '@shared/util'
 import { CameraExposureTimeUnitDropdown } from '@ui/CameraExposureTimeUnitDropdown'
 import { NumberInput } from '@ui/components/NumberInput'
 import type { NumberInputProps } from '@ui/components/NumberInput'
+import { cn } from 'cn'
 import { exposureTimeIn } from '#/camera'
 import type { CameraExposureTimeUnit } from '#/camera'
 
@@ -34,7 +34,7 @@ export function CameraExposureTimeInput({ className, value, onValueChange, unit,
 	const EndContent = <CameraExposureTimeUnitDropdown color="secondary" onValueChange={handleUnitChange} size="sm" value={unit} disabled={disabled} readOnly={readOnly} />
 
 	return (
-		<div className={tw('flex flex-row items-center gap-1', className)}>
+		<div className={cn('flex flex-row items-center gap-1', className)}>
 			<NumberInput endContent={EndContent} label="Exposure Time" maxValue={max} minValue={min} onValueChange={handleValueChange} value={clampedValue} disabled={disabled} readOnly={readOnly} {...props} />
 		</div>
 	)

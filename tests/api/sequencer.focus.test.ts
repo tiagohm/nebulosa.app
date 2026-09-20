@@ -32,7 +32,7 @@ function autofocusConfiguration(overrides?: Partial<AutofocusConfiguration>): Au
 	return {
 		triggers: { onStart: true, onFilterChange: false, afterMeridianFlip: false, everyFrames: 0, everyTime: 0, temperatureChange: 0, minimumTimeBetweenRuns: 0 },
 		algorithm: { initialOffsetSteps: 4, stepSize: 100, fittingMode: 'HYPERBOLIC', rmsdThreshold: 0.5, reversed: false, maximumPosition: 50000, backlash: { enabled: false, mode: 'overshoot', steps: 0 } },
-		capture: { exposureTime: 3, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 15, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false },
+		capture: { exposureTime: 3, exposureTimeUnit: 'second', frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 15, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false },
 		starDetection: { type: 'astap', timeout: 30, minimumSNR: 8, maximumStars: 400 },
 		filterOffsets: [],
 		settle: 0,

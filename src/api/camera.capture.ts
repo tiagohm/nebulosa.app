@@ -7,7 +7,7 @@ import type { CameraManager } from 'nebulosa/src/devices/indi/manager/camera'
 import type { BlobEncoding, PropertyState } from 'nebulosa/src/devices/indi/types'
 import { base64Source, bufferSource } from 'nebulosa/src/io/io'
 import { DEFAULT_CAMERA_CAPTURE_EVENT, exposureTimeInMicroseconds, exposureTimeInSeconds } from '#/camera'
-import type { CameraCaptureStart } from '#/camera'
+import type { CameraCaptureStart, CameraFrameEvent } from '#/camera'
 import type { GuiderDither, GuiderDitherPhase } from '#/guider'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { FailedOperationResult, OperationFailureReason, OperationResult } from '#/orchestration'
@@ -33,8 +33,8 @@ const DEFAULT_LATE_BLOB_DRAIN_TIME = 100
 
 // Result of a camera capture after every requested frame has been processed.
 export interface CameraCaptureResult {
-	// Paths emitted for processed frames, in capture order.
-	readonly paths: readonly string[]
+	// Events emitted for processed frames, in capture order.
+	readonly frames: readonly CameraFrameEvent[]
 	// Number of fully processed frames.
 	readonly frameCount: number
 }
@@ -327,8 +327,8 @@ class CameraCaptureSession {
 	readonly #request: CameraCaptureStart
 	// Inter-frame delay in microseconds.
 	readonly #waitingTime: number
-	// Paths of fully processed frames, in capture order.
-	readonly #paths: string[] = []
+	// Events of fully processed frames, in capture order.
+	readonly #frames: CameraFrameEvent[] = []
 	// Losing racer that releases a pending rendezvous when a device failure arrives outside it.
 	readonly #terminalFailure = Promise.withResolvers<OperationResult<never>>()
 	// Internal lifecycle position; terminal values never transition back into active work.
@@ -388,8 +388,8 @@ class CameraCaptureSession {
 		if (this.#request.outputName && this.#reporter.remainingCount > 1) return this.#finishFailure('commandFailed', 'a fixed output name captures a single frame')
 
 		const destination = destinationFailure(this.#request)
-
 		if (destination !== undefined) return this.#finishFailure('commandFailed', destination)
+
 		try {
 			this.sessionContext.prepare?.()
 		} catch (error) {
@@ -399,6 +399,7 @@ class CameraCaptureSession {
 		while (this.#reporter.remainingCount > 0 && !this.operationContext.signal.aborted) {
 			// A device failure recorded outside a rendezvous, such as during the inter-frame delay, only surfaces here.
 			if (this.#failureResult !== undefined) return this.#finish(this.#failureResult)
+
 			const dither = await this.#dither()
 			if (!dither.ok) return this.#finish(dither)
 
@@ -556,7 +557,7 @@ class CameraCaptureSession {
 	}
 
 	// Creates the frame attempt before dispatch and awaits exposure+BLOB rendezvous before processing.
-	async #captureFrame(): Promise<OperationResult<string>> {
+	async #captureFrame(): Promise<OperationResult<CameraFrameEvent>> {
 		if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
 
 		// The destination is resolved before the exposure is commanded, so the identity of the frame exists
@@ -615,8 +616,8 @@ class CameraCaptureSession {
 
 		if (!processed.ok) return processed
 
-		this.#paths.push(processed.value)
-		this.#reporter.completeFrame(processed.value)
+		this.#frames.push(processed.value)
+		this.#reporter.completeFrame(processed.value.path)
 		return this.#failureResult ?? processed
 	}
 
@@ -664,7 +665,7 @@ class CameraCaptureSession {
 		if (request.outputPath && request.outputName) {
 			path = join(request.outputPath, request.outputName)
 		} else {
-			const name = request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : this.camera.name
+			const name = request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS', true) : this.camera.name
 			const extension = request.transferFormat === 'XISF' ? 'xisf' : 'fit'
 			path = join(request.outputPath ?? (await makePathFor(request)), request.outputName ?? `${name}.${extension}`)
 		}
@@ -681,17 +682,25 @@ class CameraCaptureSession {
 	//
 	// The file is written to `path`. The image is published under `publishPath` when the caller asked for
 	// one, which is how a sequencer frame can land in a temporary without the UI ever seeing that name.
-	async #processBlob(blob: CameraBlob, path: string): Promise<OperationResult<string>> {
+	async #processBlob(blob: CameraBlob, path: string): Promise<OperationResult<CameraFrameEvent>> {
 		try {
 			const buffer = blob.encoding === 'raw' ? blob.data : await this.sessionContext.io.decode(blob.data)
 			if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
 
 			const published = this.#request.publishPath ?? path
 
+			const frame: CameraFrameEvent = {
+				operation: this.operationContext.id,
+				session: this.#reporter.session,
+				generation: this.#reporter.generation,
+				camera: this.camera.id,
+				path: published,
+			}
+
 			this.sessionContext.imageProcessor.save(buffer, published, this.camera)
 			if (this.#request.autoSave) await this.sessionContext.io.write(path, buffer)
 			if (this.operationContext.signal.aborted) return failedOperationResult(abortReason(this.operationContext.signal))
-			return successfulOperationResult(published)
+			return successfulOperationResult(frame)
 		} catch (error) {
 			return failedOperationResult('commandFailed', errorMessage(error))
 		}
@@ -775,7 +784,7 @@ class CameraCaptureSession {
 		this.#state = result.ok ? 'succeeded' : result.reason === 'aborted' ? 'cancelled' : 'failed'
 		if (!result.ok) this.sessionContext.settleStarted(result)
 		this.#reporter.terminal(!result.ok)
-		return result.ok ? successfulOperationResult({ paths: this.#paths, frameCount: this.#paths.length }) : result
+		return result.ok ? successfulOperationResult({ frames: this.#frames, frameCount: this.#frames.length }) : result
 	}
 }
 

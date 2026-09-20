@@ -8,6 +8,7 @@ import { Fov } from '@ui/Fov'
 import { ImageInfo } from '@ui/ImageInfo'
 import { Interactable } from '@ui/Interactable'
 import { Roi } from '@ui/Roi'
+import { TppaOverlay } from '@ui/TppaOverlay'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useContext, useEffect, useLayoutEffect, useRef } from 'react'
 import type { Image } from '#/image'
@@ -36,7 +37,7 @@ export const ImageViewer = memo(({ params }: IDockviewPanelProps<Image>) => {
 		<div className="relative h-full w-full overflow-hidden">
 			<ImageInfo />
 			<Interactable className="z-1" onGesture={viewer.mouseCoordinate.handleGesture} onMouseMove={viewer.mouseCoordinate.handleMouseMove} onClick={viewer.mouseCoordinate.handleClick} onTap={viewer.select} ref={viewer.attachInteractable}>
-				<img className="image pointer-events-none max-w-none touch-none rounded-sm select-none" draggable={false} id={params.id} onLoad={viewer.handleLoad} ref={imgRef} />
+				<img className="image pointer-events-none max-w-none touch-none rounded-sm select-none" draggable={false} id={params.id} onLoad={viewer.handleLoad} onError={viewer.handleError} ref={imgRef} />
 				<InteractableOverlay />
 			</Interactable>
 		</div>
@@ -50,6 +51,7 @@ const InteractableOverlay = memo(() => (
 		<DetectedStars />
 		<AnnotatedStars />
 		<CoordinateOnMouse />
+		<TppaOverlay />
 		<Fov />
 		<Roi />
 	</>

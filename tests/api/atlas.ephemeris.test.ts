@@ -201,6 +201,7 @@ const STUB_STAR: SkyObject = {
 	distance: 0,
 	rv: 0,
 	constellation: 0,
+	parallax: 0,
 }
 
 function stubSeries(source: 'offline' | 'horizons', request: EphemerisSampleRequest) {

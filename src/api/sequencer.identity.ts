@@ -1,3 +1,4 @@
+import { sequencerCaptureExposureInSeconds } from '#/sequencer'
 import type { SequencerPlanFrameGroup } from '#/sequencer.plan'
 import type { SequencerArtifact } from '#/sequencer.state'
 import type { SequencerAuxiliaryKind } from './sequencer.path'
@@ -250,11 +251,11 @@ function render(template: string, naming: SequencerFrameNaming) {
 			case 'group':
 				return encodeSegment(group.id)
 			case 'frameType':
-				return encodeSegment(group.frameType)
+				return encodeSegment(group.capture.frameType)
 			case 'filter':
 				return encodeSegment(naming.filter ?? '')
 			case 'exposure':
-				return exposureOf(group.exposureTime)
+				return exposureOf(sequencerCaptureExposureInSeconds(group.capture))
 			case 'cycle':
 				return `${naming.cycle}`
 			case 'ordinal':

@@ -1,9 +1,10 @@
-import { clampInteger, tw } from '@shared/util'
+import { clampInteger } from '@shared/util'
 import { Calendar } from '@ui/components/Calendar'
 import type { CalendarProps } from '@ui/components/Calendar'
 import { DEFAULT_FLOATING_OFFSET, Floating } from '@ui/components/Floating'
 import type { FloatingPlacement } from '@ui/components/Floating'
 import { Icons } from '@ui/Icon'
+import { cn } from 'cn'
 import { Fragment, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
@@ -525,27 +526,27 @@ export function DateTimeInput({
 	const EndContent = (
 		<>
 			{hasEndContent && endContent}
-			<button className={tw(styles.calendarButton(), calendarButtonClassName, classNames?.calendarButton)} disabled={disabled || readOnly} onClick={handleCalendarClick} ref={setCalendarTriggerElement} tabIndex={-1} type="button">
-				<Icons.Calendar className={tw(styles.calendarIcon(), classNames?.calendarIcon)} />
+			<button className={cn(styles.calendarButton(), calendarButtonClassName, classNames?.calendarButton)} disabled={disabled || readOnly} onClick={handleCalendarClick} ref={setCalendarTriggerElement} tabIndex={-1} type="button">
+				<Icons.Calendar className={cn(styles.calendarIcon(), classNames?.calendarIcon)} />
 			</button>
 		</>
 	)
 
-	const CalendarContent = <Calendar className={tw(styles.calendar(), classNames?.calendar)} color={color ?? 'default'} disabled={disabled} maxDate={maximumDate} minDate={minimumDate} onValueChange={handleCalendarValueChange} readOnly={readOnly} showWeekNumber={showWeekNumber} value={currentValue.toPlainDate()} />
+	const CalendarContent = <Calendar className={cn(styles.calendar(), classNames?.calendar)} color={color ?? 'default'} disabled={disabled} maxDate={maximumDate} minDate={minimumDate} onValueChange={handleCalendarValueChange} readOnly={readOnly} showWeekNumber={showWeekNumber} value={currentValue.toPlainDate()} />
 
 	return (
 		<>
-			<div {...props} className={tw(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90 pointer-events-none', classNames?.base)} ref={ref}>
-				<div className={tw(styles.surface(), surfaceClassName, classNames?.surface)}>
-					{hasStartContent && <div className={tw(styles.content(), contentClassName, classNames?.startContent)}>{startContent}</div>}
-					<div className={tw(styles.field(), classNames?.field)}>
-						<div className={tw(styles.segments(), label ? sizeStyles.segmentsWithLabel : sizeStyles.segmentsWithoutLabel, hasStartContent && 'pl-0', contentClassName, classNames?.segments)}>
+			<div {...props} className={cn(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90 pointer-events-none', classNames?.base)} ref={ref}>
+				<div className={cn(styles.surface(), surfaceClassName, classNames?.surface)}>
+					{hasStartContent && <div className={cn(styles.content(), contentClassName, classNames?.startContent)}>{startContent}</div>}
+					<div className={cn(styles.field(), classNames?.field)}>
+						<div className={cn(styles.segments(), label ? sizeStyles.segmentsWithLabel : sizeStyles.segmentsWithoutLabel, hasStartContent && 'pl-0', contentClassName, classNames?.segments)}>
 							{mapDisplayParts(displayParts, (part, index) => (
 								<Fragment key={part}>
-									{index > 0 && <span className={tw(styles.separator(), contentClassName, classNames?.separator)}>{separatorBetween(displayParts[index - 1] as DateTimeInputSegmentPart, part)}</span>}
+									{index > 0 && <span className={cn(styles.separator(), contentClassName, classNames?.separator)}>{separatorBetween(displayParts[index - 1] as DateTimeInputSegmentPart, part)}</span>}
 									<input
 										autoFocus={autoFocus && index === 0}
-										className={tw(styles.segment(), styles[part](), segmentClassName, classNames?.segment)}
+										className={cn(styles.segment(), styles[part](), segmentClassName, classNames?.segment)}
 										disabled={disabled}
 										inputMode="numeric"
 										maxLength={partWidth(part)}
@@ -563,14 +564,14 @@ export function DateTimeInput({
 								</Fragment>
 							))}
 						</div>
-						{label && <label className={tw(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</label>}
+						{label && <label className={cn(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</label>}
 					</div>
-					<div className={tw(styles.content(), contentClassName, classNames?.endContent)}>{EndContent}</div>
+					<div className={cn(styles.content(), contentClassName, classNames?.endContent)}>{EndContent}</div>
 				</div>
 			</div>
 			<Floating
 				autoFlip={autoFlip}
-				classNames={{ content: tw(styles.popover(), classNames?.popover) }}
+				classNames={{ content: cn(styles.popover(), classNames?.popover) }}
 				closeOnEscape
 				closeOnClickOutside
 				content={CalendarContent}

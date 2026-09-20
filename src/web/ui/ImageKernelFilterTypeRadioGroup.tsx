@@ -1,5 +1,5 @@
-import { tw } from '@shared/util'
 import { Radio } from '@ui/components/Radio'
+import { cn } from 'cn'
 import type { ImageKernelFilterType } from '#/image.filter'
 
 export interface ImageKernelFilterTypeRadioGroupProps extends React.ComponentProps<'div'> {
@@ -10,7 +10,7 @@ export interface ImageKernelFilterTypeRadioGroupProps extends React.ComponentPro
 
 export function ImageKernelFilterTypeRadioGroup({ value, onValueChange, disabled, className, ...props }: ImageKernelFilterTypeRadioGroupProps) {
 	return (
-		<div className={tw('flex items-start justify-center gap-1 flex-col', className)} {...props}>
+		<div className={cn('flex items-start justify-center gap-1 flex-col', className)} {...props}>
 			<Radio disabled={disabled} label="Sharpen" onValueChange={(value) => value && onValueChange('sharpen')} value={value === 'sharpen'} />
 			<Radio disabled={disabled} label="Mean" onValueChange={(value) => value && onValueChange('mean')} value={value === 'mean'} />
 			<Radio disabled={disabled} label="Blur" onValueChange={(value) => value && onValueChange('blur')} value={value === 'blur'} />

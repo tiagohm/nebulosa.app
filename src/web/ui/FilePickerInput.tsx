@@ -8,7 +8,7 @@ import { FilePicker } from '@ui/FilePicker'
 import { Icons } from '@ui/Icon'
 import { useEffect, useRef } from 'react'
 
-export interface FilePickerInputProps extends Omit<FilePickerScope, 'multiple' | 'path'>, Omit<TextInputProps, 'value' | 'onValueChange' | 'startContent' | 'endContent' | 'label'> {
+export interface FilePickerInputProps extends Omit<FilePickerScope, 'multiple' | 'path'>, Omit<TextInputProps, 'value' | 'onValueChange' | 'startContent' | 'endContent'> {
 	readonly value?: string
 	readonly onValueChange: (value?: string) => void
 }

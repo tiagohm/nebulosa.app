@@ -5,7 +5,7 @@ import type { Messager, WebSocketMessageHandler } from './message'
 import type { SequencerRuntimeChange } from './sequencer.runtime'
 import { SequencerProgressEmitter } from './sequencer.snapshot'
 
-// WebSocket fanout of the sequencer (§16.2), over the sockets `WebSocketMessageHandler` already holds.
+// WebSocket fanout of the sequencer, over the sockets `WebSocketMessageHandler` already holds.
 //
 // Four channels carry two different kinds of value. `sequencer:session`, `sequencer:event` and
 // `sequencer:artifact` report consolidated state: each message corresponds to something the store accepted,

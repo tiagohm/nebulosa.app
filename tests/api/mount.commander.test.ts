@@ -66,6 +66,7 @@ async function connected() {
 	const device = getMount()
 	mountManager.connect(device)
 	expect(device.connected).toBeTrue()
+	mountManager.slewRate(device, 'SPEED_7')
 	mountManager.syncTo(device, hour(5), deg(-30))
 	// The sync is a round trip through the driver, so the reported coordinate only matches the request
 	// once its notification has been applied.
@@ -367,13 +368,13 @@ test('parks and unparks after the driver reports both transitions', async () => 
 	expect(device.parked).toBeFalse()
 }, 20000)
 
-test('homes and reports an unsupported mechanical-home search', async () => {
+test('homes and reports an supported mechanical-home search', async () => {
 	const device = await connected()
 
 	expect(await mountCommander.home(operationCoordinator, device, { timeout: 8000 })).toMatchObject({ ok: true })
 	expect(device.homing).toBeFalse()
-	expect(device.canFindHome).toBeFalse()
-	expect(await mountCommander.findHome(operationCoordinator, device)).toMatchObject(failedOperationResult('unexpectedState'))
+	expect(device.canFindHome).toBeTrue()
+	expect(await mountCommander.findHome(operationCoordinator, device)).toMatchObject({ ok: true })
 }, 20000)
 
 test('does not complete a flip the mount never started', async () => {

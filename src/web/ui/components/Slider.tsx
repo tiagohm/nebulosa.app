@@ -1,4 +1,5 @@
-import { clamp, tw } from '@shared/util'
+import { clamp } from '@shared/util'
+import { cn } from 'cn'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
@@ -572,23 +573,23 @@ export function Slider<V extends SliderValue>({
 	const thumbValues = isRangeValue(renderedValue) ? renderedValue : [renderedValue]
 
 	return (
-		<div {...props} className={tw(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90 pointer-events-none', classNames?.base)} ref={ref} style={style}>
-			{content !== undefined && content !== null && <span className={tw(styles.label(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-200', classNames?.label)}>{content}</span>}
-			<div className={tw(styles.body(), classNames?.body)}>
-				{hasStartContent && <div className={tw(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.startContent)}>{startContent}</div>}
+		<div {...props} className={cn(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90 pointer-events-none', classNames?.base)} ref={ref} style={style}>
+			{content !== undefined && content !== null && <span className={cn(styles.label(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-200', classNames?.label)}>{content}</span>}
+			<div className={cn(styles.body(), classNames?.body)}>
+				{hasStartContent && <div className={cn(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.startContent)}>{startContent}</div>}
 				<div
-					className={tw(styles.control(), vertical ? sizeStyles.verticalControl : sizeStyles.horizontalControl, disabled ? 'bg-neutral-900/35' : readOnly ? 'bg-neutral-900/55' : 'bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600', classNames?.control)}
+					className={cn(styles.control(), vertical ? sizeStyles.verticalControl : sizeStyles.horizontalControl, disabled ? 'bg-neutral-900/35' : readOnly ? 'bg-neutral-900/55' : 'bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600', classNames?.control)}
 					onPointerDown={handleTrackPointerDown}
 					onWheel={handleWheel}
 					ref={controlRef}>
-					<div className={tw(styles.fill(), 'bg-(--color-variant)', classNames?.fill)} style={fillStyle(renderedValue, minimumValue, maximumValue, vertical, sizeStyles.thumbRem)} />
+					<div className={cn(styles.fill(), 'bg-(--color-variant)', classNames?.fill)} style={fillStyle(renderedValue, minimumValue, maximumValue, vertical, sizeStyles.thumbRem)} />
 					{thumbValues.map((thumbValue, index) => {
 						const thumbRatio = valueToRatio(thumbValue, minimumValue, maximumValue)
 						const thumb = resolveThumbContent(index, range, thumbContent, startThumbContent, endThumbContent)
 
 						return (
 							<button
-								className={tw(styles.thumb(), disabled ? 'cursor-not-allowed text-neutral-400' : readOnly ? 'cursor-default text-neutral-500' : 'cursor-grab text-(--color-variant) active:cursor-grabbing', classNames?.thumb)}
+								className={cn(styles.thumb(), disabled ? 'cursor-not-allowed text-neutral-400' : readOnly ? 'cursor-default text-neutral-500' : 'cursor-grab text-(--color-variant) active:cursor-grabbing', classNames?.thumb)}
 								key={range ? `${index}-${thumbValue}` : 'slider-thumb'}
 								onFocus={() => setActiveThumbIndex(index)}
 								onKeyDown={(event) => handleThumbKeyDown(event, index)}
@@ -596,12 +597,12 @@ export function Slider<V extends SliderValue>({
 								style={{ ...thumbPositionStyle(thumbRatio, vertical, sizeStyles.thumbRem), zIndex: activeThumbIndex === index ? 2 : 1 }}
 								tabIndex={disabled ? -1 : 0}
 								type="button">
-								<span className={tw(styles.thumbContent(), classNames?.thumbContent)}>{thumb}</span>
+								<span className={cn(styles.thumbContent(), classNames?.thumbContent)}>{thumb}</span>
 							</button>
 						)
 					})}
 				</div>
-				{hasEndContent && <div className={tw(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.endContent)}>{endContent}</div>}
+				{hasEndContent && <div className={cn(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.endContent)}>{endContent}</div>}
 			</div>
 		</div>
 	)

@@ -1,4 +1,4 @@
-import { tw } from '@shared/util'
+import { cn } from 'cn'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
 
@@ -109,12 +109,12 @@ export function Switch({ autoFocus, children, className, classNames, disabled = 
 	}
 
 	return (
-		<label className={tw(styles.base(), disabled ? 'cursor-not-allowed opacity-40' : readOnly ? 'cursor-default opacity-90 pointer-events-none' : 'cursor-pointer', className, classNames?.base)}>
+		<label className={cn(styles.base(), disabled ? 'cursor-not-allowed opacity-40' : readOnly ? 'cursor-default opacity-90 pointer-events-none' : 'cursor-pointer', className, classNames?.base)}>
 			<input
 				{...props}
 				autoFocus={autoFocus}
 				checked={checked}
-				className={tw(styles.input(), classNames?.input)}
+				className={cn(styles.input(), classNames?.input)}
 				disabled={disabled}
 				name={name}
 				onBlur={onBlur}
@@ -128,10 +128,10 @@ export function Switch({ autoFocus, children, className, classNames, disabled = 
 				tabIndex={tabIndex}
 				type="checkbox"
 			/>
-			<span className={tw(styles.control(), checked ? 'bg-(--color-variant)' : 'bg-neutral-800', !disabled && 'peer-focus-visible:ring-0', !disabled && !readOnly && (checked ? 'hover:bg-(--color-variant)/90 active:bg-(--color-variant)/80' : 'hover:bg-neutral-700 active:bg-neutral-600'), classNames?.control)}>
-				<span className={tw(styles.thumb(), checked ? switchThumbTranslateStyles[size] : 'translate-x-0', checked ? 'text-(--color-variant)' : 'text-neutral-500', classNames?.thumb)}>{thumbContent}</span>
+			<span className={cn(styles.control(), checked ? 'bg-(--color-variant)' : 'bg-neutral-800', !disabled && 'peer-focus-visible:ring-0', !disabled && !readOnly && (checked ? 'hover:bg-(--color-variant)/90 active:bg-(--color-variant)/80' : 'hover:bg-neutral-700 active:bg-neutral-600'), classNames?.control)}>
+				<span className={cn(styles.thumb(), checked ? switchThumbTranslateStyles[size] : 'translate-x-0', checked ? 'text-(--color-variant)' : 'text-neutral-500', classNames?.thumb)}>{thumbContent}</span>
 			</span>
-			{content !== undefined && content !== null && <span className={tw(styles.label(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-200', classNames?.label)}>{content}</span>}
+			{content !== undefined && content !== null && <span className={cn(styles.label(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-200', classNames?.label)}>{content}</span>}
 		</label>
 	)
 }

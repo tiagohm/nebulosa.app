@@ -5,9 +5,9 @@ import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/co
 import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { meanObliquity, timeNow, timeShift, timeUnix, toJulianDay } from 'nebulosa/src/astronomy/time/time'
 import type { Time } from 'nebulosa/src/astronomy/time/time'
+import type { StellariumObjectType } from 'nebulosa/src/catalogs/stars/stellarium'
 import { DAYSEC, DEG2RAD, PI, PIOVERTWO, TAU } from 'nebulosa/src/core/constants'
 import type { Writable } from 'nebulosa/src/core/types'
-import type { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
 import type { Point, Size } from 'nebulosa/src/math/numerical/geometry'
 import { clamp } from 'nebulosa/src/math/numerical/math'
 import type { NumberArray } from 'nebulosa/src/math/numerical/math'
@@ -3189,16 +3189,9 @@ function drawMovingBodySymbol(ctx: CanvasRenderingContext2D, type: MovingBodyTyp
 		return
 	}
 
-	if (type !== 'asteroid') {
-		ctx.beginPath()
-		ctx.arc(x, y, 4.5, 0, TAU)
-		ctx.fill()
-		return
-	}
-
 	ctx.beginPath()
-	ctx.rect(x - 2.5, y - 2.5, 5, 5)
-	ctx.stroke()
+	ctx.arc(x, y, type === 'asteroid' ? 3 : 4.5, 0, TAU)
+	ctx.fill()
 }
 
 const OBJECT_HIGLIGHT_POINT = new Float32Array(2)
@@ -4751,7 +4744,7 @@ export class Celestial {
 		const element = this.#renderer.element
 		element.addEventListener('pointermove', this.handlePointerMove)
 		element.addEventListener('click', this.handleClick)
-		select(element).call(behavior)
+		select(element).call(behavior).on('dblclick.zoom', null)
 		this.#d3ZoomBehavior = behavior
 		this.#d3ZoomBound = true
 	}

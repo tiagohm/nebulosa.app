@@ -121,7 +121,7 @@ const CloseApproaches = memo(() => {
 						<ListItem className="cursor-pointer" description={`${distance.toFixed(3)} LD`}>
 							<span className="flex items-center justify-between">
 								<span>{name}</span>
-								<span>{formatTemporal(date, 'YYYY-MM-DD HH:mm')}</span>
+								<span>{formatTemporal(date, 'YYYY-MM-DD HH:mm', true)}</span>
 							</span>
 						</ListItem>
 					)

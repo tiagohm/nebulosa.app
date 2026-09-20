@@ -8,6 +8,7 @@ import type { GuideOutputManager } from 'nebulosa/src/devices/indi/manager/guide
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
 import type { GuideFrameImage } from 'nebulosa/src/observation/guiding/client'
+import { StarTracker } from 'nebulosa/src/observation/guiding/tracker.star'
 import { EventBus } from 'src/shared/bus'
 import { DEFAULT_CAMERA_CAPTURE_START, exposureTimeInMilliseconds } from '#/camera'
 import type { CameraCaptureStart } from '#/camera'
@@ -125,6 +126,27 @@ export function localGuiderCameraKey(camera: Camera): ResourceKey {
 // Builds the logical key reserving a guide output, for the same reason as the camera above.
 export function localGuiderOutputKey(guideOutput: GuideOutput): ResourceKey {
 	return `${GUIDER_RESOURCE_PREFIX}:local:output:${resourceKey(guideOutput)}`
+}
+
+// Public session id of a guider target. Listings, commands and the sequencer persist this, so it has to
+// name the operator's request rather than the socket the OS picked: reconnecting `localhost` must keep the
+// same id whether DNS answered IPv4 or IPv6, and two spellings of one host remain two names until a later
+// occupancy check proves they landed on the same server.
+export function guiderSessionId(key: ResourceKey): string {
+	return Bun.MD5.hash(key, 'hex')
+}
+
+// Prefix of an IPv4-mapped IPv6 address, folded so `::ffff:127.0.0.1` and `127.0.0.1` are one peer.
+const IPV4_MAPPED_PREFIX = '::ffff:'
+
+// Canonical TCP peer of a remote transport, used to refuse an alias of a server already occupied.
+// The address is the resolved one after connect, and IPv4-mapped IPv6 is folded to dotted IPv4.
+function guiderRemotePeer(client: PHD2Client): string | undefined {
+	const address = client.remoteAddress
+	const port = client.remotePort
+	if (address === undefined || port === undefined) return undefined
+	const host = address.startsWith(IPV4_MAPPED_PREFIX) ? address.slice(IPV4_MAPPED_PREFIX.length) : address
+	return `${host}:${port}`
 }
 
 // What a transport answers when told to do something: the local client reports acceptance directly, the
@@ -262,8 +284,9 @@ const UNCANCELABLE = new AbortController().signal
 // command. A command requested by another operation, such as the dither of a capture, only passes its
 // signal; the session stays the owner of its devices and serializes the command itself.
 export class GuiderCommander {
-	// Open sessions by id. Nothing else indexes them: the arbiter is what knows which targets are taken,
-	// and this map only exists so a transport can reach a session by the id it published.
+	// Open sessions by public id, which is the hash of the target key. The arbiter refuses a second request
+	// for the same key; this map still has to refuse a second id that resolved to a peer already sitting here,
+	// because `localhost` and `127.0.0.1` are two keys for one TCP server.
 	readonly #sessions = new Map<string, GuiderSessionEntry>()
 	// Publisher of guide-camera activity, absent until the camera feature attaches it.
 	#cameraPublisher?: GuiderCameraPublisher
@@ -344,13 +367,28 @@ export class GuiderCommander {
 				return opened
 			}
 
+			// The public id is the target, known before connect. The resolved peer is occupancy of the socket
+			// the OS actually opened, which is the only way to see that two requested hosts are one server.
+			const id = guiderSessionId(target.value.key)
+			const peer = session.peer()
+
 			// Registered before the teardown below so it runs last: the session is only forgotten once its
-			// devices are idle and the transport is gone.
+			// devices are idle and the transport is gone. Both run even when the occupancy check refuses,
+			// because open() already attached a socket that has to be closed; remove is not published until
+			// the session has been added, so a refused alias cannot look like the occupying session ending.
 			context.onCleanup(() => {
-				if (this.#sessions.get(context.id)?.session === session) this.#sessions.delete(context.id)
+				if (this.#sessions.get(id)?.session === session) this.#sessions.delete(id)
 			})
 
 			context.onCleanup(() => session.shutdown())
+
+			if (this.#occupied(id, peer, session)) {
+				const refused = failedOperationResult('busy', 'the guider is already connected')
+				started.resolve(refused)
+				return refused
+			}
+
+			session.event.id = id
 
 			// Cancellation aborts the signal but still waits for the executor to return, and the executor is
 			// parked on the promise below. Nothing else would ever resolve it, so a cancel from outside the
@@ -358,8 +396,8 @@ export class GuiderCommander {
 			if (context.signal.aborted) session.end(failedOperationResult(abortReason(context.signal)))
 			else context.signal.addEventListener('abort', () => session.end(failedOperationResult(abortReason(context.signal))), { once: true })
 
-			this.#sessions.set(context.id, { session, operation })
-			guiderBus.emit('add', session.info)
+			this.#sessions.set(id, { session, operation })
+			session.publish()
 			started.resolve(successfulOperationResult(session.info))
 
 			// The executor stays pending on purpose: the session holds its logical resource until the
@@ -478,6 +516,19 @@ export class GuiderCommander {
 		if (session === undefined) return failedOperationResult('disconnected', `guider session ${guider} is not open`)
 		return await run(session)
 	}
+
+	// Whether this id is already published, or this resolved peer already belongs to another session.
+	#occupied(id: string, peer: string | undefined, session: GuiderSession) {
+		const existing = this.#sessions.get(id)
+		if (existing !== undefined && existing.session !== session) return true
+		if (peer === undefined) return false
+
+		for (const entry of this.#sessions.values()) {
+			if (entry.session !== session && entry.session.peer() === peer) return true
+		}
+
+		return false
+	}
 }
 
 // One guider connection: its transport, state, leases, and serialized commands.
@@ -521,6 +572,9 @@ class GuiderSession {
 	readonly #ending = new AbortController()
 	// Whether the transport is gone; a closed session ignores every later callback.
 	#closed = false
+	// Whether this session was published on the bus. A refused occupancy check shuts the transport down
+	// without `remove`, so it cannot look like the occupying session ending.
+	#published = false
 
 	// Binds a session to the operation that owns it and to the promise ending that operation.
 	constructor(
@@ -545,10 +599,21 @@ class GuiderSession {
 		return !this.#closed && this.#client !== undefined
 	}
 
+	// Resolved TCP peer of a remote transport, or nothing for a local session or before the socket is up.
+	peer() {
+		return this.#client instanceof PHD2Client ? guiderRemotePeer(this.#client) : undefined
+	}
+
+	// Announces the session on the bus once it is indexed and ready to receive commands.
+	publish() {
+		this.#published = true
+		guiderBus.emit('add', this.info)
+	}
+
 	// Snapshot describing this session to transports and listings.
 	get info(): GuiderSessionInfo {
 		return {
-			id: this.context.id,
+			id: this.event.id,
 			mode: this.target.mode,
 			key: this.target.key,
 			target: this.target.label,
@@ -560,7 +625,7 @@ class GuiderSession {
 	}
 
 	// Attaches the transport and, for a local guider, configures its devices under a scope that owns them.
-	async open(): Promise<OperationResult<void>> {
+	async open(): Promise<OperationResult<undefined>> {
 		return this.request.mode === 'remote' ? await this.#openRemote(this.request.host, this.request.port) : await this.#openLocal()
 	}
 
@@ -819,7 +884,7 @@ class GuiderSession {
 
 		// Wakes anything still waiting so it settles as disconnected instead of running to its timeout.
 		this.#emit({ state: this.#state, closed: true })
-		guiderBus.emit('remove', this.info)
+		if (this.#published) guiderBus.emit('remove', this.info)
 	}
 
 	// Drops the attached transport and tears it down, in that order so a callback fired by the teardown is
@@ -884,7 +949,7 @@ class GuiderSession {
 	// events as soon as the socket is up, and an event dropped there would be an app state never applied.
 	// Everything after the socket is up is inside the same guard: the session is only given a cleanup that
 	// closes its transport once open() has succeeded, so anything failing here has to close its own socket.
-	async #openRemote(host: string, port: number): Promise<OperationResult<void>> {
+	async #openRemote(host: string, port: number): Promise<OperationResult<undefined>> {
 		const client = new PHD2Client({ handler: this.#handler })
 		this.#client = client
 
@@ -917,6 +982,7 @@ class GuiderSession {
 			// A server that will not report its scale is still usable; angular guide errors just fall back to
 			// being reported in pixels.
 			this.#pixelScale = (scale.value.success ? scale.value.result : 0) || 1
+
 			return successfulOperationResult(undefined)
 		} catch (error) {
 			this.#detach()
@@ -927,7 +993,7 @@ class GuiderSession {
 	// Attaches the in-process guider and applies its capture configuration under a scope owning both
 	// devices. The scope ends right after: an idle client only needs the logical resource, so the camera
 	// and the guide output stay acquirable until the guider is actually told to capture.
-	async #openLocal(): Promise<OperationResult<void>> {
+	async #openLocal(): Promise<OperationResult<undefined>> {
 		if (this.request.mode !== 'local') return failedOperationResult('unexpectedState', 'the request is not a local guider connection')
 
 		const request = this.request
@@ -946,7 +1012,7 @@ class GuiderSession {
 				{ key: resourceKey(guideOutput), device: guideOutput },
 			],
 			() => {
-				const client = new GuiderClient(cameraManager, guideOutputManager, { handler: this.#handler })
+				const client = new GuiderClient(cameraManager, guideOutputManager, new StarTracker(), { handler: this.#handler })
 				this.#client = client
 
 				if (!client.connect(camera, guideOutput, request)) {
@@ -966,6 +1032,7 @@ class GuiderSession {
 		}
 
 		this.#pixelScale = configured.value.getPixelScale() || 1
+
 		return successfulOperationResult(undefined)
 	}
 
@@ -1156,7 +1223,7 @@ class GuiderSession {
 					const publisher = this.sessionContext.cameraPublisher
 
 					if (publisher !== undefined) {
-						this.#cameraFrames = new GuiderCameraFrames(this.context.id, camera, publisher, Math.max(0, client.getExposure()) * 1000)
+						this.#cameraFrames = new GuiderCameraFrames(this.event.id, camera, publisher, Math.max(0, client.getExposure()) * 1000)
 						activityContext.onCleanup(() => this.#stopCameraFrames())
 					}
 				}

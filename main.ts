@@ -1,7 +1,6 @@
 import { existsSync, rmSync } from 'fs'
-import type { MakeDirectoryOptions } from 'fs'
-import fs from 'fs/promises'
-import os from 'os'
+import { mkdir, access, constants } from 'fs/promises'
+import { homedir } from 'os'
 import { join } from 'path'
 import { parseArgs } from 'util'
 import type { Client, Device, DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/devices/indi/device'
@@ -25,6 +24,9 @@ import { CameraHandler, camera } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
 import { CameraCommander } from 'src/api/camera.commander'
 import { ConnectionHandler, connection } from 'src/api/connection'
+import { startAlpacaConnection } from 'src/api/connection.alpaca'
+import { startIndiConnection } from 'src/api/connection.indi'
+import { startSimulatorConnection } from 'src/api/connection.simulator'
 import { CoverHandler, cover } from 'src/api/cover'
 import { CoverCommander } from 'src/api/cover.commander'
 import { DarvHandler, darv } from 'src/api/darv'
@@ -81,8 +83,6 @@ import homeHtml from './src/web/pages/home/index.html'
 
 speedUpTime()
 
-const CREATE_RECURSIVE_DIRECTORY: MakeDirectoryOptions = { recursive: true }
-
 // Arguments
 
 const args = parseArgs({
@@ -124,7 +124,7 @@ async function checkDirAccess(...paths: string[]) {
 	const path = join(...paths)
 
 	try {
-		await fs.access(path, fs.constants.R_OK | fs.constants.W_OK)
+		await access(path, constants.R_OK | constants.W_OK)
 	} catch {
 		console.error('unable to access the app directory at', Bun.env.homeDir)
 		process.exit(0)
@@ -136,7 +136,7 @@ async function checkDirAccess(...paths: string[]) {
 if (appDir) {
 	await checkDirAccess(appDir)
 } else {
-	Bun.env.homeDir = await checkDirAccess(os.homedir())
+	Bun.env.homeDir = await checkDirAccess(homedir())
 }
 
 if (process.platform === 'linux') {
@@ -152,10 +152,7 @@ if (process.platform === 'linux') {
 	Bun.env.satellitesDir = join(Bun.env.appDir, 'Satellites')
 }
 
-await fs.mkdir(Bun.env.appDir, CREATE_RECURSIVE_DIRECTORY)
-await fs.mkdir(Bun.env.tmpDir, CREATE_RECURSIVE_DIRECTORY)
-await fs.mkdir(Bun.env.capturesDir, CREATE_RECURSIVE_DIRECTORY)
-await fs.mkdir(Bun.env.satellitesDir, CREATE_RECURSIVE_DIRECTORY)
+await Promise.all([mkdir(Bun.env.appDir, { recursive: true }), mkdir(Bun.env.tmpDir, { recursive: true }), mkdir(Bun.env.capturesDir, { recursive: true }), mkdir(Bun.env.satellitesDir, { recursive: true })])
 
 console.info('app directory is located at', Bun.env.appDir)
 console.info('captures directory is located at', Bun.env.capturesDir)
@@ -224,7 +221,7 @@ let shutdownTask: Promise<void> | undefined
 // Ends the running session, cancels active operations while transports are live, then releases observers and
 // transient files.
 //
-// The sequencer goes first and in one piece (§20.2): it refuses new sessions, records the one it is running as
+// The sequencer goes first and in one piece: it refuses new sessions, records the one it is running as
 // interrupted, cancels every operation owned by that session's reservation, waits for their cleanups and only
 // then releases the reservation. Doing that before `cancelAll` is what keeps the order observable — a session
 // torn down by `cancelAll` would lose the state that was never written, and the owned guiding session, whose
@@ -253,7 +250,6 @@ deviceLifecycle.observe(thermometerManager)
 deviceLifecycle.observe(dewHeaterManager)
 
 const notificationHandler = new NotificationHandler(wsm)
-const connectionHandler = new ConnectionHandler(wsm, notificationHandler, operationCoordinator)
 const confirmationHandler = new ConfirmationHandler(wsm)
 const guiderCommander = new GuiderCommander(operationCoordinator, cameraManager, guideOutputManager)
 const guiderHandler = new GuiderHandler(wsm, notificationHandler, guiderCommander)
@@ -281,6 +277,11 @@ const rotatorHandler = new RotatorHandler(wsm, rotatorManager, notificationHandl
 const dewHeaterCommander = new DewHeaterCommander(dewHeaterManager)
 const dewHeaterHandler = new DewHeaterHandler(wsm, dewHeaterManager, dewHeaterCommander, operationCoordinator)
 const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, rotatorManager, wsm)
+const connectionHandler = new ConnectionHandler(wsm, notificationHandler, operationCoordinator, {
+	INDI: (request) => startIndiConnection(request, indiHandler),
+	ALPACA: (request) => startAlpacaConnection(request, indiHandler),
+	SIMULATOR: () => startSimulatorConnection({ appDir: Bun.env.appDir, handler: indiHandler, mountManager, focuserManager, rotatorManager, guideOutputManager }),
+})
 const indiDevicePropertyHandler = new IndiDevicePropertyHandler(wsm, notificationHandler, indiHandler)
 const indiServerHandler = new IndiServerHandler(wsm)
 const framingHandler = new FramingHandler(imageProcessor)
@@ -304,8 +305,8 @@ const alpacaManagers = coordinatedAlpacaManagers(
 const alpacaHandler = new AlpacaHandler(wsm, alpacaManagers, alpacaDiscoveryPort)
 const storageHandler = new StorageHandler(false)
 
-// Sequencer (§20.1)
-//
+// Sequencer
+
 // The store is the durable state of every definition and session, the registry is the catalog of blocks a
 // definition may be compiled against, and the runtime is the only thing that admits, executes and finalizes a
 // session. They are created here, in this order, because each one is a collaborator of the next.
@@ -400,7 +401,7 @@ const server = Bun.serve({
 	},
 	routes: {
 		'/': homeHtml,
-		...connection(connectionHandler, indiHandler, mountManager, focuserManager, rotatorManager, guideOutputManager),
+		...connection(connectionHandler),
 		...confirmation(confirmationHandler),
 		...indi(indiHandler, indiDevicePropertyHandler, indiServerHandler),
 		...camera(cameraHandler),

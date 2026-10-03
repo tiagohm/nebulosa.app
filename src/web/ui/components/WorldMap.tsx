@@ -1,6 +1,7 @@
-import { clamp, tw } from '@shared/util'
+import { clamp } from '@shared/util'
 import { Interactable } from '@ui/Interactable'
 import type { InteractableMethods, InteractableProps, InteractTransform, InteractType } from '@ui/Interactable'
+import { cn } from 'cn'
 import { createContext, memo, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import worldMapSvg from 'src/data/world.map.svg'
 import { tv } from 'tailwind-variants'
@@ -231,12 +232,12 @@ export const WorldMap = memo(({ bordered, centerOnResize = false, children, clas
 	}
 
 	return (
-		<div {...props} className={tw(styles.base(), className, classNames?.base)} onWheelCapture={handleWheelCapture} ref={rootRef} style={style}>
+		<div {...props} className={cn(styles.base(), className, classNames?.base)} onWheelCapture={handleWheelCapture} ref={rootRef} style={style}>
 			<Interactable onClick={onCoordinateClick !== undefined ? handleCoordinateClick : undefined} onGesture={handleTransformChange} ref={interactableRef}>
-				<svg className={tw(styles.map(), classNames?.map)} height={surfaceSize.height} preserveAspectRatio="xMidYMid meet" ref={mapRef} style={{ height: surfaceSize.height, width: surfaceSize.width }} viewBox={WORLD_MAP_VIEW_BOX} width={surfaceSize.width}>
-					<image className={tw(styles.image(), classNames?.image)} height={WORLD_MAP_HEIGHT} href={worldMapSvg} width={WORLD_MAP_WIDTH} x={0} y={0} />
+				<svg className={cn(styles.map(), classNames?.map)} height={surfaceSize.height} preserveAspectRatio="xMidYMid meet" ref={mapRef} style={{ height: surfaceSize.height, width: surfaceSize.width }} viewBox={WORLD_MAP_VIEW_BOX} width={surfaceSize.width}>
+					<image className={cn(styles.image(), classNames?.image)} height={WORLD_MAP_HEIGHT} href={worldMapSvg} width={WORLD_MAP_WIDTH} x={0} y={0} />
 					<WorldMapContext value={methods}>
-						<g className={tw(styles.overlay(), classNames?.overlay)}>{children}</g>
+						<g className={cn(styles.overlay(), classNames?.overlay)}>{children}</g>
 					</WorldMapContext>
 				</svg>
 			</Interactable>

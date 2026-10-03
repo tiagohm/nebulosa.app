@@ -61,7 +61,7 @@ export class AutoFocusHandler {
 	}
 
 	// Runner behind the manual searches, handed to the sequencer so a session focuses through the same
-	// V-curve search the route uses and publishes to the same fanout, under its own reserved scope (§17.2).
+	// V-curve search the route uses and publishes to the same fanout, under its own reserved scope.
 	get runner() {
 		return this.#runner
 	}

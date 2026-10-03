@@ -1,4 +1,5 @@
-import { assignRef, clamp, hasRootInteraction, stopPropagation, stopPropagationForAll, tw } from '@shared/util'
+import { assignRef, clamp, hasRootInteraction, stopPropagation, stopPropagationForAll } from '@shared/util'
+import { cn } from 'cn'
 import { Children, useEffect, useMemo, useRef, useState } from 'react'
 import { tv } from 'tailwind-variants'
 import type { ClassValue } from 'tailwind-variants'
@@ -122,7 +123,7 @@ export function List({ children, itemCount, className, classNames, emptyContent,
 	const [viewportHeight, setViewportHeight] = useState(0)
 	const range = virtualRange(length, normalizedItemHeight, normalizedOverscan, scrollTop, viewportHeight)
 	const totalHeight = length * normalizedItemHeight
-	const itemClassName = tw(styles.item(), classNames?.item)
+	const itemClassName = cn(styles.item(), classNames?.item)
 
 	function handleClick(event: React.MouseEvent<HTMLElement>) {
 		stopPropagation(event)
@@ -203,11 +204,11 @@ export function List({ children, itemCount, className, classNames, emptyContent,
 	}
 
 	return (
-		<div {...props} className={tw(styles.base(), className, classNames?.base)} onScroll={handleScroll} ref={handleViewportRef}>
+		<div {...props} className={cn(styles.base(), className, classNames?.base)} onScroll={handleScroll} ref={handleViewportRef}>
 			{length === 0 && emptyContent !== undefined && emptyContent !== null ? (
-				<div className={tw(styles.empty(), classNames?.empty)}>{emptyContent}</div>
+				<div className={cn(styles.empty(), classNames?.empty)}>{emptyContent}</div>
 			) : (
-				<div className={tw(styles.spacer(), classNames?.spacer)} style={{ height: totalHeight }}>
+				<div className={cn(styles.spacer(), classNames?.spacer)} style={{ height: totalHeight }}>
 					{mountedItems}
 				</div>
 			)}
@@ -241,13 +242,13 @@ export function ListItem({ className, classNames, description, label, children, 
 	const stateClassName = disabled ? undefined : hasRootInteraction(props) ? 'cursor-pointer' : 'cursor-default'
 
 	return (
-		<div className={tw(styles.base(), stateClassName, className, classNames?.base)} {...stopPropagationForAll(props)}>
-			{startContent !== undefined && startContent !== null && <span className={tw(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
-			<div className={tw(styles.body(), classNames?.body)}>
-				{description !== undefined && description !== null && <span className={tw(styles.description(), classNames?.description)}>{description}</span>}
-				{content !== undefined && content !== null && <span className={tw(styles.label(), classNames?.label)}>{content}</span>}
+		<div className={cn(styles.base(), stateClassName, className, classNames?.base)} {...stopPropagationForAll(props)}>
+			{startContent !== undefined && startContent !== null && <span className={cn(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
+			<div className={cn(styles.body(), classNames?.body)}>
+				{description !== undefined && description !== null && <span className={cn(styles.description(), classNames?.description)}>{description}</span>}
+				{content !== undefined && content !== null && <span className={cn(styles.label(), classNames?.label)}>{content}</span>}
 			</div>
-			{endContent !== undefined && endContent !== null && <span className={tw(styles.endContent(), classNames?.endContent)}>{endContent}</span>}
+			{endContent !== undefined && endContent !== null && <span className={cn(styles.endContent(), classNames?.endContent)}>{endContent}</span>}
 		</div>
 	)
 }

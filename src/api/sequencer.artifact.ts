@@ -10,9 +10,9 @@ import type { SequencerFrameClassification } from './sequencer.write'
 // every call site.
 //
 // The lifecycle of one attempt is three steps: a `pending` record registered before the exposure starts, the
-// write protocol of §14.5, and a `committed` record confirmed with the checkpoint in the same unit. A crash
-// therefore leaves a pending record rather than a file the session claims exists, and reconciliation decides
-// what that record becomes.
+// write protocol, and a `committed` record confirmed with the checkpoint in the same unit. A crash therefore
+// leaves a pending record rather than a file the session claims exists, and reconciliation decides what that
+// record becomes.
 
 // Registers an attempt before its exposure starts, which is what makes a crash observable: the record exists
 // before the file does, so a resume finds the attempt that was open instead of inventing the next one.
@@ -74,7 +74,7 @@ export function sequencerTerminalArtifacts(artifacts: readonly SequencerArtifact
 	return drafts
 }
 
-// Draft that reconciles one open attempt against what the classification of §14.5 found on disk, or undefined
+// Draft that reconciles one open attempt against what the classification found on disk, or undefined
 // when the record must stay as it is.
 //
 // - validFinal: the file survived the crash and parses, so the attempt is confirmed and the frame is not

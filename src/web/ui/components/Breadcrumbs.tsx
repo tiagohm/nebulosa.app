@@ -1,5 +1,5 @@
-import { tw } from '@shared/util'
 import { Icons } from '@ui/Icon'
+import { cn } from 'cn'
 import { Children, Fragment, isValidElement } from 'react'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
@@ -142,15 +142,15 @@ export function Breadcrumbs({ children, className, classNames, disabled = false,
 	const styles = breadcrumbsStyles({ fullWidth, size })
 	const stateClassName = disabled ? 'cursor-not-allowed opacity-40 pointer-events-none' : 'cursor-default'
 	const inertState = disabled || inert || undefined
-	const separatorContent = separator === undefined ? <Icons.ChevronRight className={tw(styles.separatorIcon(), classNames?.separatorIcon)} /> : separator
-	const ellipsisContent = ellipsis === undefined ? <Icons.DotsHorizontal className={tw(styles.ellipsisIcon(), classNames?.ellipsisIcon)} /> : ellipsis
+	const separatorContent = separator === undefined ? <Icons.ChevronRight className={cn(styles.separatorIcon(), classNames?.separatorIcon)} /> : separator
+	const ellipsisContent = ellipsis === undefined ? <Icons.DotsHorizontal className={cn(styles.ellipsisIcon(), classNames?.ellipsisIcon)} /> : ellipsis
 
 	return (
-		<div {...props} className={tw(styles.base(), stateClassName, className, classNames?.base)} inert={inertState} ref={ref}>
+		<div {...props} className={cn(styles.base(), stateClassName, className, classNames?.base)} inert={inertState} ref={ref}>
 			{parts.map((part, index) => (
 				<Fragment key={breadcrumbPartKey(part)}>
-					{index > 0 && <span className={tw(styles.separator(), classNames?.separator)}>{separatorContent}</span>}
-					{part.type === 'ellipsis' ? <span className={tw(styles.ellipsis(), classNames?.ellipsis)}>{ellipsisContent}</span> : <span className={tw(styles.item(), classNames?.item)}>{part.item}</span>}
+					{index > 0 && <span className={cn(styles.separator(), classNames?.separator)}>{separatorContent}</span>}
+					{part.type === 'ellipsis' ? <span className={cn(styles.ellipsis(), classNames?.ellipsis)}>{ellipsisContent}</span> : <span className={cn(styles.item(), classNames?.item)}>{part.item}</span>}
 				</Fragment>
 			))}
 		</div>

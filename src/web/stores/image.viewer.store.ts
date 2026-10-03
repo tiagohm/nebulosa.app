@@ -1,5 +1,5 @@
 import { Api } from '@shared/api'
-import { cameraBus, imageBus } from '@shared/bus'
+import { imageBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import { framingStore } from '@stores/framing.store'
 import { imageAdjustmentStore } from '@stores/image.adjustment.store'
@@ -21,6 +21,8 @@ import type { ImageFovStore } from '@stores/image.fov.store'
 import { imageHeaderStore } from '@stores/image.header.store'
 import type { ImageHeaderStore } from '@stores/image.header.store'
 import type { ImageHomeStore } from '@stores/image.home.store'
+import { imageLoadStore } from '@stores/image.load.store'
+import type { ImageLoadStore } from '@stores/image.load.store'
 import { imageMouseCoordinateStore } from '@stores/image.mousecoordinate.store'
 import type { ImageMouseCoordinateStore } from '@stores/image.mousecoordinate.store'
 import { imageRoiStore } from '@stores/image.roi.store'
@@ -41,6 +43,7 @@ import { imageStatisticsStore } from '@stores/image.statistics.store'
 import type { ImageStatisticsStore } from '@stores/image.statistics.store'
 import { imageStretchStore } from '@stores/image.stretch.store'
 import type { ImageStretchStore } from '@stores/image.stretch.store'
+import type { SlideMenuItem, SlideMenuProps } from '@ui/components/SlideMenu'
 import type { InteractableMethods } from '@ui/Interactable'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import type { Writable } from 'nebulosa/src/core/types'
@@ -49,14 +52,15 @@ import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { pmod } from 'nebulosa/src/math/numerical/math'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
-import { proxy, ref, subscribe } from 'valtio'
+import { proxy, ref, snapshot, subscribe } from 'valtio'
 import type { Framing } from '#/framing'
-import type { Image, ImageLoaded, ImageTransformation, ImageInfo } from '#/image'
+import type { Image, ImageTransformation, ImageInfo } from '#/image'
 import { DEFAULT_IMAGE_TRANSFORMATION } from '#/image'
 
 export interface ImageViewerStore {
 	readonly state: ImageViewerState
 	readonly home: ImageHomeStore
+	readonly loader: ImageLoadStore
 	readonly image: Image
 	readonly key: string // The storage key
 	readonly target: HTMLImageElement | undefined
@@ -81,11 +85,14 @@ export interface ImageViewerStore {
 	readonly syncMountHere: (mount: Mount, coordinate: EquatorialCoordinate) => Promise<unknown>
 	readonly frameAt: (coordinate: EquatorialCoordinate) => Promise<void>
 	readonly handleLoad: (event: React.SyntheticEvent<HTMLImageElement>) => void
+	// Releases an undecodable blob without presenting its overlay.
+	readonly handleError: (event: React.SyntheticEvent<HTMLImageElement>) => void
 	readonly select: VoidFunction
 	readonly detach: VoidFunction
 	readonly toggleClass: (token: string, force?: boolean) => void
 	readonly remove: VoidFunction
 	readonly close: () => Promise<unknown>
+	readonly handleAction: SlideMenuProps['onAction']
 	readonly adjustment: ImageAdjustmentStore
 	readonly annotation: ImageAnnotationStore
 	readonly calibration: ImageCalibrationStore
@@ -130,11 +137,20 @@ export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewe
 
 	const u: VoidFunction[] = []
 	let mounted = false
-	let loading = false
 	let interactable: InteractableMethods | undefined
 	let target: HTMLImageElement | undefined
 	let centered = false
 	const key = camera?.id || 'default'
+
+	const loader = imageLoadStore({
+		open: (path, transformation, signal) => Api.Image.open({ path, transformation, camera: camera?.name }, signal),
+		loaded: (info) => {
+			const first = state.info === undefined
+			state.info = ref(info)
+			state.path = info.path
+			imageBus.emit('load', { image, info, first, refreshed: true })
+		},
+	})
 
 	function mount() {
 		if (mounted) return unmount
@@ -154,13 +170,9 @@ export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewe
 		const timer = window.setInterval(ping, 30000)
 		u[2] = window.clearInterval.bind(window, timer)
 
-		u[3] = cameraBus.subscribe('frame', (event) => {
-			if (event.camera === camera?.id) {
-				void load(event.path)
-			}
-		})
-
-		u[4] = imageBus.subscribe('update', (event) => {
+		// Home forwards camera frames to this image's update topic. Listening to both topics would
+		// enqueue two HTTP loads for every exposure, discarding the first response unnecessarily.
+		u[3] = imageBus.subscribe('update', (event) => {
 			if (event.image.id === image.id) {
 				void load(event.path)
 			}
@@ -173,6 +185,7 @@ export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewe
 		if (!mounted) return
 		console.info('image viewer unmounted:', state.path)
 		unsubscribe(u)
+		loader.detach()
 		window.removeEventListener('beforeunload', close)
 		mounted = false
 	}
@@ -180,6 +193,7 @@ export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewe
 	function attachImage(node: HTMLImageElement | null) {
 		if (node !== null) {
 			target = node
+			loader.attach(node)
 		}
 	}
 
@@ -211,46 +225,9 @@ export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewe
 		return reload()
 	}
 
-	async function load(path: string | true = '') {
-		if (loading) return
-
-		console.info('loading image:', path)
-
-		try {
-			loading = true
-
-			const first = state.info === undefined
-			const refreshed = first || state.path !== path || path.length > 0
-
-			// If the path is true or empty, it means to load the current image path.
-			if (path === true || path === '') path = state.path
-
-			// Load the image
-			const data = await Api.Image.open({ path, transformation: state.transformation, camera: camera?.name })
-
-			if (data === undefined) {
-				return remove()
-			}
-
-			const { blob, info } = data
-			const url = URL.createObjectURL(blob)
-
-			// Update the state
-			state.info = ref(info)
-			state.path = info.path
-
-			if (target) {
-				target.src = url
-
-				imageBus.emit('load', { image, info, first, refreshed } satisfies ImageLoaded)
-
-				console.info('image loaded:', path, url, info)
-			} else {
-				console.warn('image not mounted yet:', path)
-			}
-		} finally {
-			loading = false
-		}
+	// Queues the latest image with a private processing snapshot; identity comes back with the pixels.
+	function load(path: string | true = '') {
+		return loader.load(path === true || path === '' ? state.path : path, structuredClone(snapshot(state.transformation)))
 	}
 
 	function reload() {
@@ -301,7 +278,7 @@ export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewe
 
 	function handleLoad(event: React.SyntheticEvent<HTMLImageElement>) {
 		const target = event.currentTarget
-		URL.revokeObjectURL(target.src)
+		if (!loader.handleLoad(target)) return
 
 		if (!centered && interactable !== undefined) {
 			interactable.center()
@@ -309,8 +286,27 @@ export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewe
 		}
 	}
 
+	function handleAction(id: React.Key, item: SlideMenuItem) {
+		switch (id) {
+			case 'invert':
+				void toggleInvert()
+				break
+			case 'verticalMirror':
+				void toggleVerticalMirror()
+				break
+			case 'horizontalMirror':
+				void toggleHorizontalMirror()
+				break
+		}
+	}
+
+	// Clears failed image metadata and releases its blob URL.
+	function handleError(event: React.SyntheticEvent<HTMLImageElement>) {
+		loader.handleError(event.currentTarget)
+	}
+
 	function detach() {
-		if (loading) return
+		loader.detach()
 
 		console.info('image detached:', state.path)
 
@@ -329,6 +325,7 @@ export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewe
 	}
 
 	const store = {
+		loader,
 		state,
 		home,
 		image,
@@ -356,31 +353,33 @@ export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewe
 		syncMountHere,
 		frameAt,
 		handleLoad,
+		handleAction,
+		handleError,
 		detach,
 		toggleClass,
 		remove,
 		close,
 	} as Writable<ImageViewerStore>
 
-	const adjustment = (store.adjustment = imageAdjustmentStore(store))
-	const annotation = (store.annotation = imageAnnotationStore(store))
-	const calibration = (store.calibration = imageCalibrationStore(store))
-	const coordinateGrid = (store.coordinateGrid = imageCoordinateGridStore(store))
-	const filter = (store.filter = imageFilterStore(store))
-	const fov = (store.fov = imageFovStore(store))
-	const header = (store.header = imageHeaderStore(store))
-	const mouseCoordinate = (store.mouseCoordinate = imageMouseCoordinateStore(store))
-	const roi = (store.roi = imageRoiStore(store))
-	const save = (store.save = imageSaveStore(store))
-	const scnr = (store.scnr = imageScnrStore(store))
-	const settings = (store.settings = imageSettingsStore(store))
-	const solver = (store.solver = imageSolverStore(store))
-	const starDetection = (store.starDetection = imageStarDetectionStore(store))
-	const statistics = (store.statistics = imageStatisticsStore(store))
-	const stretch = (store.stretch = imageStretchStore(store))
-	const debayer = (store.debayer = imageDebayerStore(store))
-	const crosshair = (store.crosshair = imageCrosshairStore(store))
-	const rotation = (store.rotation = imageRotationStore(store))
+	store.adjustment = imageAdjustmentStore(store)
+	store.annotation = imageAnnotationStore(store)
+	store.calibration = imageCalibrationStore(store)
+	store.coordinateGrid = imageCoordinateGridStore(store)
+	store.filter = imageFilterStore(store)
+	store.fov = imageFovStore(store)
+	store.header = imageHeaderStore(store)
+	store.mouseCoordinate = imageMouseCoordinateStore(store)
+	store.roi = imageRoiStore(store)
+	store.save = imageSaveStore(store)
+	store.scnr = imageScnrStore(store)
+	store.settings = imageSettingsStore(store)
+	store.solver = imageSolverStore(store)
+	store.starDetection = imageStarDetectionStore(store)
+	store.statistics = imageStatisticsStore(store)
+	store.stretch = imageStretchStore(store)
+	store.debayer = imageDebayerStore(store)
+	store.crosshair = imageCrosshairStore(store)
+	store.rotation = imageRotationStore(store)
 
 	return store
 }

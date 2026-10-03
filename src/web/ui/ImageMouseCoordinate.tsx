@@ -1,10 +1,11 @@
 import { ImageViewerStoreContext } from '@shared/context'
-import { formatNumber, tw } from '@shared/util'
+import { formatNumber } from '@shared/util'
 import { hasScaledSolution } from '@stores/image.solver.store'
 import { IconButton } from '@ui/components/IconButton'
 import { Switch } from '@ui/components/Switch'
 import { MountDropdown } from '@ui/DeviceDropdown'
 import { Icons } from '@ui/Icon'
+import { cn } from 'cn'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
@@ -57,7 +58,7 @@ const SelectedCoordinate = memo(() => {
 	return (
 		<span className="col-span-full flex flex-row items-center gap-1">
 			<Coordinate declination={selected.declination} pinned rightAscension={selected.rightAscension} x={selected.x} y={selected.y} />
-			<b>D:</b> {formatAZ(selected.distance, true)}
+			<b>D:</b> {formatAZ(selected.distance, false)}
 		</span>
 	)
 })
@@ -68,7 +69,7 @@ interface CoordinateProps extends React.ComponentProps<'div'>, Readonly<Equatori
 
 function Coordinate({ pinned = false, x, y, rightAscension, declination, className, ...props }: CoordinateProps) {
 	return (
-		<div className={tw('inline-flex min-w-0 flex-row items-center gap-1', className)} {...props}>
+		<div className={cn('inline-flex min-w-0 flex-row items-center gap-1', className)} {...props}>
 			{pinned ? <Icons.Pin className="size-[1em]" /> : <Icons.Cursor className="size-[1em]" />}
 			<b>X:</b> {formatNumber(x, 0)}
 			<b className="ms-1">Y:</b> {formatNumber(y, 0)}
@@ -107,8 +108,8 @@ const SelectedCoordinateAction = memo(() => {
 	)
 })
 
-function formatAngle(value: number, format: (value: number, signed?: boolean) => string) {
-	return Number.isFinite(value) ? format(value, true) : '--'
+function formatAngle(value: number, format: (value: number, fractionDigits?: number | boolean) => string) {
+	return Number.isFinite(value) ? format(value, false) : '--'
 }
 
 function isValidCoordinate(coordinate: EquatorialCoordinate) {

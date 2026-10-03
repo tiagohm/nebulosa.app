@@ -1,7 +1,7 @@
 import { cirsToObserved, observedToCirs } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
 import type { Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
-import { equatorialToJ2000, equatorialToEcliptic, equatorialToGalatic, equatorialFromJ2000, eclipticToEquatorial, galacticToEquatorial } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import { equatorialToJ2000, equatorialToEcliptic, equatorialToGalactic, equatorialFromJ2000, eclipticToEquatorial, galacticToEquatorial } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import type { Time } from 'nebulosa/src/astronomy/time/time'
@@ -123,7 +123,7 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 		if (flags.horizontal) observed = cirsToObserved(equatorial, time)
 		if (flags.equatorialJ2000 || flags.galactic) Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
 		if (flags.ecliptic) Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
-		if (flags.galactic) Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
+		if (flags.galactic) Object.assign(galactic, equatorialToGalactic(...equatorialJ2000))
 	}
 	// J2000 equatorial coordinate
 	else if (type === 'J2000') {
@@ -133,7 +133,7 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 
 		if (hasEquatorial) Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
 		if (flags.ecliptic) Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
-		if (flags.galactic) Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
+		if (flags.galactic) Object.assign(galactic, equatorialToGalactic(...equatorialJ2000))
 		if (flags.horizontal) observed = cirsToObserved(equatorial, time)
 	}
 	// Local horizontal coordinate
@@ -145,7 +145,7 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 		if (hasEquatorial) Object.assign(equatorial, observedToCirs(...horizontal, time))
 		if (flags.equatorialJ2000 || flags.galactic) Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
 		if (flags.ecliptic) Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
-		if (flags.galactic) Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
+		if (flags.galactic) Object.assign(galactic, equatorialToGalactic(...equatorialJ2000))
 	}
 	// Ecliptic (at date) coordinate
 	else if (type === 'ECLIPTIC') {
@@ -155,7 +155,7 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 
 		if (hasEquatorial) Object.assign(equatorial, eclipticToEquatorial(...ecliptic, time))
 		if (flags.equatorialJ2000 || flags.galactic) Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
-		if (flags.galactic) Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
+		if (flags.galactic) Object.assign(galactic, equatorialToGalactic(...equatorialJ2000))
 		if (flags.horizontal) observed = cirsToObserved(equatorial, time)
 	}
 	// Galactic coordinate

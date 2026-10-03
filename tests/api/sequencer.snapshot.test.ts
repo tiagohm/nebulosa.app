@@ -120,6 +120,7 @@ describe('snapshot derivation', () => {
 			{ role: 'mount', declaredId: 'Mount Simulator', deviceId: 'Mount Simulator' },
 			{ role: 'wheel', declaredId: 'Wheel Simulator', deviceId: undefined },
 			{ role: 'focuser', declaredId: 'Focuser Simulator', deviceId: undefined },
+			{ role: 'guider', declaredId: 'guider-1', deviceId: undefined },
 		])
 	})
 
@@ -191,7 +192,7 @@ describe('snapshot derivation', () => {
 		const snapshot = deriveSequencerSnapshot(observation({ foreground: { nodeId: 'flip', type: 'meridianFlip', state: 'waiting', attempt: 1, startedAt: 9000, wait } }))
 
 		expect(snapshot.capture.exposure).toBeUndefined()
-		expect(snapshot.foreground).toEqual({ nodeId: 'flip', type: 'meridianFlip', name: 'meridianFlip', state: 'waiting', attempt: 1, progress: undefined, detail: undefined, startedAt: 9000, wait })
+		expect(snapshot.foreground).toEqual({ nodeId: 'flip', type: 'meridianFlip', state: 'waiting', attempt: 1, progress: undefined, detail: undefined, startedAt: 9000, wait })
 	})
 
 	test('reports how far every periodic trigger is from firing', () => {

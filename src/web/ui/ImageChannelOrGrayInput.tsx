@@ -1,10 +1,10 @@
-import { tw } from '@shared/util'
 import { IconButton } from '@ui/components/IconButton'
 import { NumberInput } from '@ui/components/NumberInput'
 import { Select } from '@ui/components/Select'
 import type { SelectItemRenderer } from '@ui/components/Select'
 import { Icons } from '@ui/Icon'
 import { ImageChannelOrGraySelect } from '@ui/ImageChannelOrGraySelect'
+import { cn } from 'cn'
 import { GRAYSCALES } from 'nebulosa/src/imaging/model/types'
 import type { Grayscale, ImageChannelOrGray } from 'nebulosa/src/imaging/model/types'
 import { useEffect, useRef, useState } from 'react'
@@ -62,7 +62,7 @@ export function ImageChannelOrGrayInput({ value, onValueChange, className, disab
 	}
 
 	return (
-		<div {...props} className={tw('flex min-w-0 gap-2', mode === 'input' ? 'flex-col' : 'flex-row', className)}>
+		<div {...props} className={cn('flex min-w-0 gap-2', mode === 'input' ? 'flex-col' : 'flex-row', className)}>
 			<Select className="min-w-0" disabled={disabled} items={MODE_ITEMS} label="Mode" onValueChange={handleModeChange} value={mode}>
 				{ModeItem}
 			</Select>

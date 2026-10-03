@@ -31,7 +31,7 @@ import type { AutoFocusEvent, AutoFocusStart } from '#/autofocus'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
-import { captureHandle, json, noContent, SocketMessager, waitUntil } from './util'
+import { cameraFrameEvent, captureHandle, json, noContent, SocketMessager, waitUntil } from './util'
 
 type AutoFocusStartOverrides = Omit<Partial<AutoFocusStart>, 'capture' | 'starDetection'> & {
 	readonly capture?: Partial<AutoFocusStart['capture']>
@@ -290,7 +290,7 @@ describe('auto focus handler', () => {
 			expect(autoFocusEvents().at(-1)?.message).toBe('the camera or the focuser is in use by another operation')
 			expect(autoFocusEvents().some((event) => event.id === id && event.state === 'idle')).toBeFalse()
 		} finally {
-			inFlight.resolve(successfulOperationResult({ paths: [], frameCount: 0 }))
+			inFlight.resolve(successfulOperationResult({ frames: [], frameCount: 0 }))
 			await autoFocusHandler.stop(id)
 			capture.mockRestore()
 		}
@@ -374,7 +374,7 @@ describe('auto focus handler', () => {
 
 	test('ends the run when the captured frame shows no stars', async () => {
 		const { camera, focuser } = await connectedDevices()
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve(successfulOperationResult({ paths: ['focus.fit'], frameCount: 1 })) }))
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve(successfulOperationResult({ frames: [cameraFrameEvent('focus.fit')], frameCount: 1 })) }))
 		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(() => Promise.resolve([]))
 		const request = autoFocusStartRequest()
 
@@ -395,7 +395,7 @@ describe('auto focus handler', () => {
 
 	test('measures the HFD and waits for the focuser to reach the commanded position', async () => {
 		const { camera, focuser } = await connectedDevices()
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve(successfulOperationResult({ paths: ['focus.fit'], frameCount: 1 })) }))
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve(successfulOperationResult({ frames: [cameraFrameEvent('focus.fit')], frameCount: 1 })) }))
 		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(() => Promise.resolve([star(4), star(2), star(6)]))
 		const request = autoFocusStartRequest({ initialOffsetSteps: 2, stepSize: 25 })
 		const target = focuser.position.value + 50
@@ -443,7 +443,7 @@ describe('auto focus handler', () => {
 	test('follows the curve to best focus and leaves the focuser there', async () => {
 		const { camera, focuser } = await connectedDevices()
 		const best = focuser.position.value
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve(successfulOperationResult({ paths: ['focus.fit'], frameCount: 1 })) }))
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve(successfulOperationResult({ frames: [cameraFrameEvent('focus.fit')], frameCount: 1 })) }))
 		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(vCurve(focuser, best, 25))
 		const request = autoFocusStartRequest({ initialOffsetSteps: 3, stepSize: 25, fittingMode: 'TRENDLINES' })
 

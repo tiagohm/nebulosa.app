@@ -1,10 +1,10 @@
 import { CameraCaptureStoreContext } from '@shared/context'
-import { tw } from '@shared/util'
 import { CameraExposureTimeInput } from '@ui/CameraExposureTimeInput'
 import { CameraTransferFormatSelect } from '@ui/CameraTransferFormatSelect'
 import { Checkbox } from '@ui/components/Checkbox'
 import { NumberInput } from '@ui/components/NumberInput'
 import { FrameFormatSelect } from '@ui/FrameFormatSelect'
+import { cn } from 'cn'
 import type { DeepReadonly } from 'nebulosa/src/core/types'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { useContext } from 'react'
@@ -24,7 +24,7 @@ export function CameraCaptureStartInput({ mode, camera, color, disabled, classNa
 	const exposureTimeDisabled = !canExposureTime(mode)
 
 	return (
-		<div className={tw('flex flex-row flex-wrap items-center gap-2', className)} {...props}>
+		<div className={cn('flex flex-row flex-wrap items-center gap-2', className)} {...props}>
 			<CameraExposureTimeInput
 				className="min-w-0"
 				disabled={disabled || exposureTimeDisabled}

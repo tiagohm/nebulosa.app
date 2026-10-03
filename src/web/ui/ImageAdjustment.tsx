@@ -1,11 +1,11 @@
 import { ImageViewerStoreContext } from '@shared/context'
-import { tw } from '@shared/util'
 import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
 import { NumberInput } from '@ui/components/NumberInput'
 import type { NumberInputProps } from '@ui/components/NumberInput'
 import { Icons } from '@ui/Icon'
 import { ImageChannelOrGrayInput } from '@ui/ImageChannelOrGrayInput'
+import { cn } from 'cn'
 import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import type { ImageAdjustment as Adjustment } from '#/image.adjustment'
@@ -85,7 +85,7 @@ const Footer = memo(() => {
 })
 
 function AdjustmentValueInput({ minValue = 0, className, ...props }: NumberInputProps) {
-	return <NumberInput className={tw('col-span-full min-w-0', className)} fractionDigits={2} minValue={minValue} maxValue={10} step={0.01} {...props} />
+	return <NumberInput className={cn('col-span-full min-w-0', className)} fractionDigits={2} minValue={minValue} maxValue={10} step={0.01} {...props} />
 }
 
 function isValidAdjustment(adjustment: Adjustment) {

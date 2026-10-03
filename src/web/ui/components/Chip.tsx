@@ -1,5 +1,6 @@
-import { hasRootInteraction, stopPropagationForAll, tw } from '@shared/util'
+import { hasRootInteraction, stopPropagationForAll } from '@shared/util'
 import { Icons } from '@ui/Icon'
+import { cn } from 'cn'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
 
@@ -121,12 +122,12 @@ export function Chip({ children, className, classNames, color, disabled = false,
 	}
 
 	return (
-		<div {...stopPropagationForAll(props)} className={tw(styles.base(), stateClassName, className, classNames?.base)} ref={ref}>
-			{startContent !== undefined && startContent !== null && <span className={tw(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
-			{content !== undefined && content !== null && <span className={tw(styles.label(), classNames?.label)}>{content}</span>}
-			{endContent !== undefined && endContent !== null && <span className={tw(styles.endContent(), classNames?.endContent)}>{endContent}</span>}
+		<div {...stopPropagationForAll(props)} className={cn(styles.base(), stateClassName, className, classNames?.base)} ref={ref}>
+			{startContent !== undefined && startContent !== null && <span className={cn(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
+			{content !== undefined && content !== null && <span className={cn(styles.label(), classNames?.label)}>{content}</span>}
+			{endContent !== undefined && endContent !== null && <span className={cn(styles.endContent(), classNames?.endContent)}>{endContent}</span>}
 			{onClose !== undefined && (
-				<button className={tw(styles.closeButton(), classNames?.closeButton)} onClick={handleClose} type="button">
+				<button className={cn(styles.closeButton(), classNames?.closeButton)} onClick={handleClose} type="button">
 					<Icons.Close />
 				</button>
 			)}

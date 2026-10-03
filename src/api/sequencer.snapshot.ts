@@ -1,3 +1,4 @@
+import { sequencerCaptureExposureInSeconds } from '#/sequencer'
 import type { SequencerDeviceRole } from '#/sequencer'
 import type { SequencerPlan, SequencerPlanFrameGroup, SequencerPlanNode } from '#/sequencer.plan'
 import type { SequencerActivitySnapshot, SequencerActivityState, SequencerCaptureSnapshot, SequencerDeviceSnapshot, SequencerGroupSnapshot, SequencerSession, SequencerSessionSnapshot, SequencerTriggerAnchor, SequencerTriggerAnchors, SequencerTriggerSnapshot, SequencerWaitSnapshot } from '#/sequencer.state'
@@ -6,7 +7,7 @@ import { groupProgressOf, targetProgressOf } from './sequencer.scheduler'
 import type { SequencerTriggerPolicies } from './sequencer.trigger'
 
 // Derivation of the value the UI observes, the meter behind its completion estimate, and the cadence it is
-// emitted at (§15.1, §15.2).
+// emitted.
 //
 // The snapshot is derived on every tick from the session record, its checkpoint, and what the runtime is doing
 // right now. It is never stored and never read back by the runtime: an execution decision that consulted it
@@ -16,7 +17,7 @@ import type { SequencerTriggerPolicies } from './sequencer.trigger'
 // interval is milliseconds.
 
 // Interval between two progress emissions when nothing changes, in milliseconds. A ten-minute exposure has to
-// keep the screen alive without producing ten minutes of traffic, and a transition never waits for it (§15.2).
+// keep the screen alive without producing ten minutes of traffic, and a transition never waits for it.
 export const SEQUENCER_PROGRESS_INTERVAL = 1000
 
 // Intervals the overhead average is taken over.
@@ -102,8 +103,6 @@ export interface SequencerActivityObservation {
 	readonly nodeId: string
 	// Block type of the node, as registered.
 	readonly type: string
-	// Human-readable label of the node, falling back to the block type when the plan declares none.
-	readonly name?: string
 	// What the action is doing.
 	readonly state: SequencerActivityState
 	// Attempt in progress, starting at 1.
@@ -115,7 +114,7 @@ export interface SequencerActivityObservation {
 	// Instant the action started.
 	readonly startedAt: number
 	// Condition the action is standing still on, which is what keeps a long wait explainable instead of
-	// stalling the completion estimate with no reason attached (§15.1).
+	// stalling the completion estimate with no reason attached.
 	readonly wait?: SequencerWaitSnapshot
 }
 
@@ -158,7 +157,7 @@ export interface SequencerSnapshotObservation {
 	readonly now: number
 }
 
-// Derives everything the UI shows from the durable state and what the runtime is doing right now (§15.1).
+// Derives everything the UI shows from the durable state and what the runtime is doing right now.
 //
 // The derivation is total and pure: every session produces a snapshot, including one that never started and
 // one whose plan the process no longer holds, and nothing here reads a clock of its own — `now` is the instant
@@ -185,9 +184,8 @@ export function deriveSequencerSnapshot(observation: SequencerSnapshotObservatio
 
 		groups.push({
 			id: group.id,
-			name: group.name,
-			frameType: group.frameType,
-			exposureTime: group.exposureTime,
+			frameType: group.capture.frameType,
+			exposureTime: sequencerCaptureExposureInSeconds(group.capture),
 			filter: filterLabel(group),
 			cursor: counters?.cursor ?? 0,
 			accepted: groupAccepted,
@@ -207,7 +205,7 @@ export function deriveSequencerSnapshot(observation: SequencerSnapshotObservatio
 
 		// Only the slots still to be accepted are projected, and only the required ones: the abandonment budget
 		// is margin the plan hopes not to spend, so counting it would present slack as scheduled work.
-		cycleRemaining += Math.max(0, group.requiredSlots - groupAccepted) * (group.exposureTime + overhead)
+		cycleRemaining += Math.max(0, group.requiredSlots - groupAccepted) * (sequencerCaptureExposureInSeconds(group.capture) + overhead)
 	}
 
 	const capture: SequencerCaptureSnapshot = {
@@ -228,7 +226,7 @@ export function deriveSequencerSnapshot(observation: SequencerSnapshotObservatio
 		const cycles = Math.max(0, planRepeat(plan.root) - (progress?.cycle ?? 0) - 1)
 		let remaining = cycleRemaining
 
-		for (const group of plan.groups) remaining += cycles * group.requiredSlots * (group.exposureTime + overhead)
+		for (const group of plan.groups) remaining += cycles * group.requiredSlots * (sequencerCaptureExposureInSeconds(group.capture) + overhead)
 
 		return { ...header(observation, terminal), capture: { ...capture, remaining, estimatedCompletion: now + remaining * 1000 }, ...tail(observation) }
 	}
@@ -313,7 +311,7 @@ function devicesOf(observation: SequencerSnapshotObservation): readonly Sequence
 
 // One action as the snapshot reports it, with the block type standing in for a node the plan does not name.
 function activityOf(activity: SequencerActivityObservation): SequencerActivitySnapshot {
-	return { nodeId: activity.nodeId, type: activity.type, name: activity.name ?? activity.type, state: activity.state, attempt: activity.attempt, progress: activity.progress, detail: activity.detail, startedAt: activity.startedAt, wait: activity.wait }
+	return { nodeId: activity.nodeId, type: activity.type, state: activity.state, attempt: activity.attempt, progress: activity.progress, detail: activity.detail, startedAt: activity.startedAt, wait: activity.wait }
 }
 
 // Exposure in progress, with the elapsed time clamped to the requested duration.
@@ -330,7 +328,7 @@ function exposureOf(exposure: SequencerExposureObservation, now: number) {
 // A reference by position is rendered as the position itself: the wheel is what maps it to a name, and the
 // snapshot reports what the definition asked for rather than resolving it against a device it does not read.
 function filterLabel(group: SequencerPlanFrameGroup) {
-	const filter = group.filter
+	const { filter } = group.capture
 
 	if (filter === undefined) return undefined
 
@@ -426,7 +424,7 @@ export interface SequencerProgressEmitterOptions {
 	readonly interval?: number
 }
 
-// Emits progress at a fixed cadence and immediately on every change (§15.2).
+// Emits progress at a fixed cadence and immediately on every change.
 //
 // The two halves answer different failures. Without the cadence a ten-minute exposure would leave the screen
 // frozen for ten minutes; without the immediate emission a transition would be shown up to a second after it

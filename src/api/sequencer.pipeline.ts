@@ -4,7 +4,7 @@ import type { SequencerLifecycle } from './sequencer.compiler'
 import { sequencerFailurePolicy } from './sequencer.policy'
 import type { SequencerActionResult } from './sequencer.registry'
 
-// Executor of an ordered lifecycle pipeline, which is what runs both ends of the night (§8.5, §8.6).
+// Executor of an ordered lifecycle pipeline, which is what runs both ends of the night.
 //
 // Startup and finalize are the same machine: an ordered list of actions, each with its own timeout, retry
 // policy and `required` flag, executed under the reservation the session already holds. They differ in what
@@ -22,7 +22,7 @@ import type { SequencerActionResult } from './sequencer.registry'
 // takes precedence over the continuation policy.
 //
 // An action interrupted by the flag is recorded as `notRun` rather than dropped. It is the difference between
-// an action that was tried and did not work and one that never ran, and the composition of §8.6 needs both.
+// an action that was tried and did not work and one that never ran, and the composition needs both.
 //
 // Timeouts are declared in seconds and retry delays in seconds; both are milliseconds here.
 
@@ -35,7 +35,7 @@ import type { SequencerActionResult } from './sequencer.registry'
 //   optional actions, or the session left the plan — through a stop that cancelled the action or through the
 //   convergence asked in front of it. Outside a session leaving the plan it is only possible for
 //   an optional action, since a required one is always attempted; a required action reported this way is a
-//   defect, which is exactly why the composition of §8.6 converts it into a failure instead of assuming it
+//   defect, which is exactly why the composition converts it into a failure instead of assuming it
 //   cannot happen.
 export type SequencerPipelineOutcome = 'succeeded' | 'skipped' | 'failed' | 'notRun'
 
@@ -84,7 +84,7 @@ export interface SequencerPipelineReport {
 	// Failure of the first required action that failed, absent when none did. Only a required action produces
 	// one: an optional action that fails follows `continueOnFailure` and never decides the outcome of the
 	// session — a night without a dew heater is still a night. A required action that never ran carries no
-	// failure of its own and is composed from its result by §8.6, which is where the primary outcome is known.
+	// failure of its own and is composed from its result, which is where the primary outcome is known.
 	readonly failure?: SequencerPipelineFailure
 	// Whether the pipeline was interrupted by the session leaving the plan, which is a stop that cancelled the
 	// running action or a convergence that refused the next one.
@@ -117,7 +117,7 @@ export interface SequencerPipelineExecutor {
 	// halfway, and the deadline of an attempt is armed around `run`.
 	//
 	// A pause is attended inside this call, which is why it is asynchronous and why it has no answer of its own:
-	// a pipeline has no paused state (§11.3), so it either continues once the session resumes or is stopped. A
+	// a pipeline has no paused state, so it either continues once the session resumes or is stopped. A
 	// `false` answer therefore means the session is leaving the plan, and it ends the pipeline exactly as a
 	// commanded stop does.
 	converge?(step: SequencerPipelineStep): Promise<boolean>
@@ -336,8 +336,7 @@ async function runStep(executor: SequencerPipelineExecutor, step: SequencerPipel
 	}
 }
 
-// Executes an ordered lifecycle pipeline, running each action under its own timeout and retry policy (§8.5,
-// §8.6).
+// Executes an ordered lifecycle pipeline, running each action under its own timeout and retry policy.
 //
 // `steps` are the derived actions of the pipeline in the order the compiler emitted them, which is the only
 // physically valid one: the cover closes while the sky is still open, the mount parks next, and the cooler

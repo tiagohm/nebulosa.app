@@ -1,7 +1,7 @@
-import { medianOf, NumberComparator } from 'nebulosa/src/core/util'
 import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { Regression } from 'nebulosa/src/math/numerical/regression'
+import { medianBySelectionOf } from 'nebulosa/src/math/numerical/statistics'
 import { AutoFocus } from 'nebulosa/src/observation/focus/autofocus'
 import { DEFAULT_AUTO_FOCUS_EVENT } from '#/autofocus'
 import type { AutoFocusEvent, AutoFocusStart, AutoFocusState } from '#/autofocus'
@@ -166,13 +166,13 @@ class AutoFocusRun {
 
 			if (!captured.ok) return await this.#restored(context, initialPosition, captured)
 
-			const path = captured.value.paths.at(-1)
+			const frame = captured.value.frames.at(-1)
 
-			if (path === undefined) return await this.#restored(context, initialPosition, failedOperationResult('unexpectedState', 'the capture produced no frame'))
+			if (frame === undefined) return await this.#restored(context, initialPosition, failedOperationResult('unexpectedState', 'the capture produced no frame'))
 
 			this.#publish('computing', '')
 
-			const stars = await this.runner.starDetectionHandler.detect({ ...this.request.starDetection, path }, context.signal)
+			const stars = await this.runner.starDetectionHandler.detect({ ...this.request.starDetection, path: frame.path }, context.signal)
 
 			if (context.signal.aborted) return failedOperationResult(abortReason(context.signal))
 
@@ -198,7 +198,7 @@ class AutoFocusRun {
 			}
 
 			// The median rejects the outliers a single misdetected star would otherwise contribute.
-			const hfd = medianOf(stars.map((e) => e.hfd).sort(NumberComparator))
+			const hfd = medianBySelectionOf(stars.map((e) => e.hfd))
 			const step = this.#autoFocus.add(this.focuser.position.value, hfd)
 
 			this.#event.starCount = stars.length

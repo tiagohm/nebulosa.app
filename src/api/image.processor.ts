@@ -254,10 +254,13 @@ export class ImageProcessor {
 	private readonly pipeline = new ImagePipelineRunner()
 
 	// Retains the serialized payload of a frame, which is the only copy when the producer never wrote it
-	// to a readable path. Returns the stored source.
+	// to a readable path. Optional camera scopes eviction; frame identifies the received exposure and
+	// forces retention even for reusable shared-memory paths. Returns the source without copying bytes.
 	save(buffer: Buffer, path: string, camera?: Camera) {
 		// Avoid double buffering
-		const canBuffer = !camera || process.platform !== 'linux' || !path.startsWith('/dev/shm/')
+		// Identified captures retain the received bytes: a shared-memory path can be overwritten while
+		// a worker is queued. Retaining this Buffer does not copy it and only the latest source is kept.
+		const canBuffer = camera !== undefined || process.platform !== 'linux' || !path.startsWith('/dev/shm/')
 		this.evict(path, camera)
 
 		const item: SourceImage = { buffer: canBuffer ? buffer : undefined, path, camera: camera?.id }
@@ -318,7 +321,9 @@ export class ImageProcessor {
 		applyStretchLevels(transformation, frame.stretch)
 
 		const item: TransformedImage = { source: source ?? { path, camera }, image: frame.image, transformation, key, stretch: frame.stretch }
-		this.cache(path, item)
+		// A later exposure may have replaced this source while the worker decoded it. Return its own
+		// pixels to the caller, but never let it populate the new exposure's cache.
+		if (this.sources.get(path)?.item === source) this.cache(path, item)
 		console.info('image at', path, 'was transformed:', item.image.raw.byteLength)
 		return item
 	}

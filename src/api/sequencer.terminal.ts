@@ -2,7 +2,7 @@ import type { SequencerFailureReason } from '#/sequencer'
 import type { SequencerPlanFinalize } from '#/sequencer.plan'
 import type { SequencerPipelineReport, SequencerPipelineResult } from './sequencer.pipeline'
 
-// Composition of the terminal state of a session out of two results that are recorded separately (§8.6).
+// Composition of the terminal state of a session out of two results that are recorded separately.
 //
 // `continueOnFailure` says whether the terminal pipeline keeps going, and only that. It does not say what
 // state the session ends in, and without this composition a perfect capture followed by a park that failed
@@ -18,7 +18,7 @@ export type SequencerTerminalState = 'completed' | 'stopped' | 'failed'
 
 // Outcome of the main plan, before the terminal pipeline runs.
 //
-// A capture group that concluded degraded (§8.3) and a required startup action that failed (§8.5) are both
+// A capture group that concluded degraded and a required startup action that failed are both
 // `failed` here, carrying the cause of the device failure that produced them rather than the mechanism that
 // noticed it.
 export type SequencerPrimaryOutcome = { readonly kind: 'completed' } | { readonly kind: 'stopped' } | { readonly kind: 'failed'; readonly reason: SequencerFailureReason; readonly detail?: string }
@@ -59,7 +59,7 @@ export function sequencerFinalizeRuns(finalize: SequencerPlanFinalize | undefine
 }
 
 // Turns the report of the startup pipeline into the outcome of the main plan, or undefined when the capture
-// block may run (§8.5).
+// block may run.
 //
 // A required startup action that failed aborts the session **before** capture: there is nothing to preserve,
 // so the startup failure *is* the reason of the session, the target block does not execute, and the terminal
@@ -79,7 +79,7 @@ export function sequencerStartupOutcome(report: SequencerPipelineReport): Sequen
 
 // First required action of a pipeline that never ran, or undefined when every one of them was attempted.
 //
-// By the inversion of §8.6 this cannot happen, and that is exactly why it is detected instead of assumed: if
+// By the inversion this cannot happen, and that is exactly why it is detected instead of assumed: if
 // it happens it is a defect, and reporting `completed` would hide the defect behind a session that looks fine.
 function requiredNotRun(report: SequencerPipelineReport) {
 	for (const result of report.results) {
@@ -102,8 +102,8 @@ function terminalIssues(report: SequencerPipelineReport | undefined): SequencerT
 	return issues
 }
 
-// Composes the terminal state of a session from the outcome of its plan and the report of its finalization
-// (§8.6). `finalize` is absent when the plan declares no terminal pipeline or the pipeline did not run for
+// Composes the terminal state of a session from the outcome of its plan and the report of its finalization.
+// `finalize` is absent when the plan declares no terminal pipeline or the pipeline did not run for
 // this outcome.
 //
 // The rules, in the order they are applied:

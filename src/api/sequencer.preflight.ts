@@ -1,3 +1,4 @@
+import { sequencerCaptureExposureInSeconds } from '#/sequencer'
 import type { Sequencer } from '#/sequencer'
 import type { SequencerCompilation, SequencerPlan, SequencerPreflight, SequencerPreflightGroup } from '#/sequencer.plan'
 import { compile, sequencerPlanNodes } from './sequencer.compiler'
@@ -44,7 +45,7 @@ export function preflight(compilation: SequencerCompilation): SequencerPreflight
 	let projectedIntegration = 0
 
 	for (const group of plan.groups) {
-		groups.push({ id: group.id, name: group.name, frameType: group.frameType, exposureTime: group.exposureTime, requiredSlots: group.requiredSlots, abandonmentBudget: group.abandonmentBudget, slotLimit: group.slotLimit, projectedIntegration: group.projectedIntegration })
+		groups.push({ id: group.id, frameType: group.capture.frameType, exposureTime: sequencerCaptureExposureInSeconds(group.capture), requiredSlots: group.requiredSlots, abandonmentBudget: group.abandonmentBudget, slotLimit: group.slotLimit, projectedIntegration: group.projectedIntegration })
 		requiredSlots += group.requiredSlots
 		slotLimit += group.slotLimit
 		projectedIntegration += group.projectedIntegration

@@ -1,4 +1,4 @@
-import { tw } from '@shared/util'
+import { cn } from 'cn'
 import { Children, Fragment, isValidElement } from 'react'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
@@ -228,16 +228,16 @@ export function ButtonGroup<T extends ButtonGroupId = string>({ children, classN
 		}
 
 		return (
-			<div key={item.key ?? String(id)} {...itemProps} className={tw(itemStyles.item(), stateClassName, classNames?.item, itemClassName)} onKeyDown={handleKeyDown} onClick={handleClick} ref={itemRef} role="button" tabIndex={disabled || itemDisabled ? undefined : (tabIndex ?? 0)}>
-				{startContent !== undefined && startContent !== null && <span className={tw(itemStyles.startContent(), classNames?.itemStartContent)}>{startContent}</span>}
-				{content !== undefined && content !== null && <span className={tw(itemStyles.label(), classNames?.itemLabel)}>{content}</span>}
-				{endContent !== undefined && endContent !== null && <span className={tw(itemStyles.endContent(), classNames?.itemEndContent)}>{endContent}</span>}
+			<div key={item.key ?? String(id)} {...itemProps} className={cn(itemStyles.item(), stateClassName, classNames?.item, itemClassName)} onKeyDown={handleKeyDown} onClick={handleClick} ref={itemRef} role="button" tabIndex={disabled || itemDisabled ? undefined : (tabIndex ?? 0)}>
+				{startContent !== undefined && startContent !== null && <span className={cn(itemStyles.startContent(), classNames?.itemStartContent)}>{startContent}</span>}
+				{content !== undefined && content !== null && <span className={cn(itemStyles.label(), classNames?.itemLabel)}>{content}</span>}
+				{endContent !== undefined && endContent !== null && <span className={cn(itemStyles.endContent(), classNames?.itemEndContent)}>{endContent}</span>}
 			</div>
 		)
 	}
 
 	return (
-		<div {...props} className={tw(styles.base(), className, classNames?.base)} ref={ref}>
+		<div {...props} className={cn(styles.base(), className, classNames?.base)} ref={ref}>
 			{items.map(renderItem)}
 		</div>
 	)

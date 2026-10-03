@@ -29,6 +29,7 @@ permissions:
 jobs:
     test:
         name: Test
+        if: github.event.pull_request.merged == false
         strategy:
             matrix:
                 os: [ubuntu-24.04]
@@ -46,8 +47,10 @@ jobs:
             - name: Cache Data Files
               uses: actions/cache@v6
               with:
-                  path: src/data/*.sqlite
-                  key: nebulosa-app
+                  path: |
+                      src/data/*.sqlite
+                      tests/data/
+                  key: data
 
             - name: Build Database
               run: bun run bin/nebulosa.sqlite.ts

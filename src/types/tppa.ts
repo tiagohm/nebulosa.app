@@ -1,8 +1,9 @@
 import { DEFAULT_REFRACTION_PARAMETERS } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import type { RefractionParameters } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import type { EquatorialCoordinate, HorizontalCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import type { ThreePointPolarAlignmentOverlayResult } from 'nebulosa/src/observation/alignment/polaralignment.overlay'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
-import type { CameraCaptureStart } from '#/camera'
+import type { CameraCaptureStart, CameraFrameEvent } from '#/camera'
 import { DEFAULT_PLATE_SOLVE_START } from '#/platesolver'
 import type { PlateSolveStart } from '#/platesolver'
 
@@ -21,6 +22,14 @@ export interface TppaStart {
 	readonly compensateRefraction: boolean
 }
 
+// Geometry or diagnostics tied to the exact exposure solved by a TPPA run; never persisted.
+export interface TppaOverlayEvent {
+	// Identity of the original camera pixels, including their reusable published path.
+	readonly frame: CameraFrameEvent
+	// Library geometry in FITS pixels, or the reason geometry is unavailable.
+	readonly result: ThreePointPolarAlignmentOverlayResult
+}
+
 export interface TppaEvent {
 	id: string
 	camera: string
@@ -34,6 +43,8 @@ export interface TppaEvent {
 	aligned: boolean
 	readonly error: HorizontalCoordinate
 	count: number
+	// Latest solved exposure's visual guidance; absent before alignment and at termination.
+	overlay?: TppaOverlayEvent
 }
 
 export const DEFAULT_TPPA_START: TppaStart = {
@@ -57,6 +68,7 @@ export const DEFAULT_TPPA_EVENT: TppaEvent = {
 	solved: false,
 	aligned: false,
 	count: 0,
+	overlay: undefined,
 	solver: {
 		rightAscension: 0,
 		declination: 0,

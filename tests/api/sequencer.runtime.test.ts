@@ -3,9 +3,7 @@ import { join } from 'path'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import { localGuiderCameraKey, localGuiderOutputKey, remoteGuiderKey } from 'src/api/guider.session'
 import { OperationCoordinator } from 'src/api/operation'
-import type { OperationContext, OperationHandle } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
-import type { ReservationToken } from 'src/api/resource'
 import { sequencerNodeId } from 'src/api/sequencer.compiler'
 import type { SequencerGuidingServices } from 'src/api/sequencer.guiding'
 import type { SequencerPreparationServices } from 'src/api/sequencer.prepare'
@@ -15,7 +13,6 @@ import { SequencerRuntime, SessionAdmissionGate, SessionTeardown } from 'src/api
 import type { SequencerDeviceResolver, SequencerRuntimePlanDraft } from 'src/api/sequencer.runtime'
 import { InMemorySequencerStore } from 'src/api/sequencer.store'
 import { failedOperationResult, successfulOperationResult } from '#/orchestration'
-import type { OperationResult } from '#/orchestration'
 import type { SequencerDevices, SequencerRetryPolicy } from '#/sequencer'
 import type { SequencerPlan, SequencerPlanAction, SequencerPlanGuider, SequencerPlanSequence, SequencerPlanStorage } from '#/sequencer.plan'
 
@@ -186,7 +183,7 @@ function compiled(overrides?: {
 		name: 'M42',
 		target: { id: 'm42', name: 'Orion Nebula' },
 		execution: { start: { type: 'manual' }, end: { type: 'afterSequence' }, pauseMode: 'afterCurrentExposure', stopMode: 'graceful', defaultRetry: RETRY, checkpoint: { afterEveryAction: true, afterEveryFrame: true, afterEveryArtifact: true, interval: 60 }, ...overrides?.execution },
-		devices: overrides?.devices ?? { camera: 'camera-1' },
+		devices: overrides?.devices ?? (overrides?.guider === undefined ? { camera: 'camera-1' } : { camera: 'camera-1', guider: 'guider-1' }),
 		roles: ['camera'],
 		root: { kind: 'sequence', id: sequencerNodeId.root(), children },
 		groups: [],
@@ -198,8 +195,20 @@ function compiled(overrides?: {
 	}
 }
 
-function guiderPlan(connection: SequencerPlanGuider['connection']): SequencerPlanGuider {
-	return { connection, calibrateBeforeStart: false, recalibrateAfterMeridianFlip: false, settle: { tolerance: 1.5, time: 10, timeout: 120 }, retry: RETRY }
+function guiderPlan(): SequencerPlanGuider {
+	return { calibrateBeforeStart: false, recalibrateAfterMeridianFlip: false, settle: { tolerance: 1.5, time: 10, timeout: 120 }, retry: RETRY }
+}
+
+const GUIDER_INFO = { id: 'guider-1', mode: 'remote' as const, key: 'logical:guider:remote:localhost:4400', target: 'localhost:4400', state: 'idle' as const, connected: true, looping: false, running: false }
+
+function connectedGuiding(info: typeof GUIDER_INFO | undefined = GUIDER_INFO): SequencerGuidingServices {
+	return {
+		guiderCommander: {
+			running: () => false,
+			looping: () => false,
+			info: () => info,
+		},
+	} as unknown as SequencerGuidingServices
 }
 
 function plan(overrides?: Parameters<typeof compiled>[0]): SequencerRuntimePlanDraft {
@@ -310,47 +319,35 @@ describe('sequencer runtime', () => {
 		expect(instance.observation(created.id)).toBeUndefined()
 	})
 
-	test('reserves the logical key of the remote guider the plan declares', async () => {
-		let connected: unknown
-		let availability: string | undefined
-
+	test('binds the already-connected guider and does not reserve its logical key', async () => {
+		const guiders = new Set<string | undefined>()
+		let resolved: Partial<Record<string, string>> | undefined
 		const { runtime: instance, arbiter } = runtime(
-			exposeHandler(() => {
-				availability = arbiter.availability(remoteGuiderKey('localhost', 4400))
+			exposeHandler((context) => {
+				guiders.add(context.guider)
+				resolved = instance.observation(instance.activeSessionId!)?.resolved
 				return Promise.resolve({ type: 'completed', value: 1 })
 			}),
 			undefined,
-			{
-				guiding: {
-					guiderCommander: {
-						running: () => false,
-						looping: () => false,
-						connect: (request: unknown) => {
-							connected = request
-							return Promise.resolve(successfulOperationResult({ id: 'guider-1' }))
-						},
-						disconnect: () => Promise.resolve(successfulOperationResult(undefined)),
-					},
-				} as unknown as SequencerGuidingServices,
-			},
+			{ guiding: connectedGuiding() },
 		)
 
-		const created = instance.create(plan({ guider: guiderPlan({ mode: 'remote', host: 'localhost', port: 4400 }) }))!
+		const created = instance.create(plan({ guider: guiderPlan() }))!
+		const started = instance.start(created.id)
 
-		instance.start(created.id)
+		expect(started).toMatchObject({ ok: true, reentrant: false })
 
 		const session = await instance.settled(created.id)
 
 		expect(session?.state).toBe('completed')
-		expect(connected).toEqual({ mode: 'remote', host: 'localhost', port: 4400 })
-		expect(availability).not.toBe('available')
+		expect(guiders).toEqual(new Set(['guider-1']))
+		expect(resolved).toEqual({ camera: 'camera-1', guider: 'guider-1' })
 		expect(arbiter.availability(remoteGuiderKey('localhost', 4400))).toBe('available')
 	})
 
-	test('reserves the devices and the logical keys of the local guider the plan declares', async () => {
+	test('does not reserve the local guider camera, output or logical keys', async () => {
 		const camera = { id: 'guide-camera-1', type: 'camera', hardwareId: 'hw-guide-camera', connected: true, client: { id: 'client-1' } } as unknown as Camera
 		const guideOutput = { id: 'guide-output-1', canPulseGuide: true, hardwareId: 'hw-guide-output', connected: true, client: { id: 'client-1' } } as unknown as GuideOutput
-		let connected: unknown
 		const held: string[] = []
 
 		const { runtime: instance, arbiter } = runtime(
@@ -368,24 +365,14 @@ describe('sequencer runtime', () => {
 					if (role === 'guideOutput') return { key: resourceKey(guideOutput), device: guideOutput }
 					return { key: `logical:${deviceId}` }
 				},
-				guiding: {
-					guiderCommander: {
-						running: () => false,
-						looping: () => false,
-						connect: (request: unknown) => {
-							connected = request
-							return Promise.resolve(successfulOperationResult({ id: 'guider-1' }))
-						},
-						disconnect: () => Promise.resolve(successfulOperationResult(undefined)),
-					},
-				} as unknown as SequencerGuidingServices,
+				guiding: connectedGuiding(),
 			},
 		)
 
 		const created = instance.create(
 			plan({
-				devices: { camera: 'camera-1', guideCamera: 'guide-camera-1', guideOutput: 'guide-output-1' },
-				guider: guiderPlan({ mode: 'local', focalLength: 200, capture: { exposureTime: 2, frameType: 'LIGHT', binX: 1, binY: 1, gain: 0, offset: 0, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false } }),
+				devices: { camera: 'camera-1', guideCamera: 'guide-camera-1', guideOutput: 'guide-output-1', guider: 'guider-1' },
+				guider: guiderPlan(),
 			}),
 		)!
 
@@ -394,39 +381,28 @@ describe('sequencer runtime', () => {
 		const session = await instance.settled(created.id)
 
 		expect(session?.state).toBe('completed')
-		expect(connected).toEqual({ mode: 'local', focalLength: 200, camera: 'guide-camera-1', guideOutput: 'guide-output-1' })
-		expect(held).toEqual([localGuiderCameraKey(camera), localGuiderOutputKey(guideOutput), 'hw-guide-camera', 'hw-guide-output'])
+		expect(held).toEqual([])
+		expect(arbiter.availability(localGuiderCameraKey(camera))).toBe('available')
+		expect(arbiter.availability(localGuiderOutputKey(guideOutput))).toBe('available')
 	})
 
-	test('fails the session through the finalize pipeline when the guider the plan declares cannot be opened', async () => {
-		const executed: string[] = []
-
-		const { runtime: instance, arbiter } = runtime(
-			exposeHandler((context) => {
-				executed.push(context.nodeId)
-				return Promise.resolve({ type: 'completed', value: 1 })
-			}),
+	test('refuses to start when the guider is not connected', () => {
+		const {
+			runtime: instance,
+			arbiter,
+			store,
+		} = runtime(
+			exposeHandler(() => Promise.resolve({ type: 'completed', value: 1 })),
 			undefined,
-			{
-				guiding: {
-					guiderCommander: {
-						connect: () => Promise.resolve(failedOperationResult('disconnected', 'the guider is unreachable')),
-					},
-				} as unknown as SequencerGuidingServices,
-			},
+			{ guiding: connectedGuiding({ ...GUIDER_INFO, connected: false }) },
 		)
+		const created = instance.create(plan({ guider: guiderPlan(), finalize: { continueOnFailure: true, runOn: ['failed'] } }))!
 
-		const created = instance.create(plan({ guider: guiderPlan({ mode: 'remote', host: 'localhost', port: 4400 }), finalize: { continueOnFailure: true, runOn: ['failed'] } }))!
-
-		instance.start(created.id)
-
-		const session = await instance.settled(created.id)
-
-		expect(executed).toEqual(['finalize-1'])
-		expect(session?.state).toBe('failed')
-		expect(session?.failure).toEqual({ reason: 'disconnected', detail: 'the guider is unreachable' })
-		expect(arbiter.availability(remoteGuiderKey('localhost', 4400))).toBe('available')
+		expect(instance.start(created.id)).toEqual({ ok: false, reason: 'disconnected', detail: 'guider guider-1 is not connected' })
+		expect(instance.activeSessionId).toBeUndefined()
+		expect(store.session(created.id)?.state).toBe('created')
 		expect(arbiter.availability(CAMERA_KEY)).toBe('available')
+		expect(arbiter.availability(remoteGuiderKey('localhost', 4400))).toBe('available')
 	})
 
 	test('runs the action inside the reservation while refusing an operation outside it', async () => {
@@ -948,16 +924,15 @@ describe('sequencer runtime', () => {
 		expect(session?.state).toBe('completed')
 	})
 
-	test('keeps the guiding session open across an immediate pause of the target block', async () => {
+	test('keeps the bound guider across an immediate pause of the target block', async () => {
 		const running = Promise.withResolvers<void>()
-		const executed: string[] = []
-		const opened: { coordinator?: OperationCoordinator; session?: OperationHandle<void> } = {}
+		const guiders: Array<string | undefined> = []
 
-		const { runtime: instance, coordinator } = runtime(
+		const { runtime: instance, store } = runtime(
 			exposeHandler(async (context, configuration) => {
-				executed.push(context.nodeId)
+				guiders.push(context.guider)
 
-				if (executed.length > 1) return { type: 'completed', value: configuration.exposureTime }
+				if (guiders.length > 1) return { type: 'completed', value: configuration.exposureTime }
 
 				running.resolve()
 
@@ -968,47 +943,24 @@ describe('sequencer runtime', () => {
 				return { type: 'fatalFailure', reason: 'aborted' }
 			}),
 			undefined,
-			{
-				guiding: {
-					guiderCommander: {
-						running: () => false,
-						looping: () => false,
-						connect: (_: unknown, token: ReservationToken) => {
-							const executor = (operation: OperationContext) =>
-								new Promise<OperationResult<void>>((resolve) => {
-									operation.signal.addEventListener('abort', () => resolve(failedOperationResult('aborted')), { once: true })
-								})
-
-							const handle = opened.coordinator!.tokenScope(token).start<void>('guiderSession', [], executor)
-
-							opened.session = handle
-
-							return Promise.resolve(successfulOperationResult({ id: handle.id }))
-						},
-						disconnect: () => Promise.resolve(successfulOperationResult(undefined)),
-					},
-				} as unknown as SequencerGuidingServices,
-			},
+			{ guiding: connectedGuiding() },
 		)
 
-		opened.coordinator = coordinator
-
-		const created = instance.create(plan({ execution: { pauseMode: 'immediate' }, guider: guiderPlan({ mode: 'remote', host: 'localhost', port: 4400 }) }))!
+		const created = instance.create(plan({ execution: { pauseMode: 'immediate' }, guider: guiderPlan() }))!
 
 		instance.start(created.id)
 
 		await running.promise
 		await instance.control(created.id, 'pause')
 
-		expect(opened.session?.signal.aborted).toBeFalse()
+		while (store.session(created.id)?.state !== 'paused') await Bun.sleep(1)
 
 		await instance.control(created.id, 'resume')
 
 		const stored = await instance.settled(created.id)
 
-		expect(executed).toEqual(['node-1', 'node-1'])
+		expect(guiders).toEqual(['guider-1', 'guider-1'])
 		expect(stored?.state).toBe('completed')
-		expect(opened.session?.signal.aborted).toBeTrue()
 	})
 
 	test('cancels no startup operation on an immediate pause the phase cannot attribute', async () => {

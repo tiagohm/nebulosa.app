@@ -1,5 +1,5 @@
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
-import type { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
+import type { StellariumObjectType } from 'nebulosa/src/catalogs/stars/stellarium'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { SkyObject } from '#/galaxy'
 

@@ -1,4 +1,4 @@
-import { tw } from '@shared/util'
+import { cn } from 'cn'
 import { useEffect, useImperativeHandle, useRef } from 'react'
 import type { ComponentPropsWithoutRef, CSSProperties, Ref } from 'react'
 import { Celestial } from 'src/lib/celestial/celestial'
@@ -89,7 +89,7 @@ export function SkyMap({ ref, className, height = DEFAULT_SKY_MAP_SIZE, onReady,
 		}
 	}, [])
 
-	return <div {...props} className={tw('relative overflow-hidden rounded-lg bg-transparent', className)} ref={containerRef} style={{ height, width, ...style }} />
+	return <div {...props} className={cn('relative overflow-hidden rounded-lg bg-transparent', className)} ref={containerRef} style={{ height, width, ...style }} />
 }
 
 // Reads the currently laid out container size with a safe initial fallback.

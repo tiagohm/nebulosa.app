@@ -634,7 +634,7 @@ describe('camera capture session cancellation', () => {
 
 			const result = await handle.result
 			expect(result.ok).toBeTrue()
-			if (result.ok) expect(result.value.paths).toEqual([join(directory, 'm42-lum-0.fit')])
+			if (result.ok) expect(result.value.frames.map((e) => e.path)).toEqual([join(directory, 'm42-lum-0.fit')])
 			expect(written).toEqual([join(directory, 'm42-lum-0.fit')])
 			expect(harness.saved).toEqual([join(directory, 'm42-lum-0.fit')])
 		} finally {
@@ -663,7 +663,7 @@ describe('camera capture session cancellation', () => {
 
 			const result = await handle.result
 			expect(result.ok).toBeTrue()
-			if (result.ok) expect(result.value.paths).toEqual([published])
+			if (result.ok) expect(result.value.frames.map((e) => e.path)).toEqual([published])
 			expect(written).toEqual([staged])
 			expect(harness.saved).toEqual([published])
 		} finally {

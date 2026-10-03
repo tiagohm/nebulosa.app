@@ -5,11 +5,12 @@ import { cameraCaptureStore } from '@stores/camera.capture.store'
 import { subscribeToUpdateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
 import { plateSolverStore } from '@stores/plate.solver.store'
+import { tppaOverlayStore } from '@stores/tppa.overlay.store'
 import type { DockviewPanelApi } from 'dockview-react'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
-import { proxy } from 'valtio'
+import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { DEFAULT_TPPA_START, DEFAULT_TPPA_EVENT } from '#/tppa'
 import type { TppaStart, TppaEvent } from '#/tppa'
@@ -22,6 +23,9 @@ export interface TppaState {
 	camera?: DeviceState<Camera>
 	mount?: DeviceState<Mount>
 	readonly event: TppaEvent
+	readonly overlay: {
+		show: boolean
+	}
 }
 
 export function tppaStore(api: DockviewPanelApi) {
@@ -37,6 +41,9 @@ export function tppaStore(api: DockviewPanelApi) {
 		},
 		running: false,
 		event: structuredClone(DEFAULT_TPPA_EVENT),
+		overlay: {
+			show: true,
+		},
 	})
 
 	console.info('tppa created:', id)
@@ -44,24 +51,32 @@ export function tppaStore(api: DockviewPanelApi) {
 	const u: VoidFunction[] = []
 	let mounted = false
 	let operationId: string | undefined
+	let revision = 0
 
-	function _mount() {
+	function mount() {
 		if (mounted) return unmount
 
 		console.info('tppa mounted:', id)
 
 		mounted = true
 
-		u[0] = initProxy(state, id, ['o:request'])
+		u[0] = initProxy(state, id, ['o:request', 'o:overlay'])
 
 		u[1] = tppaBus.subscribe('update', (event) => {
 			if (state.camera?.id === event.camera && state.mount?.id === event.mount) {
+				if (operationId && event.id !== operationId) return
+				if (event.state !== 'idle' && (!state.camera.connected || !state.mount.connected)) return
 				state.running = event.state !== 'idle'
+				const overlay = event.overlay
+				delete event.overlay
 				Object.assign(state.event, event)
+				if (overlay) state.event.overlay = ref(overlay)
+				tppaOverlayStore.update(id, state.event, state.overlay.show)
 			}
 		})
 
 		u[2] = subscribeKey(state, 'camera', (camera) => {
+			reset()
 			updateTitle()
 
 			if (camera !== undefined) {
@@ -83,6 +98,8 @@ export function tppaStore(api: DockviewPanelApi) {
 		if (!mounted) return
 		console.info('tppa unmounted:', id)
 		unsubscribe(u)
+		revision++
+		tppaOverlayStore.remove(id)
 		mounted = false
 	}
 
@@ -91,8 +108,24 @@ export function tppaStore(api: DockviewPanelApi) {
 	}
 
 	function reset() {
+		invalidateOverlay()
+		operationId = undefined
 		state.running = false
 		Object.assign(state.event, DEFAULT_TPPA_EVENT)
+	}
+
+	// Invalidates visual guidance on transport/device loss while allowing the server's terminal cause
+	// to arrive. Late progress from the obsolete run cannot make its geometry visible again.
+	function invalidateOverlay() {
+		revision++
+		state.event.overlay = undefined
+		tppaOverlayStore.remove(id)
+	}
+
+	// Shows or hides this panel's active overlay immediately; preference is persisted by mount.
+	function setShowOverlay(value: boolean) {
+		state.overlay.show = value
+		tppaOverlayStore.setEnabled(id, value)
 	}
 
 	function setMoveDuration(value: number) {
@@ -122,12 +155,19 @@ export function tppaStore(api: DockviewPanelApi) {
 	async function start() {
 		if (state.running || !state.camera?.connected || !state.mount?.connected) return
 
+		reset()
 		state.running = true
+		const attempt = revision
 
-		operationId = await Api.TPPA.start(state.camera, state.mount, state.request)
+		const started = await Api.TPPA.start(state.camera, state.mount, state.request)
+		if (!mounted || revision !== attempt) return
+		operationId = started
 
 		if (!operationId) {
 			reset()
+		} else if (state.event.id === operationId) {
+			// Progress can precede the HTTP response; publish the retained snapshot once ownership is known.
+			tppaOverlayStore.update(id, state.event, state.overlay.show)
 		}
 	}
 
@@ -145,9 +185,10 @@ export function tppaStore(api: DockviewPanelApi) {
 		state,
 		capture,
 		solver,
-		mount: _mount,
+		mount,
 		unmount,
 		setMoveDuration,
+		setShowOverlay,
 		setDirection,
 		setMaxAttempts,
 		setDelayBeforeCapture,

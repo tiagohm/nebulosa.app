@@ -29,7 +29,7 @@ function updateDisconnectedStyleProperty(grayscale: string, display: string) {
 	document.documentElement.style.setProperty('--ws-disconnected-display', display)
 }
 
-const DEVICE_TYPES = new Set<DeviceType>(['camera', 'cover', 'dewHeater', 'flatPanel', 'focuser', 'guideOutput', 'mount', 'power', 'rotator', 'thermometer', 'wheel'])
+const DEVICE_TYPES = new Set<DeviceType>(['camera', 'cover', 'dewHeater', 'dome', 'flatPanel', 'focuser', 'guideOutput', 'mount', 'power', 'rotator', 'thermometer', 'wheel'])
 
 function isDeviceType(type: string): type is DeviceType {
 	return DEVICE_TYPES.has(type as never)

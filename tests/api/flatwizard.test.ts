@@ -26,7 +26,7 @@ import { DEFAULT_FLAT_WIZARD_START } from '#/flatwizard'
 import type { FlatWizardEvent, FlatWizardStart } from '#/flatwizard'
 import { successfulOperationResult } from '#/orchestration'
 import type { OperationResult } from '#/orchestration'
-import { captureHandle, json, noContent, SocketMessager, waitUntil } from './util'
+import { cameraFrameEvent, captureHandle, json, noContent, SocketMessager, waitUntil } from './util'
 
 type FlatWizardStartOverrides = Omit<Partial<FlatWizardStart>, 'capture'> & {
 	readonly capture?: Partial<FlatWizardStart['capture']>
@@ -232,7 +232,7 @@ describe('flat wizard handler', () => {
 			await waitForFlatWizardState('idle', refused)
 			expect(flatWizardEvents().some((event) => event.id === id && event.state === 'idle')).toBeFalse()
 		} finally {
-			inFlight.resolve(successfulOperationResult({ paths: [], frameCount: 0 }))
+			inFlight.resolve(successfulOperationResult({ frames: [], frameCount: 0 }))
 			await flatWizardHandler.stop(id)
 			capture.mockRestore()
 		}
@@ -317,7 +317,7 @@ describe('flat wizard handler', () => {
 
 	test('ends the run when the captured frame cannot be loaded', async () => {
 		const camera = connectCamera()
-		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve(successfulOperationResult({ paths: ['flat.fit'], frameCount: 1 })) }))
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ result: Promise.resolve(successfulOperationResult({ frames: [cameraFrameEvent('flat.fit')], frameCount: 1 })) }))
 		const transform = spyOn(imageProcessor, 'transform').mockImplementation(() => Promise.resolve(undefined))
 		const request = flatWizardStartRequest({ minExposure: 100, maxExposure: 300 })
 

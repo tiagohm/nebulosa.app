@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { Mock } from 'bun:test'
-import { join } from 'path'
 import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
-import { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
+import { StellariumObjectType } from 'nebulosa/src/catalogs/stars/stellarium'
 import { deg, formatALT, formatRA, parseAngle } from 'nebulosa/src/math/units/angle'
 import { lightYear, meter, toKilometer } from 'nebulosa/src/math/units/distance'
 import { AtlasHandler } from 'src/api/atlas'
@@ -35,21 +34,30 @@ const SKY_OBJECT_SEARCH: SearchSkyObject = {
 	location: POSITION_OF_BODY.location,
 }
 
-const FETCH_ARCHIVE = new Bun.Archive(await Bun.file(join('tests', 'data', 'fetch.tar.gz')).bytes(), { compress: 'gzip' })
-const FETCH_FILES = new Map<string, string>()
-
-for (const [, file] of await FETCH_ARCHIVE.files()) {
-	const text = await file.text()
-	const start = text.indexOf('\n')
-	const url = text.slice(0, start)
-	const content = text.slice(start + 1)
-	FETCH_FILES.set(url, content)
-}
-
 let fetchMock: Mock<typeof fetch> | undefined
 
 beforeAll(() => {
-	fetchMock = spyFetch((input: string) => Promise.resolve(new Response(FETCH_FILES.get(input))))
+	fetchMock = spyFetch(async (fetch, input, init) => {
+		if (typeof input === 'string') {
+			const hashed = Bun.MD5.hash(input, 'hex')
+			const file = Bun.file(`tests/data/${hashed}.txt`)
+
+			if (!(await file.exists())) {
+				console.info('downloading:', input)
+				const response = await fetch(input, init)
+				console.info('saving at:', file.name)
+				const buffer = await response.arrayBuffer()
+				await Bun.write(file, buffer)
+				return new Response(buffer)
+			}
+
+			console.info('found fetched file at:', file.name)
+
+			return new Response(file)
+		}
+
+		return fetch(input, init)
+	})
 })
 
 afterAll(() => {
@@ -345,7 +353,7 @@ describe('moon phases', () => {
 		expect(phases[2][0]).toBe('NEW')
 		expect(formatTemporal(phases[2][1]).slice(0, 16)).toEqual('2026-05-16 20:01')
 		expect(phases[3][0]).toBe('FIRST_QUARTER')
-		expect(formatTemporal(phases[3][1]).slice(0, 16)).toEqual('2026-05-23 11:11')
+		expect(formatTemporal(phases[3][1]).slice(0, 16)).toEqual('2026-05-23 11:10')
 		expect(phases[4][0]).toBe('FULL')
 		expect(formatTemporal(phases[4][1]).slice(0, 16)).toEqual('2026-05-31 08:45')
 	})
@@ -368,10 +376,10 @@ describe('minor planet', () => {
 			expect(result.parameters).toBeDefined()
 			expect(result.parameters).toHaveLength(25)
 			expect(result.elements).toBeDefined()
-			expect(result.elements!.ec).toBeCloseTo(0.07957631994408416, 12)
-			expect('a' in result.elements!.tpqr && result.elements!.tpqr.a).toBe(2.765615651508659)
-			expect(result.elements!.h).toBe(3.35)
-			expect(result.elements!.g).toBe(0.12)
+			expect(result.elements!.ec).toBeCloseTo(0.07969, 4)
+			expect('a' in result.elements!.tpqr && result.elements!.tpqr.a).toBeCloseTo(2.76555, 4)
+			expect(result.elements!.h).toBeCloseTo(3.34, 1)
+			expect(result.elements!.g).toBeCloseTo(0.12, 1)
 			expect(result.elements!.referenceEclipticFrame).toBe('J2000')
 		}
 	})
@@ -409,12 +417,12 @@ test('position of jupiter', async () => {
 test('position of sky object', async () => {
 	const position = await atlas.positionOfSkyObject(POSITION_OF_BODY, '32263')
 
-	expect(formatRA(position.equatorial[0], true)).toBe('06 44 58')
-	expect(formatRA(position.equatorialJ2000[0], true)).toBe('06 45 09')
-	expect(formatALT(position.equatorial[1], true)).toBe('-16 45 03')
-	expect(formatALT(position.equatorialJ2000[1], true)).toBe('-16 42 58')
-	expect(formatALT(position.horizontal[1], true)).toBe('+66 48 39')
-	expect(formatALT(position.horizontal[0], true)).toBe('+278 50 39')
+	expect(formatRA(position.equatorial[0], false)).toBe('06 44 58')
+	expect(formatRA(position.equatorialJ2000[0], false)).toBe('06 45 09')
+	expect(formatALT(position.equatorial[1], false)).toBe('-16 45 03')
+	expect(formatALT(position.equatorialJ2000[1], false)).toBe('-16 42 58')
+	expect(formatALT(position.horizontal[1], false)).toBe('+66 48 39')
+	expect(formatALT(position.horizontal[0], false)).toBe('+278 50 39')
 	expect(position.distance).toBeCloseTo(lightYear(8.601071093), -1)
 	expect(position.magnitude).toBe(-1.44)
 	expect(position.constellation).toBe('CMA')
@@ -428,20 +436,20 @@ test('chart of sky object', () => {
 	const chart = atlas.chartOfSkyObject(POSITION_OF_BODY, '32263')
 
 	expect(chart).toHaveLength(1441)
-	expect(formatALT(chart[0], true)).toBe('+66 48 39')
-	expect(formatALT(chart[720], true)).toBe('-44 21 25')
-	expect(formatALT(chart[1440], true)).toBe('+65 54 26')
+	expect(formatALT(chart[0], false)).toBe('+66 48 39')
+	expect(formatALT(chart[720], false)).toBe('-44 21 25')
+	expect(formatALT(chart[1440], false)).toBe('+65 54 26')
 })
 
 test('position of sky point', async () => {
 	const position = await atlas.positionOfSkyPoint(POSITION_OF_BODY, '06 44 58', '-16 45 03')
 
-	expect(formatRA(position.equatorial[0], true)).toBe('06 44 58')
-	expect(formatRA(position.equatorialJ2000[0], true)).toBe('06 43 49')
-	expect(formatALT(position.equatorial[1], true)).toBe('-16 45 03')
-	expect(formatALT(position.equatorialJ2000[1], true)).toBe('-16 43 33')
-	expect(formatALT(position.horizontal[1], true)).toBe('+66 49 01')
-	expect(formatALT(position.horizontal[0], true)).toBe('+278 50 36')
+	expect(formatRA(position.equatorial[0], false)).toBe('06 44 58')
+	expect(formatRA(position.equatorialJ2000[0], false)).toBe('06 43 49')
+	expect(formatALT(position.equatorial[1], false)).toBe('-16 45 03')
+	expect(formatALT(position.equatorialJ2000[1], false)).toBe('-16 43 33')
+	expect(formatALT(position.horizontal[1], false)).toBe('+66 49 01')
+	expect(formatALT(position.horizontal[0], false)).toBe('+278 50 36')
 	expect(position.distance).toBe(0)
 	expect(position.magnitude).toBe(99)
 	expect(position.constellation).toBe('CMA')

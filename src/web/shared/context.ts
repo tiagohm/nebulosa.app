@@ -16,6 +16,7 @@ import type { LocationStore } from '@stores/location.store'
 import type { MountStore } from '@stores/mount.store'
 import type { PlateSolverStore } from '@stores/plate.solver.store'
 import type { RotatorStore } from '@stores/rotator.store'
+import type { SequencerStore } from '@stores/sequencer.store'
 import type { ThermometerStore } from '@stores/thermometer.store'
 import type { TppaStore } from '@stores/tppa.store'
 import type { WheelStore } from '@stores/wheel.store'
@@ -76,3 +77,5 @@ export const WheelDeviceContext = createContext<Wheel>(null as never)
 export const WheelStoreContext = createContext<WheelStore>(null as never)
 
 export const PlateSolverStoreContext = createContext<PlateSolverStore>(null as never)
+
+export const SequencerStoreContext = createContext<SequencerStore>(null as never)

@@ -118,11 +118,11 @@ const ExposureEstimatorPopoverContent = memo(() => {
 			</div>
 			<div className="col-span-8 flex flex-col gap-0">
 				<span className="font-bold">LATITUDE:</span>
-				<span>{formatALT(mount.geographicCoordinate.latitude)}</span>
+				<span>{formatALT(mount.geographicCoordinate.latitude, false)}</span>
 			</div>
 			<div className="col-span-8 flex flex-col gap-0">
 				<span className="font-bold">DECLINATION:</span>
-				<span>{formatALT(mount.equatorialCoordinate.declination)}</span>
+				<span>{formatALT(mount.equatorialCoordinate.declination, false)}</span>
 			</div>
 			<div className="col-span-8 flex flex-col gap-0">
 				<span className="font-bold">GUIDE RATE:</span>

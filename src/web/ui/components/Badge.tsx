@@ -1,4 +1,4 @@
-import { tw } from '@shared/util'
+import { cn } from 'cn'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
 
@@ -110,9 +110,9 @@ export function Badge({ children, className, classNames, color, label, placement
 	const standaloneClassName = hasChildren ? undefined : 'static translate-x-0 translate-y-0'
 
 	return (
-		<div {...props} className={tw(styles.base(), className, classNames?.base)} ref={ref}>
+		<div {...props} className={cn(styles.base(), className, classNames?.base)} ref={ref}>
 			{children}
-			{visible && <span className={tw(styles.badge(), dotClassName, standaloneClassName, classNames?.badge)}>{labeled && <span className={tw(styles.label(), classNames?.label)}>{label}</span>}</span>}
+			{visible && <span className={cn(styles.badge(), dotClassName, standaloneClassName, classNames?.badge)}>{labeled && <span className={cn(styles.label(), classNames?.label)}>{label}</span>}</span>}
 		</div>
 	)
 }

@@ -1,6 +1,6 @@
 import type { DeviceState } from '@stores/equipment.store'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
-import type { Camera, Cover, Device, FlatPanel, Focuser, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Cover, Device, Dome, FlatPanel, Focuser, GuideOutput, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { Message } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
 import type { AlpacaServerStatus } from '#/alpaca'
@@ -105,6 +105,10 @@ export const rotatorBus = new EventBus<DeviceBusEvents<Rotator>>()
 export const flatPanelBus = new EventBus<DeviceBusEvents<FlatPanel>>()
 
 export const coverBus = new EventBus<DeviceBusEvents<Cover>>()
+
+export const domeBus = new EventBus<DeviceBusEvents<Dome>>()
+
+export const guideOutputBus = new EventBus<DeviceBusEvents<GuideOutput>>()
 
 export const imageBus = new EventBus<ImageBusEvents>()
 

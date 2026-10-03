@@ -1,6 +1,6 @@
 import { Api } from '@shared/api'
-import { cameraBus, coverBus, deviceBus, flatPanelBus, focuserBus, guiderBus, mountBus, rotatorBus, wheelBus } from '@shared/bus'
-import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, SafetyMonitor, Thermometer, Weather, Wheel } from 'nebulosa/src/devices/indi/device'
+import { cameraBus, coverBus, deviceBus, domeBus, flatPanelBus, focuserBus, guideOutputBus, guiderBus, mountBus, rotatorBus, wheelBus } from '@shared/bus'
+import type { Camera, Cover, Device, DeviceType, DewHeater, Dome, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, SafetyMonitor, Thermometer, Weather, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { EventBus } from 'src/shared/bus'
 import { proxy } from 'valtio'
 import type { DeviceUpdated } from '#/device'
@@ -26,7 +26,7 @@ export interface EquipmentState {
 	readonly focuser: DeviceState<Focuser>[]
 	readonly rotator: DeviceState<Rotator>[]
 	readonly gps: DeviceState<Device>[]
-	readonly dome: DeviceState<Device>[]
+	readonly dome: DeviceState<Dome>[]
 	readonly guideOutput: DeviceState<GuideOutput>[]
 	readonly flatPanel: DeviceState<FlatPanel>[]
 	readonly cover: DeviceState<Cover>[]
@@ -80,12 +80,11 @@ const BUS = {
 	rotator: rotatorBus,
 	flatPanel: flatPanelBus,
 	cover: coverBus,
-	// TODO: add buses for the following device types
 	dewHeater: deviceBus,
 	power: deviceBus,
-	guideOutput: deviceBus,
+	guideOutput: guideOutputBus,
 	thermometer: deviceBus,
-	dome: deviceBus,
+	dome: domeBus,
 	gps: deviceBus,
 	safetyMonitor: deviceBus,
 	weather: deviceBus,

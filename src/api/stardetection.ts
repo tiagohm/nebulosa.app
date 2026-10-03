@@ -1,5 +1,3 @@
-import { mkdtemp, rm } from 'fs/promises'
-import { join } from 'path'
 import { astapDetectStars } from 'nebulosa/src/astrometry/solvers/astap'
 import { detectStars } from 'nebulosa/src/imaging/stars/detector'
 import { DEFAULT_IMAGE_TRANSFORMATION } from '#/image'
@@ -41,13 +39,7 @@ export class StarDetectionHandler {
 	}
 
 	private async detectWithAstap(req: StarDetection, signal?: AbortSignal) {
-		const outputDirectory = await mkdtemp(join(Bun.env.tmpDir, 'stardetection-'))
-
-		try {
-			return await astapDetectStars(req.path, { ...req, outputDirectory }, signal)
-		} finally {
-			await rm(outputDirectory, { recursive: true, force: true })
-		}
+		return await astapDetectStars(req.path, { ...req }, signal)
 	}
 }
 

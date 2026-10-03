@@ -1,4 +1,3 @@
-import { tw } from '@shared/util'
 import { atlasStore } from '@stores/atlas.store'
 import type { AtlasTab, TagItem } from '@stores/atlas.store'
 import { BodyCoordinateInfo } from '@ui/BodyCoordinateInfo'
@@ -7,6 +6,7 @@ import { IconButton } from '@ui/components/IconButton'
 import { MountDropdown } from '@ui/DeviceDropdown'
 import { Icons } from '@ui/Icon'
 import type { Icon } from '@ui/Icon'
+import { cn } from 'cn'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
@@ -38,16 +38,15 @@ export interface AstronomicalEventProps extends Omit<React.ComponentProps<'div'>
 	readonly icon: Icon
 	readonly label: string
 	readonly time: number
-	readonly offset?: number
 	readonly format: string
 }
 
-export const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format, className, ...props }: AstronomicalEventProps) => (
-	<div className={tw('flex flex-row items-center gap-1 hover:bg-neutral-700 rounded-md p-2 cursor-pointer', className)} {...props}>
+export const AstronomicalEvent = memo(({ icon: Icon, label, time, format, className, ...props }: AstronomicalEventProps) => (
+	<div className={cn('flex flex-row items-center gap-1 hover:bg-neutral-700 rounded-md p-2 cursor-pointer', className)} {...props}>
 		<Icon />
 		<div className="flex flex-col items-start justify-center gap-0 font-bold">
 			{label}
-			<span>{formatTemporal(time, format, offset)}</span>
+			<span>{formatTemporal(time, format, true)}</span>
 		</div>
 	</div>
 ))

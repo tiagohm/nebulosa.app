@@ -59,7 +59,7 @@ function mockFetch(...responses: (Response | Error)[]) {
 	const requests: FetchRequest[] = []
 	let index = 0
 
-	const fetch = spyFetch((input: URL | string, init) => {
+	const fetch = spyFetch((_fetch, input: URL | string, init) => {
 		requests.push({ url: new URL(input), init })
 
 		const response = responses[Math.min(index++, responses.length - 1)]

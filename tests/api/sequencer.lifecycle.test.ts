@@ -7,7 +7,7 @@ import type { SequencerActionContext, SequencerActionHandler } from 'src/api/seq
 import { sequencerInitialTriggerAnchors } from 'src/api/sequencer.trigger'
 import type { GuiderLoopStart } from '#/guider'
 import { successfulOperationResult } from '#/orchestration'
-import type { SequencerAuxiliaryCapture, SequencerCooling, SequencerGuiderSettle, SequencerLifecycleActionType, SequencerTargetTracking } from '#/sequencer'
+import type { SequencerCooling, SequencerGuiderSettle, SequencerLifecycleActionType, SequencerTargetTracking } from '#/sequencer'
 import type { SequencerPlanGuider } from '#/sequencer.plan'
 import { retry } from './sequencer.fixture'
 
@@ -206,18 +206,6 @@ describe('start guiding', () => {
 		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding: guidingPolicy(false, { tolerance: 0.8, time: 6, timeout: 45 }) }))
 
 		expect(commands).toEqual(['loop:0.8/6/45', 'startGuiding'])
-		expect(result).toMatchObject({ type: 'completed', value: { action: 'startGuiding', commanded: true } })
-	})
-
-	test('exposes the guide camera with the recipe a local guider declares', async () => {
-		const commands: string[] = []
-		const services = lifecycleServices(commands)
-		const capture: Omit<SequencerAuxiliaryCapture, 'filter'> = { exposureTime: 2.5, frameType: 'LIGHT', binX: 2, binY: 2, gain: 120, offset: 30, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '', transferFormat: 'FITS', compressed: false }
-		const guiding = { ...guidingPolicy(false), capture }
-
-		const result = await handlerOf(services, 'startGuiding').execute(actionContext({}, new AbortController().signal, 'guider-1'), configuration('startGuiding', { guiding }))
-
-		expect(commands).toEqual(['loop:1.5/10/120 capture:2.5second/2x2/120/30/FITS', 'startGuiding'])
 		expect(result).toMatchObject({ type: 'completed', value: { action: 'startGuiding', commanded: true } })
 	})
 

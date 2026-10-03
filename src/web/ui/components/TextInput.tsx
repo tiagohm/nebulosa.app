@@ -1,16 +1,18 @@
-import { tw } from '@shared/util'
 import { Icons } from '@ui/Icon'
+import { cn } from 'cn'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { tv } from 'tailwind-variants'
 import type { ClassValue, VariantProps } from 'tailwind-variants'
 
 const textInputStyles = tv({
 	slots: {
-		base: 'relative inline-flex min-w-0 align-top',
-		surface: 'flex w-full min-w-0 items-stretch overflow-hidden rounded-lg transition',
-		field: 'relative min-w-0 flex-1',
-		input: 'peer h-full w-full border-none bg-transparent outline-none transition',
-		label: 'pointer-events-none absolute origin-left truncate transition-all duration-150 ease-out',
+		base: 'relative inline-flex min-w-max align-top',
+		surface: 'flex w-full min-w-max items-stretch overflow-hidden rounded-lg transition',
+		field: 'relative grid min-w-max flex-1',
+		input: 'peer col-start-1 row-start-1 h-full w-full min-w-0 border-none bg-transparent outline-none transition',
+		valueSizer: 'col-start-1 row-start-1 pointer-events-none invisible h-0 w-max overflow-hidden whitespace-pre',
+		label: 'pointer-events-none absolute origin-left whitespace-nowrap transition-all duration-150 ease-out',
+		labelSizer: 'col-start-1 row-start-1 pointer-events-none invisible h-0 w-max overflow-hidden whitespace-nowrap',
 		content: 'flex shrink-0 items-center whitespace-nowrap',
 		clearButton: 'h-full me-2 cursor-pointer',
 	},
@@ -18,12 +20,16 @@ const textInputStyles = tv({
 		size: {
 			md: {
 				input: 'h-10 px-3 text-sm',
-				label: 'left-3 right-3 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-sm peer-focus:text-xs',
+				valueSizer: 'px-3 text-sm',
+				label: 'left-3 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-sm peer-focus:text-xs',
+				labelSizer: 'px-3 text-xs leading-none peer-placeholder-shown:text-sm peer-focus:text-xs',
 				content: 'px-3 text-sm',
 			},
 			lg: {
 				input: 'h-11 px-4 text-base',
-				label: 'left-4 right-4 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-base peer-focus:text-xs',
+				valueSizer: 'px-4 text-base',
+				label: 'left-4 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-base peer-focus:text-xs',
+				labelSizer: 'px-4 text-xs leading-none peer-placeholder-shown:text-base peer-focus:text-xs',
 				content: 'px-4 text-base',
 			},
 		},
@@ -53,6 +59,7 @@ const textInputStyles = tv({
 			},
 			false: {
 				label: 'hidden',
+				labelSizer: 'hidden',
 			},
 		},
 		fullWidth: {
@@ -67,6 +74,9 @@ const textInputStyles = tv({
 		color: 'default',
 	},
 })
+
+// Keeps an empty value sizer from collapsing to zero width.
+const EMPTY_VALUE_SIZER = '\u00A0'
 
 const textInputSizeStyles = {
 	md: {
@@ -86,7 +96,9 @@ export interface TextInputClassNames {
 	readonly surface?: ClassValue
 	readonly field?: ClassValue
 	readonly input?: ClassValue
+	readonly valueSizer?: ClassValue
 	readonly label?: ClassValue
+	readonly labelSizer?: ClassValue
 	readonly startContent?: ClassValue
 	readonly endContent?: ClassValue
 	readonly clearButton?: ClassValue
@@ -166,8 +178,8 @@ export function TextInput({
 		: readOnly
 			? 'cursor-default text-neutral-200 placeholder:text-neutral-500'
 			: hasColorVariant
-				? tw('text-lighter-(--color-variant)/85', !label && 'placeholder:text-lighter-(--color-variant)/45')
-				: tw('text-neutral-100', !label && 'placeholder:text-neutral-500')
+				? cn('text-lighter-(--color-variant)/85', !label && 'placeholder:text-lighter-(--color-variant)/45')
+				: cn('text-neutral-100', !label && 'placeholder:text-neutral-500')
 	const contentClassName = disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : hasColorVariant ? 'text-lighter-(--color-variant)/60' : 'text-neutral-400'
 	const clearClassName = disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-red-500'
 	const labelClassName = disabled
@@ -242,17 +254,17 @@ export function TextInput({
 	}
 
 	return (
-		<div className={tw(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90', classNames?.base)}>
-			<div className={tw(styles.surface(), surfaceClassName, classNames?.surface)}>
-				{hasStartContent && <div className={tw(styles.content(), disabled && 'pointer-events-none', contentClassName, classNames?.startContent)}>{startContent}</div>}
-				<div className={tw(styles.field(), classNames?.field)}>
+		<div className={cn(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90', classNames?.base)}>
+			<div className={cn(styles.surface(), surfaceClassName, classNames?.surface)}>
+				{hasStartContent && <div className={cn(styles.content(), disabled && 'pointer-events-none', contentClassName, classNames?.startContent)}>{startContent}</div>}
+				<div className={cn(styles.field(), classNames?.field)}>
 					<input
 						{...props}
 						autoCapitalize={autoCapitalize}
 						autoComplete={autoComplete}
 						autoCorrect={autoCorrect}
 						autoFocus={autoFocus}
-						className={tw(styles.input(), label ? sizeStyles.inputWithLabel : sizeStyles.inputWithoutLabel, hasStartContent && 'pl-0', hasEndContent && 'pr-0', disabled && 'pointer-events-none', inputClassName, classNames?.input)}
+						className={cn(styles.input(), label ? sizeStyles.inputWithLabel : sizeStyles.inputWithoutLabel, hasStartContent && 'pl-0', hasEndContent && 'pr-0', disabled && 'pointer-events-none', inputClassName, classNames?.input)}
 						disabled={disabled}
 						inputMode={inputMode}
 						maxLength={maxLength}
@@ -266,16 +278,19 @@ export function TextInput({
 						placeholder={displayedPlaceholder}
 						readOnly={readOnly}
 						ref={ref}
+						size={1}
 						spellCheck={spellCheck}
-						style={style}
+						style={{ ...style, fieldSizing: 'content' }}
 						tabIndex={tabIndex}
 						type="text"
 						value={draft}
 					/>
-					{label && <label className={tw(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</label>}
+					<span className={cn(styles.valueSizer(), hasStartContent && 'pl-0', hasEndContent && 'pr-0', classNames?.valueSizer)}>{draft.length > 0 ? draft : (placeholder ?? EMPTY_VALUE_SIZER)}</span>
+					{label && <span className={cn(styles.labelSizer(), hasStartContent && 'pl-0', classNames?.labelSizer)}>{label}</span>}
+					{label && <label className={cn(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</label>}
 				</div>
-				{hasEndContent && <div className={tw(styles.content(), disabled && 'pointer-events-none', contentClassName, classNames?.endContent)}>{endContent}</div>}
-				{hasClearButton && <Icons.CloseCircle className={tw(styles.clearButton(), disabled && 'pointer-events-none', clearClassName, classNames?.clearButton)} onClick={handleClearClick} />}
+				{hasEndContent && <div className={cn(styles.content(), disabled && 'pointer-events-none', contentClassName, classNames?.endContent)}>{endContent}</div>}
+				{hasClearButton && <Icons.CloseCircle className={cn(styles.clearButton(), disabled && 'pointer-events-none', clearClassName, classNames?.clearButton)} onClick={handleClearClick} />}
 			</div>
 		</div>
 	)

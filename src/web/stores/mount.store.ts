@@ -10,6 +10,7 @@ import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import type { Framing } from '#/framing'
 import { DEFAULT_COORDINATE_INFO } from '#/mount'
 import type { CoordinateInfo, MountRemoteControlProtocol, MountRemoteControlStatus } from '#/mount'
 
@@ -191,10 +192,9 @@ export function mountStore(mount: Mount) {
 	}
 
 	function frame() {
-		return framingStore.load({
-			rightAscension: formatRA(state.target.position.equatorialJ2000[0]),
-			declination: formatDEC(state.target.position.equatorialJ2000[1]),
-		})
+		const [rightAscension, declination] = state.target.position.equatorialJ2000
+		const request: Partial<Framing> = { rightAscension: formatRA(rightAscension), declination: formatDEC(declination) }
+		return framingStore.load(request)
 	}
 
 	function park() {

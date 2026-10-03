@@ -356,7 +356,7 @@ export class ImageHandler {
 					const [x, y] = point
 
 					if (x >= 0 && y >= 0 && x < width && y < height) {
-						res.push({ type: 'asteroid', id: 3000000 + i++, name, x, y, rightAscension, declination, magnitude, pmRA: 0, pmDEC: 0, rv: 0, distance: 0, constellation: 0 })
+						res.push({ type: 'asteroid', id: 3000000 + i++, name, x, y, rightAscension, declination, magnitude, pmRA: 0, pmDEC: 0, parallax: 0, rv: 0, distance: 0, constellation: 0 })
 					}
 				}
 			} else if ('message' in ident) {

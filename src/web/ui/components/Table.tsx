@@ -1,5 +1,5 @@
-import { tw } from '@shared/util'
 import { List } from '@ui/components/List'
+import { cn } from 'cn'
 import { Children, Fragment, isValidElement, useCallback, useMemo } from 'react'
 import { tv } from 'tailwind-variants'
 import type { ClassValue } from 'tailwind-variants'
@@ -98,9 +98,9 @@ export function Table({ children, className, classNames, columnCount, emptyConte
 	const normalizedRowCount = normalizeRowCount(rowCount)
 	const cells = useMemo(() => collectCells(children), [children])
 	const styles = tableStyles({ fullWidth })
-	const headerCellClassName = tw(styles.headerCell(), classNames?.headerCell)
-	const cellClassName = tw(styles.cell(), classNames?.cell)
-	const rowClassName = tw(styles.row(), onAction !== undefined && 'cursor-pointer', classNames?.row)
+	const headerCellClassName = cn(styles.headerCell(), classNames?.headerCell)
+	const cellClassName = cn(styles.cell(), classNames?.cell)
+	const rowClassName = cn(styles.row(), onAction !== undefined && 'cursor-pointer', classNames?.row)
 	const tableStyle = useMemo(() => ({ ...style, '--table-columns': `repeat(${normalizedColumnCount}, minmax(0, 1fr))` }), [normalizedColumnCount, style])
 
 	function handleClick(event: React.MouseEvent<HTMLElement>) {
@@ -123,9 +123,9 @@ export function Table({ children, className, classNames, columnCount, emptyConte
 	)
 
 	return (
-		<div {...props} className={tw(styles.base(), className, classNames?.base)} ref={ref} style={tableStyle}>
-			<div className={tw(styles.header(), classNames?.header)}>{renderCells(cells, 0, normalizedColumnCount, headerCellClassName, -1)}</div>
-			<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: tw(styles.empty(), classNames?.empty), item: rowClassName }} emptyContent={emptyContent} itemCount={normalizedRowCount} itemHeight={rowHeight} overscan={overscan}>
+		<div {...props} className={cn(styles.base(), className, classNames?.base)} ref={ref} style={tableStyle}>
+			<div className={cn(styles.header(), classNames?.header)}>{renderCells(cells, 0, normalizedColumnCount, headerCellClassName, -1)}</div>
+			<List className={cn(styles.list(), classNames?.list)} classNames={{ empty: cn(styles.empty(), classNames?.empty), item: rowClassName }} emptyContent={emptyContent} itemCount={normalizedRowCount} itemHeight={rowHeight} overscan={overscan}>
 				{renderRow}
 			</List>
 		</div>

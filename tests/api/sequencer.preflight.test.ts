@@ -33,12 +33,12 @@ describe('preflight', () => {
 		const definition = canonical()
 		const view = validate({ ...definition, capture: { ...definition.capture, repeat: 3, frames: [frame('lum', { count: 4, abandonmentBudget: 2 })] } })
 
-		expect(view.groups).toEqual([{ id: 'lum', name: 'lum', frameType: 'LIGHT', exposureTime: 60, requiredSlots: 4, abandonmentBudget: 2, slotLimit: 6, projectedIntegration: 240 }])
+		expect(view.groups).toEqual([{ id: 'lum', frameType: 'LIGHT', exposureTime: 60, requiredSlots: 4, abandonmentBudget: 2, slotLimit: 6, projectedIntegration: 240 }])
 	})
 
 	test('the totals scale the groups by the cycle count', () => {
 		const definition = canonical()
-		const view = validate({ ...definition, capture: { ...definition.capture, repeat: 3, frames: [frame('lum', { count: 4, abandonmentBudget: 2 }), frame('red', { count: 2, exposureTime: 30 })] } })
+		const view = validate({ ...definition, capture: { ...definition.capture, repeat: 3, frames: [frame('lum', { count: 4, abandonmentBudget: 2 }), frame('red', { count: 2 }, { exposureTime: 30 })] } })
 
 		expect(view.repeat).toBe(3)
 		expect(view.requiredSlots).toBe(18)
@@ -61,10 +61,10 @@ describe('preflight', () => {
 		expect(view.integrationLimit).toBeUndefined()
 	})
 
-	test('the view reports the roles the session reserves', () => {
+	test('the view reports the roles the session commands', () => {
 		const view = validate(canonical())
 
-		expect(view.roles).toEqual(['camera', 'mount', 'focuser'])
+		expect(view.roles).toEqual(['camera', 'mount', 'focuser', 'guider'])
 	})
 
 	test('a compilation is projected without being compiled again', () => {

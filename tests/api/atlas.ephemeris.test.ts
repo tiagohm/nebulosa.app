@@ -201,6 +201,7 @@ const STUB_STAR: SkyObject = {
 	distance: 0,
 	rv: 0,
 	constellation: 0,
+	parallax: 0,
 }
 
 function stubSeries(source: 'offline' | 'horizons', request: EphemerisSampleRequest) {
@@ -610,7 +611,7 @@ describe('BodyPosition flags', () => {
 	})
 
 	test('horizontal true does not compute galactic or ecliptic', async () => {
-		const galactic = spyOn(coordinate, 'equatorialToGalatic')
+		const galactic = spyOn(coordinate, 'equatorialToGalactic')
 		const ecliptic = spyOn(coordinate, 'equatorialToEcliptic')
 		const ephemeris = new AtlasEphemeris({ observer: recordingObserver().observer })
 
@@ -645,7 +646,7 @@ describe('BodyPosition flags', () => {
 	})
 
 	test('illuminated true does not fill unrelated frames', async () => {
-		const galactic = spyOn(coordinate, 'equatorialToGalatic')
+		const galactic = spyOn(coordinate, 'equatorialToGalactic')
 		const ephemeris = new AtlasEphemeris({ observer: recordingObserver().observer })
 
 		try {

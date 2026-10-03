@@ -6,7 +6,7 @@ import { CONSTELLATION_LIST, constellation } from 'nebulosa/src/astronomy/coordi
 import type { Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
 import { readHygCatalog } from 'nebulosa/src/catalogs/stars/hyg'
 import { readCatalogDat, readNamesDat, StellariumObjectType } from 'nebulosa/src/catalogs/stars/stellarium'
-import { fileHandleSource } from 'nebulosa/src/io/io'
+import { fileHandleSource } from 'nebulosa/src/io/file'
 import { deg, mas } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Distance } from 'nebulosa/src/math/units/distance'

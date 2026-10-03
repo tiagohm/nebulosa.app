@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { cirsToObserved } from 'nebulosa/src/astronomy/coordinates/astrometry'
-import { equatorialToEcliptic, equatorialToGalatic, equatorialToJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import { equatorialToEcliptic, equatorialToGalactic, equatorialToJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { timeNormalize } from 'nebulosa/src/astronomy/time/time'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Mount, MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
@@ -696,7 +696,7 @@ describe('coordinateInfo computes correctly all the coordinates passing the flag
 	time.location = { latitude: 0, longitude: 0, elevation: 0, ellipsoid: 3 }
 	const equatorial = [hour(20), deg(-30)] as const
 	const equatorialJ2000 = equatorialToJ2000(...equatorial, time)
-	const galactic = equatorialToGalatic(...equatorialJ2000)
+	const galactic = equatorialToGalactic(...equatorialJ2000)
 	const ecliptic = equatorialToEcliptic(...equatorial, time)
 	const observed = cirsToObserved(equatorial, time)
 	const horizontal = [observed.azimuth, observed.altitude] as const
@@ -748,7 +748,7 @@ describe('coordinateInfo computes correctly the constellation for all coordinate
 	time.location = { latitude: 0, longitude: 0, elevation: 0, ellipsoid: 3 }
 	const equatorial = [hour(20), deg(-30)] as const
 	const equatorialJ2000 = equatorialToJ2000(...equatorial, time)
-	const galactic = equatorialToGalatic(...equatorialJ2000)
+	const galactic = equatorialToGalactic(...equatorialJ2000)
 	const ecliptic = equatorialToEcliptic(...equatorial, time)
 	const observed = cirsToObserved(equatorial, time)
 	const horizontal = [observed.azimuth, observed.altitude] as const
@@ -775,7 +775,7 @@ describe('coordinateInfo computes correctly the lst, meridian time and pier side
 	time.location = { latitude: 0, longitude: 0, elevation: 0, ellipsoid: 3 }
 	const equatorial = [hour(20), deg(-30)] as const
 	const equatorialJ2000 = equatorialToJ2000(...equatorial, time)
-	const galactic = equatorialToGalatic(...equatorialJ2000)
+	const galactic = equatorialToGalactic(...equatorialJ2000)
 	const ecliptic = equatorialToEcliptic(...equatorial, time)
 	const observed = cirsToObserved(equatorial, time)
 	const horizontal = [observed.azimuth, observed.altitude] as const

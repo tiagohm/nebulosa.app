@@ -5,7 +5,7 @@ import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/co
 import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { meanObliquity, timeNow, timeShift, timeUnix, toJulianDay } from 'nebulosa/src/astronomy/time/time'
 import type { Time } from 'nebulosa/src/astronomy/time/time'
-import type { StellariumObjectType } from 'nebulosa/src/catalogs/stars/stellarium'
+import type { StellariumObjectType } from 'nebulosa/src/catalogs/stars/stellarium/nebulae'
 import { DAYSEC, DEG2RAD, PI, PIOVERTWO, TAU } from 'nebulosa/src/core/constants'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { Point, Size } from 'nebulosa/src/math/numerical/geometry'

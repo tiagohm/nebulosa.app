@@ -110,6 +110,22 @@ Follow the OXC configuration (`.oxfmtrc.json`, `.oxlintrc.json`) and `.editorcon
 - Style with Tailwind utility classes in `className`. Use `tv` from `tailwind-variants` for component variants and `cn` to merge class names; do not add CSS-in-JS or CSS modules.
 - Keep shared client state in `valtio` proxies; keep transient UI state in React state.
 - Reference static assets relative to the importing HTML or module so Bun can hash and bundle them.
+- Never use ARIA role and aria-* attributes.
+
+## Documentation Comments
+
+Use concise repository-style `//` comments that explain contracts, not syntax.
+
+- Start every new source file with a module description immediately after imports, or at the top when there are none. Describe its responsibility.
+- Keep a file's module description current when its responsibility changes.
+- Add a documentation comment above every function, method, class, interface, type alias, enum, and module-level constant.
+- Describe intent, every parameter, return semantics, side effects, valid domain.
+- State units for angles, distances, times, rates, temperatures, pressure, magnitudes, and pixel coordinates.
+- Explain a constant's physical or algorithmic meaning, unit, source when known, and valid range.
+- Describe every interface property adjacent to the property, including units and constraints where relevant.
+- Do not comment obvious assignments, loop mechanics, or control flow.
+
+Tests do not need documentation comments.
 
 ## Tests
 
@@ -165,5 +181,3 @@ Write precise English commit messages with:
 5. a `Co-Authored-By: Name <email>` trailer for the authoring agent.
 
 Do not use Conventional Commit prefixes. Avoid vague subjects such as `fix bug`, `update code`, `misc`, or `wip`. Mention breaking changes explicitly.
-
-On Windows and across mixed shells, write the message to a temporary file outside the repository, commit with `git commit -F <file>`, remove the file, and read the result back with `git log -1 --format=%B`.

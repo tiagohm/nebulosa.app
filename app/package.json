@@ -1,0 +1,24 @@
+{
+	"name": "app",
+	"version": "0.1.0",
+	"private": true,
+	"description": "The complete integrated solution for all of your astronomical imaging needs.",
+	"license": "MIT",
+	"author": {
+		"name": "Tiago Melo",
+		"email": "tiago.henrique.cco@gmail.com"
+	},
+	"type": "module",
+	"module": "src/main.ts",
+	"scripts": {
+		"compile": "NODE_ENV=production bun build.ts"
+	},
+	"dependencies": {
+		"api": "workspace:*",
+		"web": "workspace:*"
+	},
+	"devDependencies": {
+		"@tailwindcss/node": "4.3.3",
+		"@tailwindcss/oxide": "4.3.3"
+	}
+}

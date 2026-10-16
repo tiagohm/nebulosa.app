@@ -1,0 +1,11 @@
+{
+	"name": "api",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"dependencies": {
+		"nebulosa": "workspace:*"
+	}
+}

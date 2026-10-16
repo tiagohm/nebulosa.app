@@ -1,0 +1,12 @@
+{
+	"ignorePatterns": ["core/**", ".dist/**", "bun.lock"],
+	"semi": false,
+	"singleQuote": true,
+	"useTabs": true,
+	"tabWidth": 4,
+	"endOfLine": "lf",
+	"insertFinalNewline": true,
+	"sortImports": {
+		"newlinesBetween": false
+	}
+}

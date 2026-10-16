@@ -1,0 +1,38 @@
+name: Compile
+
+on:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    compile:
+        name: Compile
+        timeout-minutes: 30
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-24.04, ubuntu-24.04-arm, windows-2025]
+        runs-on: ${{ matrix.os }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              with:
+                  submodules: true
+                  persist-credentials: false
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: canary
+
+            - name: Install Dependencies
+              run: bun install --frozen-lockfile
+
+            - name: Compile
+              run: bun compile

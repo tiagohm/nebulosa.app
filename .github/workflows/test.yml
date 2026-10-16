@@ -1,0 +1,49 @@
+name: Test
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    test:
+        name: Test
+        timeout-minutes: 30
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-24.04]
+        runs-on: ${{ matrix.os }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              with:
+                  submodules: true
+                  persist-credentials: false
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: canary
+
+            - name: Install Dependencies
+              run: bun install --frozen-lockfile
+
+            - name: Format
+              if: ${{ matrix.os == 'ubuntu-24.04' }}
+              run: bun fmt --check
+
+            - name: Lint
+              if: ${{ matrix.os == 'ubuntu-24.04' }}
+              run: bun lint
+
+            - name: Test
+              run: bun test

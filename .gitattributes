@@ -1,0 +1,24 @@
+* text=auto eol=lf
+
+# Ensure shell scripts and other executable text files retain their executable flag
+*.sh eol=lf
+
+# Disable diffing for certain file types
+*.lock -diff
+
+*.lockb         binary
+*.dat           binary
+*.bsp           binary
+*.bpc           binary
+*.fit           binary
+*.fits          binary
+*.xisf          binary
+*.png           binary
+*.ico           binary
+*.jpg           binary
+*.db            binary
+*.gz            binary
+*.dll           binary
+*.so            binary
+*.zip           binary
+*.pdf           binary

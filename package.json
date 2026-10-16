@@ -1,0 +1,24 @@
+{
+	"name": "nebulosa-repo",
+	"private": true,
+	"workspaces": [
+		"core",
+		"api",
+		"web",
+		"app"
+	],
+	"type": "module",
+	"scripts": {
+		"dev": "bun --hot app/src/main.ts",
+		"start": "NODE_ENV=production bun app/src/main.ts",
+		"compile": "bun run --cwd app compile",
+		"lint": "bun lint --disable-nested-config",
+		"fmt": "bun fmt --disable-nested-config"
+	},
+	"devDependencies": {
+		"@types/bun": "latest"
+	},
+	"trustedDependencies": [
+		"nebulosa"
+	]
+}

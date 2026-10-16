@@ -1,0 +1,7 @@
+telemetry = false
+
+[serve.static]
+plugins = ["./app/tailwind.plugin.ts"]
+
+[test]
+pathIgnorePatterns = "core/**"

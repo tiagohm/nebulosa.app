@@ -1,0 +1,16 @@
+node_modules/
+*.tsbuildinfo
+bun.lockb
+__pycache__/
+.dist/
+*.exe
+*.out
+/coverage
+
+# Claude Code
+.claude/settings.local.json
+CLAUDE.local.md
+/memory
+
+# Per-file review state
+.reviews/

@@ -1,0 +1,54 @@
+{
+	"editor.formatOnSave": true,
+	"editor.quickSuggestions": {
+		"other": "on",
+		"comments": "off",
+		"strings": "on"
+	},
+	"explorer.excludeGitIgnore": true,
+	"js/ts.format.semicolons": "remove",
+	"js/ts.preferences.quoteStyle": "single",
+	"js/ts.tsdk.path": "node_modules/typescript/lib",
+	"js/ts.experimental.useTsgo": true,
+	"js/ts.preferences.importModuleSpecifier": "non-relative",
+	"html.format.indentInnerHtml": true,
+	"html.format.wrapAttributes": "force-aligned",
+	"html.format.wrapLineLength": 300,
+	"css.lint.unknownAtRules": "ignore",
+	"json.format.keepLines": true,
+	"search.exclude": {
+		"**/node_modules": true,
+		"core/**": true
+	},
+	"tailwindCSS.classAttributes": ["class", "className", "classNames"],
+	"tailwindCSS.rootFontSize": 12,
+	"tailwindCSS.classFunctions": ["tv"],
+	"editor.codeActionsOnSave": {
+		"source.removeUnusedImports": "explicit",
+		"source.fixAll.oxc": "explicit"
+	},
+	"[javascript]": {
+		"editor.defaultFormatter": "oxc.oxc-vscode"
+	},
+	"[javascriptreact]": {
+		"editor.defaultFormatter": "oxc.oxc-vscode"
+	},
+	"[typescript]": {
+		"editor.defaultFormatter": "oxc.oxc-vscode"
+	},
+	"[typescriptreact]": {
+		"editor.defaultFormatter": "oxc.oxc-vscode"
+	},
+	"[json]": {
+		"editor.defaultFormatter": "oxc.oxc-vscode"
+	},
+	"[jsonc]": {
+		"editor.defaultFormatter": "oxc.oxc-vscode"
+	},
+	"[css]": {
+		"editor.defaultFormatter": "oxc.oxc-vscode"
+	},
+	"[html]": {
+		"editor.defaultFormatter": "oxc.oxc-vscode"
+	}
+}

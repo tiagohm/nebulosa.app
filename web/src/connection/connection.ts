@@ -1,6 +1,7 @@
 import type { ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
+import { responseError } from '../http'
 import { isRecord, parseJson, readText, writeText } from '../storage'
 
 // Saved connections of the browser and the connections the server holds open. Saved connections are
@@ -136,18 +137,6 @@ export function removeConnection(state: ConnectionState, id: string) {
 // Records an open server connection, once per id.
 function addServer(state: ConnectionState, status: ConnectionStatus) {
 	if (!state.servers.some((s) => s.id === status.id)) state.servers.push(status)
-}
-
-// Reads the error message of a failed API response, falling back to its status text.
-async function responseError(response: Response): Promise<string> {
-	try {
-		const body = (await response.json()) as { error?: unknown }
-		if (typeof body.error === 'string') return body.error
-	} catch {
-		// Not a JSON error body.
-	}
-
-	return `${response.status} ${response.statusText}`.trim()
 }
 
 // Replaces the open server connections with the server's current list. Failures leave them unchanged.

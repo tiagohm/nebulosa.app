@@ -1,5 +1,6 @@
 import type { DeviceSummary, ServerEvent } from 'api'
 import { proxy } from 'valtio'
+import { responseError } from '../http'
 import type { EquipmentRole, EquipmentSetup } from './roles'
 
 // Device runtime of the tab: the devices of the one server connection the active profile works with,
@@ -68,18 +69,6 @@ function settle(state: DeviceState, id: string) {
 	clearTimeout(timers.get(id))
 	timers.delete(id)
 	delete state.pending[id]
-}
-
-// Reads the error message of a failed API response, falling back to its status text.
-async function responseError(response: Response): Promise<string> {
-	try {
-		const body = (await response.json()) as { error?: unknown }
-		if (typeof body.error === 'string') return body.error
-	} catch {
-		// Not a JSON error body.
-	}
-
-	return `${response.status} ${response.statusText}`.trim()
 }
 
 // Fetches the device list of the watched connection. A response is dropped when the watched connection

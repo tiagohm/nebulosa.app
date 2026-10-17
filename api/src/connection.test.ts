@@ -63,7 +63,7 @@ describe('simulator devices', () => {
 		const { id } = await manager.connect({ type: 'SIMULATOR' })
 		const devices = manager.devices.list(manager.client(id)!)
 
-		expect(new Set(devices.map((d) => d.type))).toEqual(new Set(['camera', 'mount', 'focuser', 'wheel', 'rotator']))
+		expect(new Set(devices.map((d) => d.type))).toEqual(new Set(['camera', 'mount', 'focuser', 'wheel', 'rotator', 'dome', 'cover', 'flatPanel']))
 		expect(devices.every((d) => d.connectionId === id && !d.connected)).toBeTrue()
 		expect(deviceEvents.filter((e) => e.type === 'device:added')).toHaveLength(devices.length)
 	})

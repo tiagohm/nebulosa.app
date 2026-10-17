@@ -1,7 +1,10 @@
 import { type IndiClientHandler, IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import { CLIENT, type Client, type Device, type DeviceType } from 'nebulosa/src/devices/indi/device'
 import { CameraManager } from 'nebulosa/src/devices/indi/manager/camera'
+import { CoverManager } from 'nebulosa/src/devices/indi/manager/cover'
 import type { DeviceManager, DeviceProvider } from 'nebulosa/src/devices/indi/manager/device'
+import { DomeManager } from 'nebulosa/src/devices/indi/manager/dome'
+import { FlatPanelManager } from 'nebulosa/src/devices/indi/manager/flatpanel'
 import { FocuserManager } from 'nebulosa/src/devices/indi/manager/focuser'
 import { GuideOutputManager } from 'nebulosa/src/devices/indi/manager/guideoutput'
 import { MountManager } from 'nebulosa/src/devices/indi/manager/mount'
@@ -15,7 +18,7 @@ import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 // connection-state changes. Telemetry is not published.
 
 // Device types the application manages.
-export type ManagedDeviceType = Extract<DeviceType, 'camera' | 'mount' | 'focuser' | 'wheel' | 'rotator' | 'guideOutput'>
+export type ManagedDeviceType = Extract<DeviceType, 'camera' | 'mount' | 'focuser' | 'wheel' | 'rotator' | 'guideOutput' | 'dome' | 'cover' | 'flatPanel'>
 
 // Device as reported to clients: identity and connection state only.
 export interface DeviceSummary {
@@ -41,8 +44,9 @@ export type DeviceEvent =
 // Receiver of device events.
 export type DeviceListener = (event: DeviceEvent) => void
 
-// Managed types in handler order: guide outputs come last because they resolve their parent mount or camera.
-const MANAGED_TYPES: readonly ManagedDeviceType[] = ['camera', 'mount', 'focuser', 'wheel', 'rotator', 'guideOutput']
+// Managed types in handler order: guide outputs come after mounts and cameras because they resolve
+// their parent mount or camera.
+const MANAGED_TYPES: readonly ManagedDeviceType[] = ['camera', 'mount', 'focuser', 'wheel', 'rotator', 'guideOutput', 'dome', 'cover', 'flatPanel']
 
 // Lifecycle callbacks the registry registers on every manager, typed loosely enough for any device type.
 interface LifecycleHandler {
@@ -114,6 +118,9 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 			wheel: managed(new WheelManager(), this.#lifecycle('wheel')),
 			rotator: managed(new RotatorManager(), this.#lifecycle('rotator')),
 			guideOutput: managed(guideOutput, this.#lifecycle('guideOutput')),
+			dome: managed(new DomeManager(), this.#lifecycle('dome')),
+			cover: managed(new CoverManager(), this.#lifecycle('cover')),
+			flatPanel: managed(new FlatPanelManager(), this.#lifecycle('flatPanel')),
 		}
 
 		for (const type of MANAGED_TYPES) this.handler.add(this.#managers[type].handler)

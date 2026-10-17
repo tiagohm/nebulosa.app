@@ -4,7 +4,7 @@ import type { ManagedDeviceType } from 'api'
 // table is the single place to add a role; the Equipment Setup modal and the setup store read it.
 
 // Operational function a device can be assigned to.
-export type EquipmentRole = 'MAIN_CAMERA' | 'GUIDE_CAMERA' | 'MOUNT' | 'FOCUSER' | 'FILTER_WHEEL' | 'ROTATOR' | 'GUIDE_OUTPUT'
+export type EquipmentRole = 'MAIN_CAMERA' | 'GUIDE_CAMERA' | 'MOUNT' | 'FOCUSER' | 'FILTER_WHEEL' | 'ROTATOR' | 'GUIDE_OUTPUT' | 'DOME' | 'COVER' | 'FLAT_PANEL'
 
 // Devices assigned to the roles of one connection, by device id; an absent role has no device.
 export type EquipmentSetup = Partial<Record<EquipmentRole, string>>
@@ -28,6 +28,9 @@ export const ROLES: readonly RoleDefinition[] = [
 	{ role: 'FOCUSER', label: 'Focuser', deviceType: 'focuser' },
 	{ role: 'FILTER_WHEEL', label: 'Filter Wheel', deviceType: 'wheel' },
 	{ role: 'ROTATOR', label: 'Rotator', deviceType: 'rotator' },
+	{ role: 'DOME', label: 'Dome', deviceType: 'dome' },
+	{ role: 'COVER', label: 'Cover', deviceType: 'cover' },
+	{ role: 'FLAT_PANEL', label: 'Flat Panel', deviceType: 'flatPanel' },
 ]
 
 // Groups of roles that cannot share a device: one camera cannot image and guide at once.

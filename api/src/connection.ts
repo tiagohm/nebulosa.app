@@ -4,6 +4,7 @@ import type { Client } from 'nebulosa/src/devices/indi/device'
 import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { CoverSimulator } from 'nebulosa/src/devices/indi/simulator/cover'
+import { DomeSimulator } from 'nebulosa/src/devices/indi/simulator/dome'
 import { FlatPanelSimulator } from 'nebulosa/src/devices/indi/simulator/flatpanel'
 import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
@@ -118,6 +119,7 @@ async function openClient(id: string, request: ConnectRequest, handler: IndiClie
 				new RotatorSimulator('Rotator Simulator', client),
 				new FlatPanelSimulator('Flat Panel Simulator', client),
 				new CoverSimulator('Dust Cap Simulator', client),
+				new DomeSimulator('Dome Simulator', client),
 			]
 			return client
 		}

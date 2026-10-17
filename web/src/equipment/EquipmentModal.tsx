@@ -40,11 +40,14 @@ const badge = tv({
 // SVG path data of the icon of each device type, drawn in a 24×24 box.
 const ICONS: Readonly<Record<ManagedDeviceType, string>> = {
 	camera: 'M4 7h3l1.5-2h7L17 7h3v12H4zM12 10a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7',
-	mount: 'M5 20h14M12 20v-6M8 14h8M7 4l10 6M9 9l-2 5M15 9l2 5',
+	mount: 'M3.5 12.5L15 7l1.5 3L5 15.5zM15 7l3-1.5l1.5 3l-3 1.5M10.5 13.5V16M10.5 16L7 21M10.5 16L14 21M10.5 16v5',
 	guideOutput: 'M12 3v4M12 17v4M3 12h4M17 12h4M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6',
 	focuser: 'M4 10h12v4H4zM16 8h4v8h-4zM8 6v4M8 14v4',
 	wheel: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 6.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3M7 11.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3M17 11.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3M12 14.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3',
 	rotator: 'M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5',
+	dome: 'M4 18a8 8 0 0 1 16 0M3 18h18M11 10.1V18M13 10.1V18',
+	cover: 'M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16M8 12h8',
+	flatPanel: 'M4 8h16v11H4zM8 4l1 2M12 3v3M16 4l-1 2',
 }
 
 // Equipment Setup modal, shown while deviceState.open is true; works on the active profile only.

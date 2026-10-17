@@ -83,7 +83,7 @@ export function CaptureWorkspace() {
 			panel={{
 				title: definition.panelTitle,
 				content: (
-					<ModePanel camera={role} requires={definition.requires}>
+					<ModePanel requires={definition.requires}>
 						<Panel />
 					</ModePanel>
 				),
@@ -117,7 +117,7 @@ interface CameraStateProps {
 }
 
 // Empty state of the viewer, from the real state of the view's camera.
-function CameraState({ camera: { role, device, status } }: CameraStateProps) {
+function CameraState({ camera: { role, status } }: CameraStateProps) {
 	const label = roleDefinition(role).label
 
 	switch (status) {
@@ -136,7 +136,7 @@ function CameraState({ camera: { role, device, status } }: CameraStateProps) {
 				/>
 			)
 		case 'connected':
-			return <EmptyState title="No image captured" description={`${device?.name ?? `The ${label}`} is connected. Capturing is not available yet.`} />
+			return <EmptyState title="No image captured" description="Capturing is not available yet." />
 		case 'connecting':
 		case 'disconnecting':
 			return <EmptyState title={`${label} ${status === 'connecting' ? 'connecting' : 'disconnecting'}…`} />

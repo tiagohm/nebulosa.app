@@ -22,6 +22,11 @@ export const ICONS = {
 	sky: 'M12 3l2.6 5.5l6 .8l-4.4 4.2l1.1 6L12 16.6l-5.3 2.9l1.1-6l-4.4-4.2l6-.8z',
 	tools: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
 	panel: 'M4 5h16v14H4zM15 5v14',
+	zoomIn: 'M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13M15.5 15.5L20 20M10.5 7.5v6M7.5 10.5h6',
+	zoomOut: 'M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13M15.5 15.5L20 20M7.5 10.5h6',
+	fit: 'M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5',
+	actualSize: 'M4 5h16v14H4zM8.5 9.5L10 8.5v7M14 9.5l1.5-1v7M12 11v.01M12 14v.01',
+	reticle: 'M12 3v6M12 15v6M3 12h6M15 12h6M12 7a5 5 0 1 0 0 10a5 5 0 1 0 0-10',
 } as const satisfies Readonly<Record<string, string>>
 
 // Name of an icon in ICONS.

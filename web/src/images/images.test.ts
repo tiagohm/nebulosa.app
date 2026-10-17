@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { proxy } from 'valtio'
-import { activeDocument, activeView, closeImage, type ImagesIo, type ImagesState, openImage, renderImage, selectImage, setImageView } from './images'
+import { activeDocument, activeTool, activeView, closeImage, type ImagesIo, type ImagesState, openImage, renderImage, selectImage, selectImageTool, setImageView } from './images'
 
 interface Call {
 	readonly url: string
@@ -51,7 +51,7 @@ function fakeIo(gated = false) {
 }
 
 function newState() {
-	return proxy<ImagesState>({ documents: [], views: {} })
+	return proxy<ImagesState>({ documents: [], views: {}, tools: {} })
 }
 
 describe('open', () => {
@@ -161,5 +161,23 @@ describe('view state', () => {
 		await openImage(state, '/a.fits', io)
 		closeImage(state, state.documents[0].key, io)
 		expect(state.views).toEqual({})
+	})
+})
+
+describe('tool context', () => {
+	test('a new document shows the inspector and each document keeps its own tool', async () => {
+		const state = newState()
+		const { io } = fakeIo()
+		await openImage(state, '/a.fits', io)
+		await openImage(state, '/b.fits', io)
+		const [a, b] = state.documents.map((d) => d.key)
+
+		selectImageTool(state, b, 'plate-solver')
+
+		expect(state.tools[a]?.tool).toBe('inspector')
+		expect(activeTool(state)?.tool).toBe('plate-solver')
+
+		closeImage(state, b, io)
+		expect(state.tools).toEqual({ [a]: { tool: 'inspector' } })
 	})
 })

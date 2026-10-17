@@ -8,15 +8,17 @@ import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { moveIndex } from '../ui/navigation'
+import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
 import { FIT_VIEW } from '../viewer/transform'
 import { ImageInspector } from './ImageInspector'
-import { activeDocument, activeView, closeImage, type ImageDocument, imagesState, openImage, selectImage, setImageView } from './images'
+import { activeDocument, activeTool, activeView, closeImage, type ImageDocument, imagesState, openImage, selectImage, selectImageTool, setImageView } from './images'
+import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolUnavailable } from './tools'
 
 // Images workspace: FITS and XISF images opened from the server, one tab each, shown in the shared
-// viewer with their inspector in the contextual panel. It works without any connection or equipment.
-// Documents, with their own zoom, pan, and stretch, stay open while the tab lives, across document and
-// workspace switches.
+// viewer, with the contextual tool each document selected (the Image Inspector at first) in the
+// contextual panel. It works without any connection or equipment. Documents, with their own zoom, pan,
+// stretch, and tool, stay open while the tab lives, across document and workspace switches.
 
 // Images workspace.
 export function ImagesWorkspace() {
@@ -25,6 +27,10 @@ export function ImagesWorkspace() {
 	const [choosing, setChoosing] = useState(false)
 	const document = activeDocument(state)
 	const view = activeView(state)
+	const tool = activeTool(state)?.tool ?? 'inspector'
+	const definition = IMAGE_TOOL_DEFINITIONS[tool]
+	const Panel = definition.panel ?? ImageInspector
+	const toolSelector = <Select options={IMAGE_TOOLS} value={tool} disabled={!document} format={(t) => IMAGE_TOOL_DEFINITIONS[t].label} disabledReason={imageToolUnavailable} onChange={(t) => document && selectImageTool(imagesState, document.key, t)} className="w-52 max-sm:w-40" />
 	const openButton = (
 		<Button size="sm" variant="secondary" onClick={() => setChoosing(true)}>
 			<Icon name="folder" className="size-4" />
@@ -33,7 +39,7 @@ export function ImagesWorkspace() {
 	)
 
 	return (
-		<WorkspaceLayout workspace="images" title="Images" actions={openButton} panel={{ title: 'Image Inspector', content: <ImageInspector document={document} view={view} onOpen={() => setChoosing(true)} /> }}>
+		<WorkspaceLayout workspace="images" title="Images" actions={openButton} context={toolSelector} panel={{ title: definition.panelTitle, content: <Panel document={document} view={view} onOpen={() => setChoosing(true)} /> }}>
 			<div className="flex h-full flex-col">
 				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} />}
 				<div className="min-h-0 flex-1">

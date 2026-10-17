@@ -3,11 +3,11 @@ import type { ReactNode } from 'react'
 import { PanelSection, PlannedControls } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
-import type { ImageDocument, ImageViewState } from './images'
+import type { ImageToolPanelProps } from './tools'
 
-// Contextual panel of the Images workspace: properties, acquisition data, display parameters, and the
-// header of the active document, with the analysis and processing sections still to come. It only
-// reads the document and its view state.
+// Image Inspector, the default contextual tool of the Images workspace: properties, acquisition data,
+// display parameters, and the header of the active document, with the statistics section still to come.
+// It only reads the document and its view state.
 
 // Text shown for a datum the image does not have.
 const MISSING = '—'
@@ -28,17 +28,8 @@ const ACQUISITION_FIELDS: readonly (readonly [label: string, format: (acquisitio
 	['Focal length (mm)', (a) => a.focalLength?.toString()],
 ]
 
-export interface ImageInspectorProps {
-	// Active document; absent when none is open.
-	readonly document?: ImageDocument
-	// View state of the active document.
-	readonly view?: ImageViewState
-	// Opens the file chooser.
-	readonly onOpen: () => void
-}
-
 // Inspector of the active image document.
-export function ImageInspector({ document, view, onOpen }: ImageInspectorProps) {
+export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) {
 	if (!document) {
 		return (
 			<EmptyState
@@ -90,9 +81,6 @@ export function ImageInspector({ document, view, onOpen }: ImageInspectorProps) 
 			</PanelSection>
 			<PanelSection title="Histogram and Statistics">
 				<PlannedControls items={['Histogram', 'Mean, median, and deviation']} />
-			</PanelSection>
-			<PanelSection title="Analysis and Processing">
-				<PlannedControls items={['Plate solving', 'Star detection', 'Manual stretch and processing']} />
 			</PanelSection>
 			{info && <Header info={info} />}
 		</>

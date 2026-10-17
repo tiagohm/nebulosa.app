@@ -3,11 +3,12 @@ import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { responseError } from '../http'
 import { FIT_VIEW, type ViewerView } from '../viewer/transform'
+import type { ImageToolId } from './tools'
 
-// Image documents open in the tab's Images workspace. Each open image is split in two objects under the
-// same key: the document (identity, origin, and the server-side image with its metadata) and its view
-// state (zoom, pan, stretch, and the current rendering, a JPEG held as an object URL). Two documents
-// never share a view, and a future derived image (such as a processing result) can open as a new
+// Image documents open in the tab's Images workspace. Each open image is split in three objects under the
+// same key: the document (identity, origin, and the server-side image with its metadata), its view state
+// (zoom, pan, stretch, and the current rendering, a JPEG held as an object URL), and its tool context
+// (the contextual tool it shows, the Image Inspector at first). Two documents never share a view or tool, and a future derived image (such as a processing result) can open as a new
 // document with its own view while the original stays as it is. Only the latest rendering request of a
 // document counts; starting a new one aborts the previous, and an object URL is revoked as soon as a
 // newer rendering replaces it or the document closes. Everything lives in memory only: it survives
@@ -54,12 +55,20 @@ export interface ImageViewState {
 	error?: string
 }
 
+// Contextual tool of a document.
+export interface ImageToolContext {
+	// Tool shown in the contextual panel.
+	tool: ImageToolId
+}
+
 // Image documents of the tab.
 export interface ImagesState {
 	// Open documents in tab order.
 	documents: ImageDocument[]
 	// View state of each open document, by document key.
 	views: Record<string, ImageViewState>
+	// Tool context of each open document, by document key.
+	tools: Record<string, ImageToolContext>
 	// Key of the document shown; absent when none is open.
 	activeKey?: string
 }
@@ -78,7 +87,7 @@ export interface ImagesIo {
 const RENDER_HEADER = 'X-Image-Render'
 
 // Image documents of the tab.
-export const imagesState = proxy<ImagesState>({ documents: [], views: {} })
+export const imagesState = proxy<ImagesState>({ documents: [], views: {}, tools: {} })
 
 // Browser implementation of ImagesIo.
 export const browserIo: ImagesIo = {
@@ -105,6 +114,11 @@ export function activeView<T extends ImageViewState>(state: { readonly views: Re
 	return state.activeKey === undefined ? undefined : state.views[state.activeKey]
 }
 
+// Returns the tool context of the document shown, if any.
+export function activeTool<T extends ImageToolContext>(state: { readonly tools: Readonly<Record<string, T>>; readonly activeKey?: string }): T | undefined {
+	return state.activeKey === undefined ? undefined : state.tools[state.activeKey]
+}
+
 // Returns the message of an unknown failure.
 function message(error: unknown): string {
 	return error instanceof Error ? error.message : 'Unable to reach the server'
@@ -115,13 +129,15 @@ function release(id: string, io: ImagesIo) {
 	void io.fetch(`/api/images/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => undefined)
 }
 
-// Opens a server file as a new active document, fitted to the viewer, and renders it with an automatic
+// Opens a server file as a new active document, fitted to the viewer and shown with the Image
+// Inspector, and renders it with an automatic
 // stretch. A document closed before the server answers is released on the server.
 export async function openImage(state: ImagesState, path: string, io: ImagesIo = browserIo) {
 	const key = nanoid()
 	const name = path.split(/[\\/]/).at(-1) || path
 	state.documents.push({ key, name, source: { kind: 'file', path }, status: 'loading' })
 	state.views[key] = { view: FIT_VIEW, stretch: 'auto', renderPending: false }
+	state.tools[key] = { tool: 'inspector' }
 	state.activeKey = key
 
 	try {
@@ -198,13 +214,19 @@ export function setImageView(state: ImagesState, key: string, view: ViewerView) 
 	if (current) current.view = view
 }
 
+// Shows a tool in the contextual panel of a document. Ignored for an unknown key.
+export function selectImageTool(state: ImagesState, key: string, tool: ImageToolId) {
+	const current = state.tools[key]
+	if (current) current.tool = tool
+}
+
 // Shows a document. Ignored for an unknown key.
 export function selectImage(state: ImagesState, key: string) {
 	if (documentOf(state, key)) state.activeKey = key
 }
 
 // Closes a document: aborts its rendering, revokes its object URL, releases it on the server, and drops
-// its view state. The next document (or the previous one, for the last) becomes active.
+// its view state and tool context. The next document (or the previous one, for the last) becomes active.
 export function closeImage(state: ImagesState, key: string, io: ImagesIo = browserIo) {
 	const index = state.documents.findIndex((d) => d.key === key)
 	if (index < 0) return
@@ -218,5 +240,6 @@ export function closeImage(state: ImagesState, key: string, io: ImagesIo = brows
 
 	state.documents.splice(index, 1)
 	delete state.views[key]
+	delete state.tools[key]
 	if (state.activeKey === key) state.activeKey = (state.documents[index] ?? state.documents[index - 1])?.key
 }

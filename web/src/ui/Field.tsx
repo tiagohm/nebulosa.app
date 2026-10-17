@@ -14,11 +14,7 @@ export interface FieldProps {
 export function Field({ label, className, children }: FieldProps) {
 	return (
 		<div className={cn('flex min-w-0 flex-col gap-2', className)}>
-			{label && (
-				<label className="text-xs font-medium tracking-[0.08em] text-ink-200 uppercase">
-					{label}
-				</label>
-			)}
+			{label && <label className="text-xs font-medium tracking-[0.08em] text-ink-200 uppercase">{label}</label>}
 			{children}
 		</div>
 	)

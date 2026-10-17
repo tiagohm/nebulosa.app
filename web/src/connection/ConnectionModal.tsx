@@ -6,26 +6,39 @@ import { Modal } from '../ui/Modal'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
-import { CONNECTION_TYPES, type ConnectionInput, connectionState, DEFAULT_PORT, removeConnection, saveConnection } from './connection'
+import { connect, type ConnectionInput, connectionState, DEFAULT_PORT, disconnect, removeConnection, saveConnection } from './connection'
 
+// Modal that creates, edits, and removes saved connections, and connects or disconnects the selected one.
+
+// Initial form values for a new connection: an INDI server on the default port.
 const EMPTY_FORM: ConnectionInput = { name: '', host: '', port: DEFAULT_PORT, type: 'INDI' }
 
+// Supported connection backends.
+export const CONNECTION_TYPES = ['INDI', 'ALPACA', 'SIMULATOR'] as const
+
+// Connections modal, shown while connectionState.open is true. The form on the left saves a new
+// connection or the one being edited; the list on the right acts on the selected connection.
 export function ConnectionModal() {
-	const { open, connections, selected } = useSnapshot(connectionState)
+	const { open, connections, selected, active, loading, error } = useSnapshot(connectionState)
 	const [form, setForm] = useState(EMPTY_FORM)
 	// Id of the connection loaded into the form by Edit.
 	const [editing, setEditing] = useState<string>()
+	// Whether the selected connection is the one this tab holds open.
+	const selectedIsActive = selected !== undefined && active?.connectionId === selected
 
+	// Clears the form and leaves edit mode.
 	function reset() {
 		setForm(EMPTY_FORM)
 		setEditing(undefined)
 	}
 
+	// Saves the form as a new connection, or over the one being edited, and clears the form on success.
 	function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
 		e.preventDefault()
 		if (saveConnection(connectionState, form, editing)) reset()
 	}
 
+	// Loads the selected connection into the form for editing.
 	function handleEdit() {
 		const connection = connections.find((c) => c.id === selected)
 		if (!connection) return
@@ -33,16 +46,29 @@ export function ConnectionModal() {
 		setEditing(connection.id)
 	}
 
+	// Removes the selected connection, clearing the form when it was being edited.
 	function handleRemove() {
 		if (selected === undefined) return
 		if (selected === editing) reset()
 		removeConnection(connectionState, selected)
 	}
 
+	// Hides the modal; the tab's active connection stays open.
 	function handleClose() {
 		connectionState.open = false
 	}
 
+	// Connects the selected connection, or disconnects it when it is the tab's active one.
+	function handleConnection() {
+		if (selectedIsActive) {
+			void disconnect(connectionState)
+		} else {
+			const connection = connectionState.connections.find((c) => c.id === selected)
+			if (connection) void connect(connectionState, connection)
+		}
+	}
+
+	// Whether the form can be saved: the name is not blank, and the host is not blank unless the type is SIMULATOR.
 	function canSave() {
 		const { name, host, type } = form
 
@@ -80,17 +106,23 @@ export function ConnectionModal() {
 					<div className="h-full overflow-y-auto">
 						<List emptyText="No saved connections yet.">
 							{connections.map((c) => (
-								<ListItem key={c.id} title={c.name} description={`${c.host}:${c.port}`} meta={c.type} selected={c.id === selected} onClick={() => (connectionState.selected = c.id)} />
+								<ListItem key={c.id} title={c.name} description={c.type === 'SIMULATOR' ? 'Built-in' : `${c.host}:${c.port}`} meta={active?.connectionId === c.id ? `${c.type} · Connected` : c.type} selected={c.id === selected} onClick={() => (connectionState.selected = c.id)} />
 							))}
 						</List>
 					</div>
-					<div className="flex flex-wrap justify-end gap-2">
-						<Button variant="secondary" disabled={selected === undefined} onClick={handleEdit}>
-							Edit
+					<div className="flex flex-wrap items-center gap-2">
+						<Button variant={selectedIsActive ? 'secondary' : 'primary'} disabled={selected === undefined || loading !== undefined || (active !== undefined && !selectedIsActive)} onClick={handleConnection}>
+							{loading === 'connect' ? 'Connecting…' : loading === 'disconnect' ? 'Disconnecting…' : selectedIsActive ? 'Disconnect' : 'Connect'}
 						</Button>
-						<Button variant="ghost" disabled={selected === undefined} onClick={handleRemove}>
-							Remove
-						</Button>
+						<div className="ml-auto flex gap-2">
+							<Button variant="secondary" disabled={selected === undefined || selectedIsActive} onClick={handleEdit}>
+								Edit
+							</Button>
+							<Button variant="ghost" disabled={selected === undefined || selectedIsActive} onClick={handleRemove}>
+								Remove
+							</Button>
+						</div>
+						{error && <p className="m-0 basis-full text-[13px] leading-5 text-danger">{error}</p>}
 					</div>
 				</div>
 			</div>

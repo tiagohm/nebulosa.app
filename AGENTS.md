@@ -67,7 +67,7 @@ Run every command from the repository root.
 - Lint with fixes: `bun lint --fix`
 - Format: `bun fmt`, or `bun fmt <explicit paths>` for touched files
 - Check formatting: `bun fmt --check`
-- Tests: `bun test`, or `bun test <file>` for one file
+- Tests: `bun test --parallel`, or `bun test <file>` for one file
 
 Runtime and build notes:
 
@@ -101,8 +101,8 @@ Follow the OXC configuration (`.oxfmtrc.json`, `.oxlintrc.json`) and `.editorcon
 ### Backend (`api`)
 
 - Expose endpoints as `Bun.serve` routes under `/api/`; respond with `Response.json` and meaningful status codes.
-- Validate untrusted input (request bodies, query strings, uploaded files, device and network messages) once at the boundary, then pass typed values inward.
 - Release timers, sockets, device connections, and in-flight work when a request, connection, or session ends.
+- No input (request bodies, query strings, uploaded files, device and network messages) should be validated. Assume that the caller will always send the valid values.
 
 ### Frontend (`web`)
 
@@ -118,7 +118,7 @@ Use concise repository-style `//` comments that explain contracts, not syntax.
 
 - Start every new source file with a module description immediately after imports, or at the top when there are none. Describe its responsibility.
 - Keep a file's module description current when its responsibility changes.
-- Add a documentation comment above every function, method, class, interface, type alias, enum, and module-level constant.
+- Add a documentation comment above every function, method, class, interface, type alias, enum, and module-level constant, public or private.
 - Describe intent, every parameter, return semantics, side effects, valid domain.
 - State units for angles, distances, times, rates, temperatures, pressure, magnitudes, and pixel coordinates.
 - Explain a constant's physical or algorithmic meaning, unit, source when known, and valid range.

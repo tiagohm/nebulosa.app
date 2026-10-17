@@ -17,10 +17,35 @@ export interface SelectProps<T extends string> {
 }
 
 // Select-only combobox (WAI-ARIA) with a custom listbox, so the open list matches the theme.
+// Largest height of the open list, in pixels (the max-h-88 default).
+const LIST_MAX_HEIGHT = 352
+
+// Returns the vertical range, in viewport pixels, in which content around element is visible: the
+// viewport narrowed by every scrolling ancestor, so a list opened near the edge of a scrolling panel
+// is not clipped by it.
+function visibleRange(element: HTMLElement): { top: number; bottom: number } {
+	let top = 0
+	let bottom = window.innerHeight
+
+	for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+		const { overflowY } = getComputedStyle(parent)
+
+		if ((overflowY === 'auto' || overflowY === 'scroll') && parent.scrollHeight > parent.clientHeight) {
+			const rect = parent.getBoundingClientRect()
+			top = Math.max(top, rect.top)
+			bottom = Math.min(bottom, rect.bottom)
+		}
+	}
+
+	return { top, bottom }
+}
+
 export function Select<T extends string>({ label, options, value, onChange, className, format = String, disabledReason, disabled = false }: SelectProps<T>) {
 	const [open, setOpen] = useState(false)
 	const [active, setActive] = useState(-1)
 	const [up, setUp] = useState(false)
+	// Height available to the open list on its side, in pixels; undefined keeps the default maximum.
+	const [room, setRoom] = useState<number>()
 	const rootRef = useRef<HTMLDivElement>(null)
 	const triggerRef = useRef<HTMLButtonElement>(null)
 	const listRef = useRef<HTMLUListElement>(null)
@@ -28,11 +53,17 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 	const selectedIndex = options.indexOf(value)
 
 	function openList(at: number = Math.max(0, selectedIndex)) {
-		const rect = triggerRef.current?.getBoundingClientRect()
+		const trigger = triggerRef.current
 
-		if (rect) {
-			const below = window.innerHeight - rect.bottom
-			setUp(below < 280 && rect.top > below)
+		if (trigger) {
+			const rect = trigger.getBoundingClientRect()
+			const range = visibleRange(trigger)
+			const below = range.bottom - rect.bottom
+			const above = rect.top - range.top
+			const opensUp = below < 280 && above > below
+			setUp(opensUp)
+			// Leaves room for the 4 px gap and a small margin; never shrinks below about three options.
+			setRoom(Math.max(120, (opensUp ? above : below) - 12))
 		}
 
 		setActive(at)
@@ -154,6 +185,7 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 					role="listbox"
 					tabIndex={-1}
 					hidden={!open}
+					style={room === undefined ? undefined : { maxHeight: Math.min(room, LIST_MAX_HEIGHT) }}
 					className={cn('absolute inset-x-0 z-20 m-0 box-border max-h-88 list-none overflow-y-auto overscroll-contain rounded-md border border-line-100 bg-base-200 p-1 text-sm leading-5 shadow-[0_12px_32px_rgb(0_0_0/0.45)]', up ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]')}
 				>
 					{options.map((option, index) => {

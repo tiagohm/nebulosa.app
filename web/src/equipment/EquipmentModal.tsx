@@ -95,7 +95,7 @@ export function EquipmentModal() {
 						)}
 						{error && !serverOpen && <p className="m-0 text-[13px] leading-5 text-danger">{error}</p>}
 						{serverOpen && runtime.loading && <p className="m-0 text-[13px] leading-5 text-ink-300">Loading devices…</p>}
-						<ul className="m-0 flex list-none flex-col gap-2 p-0">
+						<ul className="-mr-2 m-0 flex max-h-[calc(100dvh-15rem)] min-h-40 list-none flex-col gap-2 overflow-y-auto overscroll-contain p-0 pr-2">
 							{ROLES.map((definition) => (
 								<RoleRow
 									key={definition.role}

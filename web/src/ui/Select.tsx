@@ -8,10 +8,16 @@ export interface SelectProps<T extends string> {
 	readonly value: T
 	readonly onChange: (value: T) => void
 	readonly className?: string
+	// Display text of an option; the option itself when absent.
+	readonly format?: (value: T) => string
+	// Why an option cannot be chosen, shown under it; undefined for an available option.
+	readonly disabledReason?: (value: T) => string | undefined
+	// Whether the whole control is disabled.
+	readonly disabled?: boolean
 }
 
 // Select-only combobox (WAI-ARIA) with a custom listbox, so the open list matches the theme.
-export function Select<T extends string>({ label, options, value, onChange, className }: SelectProps<T>) {
+export function Select<T extends string>({ label, options, value, onChange, className, format = String, disabledReason, disabled = false }: SelectProps<T>) {
 	const [open, setOpen] = useState(false)
 	const [active, setActive] = useState(-1)
 	const [up, setUp] = useState(false)
@@ -40,7 +46,7 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 
 	function choose(index: number) {
 		const option = options[index]
-		if (option === undefined) return
+		if (option === undefined || disabledReason?.(option)) return
 		if (option !== value) onChange(option)
 		close(true)
 	}
@@ -57,7 +63,9 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 		for (let k = 0; k < options.length; k++) {
 			const index = (((from + offset + k) % options.length) + options.length) % options.length
 
-			if (options[index]?.toLowerCase().startsWith(state.text)) {
+			const option = options[index]
+
+			if (option !== undefined && format(option).toLowerCase().startsWith(state.text)) {
 				if (open) setActive(index)
 				else choose(index)
 				return
@@ -129,8 +137,16 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 	return (
 		<Field label={label} className={className}>
 			<div ref={rootRef} className="relative">
-				<button ref={triggerRef} type="button" role="combobox" onClick={() => (open ? close(false) : openList())} onKeyDown={handleKeyDown} className={cn(inputClassName, 'flex cursor-pointer items-center gap-2 pr-9 text-left select-none', open && 'border-accent outline-2 -outline-offset-1 outline-accent')}>
-					<span className="min-w-0 flex-1 truncate">{value}</span>
+				<button
+					ref={triggerRef}
+					type="button"
+					role="combobox"
+					disabled={disabled}
+					onClick={() => (open ? close(false) : openList())}
+					onKeyDown={handleKeyDown}
+					className={cn(inputClassName, 'flex cursor-pointer items-center gap-2 pr-9 text-left select-none', open && 'border-accent outline-2 -outline-offset-1 outline-accent')}
+				>
+					<span className="min-w-0 flex-1 truncate">{format(value)}</span>
 					<span className={cn('pointer-events-none absolute top-1/2 right-3.5 size-[7px] rotate-45 border-r-[1.5px] border-b-[1.5px] border-ink-200 transition-[rotate,margin-top] duration-150', open ? '-mt-0.5 -rotate-135 border-accent' : '-mt-1.5')} />
 				</button>
 				<ul
@@ -140,19 +156,26 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 					hidden={!open}
 					className={cn('absolute inset-x-0 z-20 m-0 box-border max-h-88 list-none overflow-y-auto overscroll-contain rounded-md border border-line-100 bg-base-200 p-1 text-sm leading-5 shadow-[0_12px_32px_rgb(0_0_0/0.45)]', up ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]')}
 				>
-					{options.map((option, index) => (
-						<li
-							key={option}
-							role="option"
-							onMouseDown={(e) => e.preventDefault()}
-							onMouseMove={() => active !== index && setActive(index)}
-							onClick={() => choose(index)}
-							className={cn('flex cursor-pointer items-start gap-2 rounded-sm py-2 pr-3 pl-2', index === active && 'bg-base-300', index === selectedIndex ? 'text-accent' : 'text-ink-100')}
-						>
-							<span className={cn('relative h-5 flex-[0_0_16px]', index === selectedIndex && "after:absolute after:top-1 after:left-[5px] after:h-3 after:w-1 after:rotate-45 after:border-r-2 after:border-b-2 after:border-accent after:content-['']")} />
-							<span className="min-w-0">{option}</span>
-						</li>
-					))}
+					{options.map((option, index) => {
+						const reason = disabledReason?.(option)
+
+						return (
+							<li
+								key={option}
+								role="option"
+								onMouseDown={(e) => e.preventDefault()}
+								onMouseMove={() => active !== index && setActive(index)}
+								onClick={() => choose(index)}
+								className={cn('flex items-start gap-2 rounded-sm py-2 pr-3 pl-2', reason ? 'cursor-not-allowed text-ink-300' : 'cursor-pointer', index === active && 'bg-base-300', !reason && (index === selectedIndex ? 'text-accent' : 'text-ink-100'))}
+							>
+								<span className={cn('relative h-5 flex-[0_0_16px]', index === selectedIndex && "after:absolute after:top-1 after:left-[5px] after:h-3 after:w-1 after:rotate-45 after:border-r-2 after:border-b-2 after:border-accent after:content-['']")} />
+								<span className="flex min-w-0 flex-col">
+									<span>{format(option)}</span>
+									{reason && <span className="text-xs leading-4">{reason}</span>}
+								</span>
+							</li>
+						)
+					})}
 				</ul>
 			</div>
 		</Field>

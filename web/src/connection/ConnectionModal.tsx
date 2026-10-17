@@ -18,10 +18,10 @@ const EMPTY_FORM: ConnectionInput = { name: '', host: '', port: DEFAULT_PORT, ty
 // Supported connection backends.
 export const CONNECTION_TYPES = ['INDI', 'ALPACA', 'SIMULATOR'] as const
 
-// Returns the list label of a saved connection's state: its type, whether the active profile uses it,
+// Returns the list description of a saved connection: its endpoint, whether the active profile uses it,
 // and whether the server holds it open.
-function connectionMeta(connection: Connection, inProfile: boolean, connected: boolean): string {
-	return [connection.type, inProfile && 'In use', connected && 'Connected'].filter(Boolean).join(' · ')
+function connectionDescription(connection: Connection, inProfile: boolean, connected: boolean): string {
+	return [connection.type === 'SIMULATOR' ? 'Built-in' : `${connection.host}:${connection.port}`, inProfile && 'In use', connected && 'Connected'].filter(Boolean).join(' · ')
 }
 
 // Connections modal, shown while connectionState.open is true. The form on the left saves a new
@@ -130,7 +130,7 @@ export function ConnectionModal() {
 					<div className="h-full overflow-y-auto">
 						<List emptyText="No saved connections yet.">
 							{connections.map((c) => (
-								<ListItem key={c.id} title={c.name} description={c.type === 'SIMULATOR' ? 'Built-in' : `${c.host}:${c.port}`} meta={connectionMeta(c, c.id === profileConnectionId, serverOf(servers, c) !== undefined)} selected={c.id === selected} onClick={() => (connectionState.selected = c.id)} />
+								<ListItem key={c.id} title={c.name} description={connectionDescription(c, c.id === profileConnectionId, serverOf(servers, c) !== undefined)} meta={c.type} selected={c.id === selected} onClick={() => (connectionState.selected = c.id)} />
 							))}
 						</List>
 					</div>

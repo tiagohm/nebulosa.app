@@ -1,6 +1,7 @@
 import logo from '../../assets/nebulosa.ico'
 import { connectionState } from '../connection/connection'
 import { ConnectionIndicator } from '../connection/ConnectionIndicator'
+import { deviceState } from '../equipment/equipment'
 import { ProfileMenu } from '../profile/ProfileMenu'
 import { Menu, MenuItem, NavigationMenu } from '../ui/NavigationMenu'
 
@@ -25,6 +26,7 @@ export function TopBar() {
 				<NavigationMenu>
 					<Menu id="management" label="Management">
 						<MenuItem onSelect={() => (connectionState.open = true)}>Connections</MenuItem>
+						<MenuItem onSelect={() => (deviceState.open = true)}>Equipment Setup</MenuItem>
 					</Menu>
 				</NavigationMenu>
 			</div>

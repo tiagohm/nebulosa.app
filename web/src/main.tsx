@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
+import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
 import { onOpen, subscribe } from './events'
 import { loadProfiles, persistProfiles, profileState } from './profile/profile'
 import { browserStores } from './storage'
@@ -16,9 +17,17 @@ loadProfiles(profileState, stores)
 persistConnections(connectionState, stores.local)
 persistProfiles(profileState, stores)
 
-subscribe((event) => handleConnectionEvent(connectionState, event))
-// Every (re)open resynchronizes the open connections, which may have changed while the socket was closed.
-onOpen(() => void refreshServers(connectionState))
+subscribe((event) => {
+	handleConnectionEvent(connectionState, event)
+	handleDeviceEvent(deviceState, event)
+})
+
+// Every (re)open resynchronizes the open connections and the watched devices, which may have changed
+// while the socket was closed.
+onOpen(() => {
+	void refreshServers(connectionState)
+	void refreshDevices(deviceState)
+})
 
 createRoot(document.getElementById('root')!).render(
 	<StrictMode>

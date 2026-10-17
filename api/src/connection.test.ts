@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { type ConnectionEvent, ConnectionManager } from './connection'
+import { type ConnectionEvent, ConnectionManager, type ServerEvent } from './connection'
+import type { DeviceEvent, DeviceSummary } from './devices'
 import { routes, websocket } from './index'
 
 const disposables: Disposable[] = []
@@ -11,9 +12,10 @@ afterEach(() => {
 function newManager() {
 	const manager = new ConnectionManager()
 	const events: ConnectionEvent[] = []
-	manager.listen((event) => events.push(event))
+	const deviceEvents: DeviceEvent[] = []
+	manager.listen((event) => (event.type.startsWith('connection:') ? events.push(event as ConnectionEvent) : deviceEvents.push(event as DeviceEvent)))
 	disposables.push(manager)
-	return { manager, events }
+	return { manager, events, deviceEvents }
 }
 
 // Fake indiserver: accepts sockets and can drop them from the server side.
@@ -52,6 +54,58 @@ describe('simulator connection', () => {
 		expect(manager.disconnect(id)).toBeFalse()
 		expect(events.at(-1)).toEqual({ type: 'connection:close', id })
 		expect(events).toHaveLength(2)
+	})
+})
+
+describe('simulator devices', () => {
+	test('are listed by managed type and attributed to the connection', async () => {
+		const { manager, deviceEvents } = newManager()
+		const { id } = await manager.connect({ type: 'SIMULATOR' })
+		const devices = manager.devices.list(manager.client(id)!)
+
+		expect(new Set(devices.map((d) => d.type))).toEqual(new Set(['camera', 'mount', 'focuser', 'wheel', 'rotator']))
+		expect(devices.every((d) => d.connectionId === id && !d.connected)).toBeTrue()
+		expect(deviceEvents.filter((e) => e.type === 'device:added')).toHaveLength(devices.length)
+	})
+
+	test('connect and disconnect publish the new state', async () => {
+		const { manager, deviceEvents } = newManager()
+		const { id } = await manager.connect({ type: 'SIMULATOR' })
+		const client = manager.client(id)!
+		const mount = manager.devices.list(client).find((d) => d.type === 'mount')!
+
+		expect(manager.devices.switch(client, mount.id, true)).toBeTrue()
+		await Bun.sleep(50)
+		expect(manager.devices.list(client).find((d) => d.id === mount.id)?.connected).toBeTrue()
+		// The mount defines its guide output once connected.
+		expect(manager.devices.list(client).some((d) => d.type === 'guideOutput')).toBeTrue()
+		expect(deviceEvents).toContainEqual({ type: 'device:updated', connectionId: id, id: mount.id, connected: true, state: expect.anything() })
+
+		expect(manager.devices.switch(client, mount.id, false)).toBeTrue()
+		await Bun.sleep(50)
+		expect(manager.devices.list(client).find((d) => d.id === mount.id)?.connected).toBeFalse()
+		expect(manager.devices.switch(client, 'unknown', true)).toBeFalse()
+	})
+
+	test('keep their ids across reconnects', async () => {
+		const { manager } = newManager()
+		const first = await manager.connect({ type: 'SIMULATOR' })
+		const before = manager.devices.list(manager.client(first.id)!).map((d) => d.id)
+		manager.disconnect(first.id)
+		const second = await manager.connect({ type: 'SIMULATOR' })
+
+		expect(manager.devices.list(manager.client(second.id)!).map((d) => d.id)).toEqual(before)
+	})
+
+	test('are removed when the connection closes', async () => {
+		const { manager, deviceEvents } = newManager()
+		const { id } = await manager.connect({ type: 'SIMULATOR' })
+		const client = manager.client(id)!
+		const count = manager.devices.list(client).length
+		manager.disconnect(id)
+
+		expect(manager.devices.list(client)).toBeEmpty()
+		expect(deviceEvents.filter((e) => e.type === 'device:removed')).toHaveLength(count)
 	})
 })
 
@@ -111,8 +165,8 @@ describe('routes', () => {
 		disposables.push({ [Symbol.dispose]: () => void server.stop(true) })
 
 		const ws = new WebSocket(`ws://127.0.0.1:${server.port}/api/ws`)
-		const messages: ConnectionEvent[] = []
-		ws.addEventListener('message', (message: MessageEvent<string>) => messages.push(JSON.parse(message.data) as ConnectionEvent))
+		const messages: ServerEvent[] = []
+		ws.addEventListener('message', (message: MessageEvent<string>) => messages.push(JSON.parse(message.data) as ServerEvent))
 		await new Promise((resolve) => {
 			ws.addEventListener('open', resolve)
 		})
@@ -126,13 +180,27 @@ describe('routes', () => {
 		expect(response.status).toBe(200)
 		const status = (await response.json()) as { id: string }
 
+		expect(await (await fetch(`${server.url}api/connections`)).json()).toEqual([{ type: 'SIMULATOR', id: status.id }])
+
+		const devices = (await (await fetch(`${server.url}api/connections/${status.id}/devices`)).json()) as DeviceSummary[]
+		const camera = devices.find((d) => d.type === 'camera')!
+		const deviceUrl = `${server.url}api/connections/${status.id}/devices/${camera.id}`
+		expect(camera.connected).toBeFalse()
+		expect((await fetch(`${deviceUrl}/connect`, { method: 'POST' })).status).toBe(202)
+		expect((await fetch(`${server.url}api/connections/${status.id}/devices/unknown/connect`, { method: 'POST' })).status).toBe(404)
+		expect((await fetch(`${server.url}api/connections/unknown/devices`)).status).toBe(404)
+		await Bun.sleep(50)
+		expect(messages).toContainEqual({ type: 'device:updated', connectionId: status.id, id: camera.id, connected: true, state: expect.anything() })
+
 		expect((await fetch(`${server.url}api/connections/${status.id}`, { method: 'DELETE' })).status).toBe(204)
 		expect((await fetch(`${server.url}api/connections/${status.id}`, { method: 'DELETE' })).status).toBe(404)
 
 		await Bun.sleep(50)
-		expect(messages).toEqual([
+		expect(messages.filter((m) => m.type.startsWith('connection:'))).toEqual([
 			{ type: 'connection:open', connection: { type: 'SIMULATOR', id: status.id } },
 			{ type: 'connection:close', id: status.id },
 		])
+		expect(messages.filter((m) => m.type === 'device:removed').length).toBeGreaterThanOrEqual(devices.length)
+		expect(await (await fetch(`${server.url}api/connections`)).json()).toEqual([])
 	})
 })

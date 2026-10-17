@@ -1,7 +1,6 @@
 import { AlpacaClient } from 'nebulosa/src/devices/alpaca/client'
-import { IndiClient, type IndiClientHandler } from 'nebulosa/src/devices/indi/client'
-import type { Client, Device } from 'nebulosa/src/devices/indi/device'
-import type { DeviceProvider } from 'nebulosa/src/devices/indi/manager/device'
+import { IndiClient, type IndiClientHandler, IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
+import type { Client } from 'nebulosa/src/devices/indi/device'
 import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { CoverSimulator } from 'nebulosa/src/devices/indi/simulator/cover'
@@ -10,10 +9,12 @@ import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { RotatorSimulator } from 'nebulosa/src/devices/indi/simulator/rotator'
 import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
+import { type DeviceEvent, DeviceRegistry } from './devices'
 
 // Application-wide registry of open device connections (INDI, Alpaca, and the in-process simulator).
 // Each endpoint is opened at most once, concurrent requests for it share the same attempt, and every
-// open/close is published to the registered listeners.
+// open/close, along with the device events of every open connection, is published to the registered
+// listeners.
 
 // Backend of a connection.
 export type ConnectionType = 'INDI' | 'ALPACA' | 'SIMULATOR'
@@ -46,8 +47,11 @@ export type ConnectionStatus = ConnectRequest & {
 // Notification published when a connection opens or closes, whoever caused it.
 export type ConnectionEvent = { readonly type: 'connection:open'; readonly connection: ConnectionStatus } | { readonly type: 'connection:close'; readonly id: string }
 
-// Receiver of connection events.
-export type ConnectionListener = (event: ConnectionEvent) => void
+// Any event published by the connection registry.
+export type ServerEvent = ConnectionEvent | DeviceEvent
+
+// Receiver of connection and device events.
+export type ConnectionListener = (event: ServerEvent) => void
 
 // Open connection with the client that owns its resources.
 interface OpenConnection {
@@ -57,21 +61,20 @@ interface OpenConnection {
 	readonly client: Client
 }
 
-// Device provider for Alpaca snooping; the application has no device managers yet, so nothing resolves.
-const NO_DEVICES: DeviceProvider<Device> = { get: () => undefined }
-
 // Returns the stable id of the endpoint a request addresses. Hostnames compare case-insensitively.
 export function connectionId(request: ConnectRequest): string {
 	const key = request.type === 'SIMULATOR' ? request.type : `${request.type}:${request.host.toLowerCase()}:${request.port}`
 	return Bun.MD5.hash(key, 'hex')
 }
 
-// Opens the client for a request. Throws an Error when the endpoint cannot be reached; the handler's
-// close callback reports later closes initiated by the server.
-async function openClient(id: string, request: ConnectRequest, handler: IndiClientHandler): Promise<Client> {
+// Opens the client for a request, attaching it to the device registry before it delivers any property.
+// Throws an Error when the endpoint cannot be reached; the handler's close callback reports later closes
+// initiated by the server.
+async function openClient(id: string, request: ConnectRequest, handler: IndiClientHandler, devices: DeviceRegistry): Promise<Client> {
 	switch (request.type) {
 		case 'INDI': {
 			const client = new IndiClient({ handler })
+			devices.attach(client, id)
 
 			try {
 				await client.connect(request.host, request.port)
@@ -85,7 +88,8 @@ async function openClient(id: string, request: ConnectRequest, handler: IndiClie
 			return client
 		}
 		case 'ALPACA': {
-			const client = new AlpacaClient(`http://${request.host}:${request.port}`, { handler }, NO_DEVICES)
+			const client = new AlpacaClient(`http://${request.host}:${request.port}`, { handler }, devices)
+			devices.attach(client, id)
 			let started = false
 
 			try {
@@ -104,6 +108,7 @@ async function openClient(id: string, request: ConnectRequest, handler: IndiClie
 		}
 		case 'SIMULATOR': {
 			const client = new ClientSimulator(id, handler)
+			devices.attach(client, id)
 			// Each simulator registers itself with the client, which disposes them all when it is disposed.
 			void [
 				new MountSimulator('Mount Simulator', client),
@@ -127,6 +132,8 @@ export class ConnectionManager implements Disposable {
 	readonly #pending = new Map<string, Promise<ConnectionStatus>>()
 	// Receivers of every connection:open and connection:close event.
 	readonly #listeners = new Set<ConnectionListener>()
+	// Devices of every open connection, publishing their events to the same listeners.
+	readonly devices = new DeviceRegistry((event) => this.#emit(event))
 
 	// Opens the endpoint addressed by request, or returns the existing connection when it is already open
 	// or opening. Publishes connection:open once per actual open. Rejects with an Error when unreachable.
@@ -148,7 +155,8 @@ export class ConnectionManager implements Disposable {
 	// Opens the client for request under the endpoint id, registers it as open, and publishes
 	// connection:open. Rejects with the Error thrown by openClient, leaving the registry unchanged.
 	async #connect(id: string, request: ConnectRequest): Promise<ConnectionStatus> {
-		const client = await openClient(id, request, { close: (client) => this.#closed(id, client) })
+		const handler = new IndiClientHandlerSet([this.devices.handler, { close: (client: Client) => this.#closed(id, client) }])
+		const client = await openClient(id, request, handler, this.devices)
 		const status: ConnectionStatus = { ...request, id }
 		this.#open.set(id, { status, client })
 		this.#emit({ type: 'connection:open', connection: status })
@@ -164,12 +172,23 @@ export class ConnectionManager implements Disposable {
 		// Removed before disposal so the client's own close callback does not publish a second event.
 		this.#open.delete(id)
 		open.client[Symbol.dispose]()
+		this.devices.close(open.client)
 		this.#emit({ type: 'connection:close', id })
 
 		return true
 	}
 
-	// Registers a listener for connection events. Returns a function that removes it.
+	// Returns the open connections, in opening order.
+	list(): ConnectionStatus[] {
+		return Array.from(this.#open.values(), (open) => open.status)
+	}
+
+	// Returns the client of the open connection with the given id.
+	client(id: string): Client | undefined {
+		return this.#open.get(id)?.client
+	}
+
+	// Registers a listener for connection and device events. Returns a function that removes it.
 	listen(listener: ConnectionListener): () => void {
 		this.#listeners.add(listener)
 		return () => this.#listeners.delete(listener)
@@ -180,11 +199,12 @@ export class ConnectionManager implements Disposable {
 	#closed(id: string, client: Client) {
 		if (this.#open.get(id)?.client !== client) return
 		this.#open.delete(id)
+		this.devices.close(client)
 		this.#emit({ type: 'connection:close', id })
 	}
 
 	// Delivers event synchronously to every registered listener, in registration order.
-	#emit(event: ConnectionEvent) {
+	#emit(event: ServerEvent) {
 		for (const listener of this.#listeners) listener(event)
 	}
 

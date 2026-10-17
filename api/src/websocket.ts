@@ -1,5 +1,5 @@
 import type { ServerWebSocket, WebSocketHandler } from 'bun'
-import type { ConnectionEvent } from './connection'
+import type { ServerEvent } from './connection'
 
 // WebSocket endpoint that pushes server events to every open browser tab.
 
@@ -19,7 +19,7 @@ export const websocket: WebSocketHandler<undefined> = {
 }
 
 // Sends an event as JSON to every open socket.
-export function broadcast(event: ConnectionEvent) {
+export function broadcast(event: ServerEvent) {
 	const data = JSON.stringify(event)
 	for (const ws of sockets) ws.send(data)
 }

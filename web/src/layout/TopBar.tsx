@@ -3,6 +3,7 @@ import { connectionState } from '../connection/connection'
 import { ConnectionIndicator } from '../connection/ConnectionIndicator'
 import { deviceState } from '../equipment/equipment'
 import { ProfileMenu } from '../profile/ProfileMenu'
+import { Icon } from '../ui/Icon'
 import { Menu, MenuItem, NavigationMenu } from '../ui/NavigationMenu'
 
 // Application top bar: logo and the primary-action menus on the left, the connection status,
@@ -52,10 +53,7 @@ function NotificationButton({ count }: NotificationButtonProps) {
 			title="Notifications"
 			className="relative flex size-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-200 transition-colors duration-150 hover:bg-base-300 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
 		>
-			<svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-				<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-				<path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-			</svg>
+			<Icon name="bell" />
 			{count > 0 && <span className="absolute top-0.5 right-0.5 box-border flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] leading-none font-semibold text-on-accent tabular-nums">{count > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : count}</span>}
 		</button>
 	)

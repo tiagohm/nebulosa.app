@@ -1,5 +1,6 @@
 import { cn } from 'cn'
 import { type ReactNode, useEffect, useRef } from 'react'
+import { Icon } from './Icon'
 
 export interface ModalProps {
 	readonly open: boolean
@@ -52,9 +53,7 @@ export function Modal({ open, onClose, title, className, fit = false, children }
 						onClick={onClose}
 						className="-mt-1 -mr-2 flex size-8 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-200 transition-colors duration-150 hover:bg-base-300 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
 					>
-						<svg viewBox="0 0 10 10" className="size-2.5" fill="none" stroke="currentColor" strokeWidth={1.5}>
-							<path d="M0 0l10 10M10 0L0 10" />
-						</svg>
+						<Icon name="close" strokeWidth={1.8} />
 					</button>
 				</header>
 				<div className={cn('px-6 pt-4 pb-6 text-[15px] leading-6 text-ink-200', fit && 'flex min-h-0 flex-col')}>{children}</div>

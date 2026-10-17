@@ -1,10 +1,11 @@
-import type { DeviceSummary, ManagedDeviceType } from 'api'
+import type { DeviceSummary } from 'api'
 import { type ReactNode, useState } from 'react'
 import { tv } from 'tailwind-variants'
 import { useSnapshot } from 'valtio'
 import { connect, connectionState, serverOf } from '../connection/connection'
 import { activeProfile, activeSetup, assignDevice, profileState } from '../profile/profile'
 import { Button } from '../ui/Button'
+import { Icon } from '../ui/Icon'
 import { Modal } from '../ui/Modal'
 import { Select } from '../ui/Select'
 import { deviceState, ROLE_STATUS_LABELS, type RoleStatus, roleDevice, roleStatus, switchDevice } from './equipment'
@@ -36,19 +37,6 @@ const badge = tv({
 		},
 	},
 })
-
-// SVG path data of the icon of each device type, drawn in a 24×24 box.
-const ICONS: Readonly<Record<ManagedDeviceType, string>> = {
-	camera: 'M4 7h3l1.5-2h7L17 7h3v12H4zM12 10a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7',
-	mount: 'M3.5 12.5L15 7l1.5 3L5 15.5zM15 7l3-1.5l1.5 3l-3 1.5M10.5 13.5V16M10.5 16L7 21M10.5 16L14 21M10.5 16v5',
-	guideOutput: 'M12 3v4M12 17v4M3 12h4M17 12h4M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6',
-	focuser: 'M4 10h12v4H4zM16 8h4v8h-4zM8 6v4M8 14v4',
-	wheel: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 6.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3M7 11.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3M17 11.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3M12 14.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3',
-	rotator: 'M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5',
-	dome: 'M4 18a8 8 0 0 1 16 0M3 18h18M11 10.1V18M13 10.1V18',
-	cover: 'M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16M8 12h8',
-	flatPanel: 'M4 8h16v11H4zM8 4l1 2M12 3v3M16 4l-1 2',
-}
 
 // Equipment Setup modal, shown while deviceState.open is true; works on the active profile only.
 export function EquipmentModal() {
@@ -210,9 +198,7 @@ function RoleRow({ definition, setup, devices, device, status, error, serverOpen
 
 	return (
 		<li className="grid grid-cols-[auto_minmax(0,1fr)_7.5rem_7rem] items-center gap-x-3 gap-y-1 rounded-md border border-line-100 bg-base-100 px-3 py-2.5 max-sm:grid-cols-[auto_minmax(0,1fr)_auto] max-sm:items-start">
-			<svg viewBox="0 0 24 24" className="size-5 text-ink-300 max-sm:mt-0.5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-				<path d={ICONS[deviceType]} />
-			</svg>
+			<Icon name={deviceType} className="text-ink-300 max-sm:mt-0.5" />
 			<div className="flex min-w-0 items-center gap-3 max-sm:col-span-2 max-sm:flex-col max-sm:items-stretch max-sm:gap-1">
 				<span className="w-32 flex-none text-xs font-medium tracking-[0.08em] text-ink-200 uppercase max-sm:w-auto">{label}</span>
 				<Select className="min-w-0 flex-1" options={options} value={assigned ?? NONE} onChange={handleChange} format={format} disabledReason={disabledReason} />

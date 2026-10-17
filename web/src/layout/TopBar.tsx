@@ -1,12 +1,11 @@
-import { useState } from 'react'
 import logo from '../../assets/nebulosa.ico'
 import { connectionState } from '../connection/connection'
 import { ConnectionIndicator } from '../connection/ConnectionIndicator'
+import { ProfileMenu } from '../profile/ProfileMenu'
 import { Menu, MenuItem, NavigationMenu } from '../ui/NavigationMenu'
 
 // Application top bar: logo and the primary-action menus on the left, the connection status,
-// notifications, and the profile switcher on the right. Notifications and profiles are visual
-// placeholders for now.
+// notifications, and the profile switcher on the right. Notifications are a visual placeholder for now.
 
 // Unread notification count shown on the bell badge; a fixed sample until notifications exist.
 const NOTIFICATION_COUNT = 3
@@ -14,25 +13,8 @@ const NOTIFICATION_COUNT = 3
 // Largest count the badge shows as a number; higher counts read as "9+".
 const MAX_BADGE_COUNT = 9
 
-// Sample profiles listed by the profile switcher, until profiles exist.
-const PROFILES = ['Default', 'Backyard', 'Remote observatory'] as const
-
-// Name of one of the sample profiles.
-type Profile = (typeof PROFILES)[number]
-
-// Returns up to two uppercase initials of a profile name, for its avatar.
-function initials(name: string): string {
-	return name
-		.split(/\s+/)
-		.slice(0, 2)
-		.map((word) => word.charAt(0).toUpperCase())
-		.join('')
-}
-
 // Top bar of the application window.
 export function TopBar() {
-	const [profile, setProfile] = useState<Profile>('Default')
-
 	return (
 		<header className="box-border flex h-14 flex-none items-center justify-between gap-4 border-b border-line-100 bg-base-000 px-4">
 			<div className="flex min-w-0 items-center gap-4">
@@ -41,7 +23,7 @@ export function TopBar() {
 					<span className="text-lg leading-[26px] font-semibold max-sm:hidden">Nebulosa</span>
 				</div>
 				<NavigationMenu>
-					<Menu id="devices" label="Devices">
+					<Menu id="management" label="Management">
 						<MenuItem onSelect={() => (connectionState.open = true)}>Connections</MenuItem>
 					</Menu>
 				</NavigationMenu>
@@ -49,27 +31,7 @@ export function TopBar() {
 			<div className="flex flex-none items-center gap-2">
 				<ConnectionIndicator />
 				<NotificationButton count={NOTIFICATION_COUNT} />
-				<NavigationMenu>
-					<Menu
-						id="profile"
-						align="end"
-						triggerClassName="pl-1.5"
-						label={
-							<>
-								<span className="flex size-7 items-center justify-center rounded-full bg-accent-subtle text-xs font-semibold text-accent">{initials(profile)}</span>
-								<span className="max-w-40 truncate max-sm:hidden">{profile}</span>
-								<span className="-mt-1 size-[7px] rotate-45 border-r-[1.5px] border-b-[1.5px] border-ink-300" />
-							</>
-						}
-					>
-						<li className="px-2 pt-1 pb-2 text-xs leading-4 text-ink-300">Profiles</li>
-						{PROFILES.map((name) => (
-							<MenuItem key={name} checked={name === profile} onSelect={() => setProfile(name)}>
-								{name}
-							</MenuItem>
-						))}
-					</Menu>
-				</NavigationMenu>
+				<ProfileMenu />
 			</div>
 		</header>
 	)

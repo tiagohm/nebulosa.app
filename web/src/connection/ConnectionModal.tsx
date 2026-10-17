@@ -1,14 +1,16 @@
 import { type SubmitEvent, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { activeProfile, forgetConnection, profileState, selectConnection } from '../profile/profile'
 import { Button } from '../ui/Button'
 import { List, ListItem } from '../ui/List'
 import { Modal } from '../ui/Modal'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
-import { connect, type ConnectionInput, connectionState, DEFAULT_PORT, disconnect, removeConnection, saveConnection } from './connection'
+import { connect, type Connection, type ConnectionInput, connectionState, DEFAULT_PORT, disconnect, removeConnection, saveConnection, serverOf } from './connection'
 
-// Modal that creates, edits, and removes saved connections, and connects or disconnects the selected one.
+// Modal that creates, edits, and removes saved connections, selects the one the active profile works
+// with, and connects or disconnects the highlighted one on the server.
 
 // Initial form values for a new connection: an INDI server on the default port.
 const EMPTY_FORM: ConnectionInput = { name: '', host: '', port: DEFAULT_PORT, type: 'INDI' }
@@ -16,15 +18,26 @@ const EMPTY_FORM: ConnectionInput = { name: '', host: '', port: DEFAULT_PORT, ty
 // Supported connection backends.
 export const CONNECTION_TYPES = ['INDI', 'ALPACA', 'SIMULATOR'] as const
 
+// Returns the list label of a saved connection's state: its type, whether the active profile uses it,
+// and whether the server holds it open.
+function connectionMeta(connection: Connection, inProfile: boolean, connected: boolean): string {
+	return [connection.type, inProfile && 'In use', connected && 'Connected'].filter(Boolean).join(' · ')
+}
+
 // Connections modal, shown while connectionState.open is true. The form on the left saves a new
-// connection or the one being edited; the list on the right acts on the selected connection.
+// connection or the one being edited; the list on the right acts on the highlighted connection.
 export function ConnectionModal() {
-	const { open, connections, selected, active, loading, error } = useSnapshot(connectionState)
+	const { open, connections, selected, servers, loading, error } = useSnapshot(connectionState)
+	const profiles = useSnapshot(profileState)
+	const profileConnectionId = profiles.profiles.length > 0 ? activeProfile(profiles).connectionId : undefined
 	const [form, setForm] = useState(EMPTY_FORM)
 	// Id of the connection loaded into the form by Edit.
 	const [editing, setEditing] = useState<string>()
-	// Whether the selected connection is the one this tab holds open.
-	const selectedIsActive = selected !== undefined && active?.connectionId === selected
+	const selectedConnection = connections.find((c) => c.id === selected)
+	// Whether the server holds the highlighted connection open, for this or another tab.
+	const selectedIsOpen = serverOf(servers, selectedConnection) !== undefined
+	// Pending request on the highlighted connection.
+	const selectedLoading = loading?.connectionId === selected ? loading?.kind : undefined
 
 	// Clears the form and leaves edit mode.
 	function reset() {
@@ -46,25 +59,36 @@ export function ConnectionModal() {
 		setEditing(connection.id)
 	}
 
-	// Removes the selected connection, clearing the form when it was being edited.
+	// Removes the selected connection, clearing the form when it was being edited. Profiles that used it
+	// lose their selection and its equipment setup.
 	function handleRemove() {
 		if (selected === undefined) return
 		if (selected === editing) reset()
 		removeConnection(connectionState, selected)
+		forgetConnection(profileState, selected)
 	}
 
-	// Hides the modal; the tab's active connection stays open.
+	// Hides the modal; open connections stay open.
 	function handleClose() {
 		connectionState.open = false
 	}
 
-	// Connects the selected connection, or disconnects it when it is the tab's active one.
+	// Makes the highlighted connection the one the active profile works with, without opening it.
+	function handleUse() {
+		if (selected !== undefined) selectConnection(profileState, selected)
+	}
+
+	// Disconnects the highlighted connection when the server holds it open; otherwise selects it for the
+	// active profile and connects it.
 	function handleConnection() {
-		if (selectedIsActive) {
-			void disconnect(connectionState)
+		const connection = connectionState.connections.find((c) => c.id === selected)
+		if (!connection) return
+
+		if (selectedIsOpen) {
+			void disconnect(connectionState, connection)
 		} else {
-			const connection = connectionState.connections.find((c) => c.id === selected)
-			if (connection) void connect(connectionState, connection)
+			selectConnection(profileState, connection.id)
+			void connect(connectionState, connection)
 		}
 	}
 
@@ -106,19 +130,22 @@ export function ConnectionModal() {
 					<div className="h-full overflow-y-auto">
 						<List emptyText="No saved connections yet.">
 							{connections.map((c) => (
-								<ListItem key={c.id} title={c.name} description={c.type === 'SIMULATOR' ? 'Built-in' : `${c.host}:${c.port}`} meta={active?.connectionId === c.id ? `${c.type} · Connected` : c.type} selected={c.id === selected} onClick={() => (connectionState.selected = c.id)} />
+								<ListItem key={c.id} title={c.name} description={c.type === 'SIMULATOR' ? 'Built-in' : `${c.host}:${c.port}`} meta={connectionMeta(c, c.id === profileConnectionId, serverOf(servers, c) !== undefined)} selected={c.id === selected} onClick={() => (connectionState.selected = c.id)} />
 							))}
 						</List>
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
-						<Button variant={selectedIsActive ? 'secondary' : 'primary'} disabled={selected === undefined || loading !== undefined || (active !== undefined && !selectedIsActive)} onClick={handleConnection}>
-							{loading === 'connect' ? 'Connecting…' : loading === 'disconnect' ? 'Disconnecting…' : selectedIsActive ? 'Disconnect' : 'Connect'}
+						<Button variant={selectedIsOpen ? 'secondary' : 'primary'} disabled={selected === undefined || loading !== undefined} onClick={handleConnection}>
+							{selectedLoading === 'connect' ? 'Connecting…' : selectedLoading === 'disconnect' ? 'Disconnecting…' : selectedIsOpen ? 'Disconnect' : 'Connect'}
+						</Button>
+						<Button variant="secondary" disabled={selected === undefined || selected === profileConnectionId} onClick={handleUse}>
+							Use in profile
 						</Button>
 						<div className="ml-auto flex gap-2">
-							<Button variant="secondary" disabled={selected === undefined || selectedIsActive} onClick={handleEdit}>
+							<Button variant="secondary" disabled={selected === undefined || selectedIsOpen} onClick={handleEdit}>
 								Edit
 							</Button>
-							<Button variant="ghost" disabled={selected === undefined || selectedIsActive} onClick={handleRemove}>
+							<Button variant="ghost" disabled={selected === undefined || selectedIsOpen} onClick={handleRemove}>
 								Remove
 							</Button>
 						</div>

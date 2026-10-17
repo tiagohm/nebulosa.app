@@ -1,16 +1,22 @@
-import type { ConnectionEvent } from 'api'
+import type { ServerEvent } from 'api'
 
 // Client side of the server event WebSocket: keeps one socket open for the tab and fans parsed events
-// out to listeners, reconnecting when the server goes away (e.g. on a dev server restart).
+// out to listeners, reconnecting when the server goes away (e.g. on a dev server restart). Open listeners
+// run every time the socket opens, so state missed while it was closed can be fetched again.
 
 // Receiver of server events.
-export type ServerEventListener = (event: ConnectionEvent) => void
+export type ServerEventListener = (event: ServerEvent) => void
 
 // Delay before reopening a dropped socket, in milliseconds.
 const RECONNECT_DELAY = 2000
 
+// Receiver of socket opens.
+export type OpenListener = () => void
+
 // Listeners registered by this tab.
 const listeners = new Set<ServerEventListener>()
+// Listeners called on every socket open.
+const openListeners = new Set<OpenListener>()
 // Whether the socket was opened once; afterwards it reopens itself.
 let started = false
 
@@ -21,8 +27,12 @@ function open() {
 
 	const socket = new WebSocket(url)
 
+	socket.addEventListener('open', () => {
+		for (const listener of openListeners) listener()
+	})
+
 	socket.addEventListener('message', (message: MessageEvent<string>) => {
-		const event = JSON.parse(message.data) as ConnectionEvent
+		const event = JSON.parse(message.data) as ServerEvent
 		for (const listener of listeners) listener(event)
 	})
 
@@ -31,15 +41,25 @@ function open() {
 	})
 }
 
+// Opens the socket once.
+function start() {
+	if (started) return
+	started = true
+	open()
+}
+
 // Registers a listener for server events, opening the socket on first use. Returns a function that
 // removes the listener.
 export function subscribe(listener: ServerEventListener): () => void {
 	listeners.add(listener)
-
-	if (!started) {
-		started = true
-		open()
-	}
-
+	start()
 	return () => listeners.delete(listener)
+}
+
+// Registers a listener called whenever the socket opens or reopens, opening it on first use. Returns a
+// function that removes the listener.
+export function onOpen(listener: OpenListener): () => void {
+	openListeners.add(listener)
+	start()
+	return () => openListeners.delete(listener)
 }

@@ -54,6 +54,29 @@ export interface PanelSectionProps {
 	readonly children: ReactNode
 }
 
+export interface PlannedControlsProps {
+	// Names of the controls the section will hold.
+	readonly items: readonly string[]
+}
+
+// Placeholder of controls that are not implemented yet: lists what the section will hold, never a fake
+// value, and says why nothing can be changed.
+export function PlannedControls({ items }: PlannedControlsProps) {
+	return (
+		<>
+			<ul className="m-0 flex list-none flex-col gap-1 p-0">
+				{items.map((item) => (
+					<li key={item} className="flex items-center gap-2 text-ink-300">
+						<span className="size-1 flex-none rounded-full bg-line-200" />
+						{item}
+					</li>
+				))}
+			</ul>
+			<p className="m-0 text-xs leading-4 text-ink-300 italic">Not available yet.</p>
+		</>
+	)
+}
+
 // Titled group of controls inside a contextual panel.
 export function PanelSection({ title, children }: PanelSectionProps) {
 	return (

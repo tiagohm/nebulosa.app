@@ -1,7 +1,7 @@
 import { cn } from 'cn'
 import { useSelectedConnection } from '../connection/useSelectedConnection'
-import { ROLE_STATUS_LABELS, type RoleStatus } from '../equipment/equipment'
 import { type EquipmentRole, roleDefinition } from '../equipment/roles'
+import { RoleStatusText } from '../equipment/RoleStatusText'
 import { useRoleDevice } from '../equipment/useEquipment'
 
 // Compact bar at the bottom of the window with the real state of the selected connection and of the
@@ -10,17 +10,6 @@ import { useRoleDevice } from '../equipment/useEquipment'
 
 // Roles summarized in the status bar, in display order.
 const STATUS_ROLES: readonly EquipmentRole[] = ['MAIN_CAMERA', 'MOUNT']
-
-// Text color of each role status; the status is always also written out.
-const ROLE_STATUS_COLORS: Readonly<Record<RoleStatus, string>> = {
-	notSelected: 'text-ink-300',
-	unavailable: 'text-ink-300',
-	disconnected: 'text-ink-200',
-	connecting: 'text-accent',
-	connected: 'text-success',
-	disconnecting: 'text-accent',
-	error: 'text-danger',
-}
 
 // Status bar of the application.
 export function StatusBar() {
@@ -52,7 +41,7 @@ function RoleStatusItem({ role }: RoleStatusItemProps) {
 	return (
 		<span className="flex items-center gap-1.5 border-l border-line-100 pl-4 max-sm:hidden">
 			<span className="text-ink-300">{roleDefinition(role).label}</span>
-			<span className={ROLE_STATUS_COLORS[status]}>{ROLE_STATUS_LABELS[status]}</span>
+			<RoleStatusText status={status} />
 		</span>
 	)
 }

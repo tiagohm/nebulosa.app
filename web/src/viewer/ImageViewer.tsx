@@ -29,9 +29,9 @@ export interface ImageViewerProps {
 	// Identity of the image's subject, such as a document id. The view fits the image again when it
 	// changes; re-renderings of the same subject keep the zoom and pan.
 	readonly subject?: string
-	// SVG elements drawn over the image in image pixel coordinates; they follow zoom and pan. Use
+	// Draws SVG elements over the image, given its size, in image pixel coordinates; they follow zoom and pan. Use
 	// vectorEffect="non-scaling-stroke" for strokes that keep their width on screen.
-	readonly overlays?: ReactNode
+	readonly overlays?: (image: Size) => ReactNode
 	// Extra toolbar controls, after the view controls.
 	readonly toolbar?: ReactNode
 }
@@ -186,7 +186,7 @@ export function ImageViewer({ image, loading = false, error, empty, subject, ove
 						<img src={image.url} alt="" draggable={false} className="block size-full max-w-none" style={{ imageRendering: view.scale >= 2 ? 'pixelated' : 'auto' }} />
 						{overlays && (
 							<svg viewBox={`0 0 ${width} ${height}`} className="pointer-events-none absolute inset-0 size-full overflow-visible">
-								{overlays}
+								{overlays({ width, height })}
 							</svg>
 						)}
 					</div>

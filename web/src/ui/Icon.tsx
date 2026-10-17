@@ -17,6 +17,11 @@ export const ICONS = {
 	flatPanel: 'M4 8h16v11H4zM8 4l1 2M12 3v3M16 4l-1 2',
 	bell: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0',
 	close: 'M6 6l12 12M18 6L6 18',
+	capture: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8M12 3v5M21 12h-5M12 21v-5M3 12h5',
+	images: 'M4 5h16v14H4zM4 16l5-5l4 4l2-2l5 5M15.5 8a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3',
+	sky: 'M12 3l2.6 5.5l6 .8l-4.4 4.2l1.1 6L12 16.6l-5.3 2.9l1.1-6l-4.4-4.2l6-.8z',
+	tools: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
+	panel: 'M4 5h16v14H4zM15 5v14',
 } as const satisfies Readonly<Record<string, string>>
 
 // Name of an icon in ICONS.

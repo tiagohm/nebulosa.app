@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
 import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
+import { WORKSPACE_IDS, type WorkspaceId } from '../shell/route'
 import { isRecord, parseJson, readText, type Stores, writeText } from '../storage'
 
 // Profiles of the browser and the profile active in this tab. Profiles are a versioned collection in
@@ -26,7 +27,11 @@ export const DEFAULT_PROFILE_NAME = 'Default'
 
 // Application preferences that belong to a profile. Each preference is added here, with its default in
 // defaultSettings and its restoration in normalizeSettings.
-export interface ProfileSettings {}
+export interface ProfileSettings {
+	// Whether the contextual panel of each workspace is expanded on wide screens; an absent workspace
+	// shows it expanded. Narrow screens open the panel as a drawer that is never persisted.
+	panels: Partial<Record<WorkspaceId, boolean>>
+}
 
 // A complete working environment: the selected connection, the equipment assigned on each connection,
 // and preferences.
@@ -73,13 +78,22 @@ export const profileState = proxy<ProfileState>({ profiles: [], activeId: '', op
 
 // Returns the default preferences of a new profile.
 export function defaultSettings(): ProfileSettings {
-	return {}
+	return { panels: {} }
 }
 
 // Restores persisted preferences, falling back to the default of every missing or invalid preference.
-// No preference exists yet, so the result is always the defaults.
 function normalizeSettings(value: unknown): ProfileSettings {
-	return defaultSettings()
+	const settings = defaultSettings()
+	if (!isRecord(value)) return settings
+
+	if (isRecord(value.panels)) {
+		for (const workspace of WORKSPACE_IDS) {
+			const open = value.panels[workspace]
+			if (typeof open === 'boolean') settings.panels[workspace] = open
+		}
+	}
+
+	return settings
 }
 
 // Restores a persisted assignment: a bare device id (version 1), whose name is unknown, or an id and
@@ -323,6 +337,20 @@ export function rememberDeviceNames(state: ProfileState, devices: readonly Devic
 	}
 
 	if (changed) touch(profile)
+}
+
+// Whether the contextual panel of a workspace is expanded in a profile's settings or a snapshot of them.
+export function panelOpen(settings: { readonly panels: Readonly<ProfileSettings['panels']> }, workspace: WorkspaceId): boolean {
+	return settings.panels[workspace] ?? true
+}
+
+// Expands or collapses the contextual panel of a workspace in the active profile. Only the layout
+// preference changes; whatever the panel controls keeps running.
+export function setPanelOpen(state: ProfileState, workspace: WorkspaceId, open: boolean) {
+	const profile = activeProfile(state)
+	if (panelOpen(profile.settings, workspace) === open) return
+	profile.settings.panels[workspace] = open
+	touch(profile)
 }
 
 // Forgets a removed saved connection in every profile: profiles that selected it lose their selection,

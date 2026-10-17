@@ -1,14 +1,10 @@
 import { tv } from 'tailwind-variants'
-import { useSnapshot } from 'valtio'
-import { activeProfile, profileState } from '../profile/profile'
-import { connectionState, serverOf } from './connection'
+import { connectionState } from './connection'
+import { useSelectedConnection } from './useSelectedConnection'
 
 // Top bar indicator of the connection selected by the tab's active profile and the real state of its
 // server: a pulsing dot while the server holds it open, a fading accent dot while connecting, and a
 // hollow dot while it is closed or none is selected. Opens the connections modal when clicked.
-
-// Display state of the indicator, derived from connectionState.
-type IndicatorStatus = 'connected' | 'connecting' | 'disconnected'
 
 // Styles of the status dot and its pulse ring for each status.
 const indicator = tv({
@@ -27,11 +23,7 @@ const indicator = tv({
 
 // Button with the selected connection's name and server status.
 export function ConnectionIndicator() {
-	const { connections, servers, loading } = useSnapshot(connectionState)
-	const profiles = useSnapshot(profileState)
-	const connectionId = profiles.profiles.length > 0 ? activeProfile(profiles).connectionId : undefined
-	const connection = connections.find((c) => c.id === connectionId)
-	const status: IndicatorStatus = serverOf(servers, connection) ? 'connected' : connection && loading?.kind === 'connect' && loading.connectionId === connection.id ? 'connecting' : 'disconnected'
+	const { connection, status } = useSelectedConnection()
 	const label = status === 'connecting' ? 'Connecting…' : (connection?.name ?? 'No connection')
 	const title = !connection ? 'No connection selected' : status === 'connected' ? `Connected to ${connection.name}` : status === 'connecting' ? `Connecting to ${connection.name}` : `${connection.name} · Not connected`
 	const { dot, ring } = indicator({ status })

@@ -1,11 +1,12 @@
 import { type KeyboardEvent, type PointerEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { IconButton } from '../ui/IconButton'
-import { centered, fit, IDENTITY, panBy, type Point, pixelAt, type Size, toImage, type ViewTransform, ZOOM_STEP, zoomAt } from './transform'
+import { centered, FIT_VIEW, manualView, panBy, type Point, pixelAt, type Size, toImage, type ViewerView, type ViewTransform, viewTransform, ZOOM_STEP, zoomAt } from './transform'
 
 // Reusable image viewer: a toolbar, a viewport with zoom, pan, and overlays, and a status line. It
 // renders a bitmap it is given and knows nothing about where the image came from (a capture, an opened
 // document, or a processing result); whoever creates the bitmap's URL owns and releases it. The view
-// (zoom and pan) is local to each viewer, so two viewers never share it.
+// (zoom and pan) is owned by the caller, which keeps one per subject (an image document, a camera view),
+// so it survives switching between subjects and unmounting the viewer.
 
 // Bitmap shown by the viewer.
 export interface ViewerImage {
@@ -26,9 +27,10 @@ export interface ImageViewerProps {
 	readonly error?: string
 	// Content shown when there is no image, error, or load in progress.
 	readonly empty?: ReactNode
-	// Identity of the image's subject, such as a document id. The view fits the image again when it
-	// changes; re-renderings of the same subject keep the zoom and pan.
-	readonly subject?: string
+	// Zoom and pan of the image.
+	readonly view: ViewerView
+	// Called with the new view when the user zooms or pans.
+	readonly onViewChange: (view: ViewerView) => void
 	// Draws SVG elements over the image, given its size, in image pixel coordinates; they follow zoom and pan. Use
 	// vectorEffect="non-scaling-stroke" for strokes that keep their width on screen.
 	readonly overlays?: (image: Size) => ReactNode
@@ -43,17 +45,19 @@ const KEY_PAN_FRACTION = 0.1
 const WHEEL_ZOOM_RATE = 0.0015
 
 // Image viewer.
-export function ImageViewer({ image, loading = false, error, empty, subject, overlays, toolbar }: ImageViewerProps) {
+export function ImageViewer({ image, loading = false, error, empty, view, onViewChange, overlays, toolbar }: ImageViewerProps) {
 	const viewportRef = useRef<HTMLDivElement>(null)
 	const [viewport, setViewport] = useState<Size>({ width: 0, height: 0 })
-	const [view, setView] = useState<ViewTransform>(IDENTITY)
-	// Whether the view follows the viewport size, until the user zooms or pans.
-	const [fitted, setFitted] = useState(true)
 	// Pointer position over the viewport, in viewport pixels; the pixel under it follows zoom and pan.
 	const [cursor, setCursor] = useState<Point>()
 	const drag = useRef<Point>(undefined)
 	const width = image?.width ?? 0
 	const height = image?.height ?? 0
+	const transform = viewTransform(view, { width, height }, viewport)
+	// Transform and viewport of the latest change, so several pointer or wheel events arriving before the
+	// owner's new view is rendered accumulate instead of each starting from the same stale transform.
+	const latest = useRef({ transform, viewport, onViewChange })
+	latest.current = { transform, viewport, onViewChange }
 
 	useLayoutEffect(() => {
 		const element = viewportRef.current
@@ -62,13 +66,6 @@ export function ImageViewer({ image, loading = false, error, empty, subject, ove
 		observer.observe(element)
 		return () => observer.disconnect()
 	}, [])
-
-	// A new subject or image size starts fitted again.
-	useLayoutEffect(() => setFitted(true), [subject, width, height])
-
-	useLayoutEffect(() => {
-		if (fitted) setView(fit({ width, height }, viewport))
-	}, [fitted, width, height, viewport])
 
 	// The wheel listener is registered natively because React's is passive and cannot stop page scrolling.
 	useEffect(() => {
@@ -85,23 +82,29 @@ export function ImageViewer({ image, loading = false, error, empty, subject, ove
 		return () => element.removeEventListener('wheel', handleWheel)
 	}, [image])
 
-	function center(): Point {
-		return { x: viewport.width / 2, y: viewport.height / 2 }
+	// Applies a new transform as a manual view.
+	function change(next: ViewTransform) {
+		const current = latest.current
+		current.transform = next
+		current.onViewChange(manualView(next, current.viewport))
 	}
 
-	function zoom(factor: number, at: Point = center()) {
-		setFitted(false)
-		setView((v) => zoomAt(v, factor, at))
+	// Zooms around a viewport point, the viewport center when absent.
+	function zoom(factor: number, at?: Point) {
+		const { transform, viewport } = latest.current
+		change(zoomAt(transform, factor, at ?? { x: viewport.width / 2, y: viewport.height / 2 }))
 	}
 
 	function pan(dx: number, dy: number) {
-		setFitted(false)
-		setView((v) => panBy(v, dx, dy))
+		change(panBy(latest.current.transform, dx, dy))
 	}
 
 	function actualSize() {
-		setFitted(false)
-		setView(centered({ width, height }, viewport, 1))
+		change(centered({ width, height }, viewport, 1))
+	}
+
+	function fitView() {
+		onViewChange(FIT_VIEW)
 	}
 
 	function handlePointerDown(e: PointerEvent<HTMLDivElement>) {
@@ -135,7 +138,7 @@ export function ImageViewer({ image, loading = false, error, empty, subject, ove
 				zoom(1 / ZOOM_STEP)
 				break
 			case '0':
-				setFitted(true)
+				fitView()
 				break
 			case '1':
 				actualSize()
@@ -159,14 +162,15 @@ export function ImageViewer({ image, loading = false, error, empty, subject, ove
 		e.preventDefault()
 	}
 
-	const pixel = image && cursor ? pixelAt({ width, height }, toImage(view, cursor)) : undefined
+	const pixel = image && cursor ? pixelAt({ width, height }, toImage(transform, cursor)) : undefined
+	const fitted = view.kind === 'fit'
 
 	return (
 		<div className="flex h-full min-h-0 flex-col bg-base-000">
 			<div className="flex h-10 flex-none items-center gap-1 border-b border-line-100 bg-base-100 px-2">
 				<IconButton icon="zoomOut" label="Zoom out (-)" disabled={!image} onClick={() => zoom(1 / ZOOM_STEP)} />
 				<IconButton icon="zoomIn" label="Zoom in (+)" disabled={!image} onClick={() => zoom(ZOOM_STEP)} />
-				<IconButton icon="fit" label="Fit to view (0)" disabled={!image} pressed={!!image && fitted} onClick={() => setFitted(true)} />
+				<IconButton icon="fit" label="Fit to view (0)" disabled={!image} pressed={!!image && fitted} onClick={fitView} />
 				<IconButton icon="actualSize" label="Actual size (1)" disabled={!image} onClick={actualSize} />
 				{toolbar && <span className="mx-1 h-5 w-px bg-line-100" />}
 				{toolbar}
@@ -183,8 +187,8 @@ export function ImageViewer({ image, loading = false, error, empty, subject, ove
 				className={image ? 'relative min-h-0 flex-1 cursor-grab touch-none overflow-hidden outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent active:cursor-grabbing' : 'relative min-h-0 flex-1 overflow-hidden'}
 			>
 				{image && (
-					<div className="absolute top-0 left-0 origin-top-left" style={{ width, height, transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
-						<img src={image.url} alt="" draggable={false} className="block size-full max-w-none" style={{ imageRendering: view.scale >= 2 ? 'pixelated' : 'auto' }} />
+					<div className="absolute top-0 left-0 origin-top-left" style={{ width, height, transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` }}>
+						<img src={image.url} alt="" draggable={false} className="block size-full max-w-none" style={{ imageRendering: transform.scale >= 2 ? 'pixelated' : 'auto' }} />
 						{overlays && (
 							<svg viewBox={`0 0 ${width} ${height}`} className="pointer-events-none absolute inset-0 size-full overflow-visible">
 								{overlays({ width, height })}
@@ -200,7 +204,7 @@ export function ImageViewer({ image, loading = false, error, empty, subject, ove
 						<span>
 							{width} × {height}
 						</span>
-						<span>{formatZoom(view.scale)}</span>
+						<span>{formatZoom(transform.scale)}</span>
 						<span>{pixel ? `x ${pixel.x}  y ${pixel.y}` : 'x –  y –'}</span>
 					</>
 				) : (

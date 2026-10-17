@@ -9,12 +9,14 @@ import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { moveIndex } from '../ui/navigation'
 import { ImageViewer } from '../viewer/ImageViewer'
+import { FIT_VIEW } from '../viewer/transform'
 import { ImageInspector } from './ImageInspector'
-import { activeDocument, closeImage, type ImageDocument, imagesState, openImage, selectImage } from './images'
+import { activeDocument, activeView, closeImage, type ImageDocument, imagesState, openImage, selectImage, setImageView } from './images'
 
 // Images workspace: FITS and XISF images opened from the server, one tab each, shown in the shared
 // viewer with their inspector in the contextual panel. It works without any connection or equipment.
-// Documents stay open while the tab lives, across workspace switches.
+// Documents, with their own zoom, pan, and stretch, stay open while the tab lives, across document and
+// workspace switches.
 
 // Images workspace.
 export function ImagesWorkspace() {
@@ -22,6 +24,7 @@ export function ImagesWorkspace() {
 	const profiles = useSnapshot(profileState)
 	const [choosing, setChoosing] = useState(false)
 	const document = activeDocument(state)
+	const view = activeView(state)
 	const openButton = (
 		<Button size="sm" variant="secondary" onClick={() => setChoosing(true)}>
 			<Icon name="folder" className="size-4" />
@@ -30,15 +33,16 @@ export function ImagesWorkspace() {
 	)
 
 	return (
-		<WorkspaceLayout workspace="images" title="Images" actions={openButton} panel={{ title: 'Image Inspector', content: <ImageInspector document={document} onOpen={() => setChoosing(true)} /> }}>
+		<WorkspaceLayout workspace="images" title="Images" actions={openButton} panel={{ title: 'Image Inspector', content: <ImageInspector document={document} view={view} onOpen={() => setChoosing(true)} /> }}>
 			<div className="flex h-full flex-col">
 				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} />}
 				<div className="min-h-0 flex-1">
 					<ImageViewer
-						subject={document?.key}
-						image={document?.rendering && document.info ? { url: document.rendering.url, width: document.info.width, height: document.info.height } : undefined}
-						loading={document?.status === 'loading' || document?.renderPending}
-						error={document?.error}
+						view={view?.view ?? FIT_VIEW}
+						onViewChange={(next) => document && setImageView(imagesState, document.key, next)}
+						image={view?.rendering && document?.info ? { url: view.rendering.url, width: document.info.width, height: document.info.height } : undefined}
+						loading={document?.status === 'loading' || view?.renderPending}
+						error={document?.error ?? view?.error}
 						empty={<EmptyState title="No image open" description="Open a FITS or XISF image from the server." action={openButton} />}
 					/>
 				</div>

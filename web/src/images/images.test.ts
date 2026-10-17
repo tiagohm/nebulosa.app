@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { proxy } from 'valtio'
-import { activeDocument, closeImage, type ImagesIo, type ImagesState, openImage, renderImage, selectImage } from './images'
+import { activeDocument, activeView, closeImage, type ImagesIo, type ImagesState, openImage, renderImage, selectImage, setImageView } from './images'
 
 interface Call {
 	readonly url: string
@@ -51,7 +51,7 @@ function fakeIo(gated = false) {
 }
 
 function newState() {
-	return proxy<ImagesState>({ documents: [] })
+	return proxy<ImagesState>({ documents: [], views: {} })
 }
 
 describe('open', () => {
@@ -62,7 +62,8 @@ describe('open', () => {
 		await openImage(state, '/data/m31.fits', io)
 		const document = activeDocument(state)!
 
-		expect(document).toMatchObject({ name: 'm31.fits', source: { kind: 'file', path: '/data/m31.fits' }, status: 'ready', renderPending: false, rendering: { url: 'blob:1', result: STRETCH } })
+		expect(document).toMatchObject({ name: 'm31.fits', source: { kind: 'file', path: '/data/m31.fits' }, status: 'ready' })
+		expect(activeView(state)).toMatchObject({ view: { kind: 'fit' }, stretch: 'auto', renderPending: false, rendering: { url: 'blob:1', result: STRETCH } })
 		expect(document.info?.id).toBe('srv-1')
 		expect(calls.map((c) => [c.method, c.url, c.body])).toEqual([
 			['POST', '/api/images', { path: '/data/m31.fits' }],
@@ -101,15 +102,15 @@ describe('render', () => {
 		gates[1]?.()
 		await Promise.all([opening, second])
 
-		expect(state.documents[0].rendering?.url).toBe('blob:1')
-		expect(state.documents[0].renderPending).toBe(false)
+		expect(state.views[key]?.rendering?.url).toBe('blob:1')
+		expect(state.views[key]?.renderPending).toBe(false)
 		expect(revoked).toEqual([])
 
 		const third = renderImage(state, key, { stretch: 'auto' }, io)
 		gates[2]?.()
 		await third
 
-		expect(state.documents[0].rendering?.url).toBe('blob:2')
+		expect(state.views[key]?.rendering?.url).toBe('blob:2')
 		expect(revoked).toEqual(['blob:1'])
 	})
 })
@@ -134,5 +135,31 @@ describe('tabs', () => {
 
 		closeImage(state, a, io)
 		expect(state.activeKey).toBeUndefined()
+	})
+})
+
+describe('view state', () => {
+	test('each document keeps its own view and stretch', async () => {
+		const state = newState()
+		const { io } = fakeIo()
+		await openImage(state, '/a.fits', io)
+		await openImage(state, '/b.fits', io)
+		const [a, b] = state.documents.map((d) => d.key)
+		const zoomed = { kind: 'manual', scale: 2, center: { x: 1, y: 1 } } as const
+
+		setImageView(state, a, zoomed)
+		await renderImage(state, b, { stretch: { midtone: 0.3, shadow: 0, highlight: 1 } }, io)
+		selectImage(state, a)
+
+		expect(activeView(state)).toMatchObject({ view: zoomed, stretch: 'auto' })
+		expect(state.views[b]).toMatchObject({ view: { kind: 'fit' }, stretch: { midtone: 0.3, shadow: 0, highlight: 1 } })
+	})
+
+	test('closing drops the view state', async () => {
+		const state = newState()
+		const { io } = fakeIo()
+		await openImage(state, '/a.fits', io)
+		closeImage(state, state.documents[0].key, io)
+		expect(state.views).toEqual({})
 	})
 })

@@ -3,11 +3,11 @@ import type { ReactNode } from 'react'
 import { PanelSection, PlannedControls } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
-import type { ImageDocument } from './images'
+import type { ImageDocument, ImageViewState } from './images'
 
 // Contextual panel of the Images workspace: properties, acquisition data, display parameters, and the
 // header of the active document, with the analysis and processing sections still to come. It only
-// reads the document.
+// reads the document and its view state.
 
 // Text shown for a datum the image does not have.
 const MISSING = '—'
@@ -31,12 +31,14 @@ const ACQUISITION_FIELDS: readonly (readonly [label: string, format: (acquisitio
 export interface ImageInspectorProps {
 	// Active document; absent when none is open.
 	readonly document?: ImageDocument
+	// View state of the active document.
+	readonly view?: ImageViewState
 	// Opens the file chooser.
 	readonly onOpen: () => void
 }
 
 // Inspector of the active image document.
-export function ImageInspector({ document, onOpen }: ImageInspectorProps) {
+export function ImageInspector({ document, view, onOpen }: ImageInspectorProps) {
 	if (!document) {
 		return (
 			<EmptyState
@@ -75,12 +77,12 @@ export function ImageInspector({ document, onOpen }: ImageInspectorProps) {
 			</PanelSection>
 			{info && <Acquisition info={info} />}
 			<PanelSection title="Display">
-				{document.rendering ? (
+				{view?.rendering ? (
 					<>
-						<Property label="Stretch">Auto</Property>
-						<Property label="Shadow">{document.rendering.result.stretch.shadow.toFixed(4)}</Property>
-						<Property label="Midtone">{document.rendering.result.stretch.midtone.toFixed(4)}</Property>
-						<Property label="Highlight">{document.rendering.result.stretch.highlight.toFixed(4)}</Property>
+						<Property label="Stretch">{view.stretch === 'auto' ? 'Auto' : 'Manual'}</Property>
+						<Property label="Shadow">{view.rendering.result.stretch.shadow.toFixed(4)}</Property>
+						<Property label="Midtone">{view.rendering.result.stretch.midtone.toFixed(4)}</Property>
+						<Property label="Highlight">{view.rendering.result.stretch.highlight.toFixed(4)}</Property>
 					</>
 				) : (
 					<p className="m-0 text-ink-300">Not rendered yet.</p>

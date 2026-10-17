@@ -1,13 +1,16 @@
+import { proxy } from 'valtio'
 import { CAMERA_ROLES, type CameraRole, type EquipmentSetup } from '../equipment/roles'
 import type { RoleDevice } from '../equipment/useEquipment'
 import type { CaptureSettings } from '../profile/profile'
 import type { CaptureCamera, CaptureMode, CaptureRoute } from '../shell/route'
+import type { ViewerView } from '../viewer/transform'
 import { CAPTURE_MODE_DEFINITIONS } from './modes'
 
 // Camera views of the Capture workspace. A camera view is the presentation context of one camera role
 // of the active profile's equipment setup: its tab, operational mode, and viewer preferences. It is not
 // an operation and not a device connection: the device it shows is resolved from the setup every time,
-// so commands target the device actually assigned, and operations never belong to a view.
+// so commands target the device actually assigned, and operations never belong to a view. The zoom and
+// pan of each view's viewer are kept here in memory only.
 
 // Camera view of each camera role, also its URL path segment.
 const CAMERA_VIEWS: Readonly<Record<CameraRole, CaptureCamera>> = { MAIN_CAMERA: 'main', GUIDE_CAMERA: 'guide' }
@@ -62,4 +65,14 @@ export function viewReticle(capture: CaptureSettings, role: CameraRole, mode: Ca
 export function captureRoute(capture: CaptureSettings, setup: Readonly<EquipmentSetup>, mode?: CaptureMode): CaptureRoute {
 	const role = resolveCameraView(setup, undefined, capture.activeCamera) ?? 'MAIN_CAMERA'
 	return { workspace: 'capture', camera: cameraView(role), mode: mode ?? viewMode(capture, role) }
+}
+
+// Zoom and pan of each camera view's viewer, by viewer key, kept in memory while the tab lives so they
+// survive switching camera views and workspaces; a view never seen yet is fitted.
+export const captureViewerState = proxy<Record<string, ViewerView>>({})
+
+// Returns the key of a camera view's viewer: its camera role and the id of the device assigned to it in
+// the setup, so a replaced device starts fitted and shows nothing of the previous one.
+export function viewerKey(role: CameraRole, setup: Readonly<EquipmentSetup>): string {
+	return `${role}:${setup[role]?.id}`
 }

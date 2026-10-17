@@ -2,12 +2,16 @@ import type { ImageInfo, RenderRequest, RenderResult } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { responseError } from '../http'
+import { FIT_VIEW, type ViewerView } from '../viewer/transform'
 
-// Image documents open in the tab's Images workspace. Each document is a server-side image (opened from
-// a file the server reads) plus the tab's current rendering of it: a JPEG held as an object URL. Only
-// the latest rendering request of a document counts; starting a new one aborts the previous, and an
-// object URL is revoked as soon as a newer rendering replaces it or the document closes. Documents live
-// in memory only and are not restored after a reload.
+// Image documents open in the tab's Images workspace. Each open image is split in two objects under the
+// same key: the document (identity, origin, and the server-side image with its metadata) and its view
+// state (zoom, pan, stretch, and the current rendering, a JPEG held as an object URL). Two documents
+// never share a view, and a future derived image (such as a processing result) can open as a new
+// document with its own view while the original stays as it is. Only the latest rendering request of a
+// document counts; starting a new one aborts the previous, and an object URL is revoked as soon as a
+// newer rendering replaces it or the document closes. Everything lives in memory only: it survives
+// switching tabs and workspaces but is not restored after a reload.
 
 // Where a document's image comes from. Captured frames will add their own kind.
 export type ImageSource = { readonly kind: 'file'; readonly path: string }
@@ -20,7 +24,7 @@ export interface ImageRendering {
 	readonly result: RenderResult
 }
 
-// Image document of the tab.
+// Image document of the tab: what the image is, independent of how it is shown.
 export interface ImageDocument {
 	// Id of the document in the tab, assigned before the server opens the image.
 	readonly key: string
@@ -30,13 +34,23 @@ export interface ImageDocument {
 	readonly source: ImageSource
 	// Whether the server is opening the image, has opened it, or failed to.
 	status: 'loading' | 'ready' | 'error'
-	// Server description of the opened image, including its id.
+	// Server description of the opened image, including its id and metadata.
 	info?: ImageInfo
+	// Why opening failed.
+	error?: string
+}
+
+// How a document is shown: its own zoom, pan, stretch, and rendering.
+export interface ImageViewState {
+	// Zoom and pan of the viewer.
+	view: ViewerView
+	// Stretch of the latest rendering request.
+	stretch: RenderRequest['stretch']
 	// Current rendering, kept while a newer one is prepared.
 	rendering?: ImageRendering
 	// Whether a rendering is in progress.
 	renderPending: boolean
-	// Why opening or rendering failed.
+	// Why the latest rendering failed.
 	error?: string
 }
 
@@ -44,6 +58,8 @@ export interface ImageDocument {
 export interface ImagesState {
 	// Open documents in tab order.
 	documents: ImageDocument[]
+	// View state of each open document, by document key.
+	views: Record<string, ImageViewState>
 	// Key of the document shown; absent when none is open.
 	activeKey?: string
 }
@@ -62,7 +78,7 @@ export interface ImagesIo {
 const RENDER_HEADER = 'X-Image-Render'
 
 // Image documents of the tab.
-export const imagesState = proxy<ImagesState>({ documents: [] })
+export const imagesState = proxy<ImagesState>({ documents: [], views: {} })
 
 // Browser implementation of ImagesIo.
 export const browserIo: ImagesIo = {
@@ -84,6 +100,11 @@ export function activeDocument(state: { readonly documents: readonly ImageDocume
 	return state.documents.find((d) => d.key === state.activeKey)
 }
 
+// Returns the view state of the document shown, if any.
+export function activeView<T extends ImageViewState>(state: { readonly views: Readonly<Record<string, T>>; readonly activeKey?: string }): T | undefined {
+	return state.activeKey === undefined ? undefined : state.views[state.activeKey]
+}
+
 // Returns the message of an unknown failure.
 function message(error: unknown): string {
 	return error instanceof Error ? error.message : 'Unable to reach the server'
@@ -94,12 +115,13 @@ function release(id: string, io: ImagesIo) {
 	void io.fetch(`/api/images/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => undefined)
 }
 
-// Opens a server file as a new active document and renders it with an automatic stretch. A document
-// closed before the server answers is released on the server.
+// Opens a server file as a new active document, fitted to the viewer, and renders it with an automatic
+// stretch. A document closed before the server answers is released on the server.
 export async function openImage(state: ImagesState, path: string, io: ImagesIo = browserIo) {
 	const key = nanoid()
 	const name = path.split(/[\\/]/).at(-1) || path
-	state.documents.push({ key, name, source: { kind: 'file', path }, status: 'loading', renderPending: false })
+	state.documents.push({ key, name, source: { kind: 'file', path }, status: 'loading' })
+	state.views[key] = { view: FIT_VIEW, stretch: 'auto', renderPending: false }
 	state.activeKey = key
 
 	try {
@@ -129,18 +151,20 @@ export async function openImage(state: ImagesState, path: string, io: ImagesIo =
 	await renderImage(state, key, { stretch: 'auto' }, io)
 }
 
-// Renders an opened document. Aborts the document's previous rendering request; the current rendering
-// stays shown until the new one arrives and is then revoked.
+// Renders an opened document and keeps the request's stretch in its view state. Aborts the document's
+// previous rendering request; the current rendering stays shown until the new one arrives and is then
+// revoked.
 export async function renderImage(state: ImagesState, key: string, request: RenderRequest, io: ImagesIo = browserIo) {
-	const document = documentOf(state, key)
-	const id = document?.info?.id
-	if (!document || !id) return
+	const id = documentOf(state, key)?.info?.id
+	const view = state.views[key]
+	if (!id || !view) return
 
 	renders.get(key)?.abort()
 	const controller = new AbortController()
 	renders.set(key, controller)
-	document.renderPending = true
-	document.error = undefined
+	view.stretch = request.stretch
+	view.renderPending = true
+	view.error = undefined
 
 	try {
 		const response = await io.fetch(`/api/images/${encodeURIComponent(id)}/render`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: controller.signal })
@@ -149,7 +173,7 @@ export async function renderImage(state: ImagesState, key: string, request: Rend
 		const blob = await response.blob()
 		if (controller.signal.aborted) return
 
-		const current = documentOf(state, key)
+		const current = state.views[key]
 		if (!current) return
 
 		const previous = current.rendering?.url
@@ -157,15 +181,21 @@ export async function renderImage(state: ImagesState, key: string, request: Rend
 		if (previous) io.revokeObjectURL(previous)
 	} catch (error) {
 		if (controller.signal.aborted) return
-		const current = documentOf(state, key)
+		const current = state.views[key]
 		if (current) current.error = message(error)
 	} finally {
 		if (renders.get(key) === controller) {
 			renders.delete(key)
-			const current = documentOf(state, key)
+			const current = state.views[key]
 			if (current) current.renderPending = false
 		}
 	}
+}
+
+// Sets the zoom and pan of a document. Ignored for an unknown key.
+export function setImageView(state: ImagesState, key: string, view: ViewerView) {
+	const current = state.views[key]
+	if (current) current.view = view
 }
 
 // Shows a document. Ignored for an unknown key.
@@ -173,18 +203,20 @@ export function selectImage(state: ImagesState, key: string) {
 	if (documentOf(state, key)) state.activeKey = key
 }
 
-// Closes a document: aborts its rendering, revokes its object URL, and releases it on the server. The
-// next document (or the previous one, for the last) becomes active.
+// Closes a document: aborts its rendering, revokes its object URL, releases it on the server, and drops
+// its view state. The next document (or the previous one, for the last) becomes active.
 export function closeImage(state: ImagesState, key: string, io: ImagesIo = browserIo) {
 	const index = state.documents.findIndex((d) => d.key === key)
 	if (index < 0) return
 
 	const document = state.documents[index]
+	const rendering = state.views[key]?.rendering
 	renders.get(key)?.abort()
 	renders.delete(key)
-	if (document.rendering) io.revokeObjectURL(document.rendering.url)
+	if (rendering) io.revokeObjectURL(rendering.url)
 	if (document.info) release(document.info.id, io)
 
 	state.documents.splice(index, 1)
+	delete state.views[key]
 	if (state.activeKey === key) state.activeKey = (state.documents[index] ?? state.documents[index - 1])?.key
 }

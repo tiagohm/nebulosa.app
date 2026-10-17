@@ -83,3 +83,23 @@ export function pixelAt(image: Size, point: Point): Point | undefined {
 	const y = Math.floor(point.y)
 	return x >= 0 && y >= 0 && x < image.width && y < image.height ? { x, y } : undefined
 }
+
+// View of an image as its owner keeps it: fitted to the viewport, or a scale and the image point at the
+// viewport center. Keeping the center in image pixels, rather than the offset in viewport pixels, keeps
+// the same part of the image centered when the viewport is resized.
+export type ViewerView = { readonly kind: 'fit' } | { readonly kind: 'manual'; readonly scale: number; readonly center: Point }
+
+// View of an image just opened: fitted to the viewport.
+export const FIT_VIEW: ViewerView = { kind: 'fit' }
+
+// Returns the transform that shows an image with a view in a viewport.
+export function viewTransform(view: ViewerView, image: Size, viewport: Size): ViewTransform {
+	if (view.kind === 'fit') return fit(image, viewport)
+	const scale = clampScale(view.scale)
+	return { scale, x: viewport.width / 2 - view.center.x * scale, y: viewport.height / 2 - view.center.y * scale }
+}
+
+// Returns the manual view of a transform shown in a viewport.
+export function manualView(view: ViewTransform, viewport: Size): ViewerView {
+	return { kind: 'manual', scale: view.scale, center: toImage(view, { x: viewport.width / 2, y: viewport.height / 2 }) }
+}

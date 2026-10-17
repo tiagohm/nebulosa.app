@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { centered, fit, MAX_SCALE, MIN_SCALE, panBy, pixelAt, toImage, zoomAt } from './transform'
+import { centered, FIT_VIEW, fit, MAX_SCALE, MIN_SCALE, manualView, panBy, pixelAt, toImage, viewTransform, zoomAt } from './transform'
 
 describe('fit', () => {
 	test('fits the limiting dimension and centers the other', () => {
@@ -48,5 +48,26 @@ describe('coordinates', () => {
 	test('points outside the image have no pixel', () => {
 		expect(pixelAt({ width: 10, height: 10 }, { x: -0.1, y: 2 })).toBeUndefined()
 		expect(pixelAt({ width: 10, height: 10 }, { x: 10, y: 2 })).toBeUndefined()
+	})
+})
+
+describe('viewer view', () => {
+	const image = { width: 400, height: 200 }
+
+	test('a fit view fits the image', () => {
+		expect(viewTransform(FIT_VIEW, image, { width: 200, height: 200 })).toEqual(fit(image, { width: 200, height: 200 }))
+	})
+
+	test('a manual view round-trips its transform', () => {
+		const viewport = { width: 300, height: 100 }
+		const transform = { scale: 2, x: -50, y: 20 }
+		expect(viewTransform(manualView(transform, viewport), image, viewport)).toEqual(transform)
+	})
+
+	test('a resized viewport keeps the same image point centered', () => {
+		const view = manualView({ scale: 2, x: -50, y: 20 }, { width: 300, height: 100 })
+		const resized = viewTransform(view, image, { width: 500, height: 300 })
+		expect(toImage(resized, { x: 250, y: 150 })).toEqual(view.kind === 'manual' ? view.center : { x: 0, y: 0 })
+		expect(resized.scale).toBe(2)
 	})
 })

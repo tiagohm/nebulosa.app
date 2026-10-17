@@ -12,10 +12,11 @@ import { IconButton } from '../ui/IconButton'
 import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
 import { Reticle } from '../viewer/Reticle'
+import { FIT_VIEW } from '../viewer/transform'
 import { CameraTabs } from './CameraTabs'
 import { ModePanel } from './ModePanel'
 import { CAPTURE_MODE_DEFINITIONS } from './modes'
-import { type CameraTarget, cameraRole, cameraTabs, cameraView, captureRoute, resolveCameraView, viewMode, viewReticle } from './views'
+import { type CameraTarget, cameraRole, cameraTabs, cameraView, captureRoute, captureViewerState, resolveCameraView, viewerKey, viewMode, viewReticle } from './views'
 
 // Capture workspace: image acquisition with the cameras of the active profile's equipment setup. Each
 // assigned camera role has a camera view, selected by a tab above the viewer and the contextual panel;
@@ -89,7 +90,7 @@ export function CaptureWorkspace() {
 				),
 			}}
 		>
-			<CaptureViewer key={`${role}:${setup[role]?.id}`} role={role} reticle={viewReticle(capture, role, mode)} />
+			<CaptureViewer key={viewerKey(role, setup)} viewer={viewerKey(role, setup)} role={role} reticle={viewReticle(capture, role, mode)} />
 		</WorkspaceLayout>
 	)
 }
@@ -97,18 +98,29 @@ export function CaptureWorkspace() {
 interface CaptureViewerProps {
 	// Camera role of the view.
 	readonly role: CameraRole
+	// Key of the view's viewer, from viewerKey.
+	readonly viewer: string
 	// Whether the reticle is shown.
 	readonly reticle: boolean
 }
 
 // Viewer of the latest frame of the view's camera with the mode's overlays. It is keyed by the camera
-// role and assigned device, so zoom and pan start over for another camera and nothing of a replaced
-// device is shown. There is no capture yet, so it shows why nothing can be captured and the flow that
-// resolves it.
-function CaptureViewer({ role, reticle }: CaptureViewerProps) {
+// role and assigned device, so nothing of a replaced device is shown; its zoom and pan are kept per
+// viewer key, so they come back after switching camera views or workspaces. There is no capture yet, so
+// it shows why nothing can be captured and the flow that resolves it.
+function CaptureViewer({ role, viewer, reticle }: CaptureViewerProps) {
 	const camera: CameraTarget = { role, ...useRoleDevice(role) }
+	const views = useSnapshot(captureViewerState)
 
-	return <ImageViewer empty={<CameraState camera={camera} />} toolbar={<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={() => setCameraReticle(profileState, role, !reticle)} />} overlays={reticle ? (size) => <Reticle {...size} /> : undefined} />
+	return (
+		<ImageViewer
+			view={views[viewer] ?? FIT_VIEW}
+			onViewChange={(view) => (captureViewerState[viewer] = view)}
+			empty={<CameraState camera={camera} />}
+			toolbar={<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={() => setCameraReticle(profileState, role, !reticle)} />}
+			overlays={reticle ? (size) => <Reticle {...size} /> : undefined}
+		/>
+	)
 }
 
 interface CameraStateProps {

@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import logo from '../../assets/nebulosa.ico'
 import { connectionState } from '../connection/connection'
+import { ConnectionIndicator } from '../connection/ConnectionIndicator'
 import { Menu, MenuItem, NavigationMenu } from '../ui/NavigationMenu'
 
-// Application top bar: logo and the primary-action menus on the left, notifications and the profile
-// switcher on the right. Notifications and profiles are visual placeholders for now.
+// Application top bar: logo and the primary-action menus on the left, the connection status,
+// notifications, and the profile switcher on the right. Notifications and profiles are visual
+// placeholders for now.
 
 // Unread notification count shown on the bell badge; a fixed sample until notifications exist.
 const NOTIFICATION_COUNT = 3
@@ -45,6 +47,7 @@ export function TopBar() {
 				</NavigationMenu>
 			</div>
 			<div className="flex flex-none items-center gap-2">
+				<ConnectionIndicator />
 				<NotificationButton count={NOTIFICATION_COUNT} />
 				<NavigationMenu>
 					<Menu

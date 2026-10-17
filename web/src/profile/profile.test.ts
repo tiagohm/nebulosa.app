@@ -3,7 +3,7 @@ import { proxy } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createProfile, deleteProfile, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectConnection, selectProfile, setPanelOpen } from './profile'
+import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createProfile, deleteProfile, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectConnection, selectProfile, setLastImageDirectory, setPanelOpen } from './profile'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }
@@ -256,14 +256,16 @@ describe('settings', () => {
 	test('restores panel visibility and drops invalid entries', () => {
 		const stores = newStores()
 		const profiles = [
-			{ id: 'a', name: 'A', settings: { panels: { capture: false, images: true, sky: 'no', bogus: false } } },
-			{ id: 'b', name: 'B', settings: 'oops' },
+			{ id: 'a', name: 'A', settings: { panels: { capture: false, images: true, sky: 'no', bogus: false }, lastImageDirectory: '/data' } },
+			{ id: 'b', name: 'B', settings: { lastImageDirectory: 3 } },
+			{ id: 'c', name: 'C', settings: 'oops' },
 		]
 		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
 		const state = load(stores)
 
-		expect(state.profiles[0].settings).toEqual({ panels: { capture: false, images: true } })
+		expect(state.profiles[0].settings).toEqual({ panels: { capture: false, images: true }, lastImageDirectory: '/data' })
 		expect(state.profiles[1].settings).toEqual({ panels: {} })
+		expect(state.profiles[2].settings).toEqual({ panels: {} })
 	})
 
 	test('panels are expanded by default and persisted per profile', () => {
@@ -280,5 +282,11 @@ describe('settings', () => {
 
 		expect(panelOpen(state.profiles[0].settings, 'capture')).toBe(false)
 		expect(panelOpen(other.settings, 'capture')).toBe(true)
+	})
+
+	test('remembers the last image directory', () => {
+		const state = load(newStores())
+		setLastImageDirectory(state, '/data/m31')
+		expect(state.profiles[0].settings.lastImageDirectory).toBe('/data/m31')
 	})
 })

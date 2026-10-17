@@ -1,11 +1,15 @@
 import type { Server } from 'bun'
 import { connections } from './connection'
+import { handleListDirectory } from './files'
+import { handleOpenImage, handleRenderImage, images } from './images'
 import { broadcast, websocket } from './websocket'
 
 // HTTP routes and the WebSocket handler of the backend, mounted by the app server.
 
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
 export type { DeviceEvent, DeviceSummary, ManagedDeviceType } from './devices'
+export type { DirectoryListing, FileEntry } from './files'
+export type { ImageFormat, ImageInfo, RenderRequest, RenderResult, Stretch } from './images'
 export { websocket }
 
 connections.listen(broadcast)
@@ -54,6 +58,21 @@ export const routes = {
 	},
 	'/api/connections/:id/devices/:deviceId/disconnect': {
 		POST: (req) => switchDevice(req.params.id, req.params.deviceId, false),
+	},
+	'/api/files': {
+		// A directory of the server's filesystem; 404 when missing, 403 when unreadable.
+		GET: handleListDirectory,
+	},
+	'/api/images': {
+		// Opens a FITS or XISF file of the server as an image document.
+		POST: handleOpenImage,
+	},
+	'/api/images/:id': {
+		// Closes an image document; 404 when it is not open.
+		DELETE: (req) => new Response(null, { status: images.close(req.params.id) ? 204 : 404 }),
+	},
+	'/api/images/:id/render': {
+		POST: (req) => handleRenderImage(req, req.params.id),
 	},
 	'/api/ws': {
 		// Upgrades to the event WebSocket; Bun sends the handshake response itself.

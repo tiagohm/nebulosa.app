@@ -49,6 +49,7 @@ export function ImageViewer({ image, loading = false, error, empty, subject, ove
 	const [view, setView] = useState<ViewTransform>(IDENTITY)
 	// Whether the view follows the viewport size, until the user zooms or pans.
 	const [fitted, setFitted] = useState(true)
+	// Pointer position over the viewport, in viewport pixels; the pixel under it follows zoom and pan.
 	const [cursor, setCursor] = useState<Point>()
 	const drag = useRef<Point>(undefined)
 	const width = image?.width ?? 0
@@ -111,7 +112,7 @@ export function ImageViewer({ image, loading = false, error, empty, subject, ove
 
 	function handlePointerMove(e: PointerEvent<HTMLDivElement>) {
 		const rect = e.currentTarget.getBoundingClientRect()
-		setCursor(toImage(view, { x: e.clientX - rect.left, y: e.clientY - rect.top }))
+		setCursor({ x: e.clientX - rect.left, y: e.clientY - rect.top })
 		if (!drag.current) return
 		pan(e.clientX - drag.current.x, e.clientY - drag.current.y)
 		drag.current = { x: e.clientX, y: e.clientY }
@@ -158,7 +159,7 @@ export function ImageViewer({ image, loading = false, error, empty, subject, ove
 		e.preventDefault()
 	}
 
-	const pixel = image && cursor ? pixelAt({ width, height }, cursor) : undefined
+	const pixel = image && cursor ? pixelAt({ width, height }, toImage(view, cursor)) : undefined
 
 	return (
 		<div className="flex h-full min-h-0 flex-col bg-base-000">

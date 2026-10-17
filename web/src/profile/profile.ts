@@ -31,6 +31,9 @@ export interface ProfileSettings {
 	// Whether the contextual panel of each workspace is expanded on wide screens; an absent workspace
 	// shows it expanded. Narrow screens open the panel as a drawer that is never persisted.
 	panels: Partial<Record<WorkspaceId, boolean>>
+	// Server directory an image was opened from last, where the file explorer starts; absent before the
+	// first image is opened.
+	lastImageDirectory?: string
 }
 
 // A complete working environment: the selected connection, the equipment assigned on each connection,
@@ -92,6 +95,8 @@ function normalizeSettings(value: unknown): ProfileSettings {
 			if (typeof open === 'boolean') settings.panels[workspace] = open
 		}
 	}
+
+	if (typeof value.lastImageDirectory === 'string' && value.lastImageDirectory) settings.lastImageDirectory = value.lastImageDirectory
 
 	return settings
 }
@@ -350,6 +355,14 @@ export function setPanelOpen(state: ProfileState, workspace: WorkspaceId, open: 
 	const profile = activeProfile(state)
 	if (panelOpen(profile.settings, workspace) === open) return
 	profile.settings.panels[workspace] = open
+	touch(profile)
+}
+
+// Remembers in the active profile the server directory an image was opened from.
+export function setLastImageDirectory(state: ProfileState, directory: string) {
+	const profile = activeProfile(state)
+	if (profile.settings.lastImageDirectory === directory) return
+	profile.settings.lastImageDirectory = directory
 	touch(profile)
 }
 

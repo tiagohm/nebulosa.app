@@ -26,6 +26,8 @@ export const ICONS = {
 	zoomOut: 'M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13M15.5 15.5L20 20M7.5 10.5h6',
 	fit: 'M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5',
 	actualSize: 'M4 5h16v14H4zM8.5 9.5L10 8.5v7M14 9.5l1.5-1v7M12 11v.01M12 14v.01',
+	folder: 'M3 6h6l2 2h10v11H3z',
+	file: 'M6 3h8l4 4v14H6zM14 3v4h4',
 	arrow: 'M12 19V5M6 11l6-6l6 6',
 	reticle: 'M12 3v6M12 15v6M3 12h6M15 12h6M12 7a5 5 0 1 0 0 10a5 5 0 1 0 0-10',
 } as const satisfies Readonly<Record<string, string>>

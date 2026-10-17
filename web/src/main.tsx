@@ -1,5 +1,5 @@
 import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import { App } from './App'
 import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
@@ -8,29 +8,47 @@ import { loadProfiles, persistProfiles, profileState } from './profile/profile'
 import { browserStores } from './storage'
 
 // Entry point of the browser bundle: restores the persisted stores before the first render, starts
-// persisting them, and keeps the server state current through the event socket.
+// persisting them, and keeps the server state current through the event socket. Under HMR the module
+// re-runs on every update: the React root is reused and the previous run's subscriptions are released.
 
 const stores = browserStores()
 
 loadConnections(connectionState, stores.local)
 loadProfiles(profileState, stores)
-persistConnections(connectionState, stores.local)
-persistProfiles(profileState, stores)
+// Functions that stop this run's persistence and event subscriptions.
+const stops = [
+	persistConnections(connectionState, stores.local),
+	persistProfiles(profileState, stores),
+	subscribe((event) => {
+		handleConnectionEvent(connectionState, event)
+		handleDeviceEvent(deviceState, event)
+	}),
+	// Every (re)open resynchronizes the open connections and the watched devices, which may have changed
+	// while the socket was closed.
+	onOpen(() => {
+		void refreshServers(connectionState)
+		void refreshDevices(deviceState)
+	}),
+]
 
-subscribe((event) => {
-	handleConnectionEvent(connectionState, event)
-	handleDeviceEvent(deviceState, event)
+import.meta.hot.accept()
+import.meta.hot.dispose(() => {
+	for (const stop of stops) stop()
 })
 
-// Every (re)open resynchronizes the open connections and the watched devices, which may have changed
-// while the socket was closed.
-onOpen(() => {
-	void refreshServers(connectionState)
-	void refreshDevices(deviceState)
-})
+// Renders the app into the page's root element, reusing the root created by a previous HMR run.
+function start() {
+	const root: Root = (import.meta.hot.data.root ??= createRoot(document.getElementById('root')!))
 
-createRoot(document.getElementById('root')!).render(
-	<StrictMode>
-		<App />
-	</StrictMode>,
-)
+	root.render(
+		<StrictMode>
+			<App />
+		</StrictMode>,
+	)
+}
+
+if (document.readyState === 'loading') {
+	document.addEventListener('DOMContentLoaded', start)
+} else {
+	start()
+}

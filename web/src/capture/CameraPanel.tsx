@@ -1,6 +1,6 @@
 import { PanelSection, PlannedControls } from '../shell/ContextualPanel'
 
-// Contextual panel sections of the Camera Capture mode: exposure settings and capture actions of the main
+// Contextual panel sections of the Camera Capture mode: exposure settings and capture actions of the view's
 // camera. The required equipment and the operation state are added by ModePanel.
 
 // Camera Capture controls.

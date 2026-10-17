@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { connectionState } from '../connection/connection'
 import { deviceState } from '../equipment/equipment'
-import { roleDefinition } from '../equipment/roles'
+import { type CameraRole, roleDefinition } from '../equipment/roles'
 import { RoleStatusText } from '../equipment/RoleStatusText'
 import { PanelSection } from '../shell/ContextualPanel'
 import { navigate, routeState } from '../shell/route'
@@ -22,10 +22,12 @@ export interface ToolDetailsProps {
 	readonly tool?: ToolDefinition
 	// Whether its requirements are met now.
 	readonly availability?: ToolAvailability
+	// Camera role of the Capture camera view the tool opens in; absent when none is assigned.
+	readonly camera?: CameraRole
 }
 
 // Details of the selected tool.
-export function ToolDetails({ tool, availability }: ToolDetailsProps) {
+export function ToolDetails({ tool, availability, camera }: ToolDetailsProps) {
 	if (!tool || !availability) return <EmptyState title="No tool selected" description="Select a tool to see what it needs." />
 
 	return (
@@ -42,17 +44,15 @@ export function ToolDetails({ tool, availability }: ToolDetailsProps) {
 				{tool.requires.length === 0 && <p className="m-0 text-ink-300">None.</p>}
 				{tool.requires.map((requirement) => {
 					const missing = availability.missing.find((m) => m.requirement === requirement)
-					return requirement.kind === 'image' ? (
-						<RequirementRow key="image" label="Open image" state={missing ? 'Missing' : 'Ready'} missing={missing} />
-					) : (
-						<RequirementRow key={requirement.role} label={roleDefinition(requirement.role).label} state={missing?.status ? <RoleStatusText status={missing.status} /> : <RoleStatusText status="connected" />} missing={missing} />
-					)
+					if (requirement.kind === 'image') return <RequirementRow key="image" label="Open image" state={missing ? 'Missing' : 'Ready'} missing={missing} />
+					const role = requirement.kind === 'camera' ? camera : requirement.role
+					return <RequirementRow key={requirement.kind === 'camera' ? 'camera' : requirement.role} label={role ? roleDefinition(role).label : 'Camera'} state={<RoleStatusText status={missing?.status ?? 'connected'} />} missing={missing} />
 				})}
 			</PanelSection>
 			<PanelSection title="Open">
 				{canLaunch(tool) ? (
 					<>
-						<Button size="sm" onClick={() => launchTool(routeState, tool)}>
+						<Button size="sm" onClick={() => launchTool(routeState, tool, camera)}>
 							Open {tool.label}
 						</Button>
 						{tool.status === 'preview' && <p className="m-0 text-xs text-ink-300">Preview: its layout is ready, its operations are not available yet.</p>}

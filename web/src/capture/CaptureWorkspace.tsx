@@ -1,84 +1,133 @@
-import { useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { connectionState } from '../connection/connection'
 import { deviceState } from '../equipment/equipment'
+import { type CameraRole, roleDefinition } from '../equipment/roles'
 import { useRoleDevice } from '../equipment/useEquipment'
-import { CAPTURE_MODES, type CaptureMode, navigate, routeState } from '../shell/route'
+import { activeProfile, activeSetup, profileState, selectCameraView, setCameraReticle } from '../profile/profile'
+import { CAPTURE_MODES, type CaptureMode, navigate, redirect, routeState } from '../shell/route'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
 import { Reticle } from '../viewer/Reticle'
+import { CameraTabs } from './CameraTabs'
 import { ModePanel } from './ModePanel'
 import { CAPTURE_MODE_DEFINITIONS } from './modes'
+import { type CameraTarget, cameraRole, cameraTabs, cameraView, captureRoute, resolveCameraView, viewMode, viewReticle } from './views'
 
-// Capture workspace: image acquisition with the profile's main camera. One viewer shows the latest
-// frame for every operational mode; the mode, selected in the header and kept in the URL, only changes
-// the contextual panel and the overlays. Opening a frame in the Images workspace will snapshot it
-// there, so later frames never replace an image being inspected.
+// Capture workspace: image acquisition with the cameras of the active profile's equipment setup. Each
+// assigned camera role has a camera view, selected by a tab above the viewer and the contextual panel;
+// the view has its own operational mode and viewer preferences, and every mode uses the view's camera.
+// The camera view and mode shown come from the URL; the profile remembers them, and a profile switch
+// reopens the view and mode that profile selected last. Switching tabs, modes, or profiles only changes
+// what is shown: no device is connected, stopped, or redirected. Only the selected view is mounted.
 
 // Capture workspace.
 export function CaptureWorkspace() {
 	const { route } = useSnapshot(routeState)
-	const mode: CaptureMode = route.workspace === 'capture' ? route.mode : 'camera'
-	const definition = CAPTURE_MODE_DEFINITIONS[mode]
-	const Panel = definition.panel
+	const profiles = useSnapshot(profileState)
+	const profile = activeProfile(profiles)
+	const setup = activeSetup(profile)
+	const capture = profile.settings.capture
+	const requested = route.workspace === 'capture' ? route : undefined
+	const role = resolveCameraView(setup, requested && cameraRole(requested.camera), capture.activeCamera)
+	const mode: CaptureMode = requested?.mode ?? (role ? viewMode(capture, role) : 'camera')
+	const shownProfile = useRef(profile.id)
 
-	return (
-		<WorkspaceLayout
-			workspace="capture"
-			title="Capture"
-			context={<Select options={CAPTURE_MODES} value={mode} format={(m) => CAPTURE_MODE_DEFINITIONS[m].label} onChange={(m) => navigate(routeState, { workspace: 'capture', mode: m })} className="w-52 max-sm:w-40" />}
-			panel={{
-				title: definition.panelTitle,
-				content: (
-					<ModePanel requires={definition.requires}>
-						<Panel />
-					</ModePanel>
-				),
-			}}
-		>
-			<CaptureViewer key={mode} mode={mode} />
-		</WorkspaceLayout>
-	)
-}
+	// The URL follows the camera view actually shown, and the profile remembers it; after a profile
+	// switch, the view and mode that profile selected last are reopened instead.
+	useEffect(() => {
+		if (shownProfile.current !== profile.id) {
+			shownProfile.current = profile.id
+			redirect(routeState, captureRoute(capture, setup))
+			return
+		}
 
-interface CaptureViewerProps {
-	// Selected mode, whose overlays are shown by default.
-	readonly mode: CaptureMode
-}
+		if (!role) return
+		if (requested?.camera !== cameraView(role)) redirect(routeState, { workspace: 'capture', camera: cameraView(role), mode })
+		selectCameraView(profileState, role, mode)
+	}, [profile.id, capture, setup, requested?.camera, role, mode])
 
-// Viewer of the latest captured frame with the mode's overlays. There is no capture yet, so it shows why
-// nothing can be captured and the flow that resolves it.
-function CaptureViewer({ mode }: CaptureViewerProps) {
-	const [reticle, setReticle] = useState(CAPTURE_MODE_DEFINITIONS[mode].overlays.includes('reticle'))
-
-	return <ImageViewer empty={<CameraState />} toolbar={<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={() => setReticle(!reticle)} />} overlays={reticle ? (size) => <Reticle {...size} /> : undefined} />
-}
-
-// Empty state of the viewer, from the real state of the main camera role.
-function CameraState() {
-	const { device, status } = useRoleDevice('MAIN_CAMERA')
-
-	switch (status) {
-		case 'notSelected':
-			return (
+	if (!role) {
+		return (
+			<WorkspaceLayout workspace="capture" title="Capture">
 				<EmptyState
-					title="No main camera selected"
-					description="Assign a camera to the Main Camera role in Equipment Setup."
+					title="No cameras configured."
+					description="Assign a Main Camera or Guide Camera in Equipment Setup."
 					action={
 						<Button size="sm" variant="secondary" onClick={() => (deviceState.open = true)}>
 							Equipment Setup
 						</Button>
 					}
 				/>
-			)
+			</WorkspaceLayout>
+		)
+	}
+
+	const definition = CAPTURE_MODE_DEFINITIONS[mode]
+	const Panel = definition.panel
+
+	// Shows the view of another camera role in the mode it selected last.
+	function selectCamera(camera: CameraRole) {
+		navigate(routeState, { workspace: 'capture', camera: cameraView(camera), mode: viewMode(capture, camera) })
+	}
+
+	return (
+		<WorkspaceLayout
+			workspace="capture"
+			title="Capture"
+			tabs={<CameraTabs tabs={cameraTabs(setup)} selected={role} onSelect={selectCamera} />}
+			context={<Select options={CAPTURE_MODES} value={mode} format={(m) => CAPTURE_MODE_DEFINITIONS[m].label} onChange={(m) => navigate(routeState, { workspace: 'capture', camera: cameraView(role), mode: m })} className="w-52 max-sm:w-40" />}
+			panel={{
+				title: definition.panelTitle,
+				content: (
+					<ModePanel camera={role} requires={definition.requires}>
+						<Panel />
+					</ModePanel>
+				),
+			}}
+		>
+			<CaptureViewer key={`${role}:${setup[role]?.id}`} role={role} reticle={viewReticle(capture, role, mode)} />
+		</WorkspaceLayout>
+	)
+}
+
+interface CaptureViewerProps {
+	// Camera role of the view.
+	readonly role: CameraRole
+	// Whether the reticle is shown.
+	readonly reticle: boolean
+}
+
+// Viewer of the latest frame of the view's camera with the mode's overlays. It is keyed by the camera
+// role and assigned device, so zoom and pan start over for another camera and nothing of a replaced
+// device is shown. There is no capture yet, so it shows why nothing can be captured and the flow that
+// resolves it.
+function CaptureViewer({ role, reticle }: CaptureViewerProps) {
+	const camera: CameraTarget = { role, ...useRoleDevice(role) }
+
+	return <ImageViewer empty={<CameraState camera={camera} />} toolbar={<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={() => setCameraReticle(profileState, role, !reticle)} />} overlays={reticle ? (size) => <Reticle {...size} /> : undefined} />
+}
+
+interface CameraStateProps {
+	// Camera of the view.
+	readonly camera: CameraTarget
+}
+
+// Empty state of the viewer, from the real state of the view's camera.
+function CameraState({ camera: { role, device, status } }: CameraStateProps) {
+	const label = roleDefinition(role).label
+
+	switch (status) {
+		case 'notSelected':
+			return null
 		case 'unavailable':
 			return (
 				<EmptyState
-					title="Main camera unavailable"
-					description="The connection that provides the main camera is not open."
+					title="Camera unavailable."
+					description={`The connection that provides the ${label} is not open.`}
 					action={
 						<Button size="sm" variant="secondary" onClick={() => (connectionState.open = true)}>
 							Connections
@@ -87,15 +136,15 @@ function CameraState() {
 				/>
 			)
 		case 'connected':
-			return <EmptyState title="No image captured" description={`${device?.name ?? 'The main camera'} is connected. Capturing is not available yet.`} />
+			return <EmptyState title="No image captured" description={`${device?.name ?? `The ${label}`} is connected. Capturing is not available yet.`} />
 		case 'connecting':
 		case 'disconnecting':
-			return <EmptyState title={`Main camera ${status === 'connecting' ? 'connecting' : 'disconnecting'}…`} />
+			return <EmptyState title={`${label} ${status === 'connecting' ? 'connecting' : 'disconnecting'}…`} />
 		default:
 			return (
 				<EmptyState
-					title={status === 'error' ? 'Main camera error' : 'Main camera disconnected'}
-					description="Connect the main camera in Equipment Setup."
+					title={status === 'error' ? 'Camera error.' : 'Camera disconnected.'}
+					description={`Connect the ${label} in Equipment Setup.`}
 					action={
 						<Button size="sm" variant="secondary" onClick={() => (deviceState.open = true)}>
 							Equipment Setup

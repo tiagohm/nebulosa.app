@@ -1,6 +1,6 @@
 import { CAPTURE_MODE_DEFINITIONS } from '../capture/modes'
 import type { EquipmentRole } from '../equipment/roles'
-import type { CaptureMode, Route } from '../shell/route'
+import type { CaptureMode, WorkspaceId } from '../shell/route'
 import type { IconName } from '../ui/Icon'
 
 // Static catalog of the application's tools: what each one does, what it needs, where it runs, and how
@@ -14,8 +14,12 @@ export type ToolCategory = 'image-analysis' | 'image-processing' | 'equipment' |
 // planned and not openable.
 export type ToolStatus = 'available' | 'preview' | 'planned'
 
-// Resource a tool needs before it can run: a role's device connected, or an open image.
-export type ToolRequirement = { readonly kind: 'role'; readonly role: EquipmentRole } | { readonly kind: 'image' }
+// Resource a tool needs before it can run: a role's device connected, the camera of the selected Capture
+// camera view connected (whichever camera role that is), or an open image.
+export type ToolRequirement = { readonly kind: 'role'; readonly role: EquipmentRole } | { readonly kind: 'camera' } | { readonly kind: 'image' }
+
+// Where a tool runs: a workspace and, for Capture, the mode it opens in the selected camera view.
+export type ToolRoute = { readonly workspace: 'capture'; readonly mode: CaptureMode } | { readonly workspace: Exclude<WorkspaceId, 'capture'> }
 
 // Definition of a tool.
 export interface ToolDefinition {
@@ -30,7 +34,7 @@ export interface ToolDefinition {
 	// Catalog group.
 	readonly category: ToolCategory
 	// Where the tool runs: its workspace and, for Capture, its mode.
-	readonly route: Route
+	readonly route: ToolRoute
 	// Resources the tool needs, in display order; empty when it needs none.
 	readonly requires: readonly ToolRequirement[]
 	// Implementation state.
@@ -56,9 +60,10 @@ export const TOOL_CATEGORIES: readonly ToolCategoryDefinition[] = [
 // Requirement of an open image.
 const IMAGE: readonly ToolRequirement[] = [{ kind: 'image' }]
 
-// Returns the requirements of a Capture mode, from its registry definition.
+// Returns the requirements of a Capture mode: the camera of the selected camera view and the roles of its
+// registry definition.
 function modeRequirements(mode: CaptureMode): readonly ToolRequirement[] {
-	return CAPTURE_MODE_DEFINITIONS[mode].requires.map((role) => ({ kind: 'role', role }))
+	return [{ kind: 'camera' }, ...CAPTURE_MODE_DEFINITIONS[mode].requires.map((role): ToolRequirement => ({ kind: 'role', role }))]
 }
 
 // Returns the definition of a tool that runs as a Capture mode.
@@ -73,7 +78,7 @@ export const TOOLS: readonly ToolDefinition[] = [
 	{ id: 'star-detection', label: 'Star Detection', description: 'Detects stars and measures their size and brightness.', icon: 'sky', category: 'image-analysis', route: { workspace: 'images' }, requires: IMAGE, status: 'planned' },
 	{ id: 'streak-detection', label: 'Streak Detection', description: 'Finds satellite and meteor trails in an image.', icon: 'streak', category: 'image-analysis', route: { workspace: 'images' }, requires: IMAGE, status: 'planned' },
 	{ id: 'image-processing', label: 'Image Processing', description: 'Stretches, calibrates, and transforms images.', icon: 'sliders', category: 'image-processing', route: { workspace: 'images' }, requires: IMAGE, status: 'planned' },
-	captureTool('camera', 'Captures single frames or loops with the main camera.', 'camera'),
+	captureTool('camera', 'Captures single frames or loops with the selected camera.', 'camera'),
 	captureTool('mount-nudge', 'Frames a target by moving the mount while looping exposures.', 'mount'),
 	captureTool('focus-calibrator', 'Finds the best focuser position from star sizes.', 'focuser'),
 	captureTool('polar-alignment', 'Measures and corrects the polar axis alignment of the mount.', 'reticle'),

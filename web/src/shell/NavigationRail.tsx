@@ -1,17 +1,23 @@
 import { cn } from 'cn'
 import { type KeyboardEvent, useRef } from 'react'
 import { useSnapshot } from 'valtio'
+import { captureRoute } from '../capture/views'
+import { activeProfile, activeSetup, profileState } from '../profile/profile'
 import { Icon } from '../ui/Icon'
 import { moveIndex } from '../ui/navigation'
 import { openWorkspace, routeState } from './route'
 import { WORKSPACES } from './workspaces'
 
 // Fixed vertical bar on the left that switches between the main workspaces. Arrow keys, Home, and End
-// move the focus between its buttons. Switching only changes what is shown.
+// move the focus between its buttons. Capture opens the camera view and mode the active profile
+// selected last. Switching only changes what is shown.
 
 // Navigation rail of the application.
 export function NavigationRail() {
 	const { route } = useSnapshot(routeState)
+	const profiles = useSnapshot(profileState)
+	const profile = activeProfile(profiles)
+	const capture = captureRoute(profile.settings.capture, activeSetup(profile))
 	const navRef = useRef<HTMLElement>(null)
 
 	function handleKeyDown(e: KeyboardEvent<HTMLElement>) {
@@ -32,7 +38,7 @@ export function NavigationRail() {
 						key={id}
 						type="button"
 						title={label}
-						onClick={() => openWorkspace(routeState, id)}
+						onClick={() => openWorkspace(routeState, id, capture)}
 						className={cn(
 							'relative flex w-14 flex-none cursor-pointer flex-col items-center gap-1 rounded-md border-0 px-0 py-2 font-mono transition-colors duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none',
 							active ? 'bg-accent-subtle text-accent' : 'bg-transparent text-ink-300 hover:bg-base-300 hover:text-ink-100',

@@ -2,7 +2,7 @@ import { cn } from 'cn'
 import { PanelSection, PlannedControls } from '../shell/ContextualPanel'
 import { Icon } from '../ui/Icon'
 
-// Contextual panel of the Mount Nudge mode: a capture loop of the main camera while the mount is moved
+// Contextual panel of the Mount Nudge mode: a capture loop of the view's camera while the mount is moved
 // in small steps, framing the target against the viewer's reticle. The direction pad is disabled until
 // mount motion is implemented with an explicit start and stop; no pointer or key event moves the mount.
 

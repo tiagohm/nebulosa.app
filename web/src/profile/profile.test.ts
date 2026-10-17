@@ -3,7 +3,7 @@ import { proxy } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createProfile, deleteProfile, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectConnection, selectProfile, setLastImageDirectory, setPanelOpen } from './profile'
+import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createProfile, deleteProfile, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectProfile, setCameraReticle, setLastImageDirectory, setPanelOpen } from './profile'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }
@@ -263,9 +263,9 @@ describe('settings', () => {
 		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
 		const state = load(stores)
 
-		expect(state.profiles[0].settings).toEqual({ panels: { capture: false, images: true }, lastImageDirectory: '/data' })
-		expect(state.profiles[1].settings).toEqual({ panels: {} })
-		expect(state.profiles[2].settings).toEqual({ panels: {} })
+		expect(state.profiles[0].settings).toEqual({ panels: { capture: false, images: true }, lastImageDirectory: '/data', capture: { views: {} } })
+		expect(state.profiles[1].settings).toEqual({ panels: {}, capture: { views: {} } })
+		expect(state.profiles[2].settings).toEqual({ panels: {}, capture: { views: {} } })
 	})
 
 	test('panels are expanded by default and persisted per profile', () => {
@@ -288,5 +288,62 @@ describe('settings', () => {
 		const state = load(newStores())
 		setLastImageDirectory(state, '/data/m31')
 		expect(state.profiles[0].settings.lastImageDirectory).toBe('/data/m31')
+	})
+})
+
+describe('capture settings', () => {
+	test('restores camera views and drops invalid entries', () => {
+		const stores = newStores()
+		const views = { MAIN_CAMERA: { mode: 'focus-calibrator', reticle: true }, GUIDE_CAMERA: { mode: 'bogus', reticle: 'yes' }, MOUNT: { mode: 'camera' } }
+		const profiles = [
+			{ id: 'a', name: 'A', settings: { capture: { activeCamera: 'GUIDE_CAMERA', views } } },
+			{ id: 'b', name: 'B', settings: { capture: { activeCamera: 'MOUNT', views: 'oops' } } },
+		]
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
+		const state = load(stores)
+
+		expect(state.profiles[0].settings.capture).toEqual({ activeCamera: 'GUIDE_CAMERA', views: { MAIN_CAMERA: { mode: 'focus-calibrator', reticle: true }, GUIDE_CAMERA: { mode: 'camera' } } })
+		expect(state.profiles[1].settings.capture).toEqual({ views: {} })
+	})
+
+	test('keeps the mode and reticle of each camera view apart', () => {
+		const state = load(newStores())
+		selectConnection(state, 'c')
+		assignDevice(state, 'MAIN_CAMERA', dev('cam'))
+		const equipment = JSON.stringify(activeProfile(state).equipment)
+
+		selectCameraView(state, 'MAIN_CAMERA', 'camera')
+		setCameraReticle(state, 'MAIN_CAMERA', true)
+		selectCameraView(state, 'GUIDE_CAMERA', 'mount-nudge')
+		setCameraReticle(state, 'GUIDE_CAMERA', false)
+
+		expect(activeProfile(state).settings.capture).toEqual({ activeCamera: 'GUIDE_CAMERA', views: { MAIN_CAMERA: { mode: 'camera', reticle: true }, GUIDE_CAMERA: { mode: 'mount-nudge', reticle: false } } })
+		expect(JSON.stringify(activeProfile(state).equipment)).toBe(equipment)
+	})
+
+	test('selecting another mode clears the reticle choice; reselecting changes nothing', () => {
+		const state = load(newStores())
+		selectCameraView(state, 'MAIN_CAMERA', 'mount-nudge')
+		setCameraReticle(state, 'MAIN_CAMERA', false)
+		const before = activeProfile(state).updatedAt
+
+		selectCameraView(state, 'MAIN_CAMERA', 'mount-nudge')
+		expect(activeProfile(state).updatedAt).toBe(before)
+		expect(activeProfile(state).settings.capture.views.MAIN_CAMERA).toEqual({ mode: 'mount-nudge', reticle: false })
+
+		selectCameraView(state, 'MAIN_CAMERA', 'camera')
+		expect(activeProfile(state).settings.capture.views.MAIN_CAMERA).toEqual({ mode: 'camera' })
+	})
+
+	test('is persisted per profile', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		selectCameraView(state, 'GUIDE_CAMERA', 'polar-alignment')
+		createProfile(state, 'Other')
+		await Bun.sleep(0)
+
+		const reloaded = load({ local: stores.local, session: new MemoryStorage() })
+		expect(reloaded.profiles[0].settings.capture).toEqual({ activeCamera: 'GUIDE_CAMERA', views: { GUIDE_CAMERA: { mode: 'polar-alignment' } } })
+		expect(reloaded.profiles[1].settings.capture).toEqual({ views: {} })
 	})
 })

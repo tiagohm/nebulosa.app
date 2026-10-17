@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
-import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
-import { WORKSPACE_IDS, type WorkspaceId } from '../shell/route'
+import { CAMERA_ROLES, type CameraRole, conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
+import { type CaptureMode, isCaptureMode, WORKSPACE_IDS, type WorkspaceId } from '../shell/route'
 import { isRecord, parseJson, readText, type Stores, writeText } from '../storage'
 
 // Profiles of the browser and the profile active in this tab. Profiles are a versioned collection in
@@ -34,6 +34,26 @@ export interface ProfileSettings {
 	// Server directory an image was opened from last, where the file explorer starts; absent before the
 	// first image is opened.
 	lastImageDirectory?: string
+	// Camera view and per-camera presentation preferences of the Capture workspace.
+	capture: CaptureSettings
+}
+
+// Presentation preferences of one Capture camera view. They belong to the camera role, not to the
+// device assigned to it, so replacing the device keeps them.
+export interface CameraViewSettings {
+	// Operational mode selected last in the camera view.
+	mode: CaptureMode
+	// Whether the viewer's reticle is shown; absent follows the mode's default overlays. Selecting
+	// another mode clears it.
+	reticle?: boolean
+}
+
+// Capture preferences of a profile. Only presentation is kept: never images, devices, or operations.
+export interface CaptureSettings {
+	// Camera role of the view selected last; absent before Capture is first opened.
+	activeCamera?: CameraRole
+	// Preferences of each camera view used so far, by camera role.
+	views: Partial<Record<CameraRole, CameraViewSettings>>
 }
 
 // A complete working environment: the selected connection, the equipment assigned on each connection,
@@ -81,7 +101,23 @@ export const profileState = proxy<ProfileState>({ profiles: [], activeId: '', op
 
 // Returns the default preferences of a new profile.
 export function defaultSettings(): ProfileSettings {
-	return { panels: {} }
+	return { panels: {}, capture: { views: {} } }
+}
+
+// Restores persisted Capture preferences, dropping unknown camera roles and invalid values. Profiles
+// written before camera views existed have none and get the defaults.
+function normalizeCapture(value: unknown, capture: CaptureSettings) {
+	if (!isRecord(value)) return
+	if (isCameraRole(value.activeCamera)) capture.activeCamera = value.activeCamera
+	if (!isRecord(value.views)) return
+
+	for (const role of CAMERA_ROLES) {
+		const view = value.views[role]
+		if (!isRecord(view)) continue
+		const settings: CameraViewSettings = { mode: isCaptureMode(view.mode) ? view.mode : 'camera' }
+		if (typeof view.reticle === 'boolean') settings.reticle = view.reticle
+		capture.views[role] = settings
+	}
 }
 
 // Restores persisted preferences, falling back to the default of every missing or invalid preference.
@@ -97,6 +133,8 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	}
 
 	if (typeof value.lastImageDirectory === 'string' && value.lastImageDirectory) settings.lastImageDirectory = value.lastImageDirectory
+
+	normalizeCapture(value.capture, settings.capture)
 
 	return settings
 }
@@ -363,6 +401,28 @@ export function setLastImageDirectory(state: ProfileState, directory: string) {
 	const profile = activeProfile(state)
 	if (profile.settings.lastImageDirectory === directory) return
 	profile.settings.lastImageDirectory = directory
+	touch(profile)
+}
+
+// Remembers in the active profile the Capture camera view shown and its mode. Selecting another mode
+// clears the view's reticle choice, so the new mode's default overlays apply. The equipment setup is
+// never changed, and nothing is started or stopped.
+export function selectCameraView(state: ProfileState, role: CameraRole, mode: CaptureMode) {
+	const capture = activeProfile(state).settings.capture
+	const view = capture.views[role]
+	if (capture.activeCamera === role && view?.mode === mode) return
+	capture.activeCamera = role
+	if (view?.mode !== mode) capture.views[role] = { mode }
+	touch(activeProfile(state))
+}
+
+// Shows or hides the viewer's reticle of a Capture camera view in the active profile; other camera views
+// keep theirs.
+export function setCameraReticle(state: ProfileState, role: CameraRole, reticle: boolean) {
+	const profile = activeProfile(state)
+	const view = (profile.settings.capture.views[role] ??= { mode: 'camera' })
+	if (view.reticle === reticle) return
+	view.reticle = reticle
 	touch(profile)
 }
 

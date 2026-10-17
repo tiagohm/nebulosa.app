@@ -1,5 +1,6 @@
 import { cn } from 'cn'
 import { useState } from 'react'
+import type { CameraRole } from '../equipment/roles'
 import { routeState } from '../shell/route'
 import { WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
@@ -22,14 +23,14 @@ export function ToolsWorkspace() {
 	const selected = TOOLS.find((tool) => tool.id === selectedId)
 
 	return (
-		<WorkspaceLayout workspace="tools" title="Tools" panel={{ title: 'Tool Details', content: <ToolDetails tool={selected} availability={selected && toolAvailability(selected, context)} /> }}>
+		<WorkspaceLayout workspace="tools" title="Tools" panel={{ title: 'Tool Details', content: <ToolDetails tool={selected} availability={selected && toolAvailability(selected, context)} camera={context.camera?.role} /> }}>
 			<div className="h-full overflow-y-auto overscroll-contain p-4">
 				{TOOL_CATEGORIES.map((category) => (
 					<section key={category.id} className="mb-6 last:mb-0">
 						<h2 className="m-0 mb-2 text-[11px] font-medium tracking-[0.08em] text-ink-300 uppercase">{category.label}</h2>
 						<div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-2">
 							{TOOLS.filter((tool) => tool.category === category.id).map((tool) => (
-								<ToolCard key={tool.id} tool={tool} availability={toolAvailability(tool, context)} selected={tool.id === selectedId} onSelect={() => setSelectedId(tool.id)} />
+								<ToolCard key={tool.id} tool={tool} availability={toolAvailability(tool, context)} camera={context.camera?.role} selected={tool.id === selectedId} onSelect={() => setSelectedId(tool.id)} />
 							))}
 						</div>
 					</section>
@@ -44,6 +45,8 @@ interface ToolCardProps {
 	readonly tool: ToolDefinition
 	// Whether its requirements are met now.
 	readonly availability: ToolAvailability
+	// Camera role of the Capture camera view the tool opens in; absent when none is assigned.
+	readonly camera?: CameraRole
 	// Whether its details are shown in the panel.
 	readonly selected: boolean
 	// Shows its details.
@@ -51,7 +54,7 @@ interface ToolCardProps {
 }
 
 // Catalog card of a tool: what it does, what it needs and whether that is met, and how to open it.
-function ToolCard({ tool, availability, selected, onSelect }: ToolCardProps) {
+function ToolCard({ tool, availability, camera, selected, onSelect }: ToolCardProps) {
 	const summary = requirementSummary(tool)
 
 	return (
@@ -71,7 +74,7 @@ function ToolCard({ tool, availability, selected, onSelect }: ToolCardProps) {
 			<div className="mt-auto flex items-center justify-between gap-2 pl-12">
 				<span className={cn('min-w-0 text-[11px] leading-4', !summary ? 'text-ink-300' : availability.ready ? 'text-success' : 'text-ink-300')}>{!summary ? 'No requirements' : availability.ready ? 'Ready' : (availability.missing[0]?.message ?? summary)}</span>
 				{canLaunch(tool) && (
-					<Button size="sm" variant="secondary" className="px-2 py-0.5 text-xs" onClick={() => launchTool(routeState, tool)}>
+					<Button size="sm" variant="secondary" className="px-2 py-0.5 text-xs" onClick={() => launchTool(routeState, tool, camera)}>
 						Open
 					</Button>
 				)}

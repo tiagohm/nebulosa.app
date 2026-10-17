@@ -1,9 +1,10 @@
 import { proxy } from 'valtio'
 
-// Navigation state of the tab: the active workspace and, for Capture, its operational mode. The URL path
-// is the source of truth, so each tab navigates independently and a reload reopens the same context;
-// nothing is kept in localStorage. Paths are /capture/<mode>, /images, /sky, and /tools; anything else
-// opens the default route.
+// Navigation state of the tab: the active workspace and, for Capture, its camera view and operational
+// mode. The URL path is the source of truth, so each tab navigates independently and a reload reopens
+// the same context; the camera and mode selected last are remembered by the active profile, which
+// builds the Capture route opened from the navigation rail. Paths are /capture/<camera>/<mode>,
+// /images, /sky, and /tools; anything else opens the default route.
 
 // Main workspaces, in navigation order.
 export const WORKSPACE_IDS = ['capture', 'images', 'sky', 'tools'] as const
@@ -11,69 +12,98 @@ export const WORKSPACE_IDS = ['capture', 'images', 'sky', 'tools'] as const
 // Identifier of a main workspace; also its first path segment.
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number]
 
-// Operational modes of the Capture workspace; also the second path segment of a Capture route.
+// Camera views of the Capture workspace; also the second path segment of a Capture route. Each one
+// stands for a camera role of the profile's equipment setup.
+export const CAPTURE_CAMERAS = ['main', 'guide'] as const
+
+// Identifier of a Capture camera view.
+export type CaptureCamera = (typeof CAPTURE_CAMERAS)[number]
+
+// Operational modes of the Capture workspace; also the third path segment of a Capture route.
 export const CAPTURE_MODES = ['camera', 'mount-nudge', 'focus-calibrator', 'polar-alignment'] as const
 
 // Identifier of a Capture operational mode.
 export type CaptureMode = (typeof CAPTURE_MODES)[number]
 
-// Location within the application: a workspace and, for Capture, the selected mode.
-export type Route = { readonly workspace: 'capture'; readonly mode: CaptureMode } | { readonly workspace: Exclude<WorkspaceId, 'capture'> }
+// Location in the Capture workspace: the camera view shown and its operational mode.
+export interface CaptureRoute {
+	// Capture workspace.
+	readonly workspace: 'capture'
+	// Camera view shown.
+	readonly camera: CaptureCamera
+	// Operational mode of the camera view.
+	readonly mode: CaptureMode
+}
+
+// Location within the application: a workspace and, for Capture, the camera view and its mode.
+export type Route = CaptureRoute | { readonly workspace: Exclude<WorkspaceId, 'capture'> }
 
 // Route opened for an empty or unknown path.
-export const DEFAULT_ROUTE: Route = { workspace: 'capture', mode: 'camera' }
+export const DEFAULT_ROUTE: Route = { workspace: 'capture', camera: 'main', mode: 'camera' }
 
 // Navigation store of the tab.
 export interface RouteState {
 	// Current route, mirrored by the URL path.
 	route: Route
-	// Capture mode selected last in the tab, restored when Capture is opened from the navigation rail.
-	captureMode: CaptureMode
 }
 
 // Navigation store of the tab, at the default route until watchHistory runs.
-export const routeState = proxy<RouteState>({ route: DEFAULT_ROUTE, captureMode: 'camera' })
+export const routeState = proxy<RouteState>({ route: DEFAULT_ROUTE })
 
 // Whether value names a workspace.
 function isWorkspaceId(value: string): value is WorkspaceId {
 	return (WORKSPACE_IDS as readonly string[]).includes(value)
 }
 
+// Whether value names a Capture camera view.
+function isCaptureCamera(value: string): value is CaptureCamera {
+	return (CAPTURE_CAMERAS as readonly string[]).includes(value)
+}
+
 // Whether value names a Capture mode.
-function isCaptureMode(value: string): value is CaptureMode {
-	return (CAPTURE_MODES as readonly string[]).includes(value)
+export function isCaptureMode(value: unknown): value is CaptureMode {
+	return (CAPTURE_MODES as readonly unknown[]).includes(value)
 }
 
 // Returns the route of a URL path. An unknown workspace gives DEFAULT_ROUTE; a Capture path without a
-// known mode opens the camera mode; extra segments are ignored.
+// known camera opens the main camera, reading the path written before camera views existed
+// (/capture/<mode>); an unknown mode opens the camera mode; extra segments are ignored.
 export function parseRoute(pathname: string): Route {
-	const [workspace = '', mode = ''] = pathname.split('/').filter(Boolean)
+	const [workspace = '', first = '', second = ''] = pathname.split('/').filter(Boolean)
 	if (!isWorkspaceId(workspace)) return DEFAULT_ROUTE
-	if (workspace === 'capture') return { workspace, mode: isCaptureMode(mode) ? mode : 'camera' }
+
+	if (workspace === 'capture') {
+		const camera = isCaptureCamera(first) ? first : 'main'
+		const mode = isCaptureCamera(first) ? second : first
+		return { workspace, camera, mode: isCaptureMode(mode) ? mode : 'camera' }
+	}
+
 	return { workspace }
 }
 
 // Returns the canonical URL path of a route.
 export function routePath(route: Route): string {
-	return route.workspace === 'capture' ? `/capture/${route.mode}` : `/${route.workspace}`
-}
-
-// Applies a route to the store, remembering the Capture mode.
-function apply(state: RouteState, route: Route) {
-	state.route = route
-	if (route.workspace === 'capture') state.captureMode = route.mode
+	return route.workspace === 'capture' ? `/capture/${route.camera}/${route.mode}` : `/${route.workspace}`
 }
 
 // Navigates the tab to a route, adding a history entry when the path changes. Navigation only changes
 // what is shown: it never connects, disconnects, or stops anything.
 export function navigate(state: RouteState, route: Route, history: Pick<History, 'pushState'> = window.history) {
 	if (routePath(route) !== routePath(state.route)) history.pushState(null, '', routePath(route))
-	apply(state, route)
+	state.route = route
 }
 
-// Opens a workspace from the navigation rail; Capture reopens the mode selected last in the tab.
-export function openWorkspace(state: RouteState, workspace: WorkspaceId, history: Pick<History, 'pushState'> = window.history) {
-	navigate(state, workspace === 'capture' ? { workspace, mode: state.captureMode } : { workspace }, history)
+// Replaces the current route without adding a history entry, for a route that cannot be shown as is,
+// such as a camera view whose role is no longer assigned.
+export function redirect(state: RouteState, route: Route, history: Pick<History, 'replaceState'> = window.history) {
+	if (routePath(route) !== routePath(state.route)) history.replaceState(null, '', routePath(route))
+	state.route = route
+}
+
+// Opens a workspace from the navigation rail; Capture opens the given route, which the caller builds
+// from the camera view and mode the active profile selected last.
+export function openWorkspace(state: RouteState, workspace: WorkspaceId, capture: CaptureRoute, history: Pick<History, 'pushState'> = window.history) {
+	navigate(state, workspace === 'capture' ? capture : { workspace }, history)
 }
 
 // Loads the route of the current URL, rewriting it to its canonical path, and follows the browser's back
@@ -81,7 +111,7 @@ export function openWorkspace(state: RouteState, workspace: WorkspaceId, history
 export function watchHistory(state: RouteState, target: Window = window): () => void {
 	function sync() {
 		const route = parseRoute(target.location.pathname)
-		apply(state, route)
+		state.route = route
 		if (target.location.pathname !== routePath(route)) target.history.replaceState(null, '', routePath(route) + target.location.search)
 	}
 

@@ -6,8 +6,9 @@ import { ContextualPanel } from './ContextualPanel'
 import type { WorkspaceId } from './route'
 import { useMediaQuery, WIDE_SCREEN } from './useMediaQuery'
 
-// Common frame of every workspace: a header with the title, the workspace's context controls (such as
-// the Capture mode selector) and actions, the main content, and the collapsible contextual panel. On
+// Common frame of every workspace: optional tabs spanning the whole workspace (such as the Capture camera
+// views), a header with the title, the workspace's context controls (such as the Capture mode selector)
+// and actions, the main content, and the collapsible contextual panel. On
 // wide screens the panel's visibility is a preference of the active profile, kept per workspace; on
 // narrow screens it is a drawer that starts closed and is never persisted.
 
@@ -30,12 +31,14 @@ export interface WorkspaceLayoutProps {
 	readonly actions?: ReactNode
 	// Contextual panel; absent when the workspace has none.
 	readonly panel?: WorkspacePanel
+	// Tabs shown above the header, the content, and the panel, selecting the context all of them show.
+	readonly tabs?: ReactNode
 	// Main content; fills the remaining space and manages its own scrolling.
 	readonly children: ReactNode
 }
 
 // Frame of a workspace.
-export function WorkspaceLayout({ workspace, title, context, actions, panel, children }: WorkspaceLayoutProps) {
+export function WorkspaceLayout({ workspace, title, context, actions, panel, tabs, children }: WorkspaceLayoutProps) {
 	const docked = useMediaQuery(WIDE_SCREEN)
 	const profiles = useSnapshot(profileState)
 	const [drawerOpen, setDrawerOpen] = useState(false)
@@ -46,7 +49,7 @@ export function WorkspaceLayout({ workspace, title, context, actions, panel, chi
 		else setDrawerOpen(value)
 	}
 
-	return (
+	const frame = (
 		<section className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
 			<div className="flex min-w-0 flex-1 flex-col">
 				<header className="flex h-12 flex-none items-center gap-3 border-b border-line-100 bg-base-100 px-4">
@@ -65,6 +68,15 @@ export function WorkspaceLayout({ workspace, title, context, actions, panel, chi
 				</ContextualPanel>
 			)}
 		</section>
+	)
+
+	if (!tabs) return frame
+
+	return (
+		<div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+			{tabs}
+			{frame}
+		</div>
 	)
 }
 

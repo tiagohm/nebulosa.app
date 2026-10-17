@@ -63,12 +63,23 @@ export const ROLES: readonly RoleDefinition[] = [
 	{ role: 'FLAT_PANEL', label: 'Flat Panel', deviceType: 'flatPanel', group: 'OBSERVATORY' },
 ]
 
+// Camera roles, in Capture tab order. Each one assigned in a setup is a camera view of Capture.
+export const CAMERA_ROLES = ['MAIN_CAMERA', 'GUIDE_CAMERA'] as const satisfies readonly EquipmentRole[]
+
+// Role filled by a camera.
+export type CameraRole = (typeof CAMERA_ROLES)[number]
+
 // Groups of roles that cannot share a device: one camera cannot image and guide at once.
 export const EXCLUSIVE_ROLES: readonly (readonly EquipmentRole[])[] = [['MAIN_CAMERA', 'GUIDE_CAMERA']]
 
 // Whether value names a role.
 export function isEquipmentRole(value: string): value is EquipmentRole {
 	return ROLES.some((r) => r.role === value)
+}
+
+// Whether value names a camera role.
+export function isCameraRole(value: unknown): value is CameraRole {
+	return (CAMERA_ROLES as readonly unknown[]).includes(value)
 }
 
 // Returns the definition of a role.

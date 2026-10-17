@@ -1,6 +1,6 @@
 import { PanelSection, PlannedControls } from '../shell/ContextualPanel'
 
-// Contextual panel of the Focus Calibrator mode: exposures of the main camera at focuser positions,
+// Contextual panel of the Focus Calibrator mode: exposures of the view's camera at focuser positions,
 // measuring focus quality to find the best position. Charts appear only once real data exists.
 
 // Focus Calibrator controls.

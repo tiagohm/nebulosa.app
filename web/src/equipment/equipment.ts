@@ -1,4 +1,4 @@
-import type { DeviceSummary, ServerEvent } from 'api'
+import type { DeviceEvent, DeviceSummary, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import { responseError } from '../http'
 import type { EquipmentRole, EquipmentSetup } from './roles'
@@ -45,11 +45,11 @@ export interface DeviceView {
 export const deviceState = proxy<DeviceState>({ devices: [], loading: false, pending: {}, errors: {}, open: false })
 
 // Operational state of a role, as shown to the user.
-export type RoleStatus = 'not-selected' | 'unavailable' | 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'error'
+export type RoleStatus = 'notSelected' | 'unavailable' | 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'error'
 
 // Display text of each role status.
 export const ROLE_STATUS_LABELS: Readonly<Record<RoleStatus, string>> = {
-	'not-selected': 'Not Selected',
+	notSelected: 'Not Selected',
 	unavailable: 'Unavailable',
 	disconnected: 'Disconnected',
 	connecting: 'Connecting',
@@ -62,13 +62,27 @@ export const ROLE_STATUS_LABELS: Readonly<Record<RoleStatus, string>> = {
 let generation = 0
 
 // Pending-request timers by device id.
-const timers = new Map<string, ReturnType<typeof setTimeout>>()
+const timers = new Map<string, number>()
+
+// Device events of the watched connection received while a device list fetch is in flight. They are
+// replayed, in order, onto the fetched list, which may predate them.
+let queued: DeviceEvent[] = []
 
 // Clears the pending request of a device and its timeout.
 function settle(state: DeviceState, id: string) {
 	clearTimeout(timers.get(id))
 	timers.delete(id)
 	delete state.pending[id]
+}
+
+// Drops the tracked devices with their pending requests and queued events; errors are kept unless
+// clearErrors is set.
+function clearDevices(state: DeviceState, clearErrors: boolean) {
+	for (const id of Array.from(timers.keys())) settle(state, id)
+	state.devices = []
+	state.pending = {}
+	if (clearErrors) state.errors = {}
+	queued = []
 }
 
 // Fetches the device list of the watched connection. A response is dropped when the watched connection
@@ -86,8 +100,12 @@ export async function refreshDevices(state: DeviceState) {
 
 	try {
 		const response = await fetch(`/api/connections/${encodeURIComponent(serverId)}/devices`)
+		const devices = response.ok ? ((await response.json()) as DeviceSummary[]) : []
 		if (current !== generation || state.watched !== serverId) return
-		state.devices = response.ok ? ((await response.json()) as DeviceSummary[]) : []
+		state.devices = devices
+		const replay = queued
+		queued = []
+		for (const event of replay) applyDeviceEvent(state, event)
 	} catch {
 		// The server is unreachable; the next socket open refreshes the list.
 	} finally {
@@ -100,12 +118,8 @@ export async function refreshDevices(state: DeviceState) {
 export function watchServer(state: DeviceState, serverId: string | undefined) {
 	if (state.watched === serverId) return
 
-	for (const id of timers.keys()) settle(state, id)
-
+	clearDevices(state, true)
 	state.watched = serverId
-	state.devices = []
-	state.pending = {}
-	state.errors = {}
 
 	void refreshDevices(state)
 }
@@ -118,19 +132,28 @@ export function handleDeviceEvent(state: DeviceState, event: ServerEvent) {
 			if (event.connection.id === state.watched) void refreshDevices(state)
 			return
 		case 'connection:close':
-			if (event.id === state.watched) state.devices = []
+			if (event.id === state.watched) clearDevices(state, false)
 			return
+		default: {
+			const connectionId = event.type === 'device:added' ? event.device.connectionId : event.connectionId
+			if (connectionId !== state.watched) return
+			if (state.loading) queued.push(event)
+			applyDeviceEvent(state, event)
+		}
+	}
+}
+
+// Applies a device event of the watched connection to its device list, pending requests, and errors.
+function applyDeviceEvent(state: DeviceState, event: DeviceEvent) {
+	switch (event.type) {
 		case 'device:added':
-			if (event.device.connectionId !== state.watched) return
 			state.devices = [...state.devices.filter((d) => d.id !== event.device.id), event.device]
 			return
 		case 'device:removed':
-			if (event.connectionId !== state.watched) return
 			state.devices = state.devices.filter((d) => d.id !== event.id)
 			settle(state, event.id)
 			return
 		case 'device:updated': {
-			if (event.connectionId !== state.watched) return
 			const device = state.devices.find((d) => d.id === event.id)
 			if (device) state.devices = state.devices.map((d) => (d.id === event.id ? { ...d, connected: event.connected } : d))
 			const pending = state.pending[event.id]
@@ -160,7 +183,7 @@ export async function switchDevice(state: DeviceState, deviceId: string, connect
 	delete state.errors[deviceId]
 	timers.set(
 		deviceId,
-		setTimeout(() => {
+		window.setTimeout(() => {
 			if (!state.pending[deviceId]) return
 			settle(state, deviceId)
 			state.errors[deviceId] = `The device did not ${connect ? 'connect' : 'disconnect'} in time`
@@ -184,15 +207,15 @@ export async function switchDevice(state: DeviceState, deviceId: string, connect
 
 // Returns the device assigned to a role among the watched connection's devices.
 export function roleDevice(setup: Readonly<EquipmentSetup>, role: EquipmentRole, state: Pick<DeviceView, 'devices'>): DeviceSummary | undefined {
-	const id = setup[role]
+	const id = setup[role]?.id
 	return id === undefined ? undefined : state.devices.find((d) => d.id === id)
 }
 
 // Returns the operational state of a role: whether a device is assigned, present on the watched
 // connection, switching, failed, or connected. A device of a closed connection is unavailable.
 export function roleStatus(setup: Readonly<EquipmentSetup>, role: EquipmentRole, state: Pick<DeviceView, 'devices' | 'pending' | 'errors'>): RoleStatus {
-	const id = setup[role]
-	if (id === undefined) return 'not-selected'
+	const id = setup[role]?.id
+	if (id === undefined) return 'notSelected'
 
 	const device = roleDevice(setup, role, state)
 	if (!device) return 'unavailable'

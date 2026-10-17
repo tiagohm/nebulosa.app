@@ -20,20 +20,20 @@ describe('role status', () => {
 		const state = { devices: [device('a'), device('b', true)], pending: { c: 'connect' as const }, errors: { d: 'boom' } }
 		state.devices.push(device('c'), device('d'))
 
-		expect(roleStatus({}, 'MAIN_CAMERA', state)).toBe('not-selected')
-		expect(roleStatus({ MAIN_CAMERA: 'gone' }, 'MAIN_CAMERA', state)).toBe('unavailable')
-		expect(roleStatus({ MAIN_CAMERA: 'a' }, 'MAIN_CAMERA', state)).toBe('disconnected')
-		expect(roleStatus({ MAIN_CAMERA: 'b' }, 'MAIN_CAMERA', state)).toBe('connected')
-		expect(roleStatus({ MAIN_CAMERA: 'c' }, 'MAIN_CAMERA', state)).toBe('connecting')
-		expect(roleStatus({ MAIN_CAMERA: 'd' }, 'MAIN_CAMERA', state)).toBe('error')
-		expect(roleStatus({ MAIN_CAMERA: 'b' }, 'MAIN_CAMERA', { ...state, pending: { b: 'disconnect' } })).toBe('disconnecting')
+		expect(roleStatus({}, 'MAIN_CAMERA', state)).toBe('notSelected')
+		expect(roleStatus({ MAIN_CAMERA: { id: 'gone', name: 'gone' } }, 'MAIN_CAMERA', state)).toBe('unavailable')
+		expect(roleStatus({ MAIN_CAMERA: { id: 'a', name: 'a' } }, 'MAIN_CAMERA', state)).toBe('disconnected')
+		expect(roleStatus({ MAIN_CAMERA: { id: 'b', name: 'b' } }, 'MAIN_CAMERA', state)).toBe('connected')
+		expect(roleStatus({ MAIN_CAMERA: { id: 'c', name: 'c' } }, 'MAIN_CAMERA', state)).toBe('connecting')
+		expect(roleStatus({ MAIN_CAMERA: { id: 'd', name: 'd' } }, 'MAIN_CAMERA', state)).toBe('error')
+		expect(roleStatus({ MAIN_CAMERA: { id: 'b', name: 'b' } }, 'MAIN_CAMERA', { ...state, pending: { b: 'disconnect' } })).toBe('disconnecting')
 	})
 
 	test('a closed connection keeps the assignment as unavailable', () => {
 		const state = newState([device('a', true)])
 		handleDeviceEvent(state, { type: 'connection:close', id: 's1' })
 
-		expect(roleStatus({ MAIN_CAMERA: 'a' }, 'MAIN_CAMERA', state)).toBe('unavailable')
+		expect(roleStatus({ MAIN_CAMERA: { id: 'a', name: 'a' } }, 'MAIN_CAMERA', state)).toBe('unavailable')
 	})
 })
 
@@ -106,7 +106,7 @@ describe('switching a device', () => {
 
 		handleDeviceEvent(state, { type: 'device:updated', connectionId: 's1', id: 'a', connected: true, state: 'Ok' })
 		expect(state.pending.a).toBeUndefined()
-		expect(roleStatus({ MAIN_CAMERA: 'a' }, 'MAIN_CAMERA', state)).toBe('connected')
+		expect(roleStatus({ MAIN_CAMERA: { id: 'a', name: 'a' } }, 'MAIN_CAMERA', state)).toBe('connected')
 	})
 
 	test('a rejected request or a driver alert is an error', async () => {
@@ -120,7 +120,7 @@ describe('switching a device', () => {
 		fetchSpy.mockResolvedValue(new Response(null, { status: 202 }))
 		await switchDevice(state, 'b', true)
 		handleDeviceEvent(state, { type: 'device:updated', connectionId: 's1', id: 'b', connected: false, state: 'Alert' })
-		expect(roleStatus({ GUIDE_CAMERA: 'b' }, 'GUIDE_CAMERA', state)).toBe('error')
+		expect(roleStatus({ GUIDE_CAMERA: { id: 'b', name: 'b' } }, 'GUIDE_CAMERA', state)).toBe('error')
 	})
 
 	test('a device not in the watched connection is never commanded', async () => {
@@ -139,5 +139,35 @@ describe('switching a device', () => {
 		await refreshDevices(state)
 
 		expect(fetchSpy).not.toHaveBeenCalled()
+	})
+})
+
+describe('events during a fetch', () => {
+	test('are replayed onto the fetched list', async () => {
+		const response = Promise.withResolvers<Response>()
+		fetchSpy.mockReturnValueOnce(response.promise)
+		const state = newState([], 's0')
+
+		watchServer(state, 's1')
+		handleDeviceEvent(state, { type: 'device:updated', connectionId: 's1', id: 'a', connected: true, state: 'Ok' })
+		handleDeviceEvent(state, { type: 'device:added', device: device('b') })
+		// The list was computed before both events.
+		response.resolve(Response.json([device('a'), device('c')]))
+		await Bun.sleep(0)
+
+		expect(state.devices).toEqual([device('a', true), device('c'), device('b')])
+	})
+
+	test('a close drops pending requests but keeps errors', async () => {
+		fetchSpy.mockResolvedValue(new Response(null, { status: 202 }))
+		const state = newState([device('a'), device('b')])
+		state.errors.b = 'boom'
+		await switchDevice(state, 'a', true)
+
+		handleDeviceEvent(state, { type: 'connection:close', id: 's1' })
+
+		expect(state.devices).toBeEmpty()
+		expect(state.pending).toEqual({})
+		expect(state.errors).toEqual({ b: 'boom' })
 	})
 })

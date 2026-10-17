@@ -8,7 +8,7 @@ import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { Select } from '../ui/Select'
 import { deviceState, ROLE_STATUS_LABELS, type RoleStatus, roleDevice, roleStatus, switchDevice } from './equipment'
-import { conflictingRole, type EquipmentRole, type EquipmentSetup, type RoleDefinition, roleDefinition, ROLES } from './roles'
+import { conflictingRole, type EquipmentSetup, type RoleDefinition, roleDefinition, ROLE_GROUPS, ROLES } from './roles'
 import { useWatchedDevices } from './useEquipment'
 
 // Modal that assigns the devices of the active profile's connection to the equipment roles and connects
@@ -26,7 +26,7 @@ const badge = tv({
 	},
 	variants: {
 		status: {
-			'not-selected': { root: 'border-dashed border-line-100 text-ink-300', dot: 'hidden' },
+			notSelected: { root: 'border-dashed border-line-100 text-ink-300', dot: 'hidden' },
 			unavailable: { root: 'border-line-200 text-ink-300', dot: 'border border-ink-300' },
 			disconnected: { root: 'border-line-100 text-ink-200', dot: 'border border-ink-200' },
 			connecting: { root: 'border-accent/50 text-accent', dot: 'animate-pulse bg-accent' },
@@ -54,13 +54,15 @@ const ICONS: Readonly<Record<ManagedDeviceType, string>> = {
 export function EquipmentModal() {
 	const { open } = useSnapshot(deviceState)
 	const profiles = useSnapshot(profileState)
-	const { connections, servers, loading, error } = useSnapshot(connectionState)
+	const { connections, servers, loading, errors } = useSnapshot(connectionState)
 	const runtime = useWatchedDevices()
 	const profile = activeProfile(profiles)
 	const setup = activeSetup(profile)
 	const connection = connections.find((c) => c.id === profile.connectionId)
 	const serverOpen = serverOf(servers, connection) !== undefined
 	const serverConnecting = connection !== undefined && loading?.kind === 'connect' && loading.connectionId === connection.id
+	// Failure of the last connect or disconnect of the profile's connection.
+	const connectionError = connection && errors[connection.id]
 
 	// Closes this modal and opens the Connections modal, where the profile's connection is chosen.
 	function openConnections() {
@@ -69,8 +71,8 @@ export function EquipmentModal() {
 	}
 
 	return (
-		<Modal open={open} onClose={() => (deviceState.open = false)} title="Equipment Setup" className="max-w-[760px]">
-			<div className="flex flex-col gap-5">
+		<Modal open={open} onClose={() => (deviceState.open = false)} title="Equipment Setup" className="max-w-[760px]" fit>
+			<div className="flex min-h-0 flex-col gap-5">
 				<div className="flex flex-col gap-1">
 					<p className="m-0">Select and connect the devices used by this profile.</p>
 					<p className="m-0 text-xs leading-5 text-ink-300">
@@ -93,22 +95,34 @@ export function EquipmentModal() {
 								</Button>
 							</Notice>
 						)}
-						{error && !serverOpen && <p className="m-0 text-[13px] leading-5 text-danger">{error}</p>}
+						{connectionError && !serverOpen && <p className="m-0 text-[13px] leading-5 text-danger">{connectionError}</p>}
 						{serverOpen && runtime.loading && <p className="m-0 text-[13px] leading-5 text-ink-300">Loading devices…</p>}
-						<ul className="-mr-2 m-0 flex max-h-[calc(100dvh-15rem)] min-h-40 list-none flex-col gap-2 overflow-y-auto overscroll-contain p-0 pr-2">
-							{ROLES.map((definition) => (
-								<RoleRow
-									key={definition.role}
-									definition={definition}
-									setup={setup}
-									devices={runtime.devices}
-									status={roleStatus(setup, definition.role, runtime)}
-									device={roleDevice(setup, definition.role, runtime)}
-									error={setup[definition.role] ? runtime.errors[setup[definition.role]!] : undefined}
-									serverOpen={serverOpen}
-								/>
+						<div className="-mr-2 flex min-h-0 flex-col gap-4 overflow-y-auto overscroll-contain pr-2">
+							{ROLE_GROUPS.map(({ group, label }) => (
+								<section key={group} className="flex flex-col gap-2">
+									<h3 className="m-0 text-xs leading-4 font-medium tracking-[0.08em] text-ink-300 uppercase">{label}</h3>
+									<ul className="m-0 flex list-none flex-col gap-2 p-0">
+										{ROLES.filter((definition) => definition.group === group).map((definition) => {
+											const assigned = setup[definition.role]
+
+											return (
+												<RoleRow
+													// Keyed by profile and connection, so a switch resets the row's messages.
+													key={`${profile.id}:${connection.id}:${definition.role}`}
+													definition={definition}
+													setup={setup}
+													devices={runtime.devices}
+													status={roleStatus(setup, definition.role, runtime)}
+													device={roleDevice(setup, definition.role, runtime)}
+													error={assigned && runtime.errors[assigned.id]}
+													serverOpen={serverOpen}
+												/>
+											)
+										})}
+									</ul>
+								</section>
 							))}
-						</ul>
+						</div>
 					</>
 				)}
 			</div>
@@ -153,7 +167,8 @@ interface RoleRowProps {
 // Row of one role: icon and name, device selector, status badge, and connect or disconnect action.
 function RoleRow({ definition, setup, devices, device, status, error, serverOpen }: RoleRowProps) {
 	const { role, label, deviceType } = definition
-	const assigned = setup[role]
+	const assignment = setup[role]
+	const assigned = assignment?.id
 	const candidates = devices.filter((d) => d.type === deviceType)
 	// The saved device stays selectable while missing, so the assignment is shown and can be replaced or cleared.
 	const options = [NONE, ...candidates.map((d) => d.id), ...(assigned && !candidates.some((d) => d.id === assigned) ? [assigned] : [])]
@@ -162,14 +177,17 @@ function RoleRow({ definition, setup, devices, device, status, error, serverOpen
 
 	// Assigns the chosen device, or clears the role for None.
 	function handleChange(value: string) {
-		const result = assignDevice(profileState, role, value === NONE ? undefined : value)
+		const device = candidates.find((d) => d.id === value)
+		const result = assignDevice(profileState, role, device && { id: device.id, name: device.name })
 		setMessage(result.ok ? undefined : result.reason === 'conflict' ? `Already used as ${roleDefinition(result.role).label}.` : 'Select a connection first.')
 	}
 
 	// Display name of a select option.
 	function format(value: string) {
 		if (value === NONE) return 'None'
-		return candidates.find((d) => d.id === value)?.name ?? (serverOpen ? 'Unavailable device' : 'Saved device (not connected)')
+		// A missing saved device keeps the name stored with its assignment; assignments saved before names
+		// were stored have none.
+		return candidates.find((d) => d.id === value)?.name ?? (value === assigned && assignment?.name ? assignment.name : 'Saved device')
 	}
 
 	// Reason an option cannot be chosen: another role that cannot share the device already holds it.
@@ -204,7 +222,7 @@ function RoleRow({ definition, setup, devices, device, status, error, serverOpen
 				{ROLE_STATUS_LABELS[status]}
 			</span>
 			<div className="flex justify-end max-sm:col-start-3">{device && <DeviceAction device={device} status={status} />}</div>
-			{hint && <p className={`col-start-2 col-end-[-1] m-0 text-xs leading-4 ${message || error ? 'text-danger' : 'text-ink-300'}`}>{hint}</p>}
+			{hint && <p className={`col-start-2 -col-end-1 m-0 text-xs leading-4 ${message || error ? 'text-danger' : 'text-ink-300'}`}>{hint}</p>}
 		</li>
 	)
 }

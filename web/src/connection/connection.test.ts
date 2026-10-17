@@ -4,7 +4,7 @@ import { MemoryStorage } from '../storage.memory'
 import { connect, CONNECTIONS_KEY, type ConnectionState, disconnect, handleConnectionEvent, loadConnections, persistConnections, removeConnection, saveConnection, serverOf } from './connection'
 
 function newState(): ConnectionState {
-	return { open: true, connections: [], servers: [] }
+	return { open: true, connections: [], servers: [], errors: {} }
 }
 
 describe('save connection', () => {
@@ -139,7 +139,7 @@ describe('connect and disconnect', () => {
 
 		expect(JSON.parse(fetchSpy.mock.calls[0][1]?.body as string)).toEqual({ type: 'INDI', host: 'pi.local', port: 7624 })
 		expect(state.servers).toBeEmpty()
-		expect(state.error).toBe('Unable to connect')
+		expect(state.errors).toEqual({ [indi.id]: 'Unable to connect' })
 	})
 
 	test('disconnect forgets the server connection, also when the server no longer has it', async () => {
@@ -153,7 +153,7 @@ describe('connect and disconnect', () => {
 
 			expect(fetchSpy).toHaveBeenLastCalledWith('/api/connections/server-1', { method: 'DELETE' })
 			expect(state.servers).toBeEmpty()
-			expect(state.error).toBeUndefined()
+			expect(state.errors).toEqual({})
 		}
 	})
 })
@@ -169,5 +169,21 @@ describe('connection events', () => {
 
 		handleConnectionEvent(state, { type: 'connection:close', id: 'server-1' })
 		expect(state.servers).toBeEmpty()
+	})
+})
+
+describe('connection errors', () => {
+	test('belong to their connection and clear when it opens or is edited', () => {
+		const state = newState()
+		const a = saveConnection(state, { name: 'A', host: 'a', port: 1, type: 'INDI' })!
+		const b = saveConnection(state, { name: 'B', host: 'b', port: 2, type: 'INDI' })!
+		state.errors[a.id] = 'refused'
+		state.errors[b.id] = 'timeout'
+
+		handleConnectionEvent(state, { type: 'connection:open', connection: { type: 'INDI', host: 'A', port: 1, id: 's-a' } })
+		expect(state.errors).toEqual({ [b.id]: 'timeout' })
+
+		saveConnection(state, { name: 'B', host: 'b2', port: 2, type: 'INDI' }, b.id)
+		expect(state.errors).toEqual({})
 	})
 })

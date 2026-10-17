@@ -3,7 +3,11 @@ import { proxy } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createProfile, deleteProfile, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, persistProfiles, type ProfileState, PROFILES_KEY, renameProfile, selectConnection, selectProfile } from './profile'
+import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createProfile, deleteProfile, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectConnection, selectProfile } from './profile'
+
+function dev(id: string) {
+	return { id, name: `${id} name` }
+}
 
 function newStores(local = new MemoryStorage()): Stores {
 	return { local, session: new MemoryStorage() }
@@ -33,7 +37,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 1, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: 2, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -55,8 +59,16 @@ describe('load', () => {
 			['a', 'A'],
 			['b', 'Unnamed'],
 		])
-		expect(state.profiles[0]).toMatchObject({ connectionId: 'c', equipment: { c: { MAIN_CAMERA: 'cam' } }, settings: {} })
+		expect(state.profiles[0]).toMatchObject({ connectionId: 'c', equipment: { c: { MAIN_CAMERA: { id: 'cam', name: '' } } }, settings: {} })
 		expect(state.profiles[1]).toMatchObject({ equipment: {}, settings: {}, createdAt: expect.any(String) })
+	})
+
+	test('version 2 restores assigned device names', () => {
+		const stores = newStores()
+		const profiles = [{ id: 'a', name: 'A', equipment: { c: { MAIN_CAMERA: { id: 'cam', name: 'ZWO ASI2600' }, MOUNT: { name: 'no id' }, FOCUSER: { id: 'f' } } } }]
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
+
+		expect(load(stores).profiles[0].equipment).toEqual({ c: { MAIN_CAMERA: { id: 'cam', name: 'ZWO ASI2600' }, FOCUSER: { id: 'f', name: '' } } })
 	})
 
 	test('an unknown version falls back to Default', () => {
@@ -148,15 +160,15 @@ describe('management', () => {
 	test('a duplicate is independent of its source', () => {
 		const state = load(newStores())
 		selectConnection(state, 'conn')
-		assignDevice(state, 'MOUNT', 'mount-1')
+		assignDevice(state, 'MOUNT', dev('mount-1'))
 		const source = activeProfile(state)
 		const copy = duplicateProfile(state, source.id)!
 
 		expect(copy.id).not.toBe(source.id)
-		expect(copy).toMatchObject({ name: 'Default (copy)', connectionId: 'conn', equipment: { conn: { MOUNT: 'mount-1' } } })
+		expect(copy).toMatchObject({ name: 'Default (copy)', connectionId: 'conn', equipment: { conn: { MOUNT: dev('mount-1') } } })
 
-		assignDevice(state, 'MOUNT', 'mount-2')
-		expect(state.profiles[1].equipment.conn.MOUNT).toBe('mount-1')
+		assignDevice(state, 'MOUNT', dev('mount-2'))
+		expect(state.profiles[1].equipment.conn.MOUNT).toEqual(dev('mount-1'))
 	})
 
 	test('the last profile cannot be deleted; deleting the active one selects another', () => {
@@ -188,35 +200,48 @@ describe('equipment', () => {
 	test('each connection keeps its own setup', () => {
 		const state = load(newStores())
 
-		expect(assignDevice(state, 'MOUNT', 'm')).toEqual({ ok: false, reason: 'no-connection' })
+		expect(assignDevice(state, 'MOUNT', dev('m'))).toEqual({ ok: false, reason: 'no-connection' })
 
 		selectConnection(state, 'indi')
-		assignDevice(state, 'MAIN_CAMERA', 'cam-indi')
+		assignDevice(state, 'MAIN_CAMERA', dev('cam-indi'))
 		selectConnection(state, 'sim')
 		expect(activeSetup(activeProfile(state))).toEqual({})
-		assignDevice(state, 'MAIN_CAMERA', 'cam-sim')
+		assignDevice(state, 'MAIN_CAMERA', dev('cam-sim'))
 
 		selectConnection(state, 'indi')
-		expect(activeSetup(activeProfile(state))).toEqual({ MAIN_CAMERA: 'cam-indi' })
+		expect(activeSetup(activeProfile(state))).toEqual({ MAIN_CAMERA: dev('cam-indi') })
 	})
 
 	test('main and guide camera cannot share a device', () => {
 		const state = load(newStores())
 		selectConnection(state, 'c')
 
-		expect(assignDevice(state, 'MAIN_CAMERA', 'cam')).toEqual({ ok: true })
-		expect(assignDevice(state, 'GUIDE_CAMERA', 'cam')).toEqual({ ok: false, reason: 'conflict', role: 'MAIN_CAMERA' })
-		expect(assignDevice(state, 'GUIDE_CAMERA', 'cam-2')).toEqual({ ok: true })
+		expect(assignDevice(state, 'MAIN_CAMERA', dev('cam'))).toEqual({ ok: true })
+		expect(assignDevice(state, 'GUIDE_CAMERA', dev('cam'))).toEqual({ ok: false, reason: 'conflict', role: 'MAIN_CAMERA' })
+		expect(assignDevice(state, 'GUIDE_CAMERA', dev('cam-2'))).toEqual({ ok: true })
 		expect(assignDevice(state, 'MAIN_CAMERA', undefined)).toEqual({ ok: true })
-		expect(activeSetup(activeProfile(state))).toEqual({ GUIDE_CAMERA: 'cam-2' })
+		expect(activeSetup(activeProfile(state))).toEqual({ GUIDE_CAMERA: dev('cam-2') })
+	})
+
+	test('missing assignment names are filled from the listed devices', () => {
+		const state = load(newStores())
+		selectConnection(state, 'c')
+		activeProfile(state).equipment.c = { MOUNT: { id: 'm', name: '' }, FOCUSER: { id: 'gone', name: '' }, MAIN_CAMERA: dev('cam') }
+
+		rememberDeviceNames(state, [
+			{ id: 'm', name: 'EQ6-R' },
+			{ id: 'cam', name: 'other' },
+		])
+
+		expect(activeSetup(activeProfile(state))).toEqual({ MOUNT: { id: 'm', name: 'EQ6-R' }, FOCUSER: { id: 'gone', name: '' }, MAIN_CAMERA: dev('cam') })
 	})
 
 	test('a removed connection is forgotten by every profile', () => {
 		const state = load(newStores())
 		selectConnection(state, 'gone')
-		assignDevice(state, 'MOUNT', 'm')
+		assignDevice(state, 'MOUNT', dev('m'))
 		const other = createProfile(state, 'Other')!
-		other.equipment.gone = { FOCUSER: 'f' }
+		other.equipment.gone = { FOCUSER: dev('f') }
 		other.connectionId = 'kept'
 
 		forgetConnection(state, 'gone')

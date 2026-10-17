@@ -2,7 +2,7 @@ import type { DeviceSummary } from 'api'
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { connectionState, serverOf } from '../connection/connection'
-import { activeProfile, activeSetup, profileState } from '../profile/profile'
+import { activeProfile, activeSetup, profileState, rememberDeviceNames } from '../profile/profile'
 import { deviceState, type DeviceView, type RoleStatus, roleDevice, roleStatus, watchServer } from './equipment'
 import type { EquipmentRole } from './roles'
 
@@ -24,10 +24,16 @@ export function useActiveServerId(): string | undefined {
 // selected connection, or the server state changes. Leaving a connection never disconnects it.
 export function useWatchActiveServer() {
 	const serverId = useActiveServerId()
+	const { watched, devices } = useSnapshot(deviceState)
 
 	useEffect(() => {
 		watchServer(deviceState, serverId)
 	}, [serverId])
+
+	// Names of assignments stored without one are filled in once their devices are listed.
+	useEffect(() => {
+		if (watched === serverId && devices.length > 0) rememberDeviceNames(profileState, devices)
+	}, [watched, serverId, devices])
 }
 
 // Device assigned to a role of the active profile and its state.

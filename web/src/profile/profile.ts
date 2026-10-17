@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
-import { conflictingRole, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
+import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
 import { isRecord, parseJson, readText, type Stores, writeText } from '../storage'
 
 // Profiles of the browser and the profile active in this tab. Profiles are a versioned collection in
@@ -17,8 +17,9 @@ export const ACTIVE_PROFILE_KEY = 'nebulosa:activeProfileId'
 // localStorage key of the profile selected last in any tab, opened by new tabs.
 export const LAST_PROFILE_KEY = 'nebulosa:lastProfileId'
 
-// Current version of the persisted format.
-export const PROFILES_VERSION = 1
+// Current version of the persisted format. Version 1 stored each assignment as a bare device id;
+// version 2 stores the device id and name.
+export const PROFILES_VERSION = 2
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -81,7 +82,15 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	return defaultSettings()
 }
 
-// Restores the persisted equipment setups, keeping only role assignments to device ids.
+// Restores a persisted assignment: a bare device id (version 1), whose name is unknown, or an id and
+// name (version 2). Returns undefined for anything else.
+function normalizeAssignment(value: unknown): DeviceAssignment | undefined {
+	if (typeof value === 'string') return value ? { id: value, name: '' } : undefined
+	if (!isRecord(value) || typeof value.id !== 'string' || !value.id) return undefined
+	return { id: value.id, name: typeof value.name === 'string' ? value.name : '' }
+}
+
+// Restores the persisted equipment setups, keeping only valid role assignments.
 function normalizeEquipment(value: unknown): Record<string, EquipmentSetup> {
 	const equipment: Record<string, EquipmentSetup> = {}
 	if (!isRecord(value)) return equipment
@@ -90,8 +99,9 @@ function normalizeEquipment(value: unknown): Record<string, EquipmentSetup> {
 		if (!isRecord(setup)) continue
 		const roles: EquipmentSetup = {}
 
-		for (const [role, deviceId] of Object.entries(setup)) {
-			if (isEquipmentRole(role) && typeof deviceId === 'string' && deviceId) roles[role] = deviceId
+		for (const [role, assignment] of Object.entries(setup)) {
+			const device = normalizeAssignment(assignment)
+			if (isEquipmentRole(role) && device) roles[role] = device
 		}
 
 		equipment[connectionId] = roles
@@ -126,7 +136,8 @@ function migrate(data: unknown, now: string): Profile[] | undefined {
 	if (!isRecord(data) || !Array.isArray(data.profiles)) return undefined
 
 	switch (data.version) {
-		case 1: {
+		case 1:
+		case 2: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {
@@ -276,23 +287,42 @@ export type AssignResult = { readonly ok: true } | { readonly ok: false; readonl
 
 // Assigns a device to a role of the active profile's setup on its selected connection; undefined clears
 // the role. Selecting a device does not connect it.
-export function assignDevice(state: ProfileState, role: EquipmentRole, deviceId: string | undefined): AssignResult {
+export function assignDevice(state: ProfileState, role: EquipmentRole, device: DeviceAssignment | undefined): AssignResult {
 	const profile = activeProfile(state)
 	const connectionId = profile.connectionId
 	if (!connectionId) return { ok: false, reason: 'no-connection' }
 
 	const setup = (profile.equipment[connectionId] ??= {})
 
-	if (deviceId) {
-		const conflict = conflictingRole(setup, role, deviceId)
+	if (device) {
+		const conflict = conflictingRole(setup, role, device.id)
 		if (conflict) return { ok: false, reason: 'conflict', role: conflict }
-		setup[role] = deviceId
+		setup[role] = { id: device.id, name: device.name }
 	} else {
 		delete setup[role]
 	}
 
 	touch(profile)
 	return { ok: true }
+}
+
+// Fills in the missing names of the active profile's assignments (stored before names were kept) from
+// the devices of its connection. Changes nothing when every assigned name is known.
+export function rememberDeviceNames(state: ProfileState, devices: readonly DeviceAssignment[]) {
+	const profile = activeProfile(state)
+	const setup = profile.connectionId ? profile.equipment[profile.connectionId] : undefined
+	if (!setup) return
+	let changed = false
+
+	for (const [role, assignment] of Object.entries(setup)) {
+		if (!isEquipmentRole(role) || !assignment || assignment.name) continue
+		const device = devices.find((d) => d.id === assignment.id)
+		if (!device) continue
+		setup[role] = { id: device.id, name: device.name }
+		changed = true
+	}
+
+	if (changed) touch(profile)
 }
 
 // Forgets a removed saved connection in every profile: profiles that selected it lose their selection,

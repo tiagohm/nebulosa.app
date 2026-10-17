@@ -48,12 +48,15 @@ export interface ConnectionState {
 	servers: ConnectionStatus[]
 	// Pending connect or disconnect request; further requests are ignored until it settles.
 	loading?: ConnectionRequest
-	// Message of the last failed connect or disconnect, cleared by the next attempt.
-	error?: string
+	// Message of the last failed connect or disconnect of each saved connection, by saved connection id;
+	// cleared by its next attempt, an edit, or the server opening it for any tab.
+	errors: Record<string, string>
+	// Message of the last failed write of the saved connections to storage.
+	storageError?: string
 }
 
 // Connection state of the tab, starting closed with no saved connections.
-export const connectionState = proxy<ConnectionState>({ open: false, connections: [], servers: [] })
+export const connectionState = proxy<ConnectionState>({ open: false, connections: [], servers: [], errors: {} })
 
 // Restores a persisted connection. Returns undefined when it lacks an id, name, or type.
 function normalizeConnection(value: unknown): Connection | undefined {
@@ -89,7 +92,7 @@ export function persistConnections(state: ConnectionState, storage: Storage): ()
 		const current = snapshot(state).connections
 		if (current === connections) return
 		connections = current
-		if (!writeText(storage, CONNECTIONS_KEY, JSON.stringify(current))) state.error = 'Unable to save connections: browser storage is unavailable or full.'
+		state.storageError = writeText(storage, CONNECTIONS_KEY, JSON.stringify(current)) ? undefined : 'Unable to save connections: browser storage is unavailable or full.'
 	})
 }
 
@@ -121,6 +124,8 @@ export function saveConnection(state: ConnectionState, input: ConnectionInput, i
 	const connection: Connection = { id: index >= 0 && id ? id : nanoid(), name, host, port: input.port, type: input.type }
 	if (index >= 0) state.connections[index] = connection
 	else state.connections.push(connection)
+	// An edit may change the endpoint, so a previous failure no longer applies.
+	delete state.errors[connection.id]
 
 	state.selected = connection.id
 
@@ -132,11 +137,17 @@ export function saveConnection(state: ConnectionState, input: ConnectionInput, i
 export function removeConnection(state: ConnectionState, id: string) {
 	state.connections = state.connections.filter((c) => c.id !== id)
 	state.selected = state.connections[0]?.id
+	delete state.errors[id]
 }
 
-// Records an open server connection, once per id.
+// Records an open server connection, once per id, and clears the failures of the saved connections
+// that address it.
 function addServer(state: ConnectionState, status: ConnectionStatus) {
 	if (!state.servers.some((s) => s.id === status.id)) state.servers.push(status)
+
+	for (const connection of state.connections) {
+		if (serverOf([status], connection)) delete state.errors[connection.id]
+	}
 }
 
 // Replaces the open server connections with the server's current list. Failures leave them unchanged.
@@ -150,41 +161,41 @@ export async function refreshServers(state: ConnectionState) {
 }
 
 // Opens the server connection of a saved connection, or reuses it when another tab opened it. Ignored
-// while another request is pending. Failures are stored in state.error.
+// while another request is pending. A failure is stored under the connection's id in state.errors.
 export async function connect(state: ConnectionState, connection: Connection) {
 	if (state.loading) return
 
 	state.loading = { kind: 'connect', connectionId: connection.id }
-	state.error = undefined
+	delete state.errors[connection.id]
 
 	try {
 		const response = await fetch('/api/connections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(connectRequest(connection)) })
 
 		if (response.ok) addServer(state, (await response.json()) as ConnectionStatus)
-		else state.error = await responseError(response)
+		else state.errors[connection.id] = await responseError(response)
 	} catch (error) {
-		state.error = error instanceof Error ? error.message : 'Unable to connect'
+		state.errors[connection.id] = error instanceof Error ? error.message : 'Unable to connect'
 	} finally {
 		state.loading = undefined
 	}
 }
 
 // Closes the server connection of a saved connection, for every tab sharing it. A connection the server
-// no longer has (404) is treated as closed. Failures are stored in state.error.
+// no longer has (404) is treated as closed. A failure is stored under the connection's id in state.errors.
 export async function disconnect(state: ConnectionState, connection: Connection) {
 	const server = serverOf(state.servers, connection)
 	if (state.loading || !server) return
 
 	state.loading = { kind: 'disconnect', connectionId: connection.id }
-	state.error = undefined
+	delete state.errors[connection.id]
 
 	try {
 		const response = await fetch(`/api/connections/${encodeURIComponent(server.id)}`, { method: 'DELETE' })
 
 		if (response.ok || response.status === 404) state.servers = state.servers.filter((s) => s.id !== server.id)
-		else state.error = await responseError(response)
+		else state.errors[connection.id] = await responseError(response)
 	} catch (error) {
-		state.error = error instanceof Error ? error.message : 'Unable to disconnect'
+		state.errors[connection.id] = error instanceof Error ? error.message : 'Unable to disconnect'
 	} finally {
 		state.loading = undefined
 	}

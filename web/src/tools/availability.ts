@@ -1,0 +1,83 @@
+import type { RoleStatus } from '../equipment/equipment'
+import { type EquipmentRole, roleDefinition } from '../equipment/roles'
+import type { ToolDefinition, ToolRequirement } from './tools'
+
+// Resolution of whether a tool's requirements are met in the tab's current context, and why not. A role
+// is ready only when its device is connected: being selected is not enough. Device capabilities are not
+// reported by the server yet, so they are not checked.
+
+// State a tool's requirements are evaluated against.
+export interface ToolContext {
+	// Operational state of every role of the active profile.
+	readonly roles: Readonly<Record<EquipmentRole, RoleStatus>>
+	// Whether an image document is open and active in the Images workspace.
+	readonly hasImage: boolean
+}
+
+// Requirement that is not met, with the reason shown to the user.
+export interface MissingRequirement {
+	// Requirement that is not met.
+	readonly requirement: ToolRequirement
+	// State of the required role, for a role requirement.
+	readonly status?: RoleStatus
+	// Why the requirement is not met and how to meet it.
+	readonly message: string
+}
+
+// Whether a tool can run now.
+export interface ToolAvailability {
+	// Whether every requirement is met.
+	readonly ready: boolean
+	// Requirements not met, in the tool's order.
+	readonly missing: readonly MissingRequirement[]
+}
+
+// Returns why a role in a status does not meet a requirement, or undefined when it does.
+function roleProblem(role: EquipmentRole, status: RoleStatus): string | undefined {
+	const label = roleDefinition(role).label
+
+	switch (status) {
+		case 'connected':
+			return undefined
+		case 'notSelected':
+			return `No ${label} selected in Equipment Setup.`
+		case 'unavailable':
+			return `The ${label} is unavailable: its connection is not open.`
+		case 'connecting':
+			return `The ${label} is still connecting.`
+		case 'disconnecting':
+			return `The ${label} is disconnecting.`
+		case 'error':
+			return `The ${label} reported an error.`
+		default:
+			return `The ${label} is not connected.`
+	}
+}
+
+// Evaluates a tool's requirements against a context.
+export function toolAvailability(tool: Pick<ToolDefinition, 'requires'>, context: ToolContext): ToolAvailability {
+	const missing: MissingRequirement[] = []
+
+	for (const requirement of tool.requires) {
+		if (requirement.kind === 'image') {
+			if (!context.hasImage) missing.push({ requirement, message: 'No image open in Images.' })
+			continue
+		}
+
+		const status = context.roles[requirement.role]
+		const message = roleProblem(requirement.role, status)
+		if (message) missing.push({ requirement, status, message })
+	}
+
+	return { ready: missing.length === 0, missing }
+}
+
+// Returns a one-sentence summary of what a tool requires, such as "Requires a connected Main Camera and
+// Mount."; undefined for a tool that requires nothing.
+export function requirementSummary(tool: Pick<ToolDefinition, 'requires'>): string | undefined {
+	const parts = tool.requires.map((r) => (r.kind === 'image' ? 'an open image' : roleDefinition(r.role).label))
+	if (parts.length === 0) return undefined
+	const roles = tool.requires.some((r) => r.kind === 'role')
+	const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`
+	return roles ? `Requires a connected ${list}.` : `Requires ${list}.`
+}

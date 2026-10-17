@@ -1,18 +1,11 @@
-import { open } from 'fs/promises'
-import { basename } from 'path'
-import { readImageFromFits, readImageFromXisf, writeImageToFormat } from 'nebulosa/src/imaging/model/image'
-import type { Image } from 'nebulosa/src/imaging/model/types'
-import { clone } from 'nebulosa/src/imaging/processing/arithmetic'
-import { adf } from 'nebulosa/src/imaging/processing/computation'
-import { stf } from 'nebulosa/src/imaging/processing/stf'
-import { fileHandleSource } from 'nebulosa/src/io/file'
-import { type FitsHeader, readFits } from 'nebulosa/src/io/formats/fits/fits'
-import { readXisf } from 'nebulosa/src/io/formats/xisf/xisf'
+import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 
 // Image documents opened by clients: FITS and XISF files read from the server's filesystem and kept
 // decoded in memory under an id until a client closes them, so later renderings (and future
 // processing) work on the same pixels. Each rendering is computed from the decoded image on request
-// and sent as JPEG; the rendering parameters actually applied are returned alongside it.
+// and sent as JPEG; the rendering parameters actually applied are returned alongside it. Decoding and
+// rendering run on a worker thread (images.worker.ts) that also holds the pixels, so a large image
+// never blocks the requests the server is handling meanwhile.
 
 // Formats an image document can be read from.
 export type ImageFormat = 'fits' | 'xisf'
@@ -61,11 +54,30 @@ export interface RenderResult {
 	readonly stretch: Stretch
 }
 
+// A rendering of an image document.
+export interface Rendering {
+	// JPEG-encoded image.
+	readonly jpeg: Uint8Array<ArrayBuffer>
+	// Rendering parameters actually applied.
+	readonly result: RenderResult
+}
+
+// Message sent to the image worker. Open and render carry an id that their response echoes; a close
+// has no response.
+export type ImageWorkerRequest = { readonly type: 'open'; readonly id: number; readonly path: string } | { readonly type: 'render'; readonly id: number; readonly document: string; readonly request: RenderRequest } | { readonly type: 'close'; readonly document: string }
+
+// Message the image worker answers a request with, by request id: the opened document, the rendering,
+// a document that is not open (missing), a file that cannot be opened (with the status of its
+// ImageOpenError), or any other failure.
+export type ImageWorkerResponse =
+	| { readonly id: number; readonly status: 'opened'; readonly info: ImageInfo }
+	| ({ readonly id: number; readonly status: 'rendered' } & Rendering)
+	| { readonly id: number; readonly status: 'missing' }
+	| { readonly id: number; readonly status: 'unopenable'; readonly path: string; readonly httpStatus: 404 | 415 }
+	| { readonly id: number; readonly status: 'failed'; readonly error: string }
+
 // Response header carrying the RenderResult of a rendering.
 export const RENDER_HEADER = 'X-Image-Render'
-
-// JPEG quality of renderings, 0 to 100: visually lossless at a fraction of the size of quality 100.
-const RENDER_QUALITY = 90
 
 // Error of an image that cannot be opened: missing file (404) or not a readable FITS or XISF image (415).
 export class ImageOpenError extends Error {
@@ -79,71 +91,107 @@ export class ImageOpenError extends Error {
 	}
 }
 
-// Open image document.
-interface ImageDocument {
-	// Description sent to clients.
-	readonly info: ImageInfo
-	// Decoded image, in the normalized scale with 32-bit samples.
-	readonly image: Image
+// Worker thread of the image documents. `unref` is a Bun extension that the DOM Worker type, which
+// takes precedence in this project, lacks.
+type ImageWorker = Worker & Pick<Bun.Worker, 'unref'>
+
+// Request to the image worker that is answered with a response.
+type AnsweredRequest = Extract<ImageWorkerRequest, { readonly id: number }>
+
+// Error a response that is not the expected outcome of its request stands for.
+function responseError(response: ImageWorkerResponse): Error {
+	if (response.status === 'unopenable') return new ImageOpenError(response.path, response.httpStatus)
+	if (response.status === 'failed') return new Error(response.error)
+	return new Error(`Unexpected image worker response: ${response.status}`)
 }
 
-// Reads the image of a FITS or XISF file with 32-bit samples. Throws ImageOpenError.
-async function readImage(path: string): Promise<{ readonly format: ImageFormat; readonly image: Image }> {
-	let handle
-
-	try {
-		handle = await open(path, 'r')
-	} catch (error) {
-		throw new ImageOpenError(path, 404, error)
-	}
-
-	// Disposing the source closes the file.
-	await using source = fileHandleSource(handle)
-
-	try {
-		const fits = await readFits(source)
-		const fitsImage = fits && (await readImageFromFits(fits, source, 32))
-		if (fitsImage) return { format: 'fits', image: fitsImage }
-
-		source.seek(0)
-		const xisf = await readXisf(source)
-		const xisfImage = xisf && (await readImageFromXisf(xisf, source, 32))
-		if (xisfImage) return { format: 'xisf', image: xisfImage }
-	} catch (error) {
-		throw new ImageOpenError(path, 415, error)
-	}
-
-	throw new ImageOpenError(path, 415)
-}
-
-// Open image documents of every client, by id.
+// Open image documents of every client. The pixels live in the image worker; this side tracks the
+// open ids, so unknown ones are answered without a round trip, and relays requests to the worker.
 export class ImageStore {
-	// Open documents by id.
-	readonly #documents = new Map<string, ImageDocument>()
+	// Ids of the open documents.
+	readonly #documents = new Set<string>()
+	// Requests sent to the worker and not answered yet, by request id.
+	readonly #pending = new Map<number, PromiseWithResolvers<ImageWorkerResponse>>()
+	// Id of the next request.
+	#id = 0
+	// Worker started on first use and kept for the lifetime of the process.
+	#worker?: ImageWorker
 
 	// Opens the FITS or XISF file at path as a new document. Throws ImageOpenError.
 	async open(path: string): Promise<ImageInfo> {
-		const { format, image } = await readImage(path)
-		const { width, height, channels, bayer } = image.metadata
-		const info: ImageInfo = { id: crypto.randomUUID(), name: basename(path), path, format, width, height, channels, header: image.header, ...(bayer && { bayer }) }
-		this.#documents.set(info.id, { info, image })
-		return info
+		const response = await this.#request({ type: 'open', id: this.#id++, path })
+		if (response.status !== 'opened') throw responseError(response)
+		this.#documents.add(response.info.id)
+		return response.info
 	}
 
-	// Renders a document as JPEG with the requested stretch. Returns undefined for an unknown id.
-	render(id: string, request: RenderRequest): { readonly jpeg: Buffer; readonly result: RenderResult } | undefined {
-		const document = this.#documents.get(id)
-		if (!document) return undefined
-
-		const [midtone, shadow, highlight] = request.stretch === 'auto' ? adf(document.image) : [request.stretch.midtone, request.stretch.shadow, request.stretch.highlight]
-		const stretched = stf(clone(document.image), midtone, shadow, highlight)
-		const jpeg = writeImageToFormat(stretched, 'jpeg', { jpeg: { quality: RENDER_QUALITY } })!
-		return { jpeg, result: { stretch: { midtone, shadow, highlight } } }
+	// Renders a document as JPEG with the requested stretch. Resolves to undefined for an unknown id,
+	// including one closed while the rendering was queued.
+	async render(id: string, request: RenderRequest): Promise<Rendering | undefined> {
+		if (!this.#documents.has(id)) return undefined
+		const response = await this.#request({ type: 'render', id: this.#id++, document: id, request })
+		if (response.status === 'rendered') return { jpeg: response.jpeg, result: response.result }
+		if (response.status === 'missing') return undefined
+		throw responseError(response)
 	}
 
 	// Closes a document, releasing its pixels. Returns false for an unknown id.
 	close(id: string): boolean {
-		return this.#documents.delete(id)
+		if (!this.#documents.delete(id)) return false
+		this.#post({ type: 'close', document: id })
+		return true
+	}
+
+	// Sends a request to the worker and resolves to its response.
+	#request(request: AnsweredRequest): Promise<ImageWorkerResponse> {
+		const resolvers = Promise.withResolvers<ImageWorkerResponse>()
+		this.#pending.set(request.id, resolvers)
+		this.#post(request)
+		return resolvers.promise
+	}
+
+	// Posts a message to the worker, starting it on first use. Messages are cloned, nothing is transferred.
+	#post(message: ImageWorkerRequest): void {
+		this.#start().postMessage(message, [])
+	}
+
+	// Starts the worker on first use.
+	#start(): Worker {
+		if (this.#worker) return this.#worker
+
+		// The compiled executable defines the embedded path of the worker (see app/build.ts); elsewhere it
+		// is resolved next to this module.
+		const worker = new Worker(process.env.NEBULOSA_IMAGE_WORKER ?? new URL('./images.worker.ts', import.meta.url)) as ImageWorker
+		worker.addEventListener('message', (event: MessageEvent<ImageWorkerResponse>) => this.#settle(event.data))
+		// A worker that dies, or fails to load at all, reports it here. Without this listener the requests
+		// it was carrying would never settle.
+		worker.addEventListener('error', (event) => this.#fail(event.message))
+		// The worker is idle between requests and must not keep the process alive on its own.
+		worker.unref()
+		this.#worker = worker
+		return worker
+	}
+
+	// Settles the request the response belongs to.
+	#settle(response: ImageWorkerResponse): void {
+		const resolvers = this.#pending.get(response.id)
+		if (!resolvers) return
+		this.#pending.delete(response.id)
+		resolvers.resolve(response)
+	}
+
+	// Discards the worker, along with every document it held, and fails every request it was carrying.
+	// The next request starts a fresh worker.
+	#fail(reason: string): void {
+		console.error('image worker failed:', reason)
+		this.#worker?.terminate()
+		this.#worker = undefined
+		this.#documents.clear()
+
+		const pending = [...this.#pending.values()]
+		this.#pending.clear()
+
+		for (const resolvers of pending) resolvers.reject(new Error(`image worker failed: ${reason}`))
 	}
 }
 
@@ -166,7 +214,7 @@ export async function handleOpenImage(req: Request): Promise<Response> {
 // Handles POST /api/images/:id/render with a RenderRequest: responds with the JPEG and its RenderResult
 // in RENDER_HEADER, or 404 when the document is not open.
 export async function handleRenderImage(req: Request, id: string): Promise<Response> {
-	const rendering = images.render(id, (await req.json()) as RenderRequest)
+	const rendering = await images.render(id, (await req.json()) as RenderRequest)
 	if (!rendering) return Response.json({ error: 'Image not found' }, { status: 404 })
-	return new Response(new Uint8Array(rendering.jpeg), { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', [RENDER_HEADER]: JSON.stringify(rendering.result) } })
+	return new Response(rendering.jpeg, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', [RENDER_HEADER]: JSON.stringify(rendering.result) } })
 }

@@ -1,4 +1,5 @@
-import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
+import type { FitsHeader, FitsHeaderKey } from 'nebulosa/src/io/formats/fits/fits'
+import { exposureTimeKeyword, numericKeyword, observationDateKeyword, textKeyword } from 'nebulosa/src/io/formats/fits/util'
 
 // Image documents opened by clients: FITS and XISF files read from the server's filesystem and kept
 // decoded in memory under an id until a client closes them, so later renderings (and future
@@ -30,6 +31,79 @@ export interface ImageInfo {
 	readonly bayer?: string
 	// FITS-compatible header of the image (for XISF, its FITS keywords).
 	readonly header: FitsHeader
+	// Acquisition data normalized from the header.
+	readonly acquisition: ImageAcquisition
+}
+
+// Pixel binning of an acquisition.
+export interface Binning {
+	// Horizontal binning factor, in sensor pixels per image pixel.
+	readonly x: number
+	// Vertical binning factor, in sensor pixels per image pixel.
+	readonly y: number
+}
+
+// Acquisition data of an image, read from its header once with every equivalent keyword resolved, so a
+// datum present under several conventions (such as EXPTIME and EXPOSURE) appears only once. A datum
+// absent from the header, blank, or not a finite number is absent.
+export interface ImageAcquisition {
+	// Name of the observed object (OBJECT).
+	readonly object?: string
+	// Start of the observation as an ISO 8601 UTC date-time (DATE-OBS, then DATE-END, then DATE).
+	readonly date?: string
+	// Exposure duration, in seconds (EXPTIME, then EXPOSURE).
+	readonly exposure?: number
+	// Filter name (FILTER).
+	readonly filter?: string
+	// Sensor gain, in the camera's units (GAIN).
+	readonly gain?: number
+	// Sensor offset, in the camera's units (OFFSET).
+	readonly offset?: number
+	// Sensor temperature, in degrees Celsius (CCD-TEMP).
+	readonly temperature?: number
+	// Pixel binning (XBINNING; YBINNING, defaulting to XBINNING).
+	readonly binning?: Binning
+	// Camera name (INSTRUME).
+	readonly camera?: string
+	// Telescope name (TELESCOP).
+	readonly telescope?: string
+	// Focal length, in millimeters (FOCALLEN).
+	readonly focalLength?: number
+}
+
+// Returns a keyword as trimmed text, absent when missing or blank.
+function textValue(header: FitsHeader, key: FitsHeaderKey): string | undefined {
+	return textKeyword(header, key).trim() || undefined
+}
+
+// Returns a finite number, absent otherwise.
+function finite(value: number | undefined): number | undefined {
+	return value !== undefined && Number.isFinite(value) ? value : undefined
+}
+
+// Returns a keyword as a finite number, absent when missing or not numeric.
+function numberValue(header: FitsHeader, key: FitsHeaderKey): number | undefined {
+	return finite(numericKeyword<number, undefined>(header, key, undefined))
+}
+
+// Normalizes the acquisition data of an image header.
+export function imageAcquisition(header: FitsHeader): ImageAcquisition {
+	const date = observationDateKeyword(header)
+	const x = numberValue(header, 'XBINNING')
+
+	return {
+		object: textValue(header, 'OBJECT'),
+		date: date === undefined ? undefined : new Date(date).toISOString(),
+		exposure: finite(exposureTimeKeyword<number, undefined>(header, undefined)),
+		filter: textValue(header, 'FILTER'),
+		gain: numberValue(header, 'GAIN'),
+		offset: numberValue(header, 'OFFSET'),
+		temperature: numberValue(header, 'CCD-TEMP'),
+		binning: x === undefined ? undefined : { x, y: numberValue(header, 'YBINNING') ?? x },
+		camera: textValue(header, 'INSTRUME'),
+		telescope: textValue(header, 'TELESCOP'),
+		focalLength: numberValue(header, 'FOCALLEN'),
+	}
 }
 
 // Screen transfer function parameters, all in [0, 1] with shadow <= highlight.

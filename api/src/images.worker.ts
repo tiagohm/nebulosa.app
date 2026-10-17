@@ -8,7 +8,7 @@ import { stf } from 'nebulosa/src/imaging/processing/stf'
 import { fileHandleSource } from 'nebulosa/src/io/file'
 import { readFits } from 'nebulosa/src/io/formats/fits/fits'
 import { readXisf } from 'nebulosa/src/io/formats/xisf/xisf'
-import { type ImageFormat, type ImageInfo, ImageOpenError, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult } from './images'
+import { type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult } from './images'
 
 // Worker thread that owns the decoded pixels of every open image document and does all the heavy
 // work on them: decoding FITS and XISF files, stretching, and JPEG encoding. Keeping the pixels here
@@ -56,7 +56,7 @@ async function readImage(path: string): Promise<{ readonly format: ImageFormat; 
 async function openDocument(path: string): Promise<ImageInfo> {
 	const { format, image } = await readImage(path)
 	const { width, height, channels, bayer } = image.metadata
-	const info: ImageInfo = { id: crypto.randomUUID(), name: basename(path), path, format, width, height, channels, header: image.header, ...(bayer && { bayer }) }
+	const info: ImageInfo = { id: crypto.randomUUID(), name: basename(path), path, format, width, height, channels, header: image.header, acquisition: imageAcquisition(image.header), ...(bayer && { bayer }) }
 	documents.set(info.id, image)
 	return info
 }

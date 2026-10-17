@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import type { ImageInfo, RenderResult } from './images'
+import { imageAcquisition, type ImageInfo, type RenderResult } from './images'
 import { routes } from './index'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-images-'))
@@ -43,6 +43,7 @@ describe('image documents', () => {
 		expect(id).toBeString()
 		expect(info).toMatchObject({ name: 'm31.fits', path, format: 'fits', width: 16, height: 8, channels: 1 })
 		expect(info.header.OBJECT).toBe('M31')
+		expect(info.acquisition.object).toBe('M31')
 
 		const auto = await call('/api/images/:id/render', 'POST', { id }, { stretch: 'auto' })
 		const result = JSON.parse(auto.headers.get('X-Image-Render')!) as RenderResult
@@ -69,5 +70,21 @@ describe('image documents', () => {
 
 	test('a missing file is 404', async () => {
 		expect((await call('/api/images', 'POST', {}, { path: join(root, 'missing.fits') })).status).toBe(404)
+	})
+})
+
+describe('acquisition', () => {
+	test('resolves equivalent keywords once', () => {
+		const acquisition = imageAcquisition({ EXPTIME: 30, EXPOSURE: 60, 'DATE-OBS': '2024-03-01T22:15:30.5', XBINNING: 2, YBINNING: 2, 'CCD-TEMP': -10, INSTRUME: 'ZWO ASI294MC Pro', FOCALLEN: '400' })
+
+		expect(acquisition).toEqual({ exposure: 30, date: '2024-03-01T22:15:30.500Z', binning: { x: 2, y: 2 }, temperature: -10, camera: 'ZWO ASI294MC Pro', focalLength: 400 })
+	})
+
+	test('falls back to EXPOSURE and to the horizontal binning', () => {
+		expect(imageAcquisition({ EXPOSURE: 5, XBINNING: 3 })).toEqual({ exposure: 5, binning: { x: 3, y: 3 } })
+	})
+
+	test('blank and non-numeric values are absent', () => {
+		expect(imageAcquisition({ TELESCOP: '   ', GAIN: 'high', OBJECT: 'M42' })).toEqual({ object: 'M42' })
 	})
 })

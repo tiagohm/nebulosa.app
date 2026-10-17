@@ -1,4 +1,4 @@
-import type { ImageInfo } from 'api'
+import type { ImageAcquisition, ImageInfo } from 'api'
 import type { ReactNode } from 'react'
 import { PanelSection, PlannedControls } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
@@ -9,21 +9,23 @@ import type { ImageDocument } from './images'
 // header of the active document, with the analysis and processing sections still to come. It only
 // reads the document.
 
-// Header keywords shown as acquisition data, with their labels, in display order. Only those present in
-// the image are shown.
-const ACQUISITION_KEYWORDS: readonly (readonly [keyword: string, label: string])[] = [
-	['OBJECT', 'Object'],
-	['DATE-OBS', 'Date'],
-	['EXPTIME', 'Exposure (s)'],
-	['EXPOSURE', 'Exposure (s)'],
-	['FILTER', 'Filter'],
-	['GAIN', 'Gain'],
-	['OFFSET', 'Offset'],
-	['CCD-TEMP', 'Sensor temp. (°C)'],
-	['XBINNING', 'Binning'],
-	['INSTRUME', 'Camera'],
-	['TELESCOP', 'Telescope'],
-	['FOCALLEN', 'Focal length (mm)'],
+// Text shown for a datum the image does not have.
+const MISSING = '—'
+
+// Acquisition fields shown, in display order: label and the formatted value, absent when the image does
+// not have it. Every field is always listed, so images can be compared at a glance.
+const ACQUISITION_FIELDS: readonly (readonly [label: string, format: (acquisition: ImageAcquisition) => string | undefined])[] = [
+	['Object', (a) => a.object],
+	['Date (UTC)', (a) => a.date && formatDate(a.date)],
+	['Exposure (s)', (a) => a.exposure?.toString()],
+	['Filter', (a) => a.filter],
+	['Gain', (a) => a.gain?.toString()],
+	['Offset', (a) => a.offset?.toString()],
+	['Sensor temp. (°C)', (a) => a.temperature?.toFixed(1)],
+	['Binning', (a) => a.binning && `${a.binning.x}×${a.binning.y}`],
+	['Camera', (a) => a.camera],
+	['Telescope', (a) => a.telescope],
+	['Focal length (mm)', (a) => a.focalLength?.toString()],
 ]
 
 export interface ImageInspectorProps {
@@ -54,8 +56,10 @@ export function ImageInspector({ document, onOpen }: ImageInspectorProps) {
 		<>
 			<PanelSection title="Properties">
 				<Property label="Name">{document.name}</Property>
-				<Property label="Path">
-					<span className="break-all">{document.source.path}</span>
+				<Property label="Folder">
+					<span title={document.source.path} className="block truncate">
+						{directoryOf(document.source.path)}
+					</span>
 				</Property>
 				{info ? (
 					<>
@@ -100,6 +104,17 @@ interface PropertyProps {
 	readonly children: ReactNode
 }
 
+// Returns the folder of a server path, without its file name; the path itself when it has no folder.
+function directoryOf(path: string): string {
+	const index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+	return index > 0 ? path.slice(0, index) : path
+}
+
+// Returns an ISO 8601 UTC date-time as "YYYY-MM-DD hh:mm:ss", in UTC.
+function formatDate(date: string): string {
+	return date.slice(0, 19).replace('T', ' ')
+}
+
 // Name and value of a property.
 function Property({ label, children }: PropertyProps) {
 	return (
@@ -117,19 +132,17 @@ interface InfoProps {
 
 // Acquisition data read from the image header.
 function Acquisition({ info }: InfoProps) {
-	const rows = ACQUISITION_KEYWORDS.filter(([keyword]) => info.header[keyword] !== undefined)
-
 	return (
 		<PanelSection title="Acquisition">
-			{rows.length > 0 ? (
-				rows.map(([keyword, label]) => (
-					<Property key={keyword} label={label}>
-						{String(info.header[keyword])}
+			{ACQUISITION_FIELDS.map(([label, format]) => {
+				const value = format(info.acquisition)
+
+				return (
+					<Property key={label} label={label}>
+						{value ? value : <span className="text-ink-300">{MISSING}</span>}
 					</Property>
-				))
-			) : (
-				<p className="m-0 text-ink-300">No acquisition data in the header.</p>
-			)}
+				)
+			})}
 		</PanelSection>
 	)
 }

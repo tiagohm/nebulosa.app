@@ -62,7 +62,7 @@ export const ROLE_STATUS_LABELS: Readonly<Record<RoleStatus, string>> = {
 let generation = 0
 
 // Pending-request timers by device id.
-const timers = new Map<string, number>()
+const timers = new Map<string, Timer>()
 
 // Device events of the watched connection received while a device list fetch is in flight. They are
 // replayed, in order, onto the fetched list, which may predate them.
@@ -183,7 +183,7 @@ export async function switchDevice(state: DeviceState, deviceId: string, connect
 	delete state.errors[deviceId]
 	timers.set(
 		deviceId,
-		window.setTimeout(() => {
+		setTimeout(() => {
 			if (!state.pending[deviceId]) return
 			settle(state, deviceId)
 			state.errors[deviceId] = `The device did not ${connect ? 'connect' : 'disconnect'} in time`

@@ -1,6 +1,6 @@
 import { open } from 'fs/promises'
 import { basename } from 'path'
-import { readImageFromFits, readImageFromXisf, writeImageToFormat } from 'nebulosa/src/imaging/model/image'
+import { denormalize, readImageFromFits, readImageFromXisf, writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/imaging/model/image'
 import type { CfaPattern, Image, ImageChannel } from 'nebulosa/src/imaging/model/types'
 import { clone } from 'nebulosa/src/imaging/processing/arithmetic'
 import { adf } from 'nebulosa/src/imaging/processing/computation'
@@ -10,13 +10,15 @@ import { scnr } from 'nebulosa/src/imaging/processing/scnr'
 import { stf } from 'nebulosa/src/imaging/processing/stf'
 import { brightness, contrast, gamma, saturation } from 'nebulosa/src/imaging/processing/tone'
 import { fileHandleSource } from 'nebulosa/src/io/file'
-import { readFits } from 'nebulosa/src/io/formats/fits/fits'
+import { Bitpix, type FitsHeader, readFits } from 'nebulosa/src/io/formats/fits/fits'
 import { uncompressedBitpixKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { readXisf } from 'nebulosa/src/io/formats/xisf/xisf'
-import { cfaPattern, DisplayError, precisionOf, type DisplaySettings, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult, type Stretch } from './images'
+import type { Sink } from 'nebulosa/src/io/types'
+import { cfaPattern, DisplayError, precisionOf, type DisplaySettings, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageProvenance, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult, type Stretch } from './images'
 
 // Worker thread that owns the decoded pixels of every open image document and does all the heavy
-// work on them: decoding FITS and XISF files, the display pipeline, and JPEG encoding. Keeping the
+// work on them: decoding FITS and XISF files, the display pipeline, JPEG encoding, deriving new
+// documents from the pipeline in floating point, and encoding documents as files. Keeping the
 // pixels here means they are never copied between threads, and the server event loop stays free while
 // a large image is decoded or rendered. Renderings run one at a time, always on a copy of the decoded
 // image, which is never modified; opens overlap them only while reading. A rendering waits in a
@@ -37,6 +39,8 @@ const LINEAR_STRETCH: Stretch = { midtone: 0.5, shadow: 0, highlight: 1 }
 // Open document: its decoded image and what renderings derive from it, so repeated renderings neither
 // debayer nor compute the auto stretch again. Everything is released when the document closes.
 interface DocumentEntry {
+	// Name of the document, which a derived document's name and provenance start from.
+	readonly name: string
 	// Decoded image, in the normalized scale with the precision of its source (precisionOf) and the
 	// min-max rescale of the read in its metadata; never modified.
 	readonly image: Image
@@ -103,8 +107,8 @@ async function openDocument(path: string): Promise<ImageInfo> {
 	const { format, image } = await readImage(path)
 	const { width, height, channels, bayer } = image.metadata
 	const cfa = cfaPattern(image.header, channels)
-	const info: ImageInfo = { id: crypto.randomUUID(), name: basename(path), path, format, width, height, channels, header: image.header, acquisition: imageAcquisition(image.header), ...(bayer && { bayer }), ...(cfa && { cfa }) }
-	documents.set(info.id, { image, cfa, autoStretches: new Map() })
+	const info: ImageInfo = { origin: 'file', path, format, id: crypto.randomUUID(), name: basename(path), width, height, channels, header: image.header, acquisition: imageAcquisition(image.header), ...(bayer && { bayer }), ...(cfa && { cfa }) }
+	documents.set(info.id, { name: info.name, image, cfa, autoStretches: new Map() })
 	return info
 }
 
@@ -164,6 +168,93 @@ function displayImage(entry: DocumentEntry, settings: DisplaySettings): { readon
 	if (settings.invert) invert(image)
 
 	return { image, result: { stretch, channels, ...(base.cfa && { cfa: base.cfa }) } }
+}
+
+// Header keywords that no longer describe a derived image: integer scaling (the samples are floating
+// point), data bounds, and the display stretch hints of the source.
+const STALE_DERIVED_KEYWORDS = ['BZERO', 'BSCALE', 'DATAMIN', 'DATAMAX', 'CSTRETCH', 'CBLACK', 'CWHITE'] as const
+
+// CFA keywords that no longer apply once an image is debayered.
+const CFA_KEYWORDS = ['BAYERPAT', 'XBAYROFF', 'YBAYROFF'] as const
+
+// Returns the header of a derived image: the source keywords with the geometry and floating-point
+// BITPIX of the result, without the keywords that no longer hold, and with HISTORY recording the
+// source, the time, and the settings applied.
+function derivedHeader(image: Image, provenance: ImageProvenance): FitsHeader {
+	const { width, height, channels } = image.metadata
+	const header: FitsHeader = { ...image.header, BITPIX: image.raw instanceof Float64Array ? Bitpix.DOUBLE : Bitpix.FLOAT, NAXIS: channels === 3 ? 3 : 2, NAXIS1: width, NAXIS2: height, NAXIS3: channels === 3 ? 3 : undefined }
+	for (const key of STALE_DERIVED_KEYWORDS) delete header[key]
+	if (channels === 3) for (const key of CFA_KEYWORDS) delete header[key]
+	if (header.NAXIS3 === undefined) delete header.NAXIS3
+	const history = [`Derived by Nebulosa from ${provenance.sourceName} at ${provenance.createdAt}`, `Display pipeline: ${JSON.stringify(provenance.settings)}`]
+	header.HISTORY = [header.HISTORY, ...history].filter((line) => typeof line === 'string' && line !== '').join('\n')
+	return header
+}
+
+// Returns the name of a derived image: the source name without its extension, marked as processed.
+function derivedName(sourceName: string): string {
+	return `${sourceName.replace(/\.[^.]+$/, '')} — Processed`
+}
+
+// Derives a new document from a document by applying settings to its image: the result keeps the
+// floating-point samples of the pipeline (and, in its metadata, the min-max rescale of the source
+// read) instead of being encoded. Throws DisplayError for settings that cannot be applied.
+function deriveDocument(source: string, entry: DocumentEntry, settings: DisplaySettings): ImageInfo {
+	const { image, result } = displayImage(entry, settings)
+	const provenance: ImageProvenance = { source, sourceName: entry.name, settings, createdAt: new Date().toISOString() }
+	const header = derivedHeader(image, provenance)
+	const { width, height, channels } = image.metadata
+	const pixelSizeInBytes = image.raw.BYTES_PER_ELEMENT
+	const derived: Image = { ...image, header, metadata: { ...image.metadata, bitpix: header.BITPIX as Bitpix, pixelSizeInBytes, strideInBytes: width * channels * pixelSizeInBytes } }
+	// A mosaic left as is keeps its pattern; a debayered one has none.
+	const cfa = result.cfa ? undefined : entry.cfa
+	const name = derivedName(entry.name)
+	const info: ImageInfo = { origin: 'derived', provenance, id: crypto.randomUUID(), name, width, height, channels, header, acquisition: imageAcquisition(header), ...(image.metadata.bayer && { bayer: image.metadata.bayer }), ...(cfa && { cfa }) }
+	documents.set(info.id, { name, image: derived, cfa, autoStretches: new Map() })
+	return info
+}
+
+// Sink collecting everything written to it, for encoding a file in memory.
+class MemorySink implements Sink {
+	// Copies of the chunks written, in order.
+	readonly #chunks: Uint8Array[] = []
+
+	// Appends size bytes of chunk from offset (characters for a string, encoded with encoding); returns
+	// the bytes appended.
+	writeSync(chunk: string | Buffer, offset: number = 0, size?: number, encoding?: BufferEncoding): number {
+		const end = size === undefined ? undefined : offset + size
+		// Writers reuse their buffers, so every chunk is copied.
+		const bytes = typeof chunk === 'string' ? Buffer.from(chunk.slice(offset, end), encoding) : Uint8Array.prototype.slice.call(chunk, offset, end)
+		this.#chunks.push(bytes)
+		return bytes.byteLength
+	}
+
+	// Asynchronous counterpart of writeSync.
+	write(chunk: string | Buffer, offset?: number, size?: number, encoding?: BufferEncoding): number {
+		return this.writeSync(chunk, offset, size, encoding)
+	}
+
+	// Returns everything written as one transferable buffer.
+	bytes(): Uint8Array<ArrayBuffer> {
+		const output = new Uint8Array(this.#chunks.reduce((total, chunk) => total + chunk.byteLength, 0))
+		let offset = 0
+
+		for (const chunk of this.#chunks) {
+			output.set(chunk, offset)
+			offset += chunk.byteLength
+		}
+
+		return output
+	}
+}
+
+// Encodes a document as a FITS or XISF file. FITS restores the scale of the source (denormalize).
+// XISF keeps the normalized 0..1 samples, since its writer declares those bounds for floating-point data.
+async function encodeDocument(entry: DocumentEntry, format: ImageFormat): Promise<Uint8Array<ArrayBuffer>> {
+	const sink = new MemorySink()
+	if (format === 'fits') await writeImageToFits(denormalize(entry.image), sink)
+	else await writeImageToXisf(entry.image, sink)
+	return sink.bytes()
 }
 
 // Renders a document as JPEG with the requested settings, returning the bytes and the parameters applied.
@@ -252,6 +343,29 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 
 	if (request.type === 'render') {
 		enqueue(request)
+		return
+	}
+
+	if (request.type === 'derive' || request.type === 'encode') {
+		const entry = documents.get(request.document)
+
+		if (!entry) {
+			reply({ id: request.id, status: 'missing' })
+			return
+		}
+
+		try {
+			if (request.type === 'derive') {
+				reply({ id: request.id, status: 'derived', info: deriveDocument(request.document, entry, request.request.settings) })
+			} else {
+				const bytes = await encodeDocument(entry, request.format)
+				reply({ id: request.id, status: 'encoded', bytes }, [bytes.buffer])
+			}
+		} catch (error) {
+			if (error instanceof DisplayError) reply({ id: request.id, status: 'invalid', error: error.message })
+			else reply({ id: request.id, status: 'failed', error: Error.isError(error) ? error.message : String(error) })
+		}
+
 		return
 	}
 

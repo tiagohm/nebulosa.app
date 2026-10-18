@@ -7,6 +7,11 @@ import {
 	activeView,
 	applyDisplay,
 	closeImage,
+	createDerivedImage,
+	documentPath,
+	formatOfFileName,
+	hasUnsavedImages,
+	saveImage,
 	defaultDisplaySettings,
 	displayStatus,
 	editDisplay,
@@ -34,6 +39,7 @@ interface Call {
 const INFO = { id: 'srv-1', name: 'm31.fits', path: '/data/m31.fits', format: 'fits', width: 4, height: 2, channels: 1, header: {} }
 const CFA_INFO = { ...INFO, bayer: 'RGGB', cfa: 'RGGB' }
 const RESULT = { stretch: [{ midtone: 0.2, shadow: 0.1, highlight: 1 }], channels: 1 }
+const DERIVED_INFO = { origin: 'derived', id: 'srv-2', name: 'm31 — Processed', width: 4, height: 2, channels: 3, header: {}, provenance: { source: 'srv-1', sourceName: 'm31.fits', settings: {}, createdAt: '2026-10-17T00:00:00.000Z' } }
 
 // Fake API: opens any path as INFO (CFA_INFO for paths containing "cfa", or fails for paths containing
 // "bad"), and renders after release() is called for that rendering when gated. Renders fail while
@@ -43,7 +49,7 @@ function fakeIo(gated = false) {
 	const created: string[] = []
 	const revoked: string[] = []
 	const gates: (() => void)[] = []
-	const control = { failing: false }
+	const control = { failing: false, deriveFailing: false }
 	let count = 0
 
 	const io: ImagesIo = {
@@ -58,6 +64,19 @@ function fakeIo(gated = false) {
 			}
 
 			if (method === 'DELETE') return new Response(null, { status: 204 })
+
+			if (input.endsWith('/derive')) {
+				if (control.deriveFailing) return Response.json({ error: 'The image has no known CFA pattern' }, { status: 422 })
+				const { settings } = body as { settings: DisplaySettings }
+				return Response.json({ ...DERIVED_INFO, provenance: { ...DERIVED_INFO.provenance, settings } }, { status: 201 })
+			}
+
+			if (input.endsWith('/save')) {
+				const { path, overwrite } = body as { path: string; overwrite: boolean }
+				if (path.includes('existing') && !overwrite) return Response.json({ error: 'The file already exists', reason: 'exists' }, { status: 409 })
+				if (path.includes('readonly')) return Response.json({ error: 'Unable to write the file: EACCES' }, { status: 500 })
+				return Response.json({ path })
+			}
 
 			if (gated) {
 				await new Promise<void>((resolve, reject) => {
@@ -315,6 +334,84 @@ describe('show original', () => {
 		closeImage(state, key, io)
 
 		expect(revoked).toEqual(['blob:1', 'blob:2'])
+	})
+})
+
+describe('derived images', () => {
+	test('creating one opens a new active unsaved document from the pending settings', async () => {
+		const state = newState()
+		const { io, calls } = fakeIo()
+		await openImage(state, '/data/m31.fits', io)
+		const key = state.documents[0].key
+		editDisplay(state, key, BRIGHTER)
+
+		await createDerivedImage(state, key, io)
+		const derived = activeDocument(state)!
+
+		expect(state.documents).toHaveLength(2)
+		expect(derived).toMatchObject({ name: 'm31 — Processed', source: { kind: 'derived', sourceName: 'm31.fits' }, status: 'ready', unsaved: true })
+		expect(derived.info).toMatchObject({ origin: 'derived', provenance: { settings: BRIGHTER } })
+		expect(calls.find((c) => c.url.endsWith('/derive'))).toMatchObject({ url: '/api/images/srv-1/derive', body: { settings: BRIGHTER } })
+		expect(state.views[derived.key]?.display.applied).toEqual({ ...ORIGINAL_DISPLAY_SETTINGS, stretch: { mode: 'linear' } })
+		expect(state.views[key]).toMatchObject({ deriving: false, display: { pending: BRIGHTER, applied: ORIGINAL_DISPLAY_SETTINGS } })
+		expect(hasUnsavedImages(state)).toBeTrue()
+		expect(documentPath(derived)).toBeUndefined()
+	})
+
+	test('a failure is kept on the source and opens nothing', async () => {
+		const state = newState()
+		const { io, control } = fakeIo()
+		await openImage(state, '/data/m31.fits', io)
+		const key = state.documents[0].key
+		control.deriveFailing = true
+
+		await createDerivedImage(state, key, io)
+
+		expect(state.documents).toHaveLength(1)
+		expect(state.views[key]).toMatchObject({ deriving: false, deriveError: 'The image has no known CFA pattern' })
+	})
+
+	test('saving marks the document saved, named after its file, only once the server confirms', async () => {
+		const state = newState()
+		const { io, calls } = fakeIo()
+		await openImage(state, '/data/m31.fits', io)
+		await createDerivedImage(state, state.documents[0].key, io)
+		const key = state.activeKey!
+
+		expect(await saveImage(state, key, '/out/existing.xisf', 'xisf', false, io)).toEqual({ status: 'exists' })
+		expect(activeDocument(state)?.unsaved).toBeTrue()
+
+		expect(await saveImage(state, key, '/readonly/m31.fits', 'fits', false, io)).toEqual({ status: 'failed', error: 'Unable to write the file: EACCES' })
+		expect(activeDocument(state)?.unsaved).toBeTrue()
+
+		expect(await saveImage(state, key, '/out/existing.xisf', 'xisf', true, io)).toEqual({ status: 'saved' })
+		expect(activeDocument(state)).toMatchObject({ unsaved: false, savedPath: '/out/existing.xisf', name: 'existing.xisf' })
+		expect(calls.at(-1)).toMatchObject({ url: '/api/images/srv-2/save', body: { path: '/out/existing.xisf', format: 'xisf', overwrite: true } })
+		expect(hasUnsavedImages(state)).toBeFalse()
+		expect(documentPath(activeDocument(state)!)).toBe('/out/existing.xisf')
+	})
+
+	test('closing one releases it on the server and revokes its rendering', async () => {
+		const state = newState()
+		const { io, calls, revoked } = fakeIo()
+		await openImage(state, '/data/m31.fits', io)
+		await createDerivedImage(state, state.documents[0].key, io)
+
+		closeImage(state, state.activeKey!, io)
+
+		expect(state.documents).toHaveLength(1)
+		expect(calls.at(-1)).toMatchObject({ method: 'DELETE', url: '/api/images/srv-2' })
+		expect(revoked).toEqual(['blob:2'])
+		expect(hasUnsavedImages(state)).toBeFalse()
+	})
+
+	test('a derived image without a stretch is shown with the auto stretch', () => {
+		const derived = { ...DERIVED_INFO, provenance: { ...DERIVED_INFO.provenance, settings: { ...ORIGINAL_DISPLAY_SETTINGS, stretch: { mode: 'linear' } } } }
+		expect(defaultDisplaySettings(derived as never)).toEqual(ORIGINAL_DISPLAY_SETTINGS)
+	})
+
+	test('the file name extension picks the format', () => {
+		expect(['a.xisf', 'b.XISF', 'c.fits', 'd.fit', 'e'].map(formatOfFileName)).toEqual(['xisf', 'xisf', 'fits', 'fits', 'fits'])
 	})
 })
 

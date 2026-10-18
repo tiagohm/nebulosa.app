@@ -1,3 +1,5 @@
+import { rename, rm } from 'fs/promises'
+import { resolve } from 'path'
 import { type CfaPattern, type ImageChannel, shiftCfaPattern } from 'nebulosa/src/imaging/model/types'
 import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/processing/scnr'
 import type { FitsHeader, FitsHeaderKey } from 'nebulosa/src/io/formats/fits/fits'
@@ -11,20 +13,40 @@ import { cfaPatternKeyword, exposureTimeKeyword, numericKeyword, observationDate
 // a worker thread (images.worker.ts) that also holds the pixels, so a large image never blocks the
 // requests the server is handling meanwhile. A rendering still queued when a newer one of the same
 // document arrives, or whose request is aborted, is dropped without being computed.
+//
+// A document can also be derived from another by applying display settings in floating point: the
+// result is a new, independent document that lives only in memory until it is saved to a file of the
+// server or downloaded. Saving never replaces the file of an open document, nor an existing file
+// without overwrite, and writes through a temporary file so a failure leaves no partial file.
 
 // Formats an image document can be read from.
 export type ImageFormat = 'fits' | 'xisf'
 
+// Where a derived image comes from: the document and the display settings it was computed with.
+export interface ImageProvenance {
+	// Id of the source document.
+	readonly source: string
+	// Name of the source document.
+	readonly sourceName: string
+	// Settings applied to the source image, in pipeline order.
+	readonly settings: DisplaySettings
+	// When the image was derived, as an ISO 8601 UTC date-time.
+	readonly createdAt: string
+}
+
+// Origin of an image document: a file read from the server, or an image derived from another document,
+// which lives only in memory until it is saved.
+export type ImageOrigin = { readonly origin: 'file'; readonly path: string; readonly format: ImageFormat } | { readonly origin: 'derived'; readonly provenance: ImageProvenance }
+
 // Description of an open image document.
-export interface ImageInfo {
+export type ImageInfo = ImageOrigin & ImageProperties
+
+// Properties of an open image document, whatever its origin.
+export interface ImageProperties {
 	// Id of the document, used by every later request.
 	readonly id: string
-	// File name.
+	// File name, or the name of a derived image.
 	readonly name: string
-	// Absolute path of the file on the server.
-	readonly path: string
-	// Format the file was read as.
-	readonly format: ImageFormat
 	// Width, in pixels.
 	readonly width: number
 	// Height, in pixels.
@@ -207,17 +229,47 @@ export interface Rendering {
 	readonly result: RenderResult
 }
 
-// Message sent to the image worker. Open and render carry an id that their response echoes; a close
-// has no response, and a cancel drops the render with that id if it has not started yet (the render
-// then answers superseded).
-export type ImageWorkerRequest = { readonly type: 'open'; readonly id: number; readonly path: string } | { readonly type: 'render'; readonly id: number; readonly document: string; readonly request: RenderRequest } | { readonly type: 'cancel'; readonly id: number } | { readonly type: 'close'; readonly document: string }
+// Body of a derive request.
+export interface DeriveRequest {
+	// Settings to apply to the source image.
+	readonly settings: DisplaySettings
+}
 
-// Message the image worker answers a request with, by request id: the opened document, the rendering,
-// a document that is not open (missing), a render dropped before it started (superseded), settings that
-// cannot be applied to the image (invalid), a file that cannot be opened (with the status of its
-// ImageOpenError), or any other failure.
+// Body of a save request.
+export interface SaveRequest {
+	// Absolute path of the file to write on the server.
+	readonly path: string
+	// Format to write.
+	readonly format: ImageFormat
+	// Whether an existing file may be replaced.
+	readonly overwrite?: boolean
+}
+
+// Result of a save.
+export interface SaveResult {
+	// Absolute path of the written file.
+	readonly path: string
+}
+
+// Message sent to the image worker. Open, render, derive, and encode carry an id that their response
+// echoes; a close has no response, and a cancel drops the render with that id if it has not started
+// yet (the render then answers superseded).
+export type ImageWorkerRequest =
+	| { readonly type: 'open'; readonly id: number; readonly path: string }
+	| { readonly type: 'render'; readonly id: number; readonly document: string; readonly request: RenderRequest }
+	| { readonly type: 'derive'; readonly id: number; readonly document: string; readonly request: DeriveRequest }
+	| { readonly type: 'encode'; readonly id: number; readonly document: string; readonly format: ImageFormat }
+	| { readonly type: 'cancel'; readonly id: number }
+	| { readonly type: 'close'; readonly document: string }
+
+// Message the image worker answers a request with, by request id: the opened or derived document, the
+// rendering, the encoded file, a document that is not open (missing), a render dropped before it
+// started (superseded), settings that cannot be applied to the image (invalid), a file that cannot be
+// opened (with the status of its ImageOpenError), or any other failure.
 export type ImageWorkerResponse =
 	| { readonly id: number; readonly status: 'opened'; readonly info: ImageInfo }
+	| { readonly id: number; readonly status: 'derived'; readonly info: ImageInfo }
+	| { readonly id: number; readonly status: 'encoded'; readonly bytes: Uint8Array<ArrayBuffer> }
 	| ({ readonly id: number; readonly status: 'rendered' } & Rendering)
 	| { readonly id: number; readonly status: 'missing' }
 	| { readonly id: number; readonly status: 'superseded' }
@@ -260,11 +312,32 @@ function responseError(response: ImageWorkerResponse): Error {
 	return new Error(`Unexpected image worker response: ${response.status}`)
 }
 
+// Outcome of a derive: the new document, or why there is none (see ImageWorkerResponse).
+export type DeriveOutcome = { readonly status: 'derived'; readonly info: ImageInfo } | { readonly status: 'missing' } | { readonly status: 'invalid'; readonly error: string }
+
+// Outcome of a save: the written file, or why nothing was written: the document is not open (missing),
+// the target is the file of an open document (original), or it exists and overwriting was not allowed.
+export type SaveOutcome = { readonly status: 'saved'; readonly path: string } | { readonly status: 'missing' } | { readonly status: 'original' } | { readonly status: 'exists' }
+
+// Returns an absolute path in a form two equal paths share: lowercase on Windows, whose filesystem
+// ignores case.
+function comparablePath(path: string): string {
+	return process.platform === 'win32' ? path.toLowerCase() : path
+}
+
+// What the server thread knows of an open document.
+interface DocumentRecord {
+	// Name of the document, for downloads.
+	readonly name: string
+	// Absolute path of the file of a file document; absent for a derived one.
+	readonly path?: string
+}
+
 // Open image documents of every client. The pixels live in the image worker; this side tracks the
 // open ids, so unknown ones are answered without a round trip, and relays requests to the worker.
 export class ImageStore {
-	// Ids of the open documents.
-	readonly #documents = new Set<string>()
+	// Open documents, by id.
+	readonly #documents = new Map<string, DocumentRecord>()
 	// Requests sent to the worker and not answered yet, by request id.
 	readonly #pending = new Map<number, PromiseWithResolvers<ImageWorkerResponse>>()
 	// Id of the next request.
@@ -276,7 +349,7 @@ export class ImageStore {
 	async open(path: string): Promise<ImageInfo> {
 		const response = await this.#request({ type: 'open', id: this.#id++, path })
 		if (response.status !== 'opened') throw responseError(response)
-		this.#documents.add(response.info.id)
+		this.#documents.set(response.info.id, { name: response.info.name, path: resolve(path) })
 		return response.info
 	}
 
@@ -299,6 +372,64 @@ export class ImageStore {
 		} finally {
 			signal?.removeEventListener('abort', cancel)
 		}
+	}
+
+	// Derives a new document from a document by applying settings to its image, keeping floating-point
+	// samples. Resolves to missing for an unknown id and to invalid when the settings cannot be applied.
+	async derive(id: string, request: DeriveRequest): Promise<DeriveOutcome> {
+		if (!this.#documents.has(id)) return { status: 'missing' }
+		const response = await this.#request({ type: 'derive', id: this.#id++, document: id, request })
+
+		if (response.status === 'derived') {
+			this.#documents.set(response.info.id, { name: response.info.name })
+			return { status: 'derived', info: response.info }
+		}
+
+		if (response.status === 'missing') return { status: 'missing' }
+		if (response.status === 'invalid') return { status: 'invalid', error: response.error }
+		throw responseError(response)
+	}
+
+	// Encodes a document as a FITS or XISF file in the scale of its source. Resolves to undefined for an
+	// unknown id.
+	async encode(id: string, format: ImageFormat): Promise<Uint8Array<ArrayBuffer> | undefined> {
+		if (!this.#documents.has(id)) return undefined
+		const response = await this.#request({ type: 'encode', id: this.#id++, document: id, format })
+		if (response.status === 'encoded') return response.bytes
+		if (response.status === 'missing') return undefined
+		throw responseError(response)
+	}
+
+	// Writes a document to a file of the server. Never replaces the file of an open document, nor any
+	// existing file unless overwrite is set; the file appears only once completely written. Resolves to
+	// missing for an unknown id, original for the file of an open document, and exists for an existing
+	// file. Throws when the file cannot be written.
+	async save(id: string, { path, format, overwrite = false }: SaveRequest): Promise<SaveOutcome> {
+		if (!this.#documents.has(id)) return { status: 'missing' }
+		const target = resolve(path)
+		const key = comparablePath(target)
+		for (const { path: source } of this.#documents.values()) if (source !== undefined && comparablePath(source) === key) return { status: 'original' }
+		if (!overwrite && (await Bun.file(target).exists())) return { status: 'exists' }
+
+		const bytes = await this.encode(id, format)
+		if (!bytes) return { status: 'missing' }
+
+		const temporary = `${target}.${crypto.randomUUID()}.tmp`
+
+		try {
+			await Bun.write(temporary, bytes)
+			await rename(temporary, target)
+		} catch (error) {
+			await rm(temporary, { force: true })
+			throw error
+		}
+
+		return { status: 'saved', path: target }
+	}
+
+	// Returns the name of an open document, or undefined for an unknown id.
+	name(id: string): string | undefined {
+		return this.#documents.get(id)?.name
 	}
 
 	// Closes a document, releasing its pixels. Returns false for an unknown id.
@@ -386,4 +517,43 @@ export async function handleRenderImage(req: Request, id: string): Promise<Respo
 	if (outcome.status === 'superseded') return Response.json({ error: 'Rendering superseded' }, { status: 409 })
 	if (outcome.status === 'invalid') return Response.json({ error: outcome.error }, { status: 422 })
 	return new Response(outcome.jpeg, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', [RENDER_HEADER]: JSON.stringify(outcome.result) } })
+}
+
+// Handles POST /api/images/:id/derive with a DeriveRequest: responds 201 with the ImageInfo of the new,
+// unsaved document, 404 when the source is not open, and 422 when the settings cannot be applied.
+export async function handleDeriveImage(req: Request, id: string): Promise<Response> {
+	const outcome = await images.derive(id, (await req.json()) as DeriveRequest)
+	if (outcome.status === 'missing') return Response.json({ error: 'Image not found' }, { status: 404 })
+	if (outcome.status === 'invalid') return Response.json({ error: outcome.error }, { status: 422 })
+	return Response.json(outcome.info, { status: 201 })
+}
+
+// Handles POST /api/images/:id/save with a SaveRequest: responds with the SaveResult once the file is
+// written, 404 when the document is not open, 409 when the target is the file of an open document or
+// exists without overwrite, and 500 when the file cannot be written.
+export async function handleSaveImage(req: Request, id: string): Promise<Response> {
+	try {
+		const outcome = await images.save(id, (await req.json()) as SaveRequest)
+		if (outcome.status === 'missing') return Response.json({ error: 'Image not found' }, { status: 404 })
+		if (outcome.status === 'original') return Response.json({ error: 'An open image is read from this file; choose another one', reason: 'original' }, { status: 409 })
+		if (outcome.status === 'exists') return Response.json({ error: 'The file already exists', reason: 'exists' }, { status: 409 })
+		return Response.json({ path: outcome.path } satisfies SaveResult)
+	} catch (error) {
+		return Response.json({ error: `Unable to write the file: ${Error.isError(error) ? error.message : String(error)}` }, { status: 500 })
+	}
+}
+
+// Extensions of the files of each format.
+const FORMAT_EXTENSIONS: Readonly<Record<ImageFormat, string>> = { fits: 'fits', xisf: 'xisf' }
+
+// Handles GET /api/images/:id/file?format=fits|xisf: responds with the document encoded as an attachment
+// named after it, or 404 when it is not open.
+export async function handleDownloadImage(req: Request, id: string): Promise<Response> {
+	const format = (new URL(req.url).searchParams.get('format') ?? 'fits') as ImageFormat
+	const bytes = await images.encode(id, format)
+	if (!bytes) return Response.json({ error: 'Image not found' }, { status: 404 })
+	const name = `${images.name(id) ?? 'image'}.${FORMAT_EXTENSIONS[format]}`
+	// The plain filename keeps only ASCII for old clients; filename* carries the exact UTF-8 name.
+	const disposition = `attachment; filename="${name.replaceAll(/[^\u0020-\u007E]|["\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`
+	return new Response(bytes, { headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': disposition, 'Cache-Control': 'no-store' } })
 }

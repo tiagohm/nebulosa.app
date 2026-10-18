@@ -8,25 +8,33 @@ import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { IconButton } from '../ui/IconButton'
+import { Modal } from '../ui/Modal'
 import { moveIndex } from '../ui/navigation'
 import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
 import { FIT_VIEW } from '../viewer/transform'
 import { ImageInspector } from './ImageInspector'
-import { activeDocument, activeTool, activeView, closeImage, type ImageDocument, type ImageViewState, imagesState, openImage, selectImage, selectImageTool, setImageView, shownRendering, toggleOriginal } from './images'
+import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, openImage, selectImage, selectImageTool, setImageView, shownRendering, toggleOriginal } from './images'
+import { SaveImageModal } from './SaveImageModal'
 import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolUnavailable } from './tools'
 
 // Images workspace: FITS and XISF images opened from the server, one tab each, shown in the shared
 // viewer, with the contextual tool each document selected (the Image Inspector at first) in the
 // contextual panel. It works without any connection or equipment. Documents, with their own zoom, pan,
 // display settings, and tool, stay open while the tab lives, across document and workspace switches.
-// The viewer toolbar switches a document between its adjusted rendering and its original one.
+// The viewer toolbar switches a document between its adjusted rendering and its original one. Closing
+// an unsaved derived image asks first (cancel, discard, or Save As and then close), and Save As writes a
+// document to a server file chosen in the file explorer.
 
 // Images workspace.
 export function ImagesWorkspace() {
 	const state = useSnapshot(imagesState)
 	const profiles = useSnapshot(profileState)
 	const [choosing, setChoosing] = useState(false)
+	// Unsaved document whose closing waits for a confirmation.
+	const [closing, setClosing] = useState<string>()
+	// Document being saved, and whether it closes once saved.
+	const [saving, setSaving] = useState<{ readonly key: string; readonly closeAfter: boolean }>()
 	const document = activeDocument(state)
 	const view = activeView(state)
 	const shown = view && shownRendering(view)
@@ -41,10 +49,19 @@ export function ImagesWorkspace() {
 		</Button>
 	)
 
+	// Closes a document, asking first when it is unsaved.
+	function requestClose(key: string) {
+		if (state.documents.find((d) => d.key === key)?.unsaved) setClosing(key)
+		else closeImage(imagesState, key)
+	}
+
+	const closingDocument = state.documents.find((d) => d.key === closing)
+	const savingDocument = state.documents.find((d) => d.key === saving?.key)
+
 	return (
-		<WorkspaceLayout workspace="images" title="Images" actions={openButton} context={toolSelector} panel={{ title: definition.panelTitle, content: <Panel document={document} view={view} onOpen={() => setChoosing(true)} /> }}>
+		<WorkspaceLayout workspace="images" title="Images" actions={openButton} context={toolSelector} panel={{ title: definition.panelTitle, content: <Panel document={document} view={view} onOpen={() => setChoosing(true)} onSaveAs={() => document && setSaving({ key: document.key, closeAfter: false })} /> }}>
 			<div className="flex h-full flex-col">
-				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} />}
+				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} onClose={requestClose} />}
 				<div className="min-h-0 flex-1">
 					<ImageViewer
 						view={view?.view ?? FIT_VIEW}
@@ -69,6 +86,42 @@ export function ImagesWorkspace() {
 					void openImage(imagesState, path)
 				}}
 			/>
+			<SaveImageModal
+				document={savingDocument}
+				onClose={() => setSaving(undefined)}
+				onSaved={() => {
+					if (saving?.closeAfter) closeImage(imagesState, saving.key)
+					setSaving(undefined)
+				}}
+			/>
+			<Modal open={!!closingDocument} onClose={() => setClosing(undefined)} title="Close unsaved image?" className="max-w-md">
+				<p className="m-0 text-[13px]">{closingDocument?.name} exists only in memory. Closing it discards it.</p>
+				<div className="mt-5 flex flex-wrap justify-end gap-2">
+					<Button size="sm" variant="secondary" onClick={() => setClosing(undefined)}>
+						Cancel
+					</Button>
+					<Button
+						size="sm"
+						variant="secondary"
+						onClick={() => {
+							if (closing) closeImage(imagesState, closing)
+							setClosing(undefined)
+						}}
+					>
+						Discard
+					</Button>
+					<Button
+						size="sm"
+						data-autofocus
+						onClick={() => {
+							if (closing) setSaving({ key: closing, closeAfter: true })
+							setClosing(undefined)
+						}}
+					>
+						Save As…
+					</Button>
+				</div>
+			</Modal>
 		</WorkspaceLayout>
 	)
 }
@@ -99,10 +152,20 @@ interface DocumentTabsProps {
 	readonly documents: readonly ImageDocument[]
 	// Key of the document shown.
 	readonly activeKey?: string
+	// Asks to close a document.
+	readonly onClose: (key: string) => void
 }
 
-// Tab strip of the open documents. Arrow keys move between tabs, Delete closes the focused one.
-function DocumentTabs({ documents, activeKey }: DocumentTabsProps) {
+// Returns the tooltip of a document tab: where its file is, or where it was derived from.
+function documentTooltip(document: ImageDocument): string {
+	const path = documentPath(document)
+	if (path) return path
+	return document.source.kind === 'derived' ? `Derived from ${document.source.sourceName}, not saved` : document.name
+}
+
+// Tab strip of the open documents. Arrow keys move between tabs, Delete closes the focused one; an
+// unsaved document is marked with an accent dot.
+function DocumentTabs({ documents, activeKey, onClose }: DocumentTabsProps) {
 	const stripRef = useRef<HTMLDivElement>(null)
 
 	function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
@@ -115,7 +178,7 @@ function DocumentTabs({ documents, activeKey }: DocumentTabsProps) {
 			stripRef.current?.querySelectorAll<HTMLElement>('[data-tab]')[next]?.focus()
 		} else if (e.key === 'Delete' && activeKey) {
 			e.preventDefault()
-			closeImage(imagesState, activeKey)
+			onClose(activeKey)
 		}
 	}
 
@@ -130,19 +193,20 @@ function DocumentTabs({ documents, activeKey }: DocumentTabsProps) {
 							type="button"
 							data-tab
 							tabIndex={active ? 0 : -1}
-							title={document.source.path}
+							title={documentTooltip(document)}
 							onClick={() => selectImage(imagesState, document.key)}
-							onAuxClick={(e) => e.button === 1 && closeImage(imagesState, document.key)}
+							onAuxClick={(e) => e.button === 1 && onClose(document.key)}
 							className="flex h-full min-w-0 cursor-pointer items-center gap-2 border-0 bg-transparent pr-1 pl-3 font-mono text-xs text-inherit focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
 						>
 							{document.status === 'error' && <span className="size-1.5 flex-none rounded-full bg-danger" />}
+							{document.unsaved && <span title="Not saved" className="size-1.5 flex-none rounded-full bg-accent" />}
 							<span className="truncate">{document.name}</span>
 						</button>
 						<button
 							type="button"
 							tabIndex={-1}
 							title={`Close ${document.name}`}
-							onClick={() => closeImage(imagesState, document.key)}
+							onClick={() => onClose(document.key)}
 							className={cn('mr-1 flex size-5 flex-none cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-ink-300 hover:bg-base-300 hover:text-ink-100', active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}
 						>
 							<Icon name="close" className="size-3.5" strokeWidth={2} />

@@ -6,12 +6,13 @@ import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { Select } from '../ui/Select'
 import { Slider } from '../ui/Slider'
-import { applyDisplay, type DisplayStatus, displayStatus, editDisplay, type ImageViewState, imagesState, resetDisplay, revertDisplay, sameDisplaySettings, summaryStretch } from './images'
+import { applyDisplay, createDerivedImage, type DisplayStatus, displayStatus, editDisplay, type ImageViewState, imagesState, resetDisplay, revertDisplay, sameDisplaySettings, summaryStretch } from './images'
 
 // Display Adjustments of the Image Inspector: the controls of a document's display pipeline (debayer,
 // stretch, tone, color, invert). Controls only edit the pending settings; nothing renders until Apply
 // to View, and the status tells whether the image shows the settings in the controls. Only the
 // controls that apply to the image are shown: debayering for a mono image, color for an RGB rendering.
+// A secondary action creates a derived image from the settings in the controls.
 
 // CFA pattern choices: the image's own pattern, then every known pattern.
 const PATTERN_OPTIONS = ['auto', 'RGGB', 'BGGR', 'GBRG', 'GRBG', 'GRGB', 'GBGR', 'RGBG', 'BGRG'] as const
@@ -145,6 +146,13 @@ export function DisplayAdjustments({ documentKey, info, view }: DisplayAdjustmen
 				<Button size="sm" variant="secondary" onClick={() => resetDisplay(imagesState, documentKey)}>
 					Reset Parameters
 				</Button>
+			</div>
+			<div className="flex flex-col gap-1 border-t border-line-100 pt-2">
+				<Button size="sm" variant="ghost" className="self-start" disabled={view.deriving || invalid} onClick={() => void createDerivedImage(imagesState, documentKey)}>
+					{view.deriving ? 'Creating Derived Image…' : 'Create Derived Image'}
+				</Button>
+				<p className="m-0 text-xs text-ink-300">Applies the settings above to the image data in floating point and opens the result as a new, unsaved image.</p>
+				{view.deriveError && <p className="m-0 text-xs text-danger">{view.deriveError}</p>}
 			</div>
 		</PanelSection>
 	)

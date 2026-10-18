@@ -1,7 +1,7 @@
 import type { Server } from 'bun'
 import { connections } from './connection'
 import { handleListDirectory } from './files'
-import { handleOpenImage, handleRenderImage, images } from './images'
+import { handleDeriveImage, handleDownloadImage, handleOpenImage, handleRenderImage, handleSaveImage, images } from './images'
 import { broadcast, websocket } from './websocket'
 
 // HTTP routes and the WebSocket handler of the backend, mounted by the app server.
@@ -9,7 +9,7 @@ import { broadcast, websocket } from './websocket'
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
 export type { DeviceEvent, DeviceSummary, ManagedDeviceType } from './devices'
 export type { DirectoryListing, FileEntry } from './files'
-export type { Binning, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageFormat, ImageInfo, RenderRequest, RenderResult, Stretch } from './images'
+export type { Binning, DeriveRequest, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from './images'
 export { websocket }
 
 connections.listen(broadcast)
@@ -73,6 +73,18 @@ export const routes = {
 	},
 	'/api/images/:id/render': {
 		POST: (req) => handleRenderImage(req, req.params.id),
+	},
+	'/api/images/:id/derive': {
+		// Creates an unsaved document from an image document and display settings.
+		POST: (req) => handleDeriveImage(req, req.params.id),
+	},
+	'/api/images/:id/save': {
+		// Writes an image document to a file of the server.
+		POST: (req) => handleSaveImage(req, req.params.id),
+	},
+	'/api/images/:id/file': {
+		// Downloads an image document as a FITS or XISF file.
+		GET: (req) => handleDownloadImage(req, req.params.id),
 	},
 	'/api/ws': {
 		// Upgrades to the event WebSocket; Bun sends the handshake response itself.

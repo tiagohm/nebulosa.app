@@ -17,6 +17,13 @@ export async function fetchDirectory(path: string, extensions?: readonly string[
 	return (await response.json()) as DirectoryListing
 }
 
+// Joins a server directory path and a file name with the directory's own separator (backslash for a
+// Windows path, slash otherwise), without doubling a trailing one such as that of C:\.
+export function joinPath(directory: string, name: string): string {
+	const separator = directory.includes('\\') ? '\\' : '/'
+	return directory.endsWith(separator) ? `${directory}${name}` : `${directory}${separator}${name}`
+}
+
 // Returns a file size in bytes as a short human-readable text, in binary units.
 export function formatSize(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`

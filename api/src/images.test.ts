@@ -1,8 +1,9 @@
 import { afterAll, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { cfaPattern, type DisplaySettings, imageAcquisition, type ImageInfo, images, precisionOf, type RenderResult } from './images'
+import { readImageFromPath } from 'nebulosa/src/imaging/model/image'
+import { cfaPattern, type DisplaySettings, imageAcquisition, type ImageInfo, images, precisionOf, type RenderResult, type SaveRequest } from './images'
 import { routes } from './index'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-images-'))
@@ -52,10 +53,34 @@ function resultOf(response: Response) {
 
 type Handler = (req: Request & { params: Record<string, string> }) => Response | Promise<Response>
 
-function call(route: keyof typeof routes, method: 'POST' | 'DELETE', params: Record<string, string>, body?: unknown) {
+function call(route: keyof typeof routes, method: 'GET' | 'POST' | 'DELETE', params: Record<string, string>, body?: unknown, query = '') {
 	const handler = (routes[route] as Record<string, Handler>)[method]
-	const req = Object.assign(new Request('http://localhost/', { method, body: body === undefined ? undefined : JSON.stringify(body) }), { params })
+	const req = Object.assign(new Request(`http://localhost/${query}`, { method, body: body === undefined ? undefined : JSON.stringify(body) }), { params })
 	return Promise.resolve(handler(req))
+}
+
+// Writes a 64-bit floating-point FITS file whose samples (1000 + 250.5 i) lie outside 0..1 and returns
+// its path and samples.
+function writeFloatFits(name: string) {
+	const cards = ['SIMPLE  =                    T', 'BITPIX  =                  -64', 'NAXIS   =                    2', 'NAXIS1  =                   16', 'NAXIS2  =                    8', 'END']
+	const header = Buffer.alloc(BLOCK, ' ')
+	for (const [i, card] of cards.entries()) header.write(card.padEnd(80), i * 80, 'latin1')
+	const samples = Array.from({ length: 16 * 8 }, (_, i) => 1000 + i * 250.5)
+	const data = Buffer.alloc(Math.ceil((samples.length * 8) / BLOCK) * BLOCK)
+	for (const [i, sample] of samples.entries()) data.writeDoubleBE(sample, i * 8)
+	const path = join(root, name)
+	writeFileSync(path, Buffer.concat([header, data]))
+	return { path, samples }
+}
+
+// Derives a document and returns the response.
+function derive(id: string, value: DisplaySettings) {
+	return call('/api/images/:id/derive', 'POST', { id }, { settings: value })
+}
+
+// Saves a document and returns the response.
+function save(id: string, body: SaveRequest) {
+	return call('/api/images/:id/save', 'POST', { id }, body)
 }
 
 describe('image documents', () => {
@@ -166,15 +191,7 @@ describe('image documents', () => {
 	})
 
 	test('opens and renders a 64-bit float FITS file outside 0..1', async () => {
-		const cards = ['SIMPLE  =                    T', 'BITPIX  =                  -64', 'NAXIS   =                    2', 'NAXIS1  =                   16', 'NAXIS2  =                    8', 'END']
-		const header = Buffer.alloc(BLOCK, ' ')
-		for (const [i, card] of cards.entries()) header.write(card.padEnd(80), i * 80, 'latin1')
-		const data = Buffer.alloc(Math.ceil((16 * 8 * 8) / BLOCK) * BLOCK)
-		for (let i = 0; i < 16 * 8; i++) data.writeDoubleBE(1000 + i * 250.5, i * 8)
-		const path = join(root, 'float64.fits')
-		writeFileSync(path, Buffer.concat([header, data]))
-
-		const info = await openFits(path)
+		const info = await openFits(writeFloatFits('float64.fits').path)
 		const response = await render(info.id, NEUTRAL)
 
 		expect(info).toMatchObject({ width: 16, height: 8, channels: 1 })
@@ -190,6 +207,99 @@ describe('image documents', () => {
 
 	test('a missing file is 404', async () => {
 		expect((await call('/api/images', 'POST', {}, { path: join(root, 'missing.fits') })).status).toBe(404)
+	})
+})
+
+describe('derived images', () => {
+	test('derive creates an independent floating-point document and leaves the source untouched', async () => {
+		const source = await openFits(writeFits('derive-cfa.fits', 16, 8, 1, ["BAYERPAT= 'RGGB    '", "CSTRETCH= 'Medium  '"]))
+		const before = new Uint8Array(await (await render(source.id, NEUTRAL)).arrayBuffer())
+		const settings = { ...NEUTRAL, debayer: { enabled: true, pattern: 'auto' } } as const satisfies DisplaySettings
+
+		const response = await derive(source.id, settings)
+		const info = (await response.json()) as ImageInfo
+
+		expect(response.status).toBe(201)
+		expect(info).toMatchObject({ origin: 'derived', name: 'derive-cfa — Processed', width: 16, height: 8, channels: 3, provenance: { source: source.id, sourceName: 'derive-cfa.fits', settings } })
+		expect(info.id).not.toBe(source.id)
+		expect(info.cfa).toBeUndefined()
+		expect(info.header).toMatchObject({ BITPIX: -32, NAXIS: 3, NAXIS3: 3, OBJECT: 'M31' })
+		expect(info.header.BAYERPAT).toBeUndefined()
+		expect(info.header.CSTRETCH).toBeUndefined()
+		expect(String(info.header.HISTORY)).toContain('Derived by Nebulosa from derive-cfa.fits')
+
+		expect(new Uint8Array(await (await render(source.id, NEUTRAL)).arrayBuffer())).toEqual(before)
+		expect((await render(info.id, settings)).status).toBe(200)
+
+		images.close(source.id)
+		expect((await render(info.id, NEUTRAL)).status).toBe(200)
+		images.close(info.id)
+	})
+
+	test('settings that cannot be applied are 422 and an unknown source is 404', async () => {
+		const source = await openFits(writeFits('derive-mono.fits', 16, 8))
+
+		expect((await derive(source.id, { ...NEUTRAL, debayer: { enabled: true, pattern: 'auto' } })).status).toBe(422)
+		images.close(source.id)
+		expect((await derive(source.id, NEUTRAL)).status).toBe(404)
+	})
+
+	test('saving as FITS restores the scale of the source', async () => {
+		const { path, samples } = writeFloatFits('derive-float.fits')
+		const source = await openFits(path)
+		const derived = (await (await derive(source.id, { ...NEUTRAL, stretch: { mode: 'linear' } })).json()) as ImageInfo
+		const target = join(root, 'saved.fits')
+
+		const response = await save(derived.id, { path: target, format: 'fits' })
+		const reread = (await readImageFromPath(target, { sampleScale: 'digital', raw: 64 }))!
+
+		expect(response.status).toBe(200)
+		expect(await response.json()).toEqual({ path: target })
+		expect(reread.header.BITPIX).toBe(-64)
+		for (const [i, sample] of samples.entries()) expect(reread.raw[i]).toBeCloseTo(sample, 6)
+
+		images.close(source.id)
+		images.close(derived.id)
+	})
+
+	test('saving never replaces an open file nor an existing one without overwrite', async () => {
+		const path = writeFits('derive-guard.fits', 16, 8)
+		const source = await openFits(path)
+		const derived = (await (await derive(source.id, NEUTRAL)).json()) as ImageInfo
+		const existing = join(root, 'existing.xisf')
+		writeFileSync(existing, 'old')
+
+		const original = await save(derived.id, { path, format: 'fits', overwrite: true })
+		expect(original.status).toBe(409)
+		expect(await original.json()).toMatchObject({ reason: 'original' })
+
+		const exists = await save(derived.id, { path: existing, format: 'xisf' })
+		expect(exists.status).toBe(409)
+		expect(await exists.json()).toMatchObject({ reason: 'exists' })
+		expect(readFileSync(existing, 'latin1')).toBe('old')
+
+		expect((await save(derived.id, { path: existing, format: 'xisf', overwrite: true })).status).toBe(200)
+		expect(readFileSync(existing, 'latin1').startsWith('XISF0100')).toBeTrue()
+		expect(readdirSync(root).some((name) => name.endsWith('.tmp'))).toBeFalse()
+
+		images.close(source.id)
+		images.close(derived.id)
+	})
+
+	test('download returns the encoded file as a named attachment', async () => {
+		const source = await openFits(writeFits('derive-download.fits', 16, 8))
+		const derived = (await (await derive(source.id, NEUTRAL)).json()) as ImageInfo
+
+		const fits = await call('/api/images/:id/file', 'GET', { id: derived.id }, undefined, '?format=fits')
+		const xisf = await call('/api/images/:id/file', 'GET', { id: derived.id }, undefined, '?format=xisf')
+
+		expect(fits.headers.get('Content-Disposition')).toBe(`attachment; filename="derive-download _ Processed.fits"; filename*=UTF-8''${encodeURIComponent('derive-download — Processed.fits')}`)
+		expect(Buffer.from(await fits.arrayBuffer()).toString('latin1', 0, 6)).toBe('SIMPLE')
+		expect(Buffer.from(await xisf.arrayBuffer()).toString('latin1', 0, 8)).toBe('XISF0100')
+
+		images.close(source.id)
+		images.close(derived.id)
+		expect((await call('/api/images/:id/file', 'GET', { id: derived.id }, undefined, '?format=fits')).status).toBe(404)
 	})
 })
 

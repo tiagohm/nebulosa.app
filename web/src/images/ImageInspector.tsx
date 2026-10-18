@@ -1,15 +1,16 @@
-import type { ImageAcquisition, ImageInfo, RenderResult } from 'api'
+import type { ImageAcquisition, ImageInfo, ImageProvenance, RenderResult } from 'api'
 import type { ReactNode } from 'react'
 import { PanelSection, PlannedControls } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { DisplayAdjustments } from './DisplayAdjustments'
+import { documentPath, downloadUrl, type ImageDocument } from './images'
 import type { ImageToolPanelProps } from './tools'
 
-// Image Inspector, the default contextual tool of the Images workspace: properties, acquisition data,
-// display adjustments with the parameters of the current rendering, and the header of the active
-// document, with the statistics section still to come. Only the display adjustments edit anything: the
-// document's pending display settings.
+// Image Inspector, the default contextual tool of the Images workspace: properties, the provenance and
+// save actions of a derived image, acquisition data, display adjustments with the parameters of the
+// current rendering, and the header of the active document, with the statistics section still to come.
+// The display adjustments edit the document's pending display settings and create derived images.
 
 // Text shown for a datum the image does not have.
 const MISSING = '—'
@@ -34,7 +35,7 @@ const ACQUISITION_FIELDS: readonly (readonly [label: string, format: (acquisitio
 ]
 
 // Inspector of the active image document.
-export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) {
+export function ImageInspector({ document, view, onOpen, onSaveAs }: ImageToolPanelProps) {
 	if (!document) {
 		return (
 			<EmptyState
@@ -49,19 +50,24 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 	}
 
 	const { info } = document
+	const path = documentPath(document)
 
 	return (
 		<>
 			<PanelSection title="Properties">
 				<Property label="Name">{document.name}</Property>
 				<Property label="Folder">
-					<span title={document.source.path} className="block truncate">
-						{directoryOf(document.source.path)}
-					</span>
+					{path ? (
+						<span title={path} className="block truncate">
+							{directoryOf(path)}
+						</span>
+					) : (
+						<span className="text-accent">Not saved</span>
+					)}
 				</Property>
 				{info ? (
 					<>
-						<Property label="Format">{info.format.toUpperCase()}</Property>
+						<Property label="Format">{info.origin === 'file' ? info.format.toUpperCase() : 'Derived'}</Property>
 						<Property label="Size">
 							{info.width} × {info.height} px
 						</Property>
@@ -71,6 +77,7 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 					<p className="m-0 text-ink-300">{document.status === 'loading' ? 'Opening…' : 'Unavailable'}</p>
 				)}
 			</PanelSection>
+			{info?.origin === 'derived' && <Derivation document={document} provenance={info.provenance} infoId={info.id} onSaveAs={onSaveAs} />}
 			{info && <Acquisition info={info} />}
 			{info && view && <DisplayAdjustments documentKey={document.key} info={info} view={view} />}
 			{view?.rendering && <AppliedDisplay result={view.rendering.result} />}
@@ -128,6 +135,40 @@ function Acquisition({ info }: InfoProps) {
 					</Property>
 				)
 			})}
+		</PanelSection>
+	)
+}
+
+interface DerivationProps {
+	// Derived document.
+	readonly document: ImageDocument
+	// Where the image was derived from.
+	readonly provenance: ImageProvenance
+	// Server id of the document, for downloads.
+	readonly infoId: string
+	// Opens the Save As dialog.
+	readonly onSaveAs: () => void
+}
+
+// Provenance and persistence of a derived image: its source, when it was derived, whether it is saved,
+// and the Save As and download actions.
+function Derivation({ document, provenance, infoId, onSaveAs }: DerivationProps) {
+	return (
+		<PanelSection title="Derived Image">
+			<Property label="Source">{provenance.sourceName}</Property>
+			<Property label="Created (UTC)">{formatDate(provenance.createdAt)}</Property>
+			<Property label="State">{document.unsaved ? <span className="text-accent">Unsaved</span> : 'Saved'}</Property>
+			<div className="mt-1 flex flex-wrap items-center gap-2">
+				<Button size="sm" onClick={onSaveAs}>
+					Save As…
+				</Button>
+				<a href={downloadUrl({ id: infoId }, 'fits')} download className="text-xs text-accent hover:underline">
+					Download FITS
+				</a>
+				<a href={downloadUrl({ id: infoId }, 'xisf')} download className="text-xs text-accent hover:underline">
+					Download XISF
+				</a>
+			</div>
 		</PanelSection>
 	)
 }

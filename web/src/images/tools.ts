@@ -22,6 +22,8 @@ export interface ImageToolPanelProps {
 	readonly view?: ImageViewState
 	// Opens the file chooser.
 	readonly onOpen: () => void
+	// Opens the Save As dialog of the active document.
+	readonly onSaveAs: () => void
 }
 
 // What running a tool's operation produces: a new rendering of the document (display), a new temporary
@@ -52,7 +54,7 @@ function catalogTool(id: Exclude<ImageToolId, 'inspector'>, outputs: ImageToolDe
 
 // Definition of every Images contextual tool, by id.
 export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefinition>> = {
-	inspector: { id: 'inspector', label: 'Image Inspector', panelTitle: 'Image Inspector', outputs: ['display'], panel: ImageInspector },
+	inspector: { id: 'inspector', label: 'Image Inspector', panelTitle: 'Image Inspector', outputs: ['display', 'derived'], panel: ImageInspector },
 	'plate-solver': catalogTool('plate-solver', ['analysis']),
 	'star-detection': catalogTool('star-detection', ['analysis']),
 	'streak-detection': catalogTool('streak-detection', ['analysis']),

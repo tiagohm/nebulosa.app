@@ -3,7 +3,25 @@ name: Test
 on:
     push:
         branches: [main]
+        paths:
+            - 'api/**.ts'
+            - 'app/**.ts'
+            - 'web/**.ts'
+            - '.github/workflows/**'
+            - 'package.json'
+            - 'bun.lock'
+            - 'tsconfig.json'
+            - 'bunfig.toml'
     pull_request:
+        paths:
+            - 'api/**.ts'
+            - 'app/**.ts'
+            - 'web/**.ts'
+            - '.github/workflows/**'
+            - 'package.json'
+            - 'bun.lock'
+            - 'tsconfig.json'
+            - 'bunfig.toml'
     workflow_dispatch:
 
 permissions:

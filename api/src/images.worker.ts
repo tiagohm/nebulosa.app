@@ -248,12 +248,12 @@ class MemorySink implements Sink {
 	}
 }
 
-// Encodes a document as a FITS or XISF file. FITS restores the scale of the source (denormalize).
-// XISF keeps the normalized 0..1 samples, since its writer declares those bounds for floating-point data.
+// Encodes a document as a FITS or XISF file in the scale of its source (denormalize).
 async function encodeDocument(entry: DocumentEntry, format: ImageFormat): Promise<Uint8Array<ArrayBuffer>> {
 	const sink = new MemorySink()
-	if (format === 'fits') await writeImageToFits(denormalize(entry.image), sink)
-	else await writeImageToXisf(entry.image, sink)
+	const image = denormalize(entry.image)
+	if (format === 'fits') await writeImageToFits(image, sink)
+	else await writeImageToXisf(image, sink)
 	return sink.bytes()
 }
 

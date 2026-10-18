@@ -244,23 +244,25 @@ describe('derived images', () => {
 		expect((await derive(source.id, NEUTRAL)).status).toBe(404)
 	})
 
-	test('saving as FITS restores the scale of the source', async () => {
-		const { path, samples } = writeFloatFits('derive-float.fits')
-		const source = await openFits(path)
-		const derived = (await (await derive(source.id, { ...NEUTRAL, stretch: { mode: 'linear' } })).json()) as ImageInfo
-		const target = join(root, 'saved.fits')
+	for (const format of ['fits', 'xisf'] as const) {
+		test(`saving as ${format.toUpperCase()} restores the scale of the source`, async () => {
+			const { path, samples } = writeFloatFits(`derive-float-${format}.fits`)
+			const source = await openFits(path)
+			const derived = (await (await derive(source.id, { ...NEUTRAL, stretch: { mode: 'linear' } })).json()) as ImageInfo
+			const target = join(root, `saved.${format}`)
 
-		const response = await save(derived.id, { path: target, format: 'fits' })
-		const reread = (await readImageFromPath(target, { sampleScale: 'digital', raw: 64 }))!
+			const response = await save(derived.id, { path: target, format })
+			const reread = (await readImageFromPath(target, { sampleScale: 'digital', raw: 64 }))!
 
-		expect(response.status).toBe(200)
-		expect(await response.json()).toEqual({ path: target })
-		expect(reread.header.BITPIX).toBe(-64)
-		for (const [i, sample] of samples.entries()) expect(reread.raw[i]).toBeCloseTo(sample, 6)
+			expect(response.status).toBe(200)
+			expect(await response.json()).toEqual({ path: target })
+			expect(reread.metadata.bitpix).toBe(-64)
+			for (const [i, sample] of samples.entries()) expect(reread.raw[i]).toBeCloseTo(sample, 6)
 
-		images.close(source.id)
-		images.close(derived.id)
-	})
+			images.close(source.id)
+			images.close(derived.id)
+		})
+	}
 
 	test('saving never replaces an open file nor an existing one without overwrite', async () => {
 		const path = writeFits('derive-guard.fits', 16, 8)

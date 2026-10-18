@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { cfaPattern, type DisplaySettings, imageAcquisition, type ImageInfo, images, type RenderResult } from './images'
+import { cfaPattern, type DisplaySettings, imageAcquisition, type ImageInfo, images, precisionOf, type RenderResult } from './images'
 import { routes } from './index'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-images-'))
@@ -165,6 +165,23 @@ describe('image documents', () => {
 		images.close(id)
 	})
 
+	test('opens and renders a 64-bit float FITS file outside 0..1', async () => {
+		const cards = ['SIMPLE  =                    T', 'BITPIX  =                  -64', 'NAXIS   =                    2', 'NAXIS1  =                   16', 'NAXIS2  =                    8', 'END']
+		const header = Buffer.alloc(BLOCK, ' ')
+		for (const [i, card] of cards.entries()) header.write(card.padEnd(80), i * 80, 'latin1')
+		const data = Buffer.alloc(Math.ceil((16 * 8 * 8) / BLOCK) * BLOCK)
+		for (let i = 0; i < 16 * 8; i++) data.writeDoubleBE(1000 + i * 250.5, i * 8)
+		const path = join(root, 'float64.fits')
+		writeFileSync(path, Buffer.concat([header, data]))
+
+		const info = await openFits(path)
+		const response = await render(info.id, NEUTRAL)
+
+		expect(info).toMatchObject({ width: 16, height: 8, channels: 1 })
+		expect(response.status).toBe(200)
+		images.close(info.id)
+	})
+
 	test('a file that is not FITS or XISF is 415', async () => {
 		const path = join(root, 'notes.txt')
 		writeFileSync(path, 'not an image')
@@ -173,6 +190,12 @@ describe('image documents', () => {
 
 	test('a missing file is 404', async () => {
 		expect((await call('/api/images', 'POST', {}, { path: join(root, 'missing.fits') })).status).toBe(404)
+	})
+})
+
+describe('precision', () => {
+	test('is 64 bits only for 32-bit integers and 64-bit floats', () => {
+		expect([8, 16, 32, 64, -32, -64].map(precisionOf)).toEqual([32, 32, 64, 32, 32, 64])
 	})
 })
 

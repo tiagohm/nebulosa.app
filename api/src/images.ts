@@ -132,6 +132,13 @@ export function cfaPattern(header: FitsHeader, channels: number): CfaPattern | u
 	return Number.isInteger(x) && Number.isInteger(y) ? shiftCfaPattern(pattern, x, y) : undefined
 }
 
+// Returns the sample precision, in bits, that keeps every value of a source with a FITS BITPIX: 64 for
+// 32-bit integers and 64-bit floats, which a 24-bit float mantissa would round; 32 otherwise, which is
+// exact for 8- and 16-bit integers and 32-bit floats at half the memory.
+export function precisionOf(bitpix: number): 32 | 64 {
+	return bitpix === 32 || bitpix === -64 ? 64 : 32
+}
+
 // Screen transfer function parameters, all in [0, 1] with shadow <= highlight.
 export interface Stretch {
 	// Midtone balance; 0.5 is linear.

@@ -11,8 +11,9 @@ import { stf } from 'nebulosa/src/imaging/processing/stf'
 import { brightness, contrast, gamma, saturation } from 'nebulosa/src/imaging/processing/tone'
 import { fileHandleSource } from 'nebulosa/src/io/file'
 import { readFits } from 'nebulosa/src/io/formats/fits/fits'
+import { uncompressedBitpixKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { readXisf } from 'nebulosa/src/io/formats/xisf/xisf'
-import { cfaPattern, DisplayError, type DisplaySettings, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult, type Stretch } from './images'
+import { cfaPattern, DisplayError, precisionOf, type DisplaySettings, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult, type Stretch } from './images'
 
 // Worker thread that owns the decoded pixels of every open image document and does all the heavy
 // work on them: decoding FITS and XISF files, the display pipeline, and JPEG encoding. Keeping the
@@ -36,7 +37,8 @@ const LINEAR_STRETCH: Stretch = { midtone: 0.5, shadow: 0, highlight: 1 }
 // Open document: its decoded image and what renderings derive from it, so repeated renderings neither
 // debayer nor compute the auto stretch again. Everything is released when the document closes.
 interface DocumentEntry {
-	// Decoded image, in the normalized scale with 32-bit samples; never modified.
+	// Decoded image, in the normalized scale with the precision of its source (precisionOf) and the
+	// min-max rescale of the read in its metadata; never modified.
 	readonly image: Image
 	// CFA pattern of the image (ImageInfo cfa), if trusted.
 	readonly cfa?: CfaPattern
@@ -65,7 +67,8 @@ const queue = new Map<string, QueuedRender>()
 // Whether the queue is scheduled to be drained.
 let draining = false
 
-// Reads the image of a FITS or XISF file with 32-bit samples. Throws ImageOpenError.
+// Reads the image of a FITS or XISF file with the precision its BITPIX needs (precisionOf); a FITS file
+// is read with 64 bits when any of its HDUs needs them. Throws ImageOpenError.
 async function readImage(path: string): Promise<{ readonly format: ImageFormat; readonly image: Image }> {
 	let handle
 
@@ -80,12 +83,13 @@ async function readImage(path: string): Promise<{ readonly format: ImageFormat; 
 
 	try {
 		const fits = await readFits(source)
-		const fitsImage = fits && (await readImageFromFits(fits, source, 32))
+		const fitsPrecision = fits && (fits.hdus.some((hdu) => precisionOf(uncompressedBitpixKeyword(hdu.header, 0)) === 64) ? 64 : 32)
+		const fitsImage = fits && (await readImageFromFits(fits, source, fitsPrecision))
 		if (fitsImage) return { format: 'fits', image: fitsImage }
 
 		source.seek(0)
 		const xisf = await readXisf(source)
-		const xisfImage = xisf && (await readImageFromXisf(xisf, source, 32))
+		const xisfImage = xisf?.images[0] && (await readImageFromXisf(xisf, source, precisionOf(xisf.images[0].bitpix)))
 		if (xisfImage) return { format: 'xisf', image: xisfImage }
 	} catch (error) {
 		throw new ImageOpenError(path, 415, error)

@@ -777,14 +777,16 @@ if (!process.argv.includes('--force') && (await Bun.file(OUTPUT).exists())) {
 	exit(0)
 }
 
-for (const [name, url] of Object.entries(SOURCE_FILES)) {
-	const file = Bun.file(dataFile(name))
-	if (await file.exists()) continue
+if (!process.argv.includes('--empty')) {
+	for (const [name, url] of Object.entries(SOURCE_FILES)) {
+		const file = Bun.file(dataFile(name))
+		if (await file.exists()) continue
 
-	console.info(`downloading ${name}...`)
-	const response = await fetch(url)
-	if (!response.ok) throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`)
-	await Bun.write(file, await response.blob())
+		console.info(`downloading ${name}...`)
+		const response = await fetch(url)
+		if (!response.ok) throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`)
+		await Bun.write(file, await response.blob())
+	}
 }
 
 await fs.rm(TEMPORARY, { force: true })
@@ -886,15 +888,17 @@ const GUM_CATALOG_MAP = mapCatalog(GUM_CATALOG)
 // Proper names of names.dat by catalog code, as [designation, proper name] pairs.
 const NAMES = new Map<number, [string, string][]>()
 
-for await (const entry of readNamesDat(fileHandleSource(await fs.open(dataFile('names.dat'))))) {
-	const type: number = CATALOG[entry.prefix as keyof typeof CATALOG] ?? -1
-	const names = NAMES.get(type) ?? []
-	names.push([entry.id, abbreviateGreekLetter(entry.name)])
-	NAMES.set(type, names)
-}
+if (!process.argv.includes('--empty')) {
+	for await (const entry of readNamesDat(fileHandleSource(await fs.open(dataFile('names.dat'))))) {
+		const type: number = CATALOG[entry.prefix as keyof typeof CATALOG] ?? -1
+		const names = NAMES.get(type) ?? []
+		names.push([entry.id, abbreviateGreekLetter(entry.name)])
+		NAMES.set(type, names)
+	}
 
-NAMES.get(IC)!.push(['342', 'Hidden Galaxy'])
-NAMES.get(NGC)!.push(['6752', 'Great Peacock Globular'])
+	NAMES.get(IC)!.push(['342', 'Hidden Galaxy'])
+	NAMES.get(NGC)!.push(['6752', 'Great Peacock Globular'])
+}
 
 // Adds the designation of an object in a catalog, plus the proper names and cross-catalog numbers known
 // for that designation. useIt false adds only the related names (catalogs too large to index). Returns
@@ -1129,9 +1133,11 @@ async function readStarClustersFromSimbad() {
 
 db.run('BEGIN TRANSACTION')
 
-await readStarsFromHyg()
-await readDsosFromStellarium()
-await readStarClustersFromSimbad()
+if (!process.argv.includes('--empty')) {
+	await readStarsFromHyg()
+	await readDsosFromStellarium()
+	await readStarClustersFromSimbad()
+}
 
 writeSkyCatalogMeta(db, 'generatedAt', new Date().toISOString())
 writeSkyCatalogMeta(db, 'sources', JSON.stringify({ ...SOURCE_FILES, simbad: 'SIMBAD TAP star clusters' }))

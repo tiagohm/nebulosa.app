@@ -135,9 +135,9 @@ function TelescopeSection({ telescope }: { readonly telescope?: Readonly<Telesco
 		<section className="flex flex-col gap-2">
 			<h3 className="m-0 text-xs leading-4 font-medium tracking-[0.08em] text-ink-300 uppercase">Telescope</h3>
 			<div className="grid grid-cols-3 gap-2 max-sm:grid-cols-1">
-				<NumberInput label="Focal length (mm)" value={current.focalLength} min={0} step={1} onChange={(focalLength) => change({ focalLength })} />
-				<NumberInput label="Reducer / Barlow (×)" value={current.focalMultiplier} min={0.1} max={10} step={0.01} onChange={(focalMultiplier) => change({ focalMultiplier })} />
-				<NumberInput label="Aperture (mm)" value={current.aperture} min={0} step={1} onChange={(aperture) => change({ aperture })} />
+				<NumberInput label="Focal length" suffix="mm" value={current.focalLength} min={0} step={1} onChange={(focalLength) => change({ focalLength })} />
+				<NumberInput label="Reducer / Barlow" suffix="×" value={current.focalMultiplier} min={0.1} max={10} step={0.01} onChange={(focalMultiplier) => change({ focalMultiplier })} />
+				<NumberInput label="Aperture" suffix="mm" value={current.aperture} min={0} step={1} onChange={(aperture) => change({ aperture })} />
 			</div>
 			<p className="m-0 text-xs leading-5 text-ink-300">Used by the Sky&apos;s Equipment Setup field of view. Kept in the profile; never sent to a device.</p>
 		</section>

@@ -213,9 +213,9 @@ function EquipmentSource({ framing, telescope, hasTarget }: { readonly framing?:
 function OpticsInputs({ optics, onChange }: { readonly optics: Readonly<Pick<OpticalConfiguration, 'focalLength' | 'focalMultiplier' | 'aperture'>>; readonly onChange: (next: Partial<TelescopeOptics>) => void }) {
 	return (
 		<PanelSection title="Optics">
-			<NumberInput label="Focal length (mm)" value={optics.focalLength} min={0} step={1} onChange={(focalLength) => onChange({ focalLength })} />
-			<NumberInput label="Reducer / Barlow (×)" value={optics.focalMultiplier} min={0.1} max={10} step={0.01} onChange={(focalMultiplier) => onChange({ focalMultiplier })} />
-			<NumberInput label="Aperture (mm)" value={optics.aperture} min={0} step={1} onChange={(aperture) => onChange({ aperture })} />
+			<NumberInput label="Focal length" suffix="mm" value={optics.focalLength} min={0} step={1} onChange={(focalLength) => onChange({ focalLength })} />
+			<NumberInput label="Reducer / Barlow" suffix="×" value={optics.focalMultiplier} min={0.1} max={10} step={0.01} onChange={(focalMultiplier) => onChange({ focalMultiplier })} />
+			<NumberInput label="Aperture" suffix="mm" value={optics.aperture} min={0} step={1} onChange={(aperture) => onChange({ aperture })} />
 			<Note>The focal length is the native one; the reducer or Barlow factor is applied to it once (1 without).</Note>
 		</PanelSection>
 	)
@@ -228,14 +228,14 @@ function SensorInputs({ sensor, onChange }: { readonly sensor: Readonly<SensorGe
 			<Select options={SENSOR_KINDS} value={sensor.kind} onChange={(kind) => onChange(convertSensor(sensor, kind))} format={(kind) => (kind === 'pixels' ? 'Resolution and pixel size' : 'Sensor size')} />
 			{sensor.kind === 'pixels' ? (
 				<>
-					<NumberInput label="Width (px)" value={sensor.width} min={0} step={1} onChange={(width) => onChange({ ...sensor, width })} />
-					<NumberInput label="Height (px)" value={sensor.height} min={0} step={1} onChange={(height) => onChange({ ...sensor, height })} />
-					<NumberInput label="Pixel size (µm)" value={sensor.pixelSize} min={0} step={0.01} onChange={(pixelSize) => onChange({ ...sensor, pixelSize })} />
+					<NumberInput label="Width" suffix="px" value={sensor.width} min={0} step={1} onChange={(width) => onChange({ ...sensor, width })} />
+					<NumberInput label="Height" suffix="px" value={sensor.height} min={0} step={1} onChange={(height) => onChange({ ...sensor, height })} />
+					<NumberInput label="Pixel size" suffix="µm" value={sensor.pixelSize} min={0} step={0.01} onChange={(pixelSize) => onChange({ ...sensor, pixelSize })} />
 				</>
 			) : (
 				<>
-					<NumberInput label="Sensor width (mm)" value={sensor.width} min={0} step={0.01} onChange={(width) => onChange({ ...sensor, width })} />
-					<NumberInput label="Sensor height (mm)" value={sensor.height} min={0} step={0.01} onChange={(height) => onChange({ ...sensor, height })} />
+					<NumberInput label="Sensor width" suffix="mm" value={sensor.width} min={0} step={0.01} onChange={(width) => onChange({ ...sensor, width })} />
+					<NumberInput label="Sensor height" suffix="mm" value={sensor.height} min={0} step={0.01} onChange={(height) => onChange({ ...sensor, height })} />
 				</>
 			)}
 		</>
@@ -269,7 +269,7 @@ function FramingResult({ optics, missingCamera, onRotate }: { readonly optics: R
 			) : (
 				<Note danger>To compute the field, enter: {missing.join(', ')}.</Note>
 			)}
-			<NumberInput label="Rotation (°, PA of the top edge)" value={optics.rotation} min={0} max={359.5} step={0.5} onChange={onRotate} />
+			<NumberInput label="Rotation (PA of the top edge)" suffix="°" value={optics.rotation} min={0} max={359.5} step={0.5} onChange={onRotate} />
 			<Note>Position angle of the sensor&apos;s top edge, from north through east, as plate solvers report it; mirrored images are not modeled.</Note>
 		</PanelSection>
 	)

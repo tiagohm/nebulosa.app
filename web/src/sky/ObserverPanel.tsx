@@ -70,9 +70,9 @@ export function ObserverPanel({ observer, onDone }: ObserverPanelProps) {
 					}}
 				>
 					<TextInput label="Name" value={name} placeholder="Optional" onChange={(e) => setName(e.target.value)} />
-					<TextInput label="Latitude (°, north +)" inputMode="decimal" value={latitude} placeholder="-23.5505" onChange={(e) => setLatitude(e.target.value)} />
-					<TextInput label="Longitude (°, east +)" inputMode="decimal" value={longitude} placeholder="-46.6333" onChange={(e) => setLongitude(e.target.value)} />
-					<TextInput label="Elevation (m)" inputMode="decimal" value={elevation} onChange={(e) => setElevation(e.target.value)} />
+					<TextInput label="Latitude (north +)" suffix="°" inputMode="decimal" value={latitude} placeholder="-23.5505" onChange={(e) => setLatitude(e.target.value)} />
+					<TextInput label="Longitude (east +)" suffix="°" inputMode="decimal" value={longitude} placeholder="-46.6333" onChange={(e) => setLongitude(e.target.value)} />
+					<TextInput label="Elevation" suffix="m" inputMode="decimal" value={elevation} onChange={(e) => setElevation(e.target.value)} />
 					<Select label="Time Zone" options={TIME_ZONES} value={timeZone} onChange={setTimeZone} format={(zone) => zone || `Browser (${BROWSER_TIME_ZONE})`} />
 					{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
 					<div className="flex flex-wrap gap-2">

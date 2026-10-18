@@ -51,7 +51,7 @@ const FRAMING_LABEL_MIN_PX = 60
 const MOUNT_MARKER_ID = 'mount-marker'
 
 // Color of the mount marker, distinct from the selection reticle and the field of view.
-const MOUNT_COLOR = '#ffb74d'
+const MOUNT_COLOR = '#66bb6a'
 
 // Color of the dark halo under the mount marker, keeping it legible over bright areas.
 const MOUNT_HALO = 'rgba(0, 0, 0, 0.6)'

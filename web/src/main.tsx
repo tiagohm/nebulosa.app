@@ -6,6 +6,7 @@ import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equi
 import { onOpen, subscribe } from './events'
 import { loadProfiles, persistProfiles, profileState } from './profile/profile'
 import { routeState, watchHistory } from './shell/route'
+import { handleMountEvent, mountRuntime, refreshMount } from './sky/mount'
 import { browserStores } from './storage'
 
 // Entry point of the browser bundle: restores the persisted stores and the URL route before the first
@@ -24,12 +25,14 @@ const stops = [
 	subscribe((event) => {
 		handleConnectionEvent(connectionState, event)
 		handleDeviceEvent(deviceState, event)
+		handleMountEvent(mountRuntime, event)
 	}),
-	// Every (re)open resynchronizes the open connections and the watched devices, which may have changed
-	// while the socket was closed.
+	// Every (re)open resynchronizes the open connections, the watched devices, and the followed mount,
+	// which may have changed while the socket was closed.
 	onOpen(() => {
 		void refreshServers(connectionState)
 		void refreshDevices(deviceState)
+		void refreshMount(mountRuntime)
 	}),
 ]
 

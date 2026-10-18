@@ -2,9 +2,11 @@ import type { MinorBody, SkyCatalogObject, SkyEvents, SkyPosition } from 'api'
 import { toMas } from 'nebulosa/src/math/units/angle'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
+import type { SkyObserverSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { formatAngularSize, formatDeclination, formatDegrees, formatLocalTime, formatMagnitude, formatRightAscension, formatSolarSystemDistance, formatStellarDistance } from './format'
+import { MountInspector } from './MountInspector'
 import { type SkySelection, skyState } from './sky'
 
 // Object Inspector of the Sky workspace: the selected object's identity, catalog data, coordinates, and,
@@ -12,7 +14,7 @@ import { type SkySelection, skyState } from './sky'
 // magnitude, and illumination; for minor bodies, their SBDB classification and elements. Every value
 // says what it is: catalog J2000 or apparent of date, topocentric or geocentric, the instant, and the
 // provider (Horizons or a local model, with the reason). Missing data is shown as missing, never as a
-// placeholder value, and catalog data stays shown when a position fails.
+// placeholder value, and catalog data stays shown when a position fails. The mount marker has its own view.
 
 // Description of each fallback reason.
 const FALLBACK_REASONS = { timeout: 'Horizons did not answer in time', network: 'Horizons cannot be reached', breakerOpen: 'Horizons failed repeatedly and is paused' } as const
@@ -21,8 +23,8 @@ const FALLBACK_REASONS = { timeout: 'Horizons did not answer in time', network: 
 const MINOR_BODY_PARAMETERS = ['a', 'e', 'i', 'q', 'per', 'H', 'G', 'M1', 'diameter'] as const
 
 export interface ObjectInspectorProps {
-	// Whether an observer is set in the profile.
-	readonly hasObserver: boolean
+	// Observer of the active profile; absent when none is set.
+	readonly observer?: SkyObserverSettings
 	// Opens the observer settings.
 	readonly onSetObserver: () => void
 	// IANA time zone times are shown in; the browser's when absent.
@@ -47,7 +49,7 @@ function Note({ children, danger }: { readonly children: ReactNode; readonly dan
 }
 
 // Object Inspector.
-export function ObjectInspector({ hasObserver, onSetObserver, timeZone, onShowFraming }: ObjectInspectorProps) {
+export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFraming }: ObjectInspectorProps) {
 	const { selection } = useSnapshot(skyState)
 
 	if (!selection) {
@@ -58,6 +60,9 @@ export function ObjectInspector({ hasObserver, onSetObserver, timeZone, onShowFr
 		)
 	}
 
+	if (selection.ref.kind === 'mount') return <MountInspector mountRef={selection.ref} observer={observer} onShowFraming={onShowFraming} />
+
+	const hasObserver = !!observer
 	const { catalog, minorBody, constellation, position, events } = selection as SkySelection
 	const designations = catalog ? catalog.designations : constellation ? [constellation.abbreviation, constellation.genitive] : []
 

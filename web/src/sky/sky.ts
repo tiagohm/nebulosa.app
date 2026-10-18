@@ -4,7 +4,7 @@ import { responseError } from '../http'
 import type { SkyObserverSettings } from '../profile/profile'
 import { skyClock, skyTime } from './clock'
 import { MAP_STAR_MAGNITUDE_LIMIT } from './display'
-import { refKey } from './objects'
+import { refKey, type SkySelectionRef } from './objects'
 import { createRequestGuard } from './selection'
 
 // State and API access of the tab's Sky workspace: the selected object with its catalog, minor body,
@@ -13,7 +13,9 @@ import { createRequestGuard } from './selection'
 // constellations) is kept in memory for the tab, so returning to the workspace never downloads it again;
 // it is downloaded again only for an instant more than a year away from the one it was computed for, as
 // precession moves its positions of date. Positions and events are computed for the instant of the Sky
-// simulation clock (./clock), which is the real current time unless the user chose another.
+// simulation clock (./clock), which is the real current time unless the user chose another. The mount
+// marker can be selected too: its identity and name are kept here, and its position is the mount
+// runtime's (./mount), never requested from the sky API.
 
 // Where a selection came from.
 export type SkySelectionSource = 'map' | 'search'
@@ -21,7 +23,7 @@ export type SkySelectionSource = 'map' | 'search'
 // Selected object of the Sky workspace.
 export interface SkySelection {
 	// Identity of the object.
-	readonly ref: SkyObjectRef
+	readonly ref: SkySelectionRef
 	// Stable key of the identity.
 	readonly key: string
 	// Where the object was selected.
@@ -64,7 +66,7 @@ export interface SkyState {
 // What is known about an object when it is selected.
 export interface SkySelectionInput {
 	// Identity of the object.
-	readonly ref: SkyObjectRef
+	readonly ref: SkySelectionRef
 	// Where it was selected.
 	readonly source: SkySelectionSource
 	// Name shown until its details arrive.
@@ -242,6 +244,13 @@ async function loadSelection(state: SkyState, observer: SkyObserverSettings | un
 
 	const request = selectionGuard.begin()
 	const { key, ref } = selection
+
+	// The mount's position comes from its runtime.
+	if (ref.kind === 'mount') {
+		selection.loading = false
+		return
+	}
+
 	const applies = () => request.current() && state.selection?.key === key
 	const time = io.time()
 	selection.loading = true

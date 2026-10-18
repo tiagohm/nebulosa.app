@@ -1,15 +1,50 @@
 import type { SkyObjectRef, SkySearchResult } from 'api'
 import type { CelestialObject, MovingBodyType, SelectionTarget } from './celestial/celestial'
 
-// Identity of sky objects in the web client: the stable key of an API object reference, the map ids of
-// moving bodies, and conversions between objects picked on the Celestial map and API references. Pure
-// functions, shared by the store and the workspace.
+// Identity of sky objects in the web client: the stable key of an API object reference or of the mount
+// marker, the map ids of moving bodies, and conversions between objects picked on the Celestial map and
+// selection references. Pure functions, shared by the store and the workspace.
 
 // Prefix of the map id of a major solar-system body, followed by its Horizons command.
 const BODY_ID_PREFIX = 'body:'
 
 // Prefix of the map id of a minor body, followed by its SPK-ID.
 const MINOR_ID_PREFIX = 'minor:'
+
+// Kind of the custom map shape marking the mount.
+export const MOUNT_SHAPE_TYPE = 'mount'
+
+// Identity of the mount marker: one device of one server connection, located by the mount runtime
+// rather than by the sky API.
+export interface MountRef {
+	// Discriminant of a mount.
+	readonly kind: 'mount'
+	// Id of the open server connection that provides the mount.
+	readonly connectionId: string
+	// Exact device id of the mount.
+	readonly id: string
+}
+
+// Identity of anything the Sky workspace can select: an object of the sky API or the mount marker.
+export type SkySelectionRef = SkyObjectRef | MountRef
+
+// Data the mount marker shape carries.
+export interface MountMarkerData {
+	// Identity of the mount.
+	readonly ref: MountRef
+	// Driver-reported name of the mount.
+	readonly name: string
+}
+
+// Whether a shape's data is the mount marker's.
+function isMountMarkerData(value: unknown): value is MountMarkerData {
+	return typeof value === 'object' && value !== null && (value as Partial<MountMarkerData>).ref?.kind === 'mount'
+}
+
+// Returns the mount marker data of a picked object; undefined for anything else.
+export function mountMarkerOf(object: CelestialObject): MountMarkerData | undefined {
+	return object.type === 'shape' && object.shape.type === MOUNT_SHAPE_TYPE && isMountMarkerData(object.shape.data) ? object.shape.data : undefined
+}
 
 // Map data that names the objects the map draws.
 export interface MapNames {
@@ -21,9 +56,10 @@ export interface MapNames {
 	readonly constellationCodes: ReadonlyMap<string, string>
 }
 
-// Returns the stable key of an object reference: "catalog:32263", "body:499", "minor:20000001", or
-// "constellation:ORI".
-export function refKey(ref: SkyObjectRef): string {
+// Returns the stable key of a selection reference: "catalog:32263", "body:499", "minor:20000001",
+// "constellation:ORI", or "mount:<connection id>:<device id>".
+export function refKey(ref: SkySelectionRef): string {
+	if (ref.kind === 'mount') return `mount:${ref.connectionId}:${ref.id}`
 	if (ref.kind === 'catalog') return `catalog:${ref.id}`
 	if (ref.kind === 'body') return `${BODY_ID_PREFIX}${ref.code}`
 	if (ref.kind === 'constellation') return `constellation:${ref.code}`
@@ -31,13 +67,13 @@ export function refKey(ref: SkyObjectRef): string {
 }
 
 // Returns the map id of the moving body of a solar-system reference; undefined for other objects.
-export function movingBodyId(ref: SkyObjectRef): string | undefined {
+export function movingBodyId(ref: SkySelectionRef): string | undefined {
 	return ref.kind === 'body' || ref.kind === 'minorBody' ? refKey(ref) : undefined
 }
 
-// Returns the API reference of an object picked on the map; undefined for custom shapes and labels of
-// unknown constellations.
-export function refOfCelestialObject(object: CelestialObject, names: MapNames): SkyObjectRef | undefined {
+// Returns the selection reference of an object picked on the map: an API reference, or the mount's for
+// the mount marker; undefined for other custom shapes and labels of unknown constellations.
+export function refOfCelestialObject(object: CelestialObject, names: MapNames): SkySelectionRef | undefined {
 	switch (object.type) {
 		case 'star':
 			return { kind: 'catalog', id: +object.id }
@@ -53,14 +89,19 @@ export function refOfCelestialObject(object: CelestialObject, names: MapNames): 
 			const code = names.constellationCodes.get(object.label.name)
 			return code ? { kind: 'constellation', code } : undefined
 		}
+		case 'shape':
+			return mountMarkerOf(object)?.ref
 		default:
 			return undefined
 	}
 }
 
 // Returns the map objects a reference may select, in the order to try: a catalog id may be a star or a
-// deep-sky object; solar-system objects are moving bodies; a constellation is any of its labels.
-export function selectionTargets(ref: SkyObjectRef, category: SkySearchResult['category'] | undefined, names: MapNames): SelectionTarget[] {
+// deep-sky object; solar-system objects are moving bodies; a constellation is any of its labels. The
+// mount marker is a custom shape, highlighted only when clicked, so it has none.
+export function selectionTargets(ref: SkySelectionRef, category: SkySearchResult['category'] | undefined, names: MapNames): SelectionTarget[] {
+	if (ref.kind === 'mount') return []
+
 	if (ref.kind === 'constellation') {
 		return [...names.constellationCodes].filter(([, code]) => code === ref.code).map(([name]) => ({ type: 'constellationLabel', id: name }))
 	}
@@ -113,6 +154,10 @@ export function hoverLabel(object: CelestialObject, names: MapNames): HoverLabel
 			return { name: object.object.name ?? object.object.id, typeName: object.object.id === 'body:999' ? 'Dwarf Planet' : MOVING_BODY_TYPE_NAMES[object.object.type], magnitude: object.object.magnitude }
 		case 'constellationLabel':
 			return { name: object.label.name, typeName: 'Constellation' }
+		case 'shape': {
+			const mount = mountMarkerOf(object)
+			return mount && { name: mount.name || 'Mount', typeName: 'Mount position' }
+		}
 		default:
 			return undefined
 	}

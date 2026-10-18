@@ -10,6 +10,7 @@ import { type SkyClockMode, skyClock } from './clock'
 import { DisplayPanel } from './DisplayPanel'
 import { FramingPanel } from './FramingPanel'
 import { HoverTooltip } from './HoverTooltip'
+import { mountPoint, mountRuntime, selectionPoint } from './mount'
 import { ObjectInspector } from './ObjectInspector'
 import { ObserverPanel } from './ObserverPanel'
 import { observerKey, planetarium, planetariumState } from './planetarium'
@@ -48,7 +49,11 @@ export function SkyWorkspace() {
 	const key = observerKey(observer)
 	const map = useMemo(() => planetarium(coordinateSystem, activeProfile(profileState).settings.sky.observer), [coordinateSystem])
 	const selectionKey = sky.selection?.key
-	const selectionPosition = sky.selection?.position
+	const mount = useSnapshot(mountRuntime)
+	const live = clock.mode === 'now'
+	const selectionCenter = selectionPoint(sky.selection, mount, live)
+	const mountCenter = mountPoint(mount, live)
+	const mountTarget = mount.target
 
 	// Follows the observer of the active profile: the map, and the selection's position when it changed.
 	useEffect(() => {
@@ -68,13 +73,18 @@ export function SkyWorkspace() {
 	const preset = framing?.presets.find((e) => e.id === framing.activePresetId)
 
 	useEffect(() => {
-		map.syncFraming(preset, framing?.visible ?? false)
-	}, [map, preset, framing?.visible, selectionPosition])
+		map.syncFraming(preset, framing?.visible ?? false, selectionCenter)
+	}, [map, preset, framing?.visible, selectionCenter?.rightAscension, selectionCenter?.declination])
+
+	// Draws the mount marker at the mount's reported position while the clock shows the real time.
+	useEffect(() => {
+		map.syncMount(mountTarget && { ref: { kind: 'mount', connectionId: mountTarget.connectionId, id: mountTarget.id }, name: mountTarget.name }, mountCenter)
+	}, [map, mountTarget, mountCenter?.rightAscension, mountCenter?.declination])
 
 	// Highlights the selection whenever it, its position, or the map data change.
 	useEffect(() => {
 		if (status === 'ready') map.syncSelection()
-	}, [map, status, selectionKey, selectionPosition])
+	}, [map, status, selectionKey, selectionCenter?.rightAscension, selectionCenter?.declination])
 
 	// Keeps the selection's position at the clock's instant while the workspace is shown: periodically and
 	// accurately for the real time, once shortly after a fixed instant settles, and quickly from the local
@@ -112,10 +122,10 @@ export function SkyWorkspace() {
 	const context = clock.mode === 'now' ? location : `${location} · Simulated time`
 
 	const panels: Record<SkyPanelView, () => { title: string; content: ReactNode }> = {
-		inspector: () => ({ title: 'Object Inspector', content: <ObjectInspector hasObserver={!!observer} onSetObserver={() => openPanel('observer')} timeZone={observer?.timeZone} onShowFraming={() => openPanel('framing')} /> }),
+		inspector: () => ({ title: 'Object Inspector', content: <ObjectInspector observer={observer} onSetObserver={() => openPanel('observer')} timeZone={observer?.timeZone} onShowFraming={() => openPanel('framing')} /> }),
 		observer: () => ({ title: 'Observer', content: <ObserverPanel key={key} observer={observer} onDone={() => (skyState.panel = 'inspector')} /> }),
 		display: () => ({ title: 'Display', content: <DisplayPanel sky={settings} local={coordinateSystem === 'horizontal'} /> }),
-		framing: () => ({ title: 'Framing', content: <FramingPanel framing={settings.framing} hasTarget={!!selectionPosition} /> }),
+		framing: () => ({ title: 'Framing', content: <FramingPanel framing={settings.framing} hasTarget={!!selectionCenter} /> }),
 	}
 
 	return (
@@ -124,6 +134,17 @@ export function SkyWorkspace() {
 				<div className="flex h-11 flex-none items-center gap-2 border-b border-line-100 bg-base-100 px-2">
 					<SkySearch onSelect={handleSearchSelect} />
 					<div className="ml-auto flex flex-none items-center gap-1">
+						<IconButton icon="mount" label={mountCenter ? 'Center on Mount' : 'Center on Mount (the mount position is shown in real time only, while connected)'} disabled={!mountCenter} onClick={() => mountCenter && map.centerOn(mountCenter)} />
+						<IconButton
+							icon="reticle"
+							label={mountCenter ? 'Follow Mount' : 'Follow Mount (the mount position is shown in real time only, while connected)'}
+							disabled={!mountCenter}
+							pressed={mount.following && !!mountCenter}
+							onClick={() => {
+								mountRuntime.following = !mountRuntime.following
+								if (mountRuntime.following && mountCenter) map.centerOn(mountCenter)
+							}}
+						/>
 						<IconButton icon="frame" label="Framing" pressed={sky.panel === 'framing'} onClick={() => togglePanel('framing')} />
 						<IconButton icon="layers" label="Display" pressed={sky.panel === 'display'} onClick={() => togglePanel('display')} />
 						<Button variant="secondary" size="sm" onClick={() => togglePanel('observer')} className="max-w-56 truncate">

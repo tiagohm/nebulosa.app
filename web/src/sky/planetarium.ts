@@ -1,13 +1,14 @@
 import type { MinorBody, SkyObjectCategory, SkyObjectRef } from 'api'
-import { DEG2RAD } from 'nebulosa/src/core/constants'
+import { DEG2RAD, TAU } from 'nebulosa/src/core/constants'
 import { proxy, subscribe } from 'valtio'
 import type { SkyObserverSettings } from '../profile/profile'
 import { Celestial, type CelestialObject, type CelestialOptions, type CelestialShape, type ConstellationLine, type CoordinateSystem, drawSelectionReticle, type MovingBody, type MovingBodyType, type RenderState } from './celestial/celestial'
 import { skyClock, skyTime } from './clock'
 import { applySkyDisplay, MAP_STAR_MAGNITUDE_LIMIT, type SkyDisplaySettings } from './display'
 import { formatAngularSize } from './format'
-import { type FramePoint, framePolygon, isFraming, type OpticalPreset, resolveFraming } from './framing'
-import { hoverLabel, type MapNames, movingBodyId, refKey, refOfCelestialObject, selectionTargets } from './objects'
+import { type FramePoint, framePolygon, isFraming, type OpticalConfiguration, resolveFraming } from './framing'
+import { type MountPoint, mountRuntime, selectionPoint } from './mount'
+import { hoverLabel, type MapNames, MOUNT_SHAPE_TYPE, type MountMarkerData, type MountRef, movingBodyId, refKey, refOfCelestialObject, selectionTargets, type SkySelectionRef } from './objects'
 import { createRequestGuard } from './selection'
 import { apiObserver, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapDataCovers, selectSkyObject, skyState } from './sky'
 
@@ -18,7 +19,9 @@ import { apiObserver, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapDataC
 // local sky (horizontal, zenith at the center) when there is an observer, an equatorial chart of the
 // whole sky otherwise. Objects below the local horizon are neither drawn nor highlighted. The map shows
 // the instant of the Sky simulation clock (./clock); its catalogs are reloaded in place when the clock
-// stops more than a year away from the instant they were computed for.
+// stops more than a year away from the instant they were computed for. The mount's reported position is
+// drawn as a selectable marker while the clock shows the real time, and the view can be centered on it
+// or follow it until the user pans.
 
 // Interval of the map's updates in milliseconds while the clock follows the real time.
 const REALTIME_INTERVAL_MS = 30_000
@@ -43,6 +46,52 @@ const FRAMING_EDGE_SAMPLES = 16
 
 // Smallest on-screen size of the field of view in pixels for which its label is drawn.
 const FRAMING_LABEL_MIN_PX = 60
+
+// Id of the custom shape marking the mount's position.
+const MOUNT_MARKER_ID = 'mount-marker'
+
+// Color of the mount marker, distinct from the selection reticle and the field of view.
+const MOUNT_COLOR = '#ffb74d'
+
+// Color of the dark halo under the mount marker, keeping it legible over bright areas.
+const MOUNT_HALO = 'rgba(0, 0, 0, 0.6)'
+
+// Radius of the mount marker's ring in pixels.
+const MOUNT_RING_RADIUS = 9
+
+// Inner and outer distance of the mount marker's crosshair ticks from its center, in pixels.
+const MOUNT_TICK_RANGE = [4, 15] as const
+
+// Draws the mount marker at a screen point (pixels): a ring with a crosshair through it and the mount's
+// name beside it.
+function drawMountMarker(ctx: CanvasRenderingContext2D, x: number, y: number, name: string) {
+	ctx.lineCap = 'round'
+
+	for (const [lineWidth, strokeStyle] of [
+		[4, MOUNT_HALO],
+		[1.5, MOUNT_COLOR],
+	] as const) {
+		ctx.lineWidth = lineWidth
+		ctx.strokeStyle = strokeStyle
+		ctx.beginPath()
+		ctx.arc(x, y, MOUNT_RING_RADIUS, 0, TAU)
+		ctx.moveTo(x - MOUNT_TICK_RANGE[1], y)
+		ctx.lineTo(x - MOUNT_TICK_RANGE[0], y)
+		ctx.moveTo(x + MOUNT_TICK_RANGE[0], y)
+		ctx.lineTo(x + MOUNT_TICK_RANGE[1], y)
+		ctx.moveTo(x, y - MOUNT_TICK_RANGE[1])
+		ctx.lineTo(x, y - MOUNT_TICK_RANGE[0])
+		ctx.moveTo(x, y + MOUNT_TICK_RANGE[0])
+		ctx.lineTo(x, y + MOUNT_TICK_RANGE[1])
+		ctx.stroke()
+	}
+
+	ctx.fillStyle = MOUNT_COLOR
+	ctx.font = '11px ui-sans-serif, system-ui, sans-serif'
+	ctx.textAlign = 'left'
+	ctx.textBaseline = 'middle'
+	ctx.fillText(name, x + MOUNT_TICK_RANGE[1] + 4, y)
+}
 
 // Strokes the outline of a field of view (equatorial points in radians), breaking it where points cannot
 // be projected, with a cross at its center and, when it is large enough on screen, its label.
@@ -122,8 +171,9 @@ function mapOptions(coordinateSystem: CoordinateSystem): CelestialOptions {
 	}
 }
 
-// Group of an object picked on the map.
-function categoryOf(object: CelestialObject, objectRef: SkyObjectRef): SkyObjectCategory {
+// Group of an object picked on the map; undefined for the mount marker.
+function categoryOf(object: CelestialObject, objectRef: SkySelectionRef): SkyObjectCategory | undefined {
+	if (objectRef.kind === 'mount') return undefined
 	if (object.type === 'star') return 'star'
 	if (object.type === 'deepSky') return 'deepSky'
 	if (objectRef.kind === 'constellation') return 'constellation'
@@ -162,6 +212,8 @@ export class Planetarium {
 	#marker = false
 	// Whether the field of view shape is on the map.
 	#framing = false
+	// Mount marker on the map, whose coordinate is moved in place as the mount moves; absent while not drawn.
+	#mountMarker?: { readonly coordinate: { rightAscension: number; declination: number }; readonly data: MountMarkerData }
 	#resizeObserver?: ResizeObserver
 	// Timer of the clock updates while attached.
 	#clockTimer?: ReturnType<typeof setInterval>
@@ -184,7 +236,7 @@ export class Planetarium {
 		}
 
 		this.celestial.setTime(skyTime(skyClock, Date.now()))
-		this.#unsubscribe = [this.celestial.on('selectionChange', ({ object }) => this.#handleClick(object)), this.celestial.on('updateEnd', ({ time }) => this.#requestMovingBodies(time))]
+		this.#unsubscribe = [this.celestial.on('selectionChange', ({ object }) => this.#handleClick(object)), this.celestial.on('updateEnd', ({ time }) => this.#requestMovingBodies(time)), this.celestial.on('panStart', () => (mountRuntime.following = false))]
 		this.load()
 	}
 
@@ -268,23 +320,53 @@ export class Planetarium {
 		this.celestial.setLayerVisible('horizon', !!observer)
 	}
 
-	// Draws the field of view of a preset around the selection, or removes it when there is no preset,
-	// field, or selection position. It follows the selection's position at the instant shown.
-	syncFraming(preset: Readonly<OpticalPreset> | undefined, visible: boolean) {
-		const position = skyState.selection?.position
-		const framing = preset && resolveFraming(preset.optics)
+	// Draws the field of view of an optical configuration named name around a center (equatorial point of
+	// date in radians), or removes it when hidden or when there is no configuration, field, or center. The
+	// caller passes the selection's point at the instant shown, so the field follows it.
+	syncFraming(source: { readonly name: string; readonly optics: Readonly<OpticalConfiguration> } | undefined, visible: boolean, center: FramePoint | undefined) {
+		const framing = source && resolveFraming(source.optics)
 
-		if (!visible || !preset || !framing || !isFraming(framing) || !position) {
+		if (!visible || !source || !framing || !isFraming(framing) || !center) {
 			if (this.#framing) this.celestial.removeShape(FRAMING_SHAPE_ID)
 			this.#framing = false
 			return
 		}
 
-		const center = { rightAscension: position.rightAscension, declination: position.declination }
-		const outline = framePolygon(center, framing.width, framing.height, preset.optics.rotation * DEG2RAD, FRAMING_EDGE_SAMPLES)
-		const label = `${preset.name} · ${formatAngularSize(framing.width)} × ${formatAngularSize(framing.height)} · PA ${preset.optics.rotation.toFixed(1)}°`
+		const outline = framePolygon(center, framing.width, framing.height, source.optics.rotation * DEG2RAD, FRAMING_EDGE_SAMPLES)
+		const label = `${source.name} · ${formatAngularSize(framing.width)} × ${formatAngularSize(framing.height)} · PA ${source.optics.rotation.toFixed(1)}°`
 		this.#framing = true
-		this.celestial.addShape({ id: FRAMING_SHAPE_ID, coordinate: center, selectable: false, render: (_, ctx, state) => drawFraming(ctx, state.state, outline, label) })
+		this.celestial.addShape({ id: FRAMING_SHAPE_ID, coordinate: { ...center }, selectable: false, render: (_, ctx, state) => drawFraming(ctx, state.state, outline, label) })
+	}
+
+	// Draws the mount marker at a point of date (radians), moving the existing marker in place so a
+	// selected marker keeps its highlight, or removes it when there is no mount or point. Recenters the
+	// view on it while the mount is followed.
+	syncMount(mount: { readonly ref: MountRef; readonly name: string } | undefined, point: MountPoint | undefined) {
+		if (!mount || !point) {
+			if (this.#mountMarker) this.celestial.removeShape(MOUNT_MARKER_ID)
+			this.#mountMarker = undefined
+			return
+		}
+
+		const marker = this.#mountMarker
+
+		if (marker && refKey(marker.data.ref) === refKey(mount.ref) && marker.data.name === mount.name) {
+			marker.coordinate.rightAscension = point.rightAscension
+			marker.coordinate.declination = point.declination
+			this.celestial.markShapeChanged(MOUNT_MARKER_ID)
+		} else {
+			const coordinate = { rightAscension: point.rightAscension, declination: point.declination }
+			const data: MountMarkerData = { ref: mount.ref, name: mount.name }
+			this.#mountMarker = { coordinate, data }
+			this.celestial.addShape({ id: MOUNT_MARKER_ID, type: MOUNT_SHAPE_TYPE, coordinate, data, render: (_, ctx, state) => drawMountMarker(ctx, state.x, state.y, data.name) })
+		}
+
+		if (mountRuntime.following) this.centerOn(point)
+	}
+
+	// Centers the view on a point of date (radians), keeping the zoom and layers.
+	centerOn(point: MountPoint) {
+		this.celestial.centerOnCoordinate(point.rightAscension, point.declination)
 	}
 
 	// Applies the display preferences in place, keeping the view and data; the local meridian is drawn
@@ -309,6 +391,7 @@ export class Planetarium {
 
 		const position = selection?.position
 		if (selection?.ref.kind === 'minorBody' && position) this.#showMinorBody(selection.ref, selection.minorBody, position.rightAscension, position.declination, position.magnitude)
+		const point = selectionPoint(selection, mountRuntime, skyClock.mode === 'now')
 
 		let found: CelestialObject | null = null
 
@@ -324,8 +407,8 @@ export class Planetarium {
 			}
 		}
 
-		if (!found && selection && position && !(position.altitude !== undefined && position.altitude < 0)) {
-			const shape: CelestialShape = { id: SELECTION_MARKER_ID, coordinate: { rightAscension: position.rightAscension, declination: position.declination }, selectable: false, render: (_, ctx, state) => drawSelectionReticle(ctx, state.x, state.y, SELECTION_COLOR) }
+		if (!found && selection && point && !(position?.altitude !== undefined && position.altitude < 0)) {
+			const shape: CelestialShape = { id: SELECTION_MARKER_ID, coordinate: { ...point }, selectable: false, render: (_, ctx, state) => drawSelectionReticle(ctx, state.x, state.y, SELECTION_COLOR) }
 			this.#marker = true
 			this.celestial.addShape(shape)
 		} else if (this.#marker) {

@@ -15,7 +15,7 @@ export type ProjectionType = 'azimuthalEquidistant' | 'azimuthalEqualArea' | 'or
 export type CoordinateSystem = 'horizontal' | 'equatorial'
 
 // Event names emitted by Celestial.
-export type CelestialEventName = 'hover' | 'click' | 'objectHover' | 'objectLeave' | 'selectionChange' | 'viewTransformChange' | 'renderStart' | 'renderEnd' | 'updateStart' | 'updateEnd' | 'resize' | 'error'
+export type CelestialEventName = 'hover' | 'click' | 'objectHover' | 'objectLeave' | 'selectionChange' | 'viewTransformChange' | 'panStart' | 'renderStart' | 'renderEnd' | 'updateStart' | 'updateEnd' | 'resize' | 'error'
 
 // Identifier of a star or deep-sky object, as provided by its catalog.
 export type StarId = string | number
@@ -537,6 +537,8 @@ export type CelestialEventMap = {
 	readonly objectLeave: Readonly<{ object: CelestialObject }>
 	readonly selectionChange: Readonly<{ object: CelestialObject }>
 	readonly viewTransformChange: Readonly<{ transform: ViewTransform }>
+	// A drag or pinch of the user started moving the view; never emitted for wheel zoom or programmatic changes.
+	readonly panStart: Readonly<Record<string, never>>
 	readonly renderStart: Readonly<{ time: number }>
 	readonly renderEnd: Readonly<{ time: number; duration: number; fps: number }>
 	readonly updateStart: Readonly<{ time: number }>

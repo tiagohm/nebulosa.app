@@ -85,7 +85,11 @@ export function CaptureWorkspace() {
 			context={<Select options={CAPTURE_MODES} value={mode} format={(m) => CAPTURE_MODE_DEFINITIONS[m].label} disabledReason={captureModeUnavailable} onChange={(m) => navigate(routeState, { workspace: 'capture', camera: cameraView(role), mode: m })} className="w-52 max-sm:w-40" />}
 			panel={{
 				title: definition.panelTitle,
-				content: <ModePanel requires={definition.requires}>{Panel && <Panel />}</ModePanel>,
+				content: (
+					<ModePanel camera={role} requires={definition.requires}>
+						{Panel && <Panel />}
+					</ModePanel>
+				),
 			}}
 		>
 			<CaptureViewer key={viewerKey(role, setup)} viewer={viewerKey(role, setup)} role={role} reticle={viewReticle(capture, role, mode)} />

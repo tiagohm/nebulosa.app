@@ -1,4 +1,4 @@
-import type { OperationRecord, ServerEvent } from 'api'
+import type { OperationKind, OperationRecord, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 
 // Device operations of the server as this tab knows them. The server owns every operation, whichever tab
@@ -11,6 +11,11 @@ import { proxy } from 'valtio'
 export interface OperationsState {
 	// Every running operation and the latest finished ones, by operation id.
 	operations: Record<string, OperationRecord>
+}
+
+// Display name of each operation kind.
+export const OPERATION_LABELS: Readonly<Record<OperationKind, string>> = {
+	'mount.slew': 'Mount slew',
 }
 
 // Most finished operations kept; older ones are dropped. Running operations are always kept.

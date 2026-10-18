@@ -1,13 +1,23 @@
 import { useSnapshot } from 'valtio'
 import { connectionState } from '../connection/connection'
+import { availabilityFix, roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
 import { type EquipmentRole, roleDefinition } from '../equipment/roles'
 import { RoleStatusText } from '../equipment/RoleStatusText'
 import { useRoleDevice } from '../equipment/useEquipment'
+import { operationsState } from '../operations'
 import { activeProfile, activeSetup, profileState } from '../profile/profile'
 
 // Row of a contextual panel with the device the active profile assigned to a role and its real state,
-// and a shortcut to the existing flow that resolves a missing requirement. It only reads state.
+// busy while any operation holds it, and a shortcut to the existing flow that resolves a missing
+// requirement. It only reads state.
+
+// Shortcut of each fix flow; none for an availability with nothing to fix.
+const FIXES = {
+	connections: { label: 'Connections', open: () => (connectionState.open = true) },
+	equipment: { label: 'Equipment Setup', open: () => (deviceState.open = true) },
+	none: undefined,
+} as const
 
 export interface RoleRowProps {
 	// Role whose device is shown.
@@ -16,16 +26,24 @@ export interface RoleRowProps {
 
 // Device and state of a role, with a shortcut to fix it.
 export function RoleRow({ role }: RoleRowProps) {
-	const { device, status } = useRoleDevice(role)
+	const roleDevice = useRoleDevice(role)
+	const { device, status } = roleDevice
 	const profiles = useSnapshot(profileState)
+	const availability = roleAvailability(role, roleDevice, useSnapshot(operationsState))
 	const name = device?.name || activeSetup(activeProfile(profiles))[role]?.name || (status === 'notSelected' ? 'None selected' : 'Unknown device')
-	const fix = status === 'unavailable' ? { label: 'Connections', open: () => (connectionState.open = true) } : status === 'connected' || status === 'connecting' || status === 'disconnecting' ? undefined : { label: 'Equipment Setup', open: () => (deviceState.open = true) }
+	const fix = FIXES[availabilityFix(availability) ?? 'none']
 
 	return (
 		<div className="flex flex-col gap-0.5">
 			<div className="flex items-baseline justify-between gap-2">
 				<span className="text-xs text-ink-300">{roleDefinition(role).label}</span>
-				<RoleStatusText status={status} className="text-xs" />
+				{availability.status === 'busy' ? (
+					<span className="text-xs text-accent" title={availability.message}>
+						Busy
+					</span>
+				) : (
+					<RoleStatusText status={status} className="text-xs" />
+				)}
 			</div>
 			<div className="flex items-baseline justify-between gap-2">
 				<span className="min-w-0 truncate text-ink-100">{name}</span>

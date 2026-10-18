@@ -1,6 +1,6 @@
 import { open } from 'fs/promises'
 import { basename } from 'path'
-import { denormalize, readImageFromFits, readImageFromXisf, writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/imaging/model/image'
+import { readImageFromFits, readImageFromXisf, writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/imaging/model/image'
 import type { CfaPattern, Image, ImageChannel } from 'nebulosa/src/imaging/model/types'
 import { clone } from 'nebulosa/src/imaging/processing/arithmetic'
 import { adf } from 'nebulosa/src/imaging/processing/computation'
@@ -248,12 +248,11 @@ class MemorySink implements Sink {
 	}
 }
 
-// Encodes a document as a FITS or XISF file in the scale of its source (denormalize).
+// Encodes a document as a FITS or XISF file in the scale of its source (sourceScale).
 async function encodeDocument(entry: DocumentEntry, format: ImageFormat): Promise<Uint8Array<ArrayBuffer>> {
 	const sink = new MemorySink()
-	const image = denormalize(entry.image)
-	if (format === 'fits') await writeImageToFits(image, sink)
-	else await writeImageToXisf(image, sink)
+	if (format === 'fits') await writeImageToFits(entry.image, sink, { sourceScale: true })
+	else await writeImageToXisf(entry.image, sink, undefined, { sourceScale: true })
 	return sink.bytes()
 }
 

@@ -3,7 +3,9 @@
 	"private": true,
 	"type": "module",
 	"exports": {
-		".": "./src/index.ts"
+		".": "./src/index.ts",
+		"./sky/designations": "./src/sky/designations.ts",
+		"./sky/schema": "./src/sky/schema.ts"
 	},
 	"dependencies": {
 		"nebulosa": "workspace:*"

@@ -2,6 +2,7 @@
 	"name": "nebulosa-repo",
 	"private": true,
 	"workspaces": [
+		"bin",
 		"core",
 		"api",
 		"web",
@@ -13,7 +14,8 @@
 		"start": "NODE_ENV=production bun app/src/main.ts",
 		"compile": "bun run --cwd app compile",
 		"lint": "bun lint --disable-nested-config",
-		"fmt": "bun fmt --disable-nested-config"
+		"fmt": "bun fmt --disable-nested-config",
+		"make:catalog": "bun run bin/src/sky.catalog.ts"
 	},
 	"devDependencies": {
 		"@types/bun": "latest"

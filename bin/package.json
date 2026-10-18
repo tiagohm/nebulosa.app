@@ -1,0 +1,9 @@
+{
+	"name": "bin",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"api": "workspace:*",
+		"nebulosa": "workspace:*"
+	}
+}

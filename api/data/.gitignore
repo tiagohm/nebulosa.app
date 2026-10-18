@@ -1,0 +1,7 @@
+*.dat
+hyg_v*.csv
+*-shm
+*-wal
+*-journal
+*.db
+*.tmp

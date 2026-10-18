@@ -26,6 +26,13 @@
         "@tailwindcss/oxide": "4.3.3",
       },
     },
+    "bin": {
+      "name": "bin",
+      "dependencies": {
+        "api": "workspace:*",
+        "nebulosa": "workspace:*",
+      },
+    },
     "core": {
       "name": "nebulosa",
       "version": "0.1.0",
@@ -106,6 +113,8 @@
     "api": ["api@workspace:api"],
 
     "app": ["app@workspace:app"],
+
+    "bin": ["bin@workspace:bin"],
 
     "bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 

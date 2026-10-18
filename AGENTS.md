@@ -9,7 +9,7 @@ Nebulosa is an integrated astronomical imaging application: a Bun server and a R
 - Runtime, package manager, bundler, test runner, linter, and formatter: **Bun** (`bun lint` and `bun fmt` are OXC-based built-ins)
 - Modules: **ESM only**, TypeScript everywhere
 - Frontend: React 19, Tailwind CSS 4, `tailwind-variants`, `cn`, and `valtio`
-- Monorepo: Bun workspaces `core`, `api`, `web`, and `app`
+- Monorepo: Bun workspaces `core`, `api`, `web`, `app`, and `bin`
 
 Use the user's task to determine the authorized outcome:
 
@@ -38,6 +38,7 @@ The graph is an index, not source authority. Read the exact implementation befor
 - `api/`: the Bun backend. `src/index.ts` is the package entry point and exports the HTTP `routes`.
 - `web/`: the React frontend. `index.html` is the HTML entry point and is exported as `web/index.html`; sources live in `src/` and static files in `assets/`.
 - `app/`: composes `api` and `web` into one `Bun.serve` server (`src/main.ts`), and builds the executable (`build.ts`, `tailwind.plugin.ts`).
+- `bin/`: development scripts that generate data files, such as `src/sky.catalog.ts`, which writes the sky catalog database `api/data/sky.catalog.db` embedded by `api`.
 
 Preserve these boundaries:
 
@@ -45,6 +46,7 @@ Preserve these boundaries:
 - `web` may import from `api` only with `import type`. Runtime communication goes through HTTP or WebSocket, never through shared runtime modules, so server code never ends up in the browser bundle.
 - `web` never imports `nebulosa` runtime code that relies on Bun, the filesystem, and native FFI. Complex computation that needs the toolkit belongs in `api`. Constants and pure functions like angle formatting can be imported.
 - `app` only wires `api` and `web` together and owns the build. Business logic belongs in `api`, UI in `web`.
+- `bin` may import `api` (through its package `exports`) and `nebulosa`; nothing imports `bin`. Schemas and codes shared by a generator and the API live in `api`.
 - Import `nebulosa` modules by path, such as `nebulosa/src/math/units/angle`; the package has no barrel.
 - Across workspaces import by package name (`api`, `web/index.html`, `nebulosa/src/...`). Within a workspace use relative imports without `.ts` extensions.
 
@@ -60,6 +62,7 @@ Preserve these boundaries:
 Run every command from the repository root.
 
 - Install: `bun install` (commit `bun.lock`; CI installs with `--frozen-lockfile`)
+- Sky catalog: `bun make:catalog` (add `--force` to regenerate) after installing and whenever its schema changes. It downloads the source files and queries SIMBAD; the generated `api/data/sky.catalog.db` is not committed, and `bun dev`, `bun start`, and `bun compile` need it.
 - Development server with hot reload and frontend HMR: `bun dev`
 - Production-mode server without compiling: `bun start`
 - Standalone executable: `bun compile`, written to `.dist/nebulosa.exe` on Windows and `.dist/nebulosa` elsewhere

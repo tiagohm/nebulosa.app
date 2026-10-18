@@ -10,6 +10,7 @@ Nebulosa is an integrated astronomical imaging application built with Bun, React
 ```sh
 git clone --recurse-submodules https://github.com/tiagohm/nebulosa.app
 bun i
+bun make:catalog --force
 ```
 
 | Command       | Description                                        |
@@ -27,3 +28,5 @@ Workspaces:
 - `api`: Bun backend
 - `web`: React frontend
 - `app`: Bundles `api` and `web` into a single server and executable
+
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the capability inventory, workspace responsibilities, and shared contracts.

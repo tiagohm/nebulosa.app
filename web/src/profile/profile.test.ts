@@ -385,6 +385,16 @@ describe('sky settings', () => {
 		expect(state.profiles[0].settings.sky).toEqual({})
 	})
 
+	test('keeps a known time zone of the observer and drops an unknown one', () => {
+		const state = load(newStores())
+
+		setSkyObserver(state, { latitude: 10, longitude: 20, elevation: 30, timeZone: 'Asia/Tokyo' })
+		expect(state.profiles[0].settings.sky.observer?.timeZone).toBe('Asia/Tokyo')
+
+		setSkyObserver(state, { latitude: 10, longitude: 20, elevation: 30, timeZone: 'Mars/Olympus_Mons' })
+		expect(state.profiles[0].settings.sky.observer).toEqual({ latitude: 10, longitude: 20, elevation: 30 })
+	})
+
 	test('a duplicated profile keeps its own observer', () => {
 		const state = load(newStores())
 		setSkyObserver(state, { latitude: 10, longitude: 20, elevation: 30 })

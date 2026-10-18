@@ -1,13 +1,13 @@
 import { expect, test } from 'bun:test'
 import { proxy } from 'valtio'
-import { changeSkyObserver, clearSkySelection, refreshSkySelection, selectSkyObject, type SkyIo, type SkyState } from './sky'
+import { changeSkyObserver, clearSkySelection, loadSkyMapData, REALTIME_REFRESH, refreshSkySelection, selectSkyObject, type SkyIo, type SkyState } from './sky'
 
 // Fake API whose responses are released by the test, in any order.
 function fakeApi() {
 	const pending: { url: string; body: unknown; resolve: (value: unknown, status?: number) => void }[] = []
 
 	const io: SkyIo = {
-		now: () => 1_000,
+		time: () => 1_000,
 		fetch: (input, init) =>
 			new Promise<Response>((resolve, reject) => {
 				init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
@@ -96,11 +96,11 @@ test('a refresh skips a fresh or loading selection', async () => {
 	const { io, pending, release } = fakeApi()
 
 	selectSkyObject(state, { ref: { kind: 'body', code: '10' }, source: 'map', name: 'Sun' }, undefined, io)
-	await refreshSkySelection(state, undefined, io)
+	await refreshSkySelection(state, undefined, REALTIME_REFRESH, io)
 	expect(pending).toHaveLength(1)
 
 	await release((url) => url === '/api/sky/position', { position: position(3) })
-	await refreshSkySelection(state, undefined, io)
+	await refreshSkySelection(state, undefined, REALTIME_REFRESH, io)
 	expect(pending).toHaveLength(0)
 })
 
@@ -111,4 +111,55 @@ test('constellation details', async () => {
 	selectSkyObject(state, { ref: { kind: 'constellation', code: 'ORI' }, source: 'map', name: 'Orion' }, undefined, io)
 	await release((url) => url === '/api/sky/constellations/ORI', { code: 'ORI', abbreviation: 'Ori', name: 'Orion', genitive: 'Orionis', rightAscension: 1.45, declination: 0.05 })
 	expect(state.selection?.constellation?.genitive).toBe('Orionis')
+})
+
+test('positions are computed for the instant shown', async () => {
+	const state = proxy<SkyState>({ panel: 'inspector' })
+	const { io, pending, release } = fakeApi()
+	let time = 5_000_000
+	const clocked: SkyIo = { ...io, time: () => time }
+
+	selectSkyObject(state, { ref: { kind: 'body', code: '301' }, source: 'map', name: 'Moon' }, undefined, clocked)
+	expect((pending[0].body as { time: number }).time).toBe(5_000_000)
+	await release((url) => url === '/api/sky/position', { position: { ...position(1), time: 5_000_000 }, events: { state: 'normal', rise: 1 } })
+
+	// The same instant is never asked twice, even for a fixed clock refreshed often.
+	await refreshSkySelection(state, undefined, { tolerance: 0, mode: 'accurate' }, clocked)
+	expect(pending).toHaveLength(0)
+
+	// A fast position of another instant keeps the selection and its previous events.
+	time = 9_000_000
+	void refreshSkySelection(state, undefined, { tolerance: 0, mode: 'fast' }, clocked)
+	expect(pending[0].body).toMatchObject({ time: 9_000_000, mode: 'fast' })
+	await release((url) => url === '/api/sky/position', { position: { ...position(2), time: 9_000_000 } })
+
+	expect(state.selection?.name).toBe('Moon')
+	expect(state.selection?.position?.time).toBe(9_000_000)
+	expect(state.selection?.events?.rise).toBe(1)
+})
+
+test('map data is downloaded again only for an instant more than a year away', async () => {
+	const { io, pending, release } = fakeApi()
+	let time = Date.UTC(2026, 0, 1)
+	const clocked: SkyIo = { ...io, time: () => time }
+	const answer = async () => {
+		await release((url) => url.startsWith('/api/sky/catalog/stars'), {})
+		await release((url) => url.startsWith('/api/sky/catalog/dsos'), {})
+		await release((url) => url.startsWith('/api/sky/constellations'), {})
+	}
+
+	const first = loadSkyMapData(clocked)
+	expect(pending).toHaveLength(3)
+	await answer()
+	expect((await first).time).toBe(time)
+
+	time = Date.UTC(2026, 11, 1)
+	expect(loadSkyMapData(clocked)).toBe(first)
+	expect(pending).toHaveLength(0)
+
+	time = Date.UTC(2028, 0, 1)
+	const second = loadSkyMapData(clocked)
+	expect(pending[0].url).toContain(`time=${time}`)
+	await answer()
+	expect((await second).time).toBe(time)
 })

@@ -50,6 +50,9 @@ export interface SkyObserverSettings {
 	longitude: number
 	// Height above the ellipsoid in meters, [-500, 9000].
 	elevation: number
+	// IANA time zone the Sky shows and enters times in, such as "America/Sao_Paulo"; absent uses the
+	// browser's. It never changes positions, only how instants are read.
+	timeZone?: string
 }
 
 // Sky preferences of a profile.
@@ -151,14 +154,24 @@ const MAX_OBSERVER_ELEVATION = 9000
 export function normalizeSkyObserver(value: unknown): SkyObserverSettings | undefined {
 	if (!isRecord(value)) return undefined
 
-	const { latitude, longitude, elevation, name } = value
+	const { latitude, longitude, elevation, name, timeZone } = value
 	if (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90) return undefined
 	if (typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return undefined
 	if (typeof elevation !== 'number' || !Number.isFinite(elevation) || elevation < MIN_OBSERVER_ELEVATION || elevation > MAX_OBSERVER_ELEVATION) return undefined
 
 	const observer: SkyObserverSettings = { latitude, longitude, elevation }
 	if (typeof name === 'string' && name.trim()) observer.name = name.trim()
+	if (typeof timeZone === 'string' && isKnownTimeZone(timeZone)) observer.timeZone = timeZone
 	return observer
+}
+
+// Whether a name is an IANA time zone the browser knows; an unknown one is dropped, using the browser's.
+function isKnownTimeZone(timeZone: string) {
+	try {
+		return new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone !== ''
+	} catch {
+		return false
+	}
 }
 
 // Restores persisted Sky preferences, dropping an invalid observer.
@@ -490,7 +503,7 @@ export function setSkyObserver(state: ProfileState, observer: SkyObserverSetting
 	const normalized = normalizeSkyObserver(observer)
 	if (!normalized) return false
 	const current = profile.settings.sky.observer
-	if (current && current.latitude === normalized.latitude && current.longitude === normalized.longitude && current.elevation === normalized.elevation && current.name === normalized.name) return true
+	if (current && current.latitude === normalized.latitude && current.longitude === normalized.longitude && current.elevation === normalized.elevation && current.name === normalized.name && current.timeZone === normalized.timeZone) return true
 	profile.settings.sky.observer = normalized
 	touch(profile)
 	return true

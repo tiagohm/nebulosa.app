@@ -25,6 +25,8 @@ export interface ObjectInspectorProps {
 	readonly hasObserver: boolean
 	// Opens the observer settings.
 	readonly onSetObserver: () => void
+	// IANA time zone times are shown in; the browser's when absent.
+	readonly timeZone?: string
 }
 
 // Label and value of one datum.
@@ -43,7 +45,7 @@ function Note({ children, danger }: { readonly children: ReactNode; readonly dan
 }
 
 // Object Inspector.
-export function ObjectInspector({ hasObserver, onSetObserver }: ObjectInspectorProps) {
+export function ObjectInspector({ hasObserver, onSetObserver, timeZone }: ObjectInspectorProps) {
 	const { selection } = useSnapshot(skyState)
 
 	if (!selection) {
@@ -65,8 +67,8 @@ export function ObjectInspector({ hasObserver, onSetObserver }: ObjectInspectorP
 				{designations.length > 0 && <p className="m-0 text-xs leading-5 text-ink-200">{designations.join(' · ')}</p>}
 				{selection.detailsError && <Note danger>Details unavailable: {selection.detailsError}</Note>}
 			</PanelSection>
-			<PositionSection selection={selection} />
-			{position && <ObserverSection position={position} events={events} hasObserver={hasObserver} onSetObserver={onSetObserver} isSolarSystem={selection.ref.kind === 'body' || selection.ref.kind === 'minorBody'} />}
+			<PositionSection selection={selection} timeZone={timeZone} />
+			{position && <ObserverSection position={position} events={events} hasObserver={hasObserver} onSetObserver={onSetObserver} isSolarSystem={selection.ref.kind === 'body' || selection.ref.kind === 'minorBody'} timeZone={timeZone} />}
 			{catalog && <CatalogSection catalog={catalog} />}
 			{minorBody && <MinorBodySection body={minorBody} />}
 		</>
@@ -147,7 +149,7 @@ function parameterValue(value: string) {
 }
 
 // Apparent coordinates of the selection, with their provider and instant.
-function PositionSection({ selection }: { readonly selection: SkySelection }) {
+function PositionSection({ selection, timeZone }: { readonly selection: SkySelection; readonly timeZone?: string }) {
 	const { position, positionError, loading } = selection
 
 	return (
@@ -167,7 +169,7 @@ function PositionSection({ selection }: { readonly selection: SkySelection }) {
 					{position.magnitude !== undefined && selection.ref.kind !== 'catalog' && <Datum label="Magnitude">{formatMagnitude(position.magnitude)}</Datum>}
 					{position.illuminated !== undefined && selection.ref.kind !== 'catalog' && <Datum label="Illuminated">{(position.illuminated * 100).toFixed(1)}%</Datum>}
 					{position.elongation !== undefined && !(selection.ref.kind === 'body' && selection.ref.code === '10') && selection.ref.kind !== 'catalog' && <Datum label="Solar elongation">{formatDegrees(position.elongation)}</Datum>}
-					<Note>{positionNote(position, selection.ref.kind === 'constellation')}</Note>
+					<Note>{positionNote(position, selection.ref.kind === 'constellation', timeZone)}</Note>
 				</>
 			) : (
 				!positionError && <p className="m-0 text-ink-300">{loading ? 'Computing the position…' : 'No position.'}</p>
@@ -178,15 +180,15 @@ function PositionSection({ selection }: { readonly selection: SkySelection }) {
 }
 
 // Describes how and when a position was computed; a constellation is located at its label, a fixed J2000
-// point near its center.
-function positionNote(position: SkyPosition, constellation: boolean) {
+// point near its center. Times are shown in a time zone, or in the browser's when absent.
+function positionNote(position: SkyPosition, constellation: boolean, timeZone?: string) {
 	const source = position.source === 'horizons' ? 'JPL Horizons' : position.fallbackReason ? `local model (${FALLBACK_REASONS[position.fallbackReason]})` : 'local model'
-	const place = `Apparent ${position.center} place at ${formatLocalTime(position.time)}, from ${source}.`
+	const place = `Apparent ${position.center} place at ${formatLocalTime(position.time, Date.now(), undefined, timeZone)}, from ${source}.`
 	return constellation ? `${place} The position is the constellation label, a fixed J2000 point near its center.` : place
 }
 
 // Horizontal coordinates and events for the observer, or an invitation to set one.
-function ObserverSection({ position, events, hasObserver, onSetObserver, isSolarSystem }: { readonly position: SkyPosition; readonly events?: SkyEvents; readonly hasObserver: boolean; readonly onSetObserver: () => void; readonly isSolarSystem: boolean }) {
+function ObserverSection({ position, events, hasObserver, onSetObserver, isSolarSystem, timeZone }: { readonly position: SkyPosition; readonly events?: SkyEvents; readonly hasObserver: boolean; readonly onSetObserver: () => void; readonly isSolarSystem: boolean; readonly timeZone?: string }) {
 	if (!hasObserver || position.altitude === undefined || position.azimuth === undefined) {
 		return (
 			<PanelSection title="Visibility">
@@ -203,18 +205,18 @@ function ObserverSection({ position, events, hasObserver, onSetObserver, isSolar
 	return (
 		<PanelSection title="Visibility">
 			<Datum label="Altitude">{formatDeclination(position.altitude)}</Datum>
-			{position.altitude < 0 && <Note>Below the horizon now, so the map does not show it.</Note>}
+			{position.altitude < 0 && <Note>Below the horizon at this instant, so the map does not show it.</Note>}
 			<Datum label="Azimuth">{formatDegrees(position.azimuth)}</Datum>
 			{events?.state === 'circumpolar' && <Datum label="Rise and set">Circumpolar</Datum>}
 			{events?.state === 'belowHorizon' && <Datum label="Rise and set">Below the horizon all day</Datum>}
-			{events?.rise !== undefined && <Datum label="Rise">{formatLocalTime(events.rise, position.time)}</Datum>}
+			{events?.rise !== undefined && <Datum label="Rise">{formatLocalTime(events.rise, position.time, undefined, timeZone)}</Datum>}
 			{events?.transit !== undefined && (
 				<Datum label="Transit">
-					{formatLocalTime(events.transit, position.time)}
+					{formatLocalTime(events.transit, position.time, undefined, timeZone)}
 					{events.transitAltitude !== undefined && ` · ${formatDeclination(events.transitAltitude)}`}
 				</Datum>
 			)}
-			{events?.set !== undefined && <Datum label="Set">{formatLocalTime(events.set, position.time)}</Datum>}
+			{events?.set !== undefined && <Datum label="Set">{formatLocalTime(events.set, position.time, undefined, timeZone)}</Datum>}
 			<Note>Refracted altitude. Rise, transit, and set are the ones nearest the instant, within 12 hours{isSolarSystem ? ', from the local model' : ''}.</Note>
 		</PanelSection>
 	)

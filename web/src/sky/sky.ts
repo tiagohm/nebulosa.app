@@ -2,15 +2,17 @@ import type { MinorBody, MinorBodySearchResponse, SkyBodyPosition, SkyCatalogObj
 import { proxy } from 'valtio'
 import { responseError } from '../http'
 import type { SkyObserverSettings } from '../profile/profile'
+import { skyClock, skyTime } from './clock'
 import { refKey } from './objects'
 import { createRequestGuard } from './selection'
 
 // State and API access of the tab's Sky workspace: the selected object with its catalog, minor body,
 // or constellation data, position, and events; and the contextual panel view. The selection is independent of where it came from (a click on the map or a search
 // result); only the latest selection's responses are applied. Map data (stars, deep-sky objects, and
-// constellations) is downloaded once per tab and kept in memory, so returning to the workspace never
-// downloads it again. Positions are computed for the real current time: the Sky simulation clock is a
-// later addition, and every request already carries its instant.
+// constellations) is kept in memory for the tab, so returning to the workspace never downloads it again;
+// it is downloaded again only for an instant more than a year away from the one it was computed for, as
+// precession moves its positions of date. Positions and events are computed for the instant of the Sky
+// simulation clock (./clock), which is the real current time unless the user chose another.
 
 // Where a selection came from.
 export type SkySelectionSource = 'map' | 'search'
@@ -35,6 +37,8 @@ export interface SkySelection {
 	constellation?: SkyConstellation
 	// Position at the latest instant computed.
 	position?: SkyPosition
+	// Instant of the latest position requested, Unix milliseconds (UTC), whether it succeeded or not.
+	requestedTime?: number
 	// Rise, transit, and set for the observer, when there is one.
 	events?: SkyEvents
 	// Whether the position is being computed.
@@ -78,20 +82,30 @@ export interface SkyMapData {
 	readonly dsos: SkyDeepSkyData
 	// Constellation figures, boundaries, and labels.
 	readonly constellations: SkyConstellations
+	// Instant the positions of date were computed for, Unix milliseconds (UTC).
+	readonly time: number
 }
 
 // Browser services the store uses, replaced in tests.
 export interface SkyIo {
 	// Performs HTTP requests to the API.
 	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
-	// Current Unix time in milliseconds.
-	readonly now: () => number
+	// Instant the Sky shows, Unix milliseconds (UTC): the simulation clock's.
+	readonly time: () => number
 }
 
 // Browser implementation of SkyIo.
 export const browserSkyIo: SkyIo = {
 	fetch: (input, init) => fetch(input, init),
-	now: () => Date.now(),
+	time: () => skyTime(skyClock, Date.now()),
+}
+
+// How a refresh recomputes the selection's position.
+export interface SkyRefreshOptions {
+	// Largest distance in milliseconds between a kept position's instant and the instant shown.
+	readonly tolerance: number
+	// Calculation path: `accurate` asks Horizons first; `fast` is local only and has no events.
+	readonly mode: 'fast' | 'accurate'
 }
 
 // Faintest star magnitude downloaded for the map; fainter stars are still found by search.
@@ -100,14 +114,21 @@ export const MAP_STAR_MAGNITUDE_LIMIT = 7
 // Age in milliseconds below which a position is fresh enough that a periodic refresh skips it.
 const FRESH_POSITION_MS = 20_000
 
+// Refresh while the clock follows the real time: positions younger than FRESH_POSITION_MS are kept.
+export const REALTIME_REFRESH: SkyRefreshOptions = { tolerance: FRESH_POSITION_MS, mode: 'accurate' }
+
+// Largest distance in milliseconds between the instant shown and the instant of the map data before the
+// data is downloaded again: one Julian year, about 50″ of precession.
+export const MAP_DATA_EPOCH_MS = 365.25 * 86_400_000
+
 // Sky workspace state of the tab.
 export const skyState = proxy<SkyState>({ panel: 'inspector' })
 
 // Requests of the current selection; a new selection supersedes them.
 const selectionGuard = createRequestGuard()
 
-// Map data download of the tab, started on the first visit to the workspace.
-let mapData: Promise<SkyMapData> | undefined
+// Latest map data download of the tab, started on the first visit to the workspace, with its instant.
+let mapData: { readonly time: number; readonly data: Promise<SkyMapData> } | undefined
 
 // Converts the profile's observer to the API's.
 export function apiObserver(observer: SkyObserverSettings | undefined): SkyObserver | undefined {
@@ -126,18 +147,30 @@ function postJson<T>(io: SkyIo, input: string, body: unknown, signal?: AbortSign
 	return fetchJson<T>(io, input, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal })
 }
 
-// Returns the map data, downloading it on the first call of the tab. A failed download is forgotten so
-// the next visit retries.
+// Whether map data computed for an instant can show another instant (both Unix milliseconds).
+export function mapDataCovers(dataTime: number, time: number) {
+	return Math.abs(time - dataTime) <= MAP_DATA_EPOCH_MS
+}
+
+// Returns the map data for the instant shown, downloading it on the first call of the tab and again only
+// when the instant is more than MAP_DATA_EPOCH_MS away from the data's. Only the latest download is
+// kept; a failed download is forgotten so the next call retries.
 export function loadSkyMapData(io: SkyIo = browserSkyIo): Promise<SkyMapData> {
-	if (!mapData) {
-		const time = io.now()
-		mapData = Promise.all([fetchJson<SkyStarData>(io, `/api/sky/catalog/stars?time=${time}&magnitude=${MAP_STAR_MAGNITUDE_LIMIT}`), fetchJson<SkyDeepSkyData>(io, `/api/sky/catalog/dsos?time=${time}`), fetchJson<SkyConstellations>(io, `/api/sky/constellations?time=${time}`)]).then(
-			([stars, dsos, constellations]) => ({ stars, dsos, constellations }),
+	const time = io.time()
+
+	if (!mapData || !mapDataCovers(mapData.time, time)) {
+		const data = Promise.all([fetchJson<SkyStarData>(io, `/api/sky/catalog/stars?time=${time}&magnitude=${MAP_STAR_MAGNITUDE_LIMIT}`), fetchJson<SkyDeepSkyData>(io, `/api/sky/catalog/dsos?time=${time}`), fetchJson<SkyConstellations>(io, `/api/sky/constellations?time=${time}`)]).then(
+			([stars, dsos, constellations]) => ({ stars, dsos, constellations, time }),
 		)
-		mapData.catch(() => (mapData = undefined))
+		const download = { time, data }
+		mapData = download
+
+		data.catch(() => {
+			if (mapData === download) mapData = undefined
+		})
 	}
 
-	return mapData
+	return mapData.data
 }
 
 // Searches the local catalog and the major bodies.
@@ -167,13 +200,13 @@ export function selectSkyObject(state: SkyState, input: SkySelectionInput, obser
 
 	if (state.selection?.key === key) {
 		if (input.minorBody) state.selection.minorBody ??= input.minorBody
-		void refreshSkySelection(state, observer, io)
+		void refreshSkySelection(state, observer, REALTIME_REFRESH, io)
 		return
 	}
 
 	state.selection = { ref: input.ref, key, source: input.source, category: input.category, name: input.name, minorBody: input.minorBody, loading: true }
 	state.panel = 'inspector'
-	void loadSelection(state, observer, io, true)
+	void loadSelection(state, observer, io, true, 'accurate')
 }
 
 // Clears the selection and abandons its requests.
@@ -182,12 +215,13 @@ export function clearSkySelection(state: SkyState) {
 	state.selection = undefined
 }
 
-// Recomputes the position of the selection, keeping its details, as time passes. Skips a selection
-// still loading or whose position is fresh, so remounting the workspace does not repeat requests.
-export async function refreshSkySelection(state: SkyState, observer: SkyObserverSettings | undefined, io: SkyIo = browserSkyIo): Promise<void> {
+// Recomputes the position of the selection for the instant shown, keeping its details. Skips a selection
+// still loading or whose latest request was within the tolerance of the instant, so remounting the
+// workspace, a fast clock, or a failing service never piles up requests.
+export async function refreshSkySelection(state: SkyState, observer: SkyObserverSettings | undefined, options: SkyRefreshOptions = REALTIME_REFRESH, io: SkyIo = browserSkyIo): Promise<void> {
 	const selection = state.selection
-	if (!selection || selection.loading || (selection.position && io.now() - selection.position.time < FRESH_POSITION_MS)) return
-	await loadSelection(state, observer, io, false)
+	if (!selection || selection.loading || (selection.requestedTime !== undefined && Math.abs(io.time() - selection.requestedTime) <= options.tolerance)) return
+	await loadSelection(state, observer, io, false, options.mode)
 }
 
 // Recomputes the position of the selection for a new observer, first dropping the position and events
@@ -198,19 +232,22 @@ export function changeSkyObserver(state: SkyState, observer: SkyObserverSettings
 		state.selection.events = undefined
 	}
 
-	return loadSelection(state, observer, io, false)
+	return loadSelection(state, observer, io, false, 'accurate')
 }
 
-// Loads the position of the selection and, when `details` is true or they are missing, its catalog or
-// minor body data. Responses are applied only while the request is the latest one for the same object.
-async function loadSelection(state: SkyState, observer: SkyObserverSettings | undefined, io: SkyIo, details: boolean) {
+// Loads the position of the selection for the instant shown and, when `details` is true or they are
+// missing, its catalog or minor body data. Responses are applied only while the request is the latest one
+// for the same object. A fast position has no events, so it keeps the previous ones (absolute instants).
+async function loadSelection(state: SkyState, observer: SkyObserverSettings | undefined, io: SkyIo, details: boolean, mode: 'fast' | 'accurate') {
 	const selection = state.selection
 	if (!selection) return
 
 	const request = selectionGuard.begin()
 	const { key, ref } = selection
 	const applies = () => request.current() && state.selection?.key === key
+	const time = io.time()
 	selection.loading = true
+	selection.requestedTime = time
 
 	const tasks: Promise<void>[] = []
 
@@ -263,11 +300,11 @@ async function loadSelection(state: SkyState, observer: SkyObserverSettings | un
 	}
 
 	tasks.push(
-		fetchSkyPosition(ref, io.now(), apiObserver(observer), 'accurate', request.signal, io).then(
+		fetchSkyPosition(ref, time, apiObserver(observer), mode, request.signal, io).then(
 			({ position, events }) => {
 				if (!applies()) return
 				state.selection!.position = position
-				state.selection!.events = events
+				if (mode === 'accurate' || events) state.selection!.events = events
 				state.selection!.positionError = undefined
 			},
 			(error: unknown) => {

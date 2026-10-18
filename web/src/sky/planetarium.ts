@@ -1,20 +1,26 @@
 import type { MinorBody, SkyObjectCategory, SkyObjectRef } from 'api'
-import { proxy } from 'valtio'
+import { proxy, subscribe } from 'valtio'
 import type { SkyObserverSettings } from '../profile/profile'
 import { Celestial, type CelestialObject, type CelestialOptions, type CelestialShape, type ConstellationLine, type CoordinateSystem, drawSelectionReticle, type MovingBody, type MovingBodyType } from './celestial/celestial'
+import { skyClock, skyTime } from './clock'
 import { hoverLabel, type MapNames, movingBodyId, refKey, refOfCelestialObject, selectionTargets } from './objects'
 import { createRequestGuard } from './selection'
-import { apiObserver, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, MAP_STAR_MAGNITUDE_LIMIT, selectSkyObject, skyState } from './sky'
+import { apiObserver, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, MAP_STAR_MAGNITUDE_LIMIT, mapDataCovers, selectSkyObject, skyState } from './sky'
 
 // The Sky workspace's star map, kept for the whole tab: the Celestial instance, its catalogs, the moving
 // bodies, and the selection highlight live here rather than in React, so leaving the workspace only
 // detaches the map from the page and stops its clock, and returning reattaches the same map with its
 // view, data, and selection. A new map is created only when the kind of chart changes: the observer's
 // local sky (horizontal, zenith at the center) when there is an observer, an equatorial chart of the
-// whole sky otherwise. Objects below the local horizon are neither drawn nor highlighted.
+// whole sky otherwise. Objects below the local horizon are neither drawn nor highlighted. The map shows
+// the instant of the Sky simulation clock (./clock); its catalogs are reloaded in place when the clock
+// stops more than a year away from the instant they were computed for.
 
-// Interval of the map's real-time updates in milliseconds.
+// Interval of the map's updates in milliseconds while the clock follows the real time.
 const REALTIME_INTERVAL_MS = 30_000
+
+// Interval of the map's updates in milliseconds while the clock plays.
+const PLAYING_INTERVAL_MS = 250
 
 // Color of the selection reticle.
 const SELECTION_COLOR = '#7e57c2'
@@ -87,13 +93,24 @@ export class Planetarium {
 	readonly #bodiesGuard = createRequestGuard()
 	readonly #minorGuard = createRequestGuard()
 	readonly #locateGuard = createRequestGuard()
+	readonly #loadGuard = createRequestGuard()
 	readonly #unsubscribe: VoidFunction[]
 	#names: MapNames = { typeNames: [], starDesignations: [], constellationCodes: new Map() }
 	#observer?: SkyObserverSettings
 	// Second and observer of the body positions requested last, so repeated updates do not refetch them.
 	#bodiesKey = ''
+	// Whether body positions are being requested; updates meanwhile only record their instant.
+	#bodiesBusy = false
+	// Instant (Unix milliseconds) of the latest update that arrived while body positions were requested.
+	#bodiesPending?: number
+	// Instant the loaded catalogs were computed for, Unix milliseconds; absent before the first load.
+	#dataTime?: number
 	#marker = false
 	#resizeObserver?: ResizeObserver
+	// Timer of the clock updates while attached.
+	#clockTimer?: ReturnType<typeof setInterval>
+	// Stops following the simulation clock; set while attached.
+	#unsubscribeClock?: VoidFunction
 	#destroyed = false
 
 	// Creates the map of a kind of chart for an observer and starts loading its data.
@@ -110,8 +127,14 @@ export class Planetarium {
 			this.celestial.addMovingBody(body)
 		}
 
-		this.#unsubscribe = [this.celestial.on('selectionChange', ({ object }) => this.#handleClick(object)), this.celestial.on('updateEnd', ({ time }) => void this.#updateMovingBodies(time))]
+		this.celestial.setTime(skyTime(skyClock, Date.now()))
+		this.#unsubscribe = [this.celestial.on('selectionChange', ({ object }) => this.#handleClick(object)), this.celestial.on('updateEnd', ({ time }) => this.#requestMovingBodies(time))]
 		this.load()
+	}
+
+	// Instant the map shows, Unix milliseconds (UTC).
+	get time() {
+		return skyTime(skyClock, Date.now())
 	}
 
 	// Map data that names the drawn objects.
@@ -119,7 +142,7 @@ export class Planetarium {
 		return this.#names
 	}
 
-	// Shows the map inside a container, following its size, and starts the real-time clock.
+	// Shows the map inside a container, following its size and the simulation clock.
 	attach(container: HTMLElement) {
 		if (this.#destroyed) return
 
@@ -128,14 +151,18 @@ export class Planetarium {
 		this.celestial.resize(rect.width, rect.height)
 		this.#resizeObserver = new ResizeObserver(([entry]) => entry && this.celestial.resize(entry.contentRect.width, entry.contentRect.height))
 		this.#resizeObserver.observe(container)
-		this.celestial.startAutoUpdate({ mode: 'realtime', interval: REALTIME_INTERVAL_MS })
+		this.#unsubscribeClock = subscribe(skyClock, () => this.#followClock())
+		this.#followClock()
 	}
 
-	// Removes the map from the page and stops its clock; the map keeps its state.
+	// Removes the map from the page and stops following the clock; the map keeps its state.
 	detach() {
 		this.#resizeObserver?.disconnect()
 		this.#resizeObserver = undefined
-		this.celestial.stopAutoUpdate()
+		this.#unsubscribeClock?.()
+		this.#unsubscribeClock = undefined
+		clearInterval(this.#clockTimer)
+		this.#clockTimer = undefined
 		this.#host.remove()
 	}
 
@@ -148,17 +175,21 @@ export class Planetarium {
 		this.#bodiesGuard.cancel()
 		this.#minorGuard.cancel()
 		this.#locateGuard.cancel()
+		this.#loadGuard.cancel()
 		this.celestial.destroy()
 	}
 
-	// Loads the map data (downloaded once per tab), or retries after a failure.
+	// Loads the map data for the instant shown (downloaded once per tab and epoch), or retries after a
+	// failure. A reload for another epoch keeps the current data drawn until the new data arrives.
 	load() {
 		planetariumState.status = 'loading'
 		planetariumState.error = undefined
+		const request = this.#loadGuard.begin()
 
 		loadSkyMapData().then(
-			({ stars, dsos, constellations }) => {
-				if (this.#destroyed) return
+			({ stars, dsos, constellations, time }) => {
+				if (this.#destroyed || !request.current()) return
+				this.#dataTime = time
 				this.#names = { typeNames: dsos.typeNames, starDesignations: stars.designations, constellationCodes: new Map(constellations.labels.map((e) => [e.name, e.code])) }
 				this.celestial.loadStars({ ra: stars.ra as number[], dec: stars.dec as number[], mag: stars.mag as number[], bv: stars.bv as number[], names: stars.names, ids: stars.ids })
 				this.celestial.loadDeepSkyObjects(dsos.ids.map((id, i) => ({ id, name: dsos.names[i], type: dsos.types[i], rightAscension: dsos.ra[i], declination: dsos.dec[i], magnitude: dsos.mag[i] ?? undefined, sizeArcMin: dsos.size[i] || undefined })))
@@ -167,7 +198,7 @@ export class Planetarium {
 				this.syncSelection()
 			},
 			(error: unknown) => {
-				if (this.#destroyed) return
+				if (this.#destroyed || !request.current()) return
 				planetariumState.error = error instanceof Error ? error.message : 'Unknown error'
 				planetariumState.status = 'error'
 			},
@@ -228,7 +259,7 @@ export class Planetarium {
 		const key = refKey(objectRef)
 
 		try {
-			const { position } = await fetchSkyPosition(objectRef, Date.now(), apiObserver(this.#observer), 'fast', request.signal)
+			const { position } = await fetchSkyPosition(objectRef, this.time, apiObserver(this.#observer), 'fast', request.signal)
 			if (!request.current() || skyState.selection?.key !== key) return
 			this.#showMinorBody(objectRef, body, position.rightAscension, position.declination, position.magnitude)
 			this.syncSelection()
@@ -254,6 +285,39 @@ export class Planetarium {
 		}
 
 		selectSkyObject(skyState, { ref: objectRef, source: 'map', name: hoverLabel(object, this.#names)?.name ?? '', category: categoryOf(object, objectRef) }, this.#observer)
+	}
+
+	// Shows the clock's instant now and updates it on a timer that suits the clock: slow while following
+	// the real time, frequent while playing, and none for a fixed instant. Once the clock is not playing,
+	// reloads the catalogs when the instant is more than a year away from theirs.
+	#followClock() {
+		clearInterval(this.#clockTimer)
+		this.#clockTimer = undefined
+
+		const tick = () => this.celestial.setTime(this.time)
+		tick()
+
+		if (skyClock.mode !== 'fixed') this.#clockTimer = setInterval(tick, skyClock.mode === 'playing' ? PLAYING_INTERVAL_MS : REALTIME_INTERVAL_MS)
+		if (skyClock.mode !== 'playing' && this.#dataTime !== undefined && !mapDataCovers(this.#dataTime, this.time)) this.load()
+	}
+
+	// Asks for the body positions of an instant (Unix milliseconds). While a request is running, only the
+	// latest instant asked meanwhile is kept and requested after it, so a fast clock never aborts requests
+	// before they finish or queues more than one.
+	#requestMovingBodies(time: number) {
+		if (this.#bodiesBusy) {
+			this.#bodiesPending = time
+			return
+		}
+
+		this.#bodiesBusy = true
+
+		void this.#updateMovingBodies(time).finally(() => {
+			this.#bodiesBusy = false
+			const pending = this.#bodiesPending
+			this.#bodiesPending = undefined
+			if (pending !== undefined && !this.#destroyed) this.#requestMovingBodies(pending)
+		})
 	}
 
 	// Recomputes the local positions of the major bodies, and of the selected minor body, for an instant.

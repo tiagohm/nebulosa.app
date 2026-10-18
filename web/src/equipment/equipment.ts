@@ -125,7 +125,8 @@ export function watchServer(state: DeviceState, serverId: string | undefined) {
 }
 
 // Applies a server event of the watched connection: devices appearing, disappearing, or changing their
-// connection state, and the connection itself opening again or closing.
+// connection state, and the connection itself opening again or closing. Telemetry and mount operation
+// events are left to the features that use them.
 export function handleDeviceEvent(state: DeviceState, event: ServerEvent) {
 	switch (event.type) {
 		case 'connection:open':
@@ -134,7 +135,9 @@ export function handleDeviceEvent(state: DeviceState, event: ServerEvent) {
 		case 'connection:close':
 			if (event.id === state.watched) clearDevices(state, false)
 			return
-		default: {
+		case 'device:added':
+		case 'device:removed':
+		case 'device:updated': {
 			const connectionId = event.type === 'device:added' ? event.device.connectionId : event.connectionId
 			if (connectionId !== state.watched) return
 			if (state.loading) queued.push(event)

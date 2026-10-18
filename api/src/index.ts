@@ -2,20 +2,25 @@ import type { Server } from 'bun'
 import { connections } from './connection'
 import { handleListDirectory } from './files'
 import { handleDeriveImage, handleDownloadImage, handleOpenImage, handleRenderImage, handleSaveImage, images } from './images'
-import { skyRoutes } from './sky'
+import { MountCommands, type MountSlewRequest } from './mounts'
+import { skyLocator, skyRoutes } from './sky'
 import { broadcast, websocket } from './websocket'
 
 // HTTP routes and the WebSocket handler of the backend, mounted by the app server.
 
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
-export type { DeviceEvent, DeviceSummary, ManagedDeviceType } from './devices'
+export type { CameraSensor, CameraSensorState, DeviceEvent, DeviceSummary, ManagedDeviceType, MountState } from './devices'
 export type { DirectoryListing, FileEntry } from './files'
+export type { MountEvent, MountOperation, MountOperationState, MountSlewRequest, MountSlewResponse } from './mounts'
 export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
 export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
 export type { Binning, DeriveRequest, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from './images'
 export { websocket }
 
 connections.listen(broadcast)
+
+// Mount commands over the devices of the open connections, publishing their operations to every tab.
+const mounts = new MountCommands(connections.devices, (id) => connections.client(id), skyLocator, broadcast)
 
 // Opens a connection, or returns the existing one for the same endpoint. Responds 400 for an invalid
 // body and 502 when the endpoint cannot be reached.
@@ -61,6 +66,26 @@ export const routes = {
 	},
 	'/api/connections/:id/devices/:deviceId/disconnect': {
 		POST: (req) => switchDevice(req.params.id, req.params.deviceId, false),
+	},
+	'/api/connections/:id/mounts/:deviceId': {
+		// Pointing and motion state of a mount; 404 when the connection is not open or has no such mount.
+		GET: (req) => mounts.state(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/mounts/:deviceId/slew': {
+		// Slews a mount to an object resolved at the current time; the outcome arrives as mount:operation events.
+		POST: async (req) => mounts.slew(req.params.id, req.params.deviceId, (await req.json()) as MountSlewRequest, req.signal),
+	},
+	'/api/connections/:id/mounts/:deviceId/stop': {
+		// Cancels the operation of a mount and stops its motion.
+		POST: (req) => mounts.stop(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/cameras/:deviceId/sensor': {
+		// Sensor geometry of a camera; 404 when the connection is not open or has no such camera.
+		GET: (req) => {
+			const client = connections.client(req.params.id)
+			const sensor = client && connections.devices.cameraSensor(client, req.params.deviceId)
+			return sensor ? Response.json(sensor) : Response.json({ error: 'Camera not found' }, { status: 404 })
+		},
 	},
 	'/api/files': {
 		// A directory of the server's filesystem; 404 when missing, 403 when unreadable.

@@ -2,7 +2,7 @@ import type { Database } from 'bun:sqlite'
 import { SOLAR_SYSTEM_BODIES, searchSolarSystem } from './bodies'
 import { type ConstellationSource, catalogObject, DEFAULT_DEEP_SKY_MAGNITUDE_LIMIT, renderConstellations, renderDeepSky, renderStars, searchCatalog } from './catalog'
 import { constellationDetails, searchConstellations } from './constellations'
-import { type EphemerisTarget, EphemerisUnavailableError, HorizonsEphemerisError, type SkyEphemeris } from './ephemeris'
+import { type EphemerisTarget, EphemerisUnavailableError, HorizonsEphemerisError, type PositionRequest, type SkyEphemeris, type SkyPosition } from './ephemeris'
 import { type MinorBodies, SbdbUnavailableError } from './minorbodies'
 import type { SkyBodiesRequest, SkyBodyPosition, SkyObjectRef, SkyPositionRequest, SkyPositionResponse } from './types'
 
@@ -41,31 +41,46 @@ function errorResponse(message: string, status: number) {
 	return Response.json({ error: message }, { status })
 }
 
-// Creates the sky routes.
-export function createSkyRoutes({ catalog, constellations, ephemeris, minorBodies }: SkyServices) {
-	// Resolves an object identity to an ephemeris target; undefined for an unknown catalog id. A minor
-	// body whose elements cannot be read from SBDB is still resolved, for Horizons alone.
-	async function resolveTarget(ref: SkyObjectRef, signal: AbortSignal): Promise<EphemerisTarget | undefined> {
-		if (ref.kind === 'catalog') {
-			const object = catalogObject(catalog, ref.id)
-			return object && { type: 'catalog', object }
-		}
+// Locates an object at an instant (PositionRequest.time) for an observer. Resolves undefined for an
+// unknown object; rejects with EphemerisUnavailableError when no provider can compute it and with
+// HorizonsEphemerisError when Horizons rejects the target.
+export type SkyLocator = (ref: SkyObjectRef, request: PositionRequest) => Promise<SkyPosition | undefined>
 
-		if (ref.kind === 'body') return { type: 'body', code: ref.code }
-
-		if (ref.kind === 'constellation') {
-			const constellation = constellationDetails(constellations, ref.code)
-			return constellation && { type: 'catalog', object: { rightAscension: constellation.rightAscension, declination: constellation.declination, pmRA: 0, pmDEC: 0 } }
-		}
-
-		try {
-			const body = await minorBodies.body(ref.spkId, signal)
-			return { type: 'minorBody', spkId: ref.spkId, elements: body?.elements }
-		} catch (error) {
-			if (error instanceof SbdbUnavailableError) return { type: 'minorBody', spkId: ref.spkId }
-			throw error
-		}
+// Resolves an object identity to an ephemeris target; undefined for an unknown catalog id or
+// constellation. A minor body whose elements cannot be read from SBDB is still resolved, for Horizons alone.
+async function resolveTarget({ catalog, constellations, minorBodies }: SkyServices, ref: SkyObjectRef, signal?: AbortSignal): Promise<EphemerisTarget | undefined> {
+	if (ref.kind === 'catalog') {
+		const object = catalogObject(catalog, ref.id)
+		return object && { type: 'catalog', object }
 	}
+
+	if (ref.kind === 'body') return { type: 'body', code: ref.code }
+
+	if (ref.kind === 'constellation') {
+		const constellation = constellationDetails(constellations, ref.code)
+		return constellation && { type: 'catalog', object: { rightAscension: constellation.rightAscension, declination: constellation.declination, pmRA: 0, pmDEC: 0 } }
+	}
+
+	try {
+		const body = await minorBodies.body(ref.spkId, signal)
+		return { type: 'minorBody', spkId: ref.spkId, elements: body?.elements }
+	} catch (error) {
+		if (error instanceof SbdbUnavailableError) return { type: 'minorBody', spkId: ref.spkId }
+		throw error
+	}
+}
+
+// Creates the locator of the objects the sky routes know, for services outside the sky API.
+export function createSkyLocator(services: SkyServices): SkyLocator {
+	return async (ref, request) => {
+		const target = await resolveTarget(services, ref, request.signal)
+		return target && (await services.ephemeris.position(target, request))
+	}
+}
+
+// Creates the sky routes.
+export function createSkyRoutes(services: SkyServices) {
+	const { catalog, constellations, ephemeris, minorBodies } = services
 
 	return {
 		'/api/sky/catalog/stars': {
@@ -128,7 +143,7 @@ export function createSkyRoutes({ catalog, constellations, ephemeris, minorBodie
 			// when Horizons rejects the target, and 503 when no provider can compute it.
 			POST: async (req: Request) => {
 				const { target: ref, time, observer, mode } = (await req.json()) as SkyPositionRequest
-				const target = await resolveTarget(ref, req.signal)
+				const target = await resolveTarget(services, ref, req.signal)
 				if (!target) return errorResponse('Object not found', 404)
 
 				try {

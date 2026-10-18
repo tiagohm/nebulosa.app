@@ -54,22 +54,6 @@ export function selectionTargets(ref: SkyObjectRef, category?: SkySearchResult['
 	]
 }
 
-// Returns the map position of a picked object (true equator of date), in radians.
-export function equatorialOfCelestialObject(object: CelestialObject): readonly [number, number] {
-	switch (object.type) {
-		case 'star':
-			return [object.rightAscension, object.declination]
-		case 'deepSky':
-			return [object.object.rightAscension, object.object.declination]
-		case 'movingBody':
-			return [object.object.position.rightAscension, object.object.position.declination]
-		case 'constellationLabel':
-			return [object.label.rightAscension, object.label.declination]
-		case 'shape':
-			return [object.shape.coordinate.rightAscension, object.shape.coordinate.declination]
-	}
-}
-
 // Short description of a hovered object, from the data the map already holds.
 export interface HoverLabel {
 	// Name, or a generic name when the object has none.

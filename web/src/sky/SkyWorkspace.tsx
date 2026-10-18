@@ -5,12 +5,10 @@ import { ref, useSnapshot } from 'valtio'
 import { activeProfile, profileState, setPanelOpen, type SkyObserverSettings } from '../profile/profile'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
-import { IconButton } from '../ui/IconButton'
-import type { Celestial, CelestialObject, CelestialOptions, CelestialShape, ConstellationLine, MovingBody, MovingBodyType } from './celestial/celestial'
-import { localSiderealTime } from './celestial/time'
+import type { Celestial, CelestialObject, CelestialOptions, CelestialShape, ConstellationLine, CoordinateSystem, MovingBody, MovingBodyType } from './celestial/celestial'
 import { HoverTooltip } from './HoverTooltip'
 import { ObjectInspector } from './ObjectInspector'
-import { equatorialOfCelestialObject, hoverLabel, type MapNames, movingBodyId, refKey, refOfCelestialObject, selectionTargets } from './objects'
+import { hoverLabel, type MapNames, movingBodyId, refKey, refOfCelestialObject, selectionTargets } from './objects'
 import { ObserverPanel } from './ObserverPanel'
 import { createRequestGuard } from './selection'
 import { apiObserver, changeSkyObserver, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, refreshSkySelection, selectSkyObject, skyState } from './sky'
@@ -19,20 +17,24 @@ import { SkyView } from './SkyView'
 
 // Sky workspace: explores the sky on the Celestial star map, independently of any connection or
 // equipment. It loads the map data once per tab, draws the Sun, the Moon, and the planets from local
-// ephemerides, shows a tooltip for the hovered object, keeps one selection whether it comes from a click
-// (which never moves the view) or from the search (which centers the object), and shows the selection
-// in the Object Inspector. The map follows the real time and the profile's observer; without an
-// observer it has no horizon. Its view is saved when the workspace is left and restored on return.
+// ephemerides, shows a tooltip for the hovered object, and keeps one selection, shown in the Object
+// Inspector and highlighted on the map, whether it comes from a click or from the search. Selecting
+// never moves the view. With an observer the map is the observer's local sky (horizontal, zenith at
+// the center), so objects below the horizon are neither drawn nor highlighted; without one it is an
+// equatorial chart of the whole sky. The map follows the real time. Its view is saved when the
+// workspace is left and restored on return to the same kind of chart.
 
-// Construction options of the map: an equatorial stereographic chart. The Milky Way has no data, and the
-// local meridian is hidden because it needs an observer the map may not have.
-const MAP_OPTIONS: CelestialOptions = {
-	projection: 'stereographic',
-	coordinateSystem: 'equatorial',
-	stars: { maxMagnitude: 8 },
-	layers: { milkyWay: false, constellationBoundaries: false },
-	referenceLines: { localMeridian: { enabled: false } },
-	theme: { selectedObject: { color: '#d97757' } },
+// Construction options of the map for a coordinate system: a stereographic chart. The Milky Way has no
+// data. The local meridian is drawn only on the local sky, the only chart that has an observer.
+function mapOptions(coordinateSystem: CoordinateSystem): CelestialOptions {
+	return {
+		projection: 'stereographic',
+		coordinateSystem,
+		stars: { maxMagnitude: 8 },
+		layers: { milkyWay: false, constellationBoundaries: false },
+		referenceLines: { localMeridian: { enabled: coordinateSystem === 'horizontal' } },
+		theme: { selectedObject: { color: '#d97757' } },
+	}
 }
 
 // Interval of the map's real-time updates in milliseconds.
@@ -82,12 +84,6 @@ function observerKey(observer?: SkyObserverSettings) {
 	return observer ? `${observer.latitude},${observer.longitude},${observer.elevation}` : ''
 }
 
-// Centers the map on a position of date in radians, keeping the zoom and dropping the pan offset.
-function centerOn(celestial: Celestial, rightAscension: number, declination: number) {
-	celestial.setViewTransform({ x: 0, y: 0, k: celestial.viewState.transform.k })
-	celestial.centerOnEquatorial(rightAscension, declination)
-}
-
 // Applies the observer to the map: its location, and the horizon only when there is one.
 function applyObserver(celestial: Celestial, observer?: SkyObserverSettings) {
 	if (observer) celestial.setObserver({ latitude: observer.latitude, longitude: observer.longitude, elevation: observer.elevation })
@@ -110,6 +106,7 @@ export function SkyWorkspace() {
 	const bodiesGuard = useRef(createRequestGuard())
 	const minorGuard = useRef(createRequestGuard())
 	const locateGuard = useRef(createRequestGuard())
+	const coordinateSystem: CoordinateSystem = observer ? 'horizontal' : 'equatorial'
 	const marker = useRef<CelestialShape | undefined>(undefined)
 	const appliedObserver = useRef(observerKey(observer))
 
@@ -128,13 +125,9 @@ export function SkyWorkspace() {
 			map.addMovingBody(body)
 		}
 
-		if (skyState.view) {
-			map.setViewState(skyState.view)
-		} else if (observerRef.current) {
-			// Starts at the zenith of the observer.
-			const { latitude, longitude } = observerRef.current
-			centerOn(map, localSiderealTime(Date.now(), (longitude * TAU) / 360), (latitude * TAU) / 360)
-		}
+		// A saved view is only meaningful on the same kind of chart; the local sky starts at the zenith.
+		const system: CoordinateSystem = observerRef.current ? 'horizontal' : 'equatorial'
+		if (skyState.view?.coordinateSystem === system) map.setViewState(skyState.view.state)
 
 		const unsubscribe = [
 			map.on('selectionChange', ({ object }) => {
@@ -160,7 +153,7 @@ export function SkyWorkspace() {
 			minorGuard.current.cancel()
 			locateGuard.current.cancel()
 			marker.current = undefined
-			skyState.view = ref(map.viewState)
+			skyState.view = ref({ coordinateSystem: system, state: map.viewState })
 			setCelestial(undefined)
 		}
 	}
@@ -226,7 +219,8 @@ export function SkyWorkspace() {
 	}
 
 	// Highlights the selection on the map: the drawn object when there is one, otherwise a marker at its
-	// position, and nothing without a selection.
+	// position when it is above the horizon, and nothing without a selection. The map itself never draws
+	// the highlight of an object below the horizon of the local sky.
 	function syncHighlight(map: Celestial) {
 		const current = skyState.selection
 		let found: CelestialObject | null = null
@@ -242,7 +236,7 @@ export function SkyWorkspace() {
 
 		const position = current?.position
 
-		if (!found && current && position) {
+		if (!found && current && position && !(position.altitude !== undefined && position.altitude < 0)) {
 			const shape: CelestialShape = { id: SELECTION_MARKER_ID, coordinate: { rightAscension: position.rightAscension, declination: position.declination }, selectable: false, render: renderSelectionMarker }
 			marker.current = shape
 			map.addShape(shape)
@@ -252,46 +246,27 @@ export function SkyWorkspace() {
 		}
 	}
 
-	// Selects a search result and centers it on the map: at its drawn position, or at its position now
-	// when the map does not draw it.
+	// Selects a search result as a click would, highlighting it where the map draws it, without moving
+	// the view. A minor body is added to the map at its position now.
 	async function handleSearchSelect(result: SkySearchResult, minorBody?: MinorBody) {
 		selectSkyObject(skyState, { ref: result.ref, source: 'search', name: result.name, category: result.category, minorBody }, observerRef.current)
 		const map = celestial
 		if (!map) return
 
+		syncHighlight(map)
+		if (result.ref.kind !== 'minorBody') return
+
 		const request = locateGuard.current.begin()
 		const key = refKey(result.ref)
-
-		for (const target of selectionTargets(result.ref, result.category)) {
-			const object = map.selectObject(target)
-
-			if (object) {
-				centerOn(map, ...equatorialOfCelestialObject(object))
-				return
-			}
-		}
 
 		try {
 			const { position } = await fetchSkyPosition(result.ref, Date.now(), apiObserver(observerRef.current), 'fast', request.signal)
 			if (!request.current() || skyState.selection?.key !== key) return
-			if (result.ref.kind === 'minorBody') showMinorBody(map, result.ref, minorBody, position.rightAscension, position.declination, position.magnitude)
-			centerOn(map, position.rightAscension, position.declination)
+			showMinorBody(map, result.ref, minorBody, position.rightAscension, position.declination, position.magnitude)
 			syncHighlight(map)
 		} catch {
 			// The Inspector shows why the position is unavailable.
 		}
-	}
-
-	// Centers the map on the selection: its drawn position, or its computed position.
-	function handleCenter() {
-		const current = skyState.selection
-		if (!celestial || !current) return
-
-		const object = celestial.selectedObject
-		const drawn = object && refOfCelestialObject(object)
-
-		if (object && drawn && refKey(drawn) === current.key) centerOn(celestial, ...equatorialOfCelestialObject(object))
-		else if (current.position) centerOn(celestial, current.position.rightAscension, current.position.declination)
 	}
 
 	// Shows the observer settings in the panel.
@@ -358,21 +333,19 @@ export function SkyWorkspace() {
 
 	const location = observer ? `${observer.name ? `${observer.name} · ` : ''}${observer.latitude.toFixed(4)}°, ${observer.longitude.toFixed(4)}°` : 'No location'
 
-	const panel =
-		sky.panel === 'observer' ? { title: 'Observer', content: <ObserverPanel key={observerKey(observer)} observer={observer} onDone={() => (skyState.panel = 'inspector')} /> } : { title: 'Object Inspector', content: <ObjectInspector hasObserver={!!observer} onCenter={handleCenter} onSetObserver={openObserver} /> }
+	const panel = sky.panel === 'observer' ? { title: 'Observer', content: <ObserverPanel key={observerKey(observer)} observer={observer} onDone={() => (skyState.panel = 'inspector')} /> } : { title: 'Object Inspector', content: <ObjectInspector hasObserver={!!observer} onSetObserver={openObserver} /> }
 
 	return (
 		<WorkspaceLayout workspace="sky" title="Sky" context={<span className="truncate text-xs text-ink-300 max-sm:hidden">{location}</span>} panel={panel}>
 			<div className="flex h-full flex-col bg-base-000">
 				<div className="flex h-11 flex-none items-center gap-2 border-b border-line-100 bg-base-100 px-2">
 					<SkySearch onSelect={(result, minorBody) => void handleSearchSelect(result, minorBody)} />
-					<IconButton icon="reticle" label="Center on selection" disabled={!selection} onClick={handleCenter} />
 					<Button variant="secondary" size="sm" onClick={openObserver} className="ml-auto max-w-56 truncate">
 						{observer ? (observer.name ?? 'Location') : 'Set Location'}
 					</Button>
 				</div>
 				<div className="relative isolate min-h-0 flex-1">
-					<SkyView options={MAP_OPTIONS} onReady={handleReady} />
+					<SkyView key={coordinateSystem} options={mapOptions(coordinateSystem)} onReady={handleReady} />
 					<HoverTooltip celestial={celestial} names={() => mapNames.current} />
 					{dataStatus === 'loading' && <p className="pointer-events-none absolute bottom-3 left-3 m-0 text-xs text-ink-300">Loading the sky catalog…</p>}
 					{dataStatus === 'error' && (

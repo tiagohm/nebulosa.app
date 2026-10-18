@@ -1,4 +1,5 @@
 import type { MinorBody, SkyCatalogObject, SkyEvents, SkyPosition } from 'api'
+import { toMas } from 'nebulosa/src/math/units/angle'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { PanelSection } from '../shell/ContextualPanel'
@@ -13,9 +14,6 @@ import { type SkySelection, skyState } from './sky'
 // provider (Horizons or a local model, with the reason). Missing data is shown as missing, never as a
 // placeholder value, and catalog data stays shown when a position fails.
 
-// Milliarcseconds per radian, for proper motion.
-const MAS_PER_RADIAN = (180 / Math.PI) * 3_600_000
-
 // Description of each fallback reason.
 const FALLBACK_REASONS = { timeout: 'Horizons did not answer in time', network: 'Horizons cannot be reached', breakerOpen: 'Horizons failed repeatedly and is paused' } as const
 
@@ -25,8 +23,6 @@ const MINOR_BODY_PARAMETERS = ['a', 'e', 'i', 'q', 'per', 'H', 'G', 'M1', 'diame
 export interface ObjectInspectorProps {
 	// Whether an observer is set in the profile.
 	readonly hasObserver: boolean
-	// Centers the map on the selected object.
-	readonly onCenter: () => void
 	// Opens the observer settings.
 	readonly onSetObserver: () => void
 }
@@ -36,7 +32,7 @@ function Datum({ label, children }: { readonly label: string; readonly children:
 	return (
 		<div className="flex items-baseline justify-between gap-3">
 			<span className="flex-none text-ink-300">{label}</span>
-			<span className="min-w-0 text-right font-mono text-[13px] break-words text-ink-100">{children}</span>
+			<span className="min-w-0 text-right font-mono text-[13px] wrap-break-word text-ink-100">{children}</span>
 		</div>
 	)
 }
@@ -47,7 +43,7 @@ function Note({ children, danger }: { readonly children: ReactNode; readonly dan
 }
 
 // Object Inspector.
-export function ObjectInspector({ hasObserver, onCenter, onSetObserver }: ObjectInspectorProps) {
+export function ObjectInspector({ hasObserver, onSetObserver }: ObjectInspectorProps) {
 	const { selection } = useSnapshot(skyState)
 
 	if (!selection) {
@@ -67,11 +63,6 @@ export function ObjectInspector({ hasObserver, onCenter, onSetObserver }: Object
 				<p className="m-0 text-ink-300">{typeOf(selection)}</p>
 				{catalog && catalog.designations.length > 0 && <p className="m-0 text-xs leading-5 text-ink-200">{catalog.designations.join(' · ')}</p>}
 				{selection.detailsError && <Note danger>Details unavailable: {selection.detailsError}</Note>}
-				<div className="pt-1">
-					<Button variant="secondary" size="sm" onClick={onCenter} disabled={!position && selection.ref.kind !== 'catalog'}>
-						Center on Object
-					</Button>
-				</div>
 			</PanelSection>
 			{catalog && <CatalogSection catalog={catalog} />}
 			{minorBody && <MinorBodySection body={minorBody} />}
@@ -109,7 +100,7 @@ function CatalogSection({ catalog }: { readonly catalog: SkyCatalogObject }) {
 			{catalog.distance !== undefined && <Datum label="Distance">{formatStellarDistance(catalog.distance)}</Datum>}
 			{pm && (
 				<Datum label="Proper motion">
-					{(catalog.pmRA * Math.cos(catalog.declination) * MAS_PER_RADIAN).toFixed(1)}, {(catalog.pmDEC * MAS_PER_RADIAN).toFixed(1)} mas/yr
+					{toMas(catalog.pmRA * Math.cos(catalog.declination)).toFixed(1)}, {toMas(catalog.pmDEC).toFixed(1)} mas/yr
 				</Datum>
 			)}
 			<Datum label="RA (J2000)">{formatRightAscension(catalog.rightAscension)}</Datum>
@@ -207,6 +198,7 @@ function ObserverSection({ position, events, hasObserver, onSetObserver, isSolar
 	return (
 		<PanelSection title="Visibility">
 			<Datum label="Altitude">{formatDeclination(position.altitude)}</Datum>
+			{position.altitude < 0 && <Note>Below the horizon now, so the map does not show it.</Note>}
 			<Datum label="Azimuth">{formatDegrees(position.azimuth)}</Datum>
 			{events?.state === 'circumpolar' && <Datum label="Rise and set">Circumpolar</Datum>}
 			{events?.state === 'belowHorizon' && <Datum label="Rise and set">Below the horizon all day</Datum>}

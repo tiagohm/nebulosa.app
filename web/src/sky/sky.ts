@@ -2,7 +2,7 @@ import type { MinorBody, MinorBodySearchResponse, SkyBodyPosition, SkyCatalogObj
 import { proxy } from 'valtio'
 import { responseError } from '../http'
 import type { SkyObserverSettings } from '../profile/profile'
-import type { ViewState } from './celestial/celestial'
+import type { CoordinateSystem, ViewState } from './celestial/celestial'
 import { refKey } from './objects'
 import { createRequestGuard } from './selection'
 
@@ -54,8 +54,9 @@ export interface SkyState {
 	selection?: SkySelection
 	// Content of the contextual panel.
 	panel: SkyPanelView
-	// Map view saved when the workspace unmounts, restored when it mounts again.
-	view?: ViewState
+	// Map view saved when the workspace unmounts, with the coordinate system of the chart it belongs to;
+	// restored when the workspace mounts again with the same kind of chart.
+	view?: { readonly coordinateSystem: CoordinateSystem; readonly state: ViewState }
 }
 
 // What is known about an object when it is selected.

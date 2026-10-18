@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import type { CelestialObject } from './celestial/celestial'
-import { equatorialOfCelestialObject, hoverLabel, movingBodyId, refKey, refOfCelestialObject, selectionTargets } from './objects'
+import { hoverLabel, movingBodyId, refKey, refOfCelestialObject, selectionTargets } from './objects'
 import { createRequestGuard } from './selection'
 
 const star: CelestialObject = { type: 'star', index: 0, id: 32263, name: 'Sirius', mag: -1.44, rightAscension: 1.77, declination: -0.29 }
@@ -34,10 +34,7 @@ test('selection targets of references', () => {
 	expect(selectionTargets({ kind: 'body', code: '499' })).toEqual([{ type: 'movingBody', id: 'body:499' }])
 })
 
-test('positions and hover labels of picked objects', () => {
-	expect(equatorialOfCelestialObject(dso)).toEqual([0.19, 0.72])
-	expect(equatorialOfCelestialObject(mars)).toEqual([2.34, 0.32])
-
+test('hover labels of picked objects', () => {
 	const names = { typeNames: ['Unknown', 'Galaxy'], starDesignations: ['Alp CMa', 'Pi-2 Ori'] }
 	expect(hoverLabel(star, names)).toEqual({ name: 'Sirius', typeName: 'Star · Alp CMa', magnitude: -1.44 })
 	expect(hoverLabel(unnamed, names)?.name).toBe('Pi-2 Ori')

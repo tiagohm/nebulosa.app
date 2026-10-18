@@ -371,6 +371,25 @@ export interface ViewTransform {
 	k: number
 }
 
+// Object to select programmatically: a loaded star, deep-sky object, or moving body by its id.
+export interface SelectionTarget {
+	// Kind of object.
+	readonly type: 'star' | 'deepSky' | 'movingBody'
+	// Catalog id of the star or deep-sky object, or id of the moving body.
+	readonly id: StarId
+}
+
+// Navigation state of the map, enough to restore the same view in a new instance of the same
+// coordinate system: the view orientation and the pan and zoom transform.
+export interface ViewState {
+	// World unit vector (frame of the coordinate system) at the view center.
+	readonly center: readonly [number, number, number]
+	// World unit vector that orients the view's up direction.
+	readonly up: readonly [number, number, number]
+	// Pan and zoom transform.
+	readonly transform: ViewTransform
+}
+
 // Milky Way ring prepared for projection.
 export interface MilkyWayRing {
 	// Equatorial unit vectors, three components per vertex.

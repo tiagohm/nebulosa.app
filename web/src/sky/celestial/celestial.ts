@@ -6,49 +6,16 @@ import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { DeepSkyCatalog, normalizeMilkyWayCoordinates, StarCatalog } from './catalog'
 import { DSO_VIEWPORT_MARGIN, isProjectedSample, writeProjectedSample } from './drawing'
 import { CelestialEventBus } from './events'
-import {
-	applyViewTransform,
-	HORIZON_EPSILON,
-	isFiniteDiskProjection,
-	isFiniteNumber,
-	isPointInsideViewportMargin,
-	multiplyMatrixVector,
-	normalizeVector,
-	projectionScale,
-	projectViewVector,
-	unprojectViewVector,
-	writeBaseViewportBounds,
-	writeEquatorialToHorizontalMatrix,
-	writeHorizontalUnitVector,
-	writeRaDecUnitVector,
-	writeViewMatrix,
-} from './geometry'
+// oxfmt-ignore
+import { applyViewTransform, HORIZON_EPSILON, isFiniteDiskProjection, isFiniteNumber, isPointInsideViewportMargin, multiplyMatrixVector, normalizeVector, projectionScale, projectViewVector, unprojectViewVector, writeBaseViewportBounds, writeEquatorialToHorizontalMatrix, writeHorizontalUnitVector, writeRaDecUnitVector, writeViewMatrix } from './geometry'
 import { anchoredTransform, beginGesture, type GestureAnchor, type GesturePointer, gestureTransform } from './gesture'
 import { BackgroundLayer, CONSTELLATION_LABEL_MIN_ZOOM, ConstellationBoundaryLayer, ConstellationLabelLayer, ConstellationLineLayer, DeepSkyObjectLayer, GridLayer, HorizonLayer, InteractionOverlayLayer, MilkyWayLayer, MovingBodyLayer, ReferenceLineLayer, ShapeLayer, StarLayer } from './layers'
 import { resolveOptions, validateObserver, validateProjection } from './options'
 import { FixedGridSpatialIndex, isPickableLayerId, objectLayerId, PICK_TYPE_CONSTELLATION_LABEL, PICK_TYPE_DSO, PICK_TYPE_MOVING_BODY, PICK_TYPE_SHAPE, PICK_TYPE_STAR, type PickIndex, pickMatchesObject, sameObject } from './picking'
 import { CanvasRenderer } from './renderer'
 import { type CelestialTime, unixTimeOf } from './time'
-import type {
-	AutoUpdateOptions,
-	CelestialEventCallback,
-	CelestialEventName,
-	CelestialObject,
-	CelestialOptions,
-	CelestialShape,
-	ConstellationData,
-	DeepSkyObject,
-	MilkyWayCoordinates,
-	MilkyWayStep,
-	MovingBody,
-	ObserverLocation,
-	ProjectionType,
-	RenderState,
-	ResolvedCelestialOptions,
-	Star,
-	StarCatalogInput,
-	ViewTransform,
-} from './types'
+// oxfmt-ignore
+import type { AutoUpdateOptions, CelestialEventCallback, CelestialEventName, CelestialObject, CelestialOptions, CelestialShape, ConstellationData, DeepSkyObject, MilkyWayCoordinates, MilkyWayStep, MovingBody, ObserverLocation, ProjectionType, RenderState, ResolvedCelestialOptions, SelectionTarget, Star, StarCatalogInput, ViewState, ViewTransform } from './types'
 import { deepSkyMagnitude, isDeepSkyObjectVisibleAtZoom, isMovingBodyVisibleAtZoom, movingBodyMagnitude, starSymbolMagnitudeLimitAtZoom } from './visibility'
 
 export { StarCatalog } from './catalog'
@@ -664,6 +631,45 @@ export class Celestial {
 		this.queueProjectionOnly()
 	}
 
+	// Selects a loaded object by id without moving the view, or clears the selection with null, and redraws
+	// the highlight. Unlike a click, it does not emit selectionChange: the caller already knows. Returns the
+	// selected object, or null (with the selection cleared) when no loaded object has the id.
+	selectObject(target: SelectionTarget | null): CelestialObject | null {
+		const object = target ? this.findObject(target) : null
+
+		if (!sameObject(object, this.#selectedObject)) {
+			this.#selectedObject = object
+			this.#renderer.markDirty('overlay')
+			this.requestRender()
+		}
+
+		return object
+	}
+
+	// Current navigation state, for restoring the view in another instance.
+	get viewState(): ViewState {
+		const c = this.#centerVector
+		const u = this.#referenceUp
+		return { center: [c[0], c[1], c[2]], up: [u[0], u[1], u[2]], transform: { ...this.#transform } }
+	}
+
+	// Restores a navigation state taken from viewState, clamping the zoom to the configured range.
+	setViewState(state: ViewState) {
+		this.#centerVector.set(state.center)
+		this.#referenceUp.set(state.up)
+
+		if (!normalizeVector(this.#centerVector) || !normalizeVector(this.#referenceUp)) {
+			this.resetViewCenter()
+		} else {
+			this.writeCurrentViewMatrix()
+		}
+
+		this.writeViewTransform(this.normalizeViewTransform(state.transform))
+		this.restartGesture()
+		this.queueProjectionOnly()
+		this.afterTransformChanged()
+	}
+
 	// Converts map-local screen pixels into right ascension [0, 2π) and declination in radians; returns null
 	// outside the projection or, in horizontal views, below the horizon.
 	screenToEquatorial(x: number, y: number): EquatorialCoordinate | null {
@@ -890,6 +896,22 @@ export class Celestial {
 
 		const index = this.findDeepSkyObjectIndex(object.object.id)
 		return index >= 0 ? { type: 'deepSky', index, object: catalog.objects[index] } : null
+	}
+
+	// Returns the loaded object of a selection target, or null.
+	private findObject(target: SelectionTarget): CelestialObject | null {
+		if (target.type === 'star') {
+			const index = this.#starCatalog?.ids.indexOf(target.id) ?? -1
+			return index >= 0 ? this.#starCatalog!.getObject(index) : null
+		}
+
+		if (target.type === 'deepSky') {
+			const index = this.findDeepSkyObjectIndex(target.id)
+			return index >= 0 ? { type: 'deepSky', index, object: this.#deepSkyCatalog!.objects[index] } : null
+		}
+
+		const index = this.#movingBodyList.findIndex((e) => e.id === target.id)
+		return index >= 0 ? { type: 'movingBody', index, object: this.#movingBodyList[index] } : null
 	}
 
 	// Returns the catalog index of a deep-sky object id, or -1.

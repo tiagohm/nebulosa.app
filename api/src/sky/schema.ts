@@ -6,7 +6,7 @@ import type { Database } from 'bun:sqlite'
 
 // Version of the schema written by createSkyCatalogSchema; the API refuses a database of another one.
 // Increment it whenever a table, column, or unit changes.
-export const SKY_CATALOG_SCHEMA_VERSION = 1
+export const SKY_CATALOG_SCHEMA_VERSION = 2
 
 // Keys of the meta table.
 export type SkyCatalogMetaKey = 'schemaVersion' | 'generatedAt' | 'sources'
@@ -55,6 +55,9 @@ export interface SkyCatalogNameRow {
 	// Designation inside the catalog without its prefix, such as "31" for M 31 or "Alp" for α CMa;
 	// compared case-insensitively.
 	readonly name: string
+	// Order of the designation among the object's designations of the same catalog in the source, 0 for
+	// the primary one; proper names are listed by popularity in Stellarium, so rank 0 is the common name.
+	readonly rank: number
 }
 
 // SQL statements that create the tables and indexes. names_type_name serves exact designation lookups
@@ -62,7 +65,7 @@ export interface SkyCatalogNameRow {
 const SCHEMA = [
 	'CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID',
 	'CREATE TABLE objects (id INTEGER PRIMARY KEY, type INTEGER NOT NULL, rightAscension REAL NOT NULL, declination REAL NOT NULL, magnitude REAL, bv REAL, pmRA REAL NOT NULL DEFAULT 0, pmDEC REAL NOT NULL DEFAULT 0, distance REAL, rv REAL NOT NULL DEFAULT 0, constellation INTEGER NOT NULL, classification TEXT, majorAxis REAL, minorAxis REAL, orientation REAL)',
-	'CREATE TABLE names (objectId INTEGER NOT NULL REFERENCES objects(id), type INTEGER NOT NULL, name TEXT NOT NULL COLLATE NOCASE, PRIMARY KEY (objectId, type, name)) WITHOUT ROWID',
+	'CREATE TABLE names (objectId INTEGER NOT NULL REFERENCES objects(id), type INTEGER NOT NULL, name TEXT NOT NULL COLLATE NOCASE, rank INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (objectId, type, name)) WITHOUT ROWID',
 	'CREATE INDEX names_type_name ON names(type, name)',
 	'CREATE INDEX objects_type_magnitude ON objects(type, magnitude)',
 ] as const

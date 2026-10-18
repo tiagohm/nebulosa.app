@@ -828,7 +828,7 @@ interface ObjectInput {
 }
 
 const insertObject = db.prepare('INSERT OR IGNORE INTO objects (id, type, rightAscension, declination, magnitude, bv, pmRA, pmDEC, distance, rv, constellation, classification, majorAxis, minorAxis, orientation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-const insertName = db.prepare('INSERT OR IGNORE INTO names (objectId, type, name) VALUES (?, ?, ?)')
+const insertName = db.prepare('INSERT OR IGNORE INTO names (objectId, type, name, rank) VALUES (?, ?, ?, ?)')
 const selectByName = db.prepare<{ objectId: number }, [number, string]>('SELECT objectId FROM names WHERE type = ? AND name = ?')
 
 // Whether a Stellarium type carries a spectral type (stars and stellar-like sources) rather than a
@@ -858,9 +858,10 @@ function addObject(o: ObjectInput) {
 	insertObject.run(o.id, o.type, o.rightAscension, o.declination, magnitude, o.bv ?? null, o.pmRA ?? 0, o.pmDEC ?? 0, positiveOrNull(o.distance), o.rv || 0, cnst, classificationOf(o.type, o.classification), majorAxis, minorAxis, orientation)
 }
 
-// Inserts a designation of an object.
-function addName(objectId: number, type: number, name: string) {
-	insertName.run(objectId, type, name)
+// Inserts a designation of an object; rank is its order among the object's designations of the same
+// catalog in the source, 0 for the primary one.
+function addName(objectId: number, type: number, name: string, rank: number = 0) {
+	insertName.run(objectId, type, name, rank)
 }
 
 // Groups cross-catalog entries by the catalog code of the object they point to, as [designation,
@@ -900,7 +901,7 @@ NAMES.get(NGC)!.push(['6752', 'Great Peacock Globular'])
 // whether any name was added.
 function addNameFromTypeAndId(objectId: number, type: number, id: string, useIt: boolean = true) {
 	const names = NAMES.get(type)?.filter((entry) => entry[0] === id)
-	if (names) for (const e of names) addName(objectId, NAME, e[1])
+	if (names) for (let i = 0; i < names.length; i++) addName(objectId, NAME, names[i][1], i)
 
 	const ben = BENNETT_CATALOG_MAP.get(type)?.filter((e) => e[0] === id)
 	if (ben) for (const e of ben) addName(objectId, BENNETT, e[1])

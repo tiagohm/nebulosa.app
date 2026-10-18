@@ -24,11 +24,15 @@ const SEARCH_DESIGNATIONS = 3
 
 // Faintest deep-sky magnitude rendered by default; objects without a magnitude are rendered only when
 // they belong to one of RENDERED_UNKNOWN_MAGNITUDE_CATALOGS.
-export const DEFAULT_DEEP_SKY_MAGNITUDE_LIMIT = 14
+export const DEFAULT_DEEP_SKY_MAGNITUDE_LIMIT = 12
 
 // Catalogs whose objects are rendered even without a magnitude: the classic visual catalogs of bright,
-// extended objects (nebulae, dark clouds, and clusters), unlike PGC galaxies.
-const RENDERED_UNKNOWN_MAGNITUDE_CATALOGS = [CATALOG.NAME, CATALOG.NGC, CATALOG.IC, CATALOG.M, CATALOG.C, CATALOG.B, CATALOG.SH2, CATALOG.LBN, CATALOG.LDN, CATALOG.MEL, CATALOG.CR, CATALOG.TR, CATALOG.CED, CATALOG.RCW, CATALOG.VDB, CATALOG.GUM] as const
+// extended objects (nebulae, dark clouds, and clusters). The large specialized catalogs (PGC, LDN, LBN,
+// and the like) would bury the chart in symbols; their objects are still found by search.
+const RENDERED_UNKNOWN_MAGNITUDE_CATALOGS = [CATALOG.NGC, CATALOG.IC, CATALOG.M, CATALOG.C, CATALOG.B, CATALOG.SH2, CATALOG.MEL, CATALOG.CR] as const
+
+// Catalogs of the designation shown for a star without a proper name, in order of preference.
+const STAR_DESIGNATION_CATALOGS = [CATALOG.BAYER, CATALOG.FLAMSTEED, CATALOG.HIP, CATALOG.HD, CATALOG.HR] as const
 
 // B-V color index in magnitudes given to stars without one (a solar-type white).
 const DEFAULT_BV = 0.65
@@ -287,6 +291,8 @@ interface StarRow {
 	readonly pmDEC: number
 	// Primary proper name, or empty.
 	readonly name: string
+	// Preferred catalog designation, such as "Alp CMa" or "HIP 32349", or empty.
+	readonly designation: string
 }
 
 // Rendered star rows by database. The catalog is read-only, so they are read once and only the
@@ -304,8 +310,22 @@ function starRows(db: Database): readonly StarRow[] {
 			.all()
 			.map((e) => [e.objectId, e.name]),
 	)
-	const stars = db.query<Omit<StarRow, 'name'> & { name: string }, [number]>("SELECT id, rightAscension, declination, magnitude, bv, pmRA, pmDEC, '' AS name FROM objects WHERE type = ? AND magnitude IS NOT NULL ORDER BY magnitude").all(StellariumObjectType.STAR)
-	for (const star of stars) star.name = names.get(star.id) ?? ''
+	const stars = db
+		.query<Omit<StarRow, 'name' | 'designation'> & { name: string; designation: string; constellation: number }, [number]>("SELECT id, rightAscension, declination, magnitude, bv, pmRA, pmDEC, constellation, '' AS name, '' AS designation FROM objects WHERE type = ? AND magnitude IS NOT NULL ORDER BY magnitude")
+		.all(StellariumObjectType.STAR)
+	const designations = new Map<number, SkyCatalogNameRow>()
+
+	for (const row of db.query<SkyCatalogNameRow, number[]>(`SELECT n.objectId, n.type, n.name, n.rank FROM names n JOIN objects o ON o.id = n.objectId WHERE o.type = ? AND n.type IN (${placeholders(STAR_DESIGNATION_CATALOGS.length)})`).all(StellariumObjectType.STAR, ...STAR_DESIGNATION_CATALOGS)) {
+		const current = designations.get(row.objectId)
+		if (!current || displayPriority(row.type) < displayPriority(current.type)) designations.set(row.objectId, row)
+	}
+
+	for (const star of stars) {
+		star.name = names.get(star.id) ?? ''
+		const designation = designations.get(star.id)
+		if (designation) star.designation = formatDesignation(designation.type, designation.name, star.constellation)
+	}
+
 	STAR_ROWS.set(db, stars)
 	return stars
 }
@@ -321,13 +341,14 @@ function roundAngle(value: number) {
 export function renderStars(db: Database, time: number): SkyStarData {
 	const equator = new EquatorOfDate(timeUnix(time / 1000, true))
 	const rows = starRows(db)
-	const data = { time, ids: new Array<number>(rows.length), names: new Array<string>(rows.length), ra: new Array<number>(rows.length), dec: new Array<number>(rows.length), mag: new Array<number>(rows.length), bv: new Array<number>(rows.length) }
+	const data = { time, ids: new Array<number>(rows.length), names: new Array<string>(rows.length), designations: new Array<string>(rows.length), ra: new Array<number>(rows.length), dec: new Array<number>(rows.length), mag: new Array<number>(rows.length), bv: new Array<number>(rows.length) }
 
 	for (let i = 0; i < rows.length; i++) {
 		const row = rows[i]
 		const [ra, dec] = equator.convert(row.rightAscension + row.pmRA * equator.years, row.declination + row.pmDEC * equator.years)
 		data.ids[i] = row.id
 		data.names[i] = row.name
+		data.designations[i] = row.designation
 		data.ra[i] = roundAngle(ra)
 		data.dec[i] = roundAngle(dec)
 		data.mag[i] = row.magnitude

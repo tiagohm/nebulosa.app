@@ -78,6 +78,7 @@ test('render stars at the equator of date', () => {
 	expect(stars.time).toBe(TIME)
 	expect(stars.ids).toEqual([32263, 27919, 22449, 22509])
 	expect(stars.names).toEqual(['Sirius', 'Betelgeuse', 'Tabit', ''])
+	expect(stars.designations).toEqual(['Alp CMa', 'Alp Ori', 'Pi-3 Ori', 'Pi-2 Ori'])
 	expect(stars.mag[0]).toBe(-1.44)
 	expect(stars.bv[0]).toBe(0.65)
 	// Precession over 26 years moves Sirius about 0.3° east in right ascension.

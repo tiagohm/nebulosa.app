@@ -91,6 +91,8 @@ export interface SkyStarData {
 	readonly ids: readonly number[]
 	// Proper name of each star; empty when it has none.
 	readonly names: readonly string[]
+	// Preferred catalog designation of each star (Bayer, Flamsteed, HIP, HD, or HR); empty when it has none.
+	readonly designations: readonly string[]
 	// Right ascension of each star in radians.
 	readonly ra: readonly number[]
 	// Declination of each star in radians.

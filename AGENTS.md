@@ -43,7 +43,7 @@ Preserve these boundaries:
 
 - `api` may import `nebulosa`; it never imports `web` or `app`.
 - `web` may import from `api` only with `import type`. Runtime communication goes through HTTP or WebSocket, never through shared runtime modules, so server code never ends up in the browser bundle.
-- `web` never imports `nebulosa` runtime code, which relies on Bun, the filesystem, and native FFI. Computation that needs the toolkit belongs in `api`.
+- `web` never imports `nebulosa` runtime code that relies on Bun, the filesystem, and native FFI. Complex computation that needs the toolkit belongs in `api`. Constants and pure functions like angle formatting can be imported.
 - `app` only wires `api` and `web` together and owns the build. Business logic belongs in `api`, UI in `web`.
 - Import `nebulosa` modules by path, such as `nebulosa/src/math/units/angle`; the package has no barrel.
 - Across workspaces import by package name (`api`, `web/index.html`, `nebulosa/src/...`). Within a workspace use relative imports without `.ts` extensions.

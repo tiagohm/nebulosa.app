@@ -8,7 +8,10 @@
 	"dependencies": {
 		"api": "workspace:*",
 		"cn": "0.4.0",
+		"d3-selection": "3.0.0",
+		"d3-zoom": "3.0.0",
 		"nanoid": "6.0.2",
+		"nebulosa": "workspace:*",
 		"react": "19.3.1",
 		"react-dom": "19.3.1",
 		"tailwind-merge": "3.7.0",
@@ -17,6 +20,8 @@
 		"valtio": "2.3.2"
 	},
 	"devDependencies": {
+		"@types/d3-selection": "3.0.12",
+		"@types/d3-zoom": "3.0.9",
 		"@types/react": "19.3.0",
 		"@types/react-dom": "19.3.0"
 	}

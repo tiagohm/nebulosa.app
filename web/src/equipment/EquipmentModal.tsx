@@ -3,10 +3,12 @@ import { type ReactNode, useState } from 'react'
 import { tv } from 'tailwind-variants'
 import { useSnapshot } from 'valtio'
 import { connect, connectionState, serverOf } from '../connection/connection'
-import { activeProfile, activeSetup, assignDevice, profileState } from '../profile/profile'
+import { activeProfile, activeSetup, assignDevice, profileState, setTelescopeOptics } from '../profile/profile'
+import { DEFAULT_TELESCOPE, type TelescopeOptics } from '../sky/framing'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { Modal } from '../ui/Modal'
+import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { deviceState, ROLE_STATUS_LABELS, type RoleStatus, roleDevice, roleStatus, switchDevice } from './equipment'
 import { conflictingRole, type EquipmentSetup, type RoleDefinition, roleDefinition, ROLE_GROUPS, ROLES } from './roles'
@@ -14,7 +16,8 @@ import { useWatchedDevices } from './useEquipment'
 
 // Modal that assigns the devices of the active profile's connection to the equipment roles and connects
 // or disconnects them one by one. Selecting a device never connects it, and closing the modal never
-// disconnects anything.
+// disconnects anything. It also holds the profile's telescope optics, which no device reports and the
+// Sky's Equipment Setup field of view uses.
 
 // Select value of the None option.
 const NONE = ''
@@ -110,11 +113,34 @@ export function EquipmentModal() {
 									</ul>
 								</section>
 							))}
+							<TelescopeSection telescope={profile.settings.telescope} />
 						</div>
 					</>
 				)}
 			</div>
 		</Modal>
+	)
+}
+
+// Telescope optics of the active profile, entered by hand: planning data never sent to a device.
+function TelescopeSection({ telescope }: { readonly telescope?: Readonly<TelescopeOptics> }) {
+	const current = telescope ?? DEFAULT_TELESCOPE
+
+	// Saves a change of the optics.
+	function change(next: Partial<TelescopeOptics>) {
+		setTelescopeOptics(profileState, { ...current, ...next })
+	}
+
+	return (
+		<section className="flex flex-col gap-2">
+			<h3 className="m-0 text-xs leading-4 font-medium tracking-[0.08em] text-ink-300 uppercase">Telescope</h3>
+			<div className="grid grid-cols-3 gap-2 max-sm:grid-cols-1">
+				<NumberInput label="Focal length (mm)" value={current.focalLength} min={0} step={1} onChange={(focalLength) => change({ focalLength })} />
+				<NumberInput label="Reducer / Barlow (×)" value={current.focalMultiplier} min={0.1} max={10} step={0.01} onChange={(focalMultiplier) => change({ focalMultiplier })} />
+				<NumberInput label="Aperture (mm)" value={current.aperture} min={0} step={1} onChange={(aperture) => change({ aperture })} />
+			</div>
+			<p className="m-0 text-xs leading-5 text-ink-300">Used by the Sky&apos;s Equipment Setup field of view. Kept in the profile; never sent to a device.</p>
+		</section>
 	)
 }
 

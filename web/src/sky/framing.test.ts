@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { deg, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
-import { DEFAULT_OPTICS, type Framing, framePolygon, isFraming, type OpticalConfiguration, resolveFraming } from './framing'
+import { DEFAULT_OPTICS, equipmentOptics, type Framing, framePolygon, isFraming, type OpticalConfiguration, resolveFraming } from './framing'
 
 const resolve = (optics: OpticalConfiguration) => {
 	const framing = resolveFraming(optics)
@@ -83,4 +83,28 @@ test('frames across the poles and right ascension zero stay continuous', () => {
 		expect(point.rightAscension).toBeLessThan(2 * Math.PI)
 		expect(point.declination).toBeLessThanOrEqual(Math.PI / 2)
 	}
+})
+
+test('the Equipment Setup takes the sensor of the chosen camera role, never another', () => {
+	const telescope = { focalLength: 400, focalMultiplier: 0.8, aperture: 80 }
+	const live = { MAIN_CAMERA: { width: 6000, height: 4000, pixelSize: 3.76 }, GUIDE_CAMERA: { width: 1280, height: 960, pixelSize: 3.75 } }
+	const manual = { kind: 'physical' as const, width: 23.5, height: 15.6 }
+
+	const main = equipmentOptics(telescope, 'MAIN_CAMERA', live, manual, 10)
+	expect(main.optics).toEqual({ focalLength: 400, focalMultiplier: 0.8, aperture: 80, rotation: 10, sensor: { kind: 'pixels', width: 6000, height: 4000, pixelSize: 3.76 } })
+	expect(main.missingCamera).toBeUndefined()
+	// The reducer is applied once.
+	expect(resolve(main.optics).effectiveFocalLength).toBeCloseTo(320, 12)
+
+	expect(equipmentOptics(telescope, 'GUIDE_CAMERA', live, manual, 0).optics.sensor).toEqual({ kind: 'pixels', width: 1280, height: 960, pixelSize: 3.75 })
+	expect(equipmentOptics(telescope, 'manual', live, manual, 0).optics.sensor).toEqual(manual)
+
+	const missing = equipmentOptics(telescope, 'GUIDE_CAMERA', { MAIN_CAMERA: live.MAIN_CAMERA }, manual, 0)
+	expect(missing.missingCamera).toBe('GUIDE_CAMERA')
+	expect(isFraming(resolveFraming(missing.optics))).toBeFalse()
+})
+
+test('the Equipment Setup without telescope optics lists the focal length as missing', () => {
+	const framing = resolveFraming(equipmentOptics(undefined, 'manual', {}, undefined, 0).optics)
+	expect(isFraming(framing) ? [] : framing.missing).toEqual(['Focal length'])
 })

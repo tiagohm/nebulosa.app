@@ -3,7 +3,7 @@ import { proxy, snapshot, subscribe } from 'valtio'
 import { CAMERA_ROLES, type CameraRole, conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
 import { type CaptureMode, isCaptureMode, WORKSPACE_IDS, type WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
-import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry } from '../sky/framing'
+import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
 import { isRecord, parseJson, readText, type Stores, writeText } from '../storage'
 
 // Profiles of the browser and the profile active in this tab. Profiles are a versioned collection in
@@ -40,6 +40,9 @@ export interface ProfileSettings {
 	capture: CaptureSettings
 	// Preferences of the Sky workspace.
 	sky: SkySettings
+	// Telescope or lens of the profile's Equipment Setup, which no device reports; absent until entered.
+	// It is planning data only and never sent to any device.
+	telescope?: TelescopeOptics
 }
 
 // Location the Sky workspace observes from. Degrees and meters, entered manually; never assumed.
@@ -69,7 +72,7 @@ export interface SkySettings {
 }
 
 // Field of view preferences of the Sky workspace: custom optical presets, independent of the equipment
-// setup, and which one is drawn.
+// setup, which one is drawn, and how the Equipment Setup source builds its field.
 export interface SkyFramingSettings {
 	// Presets in display order.
 	presets: readonly OpticalPreset[]
@@ -77,6 +80,15 @@ export interface SkyFramingSettings {
 	activePresetId?: string
 	// Whether the field of view is drawn on the map.
 	visible: boolean
+	// Where the drawn field comes from: a custom preset, or the Equipment Setup; absent means custom.
+	source?: 'custom' | 'equipment'
+	// Sensor of the Equipment Setup source; absent means the main camera.
+	sensorSource?: SensorSource
+	// Sensor entered for the Equipment Setup source when sensorSource is manual, to simulate a camera.
+	manualSensor?: SensorGeometry
+	// Position angle of the Equipment Setup field's top edge in degrees, from north towards east, [0, 360);
+	// absent means 0.
+	equipmentRotation?: number
 }
 
 // Presentation preferences of one Capture camera view. They belong to the camera role, not to the
@@ -232,13 +244,31 @@ function normalizeOpticalPreset(value: unknown): OpticalPreset | undefined {
 	return { id: value.id, name: value.name.trim(), optics: { focalLength: finiteOr(optics.focalLength, 0), focalMultiplier: finiteOr(optics.focalMultiplier, 1), aperture: Math.max(0, finiteOr(optics.aperture, 0)), sensor, rotation: ((rotation % 360) + 360) % 360 } }
 }
 
-// Restores persisted framing preferences, keeping the active preset only when it still exists.
+// Normalizes an angle in degrees to [0, 360).
+function normalizeDegrees(angle: number) {
+	return ((angle % 360) + 360) % 360
+}
+
+// Restores persisted framing preferences, keeping the active preset only when it still exists and the
+// Equipment Setup choices only when valid.
 function normalizeSkyFraming(value: unknown): SkyFramingSettings | undefined {
 	if (!isRecord(value)) return undefined
 	const presets = Array.isArray(value.presets) ? value.presets.map(normalizeOpticalPreset).filter((preset) => preset !== undefined) : []
 	const framing: SkyFramingSettings = { presets, visible: value.visible === true }
 	if (presets.some((preset) => preset.id === value.activePresetId)) framing.activePresetId = value.activePresetId as string
+	if (value.source === 'custom' || value.source === 'equipment') framing.source = value.source
+	if (value.sensorSource === 'manual' || isCameraRole(value.sensorSource)) framing.sensorSource = value.sensorSource
+	const manualSensor = normalizeSensor(value.manualSensor)
+	if (manualSensor) framing.manualSensor = manualSensor
+	if (typeof value.equipmentRotation === 'number' && Number.isFinite(value.equipmentRotation)) framing.equipmentRotation = normalizeDegrees(value.equipmentRotation)
 	return framing
+}
+
+// Restores persisted telescope optics, or undefined when they are not a record; invalid numbers fall back
+// to the defaults (an unknown focal length, no reducer, an unknown aperture).
+function normalizeTelescope(value: unknown): TelescopeOptics | undefined {
+	if (!isRecord(value)) return undefined
+	return { focalLength: Math.max(0, finiteOr(value.focalLength, 0)), focalMultiplier: finiteOr(value.focalMultiplier, 1), aperture: Math.max(0, finiteOr(value.aperture, 0)) }
 }
 
 // Restores persisted Sky preferences, dropping an invalid observer and invalid display and framing
@@ -269,6 +299,8 @@ function normalizeSettings(value: unknown): ProfileSettings {
 
 	normalizeCapture(value.capture, settings.capture)
 	normalizeSky(value.sky, settings.sky)
+	const telescope = normalizeTelescope(value.telescope)
+	if (telescope) settings.telescope = telescope
 
 	return settings
 }
@@ -670,6 +702,51 @@ export function setFramingVisible(state: ProfileState, visible: boolean) {
 	const framing = framingOf(profile)
 	if (framing.visible === visible) return
 	framing.visible = visible
+	touch(profile)
+}
+
+// Chooses where the drawn field of view comes from in the active profile.
+export function setFramingSource(state: ProfileState, source: 'custom' | 'equipment') {
+	const profile = activeProfile(state)
+	const framing = framingOf(profile)
+	if ((framing.source ?? 'custom') === source) return
+	framing.source = source
+	touch(profile)
+}
+
+// Chooses the sensor of the Equipment Setup field of view in the active profile.
+export function setSensorSource(state: ProfileState, source: SensorSource) {
+	const profile = activeProfile(state)
+	const framing = framingOf(profile)
+	if ((framing.sensorSource ?? 'MAIN_CAMERA') === source) return
+	framing.sensorSource = source
+	touch(profile)
+}
+
+// Replaces the manual sensor of the Equipment Setup field of view in the active profile; it only
+// simulates a camera and is never sent to a device.
+export function setManualSensor(state: ProfileState, sensor: SensorGeometry) {
+	const profile = activeProfile(state)
+	framingOf(profile).manualSensor = { ...sensor }
+	touch(profile)
+}
+
+// Sets the position angle in degrees of the Equipment Setup field of view in the active profile,
+// normalized to [0, 360).
+export function setEquipmentRotation(state: ProfileState, rotation: number) {
+	const profile = activeProfile(state)
+	const framing = framingOf(profile)
+	const value = normalizeDegrees(rotation)
+	if (framing.equipmentRotation === value) return
+	framing.equipmentRotation = value
+	touch(profile)
+}
+
+// Replaces the telescope optics of the active profile's Equipment Setup; planning data only, never sent
+// to a device.
+export function setTelescopeOptics(state: ProfileState, optics: TelescopeOptics) {
+	const profile = activeProfile(state)
+	profile.settings.telescope = { focalLength: optics.focalLength, focalMultiplier: optics.focalMultiplier, aperture: optics.aperture }
 	touch(profile)
 }
 

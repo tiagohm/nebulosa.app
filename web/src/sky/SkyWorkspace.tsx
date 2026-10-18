@@ -8,12 +8,14 @@ import { IconButton } from '../ui/IconButton'
 import type { CoordinateSystem } from './celestial/celestial'
 import { type SkyClockMode, skyClock } from './clock'
 import { DisplayPanel } from './DisplayPanel'
+import { equipmentOptics } from './framing'
 import { FramingPanel } from './FramingPanel'
 import { HoverTooltip } from './HoverTooltip'
 import { mountPoint, mountRuntime, selectionPoint } from './mount'
 import { ObjectInspector } from './ObjectInspector'
 import { ObserverPanel } from './ObserverPanel'
 import { observerKey, planetarium, planetariumState } from './planetarium'
+import { liveSensors, sensorRuntime } from './sensors'
 import { changeSkyObserver, REALTIME_REFRESH, refreshSkySelection, type SkyPanelView, type SkyRefreshOptions, selectSkyObject, skyState } from './sky'
 import { SkySearch } from './SkySearch'
 import { SkyView } from './SkyView'
@@ -23,8 +25,8 @@ import { TimeController } from './TimeController'
 // or equipment. It shows the map, a tooltip for the hovered object, the search, the Object Inspector of
 // the selection, which is the same whether it comes from a click or from the search (selecting never
 // moves the view), and the time bar of the simulation clock. The contextual panel also holds the
-// observer, display (layers), and framing (field of view of custom optical presets, drawn around the
-// selection) settings. With an observer the map is the observer's local sky; without one it is an
+// observer, display (layers), and framing (field of view of custom optical presets or of the Equipment
+// Setup, drawn around the selection) settings. With an observer the map is the observer's local sky; without one it is an
 // equatorial chart of the whole sky.
 
 // Interval in milliseconds at which the selection's position is checked against the clock, by mode.
@@ -68,13 +70,22 @@ export function SkyWorkspace() {
 		map.applyDisplay(settings.display)
 	}, [map, settings.display])
 
-	// Draws the field of view of the selected preset around the selection, following its position.
+	// Draws the field of view of the selected preset, or of the Equipment Setup, around the selection,
+	// following its position.
 	const framing = settings.framing
+	const telescope = activeProfile(profiles).settings.telescope
+	const sensors = useSnapshot(sensorRuntime)
+	const equipment = framing?.source === 'equipment'
 	const preset = framing?.presets.find((e) => e.id === framing.activePresetId)
+	const equipmentFrame = useMemo(
+		() => (equipment ? { name: 'Equipment Setup', optics: equipmentOptics(telescope, framing?.sensorSource ?? 'MAIN_CAMERA', liveSensors(sensors), framing?.manualSensor, framing?.equipmentRotation ?? 0).optics } : undefined),
+		[equipment, telescope, framing?.sensorSource, framing?.manualSensor, framing?.equipmentRotation, sensors],
+	)
+	const frameSource = equipment ? equipmentFrame : preset
 
 	useEffect(() => {
-		map.syncFraming(preset, framing?.visible ?? false, selectionCenter)
-	}, [map, preset, framing?.visible, selectionCenter?.rightAscension, selectionCenter?.declination])
+		map.syncFraming(frameSource, framing?.visible ?? false, selectionCenter)
+	}, [map, frameSource, framing?.visible, selectionCenter?.rightAscension, selectionCenter?.declination])
 
 	// Draws the mount marker at the mount's reported position while the clock shows the real time.
 	useEffect(() => {
@@ -125,7 +136,7 @@ export function SkyWorkspace() {
 		inspector: () => ({ title: 'Object Inspector', content: <ObjectInspector observer={observer} onSetObserver={() => openPanel('observer')} timeZone={observer?.timeZone} onShowFraming={() => openPanel('framing')} /> }),
 		observer: () => ({ title: 'Observer', content: <ObserverPanel key={key} observer={observer} onDone={() => (skyState.panel = 'inspector')} /> }),
 		display: () => ({ title: 'Display', content: <DisplayPanel sky={settings} local={coordinateSystem === 'horizontal'} /> }),
-		framing: () => ({ title: 'Framing', content: <FramingPanel framing={settings.framing} hasTarget={!!selectionCenter} /> }),
+		framing: () => ({ title: 'Framing', content: <FramingPanel framing={settings.framing} telescope={telescope} hasTarget={!!selectionCenter} /> }),
 	}
 
 	return (

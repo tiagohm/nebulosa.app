@@ -3,7 +3,7 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createOpticalPreset, createProfile, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectOpticalPreset, selectProfile, setCameraReticle, setFramingVisible, setLastImageDirectory, setPanelOpen, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, updateOpticalPreset } from './profile'
+import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createOpticalPreset, createProfile, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectOpticalPreset, selectProfile, setCameraReticle, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setTelescopeOptics, updateOpticalPreset } from './profile'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }
@@ -457,6 +457,49 @@ describe('sky settings', () => {
 		const state = load(stores)
 
 		expect(state.profiles[0].settings.sky.framing).toEqual({ presets: [{ id: 'p', name: 'P', optics: { ...optics, rotation: 270 } }], visible: true })
+	})
+
+	test('restores the Equipment Setup framing and telescope, dropping invalid values', () => {
+		const stores = newStores()
+		const framing = { presets: [], visible: false, source: 'equipment', sensorSource: 'GUIDE_CAMERA', manualSensor: { kind: 'pixels', width: 100, height: 50, pixelSize: 2 }, equipmentRotation: -30 }
+		const telescope = { focalLength: 800, focalMultiplier: 0.8, aperture: 'wide' }
+		stores.local.setItem(
+			PROFILES_KEY,
+			JSON.stringify({
+				version: 2,
+				profiles: [
+					{ id: 'a', name: 'A', settings: { sky: { framing }, telescope } },
+					{ id: 'b', name: 'B', settings: { sky: { framing: { ...framing, source: 'other', sensorSource: 'ROTATOR' } } } },
+				],
+			}),
+		)
+		const state = load(stores)
+
+		expect(state.profiles[0].settings.sky.framing).toEqual({ presets: [], visible: false, source: 'equipment', sensorSource: 'GUIDE_CAMERA', manualSensor: { kind: 'pixels', width: 100, height: 50, pixelSize: 2 }, equipmentRotation: 330 })
+		expect(state.profiles[0].settings.telescope).toEqual({ focalLength: 800, focalMultiplier: 0.8, aperture: 0 })
+		expect(state.profiles[1].settings.sky.framing?.source).toBeUndefined()
+		expect(state.profiles[1].settings.sky.framing?.sensorSource).toBeUndefined()
+		expect(state.profiles[1].settings.telescope).toBeUndefined()
+	})
+
+	test('Equipment Setup framing choices and telescope belong to the active profile', () => {
+		const state = load(newStores())
+		setFramingSource(state, 'equipment')
+		setSensorSource(state, 'manual')
+		setManualSensor(state, { kind: 'physical', width: 23.5, height: 15.6 })
+		setEquipmentRotation(state, 365)
+		setTelescopeOptics(state, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
+		const copy = duplicateProfile(state, state.profiles[0].id)!
+
+		selectProfile(state, copy.id)
+		setTelescopeOptics(state, { focalLength: 1000, focalMultiplier: 1, aperture: 200 })
+		setSensorSource(state, 'MAIN_CAMERA')
+
+		expect(state.profiles[0].settings.telescope?.focalLength).toBe(400)
+		expect(state.profiles[0].settings.sky.framing).toMatchObject({ source: 'equipment', sensorSource: 'manual', manualSensor: { kind: 'physical', width: 23.5, height: 15.6 }, equipmentRotation: 5 })
+		expect(copy.settings.telescope?.focalLength).toBe(1000)
+		expect(copy.settings.sky.framing?.sensorSource).toBe('MAIN_CAMERA')
+		expect(state.profiles[0].equipment).toEqual({})
 	})
 
 	test('a duplicated profile copies its presets independently', () => {

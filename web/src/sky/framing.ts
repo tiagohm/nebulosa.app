@@ -1,11 +1,14 @@
+import type { CameraSensor } from 'api'
 import { pixelScale, sensorDiagonalFov } from 'nebulosa/src/astronomy/formulas'
+import type { CameraRole } from '../equipment/roles'
 
 // Field of view of an imaging setup, for planning a framing on the star map without any equipment: the
 // optical configuration of a custom preset, the angular size and image scale it gives, and the outline
 // of the sensor on the sky. The sensor is flat, so its outline is the gnomonic (tangent-plane)
 // projection of a rectangle around the center; its edges are great-circle arcs and the outline stays
 // correct for wide fields. Presets are planning data kept in the profile: they never change the
-// equipment setup or any device.
+// equipment setup or any device. The Equipment Setup source combines the profile's telescope optics with
+// the sensor a camera of the setup reports, or with a sensor entered manually to simulate another camera.
 //
 // Orientation: the rotation is the position angle of the sensor's top edge (+Y), measured from celestial
 // north towards east, as plate solvers report it for an image that is not mirrored. Mirrored images are
@@ -86,6 +89,46 @@ export interface FramePoint {
 	readonly rightAscension: number
 	// Declination in radians, [-π/2, π/2].
 	readonly declination: number
+}
+
+// Telescope or lens of a profile's Equipment Setup, which no device reports.
+export interface TelescopeOptics {
+	// Native focal length in millimeters; 0 when not entered yet.
+	readonly focalLength: number
+	// Factor of a reducer (below 1) or Barlow (above 1) applied once to the native focal length; 1 without.
+	readonly focalMultiplier: number
+	// Aperture in millimeters, informative only; 0 when unknown.
+	readonly aperture: number
+}
+
+// Where the Equipment Setup field of view takes its sensor from: a camera role of the setup, whose
+// device reports it, or a sensor entered manually.
+export type SensorSource = CameraRole | 'manual'
+
+// Telescope optics of a profile that has not entered any.
+export const DEFAULT_TELESCOPE: TelescopeOptics = { focalLength: 0, focalMultiplier: 1, aperture: 0 }
+
+// Optical configuration of the Equipment Setup source, with what the sensor source lacks.
+export interface EquipmentOptics {
+	// Configuration to resolve; a sensor that is unknown has zero dimensions, so resolveFraming lists it.
+	readonly optics: OpticalConfiguration
+	// Name of the camera role whose device reports no sensor; absent when the sensor is known or manual.
+	readonly missingCamera?: CameraRole
+}
+
+// Builds the Equipment Setup configuration: the telescope optics (defaults when absent), the sensor of
+// sensorSource, either the live sensor its camera reports (pixels, micrometers) or the manual sensor,
+// and the rotation in degrees. A camera without a reported sensor yields an empty sensor and names the
+// role in missingCamera; the manual sensor is never used in its place.
+export function equipmentOptics(telescope: TelescopeOptics | undefined, sensorSource: SensorSource, liveSensors: Readonly<Partial<Record<CameraRole, CameraSensor>>>, manualSensor: SensorGeometry | undefined, rotation: number): EquipmentOptics {
+	const { focalLength, focalMultiplier, aperture } = telescope ?? DEFAULT_TELESCOPE
+	const base = { focalLength, focalMultiplier, aperture, rotation }
+
+	if (sensorSource === 'manual') return { optics: { ...base, sensor: manualSensor ?? DEFAULT_OPTICS.sensor } }
+
+	const live = liveSensors[sensorSource]
+	if (!live) return { optics: { ...base, sensor: { kind: 'pixels', width: 0, height: 0, pixelSize: 0 } }, missingCamera: sensorSource }
+	return { optics: { ...base, sensor: { kind: 'pixels', width: live.width, height: live.height, pixelSize: live.pixelSize } } }
 }
 
 // Optical configuration of a new preset: a 600 mm telescope with an APS-C camera of 3.76 µm pixels.

@@ -1,7 +1,7 @@
 # Nebulosa
 
 [![Active Development](https://img.shields.io/badge/Maintenance%20Level-Actively%20Developed-brightgreen.svg)](https://gist.github.com/cheerfulstoic/d107229326a01ff0f333a1d3476e068d)
-[![CI](https://github.com/tiagohm/nebulosa.app/actions/workflows/ci.yml/badge.svg)](https://github.com/tiagohm/nebulosa.app/actions/workflows/ci.yml)
+[![Test](https://github.com/tiagohm/nebulosa.app/actions/workflows/test.yml/badge.svg)](https://github.com/tiagohm/nebulosa.app/actions/workflows/test.yml)
 
 Nebulosa is an integrated astronomical imaging application built with Bun, React, and the [`nebulosa`](https://github.com/tiagohm/nebulosa.ts) TypeScript astronomy toolkit. It combines a local web UI, Bun API server, device-control handlers, and image-processing workflows for capture, planning, solving, and analysis.
 

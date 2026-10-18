@@ -364,7 +364,8 @@ export class Planetarium {
 		if (mountRuntime.following) this.centerOn(point)
 	}
 
-	// Centers the view on a point of date (radians), keeping the zoom and layers.
+	// Pans the view to a point of date (radians), keeping the zoom, orientation, and layers; a point below
+	// the local horizon leaves the view unchanged.
 	centerOn(point: MountPoint) {
 		this.celestial.centerOnCoordinate(point.rightAscension, point.declination)
 	}

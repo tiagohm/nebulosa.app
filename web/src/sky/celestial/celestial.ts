@@ -35,10 +35,6 @@ const WHEEL_DELTA_LINE_PIXELS = 16
 // Pixel equivalent of a wheel delta reported in pages; higher makes page-mode wheels zoom faster.
 const WHEEL_DELTA_PAGE_PIXELS = 800
 
-// Angular distance from the zenith in radians within which centerOnCoordinate puts north up on the local
-// sky instead of the zenith: 5°.
-const CENTER_ZENITH_LIMIT = (5 * Math.PI) / 180
-
 // Canvas group of each built-in layer; layers sharing a group share a canvas and redraw together.
 const LAYER_CANVAS_GROUPS: Record<string, string> = {
 	background: 'sky',
@@ -653,25 +649,17 @@ export class Celestial {
 		this.queueProjectionOnly()
 	}
 
-	// Centers the view on a right ascension and declination of date in radians, whatever the coordinate
-	// system, keeping the zoom and dropping the pan offset so the point is at the middle of the viewport.
-	// The equatorial chart puts celestial north up; the local sky puts the zenith up, or north when the
-	// point is within CENTER_ZENITH_LIMIT of the zenith, where the zenith gives no direction.
-	centerOnCoordinate(ra: number, dec: number) {
-		if (this.#options.coordinateSystem === 'horizontal') {
-			writeRaDecUnitVector(normalizeAngle(ra), clamp(dec, -PIOVERTWO, PIOVERTWO), this.#tempVector)
-			multiplyMatrixVector(this.#eqToHorizontal, this.#tempVector[0], this.#tempVector[1], this.#tempVector[2], this.#centerVector)
-			const nearZenith = this.#centerVector[2] > Math.cos(CENTER_ZENITH_LIMIT)
-			this.#referenceUp[0] = 0
-			this.#referenceUp[1] = nearZenith ? 1 : 0
-			this.#referenceUp[2] = nearZenith ? 0 : 1
-			this.writeCurrentViewMatrix()
-			this.queueProjectionOnly()
-		} else {
-			this.centerOnEquatorial(ra, dec)
-		}
+	// Pans the view so a right ascension and declination of date in radians is at the middle of the
+	// viewport, keeping the zoom and the view orientation, exactly as a drag would. The view itself is
+	// never rotated, because the local sky's layers assume it stays centered on the zenith. Returns false,
+	// leaving the view unchanged, when the point cannot be projected (below the local horizon).
+	centerOnCoordinate(ra: number, dec: number): boolean {
+		if (!this.projectEquatorialToScreen(ra, dec, this.#tempScreen)) return false
 
-		this.setViewTransform({ x: 0, y: 0, k: this.#transform.k })
+		const { width, height } = this.#options
+		const { x, y, k } = this.#transform
+		this.setViewTransform({ x: x + width / 2 - this.#tempScreen[0], y: y + height / 2 - this.#tempScreen[1], k })
+		return true
 	}
 
 	// Selects a loaded object by id without moving the view, or clears the selection with null, and redraws

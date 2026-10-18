@@ -37,7 +37,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 2, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: 3, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -292,7 +292,7 @@ describe('settings', () => {
 })
 
 describe('capture settings', () => {
-	test('restores camera views and drops invalid entries', () => {
+	test('restores camera views, renaming version 2 modes, and drops invalid entries', () => {
 		const stores = newStores()
 		const views = { MAIN_CAMERA: { mode: 'focus-calibrator', reticle: true }, GUIDE_CAMERA: { mode: 'bogus', reticle: 'yes' }, MOUNT: { mode: 'camera' } }
 		const profiles = [
@@ -302,7 +302,7 @@ describe('capture settings', () => {
 		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
 		const state = load(stores)
 
-		expect(state.profiles[0].settings.capture).toEqual({ activeCamera: 'GUIDE_CAMERA', views: { MAIN_CAMERA: { mode: 'focus-calibrator', reticle: true }, GUIDE_CAMERA: { mode: 'camera' } } })
+		expect(state.profiles[0].settings.capture).toEqual({ activeCamera: 'GUIDE_CAMERA', views: { MAIN_CAMERA: { mode: 'auto-focus', reticle: true }, GUIDE_CAMERA: { mode: 'camera' } } })
 		expect(state.profiles[1].settings.capture).toEqual({ views: {} })
 	})
 
@@ -338,12 +338,12 @@ describe('capture settings', () => {
 	test('is persisted per profile', async () => {
 		const stores = newStores()
 		const state = load(stores)
-		selectCameraView(state, 'GUIDE_CAMERA', 'polar-alignment')
+		selectCameraView(state, 'GUIDE_CAMERA', 'tppa')
 		createProfile(state, 'Other')
 		await Bun.sleep(0)
 
 		const reloaded = load({ local: stores.local, session: new MemoryStorage() })
-		expect(reloaded.profiles[0].settings.capture).toEqual({ activeCamera: 'GUIDE_CAMERA', views: { GUIDE_CAMERA: { mode: 'polar-alignment' } } })
+		expect(reloaded.profiles[0].settings.capture).toEqual({ activeCamera: 'GUIDE_CAMERA', views: { GUIDE_CAMERA: { mode: 'tppa' } } })
 		expect(reloaded.profiles[1].settings.capture).toEqual({ views: {} })
 	})
 })

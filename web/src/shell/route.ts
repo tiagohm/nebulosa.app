@@ -21,10 +21,13 @@ export const CAPTURE_CAMERAS = ['main', 'guide'] as const
 export type CaptureCamera = (typeof CAPTURE_CAMERAS)[number]
 
 // Operational modes of the Capture workspace; also the third path segment of a Capture route.
-export const CAPTURE_MODES = ['camera', 'mount-nudge', 'focus-calibrator', 'polar-alignment'] as const
+export const CAPTURE_MODES = ['camera', 'mount-nudge', 'guiding', 'auto-focus', 'darv', 'tppa', 'flat-wizard'] as const
 
 // Identifier of a Capture operational mode.
 export type CaptureMode = (typeof CAPTURE_MODES)[number]
+
+// Mode ids written by earlier versions, in URLs and profiles, and the mode each one became.
+const CAPTURE_MODE_ALIASES: Readonly<Record<string, CaptureMode>> = { 'focus-calibrator': 'auto-focus', 'polar-alignment': 'tppa' }
 
 // Location in the Capture workspace: the camera view shown and its operational mode.
 export interface CaptureRoute {
@@ -86,9 +89,16 @@ export function isCaptureMode(value: unknown): value is CaptureMode {
 	return (CAPTURE_MODES as readonly unknown[]).includes(value)
 }
 
+// Returns the Capture mode a value names, reading the ids of earlier versions; undefined for anything else.
+export function captureModeOf(value: unknown): CaptureMode | undefined {
+	if (isCaptureMode(value)) return value
+	return typeof value === 'string' && Object.hasOwn(CAPTURE_MODE_ALIASES, value) ? CAPTURE_MODE_ALIASES[value] : undefined
+}
+
 // Returns the route of a URL path. An unknown workspace gives DEFAULT_ROUTE; a Capture path without a
 // known camera opens the main camera, reading the path written before camera views existed
-// (/capture/<mode>); an unknown mode opens the camera mode; an unknown tool opens the Tools catalog;
+// (/capture/<mode>); a mode id of an earlier version opens the mode it became, and an unknown mode
+// opens the camera mode; an unknown tool opens the Tools catalog;
 // extra segments are ignored.
 export function parseRoute(pathname: string): Route {
 	const [workspace = '', first = '', second = ''] = pathname.split('/').filter(Boolean)
@@ -97,7 +107,7 @@ export function parseRoute(pathname: string): Route {
 	if (workspace === 'capture') {
 		const camera = isCaptureCamera(first) ? first : 'main'
 		const mode = isCaptureCamera(first) ? second : first
-		return { workspace, camera, mode: isCaptureMode(mode) ? mode : 'camera' }
+		return { workspace, camera, mode: captureModeOf(mode) ?? 'camera' }
 	}
 
 	if (workspace === 'tools') return isToolId(first) ? { workspace, tool: first } : { workspace }

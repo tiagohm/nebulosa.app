@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { EquipmentSetup } from '../equipment/roles'
 import type { CaptureSettings } from '../profile/profile'
+import { CAPTURE_MODE_DEFINITIONS } from './modes'
 import { cameraRole, cameraTabs, cameraView, captureRoute, resolveCameraView, viewMode, viewReticle } from './views'
 
 const MAIN = { id: 'main', name: 'ASI2600MC Pro' }
@@ -45,20 +46,24 @@ describe('preferences', () => {
 
 	test('each camera view keeps its own mode', () => {
 		expect(viewMode(capture, 'MAIN_CAMERA')).toBe('camera')
-		expect(viewMode(capture, 'GUIDE_CAMERA')).toBe('mount-nudge')
 		expect(viewMode({ views: {} }, 'GUIDE_CAMERA')).toBe('camera')
+	})
+
+	test('a planned mode selected last opens the camera mode', () => {
+		expect(CAPTURE_MODE_DEFINITIONS['mount-nudge'].planned).toBe(true)
+		expect(viewMode(capture, 'GUIDE_CAMERA')).toBe('camera')
 	})
 
 	test('the reticle follows the view choice, else the mode overlays', () => {
 		expect(viewReticle(capture, 'GUIDE_CAMERA', 'mount-nudge')).toBe(false)
 		expect(viewReticle(capture, 'MAIN_CAMERA', 'camera')).toBe(false)
-		expect(viewReticle(capture, 'MAIN_CAMERA', 'polar-alignment')).toBe(true)
+		expect(viewReticle(capture, 'MAIN_CAMERA', 'tppa')).toBe(true)
 	})
 
 	test('builds the capture route of a profile', () => {
-		expect(captureRoute(capture, { MAIN_CAMERA: MAIN, GUIDE_CAMERA: GUIDE })).toEqual({ workspace: 'capture', camera: 'guide', mode: 'mount-nudge' })
+		expect(captureRoute(capture, { MAIN_CAMERA: MAIN, GUIDE_CAMERA: GUIDE })).toEqual({ workspace: 'capture', camera: 'guide', mode: 'camera' })
 		expect(captureRoute(capture, { MAIN_CAMERA: MAIN })).toEqual({ workspace: 'capture', camera: 'main', mode: 'camera' })
-		expect(captureRoute(capture, { MAIN_CAMERA: MAIN, GUIDE_CAMERA: GUIDE }, 'focus-calibrator')).toEqual({ workspace: 'capture', camera: 'guide', mode: 'focus-calibrator' })
+		expect(captureRoute(capture, { MAIN_CAMERA: MAIN, GUIDE_CAMERA: GUIDE }, 'auto-focus')).toEqual({ workspace: 'capture', camera: 'guide', mode: 'auto-focus' })
 		expect(captureRoute({ views: {} }, {})).toEqual({ workspace: 'capture', camera: 'main', mode: 'camera' })
 	})
 })

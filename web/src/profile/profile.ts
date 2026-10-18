@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
 import { CAMERA_ROLES, type CameraRole, conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
-import { type CaptureMode, isCaptureMode, WORKSPACE_IDS, type WorkspaceId } from '../shell/route'
+import { type CaptureMode, captureModeOf, WORKSPACE_IDS, type WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
 import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
 import { isRecord, parseJson, readText, type Stores, writeText } from '../storage'
@@ -21,8 +21,9 @@ export const ACTIVE_PROFILE_KEY = 'nebulosa:activeProfileId'
 export const LAST_PROFILE_KEY = 'nebulosa:lastProfileId'
 
 // Current version of the persisted format. Version 1 stored each assignment as a bare device id;
-// version 2 stores the device id and name.
-export const PROFILES_VERSION = 2
+// version 2 stores the device id and name; version 3 names the Capture modes auto-focus and tppa,
+// which version 2 called focus-calibrator and polar-alignment.
+export const PROFILES_VERSION = 3
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -157,8 +158,9 @@ export function defaultSettings(): ProfileSettings {
 	return { panels: {}, capture: { views: {} }, sky: {} }
 }
 
-// Restores persisted Capture preferences, dropping unknown camera roles and invalid values. Profiles
-// written before camera views existed have none and get the defaults.
+// Restores persisted Capture preferences, dropping unknown camera roles and invalid values and reading
+// the mode ids of earlier versions. Profiles written before camera views existed have none and get the
+// defaults.
 function normalizeCapture(value: unknown, capture: CaptureSettings) {
 	if (!isRecord(value)) return
 	if (isCameraRole(value.activeCamera)) capture.activeCamera = value.activeCamera
@@ -167,7 +169,7 @@ function normalizeCapture(value: unknown, capture: CaptureSettings) {
 	for (const role of CAMERA_ROLES) {
 		const view = value.views[role]
 		if (!isRecord(view)) continue
-		const settings: CameraViewSettings = { mode: isCaptureMode(view.mode) ? view.mode : 'camera' }
+		const settings: CameraViewSettings = { mode: captureModeOf(view.mode) ?? 'camera' }
 		if (typeof view.reticle === 'boolean') settings.reticle = view.reticle
 		capture.views[role] = settings
 	}
@@ -360,7 +362,8 @@ function migrate(data: unknown, now: string): Profile[] | undefined {
 
 	switch (data.version) {
 		case 1:
-		case 2: {
+		case 2:
+		case 3: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

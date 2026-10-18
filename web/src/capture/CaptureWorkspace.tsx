@@ -15,7 +15,7 @@ import { Reticle } from '../viewer/Reticle'
 import { FIT_VIEW } from '../viewer/transform'
 import { CameraTabs } from './CameraTabs'
 import { ModePanel } from './ModePanel'
-import { CAPTURE_MODE_DEFINITIONS } from './modes'
+import { CAPTURE_MODE_DEFINITIONS, captureModeUnavailable } from './modes'
 import { type CameraTarget, cameraRole, cameraTabs, cameraView, captureRoute, captureViewerState, resolveCameraView, viewerKey, viewMode, viewReticle } from './views'
 
 // Capture workspace: image acquisition with the cameras of the active profile's equipment setup. Each
@@ -23,7 +23,8 @@ import { type CameraTarget, cameraRole, cameraTabs, cameraView, captureRoute, ca
 // the view has its own operational mode and viewer preferences, and every mode uses the view's camera.
 // The camera view and mode shown come from the URL; the profile remembers them, and a profile switch
 // reopens the view and mode that profile selected last. Switching tabs, modes, or profiles only changes
-// what is shown: no device is connected, stopped, or redirected. Only the selected view is mounted.
+// what is shown: no device is connected, stopped, or redirected. Only the selected view is mounted. A
+// URL naming a planned mode opens the camera mode instead.
 
 // Capture workspace.
 export function CaptureWorkspace() {
@@ -34,7 +35,8 @@ export function CaptureWorkspace() {
 	const capture = profile.settings.capture
 	const requested = route.workspace === 'capture' ? route : undefined
 	const role = resolveCameraView(setup, requested && cameraRole(requested.camera), capture.activeCamera)
-	const mode: CaptureMode = requested?.mode ?? (role ? viewMode(capture, role) : 'camera')
+	const wanted: CaptureMode = requested?.mode ?? (role ? viewMode(capture, role) : 'camera')
+	const mode: CaptureMode = CAPTURE_MODE_DEFINITIONS[wanted].planned ? 'camera' : wanted
 	const shownProfile = useRef(profile.id)
 
 	// The URL follows the camera view actually shown, and the profile remembers it; after a profile
@@ -47,7 +49,7 @@ export function CaptureWorkspace() {
 		}
 
 		if (!role) return
-		if (requested?.camera !== cameraView(role)) redirect(routeState, { workspace: 'capture', camera: cameraView(role), mode })
+		if (requested?.camera !== cameraView(role) || requested.mode !== mode) redirect(routeState, { workspace: 'capture', camera: cameraView(role), mode })
 		selectCameraView(profileState, role, mode)
 	}, [profile.id, capture, setup, requested?.camera, role, mode])
 
@@ -80,14 +82,10 @@ export function CaptureWorkspace() {
 			workspace="capture"
 			title="Capture"
 			tabs={<CameraTabs tabs={cameraTabs(setup)} selected={role} onSelect={selectCamera} />}
-			context={<Select options={CAPTURE_MODES} value={mode} format={(m) => CAPTURE_MODE_DEFINITIONS[m].label} onChange={(m) => navigate(routeState, { workspace: 'capture', camera: cameraView(role), mode: m })} className="w-52 max-sm:w-40" />}
+			context={<Select options={CAPTURE_MODES} value={mode} format={(m) => CAPTURE_MODE_DEFINITIONS[m].label} disabledReason={captureModeUnavailable} onChange={(m) => navigate(routeState, { workspace: 'capture', camera: cameraView(role), mode: m })} className="w-52 max-sm:w-40" />}
 			panel={{
 				title: definition.panelTitle,
-				content: (
-					<ModePanel requires={definition.requires}>
-						<Panel />
-					</ModePanel>
-				),
+				content: <ModePanel requires={definition.requires}>{Panel && <Panel />}</ModePanel>,
 			}}
 		>
 			<CaptureViewer key={viewerKey(role, setup)} viewer={viewerKey(role, setup)} role={role} reticle={viewReticle(capture, role, mode)} />

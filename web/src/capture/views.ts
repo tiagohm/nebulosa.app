@@ -48,9 +48,11 @@ export function resolveCameraView(setup: Readonly<EquipmentSetup>, requested?: C
 	return tabs[0]
 }
 
-// Returns the operational mode selected last in a camera role's view; the camera mode before any.
+// Returns the operational mode selected last in a camera role's view; the camera mode before any, or
+// when the mode selected last is planned and cannot be shown.
 export function viewMode(capture: CaptureSettings, role: CameraRole): CaptureMode {
-	return capture.views[role]?.mode ?? 'camera'
+	const mode = capture.views[role]?.mode ?? 'camera'
+	return CAPTURE_MODE_DEFINITIONS[mode].planned ? 'camera' : mode
 }
 
 // Returns whether the reticle is shown in a camera role's view in a mode: the view's choice, or the

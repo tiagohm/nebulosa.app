@@ -12,8 +12,8 @@ import { RoleRow } from './RoleRow'
 export interface ModePanelProps {
 	// Roles the mode requires besides the camera, in display order; the Equipment section is omitted when empty.
 	readonly requires: readonly EquipmentRole[]
-	// Sections of the mode's controls.
-	readonly children: ReactNode
+	// Sections of the mode's controls; absent when the mode has none.
+	readonly children?: ReactNode
 }
 
 // Contextual panel of a Capture mode.

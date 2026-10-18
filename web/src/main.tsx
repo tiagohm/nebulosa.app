@@ -4,6 +4,7 @@ import { App } from './App'
 import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
 import { onOpen, subscribe } from './events'
+import { handleOperationEvent, operationsState, refreshOperations } from './operations'
 import { loadProfiles, persistProfiles, profileState } from './profile/profile'
 import { routeState, watchHistory } from './shell/route'
 import { handleMountEvent, mountRuntime, refreshMount } from './sky/mount'
@@ -27,14 +28,16 @@ const stops = [
 		handleConnectionEvent(connectionState, event)
 		handleDeviceEvent(deviceState, event)
 		handleMountEvent(mountRuntime, event)
+		handleOperationEvent(operationsState, event)
 		handleSensorEvent(sensorRuntime, event)
 	}),
-	// Every (re)open resynchronizes the open connections, the watched devices, the followed mount, and the
-	// camera sensors, which may have changed while the socket was closed.
+	// Every (re)open resynchronizes the open connections, the watched devices, the followed mount, the
+	// running operations, and the camera sensors, which may have changed while the socket was closed.
 	onOpen(() => {
 		void refreshServers(connectionState)
 		void refreshDevices(deviceState)
 		void refreshMount(mountRuntime)
+		void refreshOperations(operationsState)
 		refreshSensors(sensorRuntime)
 	}),
 ]

@@ -1,6 +1,7 @@
-import type { MountOperation, SkyObjectRef, SkyPosition } from 'api'
+import type { OperationRecord, SkyObjectRef, SkyPosition } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { operationsState } from '../operations'
 import type { SkyObserverSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
@@ -24,7 +25,7 @@ export interface SlewSectionProps {
 }
 
 // Description of each reason a mount operation fails.
-const FAILURE_REASONS: Readonly<Record<NonNullable<MountOperation['reason']>, string>> = {
+const FAILURE_REASONS: Readonly<Record<NonNullable<OperationRecord['reason']>, string>> = {
 	busy: 'the mount was busy',
 	aborted: 'it was stopped',
 	disconnected: 'the mount disconnected',
@@ -41,10 +42,11 @@ type Preview = { readonly status: 'loading' } | { readonly status: 'ready'; read
 // Slew to Object section.
 export function SlewSection({ target, targetName, observer }: SlewSectionProps) {
 	const runtime = useSnapshot(mountRuntime)
+	const operations = useSnapshot(operationsState)
 	const [preview, setPreview] = useState<Preview>()
 	const mount = runtime.target
-	const blocker = observer ? slewBlocker(runtime) : 'Set the observer location to check the horizon'
-	const progress = slewProgress(runtime)
+	const blocker = observer ? slewBlocker(runtime, operations) : 'Set the observer location to check the horizon'
+	const progress = slewProgress(runtime, operations)
 	const moving = runtime.state?.slewing === true || progress?.state === 'running'
 
 	if (!mount) return null
@@ -117,7 +119,7 @@ export function SlewSection({ target, targetName, observer }: SlewSectionProps) 
 }
 
 // Outcome of the latest slew, as the server reported it.
-function SlewStatus({ targetName, operation }: { readonly targetName: string; readonly operation?: MountOperation }) {
+function SlewStatus({ targetName, operation }: { readonly targetName: string; readonly operation?: OperationRecord }) {
 	if (!operation || operation.state === 'running') return <p className="m-0 text-xs leading-4 text-ink-200">Slewing to {targetName}…</p>
 	if (operation.state === 'succeeded') return <p className="m-0 text-xs leading-4 text-ink-200">Arrived at {targetName}.</p>
 	return (

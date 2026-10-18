@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import type { MountState } from 'api'
+import type { MountState, OperationRecord } from 'api'
 import { proxy } from 'valtio'
 import { localSiderealTime } from './celestial/time'
 import { handleMountEvent, horizontalOf, type MountRuntime, mountPoint, selectionPoint, slewBlocker, slewMount, watchMount } from './mount'
@@ -22,7 +22,7 @@ function fakeFetch(respond: () => Response) {
 }
 
 function runtime(): MountRuntime {
-	const value = proxy<MountRuntime>({ operations: {}, sending: false, following: false })
+	const value = proxy<MountRuntime>({ sending: false, following: false })
 	watchMount(value, TARGET, fakeFetch(() => Response.json(state())).request)
 	return value
 }
@@ -36,11 +36,6 @@ test('applies only the events of the followed mount on its connection', () => {
 
 	handleMountEvent(value, { type: 'mount:updated', state: state({ rightAscension: 3 }) })
 	expect(value.state?.rightAscension).toBe(3)
-
-	handleMountEvent(value, { type: 'mount:operation', operation: { connectionId: 'b', id: 'm1', operationId: 'x', kind: 'slew', state: 'running' } })
-	expect(value.operations).toEqual({})
-	handleMountEvent(value, { type: 'mount:operation', operation: { connectionId: 'a', id: 'm1', operationId: 'x', kind: 'slew', state: 'running' } })
-	expect(value.operations.x?.state).toBe('running')
 
 	handleMountEvent(value, { type: 'connection:close', id: 'b' })
 	expect(value.state).toBeDefined()
@@ -70,13 +65,24 @@ test('has a position only while connected and in real time', () => {
 })
 
 test('explains why the mount cannot slew', () => {
-	const base = { target: TARGET, sending: false, operations: {} }
-	expect(slewBlocker({ ...base, target: undefined })).toBeDefined()
-	expect(slewBlocker({ ...base, state: state({ connected: false }) })).toBe('The mount is disconnected')
-	expect(slewBlocker({ ...base, state: state({ parked: true }) })).toBe('The mount is parked')
-	expect(slewBlocker({ ...base, state: state({ canGoTo: false }) })).toBe('The mount cannot go to a target')
-	expect(slewBlocker({ ...base, state: state({ slewing: true }) })).toBe('The mount is slewing')
-	expect(slewBlocker({ ...base, state: state() })).toBeUndefined()
+	const base = { target: TARGET, sending: false }
+	const none = { operations: {} }
+	expect(slewBlocker({ ...base, target: undefined }, none)).toBeDefined()
+	expect(slewBlocker({ ...base, state: state({ connected: false }) }, none)).toBe('The mount is disconnected')
+	expect(slewBlocker({ ...base, state: state({ parked: true }) }, none)).toBe('The mount is parked')
+	expect(slewBlocker({ ...base, state: state({ canGoTo: false }) }, none)).toBe('The mount cannot go to a target')
+	expect(slewBlocker({ ...base, state: state({ slewing: true }) }, none)).toBe('The mount is slewing')
+	expect(slewBlocker({ ...base, state: state() }, none)).toBeUndefined()
+})
+
+test('a slew is blocked while any operation holds the exact mount', () => {
+	const base = { target: TARGET, sending: false, state: state() }
+	const operation = (connectionId: string, state: OperationRecord['state']): OperationRecord => ({ operationId: 'x', kind: 'mount.slew', devices: [{ connectionId, deviceId: 'm1' }], state, startedAt: 1 })
+
+	expect(slewBlocker(base, { operations: { x: operation('b', 'running') } })).toBeUndefined()
+	expect(slewBlocker(base, { operations: { x: operation('a', 'failed') } })).toBeUndefined()
+	expect(slewBlocker(base, { operations: { x: operation('a', 'running') } })).toBe('The mount is busy')
+	expect(slewBlocker({ ...base, slew: { operationId: 'x', targetName: 'M31', response: { operationId: 'x', time: 1, rightAscension: 0, declination: 0, azimuth: 0, altitude: 1 } } }, { operations: { x: operation('a', 'running') } })).toBe('The mount is slewing')
 })
 
 test('records an accepted slew and keeps the reason of a refused one', async () => {

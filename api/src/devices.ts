@@ -11,6 +11,7 @@ import { MountManager } from 'nebulosa/src/devices/indi/manager/mount'
 import { RotatorManager } from 'nebulosa/src/devices/indi/manager/rotator'
 import { WheelManager } from 'nebulosa/src/devices/indi/manager/wheel'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
+import type { DeviceLifecycle } from 'nebulosa/src/devices/orchestration/device.lifecycle'
 
 // Application-wide registry of the devices discovered on every open connection. One device manager per
 // managed type ingests the property stream of all clients; the registry maps each client back to the
@@ -133,6 +134,8 @@ interface ManagedDevices {
 	readonly switch: (client: Client, id: string, connect: boolean) => boolean
 	// Drops every device of a closed client.
 	readonly close: (client: Client) => void
+	// Makes a lifecycle bridge follow the manager's devices; returns a function that stops it.
+	readonly observe: (lifecycle: DeviceLifecycle) => VoidFunction
 }
 
 // Coalescing state of the mount:updated events of one mount.
@@ -179,6 +182,7 @@ function managed<D extends Device>(manager: DeviceManager<D>, handler: Lifecycle
 			return true
 		},
 		close: (client) => manager.close(client, false),
+		observe: (lifecycle) => lifecycle.observe(manager),
 	}
 }
 
@@ -229,6 +233,16 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 	// properties, so every device it defines is attributed to the connection.
 	attach(client: Client, connectionId: string) {
 		this.#connections.set(client, connectionId)
+	}
+
+	// Makes a lifecycle bridge follow the devices of every managed type, so their availability and the
+	// cancellation of their operations track connects, disconnects, and removals. Returns a function that
+	// stops following them.
+	observe(lifecycle: DeviceLifecycle): VoidFunction {
+		const disposers = MANAGED_TYPES.map((type) => this.#managers[type].observe(lifecycle))
+		return () => {
+			for (const dispose of disposers) dispose()
+		}
 	}
 
 	// Drops every device of a closed client, publishing device:removed for each.

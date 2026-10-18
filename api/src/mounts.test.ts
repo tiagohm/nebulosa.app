@@ -1,7 +1,8 @@
 import { afterEach, expect, test } from 'bun:test'
 import { deg } from 'nebulosa/src/math/units/angle'
 import { ConnectionManager } from './connection'
-import { type MountEvent, MountCommands, type MountSlewRequest, type MountSlewResponse } from './mounts'
+import { MountCommands, type MountSlewRequest, type MountSlewResponse } from './mounts'
+import { type OperationEvent, type OperationRecord, OperationRegistry } from './operations'
 import type { PositionRequest, SkyPosition } from './sky/ephemeris'
 import type { SkyObjectRef } from './sky/types'
 
@@ -40,17 +41,14 @@ async function setup(offset = deg(2), altitude = deg(30)) {
 	disposables.push(manager)
 	const { id } = await manager.connect({ type: 'SIMULATOR' })
 	const client = manager.client(id)!
-	const events: MountEvent[] = []
+	const events: OperationEvent[] = []
 	const fake = locator(offset, altitude)
-	const commands = new MountCommands(
-		manager.devices,
-		(connectionId) => manager.client(connectionId),
-		fake.locate,
-		(event) => events.push(event),
-	)
+	const operations = new OperationRegistry(manager.devices, (event) => events.push(event))
+	disposables.push(operations)
+	const commands = new MountCommands(manager.devices, (connectionId) => manager.client(connectionId), fake.locate, operations)
 	disposables.push(commands)
 	const summary = manager.devices.list(client).find((d) => d.type === 'mount')!
-	return { manager, id, client, commands, events, fake, mountId: summary.id }
+	return { manager, id, client, commands, operations, events, fake, mountId: summary.id }
 }
 
 async function connectMount(manager: ConnectionManager, client: NonNullable<ReturnType<ConnectionManager['client']>>, mountId: string) {
@@ -64,7 +62,7 @@ async function connectMount(manager: ConnectionManager, client: NonNullable<Retu
 const request: MountSlewRequest = { target: TARGET, observer: OBSERVER }
 
 test('slews to an object resolved at the real current time and reports the real outcome', async () => {
-	const { manager, id, client, commands, events, fake, mountId } = await setup()
+	const { manager, id, client, commands, operations, events, fake, mountId } = await setup()
 	const mount = await connectMount(manager, client, mountId)
 	fake.setBase({ ...mount.equatorialCoordinate })
 
@@ -78,10 +76,13 @@ test('slews to an object resolved at the real current time and reports the real 
 	expect(fake.requests[0].time).toBeLessThanOrEqual(Date.now())
 	expect(fake.requests[0].observer).toEqual(OBSERVER)
 	expect(body.time).toBe(fake.requests[0].time)
-	expect(events).toEqual([{ type: 'mount:operation', operation: { connectionId: id, id: mountId, operationId: body.operationId, kind: 'slew', state: 'running' } }])
+	const running: OperationRecord = { operationId: body.operationId, kind: 'mount.slew', devices: [{ connectionId: id, deviceId: mountId }], state: 'running', startedAt: expect.any(Number) as number }
+	expect(events).toEqual([{ type: 'operation:updated', operation: running }])
+	expect(operations.running()).toEqual([running])
 
 	await waitUntil(() => events.length === 2, 30000)
-	expect(events[1].operation).toEqual({ connectionId: id, id: mountId, operationId: body.operationId, kind: 'slew', state: 'succeeded' })
+	expect(events[1].operation).toEqual({ ...running, state: 'succeeded' })
+	expect(operations.running()).toBeEmpty()
 	expect(mount.equatorialCoordinate.rightAscension).toBeCloseTo(body.rightAscension, 2)
 }, 40000)
 

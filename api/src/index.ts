@@ -3,6 +3,7 @@ import { connections } from './connection'
 import { handleListDirectory } from './files'
 import { handleDeriveImage, handleDownloadImage, handleOpenImage, handleRenderImage, handleSaveImage, images } from './images'
 import { MountCommands, type MountSlewRequest } from './mounts'
+import { OperationRegistry } from './operations'
 import { skyLocator, skyRoutes } from './sky'
 import { broadcast, websocket } from './websocket'
 
@@ -11,7 +12,8 @@ import { broadcast, websocket } from './websocket'
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
 export type { CameraSensor, CameraSensorState, DeviceEvent, DeviceSummary, ManagedDeviceType, MountState } from './devices'
 export type { DirectoryListing, FileEntry } from './files'
-export type { MountEvent, MountOperation, MountOperationState, MountSlewRequest, MountSlewResponse } from './mounts'
+export type { MountSlewRequest, MountSlewResponse } from './mounts'
+export type { OperationDevice, OperationEvent, OperationKind, OperationRecord, OperationState } from './operations'
 export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
 export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
 export type { Binning, DeriveRequest, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from './images'
@@ -19,8 +21,11 @@ export { websocket }
 
 connections.listen(broadcast)
 
-// Mount commands over the devices of the open connections, publishing their operations to every tab.
-const mounts = new MountCommands(connections.devices, (id) => connections.client(id), skyLocator, broadcast)
+// Device operations of the process, published to every tab.
+const operations = new OperationRegistry(connections.devices, broadcast)
+
+// Mount commands over the devices of the open connections.
+const mounts = new MountCommands(connections.devices, (id) => connections.client(id), skyLocator, operations)
 
 // Opens a connection, or returns the existing one for the same endpoint. Responds 400 for an invalid
 // body and 502 when the endpoint cannot be reached.
@@ -44,6 +49,10 @@ function switchDevice(id: string, deviceId: string, connect: boolean): Response 
 export const routes = {
 	'/api/health': {
 		GET: () => Response.json({ status: 'ok' }),
+	},
+	'/api/operations': {
+		// The device operations still running, started by any tab.
+		GET: () => Response.json(operations.running()),
 	},
 	'/api/connections': {
 		// The open connections, shared by every tab.
@@ -72,7 +81,7 @@ export const routes = {
 		GET: (req) => mounts.state(req.params.id, req.params.deviceId),
 	},
 	'/api/connections/:id/mounts/:deviceId/slew': {
-		// Slews a mount to an object resolved at the current time; the outcome arrives as mount:operation events.
+		// Slews a mount to an object resolved at the current time; the outcome arrives as operation:updated events.
 		POST: async (req) => mounts.slew(req.params.id, req.params.deviceId, (await req.json()) as MountSlewRequest, req.signal),
 	},
 	'/api/connections/:id/mounts/:deviceId/stop': {

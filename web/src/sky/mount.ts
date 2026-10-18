@@ -1,6 +1,7 @@
-import type { MountOperation, MountSlewResponse, MountState, ServerEvent, SkyObjectRef, SkyObserver } from 'api'
+import type { MountSlewResponse, MountState, OperationRecord, ServerEvent, SkyObjectRef, SkyObserver } from 'api'
 import { proxy } from 'valtio'
 import { responseError } from '../http'
+import { type OperationsState, runningOn } from '../operations'
 import { multiplyMatrixVector, writeEquatorialToHorizontalMatrix, writeRaDecUnitVector } from './celestial/geometry'
 import type { ObserverLocation } from './celestial/types'
 import type { SkySelection } from './sky'
@@ -25,7 +26,7 @@ export interface MountTarget {
 
 // Slew started from this tab.
 export interface MountSlew {
-	// Id of the operation, matching its mount:operation events.
+	// Id of the operation, matching its operation:updated events.
 	readonly operationId: string
 	// Name of the object slewed to.
 	readonly targetName: string
@@ -41,8 +42,6 @@ export interface MountRuntime {
 	state?: MountState
 	// Latest slew started from this tab on the target.
 	slew?: MountSlew
-	// Latest progress of each operation of the target seen since it was followed, by operation id.
-	operations: Record<string, MountOperation>
 	// Whether a slew or stop request is being sent.
 	sending: boolean
 	// Why the latest slew or stop request was refused.
@@ -59,11 +58,8 @@ export interface MountPoint {
 	readonly declination: number
 }
 
-// Most operations kept in MountRuntime.operations; older ones are dropped.
-const MAX_OPERATIONS = 16
-
 // Mount runtime of the tab.
-export const mountRuntime = proxy<MountRuntime>({ operations: {}, sending: false, following: false })
+export const mountRuntime = proxy<MountRuntime>({ sending: false, following: false })
 
 // Counter of state fetches; a response is applied only if no later fetch started.
 let generation = 0
@@ -89,7 +85,6 @@ export function watchMount(runtime: MountRuntime, target: MountTarget | undefine
 	runtime.target = target
 	runtime.state = undefined
 	runtime.slew = undefined
-	runtime.operations = {}
 	runtime.error = undefined
 	runtime.sending = false
 	runtime.following = false
@@ -112,8 +107,8 @@ export async function refreshMount(runtime: MountRuntime, request: typeof fetch 
 	}
 }
 
-// Applies a server event concerning the followed mount: its state, its operations, its removal, and the
-// closing of its connection. Events of every other mount are ignored.
+// Applies a server event concerning the followed mount: its state, its removal, and the closing of its
+// connection. Events of every other mount are ignored; operations are followed by the operations store.
 export function handleMountEvent(runtime: MountRuntime, event: ServerEvent) {
 	const target = runtime.target
 	if (!target) return
@@ -122,14 +117,6 @@ export function handleMountEvent(runtime: MountRuntime, event: ServerEvent) {
 		case 'mount:updated':
 			if (sameMount(event.state, target)) runtime.state = event.state
 			return
-		case 'mount:operation': {
-			const { operation } = event
-			if (!sameMount(operation, target)) return
-			const ids = Object.keys(runtime.operations).filter((id) => id !== operation.operationId)
-			for (const id of ids.slice(0, Math.max(0, ids.length - MAX_OPERATIONS + 1))) delete runtime.operations[id]
-			runtime.operations[operation.operationId] = operation
-			return
-		}
 		case 'device:removed':
 			if (sameMount(event, target)) runtime.state = undefined
 			return
@@ -167,25 +154,27 @@ export function horizontalOf(point: MountPoint, time: number, observer: Observer
 }
 
 // Progress of the latest slew started from this tab: running until its operation reports an outcome.
-export function slewProgress(runtime: Pick<MountRuntime, 'slew' | 'operations'>): MountOperation | undefined {
+export function slewProgress(runtime: Pick<MountRuntime, 'slew'>, operations: Pick<OperationsState, 'operations'>): OperationRecord | undefined {
 	const slew = runtime.slew
-	return slew && runtime.operations[slew.operationId]
+	return slew && operations.operations[slew.operationId]
 }
 
-// Why the followed mount cannot slew now, or undefined when it can. The server checks again.
-export function slewBlocker(runtime: Pick<MountRuntime, 'target' | 'state' | 'sending' | 'slew' | 'operations'>): string | undefined {
+// Why the followed mount cannot slew now, or undefined when it can: among other reasons, while any
+// operation started by any tab holds it. The server checks again.
+export function slewBlocker(runtime: Pick<MountRuntime, 'target' | 'state' | 'sending' | 'slew'>, operations: Pick<OperationsState, 'operations'>): string | undefined {
 	if (!runtime.target) return 'No mount is assigned on the connection'
 	const state = runtime.state
 	if (!state?.connected) return 'The mount is disconnected'
 	if (!state.canGoTo) return 'The mount cannot go to a target'
 	if (state.parked || state.parking) return 'The mount is parked'
 	if (runtime.sending) return 'A request is being sent'
-	if (state.slewing || slewProgress(runtime)?.state === 'running') return 'The mount is slewing'
+	if (state.slewing || slewProgress(runtime, operations)?.state === 'running') return 'The mount is slewing'
+	if (runningOn(operations, runtime.target.connectionId, runtime.target.id).length > 0) return 'The mount is busy'
 	return undefined
 }
 
 // Asks the server to slew the followed mount to an object, resolved by the server at its current time
-// for the observer. On acceptance the slew is recorded and its outcome arrives as mount:operation events;
+// for the observer. On acceptance the slew is recorded and its outcome arrives as operation:updated events;
 // on refusal the server's reason is kept in error.
 export async function slewMount(runtime: MountRuntime, target: SkyObjectRef, targetName: string, observer: SkyObserver, request: typeof fetch = fetch) {
 	const mount = runtime.target

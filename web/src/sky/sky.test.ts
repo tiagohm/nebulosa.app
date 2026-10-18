@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { proxy } from 'valtio'
-import { changeSkyObserver, clearSkySelection, selectSkyObject, type SkyIo, type SkyState } from './sky'
+import { changeSkyObserver, clearSkySelection, refreshSkySelection, selectSkyObject, type SkyIo, type SkyState } from './sky'
 
 // Fake API whose responses are released by the test, in any order.
 function fakeApi() {
@@ -89,4 +89,26 @@ test('changing the observer drops the previous position', async () => {
 
 	clearSkySelection(state)
 	expect(state.selection).toBeUndefined()
+})
+
+test('a refresh skips a fresh or loading selection', async () => {
+	const state = proxy<SkyState>({ panel: 'inspector' })
+	const { io, pending, release } = fakeApi()
+
+	selectSkyObject(state, { ref: { kind: 'body', code: '10' }, source: 'map', name: 'Sun' }, undefined, io)
+	await refreshSkySelection(state, undefined, io)
+	expect(pending).toHaveLength(1)
+
+	await release((url) => url === '/api/sky/position', { position: position(3) })
+	await refreshSkySelection(state, undefined, io)
+	expect(pending).toHaveLength(0)
+})
+
+test('constellation details', async () => {
+	const state = proxy<SkyState>({ panel: 'inspector' })
+	const { io, release } = fakeApi()
+
+	selectSkyObject(state, { ref: { kind: 'constellation', code: 'ORI' }, source: 'map', name: 'Orion' }, undefined, io)
+	await release((url) => url === '/api/sky/constellations/ORI', { code: 'ORI', abbreviation: 'Ori', name: 'Orion', genitive: 'Orionis', rightAscension: 1.45, declination: 0.05 })
+	expect(state.selection?.constellation?.genitive).toBe('Orionis')
 })

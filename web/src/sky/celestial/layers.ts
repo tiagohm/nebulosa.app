@@ -11,6 +11,7 @@ import {
 	drawDsoSymbol,
 	drawMovingBodySymbol,
 	drawObjectHighlight,
+	drawSelectedObject,
 	drawProjectionBoundary,
 	drawZenithLabel,
 	DSO_VIEWPORT_MARGIN,
@@ -1318,7 +1319,7 @@ export class InteractionOverlayLayer extends InternalLayer {
 
 	// Draws the selected and hovered object highlights and labels.
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
-		drawObjectHighlight(ctx, state, state.selectedObject, state.theme.selectedObject.color, 8)
+		drawSelectedObject(ctx, state, state.selectedObject, state.theme.selectedObject.color)
 		drawObjectHighlight(ctx, state, state.hoverObject, state.theme.hoverHighlight.color, 6)
 		this.drawHighlightedLabel(ctx, state, state.selectedObject)
 

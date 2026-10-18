@@ -362,6 +362,60 @@ export function movingBodyColor(object: MovingBody, state: RenderState) {
 	return state.theme.movingBodies.planetColor
 }
 
+// Radius in pixels of the ring of the selection reticle.
+const SELECTION_RING_RADIUS = 11
+
+// Inner and outer distance in pixels from the center of the ticks of the selection reticle.
+const SELECTION_TICK_RANGE = [15, 23] as const
+
+// Halo drawn under the selection reticle so it stands out on bright and dark sky alike.
+const SELECTION_HALO = 'rgba(0, 0, 0, 0.7)'
+
+// The x/y directions of the four ticks pointing at the object.
+const RETICLE_TICKS = [
+	[0, -1],
+	[1, 0],
+	[0, 1],
+	[-1, 0],
+] as const
+
+// Draws the selection reticle centered at a point in pixels: a ring and four ticks pointing at the
+// object, stroked over a dark halo.
+export function drawSelectionReticle(ctx: CanvasRenderingContext2D, x: number, y: number, color: string) {
+	ctx.save()
+	ctx.lineCap = 'round'
+
+	for (const [lineWidth, strokeStyle] of [
+		[6, SELECTION_HALO],
+		[2, color],
+	] as const) {
+		ctx.lineWidth = lineWidth
+		ctx.strokeStyle = strokeStyle
+		ctx.beginPath()
+		ctx.arc(x, y, SELECTION_RING_RADIUS, 0, TAU)
+
+		for (const [dx, dy] of RETICLE_TICKS) {
+			ctx.moveTo(x + dx * SELECTION_TICK_RANGE[0], y + dy * SELECTION_TICK_RANGE[0])
+			ctx.lineTo(x + dx * SELECTION_TICK_RANGE[1], y + dy * SELECTION_TICK_RANGE[1])
+		}
+
+		ctx.stroke()
+	}
+
+	ctx.restore()
+}
+
+// Draws the selection reticle on an object when it is projected on the map, even when the zoom is too low
+// for its symbol to be drawn, so a selection never disappears while zooming out.
+export function drawSelectedObject(ctx: CanvasRenderingContext2D, state: RenderState, object: CelestialObject | null, color: string) {
+	if (!object) return
+
+	const point = OBJECT_HIGHLIGHT_POINT
+	if (!projectObjectToScreen(object, state, point, true)) return
+
+	drawSelectionReticle(ctx, point[0], point[1], color)
+}
+
 // Strokes a ring of `radius` pixels around an object when it is currently visible.
 export function drawObjectHighlight(ctx: CanvasRenderingContext2D, state: RenderState, object: CelestialObject | null, color: string, radius: number) {
 	if (!object) return
@@ -378,8 +432,8 @@ export function drawObjectHighlight(ctx: CanvasRenderingContext2D, state: Render
 }
 
 // Writes the current screen position of a picked object at `out[0..1]`; returns false when its layer is
-// hidden or the object is not visible.
-function projectObjectToScreen(object: CelestialObject, state: RenderState, out: NumberArray): boolean {
+// hidden or the object is not visible (projected, and bright enough for the zoom unless `anyZoom`).
+function projectObjectToScreen(object: CelestialObject, state: RenderState, out: NumberArray, anyZoom: boolean = false): boolean {
 	if (!isObjectLayerVisible(object, state)) {
 		return false
 	}
@@ -388,14 +442,14 @@ function projectObjectToScreen(object: CelestialObject, state: RenderState, out:
 		case 'star': {
 			const catalog = state.starCatalog
 			if (!catalog || !catalog.visible[object.index]) return false
-			if (!isStarVisibleAtZoom(catalog.mag[object.index], state.transform.k, state.stars.maxMagnitude)) return false
+			if (!anyZoom && !isStarVisibleAtZoom(catalog.mag[object.index], state.transform.k, state.stars.maxMagnitude)) return false
 			applyViewTransform(catalog.screenX[object.index], catalog.screenY[object.index], state.width, state.height, state.transform, out)
 			return true
 		}
 		case 'deepSky': {
 			const catalog = state.deepSkyCatalog
 			if (!catalog || !catalog.visible[object.index]) return false
-			if (!isDeepSkyObjectVisible(object.object, state)) return false
+			if (!anyZoom && !isDeepSkyObjectVisible(object.object, state)) return false
 			applyViewTransform(catalog.screenX[object.index], catalog.screenY[object.index], state.width, state.height, state.transform, out)
 			return true
 		}

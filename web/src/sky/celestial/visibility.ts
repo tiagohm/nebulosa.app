@@ -7,11 +7,11 @@ import type { DeepSkyObject, MovingBody, RenderState } from './types'
 // visible. Magnitudes are visual magnitudes; a zoom octave doubles the zoom factor.
 
 // Star magnitude shown at base zoom; higher shows more faint stars initially.
-const STAR_SYMBOL_BASE_MAGNITUDE = 7
+const STAR_SYMBOL_BASE_MAGNITUDE = 6
 // Extra star magnitude unlocked per zoom octave; higher reveals faint stars faster while zooming.
 const STAR_SYMBOL_MAGNITUDE_PER_ZOOM = 1.9
 // Lower bound of the star magnitude limit when zoomed out; higher hides fewer stars at low zoom.
-const STAR_SYMBOL_MIN_MAGNITUDE = 4.5
+const STAR_SYMBOL_MIN_MAGNITUDE = 4
 // Star label magnitude shown at base zoom; higher labels more stars initially.
 const STAR_LABEL_BASE_MAGNITUDE = 1.5
 // Extra labeled star magnitude unlocked per zoom octave; higher reveals labels faster while zooming.
@@ -21,7 +21,7 @@ const STAR_LABEL_MIN_MAGNITUDE = 1.5
 // Magnitude assigned to deep-sky objects without one; higher makes them appear later while zooming.
 const DSO_DEFAULT_MAGNITUDE = 10
 // Deep-sky magnitude shown at base zoom; higher shows more faint objects initially.
-const DSO_SYMBOL_BASE_MAGNITUDE = 8
+const DSO_SYMBOL_BASE_MAGNITUDE = 7
 // Extra deep-sky magnitude unlocked per zoom octave.
 const DSO_SYMBOL_MAGNITUDE_PER_ZOOM = 1.9
 // Lower bound of the deep-sky magnitude limit when zoomed out.
@@ -29,11 +29,11 @@ const DSO_SYMBOL_MIN_MAGNITUDE = 6
 // Faintest deep-sky symbol ever shown; caps visual density.
 const DSO_SYMBOL_MAX_MAGNITUDE = 14.5
 // Deep-sky label magnitude shown at base zoom.
-const DSO_LABEL_BASE_MAGNITUDE = 5.5
+const DSO_LABEL_BASE_MAGNITUDE = 4.5
 // Extra labeled deep-sky magnitude unlocked per zoom octave.
 const DSO_LABEL_MAGNITUDE_PER_ZOOM = 2.5
 // Lower bound of the deep-sky label magnitude limit.
-const DSO_LABEL_MIN_MAGNITUDE = 5.5
+const DSO_LABEL_MIN_MAGNITUDE = 4.5
 // Faintest deep-sky label ever shown; caps label clutter.
 const DSO_LABEL_MAX_MAGNITUDE = 14
 

@@ -19,6 +19,7 @@ import type { AutoUpdateOptions, CelestialEventCallback, CelestialEventName, Cel
 import { deepSkyMagnitude, isDeepSkyObjectVisibleAtZoom, isMovingBodyVisibleAtZoom, movingBodyMagnitude, starSymbolMagnitudeLimitAtZoom } from './visibility'
 
 export { StarCatalog } from './catalog'
+export { drawSelectionReticle } from './drawing'
 export type { CelestialTime } from './time'
 export type * from './types'
 
@@ -281,10 +282,13 @@ export class Celestial {
 		this.#autoUpdateOptions = null
 	}
 
-	// Resizes the map to a size in pixels and reprojects without recreating the instance.
+	// Resizes the map to a size in pixels and reprojects without recreating the instance. The cached
+	// element rect is dropped even when the size is unchanged, since the map may have moved (for example,
+	// re-attached to another container).
 	resize(width: number, height: number) {
 		const nextWidth = Math.max(1, Math.floor(width))
 		const nextHeight = Math.max(1, Math.floor(height))
+		this.#cachedRect = null
 
 		if (nextWidth === this.#options.width && nextHeight === this.#options.height) {
 			return
@@ -908,6 +912,12 @@ export class Celestial {
 		if (target.type === 'deepSky') {
 			const index = this.findDeepSkyObjectIndex(target.id)
 			return index >= 0 ? { type: 'deepSky', index, object: this.#deepSkyCatalog!.objects[index] } : null
+		}
+
+		if (target.type === 'constellationLabel') {
+			const labels = this.#constellations.labels ?? []
+			const index = labels.findIndex((e) => e.name === target.id)
+			return index >= 0 ? { type: 'constellationLabel', index, label: labels[index] } : null
 		}
 
 		const index = this.#movingBodyList.findIndex((e) => e.id === target.id)

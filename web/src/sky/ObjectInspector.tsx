@@ -54,20 +54,21 @@ export function ObjectInspector({ hasObserver, onSetObserver }: ObjectInspectorP
 		)
 	}
 
-	const { catalog, minorBody, position, events } = selection as SkySelection
+	const { catalog, minorBody, constellation, position, events } = selection as SkySelection
+	const designations = catalog ? catalog.designations : constellation ? [constellation.abbreviation, constellation.genitive] : []
 
 	return (
 		<>
 			<PanelSection title="Object">
 				<p className="m-0 text-base leading-6 font-semibold text-ink-100">{selection.name}</p>
 				<p className="m-0 text-ink-300">{typeOf(selection)}</p>
-				{catalog && catalog.designations.length > 0 && <p className="m-0 text-xs leading-5 text-ink-200">{catalog.designations.join(' · ')}</p>}
+				{designations.length > 0 && <p className="m-0 text-xs leading-5 text-ink-200">{designations.join(' · ')}</p>}
 				{selection.detailsError && <Note danger>Details unavailable: {selection.detailsError}</Note>}
 			</PanelSection>
+			<PositionSection selection={selection} />
+			{position && <ObserverSection position={position} events={events} hasObserver={hasObserver} onSetObserver={onSetObserver} isSolarSystem={selection.ref.kind === 'body' || selection.ref.kind === 'minorBody'} />}
 			{catalog && <CatalogSection catalog={catalog} />}
 			{minorBody && <MinorBodySection body={minorBody} />}
-			<PositionSection selection={selection} />
-			{position && <ObserverSection position={position} events={events} hasObserver={hasObserver} onSetObserver={onSetObserver} isSolarSystem={selection.ref.kind !== 'catalog'} />}
 		</>
 	)
 }
@@ -76,6 +77,7 @@ export function ObjectInspector({ hasObserver, onSetObserver }: ObjectInspectorP
 function typeOf(selection: SkySelection) {
 	if (selection.catalog) return `${selection.catalog.typeName} in ${selection.catalog.constellationName}`
 	if (selection.minorBody) return `${selection.minorBody.kind === 'comet' ? 'Comet' : 'Asteroid'} · ${selection.minorBody.orbitClass}`
+	if (selection.ref.kind === 'constellation') return 'Constellation'
 	if (selection.ref.kind === 'body') return selection.ref.code === '10' ? 'Star' : selection.ref.code === '301' ? 'Natural Satellite' : selection.ref.code === '999' ? 'Dwarf Planet' : 'Planet'
 	return selection.loading ? 'Loading…' : ''
 }
@@ -100,7 +102,7 @@ function CatalogSection({ catalog }: { readonly catalog: SkyCatalogObject }) {
 			{catalog.distance !== undefined && <Datum label="Distance">{formatStellarDistance(catalog.distance)}</Datum>}
 			{pm && (
 				<Datum label="Proper motion">
-					{toMas(catalog.pmRA * Math.cos(catalog.declination)).toFixed(1)}, {toMas(catalog.pmDEC).toFixed(1)} mas/yr
+					{toMas(catalog.pmRA * Math.cos(catalog.declination)).toFixed(2)}, {toMas(catalog.pmDEC).toFixed(2)} mas/yr
 				</Datum>
 			)}
 			<Datum label="RA (J2000)">{formatRightAscension(catalog.rightAscension)}</Datum>
@@ -152,6 +154,7 @@ function PositionSection({ selection }: { readonly selection: SkySelection }) {
 		<PanelSection title="Position">
 			{position ? (
 				<>
+					<Datum label="Constellation">{position.constellationName ?? position.constellation}</Datum>
 					<Datum label="RA (of date)">{formatRightAscension(position.rightAscension)}</Datum>
 					<Datum label="Dec (of date)">{formatDeclination(position.declination)}</Datum>
 					{selection.ref.kind !== 'catalog' && (
@@ -164,7 +167,7 @@ function PositionSection({ selection }: { readonly selection: SkySelection }) {
 					{position.magnitude !== undefined && selection.ref.kind !== 'catalog' && <Datum label="Magnitude">{formatMagnitude(position.magnitude)}</Datum>}
 					{position.illuminated !== undefined && selection.ref.kind !== 'catalog' && <Datum label="Illuminated">{(position.illuminated * 100).toFixed(1)}%</Datum>}
 					{position.elongation !== undefined && !(selection.ref.kind === 'body' && selection.ref.code === '10') && selection.ref.kind !== 'catalog' && <Datum label="Solar elongation">{formatDegrees(position.elongation)}</Datum>}
-					<Note>{positionNote(position)}</Note>
+					<Note>{positionNote(position, selection.ref.kind === 'constellation')}</Note>
 				</>
 			) : (
 				!positionError && <p className="m-0 text-ink-300">{loading ? 'Computing the position…' : 'No position.'}</p>
@@ -174,10 +177,12 @@ function PositionSection({ selection }: { readonly selection: SkySelection }) {
 	)
 }
 
-// Describes how and when a position was computed.
-function positionNote(position: SkyPosition) {
+// Describes how and when a position was computed; a constellation is located at its label, a fixed J2000
+// point near its center.
+function positionNote(position: SkyPosition, constellation: boolean) {
 	const source = position.source === 'horizons' ? 'JPL Horizons' : position.fallbackReason ? `local model (${FALLBACK_REASONS[position.fallbackReason]})` : 'local model'
-	return `Apparent ${position.center} place at ${formatLocalTime(position.time)}, from ${source}.`
+	const place = `Apparent ${position.center} place at ${formatLocalTime(position.time)}, from ${source}.`
+	return constellation ? `${place} The position is the constellation label, a fixed J2000 point near its center.` : place
 }
 
 // Horizontal coordinates and events for the observer, or an invitation to set one.

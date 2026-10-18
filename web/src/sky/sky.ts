@@ -1,14 +1,12 @@
-import type { MinorBody, MinorBodySearchResponse, SkyBodyPosition, SkyCatalogObject, SkyConstellations, SkyDeepSkyData, SkyEvents, SkyObjectCategory, SkyObjectRef, SkyObserver, SkyPosition, SkyPositionResponse, SkySearchResult, SkyStarData } from 'api'
+import type { MinorBody, MinorBodySearchResponse, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyEvents, SkyObjectCategory, SkyObjectRef, SkyObserver, SkyPosition, SkyPositionResponse, SkySearchResult, SkyStarData } from 'api'
 import { proxy } from 'valtio'
 import { responseError } from '../http'
 import type { SkyObserverSettings } from '../profile/profile'
-import type { CoordinateSystem, ViewState } from './celestial/celestial'
 import { refKey } from './objects'
 import { createRequestGuard } from './selection'
 
-// State and API access of the tab's Sky workspace: the selected object with its catalog data, minor
-// body data, position, and events; the contextual panel view; and the map view kept while the workspace
-// is not shown. The selection is independent of where it came from (a click on the map or a search
+// State and API access of the tab's Sky workspace: the selected object with its catalog, minor body,
+// or constellation data, position, and events; and the contextual panel view. The selection is independent of where it came from (a click on the map or a search
 // result); only the latest selection's responses are applied. Map data (stars, deep-sky objects, and
 // constellations) is downloaded once per tab and kept in memory, so returning to the workspace never
 // downloads it again. Positions are computed for the real current time: the Sky simulation clock is a
@@ -33,6 +31,8 @@ export interface SkySelection {
 	catalog?: SkyCatalogObject
 	// SBDB data of a minor body, once loaded.
 	minorBody?: MinorBody
+	// Data of a constellation, once loaded.
+	constellation?: SkyConstellation
 	// Position at the latest instant computed.
 	position?: SkyPosition
 	// Rise, transit, and set for the observer, when there is one.
@@ -54,9 +54,6 @@ export interface SkyState {
 	selection?: SkySelection
 	// Content of the contextual panel.
 	panel: SkyPanelView
-	// Map view saved when the workspace unmounts, with the coordinate system of the chart it belongs to;
-	// restored when the workspace mounts again with the same kind of chart.
-	view?: { readonly coordinateSystem: CoordinateSystem; readonly state: ViewState }
 }
 
 // What is known about an object when it is selected.
@@ -97,6 +94,12 @@ export const browserSkyIo: SkyIo = {
 	now: () => Date.now(),
 }
 
+// Faintest star magnitude downloaded for the map; fainter stars are still found by search.
+export const MAP_STAR_MAGNITUDE_LIMIT = 7
+
+// Age in milliseconds below which a position is fresh enough that a periodic refresh skips it.
+const FRESH_POSITION_MS = 20_000
+
 // Sky workspace state of the tab.
 export const skyState = proxy<SkyState>({ panel: 'inspector' })
 
@@ -128,7 +131,9 @@ function postJson<T>(io: SkyIo, input: string, body: unknown, signal?: AbortSign
 export function loadSkyMapData(io: SkyIo = browserSkyIo): Promise<SkyMapData> {
 	if (!mapData) {
 		const time = io.now()
-		mapData = Promise.all([fetchJson<SkyStarData>(io, `/api/sky/catalog/stars?time=${time}`), fetchJson<SkyDeepSkyData>(io, `/api/sky/catalog/dsos?time=${time}`), fetchJson<SkyConstellations>(io, `/api/sky/constellations?time=${time}`)]).then(([stars, dsos, constellations]) => ({ stars, dsos, constellations }))
+		mapData = Promise.all([fetchJson<SkyStarData>(io, `/api/sky/catalog/stars?time=${time}&magnitude=${MAP_STAR_MAGNITUDE_LIMIT}`), fetchJson<SkyDeepSkyData>(io, `/api/sky/catalog/dsos?time=${time}`), fetchJson<SkyConstellations>(io, `/api/sky/constellations?time=${time}`)]).then(
+			([stars, dsos, constellations]) => ({ stars, dsos, constellations }),
+		)
 		mapData.catch(() => (mapData = undefined))
 	}
 
@@ -177,10 +182,12 @@ export function clearSkySelection(state: SkyState) {
 	state.selection = undefined
 }
 
-// Recomputes the position of the selection, keeping its details, after the observer changed or time
-// passed.
-export function refreshSkySelection(state: SkyState, observer: SkyObserverSettings | undefined, io: SkyIo = browserSkyIo): Promise<void> {
-	return loadSelection(state, observer, io, false)
+// Recomputes the position of the selection, keeping its details, as time passes. Skips a selection
+// still loading or whose position is fresh, so remounting the workspace does not repeat requests.
+export async function refreshSkySelection(state: SkyState, observer: SkyObserverSettings | undefined, io: SkyIo = browserSkyIo): Promise<void> {
+	const selection = state.selection
+	if (!selection || selection.loading || (selection.position && io.now() - selection.position.time < FRESH_POSITION_MS)) return
+	await loadSelection(state, observer, io, false)
 }
 
 // Recomputes the position of the selection for a new observer, first dropping the position and events
@@ -215,6 +222,22 @@ async function loadSelection(state: SkyState, observer: SkyObserverSettings | un
 					state.selection!.catalog = catalog
 					state.selection!.name = catalog.name
 					state.selection!.category = catalog.category
+					state.selection!.detailsError = undefined
+				},
+				(error: unknown) => {
+					if (applies()) state.selection!.detailsError = errorMessage(error)
+				},
+			),
+		)
+	}
+
+	if (ref.kind === 'constellation' && (details || !selection.constellation)) {
+		tasks.push(
+			fetchJson<SkyConstellation>(io, `/api/sky/constellations/${ref.code}`, { signal: request.signal }).then(
+				(constellation) => {
+					if (!applies()) return
+					state.selection!.constellation = constellation
+					state.selection!.name = constellation.name
 					state.selection!.detailsError = undefined
 				},
 				(error: unknown) => {

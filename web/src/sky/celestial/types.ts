@@ -371,11 +371,12 @@ export interface ViewTransform {
 	k: number
 }
 
-// Object to select programmatically: a loaded star, deep-sky object, or moving body by its id.
+// Object to select programmatically: a loaded star, deep-sky object, moving body, or constellation label
+// by its id.
 export interface SelectionTarget {
 	// Kind of object.
-	readonly type: 'star' | 'deepSky' | 'movingBody'
-	// Catalog id of the star or deep-sky object, or id of the moving body.
+	readonly type: 'star' | 'deepSky' | 'movingBody' | 'constellationLabel'
+	// Catalog id of the star or deep-sky object, id of the moving body, or name of the label.
 	readonly id: StarId
 }
 

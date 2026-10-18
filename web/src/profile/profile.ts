@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
 import { CAMERA_ROLES, type CameraRole, conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
 import { type CaptureMode, isCaptureMode, WORKSPACE_IDS, type WorkspaceId } from '../shell/route'
+import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
 import { isRecord, parseJson, readText, type Stores, writeText } from '../storage'
 
 // Profiles of the browser and the profile active in this tab. Profiles are a versioned collection in
@@ -60,6 +61,8 @@ export interface SkySettings {
 	// Observer location; absent until the user sets one, and then the sky is shown without a horizon
 	// and positions are geocentric.
 	observer?: SkyObserverSettings
+	// What the star map shows; absent until the user changes a preference, and then every default holds.
+	display?: SkyDisplaySettings
 }
 
 // Presentation preferences of one Capture camera view. They belong to the camera role, not to the
@@ -174,11 +177,30 @@ function isKnownTimeZone(timeZone: string) {
 	}
 }
 
-// Restores persisted Sky preferences, dropping an invalid observer.
+// Restores persisted display preferences, keeping only known layers and a magnitude limit in range.
+function normalizeSkyDisplay(value: unknown): SkyDisplaySettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const display: SkyDisplaySettings = { layers: {} }
+
+	if (isRecord(value.layers)) {
+		for (const [id, visible] of Object.entries(value.layers)) {
+			if (SKY_LAYER_IDS.has(id) && typeof visible === 'boolean') display.layers[id as SkyLayerId] = visible
+		}
+	}
+
+	const limit = value.magnitudeLimit
+	if (typeof limit === 'number' && limit >= MIN_MAGNITUDE_LIMIT && limit <= MAP_STAR_MAGNITUDE_LIMIT) display.magnitudeLimit = limit
+	return display
+}
+
+// Restores persisted Sky preferences, dropping an invalid observer and invalid display preferences.
 function normalizeSky(value: unknown, sky: SkySettings) {
 	if (!isRecord(value)) return
 	const observer = normalizeSkyObserver(value.observer)
 	if (observer) sky.observer = observer
+	const display = normalizeSkyDisplay(value.display)
+	if (display) sky.display = display
 }
 
 // Restores persisted preferences, falling back to the default of every missing or invalid preference.
@@ -507,6 +529,26 @@ export function setSkyObserver(state: ProfileState, observer: SkyObserverSetting
 	profile.settings.sky.observer = normalized
 	touch(profile)
 	return true
+}
+
+// Shows or hides a star map layer in the active profile.
+export function setSkyLayerVisible(state: ProfileState, layer: SkyLayerId, visible: boolean) {
+	const profile = activeProfile(state)
+	const display = (profile.settings.sky.display ??= { layers: {} })
+	if (display.layers[layer] === visible) return
+	display.layers[layer] = visible
+	touch(profile)
+}
+
+// Sets the faintest star magnitude the star map draws in the active profile, kept within
+// [MIN_MAGNITUDE_LIMIT, MAP_STAR_MAGNITUDE_LIMIT].
+export function setSkyMagnitudeLimit(state: ProfileState, limit: number) {
+	const profile = activeProfile(state)
+	const display = (profile.settings.sky.display ??= { layers: {} })
+	const value = Math.min(MAP_STAR_MAGNITUDE_LIMIT, Math.max(MIN_MAGNITUDE_LIMIT, limit))
+	if (display.magnitudeLimit === value) return
+	display.magnitudeLimit = value
+	touch(profile)
 }
 
 // Forgets a removed saved connection in every profile: profiles that selected it lose their selection,

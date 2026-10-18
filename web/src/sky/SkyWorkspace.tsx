@@ -1,16 +1,18 @@
 import type { MinorBody, SkySearchResult } from 'api'
-import { useEffect, useMemo } from 'react'
+import { type ReactNode, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { activeProfile, profileState, setPanelOpen } from '../profile/profile'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
+import { IconButton } from '../ui/IconButton'
 import type { CoordinateSystem } from './celestial/celestial'
 import { type SkyClockMode, skyClock } from './clock'
+import { DisplayPanel } from './DisplayPanel'
 import { HoverTooltip } from './HoverTooltip'
 import { ObjectInspector } from './ObjectInspector'
 import { ObserverPanel } from './ObserverPanel'
 import { observerKey, planetarium, planetariumState } from './planetarium'
-import { changeSkyObserver, REALTIME_REFRESH, refreshSkySelection, type SkyRefreshOptions, selectSkyObject, skyState } from './sky'
+import { changeSkyObserver, REALTIME_REFRESH, refreshSkySelection, type SkyPanelView, type SkyRefreshOptions, selectSkyObject, skyState } from './sky'
 import { SkySearch } from './SkySearch'
 import { SkyView } from './SkyView'
 import { TimeController } from './TimeController'
@@ -34,7 +36,8 @@ let appliedObserver: string | undefined
 // Sky workspace.
 export function SkyWorkspace() {
 	const profiles = useSnapshot(profileState)
-	const observer = activeProfile(profiles).settings.sky.observer
+	const settings = activeProfile(profiles).settings.sky
+	const observer = settings.observer
 	const sky = useSnapshot(skyState)
 	const clock = useSnapshot(skyClock)
 	const { status, error } = useSnapshot(planetariumState)
@@ -51,6 +54,11 @@ export function SkyWorkspace() {
 		if (appliedObserver !== undefined && appliedObserver !== key) void changeSkyObserver(skyState, current)
 		appliedObserver = key
 	}, [map, key])
+
+	// Applies the display preferences of the active profile to the map, in place.
+	useEffect(() => {
+		map.applyDisplay(settings.display)
+	}, [map, settings.display])
 
 	// Highlights the selection whenever it, its position, or the map data change.
 	useEffect(() => {
@@ -77,25 +85,38 @@ export function SkyWorkspace() {
 		if (result.ref.kind === 'minorBody') void map.locateMinorBody(result.ref, minorBody)
 	}
 
-	// Shows the observer settings in the panel.
-	function openObserver() {
-		skyState.panel = 'observer'
+	// Shows a view in the panel, opening the panel.
+	function openPanel(view: SkyPanelView) {
+		skyState.panel = view
 		setPanelOpen(profileState, 'sky', true)
+	}
+
+	// Shows a settings view, or returns to the Object Inspector when it is already shown.
+	function togglePanel(view: SkyPanelView) {
+		if (sky.panel === view && activeProfile(profileState).settings.panels.sky !== false) skyState.panel = 'inspector'
+		else openPanel(view)
 	}
 
 	const location = observer ? `${observer.name ? `${observer.name} · ` : ''}${observer.latitude.toFixed(4)}°, ${observer.longitude.toFixed(4)}°` : 'No location'
 	const context = clock.mode === 'now' ? location : `${location} · Simulated time`
 
-	const panel = sky.panel === 'observer' ? { title: 'Observer', content: <ObserverPanel key={key} observer={observer} onDone={() => (skyState.panel = 'inspector')} /> } : { title: 'Object Inspector', content: <ObjectInspector hasObserver={!!observer} onSetObserver={openObserver} timeZone={observer?.timeZone} /> }
+	const panels: Record<SkyPanelView, () => { title: string; content: ReactNode }> = {
+		inspector: () => ({ title: 'Object Inspector', content: <ObjectInspector hasObserver={!!observer} onSetObserver={() => openPanel('observer')} timeZone={observer?.timeZone} /> }),
+		observer: () => ({ title: 'Observer', content: <ObserverPanel key={key} observer={observer} onDone={() => (skyState.panel = 'inspector')} /> }),
+		display: () => ({ title: 'Display', content: <DisplayPanel sky={settings} local={coordinateSystem === 'horizontal'} /> }),
+	}
 
 	return (
-		<WorkspaceLayout workspace="sky" title="Sky" context={<span className="truncate text-xs text-ink-300 max-sm:hidden">{context}</span>} panel={panel}>
+		<WorkspaceLayout workspace="sky" title="Sky" context={<span className="truncate text-xs text-ink-300 max-sm:hidden">{context}</span>} panel={panels[sky.panel]()}>
 			<div className="flex h-full flex-col bg-base-000">
 				<div className="flex h-11 flex-none items-center gap-2 border-b border-line-100 bg-base-100 px-2">
 					<SkySearch onSelect={handleSearchSelect} />
-					<Button variant="secondary" size="sm" onClick={openObserver} className="ml-auto max-w-56 truncate">
-						{observer ? (observer.name ?? 'Location') : 'Set Location'}
-					</Button>
+					<div className="ml-auto flex flex-none items-center gap-1">
+						<IconButton icon="layers" label="Display" pressed={sky.panel === 'display'} onClick={() => togglePanel('display')} />
+						<Button variant="secondary" size="sm" onClick={() => togglePanel('observer')} className="max-w-56 truncate">
+							{observer ? (observer.name ?? 'Location') : 'Set Location'}
+						</Button>
+					</div>
 				</div>
 				<div className="relative isolate min-h-0 flex-1">
 					<SkyView planetarium={map} />

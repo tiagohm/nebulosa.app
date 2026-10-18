@@ -15,7 +15,7 @@ import { FixedGridSpatialIndex, isPickableLayerId, objectLayerId, PICK_TYPE_CONS
 import { CanvasRenderer } from './renderer'
 import { type CelestialTime, unixTimeOf } from './time'
 // oxfmt-ignore
-import type { AutoUpdateOptions, CelestialEventCallback, CelestialEventName, CelestialObject, CelestialOptions, CelestialShape, ConstellationData, DeepSkyObject, MilkyWayCoordinates, MilkyWayStep, MovingBody, ObserverLocation, ProjectionType, RenderState, ResolvedCelestialOptions, SelectionTarget, Star, StarCatalogInput, ViewState, ViewTransform } from './types'
+import type { AutoUpdateOptions, CelestialEventCallback, CelestialEventName, CelestialObject, CelestialOptions, CelestialShape, ConstellationData, DeepSkyObject, MilkyWayCoordinates, MilkyWayStep, MovingBody, ObserverLocation, ProjectionType, RenderState, ResolvedCelestialOptions, ResolvedReferenceLinesOptions, SelectionTarget, Star, StarCatalogInput, ViewState, ViewTransform } from './types'
 import { deepSkyMagnitude, isDeepSkyObjectVisibleAtZoom, isMovingBodyVisibleAtZoom, movingBodyMagnitude, starSymbolMagnitudeLimitAtZoom } from './visibility'
 
 export { StarCatalog } from './catalog'
@@ -219,6 +219,17 @@ export class Celestial {
 		if (this.#options.stars.labels !== visible) {
 			this.#options.stars.labels = visible
 			this.#renderer.markDirty('stars')
+			this.requestRender()
+		}
+	}
+
+	// Shows or hides one reference line (local meridian, celestial equator, or ecliptic) without reprojecting.
+	setReferenceLineVisible(line: keyof ResolvedReferenceLinesOptions, visible: boolean) {
+		const style = this.#options.referenceLines[line]
+
+		if (style.enabled !== visible) {
+			style.enabled = visible
+			this.#renderer.markDirty('referenceLines')
 			this.requestRender()
 		}
 	}

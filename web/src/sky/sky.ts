@@ -3,6 +3,7 @@ import { proxy } from 'valtio'
 import { responseError } from '../http'
 import type { SkyObserverSettings } from '../profile/profile'
 import { skyClock, skyTime } from './clock'
+import { MAP_STAR_MAGNITUDE_LIMIT } from './display'
 import { refKey } from './objects'
 import { createRequestGuard } from './selection'
 
@@ -50,7 +51,7 @@ export interface SkySelection {
 }
 
 // Content of the contextual panel.
-export type SkyPanelView = 'inspector' | 'observer'
+export type SkyPanelView = 'inspector' | 'observer' | 'display'
 
 // Sky workspace state of the tab.
 export interface SkyState {
@@ -107,9 +108,6 @@ export interface SkyRefreshOptions {
 	// Calculation path: `accurate` asks Horizons first; `fast` is local only and has no events.
 	readonly mode: 'fast' | 'accurate'
 }
-
-// Faintest star magnitude downloaded for the map; fainter stars are still found by search.
-export const MAP_STAR_MAGNITUDE_LIMIT = 7
 
 // Age in milliseconds below which a position is fresh enough that a periodic refresh skips it.
 const FRESH_POSITION_MS = 20_000

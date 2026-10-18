@@ -3,9 +3,10 @@ import { proxy, subscribe } from 'valtio'
 import type { SkyObserverSettings } from '../profile/profile'
 import { Celestial, type CelestialObject, type CelestialOptions, type CelestialShape, type ConstellationLine, type CoordinateSystem, drawSelectionReticle, type MovingBody, type MovingBodyType } from './celestial/celestial'
 import { skyClock, skyTime } from './clock'
+import { applySkyDisplay, MAP_STAR_MAGNITUDE_LIMIT, type SkyDisplaySettings } from './display'
 import { hoverLabel, type MapNames, movingBodyId, refKey, refOfCelestialObject, selectionTargets } from './objects'
 import { createRequestGuard } from './selection'
-import { apiObserver, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, MAP_STAR_MAGNITUDE_LIMIT, mapDataCovers, selectSkyObject, skyState } from './sky'
+import { apiObserver, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapDataCovers, selectSkyObject, skyState } from './sky'
 
 // The Sky workspace's star map, kept for the whole tab: the Celestial instance, its catalogs, the moving
 // bodies, and the selection highlight live here rather than in React, so leaving the workspace only
@@ -210,6 +211,12 @@ export class Planetarium {
 		this.#observer = observer
 		if (observer) this.celestial.setObserver({ latitude: observer.latitude, longitude: observer.longitude, elevation: observer.elevation })
 		this.celestial.setLayerVisible('horizon', !!observer)
+	}
+
+	// Applies the display preferences in place, keeping the view and data; the local meridian is drawn
+	// only on the local sky.
+	applyDisplay(display: Readonly<SkyDisplaySettings> | undefined) {
+		applySkyDisplay(this.celestial, display, this.coordinateSystem === 'horizontal', MAP_STAR_MAGNITUDE_LIMIT)
 	}
 
 	// Highlights the selection: the drawn object when there is one, otherwise a marker at its position

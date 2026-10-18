@@ -3,7 +3,7 @@ import { proxy } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createProfile, deleteProfile, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectProfile, setCameraReticle, setLastImageDirectory, setPanelOpen, setSkyObserver } from './profile'
+import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createProfile, deleteProfile, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectProfile, setCameraReticle, setLastImageDirectory, setPanelOpen, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver } from './profile'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }
@@ -393,6 +393,26 @@ describe('sky settings', () => {
 
 		setSkyObserver(state, { latitude: 10, longitude: 20, elevation: 30, timeZone: 'Mars/Olympus_Mons' })
 		expect(state.profiles[0].settings.sky.observer).toEqual({ latitude: 10, longitude: 20, elevation: 30 })
+	})
+
+	test('restores display preferences, dropping unknown layers and limits out of range', () => {
+		const stores = newStores()
+		const profiles = [
+			{ id: 'a', name: 'A', settings: { sky: { display: { layers: { deepSky: false, milkyWay: true, grid: 'no' }, magnitudeLimit: 5 } } } },
+			{ id: 'b', name: 'B', settings: { sky: { display: { layers: { stars: false }, magnitudeLimit: 12 } } } },
+		]
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
+		const state = load(stores)
+
+		expect(state.profiles[0].settings.sky.display).toEqual({ layers: { deepSky: false }, magnitudeLimit: 5 })
+		expect(state.profiles[1].settings.sky.display).toEqual({ layers: { stars: false } })
+	})
+
+	test('sets display preferences of the active profile', () => {
+		const state = load(newStores())
+		setSkyLayerVisible(state, 'constellationBoundaries', true)
+		setSkyMagnitudeLimit(state, 0)
+		expect(state.profiles[0].settings.sky.display).toEqual({ layers: { constellationBoundaries: true }, magnitudeLimit: 1 })
 	})
 
 	test('a duplicated profile keeps its own observer', () => {

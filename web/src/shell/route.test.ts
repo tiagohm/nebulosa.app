@@ -16,6 +16,8 @@ describe('parse', () => {
 	test('reads workspaces, capture cameras, and capture modes', () => {
 		expect(parseRoute('/images')).toEqual({ workspace: 'images' })
 		expect(parseRoute('/tools/')).toEqual({ workspace: 'tools' })
+		expect(parseRoute('/tools/alpaca-server')).toEqual({ workspace: 'tools', tool: 'alpaca-server' })
+		expect(parseRoute('/tools/bogus')).toEqual({ workspace: 'tools' })
 		expect(parseRoute('/capture/guide/mount-nudge')).toEqual({ workspace: 'capture', camera: 'guide', mode: 'mount-nudge' })
 	})
 
@@ -32,7 +34,7 @@ describe('parse', () => {
 	})
 
 	test('round-trips canonical paths', () => {
-		for (const path of ['/capture/main/camera', '/capture/guide/polar-alignment', '/images', '/sky', '/tools']) expect(routePath(parseRoute(path))).toBe(path)
+		for (const path of ['/capture/main/camera', '/capture/guide/polar-alignment', '/images', '/sky', '/tools', '/tools/calculator']) expect(routePath(parseRoute(path))).toBe(path)
 	})
 })
 

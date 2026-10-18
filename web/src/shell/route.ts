@@ -1,10 +1,11 @@
 import { proxy } from 'valtio'
 
-// Navigation state of the tab: the active workspace and, for Capture, its camera view and operational
-// mode. The URL path is the source of truth, so each tab navigates independently and a reload reopens
-// the same context; the camera and mode selected last are remembered by the active profile, which
-// builds the Capture route opened from the navigation rail. Paths are /capture/<camera>/<mode>,
-// /images, /sky, and /tools; anything else opens the default route.
+// Navigation state of the tab: the active workspace, for Capture its camera view and operational mode,
+// and for Tools the standalone tool shown. The URL path is the source of truth, so each tab navigates
+// independently and a reload reopens the same context; the camera and mode selected last are
+// remembered by the active profile, which builds the Capture route opened from the navigation rail.
+// Paths are /capture/<camera>/<mode>, /images, /sky, /tools, and /tools/<tool>; anything else opens
+// the default route.
 
 // Main workspaces, in navigation order.
 export const WORKSPACE_IDS = ['capture', 'images', 'sky', 'tools'] as const
@@ -35,8 +36,23 @@ export interface CaptureRoute {
 	readonly mode: CaptureMode
 }
 
-// Location within the application: a workspace and, for Capture, the camera view and its mode.
-export type Route = CaptureRoute | { readonly workspace: Exclude<WorkspaceId, 'capture'> }
+// Standalone tools of the Tools workspace; also the second path segment of a Tools route.
+export const TOOL_IDS = ['calculator', 'solar-eclipse-map', 'lunar-eclipse-map', 'alpaca-server'] as const
+
+// Identifier of a standalone tool.
+export type ToolId = (typeof TOOL_IDS)[number]
+
+// Location in the Tools workspace: the catalog, or the view of one tool.
+export interface ToolsRoute {
+	// Tools workspace.
+	readonly workspace: 'tools'
+	// Tool shown; absent for the catalog.
+	readonly tool?: ToolId
+}
+
+// Location within the application: a workspace and, for Capture, the camera view and its mode, or for
+// Tools, the tool shown.
+export type Route = CaptureRoute | ToolsRoute | { readonly workspace: Exclude<WorkspaceId, 'capture' | 'tools'> }
 
 // Route opened for an empty or unknown path.
 export const DEFAULT_ROUTE: Route = { workspace: 'capture', camera: 'main', mode: 'camera' }
@@ -60,6 +76,11 @@ function isCaptureCamera(value: string): value is CaptureCamera {
 	return (CAPTURE_CAMERAS as readonly string[]).includes(value)
 }
 
+// Whether value names a standalone tool.
+export function isToolId(value: unknown): value is ToolId {
+	return (TOOL_IDS as readonly unknown[]).includes(value)
+}
+
 // Whether value names a Capture mode.
 export function isCaptureMode(value: unknown): value is CaptureMode {
 	return (CAPTURE_MODES as readonly unknown[]).includes(value)
@@ -67,7 +88,8 @@ export function isCaptureMode(value: unknown): value is CaptureMode {
 
 // Returns the route of a URL path. An unknown workspace gives DEFAULT_ROUTE; a Capture path without a
 // known camera opens the main camera, reading the path written before camera views existed
-// (/capture/<mode>); an unknown mode opens the camera mode; extra segments are ignored.
+// (/capture/<mode>); an unknown mode opens the camera mode; an unknown tool opens the Tools catalog;
+// extra segments are ignored.
 export function parseRoute(pathname: string): Route {
 	const [workspace = '', first = '', second = ''] = pathname.split('/').filter(Boolean)
 	if (!isWorkspaceId(workspace)) return DEFAULT_ROUTE
@@ -78,12 +100,16 @@ export function parseRoute(pathname: string): Route {
 		return { workspace, camera, mode: isCaptureMode(mode) ? mode : 'camera' }
 	}
 
+	if (workspace === 'tools') return isToolId(first) ? { workspace, tool: first } : { workspace }
+
 	return { workspace }
 }
 
 // Returns the canonical URL path of a route.
 export function routePath(route: Route): string {
-	return route.workspace === 'capture' ? `/capture/${route.camera}/${route.mode}` : `/${route.workspace}`
+	if (route.workspace === 'capture') return `/capture/${route.camera}/${route.mode}`
+	if (route.workspace === 'tools' && route.tool) return `/tools/${route.tool}`
+	return `/${route.workspace}`
 }
 
 // Navigates the tab to a route, adding a history entry when the path changes. Navigation only changes

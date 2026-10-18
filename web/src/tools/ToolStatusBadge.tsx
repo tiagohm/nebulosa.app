@@ -1,13 +1,11 @@
 import { tv } from 'tailwind-variants'
 import type { ToolStatus } from './tools'
 
-// Badge with a tool's implementation status, so a preview or planned tool is never mistaken for an
-// operational one.
+// Badge with a tool's implementation status, so a planned tool is never mistaken for an operational one.
 
 // Display text of each implementation status.
 const TOOL_STATUS_LABELS: Readonly<Record<ToolStatus, string>> = {
 	available: 'Available',
-	preview: 'Preview',
 	planned: 'Coming Soon',
 }
 
@@ -17,7 +15,6 @@ const statusBadge = tv({
 	variants: {
 		status: {
 			available: 'border-success/40 text-success',
-			preview: 'border-accent/40 text-accent',
 			planned: 'border-line-100 text-ink-300',
 		},
 	},

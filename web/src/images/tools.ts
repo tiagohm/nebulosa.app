@@ -1,17 +1,16 @@
 import type { ComponentType } from 'react'
-import { toolDefinition } from '../tools/tools'
 import { ImageInspector } from './ImageInspector'
 import type { ImageDocument, ImageViewState } from './images'
 
 // Static registry of the contextual tools of the Images workspace. A tool replaces the contextual panel
 // of one document, and each document remembers the tool it shows, so two documents can show different
-// tools. The Image Inspector is the default; the analysis and processing tools are listed from the tool
-// catalog and cannot be selected until they have a panel.
+// tools. The Image Inspector is the default; the analysis and processing tools are listed but cannot be
+// selected until they have a panel. This registry is the only place Images tools are declared.
 
 // Contextual tools of the Images workspace, in selector order.
 export const IMAGE_TOOLS = ['inspector', 'plate-solver', 'star-detection', 'streak-detection', 'image-processing'] as const
 
-// Identifier of an Images contextual tool; except for the inspector, also its id in the tool catalog.
+// Identifier of an Images contextual tool.
 export type ImageToolId = (typeof IMAGE_TOOLS)[number]
 
 // Properties of a tool's contextual panel.
@@ -46,19 +45,18 @@ export interface ImageToolDefinition {
 	readonly panel?: ComponentType<ImageToolPanelProps>
 }
 
-// Returns the definition of a tool listed in the tool catalog, with no panel yet.
-function catalogTool(id: Exclude<ImageToolId, 'inspector'>, outputs: ImageToolDefinition['outputs']): ImageToolDefinition {
-	const label = toolDefinition(id)?.label ?? id
+// Returns the definition of a tool that has no panel yet.
+function plannedTool(id: Exclude<ImageToolId, 'inspector'>, label: string, outputs: ImageToolDefinition['outputs']): ImageToolDefinition {
 	return { id, label, panelTitle: label, outputs }
 }
 
 // Definition of every Images contextual tool, by id.
 export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefinition>> = {
 	inspector: { id: 'inspector', label: 'Image Inspector', panelTitle: 'Image Inspector', outputs: ['display', 'derived'], panel: ImageInspector },
-	'plate-solver': catalogTool('plate-solver', ['analysis']),
-	'star-detection': catalogTool('star-detection', ['analysis']),
-	'streak-detection': catalogTool('streak-detection', ['analysis']),
-	'image-processing': catalogTool('image-processing', ['derived']),
+	'plate-solver': plannedTool('plate-solver', 'Plate Solver', ['analysis']),
+	'star-detection': plannedTool('star-detection', 'Star Detection', ['analysis']),
+	'streak-detection': plannedTool('streak-detection', 'Streak Detection', ['analysis']),
+	'image-processing': plannedTool('image-processing', 'Image Processing', ['derived']),
 }
 
 // Returns why a tool cannot be selected, or undefined when it can.

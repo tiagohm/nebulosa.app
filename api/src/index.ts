@@ -10,7 +10,8 @@ import { broadcast, websocket } from './websocket'
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
 export type { DeviceEvent, DeviceSummary, ManagedDeviceType } from './devices'
 export type { DirectoryListing, FileEntry } from './files'
-export type { SkyCatalogObject, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
+export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
+export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
 export type { Binning, DeriveRequest, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from './images'
 export { websocket }
 

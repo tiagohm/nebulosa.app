@@ -1,3 +1,5 @@
+import type { EphemerisMode, SkyEvents, SkyObserver, SkyPosition } from './ephemeris'
+
 // Contracts of the sky API shared with the web client: object identity, search results, catalog details,
 // and the columnar data the star map renders. Angles are radians, times Unix milliseconds (UTC), and
 // distances AU unless a name says otherwise.
@@ -132,4 +134,89 @@ export interface SkyConstellations {
 	readonly boundaries: readonly (readonly (readonly [number, number])[])[]
 	// Labels at the constellation centers.
 	readonly labels: readonly { readonly name: string; readonly rightAscension: number; readonly declination: number }[]
+}
+
+// Orbital element or physical parameter of a minor body, as published by SBDB.
+export interface MinorBodyParameter {
+	// SBDB parameter name, such as "e" or "H".
+	readonly name: string
+	// Human-readable title, such as "eccentricity".
+	readonly title: string
+	// Value as published.
+	readonly value: string
+	// Units of the value, when it has any.
+	readonly units?: string
+}
+
+// Asteroid or comet of the JPL Small-Body Database.
+export interface MinorBody {
+	// SPK-ID, the stable identity of the body.
+	readonly spkId: string
+	// Primary designation, such as "1" or "1P".
+	readonly designation: string
+	// Full name, such as "1 Ceres (A801 AA)".
+	readonly name: string
+	// Kind of body.
+	readonly kind: 'asteroid' | 'comet'
+	// Whether the body is numbered.
+	readonly numbered: boolean
+	// Whether it is a near-Earth object.
+	readonly neo: boolean
+	// Whether it is a potentially hazardous asteroid.
+	readonly pha: boolean
+	// Orbit class, such as "Main-belt Asteroid".
+	readonly orbitClass: string
+	// Epoch of the osculating elements, Julian date (TDB); absent when SBDB does not publish one.
+	readonly epoch?: number
+	// Date of the orbit solution, as published.
+	readonly solutionDate: string
+	// Orbital elements and physical parameters.
+	readonly parameters: readonly MinorBodyParameter[]
+}
+
+// Outcome of a minor body search: one body, several candidates to search again by designation, or none.
+export type MinorBodySearchResponse = { readonly kind: 'found'; readonly body: MinorBody } | { readonly kind: 'ambiguous'; readonly matches: readonly { readonly designation: string; readonly name: string }[] } | { readonly kind: 'notFound'; readonly message: string }
+
+// Position of a major body for drawing it on the map.
+export interface SkyBodyPosition {
+	// Horizons command.
+	readonly code: SolarSystemBodyCode
+	// Kind of body, which selects its map symbol.
+	readonly kind: 'sun' | 'moon' | 'mercury' | 'venus' | 'mars' | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto'
+	// Display name.
+	readonly name: string
+	// Apparent right ascension of date in radians.
+	readonly rightAscension: number
+	// Apparent declination of date in radians.
+	readonly declination: number
+	// Apparent visual magnitude; absent when unknown.
+	readonly magnitude?: number
+}
+
+// Body of POST /api/sky/position.
+export interface SkyPositionRequest {
+	// Object to locate.
+	readonly target: SkyObjectRef
+	// Instant, Unix milliseconds (UTC).
+	readonly time: number
+	// Observer; the geocenter when absent, which also omits azimuth, altitude, and events.
+	readonly observer?: SkyObserver
+	// `accurate` (default) asks Horizons first for solar-system objects; `fast` is local only and omits events.
+	readonly mode?: EphemerisMode
+}
+
+// Response of POST /api/sky/position.
+export interface SkyPositionResponse {
+	// Position at the requested instant.
+	readonly position: SkyPosition
+	// Rise, transit, and set; absent without an observer, in fast mode, or without a local model.
+	readonly events?: SkyEvents
+}
+
+// Body of POST /api/sky/bodies.
+export interface SkyBodiesRequest {
+	// Instant, Unix milliseconds (UTC).
+	readonly time: number
+	// Observer; the geocenter when absent.
+	readonly observer?: SkyObserver
 }

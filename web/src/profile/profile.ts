@@ -36,6 +36,27 @@ export interface ProfileSettings {
 	lastImageDirectory?: string
 	// Camera view and per-camera presentation preferences of the Capture workspace.
 	capture: CaptureSettings
+	// Preferences of the Sky workspace.
+	sky: SkySettings
+}
+
+// Location the Sky workspace observes from. Degrees and meters, entered manually; never assumed.
+export interface SkyObserverSettings {
+	// Name of the place, such as "Backyard"; absent when not named.
+	name?: string
+	// Geodetic latitude in degrees, north positive, [-90, 90].
+	latitude: number
+	// Geodetic longitude in degrees, east positive, [-180, 180].
+	longitude: number
+	// Height above the ellipsoid in meters, [-500, 9000].
+	elevation: number
+}
+
+// Sky preferences of a profile.
+export interface SkySettings {
+	// Observer location; absent until the user sets one, and then the sky is shown without a horizon
+	// and positions are geocentric.
+	observer?: SkyObserverSettings
 }
 
 // Presentation preferences of one Capture camera view. They belong to the camera role, not to the
@@ -101,7 +122,7 @@ export const profileState = proxy<ProfileState>({ profiles: [], activeId: '', op
 
 // Returns the default preferences of a new profile.
 export function defaultSettings(): ProfileSettings {
-	return { panels: {}, capture: { views: {} } }
+	return { panels: {}, capture: { views: {} }, sky: {} }
 }
 
 // Restores persisted Capture preferences, dropping unknown camera roles and invalid values. Profiles
@@ -120,6 +141,33 @@ function normalizeCapture(value: unknown, capture: CaptureSettings) {
 	}
 }
 
+// Lowest elevation accepted for an observer in meters (below the Dead Sea shore, -430 m).
+const MIN_OBSERVER_ELEVATION = -500
+
+// Highest elevation accepted for an observer in meters (above Everest, 8849 m).
+const MAX_OBSERVER_ELEVATION = 9000
+
+// Returns a valid observer, or undefined for anything out of range or incomplete.
+export function normalizeSkyObserver(value: unknown): SkyObserverSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const { latitude, longitude, elevation, name } = value
+	if (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90) return undefined
+	if (typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return undefined
+	if (typeof elevation !== 'number' || !Number.isFinite(elevation) || elevation < MIN_OBSERVER_ELEVATION || elevation > MAX_OBSERVER_ELEVATION) return undefined
+
+	const observer: SkyObserverSettings = { latitude, longitude, elevation }
+	if (typeof name === 'string' && name.trim()) observer.name = name.trim()
+	return observer
+}
+
+// Restores persisted Sky preferences, dropping an invalid observer.
+function normalizeSky(value: unknown, sky: SkySettings) {
+	if (!isRecord(value)) return
+	const observer = normalizeSkyObserver(value.observer)
+	if (observer) sky.observer = observer
+}
+
 // Restores persisted preferences, falling back to the default of every missing or invalid preference.
 function normalizeSettings(value: unknown): ProfileSettings {
 	const settings = defaultSettings()
@@ -135,6 +183,7 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	if (typeof value.lastImageDirectory === 'string' && value.lastImageDirectory) settings.lastImageDirectory = value.lastImageDirectory
 
 	normalizeCapture(value.capture, settings.capture)
+	normalizeSky(value.sky, settings.sky)
 
 	return settings
 }
@@ -424,6 +473,27 @@ export function setCameraReticle(state: ProfileState, role: CameraRole, reticle:
 	if (view.reticle === reticle) return
 	view.reticle = reticle
 	touch(profile)
+}
+
+// Sets the Sky observer of the active profile, or clears it with undefined. Returns false, changing
+// nothing, for an observer out of range.
+export function setSkyObserver(state: ProfileState, observer: SkyObserverSettings | undefined): boolean {
+	const profile = activeProfile(state)
+
+	if (observer === undefined) {
+		if (!profile.settings.sky.observer) return true
+		delete profile.settings.sky.observer
+		touch(profile)
+		return true
+	}
+
+	const normalized = normalizeSkyObserver(observer)
+	if (!normalized) return false
+	const current = profile.settings.sky.observer
+	if (current && current.latitude === normalized.latitude && current.longitude === normalized.longitude && current.elevation === normalized.elevation && current.name === normalized.name) return true
+	profile.settings.sky.observer = normalized
+	touch(profile)
+	return true
 }
 
 // Forgets a removed saved connection in every profile: profiles that selected it lose their selection,

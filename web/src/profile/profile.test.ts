@@ -3,7 +3,7 @@ import { proxy } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createProfile, deleteProfile, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectProfile, setCameraReticle, setLastImageDirectory, setPanelOpen } from './profile'
+import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createProfile, deleteProfile, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectProfile, setCameraReticle, setLastImageDirectory, setPanelOpen, setSkyObserver } from './profile'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }
@@ -263,9 +263,9 @@ describe('settings', () => {
 		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
 		const state = load(stores)
 
-		expect(state.profiles[0].settings).toEqual({ panels: { capture: false, images: true }, lastImageDirectory: '/data', capture: { views: {} } })
-		expect(state.profiles[1].settings).toEqual({ panels: {}, capture: { views: {} } })
-		expect(state.profiles[2].settings).toEqual({ panels: {}, capture: { views: {} } })
+		expect(state.profiles[0].settings).toEqual({ panels: { capture: false, images: true }, lastImageDirectory: '/data', capture: { views: {} }, sky: {} })
+		expect(state.profiles[1].settings).toEqual({ panels: {}, capture: { views: {} }, sky: {} })
+		expect(state.profiles[2].settings).toEqual({ panels: {}, capture: { views: {} }, sky: {} })
 	})
 
 	test('panels are expanded by default and persisted per profile', () => {
@@ -345,5 +345,55 @@ describe('capture settings', () => {
 		const reloaded = load({ local: stores.local, session: new MemoryStorage() })
 		expect(reloaded.profiles[0].settings.capture).toEqual({ activeCamera: 'GUIDE_CAMERA', views: { GUIDE_CAMERA: { mode: 'polar-alignment' } } })
 		expect(reloaded.profiles[1].settings.capture).toEqual({ views: {} })
+	})
+})
+
+describe('sky settings', () => {
+	test('restores the observer and drops invalid ones', () => {
+		const stores = newStores()
+		const profiles = [
+			{ id: 'a', name: 'A', settings: { sky: { observer: { name: ' Backyard ', latitude: -23.5, longitude: -46.6, elevation: 760 } } } },
+			{ id: 'b', name: 'B', settings: { sky: { observer: { latitude: 91, longitude: 0, elevation: 0 } } } },
+			{ id: 'c', name: 'C', settings: { sky: { observer: { latitude: 10, longitude: 20 } } } },
+		]
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
+		const state = load(stores)
+
+		expect(state.profiles[0].settings.sky).toEqual({ observer: { name: 'Backyard', latitude: -23.5, longitude: -46.6, elevation: 760 } })
+		expect(state.profiles[1].settings.sky).toEqual({})
+		expect(state.profiles[2].settings.sky).toEqual({})
+	})
+
+	test('sets, validates, and clears the observer of the active profile', () => {
+		const state = load(newStores())
+		const before = state.profiles[0].updatedAt
+
+		expect(setSkyObserver(state, { latitude: 100, longitude: 0, elevation: 0 })).toBe(false)
+		expect(setSkyObserver(state, { latitude: 0, longitude: -181, elevation: 0 })).toBe(false)
+		expect(setSkyObserver(state, { latitude: 0, longitude: 0, elevation: 10_000 })).toBe(false)
+		expect(state.profiles[0].settings.sky).toEqual({})
+		expect(state.profiles[0].updatedAt).toBe(before)
+
+		expect(setSkyObserver(state, { latitude: 51.4779, longitude: -0.0015, elevation: 46 })).toBe(true)
+		expect(state.profiles[0].settings.sky.observer).toEqual({ latitude: 51.4779, longitude: -0.0015, elevation: 46 })
+
+		const other = createProfile(state, 'Other')!
+		expect(other.settings.sky).toEqual({})
+
+		selectProfile(state, state.profiles[0].id)
+		setSkyObserver(state, undefined)
+		expect(state.profiles[0].settings.sky).toEqual({})
+	})
+
+	test('a duplicated profile keeps its own observer', () => {
+		const state = load(newStores())
+		setSkyObserver(state, { latitude: 10, longitude: 20, elevation: 30 })
+		const copy = duplicateProfile(state, state.profiles[0].id)!
+
+		selectProfile(state, copy.id)
+		setSkyObserver(state, { latitude: -10, longitude: -20, elevation: 0 })
+
+		expect(state.profiles[0].settings.sky.observer).toEqual({ latitude: 10, longitude: 20, elevation: 30 })
+		expect(copy.settings.sky.observer).toEqual({ latitude: -10, longitude: -20, elevation: 0 })
 	})
 })

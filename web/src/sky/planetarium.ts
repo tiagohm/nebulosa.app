@@ -1,9 +1,12 @@
 import type { MinorBody, SkyObjectCategory, SkyObjectRef } from 'api'
+import { DEG2RAD } from 'nebulosa/src/core/constants'
 import { proxy, subscribe } from 'valtio'
 import type { SkyObserverSettings } from '../profile/profile'
-import { Celestial, type CelestialObject, type CelestialOptions, type CelestialShape, type ConstellationLine, type CoordinateSystem, drawSelectionReticle, type MovingBody, type MovingBodyType } from './celestial/celestial'
+import { Celestial, type CelestialObject, type CelestialOptions, type CelestialShape, type ConstellationLine, type CoordinateSystem, drawSelectionReticle, type MovingBody, type MovingBodyType, type RenderState } from './celestial/celestial'
 import { skyClock, skyTime } from './clock'
 import { applySkyDisplay, MAP_STAR_MAGNITUDE_LIMIT, type SkyDisplaySettings } from './display'
+import { formatAngularSize } from './format'
+import { type FramePoint, framePolygon, isFraming, type OpticalPreset, resolveFraming } from './framing'
 import { hoverLabel, type MapNames, movingBodyId, refKey, refOfCelestialObject, selectionTargets } from './objects'
 import { createRequestGuard } from './selection'
 import { apiObserver, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapDataCovers, selectSkyObject, skyState } from './sky'
@@ -28,6 +31,56 @@ const SELECTION_COLOR = '#7e57c2'
 
 // Id of the custom shape marking a selection that is not drawn on the map (a faint catalog object).
 const SELECTION_MARKER_ID = 'selection-marker'
+
+// Id of the custom shape drawing the field of view.
+const FRAMING_SHAPE_ID = 'framing'
+
+// Color of the field of view outline.
+const FRAMING_COLOR = '#4dd0e1'
+
+// Points sampled along each edge of the field of view, so wide fields follow the projection's curvature.
+const FRAMING_EDGE_SAMPLES = 16
+
+// Smallest on-screen size of the field of view in pixels for which its label is drawn.
+const FRAMING_LABEL_MIN_PX = 60
+
+// Strokes the outline of a field of view (equatorial points in radians), breaking it where points cannot
+// be projected, with a cross at its center and, when it is large enough on screen, its label.
+function drawFraming(ctx: CanvasRenderingContext2D, state: RenderState, outline: readonly FramePoint[], label: string) {
+	const point = new Float64Array(2)
+	let open = false
+	let minX = Infinity
+	let maxX = -Infinity
+	let minY = Infinity
+
+	ctx.beginPath()
+
+	for (const { rightAscension, declination } of outline) {
+		if (!state.projectEquatorialToScreen(rightAscension, declination, point)) {
+			open = false
+			continue
+		}
+
+		if (open) ctx.lineTo(point[0], point[1])
+		else ctx.moveTo(point[0], point[1])
+		open = true
+		minX = Math.min(minX, point[0])
+		maxX = Math.max(maxX, point[0])
+		minY = Math.min(minY, point[1])
+	}
+
+	ctx.strokeStyle = FRAMING_COLOR
+	ctx.lineWidth = 1.5
+	ctx.stroke()
+
+	if (maxX - minX >= FRAMING_LABEL_MIN_PX) {
+		ctx.fillStyle = FRAMING_COLOR
+		ctx.font = '11px ui-monospace, monospace'
+		ctx.textAlign = 'left'
+		ctx.textBaseline = 'bottom'
+		ctx.fillText(label, minX, minY - 4)
+	}
+}
 
 // Map symbol and name of each major body, by Horizons command.
 const BODY_TYPES: readonly (readonly [string, MovingBodyType, string])[] = [
@@ -107,6 +160,8 @@ export class Planetarium {
 	// Instant the loaded catalogs were computed for, Unix milliseconds; absent before the first load.
 	#dataTime?: number
 	#marker = false
+	// Whether the field of view shape is on the map.
+	#framing = false
 	#resizeObserver?: ResizeObserver
 	// Timer of the clock updates while attached.
 	#clockTimer?: ReturnType<typeof setInterval>
@@ -211,6 +266,25 @@ export class Planetarium {
 		this.#observer = observer
 		if (observer) this.celestial.setObserver({ latitude: observer.latitude, longitude: observer.longitude, elevation: observer.elevation })
 		this.celestial.setLayerVisible('horizon', !!observer)
+	}
+
+	// Draws the field of view of a preset around the selection, or removes it when there is no preset,
+	// field, or selection position. It follows the selection's position at the instant shown.
+	syncFraming(preset: Readonly<OpticalPreset> | undefined, visible: boolean) {
+		const position = skyState.selection?.position
+		const framing = preset && resolveFraming(preset.optics)
+
+		if (!visible || !preset || !framing || !isFraming(framing) || !position) {
+			if (this.#framing) this.celestial.removeShape(FRAMING_SHAPE_ID)
+			this.#framing = false
+			return
+		}
+
+		const center = { rightAscension: position.rightAscension, declination: position.declination }
+		const outline = framePolygon(center, framing.width, framing.height, preset.optics.rotation * DEG2RAD, FRAMING_EDGE_SAMPLES)
+		const label = `${preset.name} · ${formatAngularSize(framing.width)} × ${formatAngularSize(framing.height)} · PA ${preset.optics.rotation.toFixed(1)}°`
+		this.#framing = true
+		this.celestial.addShape({ id: FRAMING_SHAPE_ID, coordinate: center, selectable: false, render: (_, ctx, state) => drawFraming(ctx, state.state, outline, label) })
 	}
 
 	// Applies the display preferences in place, keeping the view and data; the local meridian is drawn

@@ -8,6 +8,7 @@ import { IconButton } from '../ui/IconButton'
 import type { CoordinateSystem } from './celestial/celestial'
 import { type SkyClockMode, skyClock } from './clock'
 import { DisplayPanel } from './DisplayPanel'
+import { FramingPanel } from './FramingPanel'
 import { HoverTooltip } from './HoverTooltip'
 import { ObjectInspector } from './ObjectInspector'
 import { ObserverPanel } from './ObserverPanel'
@@ -20,8 +21,10 @@ import { TimeController } from './TimeController'
 // Sky workspace: explores the sky on the tab's star map (./planetarium), independently of any connection
 // or equipment. It shows the map, a tooltip for the hovered object, the search, the Object Inspector of
 // the selection, which is the same whether it comes from a click or from the search (selecting never
-// moves the view), and the time bar of the simulation clock. With an observer the map is the observer's
-// local sky; without one it is an equatorial chart of the whole sky.
+// moves the view), and the time bar of the simulation clock. The contextual panel also holds the
+// observer, display (layers), and framing (field of view of custom optical presets, drawn around the
+// selection) settings. With an observer the map is the observer's local sky; without one it is an
+// equatorial chart of the whole sky.
 
 // Interval in milliseconds at which the selection's position is checked against the clock, by mode.
 const REFRESH_INTERVAL_MS: Readonly<Record<SkyClockMode, number>> = { now: 60_000, fixed: 400, playing: 2_000 }
@@ -59,6 +62,14 @@ export function SkyWorkspace() {
 	useEffect(() => {
 		map.applyDisplay(settings.display)
 	}, [map, settings.display])
+
+	// Draws the field of view of the selected preset around the selection, following its position.
+	const framing = settings.framing
+	const preset = framing?.presets.find((e) => e.id === framing.activePresetId)
+
+	useEffect(() => {
+		map.syncFraming(preset, framing?.visible ?? false)
+	}, [map, preset, framing?.visible, selectionPosition])
 
 	// Highlights the selection whenever it, its position, or the map data change.
 	useEffect(() => {
@@ -101,9 +112,10 @@ export function SkyWorkspace() {
 	const context = clock.mode === 'now' ? location : `${location} · Simulated time`
 
 	const panels: Record<SkyPanelView, () => { title: string; content: ReactNode }> = {
-		inspector: () => ({ title: 'Object Inspector', content: <ObjectInspector hasObserver={!!observer} onSetObserver={() => openPanel('observer')} timeZone={observer?.timeZone} /> }),
+		inspector: () => ({ title: 'Object Inspector', content: <ObjectInspector hasObserver={!!observer} onSetObserver={() => openPanel('observer')} timeZone={observer?.timeZone} onShowFraming={() => openPanel('framing')} /> }),
 		observer: () => ({ title: 'Observer', content: <ObserverPanel key={key} observer={observer} onDone={() => (skyState.panel = 'inspector')} /> }),
 		display: () => ({ title: 'Display', content: <DisplayPanel sky={settings} local={coordinateSystem === 'horizontal'} /> }),
+		framing: () => ({ title: 'Framing', content: <FramingPanel framing={settings.framing} hasTarget={!!selectionPosition} /> }),
 	}
 
 	return (
@@ -112,6 +124,7 @@ export function SkyWorkspace() {
 				<div className="flex h-11 flex-none items-center gap-2 border-b border-line-100 bg-base-100 px-2">
 					<SkySearch onSelect={handleSearchSelect} />
 					<div className="ml-auto flex flex-none items-center gap-1">
+						<IconButton icon="frame" label="Framing" pressed={sky.panel === 'framing'} onClick={() => togglePanel('framing')} />
 						<IconButton icon="layers" label="Display" pressed={sky.panel === 'display'} onClick={() => togglePanel('display')} />
 						<Button variant="secondary" size="sm" onClick={() => togglePanel('observer')} className="max-w-56 truncate">
 							{observer ? (observer.name ?? 'Location') : 'Set Location'}

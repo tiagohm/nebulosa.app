@@ -3,6 +3,7 @@ import { proxy, snapshot, subscribe } from 'valtio'
 import { CAMERA_ROLES, type CameraRole, conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
 import { type CaptureMode, isCaptureMode, WORKSPACE_IDS, type WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
+import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry } from '../sky/framing'
 import { isRecord, parseJson, readText, type Stores, writeText } from '../storage'
 
 // Profiles of the browser and the profile active in this tab. Profiles are a versioned collection in
@@ -63,6 +64,19 @@ export interface SkySettings {
 	observer?: SkyObserverSettings
 	// What the star map shows; absent until the user changes a preference, and then every default holds.
 	display?: SkyDisplaySettings
+	// Field of view drawn around the selection; absent until the user creates a preset.
+	framing?: SkyFramingSettings
+}
+
+// Field of view preferences of the Sky workspace: custom optical presets, independent of the equipment
+// setup, and which one is drawn.
+export interface SkyFramingSettings {
+	// Presets in display order.
+	presets: readonly OpticalPreset[]
+	// Id of the preset drawn; absent when there is none.
+	activePresetId?: string
+	// Whether the field of view is drawn on the map.
+	visible: boolean
 }
 
 // Presentation preferences of one Capture camera view. They belong to the camera role, not to the
@@ -194,13 +208,49 @@ function normalizeSkyDisplay(value: unknown): SkyDisplaySettings | undefined {
 	return display
 }
 
-// Restores persisted Sky preferences, dropping an invalid observer and invalid display preferences.
+// Returns a finite number, or a fallback for anything else.
+function finiteOr(value: unknown, fallback: number) {
+	return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+// Restores a persisted sensor geometry, or undefined when it is neither pixels nor physical.
+function normalizeSensor(value: unknown): SensorGeometry | undefined {
+	if (!isRecord(value)) return undefined
+	if (value.kind === 'pixels') return { kind: 'pixels', width: finiteOr(value.width, 0), height: finiteOr(value.height, 0), pixelSize: finiteOr(value.pixelSize, 0) }
+	if (value.kind === 'physical') return { kind: 'physical', width: finiteOr(value.width, 0), height: finiteOr(value.height, 0) }
+	return undefined
+}
+
+// Restores a persisted optical preset; incomplete optics are kept (the framing panel lists what is
+// missing), but a preset without id, name, or sensor kind is dropped.
+function normalizeOpticalPreset(value: unknown): OpticalPreset | undefined {
+	if (!isRecord(value) || typeof value.id !== 'string' || !value.id || typeof value.name !== 'string' || !value.name.trim() || !isRecord(value.optics)) return undefined
+	const { optics } = value
+	const sensor = normalizeSensor(optics.sensor)
+	if (!sensor) return undefined
+	const rotation = finiteOr(optics.rotation, 0)
+	return { id: value.id, name: value.name.trim(), optics: { focalLength: finiteOr(optics.focalLength, 0), focalMultiplier: finiteOr(optics.focalMultiplier, 1), aperture: Math.max(0, finiteOr(optics.aperture, 0)), sensor, rotation: ((rotation % 360) + 360) % 360 } }
+}
+
+// Restores persisted framing preferences, keeping the active preset only when it still exists.
+function normalizeSkyFraming(value: unknown): SkyFramingSettings | undefined {
+	if (!isRecord(value)) return undefined
+	const presets = Array.isArray(value.presets) ? value.presets.map(normalizeOpticalPreset).filter((preset) => preset !== undefined) : []
+	const framing: SkyFramingSettings = { presets, visible: value.visible === true }
+	if (presets.some((preset) => preset.id === value.activePresetId)) framing.activePresetId = value.activePresetId as string
+	return framing
+}
+
+// Restores persisted Sky preferences, dropping an invalid observer and invalid display and framing
+// preferences.
 function normalizeSky(value: unknown, sky: SkySettings) {
 	if (!isRecord(value)) return
 	const observer = normalizeSkyObserver(value.observer)
 	if (observer) sky.observer = observer
 	const display = normalizeSkyDisplay(value.display)
 	if (display) sky.display = display
+	const framing = normalizeSkyFraming(value.framing)
+	if (framing) sky.framing = framing
 }
 
 // Restores persisted preferences, falling back to the default of every missing or invalid preference.
@@ -548,6 +598,78 @@ export function setSkyMagnitudeLimit(state: ProfileState, limit: number) {
 	const value = Math.min(MAP_STAR_MAGNITUDE_LIMIT, Math.max(MIN_MAGNITUDE_LIMIT, limit))
 	if (display.magnitudeLimit === value) return
 	display.magnitudeLimit = value
+	touch(profile)
+}
+
+// Copies optics, which may be a store proxy or snapshot, into a plain object.
+function copyOptics(optics: OpticalConfiguration): OpticalConfiguration {
+	return { ...optics, sensor: { ...optics.sensor } }
+}
+
+// Returns the framing preferences of a profile, creating them empty and hidden.
+function framingOf(profile: Profile): SkyFramingSettings {
+	return (profile.settings.sky.framing ??= { presets: [], visible: false })
+}
+
+// Creates an optical preset in the active profile from optics (the defaults when absent), selects it,
+// and shows the field of view. Returns the preset, or undefined for a blank name.
+export function createOpticalPreset(state: ProfileState, name: string, optics: OpticalConfiguration = DEFAULT_OPTICS): OpticalPreset | undefined {
+	const trimmed = name.trim()
+	if (!trimmed) return undefined
+	const profile = activeProfile(state)
+	const framing = framingOf(profile)
+	const preset: OpticalPreset = { id: nanoid(), name: trimmed, optics: copyOptics(optics) }
+	framing.presets = [...framing.presets, preset]
+	framing.activePresetId = preset.id
+	framing.visible = true
+	touch(profile)
+	return preset
+}
+
+// Replaces the name or optics of a preset of the active profile; a blank name is ignored. Returns
+// whether the preset exists.
+export function updateOpticalPreset(state: ProfileState, id: string, changes: { readonly name?: string; readonly optics?: OpticalConfiguration }): boolean {
+	const profile = activeProfile(state)
+	const framing = profile.settings.sky.framing
+	const current = framing?.presets.find((preset) => preset.id === id)
+	if (!framing || !current) return false
+	const updated: OpticalPreset = { id, name: changes.name?.trim() || current.name, optics: changes.optics ? copyOptics(changes.optics) : current.optics }
+	framing.presets = framing.presets.map((preset) => (preset.id === id ? updated : preset))
+	touch(profile)
+	return true
+}
+
+// Copies a preset of the active profile under the name "<name> (copy)" and selects the copy.
+export function duplicateOpticalPreset(state: ProfileState, id: string): OpticalPreset | undefined {
+	const source = activeProfile(state).settings.sky.framing?.presets.find((preset) => preset.id === id)
+	return source && createOpticalPreset(state, `${source.name} (copy)`, source.optics)
+}
+
+// Deletes a preset of the active profile; deleting the selected one selects the first left, if any.
+export function deleteOpticalPreset(state: ProfileState, id: string) {
+	const profile = activeProfile(state)
+	const framing = profile.settings.sky.framing
+	if (!framing?.presets.some((preset) => preset.id === id)) return
+	framing.presets = framing.presets.filter((preset) => preset.id !== id)
+	if (framing.activePresetId === id) framing.activePresetId = framing.presets[0]?.id
+	touch(profile)
+}
+
+// Selects the preset drawn in the active profile.
+export function selectOpticalPreset(state: ProfileState, id: string) {
+	const profile = activeProfile(state)
+	const framing = profile.settings.sky.framing
+	if (!framing?.presets.some((preset) => preset.id === id) || framing.activePresetId === id) return
+	framing.activePresetId = id
+	touch(profile)
+}
+
+// Shows or hides the field of view in the active profile.
+export function setFramingVisible(state: ProfileState, visible: boolean) {
+	const profile = activeProfile(state)
+	const framing = framingOf(profile)
+	if (framing.visible === visible) return
+	framing.visible = visible
 	touch(profile)
 }
 

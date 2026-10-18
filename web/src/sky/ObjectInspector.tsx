@@ -27,6 +27,8 @@ export interface ObjectInspectorProps {
 	readonly onSetObserver: () => void
 	// IANA time zone times are shown in; the browser's when absent.
 	readonly timeZone?: string
+	// Opens the framing settings, which draw the field of view around the selection.
+	readonly onShowFraming: () => void
 }
 
 // Label and value of one datum.
@@ -45,7 +47,7 @@ function Note({ children, danger }: { readonly children: ReactNode; readonly dan
 }
 
 // Object Inspector.
-export function ObjectInspector({ hasObserver, onSetObserver, timeZone }: ObjectInspectorProps) {
+export function ObjectInspector({ hasObserver, onSetObserver, timeZone, onShowFraming }: ObjectInspectorProps) {
 	const { selection } = useSnapshot(skyState)
 
 	if (!selection) {
@@ -66,6 +68,11 @@ export function ObjectInspector({ hasObserver, onSetObserver, timeZone }: Object
 				<p className="m-0 text-ink-300">{typeOf(selection)}</p>
 				{designations.length > 0 && <p className="m-0 text-xs leading-5 text-ink-200">{designations.join(' · ')}</p>}
 				{selection.detailsError && <Note danger>Details unavailable: {selection.detailsError}</Note>}
+				<div>
+					<Button variant="secondary" size="sm" onClick={onShowFraming}>
+						Show Framing
+					</Button>
+				</div>
 			</PanelSection>
 			<PositionSection selection={selection} timeZone={timeZone} />
 			{position && <ObserverSection position={position} events={events} hasObserver={hasObserver} onSetObserver={onSetObserver} isSolarSystem={selection.ref.kind === 'body' || selection.ref.kind === 'minorBody'} timeZone={timeZone} />}

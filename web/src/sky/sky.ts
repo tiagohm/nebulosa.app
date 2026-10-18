@@ -51,7 +51,7 @@ export interface SkySelection {
 }
 
 // Content of the contextual panel.
-export type SkyPanelView = 'inspector' | 'observer' | 'display'
+export type SkyPanelView = 'inspector' | 'observer' | 'display' | 'framing'
 
 // Sky workspace state of the tab.
 export interface SkyState {

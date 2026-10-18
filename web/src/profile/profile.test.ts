@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { proxy } from 'valtio'
+import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createProfile, deleteProfile, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectProfile, setCameraReticle, setLastImageDirectory, setPanelOpen, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver } from './profile'
+import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createOpticalPreset, createProfile, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectOpticalPreset, selectProfile, setCameraReticle, setFramingVisible, setLastImageDirectory, setPanelOpen, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, updateOpticalPreset } from './profile'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }
@@ -413,6 +413,62 @@ describe('sky settings', () => {
 		setSkyLayerVisible(state, 'constellationBoundaries', true)
 		setSkyMagnitudeLimit(state, 0)
 		expect(state.profiles[0].settings.sky.display).toEqual({ layers: { constellationBoundaries: true }, magnitudeLimit: 1 })
+	})
+
+	test('manages optical presets without touching the equipment setup', () => {
+		const state = load(newStores())
+		selectConnection(state, 'c1')
+		assignDevice(state, 'MAIN_CAMERA', dev('cam'))
+		const equipment = structuredClone(snapshot(state).profiles[0].equipment)
+
+		const first = createOpticalPreset(state, ' Refractor + APS-C ')!
+		expect(createOpticalPreset(state, '  ')).toBeUndefined()
+		expect(state.profiles[0].settings.sky.framing).toEqual({ presets: [first], activePresetId: first.id, visible: true })
+
+		expect(updateOpticalPreset(state, first.id, { optics: { ...first.optics, focalLength: 420, focalMultiplier: 0.8 } })).toBe(true)
+		const copy = duplicateOpticalPreset(state, first.id)!
+		expect(copy.name).toBe('Refractor + APS-C (copy)')
+		expect(copy.optics.focalLength).toBe(420)
+		expect(state.profiles[0].settings.sky.framing?.activePresetId).toBe(copy.id)
+
+		selectOpticalPreset(state, first.id)
+		deleteOpticalPreset(state, first.id)
+		expect(state.profiles[0].settings.sky.framing?.presets.map((e) => e.id)).toEqual([copy.id])
+		expect(state.profiles[0].settings.sky.framing?.activePresetId).toBe(copy.id)
+
+		setFramingVisible(state, false)
+		expect(state.profiles[0].settings.sky.framing?.visible).toBe(false)
+		expect(state.profiles[0].equipment).toEqual(equipment)
+	})
+
+	test('restores presets, dropping invalid ones and a missing active preset', () => {
+		const stores = newStores()
+		const optics = { focalLength: 600, focalMultiplier: 1, aperture: 0, sensor: { kind: 'physical' as const, width: 23.5, height: 15.6 }, rotation: -90 }
+		const framing = {
+			presets: [
+				{ id: 'p', name: 'P', optics },
+				{ id: '', name: 'X', optics },
+				{ id: 'q', name: 'Q', optics: { ...optics, sensor: { kind: 'film' } } },
+			],
+			activePresetId: 'gone',
+			visible: true,
+		}
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles: [{ id: 'a', name: 'A', settings: { sky: { framing } } }] }))
+		const state = load(stores)
+
+		expect(state.profiles[0].settings.sky.framing).toEqual({ presets: [{ id: 'p', name: 'P', optics: { ...optics, rotation: 270 } }], visible: true })
+	})
+
+	test('a duplicated profile copies its presets independently', () => {
+		const state = load(newStores())
+		const preset = createOpticalPreset(state, 'Newtonian')!
+		const copy = duplicateProfile(state, state.profiles[0].id)!
+
+		selectProfile(state, copy.id)
+		updateOpticalPreset(state, preset.id, { name: 'Changed' })
+
+		expect(state.profiles[0].settings.sky.framing?.presets[0].name).toBe('Newtonian')
+		expect(copy.settings.sky.framing?.presets[0].name).toBe('Changed')
 	})
 
 	test('a duplicated profile keeps its own observer', () => {

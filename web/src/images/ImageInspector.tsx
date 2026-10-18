@@ -1,16 +1,21 @@
-import type { ImageAcquisition, ImageInfo } from 'api'
+import type { ImageAcquisition, ImageInfo, RenderResult } from 'api'
 import type { ReactNode } from 'react'
 import { PanelSection, PlannedControls } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
+import { DisplayAdjustments } from './DisplayAdjustments'
 import type { ImageToolPanelProps } from './tools'
 
 // Image Inspector, the default contextual tool of the Images workspace: properties, acquisition data,
-// display parameters, and the header of the active document, with the statistics section still to come.
-// It only reads the document and its view state.
+// display adjustments with the parameters of the current rendering, and the header of the active
+// document, with the statistics section still to come. Only the display adjustments edit anything: the
+// document's pending display settings.
 
 // Text shown for a datum the image does not have.
 const MISSING = '—'
+
+// Names of the RGB channels, in the order of a per-channel stretch.
+const CHANNEL_NAMES = ['R', 'G', 'B'] as const
 
 // Acquisition fields shown, in display order: label and the formatted value, absent when the image does
 // not have it. Every field is always listed, so images can be compared at a glance.
@@ -67,18 +72,8 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 				)}
 			</PanelSection>
 			{info && <Acquisition info={info} />}
-			<PanelSection title="Display">
-				{view?.rendering ? (
-					<>
-						<Property label="Stretch">{view.stretch === 'auto' ? 'Auto' : 'Manual'}</Property>
-						<Property label="Shadow">{view.rendering.result.stretch.shadow.toFixed(4)}</Property>
-						<Property label="Midtone">{view.rendering.result.stretch.midtone.toFixed(4)}</Property>
-						<Property label="Highlight">{view.rendering.result.stretch.highlight.toFixed(4)}</Property>
-					</>
-				) : (
-					<p className="m-0 text-ink-300">Not rendered yet.</p>
-				)}
-			</PanelSection>
+			{info && view && <DisplayAdjustments documentKey={document.key} info={info} view={view} />}
+			{view?.rendering && <AppliedDisplay result={view.rendering.result} />}
 			<PanelSection title="Histogram and Statistics">
 				<PlannedControls items={['Histogram', 'Mean, median, and deviation']} />
 			</PanelSection>
@@ -133,6 +128,26 @@ function Acquisition({ info }: InfoProps) {
 					</Property>
 				)
 			})}
+		</PanelSection>
+	)
+}
+
+interface AppliedDisplayProps {
+	// Parameters of the current rendering.
+	readonly result: RenderResult
+}
+
+// Parameters the server applied to the current rendering, such as the values an auto stretch computed.
+function AppliedDisplay({ result }: AppliedDisplayProps) {
+	return (
+		<PanelSection title="Applied Display">
+			<Property label="Debayer">{result.cfa ?? 'Off'}</Property>
+			<Property label="Channels">{result.channels === 3 ? 'RGB' : 'Mono'}</Property>
+			{result.stretch.map((stretch, i) => (
+				<Property key={i} label={`Stretch${result.stretch.length === 3 ? ` ${CHANNEL_NAMES[i]}` : ''} (S / M / H)`}>
+					{stretch.shadow.toFixed(4)} / {stretch.midtone.toFixed(4)} / {stretch.highlight.toFixed(4)}
+				</Property>
+			))}
 		</PanelSection>
 	)
 }

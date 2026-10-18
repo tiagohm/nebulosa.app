@@ -1,4 +1,4 @@
-import type { ImageInfo, RenderRequest, RenderResult } from 'api'
+import type { DisplaySettings, ImageInfo, RenderRequest, RenderResult, Stretch } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { responseError } from '../http'
@@ -7,12 +7,20 @@ import type { ImageToolId } from './tools'
 
 // Image documents open in the tab's Images workspace. Each open image is split in three objects under the
 // same key: the document (identity, origin, and the server-side image with its metadata), its view state
-// (zoom, pan, stretch, and the current rendering, a JPEG held as an object URL), and its tool context
-// (the contextual tool it shows, the Image Inspector at first). Two documents never share a view or tool, and a future derived image (such as a processing result) can open as a new
-// document with its own view while the original stays as it is. Only the latest rendering request of a
+// (zoom, pan, display settings, and the current rendering, a JPEG held as an object URL), and its tool
+// context (the contextual tool it shows, the Image Inspector at first). Two documents never share a view
+// or tool, and a future derived image (such as a processing result) can open as a new document with its
+// own view while the original stays as it is.
+//
+// Display settings are edited as pending settings that never render by themselves; applying them sends
+// a snapshot to the server, and only a successful rendering makes that snapshot the applied settings, so
+// edits made while it is processing stay pending and a failure keeps the previous rendering and applied
+// settings. Show Original renders the unprocessed image (no debayering, auto stretch, neutral
+// adjustments) once and keeps it beside the applied rendering. Only the latest rendering request of a
 // document counts; starting a new one aborts the previous, and an object URL is revoked as soon as a
-// newer rendering replaces it or the document closes. Everything lives in memory only: it survives
-// switching tabs and workspaces but is not restored after a reload.
+// newer rendering replaces it or the document closes. Requests belong to the store, not to components,
+// so they complete while the panel is collapsed or another document is shown. Everything lives in
+// memory only: it survives switching tabs and workspaces but is not restored after a reload.
 
 // Where a document's image comes from. Captured frames will add their own kind.
 export type ImageSource = { readonly kind: 'file'; readonly path: string }
@@ -41,19 +49,35 @@ export interface ImageDocument {
 	error?: string
 }
 
-// How a document is shown: its own zoom, pan, stretch, and rendering.
+// Display settings of a document: those being edited and those of the current rendering.
+export interface ImageDisplayState {
+	// Settings shown by the controls; editing them never renders.
+	pending: DisplaySettings
+	// Exact settings the current rendering was made with; absent before the first rendering succeeds.
+	applied?: DisplaySettings
+	// Whether the viewer shows the original rendering instead of the applied one.
+	showOriginal: boolean
+	// Rendering of the unprocessed image (ORIGINAL_DISPLAY_SETTINGS), made on the first Show Original.
+	original?: ImageRendering
+}
+
+// How a document is shown: its own zoom, pan, display settings, and rendering.
 export interface ImageViewState {
 	// Zoom and pan of the viewer.
 	view: ViewerView
-	// Stretch of the latest rendering request.
-	stretch: RenderRequest['stretch']
-	// Current rendering, kept while a newer one is prepared.
+	// Display settings.
+	display: ImageDisplayState
+	// Current rendering of the applied settings, kept while a newer one is prepared.
 	rendering?: ImageRendering
 	// Whether a rendering is in progress.
 	renderPending: boolean
 	// Why the latest rendering failed.
 	error?: string
 }
+
+// State of a document's display settings: rendering, the latest rendering failed, the pending settings
+// differ from the applied ones, or they are applied.
+export type DisplayStatus = 'processing' | 'error' | 'not-applied' | 'applied'
 
 // Contextual tool of a document.
 export interface ImageToolContext {
@@ -96,8 +120,52 @@ export const browserIo: ImagesIo = {
 	revokeObjectURL: (url) => URL.revokeObjectURL(url),
 }
 
+// Settings of the unprocessed image shown by Show Original: no debayering, a linked auto stretch, and
+// neutral adjustments.
+export const ORIGINAL_DISPLAY_SETTINGS: DisplaySettings = { debayer: { enabled: false }, stretch: { mode: 'auto', linked: true }, brightness: 1, contrast: 1, gamma: 1, saturation: 1, scnr: { enabled: false }, invert: false }
+
 // Pending rendering request of each document, by document key.
 const renders = new Map<string, AbortController>()
+
+// Returns the initial display settings of an opened image: the unprocessed settings, debayered with the
+// image's own pattern when it is a CFA mosaic with a trusted one.
+export function defaultDisplaySettings(info: ImageInfo): DisplaySettings {
+	return info.cfa ? { ...ORIGINAL_DISPLAY_SETTINGS, debayer: { enabled: true, pattern: 'auto' } } : ORIGINAL_DISPLAY_SETTINGS
+}
+
+// Returns a plain deep copy of settings, detached from any proxy.
+function copySettings(settings: DisplaySettings): DisplaySettings {
+	return JSON.parse(JSON.stringify(settings)) as DisplaySettings
+}
+
+// Returns whether two JSON-like values are deeply equal, regardless of key order.
+function sameValue(a: unknown, b: unknown): boolean {
+	if (a === b) return true
+	if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
+	const keys = Object.keys(a)
+	if (keys.length !== Object.keys(b).length) return false
+	return keys.every((key) => sameValue((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
+}
+
+// Returns whether two display settings are equal.
+export function sameDisplaySettings(a: DisplaySettings, b: DisplaySettings | undefined): boolean {
+	return b !== undefined && sameValue(a, b)
+}
+
+// Returns the display status of a document's view state.
+export function displayStatus(view: Pick<ImageViewState, 'display' | 'renderPending' | 'error'>): DisplayStatus {
+	if (view.renderPending) return 'processing'
+	if (view.error) return 'error'
+	return sameDisplaySettings(view.display.pending, view.display.applied) ? 'applied' : 'not-applied'
+}
+
+// Returns a single stretch summarizing the stretch a rendering applied: the stretch itself, or the mean
+// of the per-channel stretches of an unlinked auto stretch. Used to start a manual stretch from it.
+export function summaryStretch(result: RenderResult): Stretch {
+	const n = result.stretch.length
+	const mean = (pick: (s: Stretch) => number) => result.stretch.reduce((sum, s) => sum + pick(s), 0) / n
+	return { midtone: mean((s) => s.midtone), shadow: mean((s) => s.shadow), highlight: mean((s) => s.highlight) }
+}
 
 // Returns the document with key, if still open.
 function documentOf(state: ImagesState, key: string): ImageDocument | undefined {
@@ -130,13 +198,14 @@ function release(id: string, io: ImagesIo) {
 }
 
 // Opens a server file as a new active document, fitted to the viewer and shown with the Image
-// Inspector, and renders it with an automatic
-// stretch. A document closed before the server answers is released on the server.
+// Inspector, and renders it once with its default display settings (defaultDisplaySettings), which
+// become its pending and applied settings. A document closed before the server answers is released on
+// the server.
 export async function openImage(state: ImagesState, path: string, io: ImagesIo = browserIo) {
 	const key = nanoid()
 	const name = path.split(/[\\/]/).at(-1) || path
 	state.documents.push({ key, name, source: { kind: 'file', path }, status: 'loading' })
-	state.views[key] = { view: FIT_VIEW, stretch: 'auto', renderPending: false }
+	state.views[key] = { view: FIT_VIEW, display: { pending: copySettings(ORIGINAL_DISPLAY_SETTINGS), showOriginal: false }, renderPending: false }
 	state.tools[key] = { tool: 'inspector' }
 	state.activeKey = key
 
@@ -158,47 +227,44 @@ export async function openImage(state: ImagesState, path: string, io: ImagesIo =
 
 		document.info = ref(info)
 		document.status = 'ready'
+		const view = state.views[key]
+		if (view) view.display.pending = copySettings(defaultDisplaySettings(info))
 	} catch (error) {
 		const document = documentOf(state, key)
 		if (document) Object.assign(document, { status: 'error', error: message(error) })
 		return
 	}
 
-	await renderImage(state, key, { stretch: 'auto' }, io)
+	await applyDisplay(state, key, io)
 }
 
-// Renders an opened document and keeps the request's stretch in its view state. Aborts the document's
-// previous rendering request; the current rendering stays shown until the new one arrives and is then
-// revoked.
-export async function renderImage(state: ImagesState, key: string, request: RenderRequest, io: ImagesIo = browserIo) {
+// Renders an opened document with settings, aborting its previous rendering request. Resolves to the
+// new rendering, whose object URL the caller then owns, or to undefined when the request was aborted,
+// failed (the failure is kept in the view state), or the document closed meanwhile.
+async function requestRendering(state: ImagesState, key: string, settings: DisplaySettings, io: ImagesIo): Promise<ImageRendering | undefined> {
 	const id = documentOf(state, key)?.info?.id
 	const view = state.views[key]
-	if (!id || !view) return
+	if (!id || !view) return undefined
 
 	renders.get(key)?.abort()
 	const controller = new AbortController()
 	renders.set(key, controller)
-	view.stretch = request.stretch
 	view.renderPending = true
 	view.error = undefined
 
 	try {
+		const request: RenderRequest = { settings }
 		const response = await io.fetch(`/api/images/${encodeURIComponent(id)}/render`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: controller.signal })
 		if (!response.ok) throw new Error(await responseError(response))
 		const result = JSON.parse(response.headers.get(RENDER_HEADER) ?? 'null') as RenderResult
 		const blob = await response.blob()
-		if (controller.signal.aborted) return
-
-		const current = state.views[key]
-		if (!current) return
-
-		const previous = current.rendering?.url
-		current.rendering = { url: io.createObjectURL(blob), result }
-		if (previous) io.revokeObjectURL(previous)
+		if (controller.signal.aborted || !state.views[key]) return undefined
+		return { url: io.createObjectURL(blob), result }
 	} catch (error) {
-		if (controller.signal.aborted) return
+		if (controller.signal.aborted) return undefined
 		const current = state.views[key]
 		if (current) current.error = message(error)
+		return undefined
 	} finally {
 		if (renders.get(key) === controller) {
 			renders.delete(key)
@@ -206,6 +272,70 @@ export async function renderImage(state: ImagesState, key: string, request: Rend
 			if (current) current.renderPending = false
 		}
 	}
+}
+
+// Applies the pending display settings of a document: renders a snapshot of them and, once the
+// rendering succeeds, shows it and makes the snapshot the applied settings. Leaves Show Original. Edits
+// made meanwhile stay pending; a failure keeps the current rendering and applied settings.
+export async function applyDisplay(state: ImagesState, key: string, io: ImagesIo = browserIo) {
+	const view = state.views[key]
+	if (!view) return
+
+	const settings = copySettings(view.display.pending)
+	view.display.showOriginal = false
+	const rendering = await requestRendering(state, key, settings, io)
+	const current = state.views[key]
+	if (!rendering || !current) return
+
+	const previous = current.rendering?.url
+	current.rendering = rendering
+	current.display.applied = settings
+	if (previous) io.revokeObjectURL(previous)
+}
+
+// Replaces the pending display settings of a document, without rendering. Ignored for an unknown key.
+export function editDisplay(state: ImagesState, key: string, settings: DisplaySettings) {
+	const view = state.views[key]
+	if (view) view.display.pending = copySettings(settings)
+}
+
+// Discards the pending edits of a document, restoring the applied settings, without rendering.
+export function revertDisplay(state: ImagesState, key: string) {
+	const display = state.views[key]?.display
+	if (display?.applied) display.pending = copySettings(display.applied)
+}
+
+// Restores the default display settings of a document as pending settings, without rendering.
+export function resetDisplay(state: ImagesState, key: string) {
+	const info = documentOf(state, key)?.info
+	const view = state.views[key]
+	if (info && view) view.display.pending = copySettings(defaultDisplaySettings(info))
+}
+
+// Switches a document between its applied rendering and its original one, rendering the original on
+// first use. The pending and applied settings are untouched. Ignored while a rendering is in progress,
+// which the original would otherwise abort.
+export async function toggleOriginal(state: ImagesState, key: string, io: ImagesIo = browserIo) {
+	const view = state.views[key]
+	if (!view || view.renderPending) return
+
+	if (view.display.showOriginal || view.display.original) {
+		view.display.showOriginal = !view.display.showOriginal
+		return
+	}
+
+	const rendering = await requestRendering(state, key, ORIGINAL_DISPLAY_SETTINGS, io)
+	const current = state.views[key]
+	if (!rendering || !current) return
+
+	current.display.original = rendering
+	current.display.showOriginal = true
+}
+
+// Returns the rendering the viewer shows for a view state: the original one during Show Original, the
+// applied one otherwise.
+export function shownRendering(view: Pick<ImageViewState, 'display' | 'rendering'>): ImageRendering | undefined {
+	return view.display.showOriginal && view.display.original ? view.display.original : view.rendering
 }
 
 // Sets the zoom and pan of a document. Ignored for an unknown key.
@@ -225,17 +355,18 @@ export function selectImage(state: ImagesState, key: string) {
 	if (documentOf(state, key)) state.activeKey = key
 }
 
-// Closes a document: aborts its rendering, revokes its object URL, releases it on the server, and drops
+// Closes a document: aborts its rendering, revokes its object URLs, releases it on the server, and drops
 // its view state and tool context. The next document (or the previous one, for the last) becomes active.
 export function closeImage(state: ImagesState, key: string, io: ImagesIo = browserIo) {
 	const index = state.documents.findIndex((d) => d.key === key)
 	if (index < 0) return
 
 	const document = state.documents[index]
-	const rendering = state.views[key]?.rendering
+	const view = state.views[key]
 	renders.get(key)?.abort()
 	renders.delete(key)
-	if (rendering) io.revokeObjectURL(rendering.url)
+	if (view?.rendering) io.revokeObjectURL(view.rendering.url)
+	if (view?.display.original) io.revokeObjectURL(view.display.original.url)
 	if (document.info) release(document.info.id, io)
 
 	state.documents.splice(index, 1)

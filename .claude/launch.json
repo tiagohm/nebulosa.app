@@ -5,7 +5,9 @@
 			"name": "dev",
 			"runtimeExecutable": "bun",
 			"runtimeArgs": ["dev"],
-			"port": 7000
+			"env": { "APP_PORT": "7001" },
+			"port": 7001,
+			"autoPort": false
 		}
 	]
 }

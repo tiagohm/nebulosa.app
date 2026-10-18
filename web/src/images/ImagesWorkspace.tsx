@@ -7,18 +7,20 @@ import { activeProfile, profileState, setLastImageDirectory } from '../profile/p
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
+import { IconButton } from '../ui/IconButton'
 import { moveIndex } from '../ui/navigation'
 import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
 import { FIT_VIEW } from '../viewer/transform'
 import { ImageInspector } from './ImageInspector'
-import { activeDocument, activeTool, activeView, closeImage, type ImageDocument, imagesState, openImage, selectImage, selectImageTool, setImageView } from './images'
+import { activeDocument, activeTool, activeView, closeImage, type ImageDocument, type ImageViewState, imagesState, openImage, selectImage, selectImageTool, setImageView, shownRendering, toggleOriginal } from './images'
 import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolUnavailable } from './tools'
 
 // Images workspace: FITS and XISF images opened from the server, one tab each, shown in the shared
 // viewer, with the contextual tool each document selected (the Image Inspector at first) in the
 // contextual panel. It works without any connection or equipment. Documents, with their own zoom, pan,
-// stretch, and tool, stay open while the tab lives, across document and workspace switches.
+// display settings, and tool, stay open while the tab lives, across document and workspace switches.
+// The viewer toolbar switches a document between its adjusted rendering and its original one.
 
 // Images workspace.
 export function ImagesWorkspace() {
@@ -27,6 +29,7 @@ export function ImagesWorkspace() {
 	const [choosing, setChoosing] = useState(false)
 	const document = activeDocument(state)
 	const view = activeView(state)
+	const shown = view && shownRendering(view)
 	const tool = activeTool(state)?.tool ?? 'inspector'
 	const definition = IMAGE_TOOL_DEFINITIONS[tool]
 	const Panel = definition.panel ?? ImageInspector
@@ -46,9 +49,10 @@ export function ImagesWorkspace() {
 					<ImageViewer
 						view={view?.view ?? FIT_VIEW}
 						onViewChange={(next) => document && setImageView(imagesState, document.key, next)}
-						image={view?.rendering && document?.info ? { url: view.rendering.url, width: document.info.width, height: document.info.height } : undefined}
+						image={shown && document?.info ? { url: shown.url, width: document.info.width, height: document.info.height } : undefined}
 						loading={document?.status === 'loading' || view?.renderPending}
 						error={document?.error ?? view?.error}
+						toolbar={document && view && <OriginalToggle documentKey={document.key} view={view} mosaic={!!document.info && document.info.channels === 1 && !!document.info.bayer} />}
 						empty={<EmptyState title="No image open" description="Open a FITS or XISF image from the server." action={openButton} />}
 					/>
 				</div>
@@ -66,6 +70,27 @@ export function ImagesWorkspace() {
 				}}
 			/>
 		</WorkspaceLayout>
+	)
+}
+
+interface OriginalToggleProps {
+	// Key of the document.
+	readonly documentKey: string
+	// View state of the document.
+	readonly view: ImageViewState
+	// Whether the original rendering is a raw CFA mosaic.
+	readonly mosaic: boolean
+}
+
+// Show Original toggle of the viewer toolbar, with the name of what the original shows while it is on.
+function OriginalToggle({ documentKey, view, mosaic }: OriginalToggleProps) {
+	const on = view.display.showOriginal
+
+	return (
+		<>
+			<IconButton icon="original" label={on ? 'Show adjusted' : 'Show original'} pressed={on} disabled={!view.rendering || view.renderPending} onClick={() => void toggleOriginal(imagesState, documentKey)} />
+			{on && <span className="px-1 text-xs text-accent">{mosaic ? 'Raw CFA / Mosaic' : 'Original'}</span>}
+		</>
 	)
 }
 

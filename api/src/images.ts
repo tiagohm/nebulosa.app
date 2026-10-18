@@ -1,12 +1,16 @@
+import { type CfaPattern, type ImageChannel, shiftCfaPattern } from 'nebulosa/src/imaging/model/types'
+import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/processing/scnr'
 import type { FitsHeader, FitsHeaderKey } from 'nebulosa/src/io/formats/fits/fits'
-import { exposureTimeKeyword, numericKeyword, observationDateKeyword, textKeyword } from 'nebulosa/src/io/formats/fits/util'
+import { cfaPatternKeyword, exposureTimeKeyword, numericKeyword, observationDateKeyword, textKeyword } from 'nebulosa/src/io/formats/fits/util'
 
 // Image documents opened by clients: FITS and XISF files read from the server's filesystem and kept
 // decoded in memory under an id until a client closes them, so later renderings (and future
-// processing) work on the same pixels. Each rendering is computed from the decoded image on request
-// and sent as JPEG; the rendering parameters actually applied are returned alongside it. Decoding and
-// rendering run on a worker thread (images.worker.ts) that also holds the pixels, so a large image
-// never blocks the requests the server is handling meanwhile.
+// processing) work on the same pixels. Each rendering applies a complete set of display settings
+// (debayer, stretch, tone, and color) to a copy of the decoded image, never to the image itself, and is
+// sent as JPEG; the parameters actually applied are returned alongside it. Decoding and rendering run on
+// a worker thread (images.worker.ts) that also holds the pixels, so a large image never blocks the
+// requests the server is handling meanwhile. A rendering still queued when a newer one of the same
+// document arrives, or whose request is aborted, is dropped without being computed.
 
 // Formats an image document can be read from.
 export type ImageFormat = 'fits' | 'xisf'
@@ -27,8 +31,11 @@ export interface ImageInfo {
 	readonly height: number
 	// Number of channels: 1 for grayscale or a raw CFA mosaic, 3 for RGB.
 	readonly channels: number
-	// Bayer pattern of a raw CFA mosaic, such as RGGB; absent otherwise.
+	// Bayer pattern of a raw CFA mosaic as written in the header (BAYERPAT), such as RGGB; absent otherwise.
 	readonly bayer?: string
+	// CFA pattern at the image origin: BAYERPAT when it is a known pattern, shifted by the XBAYROFF and
+	// YBAYROFF offsets; absent when the image is not a mono CFA mosaic or its pattern cannot be trusted.
+	readonly cfa?: CfaPattern
 	// FITS-compatible header of the image (for XISF, its FITS keywords).
 	readonly header: FitsHeader
 	// Acquisition data normalized from the header.
@@ -106,6 +113,25 @@ export function imageAcquisition(header: FitsHeader): ImageAcquisition {
 	}
 }
 
+// Known CFA patterns, the valid values of BAYERPAT.
+const CFA_PATTERNS: ReadonlySet<string> = new Set<CfaPattern>(['RGGB', 'BGGR', 'GBRG', 'GRBG', 'GRGB', 'GBGR', 'RGBG', 'BGRG'])
+
+// Returns whether a value is a known CFA pattern.
+function isCfaPattern(value: string | undefined): value is CfaPattern {
+	return value !== undefined && CFA_PATTERNS.has(value)
+}
+
+// Returns the CFA pattern at the origin of an image from its header: BAYERPAT shifted by the integer
+// XBAYROFF and YBAYROFF offsets, in pixels (0 when absent). Absent for an image with more than one
+// channel, an unknown pattern, or non-integer offsets, so no pattern is ever assumed.
+export function cfaPattern(header: FitsHeader, channels: number): CfaPattern | undefined {
+	const pattern = cfaPatternKeyword(header)?.toUpperCase()
+	if (channels !== 1 || !isCfaPattern(pattern)) return undefined
+	const x = numericKeyword(header, 'XBAYROFF', 0)
+	const y = numericKeyword(header, 'YBAYROFF', 0)
+	return Number.isInteger(x) && Number.isInteger(y) ? shiftCfaPattern(pattern, x, y) : undefined
+}
+
 // Screen transfer function parameters, all in [0, 1] with shadow <= highlight.
 export interface Stretch {
 	// Midtone balance; 0.5 is linear.
@@ -116,16 +142,54 @@ export interface Stretch {
 	readonly highlight: number
 }
 
-// Body of a render request. Further transformations become further optional fields.
+// Stretch of a rendering: computed from the image statistics (auto; linked computes one stretch from
+// the luminance, unlinked one per RGB channel), explicit (manual), or none (linear).
+export type DisplayStretch = { readonly mode: 'auto'; readonly linked: boolean } | { readonly mode: 'manual'; readonly stretch: Stretch } | { readonly mode: 'linear' }
+
+// Debayering of a mono CFA mosaic: off, or with the pattern of the image (auto, its ImageInfo cfa) or
+// an explicit one. Ignored for an image that is not mono.
+export type DisplayDebayer = { readonly enabled: false } | { readonly enabled: true; readonly pattern: 'auto' | CfaPattern }
+
+// Removal of a color cast from one channel (SCNR), applied only to RGB renderings. The amount is in [0, 1].
+export type DisplayScnr = { readonly enabled: false } | { readonly enabled: true; readonly channel: ImageChannel; readonly amount: number; readonly method: SCNRProtectionMethod }
+
+// Complete settings of a rendering, applied in this order: debayer, stretch, brightness, contrast,
+// gamma, saturation, SCNR, invert. Neutral values leave the image unchanged.
+export interface DisplaySettings {
+	// Debayering of a CFA mosaic.
+	readonly debayer: DisplayDebayer
+	// Display stretch.
+	readonly stretch: DisplayStretch
+	// Brightness factor, non-negative; 1 is neutral.
+	readonly brightness: number
+	// Contrast factor around mid-gray, non-negative; 1 is neutral.
+	readonly contrast: number
+	// Gamma, positive; 1 is neutral.
+	readonly gamma: number
+	// Saturation factor of RGB renderings, non-negative; 1 is neutral.
+	readonly saturation: number
+	// Color cast removal of RGB renderings.
+	readonly scnr: DisplayScnr
+	// Whether to invert the rendering.
+	readonly invert: boolean
+}
+
+// Body of a render request.
 export interface RenderRequest {
-	// Display stretch: computed from the image statistics (auto), or explicit.
-	readonly stretch: 'auto' | Stretch
+	// Settings to render with.
+	readonly settings: DisplaySettings
 }
 
 // Rendering parameters actually applied, sent as JSON in the RENDER_HEADER response header.
 export interface RenderResult {
-	// Stretch applied; for an auto stretch, the parameters computed from the image.
-	readonly stretch: Stretch
+	// Stretch applied: one for every sample, or one per RGB channel (red, green, blue) for an unlinked
+	// auto stretch. An auto stretch reports the parameters computed from the image; linear reports the
+	// identity (midtone 0.5, shadow 0, highlight 1).
+	readonly stretch: readonly Stretch[]
+	// CFA pattern the image was debayered with; absent when it was not.
+	readonly cfa?: CfaPattern
+	// Channels of the rendering: 1 for grayscale (including a raw CFA mosaic), 3 for RGB.
+	readonly channels: 1 | 3
 }
 
 // A rendering of an image document.
@@ -137,21 +201,31 @@ export interface Rendering {
 }
 
 // Message sent to the image worker. Open and render carry an id that their response echoes; a close
-// has no response.
-export type ImageWorkerRequest = { readonly type: 'open'; readonly id: number; readonly path: string } | { readonly type: 'render'; readonly id: number; readonly document: string; readonly request: RenderRequest } | { readonly type: 'close'; readonly document: string }
+// has no response, and a cancel drops the render with that id if it has not started yet (the render
+// then answers superseded).
+export type ImageWorkerRequest = { readonly type: 'open'; readonly id: number; readonly path: string } | { readonly type: 'render'; readonly id: number; readonly document: string; readonly request: RenderRequest } | { readonly type: 'cancel'; readonly id: number } | { readonly type: 'close'; readonly document: string }
 
 // Message the image worker answers a request with, by request id: the opened document, the rendering,
-// a document that is not open (missing), a file that cannot be opened (with the status of its
+// a document that is not open (missing), a render dropped before it started (superseded), settings that
+// cannot be applied to the image (invalid), a file that cannot be opened (with the status of its
 // ImageOpenError), or any other failure.
 export type ImageWorkerResponse =
 	| { readonly id: number; readonly status: 'opened'; readonly info: ImageInfo }
 	| ({ readonly id: number; readonly status: 'rendered' } & Rendering)
 	| { readonly id: number; readonly status: 'missing' }
+	| { readonly id: number; readonly status: 'superseded' }
+	| { readonly id: number; readonly status: 'invalid'; readonly error: string }
 	| { readonly id: number; readonly status: 'unopenable'; readonly path: string; readonly httpStatus: 404 | 415 }
 	| { readonly id: number; readonly status: 'failed'; readonly error: string }
 
+// Outcome of a render: the rendering, or why there is none (see ImageWorkerResponse).
+export type RenderOutcome = ({ readonly status: 'rendered' } & Rendering) | { readonly status: 'missing' } | { readonly status: 'superseded' } | { readonly status: 'invalid'; readonly error: string }
+
 // Response header carrying the RenderResult of a rendering.
 export const RENDER_HEADER = 'X-Image-Render'
+
+// Error of display settings that cannot be applied to an image, such as debayering without a pattern.
+export class DisplayError extends Error {}
 
 // Error of an image that cannot be opened: missing file (404) or not a readable FITS or XISF image (415).
 export class ImageOpenError extends Error {
@@ -199,14 +273,25 @@ export class ImageStore {
 		return response.info
 	}
 
-	// Renders a document as JPEG with the requested stretch. Resolves to undefined for an unknown id,
-	// including one closed while the rendering was queued.
-	async render(id: string, request: RenderRequest): Promise<Rendering | undefined> {
-		if (!this.#documents.has(id)) return undefined
-		const response = await this.#request({ type: 'render', id: this.#id++, document: id, request })
-		if (response.status === 'rendered') return { jpeg: response.jpeg, result: response.result }
-		if (response.status === 'missing') return undefined
-		throw responseError(response)
+	// Renders a document as JPEG with the requested settings. Resolves to missing for an unknown id,
+	// including one closed while the rendering was queued, and to superseded when a newer rendering of
+	// the same document, or an abort of signal, dropped it before it started.
+	async render(id: string, request: RenderRequest, signal?: AbortSignal): Promise<RenderOutcome> {
+		if (!this.#documents.has(id)) return { status: 'missing' }
+		if (signal?.aborted) return { status: 'superseded' }
+		const requestId = this.#id++
+		const cancel = () => this.#post({ type: 'cancel', id: requestId })
+		signal?.addEventListener('abort', cancel, { once: true })
+
+		try {
+			const response = await this.#request({ type: 'render', id: requestId, document: id, request })
+			if (response.status === 'rendered') return { status: 'rendered', jpeg: response.jpeg, result: response.result }
+			if (response.status === 'missing' || response.status === 'superseded') return { status: response.status }
+			if (response.status === 'invalid') return { status: 'invalid', error: response.error }
+			throw responseError(response)
+		} finally {
+			signal?.removeEventListener('abort', cancel)
+		}
 	}
 
 	// Closes a document, releasing its pixels. Returns false for an unknown id.
@@ -286,9 +371,12 @@ export async function handleOpenImage(req: Request): Promise<Response> {
 }
 
 // Handles POST /api/images/:id/render with a RenderRequest: responds with the JPEG and its RenderResult
-// in RENDER_HEADER, or 404 when the document is not open.
+// in RENDER_HEADER, 404 when the document is not open, 409 when a newer rendering of the document or an
+// aborted request dropped it, and 422 when the settings cannot be applied to the image.
 export async function handleRenderImage(req: Request, id: string): Promise<Response> {
-	const rendering = await images.render(id, (await req.json()) as RenderRequest)
-	if (!rendering) return Response.json({ error: 'Image not found' }, { status: 404 })
-	return new Response(rendering.jpeg, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', [RENDER_HEADER]: JSON.stringify(rendering.result) } })
+	const outcome = await images.render(id, (await req.json()) as RenderRequest, req.signal)
+	if (outcome.status === 'missing') return Response.json({ error: 'Image not found' }, { status: 404 })
+	if (outcome.status === 'superseded') return Response.json({ error: 'Rendering superseded' }, { status: 409 })
+	if (outcome.status === 'invalid') return Response.json({ error: outcome.error }, { status: 422 })
+	return new Response(outcome.jpeg, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', [RENDER_HEADER]: JSON.stringify(outcome.result) } })
 }

@@ -9,7 +9,7 @@ import { broadcast, websocket } from './websocket'
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
 export type { DeviceEvent, DeviceSummary, ManagedDeviceType } from './devices'
 export type { DirectoryListing, FileEntry } from './files'
-export type { Binning, ImageAcquisition, ImageFormat, ImageInfo, RenderRequest, RenderResult, Stretch } from './images'
+export type { Binning, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageFormat, ImageInfo, RenderRequest, RenderResult, Stretch } from './images'
 export { websocket }
 
 connections.listen(broadcast)

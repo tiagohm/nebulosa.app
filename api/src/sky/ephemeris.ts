@@ -1,7 +1,7 @@
 import { observer as horizonsObserver, type ObserverWithOsculatingElements, Quantity } from 'nebulosa/src/adapters/ephemeris/horizons'
 import { planetMagnitude } from 'nebulosa/src/astronomy/bodies/photometry'
 import { cirsToObserved, icrsToCirs, lightTime, refractedAltitude, type PositionAndVelocity, type PositionAndVelocityOverTime, phaseAngle, topocentricDirection } from 'nebulosa/src/astronomy/coordinates/astrometry'
-import { constellation as constellationOf } from 'nebulosa/src/astronomy/coordinates/constellation'
+import { constellation as constellationOf, CONSTELLATIONS } from 'nebulosa/src/astronomy/coordinates/constellation'
 import { eraC2s, eraEo06a } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { frameToFrame, ICRS, ITRS } from 'nebulosa/src/astronomy/coordinates/frame'
 import { itrs } from 'nebulosa/src/astronomy/coordinates/itrs'
@@ -149,6 +149,8 @@ export interface SkyPosition {
 	readonly elongation?: number
 	// IAU abbreviation of the constellation of the apparent position, upper case, such as "ORI".
 	readonly constellation: string
+	// Name of that constellation, such as "Orion"; absent when the code is unknown.
+	readonly constellationName?: string
 }
 
 // Rise, transit, and set nearest the instant, within ±12 h, for an observer. Times are Unix
@@ -671,6 +673,13 @@ export class SkyEphemeris {
 	// semantic Horizons failures and minor bodies without a local model reject. Catalog objects and fast
 	// requests are always local.
 	async position(target: EphemerisTarget, request: PositionRequest): Promise<SkyPosition> {
+		const position = await this.#position(target, request)
+		const name = CONSTELLATIONS[position.constellation as keyof typeof CONSTELLATIONS]?.name
+		return name ? { ...position, constellationName: name } : position
+	}
+
+	// Computes a position as described by position(), without the constellation name.
+	async #position(target: EphemerisTarget, request: PositionRequest): Promise<SkyPosition> {
 		request.signal?.throwIfAborted()
 
 		if (target.type === 'catalog') return { time: request.time, source: 'local', ...catalogPosition(target.object, makeTime(request.time, request.observer)) }

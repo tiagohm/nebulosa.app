@@ -59,3 +59,17 @@ test('local positions of the major bodies', async () => {
 	expect(bodies.map((e) => e.code)).toEqual(['10', '301', '199', '299', '499', '599', '699', '799', '899', '999'])
 	expect(bodies[0].magnitude).toBe(-26.74)
 })
+
+test('constellations are located at their label', async () => {
+	const withLabels = createSkyRoutes({ catalog: fixtureCatalog(), constellations: { lines: [], boundaries: [], labels: [{ name: 'Orion', rightAscension: 1.45, declination: 0.05 }] }, ephemeris: new SkyEphemeris(), minorBodies: new MinorBodies() })
+	const details = withLabels['/api/sky/constellations/:code'].GET(Object.assign(new Request('http://localhost/api/sky/constellations/ori'), { params: { code: 'ori' } }) as never)
+	expect(((await details.json()) as { name: string }).name).toBe('Orion')
+
+	const body = { target: { kind: 'constellation', code: 'ORI' }, time: Date.UTC(2026, 9, 18, 12) }
+	const response = await withLabels['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify(body) }))
+	const { position } = (await response.json()) as SkyPositionResponse
+	expect(position.source).toBe('local')
+	expect(position.rightAscensionJ2000).toBe(1.45)
+	expect(position.distance).toBeUndefined()
+	expect(position.constellationName).toBe('Orion')
+})

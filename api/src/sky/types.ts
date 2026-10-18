@@ -16,9 +16,11 @@ export type SkyObjectRef =
 	| { readonly kind: 'body'; readonly code: SolarSystemBodyCode }
 	// Asteroid or comet of the JPL Small-Body Database, by its SPK-ID, with the designation shown for it.
 	| { readonly kind: 'minorBody'; readonly spkId: string; readonly designation: string }
+	// IAU constellation, by its upper-case code such as "ORI", located at its label.
+	| { readonly kind: 'constellation'; readonly code: string }
 
 // Group an object belongs to in search results and in the inspector.
-export type SkyObjectCategory = 'star' | 'deepSky' | 'solarSystem' | 'minorBody'
+export type SkyObjectCategory = 'star' | 'deepSky' | 'solarSystem' | 'minorBody' | 'constellation'
 
 // Object matched by a search.
 export interface SkySearchResult {
@@ -134,8 +136,9 @@ export interface SkyConstellations {
 	readonly lines: readonly (readonly (readonly [number, number])[])[]
 	// Boundary polylines.
 	readonly boundaries: readonly (readonly (readonly [number, number])[])[]
-	// Labels at the constellation centers.
-	readonly labels: readonly { readonly name: string; readonly rightAscension: number; readonly declination: number }[]
+	// Labels at the constellation centers, with the upper-case IAU code of their constellation (empty when
+	// unknown).
+	readonly labels: readonly { readonly name: string; readonly code: string; readonly rightAscension: number; readonly declination: number }[]
 }
 
 // Orbital element or physical parameter of a minor body, as published by SBDB.
@@ -221,4 +224,21 @@ export interface SkyBodiesRequest {
 	readonly time: number
 	// Observer; the geocenter when absent.
 	readonly observer?: SkyObserver
+}
+
+// IAU constellation, located at its label: a fixed J2000 point near its center, without proper motion,
+// distance, or radial velocity.
+export interface SkyConstellation {
+	// Upper-case IAU code, such as "ORI".
+	readonly code: string
+	// IAU abbreviation, such as "Ori".
+	readonly abbreviation: string
+	// Name, such as "Orion".
+	readonly name: string
+	// Genitive, such as "Orionis".
+	readonly genitive: string
+	// Right ascension of the label at J2000 in radians.
+	readonly rightAscension: number
+	// Declination of the label at J2000 in radians.
+	readonly declination: number
 }

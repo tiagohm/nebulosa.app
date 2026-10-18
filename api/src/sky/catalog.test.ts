@@ -108,3 +108,13 @@ test('schema version', () => {
 	expect(() => assertSkyCatalogSchema(db)).not.toThrow()
 	expect(() => assertSkyCatalogSchema(new Database(':memory:'))).toThrow('Run "bun make:catalog --force"')
 })
+
+test('render stars up to a magnitude', () => {
+	expect(renderStars(db, TIME, 1).ids).toEqual([32263, 27919])
+	expect(renderStars(db, TIME, -2).ids).toEqual([])
+})
+
+test('constellation labels carry their code', () => {
+	const data = renderConstellations({ lines: [], boundaries: [], labels: [{ name: 'Serpens Cauda', rightAscension: 4.8, declination: -0.1 }] }, TIME)
+	expect(data.labels[0].code).toBe('SER')
+})

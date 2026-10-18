@@ -7,6 +7,7 @@ import { J2000 } from 'nebulosa/src/core/constants'
 import { type Mat3, matMulVec } from 'nebulosa/src/math/linear-algebra/mat3'
 import type { MutVec3 } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle, toArcmin } from 'nebulosa/src/math/units/angle'
+import { constellationOfLabel } from './constellations'
 import { CATALOG, constellationAbbreviation, displayPriority, formatDesignation, parseDesignationQuery } from './designations'
 import type { SkyCatalogNameRow, SkyCatalogObjectRow } from './schema'
 import type { SkyCatalogObject, SkyConstellations, SkyDeepSkyData, SkySearchResult, SkyStarData } from './types'
@@ -330,6 +331,20 @@ function starRows(db: Database): readonly StarRow[] {
 	return stars
 }
 
+// Number of rows, sorted by magnitude, whose magnitude is at most `limit`.
+function upperBound(rows: readonly StarRow[], limit: number) {
+	let low = 0
+	let high = rows.length
+
+	while (low < high) {
+		const middle = (low + high) >>> 1
+		if (rows[middle].magnitude <= limit) low = middle + 1
+		else high = middle
+	}
+
+	return low
+}
+
 // Rounds an angle in radians to 1e-7 rad (0.02″), well under a pixel at any zoom, to keep payloads small.
 function roundAngle(value: number) {
 	return Math.round(value * 1e7) / 1e7
@@ -338,9 +353,10 @@ function roundAngle(value: number) {
 // Returns every star of the catalog for rendering, at the true equator of `time` (Unix milliseconds).
 // Proper motion is applied linearly from J2000, which is accurate to well under an arcsecond over the
 // decades the map is used for.
-export function renderStars(db: Database, time: number): SkyStarData {
+export function renderStars(db: Database, time: number, magnitudeLimit: number = Number.POSITIVE_INFINITY): SkyStarData {
 	const equator = new EquatorOfDate(timeUnix(time / 1000, true))
-	const rows = starRows(db)
+	const all = starRows(db)
+	const rows = Number.isFinite(magnitudeLimit) ? all.slice(0, upperBound(all, magnitudeLimit)) : all
 	const data = { time, ids: new Array<number>(rows.length), names: new Array<string>(rows.length), designations: new Array<string>(rows.length), ra: new Array<number>(rows.length), dec: new Array<number>(rows.length), mag: new Array<number>(rows.length), bv: new Array<number>(rows.length) }
 
 	for (let i = 0; i < rows.length; i++) {
@@ -419,7 +435,7 @@ export function renderConstellations(source: ConstellationSource, time: number):
 		boundaries: source.boundaries.map(polyline),
 		labels: source.labels.map(({ name, rightAscension, declination }) => {
 			const [ra, dec] = equator.convert(rightAscension, declination)
-			return { name, rightAscension: roundAngle(ra), declination: roundAngle(dec) }
+			return { name, code: constellationOfLabel(name) ?? '', rightAscension: roundAngle(ra), declination: roundAngle(dec) }
 		}),
 	}
 }

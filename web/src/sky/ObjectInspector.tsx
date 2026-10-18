@@ -8,13 +8,15 @@ import { Button } from '../ui/Button'
 import { formatAngularSize, formatDeclination, formatDegrees, formatLocalTime, formatMagnitude, formatRightAscension, formatSolarSystemDistance, formatStellarDistance } from './format'
 import { MountInspector } from './MountInspector'
 import { type SkySelection, skyState } from './sky'
+import { SlewSection } from './SlewSection'
 
 // Object Inspector of the Sky workspace: the selected object's identity, catalog data, coordinates, and,
 // for an observer, its altitude, azimuth, rise, transit, and set; for solar-system objects, distance,
 // magnitude, and illumination; for minor bodies, their SBDB classification and elements. Every value
 // says what it is: catalog J2000 or apparent of date, topocentric or geocentric, the instant, and the
 // provider (Horizons or a local model, with the reason). Missing data is shown as missing, never as a
-// placeholder value, and catalog data stays shown when a position fails. The mount marker has its own view.
+// placeholder value, and catalog data stays shown when a position fails. With a mount on the profile's
+// connection, the object can be slewed to. The mount marker has its own view.
 
 // Description of each fallback reason.
 const FALLBACK_REASONS = { timeout: 'Horizons did not answer in time', network: 'Horizons cannot be reached', breakerOpen: 'Horizons failed repeatedly and is paused' } as const
@@ -79,6 +81,7 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 					</Button>
 				</div>
 			</PanelSection>
+			<SlewSection target={selection.ref} targetName={selection.name} observer={observer} />
 			<PositionSection selection={selection} timeZone={timeZone} />
 			{position && <ObserverSection position={position} events={events} hasObserver={hasObserver} onSetObserver={onSetObserver} isSolarSystem={selection.ref.kind === 'body' || selection.ref.kind === 'minorBody'} timeZone={timeZone} />}
 			{catalog && <CatalogSection catalog={catalog} />}

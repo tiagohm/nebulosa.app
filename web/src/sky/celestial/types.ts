@@ -301,8 +301,6 @@ export interface InteractionOptions {
 	pickRadius?: number
 	// Minimum interval between hover picks in milliseconds.
 	pointerMoveThrottleMs?: number
-	// Whether d3-zoom drives pan and zoom instead of the built-in handlers.
-	preferD3Zoom?: boolean
 	// Zoom change per wheel pixel, in [0.00005, 0.01].
 	wheelZoomSpeed?: number
 }
@@ -363,7 +361,7 @@ export interface ResolvedCelestialOptions {
 	readonly interactions: Required<InteractionOptions>
 }
 
-// Pan and zoom transform in d3-zoom's x/y/k shape, relative to the canvas center.
+// Pan and zoom transform relative to the canvas center: a base position b is shown at center + (x, y) + (b - center) × k.
 export interface ViewTransform {
 	// Horizontal translation in pixels.
 	x: number

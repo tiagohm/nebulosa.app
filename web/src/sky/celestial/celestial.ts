@@ -1,5 +1,3 @@
-import { select } from 'd3-selection'
-import { type D3ZoomEvent, type ZoomBehavior, zoom, zoomIdentity } from 'd3-zoom'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { PIOVERTWO } from 'nebulosa/src/core/constants'
 import type { Writable } from 'nebulosa/src/core/types'
@@ -25,6 +23,7 @@ import {
 	writeRaDecUnitVector,
 	writeViewMatrix,
 } from './geometry'
+import { anchoredTransform, beginGesture, type GestureAnchor, type GesturePointer, gestureTransform } from './gesture'
 import { BackgroundLayer, CONSTELLATION_LABEL_MIN_ZOOM, ConstellationBoundaryLayer, ConstellationLabelLayer, ConstellationLineLayer, DeepSkyObjectLayer, GridLayer, HorizonLayer, InteractionOverlayLayer, MilkyWayLayer, MovingBodyLayer, ReferenceLineLayer, ShapeLayer, StarLayer } from './layers'
 import { resolveOptions, validateObserver, validateProjection } from './options'
 import { FixedGridSpatialIndex, isPickableLayerId, objectLayerId, PICK_TYPE_CONSTELLATION_LABEL, PICK_TYPE_DSO, PICK_TYPE_MOVING_BODY, PICK_TYPE_SHAPE, PICK_TYPE_STAR, type PickIndex, pickMatchesObject, sameObject } from './picking'
@@ -58,7 +57,7 @@ export type * from './types'
 
 // Celestial: an interactive Canvas star map rendered in the browser. It owns the observer, time, and view,
 // projects the loaded catalogs and caller objects through an azimuthal projection, and drives the layers,
-// picking, pointer interactions (d3-zoom or built-in), and events. Astronomical updates (time or observer
+// picking, pointer interactions (pan, pinch, and wheel zoom), and events. Astronomical updates (time or observer
 // changes) are coalesced into microtasks and rendering into animation frames. This module is the entry
 // point of the star map and re-exports its public types.
 
@@ -110,6 +109,14 @@ function resolveContainer(container: HTMLElement | string): HTMLElement {
 	return element
 }
 
+// Pressed pointer of a gesture, in map-local pixels.
+interface ActivePointer extends GesturePointer {
+	// Horizontal press position in pixels.
+	readonly startX: number
+	// Vertical press position in pixels.
+	readonly startY: number
+}
+
 // Normalizes a thrown value to an Error.
 function normalizeError(error: unknown): Error {
 	return error instanceof Error ? error : new Error(String(error))
@@ -159,15 +166,12 @@ export class Celestial {
 	#projectedGeometryRevision = 0
 	#pickingDirty = false
 	#destroyed = false
-	#pointerDown = false
+	// Pressed pointers by pointer id, with their press positions, in map-local pixels.
+	readonly #activePointers = new Map<number, ActivePointer>()
+	// Pan or pinch in progress, anchored when the pressed pointers last changed.
+	#gesture: GestureAnchor | undefined
+	// Whether the pointers moved the view since the first press, which suppresses the click.
 	#pointerMoved = false
-	#d3ZoomBound = false
-	#d3ZoomActive = false
-	#d3ZoomBehavior: ZoomBehavior<HTMLElement, unknown> | null = null
-	#pointerStartX = 0
-	#pointerStartY = 0
-	#transformStartX = 0
-	#transformStartY = 0
 	#lastPointerMove = 0
 	#lastPointerX = Number.NaN
 	#lastPointerY = Number.NaN
@@ -182,11 +186,7 @@ export class Celestial {
 
 		this.setupLayers()
 
-		if (this.#options.interactions.preferD3Zoom) {
-			this.bindD3Zoom()
-		} else {
-			this.bindLocalInteractions()
-		}
+		this.bindInteractions()
 
 		// The element rect is cached for pointer math; scroll/resize can move it, so invalidate on both.
 		window.addEventListener('scroll', this.invalidateRect, { capture: true, passive: true })
@@ -255,15 +255,10 @@ export class Celestial {
 		}
 	}
 
-	// Sets the pan and zoom transform, clamping the zoom to the configured range and keeping d3-zoom in sync.
+	// Sets the pan and zoom transform, clamping the zoom to the configured range; a gesture in progress continues from it.
 	setViewTransform(transform: ViewTransform) {
-		const nextTransform = this.normalizeViewTransform(transform)
-
-		if (this.#d3ZoomBehavior) {
-			this.syncD3ZoomTransform(nextTransform)
-		}
-
-		if (this.writeViewTransform(nextTransform)) {
+		if (this.writeViewTransform(this.normalizeViewTransform(transform))) {
+			this.restartGesture()
 			this.afterTransformChanged()
 		}
 	}
@@ -333,7 +328,6 @@ export class Celestial {
 		this.invalidateProjectedGeometry()
 		this.#cachedRect = null
 		this.#renderer.resize(this.#options.width, this.#options.height)
-		this.syncD3ZoomTransform(this.#transform)
 		this.projectStars()
 		this.projectDeepSkyObjects()
 		this.rebuildPickingIndex()
@@ -358,8 +352,9 @@ export class Celestial {
 
 		this.#destroyed = true
 		this.stopAutoUpdate()
-		this.unbindD3Zoom()
-		this.unbindLocalInteractions()
+		this.unbindInteractions()
+		this.#activePointers.clear()
+		this.#gesture = undefined
 		window.removeEventListener('scroll', this.invalidateRect, { capture: true })
 		window.removeEventListener('resize', this.invalidateRect)
 
@@ -1403,8 +1398,8 @@ export class Celestial {
 		this.#emitter.emit('error', error)
 	}
 
-	// Binds the built-in pointer handlers for pan, wheel zoom, hover, and click.
-	private bindLocalInteractions() {
+	// Binds the pointer handlers for pan, pinch and wheel zoom, hover, and click.
+	private bindInteractions() {
 		if (!this.#options.interactions.enabled) return
 
 		const element = this.#renderer.element
@@ -1416,8 +1411,8 @@ export class Celestial {
 		document.addEventListener('pointercancel', this.handlePointerUp)
 	}
 
-	// Removes the built-in pointer handlers.
-	private unbindLocalInteractions() {
+	// Removes the pointer handlers.
+	private unbindInteractions() {
 		const element = this.#renderer.element
 		element.removeEventListener('pointerdown', this.handlePointerDown)
 		element.removeEventListener('pointermove', this.handlePointerMove)
@@ -1427,61 +1422,29 @@ export class Celestial {
 		document.removeEventListener('pointercancel', this.handlePointerUp)
 	}
 
-	// Binds d3-zoom for pan and zoom, and pointer handlers for hover and click.
-	private bindD3Zoom() {
-		if (!this.#options.interactions.enabled || this.#d3ZoomBound) return
-
-		const behavior = zoom<HTMLElement, unknown>()
-			.scaleExtent([this.#options.interactions.minZoom, this.#options.interactions.maxZoom])
-			.wheelDelta((event: WheelEvent) => -(normalizedWheelDeltaY(event) * this.#options.interactions.wheelZoomSpeed) / Math.LN2)
-			.on('start', () => {
-				this.#d3ZoomActive = true
-			})
-			.on('zoom', (event: D3ZoomEvent<HTMLElement, unknown>) => {
-				const k = event.transform.k
-				const transform = this.normalizeViewTransform({ x: event.transform.x - (this.#options.width / 2) * (1 - k), y: event.transform.y - (this.#options.height / 2) * (1 - k), k })
-
-				if (this.writeViewTransform(transform)) {
-					this.afterTransformChanged()
-				}
-			})
-			.on('end', () => {
-				this.#d3ZoomActive = false
-				this.refreshPointerHover()
-			})
-
-		const element = this.#renderer.element
-		element.addEventListener('pointermove', this.handlePointerMove)
-		element.addEventListener('click', this.handleClick)
-		select(element).call(behavior).on('dblclick.zoom', null)
-		this.#d3ZoomBehavior = behavior
-		this.#d3ZoomBound = true
+	// Re-anchors the gesture on the pointers still down, or ends it when none is.
+	private restartGesture() {
+		this.#gesture = beginGesture(this.#activePointers.values(), this.#transform)
 	}
 
-	// Removes the d3-zoom listeners.
-	private unbindD3Zoom() {
-		if (!this.#d3ZoomBound) return
-
-		select(this.#renderer.element).on('.zoom', null)
-		this.#d3ZoomBehavior = null
-		this.#d3ZoomBound = false
-		this.#d3ZoomActive = false
-	}
-
-	// Starts a built-in pan on primary button press.
+	// Adds a pressed pointer (primary button, finger, or pen) to the gesture; a second pointer starts a pinch.
 	private readonly handlePointerDown = (event: PointerEvent): void => {
 		if (event.button !== 0) return
 
-		this.#pointerDown = true
-		this.#pointerMoved = false
-		this.#pointerStartX = event.clientX
-		this.#pointerStartY = event.clientY
-		this.#transformStartX = this.#transform.x
-		this.#transformStartY = this.#transform.y
+		const point = this.eventPoint(event)
+
+		if (this.#activePointers.size === 0) {
+			this.#pointerMoved = false
+		}
+
+		this.#activePointers.set(event.pointerId, { x: point[0], y: point[1], startX: point[0], startY: point[1] })
+		this.#pointerMoved ||= this.#activePointers.size > 1
+		this.restartGesture()
 		this.#renderer.element.setPointerCapture?.(event.pointerId)
 	}
 
-	// Pans during a built-in drag, otherwise updates the hover pick at most once per throttle interval.
+	// Pans or pinches while pointers are down, otherwise updates the hover pick at most once per throttle
+	// interval.
 	private readonly handlePointerMove = (event: PointerEvent): void => {
 		const point = this.eventPoint(event)
 		const x = point[0]
@@ -1489,19 +1452,28 @@ export class Celestial {
 		this.#lastPointerX = x
 		this.#lastPointerY = y
 
-		if (this.#d3ZoomActive) return
+		const pointer = this.#activePointers.get(event.pointerId)
 
-		const now = performance.now()
+		if (pointer) {
+			pointer.x = x
+			pointer.y = y
+			this.#pointerMoved ||= Math.abs(x - pointer.startX) + Math.abs(y - pointer.startY) > 3
 
-		if (this.#pointerDown) {
-			const dx = event.clientX - this.#pointerStartX
-			const dy = event.clientY - this.#pointerStartY
-			this.#pointerMoved ||= Math.abs(dx) + Math.abs(dy) > 3
-			this.#transform.x = this.#transformStartX + dx
-			this.#transform.y = this.#transformStartY + dy
-			this.afterTransformChanged()
+			if (this.#gesture) {
+				const { width, height, interactions } = this.#options
+				const transform = gestureTransform(this.#gesture, this.#activePointers.values(), width, height, interactions.minZoom, interactions.maxZoom)
+
+				if (this.writeViewTransform(transform)) {
+					this.afterTransformChanged()
+				}
+			}
+
 			return
 		}
+
+		if (this.#activePointers.size > 0) return
+
+		const now = performance.now()
 
 		if (now - this.#lastPointerMove < this.#options.interactions.pointerMoveThrottleMs) return
 
@@ -1509,15 +1481,20 @@ export class Celestial {
 		this.updatePointerHover(x, y)
 	}
 
-	// Ends a built-in pan.
+	// Removes a released or cancelled pointer from the gesture, refreshing the hover when the last one lifts
+	// after moving the view.
 	private readonly handlePointerUp = (event: PointerEvent): void => {
-		if (!this.#pointerDown) return
+		if (!this.#activePointers.delete(event.pointerId)) return
 
-		this.#pointerDown = false
 		this.#renderer.element.releasePointerCapture?.(event.pointerId)
+		this.restartGesture()
+
+		if (this.#activePointers.size === 0 && this.#pointerMoved) {
+			this.refreshPointerHover()
+		}
 	}
 
-	// Emits click and selects the picked object, unless the click ended a built-in pan.
+	// Emits click and selects the picked object, unless the click ended a pan or pinch.
 	private readonly handleClick = (event: MouseEvent): void => {
 		if (this.#pointerMoved) return
 
@@ -1544,7 +1521,7 @@ export class Celestial {
 		this.requestRender()
 	}
 
-	// Zooms around the pointer on wheel in built-in interaction mode.
+	// Zooms around the pointer on wheel, re-anchoring a gesture in progress.
 	private readonly handleWheel = (event: WheelEvent): void => {
 		event.preventDefault()
 
@@ -1554,13 +1531,8 @@ export class Celestial {
 
 		if (nextK === previousK) return
 
-		const cx = this.#options.width / 2
-		const cy = this.#options.height / 2
-		const worldX = (point[0] - cx - this.#transform.x) / previousK
-		const worldY = (point[1] - cy - this.#transform.y) / previousK
-		this.#transform.k = nextK
-		this.#transform.x = point[0] - cx - worldX * nextK
-		this.#transform.y = point[1] - cy - worldY * nextK
+		this.writeViewTransform(anchoredTransform(this.#transform, point[0], point[1], point[0], point[1], nextK, this.#options.width, this.#options.height))
+		this.restartGesture()
 		this.afterTransformChanged()
 	}
 
@@ -1578,15 +1550,6 @@ export class Celestial {
 		if (transform.x === this.#transform.x && transform.y === this.#transform.y && transform.k === this.#transform.k) return false
 		this.#transform = transform
 		return true
-	}
-
-	// Stores a transform in d3-zoom's state (whose origin is the canvas corner) without emitting zoom events.
-	private syncD3ZoomTransform(transform: ViewTransform) {
-		if (!this.#d3ZoomBehavior) return
-
-		const d3Transform = zoomIdentity.translate(transform.x + (this.#options.width / 2) * (1 - transform.k), transform.y + (this.#options.height / 2) * (1 - transform.k)).scale(transform.k)
-
-		select(this.#renderer.element).property('__zoom', d3Transform)
 	}
 
 	// Redraws after a pan or zoom, reprojecting stars only when the view left the projected area.

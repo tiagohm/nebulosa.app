@@ -150,7 +150,6 @@ const DEFAULT_INTERACTION_OPTIONS: Required<InteractionOptions> = {
 	maxZoom: 1000,
 	pickRadius: 7,
 	pointerMoveThrottleMs: 32,
-	preferD3Zoom: true,
 	wheelZoomSpeed: 0.0004,
 }
 

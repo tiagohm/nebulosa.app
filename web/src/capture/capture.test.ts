@@ -3,7 +3,7 @@ import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession }
 import { proxy } from 'valtio'
 import type { ImagesIo } from '../images/images'
 import { DEFAULT_ACQUISITION_SETTINGS } from '../profile/profile'
-import { cameraKey, captureCount, captureElapsed, captureRequest, type CaptureRuntime, captureRunning, captureStatus, handleCaptureEvent, refreshCaptures, renderFrame, startCapture, stopCapture } from './capture'
+import { cameraKey, captureCount, captureElapsed, captureRequest, type CaptureRuntime, captureRunning, captureStatus, fileState, frameState, handleCaptureEvent, refreshCaptures, renderFrame, startCapture, stopCapture } from './capture'
 import { parseDecimal } from './DecimalInput'
 
 function newState() {
@@ -15,7 +15,7 @@ function session(patch: Partial<CaptureSession> = {}): CaptureSession {
 }
 
 function frame(patch: Partial<CaptureFrame> = {}): CaptureFrame {
-	return { imageId: 'i1', sessionId: 's1', connectionId: 'c', deviceId: 'cam', generation: 1, time: 10, saved: false, frameType: 'LIGHT', width: 64, height: 32, channels: 1, acquisition: {}, ...patch }
+	return { imageId: 'i1', sessionId: 's1', connectionId: 'c', deviceId: 'cam', generation: 1, time: 10, frameType: 'LIGHT', width: 64, height: 32, channels: 1, acquisition: {}, ...patch }
 }
 
 const CAPABILITIES: CameraCapabilities = {
@@ -50,11 +50,11 @@ test('mirrors sessions, frames, and capabilities by exact camera, ignoring late 
 	handleCaptureEvent(state, { type: 'capture:updated', session: session() })
 	handleCaptureEvent(state, { type: 'capture:frame', frame: frame({ imageId: 'i2', time: 20 }) })
 	handleCaptureEvent(state, { type: 'capture:frame', frame: frame({ imageId: 'i1', time: 10 }) })
-	handleCaptureEvent(state, { type: 'capture:frame', frame: frame({ imageId: 'i2', time: 20, saved: true }) })
+	handleCaptureEvent(state, { type: 'capture:frame', frame: frame({ imageId: 'i2', time: 20, file: 'saved' }) })
 	handleCaptureEvent(state, { type: 'camera:capabilities', capabilities: CAPABILITIES })
 
 	expect(state.sessions[key]?.phase).toBe('exposing')
-	expect(state.frames[key]).toMatchObject({ imageId: 'i2', saved: true })
+	expect(state.frames[key]).toMatchObject({ imageId: 'i2', file: 'saved' })
 	expect(state.capabilities[key]?.name).toBe('Camera')
 	expect(state.sessions[cameraKey('other', 'cam')]).toBeUndefined()
 
@@ -141,7 +141,7 @@ test('keeps the previous rendering until the next frame is rendered, and when it
 	await renderFrame(state, key, frame({ imageId: 'i1' }), io)
 	expect(state.renderings[key]).toEqual({ imageId: 'i1', url: 'blob:1', width: 64, height: 32 })
 
-	await renderFrame(state, key, frame({ imageId: 'i1', saved: true }), io)
+	await renderFrame(state, key, frame({ imageId: 'i1', file: 'saved' }), io)
 	expect(created).toBe(1)
 
 	status = 404
@@ -170,4 +170,19 @@ test('parses decimal times without rounding them', () => {
 	expect(parseDecimal('abc', 0)).toBeUndefined()
 	expect(parseDecimal('', 0)).toBeUndefined()
 	expect(parseDecimal('Infinity', 0)).toBeUndefined()
+})
+
+test('keeps the frame state apart from the capture outcome', () => {
+	expect(frameState(frame({ imageId: 'i2' }))).toBe('received')
+	expect(frameState(frame({ imageId: 'i2' }), { imageId: 'i1' })).toBe('received')
+	expect(frameState(frame({ imageId: 'i2' }), { imageId: 'i2' }, 'Image not found')).toBe('ready')
+	expect(frameState(frame({ imageId: 'i2' }), { imageId: 'i1' }, 'Image not found')).toBe('error')
+	expect(frameState(frame({ imageId: 'i2' }), undefined, undefined, 'Unable to decode the frame')).toBe('error')
+})
+
+test('reports the file state of previewed and saved frames', () => {
+	expect(fileState(frame())).toBe('not-saved')
+	expect(fileState(frame({ path: '/f.fit', file: 'saving' }))).toBe('saving')
+	expect(fileState(frame({ path: '/f.fit', file: 'saved' }))).toBe('saved')
+	expect(fileState(frame({ path: '/f.fit', file: 'failed' }))).toBe('failed')
 })

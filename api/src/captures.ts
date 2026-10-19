@@ -85,6 +85,12 @@ export interface CaptureStartResponse {
 // - failed: the capture ended because of an error, given in reason and error.
 export type CapturePhase = 'starting' | 'exposing' | 'reading' | 'saving' | 'waiting' | 'completed' | 'stopped' | 'aborted' | 'failed'
 
+// State of the write of a saved frame's file, independent of the capture's outcome:
+// - saving: the write has not completed yet.
+// - saved: the file was completely written.
+// - failed: the write failed, which also ends the capture.
+export type CaptureFileState = 'saving' | 'saved' | 'failed'
+
 // Frame of a capture that was decoded into the image store.
 export interface CaptureFrame {
 	// Id of the capture document of the frame in the image store.
@@ -101,8 +107,8 @@ export interface CaptureFrame {
 	readonly time: number
 	// Absolute path of the file the frame is saved to; absent when it is only previewed.
 	readonly path?: string
-	// Whether the write of the frame's file completed; false until it does and when it failed.
-	readonly saved: boolean
+	// State of the write of the frame's file; absent when the frame is only previewed.
+	readonly file?: CaptureFileState
 	// Frame type the capture requested.
 	readonly frameType: CaptureSettings['frameType']
 	// Width of the image, in pixels.
@@ -184,8 +190,8 @@ interface FrameRecord {
 	readonly time: number
 	// File the frame is saved to, when saving.
 	readonly path?: string
-	// Whether the write of that file completed.
-	saved: boolean
+	// State of the write of that file, when saving.
+	file?: CaptureFileState
 }
 
 // Frame of a running session waiting to be decoded, or being decoded.
@@ -437,7 +443,7 @@ export class CameraCaptures implements Disposable {
 		const { output, frameType } = capture.session.request
 		const name = frameName(output.filenameTemplate ?? DEFAULT_FILENAME_TEMPLATE, { camera: camera.name, type: frameType, time, generation, timezoneOffset: -new Date(time).getTimezoneOffset() })
 		const path = join(output.directory || this.capturesDir, `${name}.${output.format === 'XISF' ? 'xisf' : 'fit'}`)
-		capture.frames.set(generation, { time, path, saved: false })
+		capture.frames.set(generation, { time, path, file: 'saving' })
 		capture.frames.delete(generation - FRAME_HISTORY)
 		this.#writes.set(path, { capture, generation })
 		return path
@@ -448,7 +454,7 @@ export class CameraCaptures implements Disposable {
 		if (event.generation > capture.generation) {
 			capture.generation = event.generation
 			// A frame that is not saved resolves no path, so its record starts when its exposure is commanded.
-			if (!capture.frames.has(event.generation)) capture.frames.set(event.generation, { time: Date.now(), saved: false })
+			if (!capture.frames.has(event.generation)) capture.frames.set(event.generation, { time: Date.now() })
 			capture.frames.delete(event.generation - FRAME_HISTORY)
 		}
 
@@ -514,8 +520,8 @@ export class CameraCaptures implements Disposable {
 				const previous = preview.frame
 				const bitpix = numericKeyword<number, undefined>(info.header, 'BITPIX', undefined)
 				const { width, height, channels, cfa, acquisition } = info
-				const saved = capture.frames.get(generation)?.saved === true
-				preview.frame = { imageId: info.id, sessionId, connectionId, deviceId, generation, time, path, saved, frameType: capture.session.request.frameType, width, height, channels, cfa, bitpix, acquisition }
+				const file = path === undefined ? undefined : (capture.frames.get(generation)?.file ?? 'saving')
+				preview.frame = { imageId: info.id, sessionId, connectionId, deviceId, generation, time, path, file, frameType: capture.session.request.frameType, width, height, channels, cfa, bitpix, acquisition }
 				if (previous) this.images.close(previous.imageId)
 				this.listener({ type: 'capture:frame', frame: preview.frame })
 				if (capture.session.previewError !== undefined) this.#update(capture, { previewError: undefined })
@@ -529,25 +535,39 @@ export class CameraCaptures implements Disposable {
 		preview.decoding = false
 	}
 
-	// Writes a saved frame exclusively, and counts it once the write completed.
+	// Writes a saved frame exclusively, and counts it once the write completed. A failed write marks the
+	// frame's file as failed and is rethrown, so the capture fails.
 	async #write(path: string, data: Buffer) {
-		await writeFrameExclusively(path, data)
+		try {
+			await writeFrameExclusively(path, data)
+		} catch (error) {
+			this.#written(path, 'failed')
+			throw error
+		}
 
+		const capture = this.#written(path, 'saved')
+		if (capture) this.#update(capture, { saved: capture.session.saved + 1 })
+	}
+
+	// Records the outcome of the write of a frame's file, and republishes the previewed frame when it is
+	// that frame. Returns the capture the file belongs to, or undefined when the path is unknown.
+	#written(path: string, file: CaptureFileState) {
 		const write = this.#writes.get(path)
-		if (!write) return
+		if (!write) return undefined
 		this.#writes.delete(path)
 
 		const { capture, generation } = write
 		const record = capture.frames.get(generation)
-		if (record) record.saved = true
-		this.#update(capture, { saved: capture.session.saved + 1 })
+		if (record) record.file = file
 
 		const preview = this.#previews.get(resourceKey(capture.camera))
 
 		if (preview?.frame?.path === path) {
-			preview.frame = { ...preview.frame, saved: true }
+			preview.frame = { ...preview.frame, file }
 			this.listener({ type: 'capture:frame', frame: preview.frame })
 		}
+
+		return capture
 	}
 
 	// Stops routing camera callbacks; running captures end by their own cleanup or the registry's disposal.

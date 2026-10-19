@@ -246,6 +246,33 @@ export function captureCount(session: Pick<CaptureSession, 'captured' | 'count'>
 	return session.count === undefined ? `Captured ${session.captured}` : `Captured ${session.captured} / ${session.count}`
 }
 
+// State of a camera's latest frame in this tab, independent of the capture's outcome:
+// - received: the frame arrived and is not rendered yet.
+// - ready: the frame is rendered and shown.
+// - error: the frame could not be decoded on the server or rendered here.
+export type FrameState = 'received' | 'ready' | 'error'
+
+// Label of each frame state.
+export const FRAME_STATE_LABELS: Readonly<Record<FrameState, string>> = { received: 'Received', ready: 'Ready', error: 'Error' }
+
+// State of a frame's file: not-saved for a frame that is only previewed, otherwise its CaptureFileState.
+export type FileState = 'not-saved' | NonNullable<CaptureFrame['file']>
+
+// Label of each file state.
+export const FILE_STATE_LABELS: Readonly<Record<FileState, string>> = { 'not-saved': 'Not Saved', saving: 'Saving', saved: 'Saved', failed: 'Save Failed' }
+
+// Returns the state of a camera's latest frame from its rendering, the error of its last rendering, and the
+// session's preview error. A frame is ready once its own rendering is shown, whatever happened since.
+export function frameState(frame: Pick<CaptureFrame, 'imageId'>, rendering?: Pick<FrameRendering, 'imageId'>, renderError?: string, previewError?: string): FrameState {
+	if (rendering?.imageId === frame.imageId) return 'ready'
+	return renderError || previewError ? 'error' : 'received'
+}
+
+// Returns the state of a frame's file.
+export function fileState(frame: Pick<CaptureFrame, 'file'>): FileState {
+	return frame.file ?? 'not-saved'
+}
+
 // Returns the time a session has run, or ran, in seconds; now is Unix milliseconds.
 export function captureElapsed(session: Pick<CaptureSession, 'startedAt' | 'endedAt'>, now: number) {
 	return Math.max(0, ((session.endedAt ?? now) - session.startedAt) / 1000)

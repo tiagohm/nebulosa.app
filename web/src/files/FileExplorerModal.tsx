@@ -12,16 +12,17 @@ import { fetchDirectory, formatSize, joinPath } from './files'
 // Modal to choose a file on the server's filesystem, since the application may run on another machine
 // than the browser. It lists one directory at a time, filtered by extension; double click or Enter opens
 // a directory or chooses a file. In save mode a file name is typed (clicking a listed file copies its
-// name) and the chosen path is that name in the listed directory, whether or not it exists. Its state is
-// transient and lives in the component.
+// name) and the chosen path is that name in the listed directory, whether or not it exists. In directory
+// mode only directories are listed, and the chosen path is the selected directory or, with none selected,
+// the listed one. Its state is transient and lives in the component.
 
 export interface FileExplorerModalProps {
 	// Whether the modal is shown.
 	readonly open: boolean
 	// Modal title.
 	readonly title: string
-	// Whether an existing file is opened or a file name is chosen to save to.
-	readonly mode?: 'open' | 'save'
+	// Whether an existing file is opened, a file name is chosen to save to, or a directory is chosen.
+	readonly mode?: 'open' | 'save' | 'directory'
 	// File name proposed in save mode.
 	readonly defaultName?: string
 	// Whether the choice is being acted on, which disables the confirm button.
@@ -30,9 +31,10 @@ export interface FileExplorerModalProps {
 	readonly message?: string
 	// Directory shown first; falls back to the server's working directory when it cannot be listed.
 	readonly initialPath?: string
-	// Extensions of the files listed (lowercase, without the dot); every directory is listed.
-	readonly extensions: readonly string[]
-	// Receives the chosen file and the directory it is in; the modal stays open until onClose.
+	// Extensions of the files listed (lowercase, without the dot); every file when absent. Every directory
+	// is listed; files are not listed in directory mode.
+	readonly extensions?: readonly string[]
+	// Receives the chosen file or directory and the listed directory; the modal stays open until onClose.
 	readonly onChoose: (path: string, directory: string) => void
 	// Hides the modal.
 	readonly onClose: () => void
@@ -50,6 +52,9 @@ export function FileExplorerModal({ open, title, mode = 'open', defaultName = ''
 	const request = useRef<AbortController>(undefined)
 	const listRef = useRef<HTMLUListElement>(null)
 	const saving = mode === 'save'
+	const choosingDirectory = mode === 'directory'
+	// Entries shown: the directories only in directory mode.
+	const entries = (choosingDirectory ? listing?.entries.filter((entry) => entry.directory) : listing?.entries) ?? []
 
 	// Lists a directory; a newer request aborts an older one. When fallback is set, a failure lists it
 	// instead (used when the remembered directory no longer exists).
@@ -93,7 +98,6 @@ export function FileExplorerModal({ open, title, mode = 'open', defaultName = ''
 	}
 
 	function handleListKeyDown(e: KeyboardEvent<HTMLUListElement>) {
-		const entries = listing?.entries ?? []
 		const index = moveIndex(
 			entries.findIndex((entry) => entry.path === selected),
 			entries.length,
@@ -119,6 +123,8 @@ export function FileExplorerModal({ open, title, mode = 'open', defaultName = ''
 	// Name typed in save mode, trimmed; a listing of drives has no directory to save in.
 	const fileName = name.trim()
 	const saveDirectory = listing?.path ? listing.path : undefined
+	// Directory chosen in directory mode: the selected one, or else the listed one (none for the drives).
+	const chosenDirectory = choosingDirectory ? (entries.find((entry) => entry.path === selected)?.path ?? saveDirectory) : undefined
 
 	return (
 		<Modal open={open} onClose={onClose} title={title} fit className="max-w-3xl">
@@ -138,11 +144,11 @@ export function FileExplorerModal({ open, title, mode = 'open', defaultName = ''
 			<div className="mt-3 h-[min(26rem,calc(100dvh-16rem))] min-h-32 overflow-y-auto overscroll-contain rounded-sm border border-line-100 bg-base-100">
 				{error ? (
 					<p className="m-0 p-6 text-center text-[13px] text-danger">{error}</p>
-				) : listing && listing.entries.length === 0 ? (
-					<p className="m-0 p-6 text-center text-[13px] text-ink-300">{loading ? 'Loading…' : 'No folders or images here.'}</p>
+				) : listing && entries.length === 0 ? (
+					<p className="m-0 p-6 text-center text-[13px] text-ink-300">{loading ? 'Loading…' : choosingDirectory ? 'No folders here.' : 'No folders or images here.'}</p>
 				) : (
 					<ul ref={listRef} tabIndex={0} onKeyDown={handleListKeyDown} className={cn('m-0 list-none p-1 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', loading && 'opacity-60')}>
-						{listing?.entries.map((entry) => (
+						{entries.map((entry) => (
 							<li key={entry.path}>
 								<button
 									type="button"
@@ -174,11 +180,15 @@ export function FileExplorerModal({ open, title, mode = 'open', defaultName = ''
 			)}
 			{message && <p className="m-0 mt-3 text-[13px] text-danger">{message}</p>}
 			<div className="mt-4 flex items-center justify-end gap-2">
-				<span className="mr-auto min-w-0 truncate text-[13px] text-ink-300">{saving ? (saveDirectory ? `Saving in ${saveDirectory}` : 'Choose a folder') : chosen ? chosen.name : 'Choose an image file'}</span>
+				<span className="mr-auto min-w-0 truncate text-[13px] text-ink-300">{choosingDirectory ? (chosenDirectory ?? 'Choose a folder') : saving ? (saveDirectory ? `Saving in ${saveDirectory}` : 'Choose a folder') : chosen ? chosen.name : 'Choose an image file'}</span>
 				<Button variant="secondary" size="sm" onClick={onClose}>
 					Cancel
 				</Button>
-				{saving ? (
+				{choosingDirectory ? (
+					<Button size="sm" disabled={!chosenDirectory || busy} onClick={() => chosenDirectory && listing && onChoose(chosenDirectory, listing.path)}>
+						Select
+					</Button>
+				) : saving ? (
 					<Button size="sm" disabled={!fileName || !saveDirectory || busy} onClick={() => saveDirectory && onChoose(joinPath(saveDirectory, fileName), saveDirectory)}>
 						{busy ? 'Saving…' : 'Save'}
 					</Button>

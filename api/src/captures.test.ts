@@ -73,7 +73,7 @@ test('a single capture saves one frame, previews it, and releases the camera', a
 	const { sessionId, operationId } = (await response.json()) as { sessionId: string; operationId: string }
 
 	await waitUntil(ended)
-	await waitUntil(() => frames().some((frame) => frame.saved))
+	await waitUntil(() => frames().some((frame) => frame.file === 'saved'))
 
 	expect(session()).toMatchObject({ sessionId, operationId, connectionId: id, deviceId: cameraId, phase: 'completed', captured: 1, saved: 1, count: 1, stopping: false })
 	const files = readdirSync(capture.output.directory!)
@@ -81,7 +81,7 @@ test('a single capture saves one frame, previews it, and releases the camera', a
 	expect(files[0]).toMatch(/^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-\d{3}_Camera Simulator_LIGHT_0001\.fit$/)
 
 	const frame = frames().at(-1)!
-	expect(frame).toMatchObject({ sessionId, connectionId: id, deviceId: cameraId, generation: 1, path: join(capture.output.directory!, files[0]), saved: true, frameType: 'LIGHT', width: 32, height: 32, channels: 1 })
+	expect(frame).toMatchObject({ sessionId, connectionId: id, deviceId: cameraId, generation: 1, path: join(capture.output.directory!, files[0]), file: 'saved', frameType: 'LIGHT', width: 32, height: 32, channels: 1 })
 	expect(frame.acquisition.exposure).toBeCloseTo(0.05, 6)
 	expect(images.name(frame.imageId)).toBe(files[0])
 	expect(captures.snapshot().frames).toEqual([frame])
@@ -99,7 +99,7 @@ test('a fixed capture takes exactly its frames, under unique names, and keeps on
 
 	captures.start(id, cameraId, capture)
 	await waitUntil(ended)
-	await waitUntil(() => frames().some((frame) => frame.generation === 3 && frame.saved))
+	await waitUntil(() => frames().some((frame) => frame.generation === 3 && frame.file === 'saved'))
 
 	expect(session()).toMatchObject({ phase: 'completed', captured: 3, saved: 3, count: 3 })
 	expect(readdirSync(capture.output.directory!).toSorted()).toEqual(['m42_0001.fit', 'm42_0002.fit', 'm42_0003.fit'])
@@ -136,11 +136,11 @@ test('preview only writes no file', async () => {
 
 	expect(session()).toMatchObject({ phase: 'completed', captured: 2, saved: 0 })
 	expect(readdirSync(capture.output.directory!)).toEqual([])
-	expect(frames().every((frame: CaptureFrame) => frame.path === undefined && !frame.saved)).toBeTrue()
+	expect(frames().every((frame: CaptureFrame) => frame.path === undefined && frame.file === undefined)).toBeTrue()
 })
 
-test('a failed write fails the capture, counts the frame as captured but not saved, and leaves no file', async () => {
-	const { id, cameraId, captures, session, ended } = await setup()
+test('a failed write fails the capture, marks the frame file as failed, and leaves no file', async () => {
+	const { id, cameraId, captures, session, frames, ended } = await setup()
 	const blocker = join(mkdtempSync(join(root, 'blocked-')), 'not-a-directory')
 	writeFileSync(blocker, 'a file')
 
@@ -148,6 +148,8 @@ test('a failed write fails the capture, counts the frame as captured but not sav
 	await waitUntil(ended)
 
 	expect(session()).toMatchObject({ phase: 'failed', reason: 'commandFailed', captured: 1, saved: 0 })
+	await waitUntil(() => frames().some((frame) => frame.file === 'failed'))
+	expect(frames().at(-1)).toMatchObject({ generation: 1, path: expect.stringContaining(join(blocker, 'frames')), file: 'failed' })
 	expect(readdirSync(join(blocker, '..'))).toEqual(['not-a-directory'])
 })
 

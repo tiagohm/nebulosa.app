@@ -1,28 +1,32 @@
 import type { CameraCapabilities, CaptureFrame, CaptureOutputMode, CaptureRequest, CaptureSession } from 'api'
+import { cn } from 'cn'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { roleAvailability } from '../equipment/availability'
 import { useRoleDevice } from '../equipment/useEquipment'
+import { FileExplorerModal } from '../files/FileExplorerModal'
 import { operationsState } from '../operations'
 import { acquisitionSettings, activeProfile, type CameraAcquisitionSettings, profileState, setAcquisitionSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { IconButton } from '../ui/IconButton'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
-import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, refreshCapabilities, startCapture, stopCapture } from './capture'
+import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, FRAME_STATE_LABELS, type FrameState, frameState, refreshCapabilities, startCapture, stopCapture } from './capture'
 import { DecimalInput } from './DecimalInput'
 import type { CaptureModePanelProps } from './modes'
 
 // Contextual panel sections of the Camera Capture mode: the exposure, the acquisition mode with its start
-// and stop commands, the state of the capture, the less frequent camera settings, the output, and the
-// metadata of the latest frame. The form is the camera view's, kept in the profile; the capture it starts
-// is the server's, run on the device the view's role resolves to when it starts, and shown here from the
-// server state whichever tab started it. Controls that would change a running capture are disabled; a
-// control the camera does not support is not shown, and the values sent are fitted to the camera's
-// reported capabilities.
+// and stop commands, the state of the running or last capture, the less frequent camera settings, the
+// output with a server directory chooser, and the latest frame, whose own state and file state are shown
+// apart from the outcome of the capture that took it. The form is the camera view's, kept in the profile;
+// the capture it starts is the server's, run on the device the view's role resolves to when it starts, and
+// shown here from the server state whichever tab started it. Controls that would change a running capture
+// are disabled; a control the camera does not support is not shown, and the values sent are fitted to the
+// camera's reported capabilities.
 
 // Acquisition modes, in display order.
 const EXPOSURE_MODES: readonly CaptureRequest['exposureMode'][] = ['single', 'fixed', 'loop']
@@ -62,6 +66,7 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 	const error = key ? runtime.errors[key] : undefined
 	const availability = roleAvailability(role, target, operations)
 	const locked = running || pending
+	const [choosingDirectory, setChoosingDirectory] = useState(false)
 
 	useEffect(() => {
 		if (device?.connected) void refreshCapabilities(captureRuntime, device.connectionId, device.id)
@@ -99,7 +104,7 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 				{settings.exposureMode === 'fixed' && <NumberInput label="Frame Count" value={settings.count} min={1} max={MAX_FRAME_COUNT} disabled={locked} onChange={(count) => update({ count })} />}
 				{settings.exposureMode !== 'single' && (
 					<>
-						<DecimalInput label="Delay" suffix="s" value={settings.delay} min={0} disabled={locked} onChange={(delay) => update({ delay })} />
+						<NumberInput label="Delay" suffix="s" value={settings.delay} min={0} disabled={locked} onChange={(delay) => update({ delay })} />
 						<p className="m-0 text-xs leading-4 text-ink-300">Wait after each capture before starting the next one.</p>
 					</>
 				)}
@@ -122,7 +127,10 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 				<SegmentedControl options={OUTPUT_MODES} value={settings.output.mode} format={(mode) => OUTPUT_MODE_LABELS[mode]} disabled={locked} onChange={(mode) => updateOutput({ mode })} />
 				{settings.output.mode === 'preview-save' && (
 					<>
-						<TextInput label="Server Directory" placeholder="~/Nebulosa/captures" value={settings.output.directory ?? ''} disabled={locked} onChange={(e) => updateOutput({ directory: e.target.value.trim() || undefined })} />
+						<div className="flex items-end gap-1">
+							<TextInput label="Server Directory" className="flex-1" placeholder="~/Nebulosa/captures" value={settings.output.directory ?? ''} disabled={locked} onChange={(e) => updateOutput({ directory: e.target.value.trim() || undefined })} />
+							<IconButton icon="folder" label="Choose directory" className="size-[38px]" disabled={locked} onClick={() => setChoosingDirectory(true)} />
+						</div>
 						<TextInput label="Filename Template" placeholder="{date}_{time}_{camera}_{type}_{seq}" value={settings.output.filenameTemplate ?? ''} disabled={locked} onChange={(e) => updateOutput({ filenameTemplate: e.target.value || undefined })} />
 						<p className="m-0 text-xs leading-4 text-ink-300">{'{camera} {type} {date} {time} {seq}'}; existing files are never replaced.</p>
 						<Select label="Format" options={xisf ? (['FITS', 'XISF'] as const) : (['FITS'] as const)} value={xisf ? settings.output.format : 'FITS'} disabled={locked} onChange={(format) => updateOutput({ format })} />
@@ -130,7 +138,18 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 				)}
 				{settings.output.mode === 'preview-only' && <p className="m-0 text-xs leading-4 text-ink-300">Frames are kept in memory for viewing only; nothing is written.</p>}
 			</PanelSection>
-			{frame && <LastFrame frame={frame} />}
+			{frame && <LastFrame frame={frame} state={frameState(frame, key ? runtime.renderings[key] : undefined, key ? runtime.renderErrors[key] : undefined, session?.previewError)} />}
+			<FileExplorerModal
+				open={choosingDirectory}
+				mode="directory"
+				title="Capture Directory"
+				initialPath={settings.output.directory}
+				onClose={() => setChoosingDirectory(false)}
+				onChoose={(directory) => {
+					setChoosingDirectory(false)
+					updateOutput({ directory })
+				}}
+			/>
 		</>
 	)
 }
@@ -186,7 +205,8 @@ interface CaptureStateProps {
 	readonly session: CaptureSession
 }
 
-// State of the camera's latest capture: what it does, its progress, and its counts.
+// State of the camera's latest capture: what it does, its progress, and its counts. Once the capture ended
+// it is titled as the last acquisition, so its counts are not read as the form's.
 function CaptureState({ session }: CaptureStateProps) {
 	const running = captureRunning(session)
 	const [now, setNow] = useState(Date.now)
@@ -202,12 +222,12 @@ function CaptureState({ session }: CaptureStateProps) {
 	const failed = session.phase === 'failed' || session.phase === 'aborted'
 
 	return (
-		<PanelSection title="Status">
+		<PanelSection title={running ? 'Acquisition Status' : 'Last Acquisition'}>
 			<p className={failed ? 'm-0 text-danger' : 'm-0 text-ink-100'}>{captureStatus(session)}</p>
 			{running && <div className="h-1 overflow-hidden rounded-full bg-base-300">{progress === undefined ? <div className="h-full w-1/3 animate-pulse bg-accent/60" /> : <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${Math.min(100, progress)}%` }} />}</div>}
 			<dl className="m-0 grid grid-cols-2 gap-x-3 gap-y-1">
 				<dt className="text-ink-300">{captureCount(session)}</dt>
-				<dd className="m-0 text-right tabular-nums">{session.request.output.mode === 'preview-save' ? `Saved ${session.saved}` : 'Not saved'}</dd>
+				<dd className="m-0 text-right tabular-nums">{session.request.output.mode === 'preview-save' ? `Saved ${session.saved}` : 'Not Saved'}</dd>
 				<dt className="text-ink-300">Elapsed</dt>
 				<dd className="m-0 text-right tabular-nums">{formatElapsed(captureElapsed(session, now))}</dd>
 			</dl>
@@ -266,7 +286,7 @@ function CameraSettings({ settings, capabilities, disabled, onChange }: CameraSe
 					{cooler && `Cooler ${cooler.enabled === false ? 'off' : `${Math.round(cooler.power)} %`}`}
 				</p>
 			)}
-			<Button variant="ghost" size="sm" className="self-start px-0" onClick={() => setOpen(!open)}>
+			<Button variant="ghost" size="sm" className="self-start px-1" onClick={() => setOpen(!open)}>
 				{open ? 'Hide settings' : 'Show settings'}
 			</Button>
 			{open && (
@@ -307,14 +327,20 @@ function CameraSettings({ settings, capabilities, disabled, onChange }: CameraSe
 interface LastFrameProps {
 	// Latest previewed frame of the camera.
 	readonly frame: CaptureFrame
+	// State of the frame in this tab.
+	readonly state: FrameState
 }
 
-// Metadata of the camera's latest frame, as its header and the capture report them; a datum the frame
-// does not carry is not shown.
-function LastFrame({ frame }: LastFrameProps) {
+// State and metadata of the camera's latest frame, as its header and the capture report them; a datum the
+// frame does not carry is not shown. The frame and its file keep their own states whatever the outcome of
+// the capture, so the last frame of an aborted capture is still shown as ready and saved.
+function LastFrame({ frame, state }: LastFrameProps) {
 	const { acquisition } = frame
-	const rows: [string, string][] = [
+	const file = fileState(frame)
+	const rows: [string, string, boolean?][] = [
 		['Frame', `#${frame.generation} · ${frame.frameType}`],
+		['State', FRAME_STATE_LABELS[state], state === 'error'],
+		['File', FILE_STATE_LABELS[file], file === 'failed'],
 		['Dimensions', `${frame.width} × ${frame.height}${frame.channels === 3 ? ' RGB' : frame.cfa ? ` ${frame.cfa}` : ''}`],
 	]
 
@@ -326,15 +352,14 @@ function LastFrame({ frame }: LastFrameProps) {
 	if (frame.bitpix !== undefined) rows.push(['Bit Depth', frame.bitpix < 0 ? `${-frame.bitpix}-bit float` : `${frame.bitpix}-bit`])
 	if (acquisition.temperature !== undefined) rows.push(['Temperature', `${acquisition.temperature.toFixed(1)} °C`])
 	rows.push(['Acquired', new Date(frame.time).toLocaleTimeString()])
-	rows.push(['Save', frame.path === undefined ? 'Preview only' : frame.saved ? 'Saved' : 'Not saved'])
 
 	return (
 		<PanelSection title="Last Frame">
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				{rows.map(([label, value]) => (
+				{rows.map(([label, value, danger]) => (
 					<div key={label} className="contents">
 						<dt className="text-ink-300">{label}</dt>
-						<dd className="m-0 min-w-0 truncate text-right tabular-nums">{value}</dd>
+						<dd className={cn('m-0 min-w-0 truncate text-right tabular-nums', danger && 'text-danger')}>{value}</dd>
 					</div>
 				))}
 			</dl>

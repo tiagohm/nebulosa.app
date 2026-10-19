@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import type { CameraRole, EquipmentRole } from '../equipment/roles'
 import type { CaptureMode } from '../shell/route'
 import { CameraCapturePanel } from './CameraCapturePanel'
+import { MountNudgePanel } from './MountNudgePanel'
 
 // Static registry of the Capture workspace's operational modes. A mode configures the shared workspace
 // (its panel, overlays, and required equipment) of one camera view, and every mode uses that view's
@@ -42,7 +43,7 @@ export interface CaptureModeDefinition {
 // Definition of every Capture mode, by id, in selector order.
 export const CAPTURE_MODE_DEFINITIONS: Readonly<Record<CaptureMode, CaptureModeDefinition>> = {
 	camera: { id: 'camera', label: 'Camera Capture', panelTitle: 'Camera Capture', planned: false, panel: CameraCapturePanel, overlays: [], requires: [] },
-	'mount-nudge': { id: 'mount-nudge', label: 'Mount Nudge', panelTitle: 'Mount Nudge', planned: true, overlays: ['reticle'], requires: ['MOUNT'] },
+	'mount-nudge': { id: 'mount-nudge', label: 'Mount Nudge', panelTitle: 'Mount Nudge', planned: false, panel: MountNudgePanel, overlays: [], requires: ['MOUNT'] },
 	guiding: { id: 'guiding', label: 'Guiding', panelTitle: 'Guiding', planned: true, overlays: [], requires: [] },
 	'auto-focus': { id: 'auto-focus', label: 'Auto Focus', panelTitle: 'Auto Focus', planned: true, overlays: [], requires: ['FOCUSER'] },
 	darv: { id: 'darv', label: 'DARV', panelTitle: 'Drift Alignment (DARV)', planned: true, overlays: ['reticle'], requires: ['MOUNT'] },

@@ -37,6 +37,7 @@ export const ICONS = {
 	original: 'M4 5h16v14H4zM12 5v14M12 10l5-5M12 15l8-8M12 19l8-8M16 19l4-4',
 	play: 'M8 5v14l11-7z',
 	pause: 'M8 5v14M16 5v14',
+	stop: 'M7 7h10v10H7z',
 	stepBack: 'M15 6l-6 6l6 6',
 	stepForward: 'M9 6l6 6l-6 6',
 	clock: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7v5l3 2',

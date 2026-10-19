@@ -42,7 +42,7 @@ describe('resolve', () => {
 })
 
 describe('preferences', () => {
-	const capture: CaptureSettings = { activeCamera: 'GUIDE_CAMERA', views: { MAIN_CAMERA: { mode: 'camera' }, GUIDE_CAMERA: { mode: 'mount-nudge', reticle: false } } }
+	const capture: CaptureSettings = { activeCamera: 'GUIDE_CAMERA', views: { MAIN_CAMERA: { mode: 'camera' }, GUIDE_CAMERA: { mode: 'guiding', reticle: false } } }
 
 	test('each camera view keeps its own mode', () => {
 		expect(viewMode(capture, 'MAIN_CAMERA')).toBe('camera')
@@ -50,12 +50,13 @@ describe('preferences', () => {
 	})
 
 	test('a planned mode selected last opens the camera mode', () => {
-		expect(CAPTURE_MODE_DEFINITIONS['mount-nudge'].planned).toBe(true)
+		expect(CAPTURE_MODE_DEFINITIONS.guiding.planned).toBe(true)
 		expect(viewMode(capture, 'GUIDE_CAMERA')).toBe('camera')
 	})
 
 	test('the reticle follows the view choice, else the mode overlays', () => {
-		expect(viewReticle(capture, 'GUIDE_CAMERA', 'mount-nudge')).toBe(false)
+		expect(viewReticle(capture, 'GUIDE_CAMERA', 'guiding')).toBe(false)
+		expect(viewReticle({ views: {} }, 'GUIDE_CAMERA', 'mount-nudge')).toBe(false)
 		expect(viewReticle(capture, 'MAIN_CAMERA', 'camera')).toBe(false)
 		expect(viewReticle(capture, 'MAIN_CAMERA', 'tppa')).toBe(true)
 	})

@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { App } from './App'
 import { captureRuntime, handleCaptureEvent, refreshCameraCapabilities, refreshCaptures } from './capture/capture'
+import { handleNudgeEvent, nudgeRuntime, refreshNudgeMount, refreshNudges } from './capture/nudge'
 import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
 import { onOpen, subscribe } from './events'
@@ -32,10 +33,11 @@ const stops = [
 		handleOperationEvent(operationsState, event)
 		handleSensorEvent(sensorRuntime, event)
 		handleCaptureEvent(captureRuntime, event)
+		handleNudgeEvent(nudgeRuntime, event)
 	}),
 	// Every (re)open resynchronizes the open connections, the watched devices, the followed mount, the
-	// running operations, the camera sensors, and the captures and camera capabilities, which may have
-	// changed while the socket was closed.
+	// running operations, the camera sensors, the captures and camera capabilities, and the nudged mount
+	// and its nudge sessions, which may have changed while the socket was closed.
 	onOpen(() => {
 		void refreshServers(connectionState)
 		void refreshDevices(deviceState)
@@ -44,6 +46,8 @@ const stops = [
 		refreshSensors(sensorRuntime)
 		void refreshCaptures(captureRuntime)
 		refreshCameraCapabilities(captureRuntime)
+		void refreshNudgeMount(nudgeRuntime)
+		void refreshNudges(nudgeRuntime)
 	}),
 ]
 

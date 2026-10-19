@@ -51,6 +51,10 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 	// Pointer position over the viewport, in viewport pixels; the pixel under it follows zoom and pan.
 	const [cursor, setCursor] = useState<Point>()
 	const drag = useRef<Point>(undefined)
+	// Pressed pointers over the viewport by pointer id, at their latest client position in pixels.
+	const pointers = useRef(new Map<number, Point>())
+	// Distance between the two pinching pointers at the latest pinch step, in client pixels; absent when not pinching.
+	const pinch = useRef<number>(undefined)
 	const width = image?.width ?? 0
 	const height = image?.height ?? 0
 	const transform = viewTransform(view, { width, height }, viewport)
@@ -107,21 +111,44 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 		onViewChange(FIT_VIEW)
 	}
 
+	// A single pointer drags the image; a second one turns the gesture into a pinch that only zooms, so the
+	// image does not move with the fingers.
 	function handlePointerDown(e: PointerEvent<HTMLDivElement>) {
 		if (e.button !== 0 || !image) return
 		e.currentTarget.setPointerCapture(e.pointerId)
-		drag.current = { x: e.clientX, y: e.clientY }
+		const position = { x: e.clientX, y: e.clientY }
+		pointers.current.set(e.pointerId, position)
+
+		if (pointers.current.size === 1) {
+			drag.current = position
+		} else if (pointers.current.size === 2) {
+			drag.current = undefined
+			pinch.current = pinchSpan(pointers.current)?.distance
+		}
 	}
 
 	function handlePointerMove(e: PointerEvent<HTMLDivElement>) {
 		const rect = e.currentTarget.getBoundingClientRect()
 		setCursor({ x: e.clientX - rect.left, y: e.clientY - rect.top })
-		if (!drag.current) return
-		pan(e.clientX - drag.current.x, e.clientY - drag.current.y)
-		drag.current = { x: e.clientX, y: e.clientY }
+		if (!pointers.current.has(e.pointerId)) return
+		pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+		const span = pinch.current !== undefined ? pinchSpan(pointers.current) : undefined
+
+		if (span) {
+			if (pinch.current && span.distance > 0) zoom(span.distance / pinch.current, { x: span.center.x - rect.left, y: span.center.y - rect.top })
+			pinch.current = span.distance
+		} else if (drag.current) {
+			pan(e.clientX - drag.current.x, e.clientY - drag.current.y)
+			drag.current = { x: e.clientX, y: e.clientY }
+		}
 	}
 
-	function handlePointerUp() {
+	// Ends a drag or pinch. A finger left down after a pinch does not drag until every pointer is lifted,
+	// so lifting one finger does not jump the image.
+	function handlePointerUp(e: PointerEvent<HTMLDivElement>) {
+		pointers.current.delete(e.pointerId)
+		if (pointers.current.size < 2) pinch.current = undefined
 		drag.current = undefined
 	}
 
@@ -215,6 +242,21 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 			</div>
 		</div>
 	)
+}
+
+// Distance and midpoint of a two-finger pinch.
+interface PinchSpan {
+	// Distance between the two pointers, in client pixels.
+	readonly distance: number
+	// Midpoint between the two pointers, in client pixels.
+	readonly center: Point
+}
+
+// Returns the span of the first two pressed pointers, or undefined when fewer than two are pressed.
+function pinchSpan(pointers: ReadonlyMap<number, Point>): PinchSpan | undefined {
+	const [a, b] = pointers.values()
+	if (!a || !b) return undefined
+	return { distance: Math.hypot(a.x - b.x, a.y - b.y), center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }
 }
 
 // Returns a zoom scale as a percentage with up to one decimal.

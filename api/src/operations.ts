@@ -11,7 +11,7 @@ import type { DeviceRegistry } from './devices'
 // operation:updated event naming the exact connection and device ids involved, never a role.
 
 // Kind of operation, prefixed by the service that runs it.
-export type OperationKind = 'mount.slew' | 'camera.capture'
+export type OperationKind = 'mount.slew' | 'mount.nudge' | 'camera.capture'
 
 // Life stage of an operation.
 export type OperationState = 'running' | 'succeeded' | 'failed'

@@ -12,6 +12,7 @@ import { RotatorSimulator } from 'nebulosa/src/devices/indi/simulator/rotator'
 import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
 import type { CaptureEvent } from './captures'
 import { type DeviceEvent, DeviceRegistry } from './devices'
+import type { MountNudgeEvent } from './mounts'
 import type { OperationEvent } from './operations'
 
 // Application-wide registry of open device connections (INDI, Alpaca, and the in-process simulator).
@@ -51,8 +52,8 @@ export type ConnectionStatus = ConnectRequest & {
 export type ConnectionEvent = { readonly type: 'connection:open'; readonly connection: ConnectionStatus } | { readonly type: 'connection:close'; readonly id: string }
 
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the
-// operation events of the operation registry, and the events of the capture service.
-export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent | CaptureEvent
+// operation events of the operation registry, and the events of the capture and mount nudge services.
+export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent | CaptureEvent | MountNudgeEvent
 
 // Receiver of connection and device events.
 export type ConnectionListener = (event: ServerEvent) => void

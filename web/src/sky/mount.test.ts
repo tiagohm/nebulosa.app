@@ -8,7 +8,7 @@ import { mountMarkerOf, refKey, refOfCelestialObject } from './objects'
 const TARGET = { connectionId: 'a', id: 'm1', name: 'Mount Simulator' }
 
 function state(overrides: Partial<MountState> = {}): MountState {
-	return { connectionId: 'a', id: 'm1', connected: true, rightAscension: 1, declination: 0.5, slewing: false, tracking: true, parked: false, parking: false, canGoTo: true, canAbort: true, ...overrides }
+	return { connectionId: 'a', id: 'm1', connected: true, rightAscension: 1, declination: 0.5, slewing: false, tracking: true, parked: false, parking: false, canGoTo: true, canAbort: true, canMove: true, canMoveNS: true, canMoveWE: true, moving: false, slewRates: [], ...overrides }
 }
 
 // Fake fetch answering every request with a fixed response, recording the requests.

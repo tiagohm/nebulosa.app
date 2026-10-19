@@ -3,7 +3,7 @@ import { CameraCaptures, type CaptureRequest } from './captures'
 import { connections } from './connection'
 import { handleListDirectory } from './files'
 import { handleDeriveImage, handleDownloadImage, handleOpenImage, handleRenderImage, handleSaveImage, images } from './images'
-import { MountCommands, type MountSlewRequest } from './mounts'
+import { MountCommands, type MountNudgeRequest, type MountSlewRateRequest, type MountSlewRequest } from './mounts'
 import { OperationRegistry } from './operations'
 import { skyLocator, skyRoutes } from './sky'
 import { broadcast, websocket } from './websocket'
@@ -14,7 +14,7 @@ export type { CaptureEvent, CaptureFormat, CaptureFrame, CaptureOutput, CaptureO
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
 export type { CameraCapabilities, CameraRange, CameraSensor, CameraSensorState, DeviceEvent, DeviceSummary, ManagedDeviceType, MountState } from './devices'
 export type { DirectoryListing, FileEntry } from './files'
-export type { MountSlewRequest, MountSlewResponse } from './mounts'
+export type { MountNudgeDirection, MountNudgeEvent, MountNudgePhase, MountNudgeRequest, MountNudgeSession, MountNudgeStartResponse, MountSlewRateRequest, MountSlewRequest, MountSlewResponse } from './mounts'
 export type { OperationDevice, OperationEvent, OperationKind, OperationRecord, OperationState } from './operations'
 export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
 export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
@@ -26,8 +26,8 @@ connections.listen(broadcast)
 // Device operations of the process, published to every tab.
 const operations = new OperationRegistry(connections.devices, broadcast)
 
-// Mount commands over the devices of the open connections.
-const mounts = new MountCommands(connections.devices, (id) => connections.client(id), skyLocator, operations)
+// Mount commands and nudge sessions over the devices of the open connections.
+const mounts = new MountCommands(connections.devices, (id) => connections.client(id), skyLocator, operations, broadcast)
 
 // Camera captures over the devices of the open connections, their frames entering the image store.
 const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, broadcast)
@@ -92,6 +92,26 @@ export const routes = {
 	'/api/connections/:id/mounts/:deviceId/stop': {
 		// Cancels the operation of a mount and stops its motion.
 		POST: (req) => mounts.stop(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/mounts/:deviceId/slew-rate': {
+		// Selects the speed preset of manual motion; the new preset arrives as a mount:updated event.
+		POST: async (req) => mounts.setSlewRate(req.params.id, req.params.deviceId, (await req.json()) as MountSlewRateRequest),
+	},
+	'/api/connections/:id/mounts/:deviceId/nudge': {
+		// Starts a nudge held by a lease; its changes arrive as mount:nudge and operation:updated events.
+		POST: async (req) => mounts.startNudge(req.params.id, req.params.deviceId, (await req.json()) as MountNudgeRequest),
+	},
+	'/api/mounts/nudges': {
+		// The nudge sessions still running, started by any tab.
+		GET: () => Response.json(mounts.nudges()),
+	},
+	'/api/mounts/nudges/:token/heartbeat': {
+		// Renews the lease of a running nudge.
+		POST: (req) => mounts.heartbeatNudge(req.params.token),
+	},
+	'/api/mounts/nudges/:token/stop': {
+		// Ends a nudge, or records a press that has not started yet as ended; idempotent.
+		POST: (req) => mounts.stopNudge(req.params.token),
 	},
 	'/api/captures': {
 		// The latest capture session and previewed frame of every camera, started by any tab.

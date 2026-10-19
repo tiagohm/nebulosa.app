@@ -63,6 +63,18 @@ export interface MountState {
 	readonly canGoTo: boolean
 	// Whether the driver accepts an abort of its motion.
 	readonly canAbort: boolean
+	// Whether at least one axis accepts manual motion.
+	readonly canMove: boolean
+	// Whether the north/south axis accepts manual motion.
+	readonly canMoveNS: boolean
+	// Whether the west/east axis accepts manual motion.
+	readonly canMoveWE: boolean
+	// Whether the driver reports an axis in manual motion.
+	readonly moving: boolean
+	// Speed presets of manual motion, in driver order; empty when the driver offers no choice.
+	readonly slewRates: readonly NameAndLabel[]
+	// Name of the selected speed preset; absent when the driver reports none.
+	readonly slewRate?: string
 }
 
 // Imaging area of a camera at full frame and without binning, as its driver reports it.
@@ -151,8 +163,9 @@ const MANAGED_TYPES: readonly ManagedDeviceType[] = ['camera', 'mount', 'focuser
 // milliseconds. Motion-state changes are published at once.
 const MOUNT_STATE_INTERVAL = 1000
 
-// Mount fields whose change is published at once, ahead of the coalesced coordinate updates.
-const MOUNT_MOTION_FIELDS: ReadonlySet<string> = new Set(['connected', 'slewing', 'tracking', 'parked', 'parking', 'canGoTo', 'canAbort'])
+// Mount fields whose change is published at once, ahead of the coalesced coordinate updates: motion
+// state, capabilities, and the manual-motion speed presets.
+const MOUNT_MOTION_FIELDS: ReadonlySet<string> = new Set(['connected', 'slewing', 'tracking', 'parked', 'parking', 'canGoTo', 'canAbort', 'canMove', 'canMoveNS', 'canMoveWE', 'moving', 'slewRates', 'slewRate'])
 
 // Camera fields the sensor geometry depends on.
 const CAMERA_SENSOR_FIELDS: ReadonlySet<string> = new Set(['connected', 'frame', 'pixelSize'])
@@ -401,9 +414,10 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 		const client = mount[CLIENT]
 		const connectionId = client && this.#connections.get(client)
 		if (!connectionId) return undefined
-		const { connected, slewing, tracking, parked, parking, canGoTo, canAbort } = mount
+		const { connected, slewing, tracking, parked, parking, canGoTo, canAbort, canMove, canMoveNS, canMoveWE, moving, slewRate } = mount
 		const { rightAscension, declination } = mount.equatorialCoordinate
-		return { connectionId, id: mount.id, connected, rightAscension, declination, slewing, tracking, parked, parking, canGoTo, canAbort }
+		const slewRates = mount.slewRates.map(({ name, label }) => ({ name, label }))
+		return { connectionId, id: mount.id, connected, rightAscension, declination, slewing, tracking, parked, parking, canGoTo, canAbort, canMove, canMoveNS, canMoveWE, moving, slewRates, slewRate }
 	}
 
 	// Publishes the current state of a mount now, cancelling its pending trailing publication.

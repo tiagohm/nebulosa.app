@@ -23,12 +23,12 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
 | Profiles (versioned, v3)                            | Implemented          | `web/src/profile/profile.ts` (`migrate`, `PROFILES_VERSION`); active profile per tab in sessionStorage            |
 | Connections (INDI, Alpaca, simulator)               | Implemented          | `api/src/connection.ts`, `web/src/connection/`                                                                    |
 | Device registry and identity                        | Implemented          | `api/src/devices.ts` (`DeviceSummary`: connection id + stable device id)                                          |
-| Device capabilities                                 | Partial              | Only `MountState` (`canGoTo`, `canAbort`) and the camera sensor are reported                                      |
+| Device capabilities                                 | Partial              | `MountState` (`canGoTo`, `canAbort`), the camera sensor, and `CameraCapabilities` (`api/src/devices.ts`)          |
 | Operations and arbitration                          | Implemented          | `api/src/operations.ts` (`OperationRegistry`), `web/src/operations.ts`; toolkit `core/src/devices/orchestration/` |
 | Mount slew / stop                                   | Implemented          | `api/src/mounts.ts`, `web/src/sky/mount.ts`                                                                       |
 | Mount sync, park, track, manual move, pulse guide   | Integration Required | `core/src/devices/commanders/mount.ts`, `guideoutput.ts`                                                          |
 | Focuser, wheel, rotator, cover, flat panel commands | Integration Required | `core/src/devices/commanders/*`                                                                                   |
-| Camera capture and frames                           | Integration Required | `core/src/devices/runners/camera.capture.ts` (`CameraCapturer`), `commanders/camera.ts`                           |
+| Camera capture and frames                           | Partial              | `api/src/captures.ts` over `CameraCapturer`; the Camera Capture panel and viewer frames are pending               |
 | Image documents (FITS/XISF)                         | Implemented          | `api/src/images.ts` + `images.worker.ts`, `web/src/images/images.ts`                                              |
 | Display pipeline, derive, save                      | Implemented          | same as above                                                                                                     |
 | Histogram and statistics                            | Planned              | Inspector shows a placeholder                                                                                     |
@@ -74,8 +74,8 @@ Rules:
 There is **one** image store, `ImageStore` in `api/src/images.ts`, and the scientific image reference is its document id.
 
 - An image document is addressed as `/api/images/:id/...` by every operation, whatever workspace requested it. There is no second solver or detector path for Capture.
-- Camera frames will enter the store as documents with a new origin variant, `{ origin: 'capture', connectionId, deviceId, frameId, time }`, added together with the capture service. A frame is never identified by camera role.
-- In loop capture, each frame is its own document. An analysis stays bound to the id it was started on, and a newer frame never changes it. The capture service retains the latest frame of each camera plus any frame a running operation pins, and closes the rest.
+- Camera frames enter the store as documents of the origin `{ origin: 'capture', connectionId, deviceId, frameId, time, path? }` (`ImageStore.openCapture`), decoded from the bytes the driver sent. A frame is never identified by camera role.
+- In loop capture, each frame is its own document. An analysis stays bound to the id it was started on, and a newer frame never changes it. The capture service (`api/src/captures.ts`) retains the latest frame of each camera and closes the previous one; pinning a frame for a running analysis is added with the first analysis that needs it.
 - Analysis results (solution, star list, streaks) are keyed by image id and the parameters applied, and are kept with the document until it closes. Re-running with the same parameters reuses the result.
 - A Sky Framing survey image is not an image document. Importing one into Images is an explicit action, available only when the cutout carries usable WCS metadata.
 

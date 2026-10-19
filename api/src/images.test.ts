@@ -341,3 +341,31 @@ describe('acquisition', () => {
 		expect(imageAcquisition({ TELESCOP: '   ', GAIN: 'high', OBJECT: 'M42' })).toEqual({ object: 'M42' })
 	})
 })
+
+describe('capture documents', () => {
+	const capture = { connectionId: 'connection', deviceId: 'camera', frameId: 'session:1', time: Date.UTC(2026, 9, 19) }
+
+	test('open a camera frame from its bytes', async () => {
+		const bytes = new Uint8Array(readFileSync(writeFits('frame.fits', 16, 8)))
+		const info = await images.openCapture(bytes, 'Camera #1', capture)
+
+		expect(info).toMatchObject({ origin: 'capture', format: 'fits', name: 'Camera #1', width: 16, height: 8, channels: 1, ...capture })
+		expect(info.acquisition.object).toBe('M31')
+		expect(bytes.byteLength).toBe(0)
+		expect((await render(info.id, NEUTRAL)).status).toBe(200)
+		expect(images.close(info.id)).toBeTrue()
+	})
+
+	test('never replaces the file a frame is saved to', async () => {
+		const path = writeFits('saved-frame.fits', 16, 8)
+		const info = await images.openCapture(new Uint8Array(readFileSync(path)), 'saved-frame.fits', { ...capture, path })
+
+		expect(info).toMatchObject({ origin: 'capture', path })
+		expect(await images.save(info.id, { path, format: 'fits', overwrite: true })).toEqual({ status: 'original' })
+		images.close(info.id)
+	})
+
+	test('refuses bytes that are not an image', async () => {
+		await expect(images.openCapture(new TextEncoder().encode('not an image'), 'Camera #2', capture)).rejects.toThrow('The camera frame is not a FITS or XISF image')
+	})
+})

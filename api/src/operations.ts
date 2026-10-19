@@ -4,14 +4,14 @@ import { ResourceArbiter } from 'nebulosa/src/devices/orchestration/resource'
 import type { DeviceRegistry } from './devices'
 
 // Device operations of the whole server process. One resource arbiter grants each physical device to one
-// operation at a time, whichever service (mount commands today; capture, focus, alignment, guiding, and
-// the sequencer later) or browser tab starts it, and one lifecycle bridge cancels an operation when a
+// operation at a time, whichever service (mount commands and camera captures today; focus, alignment,
+// guiding, and the sequencer later) or browser tab starts it, and one lifecycle bridge cancels an operation when a
 // device it holds disconnects or disappears. Operations are owned here, never by a request or a tab: the
 // running ones are listed for any tab that (re)connects, and every start and end is published as an
 // operation:updated event naming the exact connection and device ids involved, never a role.
 
 // Kind of operation, prefixed by the service that runs it.
-export type OperationKind = 'mount.slew'
+export type OperationKind = 'mount.slew' | 'camera.capture'
 
 // Life stage of an operation.
 export type OperationState = 'running' | 'succeeded' | 'failed'

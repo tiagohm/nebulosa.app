@@ -5,8 +5,8 @@ import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/processing/scnr'
 import type { FitsHeader, FitsHeaderKey } from 'nebulosa/src/io/formats/fits/fits'
 import { cfaPatternKeyword, exposureTimeKeyword, numericKeyword, observationDateKeyword, textKeyword } from 'nebulosa/src/io/formats/fits/util'
 
-// Image documents opened by clients: FITS and XISF files read from the server's filesystem and kept
-// decoded in memory under an id until a client closes them, so later renderings (and future
+// Image documents opened by clients: FITS and XISF files read from the server's filesystem, or camera
+// frames handed over by the capture service, kept decoded in memory under an id until they are closed, so later renderings (and future
 // processing) work on the same pixels. Each rendering applies a complete set of display settings
 // (debayer, stretch, tone, and color) to a copy of the decoded image, never to the image itself, and is
 // sent as JPEG; the parameters actually applied are returned alongside it. Decoding and rendering run on
@@ -34,9 +34,25 @@ export interface ImageProvenance {
 	readonly createdAt: string
 }
 
-// Origin of an image document: a file read from the server, or an image derived from another document,
-// which lives only in memory until it is saved.
-export type ImageOrigin = { readonly origin: 'file'; readonly path: string; readonly format: ImageFormat } | { readonly origin: 'derived'; readonly provenance: ImageProvenance }
+// Camera frame an image document was decoded from, as the capture service received it.
+export interface ImageCapture {
+	// Id of the open connection that provides the camera.
+	readonly connectionId: string
+	// Exact id of the camera.
+	readonly deviceId: string
+	// Identity of the frame, unique across captures: the capture session id and the frame generation.
+	readonly frameId: string
+	// Instant the frame's exposure was commanded, Unix milliseconds (UTC).
+	readonly time: number
+	// Absolute path of the file the frame is saved to; absent when it is only previewed. The file may not be
+	// written yet, or its write may have failed: the capture service reports that.
+	readonly path?: string
+}
+
+// Origin of an image document: a file read from the server, an image derived from another document, which
+// lives only in memory until it is saved, or a camera frame, which lives only in memory whether or not the
+// capture also saved it to a file.
+export type ImageOrigin = { readonly origin: 'file'; readonly path: string; readonly format: ImageFormat } | { readonly origin: 'derived'; readonly provenance: ImageProvenance } | ({ readonly origin: 'capture'; readonly format: ImageFormat } & ImageCapture)
 
 // Description of an open image document.
 export type ImageInfo = ImageOrigin & ImageProperties
@@ -251,11 +267,12 @@ export interface SaveResult {
 	readonly path: string
 }
 
-// Message sent to the image worker. Open, render, derive, and encode carry an id that their response
-// echoes; a close has no response, and a cancel drops the render with that id if it has not started
+// Message sent to the image worker. Open, open capture, render, derive, and encode carry an id that their
+// response echoes; open capture transfers its bytes to the worker; a close has no response, and a cancel drops the render with that id if it has not started
 // yet (the render then answers superseded).
 export type ImageWorkerRequest =
 	| { readonly type: 'open'; readonly id: number; readonly path: string }
+	| { readonly type: 'openCapture'; readonly id: number; readonly bytes: Uint8Array<ArrayBuffer>; readonly name: string; readonly capture: ImageCapture }
 	| { readonly type: 'render'; readonly id: number; readonly document: string; readonly request: RenderRequest }
 	| { readonly type: 'derive'; readonly id: number; readonly document: string; readonly request: DeriveRequest }
 	| { readonly type: 'encode'; readonly id: number; readonly document: string; readonly format: ImageFormat }
@@ -329,7 +346,8 @@ function comparablePath(path: string): string {
 interface DocumentRecord {
 	// Name of the document, for downloads.
 	readonly name: string
-	// Absolute path of the file of a file document; absent for a derived one.
+	// Absolute path of the file of a file document, or the file a captured frame is saved to; absent for a
+	// derived document and a frame that is only previewed.
 	readonly path?: string
 }
 
@@ -350,6 +368,16 @@ export class ImageStore {
 		const response = await this.#request({ type: 'open', id: this.#id++, path })
 		if (response.status !== 'opened') throw responseError(response)
 		this.#documents.set(response.info.id, { name: response.info.name, path: resolve(path) })
+		return response.info
+	}
+
+	// Opens a camera frame, the bytes of a FITS or XISF file, as a new document named name. The bytes are
+	// transferred to the worker, so the caller must not use them afterwards. Throws when they are not a
+	// readable FITS or XISF image.
+	async openCapture(bytes: Uint8Array<ArrayBuffer>, name: string, capture: ImageCapture): Promise<ImageInfo> {
+		const response = await this.#request({ type: 'openCapture', id: this.#id++, bytes, name, capture }, [bytes.buffer])
+		if (response.status !== 'opened') throw responseError(response)
+		this.#documents.set(response.info.id, { name: response.info.name, path: capture.path === undefined ? undefined : resolve(capture.path) })
 		return response.info
 	}
 
@@ -439,17 +467,18 @@ export class ImageStore {
 		return true
 	}
 
-	// Sends a request to the worker and resolves to its response.
-	#request(request: AnsweredRequest): Promise<ImageWorkerResponse> {
+	// Sends a request to the worker, transferring the given buffers, and resolves to its response.
+	#request(request: AnsweredRequest, transfer: Transferable[] = []): Promise<ImageWorkerResponse> {
 		const resolvers = Promise.withResolvers<ImageWorkerResponse>()
 		this.#pending.set(request.id, resolvers)
-		this.#post(request)
+		this.#post(request, transfer)
 		return resolvers.promise
 	}
 
-	// Posts a message to the worker, starting it on first use. Messages are cloned, nothing is transferred.
-	#post(message: ImageWorkerRequest): void {
-		this.#start().postMessage(message, [])
+	// Posts a message to the worker, starting it on first use. Messages are cloned except the transferred
+	// buffers, which the worker owns afterwards.
+	#post(message: ImageWorkerRequest, transfer: Transferable[] = []): void {
+		this.#start().postMessage(message, transfer)
 	}
 
 	// Starts the worker on first use.

@@ -83,3 +83,22 @@ test('camera sensor is published when reported and looked up by exact connection
 	expect(registry.cameraSensor(clients[1], other.id)?.sensor).toBeUndefined()
 	expect(registry.mount(clients[1], registry.list(clients[0]).find((d) => d.type === 'mount')!.id)).toBeUndefined()
 })
+
+test('camera capabilities are published when they change, not on exposure progress', async () => {
+	const { registry, events, clients } = setup('a')
+	const camera = registry.list(clients[0]).find((d) => d.type === 'camera')!
+	registry.switch(clients[0], camera.id, true)
+	const device = registry.camera(clients[0], camera.id)!
+	await waitUntil(() => events.some((event) => event.type === 'camera:capabilities' && event.capabilities.transferFormats.length > 0 && event.capabilities.exposure !== undefined))
+
+	const capabilities = registry.cameraCapabilities(clients[0], camera.id)!
+	expect(capabilities).toMatchObject({ connectionId: 'a', id: camera.id, connected: true, transferFormats: ['FITS', 'XISF'] })
+	expect(registry.camera(clients[0], 'missing')).toBeUndefined()
+
+	await Bun.sleep(200)
+	const before = events.filter((event) => event.type === 'camera:capabilities').length
+	registry.cameras.startExposure(device, 0.5)
+	await waitUntil(() => device.exposuring)
+	await waitUntil(() => !device.exposuring)
+	expect(events.filter((event) => event.type === 'camera:capabilities').length).toBe(before)
+})

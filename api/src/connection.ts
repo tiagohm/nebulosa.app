@@ -10,6 +10,7 @@ import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { RotatorSimulator } from 'nebulosa/src/devices/indi/simulator/rotator'
 import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
+import type { CaptureEvent } from './captures'
 import { type DeviceEvent, DeviceRegistry } from './devices'
 import type { OperationEvent } from './operations'
 
@@ -49,9 +50,9 @@ export type ConnectionStatus = ConnectRequest & {
 // Notification published when a connection opens or closes, whoever caused it.
 export type ConnectionEvent = { readonly type: 'connection:open'; readonly connection: ConnectionStatus } | { readonly type: 'connection:close'; readonly id: string }
 
-// Any event pushed to the browser tabs: connection and device events of the connection registry, and
-// the operation events of the operation registry.
-export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent
+// Any event pushed to the browser tabs: connection and device events of the connection registry, the
+// operation events of the operation registry, and the events of the capture service.
+export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent | CaptureEvent
 
 // Receiver of connection and device events.
 export type ConnectionListener = (event: ServerEvent) => void

@@ -1,4 +1,5 @@
 import type { Server } from 'bun'
+import { CameraCaptures, type CaptureRequest } from './captures'
 import { connections } from './connection'
 import { handleListDirectory } from './files'
 import { handleDeriveImage, handleDownloadImage, handleOpenImage, handleRenderImage, handleSaveImage, images } from './images'
@@ -9,14 +10,15 @@ import { broadcast, websocket } from './websocket'
 
 // HTTP routes and the WebSocket handler of the backend, mounted by the app server.
 
+export type { CaptureEvent, CaptureFormat, CaptureFrame, CaptureOutput, CaptureOutputMode, CapturePhase, CaptureRequest, CaptureSession, CaptureSettings, CaptureSnapshot, CaptureStartResponse } from './captures'
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
-export type { CameraSensor, CameraSensorState, DeviceEvent, DeviceSummary, ManagedDeviceType, MountState } from './devices'
+export type { CameraCapabilities, CameraRange, CameraSensor, CameraSensorState, DeviceEvent, DeviceSummary, ManagedDeviceType, MountState } from './devices'
 export type { DirectoryListing, FileEntry } from './files'
 export type { MountSlewRequest, MountSlewResponse } from './mounts'
 export type { OperationDevice, OperationEvent, OperationKind, OperationRecord, OperationState } from './operations'
 export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
 export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
-export type { Binning, DeriveRequest, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from './images'
+export type { Binning, DeriveRequest, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageCapture, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from './images'
 export { websocket }
 
 connections.listen(broadcast)
@@ -26,6 +28,9 @@ const operations = new OperationRegistry(connections.devices, broadcast)
 
 // Mount commands over the devices of the open connections.
 const mounts = new MountCommands(connections.devices, (id) => connections.client(id), skyLocator, operations)
+
+// Camera captures over the devices of the open connections, their frames entering the image store.
+const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, broadcast)
 
 // Opens a connection, or returns the existing one for the same endpoint. Responds 400 for an invalid
 // body and 502 when the endpoint cannot be reached.
@@ -87,6 +92,26 @@ export const routes = {
 	'/api/connections/:id/mounts/:deviceId/stop': {
 		// Cancels the operation of a mount and stops its motion.
 		POST: (req) => mounts.stop(req.params.id, req.params.deviceId),
+	},
+	'/api/captures': {
+		// The latest capture session and previewed frame of every camera, started by any tab.
+		GET: () => Response.json(captures.snapshot()),
+	},
+	'/api/connections/:id/cameras/:deviceId': {
+		// Capture capabilities and thermal state of a camera; 404 when the connection is not open or has no such camera.
+		GET: (req) => captures.capabilities(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/cameras/:deviceId/capture': {
+		// Starts a capture; its progress and outcome arrive as capture:updated and operation:updated events.
+		POST: async (req) => captures.start(req.params.id, req.params.deviceId, (await req.json()) as CaptureRequest),
+	},
+	'/api/connections/:id/cameras/:deviceId/capture/stop': {
+		// Stops the capture of a camera after the exposure in flight.
+		POST: (req) => captures.stop(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/cameras/:deviceId/capture/abort': {
+		// Aborts the exposure in flight and ends the capture of a camera.
+		POST: (req) => captures.abort(req.params.id, req.params.deviceId),
 	},
 	'/api/connections/:id/cameras/:deviceId/sensor': {
 		// Sensor geometry of a camera; 404 when the connection is not open or has no such camera.

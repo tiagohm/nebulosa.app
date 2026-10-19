@@ -13,11 +13,12 @@ import { fileHandleSource } from 'nebulosa/src/io/file'
 import { Bitpix, type FitsHeader, readFits } from 'nebulosa/src/io/formats/fits/fits'
 import { uncompressedBitpixKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { readXisf } from 'nebulosa/src/io/formats/xisf/xisf'
+import { bufferSource } from 'nebulosa/src/io/io'
 import type { Sink } from 'nebulosa/src/io/types'
-import { cfaPattern, DisplayError, precisionOf, type DisplaySettings, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageProvenance, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult, type Stretch } from './images'
+import { cfaPattern, DisplayError, precisionOf, type DisplaySettings, type ImageCapture, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageProvenance, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult, type Stretch } from './images'
 
 // Worker thread that owns the decoded pixels of every open image document and does all the heavy
-// work on them: decoding FITS and XISF files, the display pipeline, JPEG encoding, deriving new
+// work on them: decoding FITS and XISF files and camera frames, the display pipeline, JPEG encoding, deriving new
 // documents from the pipeline in floating point, and encoding documents as files. Keeping the
 // pixels here means they are never copied between threads, and the server event loop stays free while
 // a large image is decoded or rendered. Renderings run one at a time, always on a copy of the decoded
@@ -71,8 +72,27 @@ const queue = new Map<string, QueuedRender>()
 // Whether the queue is scheduled to be drained.
 let draining = false
 
-// Reads the image of a FITS or XISF file with the precision its BITPIX needs (precisionOf); a FITS file
-// is read with 64 bits when any of its HDUs needs them. Throws ImageOpenError.
+// Seekable source of a FITS or XISF image: an open file or bytes in memory.
+type ImageSource = ReturnType<typeof fileHandleSource> | ReturnType<typeof bufferSource>
+
+// Reads the image of a FITS or XISF source with the precision its BITPIX needs (precisionOf); a FITS image
+// is read with 64 bits when any of its HDUs needs them. Resolves to undefined when the source is neither,
+// and throws whatever the decoder throws for a malformed one.
+async function readImageFrom(source: ImageSource): Promise<{ readonly format: ImageFormat; readonly image: Image } | undefined> {
+	const fits = await readFits(source)
+	const fitsPrecision = fits && (fits.hdus.some((hdu) => precisionOf(uncompressedBitpixKeyword(hdu.header, 0)) === 64) ? 64 : 32)
+	const fitsImage = fits && (await readImageFromFits(fits, source, fitsPrecision))
+	if (fitsImage) return { format: 'fits', image: fitsImage }
+
+	source.seek(0)
+	const xisf = await readXisf(source)
+	const xisfImage = xisf?.images[0] && (await readImageFromXisf(xisf, source, precisionOf(xisf.images[0].bitpix)))
+	if (xisfImage) return { format: 'xisf', image: xisfImage }
+
+	return undefined
+}
+
+// Reads the image of a FITS or XISF file (see readImageFrom). Throws ImageOpenError.
 async function readImage(path: string): Promise<{ readonly format: ImageFormat; readonly image: Image }> {
 	let handle
 
@@ -84,32 +104,43 @@ async function readImage(path: string): Promise<{ readonly format: ImageFormat; 
 
 	// Disposing the source closes the file.
 	await using source = fileHandleSource(handle)
+	let read
 
 	try {
-		const fits = await readFits(source)
-		const fitsPrecision = fits && (fits.hdus.some((hdu) => precisionOf(uncompressedBitpixKeyword(hdu.header, 0)) === 64) ? 64 : 32)
-		const fitsImage = fits && (await readImageFromFits(fits, source, fitsPrecision))
-		if (fitsImage) return { format: 'fits', image: fitsImage }
-
-		source.seek(0)
-		const xisf = await readXisf(source)
-		const xisfImage = xisf?.images[0] && (await readImageFromXisf(xisf, source, precisionOf(xisf.images[0].bitpix)))
-		if (xisfImage) return { format: 'xisf', image: xisfImage }
+		read = await readImageFrom(source)
 	} catch (error) {
 		throw new ImageOpenError(path, 415, error)
 	}
 
-	throw new ImageOpenError(path, 415)
+	if (!read) throw new ImageOpenError(path, 415)
+	return read
+}
+
+// Properties of a new document holding a decoded image, under a fresh id.
+function documentProperties(name: string, image: Image) {
+	const { width, height, channels, bayer } = image.metadata
+	const cfa = cfaPattern(image.header, channels)
+	return { id: crypto.randomUUID(), name, width, height, channels, header: image.header, acquisition: imageAcquisition(image.header), ...(bayer && { bayer }), ...(cfa && { cfa }) }
+}
+
+// Keeps the decoded image of a new document and returns its info.
+function addDocument(info: ImageInfo, image: Image): ImageInfo {
+	documents.set(info.id, { name: info.name, image, cfa: info.cfa, autoStretches: new Map() })
+	return info
 }
 
 // Opens the FITS or XISF file at path as a new document. Throws ImageOpenError.
 async function openDocument(path: string): Promise<ImageInfo> {
 	const { format, image } = await readImage(path)
-	const { width, height, channels, bayer } = image.metadata
-	const cfa = cfaPattern(image.header, channels)
-	const info: ImageInfo = { origin: 'file', path, format, id: crypto.randomUUID(), name: basename(path), width, height, channels, header: image.header, acquisition: imageAcquisition(image.header), ...(bayer && { bayer }), ...(cfa && { cfa }) }
-	documents.set(info.id, { name: info.name, image, cfa, autoStretches: new Map() })
-	return info
+	return addDocument({ origin: 'file', path, format, ...documentProperties(basename(path), image) }, image)
+}
+
+// Opens a camera frame, the bytes of a FITS or XISF file, as a new document named name. Throws when the
+// bytes are not one.
+async function openCapture(bytes: Uint8Array<ArrayBuffer>, name: string, capture: ImageCapture): Promise<ImageInfo> {
+	const read = await readImageFrom(bufferSource(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)))
+	if (!read) throw new Error('The camera frame is not a FITS or XISF image')
+	return addDocument({ origin: 'capture', format: read.format, ...capture, ...documentProperties(name, read.image) }, read.image)
 }
 
 // Returns the image a rendering starts from: the decoded image, or its debayered copy when the
@@ -363,6 +394,16 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 		} catch (error) {
 			if (error instanceof DisplayError) reply({ id: request.id, status: 'invalid', error: error.message })
 			else reply({ id: request.id, status: 'failed', error: Error.isError(error) ? error.message : String(error) })
+		}
+
+		return
+	}
+
+	if (request.type === 'openCapture') {
+		try {
+			reply({ id: request.id, status: 'opened', info: await openCapture(request.bytes, request.name, request.capture) })
+		} catch (error) {
+			reply({ id: request.id, status: 'failed', error: Error.isError(error) ? error.message : String(error) })
 		}
 
 		return

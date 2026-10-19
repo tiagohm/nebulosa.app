@@ -14,6 +14,7 @@ import { ImageViewer } from '../viewer/ImageViewer'
 import { Reticle } from '../viewer/Reticle'
 import { FIT_VIEW } from '../viewer/transform'
 import { CameraTabs } from './CameraTabs'
+import { cameraKey, captureRuntime, renderFrame } from './capture'
 import { ModePanel } from './ModePanel'
 import { CAPTURE_MODE_DEFINITIONS, captureModeUnavailable } from './modes'
 import { type CameraTarget, cameraRole, cameraTabs, cameraView, captureRoute, captureViewerState, resolveCameraView, viewerKey, viewMode, viewReticle } from './views'
@@ -87,7 +88,7 @@ export function CaptureWorkspace() {
 				title: definition.panelTitle,
 				content: (
 					<ModePanel camera={role} requires={definition.requires}>
-						{Panel && <Panel />}
+						{Panel && <Panel camera={role} />}
 					</ModePanel>
 				),
 			}}
@@ -108,14 +109,27 @@ interface CaptureViewerProps {
 
 // Viewer of the latest frame of the view's camera with the mode's overlays. It is keyed by the camera
 // role and assigned device, so nothing of a replaced device is shown; its zoom and pan are kept per
-// viewer key, so they come back after switching camera views or workspaces. There is no capture yet, so
-// it shows why nothing can be captured and the flow that resolves it.
+// viewer key, so they come back after switching camera views or workspaces. The frame shown is the
+// latest one the server previewed for the assigned device, whichever tab started its capture; while the
+// next one is exposed or rendered, the previous one stays visible. Before any frame it shows the state of
+// the camera and the flow that fixes it.
 function CaptureViewer({ role, viewer, reticle }: CaptureViewerProps) {
 	const camera: CameraTarget = { role, ...useRoleDevice(role) }
 	const views = useSnapshot(captureViewerState)
+	const runtime = useSnapshot(captureRuntime)
+	const key = camera.device && cameraKey(camera.device.connectionId, camera.device.id)
+	const frame = key ? runtime.frames[key] : undefined
+	const rendering = key ? runtime.renderings[key] : undefined
+
+	useEffect(() => {
+		if (key && frame) void renderFrame(captureRuntime, key, frame)
+	}, [key, frame])
 
 	return (
 		<ImageViewer
+			image={rendering}
+			loading={frame !== undefined && rendering?.imageId !== frame.imageId}
+			error={key ? runtime.renderErrors[key] : undefined}
 			view={views[viewer] ?? FIT_VIEW}
 			onViewChange={(view) => (captureViewerState[viewer] = view)}
 			empty={<CameraState camera={camera} />}
@@ -150,7 +164,7 @@ function CameraState({ camera: { role, status } }: CameraStateProps) {
 				/>
 			)
 		case 'connected':
-			return <EmptyState title="No image captured" description="Capturing is not available yet." />
+			return <EmptyState title="No image captured" description="Start a capture in the Camera Capture panel." />
 		case 'connecting':
 		case 'disconnecting':
 			return <EmptyState title={`${label} ${status === 'connecting' ? 'connecting' : 'disconnecting'}…`} />

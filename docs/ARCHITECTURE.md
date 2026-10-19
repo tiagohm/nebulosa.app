@@ -28,7 +28,7 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
 | Mount slew / stop                                   | Implemented          | `api/src/mounts.ts`, `web/src/sky/mount.ts`                                                                       |
 | Mount sync, park, track, manual move, pulse guide   | Integration Required | `core/src/devices/commanders/mount.ts`, `guideoutput.ts`                                                          |
 | Focuser, wheel, rotator, cover, flat panel commands | Integration Required | `core/src/devices/commanders/*`                                                                                   |
-| Camera capture and frames                           | Partial              | `api/src/captures.ts` over `CameraCapturer`; the Camera Capture panel and viewer frames are pending               |
+| Camera capture and frames                           | Implemented          | `api/src/captures.ts` over `CameraCapturer`; `web/src/capture/CameraCapturePanel.tsx`, `capture.ts`               |
 | Image documents (FITS/XISF)                         | Implemented          | `api/src/images.ts` + `images.worker.ts`, `web/src/images/images.ts`                                              |
 | Display pipeline, derive, save                      | Implemented          | same as above                                                                                                     |
 | Histogram and statistics                            | Planned              | Inspector shows a placeholder                                                                                     |

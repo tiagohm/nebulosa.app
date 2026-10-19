@@ -6,8 +6,9 @@ import type { OperationFailureReason } from 'nebulosa/src/devices/orchestration/
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { type CameraCaptureHandle, CameraCapturer, type CameraFramePathRequest, writeFrameExclusively } from 'nebulosa/src/devices/runners/camera.capture'
 import { type CameraCaptureEvent, type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START } from 'nebulosa/src/devices/runners/camera.capture.types'
+import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import type { DeviceRegistry } from './devices'
-import type { ImageStore } from './images'
+import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
 import type { OperationRegistry } from './operations'
 
 // Camera Capture service: single, fixed-count, and loop acquisitions of one camera, run on the server through
@@ -102,6 +103,20 @@ export interface CaptureFrame {
 	readonly path?: string
 	// Whether the write of the frame's file completed; false until it does and when it failed.
 	readonly saved: boolean
+	// Frame type the capture requested.
+	readonly frameType: CaptureSettings['frameType']
+	// Width of the image, in pixels.
+	readonly width: number
+	// Height of the image, in pixels.
+	readonly height: number
+	// Number of channels: 1 for grayscale or a raw CFA mosaic, 3 for RGB.
+	readonly channels: number
+	// CFA pattern at the image origin of a mono CFA mosaic (ImageInfo cfa); absent otherwise.
+	readonly cfa?: ImageInfo['cfa']
+	// FITS BITPIX of the frame: 8, 16, or 32 for integers, -32 or -64 for floats; absent when not reported.
+	readonly bitpix?: number
+	// Acquisition data the driver wrote into the frame's header.
+	readonly acquisition: ImageAcquisition
 }
 
 // State of a capture session as published to clients. It stays listed after it ends, until the next capture
@@ -497,7 +512,10 @@ export class CameraCaptures implements Disposable {
 			try {
 				const info = await this.images.openCapture(bytes, path === undefined ? `${cameraName} #${generation}` : basename(path), { connectionId, deviceId, frameId: `${sessionId}:${generation}`, time, path })
 				const previous = preview.frame
-				preview.frame = { imageId: info.id, sessionId, connectionId, deviceId, generation, time, path, saved: capture.frames.get(generation)?.saved === true }
+				const bitpix = numericKeyword<number, undefined>(info.header, 'BITPIX', undefined)
+				const { width, height, channels, cfa, acquisition } = info
+				const saved = capture.frames.get(generation)?.saved === true
+				preview.frame = { imageId: info.id, sessionId, connectionId, deviceId, generation, time, path, saved, frameType: capture.session.request.frameType, width, height, channels, cfa, bitpix, acquisition }
 				if (previous) this.images.close(previous.imageId)
 				this.listener({ type: 'capture:frame', frame: preview.frame })
 				if (capture.session.previewError !== undefined) this.#update(capture, { previewError: undefined })

@@ -3,7 +3,7 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createOpticalPreset, createProfile, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectOpticalPreset, selectProfile, setCameraReticle, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setTelescopeOptics, updateOpticalPreset } from './profile'
+import { acquisitionSettings, ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createOpticalPreset, createProfile, DEFAULT_ACQUISITION_SETTINGS, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectOpticalPreset, selectProfile, setAcquisitionSettings, setCameraReticle, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setTelescopeOptics, updateOpticalPreset } from './profile'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }
@@ -524,5 +524,36 @@ describe('sky settings', () => {
 
 		expect(state.profiles[0].settings.sky.observer).toEqual({ latitude: 10, longitude: 20, elevation: 30 })
 		expect(copy.settings.sky.observer).toEqual({ latitude: -10, longitude: -20, elevation: 0 })
+	})
+})
+
+describe('camera capture form', () => {
+	test('starts from the defaults and keeps the form of each camera view apart', () => {
+		const state = load(newStores())
+		expect(acquisitionSettings(activeProfile(state).settings.capture, 'MAIN_CAMERA')).toEqual(DEFAULT_ACQUISITION_SETTINGS)
+
+		setAcquisitionSettings(state, 'MAIN_CAMERA', { exposureMode: 'loop', exposureTime: 0.0001, delay: 1.5 })
+		setAcquisitionSettings(state, 'GUIDE_CAMERA', { output: { mode: 'preview-only', format: 'FITS' } })
+		selectCameraView(state, 'MAIN_CAMERA', 'mount-nudge')
+
+		const capture = activeProfile(state).settings.capture
+		expect(acquisitionSettings(capture, 'MAIN_CAMERA')).toEqual({ ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'loop', exposureTime: 0.0001, delay: 1.5 })
+		expect(acquisitionSettings(capture, 'GUIDE_CAMERA').output).toEqual({ mode: 'preview-only', format: 'FITS' })
+		expect(DEFAULT_ACQUISITION_SETTINGS.exposureMode).toBe('single')
+	})
+
+	test('is persisted and restored, replacing invalid fields with defaults', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		setAcquisitionSettings(state, 'MAIN_CAMERA', { exposureMode: 'fixed', count: 30, exposureTime: 0.0001, output: { mode: 'preview-save', directory: '/data/allsky', filenameTemplate: 'sky_{seq}', format: 'XISF' } })
+		await Bun.sleep(0)
+
+		const reloaded = load({ local: stores.local, session: new MemoryStorage() })
+		expect(acquisitionSettings(reloaded.profiles[0].settings.capture, 'MAIN_CAMERA')).toEqual({ ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'fixed', count: 30, exposureTime: 0.0001, output: { mode: 'preview-save', directory: '/data/allsky', filenameTemplate: 'sky_{seq}', format: 'XISF' } })
+
+		const invalid = newStores()
+		const acquisition = { MAIN_CAMERA: { exposureMode: 'burst', count: 2.5, delay: -1, exposureTime: 0, frameType: 'SKY', binX: 0, output: { mode: 'x', format: 'NATIVE', directory: '  ' } }, MOUNT: {} }
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {}, acquisition } } }] }))
+		expect(load(invalid).profiles[0].settings.capture).toEqual({ views: {}, acquisition: { MAIN_CAMERA: DEFAULT_ACQUISITION_SETTINGS } })
 	})
 })

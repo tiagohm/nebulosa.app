@@ -1,3 +1,4 @@
+import type { CaptureRequest } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
 import { CAMERA_ROLES, type CameraRole, conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
@@ -102,12 +103,41 @@ export interface CameraViewSettings {
 	reticle?: boolean
 }
 
-// Capture preferences of a profile. Only presentation is kept: never images, devices, or operations.
+// Camera Capture form of one camera view: the request the next capture starts with. It belongs to the
+// camera role, so it is kept when another device is assigned; the panel fits it to the capabilities of the
+// device actually assigned when a capture starts. Exposure time and delay are in seconds.
+export type CameraAcquisitionSettings = CaptureRequest
+
+// Camera Capture form of a view that has none yet: one 1 s light frame, previewed and saved in the server's
+// default directory with the server's default names, as FITS.
+export const DEFAULT_ACQUISITION_SETTINGS: CameraAcquisitionSettings = {
+	exposureMode: 'single',
+	count: 10,
+	delay: 0,
+	exposureTime: 1,
+	frameType: 'LIGHT',
+	gain: 0,
+	offset: 0,
+	binX: 1,
+	binY: 1,
+	subframe: false,
+	x: 0,
+	y: 0,
+	width: 0,
+	height: 0,
+	frameFormat: '',
+	output: { mode: 'preview-save', format: 'FITS' },
+}
+
+// Capture preferences of a profile. Only presentation and forms are kept: never images, devices, or
+// operations.
 export interface CaptureSettings {
 	// Camera role of the view selected last; absent before Capture is first opened.
 	activeCamera?: CameraRole
 	// Preferences of each camera view used so far, by camera role.
 	views: Partial<Record<CameraRole, CameraViewSettings>>
+	// Camera Capture form of each camera view edited so far, by camera role; absent before the first edit.
+	acquisition?: Partial<Record<CameraRole, CameraAcquisitionSettings>>
 }
 
 // A complete working environment: the selected connection, the equipment assigned on each connection,
@@ -164,6 +194,16 @@ export function defaultSettings(): ProfileSettings {
 function normalizeCapture(value: unknown, capture: CaptureSettings) {
 	if (!isRecord(value)) return
 	if (isCameraRole(value.activeCamera)) capture.activeCamera = value.activeCamera
+
+	if (isRecord(value.acquisition)) {
+		for (const role of CAMERA_ROLES) {
+			const acquisition = normalizeAcquisition(value.acquisition[role])
+			if (!acquisition) continue
+			capture.acquisition ??= {}
+			capture.acquisition[role] = acquisition
+		}
+	}
+
 	if (!isRecord(value.views)) return
 
 	for (const role of CAMERA_ROLES) {
@@ -173,6 +213,51 @@ function normalizeCapture(value: unknown, capture: CaptureSettings) {
 		if (typeof view.reticle === 'boolean') settings.reticle = view.reticle
 		capture.views[role] = settings
 	}
+}
+
+// Acquisition modes of the Camera Capture form.
+const EXPOSURE_MODES: ReadonlySet<string> = new Set<CameraAcquisitionSettings['exposureMode']>(['single', 'fixed', 'loop'])
+
+// Frame types of the Camera Capture form.
+const FRAME_TYPES: ReadonlySet<string> = new Set<CameraAcquisitionSettings['frameType']>(['LIGHT', 'DARK', 'FLAT', 'BIAS'])
+
+// Returns a number at least min, or the fallback for anything else; integer keeps whole numbers only.
+function numberAtLeast(value: unknown, min: number, fallback: number, integer = false) {
+	return typeof value === 'number' && Number.isFinite(value) && value >= min && (!integer || Number.isInteger(value)) ? value : fallback
+}
+
+// Restores a persisted Camera Capture form, filling every invalid field with its default; undefined for
+// anything that is not a record.
+function normalizeAcquisition(value: unknown): CameraAcquisitionSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = DEFAULT_ACQUISITION_SETTINGS
+	const output = isRecord(value.output) ? value.output : {}
+	const acquisition: CameraAcquisitionSettings = {
+		exposureMode: typeof value.exposureMode === 'string' && EXPOSURE_MODES.has(value.exposureMode) ? (value.exposureMode as CameraAcquisitionSettings['exposureMode']) : defaults.exposureMode,
+		count: numberAtLeast(value.count, 1, defaults.count, true),
+		delay: numberAtLeast(value.delay, 0, defaults.delay),
+		exposureTime: typeof value.exposureTime === 'number' && Number.isFinite(value.exposureTime) && value.exposureTime > 0 ? value.exposureTime : defaults.exposureTime,
+		frameType: typeof value.frameType === 'string' && FRAME_TYPES.has(value.frameType) ? (value.frameType as CameraAcquisitionSettings['frameType']) : defaults.frameType,
+		gain: numberAtLeast(value.gain, -Infinity, defaults.gain),
+		offset: numberAtLeast(value.offset, -Infinity, defaults.offset),
+		binX: numberAtLeast(value.binX, 1, defaults.binX, true),
+		binY: numberAtLeast(value.binY, 1, defaults.binY, true),
+		subframe: value.subframe === true,
+		x: numberAtLeast(value.x, 0, defaults.x, true),
+		y: numberAtLeast(value.y, 0, defaults.y, true),
+		width: numberAtLeast(value.width, 0, defaults.width, true),
+		height: numberAtLeast(value.height, 0, defaults.height, true),
+		frameFormat: typeof value.frameFormat === 'string' ? value.frameFormat : defaults.frameFormat,
+		output: {
+			mode: output.mode === 'preview-only' ? 'preview-only' : 'preview-save',
+			format: output.format === 'XISF' ? 'XISF' : 'FITS',
+			...(typeof output.directory === 'string' && output.directory.trim() && { directory: output.directory.trim() }),
+			...(typeof output.filenameTemplate === 'string' && output.filenameTemplate.trim() && { filenameTemplate: output.filenameTemplate.trim() }),
+		},
+	}
+
+	return acquisition
 }
 
 // Lowest elevation accepted for an observer in meters (below the Dead Sea shore, -430 m).
@@ -592,6 +677,23 @@ export function setCameraReticle(state: ProfileState, role: CameraRole, reticle:
 	const view = (profile.settings.capture.views[role] ??= { mode: 'camera' })
 	if (view.reticle === reticle) return
 	view.reticle = reticle
+	touch(profile)
+}
+
+// Returns the Camera Capture form of a camera view: the one edited last, or the defaults.
+export function acquisitionSettings(capture: Readonly<CaptureSettings>, role: CameraRole): Readonly<CameraAcquisitionSettings> {
+	return capture.acquisition?.[role] ?? DEFAULT_ACQUISITION_SETTINGS
+}
+
+// Replaces fields of the Camera Capture form of a camera view in the active profile; other views keep
+// theirs. The output is replaced as a whole when given.
+export function setAcquisitionSettings(state: ProfileState, role: CameraRole, patch: Partial<CameraAcquisitionSettings>) {
+	const profile = activeProfile(state)
+	const capture = profile.settings.capture
+	// A plain copy: the stored form is a proxy, and a default must never be shared with a view.
+	const next = JSON.parse(JSON.stringify({ ...acquisitionSettings(capture, role), ...patch })) as CameraAcquisitionSettings
+	capture.acquisition ??= {}
+	capture.acquisition[role] = next
 	touch(profile)
 }
 

@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { App } from './App'
+import { captureRuntime, handleCaptureEvent, refreshCameraCapabilities, refreshCaptures } from './capture/capture'
 import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
 import { onOpen, subscribe } from './events'
@@ -30,15 +31,19 @@ const stops = [
 		handleMountEvent(mountRuntime, event)
 		handleOperationEvent(operationsState, event)
 		handleSensorEvent(sensorRuntime, event)
+		handleCaptureEvent(captureRuntime, event)
 	}),
 	// Every (re)open resynchronizes the open connections, the watched devices, the followed mount, the
-	// running operations, and the camera sensors, which may have changed while the socket was closed.
+	// running operations, the camera sensors, and the captures and camera capabilities, which may have
+	// changed while the socket was closed.
 	onOpen(() => {
 		void refreshServers(connectionState)
 		void refreshDevices(deviceState)
 		void refreshMount(mountRuntime)
 		void refreshOperations(operationsState)
 		refreshSensors(sensorRuntime)
+		void refreshCaptures(captureRuntime)
+		refreshCameraCapabilities(captureRuntime)
 	}),
 ]
 

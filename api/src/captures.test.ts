@@ -81,7 +81,8 @@ test('a single capture saves one frame, previews it, and releases the camera', a
 	expect(files[0]).toMatch(/^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-\d{3}_Camera Simulator_LIGHT_0001\.fit$/)
 
 	const frame = frames().at(-1)!
-	expect(frame).toMatchObject({ sessionId, connectionId: id, deviceId: cameraId, generation: 1, path: join(capture.output.directory!, files[0]), saved: true })
+	expect(frame).toMatchObject({ sessionId, connectionId: id, deviceId: cameraId, generation: 1, path: join(capture.output.directory!, files[0]), saved: true, frameType: 'LIGHT', width: 32, height: 32, channels: 1 })
+	expect(frame.acquisition.exposure).toBeCloseTo(0.05, 6)
 	expect(images.name(frame.imageId)).toBe(files[0])
 	expect(captures.snapshot().frames).toEqual([frame])
 

@@ -31,6 +31,7 @@ const CAPABILITIES: CameraCapabilities = {
 	frameFormats: [{ name: 'MONO', label: 'Mono' }],
 	frameFormat: 'MONO',
 	transferFormats: ['FITS'],
+	canSetTemperature: false,
 }
 
 // Fetch fake answering each URL with the response its handler builds, recording the requests.

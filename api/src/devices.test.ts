@@ -1,7 +1,10 @@
 import { afterEach, expect, test } from 'bun:test'
 import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
+import { CoverSimulator } from 'nebulosa/src/devices/indi/simulator/cover'
+import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
+import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
 import { deg } from 'nebulosa/src/math/units/angle'
 import { type DeviceEvent, DeviceRegistry, type MountState } from './devices'
 
@@ -102,3 +105,53 @@ test('camera capabilities are published when they change, not on exposure progre
 	await waitUntil(() => !device.exposuring)
 	expect(events.filter((event) => event.type === 'camera:capabilities').length).toBe(before)
 })
+
+// Registry with one simulator client providing a focuser, a filter wheel, and a cover.
+function setupAccessories() {
+	const events: DeviceEvent[] = []
+	const registry = new DeviceRegistry((event) => events.push(event))
+	const client = new ClientSimulator('a', registry.handler)
+	registry.attach(client, 'a')
+	void [new FocuserSimulator('Focuser Simulator', client), new WheelSimulator('Filter Wheel Simulator', client), new CoverSimulator('Dust Cap Simulator', client)]
+	disposables.push(client)
+	return { registry, events, client }
+}
+
+test('summaries carry the physical identity and the driver', () => {
+	const { registry, clients } = setup('a')
+	const [camera, mount] = registry.list(clients[0])
+	expect(camera).toMatchObject({ type: 'camera', hardwareId: expect.any(String) as string, interfaces: expect.arrayContaining(['camera']) as string[], driver: { executable: expect.any(String) as string, version: expect.any(String) as string } })
+	expect(mount.hardwareId).not.toBe(camera.hardwareId)
+})
+
+test('accessory states are published on change, deduplicated, and listed by connection', async () => {
+	const { registry, events, client } = setupAccessories()
+	const focuser = registry.list(client).find((d) => d.type === 'focuser')!
+	const wheel = registry.list(client).find((d) => d.type === 'wheel')!
+	registry.switch(client, focuser.id, true)
+	registry.switch(client, wheel.id, true)
+	const device = registry.device(client, 'focuser', focuser.id)!
+	await waitUntil(() => device.connected && device.canAbsoluteMove)
+	await waitUntil(() => registry.device(client, 'wheel', wheel.id)!.count > 0)
+
+	const published = events.flatMap((event) => (event.type === 'focuser:updated' ? [event.state] : []))
+	expect(published.at(-1)).toMatchObject({ connectionId: 'a', id: focuser.id, connected: true, canAbsoluteMove: true })
+	expect(new Set(published.map((state) => JSON.stringify(state))).size).toBe(published.length)
+
+	const states = registry.states(client)
+	expect(states.focuser).toEqual([registry.state(client, 'focuser', focuser.id)!])
+	expect(states.wheel[0]).toMatchObject({ id: wheel.id, count: 8, position: expect.any(Number) as number })
+	expect(states.mount).toBeEmpty()
+	expect(states.cover).toHaveLength(1)
+	expect(registry.state(client, 'wheel', focuser.id)).toBeUndefined()
+
+	const start = events.length
+	registry.focusers.moveTo(device, device.position.value + 5000)
+	await waitUntil(() => device.moving)
+	await waitUntil(() => !device.moving, 15000)
+	await Bun.sleep(1100)
+	const moves = events.slice(start).flatMap((event) => (event.type === 'focuser:updated' ? [event.state] : []))
+	// Motion changes are published at once and the trailing publication delivers the final position.
+	expect(moves.some((state) => state.moving)).toBeTrue()
+	expect(moves.at(-1)).toMatchObject({ moving: false, position: { value: device.position.value } })
+}, 30000)

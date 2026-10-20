@@ -4,7 +4,8 @@ import { proxy } from 'valtio'
 // and for Tools the standalone tool shown. The URL path is the source of truth, so each tab navigates
 // independently and a reload reopens the same context; the camera and mode selected last are
 // remembered by the active profile, which builds the Capture route opened from the navigation rail.
-// Paths are /capture/<camera>/<mode>, /images, /sky, /tools, and /tools/<tool>; anything else opens
+// Paths are /capture/<camera>/<mode>, /images, /sky, /tools, /tools/<tool>, and the Equipment Control page
+// /equipment and /equipment/<device id>, which is not a workspace of the navigation rail; anything else opens
 // the default route.
 
 // Main workspaces, in navigation order.
@@ -53,9 +54,18 @@ export interface ToolsRoute {
 	readonly tool?: ToolId
 }
 
-// Location within the application: a workspace and, for Capture, the camera view and its mode, or for
-// Tools, the tool shown.
-export type Route = CaptureRoute | ToolsRoute | { readonly workspace: Exclude<WorkspaceId, 'capture' | 'tools'> }
+// Location in the Equipment Control page: the device shown, if any. The page is opened from the Management
+// menu, not from the navigation rail, and lists the devices of the active profile's connection only.
+export interface EquipmentRoute {
+	// Equipment Control page.
+	readonly workspace: 'equipment'
+	// Id of the device shown, on the active profile's connection; absent when none is selected.
+	readonly device?: string
+}
+
+// Location within the application: a workspace and, for Capture, the camera view and its mode, for
+// Tools, the tool shown, or the Equipment Control page and its device.
+export type Route = CaptureRoute | ToolsRoute | EquipmentRoute | { readonly workspace: Exclude<WorkspaceId, 'capture' | 'tools'> }
 
 // Route opened for an empty or unknown path.
 export const DEFAULT_ROUTE: Route = { workspace: 'capture', camera: 'main', mode: 'camera' }
@@ -102,6 +112,7 @@ export function captureModeOf(value: unknown): CaptureMode | undefined {
 // extra segments are ignored.
 export function parseRoute(pathname: string): Route {
 	const [workspace = '', first = '', second = ''] = pathname.split('/').filter(Boolean)
+	if (workspace === 'equipment') return first ? { workspace, device: first } : { workspace }
 	if (!isWorkspaceId(workspace)) return DEFAULT_ROUTE
 
 	if (workspace === 'capture') {
@@ -119,6 +130,7 @@ export function parseRoute(pathname: string): Route {
 export function routePath(route: Route): string {
 	if (route.workspace === 'capture') return `/capture/${route.camera}/${route.mode}`
 	if (route.workspace === 'tools' && route.tool) return `/tools/${route.tool}`
+	if (route.workspace === 'equipment') return route.device ? `/equipment/${encodeURIComponent(route.device)}` : '/equipment'
 	return `/${route.workspace}`
 }
 

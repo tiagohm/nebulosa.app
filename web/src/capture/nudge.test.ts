@@ -14,7 +14,41 @@ function session(patch: Partial<MountNudgeSession> = {}): MountNudgeSession {
 }
 
 function mountState(patch: Partial<MountState> = {}): MountState {
-	return { connectionId: 'c', id: 'm', connected: true, rightAscension: 0, declination: 0, slewing: false, tracking: true, parked: false, parking: false, canGoTo: true, canAbort: true, canMove: true, canMoveNS: true, canMoveWE: true, moving: false, slewRates: [], ...patch }
+	return {
+		connectionId: 'c',
+		id: 'm',
+		connected: true,
+		rightAscension: 0,
+		declination: 0,
+		slewing: false,
+		tracking: true,
+		parked: false,
+		parking: false,
+		homing: false,
+		canGoTo: true,
+		canFlip: false,
+		canSync: true,
+		canAbort: true,
+		canTracking: true,
+		canPark: true,
+		canSetPark: false,
+		canHome: false,
+		canFindHome: false,
+		canSetHome: false,
+		canMove: true,
+		canMoveNS: true,
+		canMoveWE: true,
+		moving: false,
+		slewRates: [],
+		trackModes: ['SIDEREAL'],
+		trackMode: 'SIDEREAL',
+		mountType: 'EQ_GEM',
+		hasPierSide: false,
+		pierSide: 'NEITHER',
+		site: { latitude: 0, longitude: 0, elevation: 0 },
+		time: { utc: 0, offset: 0 },
+		...patch,
+	}
 }
 
 // Fetch fake answering each request with the response its handler builds, recording the requests.

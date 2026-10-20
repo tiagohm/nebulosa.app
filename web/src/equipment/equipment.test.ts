@@ -8,7 +8,7 @@ const fetchSpy = spyOn(globalThis, 'fetch')
 afterEach(() => fetchSpy.mockReset())
 
 function device(id: string, connected = false, connectionId = 's1'): DeviceSummary {
-	return { id, type: 'camera', name: id, connected, connectionId }
+	return { id, type: 'camera', name: id, connected, connectionId, hardwareId: id, interfaces: ['camera'], driver: { executable: '', version: '' } }
 }
 
 function newState(devices: DeviceSummary[] = [], watched = 's1'): DeviceState {

@@ -1,5 +1,6 @@
 import type { Server } from 'bun'
 import { CameraCaptures, type CaptureRequest } from './captures'
+import { errorResponse } from './commands'
 import { connections } from './connection'
 import { handleListDirectory } from './files'
 import { handleDeriveImage, handleDownloadImage, handleOpenImage, handleRenderImage, handleSaveImage, images } from './images'
@@ -12,7 +13,33 @@ import { broadcast, websocket } from './websocket'
 
 export type { CaptureEvent, CaptureFormat, CaptureFrame, CaptureOutput, CaptureOutputMode, CapturePhase, CaptureRequest, CaptureSession, CaptureSettings, CaptureSnapshot, CaptureStartResponse } from './captures'
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
-export type { CameraCapabilities, CameraRange, CameraSensor, CameraSensorState, DeviceEvent, DeviceSummary, ManagedDeviceType, MountState } from './devices'
+export type { CommandAccepted, CommandError, CommandErrorCode, CommandRequest } from './commands'
+export type {
+	CameraCapabilities,
+	CameraRange,
+	CameraSensor,
+	CameraSensorState,
+	CoverState,
+	DeviceEvent,
+	DeviceRange,
+	DeviceStateBase,
+	DeviceStateEvent,
+	DeviceStateMap,
+	DeviceStates,
+	DeviceSummary,
+	DewHeaterState,
+	DomeMeasurements,
+	DomeState,
+	FlatPanelState,
+	FocuserState,
+	GuideOutputState,
+	ManagedDeviceType,
+	MountSite,
+	MountState,
+	MountTime,
+	RotatorState,
+	WheelState,
+} from './devices'
 export type { DirectoryListing, FileEntry } from './files'
 export type { MountNudgeDirection, MountNudgeEvent, MountNudgePhase, MountNudgeRequest, MountNudgeSession, MountNudgeStartResponse, MountSlewRateRequest, MountSlewRequest, MountSlewResponse } from './mounts'
 export type { OperationDevice, OperationEvent, OperationKind, OperationRecord, OperationState } from './operations'
@@ -73,6 +100,13 @@ export const routes = {
 		GET: (req) => {
 			const client = connections.client(req.params.id)
 			return client ? Response.json(connections.devices.list(client)) : Response.json({ error: 'Connection not found' }, { status: 404 })
+		},
+	},
+	'/api/connections/:id/states': {
+		// The control state of every managed device of an open connection, by type; 404 when it is not open.
+		GET: (req) => {
+			const client = connections.client(req.params.id)
+			return client ? Response.json(connections.devices.states(client)) : errorResponse('Connection not found', 404, 'notFound')
 		},
 	},
 	'/api/connections/:id/devices/:deviceId/connect': {

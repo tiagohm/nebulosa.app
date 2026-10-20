@@ -8,7 +8,41 @@ import { mountMarkerOf, refKey, refOfCelestialObject } from './objects'
 const TARGET = { connectionId: 'a', id: 'm1', name: 'Mount Simulator' }
 
 function state(overrides: Partial<MountState> = {}): MountState {
-	return { connectionId: 'a', id: 'm1', connected: true, rightAscension: 1, declination: 0.5, slewing: false, tracking: true, parked: false, parking: false, canGoTo: true, canAbort: true, canMove: true, canMoveNS: true, canMoveWE: true, moving: false, slewRates: [], ...overrides }
+	return {
+		connectionId: 'a',
+		id: 'm1',
+		connected: true,
+		rightAscension: 1,
+		declination: 0.5,
+		slewing: false,
+		tracking: true,
+		parked: false,
+		parking: false,
+		homing: false,
+		canGoTo: true,
+		canFlip: false,
+		canSync: true,
+		canAbort: true,
+		canTracking: true,
+		canPark: true,
+		canSetPark: false,
+		canHome: false,
+		canFindHome: false,
+		canSetHome: false,
+		canMove: true,
+		canMoveNS: true,
+		canMoveWE: true,
+		moving: false,
+		slewRates: [],
+		trackModes: ['SIDEREAL'],
+		trackMode: 'SIDEREAL',
+		mountType: 'EQ_GEM',
+		hasPierSide: false,
+		pierSide: 'NEITHER',
+		site: { latitude: 0, longitude: 0, elevation: 0 },
+		time: { utc: 0, offset: 0 },
+		...overrides,
+	}
 }
 
 // Fake fetch answering every request with a fixed response, recording the requests.

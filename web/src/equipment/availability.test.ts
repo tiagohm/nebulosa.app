@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { DeviceSummary, OperationRecord } from 'api'
 import { availabilityFix, roleAvailability } from './availability'
 
-const MOUNT: DeviceSummary = { id: 'm1', type: 'mount', name: 'Mount', connected: true, connectionId: 'a' }
+const MOUNT: DeviceSummary = { id: 'm1', type: 'mount', name: 'Mount', connected: true, connectionId: 'a', hardwareId: 'h1', interfaces: ['mount'], driver: { executable: '', version: '' } }
 
 function running(connectionId: string, deviceId: string, state: OperationRecord['state'] = 'running'): Record<string, OperationRecord> {
 	return { x: { operationId: 'x', kind: 'mount.slew', devices: [{ connectionId, deviceId }], state, startedAt: 1 } }

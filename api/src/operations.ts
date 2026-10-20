@@ -1,14 +1,16 @@
+import type { Device } from 'nebulosa/src/devices/indi/device'
 import { DeviceLifecycle } from 'nebulosa/src/devices/orchestration/device.lifecycle'
 import { OperationCoordinator, type OperationFailureReason, type OperationResult } from 'nebulosa/src/devices/orchestration/operation'
-import { ResourceArbiter } from 'nebulosa/src/devices/orchestration/resource'
+import { ResourceArbiter, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { DeviceRegistry } from './devices'
 
 // Device operations of the whole server process. One resource arbiter grants each physical device to one
-// operation at a time, whichever service (mount commands and camera captures today; focus, alignment,
-// guiding, and the sequencer later) or browser tab starts it, and one lifecycle bridge cancels an operation when a
-// device it holds disconnects or disappears. Operations are owned here, never by a request or a tab: the
-// running ones are listed for any tab that (re)connects, and every start and end is published as an
-// operation:updated event naming the exact connection and device ids involved, never a role.
+// operation at a time, whichever service (the device commands and camera captures today; focus, alignment,
+// guiding, and the sequencer later) or browser tab starts it, and one lifecycle bridge cancels an operation
+// when a device it holds disconnects or disappears. Operations are owned here, never by a request or a tab:
+// the running ones are listed for any tab that (re)connects, and every start and end is published as an
+// operation:updated event naming the exact connection and device ids involved, never a role. An operation
+// started for a command token is remembered by it, so a repeated request never commands a device twice.
 
 // Kind of operation, prefixed by the service that runs it.
 export type OperationKind = 'mount.slew' | 'mount.nudge' | 'camera.capture'
@@ -48,6 +50,10 @@ export type OperationEvent = { readonly type: 'operation:updated'; readonly oper
 // Receiver of operation events.
 export type OperationListener = (event: OperationEvent) => void
 
+// Command tokens remembered so a repeated request is answered with its first operation; older ones are
+// forgotten. A request is never repeated after more than a few others, so the most recent are enough.
+const MAX_TOKENS = 256
+
 // Process-wide registry of device operations.
 export class OperationRegistry implements Disposable {
 	// Arbiter granting each physical device to one operation at a time.
@@ -58,6 +64,8 @@ export class OperationRegistry implements Disposable {
 	readonly #lifecycle = new DeviceLifecycle(this.arbiter, this.coordinator)
 	// Operations still running, by id.
 	readonly #running = new Map<string, OperationRecord>()
+	// Running record of the operation each recent command token started, oldest first (see MAX_TOKENS).
+	readonly #tokens = new Map<string, OperationRecord>()
 	// Stops the lifecycle bridge following the registry's devices.
 	readonly #unobserve: VoidFunction
 
@@ -73,6 +81,29 @@ export class OperationRegistry implements Disposable {
 	// Returns the operations still running, in start order.
 	running(): OperationRecord[] {
 		return Array.from(this.#running.values())
+	}
+
+	// Whether a device can be granted to a new operation now: connected, at rest, and held by none.
+	available(device: Device) {
+		return this.arbiter.availability(resourceKey(device)) === 'available'
+	}
+
+	// Returns the running record of the operation a command token started, while the token is remembered.
+	started(token: string): OperationRecord | undefined {
+		return this.#tokens.get(token)
+	}
+
+	// Starts and tracks the operation of a command identified by a token the client generated for one
+	// request, so a request repeated after a lost response, a retry, or a double submission never commands
+	// the device twice: a token already seen returns the record of its operation without calling start.
+	run(kind: OperationKind, devices: readonly OperationDevice[], token: string, start: () => Promise<OperationResult<unknown>>): OperationRecord {
+		const known = this.#tokens.get(token)
+		if (known) return known
+
+		const record = this.track(kind, devices, start())
+		this.#tokens.set(token, record)
+		if (this.#tokens.size > MAX_TOKENS) this.#tokens.delete(this.#tokens.keys().next().value!)
+		return record
 	}
 
 	// Publishes an operation of a kind holding devices as running, and as succeeded or failed once its

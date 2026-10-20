@@ -4,6 +4,7 @@ import { App } from './App'
 import { captureRuntime, handleCaptureEvent, refreshCameraCapabilities, refreshCaptures } from './capture/capture'
 import { handleNudgeEvent, nudgeRuntime, refreshNudgeMount, refreshNudges } from './capture/nudge'
 import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
+import { controlRuntime, handleControlEvent, refreshStates } from './equipment-control/control'
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
 import { onOpen, subscribe } from './events'
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
@@ -29,18 +30,20 @@ const stops = [
 	subscribe((event) => {
 		handleConnectionEvent(connectionState, event)
 		handleDeviceEvent(deviceState, event)
+		handleControlEvent(controlRuntime, event)
 		handleMountEvent(mountRuntime, event)
 		handleOperationEvent(operationsState, event)
 		handleSensorEvent(sensorRuntime, event)
 		handleCaptureEvent(captureRuntime, event)
 		handleNudgeEvent(nudgeRuntime, event)
 	}),
-	// Every (re)open resynchronizes the open connections, the watched devices, the followed mount, the
+	// Every (re)open resynchronizes the open connections, the watched devices and their control states, the followed mount, the
 	// running operations, the camera sensors, the captures and camera capabilities, and the nudged mount
 	// and its nudge sessions, which may have changed while the socket was closed.
 	onOpen(() => {
 		void refreshServers(connectionState)
 		void refreshDevices(deviceState)
+		void refreshStates(controlRuntime)
 		void refreshMount(mountRuntime)
 		void refreshOperations(operationsState)
 		refreshSensors(sensorRuntime)

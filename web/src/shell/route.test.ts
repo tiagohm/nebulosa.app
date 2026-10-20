@@ -19,6 +19,10 @@ describe('parse', () => {
 		expect(parseRoute('/tools/alpaca-server')).toEqual({ workspace: 'tools', tool: 'alpaca-server' })
 		expect(parseRoute('/tools/bogus')).toEqual({ workspace: 'tools' })
 		expect(parseRoute('/capture/guide/mount-nudge')).toEqual({ workspace: 'capture', camera: 'guide', mode: 'mount-nudge' })
+		expect(parseRoute('/equipment')).toEqual({ workspace: 'equipment' })
+		expect(parseRoute('/equipment/abc123/extra')).toEqual({ workspace: 'equipment', device: 'abc123' })
+		expect(routePath({ workspace: 'equipment' })).toBe('/equipment')
+		expect(routePath({ workspace: 'equipment', device: 'abc123' })).toBe('/equipment/abc123')
 	})
 
 	test('reads capture paths written before camera views', () => {

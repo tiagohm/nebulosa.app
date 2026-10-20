@@ -91,3 +91,29 @@ test('a rejected result fails the operation', async () => {
 	await waitUntil(() => events.length === 2)
 	expect(events[1].operation).toMatchObject({ state: 'failed', reason: 'commandFailed', error: 'lost' })
 })
+
+test('a repeated command token answers its first operation without starting another', async () => {
+	const { id, operations, events, mount, mountId } = await setup()
+
+	expect(operations.available(mount)).toBeTrue()
+	let starts = 0
+	const handle = hold(operations, mount)
+	const start = () => {
+		starts++
+		return handle.result
+	}
+
+	const first = operations.run('mount.slew', [{ connectionId: id, deviceId: mountId }], 'token', start)
+	const second = operations.run('mount.slew', [{ connectionId: id, deviceId: mountId }], 'token', start)
+
+	expect(second).toBe(first)
+	expect(operations.started('token')).toBe(first)
+	expect(operations.started('other')).toBeUndefined()
+	expect(starts).toBe(1)
+	expect(operations.available(mount)).toBeFalse()
+
+	await handle.cancel()
+	await waitUntil(() => events.length === 2)
+	expect(operations.run('mount.slew', [], 'token', start)).toBe(first)
+	expect(starts).toBe(1)
+})

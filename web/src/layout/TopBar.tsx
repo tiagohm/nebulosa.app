@@ -3,6 +3,7 @@ import { connectionState } from '../connection/connection'
 import { ConnectionIndicator } from '../connection/ConnectionIndicator'
 import { deviceState } from '../equipment/equipment'
 import { ProfileMenu } from '../profile/ProfileMenu'
+import { navigate, routeState } from '../shell/route'
 import { Icon } from '../ui/Icon'
 import { Menu, MenuItem, NavigationMenu } from '../ui/NavigationMenu'
 
@@ -28,6 +29,7 @@ export function TopBar() {
 					<Menu id="management" label="Management">
 						<MenuItem onSelect={() => (connectionState.open = true)}>Connections</MenuItem>
 						<MenuItem onSelect={() => (deviceState.open = true)}>Equipment Setup</MenuItem>
+						<MenuItem onSelect={() => navigate(routeState, { workspace: 'equipment' })}>Equipment Control</MenuItem>
 					</Menu>
 				</NavigationMenu>
 			</div>

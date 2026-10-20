@@ -28,6 +28,8 @@ export const OPERATION_LABELS: Readonly<Record<OperationKind, string>> = {
 	'wheel.move': 'Filter change',
 	'rotator.move': 'Rotator move',
 	'rotator.home': 'Rotator go home',
+	'cover.open': 'Cover open',
+	'cover.close': 'Cover close',
 	'camera.capture': 'Camera capture',
 }
 

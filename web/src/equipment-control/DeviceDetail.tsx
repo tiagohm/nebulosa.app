@@ -6,7 +6,10 @@ import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { controlRuntime, deviceStateOf } from './control'
+import { CoverControls } from './controls/CoverControls'
+import { DewHeaterControls } from './controls/DewHeaterControls'
 import { FilterWheelControls } from './controls/FilterWheelControls'
+import { FlatPanelControls } from './controls/FlatPanelControls'
 import { FocuserControls } from './controls/FocuserControls'
 import { GuideOutputControls } from './controls/GuideOutputControls'
 import { MountControls } from './controls/MountControls'
@@ -28,6 +31,9 @@ const CONTROLS: Partial<Record<ManagedDeviceType, ComponentType<InterfaceProps>>
 	focuser: FocuserControls,
 	wheel: FilterWheelControls,
 	rotator: RotatorControls,
+	cover: CoverControls,
+	flatPanel: FlatPanelControls,
+	dewHeater: DewHeaterControls,
 }
 
 export interface DeviceDetailProps {

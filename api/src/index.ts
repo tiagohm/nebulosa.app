@@ -2,7 +2,10 @@ import type { Server } from 'bun'
 import { CameraCaptures, type CaptureRequest } from './captures'
 import { type CommandRequest, errorResponse } from './commands'
 import { connections } from './connection'
+import { CoverCommands } from './covers'
+import { DewHeaterCommands, type DewHeaterDutyCycleRequest } from './dewheaters'
 import { handleListDirectory } from './files'
+import { FlatPanelCommands, type FlatPanelIntensityRequest, type FlatPanelLightRequest } from './flatpanels'
 import { FocuserCommands, type FocuserMoveRequest, type FocuserMoveToRequest, type FocuserReverseRequest, type FocuserSyncRequest } from './focusers'
 import { GuideOutputCommands, type GuidePulseRequest, type GuideRateRequest } from './guideoutputs'
 import { handleDeriveImage, handleDownloadImage, handleOpenImage, handleRenderImage, handleSaveImage, images } from './images'
@@ -44,7 +47,9 @@ export type {
 	RotatorState,
 	WheelState,
 } from './devices'
+export type { DewHeaterDutyCycleRequest } from './dewheaters'
 export type { DirectoryListing, FileEntry } from './files'
+export type { FlatPanelIntensityRequest, FlatPanelLightRequest } from './flatpanels'
 export type { FocuserDirection, FocuserMoveRequest, FocuserMoveToRequest, FocuserReverseRequest, FocuserSyncRequest } from './focusers'
 export type { GuidePulseRequest, GuideRateRequest } from './guideoutputs'
 export type {
@@ -89,6 +94,11 @@ const guideOutputs = new GuideOutputCommands(connections.devices, (id) => connec
 const focusers = new FocuserCommands(connections.devices, (id) => connections.client(id), operations)
 const wheels = new WheelCommands(connections.devices, (id) => connections.client(id), operations)
 const rotators = new RotatorCommands(connections.devices, (id) => connections.client(id), operations)
+
+// Cover, flat panel, and dew heater commands over the devices of the open connections.
+const covers = new CoverCommands(connections.devices, (id) => connections.client(id), operations)
+const flatPanels = new FlatPanelCommands(connections.devices, (id) => connections.client(id), operations)
+const dewHeaters = new DewHeaterCommands(connections.devices, (id) => connections.client(id), operations)
 
 const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, broadcast)
 
@@ -299,6 +309,42 @@ export const routes = {
 	'/api/connections/:id/rotators/:deviceId/stop': {
 		// Cancels the move of a rotator and stops it.
 		POST: (req) => rotators.stop(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/covers/:deviceId': {
+		// Position and capabilities of a cover; 404 when the connection is not open or has no such cover.
+		GET: (req) => covers.state(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/covers/:deviceId/open': {
+		// Starts opening a cover; the outcome arrives as operation:updated events.
+		POST: async (req) => covers.open(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+	},
+	'/api/connections/:id/covers/:deviceId/close': {
+		// Starts closing a cover; the outcome arrives as operation:updated events.
+		POST: async (req) => covers.close(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+	},
+	'/api/connections/:id/covers/:deviceId/stop': {
+		// Cancels the motion of a cover and stops it.
+		POST: (req) => covers.stop(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/flat-panels/:deviceId': {
+		// Light state of a flat panel; 404 when the connection is not open or has no such panel.
+		GET: (req) => flatPanels.state(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/flat-panels/:deviceId/light': {
+		// Switches the light; the new state arrives as a flatPanel:updated event.
+		POST: async (req) => flatPanels.setLight(req.params.id, req.params.deviceId, (await req.json()) as FlatPanelLightRequest),
+	},
+	'/api/connections/:id/flat-panels/:deviceId/intensity': {
+		// Sets the brightness; the new value arrives as a flatPanel:updated event.
+		POST: async (req) => flatPanels.setIntensity(req.params.id, req.params.deviceId, (await req.json()) as FlatPanelIntensityRequest),
+	},
+	'/api/connections/:id/dew-heaters/:deviceId': {
+		// Heating level of a dew heater; 404 when the connection is not open or has no such heater.
+		GET: (req) => dewHeaters.state(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/dew-heaters/:deviceId/duty-cycle': {
+		// Sets the duty cycle; the new value arrives as a dewHeater:updated event.
+		POST: async (req) => dewHeaters.setDutyCycle(req.params.id, req.params.deviceId, (await req.json()) as DewHeaterDutyCycleRequest),
 	},
 	'/api/mounts/nudges': {
 		// The nudge sessions still running, started by any tab.

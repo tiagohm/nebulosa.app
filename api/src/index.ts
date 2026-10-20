@@ -3,12 +3,15 @@ import { CameraCaptures, type CaptureRequest } from './captures'
 import { type CommandRequest, errorResponse } from './commands'
 import { connections } from './connection'
 import { handleListDirectory } from './files'
+import { FocuserCommands, type FocuserMoveRequest, type FocuserMoveToRequest, type FocuserReverseRequest, type FocuserSyncRequest } from './focusers'
 import { GuideOutputCommands, type GuidePulseRequest, type GuideRateRequest } from './guideoutputs'
 import { handleDeriveImage, handleDownloadImage, handleOpenImage, handleRenderImage, handleSaveImage, images } from './images'
 import { MountCommands, type MountGoToRequest, type MountNudgeRequest, type MountSiteRequest, type MountSlewRateRequest, type MountSlewRequest, type MountSyncRequest, type MountTimeRequest, type MountTrackingRequest, type MountTrackModeRequest } from './mounts'
 import { OperationRegistry } from './operations'
+import { RotatorCommands, type RotatorMoveByRequest, type RotatorMoveToRequest, type RotatorReverseRequest, type RotatorSyncRequest } from './rotators'
 import { skyLocator, skyRoutes } from './sky'
 import { broadcast, websocket } from './websocket'
+import { WheelCommands, type WheelMoveRequest, type WheelNamesRequest } from './wheels'
 
 // HTTP routes and the WebSocket handler of the backend, mounted by the app server.
 
@@ -42,6 +45,7 @@ export type {
 	WheelState,
 } from './devices'
 export type { DirectoryListing, FileEntry } from './files'
+export type { FocuserDirection, FocuserMoveRequest, FocuserMoveToRequest, FocuserReverseRequest, FocuserSyncRequest } from './focusers'
 export type { GuidePulseRequest, GuideRateRequest } from './guideoutputs'
 export type {
 	MountCoordinate,
@@ -62,6 +66,8 @@ export type {
 	MountTrackModeRequest,
 } from './mounts'
 export type { OperationDevice, OperationEvent, OperationKind, OperationRecord, OperationState } from './operations'
+export type { RotatorMoveByRequest, RotatorMoveToRequest, RotatorReverseRequest, RotatorSyncRequest } from './rotators'
+export type { WheelMoveRequest, WheelNamesRequest } from './wheels'
 export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
 export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
 export type { Binning, DeriveRequest, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageCapture, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from './images'
@@ -78,6 +84,11 @@ const mounts = new MountCommands(connections.devices, (id) => connections.client
 // Camera captures over the devices of the open connections, their frames entering the image store.
 // Pulse guiding of the guide outputs of the open connections.
 const guideOutputs = new GuideOutputCommands(connections.devices, (id) => connections.client(id), operations)
+
+// Focuser, filter wheel, and rotator commands over the devices of the open connections.
+const focusers = new FocuserCommands(connections.devices, (id) => connections.client(id), operations)
+const wheels = new WheelCommands(connections.devices, (id) => connections.client(id), operations)
+const rotators = new RotatorCommands(connections.devices, (id) => connections.client(id), operations)
 
 const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, broadcast)
 
@@ -224,6 +235,70 @@ export const routes = {
 	'/api/connections/:id/guide-outputs/:deviceId/stop': {
 		// Stops every pulse of a guide output.
 		POST: (req) => guideOutputs.stop(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/focusers/:deviceId': {
+		// Position, motion, and capabilities of a focuser; 404 when the connection is not open or has no such focuser.
+		GET: (req) => focusers.state(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/focusers/:deviceId/move-to': {
+		// Starts a move to an absolute position; the outcome arrives as operation:updated events.
+		POST: async (req) => focusers.moveTo(req.params.id, req.params.deviceId, (await req.json()) as FocuserMoveToRequest),
+	},
+	'/api/connections/:id/focusers/:deviceId/move': {
+		// Starts a move by a number of steps; the outcome arrives as operation:updated events.
+		POST: async (req) => focusers.move(req.params.id, req.params.deviceId, (await req.json()) as FocuserMoveRequest),
+	},
+	'/api/connections/:id/focusers/:deviceId/sync': {
+		// Redefines the position counter without moving.
+		POST: async (req) => focusers.sync(req.params.id, req.params.deviceId, (await req.json()) as FocuserSyncRequest),
+	},
+	'/api/connections/:id/focusers/:deviceId/reverse': {
+		// Reverses or restores the motion direction.
+		POST: async (req) => focusers.reverse(req.params.id, req.params.deviceId, (await req.json()) as FocuserReverseRequest),
+	},
+	'/api/connections/:id/focusers/:deviceId/stop': {
+		// Cancels the move of a focuser and stops it.
+		POST: (req) => focusers.stop(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/wheels/:deviceId': {
+		// Slot, motion, and names of a filter wheel; 404 when the connection is not open or has no such wheel.
+		GET: (req) => wheels.state(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/wheels/:deviceId/move': {
+		// Starts a change of slot; the outcome arrives as operation:updated events.
+		POST: async (req) => wheels.move(req.params.id, req.params.deviceId, (await req.json()) as WheelMoveRequest),
+	},
+	'/api/connections/:id/wheels/:deviceId/names': {
+		// Renames the slots; the new names arrive as a wheel:updated event.
+		POST: async (req) => wheels.setNames(req.params.id, req.params.deviceId, (await req.json()) as WheelNamesRequest),
+	},
+	'/api/connections/:id/rotators/:deviceId': {
+		// Angle, motion, and capabilities of a rotator; 404 when the connection is not open or has no such rotator.
+		GET: (req) => rotators.state(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/rotators/:deviceId/move-to': {
+		// Starts a move to a mechanical angle; the outcome arrives as operation:updated events.
+		POST: async (req) => rotators.moveTo(req.params.id, req.params.deviceId, (await req.json()) as RotatorMoveToRequest),
+	},
+	'/api/connections/:id/rotators/:deviceId/move-by': {
+		// Starts a move by an angle; the outcome arrives as operation:updated events.
+		POST: async (req) => rotators.moveBy(req.params.id, req.params.deviceId, (await req.json()) as RotatorMoveByRequest),
+	},
+	'/api/connections/:id/rotators/:deviceId/home': {
+		// Starts a move to the home position; the outcome arrives as operation:updated events.
+		POST: async (req) => rotators.home(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+	},
+	'/api/connections/:id/rotators/:deviceId/sync': {
+		// Redefines the angle without moving.
+		POST: async (req) => rotators.sync(req.params.id, req.params.deviceId, (await req.json()) as RotatorSyncRequest),
+	},
+	'/api/connections/:id/rotators/:deviceId/reverse': {
+		// Reverses or restores the rotation direction.
+		POST: async (req) => rotators.reverse(req.params.id, req.params.deviceId, (await req.json()) as RotatorReverseRequest),
+	},
+	'/api/connections/:id/rotators/:deviceId/stop': {
+		// Cancels the move of a rotator and stops it.
+		POST: (req) => rotators.stop(req.params.id, req.params.deviceId),
 	},
 	'/api/mounts/nudges': {
 		// The nudge sessions still running, started by any tab.

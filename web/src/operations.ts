@@ -24,6 +24,10 @@ export const OPERATION_LABELS: Readonly<Record<OperationKind, string>> = {
 	'mount.findHome': 'Mount find home',
 	'mount.nudge': 'Mount nudge',
 	'guideOutput.pulse': 'Guide pulse',
+	'focuser.move': 'Focuser move',
+	'wheel.move': 'Filter change',
+	'rotator.move': 'Rotator move',
+	'rotator.home': 'Rotator go home',
 	'camera.capture': 'Camera capture',
 }
 

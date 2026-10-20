@@ -6,8 +6,11 @@ import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { controlRuntime, deviceStateOf } from './control'
+import { FilterWheelControls } from './controls/FilterWheelControls'
+import { FocuserControls } from './controls/FocuserControls'
 import { GuideOutputControls } from './controls/GuideOutputControls'
 import { MountControls } from './controls/MountControls'
+import { RotatorControls } from './controls/RotatorControls'
 import { DeviceDiagnostics } from './DeviceDiagnostics'
 import { DEVICE_TYPE_LABELS, type DeviceGroup, groupTypes } from './groups'
 import { OperationStatus } from './OperationStatus'
@@ -22,6 +25,9 @@ import { type InterfaceProps, Notice } from './parts'
 const CONTROLS: Partial<Record<ManagedDeviceType, ComponentType<InterfaceProps>>> = {
 	mount: MountControls,
 	guideOutput: GuideOutputControls,
+	focuser: FocuserControls,
+	wheel: FilterWheelControls,
+	rotator: RotatorControls,
 }
 
 export interface DeviceDetailProps {

@@ -1,5 +1,6 @@
 import type { Client, Device } from 'nebulosa/src/devices/indi/device'
 import type { FailedOperationResult, OperationFailureReason, OperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { DeviceRegistry, ManagedDeviceMap, ManagedDeviceType } from './devices'
 import type { OperationKind, OperationRegistry } from './operations'
 
@@ -109,6 +110,33 @@ export async function settle(result: Promise<OperationResult<unknown>>, action: 
 export function findDevice<T extends ManagedDeviceType>(devices: DeviceRegistry, client: ClientResolver, connectionId: string, type: T, deviceId: string): ManagedDeviceMap[T] | undefined {
 	const owner = client(connectionId)
 	return owner && devices.device(owner, type, deviceId)
+}
+
+// Resolves the connected device of a managed type with exactly this id on an open connection, or the
+// response refusing it: 404 when there is none, 409 when it is disconnected. what names the device in the
+// messages, such as "Focuser".
+export function connectedDevice<T extends ManagedDeviceType>(devices: DeviceRegistry, client: ClientResolver, connectionId: string, type: T, deviceId: string, what: string): ManagedDeviceMap[T] | Response {
+	const device = findDevice(devices, client, connectionId, type, deviceId)
+	if (!device) return notFound(what)
+	if (!device.connected) return disconnected(what)
+	return device
+}
+
+// Responds with the control state of a device of a managed type, or 404 when the connection is not open
+// or has no such device.
+export function stateResponse(devices: DeviceRegistry, client: ClientResolver, connectionId: string, type: ManagedDeviceType, deviceId: string, what: string): Response {
+	const owner = client(connectionId)
+	const state = owner && devices.state(owner, type, deviceId)
+	return state ? Response.json(state) : notFound(what)
+}
+
+// Stops the motion of a device: cancels the operation holding the physical device, so its cleanup cannot
+// command the motion again, then sends the stop, which never needs the device to be granted. Responds 204
+// once the device reports a standstill, and 409 when the stop could not be confirmed.
+export async function stopResponse(operations: OperationRegistry, device: Device, stop: () => Promise<OperationResult<unknown>>): Promise<Response> {
+	await operations.coordinator.cancelByDevice(resourceKey(device))
+	const result = await stop()
+	return result.ok ? new Response(null, { status: 204 }) : errorResponse(result.error ?? `The device did not stop (${result.reason})`, 409, failureCode(result.reason))
 }
 
 // Starts a durable command on a device and responds 202 with its operation id. A token already seen

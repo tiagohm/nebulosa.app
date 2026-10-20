@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { DeviceSummary, ManagedDeviceType, MountState } from 'api'
 import { newControlRuntime } from './control'
+import { slotLabel } from './controls/FilterWheelControls'
 import { findGroup, groupActivity, groupDevices, groupTypes, searchGroups } from './groups'
 
 function device(id: string, type: ManagedDeviceType, name: string, hardwareId = name, connectionId = 'c', connected = true): DeviceSummary {
@@ -47,4 +48,10 @@ test('activity reports connection, motion, and operations, never a requested sta
 	expect(groupActivity(mount, runtime.states, true)).toEqual({ label: 'Busy', tone: 'active' })
 	runtime.states.mount.m = { ...runtime.states.mount.m, parked: false, slewing: true }
 	expect(groupActivity(mount, runtime.states, true)).toEqual({ label: 'Slewing', tone: 'active' })
+})
+
+test('filter slots are shown from 1 with the driver names, never invented ones', () => {
+	expect(slotLabel({ names: ['L', ' '] }, 0)).toBe('1 · L')
+	expect(slotLabel({ names: ['L', ' '] }, 1)).toBe('Slot 2')
+	expect(slotLabel({ names: [] }, 4)).toBe('Slot 5')
 })

@@ -13,7 +13,7 @@ import type { DeviceRegistry } from './devices'
 // started for a command token is remembered by it, so a repeated request never commands a device twice.
 
 // Kind of operation, prefixed by the service that runs it.
-export type OperationKind = 'mount.slew' | 'mount.nudge' | 'camera.capture'
+export type OperationKind = 'mount.slew' | 'mount.goto' | 'mount.flip' | 'mount.park' | 'mount.unpark' | 'mount.home' | 'mount.findHome' | 'mount.nudge' | 'guideOutput.pulse' | 'camera.capture'
 
 // Life stage of an operation.
 export type OperationState = 'running' | 'succeeded' | 'failed'

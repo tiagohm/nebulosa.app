@@ -251,6 +251,24 @@ export async function sendCommand(state: ControlRuntime, command: DeviceCommand,
 	return (await send(state, command, request)) !== undefined
 }
 
+// Sends a stop or abort. Unlike other commands it is sent even while another command of the device is in
+// flight, since stopping a motion must never wait for the request that started it, and it marks nothing as
+// pending. Resolves true when the server confirmed the stop.
+export async function stopCommand(state: ControlRuntime, { type, deviceId, action }: Omit<DeviceCommand, 'label' | 'body'>, request: typeof fetch = fetch): Promise<boolean> {
+	const serverId = state.watched
+	if (!serverId) return false
+
+	try {
+		const response = await request(commandUrl(serverId, type, deviceId, action), { method: 'POST' })
+		if (response.ok) return true
+		if (state.watched === serverId) state.errors[deviceId] = await responseError(response)
+	} catch {
+		if (state.watched === serverId) state.errors[deviceId] = 'Unable to reach the server; the device may still be moving.'
+	}
+
+	return false
+}
+
 // Starts a durable command, such as a motion, under a token generated once for this action, and records
 // the id of the operation running it; its progress and outcome arrive as operation events.
 export async function startCommand(state: ControlRuntime, command: DeviceCommand, request: typeof fetch = fetch): Promise<void> {

@@ -1,17 +1,31 @@
+import { equatorialToHorizontal } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
+import { timeNow } from 'nebulosa/src/astronomy/time/time'
 import { MountCommander, type MountMoveDirection } from 'nebulosa/src/devices/commanders/mount'
-import type { Client, Mount } from 'nebulosa/src/devices/indi/device'
+import type { Client, Mount, MountTargetCoordinate, MountTargetCoordinateType, TrackMode } from 'nebulosa/src/devices/indi/device'
+import { mountTargetEquatorial } from 'nebulosa/src/devices/indi/manager/mount'
 import { isDeviceQuiescent } from 'nebulosa/src/devices/orchestration/device.lifecycle'
 import { failedOperationResult, type OperationContext, type OperationFailureReason, type OperationHandle, type OperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { abortReason } from 'nebulosa/src/devices/orchestration/operation.wait'
 import { type ResourceKey, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { deg } from 'nebulosa/src/math/units/angle'
+import { meter } from 'nebulosa/src/math/units/distance'
+import { type CommandErrorCode, type CommandRequest, disconnected, errorResponse, failureCode, findDevice, notFound, settle, startCommand, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { OperationRegistry } from './operations'
 import { EphemerisUnavailableError, HorizonsEphemerisError, type SkyObserver, type SkyPosition } from './sky/ephemeris'
 import type { SkyLocator } from './sky/routes'
 import type { SkyObjectRef } from './sky/types'
 
-// Physical mount commands of the Sky workspace. A slew to an object resolves the object at the server's
-// real current time, never at a simulated instant, refuses targets below the observer's horizon, and runs
+// Physical mount commands of the Sky workspace, the Capture nudge, and the Equipment Control page. Besides
+// the slew to an object described below, a mount can be sent to, flipped to, or synced on a coordinate
+// in any frame the toolkit resolves (a goto or flip is refused below the observer's horizon, like a slew),
+// parked, unparked, sent home or made to search for it, have its tracking, tracking rate, home and park
+// positions, site, and clock set. Motions run as operations through the shared command contract of
+// commands.ts and are answered 202 with their operation id; settings are answered once applied.
+//
+// A slew to an object resolves the object at the server's real current time, never at a simulated
+// instant, refuses targets below the observer's horizon, and runs
 // through the toolkit's MountCommander, whose operation checks connection, capability, lease, driver
 // alerts, timeout, and arrival, under the process-wide operation registry, so no other operation can
 // hold the mount meanwhile. The HTTP response only says the command was accepted; the outcome is
@@ -78,6 +92,58 @@ export interface MountNudgeRequest {
 export interface MountSlewRateRequest {
 	// Name of one of the speed presets the mount reports (MountState slewRates).
 	readonly name: string
+}
+
+// Coordinate of a mount target: a frame and its two components as text, sexagesimal or decimal, in
+// degrees, except the right ascension of the JNOW and J2000 frames, read in hours. x is the longitude-like
+// component (right ascension, azimuth, ecliptic or galactic longitude) and y the latitude-like one.
+export interface MountCoordinate {
+	// Frame the components are given in.
+	readonly frame: MountTargetCoordinateType
+	// Longitude-like component.
+	readonly x: string
+	// Latitude-like component.
+	readonly y: string
+}
+
+// Body of POST /api/connections/:id/mounts/:deviceId/goto and .../flip.
+export interface MountGoToRequest extends CommandRequest {
+	// Coordinate to point at.
+	readonly target: MountCoordinate
+	// Observer whose horizon the target must be above; the mount points from the same site.
+	readonly observer: SkyObserver
+}
+
+// Body of POST /api/connections/:id/mounts/:deviceId/sync.
+export interface MountSyncRequest {
+	// Coordinate the mount is pointing at, by the user's account.
+	readonly target: MountCoordinate
+}
+
+// Body of POST /api/connections/:id/mounts/:deviceId/tracking.
+export interface MountTrackingRequest {
+	// Whether tracking is to be on.
+	readonly enabled: boolean
+}
+
+// Body of POST /api/connections/:id/mounts/:deviceId/track-mode.
+export interface MountTrackModeRequest {
+	// One of the tracking rates the mount reports (MountState trackModes).
+	readonly mode: TrackMode
+}
+
+// Body of POST /api/connections/:id/mounts/:deviceId/site.
+export interface MountSiteRequest {
+	// Site to send: latitude and longitude in degrees, elevation in meters.
+	readonly site: SkyObserver
+}
+
+// Body of POST /api/connections/:id/mounts/:deviceId/time.
+export interface MountTimeRequest {
+	// UTC instant, Unix milliseconds.
+	readonly utc: number
+	// Offset of local time from UTC, in minutes.
+	readonly offset: number
 }
 
 // Nudge session as published to clients.
@@ -175,9 +241,17 @@ interface ActiveNudge {
 	readonly started: PromiseWithResolvers<void>
 }
 
-// Responds with an error message and a status.
-function errorResponse(message: string, status: number) {
-	return Response.json({ error: message }, { status })
+// Returns the toolkit form of a coordinate target.
+function targetCoordinate({ frame, x, y }: MountCoordinate): MountTargetCoordinate {
+	return { type: frame, [frame]: { x, y } }
+}
+
+// Geometric altitude, in radians, of a coordinate target for an observer now. The target is resolved to
+// the equinox of date as the mount itself resolves it; NaN when a component cannot be parsed.
+function targetAltitude(mount: Mount, target: MountTargetCoordinate, observer: SkyObserver) {
+	const time = timeNow(true)
+	const [rightAscension, declination] = mountTargetEquatorial(mount, target, time)
+	return equatorialToHorizontal(rightAscension, declination, deg(observer.latitude), localSiderealTime(time, deg(observer.longitude)))[1]
 }
 
 // Returns a session with fields replaced.
@@ -186,11 +260,11 @@ function changed(session: MountNudgeSession, patch: Partial<MountNudgeSession>):
 }
 
 // Returns why a mount cannot move in a direction, with the status to respond with, or undefined when it can.
-function nudgeRefusal(mount: Mount, direction: MountNudgeDirection): readonly [string, number] | undefined {
-	if (!mount.connected) return ['The mount is disconnected', 409]
-	if (!mount.canMove) return ['The mount cannot move manually', 422]
-	for (const axis of NUDGE_AXES[direction]) if (!(axis === 'NORTH' || axis === 'SOUTH' ? mount.canMoveNS : mount.canMoveWE)) return [`The mount cannot move ${axis.toLowerCase()}`, 422]
-	if (mount.parked || mount.parking) return ['The mount is parked', 409]
+function nudgeRefusal(mount: Mount, direction: MountNudgeDirection): readonly [string, number, CommandErrorCode] | undefined {
+	if (!mount.connected) return ['The mount is disconnected', 409, 'disconnected']
+	if (!mount.canMove) return ['The mount cannot move manually', 422, 'unsupported']
+	for (const axis of NUDGE_AXES[direction]) if (!(axis === 'NORTH' || axis === 'SOUTH' ? mount.canMoveNS : mount.canMoveWE)) return [`The mount cannot move ${axis.toLowerCase()}`, 422, 'unsupported']
+	if (mount.parked || mount.parking) return ['The mount is parked', 409, 'unsupported']
 	return undefined
 }
 
@@ -235,16 +309,16 @@ export class MountCommands implements Disposable {
 	async startNudge(connectionId: string, deviceId: string, { token, direction }: MountNudgeRequest): Promise<Response> {
 		const client = this.client(connectionId)
 		const mount = client && this.devices.mount(client, deviceId)
-		if (!mount) return errorResponse('Mount not found', 404)
+		if (!mount) return notFound('Mount')
 
 		const key = resourceKey(mount)
 		const active = this.#nudges.get(key)
 		if (active?.session.token === token) return await this.#startResponse(active)
-		if (this.#endedTokens.has(token)) return errorResponse('The nudge was already stopped', 409)
+		if (this.#endedTokens.has(token)) return errorResponse('The nudge was already stopped', 409, 'rejected')
 
 		const refusal = nudgeRefusal(mount, direction)
 		if (refusal) return errorResponse(...refusal)
-		if (active || this.operations.arbiter.availability(key) !== 'available') return errorResponse('The mount is busy', 409)
+		if (active || this.operations.arbiter.availability(key) !== 'available') return errorResponse('The mount is busy', 409, 'busy')
 
 		const nudge: ActiveNudge = {
 			session: { token, operationId: '', connectionId, deviceId, direction, slewRate: mount.slewRate, phase: 'starting', startedAt: Date.now() },
@@ -270,7 +344,7 @@ export class MountCommands implements Disposable {
 	// the tab ends it.
 	heartbeatNudge(token: string): Response {
 		const nudge = this.#nudgeOf(token)
-		if (!nudge || nudge.session.phase === 'stopping') return errorResponse('The nudge is not running', 404)
+		if (!nudge || nudge.session.phase === 'stopping') return errorResponse('The nudge is not running', 404, 'notFound')
 		this.#renew(nudge)
 		return new Response(null, { status: 204 })
 	}
@@ -285,7 +359,7 @@ export class MountCommands implements Disposable {
 
 		this.#end(nudge)
 		await nudge.operation?.result
-		return nudge.session.stopConfirmed === false ? errorResponse('The mount was not observed to stop', 409) : new Response(null, { status: 204 })
+		return nudge.session.stopConfirmed === false ? errorResponse('The mount was not observed to stop', 409, 'unknownResult') : new Response(null, { status: 204 })
 	}
 
 	// Selects the speed preset of manual motion. Responds 204 once sent (the new preset arrives as a
@@ -294,20 +368,20 @@ export class MountCommands implements Disposable {
 	async setSlewRate(connectionId: string, deviceId: string, { name }: MountSlewRateRequest): Promise<Response> {
 		const client = this.client(connectionId)
 		const mount = client && this.devices.mount(client, deviceId)
-		if (!mount) return errorResponse('Mount not found', 404)
-		if (!mount.connected) return errorResponse('The mount is disconnected', 409)
-		if (!mount.slewRates.some((rate) => rate.name === name)) return errorResponse('Unknown slew rate', 422)
+		if (!mount) return notFound('Mount')
+		if (!mount.connected) return errorResponse('The mount is disconnected', 409, 'disconnected')
+		if (!mount.slewRates.some((rate) => rate.name === name)) return errorResponse('Unknown slew rate', 422, 'invalidParameter')
 
 		const result = await this.#commander.setSlewRate(this.operations.coordinator, mount, name)
 		if (result.ok) return new Response(null, { status: 204 })
-		return errorResponse(result.reason === 'busy' ? 'The mount is busy' : (result.error ?? `The slew rate was not changed (${result.reason})`), nudgeFailureStatus(result.reason))
+		return errorResponse(result.reason === 'busy' ? 'The mount is busy' : (result.error ?? `The slew rate was not changed (${result.reason})`), nudgeFailureStatus(result.reason), failureCode(result.reason))
 	}
 
 	// Responds with the state of a mount, or 404 when the connection is not open or has no such mount.
 	state(connectionId: string, deviceId: string): Response {
 		const client = this.client(connectionId)
 		const state = client && this.devices.mountState(client, deviceId)
-		return state ? Response.json(state) : errorResponse('Mount not found', 404)
+		return state ? Response.json(state) : notFound('Mount')
 	}
 
 	// Slews a mount to an object resolved now. Responds 202 with MountSlewResponse once the command
@@ -317,11 +391,11 @@ export class MountCommands implements Disposable {
 	async slew(connectionId: string, deviceId: string, { target, observer }: MountSlewRequest, signal?: AbortSignal): Promise<Response> {
 		const client = this.client(connectionId)
 		const mount = client && this.devices.mount(client, deviceId)
-		if (!mount) return errorResponse('Mount not found', 404)
-		if (!mount.connected) return errorResponse('The mount is disconnected', 409)
-		if (!mount.canGoTo) return errorResponse('The mount cannot go to a target', 422)
-		if (mount.parked || mount.parking) return errorResponse('The mount is parked', 409)
-		if (this.operations.arbiter.availability(resourceKey(mount)) !== 'available') return errorResponse('The mount is busy', 409)
+		if (!mount) return notFound('Mount')
+		if (!mount.connected) return errorResponse('The mount is disconnected', 409, 'disconnected')
+		if (!mount.canGoTo) return errorResponse('The mount cannot go to a target', 422, 'unsupported')
+		if (mount.parked || mount.parking) return errorResponse('The mount is parked', 409, 'unsupported')
+		if (this.operations.arbiter.availability(resourceKey(mount)) !== 'available') return errorResponse('The mount is busy', 409, 'busy')
 
 		const time = Date.now()
 		let position: SkyPosition | undefined
@@ -329,16 +403,16 @@ export class MountCommands implements Disposable {
 		try {
 			position = await this.locate(target, { time, observer, mode: 'accurate', signal })
 		} catch (error) {
-			if (error instanceof EphemerisUnavailableError) return errorResponse(error.message, 503)
-			if (error instanceof HorizonsEphemerisError) return errorResponse(error.message, 502)
+			if (error instanceof EphemerisUnavailableError) return errorResponse(error.message, 503, 'serviceUnavailable')
+			if (error instanceof HorizonsEphemerisError) return errorResponse(error.message, 502, 'serviceUnavailable')
 			throw error
 		}
 
-		if (!position) return errorResponse('Object not found', 404)
+		if (!position) return errorResponse('Object not found', 404, 'notFound')
 
 		const { rightAscension, declination, azimuth, altitude } = position
-		if (azimuth === undefined || altitude === undefined) return errorResponse('An observer is required', 422)
-		if (altitude < 0) return errorResponse('The target is below the horizon', 422)
+		if (azimuth === undefined || altitude === undefined) return errorResponse('An observer is required', 422, 'invalidParameter')
+		if (altitude < 0) return errorResponse('The target is below the horizon', 422, 'invalidParameter')
 
 		const result = this.#commander.goTo(this.operations.coordinator, mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
 		const { operationId } = this.operations.track('mount.slew', [{ connectionId, deviceId: mount.id }], result)
@@ -351,11 +425,147 @@ export class MountCommands implements Disposable {
 	async stop(connectionId: string, deviceId: string): Promise<Response> {
 		const client = this.client(connectionId)
 		const mount = client && this.devices.mount(client, deviceId)
-		if (!mount) return errorResponse('Mount not found', 404)
+		if (!mount) return notFound('Mount')
 
 		await this.operations.coordinator.cancelByDevice(resourceKey(mount))
 		const result = await this.#commander.stopMotion(mount)
-		return result.ok ? new Response(null, { status: 204 }) : errorResponse(result.error ?? `The mount did not stop (${result.reason})`, 409)
+		return result.ok ? new Response(null, { status: 204 }) : errorResponse(result.error ?? `The mount did not stop (${result.reason})`, 409, failureCode(result.reason))
+	}
+
+	// Starts a goto to a coordinate. Responds 202 with the operation id, or with why the mount cannot go
+	// there: 404 unknown mount; 409 disconnected, parked, or busy; 422 when it cannot go to a target or the
+	// target is below the observer's horizon or not a valid coordinate.
+	goTo(connectionId: string, deviceId: string, request: MountGoToRequest): Response {
+		return this.#slewTo('mount.goto', connectionId, deviceId, request)
+	}
+
+	// Starts a meridian flip to a coordinate; answered like goTo, with 422 when the mount cannot flip.
+	flip(connectionId: string, deviceId: string, request: MountGoToRequest): Response {
+		return this.#slewTo('mount.flip', connectionId, deviceId, request)
+	}
+
+	// Redefines where the mount points. Responds 204 once applied, 404 unknown mount, 409 disconnected or
+	// busy, and 422 when the mount cannot sync or the target is not a valid coordinate.
+	async sync(connectionId: string, deviceId: string, { target }: MountSyncRequest): Promise<Response> {
+		const mount = this.#connected(connectionId, deviceId)
+		if (mount instanceof Response) return mount
+		if (!mount.canSync) return unsupported('The mount cannot sync')
+
+		const coordinate = targetCoordinate(target)
+		if (!mountTargetEquatorial(mount, coordinate).every(Number.isFinite)) return errorResponse('The target is not a valid coordinate', 422, 'invalidParameter')
+
+		return await settle(this.#commander.sync(this.operations.coordinator, mount, coordinate), 'The sync')
+	}
+
+	// Starts parking the mount. Responds 202 with the operation id; 404, 409 disconnected or busy, 422 when
+	// the mount cannot park.
+	park(connectionId: string, deviceId: string, request: CommandRequest): Response {
+		const mount = this.#connected(connectionId, deviceId)
+		if (mount instanceof Response) return mount
+		if (!mount.canPark) return unsupported('The mount cannot park')
+		return startCommand(this.operations, 'mount.park', connectionId, mount, request, () => this.#commander.park(this.operations.coordinator, mount))
+	}
+
+	// Starts unparking the mount; answered like park.
+	unpark(connectionId: string, deviceId: string, request: CommandRequest): Response {
+		const mount = this.#connected(connectionId, deviceId)
+		if (mount instanceof Response) return mount
+		if (!mount.canPark) return unsupported('The mount cannot unpark')
+		return startCommand(this.operations, 'mount.unpark', connectionId, mount, request, () => this.#commander.unpark(this.operations.coordinator, mount))
+	}
+
+	// Starts a slew to the home position the mount knows. Responds 202 with the operation id; 404, 409
+	// disconnected, parked, or busy, 422 when the mount has no home command.
+	home(connectionId: string, deviceId: string, request: CommandRequest): Response {
+		const mount = this.#connected(connectionId, deviceId)
+		if (mount instanceof Response) return mount
+		if (!mount.canHome) return unsupported('The mount cannot go home')
+		if (mount.parked || mount.parking) return errorResponse('The mount is parked', 409, 'unsupported')
+		return startCommand(this.operations, 'mount.home', connectionId, mount, request, () => this.#commander.home(this.operations.coordinator, mount))
+	}
+
+	// Starts the search for the home position by the mount's sensors; answered like home.
+	findHome(connectionId: string, deviceId: string, request: CommandRequest): Response {
+		const mount = this.#connected(connectionId, deviceId)
+		if (mount instanceof Response) return mount
+		if (!mount.canFindHome) return unsupported('The mount cannot search its home position')
+		if (mount.parked || mount.parking) return errorResponse('The mount is parked', 409, 'unsupported')
+		return startCommand(this.operations, 'mount.findHome', connectionId, mount, request, () => this.#commander.findHome(this.operations.coordinator, mount))
+	}
+
+	// Stores the current position as the home position. Responds 204 once applied; 404, 409 disconnected or
+	// busy, 422 when the mount cannot.
+	async setHome(connectionId: string, deviceId: string): Promise<Response> {
+		const mount = this.#connected(connectionId, deviceId)
+		if (mount instanceof Response) return mount
+		if (!mount.canSetHome) return unsupported('The mount cannot store its home position')
+		return await settle(this.#commander.setHome(this.operations.coordinator, mount), 'Setting the home position')
+	}
+
+	// Stores the current position as the park position; answered like setHome.
+	async setPark(connectionId: string, deviceId: string): Promise<Response> {
+		const mount = this.#connected(connectionId, deviceId)
+		if (mount instanceof Response) return mount
+		if (!mount.canSetPark) return unsupported('The mount cannot store its park position')
+		return await settle(this.#commander.setPark(this.operations.coordinator, mount), 'Setting the park position')
+	}
+
+	// Switches tracking and responds 204 once the mount reports the requested state; 404, 409 disconnected,
+	// parked, or busy, 422 when tracking cannot be switched, 504 when the mount did not report it in time.
+	async setTracking(connectionId: string, deviceId: string, { enabled }: MountTrackingRequest): Promise<Response> {
+		const mount = this.#connected(connectionId, deviceId)
+		if (mount instanceof Response) return mount
+		if (!mount.canTracking) return unsupported('The mount cannot switch tracking')
+		if (enabled && (mount.parked || mount.parking)) return errorResponse('The mount is parked', 409, 'unsupported')
+		return await settle(this.#commander.setTracking(this.operations.coordinator, mount, enabled), 'Switching tracking')
+	}
+
+	// Selects the tracking rate. Responds 204 once sent (the new rate arrives as a mount:updated event); 404,
+	// 409 disconnected or busy, 422 for a rate the mount does not offer.
+	async setTrackMode(connectionId: string, deviceId: string, { mode }: MountTrackModeRequest): Promise<Response> {
+		const mount = this.#connected(connectionId, deviceId)
+		if (mount instanceof Response) return mount
+		if (!mount.trackModes.includes(mode)) return errorResponse('Unknown tracking rate', 422, 'invalidParameter')
+		return await settle(this.#commander.setTrackMode(this.operations.coordinator, mount, mode), 'Selecting the tracking rate')
+	}
+
+	// Sends a site to the mount, which uses it for its own coordinate conversions. Responds 204 once sent;
+	// 404, 409 disconnected or busy.
+	async setSite(connectionId: string, deviceId: string, { site }: MountSiteRequest): Promise<Response> {
+		const mount = this.#connected(connectionId, deviceId)
+		if (mount instanceof Response) return mount
+		const coordinate = { latitude: deg(site.latitude), longitude: deg(site.longitude), elevation: meter(site.elevation) }
+		return await settle(this.#commander.setGeographicCoordinate(this.operations.coordinator, mount, coordinate), 'Sending the site')
+	}
+
+	// Sends a clock to the mount. Responds 204 once sent; 404, 409 disconnected or busy.
+	async setTime(connectionId: string, deviceId: string, { utc, offset }: MountTimeRequest): Promise<Response> {
+		const mount = this.#connected(connectionId, deviceId)
+		if (mount instanceof Response) return mount
+		return await settle(this.#commander.setTime(this.operations.coordinator, mount, { utc, offset }), 'Sending the time')
+	}
+
+	// Returns the connected mount with this id on an open connection, or the response refusing it.
+	#connected(connectionId: string, deviceId: string): Mount | Response {
+		const mount = findDevice(this.devices, this.client, connectionId, 'mount', deviceId)
+		if (!mount) return notFound('Mount')
+		if (!mount.connected) return disconnected('Mount')
+		return mount
+	}
+
+	// Starts a goto or a flip to a coordinate, refusing a target below the observer's horizon.
+	#slewTo(kind: 'mount.goto' | 'mount.flip', connectionId: string, deviceId: string, request: MountGoToRequest): Response {
+		const mount = this.#connected(connectionId, deviceId)
+		if (mount instanceof Response) return mount
+		if (kind === 'mount.goto' ? !mount.canGoTo : !mount.canFlip) return unsupported(kind === 'mount.goto' ? 'The mount cannot go to a target' : 'The mount cannot flip')
+		if (mount.parked || mount.parking) return errorResponse('The mount is parked', 409, 'unsupported')
+
+		const coordinate = targetCoordinate(request.target)
+		// Inverted so that an unparsable coordinate, whose altitude is NaN, is refused as well.
+		if (!(targetAltitude(mount, coordinate, request.observer) >= 0)) return errorResponse('The target is below the horizon or is not a valid coordinate', 422, 'invalidParameter')
+
+		const { coordinator } = this.operations
+		return startCommand(this.operations, kind, connectionId, mount, request, () => (kind === 'mount.goto' ? this.#commander.goTo(coordinator, mount, coordinate) : this.#commander.flip(coordinator, mount, coordinate)))
 	}
 
 	// Runs a nudge under its operation: commands every axis of the direction through a nested manual
@@ -401,7 +611,7 @@ export class MountCommands implements Disposable {
 		const { session } = nudge
 
 		if (session.phase === 'failed' && session.reason !== undefined) {
-			return Response.json({ error: session.error ?? `The nudge failed (${session.reason})`, session }, { status: nudgeFailureStatus(session.reason) })
+			return Response.json({ error: session.error ?? `The nudge failed (${session.reason})`, code: failureCode(session.reason), session }, { status: nudgeFailureStatus(session.reason) })
 		}
 
 		return Response.json({ session, ...this.nudge } satisfies MountNudgeStartResponse, { status: 202 })

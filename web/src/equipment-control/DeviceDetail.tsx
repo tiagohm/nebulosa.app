@@ -6,6 +6,8 @@ import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { controlRuntime, deviceStateOf } from './control'
+import { GuideOutputControls } from './controls/GuideOutputControls'
+import { MountControls } from './controls/MountControls'
 import { DeviceDiagnostics } from './DeviceDiagnostics'
 import { DEVICE_TYPE_LABELS, type DeviceGroup, groupTypes } from './groups'
 import { OperationStatus } from './OperationStatus'
@@ -17,7 +19,10 @@ import { type InterfaceProps, Notice } from './parts'
 // page has no controls for is listed, never given improvised ones.
 
 // Controls of each interface type.
-const CONTROLS: Partial<Record<ManagedDeviceType, ComponentType<InterfaceProps>>> = {}
+const CONTROLS: Partial<Record<ManagedDeviceType, ComponentType<InterfaceProps>>> = {
+	mount: MountControls,
+	guideOutput: GuideOutputControls,
+}
 
 export interface DeviceDetailProps {
 	// Device shown.

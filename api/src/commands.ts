@@ -25,7 +25,8 @@ import type { OperationKind, OperationRegistry } from './operations'
 // - deviceError: the driver reported an error.
 // - connectionLost: the device disappeared while commanded.
 // - unknownResult: the command could not be confirmed as sent; the device may or may not have received it.
-export type CommandErrorCode = 'notFound' | 'disconnected' | 'busy' | 'unsupported' | 'invalidParameter' | 'timeout' | 'rejected' | 'deviceError' | 'connectionLost' | 'unknownResult'
+// - serviceUnavailable: a service the command depends on, such as an ephemeris provider, failed or is absent.
+export type CommandErrorCode = 'notFound' | 'disconnected' | 'busy' | 'unsupported' | 'invalidParameter' | 'timeout' | 'rejected' | 'deviceError' | 'connectionLost' | 'unknownResult' | 'serviceUnavailable'
 
 // Body of an error response.
 export interface CommandError {
@@ -65,6 +66,11 @@ const FAILURES: Readonly<Record<OperationFailureReason, readonly [number, Comman
 // Responds with an error message, a status, and a stable code.
 export function errorResponse(message: string, status: number, code: CommandErrorCode): Response {
 	return Response.json({ error: message, code } satisfies CommandError, { status })
+}
+
+// Returns the stable code of an operation failure reason.
+export function failureCode(reason: OperationFailureReason): CommandErrorCode {
+	return FAILURES[reason][1]
 }
 
 // Responds with the error of a failed operation; action names the command for the fallback message.

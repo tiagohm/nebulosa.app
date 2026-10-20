@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { DeviceStates, FocuserState, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { commandUrl, type ControlRuntime, deviceStateOf, handleControlEvent, newControlRuntime, refreshStates, sendCommand, startCommand, watchControl } from './control'
+import { commandUrl, type ControlRuntime, deviceStateOf, handleControlEvent, newControlRuntime, refreshStates, sendCommand, startCommand, stopCommand, watchControl } from './control'
 
 function focuser(patch: Partial<FocuserState> = {}): FocuserState {
 	return { connectionId: 'c', id: 'f', connected: true, moving: false, position: { value: 100, min: 0, max: 1000, step: 1 }, canAbsoluteMove: true, canRelativeMove: true, canAbort: true, canReverse: false, reversed: false, canSync: true, ...patch }
@@ -123,4 +123,18 @@ test('an unreachable server reports that the command may have been applied and r
 	expect(state.errors.f).toContain('may have been applied')
 	expect(requests.at(-1)?.url).toBe('/api/connections/c/states')
 	expect(deviceStateOf(state.states, 'focuser', 'f')?.moving).toBeTrue()
+})
+
+test('a stop is sent even while another command of the device is in flight', async () => {
+	const state = newState()
+	state.pending.f = 'Move'
+	const { requests, request } = fakeFetch(() => new Response(null, { status: 204 }))
+
+	expect(await stopCommand(state, { type: 'focuser', deviceId: 'f', action: 'stop' }, request)).toBeTrue()
+	expect(requests[0].url).toBe('/api/connections/c/focusers/f/stop')
+	expect(state.pending.f).toBe('Move')
+
+	const failing = fakeFetch(() => Response.json({ error: 'The focuser did not stop', code: 'timeout' }, { status: 504 }))
+	expect(await stopCommand(state, { type: 'focuser', deviceId: 'f', action: 'stop' }, failing.request)).toBeFalse()
+	expect(state.errors.f).toBe('The focuser did not stop')
 })

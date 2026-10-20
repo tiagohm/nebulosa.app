@@ -16,7 +16,14 @@ export interface OperationsState {
 // Display name of each operation kind.
 export const OPERATION_LABELS: Readonly<Record<OperationKind, string>> = {
 	'mount.slew': 'Mount slew',
+	'mount.goto': 'Mount goto',
+	'mount.flip': 'Mount flip',
+	'mount.park': 'Mount park',
+	'mount.unpark': 'Mount unpark',
+	'mount.home': 'Mount go home',
+	'mount.findHome': 'Mount find home',
 	'mount.nudge': 'Mount nudge',
+	'guideOutput.pulse': 'Guide pulse',
 	'camera.capture': 'Camera capture',
 }
 

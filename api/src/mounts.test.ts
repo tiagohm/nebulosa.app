@@ -2,8 +2,9 @@ import { afterEach, expect, spyOn, test } from 'bun:test'
 import { failedOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { deg } from 'nebulosa/src/math/units/angle'
+import type { CommandAccepted } from './commands'
 import { ConnectionManager } from './connection'
-import { DEFAULT_MOUNT_NUDGE_OPTIONS, MountCommands, type MountNudgeDirection, type MountNudgeEvent, type MountNudgeOptions, type MountNudgeSession, type MountNudgeStartResponse, type MountSlewRequest, type MountSlewResponse } from './mounts'
+import { DEFAULT_MOUNT_NUDGE_OPTIONS, MountCommands, type MountCoordinate, type MountNudgeDirection, type MountNudgeEvent, type MountNudgeOptions, type MountNudgeSession, type MountNudgeStartResponse, type MountSlewRequest, type MountSlewResponse } from './mounts'
 import { type OperationEvent, type OperationRecord, OperationRegistry } from './operations'
 import type { PositionRequest, SkyPosition } from './sky/ephemeris'
 import type { SkyObjectRef } from './sky/types'
@@ -356,4 +357,107 @@ test('an operation holding the camera does not block a nudge', async () => {
 	expect((await commands.stopNudge('while-capturing')).status).toBe(204)
 	expect(operations.arbiter.availability(resourceKey(camera))).not.toBe('available')
 	await capture.cancel()
+})
+
+// Coordinate target of the place a mount points at now, in the equinox of date, as decimal text.
+function currentTarget(mount: { readonly equatorialCoordinate: { readonly rightAscension: number; readonly declination: number } }, offset = 0): MountCoordinate {
+	return { frame: 'JNOW', x: `${((mount.equatorialCoordinate.rightAscension + offset) * 12) / Math.PI}`, y: `${(mount.equatorialCoordinate.declination * 180) / Math.PI}` }
+}
+
+// Observer at the mount's site, so the pole is always above the horizon from the simulator.
+const SITE_OBSERVER = { latitude: 0, longitude: 0, elevation: 0 }
+
+test('switches tracking and its rate only as the mount reports them', async () => {
+	const { manager, id, client, commands, mountId } = await setup()
+	const mount = await connectMount(manager, client, mountId)
+
+	expect((await commands.setTracking(id, mountId, { enabled: true })).status).toBe(204)
+	expect(mount.tracking).toBeTrue()
+	expect((await commands.setTracking(id, mountId, { enabled: false })).status).toBe(204)
+	expect(mount.tracking).toBeFalse()
+
+	expect((await commands.setTrackMode(id, mountId, { mode: 'CUSTOM' })).status).toBe(422)
+	expect((await commands.setTrackMode(id, mountId, { mode: 'LUNAR' })).status).toBe(204)
+	await waitUntil(() => mount.trackMode === 'LUNAR')
+	expect(manager.devices.mountState(client, mountId)).toMatchObject({ trackMode: 'LUNAR', trackModes: expect.arrayContaining(['SIDEREAL', 'LUNAR']) as string[], canTracking: true })
+})
+
+test('parks and unparks as operations, and a repeated token does not command twice', async () => {
+	const { manager, id, client, commands, events, operations, mountId } = await setup()
+	const mount = await connectMount(manager, client, mountId)
+
+	const response = commands.park(id, mountId, { token: 'park-1' })
+	expect(response.status).toBe(202)
+	const { operationId } = (await response.json()) as CommandAccepted
+	const repeated = commands.park(id, mountId, { token: 'park-1' })
+	expect(((await repeated.json()) as CommandAccepted).operationId).toBe(operationId)
+	expect(commands.park(id, mountId, { token: 'park-2' }).status).toBe(409)
+
+	await waitUntil(() => events.some((event) => event.operation.operationId === operationId && event.operation.state !== 'running'), 30000)
+	expect(events.findLast((event) => event.operation.operationId === operationId)?.operation).toMatchObject({ kind: 'mount.park', state: 'succeeded' })
+	expect(mount.parked).toBeTrue()
+	expect(operations.running()).toBeEmpty()
+
+	expect(commands.goTo(id, mountId, { token: 'g', target: currentTarget(mount), observer: SITE_OBSERVER }).status).toBe(409)
+	expect(commands.home(id, mountId, { token: 'h' }).status).toBe(409)
+	expect((await commands.setTracking(id, mountId, { enabled: true })).status).toBe(409)
+
+	expect(commands.unpark(id, mountId, { token: 'unpark-1' }).status).toBe(202)
+	await waitUntil(() => !mount.parked && operations.running().length === 0, 30000)
+}, 40000)
+
+test('goes to a coordinate above the horizon only, and syncs on one', async () => {
+	const { manager, id, client, commands, events, mountId } = await setup()
+	const mount = await connectMount(manager, client, mountId)
+	const below = { frame: 'ALTAZ', x: '120', y: '-30' } as const
+
+	expect(commands.goTo(id, mountId, { token: 'below', target: below, observer: SITE_OBSERVER }).status).toBe(422)
+	expect(commands.goTo(id, mountId, { token: 'garbage', target: { frame: 'JNOW', x: 'abc', y: '10' }, observer: SITE_OBSERVER }).status).toBe(422)
+	expect((await commands.sync(id, mountId, { target: { frame: 'JNOW', x: 'abc', y: '10' } })).status).toBe(422)
+
+	const target = currentTarget(mount, deg(1))
+	expect((await commands.sync(id, mountId, { target })).status).toBe(204)
+	await waitUntil(() => Math.abs(mount.equatorialCoordinate.rightAscension - (Number(target.x) * Math.PI) / 12) < deg(0.1))
+
+	const response = commands.goTo(id, mountId, { token: 'up', target: { frame: 'ALTAZ', x: '90', y: '60' }, observer: SITE_OBSERVER })
+	expect(response.status).toBe(202)
+	const { operationId } = (await response.json()) as CommandAccepted
+	await waitUntil(() => events.some((event) => event.operation.operationId === operationId && event.operation.state !== 'running'), 30000)
+	expect(events.findLast((event) => event.operation.operationId === operationId)?.operation).toMatchObject({ kind: 'mount.goto', state: 'succeeded' })
+}, 40000)
+
+test('home commands follow the capabilities and set home asks nothing to move', async () => {
+	const { manager, id, client, commands, events, mountId } = await setup()
+	const mount = await connectMount(manager, client, mountId)
+	await waitUntil(() => mount.canFindHome && mount.canSetHome && mount.canHome)
+
+	expect((await commands.setHome(id, mountId)).status).toBe(204)
+	const response = commands.home(id, mountId, { token: 'home' })
+	expect(response.status).toBe(202)
+	const { operationId } = (await response.json()) as CommandAccepted
+	await waitUntil(() => events.some((event) => event.operation.operationId === operationId && event.operation.state !== 'running'), 30000)
+	expect(events.findLast((event) => event.operation.operationId === operationId)?.operation).toMatchObject({ kind: 'mount.home', state: 'succeeded' })
+}, 40000)
+
+test('a mount command is refused while a nudge holds the mount', async () => {
+	const { manager, id, client, commands, mountId } = await setup()
+	await connectMount(manager, client, mountId)
+
+	expect((await nudge(commands, id, mountId, 'held', 'N')).status).toBe(202)
+	expect(commands.park(id, mountId, { token: 'p' }).status).toBe(409)
+	expect((await commands.setTracking(id, mountId, { enabled: true })).status).toBe(409)
+	expect((await commands.stopNudge('held')).status).toBe(204)
+})
+
+test('sends the site and the clock to the mount', async () => {
+	const { manager, id, client, commands, mountId } = await setup()
+	const mount = await connectMount(manager, client, mountId)
+
+	expect((await commands.setSite(id, mountId, { site: OBSERVER })).status).toBe(204)
+	await waitUntil(() => Math.abs(mount.geographicCoordinate.latitude - deg(OBSERVER.latitude)) < 1e-6)
+	expect(manager.devices.mountState(client, mountId)?.site.elevation).toBeCloseTo(OBSERVER.elevation, 3)
+
+	const utc = Date.UTC(2026, 0, 2, 3, 4, 5)
+	expect((await commands.setTime(id, mountId, { utc, offset: -180 })).status).toBe(204)
+	await waitUntil(() => Math.abs(mount.time.utc - utc) < 60000)
 })

@@ -1,10 +1,11 @@
 import type { Server } from 'bun'
 import { CameraCaptures, type CaptureRequest } from './captures'
-import { errorResponse } from './commands'
+import { type CommandRequest, errorResponse } from './commands'
 import { connections } from './connection'
 import { handleListDirectory } from './files'
+import { GuideOutputCommands, type GuidePulseRequest, type GuideRateRequest } from './guideoutputs'
 import { handleDeriveImage, handleDownloadImage, handleOpenImage, handleRenderImage, handleSaveImage, images } from './images'
-import { MountCommands, type MountNudgeRequest, type MountSlewRateRequest, type MountSlewRequest } from './mounts'
+import { MountCommands, type MountGoToRequest, type MountNudgeRequest, type MountSiteRequest, type MountSlewRateRequest, type MountSlewRequest, type MountSyncRequest, type MountTimeRequest, type MountTrackingRequest, type MountTrackModeRequest } from './mounts'
 import { OperationRegistry } from './operations'
 import { skyLocator, skyRoutes } from './sky'
 import { broadcast, websocket } from './websocket'
@@ -41,7 +42,25 @@ export type {
 	WheelState,
 } from './devices'
 export type { DirectoryListing, FileEntry } from './files'
-export type { MountNudgeDirection, MountNudgeEvent, MountNudgePhase, MountNudgeRequest, MountNudgeSession, MountNudgeStartResponse, MountSlewRateRequest, MountSlewRequest, MountSlewResponse } from './mounts'
+export type { GuidePulseRequest, GuideRateRequest } from './guideoutputs'
+export type {
+	MountCoordinate,
+	MountGoToRequest,
+	MountNudgeDirection,
+	MountNudgeEvent,
+	MountNudgePhase,
+	MountNudgeRequest,
+	MountNudgeSession,
+	MountNudgeStartResponse,
+	MountSiteRequest,
+	MountSlewRateRequest,
+	MountSlewRequest,
+	MountSlewResponse,
+	MountSyncRequest,
+	MountTimeRequest,
+	MountTrackingRequest,
+	MountTrackModeRequest,
+} from './mounts'
 export type { OperationDevice, OperationEvent, OperationKind, OperationRecord, OperationState } from './operations'
 export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
 export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
@@ -57,6 +76,9 @@ const operations = new OperationRegistry(connections.devices, broadcast)
 const mounts = new MountCommands(connections.devices, (id) => connections.client(id), skyLocator, operations, broadcast)
 
 // Camera captures over the devices of the open connections, their frames entering the image store.
+// Pulse guiding of the guide outputs of the open connections.
+const guideOutputs = new GuideOutputCommands(connections.devices, (id) => connections.client(id), operations)
+
 const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, broadcast)
 
 // Opens a connection, or returns the existing one for the same endpoint. Responds 400 for an invalid
@@ -134,6 +156,74 @@ export const routes = {
 	'/api/connections/:id/mounts/:deviceId/nudge': {
 		// Starts a nudge held by a lease; its changes arrive as mount:nudge and operation:updated events.
 		POST: async (req) => mounts.startNudge(req.params.id, req.params.deviceId, (await req.json()) as MountNudgeRequest),
+	},
+	'/api/connections/:id/mounts/:deviceId/goto': {
+		// Starts a goto to a coordinate; the outcome arrives as operation:updated events.
+		POST: async (req) => mounts.goTo(req.params.id, req.params.deviceId, (await req.json()) as MountGoToRequest),
+	},
+	'/api/connections/:id/mounts/:deviceId/flip': {
+		// Starts a meridian flip to a coordinate; the outcome arrives as operation:updated events.
+		POST: async (req) => mounts.flip(req.params.id, req.params.deviceId, (await req.json()) as MountGoToRequest),
+	},
+	'/api/connections/:id/mounts/:deviceId/sync': {
+		// Redefines where the mount points.
+		POST: async (req) => mounts.sync(req.params.id, req.params.deviceId, (await req.json()) as MountSyncRequest),
+	},
+	'/api/connections/:id/mounts/:deviceId/park': {
+		// Starts parking; the outcome arrives as operation:updated events.
+		POST: async (req) => mounts.park(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+	},
+	'/api/connections/:id/mounts/:deviceId/unpark': {
+		// Starts unparking; the outcome arrives as operation:updated events.
+		POST: async (req) => mounts.unpark(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+	},
+	'/api/connections/:id/mounts/:deviceId/home': {
+		// Starts a slew to the home position; the outcome arrives as operation:updated events.
+		POST: async (req) => mounts.home(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+	},
+	'/api/connections/:id/mounts/:deviceId/find-home': {
+		// Starts the search for the home position; the outcome arrives as operation:updated events.
+		POST: async (req) => mounts.findHome(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+	},
+	'/api/connections/:id/mounts/:deviceId/set-home': {
+		// Stores the current position as the home position.
+		POST: (req) => mounts.setHome(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/mounts/:deviceId/set-park': {
+		// Stores the current position as the park position.
+		POST: (req) => mounts.setPark(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/mounts/:deviceId/tracking': {
+		// Switches tracking, answered once the mount reports it.
+		POST: async (req) => mounts.setTracking(req.params.id, req.params.deviceId, (await req.json()) as MountTrackingRequest),
+	},
+	'/api/connections/:id/mounts/:deviceId/track-mode': {
+		// Selects the tracking rate; the new rate arrives as a mount:updated event.
+		POST: async (req) => mounts.setTrackMode(req.params.id, req.params.deviceId, (await req.json()) as MountTrackModeRequest),
+	},
+	'/api/connections/:id/mounts/:deviceId/site': {
+		// Sends a site to the mount.
+		POST: async (req) => mounts.setSite(req.params.id, req.params.deviceId, (await req.json()) as MountSiteRequest),
+	},
+	'/api/connections/:id/mounts/:deviceId/time': {
+		// Sends a clock to the mount.
+		POST: async (req) => mounts.setTime(req.params.id, req.params.deviceId, (await req.json()) as MountTimeRequest),
+	},
+	'/api/connections/:id/guide-outputs/:deviceId': {
+		// Pulse-guide state of a guide output; 404 when the connection is not open or has no such output.
+		GET: (req) => guideOutputs.state(req.params.id, req.params.deviceId),
+	},
+	'/api/connections/:id/guide-outputs/:deviceId/pulse': {
+		// Starts a guide pulse; the outcome arrives as operation:updated events.
+		POST: async (req) => guideOutputs.pulse(req.params.id, req.params.deviceId, (await req.json()) as GuidePulseRequest),
+	},
+	'/api/connections/:id/guide-outputs/:deviceId/guide-rate': {
+		// Sets the guide rates; the new rates arrive as a guideOutput:updated event.
+		POST: async (req) => guideOutputs.setGuideRate(req.params.id, req.params.deviceId, (await req.json()) as GuideRateRequest),
+	},
+	'/api/connections/:id/guide-outputs/:deviceId/stop': {
+		// Stops every pulse of a guide output.
+		POST: (req) => guideOutputs.stop(req.params.id, req.params.deviceId),
 	},
 	'/api/mounts/nudges': {
 		// The nudge sessions still running, started by any tab.

@@ -6,6 +6,7 @@ import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { controlRuntime, deviceStateOf } from './control'
+import { CameraControls } from './controls/CameraControls'
 import { CoverControls } from './controls/CoverControls'
 import { DewHeaterControls } from './controls/DewHeaterControls'
 import { DomeControls } from './controls/DomeControls'
@@ -27,6 +28,7 @@ import { type InterfaceProps, Notice } from './parts'
 
 // Controls of each interface type.
 const CONTROLS: Partial<Record<ManagedDeviceType, ComponentType<InterfaceProps>>> = {
+	camera: CameraControls,
 	mount: MountControls,
 	guideOutput: GuideOutputControls,
 	focuser: FocuserControls,

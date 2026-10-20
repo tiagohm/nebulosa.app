@@ -1,4 +1,5 @@
 import type { Server } from 'bun'
+import { type CameraCoolerRequest, CameraCommands, type CameraTemperatureRequest } from './cameras'
 import { CameraCaptures, type CaptureRequest } from './captures'
 import { type CommandRequest, errorResponse } from './commands'
 import { connections } from './connection'
@@ -19,6 +20,7 @@ import { WheelCommands, type WheelMoveRequest, type WheelNamesRequest } from './
 
 // HTTP routes and the WebSocket handler of the backend, mounted by the app server.
 
+export type { CameraCoolerRequest, CameraTemperatureRequest } from './cameras'
 export type { CaptureEvent, CaptureFormat, CaptureFrame, CaptureOutput, CaptureOutputMode, CapturePhase, CaptureRequest, CaptureSession, CaptureSettings, CaptureSnapshot, CaptureStartResponse } from './captures'
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
 export type { CommandAccepted, CommandError, CommandErrorCode, CommandRequest } from './commands'
@@ -105,6 +107,9 @@ const dewHeaters = new DewHeaterCommands(connections.devices, (id) => connection
 
 // Dome commands and manual rotation sessions over the devices of the open connections.
 const domes = new DomeCommands(connections.devices, (id) => connections.client(id), operations, broadcast)
+
+// Cooling of the cameras of the open connections, arbitrated against their captures.
+const cameras = new CameraCommands(connections.devices, (id) => connections.client(id), operations)
 
 const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, broadcast)
 
@@ -423,6 +428,14 @@ export const routes = {
 	'/api/domes/motions/:token/stop': {
 		// Ends a manual rotation, or records a press that has not started yet as ended; idempotent.
 		POST: (req) => domes.stopMotion(req.params.token),
+	},
+	'/api/connections/:id/cameras/:deviceId/cooler': {
+		// Switches the cooler; the new state arrives as a camera:capabilities event.
+		POST: async (req) => cameras.setCooler(req.params.id, req.params.deviceId, (await req.json()) as CameraCoolerRequest),
+	},
+	'/api/connections/:id/cameras/:deviceId/temperature': {
+		// Sets the cooling target; the sensor temperature arrives as camera:capabilities events.
+		POST: async (req) => cameras.setTemperature(req.params.id, req.params.deviceId, (await req.json()) as CameraTemperatureRequest),
 	},
 	'/api/mounts/nudges': {
 		// The nudge sessions still running, started by any tab.

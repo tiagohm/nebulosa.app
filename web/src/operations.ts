@@ -30,6 +30,12 @@ export const OPERATION_LABELS: Readonly<Record<OperationKind, string>> = {
 	'rotator.home': 'Rotator go home',
 	'cover.open': 'Cover open',
 	'cover.close': 'Cover close',
+	'dome.slew': 'Dome slew',
+	'dome.home': 'Dome find home',
+	'dome.park': 'Dome park',
+	'dome.unpark': 'Dome unpark',
+	'dome.shutter': 'Dome shutter',
+	'dome.move': 'Dome rotation',
 	'camera.capture': 'Camera capture',
 }
 

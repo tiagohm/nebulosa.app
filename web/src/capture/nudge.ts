@@ -1,9 +1,11 @@
-import type { MountNudgeDirection, MountNudgeSession, MountNudgeStartResponse, MountState, ServerEvent } from 'api'
+import type { MountNudgeDirection, MountNudgeSession, MountState, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import { responseError } from '../http'
+import { followPress, type Press, pressRunning, reconcilePress, releasePress, startPress, stopPress } from '../press'
 
-// Mount Nudge runtime of the tab: the real state of the mount the active profile assigns to the MOUNT role,
-// the nudge sessions the server reports on it, and the one press this tab holds. The server owns every
+// Mount Nudge runtime of the tab, over the press handling shared with the dome (press.ts): the real state
+// of the mount the active profile assigns to the MOUNT role, the nudge sessions the server reports on it,
+// and the one press this tab holds. The server owns every
 // session and stops it when its lease is no longer renewed, so this store never assumes a motion from
 // local state alone: a press starts only with a pointer down, is renewed by heartbeats while the server
 // says it moves, and is released on pointer up or whenever control is lost. A press is never restored
@@ -20,15 +22,11 @@ export interface NudgeTarget {
 }
 
 // Press held by this tab.
-export interface NudgePress {
-	// Identity of the press, sent with every request about it.
-	readonly token: string
+export interface NudgePress extends Press {
 	// Mount the press moves; it never follows a later change of the role's device.
 	readonly target: NudgeTarget
 	// Direction moved in.
 	readonly direction: MountNudgeDirection
-	// Life stage: starting until the server answers, then the stage the server reports.
-	phase: 'starting' | 'moving' | 'stopping'
 }
 
 // Mount Nudge runtime state.
@@ -50,8 +48,8 @@ export interface NudgeRuntime {
 // Mount Nudge runtime of the tab.
 export const nudgeRuntime = proxy<NudgeRuntime>({ sessions: {}, sending: false })
 
-// Heartbeat timer of each press of this tab, by token.
-const heartbeats = new Map<string, ReturnType<typeof setInterval>>()
+// Message kept when a stop cannot reach the server.
+const UNREACHABLE = 'The server cannot be reached; the mount stops by itself once its lease expires'
 
 // Counter of state fetches; a response is applied only if no later fetch started.
 let stateGeneration = 0
@@ -87,13 +85,13 @@ function mountPath({ connectionId, id }: NudgeTarget) {
 }
 
 // Path of the API resource of a press.
-function pressPath(token: string) {
+export function pressPath(token: string) {
 	return `/api/mounts/nudges/${encodeURIComponent(token)}`
 }
 
 // Returns whether a session is still running.
 export function nudgeRunning(session: Pick<MountNudgeSession, 'phase'> | undefined): boolean {
-	return session !== undefined && session.phase !== 'stopped' && session.phase !== 'failed'
+	return pressRunning(session)
 }
 
 // Returns whether a direction can be moved in by a mount: each of its axes must accept manual motion.
@@ -121,18 +119,6 @@ export function nudgeEndProblem(session: MountNudgeSession): string | undefined 
 		default:
 			return `${session.error ?? 'The motion failed.'}${stop}`
 	}
-}
-
-// Stops renewing a press.
-function stopHeartbeat(token: string) {
-	clearInterval(heartbeats.get(token))
-	heartbeats.delete(token)
-}
-
-// Forgets the press of this tab when it is the given one.
-function forgetPress(runtime: NudgeRuntime, token: string) {
-	stopHeartbeat(token)
-	if (runtime.press?.token === token) runtime.press = undefined
 }
 
 // Follows another mount, or none. A press held on the previous mount is released, everything known about
@@ -178,8 +164,7 @@ export async function refreshNudges(runtime: NudgeRuntime, request: typeof fetch
 		for (const [key, session] of Object.entries(runtime.sessions)) if (nudgeRunning(session)) delete runtime.sessions[key]
 		for (const session of running) runtime.sessions[nudgeKey(session.connectionId, session.deviceId)] = session
 
-		const press = runtime.press
-		if (press && press.phase !== 'starting' && !running.some((session) => session.token === press.token)) forgetPress(runtime, press.token)
+		reconcilePress(runtime, running)
 	} catch {
 		// The server is unreachable; the next socket open refreshes the sessions.
 	}
@@ -200,16 +185,7 @@ export function handleNudgeEvent(runtime: NudgeRuntime, event: ServerEvent) {
 			// An event of an older session of the mount never replaces a newer one.
 			if (!known || known.token === session.token || session.startedAt >= known.startedAt) runtime.sessions[key] = session
 
-			const press = runtime.press
-			if (press?.token !== session.token) return
-
-			if (session.phase === 'moving' || session.phase === 'stopping') {
-				press.phase = session.phase
-			} else if (!nudgeRunning(session)) {
-				forgetPress(runtime, session.token)
-				runtime.error = nudgeEndProblem(session)
-			}
-
+			followPress(runtime, session, nudgeEndProblem)
 			return
 		}
 		case 'mount:updated':
@@ -231,60 +207,14 @@ export async function pressNudge(runtime: NudgeRuntime, direction: MountNudgeDir
 	if (!target || runtime.press) return
 
 	const token = crypto.randomUUID()
-	runtime.press = { token, target: { ...target }, direction, phase: 'starting' }
-	runtime.error = undefined
-
-	try {
-		const response = await request(`${mountPath(target)}/nudge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, direction }) })
-
-		if (!response.ok) {
-			const message = await responseError(response)
-			if (runtime.press?.token === token) runtime.error = message
-			forgetPress(runtime, token)
-			return
-		}
-
-		const { session, heartbeatInterval } = (await response.json()) as MountNudgeStartResponse
-		const press = runtime.press
-
-		// Released while starting: its stop is already on the way and owns forgetting it.
-		if (press?.token === token && press.phase === 'stopping') return
-
-		if (press?.token !== token || !nudgeRunning(session)) {
-			forgetPress(runtime, token)
-			return
-		}
-
-		if (session.phase === 'moving') press.phase = 'moving'
-		heartbeats.set(
-			token,
-			setInterval(() => void heartbeat(runtime, token, request), heartbeatInterval),
-		)
-	} catch {
-		if (runtime.press?.token === token) runtime.error = 'The server cannot be reached'
-		forgetPress(runtime, token)
-	}
-}
-
-// Renews a press; a press the server no longer runs is forgotten. A failed request is not an end: the
-// server stops the press by itself if no later heartbeat arrives in time.
-async function heartbeat(runtime: NudgeRuntime, token: string, request: typeof fetch) {
-	try {
-		const response = await request(`${pressPath(token)}/heartbeat`, { method: 'POST' })
-		if (response.status === 404) forgetPress(runtime, token)
-	} catch {
-		// The server is unreachable; its lease ends the press if this lasts.
-	}
+	await startPress(runtime, { token, target: { ...target }, direction, phase: 'starting' }, `${mountPath(target)}/nudge`, { direction }, pressPath, request)
 }
 
 // Releases the press of this tab, if any, and resolves once the server answered. The stop is sent even
 // while the start is still in flight, so the server records the press as ended before it can move, and
 // it is sent with keepalive so it still leaves a page that is being closed.
 export async function releaseNudge(runtime: NudgeRuntime, request: typeof fetch = fetch) {
-	const press = runtime.press
-	if (!press || press.phase === 'stopping') return
-	press.phase = 'stopping'
-	await stopPress(runtime, press.token, request)
+	await releasePress(runtime, pressPath, UNREACHABLE, request)
 }
 
 // Stops the press of this tab and any nudge running on the followed mount, whichever tab holds it. It
@@ -302,22 +232,7 @@ export async function stopNudges(runtime: NudgeRuntime, request: typeof fetch = 
 
 	if (nudgeRunning(running)) tokens.add(running!.token)
 
-	await Promise.all(Array.from(tokens, (token) => stopPress(runtime, token, request)))
-}
-
-// Sends the stop of a press and forgets it once answered, keeping the server's reason when the mount
-// could not be observed to stop.
-async function stopPress(runtime: NudgeRuntime, token: string, request: typeof fetch) {
-	stopHeartbeat(token)
-
-	try {
-		const response = await request(`${pressPath(token)}/stop`, { method: 'POST', keepalive: true })
-		if (!response.ok) runtime.error = await responseError(response)
-	} catch {
-		runtime.error = 'The server cannot be reached; the mount stops by itself once its lease expires'
-	}
-
-	forgetPress(runtime, token)
+	await Promise.all(Array.from(tokens, (token) => stopPress(runtime, token, pressPath, UNREACHABLE, request)))
 }
 
 // Selects the speed preset of the followed mount. The selection shown follows the mount's own report,

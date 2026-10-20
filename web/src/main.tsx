@@ -5,6 +5,7 @@ import { captureRuntime, handleCaptureEvent, refreshCameraCapabilities, refreshC
 import { handleNudgeEvent, nudgeRuntime, refreshNudgeMount, refreshNudges } from './capture/nudge'
 import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
 import { controlRuntime, handleControlEvent, refreshStates } from './equipment-control/control'
+import { domeMotionRuntime, handleDomeMotionEvent, refreshDomeMotions } from './equipment-control/domeMotion'
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
 import { onOpen, subscribe } from './events'
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
@@ -31,6 +32,7 @@ const stops = [
 		handleConnectionEvent(connectionState, event)
 		handleDeviceEvent(deviceState, event)
 		handleControlEvent(controlRuntime, event)
+		handleDomeMotionEvent(domeMotionRuntime, event)
 		handleMountEvent(mountRuntime, event)
 		handleOperationEvent(operationsState, event)
 		handleSensorEvent(sensorRuntime, event)
@@ -39,11 +41,12 @@ const stops = [
 	}),
 	// Every (re)open resynchronizes the open connections, the watched devices and their control states, the followed mount, the
 	// running operations, the camera sensors, the captures and camera capabilities, and the nudged mount
-	// and its nudge sessions, which may have changed while the socket was closed.
+	// and its nudge sessions, and the dome rotation sessions, which may have changed while the socket was closed.
 	onOpen(() => {
 		void refreshServers(connectionState)
 		void refreshDevices(deviceState)
 		void refreshStates(controlRuntime)
+		void refreshDomeMotions(domeMotionRuntime)
 		void refreshMount(mountRuntime)
 		void refreshOperations(operationsState)
 		refreshSensors(sensorRuntime)

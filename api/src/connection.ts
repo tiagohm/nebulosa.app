@@ -12,6 +12,7 @@ import { RotatorSimulator } from 'nebulosa/src/devices/indi/simulator/rotator'
 import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
 import type { CaptureEvent } from './captures'
 import { type DeviceEvent, DeviceRegistry } from './devices'
+import type { DomeMotionEvent } from './domes'
 import type { MountNudgeEvent } from './mounts'
 import type { OperationEvent } from './operations'
 
@@ -52,8 +53,9 @@ export type ConnectionStatus = ConnectRequest & {
 export type ConnectionEvent = { readonly type: 'connection:open'; readonly connection: ConnectionStatus } | { readonly type: 'connection:close'; readonly id: string }
 
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the
-// operation events of the operation registry, and the events of the capture and mount nudge services.
-export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent | CaptureEvent | MountNudgeEvent
+// operation events of the operation registry, and the events of the capture, mount nudge, and dome manual
+// rotation services.
+export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent | CaptureEvent | MountNudgeEvent | DomeMotionEvent
 
 // Receiver of connection and device events.
 export type ConnectionListener = (event: ServerEvent) => void
@@ -123,7 +125,8 @@ async function openClient(id: string, request: ConnectRequest, handler: IndiClie
 				new RotatorSimulator('Rotator Simulator', client),
 				new FlatPanelSimulator('Flat Panel Simulator', client),
 				new CoverSimulator('Dust Cap Simulator', client),
-				new DomeSimulator('Dome Simulator', client),
+				// The dome follows the simulated mount through the shared mount manager when slaving is on.
+				new DomeSimulator('Dome Simulator', client, { mountManager: devices.mounts }),
 			]
 			return client
 		}

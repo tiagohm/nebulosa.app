@@ -8,6 +8,7 @@ import { Icon } from '../ui/Icon'
 import { controlRuntime, deviceStateOf } from './control'
 import { CoverControls } from './controls/CoverControls'
 import { DewHeaterControls } from './controls/DewHeaterControls'
+import { DomeControls } from './controls/DomeControls'
 import { FilterWheelControls } from './controls/FilterWheelControls'
 import { FlatPanelControls } from './controls/FlatPanelControls'
 import { FocuserControls } from './controls/FocuserControls'
@@ -34,6 +35,7 @@ const CONTROLS: Partial<Record<ManagedDeviceType, ComponentType<InterfaceProps>>
 	cover: CoverControls,
 	flatPanel: FlatPanelControls,
 	dewHeater: DewHeaterControls,
+	dome: DomeControls,
 }
 
 export interface DeviceDetailProps {

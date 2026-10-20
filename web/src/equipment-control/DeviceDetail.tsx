@@ -23,11 +23,11 @@ import { type InterfaceProps, Notice } from './parts'
 
 // Detail of one physical device: its name, interfaces, and connection, with an explicit connect or
 // disconnect command, the controls of each interface it offers, its activity, and its diagnostics.
-// Controls are shown only for a connected device and only for what it reports it can do; an interface the
-// page has no controls for is listed, never given improvised ones.
+// Controls are shown only for a connected device whose state the server reported, and only for what it
+// reports it can do.
 
 // Controls of each interface type.
-const CONTROLS: Partial<Record<ManagedDeviceType, ComponentType<InterfaceProps>>> = {
+const CONTROLS: Readonly<Record<ManagedDeviceType, ComponentType<InterfaceProps>>> = {
 	camera: CameraControls,
 	mount: MountControls,
 	guideOutput: GuideOutputControls,
@@ -45,19 +45,11 @@ export interface DeviceDetailProps {
 	readonly group: DeviceGroup
 }
 
-// Controls of one interface, or a note when there are none or its state is not known yet.
+// Controls of one interface, or a note while its state is not known yet.
 function InterfaceSection({ device }: InterfaceProps) {
 	const control = useSnapshot(controlRuntime)
 	const Controls = CONTROLS[device.type]
 	const label = DEVICE_TYPE_LABELS[device.type]
-
-	if (!Controls) {
-		return (
-			<PanelSection title={label}>
-				<Notice>The Equipment Control has no controls for this interface.</Notice>
-			</PanelSection>
-		)
-	}
 
 	if (!deviceStateOf(control.states, device.type, device.id)) {
 		return (

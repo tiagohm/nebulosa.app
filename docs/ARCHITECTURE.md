@@ -17,51 +17,54 @@ Server state reaches every tab through `GET` snapshots plus the `/api/ws` event 
 
 Status: **Implemented** (works end to end), **Integration Required** (exists in `core`, not exposed by `api`/`web`), **Partial**, **Planned** (nothing yet).
 
-| Capability                                          | Status               | Where                                                                                                             |
-| --------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Shell, routes, workspaces                           | Implemented          | `web/src/shell/` (`route.ts`, `workspaces.ts`, `WorkspaceLayout.tsx`)                                             |
-| Profiles (versioned, v3)                            | Implemented          | `web/src/profile/profile.ts` (`migrate`, `PROFILES_VERSION`); active profile per tab in sessionStorage            |
-| Connections (INDI, Alpaca, simulator)               | Implemented          | `api/src/connection.ts`, `web/src/connection/`                                                                    |
-| Device registry and identity                        | Implemented          | `api/src/devices.ts` (`DeviceSummary`: connection id + stable device id)                                          |
-| Device capabilities                                 | Partial              | `MountState` (`canGoTo`, `canAbort`), the camera sensor, and `CameraCapabilities` (`api/src/devices.ts`)          |
-| Operations and arbitration                          | Implemented          | `api/src/operations.ts` (`OperationRegistry`), `web/src/operations.ts`; toolkit `core/src/devices/orchestration/` |
-| Mount slew / stop                                   | Implemented          | `api/src/mounts.ts`, `web/src/sky/mount.ts`                                                                       |
-| Mount sync, park, track, manual move, pulse guide   | Integration Required | `core/src/devices/commanders/mount.ts`, `guideoutput.ts`                                                          |
-| Focuser, wheel, rotator, cover, flat panel commands | Integration Required | `core/src/devices/commanders/*`                                                                                   |
-| Camera capture and frames                           | Implemented          | `api/src/captures.ts` over `CameraCapturer`; `web/src/capture/CameraCapturePanel.tsx`, `capture.ts`               |
-| Image documents (FITS/XISF)                         | Implemented          | `api/src/images.ts` + `images.worker.ts`, `web/src/images/images.ts`                                              |
-| Display pipeline, derive, save                      | Implemented          | same as above                                                                                                     |
-| Histogram and statistics                            | Planned              | Inspector shows a placeholder                                                                                     |
-| Plate solving                                       | Integration Required | `core/src/astrometry/solvers/` (ASTAP, astrometry.net)                                                            |
-| Star detection                                      | Integration Required | `core/src/imaging/stars/detector.ts`                                                                              |
-| Streak detection                                    | Integration Required | `core/src/imaging/analysis/streak/`                                                                               |
-| WCS                                                 | Integration Required | `core/src/astrometry/wcs/`                                                                                        |
-| Shared image viewer                                 | Implemented          | `web/src/viewer/` (overlays in image pixels, zoom/pan in `transform.ts`)                                          |
-| Overlays                                            | Partial              | Reticle only (`web/src/viewer/Reticle.tsx`)                                                                       |
-| Planetarium, search, inspector, time, observer      | Implemented          | `web/src/sky/`, `api/src/sky/`                                                                                    |
-| FOV and optical presets                             | Implemented          | `web/src/sky/framing.ts` (gnomonic outline, position angle)                                                       |
-| HiPS surveys                                        | Integration Required | `core/src/adapters/sky/hips2fits.ts`, `core/src/astronomy/sky/spatial/healpix.ts`                                 |
-| Eclipses (solar, lunar, maps)                       | Integration Required | `core/src/astronomy/events/eclipse/`                                                                              |
-| Calculator formulas                                 | Integration Required | `core/src/astronomy/formulas.ts` (pure, importable by `web`)                                                      |
-| Alpaca server                                       | Integration Required | `core/src/devices/alpaca/server.ts`, `discovery.ts`                                                               |
-| PHD2 and built-in guider                            | Integration Required | `core/src/devices/guiding/phd2.ts`, `core/src/observation/guiding/`                                               |
-| Auto focus                                          | Integration Required | `core/src/observation/focus/autofocus.ts`                                                                         |
-| DARV, TPPA                                          | Integration Required | `core/src/observation/alignment/`                                                                                 |
-| Flat analysis and exposure                          | Integration Required | `core/src/imaging/analysis/flat/` (no wizard flow)                                                                |
-| Sequencer                                           | Planned              | No engine exists in `core` or `api`                                                                               |
-| Notifications                                       | Planned              | The top bar bell is static                                                                                        |
+| Capability                                                                   | Status               | Where                                                                                                             |
+| ---------------------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Shell, routes, workspaces                                                    | Implemented          | `web/src/shell/` (`route.ts`, `workspaces.ts`, `WorkspaceLayout.tsx`)                                             |
+| Profiles (versioned, v3)                                                     | Implemented          | `web/src/profile/profile.ts` (`migrate`, `PROFILES_VERSION`); active profile per tab in sessionStorage            |
+| Connections (INDI, Alpaca, simulator)                                        | Implemented          | `api/src/connection.ts`, `web/src/connection/`                                                                    |
+| Device registry and identity                                                 | Implemented          | `api/src/devices.ts` (`DeviceSummary`: connection id + stable device id)                                          |
+| Device capabilities and control states                                       | Implemented          | `api/src/devices.ts` (`DeviceStateMap`, `<type>:updated` events, `GET /api/connections/:id/states`)               |
+| Operations and arbitration                                                   | Implemented          | `api/src/operations.ts` (`OperationRegistry`), `web/src/operations.ts`; toolkit `core/src/devices/orchestration/` |
+| Mount slew / stop                                                            | Implemented          | `api/src/mounts.ts`, `web/src/sky/mount.ts`                                                                       |
+| Mount goto/flip/sync, park, home, track, site, time                          | Implemented          | `api/src/mounts.ts`; manual move is the Capture Mount Nudge; pulse guide in `api/src/guideoutputs.ts`             |
+| Focuser, wheel, rotator, cover, flat panel, dew heater, dome, camera cooling | Implemented          | `api/src/{focusers,wheels,rotators,covers,flatpanels,dewheaters,domes,cameras}.ts`, Equipment Control page        |
+| Equipment Control (manual device control)                                    | Implemented          | `web/src/equipment-control/`, route `/equipment` opened from Management                                           |
+| Camera capture and frames                                                    | Implemented          | `api/src/captures.ts` over `CameraCapturer`; `web/src/capture/CameraCapturePanel.tsx`, `capture.ts`               |
+| Image documents (FITS/XISF)                                                  | Implemented          | `api/src/images.ts` + `images.worker.ts`, `web/src/images/images.ts`                                              |
+| Display pipeline, derive, save                                               | Implemented          | same as above                                                                                                     |
+| Histogram and statistics                                                     | Planned              | Inspector shows a placeholder                                                                                     |
+| Plate solving                                                                | Integration Required | `core/src/astrometry/solvers/` (ASTAP, astrometry.net)                                                            |
+| Star detection                                                               | Integration Required | `core/src/imaging/stars/detector.ts`                                                                              |
+| Streak detection                                                             | Integration Required | `core/src/imaging/analysis/streak/`                                                                               |
+| WCS                                                                          | Integration Required | `core/src/astrometry/wcs/`                                                                                        |
+| Shared image viewer                                                          | Implemented          | `web/src/viewer/` (overlays in image pixels, zoom/pan in `transform.ts`)                                          |
+| Overlays                                                                     | Partial              | Reticle only (`web/src/viewer/Reticle.tsx`)                                                                       |
+| Planetarium, search, inspector, time, observer                               | Implemented          | `web/src/sky/`, `api/src/sky/`                                                                                    |
+| FOV and optical presets                                                      | Implemented          | `web/src/sky/framing.ts` (gnomonic outline, position angle)                                                       |
+| HiPS surveys                                                                 | Integration Required | `core/src/adapters/sky/hips2fits.ts`, `core/src/astronomy/sky/spatial/healpix.ts`                                 |
+| Eclipses (solar, lunar, maps)                                                | Integration Required | `core/src/astronomy/events/eclipse/`                                                                              |
+| Calculator formulas                                                          | Integration Required | `core/src/astronomy/formulas.ts` (pure, importable by `web`)                                                      |
+| Alpaca server                                                                | Integration Required | `core/src/devices/alpaca/server.ts`, `discovery.ts`                                                               |
+| PHD2 and built-in guider                                                     | Integration Required | `core/src/devices/guiding/phd2.ts`, `core/src/observation/guiding/`                                               |
+| Auto focus                                                                   | Integration Required | `core/src/observation/focus/autofocus.ts`                                                                         |
+| DARV, TPPA                                                                   | Integration Required | `core/src/observation/alignment/`                                                                                 |
+| Flat analysis and exposure                                                   | Integration Required | `core/src/imaging/analysis/flat/` (no wizard flow)                                                                |
+| Sequencer                                                                    | Planned              | No engine exists in `core` or `api`                                                                               |
+| Notifications                                                                | Planned              | The top bar bell is static                                                                                        |
+| Power, weather, safety monitor, GPS devices                                  | Planned              | Toolkit managers only, no commanders; not managed by `api`                                                        |
 
 ## Workspace Responsibility Matrix
 
 Each feature has exactly one place in the UI. Workspaces share services, not interfaces.
 
-| Workspace | Responsibility                                     | Features                                                                                                                       | Registry                                                     |
-| --------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| Capture   | Acquisition and assisted operation of equipment    | Camera Capture, Mount Nudge, Guiding, Auto Focus, DARV, TPPA, Flat Wizard                                                      | `CAPTURE_MODE_DEFINITIONS` (`web/src/capture/modes.ts`)      |
-| Images    | Documents and hardware-independent image work      | Inspector, Plate Solver, Star Detection, Streak Detection, Processing; later Annotation, Crosshair, Calibrator, ROI, FOV, Grid | `IMAGE_TOOL_DEFINITIONS` (`web/src/images/tools.ts`)         |
-| Sky       | Exploration, planning, contextual mount control    | Planetarium, search, inspector, observer, time, layers, FOV, slew; later Framing with HiPS                                     | panel views in `SkyWorkspace.tsx`                            |
-| Tools     | Standalone utilities, no camera or document needed | Calculator, Solar Eclipse Map, Lunar Eclipse Map, Alpaca Server                                                                | `TOOL_DEFINITIONS` (`web/src/tools/tools.ts`), `/tools/<id>` |
-| Sequencer | Configuring and observing server-run automation    | Planned                                                                                                                        | a future entry in `WORKSPACE_IDS`                            |
+| Workspace                           | Responsibility                                             | Features                                                                                                                       | Registry                                                                              |
+| ----------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| Capture                             | Acquisition and assisted operation of equipment            | Camera Capture, Mount Nudge, Guiding, Auto Focus, DARV, TPPA, Flat Wizard                                                      | `CAPTURE_MODE_DEFINITIONS` (`web/src/capture/modes.ts`)                               |
+| Images                              | Documents and hardware-independent image work              | Inspector, Plate Solver, Star Detection, Streak Detection, Processing; later Annotation, Crosshair, Calibrator, ROI, FOV, Grid | `IMAGE_TOOL_DEFINITIONS` (`web/src/images/tools.ts`)                                  |
+| Sky                                 | Exploration, planning, contextual mount control            | Planetarium, search, inspector, observer, time, layers, FOV, slew; later Framing with HiPS                                     | panel views in `SkyWorkspace.tsx`                                                     |
+| Tools                               | Standalone utilities, no camera or document needed         | Calculator, Solar Eclipse Map, Lunar Eclipse Map, Alpaca Server                                                                | `TOOL_DEFINITIONS` (`web/src/tools/tools.ts`), `/tools/<id>`                          |
+| Sequencer                           | Configuring and observing server-run automation            | Planned                                                                                                                        | a future entry in `WORKSPACE_IDS`                                                     |
+| Equipment Control (Management page) | Manual control of every device of the profile's connection | Mount, guide output, focuser, filter wheel, rotator, cover, flat panel, dew heater, dome, camera cooling                       | `CONTROLS` (`web/src/equipment-control/DeviceDetail.tsx`), `/equipment[/<device id>]` |
 
 Rules:
 
@@ -101,18 +104,29 @@ There is **one** image store, `ImageStore` in `api/src/images.ts`, and the scien
 
 Requirements are declared by each registry; availability is evaluated by `roleAvailability` (`web/src/equipment/availability.ts`): ready, busy, or the role state that prevents use.
 
-| Feature        | Requires (besides the view's camera)              | Holds                                        | Conflicts with                                 |
-| -------------- | ------------------------------------------------- | -------------------------------------------- | ---------------------------------------------- |
-| Camera Capture | —                                                 | camera                                       | Auto Focus, Flat Wizard, TPPA, DARV, sequencer |
-| Mount Nudge    | Mount                                             | camera (loop), mount (moves)                 | slew, TPPA, DARV, guiding                      |
-| Guiding        | a guiding provider (PHD2 manages its own devices) | provider session; mount pulses when built-in | DARV, Mount Nudge, slews without dither settle |
-| Auto Focus     | Focuser                                           | camera, focuser                              | Camera Capture, sequencer                      |
-| DARV           | Mount                                             | camera, mount                                | guiding, Mount Nudge                           |
-| TPPA           | Mount; a plate solver                             | camera, mount                                | Mount Nudge, slew, guiding                     |
-| Flat Wizard    | — (filter wheel and flat panel optional)          | camera; wheel/panel when used                | Camera Capture                                 |
-| Sky slew       | Mount                                             | mount                                        | any mount operation                            |
+| Feature                   | Requires (besides the view's camera)              | Holds                                        | Conflicts with                                                      |
+| ------------------------- | ------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------- |
+| Camera Capture            | —                                                 | camera                                       | Auto Focus, Flat Wizard, TPPA, DARV, sequencer                      |
+| Mount Nudge               | Mount                                             | camera (loop), mount (moves)                 | slew, TPPA, DARV, guiding                                           |
+| Guiding                   | a guiding provider (PHD2 manages its own devices) | provider session; mount pulses when built-in | DARV, Mount Nudge, slews without dither settle                      |
+| Auto Focus                | Focuser                                           | camera, focuser                              | Camera Capture, sequencer                                           |
+| DARV                      | Mount                                             | camera, mount                                | guiding, Mount Nudge                                                |
+| TPPA                      | Mount; a plate solver                             | camera, mount                                | Mount Nudge, slew, guiding                                          |
+| Flat Wizard               | — (filter wheel and flat panel optional)          | camera; wheel/panel when used                | Camera Capture                                                      |
+| Sky slew                  | Mount                                             | mount                                        | any mount operation                                                 |
+| Equipment Control motion  | the device shown                                  | the physical device (hardware id)            | any operation of the same physical device                           |
+| Equipment Control setting | the device shown                                  | the physical device, for the command only    | any operation of the same physical device; cooling during a capture |
 
 Conflicts are resolved by the arbiter on the server, never only in the browser, because several tabs (and profiles) may address the same device.
+
+## Equipment Control Contract
+
+- The page lists the devices of the active profile's connection only, grouped by hardware id, so the interfaces of one physical device (a flip-flat's cover and flat panel, a mount and its guide output) appear once. Opening it, switching devices, or reloading never connects, disconnects, or commands anything.
+- Every command goes through `api` under the shared contract of `api/src/commands.ts`: settings answer 204 once applied, motions answer 202 with an operation id and report their outcome only through `operation:updated`. Durable requests carry a client token, so a repeated request never moves a device twice. Errors carry a stable `code`.
+- Stops never wait for a lease: `POST …/stop` cancels the operation of the physical device and sends the commander's `stopMotion`. A filter wheel has no abort. Guide pulse stops never cancel another operation of the mount.
+- Manual motion held by a lease (mount nudge, dome rotation) shares `api/src/leases.ts` and `web/src/press.ts`.
+- Values shown are those the devices report; forms and sliders only hold pending values until an explicit action.
+- Known driver differences: Alpaca mounts expose only Go Home (no find or set home, no set park, no flip); Alpaca domes cannot unpark or rotate manually; Alpaca focusers have no sync or reverse; Alpaca rotators have no home. Pier side and the INDI Alignment Subsystem are reported but have no commander, so they are read-only; power, weather, safety monitor, and GPS devices are not managed. The simulator has no composite cover with a heater; that path is tested with a fake client.
 
 ## Sky Framing Integration Contract
 
@@ -169,6 +183,6 @@ Run before every delivery, as CI does (`.github/workflows/test.yml`):
 | 6   | Capture   | Capture service over `CameraCapturer` under the registry; frames as `capture` image documents | —          |
 | 7   | Capture   | Camera Capture mode panel and viewer frames                                                   | 6          |
 | 8   | Images    | Plate solving and star detection routes by image id, results keyed by id; overlays            | —          |
-| 9   | Capture   | Device capabilities in `DeviceSummary`; an `unsupported` availability state                   | —          |
+| 9   | Capture   | An `unsupported` availability state in Capture, over the control states (now in `api`)        | —          |
 | 10  | Capture   | Mount Nudge, Auto Focus, DARV, TPPA, Flat Wizard, Guiding (PHD2)                              | 6, 8, 9    |
 | 11  | Sequencer | Sequencer service and workspace                                                               | 6, 10      |

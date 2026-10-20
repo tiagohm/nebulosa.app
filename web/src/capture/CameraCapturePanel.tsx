@@ -286,7 +286,7 @@ function CameraSettings({ settings, capabilities, disabled, onChange }: CameraSe
 					{cooler && `Cooler ${cooler.enabled === false ? 'off' : `${Math.round(cooler.power)} %`}`}
 				</p>
 			)}
-			<Button variant="ghost" size="sm" className="self-start px-1" onClick={() => setOpen(!open)}>
+			<Button variant="ghost" className="self-start px-1" onClick={() => setOpen(!open)}>
 				{open ? 'Hide settings' : 'Show settings'}
 			</Button>
 			{open && (

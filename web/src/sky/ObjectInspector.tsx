@@ -76,7 +76,7 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 				{designations.length > 0 && <p className="m-0 text-xs leading-5 text-ink-200">{designations.join(' · ')}</p>}
 				{selection.detailsError && <Note danger>Details unavailable: {selection.detailsError}</Note>}
 				<div>
-					<Button variant="secondary" size="sm" onClick={onShowFraming}>
+					<Button variant="secondary" onClick={onShowFraming}>
 						Show Framing
 					</Button>
 				</div>
@@ -209,7 +209,7 @@ function ObserverSection({ position, events, hasObserver, onSetObserver, isSolar
 			<PanelSection title="Visibility">
 				<p className="m-0 text-ink-300">Altitude, azimuth, rise, and set need the observer&apos;s location.</p>
 				<div>
-					<Button variant="secondary" size="sm" onClick={onSetObserver}>
+					<Button variant="secondary" onClick={onSetObserver}>
 						Set Location
 					</Button>
 				</div>

@@ -137,18 +137,18 @@ export function DisplayAdjustments({ documentKey, info, view }: DisplayAdjustmen
 			</Group>
 
 			<div className="mt-1 flex flex-wrap gap-2">
-				<Button size="sm" disabled={status === 'processing' || invalid} onClick={() => void applyDisplay(imagesState, documentKey)}>
+				<Button disabled={status === 'processing' || invalid} onClick={() => void applyDisplay(imagesState, documentKey)}>
 					Apply to View
 				</Button>
-				<Button size="sm" variant="secondary" disabled={!view.display.applied || sameDisplaySettings(settings, view.display.applied)} onClick={() => revertDisplay(imagesState, documentKey)}>
+				<Button variant="secondary" disabled={!view.display.applied || sameDisplaySettings(settings, view.display.applied)} onClick={() => revertDisplay(imagesState, documentKey)}>
 					Revert Changes
 				</Button>
-				<Button size="sm" variant="secondary" onClick={() => resetDisplay(imagesState, documentKey)}>
+				<Button variant="secondary" onClick={() => resetDisplay(imagesState, documentKey)}>
 					Reset Parameters
 				</Button>
 			</div>
 			<div className="flex flex-col gap-1 border-t border-line-100 pt-2">
-				<Button size="sm" variant="ghost" className="self-start" disabled={view.deriving || invalid} onClick={() => void createDerivedImage(imagesState, documentKey)}>
+				<Button variant="ghost" className="self-start" disabled={view.deriving || invalid} onClick={() => void createDerivedImage(imagesState, documentKey)}>
 					{view.deriving ? 'Creating Derived Image…' : 'Create Derived Image'}
 				</Button>
 				<p className="m-0 text-xs text-ink-300">Applies the settings above to the image data in floating point and opens the result as a new, unsaved image.</p>

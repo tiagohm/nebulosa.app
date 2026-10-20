@@ -137,7 +137,7 @@ export function FileExplorerModal({ open, title, mode = 'open', defaultName = ''
 			>
 				<IconButton icon="arrow" label="Parent directory (Backspace)" disabled={listing?.parent === undefined} onClick={() => listing?.parent !== undefined && void browse(listing.parent)} />
 				<input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Path on the server" spellCheck={false} className={inputClassName} />
-				<Button type="submit" size="sm" variant="secondary">
+				<Button type="submit" variant="secondary">
 					Go
 				</Button>
 			</form>
@@ -181,19 +181,19 @@ export function FileExplorerModal({ open, title, mode = 'open', defaultName = ''
 			{message && <p className="m-0 mt-3 text-[13px] text-danger">{message}</p>}
 			<div className="mt-4 flex items-center justify-end gap-2">
 				<span className="mr-auto min-w-0 truncate text-[13px] text-ink-300">{choosingDirectory ? (chosenDirectory ?? 'Choose a folder') : saving ? (saveDirectory ? `Saving in ${saveDirectory}` : 'Choose a folder') : chosen ? chosen.name : 'Choose an image file'}</span>
-				<Button variant="secondary" size="sm" onClick={onClose}>
+				<Button variant="secondary" onClick={onClose}>
 					Cancel
 				</Button>
 				{choosingDirectory ? (
-					<Button size="sm" disabled={!chosenDirectory || busy} onClick={() => chosenDirectory && listing && onChoose(chosenDirectory, listing.path)}>
+					<Button disabled={!chosenDirectory || busy} onClick={() => chosenDirectory && listing && onChoose(chosenDirectory, listing.path)}>
 						Select
 					</Button>
 				) : saving ? (
-					<Button size="sm" disabled={!fileName || !saveDirectory || busy} onClick={() => saveDirectory && onChoose(joinPath(saveDirectory, fileName), saveDirectory)}>
+					<Button disabled={!fileName || !saveDirectory || busy} onClick={() => saveDirectory && onChoose(joinPath(saveDirectory, fileName), saveDirectory)}>
 						{busy ? 'Saving…' : 'Save'}
 					</Button>
 				) : (
-					<Button size="sm" disabled={!chosen} onClick={() => chosen && listing && onChoose(chosen.path, listing.path)}>
+					<Button disabled={!chosen} onClick={() => chosen && listing && onChoose(chosen.path, listing.path)}>
 						Open
 					</Button>
 				)}

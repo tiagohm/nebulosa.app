@@ -37,30 +37,28 @@ export function RotatorControls({ device }: InterfaceProps) {
 			<Readout label="State">{rotator.moving ? 'Moving' : 'Idle'}</Readout>
 			{rotator.moving && rotator.canAbort && (
 				<Actions>
-					<Button size="sm" onClick={() => void stopCommand(controlRuntime, { type: 'rotator', deviceId: device.id, action: 'stop' })}>
-						Stop
-					</Button>
+					<Button onClick={() => void stopCommand(controlRuntime, { type: 'rotator', deviceId: device.id, action: 'stop' })}>Stop</Button>
 				</Actions>
 			)}
 			<div className="flex items-end gap-2">
 				<NumberInput className="min-w-0 flex-1" label="Target angle" value={target} min={angle.min} max={angle.max} step={step} suffix="°" onChange={setTarget} />
-				<Button size="sm" disabled={blocked} onClick={() => move('move-to', 'Move To', { angle: target })}>
+				<Button disabled={blocked} onClick={() => move('move-to', 'Move To', { angle: target })}>
 					Move To
 				</Button>
 			</div>
 			<div className="flex items-end gap-2">
 				<NumberInput className="min-w-0 flex-1" label="Relative move" value={delta} step={step} suffix="°" onChange={setDelta} />
-				<Button size="sm" variant="secondary" disabled={blocked || delta === 0} onClick={() => move('move-by', 'Rotate', { delta: -delta })}>
+				<Button variant="secondary" disabled={blocked || delta === 0} onClick={() => move('move-by', 'Rotate', { delta: -delta })}>
 					−
 				</Button>
-				<Button size="sm" variant="secondary" disabled={blocked || delta === 0} onClick={() => move('move-by', 'Rotate', { delta })}>
+				<Button variant="secondary" disabled={blocked || delta === 0} onClick={() => move('move-by', 'Rotate', { delta })}>
 					+
 				</Button>
 			</div>
 			{rotator.canHome && (
 				<Actions>
 					{rotator.canHome && (
-						<Button size="sm" variant="secondary" disabled={blocked} onClick={() => move('home', 'Go Home')}>
+						<Button variant="secondary" disabled={blocked} onClick={() => move('home', 'Go Home')}>
 							Go Home
 						</Button>
 					)}

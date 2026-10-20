@@ -36,7 +36,7 @@ export function FilterWheelControls({ device }: InterfaceProps) {
 			{wheel.count > 0 && (
 				<div className="flex items-end gap-2">
 					<Select className="min-w-0 flex-1" label="Target filter" options={slots} value={slots.includes(target) ? target : slots[0]} format={(value) => slotLabel(wheel, Number(value))} onChange={setTarget} />
-					<Button size="sm" disabled={busy || wheel.moving || slot === wheel.position} onClick={() => void startCommand(controlRuntime, { type: 'wheel', deviceId: device.id, action: 'move', label: 'Change Filter', body: { slot } })}>
+					<Button disabled={busy || wheel.moving || slot === wheel.position} onClick={() => void startCommand(controlRuntime, { type: 'wheel', deviceId: device.id, action: 'move', label: 'Change Filter', body: { slot } })}>
 						Change Filter
 					</Button>
 				</div>
@@ -49,11 +49,10 @@ export function FilterWheelControls({ device }: InterfaceProps) {
 							<TextInput key={index} label={`Slot ${index + 1}`} value={name} onChange={(e) => setNames(names.map((n, i) => (i === index ? e.target.value : n)))} />
 						))}
 						<Actions>
-							<Button size="sm" variant="secondary" onClick={() => setNames(undefined)}>
+							<Button variant="secondary" onClick={() => setNames(undefined)}>
 								Cancel
 							</Button>
 							<Button
-								size="sm"
 								disabled={busy || wheel.moving}
 								onClick={async () => {
 									if (await sendCommand(controlRuntime, { type: 'wheel', deviceId: device.id, action: 'names', label: 'Rename', body: { names: names.map((name) => name.trim()) } })) setNames(undefined)
@@ -65,7 +64,7 @@ export function FilterWheelControls({ device }: InterfaceProps) {
 					</>
 				) : (
 					<Actions>
-						<Button size="sm" variant="ghost" disabled={wheel.count === 0} onClick={() => setNames(Array.from({ length: wheel.count }, (_, slot) => wheel.names[slot] ?? ''))}>
+						<Button variant="ghost" disabled={wheel.count === 0} onClick={() => setNames(Array.from({ length: wheel.count }, (_, slot) => wheel.names[slot] ?? ''))}>
 							Edit Names
 						</Button>
 					</Actions>

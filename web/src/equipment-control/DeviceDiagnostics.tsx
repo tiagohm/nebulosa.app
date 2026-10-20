@@ -38,7 +38,7 @@ function InterfaceDiagnostics({ device }: { readonly device: DeviceSummary }) {
 			<Readout label="Interfaces">{device.interfaces.join(', ')}</Readout>
 			<Readout label="Driver">{device.driver.executable || '—'}</Readout>
 			<Readout label="Driver version">{device.driver.version || '—'}</Readout>
-			<Readout label="Capabilities">{capabilities.length > 0 ? capabilities.map(([key, value]) => `${key} ${value ? 'yes' : 'no'}`).join(', ') : state ? 'none declared' : 'not reported yet'}</Readout>
+			<Readout label="Capabilities">{capabilities.length > 0 ? capabilities.map(([key, value]) => `${key}: ${value ? 'yes' : 'no'}`).join(', ') : state ? 'none declared' : 'not reported yet'}</Readout>
 			<Readout label="Operations">{running.length > 0 ? running.map((operation) => `${operation.kind} (${operation.operationId})`).join(', ') : 'none'}</Readout>
 			<Readout label="Last error">{control.errors[device.id] ?? runtime.errors[device.id] ?? 'none'}</Readout>
 			{state && <pre className="m-0 max-h-60 overflow-auto rounded-sm bg-base-200 p-2 font-mono text-[11px] leading-4 whitespace-pre-wrap text-ink-200">{JSON.stringify(state, undefined, 2)}</pre>}

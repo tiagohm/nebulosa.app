@@ -37,11 +37,11 @@ export function DewHeaterControls({ device }: InterfaceProps) {
 			<Slider label="Duty cycle" value={value} min={dutyCycle.min} max={dutyCycle.max} step={step} onChange={setPending} />
 			<Actions>
 				{pending !== undefined && (
-					<Button size="sm" variant="secondary" onClick={() => setPending(undefined)}>
+					<Button variant="secondary" onClick={() => setPending(undefined)}>
 						Discard
 					</Button>
 				)}
-				<Button size="sm" disabled={busy || pending === undefined || pending === dutyCycle.value} onClick={() => void apply()}>
+				<Button disabled={busy || pending === undefined || pending === dutyCycle.value} onClick={() => void apply()}>
 					Apply Duty Cycle
 				</Button>
 			</Actions>

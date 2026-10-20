@@ -58,7 +58,7 @@ export interface ConfirmButtonProps extends Omit<ButtonProps, 'onClick'> {
 
 // Button that opens a confirmation dialog and runs its command only once confirmed. Used for commands that
 // redefine a reference (sync, set home, set park) or start a long physical search.
-export function ConfirmButton({ title, message, confirmLabel, onConfirm, size = 'sm', variant = 'secondary', ...props }: ConfirmButtonProps) {
+export function ConfirmButton({ title, message, confirmLabel, onConfirm, size = 'md', variant = 'secondary', ...props }: ConfirmButtonProps) {
 	const [open, setOpen] = useState(false)
 
 	return (
@@ -67,11 +67,10 @@ export function ConfirmButton({ title, message, confirmLabel, onConfirm, size = 
 			<Modal open={open} onClose={() => setOpen(false)} title={title} className="max-w-md">
 				<div className="m-0 text-[13px] leading-5 text-ink-200">{message}</div>
 				<div className="mt-5 flex justify-end gap-2">
-					<Button size="sm" variant="secondary" onClick={() => setOpen(false)}>
+					<Button variant="secondary" onClick={() => setOpen(false)}>
 						Cancel
 					</Button>
 					<Button
-						size="sm"
 						data-autofocus
 						onClick={() => {
 							setOpen(false)

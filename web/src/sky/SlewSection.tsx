@@ -71,11 +71,11 @@ export function SlewSection({ target, targetName, observer }: SlewSectionProps) 
 	return (
 		<PanelSection title="Mount">
 			<div className="flex flex-wrap gap-2">
-				<Button variant="secondary" size="sm" disabled={!!blocker} title={blocker} onClick={confirm}>
+				<Button variant="secondary" disabled={!!blocker} title={blocker} onClick={confirm}>
 					Slew to Object
 				</Button>
 				{moving && (
-					<Button variant="secondary" size="sm" disabled={!runtime.state?.canAbort} onClick={() => void stopMount(mountRuntime)}>
+					<Button variant="secondary" disabled={!runtime.state?.canAbort} onClick={() => void stopMount(mountRuntime)}>
 						Stop
 					</Button>
 				)}
@@ -106,10 +106,10 @@ export function SlewSection({ target, targetName, observer }: SlewSectionProps) 
 					)}
 				</div>
 				<div className="mt-5 flex justify-end gap-2">
-					<Button size="sm" variant="secondary" onClick={() => setPreview(undefined)}>
+					<Button variant="secondary" onClick={() => setPreview(undefined)}>
 						Cancel
 					</Button>
-					<Button size="sm" disabled={preview?.status === 'ready' && preview.position.altitude !== undefined && preview.position.altitude < 0} onClick={slew} data-autofocus>
+					<Button disabled={preview?.status === 'ready' && preview.position.altitude !== undefined && preview.position.altitude < 0} onClick={slew} data-autofocus>
 						Slew
 					</Button>
 				</div>

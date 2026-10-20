@@ -32,14 +32,14 @@ export function FlatPanelControls({ device }: InterfaceProps) {
 			<Checkbox label="Light on" checked={panel.enabled} disabled={busy} onChange={(enabled) => void sendCommand(controlRuntime, { type: 'flatPanel', deviceId: device.id, action: 'light', label: enabled ? 'Light on' : 'Light off', body: { enabled } })} />
 			{intensity.max > intensity.min && (
 				<>
-					<Slider label="Brightness" value={value} min={intensity.min} max={intensity.max} step={step} onChange={setPending} />
+					<Slider disabled={!panel.enabled} label="Brightness" value={value} min={intensity.min} max={intensity.max} step={step} onChange={setPending} />
 					<Actions>
 						{pending !== undefined && (
-							<Button size="sm" variant="secondary" onClick={() => setPending(undefined)}>
+							<Button variant="secondary" onClick={() => setPending(undefined)}>
 								Discard
 							</Button>
 						)}
-						<Button size="sm" disabled={busy || pending === undefined || pending === intensity.value} onClick={() => void apply()}>
+						<Button disabled={!panel.enabled || busy || pending === undefined || pending === intensity.value} onClick={() => void apply()}>
 							Apply Brightness
 						</Button>
 					</Actions>

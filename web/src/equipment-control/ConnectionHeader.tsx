@@ -31,10 +31,10 @@ export function ConnectionHeader() {
 				<span className="truncate">{connection ? `${connection.name} · ${connection.type} · ${STATUS_LABELS[status]}` : 'No connection selected'}</span>
 			</div>
 			<div className="ml-auto flex flex-none items-center gap-2">
-				<Button size="sm" variant="secondary" onClick={refresh} disabled={status !== 'connected'}>
+				<Button variant="secondary" onClick={refresh} disabled={status !== 'connected'}>
 					Refresh
 				</Button>
-				<Button size="sm" variant="secondary" onClick={() => (connectionState.open = true)}>
+				<Button variant="secondary" onClick={() => (connectionState.open = true)}>
 					Connections
 				</Button>
 			</div>

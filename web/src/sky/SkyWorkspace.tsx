@@ -158,7 +158,7 @@ export function SkyWorkspace() {
 						/>
 						<IconButton icon="frame" label="Framing" pressed={sky.panel === 'framing'} onClick={() => togglePanel('framing')} />
 						<IconButton icon="layers" label="Display" pressed={sky.panel === 'display'} onClick={() => togglePanel('display')} />
-						<Button variant="secondary" size="sm" onClick={() => togglePanel('observer')} className="max-w-56 truncate">
+						<Button variant="secondary" onClick={() => togglePanel('observer')} className="max-w-56 truncate">
 							{observer ? (observer.name ?? 'Location') : 'Set Location'}
 						</Button>
 					</div>
@@ -173,7 +173,7 @@ export function SkyWorkspace() {
 								title="The sky catalog could not be loaded"
 								description={error}
 								action={
-									<Button variant="secondary" size="sm" onClick={() => map.load()}>
+									<Button variant="secondary" onClick={() => map.load()}>
 										Retry
 									</Button>
 								}

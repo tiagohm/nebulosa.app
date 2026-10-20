@@ -67,9 +67,7 @@ export function DomeControls({ device }: InterfaceProps) {
 				{dome.canSlave && <Readout label="Slaving">{dome.slaved ? 'Following the mount' : 'Off'}</Readout>}
 				{moving && dome.canAbort && (
 					<Actions>
-						<Button size="sm" onClick={() => void stopCommand(controlRuntime, { type: 'dome', deviceId: device.id, action: 'stop' })}>
-							Abort
-						</Button>
+						<Button onClick={() => void stopCommand(controlRuntime, { type: 'dome', deviceId: device.id, action: 'stop' })}>Abort</Button>
 					</Actions>
 				)}
 				{dome.slaved && <Notice>The driver moves the dome with the mount; switch slaving off to move it from here.</Notice>}
@@ -79,7 +77,7 @@ export function DomeControls({ device }: InterfaceProps) {
 					{dome.canSetAzimuth && (
 						<div className="flex items-end gap-2">
 							<NumberInput className="min-w-0 flex-1" label="Target azimuth" value={azimuth} min={0} max={360} step={1} suffix="°" onChange={setAzimuth} />
-							<Button size="sm" disabled={blocked} onClick={() => run('slew', 'Slew', { azimuth })}>
+							<Button disabled={blocked} onClick={() => run('slew', 'Slew', { azimuth })}>
 								Slew
 							</Button>
 						</div>
@@ -87,10 +85,10 @@ export function DomeControls({ device }: InterfaceProps) {
 					{dome.canRelativeMove && (
 						<div className="flex items-end gap-2">
 							<NumberInput className="min-w-0 flex-1" label="Rotate by" value={delta} min={0} max={360} step={1} suffix="°" onChange={setDelta} />
-							<Button size="sm" variant="secondary" disabled={blocked || !(delta > 0)} onClick={() => run('move-by', 'Rotate', { delta: -delta })}>
+							<Button variant="secondary" disabled={blocked || !(delta > 0)} onClick={() => run('move-by', 'Rotate', { delta: -delta })}>
 								CCW
 							</Button>
-							<Button size="sm" variant="secondary" disabled={blocked || !(delta > 0)} onClick={() => run('move-by', 'Rotate', { delta })}>
+							<Button variant="secondary" disabled={blocked || !(delta > 0)} onClick={() => run('move-by', 'Rotate', { delta })}>
 								CW
 							</Button>
 						</div>
@@ -98,7 +96,7 @@ export function DomeControls({ device }: InterfaceProps) {
 					{dome.canSetAltitude && (
 						<div className="flex items-end gap-2">
 							<NumberInput className="min-w-0 flex-1" label="Shutter altitude" value={altitude} min={Math.round(degrees(dome.altitude.min))} max={Math.round(degrees(dome.altitude.max))} step={1} suffix="°" onChange={setAltitude} />
-							<Button size="sm" variant="secondary" disabled={blocked} onClick={() => run('altitude', 'Altitude', { altitude })}>
+							<Button variant="secondary" disabled={blocked} onClick={() => run('altitude', 'Altitude', { altitude })}>
 								Move Shutter
 							</Button>
 						</div>
@@ -111,21 +109,21 @@ export function DomeControls({ device }: InterfaceProps) {
 					<Actions>
 						{dome.hasShutter && dome.canSetShutter && (
 							<>
-								<Button size="sm" variant="secondary" disabled={busy || moving || dome.shutterState === 'OPEN'} onClick={() => run('shutter', 'Open shutter', { open: true })}>
+								<Button variant="secondary" disabled={busy || moving || dome.shutterState === 'OPEN'} onClick={() => run('shutter', 'Open shutter', { open: true })}>
 									Open Shutter
 								</Button>
-								<Button size="sm" variant="secondary" disabled={busy || moving || dome.shutterState === 'CLOSED'} onClick={() => run('shutter', 'Close shutter', { open: false })}>
+								<Button variant="secondary" disabled={busy || moving || dome.shutterState === 'CLOSED'} onClick={() => run('shutter', 'Close shutter', { open: false })}>
 									Close Shutter
 								</Button>
 							</>
 						)}
 						{dome.canPark && !dome.parked && (
-							<Button size="sm" variant="secondary" disabled={busy || moving || dome.slaved} onClick={() => run('park', 'Park')}>
+							<Button variant="secondary" disabled={busy || moving || dome.slaved} onClick={() => run('park', 'Park')}>
 								Park
 							</Button>
 						)}
 						{dome.canUnpark && dome.parked && (
-							<Button size="sm" variant="secondary" disabled={busy || moving} onClick={() => run('unpark', 'Unpark')}>
+							<Button variant="secondary" disabled={busy || moving} onClick={() => run('unpark', 'Unpark')}>
 								Unpark
 							</Button>
 						)}
@@ -152,7 +150,7 @@ export function DomeControls({ device }: InterfaceProps) {
 					{dome.canSetSpeed && (
 						<div className="flex items-end gap-2">
 							<NumberInput className="min-w-0 flex-1" label="Speed" value={speed} min={dome.speed.min} max={dome.speed.max} step={dome.speed.step > 0 ? dome.speed.step : 0.1} suffix="RPM" onChange={setSpeed} />
-							<Button size="sm" variant="secondary" disabled={busy || speed === dome.speed.value} onClick={() => void set('speed', 'Speed', { value: speed })}>
+							<Button variant="secondary" disabled={busy || speed === dome.speed.value} onClick={() => void set('speed', 'Speed', { value: speed })}>
 								Apply
 							</Button>
 						</div>
@@ -162,7 +160,7 @@ export function DomeControls({ device }: InterfaceProps) {
 							<Checkbox label="Backlash compensation" checked={dome.backlashEnabled} disabled={busy || moving} onChange={(enabled) => void set('backlash', 'Backlash', { enabled })} />
 							<div className="flex items-end gap-2">
 								<NumberInput className="min-w-0 flex-1" label="Backlash" value={backlash} min={dome.backlash.min} max={dome.backlash.max} step={dome.backlash.step > 0 ? dome.backlash.step : 1} suffix="steps" onChange={setBacklash} />
-								<Button size="sm" variant="secondary" disabled={busy || moving || backlash === dome.backlash.value} onClick={() => void set('backlash', 'Backlash', { steps: backlash })}>
+								<Button variant="secondary" disabled={busy || moving || backlash === dome.backlash.value} onClick={() => void set('backlash', 'Backlash', { steps: backlash })}>
 									Apply
 								</Button>
 							</div>

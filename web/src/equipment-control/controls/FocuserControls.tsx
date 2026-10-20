@@ -36,15 +36,13 @@ export function FocuserControls({ device }: InterfaceProps) {
 			{focuser.temperature !== undefined && <Readout label="Temperature">{`${focuser.temperature.toFixed(1)} °C`}</Readout>}
 			{focuser.moving && focuser.canAbort && (
 				<Actions>
-					<Button size="sm" onClick={() => void stopCommand(controlRuntime, { type: 'focuser', deviceId: device.id, action: 'stop' })}>
-						Stop
-					</Button>
+					<Button onClick={() => void stopCommand(controlRuntime, { type: 'focuser', deviceId: device.id, action: 'stop' })}>Stop</Button>
 				</Actions>
 			)}
 			{focuser.canAbsoluteMove && (
 				<div className="flex items-end gap-2">
 					<NumberInput className="min-w-0 flex-1" label="Target position" value={target} min={position.min} max={position.max} step={step} suffix="steps" onChange={setTarget} />
-					<Button size="sm" disabled={busy || focuser.moving || target === position.value} onClick={() => move('move-to', 'Move To', { position: target })}>
+					<Button disabled={busy || focuser.moving || target === position.value} onClick={() => move('move-to', 'Move To', { position: target })}>
 						Move To
 					</Button>
 				</div>
@@ -52,10 +50,10 @@ export function FocuserControls({ device }: InterfaceProps) {
 			{(focuser.canRelativeMove || focuser.canAbsoluteMove) && (
 				<div className="flex items-end gap-2">
 					<NumberInput className="min-w-0 flex-1" label="Relative move" value={steps} min={1} max={position.max - position.min || undefined} step={step} suffix="steps" onChange={setSteps} />
-					<Button size="sm" variant="secondary" disabled={busy || focuser.moving || !(steps > 0)} onClick={() => move('move', 'Move In', { direction: 'IN', steps })}>
+					<Button variant="secondary" disabled={busy || focuser.moving || !(steps > 0)} onClick={() => move('move', 'Move In', { direction: 'IN', steps })}>
 						Move In
 					</Button>
-					<Button size="sm" variant="secondary" disabled={busy || focuser.moving || !(steps > 0)} onClick={() => move('move', 'Move Out', { direction: 'OUT', steps })}>
+					<Button variant="secondary" disabled={busy || focuser.moving || !(steps > 0)} onClick={() => move('move', 'Move Out', { direction: 'OUT', steps })}>
 						Move Out
 					</Button>
 				</div>

@@ -41,7 +41,7 @@ export function ImageInspector({ document, view, onOpen, onSaveAs }: ImageToolPa
 			<EmptyState
 				title="No image open"
 				action={
-					<Button size="sm" variant="secondary" onClick={onOpen}>
+					<Button variant="secondary" onClick={onOpen}>
 						Open Image
 					</Button>
 				}
@@ -159,9 +159,7 @@ function Derivation({ document, provenance, infoId, onSaveAs }: DerivationProps)
 			<Property label="Created (UTC)">{formatDate(provenance.createdAt)}</Property>
 			<Property label="State">{document.unsaved ? <span className="text-accent">Unsaved</span> : 'Saved'}</Property>
 			<div className="mt-1 flex flex-wrap items-center gap-2">
-				<Button size="sm" onClick={onSaveAs}>
-					Save As…
-				</Button>
+				<Button onClick={onSaveAs}>Save As…</Button>
 				<a href={downloadUrl({ id: infoId }, 'fits')} download className="text-xs text-accent hover:underline">
 					Download FITS
 				</a>

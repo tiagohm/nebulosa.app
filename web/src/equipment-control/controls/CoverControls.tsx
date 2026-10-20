@@ -22,17 +22,13 @@ export function CoverControls({ device }: InterfaceProps) {
 			<Readout label="State">{cover.parking ? 'Moving' : cover.parked ? 'Closed' : 'Open'}</Readout>
 			{cover.canPark ? (
 				<Actions>
-					<Button size="sm" variant="secondary" disabled={busy || cover.parking || !cover.parked} onClick={() => move('open')}>
+					<Button variant="secondary" disabled={busy || cover.parking || !cover.parked} onClick={() => move('open')}>
 						Open
 					</Button>
-					<Button size="sm" variant="secondary" disabled={busy || cover.parking || cover.parked} onClick={() => move('close')}>
+					<Button variant="secondary" disabled={busy || cover.parking || cover.parked} onClick={() => move('close')}>
 						Close
 					</Button>
-					{cover.parking && cover.canAbort && (
-						<Button size="sm" onClick={() => void stopCommand(controlRuntime, { type: 'cover', deviceId: device.id, action: 'stop' })}>
-							Stop
-						</Button>
-					)}
+					{cover.parking && cover.canAbort && <Button onClick={() => void stopCommand(controlRuntime, { type: 'cover', deviceId: device.id, action: 'stop' })}>Stop</Button>}
 				</Actions>
 			) : (
 				<Notice>This cover does not accept open and close commands.</Notice>

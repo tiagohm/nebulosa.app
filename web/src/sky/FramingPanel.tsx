@@ -107,15 +107,15 @@ function CustomSource({ framing, hasTarget }: { readonly framing?: Readonly<SkyF
 					<p className="m-0 text-ink-300">No presets yet. A preset describes a telescope or lens and a camera, owned or not.</p>
 				)}
 				<div className="flex flex-wrap gap-2">
-					<Button variant="secondary" size="sm" onClick={() => createOpticalPreset(profileState, `Preset ${presets.length + 1}`)}>
+					<Button variant="secondary" onClick={() => createOpticalPreset(profileState, `Preset ${presets.length + 1}`)}>
 						New
 					</Button>
 					{preset && (
 						<>
-							<Button variant="secondary" size="sm" onClick={() => duplicateOpticalPreset(profileState, preset.id)}>
+							<Button variant="secondary" onClick={() => duplicateOpticalPreset(profileState, preset.id)}>
 								Duplicate
 							</Button>
-							<Button variant="ghost" size="sm" onClick={() => deleteOpticalPreset(profileState, preset.id)}>
+							<Button variant="ghost" onClick={() => deleteOpticalPreset(profileState, preset.id)}>
 								Delete
 							</Button>
 						</>
@@ -196,7 +196,7 @@ function EquipmentSource({ framing, telescope, hasTarget }: { readonly framing?:
 					<>
 						<Note>The {sensorSourceName(sensorSource)} has not reported its sensor: assign and connect it in the Equipment Setup, or enter a sensor manually.</Note>
 						<div>
-							<Button variant="secondary" size="sm" onClick={() => setSensorSource(profileState, 'manual')}>
+							<Button variant="secondary" onClick={() => setSensorSource(profileState, 'manual')}>
 								Enter Manually
 							</Button>
 						</div>

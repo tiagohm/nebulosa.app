@@ -79,7 +79,7 @@ export function DeviceDetail({ group }: DeviceDetailProps) {
 						{groupTypes(group)} · {pending ? (pending === 'connect' ? 'Connecting' : 'Disconnecting') : primary.connected ? 'Connected' : 'Disconnected'}
 					</p>
 				</div>
-				<Button size="sm" variant="secondary" disabled={!!pending} onClick={() => void switchDevice(deviceState, primary.id, !primary.connected)}>
+				<Button variant="secondary" disabled={!!pending} onClick={() => void switchDevice(deviceState, primary.id, !primary.connected)}>
 					{primary.connected ? 'Disconnect' : 'Connect'}
 				</Button>
 			</header>

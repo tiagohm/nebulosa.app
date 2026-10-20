@@ -252,7 +252,7 @@ function DeviceAction({ device, status }: DeviceActionProps) {
 	const connected = device.connected
 
 	return (
-		<Button size="sm" variant={connected ? 'secondary' : 'primary'} disabled={busy} onClick={() => void switchDevice(deviceState, device.id, !connected)}>
+		<Button variant={connected ? 'secondary' : 'primary'} disabled={busy} onClick={() => void switchDevice(deviceState, device.id, !connected)}>
 			{status === 'connecting' ? 'Connecting…' : status === 'disconnecting' ? 'Disconnecting…' : connected ? 'Disconnect' : 'Connect'}
 		</Button>
 	)

@@ -91,7 +91,7 @@ export function TimeController({ timeZone }: TimeControllerProps) {
 
 	return (
 		<div className="flex min-h-12 flex-none flex-wrap items-center gap-2 border-t border-line-100 bg-base-100 px-2 py-1.5">
-			<Button variant={clock.mode === 'now' ? 'primary' : 'secondary'} size="sm" onClick={() => setSkyTimeNow(skyClock)} title="Show the real current time">
+			<Button variant={clock.mode === 'now' ? 'primary' : 'secondary'} onClick={() => setSkyTimeNow(skyClock)} title="Show the real current time">
 				Now
 			</Button>
 			<IconButton icon="stepBack" label={`Back ${step}`} onClick={() => stepSkyTime(skyClock, -STEPS[step])} />

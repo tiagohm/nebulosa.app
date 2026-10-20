@@ -61,7 +61,7 @@ export function CaptureWorkspace() {
 					title="No cameras configured."
 					description="Assign a Main Camera or Guide Camera in Equipment Setup."
 					action={
-						<Button size="sm" variant="secondary" onClick={() => (deviceState.open = true)}>
+						<Button variant="secondary" onClick={() => (deviceState.open = true)}>
 							Equipment Setup
 						</Button>
 					}
@@ -157,7 +157,7 @@ function CameraState({ camera: { role, status } }: CameraStateProps) {
 					title="Camera unavailable."
 					description={`The connection that provides the ${label} is not open.`}
 					action={
-						<Button size="sm" variant="secondary" onClick={() => (connectionState.open = true)}>
+						<Button variant="secondary" onClick={() => (connectionState.open = true)}>
 							Connections
 						</Button>
 					}
@@ -174,7 +174,7 @@ function CameraState({ camera: { role, status } }: CameraStateProps) {
 					title={status === 'error' ? 'Camera error.' : 'Camera disconnected.'}
 					description={`Connect the ${label} in Equipment Setup.`}
 					action={
-						<Button size="sm" variant="secondary" onClick={() => (deviceState.open = true)}>
+						<Button variant="secondary" onClick={() => (deviceState.open = true)}>
 							Equipment Setup
 						</Button>
 					}

@@ -76,14 +76,12 @@ export function ObserverPanel({ observer, onDone }: ObserverPanelProps) {
 					<Select label="Time Zone" options={TIME_ZONES} value={timeZone} onChange={setTimeZone} format={(zone) => zone || `Browser (${BROWSER_TIME_ZONE})`} />
 					{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
 					<div className="flex flex-wrap gap-2">
-						<Button type="submit" size="sm">
-							Save
-						</Button>
-						<Button variant="secondary" size="sm" onClick={onDone}>
+						<Button type="submit">Save</Button>
+						<Button variant="secondary" onClick={onDone}>
 							Cancel
 						</Button>
 						{observer && (
-							<Button variant="ghost" size="sm" onClick={clear}>
+							<Button variant="ghost" onClick={clear}>
 								Clear Location
 							</Button>
 						)}

@@ -43,7 +43,7 @@ export function ImagesWorkspace() {
 	const Panel = definition.panel ?? ImageInspector
 	const toolSelector = <Select options={IMAGE_TOOLS} value={tool} disabled={!document} format={(t) => IMAGE_TOOL_DEFINITIONS[t].label} disabledReason={imageToolUnavailable} onChange={(t) => document && selectImageTool(imagesState, document.key, t)} className="w-52 max-sm:w-40" />
 	const openButton = (
-		<Button size="sm" variant="secondary" onClick={() => setChoosing(true)}>
+		<Button variant="secondary" onClick={() => setChoosing(true)}>
 			<Icon name="folder" className="size-4" />
 			Open Image
 		</Button>
@@ -97,11 +97,10 @@ export function ImagesWorkspace() {
 			<Modal open={!!closingDocument} onClose={() => setClosing(undefined)} title="Close unsaved image?" className="max-w-md">
 				<p className="m-0 text-[13px]">{closingDocument?.name} exists only in memory. Closing it discards it.</p>
 				<div className="mt-5 flex flex-wrap justify-end gap-2">
-					<Button size="sm" variant="secondary" onClick={() => setClosing(undefined)}>
+					<Button variant="secondary" onClick={() => setClosing(undefined)}>
 						Cancel
 					</Button>
 					<Button
-						size="sm"
 						variant="secondary"
 						onClick={() => {
 							if (closing) closeImage(imagesState, closing)
@@ -111,7 +110,6 @@ export function ImagesWorkspace() {
 						Discard
 					</Button>
 					<Button
-						size="sm"
 						data-autofocus
 						onClick={() => {
 							if (closing) setSaving({ key: closing, closeAfter: true })

@@ -54,7 +54,7 @@ export function MountInspector({ mountRef, observer, onShowFraming }: MountInspe
 				<p className="m-0 text-base leading-6 font-semibold text-ink-100">{same ? runtime.target?.name || 'Mount' : 'Mount'}</p>
 				<p className="m-0 text-ink-300">Mount position</p>
 				<div>
-					<Button variant="secondary" size="sm" onClick={onShowFraming}>
+					<Button variant="secondary" onClick={onShowFraming}>
 						Show Framing
 					</Button>
 				</div>

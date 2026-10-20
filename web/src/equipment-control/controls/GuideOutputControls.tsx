@@ -42,15 +42,11 @@ export function GuideOutputControls({ device }: InterfaceProps) {
 					<NumberInput label="Pulse duration" value={duration} min={1} max={MAX_DURATION} step={100} suffix="ms" onChange={setDuration} />
 					<Actions>
 						{DIRECTIONS.map(([direction, label]) => (
-							<Button key={direction} size="sm" variant="secondary" disabled={busy || output.pulsing} onClick={() => void startCommand(controlRuntime, { type: 'guideOutput', deviceId: device.id, action: 'pulse', label: `Pulse ${label}`, body: { direction, duration } })}>
+							<Button key={direction} variant="secondary" disabled={busy || output.pulsing} onClick={() => void startCommand(controlRuntime, { type: 'guideOutput', deviceId: device.id, action: 'pulse', label: `Pulse ${label}`, body: { direction, duration } })}>
 								{label}
 							</Button>
 						))}
-						{output.pulsing && (
-							<Button size="sm" onClick={() => void stopCommand(controlRuntime, { type: 'guideOutput', deviceId: device.id, action: 'stop' })}>
-								Stop Pulses
-							</Button>
-						)}
+						{output.pulsing && <Button onClick={() => void stopCommand(controlRuntime, { type: 'guideOutput', deviceId: device.id, action: 'stop' })}>Stop Pulses</Button>}
 					</Actions>
 				</>
 			) : (
@@ -67,7 +63,6 @@ export function GuideOutputControls({ device }: InterfaceProps) {
 							</div>
 							<Actions>
 								<Button
-									size="sm"
 									variant="secondary"
 									disabled={busy || !rates}
 									onClick={async () => {

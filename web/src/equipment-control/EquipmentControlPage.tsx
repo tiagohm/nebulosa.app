@@ -27,7 +27,7 @@ function openConnections() {
 
 // Button opening the connections modal.
 const CONNECTIONS_ACTION = (
-	<Button size="sm" variant="secondary" onClick={openConnections}>
+	<Button variant="secondary" onClick={openConnections}>
 		Open Connections
 	</Button>
 )

@@ -43,7 +43,7 @@ export function CameraControls({ device }: InterfaceProps) {
 		<>
 			<PanelSection title="Camera">
 				<Readout label="Model">{camera.name}</Readout>
-				<Readout label="Sensor">{sensor ? `${sensor.width} × ${sensor.height} px · ${sensor.pixelSize} µm` : 'Not reported'}</Readout>
+				<Readout label="Sensor">{sensor ? `${sensor.width} × ${sensor.height} px · ${sensor.pixelSize.toFixed(2)} µm` : 'Not reported'}</Readout>
 				{camera.exposure && <Readout label="Exposure">{`${camera.exposure.min} s to ${camera.exposure.max} s`}</Readout>}
 				{camera.gain && <Readout label="Gain">{`${camera.gain.min} to ${camera.gain.max}`}</Readout>}
 				{camera.offset && <Readout label="Offset">{`${camera.offset.min} to ${camera.offset.max}`}</Readout>}
@@ -62,7 +62,7 @@ export function CameraControls({ device }: InterfaceProps) {
 					{camera.canSetTemperature && (
 						<div className="flex items-end gap-2">
 							<NumberInput className="min-w-0 flex-1" label="Target temperature" value={target} min={-60} max={40} step={0.5} suffix="°C" onChange={setTarget} />
-							<Button size="sm" disabled={busy || capturing} onClick={() => void sendCommand(controlRuntime, { type: 'camera', deviceId: device.id, action: 'temperature', label: 'Target temperature', body: { value: target } })}>
+							<Button disabled={busy || capturing} onClick={() => void sendCommand(controlRuntime, { type: 'camera', deviceId: device.id, action: 'temperature', label: 'Target temperature', body: { value: target } })}>
 								Apply
 							</Button>
 						</div>

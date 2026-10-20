@@ -80,11 +80,10 @@ export function SaveImageModal({ document, onClose, onSaved }: SaveImageModalPro
 			<Modal open={!!replacing} onClose={() => setReplacing(undefined)} title="Replace file?" className="max-w-md">
 				<p className="m-0 text-[13px] break-all">{replacing} already exists. Replacing it overwrites its contents.</p>
 				<div className="mt-5 flex justify-end gap-2">
-					<Button size="sm" variant="secondary" onClick={() => setReplacing(undefined)}>
+					<Button variant="secondary" onClick={() => setReplacing(undefined)}>
 						Cancel
 					</Button>
 					<Button
-						size="sm"
 						disabled={busy}
 						onClick={() => {
 							const path = replacing

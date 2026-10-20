@@ -86,9 +86,7 @@ export function MountControls({ device }: InterfaceProps) {
 				<Notice>{horizontal ? 'Altitude and azimuth are geometric, for the profile observer.' : 'Set an observer in the Sky workspace to see altitude and azimuth.'}</Notice>
 				{moving && mount.canAbort && (
 					<Actions>
-						<Button size="sm" onClick={() => void stopCommand(controlRuntime, { type: 'mount', deviceId: device.id, action: 'stop' })}>
-							Abort Motion
-						</Button>
+						<Button onClick={() => void stopCommand(controlRuntime, { type: 'mount', deviceId: device.id, action: 'stop' })}>Abort Motion</Button>
 					</Actions>
 				)}
 			</PanelSection>
@@ -115,16 +113,16 @@ export function MountControls({ device }: InterfaceProps) {
 					<Actions>
 						{mount.canPark &&
 							(mount.parked ? (
-								<Button size="sm" variant="secondary" disabled={busy || moving} onClick={() => run('unpark', 'Unpark')}>
+								<Button variant="secondary" disabled={busy || moving} onClick={() => run('unpark', 'Unpark')}>
 									Unpark
 								</Button>
 							) : (
-								<Button size="sm" variant="secondary" disabled={busy || moving} onClick={() => run('park', 'Park')}>
+								<Button variant="secondary" disabled={busy || moving} onClick={() => run('park', 'Park')}>
 									Park
 								</Button>
 							))}
 						{mount.canHome && (
-							<Button size="sm" variant="secondary" disabled={busy || moving || mount.parked} onClick={() => run('home', 'Go Home')}>
+							<Button variant="secondary" disabled={busy || moving || mount.parked} onClick={() => run('home', 'Go Home')}>
 								Go Home
 							</Button>
 						)}
@@ -172,7 +170,7 @@ export function MountControls({ device }: InterfaceProps) {
 				<PanelSection title="Manual Motion">
 					{nudgeable ? (
 						<Actions>
-							<Button size="sm" variant="secondary" onClick={() => navigate(routeState, captureRoute(profile.settings.capture, activeSetup(profile), 'mount-nudge'))}>
+							<Button variant="secondary" onClick={() => navigate(routeState, captureRoute(profile.settings.capture, activeSetup(profile), 'mount-nudge'))}>
 								Open Mount Nudge
 							</Button>
 						</Actions>
@@ -230,16 +228,16 @@ function TargetSection({ mount, deviceId, busy, observer }: TargetSectionProps) 
 				<TextInput label={yLabel} value={y} onChange={(e) => setY(e.target.value)} placeholder="-05 23 28" />
 			</div>
 			<Actions>
-				<Button size="sm" variant="ghost" onClick={useCurrent}>
+				<Button variant="ghost" onClick={useCurrent}>
 					Use Current
 				</Button>
 				{mount.canGoTo && (
-					<Button size="sm" disabled={blocked || !observer} onClick={() => slew('goto')}>
+					<Button disabled={blocked || !observer} onClick={() => slew('goto')}>
 						GoTo
 					</Button>
 				)}
 				{mount.canFlip && (
-					<Button size="sm" variant="secondary" disabled={blocked || !observer} onClick={() => slew('flip')}>
+					<Button variant="secondary" disabled={blocked || !observer} onClick={() => slew('flip')}>
 						Flip
 					</Button>
 				)}

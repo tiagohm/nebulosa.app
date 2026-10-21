@@ -22,6 +22,8 @@ await build({
 		'process.env.NEBULOSA_IMAGE_WORKER': JSON.stringify(`./${relative(ROOT, IMAGE_WORKER).replaceAll('\\', '/')}`),
 	},
 	plugins: [bunTailwindPlugin],
+	reactCompiler: true,
+	reactCompilerOutputMode: 'client',
 	compile: {
 		outfile: join(ROOT, '.dist', process.platform === 'win32' ? 'nebulosa.exe' : 'nebulosa'),
 		autoloadBunfig: false,

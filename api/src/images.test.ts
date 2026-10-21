@@ -365,7 +365,7 @@ describe('capture documents', () => {
 		images.close(info.id)
 	})
 
-	test('refuses bytes that are not an image', async () => {
-		await expect(images.openCapture(new TextEncoder().encode('not an image'), 'Camera #2', capture)).rejects.toThrow('The camera frame is not a FITS or XISF image')
+	test('refuses bytes that are not an image', () => {
+		expect(images.openCapture(new TextEncoder().encode('not an image'), 'Camera #2', capture)).rejects.toThrow('The camera frame is not a FITS or XISF image')
 	})
 })

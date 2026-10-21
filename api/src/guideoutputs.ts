@@ -41,7 +41,7 @@ export class GuideOutputCommands implements Disposable {
 		readonly client: ClientResolver,
 		readonly operations: OperationRegistry,
 	) {
-		this.#commander = new GuideOutputCommander(devices.guideOutputs)
+		this.#commander = new GuideOutputCommander(devices.guideOutputs, operations.arbiter)
 	}
 
 	// Responds with the state of a guide output, or 404 when the connection is not open or has no such output.

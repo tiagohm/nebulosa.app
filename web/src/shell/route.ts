@@ -4,8 +4,9 @@ import { proxy } from 'valtio'
 // and for Tools the standalone tool shown. The URL path is the source of truth, so each tab navigates
 // independently and a reload reopens the same context; the camera and mode selected last are
 // remembered by the active profile, which builds the Capture route opened from the navigation rail.
-// Paths are /capture/<camera>/<mode>, /images, /sky, /tools, /tools/<tool>, and the Equipment Control page
-// /equipment and /equipment/<device id>, which is not a workspace of the navigation rail; anything else opens
+// Paths are /capture/<camera>/<mode>, /images, /sky, /tools, /tools/<tool>, the Equipment Control page
+// /equipment and /equipment/<device id>, and the Settings page /settings/external-tools and
+// /settings/external-tools/<tool id>, which are not workspaces of the navigation rail; anything else opens
 // the default route.
 
 // Main workspaces, in navigation order.
@@ -63,9 +64,18 @@ export interface EquipmentRoute {
 	readonly device?: string
 }
 
+// Location in the Settings page, whose only section is External Tools: the external program shown, if any.
+// The page is opened from the Management menu, not from the navigation rail.
+export interface SettingsRoute {
+	// Settings page.
+	readonly workspace: 'settings'
+	// Id of the external program shown, as the server registers it; absent when none is selected.
+	readonly tool?: string
+}
+
 // Location within the application: a workspace and, for Capture, the camera view and its mode, for
-// Tools, the tool shown, or the Equipment Control page and its device.
-export type Route = CaptureRoute | ToolsRoute | EquipmentRoute | { readonly workspace: Exclude<WorkspaceId, 'capture' | 'tools'> }
+// Tools, the tool shown, the Equipment Control page and its device, or the Settings page and its external program.
+export type Route = CaptureRoute | ToolsRoute | EquipmentRoute | SettingsRoute | { readonly workspace: Exclude<WorkspaceId, 'capture' | 'tools'> }
 
 // Route opened for an empty or unknown path.
 export const DEFAULT_ROUTE: Route = { workspace: 'capture', camera: 'main', mode: 'camera' }
@@ -108,11 +118,12 @@ export function captureModeOf(value: unknown): CaptureMode | undefined {
 // Returns the route of a URL path. An unknown workspace gives DEFAULT_ROUTE; a Capture path without a
 // known camera opens the main camera, reading the path written before camera views existed
 // (/capture/<mode>); a mode id of an earlier version opens the mode it became, and an unknown mode
-// opens the camera mode; an unknown tool opens the Tools catalog;
+// opens the camera mode; an unknown tool opens the Tools catalog; any Settings path opens External Tools;
 // extra segments are ignored.
 export function parseRoute(pathname: string): Route {
 	const [workspace = '', first = '', second = ''] = pathname.split('/').filter(Boolean)
 	if (workspace === 'equipment') return first ? { workspace, device: first } : { workspace }
+	if (workspace === 'settings') return first === 'external-tools' && second ? { workspace, tool: second } : { workspace }
 	if (!isWorkspaceId(workspace)) return DEFAULT_ROUTE
 
 	if (workspace === 'capture') {
@@ -131,6 +142,7 @@ export function routePath(route: Route): string {
 	if (route.workspace === 'capture') return `/capture/${route.camera}/${route.mode}`
 	if (route.workspace === 'tools' && route.tool) return `/tools/${route.tool}`
 	if (route.workspace === 'equipment') return route.device ? `/equipment/${encodeURIComponent(route.device)}` : '/equipment'
+	if (route.workspace === 'settings') return route.tool ? `/settings/external-tools/${encodeURIComponent(route.tool)}` : '/settings/external-tools'
 	return `/${route.workspace}`
 }
 

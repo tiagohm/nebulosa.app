@@ -1,4 +1,3 @@
-import type { Server } from 'bun'
 import { type CameraCoolerRequest, CameraCommands, type CameraTemperatureRequest } from './cameras'
 import { CameraCaptures, type CaptureRequest } from './captures'
 import { type CommandRequest, errorResponse } from './commands'
@@ -513,6 +512,6 @@ export const routes = {
 	...skyRoutes,
 	'/api/ws': {
 		// Upgrades to the event WebSocket; Bun sends the handshake response itself.
-		GET: (req: Request, server: Server<undefined>) => (server.upgrade(req) ? undefined : new Response('WebSocket upgrade failed', { status: 400 })),
+		GET: (req, server) => (server.upgrade(req) ? undefined : new Response('WebSocket upgrade failed', { status: 400 })),
 	},
-} as const as Readonly<Bun.Serve.Routes<undefined, string>>
+} as Readonly<Bun.Serve.Routes<undefined, string>>

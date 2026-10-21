@@ -105,7 +105,7 @@ export function createSkyRoutes(services: SkyServices) {
 		},
 		'/api/sky/constellations/:code': {
 			// A constellation by its upper-case IAU code; 404 when unknown.
-			GET: (req: Bun.BunRequest<'/api/sky/constellations/:code'>) => {
+			GET: (req) => {
 				const constellation = constellationDetails(constellations, req.params.code.toUpperCase())
 				return constellation ? Response.json(constellation) : errorResponse('Constellation not found', 404)
 			},
@@ -133,7 +133,7 @@ export function createSkyRoutes(services: SkyServices) {
 		},
 		'/api/sky/objects/:id': {
 			// Catalog data of a star or deep-sky object; 404 when unknown.
-			GET: (req: Bun.BunRequest<'/api/sky/objects/:id'>) => {
+			GET: (req) => {
 				const object = catalogObject(catalog, +req.params.id)
 				return object ? Response.json(object) : errorResponse('Object not found', 404)
 			},
@@ -141,7 +141,7 @@ export function createSkyRoutes(services: SkyServices) {
 		'/api/sky/position': {
 			// Position of an object, with its events for an observer. 404 for an unknown catalog object, 502
 			// when Horizons rejects the target, and 503 when no provider can compute it.
-			POST: async (req: Request) => {
+			POST: async (req) => {
 				const { target: ref, time, observer, mode } = (await req.json()) as SkyPositionRequest
 				const target = await resolveTarget(services, ref, req.signal)
 				if (!target) return errorResponse('Object not found', 404)
@@ -159,7 +159,7 @@ export function createSkyRoutes(services: SkyServices) {
 		},
 		'/api/sky/bodies': {
 			// Local positions of the Sun, the Moon, the planets, and Pluto, for drawing them on the map.
-			POST: async (req: Request) => {
+			POST: async (req) => {
 				const { time, observer } = (await req.json()) as SkyBodiesRequest
 				const bodies: SkyBodyPosition[] = []
 
@@ -171,5 +171,5 @@ export function createSkyRoutes(services: SkyServices) {
 				return Response.json(bodies)
 			},
 		},
-	} as const
+	} as const satisfies Bun.Serve.Routes<undefined, string>
 }

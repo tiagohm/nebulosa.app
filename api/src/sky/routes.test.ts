@@ -31,7 +31,7 @@ test('star data honors the requested time', async () => {
 
 test('position of a catalog object with events', async () => {
 	const body = { target: { kind: 'catalog', id: 32263 }, time: Date.UTC(2026, 9, 18, 12), observer: { latitude: -23.5, longitude: -46.6, elevation: 760 } }
-	const response = await routes['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify(body) }))
+	const response = await routes['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify(body) }) as never)
 	const { position, events } = (await response.json()) as SkyPositionResponse
 	expect(position.source).toBe('local')
 	expect(position.altitude).toBeDefined()
@@ -39,11 +39,11 @@ test('position of a catalog object with events', async () => {
 })
 
 test('position errors', async () => {
-	const unknown = await routes['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify({ target: { kind: 'catalog', id: 5 }, time: 0 }) }))
+	const unknown = await routes['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify({ target: { kind: 'catalog', id: 5 }, time: 0 }) }) as never)
 	expect(unknown.status).toBe(404)
 
 	// SBDB and Horizons are both offline, and without elements there is no local model.
-	const minor = await routes['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify({ target: { kind: 'minorBody', spkId: '20000001', designation: '1' }, time: 0 }) }))
+	const minor = await routes['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify({ target: { kind: 'minorBody', spkId: '20000001', designation: '1' }, time: 0 }) }) as never)
 	expect(minor.status).toBe(503)
 })
 
@@ -54,7 +54,7 @@ test('minor body search is unavailable offline', async () => {
 })
 
 test('local positions of the major bodies', async () => {
-	const response = await routes['/api/sky/bodies'].POST(new Request('http://localhost/api/sky/bodies', { method: 'POST', body: JSON.stringify({ time: Date.UTC(2026, 9, 18, 12) }) }))
+	const response = await routes['/api/sky/bodies'].POST(new Request('http://localhost/api/sky/bodies', { method: 'POST', body: JSON.stringify({ time: Date.UTC(2026, 9, 18, 12) }) }) as never)
 	const bodies = (await response.json()) as SkyBodyPosition[]
 	expect(bodies.map((e) => e.code)).toEqual(['10', '301', '199', '299', '499', '599', '699', '799', '899', '999'])
 	expect(bodies[0].magnitude).toBe(-26.74)
@@ -66,7 +66,7 @@ test('constellations are located at their label', async () => {
 	expect(((await details.json()) as { name: string }).name).toBe('Orion')
 
 	const body = { target: { kind: 'constellation', code: 'ORI' }, time: Date.UTC(2026, 9, 18, 12) }
-	const response = await withLabels['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify(body) }))
+	const response = await withLabels['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify(body) }) as never)
 	const { position } = (await response.json()) as SkyPositionResponse
 	expect(position.source).toBe('local')
 	expect(position.rightAscensionJ2000).toBe(1.45)

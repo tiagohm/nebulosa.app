@@ -25,6 +25,15 @@ describe('parse', () => {
 		expect(routePath({ workspace: 'equipment', device: 'abc123' })).toBe('/equipment/abc123')
 	})
 
+	test('reads the Settings page and its external program', () => {
+		expect(parseRoute('/settings')).toEqual({ workspace: 'settings' })
+		expect(parseRoute('/settings/external-tools')).toEqual({ workspace: 'settings' })
+		expect(parseRoute('/settings/external-tools/astap/extra')).toEqual({ workspace: 'settings', tool: 'astap' })
+		expect(parseRoute('/settings/other/astap')).toEqual({ workspace: 'settings' })
+		expect(routePath({ workspace: 'settings' })).toBe('/settings/external-tools')
+		expect(routePath({ workspace: 'settings', tool: 'astap' })).toBe('/settings/external-tools/astap')
+	})
+
 	test('reads capture paths written before camera views', () => {
 		expect(parseRoute('/capture/mount-nudge')).toEqual({ workspace: 'capture', camera: 'main', mode: 'mount-nudge' })
 	})

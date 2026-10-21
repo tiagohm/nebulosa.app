@@ -33,6 +33,7 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
 | Image documents (FITS/XISF)                                                  | Implemented          | `api/src/images.ts` + `images.worker.ts`, `web/src/images/images.ts`                                              |
 | Display pipeline, derive, save                                               | Implemented          | same as above                                                                                                     |
 | Histogram and statistics                                                     | Planned              | Inspector shows a placeholder                                                                                     |
+| External tools settings (ASTAP)                                              | Implemented          | `api/src/externaltools.ts`, `web/src/settings/`, route `/settings/external-tools` opened from Management          |
 | Plate solving                                                                | Integration Required | `core/src/astrometry/solvers/` (ASTAP, astrometry.net)                                                            |
 | Star detection                                                               | Integration Required | `core/src/imaging/stars/detector.ts`                                                                              |
 | Streak detection                                                             | Integration Required | `core/src/imaging/analysis/streak/`                                                                               |
@@ -142,6 +143,15 @@ Conflicts are resolved by the arbiter on the server, never only in the browser, 
 - Eclipse maps: computed in `api` from `core/src/astronomy/events/eclipse/*`, which already produce geographic geometry and SVG paths. A coastline basemap must be chosen in that delivery; no map library is added before that.
 - Alpaca Server: an `api` service over `AlpacaServer`, started and stopped explicitly, bound to localhost by default, publishing only an explicit allowlist of devices. Devices imported from Alpaca connections are never exported, to avoid publication loops. Its state is published as events. The Tools view only controls it.
 
+## External Tools Contract
+
+- External programs the backend runs are registered in `api/src/externaltools.ts` with the capabilities their adapters provide. Only ASTAP is registered (plate solving and star detection, through `core/src/astrometry/solvers/astap.ts`); the native `detectStars` and the libastrometry binding are not external tools, and astrometry.net is not registered while no `api` service uses it. No route runs an arbitrary command.
+- Settings belong to the server instance, never to a profile or a browser: Management → Settings → External Tools (`/settings/external-tools/<id>`) edits a draft, and only Save writes it, with the revision it was edited from; a save from an outdated revision is refused with 409, and every change is published as `externalTool:updated`.
+- With no executable saved, a program is Not Configured and `ExternalToolsStore.resolve` returns undefined, so its services must refuse to run it; no platform default path is assumed. A service resolves the settings once when an operation starts and keeps that snapshot until the operation ends, so a save applies to the next operations without a restart.
+- Test checks a draft on the server's filesystem without saving it: the path exists, is a regular file, and may be executed (on Windows any existing file passes); a bare name is looked up on the server's PATH. It never starts the program, so it proves neither that the program runs nor that it analyzes images, and the version is reported as unknown. Only a check of the saved settings becomes the program's latest check, kept in memory until the server restarts.
+- There is no authentication: any client that can reach the API can change the executable the server runs and check paths of its filesystem, like `/api/files` lists them. Keep `APP_HOST` on localhost when untrusted clients can reach the network.
+- Nothing configured ASTAP before these settings existed, so there is nothing to migrate.
+
 ## Capture–Sequencer Compatibility Report
 
 - There is no sequencer engine to integrate. It will be an `api` service composed of the same services Capture uses: capture via `CameraCapturer`, filter, focus, dither, and mount commands through the commanders, all under the `OperationRegistry`.
@@ -157,6 +167,7 @@ Conflicts are resolved by the arbiter on the server, never only in the browser, 
 | Active profile                                       | sessionStorage per tab                         |
 | Route, document view, zoom/pan                       | tab memory                                     |
 | Image pixels and analysis results                    | `api` image store                              |
+| External tool settings                               | `api`, `~/Nebulosa/settings.json`, versioned   |
 | Connections, devices, operations, sessions, services | `api`                                          |
 
 Profile format changes add a version and a case in `migrate`; older documents are read, and newer ones are never overwritten.

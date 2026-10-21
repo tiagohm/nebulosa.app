@@ -10,6 +10,7 @@ import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equi
 import { onOpen, subscribe } from './events'
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
 import { loadProfiles, persistProfiles, profileState } from './profile/profile'
+import { externalToolsState, handleExternalToolEvent, refreshExternalTools } from './settings/externaltools'
 import { routeState, watchHistory } from './shell/route'
 import { handleMountEvent, mountRuntime, refreshMount } from './sky/mount'
 import { handleSensorEvent, refreshSensors, sensorRuntime } from './sky/sensors'
@@ -38,11 +39,13 @@ const stops = [
 		handleSensorEvent(sensorRuntime, event)
 		handleCaptureEvent(captureRuntime, event)
 		handleNudgeEvent(nudgeRuntime, event)
+		handleExternalToolEvent(externalToolsState, event)
 	}),
 	// Every (re)open resynchronizes the open connections, the watched devices and their control states, the followed mount, the
 	// running operations, the camera sensors, the captures and camera capabilities, and the nudged mount
-	// and its nudge sessions, and the dome rotation sessions, which may have changed while the socket was closed.
+	// and its nudge sessions, the dome rotation sessions, and the external tool settings, which may have changed while the socket was closed.
 	onOpen(() => {
+		void refreshExternalTools(externalToolsState)
 		void refreshServers(connectionState)
 		void refreshDevices(deviceState)
 		void refreshStates(controlRuntime)

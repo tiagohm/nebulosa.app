@@ -5,7 +5,7 @@ import { deviceState } from '../equipment/equipment'
 import { ProfileMenu } from '../profile/ProfileMenu'
 import { navigate, routeState } from '../shell/route'
 import { Icon } from '../ui/Icon'
-import { Menu, MenuItem, NavigationMenu } from '../ui/NavigationMenu'
+import { Menu, MenuItem, NavigationMenu, SubMenu } from '../ui/NavigationMenu'
 
 // Application top bar: logo and the primary-action menus on the left, the connection status,
 // notifications, and the profile switcher on the right. Notifications are a visual placeholder for now.
@@ -30,6 +30,9 @@ export function TopBar() {
 						<MenuItem onSelect={() => (connectionState.open = true)}>Connections</MenuItem>
 						<MenuItem onSelect={() => (deviceState.open = true)}>Equipment Setup</MenuItem>
 						<MenuItem onSelect={() => navigate(routeState, { workspace: 'equipment' })}>Equipment Control</MenuItem>
+						<SubMenu id="settings" label="Settings">
+							<MenuItem onSelect={() => navigate(routeState, { workspace: 'settings' })}>External Tools</MenuItem>
+						</SubMenu>
 					</Menu>
 				</NavigationMenu>
 			</div>

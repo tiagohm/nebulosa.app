@@ -6,6 +6,7 @@ import { connections } from './connection'
 import { CoverCommands } from './covers'
 import { DewHeaterCommands, type DewHeaterDutyCycleRequest } from './dewheaters'
 import { type DomeAltitudeRequest, type DomeBacklashRequest, DomeCommands, type DomeMotionRequest, type DomeMoveByRequest, type DomeShutterRequest, type DomeSlavingRequest, type DomeSlewRequest, type DomeSpeedRequest, type DomeSyncRequest } from './domes'
+import { createExternalToolsRoutes, DEFAULT_SETTINGS_FILE, ExternalToolsStore } from './externaltools'
 import { handleListDirectory } from './files'
 import { FlatPanelCommands, type FlatPanelIntensityRequest, type FlatPanelLightRequest } from './flatpanels'
 import { FocuserCommands, type FocuserMoveRequest, type FocuserMoveToRequest, type FocuserReverseRequest, type FocuserSyncRequest } from './focusers'
@@ -52,6 +53,7 @@ export type {
 } from './devices'
 export type { DewHeaterDutyCycleRequest } from './dewheaters'
 export type { DomeAltitudeRequest, DomeBacklashRequest, DomeMotionEvent, DomeMotionRequest, DomeMotionSession, DomeMotionStartResponse, DomeMoveByRequest, DomeShutterRequest, DomeSlavingRequest, DomeSlewRequest, DomeSpeedRequest, DomeSyncRequest } from './domes'
+export type { ExternalToolCapability, ExternalToolCheck, ExternalToolCheckCode, ExternalToolCheckStatus, ExternalToolConfig, ExternalToolConfigStatus, ExternalToolDefinition, ExternalToolEvent, ExternalToolId, ExternalToolSaveRequest, ExternalToolState, ExternalToolTestRequest, TimeoutLimits } from './externaltools'
 export type { LeasedPhase, LeasedSession, LeasedStartResponse, LeaseOptions } from './leases'
 export type { DirectoryListing, FileEntry } from './files'
 export type { FlatPanelIntensityRequest, FlatPanelLightRequest } from './flatpanels'
@@ -112,6 +114,9 @@ const domes = new DomeCommands(connections.devices, (id) => connections.client(i
 const cameras = new CameraCommands(connections.devices, (id) => connections.client(id), operations)
 
 const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, broadcast)
+
+// Settings of the external programs, such as ASTAP, read by the services that run them.
+const externalTools = new ExternalToolsStore(DEFAULT_SETTINGS_FILE, broadcast)
 
 // Opens a connection, or returns the existing one for the same endpoint. Responds 400 for an invalid
 // body and 502 when the endpoint cannot be reached.
@@ -504,6 +509,7 @@ export const routes = {
 		// Downloads an image document as a FITS or XISF file.
 		GET: (req) => handleDownloadImage(req, req.params.id),
 	},
+	...createExternalToolsRoutes(externalTools),
 	...skyRoutes,
 	'/api/ws': {
 		// Upgrades to the event WebSocket; Bun sends the handshake response itself.

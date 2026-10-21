@@ -13,6 +13,7 @@ import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
 import type { CaptureEvent } from './captures'
 import { type DeviceEvent, DeviceRegistry } from './devices'
 import type { DomeMotionEvent } from './domes'
+import type { ExternalToolEvent } from './externaltools'
 import type { MountNudgeEvent } from './mounts'
 import type { OperationEvent } from './operations'
 
@@ -53,9 +54,9 @@ export type ConnectionStatus = ConnectRequest & {
 export type ConnectionEvent = { readonly type: 'connection:open'; readonly connection: ConnectionStatus } | { readonly type: 'connection:close'; readonly id: string }
 
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the
-// operation events of the operation registry, and the events of the capture, mount nudge, and dome manual
-// rotation services.
-export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent | CaptureEvent | MountNudgeEvent | DomeMotionEvent
+// operation events of the operation registry, the events of the capture, mount nudge, and dome manual
+// rotation services, and the changes of the external program settings.
+export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent | CaptureEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent
 
 // Receiver of connection and device events.
 export type ConnectionListener = (event: ServerEvent) => void

@@ -242,7 +242,7 @@ async function writeAtomically(file: string, text: string) {
 
 // Error code of a failed filesystem call, if any.
 function errorCode(error: unknown) {
-	return Error.isError(error) && 'code' in error ? error.code : undefined
+	return Error.isError(error) && 'code' in error ? (error.code as string) : undefined
 }
 
 // Outcome of inspecting an executable, before timing is added.
@@ -302,8 +302,10 @@ export class ExternalToolsStore {
 
 	// Returns the settings read from the file, reading it on the first call. A missing file gives the defaults.
 	#load(): Promise<LoadedSettings> {
-		this.#loaded ??= readFile(this.file, 'utf-8').then(parseSettings, (error: unknown) => (errorCode(error) === 'ENOENT' ? { tools: defaultTools() } : { tools: defaultTools(), error: 'The settings file cannot be read' }))
-		return this.#loaded
+		return (this.#loaded ??= readFile(this.file, 'utf-8').then(parseSettings, (error: unknown) => {
+			const code = errorCode(error)
+			return code === 'ENOTDIR' || code === 'ENOENT' ? { tools: defaultTools() } : { tools: defaultTools(), error: 'The settings file cannot be read' }
+		}))
 	}
 
 	// Returns the state of a program from loaded settings.

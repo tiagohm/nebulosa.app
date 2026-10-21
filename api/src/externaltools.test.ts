@@ -32,8 +32,10 @@ function store(file = settingsFile()) {
 
 type Handler = (req: Request) => Promise<Response>
 
+type ExternalToolsRoutes = ReturnType<typeof createExternalToolsRoutes>
+
 // Calls a route of the external tools API.
-function call(routes: ReturnType<typeof createExternalToolsRoutes>, path: '/api/settings/external-tools' | '/api/settings/external-tools/:id' | '/api/settings/external-tools/:id/test', method: string, id?: string, body?: unknown) {
+function call(routes: ExternalToolsRoutes, path: keyof ExternalToolsRoutes, method: string, id?: string, body?: unknown) {
 	const handler = (routes[path] as unknown as Record<string, Handler>)[method]
 	const req = new Request(`http://localhost${path.replace(':id', id ?? '')}`, { method, body: body === undefined ? undefined : JSON.stringify(body) })
 	return handler(Object.assign(req, { params: { id } }))

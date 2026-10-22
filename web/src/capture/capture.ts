@@ -230,6 +230,8 @@ export function captureStatus(session: CaptureSession): string {
 			return 'Saving Frame'
 		case 'waiting':
 			return delay ? `Waiting — ${seconds(delay.remainingTime / 1000000)} s` : 'Waiting'
+		case 'analysisWait':
+			return 'Waiting for Analysis Capacity'
 		case 'completed':
 			return 'Completed'
 		case 'stopped':

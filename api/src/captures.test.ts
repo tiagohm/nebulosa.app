@@ -1,13 +1,15 @@
 import { afterAll, afterEach, expect, test } from 'bun:test'
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs'
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { CameraCaptures, type CaptureEvent, type CaptureFrame, type CaptureRequest, type CaptureSession, frameName, sanitizeFileName } from './captures'
 import { ConnectionManager } from './connection'
 import type { CameraCapabilities } from './devices'
+import { ExternalToolsStore } from './externaltools'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry } from './operations'
+import { DEFAULT_ASTAP_SETTINGS, DEFAULT_BUILTIN_SETTINGS, DEFAULT_STAR_ACCEPTANCE, type StarDetectionEvent, StarDetectionService } from './stars'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-captures-'))
 const disposables: Disposable[] = []
@@ -40,12 +42,16 @@ async function setup() {
 	const operations = new OperationRegistry(manager.devices, (event) => operationEvents.push(event))
 	disposables.push(operations)
 	const images = new ImageStore()
+	const tools = new ExternalToolsStore(join(mkdtempSync(join(root, 'settings-')), 'settings.json'))
+	const starEvents: StarDetectionEvent[] = []
+	const stars = new StarDetectionService(images, tools, (event) => starEvents.push(event))
 	const events: CaptureEvent[] = []
 	const captures = new CameraCaptures(
 		manager.devices,
 		(connectionId) => manager.client(connectionId),
 		operations,
 		images,
+		stars,
 		(event) => events.push(event),
 		mkdtempSync(join(root, 'default-')),
 	)
@@ -61,14 +67,14 @@ async function setup() {
 	const frames = () => events.filter((event): event is Extract<CaptureEvent, { type: 'capture:frame' }> => event.type === 'capture:frame').map((event) => event.frame)
 	const ended = () => ['completed', 'stopped', 'aborted', 'failed'].includes(session()?.phase ?? '')
 
-	return { manager, id, client, operations, operationEvents, images, captures, events, camera, cameraId, session, frames, ended }
+	return { manager, id, client, operations, operationEvents, images, tools, stars, starEvents, captures, events, camera, cameraId, session, frames, ended }
 }
 
 test('a single capture saves one frame, previews it, and releases the camera', async () => {
 	const { id, cameraId, captures, operations, operationEvents, images, camera, session, frames, ended } = await setup()
 	const capture = request()
 
-	const response = captures.start(id, cameraId, capture)
+	const response = await captures.start(id, cameraId, capture)
 	expect(response.status).toBe(202)
 	const { sessionId, operationId } = (await response.json()) as { sessionId: string; operationId: string }
 
@@ -97,7 +103,7 @@ test('a fixed capture takes exactly its frames, under unique names, and keeps on
 	const { id, cameraId, captures, images, session, frames, ended } = await setup()
 	const capture = request({ exposureMode: 'fixed', count: 3, delay: 0.05, output: { mode: 'preview-save', directory: mkdtempSync(join(root, 'fixed-')), filenameTemplate: 'm42_{seq}', format: 'FITS' } })
 
-	captures.start(id, cameraId, capture)
+	await captures.start(id, cameraId, capture)
 	await waitUntil(ended)
 	await waitUntil(() => frames().some((frame) => frame.generation === 3 && frame.file === 'saved'))
 
@@ -113,7 +119,7 @@ test('a fixed capture takes exactly its frames, under unique names, and keeps on
 test('stopping a loop during its delay ends it at once with the frames taken', async () => {
 	const { id, cameraId, captures, session, ended } = await setup()
 
-	captures.start(id, cameraId, request({ exposureMode: 'loop', delay: 30 }))
+	await captures.start(id, cameraId, request({ exposureMode: 'loop', delay: 30 }))
 	await waitUntil(() => session()?.phase === 'waiting' && session()!.saved === 1)
 
 	const stoppedAt = performance.now()
@@ -130,7 +136,7 @@ test('preview only writes no file', async () => {
 	const { id, cameraId, captures, session, frames, ended } = await setup()
 	const capture = request({ exposureMode: 'fixed', count: 2, output: { mode: 'preview-only', directory: mkdtempSync(join(root, 'preview-')), format: 'FITS' } })
 
-	captures.start(id, cameraId, capture)
+	await captures.start(id, cameraId, capture)
 	await waitUntil(ended)
 	await waitUntil(() => frames().length > 0)
 
@@ -144,7 +150,7 @@ test('a failed write fails the capture, marks the frame file as failed, and leav
 	const blocker = join(mkdtempSync(join(root, 'blocked-')), 'not-a-directory')
 	writeFileSync(blocker, 'a file')
 
-	captures.start(id, cameraId, request({ exposureMode: 'loop', output: { mode: 'preview-save', directory: join(blocker, 'frames'), format: 'FITS' } }))
+	await captures.start(id, cameraId, request({ exposureMode: 'loop', output: { mode: 'preview-save', directory: join(blocker, 'frames'), format: 'FITS' } }))
 	await waitUntil(ended)
 
 	expect(session()).toMatchObject({ phase: 'failed', reason: 'commandFailed', captured: 1, saved: 0 })
@@ -156,10 +162,10 @@ test('a failed write fails the capture, marks the frame file as failed, and leav
 test('a busy camera refuses a second capture, and abort ends the first', async () => {
 	const { id, cameraId, captures, session, ended } = await setup()
 
-	expect(captures.start(id, cameraId, request({ exposureTime: 30 })).status).toBe(202)
+	expect((await captures.start(id, cameraId, request({ exposureTime: 30 }))).status).toBe(202)
 	await waitUntil(() => session()?.phase === 'exposing')
 
-	const second = captures.start(id, cameraId, request())
+	const second = await captures.start(id, cameraId, request())
 	expect(second.status).toBe(409)
 	expect(await second.json()).toEqual({ error: 'The camera is busy' })
 
@@ -171,7 +177,7 @@ test('a busy camera refuses a second capture, and abort ends the first', async (
 test('disconnecting the camera during the delay fails the capture', async () => {
 	const { id, cameraId, client, manager, captures, session, ended } = await setup()
 
-	captures.start(id, cameraId, request({ exposureMode: 'loop', delay: 30 }))
+	await captures.start(id, cameraId, request({ exposureMode: 'loop', delay: 30 }))
 	await waitUntil(() => session()?.phase === 'waiting')
 	manager.devices.switch(client, cameraId, false)
 
@@ -182,7 +188,7 @@ test('disconnecting the camera during the delay fails the capture', async () => 
 test('an unknown camera is not found', async () => {
 	const { id, captures } = await setup()
 
-	expect(captures.start(id, 'missing', request()).status).toBe(404)
+	expect((await captures.start(id, 'missing', request())).status).toBe(404)
 	expect(captures.stop(id, 'missing').status).toBe(404)
 	expect((await captures.abort(id, 'missing')).status).toBe(404)
 	expect(captures.capabilities(id, 'missing').status).toBe(404)
@@ -201,7 +207,7 @@ test('reports the capabilities of a camera', async () => {
 test('the snapshot keeps the ended session of each camera', async () => {
 	const { id, cameraId, captures, ended } = await setup()
 
-	captures.start(id, cameraId, request())
+	await captures.start(id, cameraId, request())
 	await waitUntil(ended)
 
 	const sessions: readonly CaptureSession[] = captures.snapshot().sessions
@@ -231,3 +237,114 @@ test('mounts the capture routes', async () => {
 	expect((await call('/api/connections/:id/cameras/:deviceId/capture/stop', 'POST')).status).toBe(404)
 	expect((await call('/api/connections/:id/cameras/:deviceId/capture/abort', 'POST')).status).toBe(404)
 })
+
+// Writes an executable standing in for ASTAP's -extract that sleeps, then writes an empty star list next to
+// the input (its second argument) and exits 0, or exits with exitCode without writing anything.
+function fakeAstap(sleep: number, exitCode = 0) {
+	const directory = mkdtempSync(join(root, 'astap-'))
+	mkdirSync(directory, { recursive: true })
+
+	if (process.platform === 'win32') {
+		const path = join(directory, 'astap.cmd')
+		writeFileSync(path, ['@echo off', ...(sleep > 0 ? [`ping -n ${sleep + 1} 127.0.0.1 >nul`] : []), ...(exitCode === 0 ? ['echo x,y,hfd,snr,flux> "%~dpn2.csv"'] : []), `exit /b ${exitCode}`].join('\r\n'))
+		return path
+	}
+
+	const path = join(directory, 'astap')
+	writeFileSync(path, ['#!/bin/sh', ...(sleep > 0 ? [`sleep ${sleep}`] : []), ...(exitCode === 0 ? ['echo x,y,hfd,snr,flux > "${2%.*}.csv"'] : []), `exit ${exitCode}`].join('\n'))
+	chmodSync(path, 0o755)
+	return path
+}
+
+// Saves the ASTAP settings of a store.
+async function configureAstap(tools: ExternalToolsStore, executable: string) {
+	const { revision } = await tools.get('astap')
+	await tools.save('astap', { executable, timeout: 60000 }, revision)
+}
+
+const BUILTIN_ANALYSIS = { policy: 'everyFrame', request: { detector: DEFAULT_BUILTIN_SETTINGS, acceptance: DEFAULT_STAR_ACCEPTANCE } } as const
+const ASTAP_REQUEST = { detector: DEFAULT_ASTAP_SETTINGS, acceptance: DEFAULT_STAR_ACCEPTANCE } as const
+
+// Whether every frame of a session was accounted for by its analysis and none is pending.
+function settled(session: CaptureSession | undefined) {
+	const analysis = session?.analysis
+	return !!analysis && analysis.pending === 0 && analysis.analyzed + analysis.failed + analysis.skipped === session.captured
+}
+
+test('a capture without analysis publishes no analysis state', async () => {
+	const { id, cameraId, captures, ended, session, starEvents } = await setup()
+	await captures.start(id, cameraId, request())
+	await waitUntil(ended)
+
+	expect(session()?.analysis).toBeUndefined()
+	expect(starEvents).toEqual([])
+})
+
+test('Every Frame analyzes each frame of a fixed capture in its own document', async () => {
+	const { id, cameraId, captures, ended, session, frames, starEvents } = await setup()
+	await captures.start(id, cameraId, request({ exposureMode: 'fixed', count: 3, output: { mode: 'preview-only', format: 'FITS' }, analysis: BUILTIN_ANALYSIS }))
+	await waitUntil(() => ended() && settled(session()))
+
+	expect(session()).toMatchObject({ phase: 'completed', captured: 3, analysis: { policy: 'everyFrame', provider: 'builtin', analyzed: 3, pending: 0, failed: 0, skipped: 0, waiting: false } })
+	const analyzed = new Set(starEvents.filter((event) => event.job.state === 'completed').map((event) => event.job.imageId))
+	expect(analyzed.size).toBe(3)
+	expect(new Set(frames().map((frame) => frame.imageId))).toEqual(analyzed)
+	expect(starEvents.filter((event) => event.job.state === 'completed').map((event) => (event.job.origin.kind === 'capture' ? event.job.origin.generation : 0))).toEqual([1, 2, 3])
+})
+
+test('Every Frame holds the next exposure while the analysis lags, without dropping or failing a frame', async () => {
+	const { id, cameraId, captures, ended, session, events, tools } = await setup()
+	await configureAstap(tools, fakeAstap(1))
+	await captures.start(id, cameraId, request({ exposureMode: 'fixed', count: 4, analysis: { policy: 'everyFrame', request: ASTAP_REQUEST } }))
+	await waitUntil(() => ended() && settled(session()), 30000)
+
+	const phases = events.flatMap((event) => (event.type === 'capture:updated' ? [event.session.phase] : []))
+	expect(phases).toContain('analysisWait')
+	expect(session()).toMatchObject({ phase: 'completed', captured: 4, saved: 4, request: { delay: 0 }, analysis: { analyzed: 4, failed: 0, skipped: 0, waiting: false } })
+}, 40000)
+
+test('Latest Frame Only skips the frames still waiting and never holds the capture', async () => {
+	const { id, cameraId, captures, ended, session, events, tools } = await setup()
+	await configureAstap(tools, fakeAstap(1))
+	await captures.start(id, cameraId, request({ exposureMode: 'fixed', count: 6, output: { mode: 'preview-only', format: 'FITS' }, analysis: { policy: 'latestFrame', request: ASTAP_REQUEST } }))
+	await waitUntil(ended, 30000)
+
+	expect(events.some((event) => event.type === 'capture:updated' && event.session.phase === 'analysisWait')).toBeFalse()
+	await waitUntil(() => settled(session()), 30000)
+	const analysis = session()!.analysis!
+	expect(analysis.skipped).toBeGreaterThan(0)
+	expect(analysis.failed).toBe(0)
+	expect(analysis.analyzed).toBeGreaterThan(0)
+}, 40000)
+
+test('a capture analyzed with ASTAP refuses to start while ASTAP is not configured', async () => {
+	const { id, cameraId, captures, operations } = await setup()
+	const response = await captures.start(id, cameraId, request({ analysis: { policy: 'everyFrame', request: ASTAP_REQUEST } }))
+
+	expect(response.status).toBe(422)
+	expect(operations.running()).toEqual([])
+})
+
+test('failing analyses halt the analysis, never the capture', async () => {
+	const { id, cameraId, captures, ended, session, tools } = await setup()
+	await configureAstap(tools, fakeAstap(0, 1))
+	await captures.start(id, cameraId, request({ exposureMode: 'fixed', count: 5, analysis: { policy: 'everyFrame', request: ASTAP_REQUEST } }))
+	await waitUntil(() => ended() && session()?.analysis?.pending === 0, 30000)
+
+	expect(session()).toMatchObject({ phase: 'completed', captured: 5, saved: 5, analysis: { analyzed: 0, failed: 3 } })
+	expect(session()!.analysis!.halted).toContain('3 frames in a row')
+}, 40000)
+
+test('a stop while waiting for analysis capacity ends the capture and lets the accepted analyses finish', async () => {
+	const { id, cameraId, captures, ended, session, tools } = await setup()
+	await configureAstap(tools, fakeAstap(1))
+	await captures.start(id, cameraId, request({ exposureMode: 'loop', analysis: { policy: 'everyFrame', request: ASTAP_REQUEST } }))
+	await waitUntil(() => session()?.phase === 'analysisWait', 30000)
+
+	expect(captures.stop(id, cameraId).status).toBe(204)
+	await waitUntil(ended, 30000)
+	expect(session()?.phase).toBe('stopped')
+	await waitUntil(() => settled(session()), 30000)
+	expect(session()!.analysis).toMatchObject({ failed: 0, skipped: 0, waiting: false })
+	expect(session()!.analysis!.analyzed).toBe(session()!.captured)
+}, 40000)

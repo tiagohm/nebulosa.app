@@ -426,6 +426,20 @@ export class StarDetectionService {
 		return { job: this.#enqueue(imageId, preparation, origin, 'capture', origin.sessionId), skipped, full: false }
 	}
 
+	// Holds capacity for the next frame of a capture session at once, or returns undefined when the session has
+	// SESSION_CAPACITY frames in flight or the queue is full (see reserve).
+	tryReserve(sessionId: string): StarDetectionReservation | undefined {
+		return this.#hasCapacity(sessionId) ? this.#reservation(sessionId) : undefined
+	}
+
+	// Resolves to the final state of a job once it ended: at once for an ended job, and to undefined for a job
+	// no longer known.
+	ended(jobId: string): Promise<StarDetectionJob | undefined> {
+		const entry = this.#entries.get(jobId)
+		if (!entry) return Promise.resolve(this.job(jobId))
+		return entry.done.promise.then(() => entry.job)
+	}
+
 	// Holds capacity for the next frame of a capture session, for an Every Frame analysis: resolves once the
 	// session has fewer than SESSION_CAPACITY frames in flight and the queue has room, or to undefined when
 	// signal aborts first.

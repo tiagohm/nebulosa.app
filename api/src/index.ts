@@ -22,7 +22,7 @@ import { WheelCommands, type WheelMoveRequest, type WheelNamesRequest } from './
 // HTTP routes and the WebSocket handler of the backend, mounted by the app server.
 
 export type { CameraCoolerRequest, CameraTemperatureRequest } from './cameras'
-export type { CaptureEvent, CaptureFormat, CaptureFrame, CaptureOutput, CaptureOutputMode, CapturePhase, CaptureRequest, CaptureSession, CaptureSettings, CaptureSnapshot, CaptureStartResponse } from './captures'
+export type { CaptureAnalysisState, CaptureEvent, CaptureFormat, CaptureFrame, CaptureOutput, CaptureOutputMode, CapturePhase, CaptureRequest, CaptureSession, CaptureSettings, CaptureSnapshot, CaptureStartResponse, PostCaptureAnalysis, PostCaptureAnalysisPolicy } from './captures'
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
 export type { CommandAccepted, CommandError, CommandErrorCode, CommandRequest } from './commands'
 export type {
@@ -136,7 +136,7 @@ const externalTools = new ExternalToolsStore(DEFAULT_SETTINGS_FILE, broadcast)
 // Star detection of the image documents, shared by the Images workspace and the captures.
 const stars = new StarDetectionService(images, externalTools, broadcast)
 
-const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, broadcast)
+const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, stars, broadcast)
 
 // Opens a connection, or returns the existing one for the same endpoint. Responds 400 for an invalid
 // body and 502 when the endpoint cannot be reached.

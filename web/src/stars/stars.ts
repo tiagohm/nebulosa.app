@@ -63,6 +63,33 @@ export function defaultSettings(provider: StarDetectorProvider): StarDetectionSe
 	return provider === 'builtin' ? DEFAULT_BUILTIN_SETTINGS : DEFAULT_ASTAP_SETTINGS
 }
 
+// Returns a request switched to a detector with its default settings; the request itself when it uses it.
+export function withProvider(request: StarDetectionRequest, provider: StarDetectorProvider): StarDetectionRequest {
+	return request.detector.provider === provider ? request : { ...request, detector: { ...defaultSettings(provider) } }
+}
+
+// Settings of a detector a control edits; searchRegion applies to the built-in detector only.
+export interface StarDetectorPatch {
+	// Maximum number of stars kept.
+	readonly maxStars?: number
+	// Minimum SNR of a detection.
+	readonly minSNR?: number
+	// Uniqueness box of the built-in detector, in pixels.
+	readonly searchRegion?: number
+}
+
+// Returns a request with settings of its detector replaced; a field its detector does not have is ignored.
+export function withDetectorSettings(request: StarDetectionRequest, { maxStars, minSNR, searchRegion }: StarDetectorPatch): StarDetectionRequest {
+	const { detector } = request
+	const common = { maxStars: maxStars ?? detector.maxStars, minSNR: minSNR ?? detector.minSNR }
+	return { ...request, detector: detector.provider === 'builtin' ? { ...detector, ...common, searchRegion: searchRegion ?? detector.searchRegion } : { ...detector, ...common } }
+}
+
+// Returns a request with acceptance criteria replaced.
+export function withAcceptance(request: StarDetectionRequest, patch: Partial<StarAcceptance>): StarDetectionRequest {
+	return { ...request, acceptance: { ...request.acceptance, ...patch } }
+}
+
 // Whether a job is waiting or running.
 export function isActive(job: Pick<StarDetectionJob, 'state'> | undefined): boolean {
 	return job?.state === 'queued' || job?.state === 'running'

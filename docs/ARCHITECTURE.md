@@ -35,11 +35,11 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
 | Histogram and statistics                                                     | Planned              | Inspector shows a placeholder                                                                                     |
 | External tools settings (ASTAP)                                              | Implemented          | `api/src/externaltools.ts`, `web/src/settings/`, route `/settings/external-tools` opened from Management          |
 | Plate solving                                                                | Integration Required | `core/src/astrometry/solvers/` (ASTAP, astrometry.net)                                                            |
-| Star detection                                                               | Integration Required | `core/src/imaging/stars/detector.ts`                                                                              |
+| Star detection                                                               | Implemented          | `api/src/stars.ts` + `stars.worker.ts`, `web/src/stars/`; Images tool and Capture post-capture analysis           |
 | Streak detection                                                             | Integration Required | `core/src/imaging/analysis/streak/`                                                                               |
 | WCS                                                                          | Integration Required | `core/src/astrometry/wcs/`                                                                                        |
 | Shared image viewer                                                          | Implemented          | `web/src/viewer/` (overlays in image pixels, zoom/pan in `transform.ts`)                                          |
-| Overlays                                                                     | Partial              | Reticle only (`web/src/viewer/Reticle.tsx`)                                                                       |
+| Overlays                                                                     | Partial              | Reticle (`web/src/viewer/Reticle.tsx`) and star markers (`web/src/stars/StarOverlay.tsx`)                         |
 | Planetarium, search, inspector, time, observer                               | Implemented          | `web/src/sky/`, `api/src/sky/`                                                                                    |
 | FOV and optical presets                                                      | Implemented          | `web/src/sky/framing.ts` (gnomonic outline, position angle)                                                       |
 | HiPS surveys                                                                 | Integration Required | `core/src/adapters/sky/hips2fits.ts`, `core/src/astronomy/sky/spatial/healpix.ts`                                 |
@@ -79,16 +79,16 @@ There is **one** image store, `ImageStore` in `api/src/images.ts`, and the scien
 
 - An image document is addressed as `/api/images/:id/...` by every operation, whatever workspace requested it. There is no second solver or detector path for Capture.
 - Camera frames enter the store as documents of the origin `{ origin: 'capture', connectionId, deviceId, frameId, time, path? }` (`ImageStore.openCapture`), decoded from the bytes the driver sent. A frame is never identified by camera role.
-- In loop capture, each frame is its own document. An analysis stays bound to the id it was started on, and a newer frame never changes it. The capture service (`api/src/captures.ts`) retains the latest frame of each camera and closes the previous one; pinning a frame for a running analysis is added with the first analysis that needs it.
-- Analysis results (solution, star list, streaks) are keyed by image id and the parameters applied, and are kept with the document until it closes. Re-running with the same parameters reuses the result.
+- In loop capture, each frame is its own document. An analysis stays bound to the id it was started on, and a newer frame never changes it. The capture service (`api/src/captures.ts`) keeps the latest frame of each camera and closes the previous one. An analysis retains its document (`ImageStore.retain`/`release`): closing it hides it from every route at once, but its pixels are released only when the last analysis lets it go.
+- Analysis results (solution, star list, streaks) are keyed by image id and the parameters applied, and are kept in memory with the document until its pixels are released. Re-running with the same parameters reuses the result.
 - A Sky Framing survey image is not an image document. Importing one into Images is an explicit action, available only when the cutout carries usable WCS metadata.
 
 ## Overlay Contracts
 
-- Overlays draw through `ImageViewer`'s `overlays(size)` callback as SVG in **image pixel coordinates** (origin at the top-left of the first pixel). Zoom, pan, fit, 1:1, and resize are applied by the viewer, so overlays never compute screen coordinates. Strokes use `vectorEffect="non-scaling-stroke"`.
+- Overlays draw through `ImageViewer`'s `overlays(size, view)` callback as SVG in **image pixel coordinates** (origin at the top-left of the first pixel). Zoom, pan, fit, 1:1, and resize are applied by the viewer, so overlays never compute screen coordinates; `view` gives the scale, for sizes constant on screen, and the visible region, to skip what is off screen. Strokes use `vectorEffect="non-scaling-stroke"`. Toolkit results use 0-based pixel indices with integer centres, so a result point (x, y) is drawn at (x + 0.5, y + 0.5).
 - An overlay is a pure function of a result and the image shown: it draws only results whose image id matches the displayed image. Hiding an overlay never cancels or deletes the result, and showing one never re-runs the analysis.
 - Celestial-coordinate overlays (annotation, grid) require a WCS solution of that same image. Without one they are unavailable, not approximated.
-- A screen-space layer and pointer interaction (Crosshair, ROI, Mouse Coordinates) are added with their first consumer, using `toImage`/`pixelAt` from `web/src/viewer/transform.ts`.
+- `ImageViewer`'s `onImageClick(point, view)` reports a click (never a drag or a pinch) in image coordinates; the star markers use it to pick a star. A screen-space layer and other pointer interactions (Crosshair, ROI, Mouse Coordinates) are added with their first consumer, using `toImage`/`pixelAt` from `web/src/viewer/transform.ts`.
 - An ROI is a region in image pixels. It never changes a camera's physical subframe unless an explicit, capability-checked command does it.
 
 ## Operation Lifecycle Rules
@@ -152,6 +152,17 @@ Conflicts are resolved by the arbiter on the server, never only in the browser, 
 - There is no authentication: any client that can reach the API can change the executable the server runs and check paths of its filesystem, like `/api/files` lists them. Keep `APP_HOST` on localhost when untrusted clients can reach the network.
 - Nothing configured ASTAP before these settings existed, so there is nothing to migrate.
 
+## Star Detection Contract
+
+- One service, `StarDetectionService` (`api/src/stars.ts`), detects the stars of an image document for every consumer: Images → Star Detection (manual runs), Camera Capture's post-capture analysis, and later Auto Focus. Results are the toolkit's `DetectedStar` (x, y, HFD, SNR, flux) in 0-based pixel coordinates of the document, origin at the upper-left sample, +X right, +Y down.
+- Providers: `builtin` runs `detectStars` on a worker of its own (`api/src/stars.worker.ts`), fed a grayscale copy prepared by the image worker (a CFA mosaic is debayered with its trusted pattern first). `astap` runs `astapDetectStars` on a FITS copy in a per-job temporary directory, with the External Tools settings resolved once per job (or per capture). ASTAP failures are typed (unavailable, timeout, failed); a failure never falls back to the other provider.
+- Scheduling is in memory: one built-in detection and one ASTAP process at a time, at most 16 jobs waiting, manual jobs first, capture sessions served in turn. A running built-in detection is cancelled by terminating its worker; ASTAP is killed through its signal. No device is held.
+- Accepted stars have finite coordinates inside the image less an edge margin, a finite positive HFD within the limits, and finite positive SNR (at least the minimum) and flux. The aggregate HFD is the median HFD of the accepted stars, in pixels, and is unavailable (never 0) below 3 accepted stars. HFDs of the two providers are computed differently and must not be compared.
+- Jobs are published as `stars:updated` without the stars; `GET /api/stars` is the snapshot, `GET /api/stars/:jobId/result` the full result, `POST /api/images/:id/stars` submits a manual detection (an equivalent kept result is answered instead), and `POST /api/stars/:jobId/cancel` cancels. Results are kept per image (8) and in total (256), in memory only, and dropped when the image is released: an expired result answers 404.
+- Post-capture analysis is part of `CaptureRequest` (`analysis`), off unless asked. Every Frame decodes each frame as its own document and reserves its capacity before the exposure (`beforeFrame` of `CameraCapturer`), so a lagging analysis holds the next exposure (phase `analysisWait`) on top of the unchanged delay; Latest Frame Only analyzes the previewed frames and skips a waiting one when a newer arrives. Analysis counters are apart from captured and saved frames, failures never fail a capture, and three failures in a row, or ASTAP unable to run, halt the analysis. Stop and Abort act on the acquisition only; accepted analyses finish.
+- Auto Focus integration: `StarDetectionService.measure(imageId, request, signal)` resolves to the result of one image, runs with the manual priority, is never replaced by a newer frame, and cancels with its signal; the future Auto Focus measurer opens or captures its frame as a document and reads `aggregateHfd`. The Auto Focus runner, focuser coordination, and curve fitting stay in `core`.
+- Limitations: results do not survive a restart, and Every Frame gives no exactly-once guarantee after a crash; the built-in HFD is measured inside a 4 px aperture, so it saturates near 8 px for defocused stars (`detectStarProfiles` is the candidate for Auto Focus), and the built-in detector returns at most 2000 stars; saturation is not detected; a frame replaced on screen before its result is fetched shows no markers.
+
 ## Capture–Sequencer Compatibility Report
 
 - There is no sequencer engine to integrate. It will be an `api` service composed of the same services Capture uses: capture via `CameraCapturer`, filter, focus, dither, and mount commands through the commanders, all under the `OperationRegistry`.
@@ -166,7 +177,8 @@ Conflicts are resolved by the arbiter on the server, never only in the browser, 
 | Profiles, presets, panel and view preferences        | browser localStorage, versioned (`profile.ts`) |
 | Active profile                                       | sessionStorage per tab                         |
 | Route, document view, zoom/pan                       | tab memory                                     |
-| Image pixels and analysis results                    | `api` image store                              |
+| Image pixels                                         | `api` image store                              |
+| Star detection jobs and results                      | `api` star detection service, memory only      |
 | External tool settings                               | `api`, `~/Nebulosa/settings.json`, versioned   |
 | Connections, devices, operations, sessions, services | `api`                                          |
 
@@ -193,7 +205,7 @@ Run before every delivery, as CI does (`.github/workflows/test.yml`):
 | 5   | Framing   | Framing view in Sky using the presets and the cutout                                          | 4          |
 | 6   | Capture   | Capture service over `CameraCapturer` under the registry; frames as `capture` image documents | —          |
 | 7   | Capture   | Camera Capture mode panel and viewer frames                                                   | 6          |
-| 8   | Images    | Plate solving and star detection routes by image id, results keyed by id; overlays            | —          |
+| 8   | Images    | Plate solving routes by image id, results keyed by id; overlays (star detection is done)      | —          |
 | 9   | Capture   | An `unsupported` availability state in Capture, over the control states (now in `api`)        | —          |
 | 10  | Capture   | Mount Nudge, Auto Focus, DARV, TPPA, Flat Wizard, Guiding (PHD2)                              | 6, 8, 9    |
 | 11  | Sequencer | Sequencer service and workspace                                                               | 6, 10      |

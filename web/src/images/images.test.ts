@@ -15,8 +15,6 @@ import {
 	defaultDisplaySettings,
 	displayStatus,
 	editDisplay,
-	editStarAcceptance,
-	editStarDetector,
 	type ImagesIo,
 	type ImagesState,
 	openImage,
@@ -27,8 +25,8 @@ import {
 	selectImageTool,
 	selectStar,
 	setImageView,
-	setStarDetector,
 	setStarMarkers,
+	setStarRequest,
 	shownRendering,
 	summaryStretch,
 	toggleOriginal,
@@ -495,7 +493,7 @@ describe('star detection', () => {
 		expect(state.views[key]?.stars).toEqual({ request: { detector: { provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 }, acceptance: { minSNR: 0, minHfd: 0, maxHfd: 0, edgeMargin: 0 } }, visible: true, acceptedOnly: false })
 	})
 
-	test('edits the request of one document only and switches detectors from their defaults', async () => {
+	test('edits the request and markers of one document only', async () => {
 		const state = newState()
 		const { io, calls } = fakeIo()
 		await openImage(state, '/a.fits', io)
@@ -503,14 +501,10 @@ describe('star detection', () => {
 		const [a, b] = state.documents.map((d) => d.key)
 		const requests = calls.length
 
-		editStarDetector(state, a, { maxStars: 100, searchRegion: 12 })
-		editStarAcceptance(state, a, { minHfd: 1.5 })
-		expect(state.views[a]?.stars.request).toEqual({ detector: { provider: 'builtin', maxStars: 100, minSNR: 0, searchRegion: 12 }, acceptance: { minSNR: 0, minHfd: 1.5, maxHfd: 0, edgeMargin: 0 } })
+		const request = { detector: { provider: 'astap', maxStars: 0, minSNR: 20 }, acceptance: { minSNR: 0, minHfd: 1.5, maxHfd: 0, edgeMargin: 0 } } as const
+		setStarRequest(state, a, request)
+		expect(state.views[a]?.stars.request).toEqual(request)
 		expect(state.views[b]?.stars.request.detector).toEqual({ provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 })
-
-		setStarDetector(state, a, 'astap')
-		editStarDetector(state, a, { minSNR: 20, searchRegion: 5 })
-		expect(state.views[a]?.stars.request.detector).toEqual({ provider: 'astap', maxStars: 0, minSNR: 20 })
 
 		setStarMarkers(state, a, { acceptedOnly: true })
 		selectStar(state, a, { jobId: 'job-1', index: 3 })

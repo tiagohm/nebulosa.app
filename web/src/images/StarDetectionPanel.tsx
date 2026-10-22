@@ -3,18 +3,14 @@ import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { Actions, Notice } from '../equipment-control/parts'
-import { externalToolsState } from '../settings/externaltools'
-import { summaryOf } from '../settings/ExternalToolStatus'
 import { PanelSection } from '../shell/ContextualPanel'
-import { navigate, routeState } from '../shell/route'
 import { EmptyState } from '../shell/WorkspaceLayout'
-import { BUILTIN_STAR_LIMIT, cancelDetection, isActive, PROVIDER_LABELS, PROVIDERS, runDetection, sameRequest, starsState } from '../stars/stars'
+import { AcceptanceControls, DetectorControls, DetectorSettingsControls, useAstapConfigured } from '../stars/StarRequestControls'
+import { cancelDetection, isActive, PROVIDER_LABELS, runDetection, sameRequest, starsState } from '../stars/stars'
 import { useStarResult } from '../stars/useStarResult'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
-import { NumberInput } from '../ui/NumberInput'
-import { SegmentedControl } from '../ui/SegmentedControl'
-import { editStarAcceptance, editStarDetector, type ImageStarsState, imagesState, setStarDetector, setStarMarkers } from './images'
+import { type ImageStarsState, imagesState, setStarMarkers, setStarRequest } from './images'
 import type { ImageToolPanelProps } from './tools'
 
 // Star Detection tool of the Images workspace: runs a detection of the active document on the server with
@@ -70,12 +66,19 @@ function StarDetection({ documentKey, imageId, stars }: StarDetectionProps) {
 	const { submitErrors } = useSnapshot(starsState)
 	const { request } = stars
 	const selected = result && stars.selected?.jobId === result.jobId ? result.stars[stars.selected.index] : undefined
+	const edit = (next: StarDetectionRequest) => setStarRequest(imagesState, documentKey, next)
 
 	return (
 		<>
-			<Detector documentKey={documentKey} request={request} />
-			<DetectionSettings documentKey={documentKey} request={request} />
-			<Acceptance documentKey={documentKey} request={request} />
+			<PanelSection title="Detector">
+				<DetectorControls request={request} onChange={edit} />
+			</PanelSection>
+			<PanelSection title="Detection Settings">
+				<DetectorSettingsControls request={request} onChange={edit} />
+			</PanelSection>
+			<PanelSection title="Acceptance">
+				<AcceptanceControls request={request} onChange={edit} />
+			</PanelSection>
 			<Analysis imageId={imageId} request={request} job={job} submitError={submitErrors[imageId]} />
 			<Results job={job} result={result} resultError={resultError} />
 			<SelectedStar star={selected} />
@@ -85,81 +88,6 @@ function StarDetection({ documentKey, imageId, stars }: StarDetectionProps) {
 				<Notice>Click a star in the image to inspect it. Showing or hiding the markers never runs a detection.</Notice>
 			</PanelSection>
 		</>
-	)
-}
-
-interface RequestProps {
-	// Key of the document.
-	readonly documentKey: string
-	// Pending request of the document.
-	readonly request: StarDetectionRequest
-}
-
-// Choice of the detector, with the availability of ASTAP.
-function Detector({ documentKey, request }: RequestProps) {
-	return (
-		<PanelSection title="Detector">
-			<SegmentedControl options={PROVIDERS} value={request.detector.provider} format={(provider) => PROVIDER_LABELS[provider]} onChange={(provider) => setStarDetector(imagesState, documentKey, provider)} />
-			{request.detector.provider === 'astap' && <AstapAvailability />}
-		</PanelSection>
-	)
-}
-
-// Whether ASTAP can be used, as the server's External Tools settings report it, with a link to them.
-export function AstapAvailability() {
-	const { tools } = useSnapshot(externalToolsState)
-	const astap = tools.find((tool) => tool.id === 'astap')
-	const summary = astap && summaryOf(astap)
-
-	return (
-		<div className="flex flex-col gap-1">
-			<p className="m-0 text-xs leading-4 text-ink-300">
-				ASTAP: <span className={summary?.className}>{summary?.label ?? 'Loading…'}</span>
-				{astap?.lastCheck && astap.lastCheck.status !== 'available' && ` — ${astap.lastCheck.message}`}
-			</p>
-			<Button variant="ghost" size="sm" className="self-start px-1" onClick={() => navigate(routeState, { workspace: 'settings', tool: 'astap' })}>
-				Settings → External Tools → ASTAP
-			</Button>
-		</div>
-	)
-}
-
-// Settings of the selected detector.
-function DetectionSettings({ documentKey, request }: RequestProps) {
-	const { detector } = request
-
-	return (
-		<PanelSection title="Detection Settings">
-			{detector.provider === 'builtin' ? (
-				<>
-					<NumberInput label="Max stars" value={detector.maxStars} min={1} max={BUILTIN_STAR_LIMIT} onChange={(maxStars) => editStarDetector(imagesState, documentKey, { maxStars })} />
-					<NumberInput label="Min SNR" value={detector.minSNR} min={0} step={0.5} onChange={(minSNR) => editStarDetector(imagesState, documentKey, { minSNR })} />
-					<NumberInput label="Search region" value={detector.searchRegion} min={0} max={500} suffix="px" onChange={(searchRegion) => editStarDetector(imagesState, documentKey, { searchRegion })} />
-					<Notice>Search region removes pairs of similar stars closer than it; 0 keeps every star.</Notice>
-				</>
-			) : (
-				<>
-					<NumberInput label="Max stars" value={detector.maxStars} min={0} max={100000} onChange={(maxStars) => editStarDetector(imagesState, documentKey, { maxStars })} />
-					<NumberInput label="Min SNR" value={detector.minSNR} min={0} max={1000} onChange={(minSNR) => editStarDetector(imagesState, documentKey, { minSNR })} />
-					<Notice>Max stars 0 keeps every star ASTAP extracts.</Notice>
-				</>
-			)}
-		</PanelSection>
-	)
-}
-
-// Criteria of the stars entering the aggregate HFD.
-function Acceptance({ documentKey, request }: RequestProps) {
-	const { acceptance } = request
-
-	return (
-		<PanelSection title="Acceptance">
-			<NumberInput label="Min SNR" value={acceptance.minSNR} min={0} step={0.5} onChange={(minSNR) => editStarAcceptance(imagesState, documentKey, { minSNR })} />
-			<NumberInput label="Min HFD" value={acceptance.minHfd} min={0} step={0.1} suffix="px" onChange={(minHfd) => editStarAcceptance(imagesState, documentKey, { minHfd })} />
-			<NumberInput label="Max HFD" value={acceptance.maxHfd} min={0} step={0.1} suffix="px" onChange={(maxHfd) => editStarAcceptance(imagesState, documentKey, { maxHfd })} />
-			<NumberInput label="Edge margin" value={acceptance.edgeMargin} min={0} suffix="px" onChange={(edgeMargin) => editStarAcceptance(imagesState, documentKey, { edgeMargin })} />
-			<Notice>Max HFD 0 sets no upper limit. Saturation is not checked.</Notice>
-		</PanelSection>
 	)
 }
 
@@ -176,10 +104,9 @@ interface AnalysisProps {
 
 // Run and Cancel, with the state of the latest job.
 function Analysis({ imageId, request, job, submitError }: AnalysisProps) {
-	const { tools } = useSnapshot(externalToolsState)
 	const active = isActive(job)
 	const now = useNow(active)
-	const astapReady = request.detector.provider !== 'astap' || tools.find((tool) => tool.id === 'astap')?.status === 'configured'
+	const astapReady = useAstapConfigured() || request.detector.provider !== 'astap'
 	const changed = job && !sameRequest(job.request, request)
 
 	return (

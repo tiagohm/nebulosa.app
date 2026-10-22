@@ -1,8 +1,8 @@
-import type { DeriveRequest, DisplaySettings, ImageFormat, ImageInfo, RenderRequest, RenderResult, SaveRequest, SaveResult, StarAcceptance, StarDetectionRequest, StarDetectionSettings, StarDetectorProvider, Stretch } from 'api'
+import type { DeriveRequest, DisplaySettings, ImageFormat, ImageInfo, RenderRequest, RenderResult, SaveRequest, SaveResult, StarDetectionRequest, Stretch } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { responseError } from '../http'
-import { DEFAULT_STAR_REQUEST, defaultSettings } from '../stars/stars'
+import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { FIT_VIEW, type ViewerView } from '../viewer/transform'
 import type { ImageToolId } from './tools'
 
@@ -478,36 +478,11 @@ export function setImageView(state: ImagesState, key: string, view: ViewerView) 
 	if (current) current.view = view
 }
 
-// Switches the star detector of a document's request, starting from its default settings. Ignored for an
-// unknown key and for the detector already selected.
-export function setStarDetector(state: ImagesState, key: string, provider: StarDetectorProvider) {
+// Replaces the star detection request of a document, which only the next Run Detection sends. Ignored for an
+// unknown key.
+export function setStarRequest(state: ImagesState, key: string, request: StarDetectionRequest) {
 	const stars = state.views[key]?.stars
-	if (stars && stars.request.detector.provider !== provider) stars.request = { ...stars.request, detector: { ...defaultSettings(provider) } }
-}
-
-// Settings of a star detector a panel edits; searchRegion applies to the built-in detector only.
-export interface StarDetectorPatch {
-	// Maximum number of stars kept.
-	readonly maxStars?: number
-	// Minimum SNR of a detection.
-	readonly minSNR?: number
-	// Uniqueness box of the built-in detector, in pixels.
-	readonly searchRegion?: number
-}
-
-// Edits the settings of the star detector of a document's request. Ignored for an unknown key.
-export function editStarDetector(state: ImagesState, key: string, { maxStars, minSNR, searchRegion }: StarDetectorPatch) {
-	const stars = state.views[key]?.stars
-	if (!stars) return
-	const { detector } = stars.request
-	const next: StarDetectionSettings = detector.provider === 'builtin' ? { ...detector, maxStars: maxStars ?? detector.maxStars, minSNR: minSNR ?? detector.minSNR, searchRegion: searchRegion ?? detector.searchRegion } : { ...detector, maxStars: maxStars ?? detector.maxStars, minSNR: minSNR ?? detector.minSNR }
-	stars.request = { ...stars.request, detector: next }
-}
-
-// Edits the acceptance criteria of a document's star detection request. Ignored for an unknown key.
-export function editStarAcceptance(state: ImagesState, key: string, patch: Partial<StarAcceptance>) {
-	const stars = state.views[key]?.stars
-	if (stars) stars.request = { ...stars.request, acceptance: { ...stars.request.acceptance, ...patch } }
+	if (stars) stars.request = request
 }
 
 // Changes how the star markers of a document are shown. Ignored for an unknown key.

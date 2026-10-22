@@ -4,9 +4,11 @@ import { connectionState } from '../connection/connection'
 import { deviceState } from '../equipment/equipment'
 import { type CameraRole, roleDefinition } from '../equipment/roles'
 import { useRoleDevice } from '../equipment/useEquipment'
-import { activeProfile, activeSetup, profileState, selectCameraView, setCameraReticle } from '../profile/profile'
+import { activeProfile, activeSetup, analysisSettings, profileState, selectCameraView, setCameraReticle } from '../profile/profile'
 import { CAPTURE_MODES, type CaptureMode, navigate, redirect, routeState } from '../shell/route'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
+import { StarOverlay } from '../stars/StarOverlay'
+import { useStarResult } from '../stars/useStarResult'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { Select } from '../ui/Select'
@@ -93,7 +95,7 @@ export function CaptureWorkspace() {
 				),
 			}}
 		>
-			<CaptureViewer key={viewerKey(role, setup)} viewer={viewerKey(role, setup)} role={role} reticle={viewReticle(capture, role, mode)} />
+			<CaptureViewer key={viewerKey(role, setup)} viewer={viewerKey(role, setup)} role={role} reticle={viewReticle(capture, role, mode)} stars={analysisSettings(capture, role).overlay} />
 		</WorkspaceLayout>
 	)
 }
@@ -105,21 +107,26 @@ interface CaptureViewerProps {
 	readonly viewer: string
 	// Whether the reticle is shown.
 	readonly reticle: boolean
+	// Whether the star markers of the frame shown are drawn.
+	readonly stars: boolean
 }
 
 // Viewer of the latest frame of the view's camera with the mode's overlays. It is keyed by the camera
 // role and assigned device, so nothing of a replaced device is shown; its zoom and pan are kept per
 // viewer key, so they come back after switching camera views or workspaces. The frame shown is the
 // latest one the server previewed for the assigned device, whichever tab started its capture; while the
-// next one is exposed or rendered, the previous one stays visible. Before any frame it shows the state of
+// next one is exposed or rendered, the previous one stays visible. The star markers drawn are those of
+// the frame shown, matched by its image id, so a late result never lands on a newer frame. Before any frame it shows the state of
 // the camera and the flow that fixes it.
-function CaptureViewer({ role, viewer, reticle }: CaptureViewerProps) {
+function CaptureViewer({ role, viewer, reticle, stars }: CaptureViewerProps) {
 	const camera: CameraTarget = { role, ...useRoleDevice(role) }
 	const views = useSnapshot(captureViewerState)
 	const runtime = useSnapshot(captureRuntime)
 	const key = camera.device && cameraKey(camera.device.connectionId, camera.device.id)
 	const frame = key ? runtime.frames[key] : undefined
 	const rendering = key ? runtime.renderings[key] : undefined
+	// The markers follow the frame on screen: the rendering's image, not a frame still being rendered.
+	const { result } = useStarResult(stars ? rendering?.imageId : undefined)
 
 	useEffect(() => {
 		if (key && frame) void renderFrame(captureRuntime, key, frame)
@@ -134,7 +141,16 @@ function CaptureViewer({ role, viewer, reticle }: CaptureViewerProps) {
 			onViewChange={(view) => (captureViewerState[viewer] = view)}
 			empty={<CameraState camera={camera} />}
 			toolbar={<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={() => setCameraReticle(profileState, role, !reticle)} />}
-			overlays={reticle ? (size) => <Reticle {...size} /> : undefined}
+			overlays={
+				reticle || result
+					? (size, view) => (
+							<>
+								{reticle && <Reticle {...size} />}
+								{result && <StarOverlay result={result} view={view} acceptedOnly={false} />}
+							</>
+						)
+					: undefined
+			}
 		/>
 	)
 }

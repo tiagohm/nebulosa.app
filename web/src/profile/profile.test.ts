@@ -3,7 +3,7 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { acquisitionSettings, ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, createOpticalPreset, createProfile, DEFAULT_ACQUISITION_SETTINGS, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectOpticalPreset, selectProfile, setAcquisitionSettings, setCameraReticle, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setTelescopeOptics, updateOpticalPreset } from './profile'
+import { acquisitionSettings, ACTIVE_PROFILE_KEY, activeProfile, activeSetup, analysisSettings, assignDevice, createOpticalPreset, createProfile, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_ANALYSIS_SETTINGS, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectOpticalPreset, selectProfile, setAcquisitionSettings, setAnalysisSettings, setCameraReticle, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setTelescopeOptics, updateOpticalPreset } from './profile'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }
@@ -555,5 +555,41 @@ describe('camera capture form', () => {
 		const acquisition = { MAIN_CAMERA: { exposureMode: 'burst', count: 2.5, delay: -1, exposureTime: 0, frameType: 'SKY', binX: 0, output: { mode: 'x', format: 'NATIVE', directory: '  ' } }, MOUNT: {} }
 		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {}, acquisition } } }] }))
 		expect(load(invalid).profiles[0].settings.capture).toEqual({ views: {}, acquisition: { MAIN_CAMERA: DEFAULT_ACQUISITION_SETTINGS } })
+	})
+})
+
+describe('post-capture analysis', () => {
+	test('is off by default, Every Frame once on, and kept per camera view', () => {
+		const state = load(newStores())
+		expect(analysisSettings(activeProfile(state).settings.capture, 'MAIN_CAMERA')).toEqual({ enabled: false, policy: 'everyFrame', request: { detector: { provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 }, acceptance: { minSNR: 0, minHfd: 0, maxHfd: 0, edgeMargin: 0 } }, overlay: true })
+
+		setAnalysisSettings(state, 'MAIN_CAMERA', { enabled: true })
+		setAnalysisSettings(state, 'GUIDE_CAMERA', { overlay: false })
+
+		const capture = activeProfile(state).settings.capture
+		expect(analysisSettings(capture, 'MAIN_CAMERA')).toMatchObject({ enabled: true, policy: 'everyFrame', overlay: true })
+		expect(analysisSettings(capture, 'GUIDE_CAMERA')).toMatchObject({ enabled: false, overlay: false })
+		expect(DEFAULT_ANALYSIS_SETTINGS.enabled).toBeFalse()
+	})
+
+	test('is persisted and restored, replacing invalid fields with defaults and staying off unless on', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		const request = { detector: { provider: 'astap', maxStars: 200, minSNR: 15 }, acceptance: { minSNR: 5, minHfd: 1, maxHfd: 12, edgeMargin: 20 } } as const
+		setAnalysisSettings(state, 'MAIN_CAMERA', { enabled: true, policy: 'latestFrame', request, overlay: false })
+		await Bun.sleep(0)
+
+		const reloaded = load({ local: stores.local, session: new MemoryStorage() })
+		expect(analysisSettings(reloaded.profiles[0].settings.capture, 'MAIN_CAMERA')).toEqual({ enabled: true, policy: 'latestFrame', request, overlay: false })
+
+		const invalid = newStores()
+		const analysis = { MAIN_CAMERA: { enabled: 'yes', policy: 'sometimes', request: { detector: { provider: 'other', maxStars: -1, minSNR: 'high' }, acceptance: { minHfd: -2 } }, overlay: 0 }, MOUNT: { enabled: true } }
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {}, analysis } } }] }))
+		expect(load(invalid).profiles[0].settings.capture).toEqual({ views: {}, analysis: { MAIN_CAMERA: DEFAULT_ANALYSIS_SETTINGS } })
+
+		// Profiles written before the analysis existed have none, which reads as off.
+		const older = newStores()
+		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {} } } }] }))
+		expect(analysisSettings(load(older).profiles[0].settings.capture, 'MAIN_CAMERA').enabled).toBeFalse()
 	})
 })

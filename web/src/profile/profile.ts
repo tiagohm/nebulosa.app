@@ -1,10 +1,11 @@
-import type { CaptureRequest } from 'api'
+import type { CaptureRequest, PostCaptureAnalysisPolicy, StarDetectionRequest } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
 import { CAMERA_ROLES, type CameraRole, conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
 import { type CaptureMode, captureModeOf, WORKSPACE_IDS, type WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
 import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
+import { DEFAULT_ASTAP_SETTINGS, DEFAULT_BUILTIN_SETTINGS, DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { isRecord, parseJson, readText, type Stores, writeText } from '../storage'
 
 // Profiles of the browser and the profile active in this tab. Profiles are a versioned collection in
@@ -129,6 +130,24 @@ export const DEFAULT_ACQUISITION_SETTINGS: CameraAcquisitionSettings = {
 	output: { mode: 'preview-save', format: 'FITS' },
 }
 
+// Post-capture analysis of one camera view: whether the next capture analyzes its frames, how, and whether
+// the star markers are drawn. Kept apart from the capture form, so turning the analysis off keeps its
+// settings; the server's ASTAP settings are never copied here.
+export interface CaptureAnalysisSettings {
+	// Whether the next capture analyzes its frames.
+	enabled: boolean
+	// How frames are forwarded to the star detection.
+	policy: PostCaptureAnalysisPolicy
+	// Detector, settings, and acceptance criteria.
+	request: StarDetectionRequest
+	// Whether the star markers of the frame shown are drawn; never changes the analysis.
+	overlay: boolean
+}
+
+// Post-capture analysis of a view that has none yet: off, Every Frame once turned on, the built-in detector,
+// and the markers shown.
+export const DEFAULT_ANALYSIS_SETTINGS: CaptureAnalysisSettings = { enabled: false, policy: 'everyFrame', request: DEFAULT_STAR_REQUEST, overlay: true }
+
 // Capture preferences of a profile. Only presentation and forms are kept: never images, devices, or
 // operations.
 export interface CaptureSettings {
@@ -138,6 +157,8 @@ export interface CaptureSettings {
 	views: Partial<Record<CameraRole, CameraViewSettings>>
 	// Camera Capture form of each camera view edited so far, by camera role; absent before the first edit.
 	acquisition?: Partial<Record<CameraRole, CameraAcquisitionSettings>>
+	// Post-capture analysis of each camera view edited so far, by camera role; absent before the first edit.
+	analysis?: Partial<Record<CameraRole, CaptureAnalysisSettings>>
 }
 
 // A complete working environment: the selected connection, the equipment assigned on each connection,
@@ -204,6 +225,15 @@ function normalizeCapture(value: unknown, capture: CaptureSettings) {
 		}
 	}
 
+	if (isRecord(value.analysis)) {
+		for (const role of CAMERA_ROLES) {
+			const analysis = normalizeAnalysis(value.analysis[role])
+			if (!analysis) continue
+			capture.analysis ??= {}
+			capture.analysis[role] = analysis
+		}
+	}
+
 	if (!isRecord(value.views)) return
 
 	for (const role of CAMERA_ROLES) {
@@ -258,6 +288,31 @@ function normalizeAcquisition(value: unknown): CameraAcquisitionSettings | undef
 	}
 
 	return acquisition
+}
+
+// Restores a persisted post-capture analysis, filling every invalid field with its default (off unless it was
+// explicitly on); undefined for anything that is not a record.
+function normalizeAnalysis(value: unknown): CaptureAnalysisSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = DEFAULT_ANALYSIS_SETTINGS
+	const request = isRecord(value.request) ? value.request : {}
+	const detector = isRecord(request.detector) ? request.detector : {}
+	const acceptance = isRecord(request.acceptance) ? request.acceptance : {}
+	const fallback = defaults.request.acceptance
+
+	return {
+		enabled: value.enabled === true,
+		policy: value.policy === 'latestFrame' ? 'latestFrame' : 'everyFrame',
+		request: {
+			detector:
+				detector.provider === 'astap'
+					? { provider: 'astap', maxStars: numberAtLeast(detector.maxStars, 0, DEFAULT_ASTAP_SETTINGS.maxStars, true), minSNR: numberAtLeast(detector.minSNR, 0, DEFAULT_ASTAP_SETTINGS.minSNR) }
+					: { provider: 'builtin', maxStars: numberAtLeast(detector.maxStars, 1, DEFAULT_BUILTIN_SETTINGS.maxStars, true), minSNR: numberAtLeast(detector.minSNR, 0, DEFAULT_BUILTIN_SETTINGS.minSNR), searchRegion: numberAtLeast(detector.searchRegion, 0, DEFAULT_BUILTIN_SETTINGS.searchRegion) },
+			acceptance: { minSNR: numberAtLeast(acceptance.minSNR, 0, fallback.minSNR), minHfd: numberAtLeast(acceptance.minHfd, 0, fallback.minHfd), maxHfd: numberAtLeast(acceptance.maxHfd, 0, fallback.maxHfd), edgeMargin: numberAtLeast(acceptance.edgeMargin, 0, fallback.edgeMargin) },
+		},
+		overlay: value.overlay !== false,
+	}
 }
 
 // Lowest elevation accepted for an observer in meters (below the Dead Sea shore, -430 m).
@@ -694,6 +749,23 @@ export function setAcquisitionSettings(state: ProfileState, role: CameraRole, pa
 	const next = JSON.parse(JSON.stringify({ ...acquisitionSettings(capture, role), ...patch })) as CameraAcquisitionSettings
 	capture.acquisition ??= {}
 	capture.acquisition[role] = next
+	touch(profile)
+}
+
+// Returns the post-capture analysis of a camera view: the one edited last, or the defaults.
+export function analysisSettings(capture: Readonly<CaptureSettings>, role: CameraRole): Readonly<CaptureAnalysisSettings> {
+	return capture.analysis?.[role] ?? DEFAULT_ANALYSIS_SETTINGS
+}
+
+// Replaces fields of the post-capture analysis of a camera view in the active profile; other views keep
+// theirs. The request is replaced as a whole when given.
+export function setAnalysisSettings(state: ProfileState, role: CameraRole, patch: Partial<CaptureAnalysisSettings>) {
+	const profile = activeProfile(state)
+	const capture = profile.settings.capture
+	// A plain copy: the stored settings are a proxy, and a default must never be shared with a view.
+	const next = JSON.parse(JSON.stringify({ ...analysisSettings(capture, role), ...patch })) as CaptureAnalysisSettings
+	capture.analysis ??= {}
+	capture.analysis[role] = next
 	touch(profile)
 }
 

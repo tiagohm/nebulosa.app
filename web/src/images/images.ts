@@ -1,7 +1,8 @@
-import type { DeriveRequest, DisplaySettings, ImageFormat, ImageInfo, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from 'api'
+import type { DeriveRequest, DisplaySettings, ImageFormat, ImageInfo, RenderRequest, RenderResult, SaveRequest, SaveResult, StarAcceptance, StarDetectionRequest, StarDetectionSettings, StarDetectorProvider, Stretch } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { responseError } from '../http'
+import { DEFAULT_STAR_REQUEST, defaultSettings } from '../stars/stars'
 import { FIT_VIEW, type ViewerView } from '../viewer/transform'
 import type { ImageToolId } from './tools'
 
@@ -21,6 +22,9 @@ import type { ImageToolId } from './tools'
 // newer rendering replaces it or the document closes. Requests belong to the store, not to components,
 // so they complete while the panel is collapsed or another document is shown. Everything lives in
 // memory only: it survives switching tabs and workspaces but is not restored after a reload.
+//
+// The star detection of a document keeps its request being edited, which is sent only by Run Detection, and
+// how its markers are shown; neither zoom, pan, display settings, nor the markers ever run a detection.
 //
 // A derived image, computed by the server from a document's pending settings, opens as a new document
 // that is unsaved until a save to a server file succeeds; the page asks before unloading while one
@@ -74,6 +78,18 @@ export interface ImageDisplayState {
 	original?: ImageRendering
 }
 
+// Star detection of a document as the tab shows it: the request being edited and how its markers are shown.
+export interface ImageStarsState {
+	// Request the next Run Detection sends; editing it never runs one.
+	request: StarDetectionRequest
+	// Whether the markers of the latest result are drawn.
+	visible: boolean
+	// Whether only the accepted stars are drawn.
+	acceptedOnly: boolean
+	// Selected star: its index in the result of a job, which only counts while that result is shown.
+	selected?: { readonly jobId: string; readonly index: number }
+}
+
 // How a document is shown: its own zoom, pan, display settings, and rendering.
 export interface ImageViewState {
 	// Zoom and pan of the viewer.
@@ -90,6 +106,8 @@ export interface ImageViewState {
 	deriving: boolean
 	// Why creating the latest derived image failed.
 	deriveError?: string
+	// Star detection request and markers.
+	stars: ImageStarsState
 }
 
 // State of a document's display settings: rendering, the latest rendering failed, the pending settings
@@ -289,7 +307,7 @@ export async function openImage(state: ImagesState, path: string, io: ImagesIo =
 function addDocument(state: ImagesState, document: ImageDocument) {
 	const pending = copySettings(document.info ? defaultDisplaySettings(document.info) : ORIGINAL_DISPLAY_SETTINGS)
 	state.documents.push(document)
-	state.views[document.key] = { view: FIT_VIEW, display: { pending, showOriginal: false }, renderPending: false, deriving: false }
+	state.views[document.key] = { view: FIT_VIEW, display: { pending, showOriginal: false }, renderPending: false, deriving: false, stars: { request: { detector: { ...DEFAULT_STAR_REQUEST.detector }, acceptance: { ...DEFAULT_STAR_REQUEST.acceptance } }, visible: true, acceptedOnly: false } }
 	state.tools[document.key] = { tool: 'inspector' }
 	state.activeKey = document.key
 }
@@ -458,6 +476,50 @@ export function shownRendering(view: Pick<ImageViewState, 'display' | 'rendering
 export function setImageView(state: ImagesState, key: string, view: ViewerView) {
 	const current = state.views[key]
 	if (current) current.view = view
+}
+
+// Switches the star detector of a document's request, starting from its default settings. Ignored for an
+// unknown key and for the detector already selected.
+export function setStarDetector(state: ImagesState, key: string, provider: StarDetectorProvider) {
+	const stars = state.views[key]?.stars
+	if (stars && stars.request.detector.provider !== provider) stars.request = { ...stars.request, detector: { ...defaultSettings(provider) } }
+}
+
+// Settings of a star detector a panel edits; searchRegion applies to the built-in detector only.
+export interface StarDetectorPatch {
+	// Maximum number of stars kept.
+	readonly maxStars?: number
+	// Minimum SNR of a detection.
+	readonly minSNR?: number
+	// Uniqueness box of the built-in detector, in pixels.
+	readonly searchRegion?: number
+}
+
+// Edits the settings of the star detector of a document's request. Ignored for an unknown key.
+export function editStarDetector(state: ImagesState, key: string, { maxStars, minSNR, searchRegion }: StarDetectorPatch) {
+	const stars = state.views[key]?.stars
+	if (!stars) return
+	const { detector } = stars.request
+	const next: StarDetectionSettings = detector.provider === 'builtin' ? { ...detector, maxStars: maxStars ?? detector.maxStars, minSNR: minSNR ?? detector.minSNR, searchRegion: searchRegion ?? detector.searchRegion } : { ...detector, maxStars: maxStars ?? detector.maxStars, minSNR: minSNR ?? detector.minSNR }
+	stars.request = { ...stars.request, detector: next }
+}
+
+// Edits the acceptance criteria of a document's star detection request. Ignored for an unknown key.
+export function editStarAcceptance(state: ImagesState, key: string, patch: Partial<StarAcceptance>) {
+	const stars = state.views[key]?.stars
+	if (stars) stars.request = { ...stars.request, acceptance: { ...stars.request.acceptance, ...patch } }
+}
+
+// Changes how the star markers of a document are shown. Ignored for an unknown key.
+export function setStarMarkers(state: ImagesState, key: string, patch: Partial<Pick<ImageStarsState, 'visible' | 'acceptedOnly'>>) {
+	const stars = state.views[key]?.stars
+	if (stars) Object.assign(stars, patch)
+}
+
+// Selects a star of a result of a document, or clears the selection. Ignored for an unknown key.
+export function selectStar(state: ImagesState, key: string, selected?: ImageStarsState['selected']) {
+	const stars = state.views[key]?.stars
+	if (stars) stars.selected = selected
 }
 
 // Shows a tool in the contextual panel of a document. Ignored for an unknown key.

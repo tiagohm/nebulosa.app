@@ -5,6 +5,9 @@ import { FileExplorerModal } from '../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../files/files'
 import { activeProfile, profileState, setLastImageDirectory } from '../profile/profile'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
+import { StarOverlay } from '../stars/StarOverlay'
+import { pickStar } from '../stars/stars'
+import { useStarResult } from '../stars/useStarResult'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { IconButton } from '../ui/IconButton'
@@ -14,7 +17,7 @@ import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
 import { FIT_VIEW } from '../viewer/transform'
 import { ImageInspector } from './ImageInspector'
-import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, openImage, selectImage, selectImageTool, setImageView, shownRendering, toggleOriginal } from './images'
+import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, openImage, selectImage, selectImageTool, selectStar, setImageView, shownRendering, toggleOriginal } from './images'
 import { SaveImageModal } from './SaveImageModal'
 import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolUnavailable } from './tools'
 
@@ -22,9 +25,14 @@ import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolUnavailable } from './too
 // viewer, with the contextual tool each document selected (the Image Inspector at first) in the
 // contextual panel. It works without any connection or equipment. Documents, with their own zoom, pan,
 // display settings, and tool, stay open while the tab lives, across document and workspace switches.
-// The viewer toolbar switches a document between its adjusted rendering and its original one. Closing
+// The viewer toolbar switches a document between its adjusted rendering and its original one. The star
+// markers of the latest detection of the document's image are drawn over it while shown, and a click
+// selects a star while the Star Detection tool is open. Closing
 // an unsaved derived image asks first (cancel, discard, or Save As and then close), and Save As writes a
 // document to a server file chosen in the file explorer.
+
+// Distance from the pointer a click looks for a star within, in screen pixels.
+const STAR_PICK_RADIUS = 8
 
 // Images workspace.
 export function ImagesWorkspace() {
@@ -41,6 +49,8 @@ export function ImagesWorkspace() {
 	const tool = activeTool(state)?.tool ?? 'inspector'
 	const definition = IMAGE_TOOL_DEFINITIONS[tool]
 	const Panel = definition.panel ?? ImageInspector
+	const { result: stars } = useStarResult(document?.info?.id)
+	const markers = view?.stars.visible && stars ? stars : undefined
 	const toolSelector = <Select options={IMAGE_TOOLS} value={tool} disabled={!document} format={(t) => IMAGE_TOOL_DEFINITIONS[t].label} disabledReason={imageToolUnavailable} onChange={(t) => document && selectImageTool(imagesState, document.key, t)} className="w-52 max-sm:w-40" />
 	const openButton = (
 		<Button variant="secondary" onClick={() => setChoosing(true)}>
@@ -70,6 +80,15 @@ export function ImagesWorkspace() {
 						loading={document?.status === 'loading' || view?.renderPending}
 						error={document?.error ?? view?.error}
 						toolbar={document && view && <OriginalToggle documentKey={document.key} view={view} mosaic={!!document.info && document.info.channels === 1 && !!document.info.bayer} />}
+						overlays={markers && view ? (_, overlay) => <StarOverlay result={markers} view={overlay} acceptedOnly={view.stars.acceptedOnly} selected={view.stars.selected?.jobId === markers.jobId ? view.stars.selected.index : undefined} /> : undefined}
+						onImageClick={
+							markers && view && document && tool === 'star-detection'
+								? (point, overlay) => {
+										const index = pickStar(markers, point, STAR_PICK_RADIUS / overlay.scale, view.stars.acceptedOnly)
+										selectStar(imagesState, document.key, index === undefined ? undefined : { jobId: markers.jobId, index })
+									}
+								: undefined
+						}
 						empty={<EmptyState title="No image open" description="Open a FITS or XISF image from the server." action={openButton} />}
 					/>
 				</div>

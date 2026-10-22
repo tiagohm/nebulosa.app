@@ -19,6 +19,17 @@ export interface Point {
 	readonly y: number
 }
 
+// Axis-aligned rectangle, in the pixels of its coordinate space.
+export interface Rect extends Point, Size {}
+
+// What an overlay needs of the current view: the zoom and the part of the image on screen.
+export interface OverlayView {
+	// Viewport pixels per image pixel; a length of n screen pixels is n / scale image pixels.
+	readonly scale: number
+	// Region of the image inside the viewport, in image coordinates; it may extend beyond the image.
+	readonly visible: Rect
+}
+
 // Mapping from image to viewport coordinates: viewport = image × scale + offset.
 export interface ViewTransform {
 	// Viewport pixels per image pixel; 1 shows the image at actual size.
@@ -74,6 +85,12 @@ export function panBy(view: ViewTransform, dx: number, dy: number): ViewTransfor
 // Returns the image point under a viewport point.
 export function toImage(view: ViewTransform, point: Point): Point {
 	return { x: (point.x - view.x) / view.scale, y: (point.y - view.y) / view.scale }
+}
+
+// Returns the region of the image a viewport shows, in image coordinates.
+export function visibleRegion(view: ViewTransform, viewport: Size): Rect {
+	const { x, y } = toImage(view, { x: 0, y: 0 })
+	return { x, y, width: viewport.width / view.scale, height: viewport.height / view.scale }
 }
 
 // Returns the integer coordinates of the image pixel containing an image point, or undefined when the

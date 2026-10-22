@@ -1,8 +1,8 @@
 import { type KeyboardEvent, type PointerEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { IconButton } from '../ui/IconButton'
-import { centered, FIT_VIEW, manualView, panBy, type Point, pixelAt, type Size, toImage, type ViewerView, type ViewTransform, viewTransform, ZOOM_STEP, zoomAt } from './transform'
+import { centered, FIT_VIEW, manualView, type OverlayView, panBy, type Point, pixelAt, type Size, toImage, type ViewerView, type ViewTransform, viewTransform, visibleRegion, ZOOM_STEP, zoomAt } from './transform'
 
-// Reusable image viewer: a toolbar, a viewport with zoom, pan, and overlays, and a status line. It
+// Reusable image viewer: a toolbar, a viewport with zoom, pan, overlays, and clicks on the image, and a status line. It
 // renders a bitmap it is given and knows nothing about where the image came from (a capture, an opened
 // document, or a processing result); whoever creates the bitmap's URL owns and releases it. The view
 // (zoom and pan) is owned by the caller, which keeps one per subject (an image document, a camera view),
@@ -31,9 +31,13 @@ export interface ImageViewerProps {
 	readonly view: ViewerView
 	// Called with the new view when the user zooms or pans.
 	readonly onViewChange: (view: ViewerView) => void
-	// Draws SVG elements over the image, given its size, in image pixel coordinates; they follow zoom and pan. Use
-	// vectorEffect="non-scaling-stroke" for strokes that keep their width on screen.
-	readonly overlays?: (image: Size) => ReactNode
+	// Draws SVG elements over the image, given its size and the current view, in image pixel coordinates; they
+	// follow zoom and pan. Use vectorEffect="non-scaling-stroke" for strokes that keep their width on screen,
+	// and the view's scale for sizes that do.
+	readonly overlays?: (image: Size, view: OverlayView) => ReactNode
+	// Called with the image point under a click (a press released within CLICK_TOLERANCE of where it started,
+	// never a drag or a pinch), in image coordinates, and the current view.
+	readonly onImageClick?: (point: Point, view: OverlayView) => void
 	// Extra toolbar controls, after the view controls.
 	readonly toolbar?: ReactNode
 }
@@ -44,8 +48,11 @@ const KEY_PAN_FRACTION = 0.1
 // Zoom factor per pixel of wheel movement; a typical 100 px notch zooms about 16 %.
 const WHEEL_ZOOM_RATE = 0.0015
 
+// Distance a press may move and still count as a click, in client pixels.
+const CLICK_TOLERANCE = 4
+
 // Image viewer.
-export function ImageViewer({ image, loading = false, error, empty, view, onViewChange, overlays, toolbar }: ImageViewerProps) {
+export function ImageViewer({ image, loading = false, error, empty, view, onViewChange, overlays, onImageClick, toolbar }: ImageViewerProps) {
 	const viewportRef = useRef<HTMLDivElement>(null)
 	const [viewport, setViewport] = useState<Size>({ width: 0, height: 0 })
 	// Pointer position over the viewport, in viewport pixels; the pixel under it follows zoom and pan.
@@ -55,6 +62,8 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 	const pointers = useRef(new Map<number, Point>())
 	// Distance between the two pinching pointers at the latest pinch step, in client pixels; absent when not pinching.
 	const pinch = useRef<number>(undefined)
+	// Pointer and client position of a press that may still be a click; cleared once it moves or pinches.
+	const press = useRef<{ readonly id: number; readonly at: Point }>(undefined)
 	const width = image?.width ?? 0
 	const height = image?.height ?? 0
 	const transform = viewTransform(view, { width, height }, viewport)
@@ -121,8 +130,10 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 
 		if (pointers.current.size === 1) {
 			drag.current = position
+			press.current = { id: e.pointerId, at: position }
 		} else if (pointers.current.size === 2) {
 			drag.current = undefined
+			press.current = undefined
 			pinch.current = pinchSpan(pointers.current)?.distance
 		}
 	}
@@ -132,6 +143,7 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 		setCursor({ x: e.clientX - rect.left, y: e.clientY - rect.top })
 		if (!pointers.current.has(e.pointerId)) return
 		pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+		if (press.current && Math.hypot(e.clientX - press.current.at.x, e.clientY - press.current.at.y) > CLICK_TOLERANCE) press.current = undefined
 
 		const span = pinch.current !== undefined ? pinchSpan(pointers.current) : undefined
 
@@ -150,6 +162,14 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 		pointers.current.delete(e.pointerId)
 		if (pointers.current.size < 2) pinch.current = undefined
 		drag.current = undefined
+
+		if (press.current?.id === e.pointerId && e.type === 'pointerup' && onImageClick) {
+			const rect = e.currentTarget.getBoundingClientRect()
+			const { transform, viewport } = latest.current
+			onImageClick(toImage(transform, { x: e.clientX - rect.left, y: e.clientY - rect.top }), { scale: transform.scale, visible: visibleRegion(transform, viewport) })
+		}
+
+		press.current = undefined
 	}
 
 	function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
@@ -218,7 +238,7 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 						<img src={image.url} alt="" draggable={false} className="block size-full max-w-none" style={{ imageRendering: transform.scale >= 2 ? 'pixelated' : 'auto' }} />
 						{overlays && (
 							<svg viewBox={`0 0 ${width} ${height}`} className="pointer-events-none absolute inset-0 size-full overflow-visible">
-								{overlays({ width, height })}
+								{overlays({ width, height }, { scale: transform.scale, visible: visibleRegion(transform, viewport) })}
 							</svg>
 						)}
 					</div>

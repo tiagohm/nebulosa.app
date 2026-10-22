@@ -15,6 +15,8 @@ import {
 	defaultDisplaySettings,
 	displayStatus,
 	editDisplay,
+	editStarAcceptance,
+	editStarDetector,
 	type ImagesIo,
 	type ImagesState,
 	openImage,
@@ -23,7 +25,10 @@ import {
 	revertDisplay,
 	selectImage,
 	selectImageTool,
+	selectStar,
 	setImageView,
+	setStarDetector,
+	setStarMarkers,
 	shownRendering,
 	summaryStretch,
 	toggleOriginal,
@@ -478,5 +483,40 @@ describe('tool context', () => {
 
 		closeImage(state, b, io)
 		expect(state.tools).toEqual({ [a]: { tool: 'inspector' } })
+	})
+})
+
+describe('star detection', () => {
+	test('a new document starts with the built-in detector, shown markers, and nothing selected', async () => {
+		const state = newState()
+		await openImage(state, '/a.fits', fakeIo().io)
+		const key = state.documents[0].key
+
+		expect(state.views[key]?.stars).toEqual({ request: { detector: { provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 }, acceptance: { minSNR: 0, minHfd: 0, maxHfd: 0, edgeMargin: 0 } }, visible: true, acceptedOnly: false })
+	})
+
+	test('edits the request of one document only and switches detectors from their defaults', async () => {
+		const state = newState()
+		const { io, calls } = fakeIo()
+		await openImage(state, '/a.fits', io)
+		await openImage(state, '/b.fits', io)
+		const [a, b] = state.documents.map((d) => d.key)
+		const requests = calls.length
+
+		editStarDetector(state, a, { maxStars: 100, searchRegion: 12 })
+		editStarAcceptance(state, a, { minHfd: 1.5 })
+		expect(state.views[a]?.stars.request).toEqual({ detector: { provider: 'builtin', maxStars: 100, minSNR: 0, searchRegion: 12 }, acceptance: { minSNR: 0, minHfd: 1.5, maxHfd: 0, edgeMargin: 0 } })
+		expect(state.views[b]?.stars.request.detector).toEqual({ provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 })
+
+		setStarDetector(state, a, 'astap')
+		editStarDetector(state, a, { minSNR: 20, searchRegion: 5 })
+		expect(state.views[a]?.stars.request.detector).toEqual({ provider: 'astap', maxStars: 0, minSNR: 20 })
+
+		setStarMarkers(state, a, { acceptedOnly: true })
+		selectStar(state, a, { jobId: 'job-1', index: 3 })
+		expect(state.views[a]?.stars).toMatchObject({ visible: true, acceptedOnly: true, selected: { jobId: 'job-1', index: 3 } })
+
+		// Editing and showing never reach the server.
+		expect(calls.length).toBe(requests)
 	})
 })

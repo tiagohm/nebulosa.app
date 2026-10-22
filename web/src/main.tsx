@@ -14,6 +14,7 @@ import { externalToolsState, handleExternalToolEvent, refreshExternalTools } fro
 import { routeState, watchHistory } from './shell/route'
 import { handleMountEvent, mountRuntime, refreshMount } from './sky/mount'
 import { handleSensorEvent, refreshSensors, sensorRuntime } from './sky/sensors'
+import { handleStarsEvent, refreshStars, starsState } from './stars/stars'
 import { browserStores } from './storage'
 
 // Entry point of the browser bundle: restores the persisted stores and the URL route before the first
@@ -40,10 +41,11 @@ const stops = [
 		handleCaptureEvent(captureRuntime, event)
 		handleNudgeEvent(nudgeRuntime, event)
 		handleExternalToolEvent(externalToolsState, event)
+		handleStarsEvent(starsState, event)
 	}),
 	// Every (re)open resynchronizes the open connections, the watched devices and their control states, the followed mount, the
 	// running operations, the camera sensors, the captures and camera capabilities, and the nudged mount
-	// and its nudge sessions, the dome rotation sessions, and the external tool settings, which may have changed while the socket was closed.
+	// and its nudge sessions, the dome rotation sessions, the external tool settings, and the star detection jobs, which may have changed while the socket was closed.
 	onOpen(() => {
 		void refreshExternalTools(externalToolsState)
 		void refreshServers(connectionState)
@@ -57,6 +59,7 @@ const stops = [
 		refreshCameraCapabilities(captureRuntime)
 		void refreshNudgeMount(nudgeRuntime)
 		void refreshNudges(nudgeRuntime)
+		void refreshStars(starsState)
 	}),
 ]
 

@@ -189,3 +189,24 @@ test('a stop during the overshoot commands no further position', async () => {
 	expect(progressOf(events, moved.operationId)).toEqual([`1/2 Moving to ${target + 20000}`])
 	expect(focuser.moving).toBeFalse()
 }, 40000)
+
+test('a compensated move of a focuser whose driver compensates its backlash is refused before anything moves', async () => {
+	const { id, client, commands, events, focuser, focuserId } = await setup()
+	await saveBacklash(commands, id, focuserId, { enabled: true, mode: 'OVERSHOOT', backlashIn: 0, backlashOut: 80 })
+	const start = focuser.position.value
+
+	client.sendSwitch({ device: focuser.name, name: 'FOCUS_BACKLASH_TOGGLE', elements: { INDI_ENABLED: true } })
+	await waitUntil(() => focuser.backlashEnabled)
+
+	const refused = (await commands.moveTo(id, focuserId, { token: 'double', position: start + 300 }).json()) as CommandAccepted
+	expect(await outcome(events, refused.operationId)).toMatchObject({ state: 'failed', reason: 'unexpectedState' })
+	expect(progressOf(events, refused.operationId)).toEqual([])
+	expect(focuser.position.value).toBe(start)
+
+	client.sendSwitch({ device: focuser.name, name: 'FOCUS_BACKLASH_TOGGLE', elements: { INDI_DISABLED: true } })
+	await waitUntil(() => !focuser.backlashEnabled)
+
+	const moved = (await commands.moveTo(id, focuserId, { token: 'single', position: start + 300 }).json()) as CommandAccepted
+	expect(await outcome(events, moved.operationId)).toMatchObject({ state: 'succeeded' })
+	expect(progressOf(events, moved.operationId)).toEqual([`1/2 Moving to ${start + 380}`, `2/2 Moving to ${start + 300}`])
+}, 40000)

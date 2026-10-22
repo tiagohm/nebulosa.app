@@ -256,8 +256,12 @@ export interface FocuserState extends DeviceStateBase {
 	readonly reversed: boolean
 	// Whether the position counter can be redefined without moving.
 	readonly canSync: boolean
-	// Whether the driver offers a backlash compensation of its own, whose state is not reported.
+	// Whether the driver offers a backlash compensation of its own that can be switched.
 	readonly hasBacklash: boolean
+	// Whether the driver compensates the backlash of every move itself; compensated moves of Nebulosa are then refused.
+	readonly backlashEnabled: boolean
+	// Backlash the driver compensates, in steps.
+	readonly backlash: DeviceRange
 	// Temperature in degrees Celsius; absent when the focuser has no thermometer.
 	readonly temperature?: number
 }
@@ -650,8 +654,8 @@ export function mountState(mount: Mount, connectionId: string): MountState {
 
 // Returns the state of a focuser, attributed to its connection.
 export function focuserState(focuser: Focuser, connectionId: string): FocuserState {
-	const { id, connected, moving, canAbsoluteMove, canRelativeMove, canAbort, canReverse, reversed, canSync, hasBacklash } = focuser
-	return { connectionId, id, connected, moving, position: range(focuser.position), canAbsoluteMove, canRelativeMove, canAbort, canReverse, reversed, canSync, hasBacklash, temperature: focuser.hasThermometer ? focuser.temperature : undefined }
+	const { id, connected, moving, canAbsoluteMove, canRelativeMove, canAbort, canReverse, reversed, canSync, hasBacklash, backlashEnabled } = focuser
+	return { connectionId, id, connected, moving, position: range(focuser.position), canAbsoluteMove, canRelativeMove, canAbort, canReverse, reversed, canSync, hasBacklash, backlashEnabled, backlash: range(focuser.backlash), temperature: focuser.hasThermometer ? focuser.temperature : undefined }
 }
 
 // Returns the state of a filter wheel, attributed to its connection.

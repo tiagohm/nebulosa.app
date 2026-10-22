@@ -25,8 +25,9 @@ import type { OperationProgressReporter, OperationRegistry } from './operations'
 // ABSOLUTE mode the compensator accumulates an offset, the commanded position minus the logical one; it is
 // kept in memory per focuser only, published with the settings, and forgotten on a sync, a reversal, a
 // disconnection, a saved change of the settings, and a restart of the server. A focuser with relative
-// positioning only is never compensated. The same compensated moves serve composite features, such as the
-// autofocus, through mover.
+// positioning only is never compensated, and a compensated move of a focuser whose driver compensates its
+// backlash itself is refused before anything moves, so no move is compensated twice. The same compensated
+// moves serve composite features, such as the autofocus, through mover.
 
 // Direction of a relative move: towards the telescope (IN) or away from it (OUT), as the driver defines.
 export type FocuserDirection = 'IN' | 'OUT'
@@ -262,12 +263,13 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 
 	// Moves a focuser to a logical position through the positions the compensator plans for it, all inside one
 	// operation of scope holding the focuser. The target (steps, rounded) and the current position are read once
-	// the focuser is held; a plan with a position outside the travel is refused before anything moves and leaves
-	// the compensator as it was. A failed or cancelled step stops the move and makes the compensator forget its
+	// the focuser is held; a focuser whose driver compensates its backlash is refused, and so is a plan with a
+	// position outside the travel, both before anything moves and leaving the compensator as it was. A failed or cancelled step stops the move and makes the compensator forget its
 	// memory, since the focuser stands at a position no plan expected.
 	async #compensated(scope: OperationScope, focuser: Focuser, settings: StoredFocuserBacklash, target: () => number, options?: FocuserCommandOptions, report?: OperationProgressReporter): Promise<OperationResult<void>> {
 		return await scope.start<void>('focuserCompensatedMove', [{ key: resourceKey(focuser), device: focuser }], async (context) => {
 			if (!focuser.connected) return failedOperationResult('disconnected')
+			if (focuser.backlashEnabled) return failedOperationResult('unexpectedState', `the driver of ${focuser.name} compensates its backlash; turn it or the compensation of Nebulosa off`)
 
 			const { compensator } = this.#compensation(focuser, settings)
 			const previous = compensator.state

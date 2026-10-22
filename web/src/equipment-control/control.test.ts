@@ -4,7 +4,23 @@ import { proxy } from 'valtio'
 import { commandUrl, type ControlRuntime, deviceStateOf, handleControlEvent, newControlRuntime, refreshStates, sendCommand, startCommand, stopCommand, watchControl } from './control'
 
 function focuser(patch: Partial<FocuserState> = {}): FocuserState {
-	return { connectionId: 'c', id: 'f', connected: true, moving: false, position: { value: 100, min: 0, max: 1000, step: 1 }, canAbsoluteMove: true, canRelativeMove: true, canAbort: true, canReverse: false, reversed: false, canSync: true, hasBacklash: false, ...patch }
+	return {
+		connectionId: 'c',
+		id: 'f',
+		connected: true,
+		moving: false,
+		position: { value: 100, min: 0, max: 1000, step: 1 },
+		canAbsoluteMove: true,
+		canRelativeMove: true,
+		canAbort: true,
+		canReverse: false,
+		reversed: false,
+		canSync: true,
+		hasBacklash: false,
+		backlashEnabled: false,
+		backlash: { value: 0, min: 0, max: 0, step: 1 },
+		...patch,
+	}
 }
 
 function states(patch: Partial<DeviceStates> = {}): DeviceStates {

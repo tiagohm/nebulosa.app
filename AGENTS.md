@@ -62,7 +62,7 @@ Preserve these boundaries:
 Run every command from the repository root.
 
 - Install: `bun install` (commit `bun.lock`; CI installs with `--frozen-lockfile`)
-- Sky catalog: `bun make:catalog` (add `--force` to regenerate) after installing and whenever its schema changes. It downloads the source files and queries SIMBAD; the generated `api/data/sky.catalog.db` is not committed, and `bun dev`, `bun start`, and `bun compile` need it.
+- Sky catalog: `bun make:catalog` (add `--force` to regenerate) after installing and whenever its schema changes. It downloads the source files and queries SIMBAD; the generated `api/data/sky.catalog.db` is not committed, and `bun dev`, `bun start`, `bun compile`, and `bun test` need it. `bun make:catalog --empty` writes the schema without downloading or querying anything, which is enough for tests.
 - Development server with hot reload and frontend HMR: `bun dev`
 - Production-mode server without compiling: `bun start`
 - Standalone executable: `bun compile`, written to `.dist/nebulosa.exe` on Windows and `.dist/nebulosa` elsewhere
@@ -113,7 +113,7 @@ Follow the OXC configuration (`.oxfmtrc.json`, `.oxlintrc.json`) and `.editorcon
 - Style with Tailwind utility classes in `className`. Use `tv` from `tailwind-variants` for component variants and `cn` to merge class names; do not add CSS-in-JS or CSS modules.
 - Keep shared client state in `valtio` proxies; keep transient UI state in React state.
 - Reference static assets relative to the importing HTML or module so Bun can hash and bundle them.
-- Never use ARIA role and aria-* attributes.
+- Never use aria-* attributes.
 
 ## Documentation Comments
 

@@ -39,6 +39,10 @@ export interface BuiltinStarDetectionSettings {
 	// Side of the uniqueness box of the detector, in pixels: pairs of stars of similar brightness closer
 	// than it are removed; 0 disables the filter.
 	readonly searchRegion: number
+	// Largest signal-aperture radius, in pixels: above STAR_SIGNAL_RADIUS (4) the aperture grows to measure
+	// defocused stars, such as the frames of an Auto Focus, whose HFD the fixed aperture saturates; absent keeps
+	// the fixed aperture.
+	readonly maximumRadius?: number
 }
 
 // Settings of ASTAP's star extraction.
@@ -74,7 +78,8 @@ export interface StarDetectionRequest {
 	readonly acceptance: StarAcceptance
 }
 
-// Who asked for a job: a person (manual), or the post-capture analysis of a frame.
+// Who asked for a job: a person (manual), the post-capture analysis of a frame, or the measurement of an Auto
+// Focus frame.
 export type StarDetectionOrigin =
 	| { readonly kind: 'manual' }
 	| {
@@ -89,6 +94,19 @@ export type StarDetectionOrigin =
 			readonly frameId: string
 			// Frame number within the session, from 1.
 			readonly generation: number
+	  }
+	| {
+			readonly kind: 'autofocus'
+			// Id of the Auto Focus session.
+			readonly sessionId: string
+			// Id of the open connection that provides the camera.
+			readonly connectionId: string
+			// Exact id of the camera.
+			readonly deviceId: string
+			// Identity of the frame: the operation id and the capture ordinal.
+			readonly frameId: string
+			// Auxiliary frame number within the session, from 1.
+			readonly capture: number
 	  }
 
 // State of a job: waiting for its detector, running, or ended (completed, failed, cancelled, or skipped,
@@ -246,6 +264,9 @@ export const DEFAULT_ASTAP_SETTINGS: AstapStarDetectionSettings = { provider: 'a
 // Acceptance of every star with finite, positive measurements inside the image.
 export const DEFAULT_STAR_ACCEPTANCE: StarAcceptance = { minSNR: 0, minHfd: 0, maxHfd: 0, edgeMargin: 0 }
 
+// Origin of a detection a person asked for.
+const MANUAL_ORIGIN: StarDetectionOrigin = { kind: 'manual' }
+
 // Most stars the built-in detector returns, whatever maxStars asks for (the capacity of its star list).
 export const BUILTIN_STAR_LIMIT = 2000
 
@@ -309,7 +330,7 @@ export function aggregateHfd(stars: readonly DetectedStar[], accepted: readonly 
 // Returns the key of an equivalent detection: the same image, detector settings, acceptance criteria, and
 // ASTAP executable. The timeout is left out, since it does not change a result.
 export function cacheKey(imageId: string, { detector, acceptance }: StarDetectionRequest, tool?: Readonly<ExternalToolConfig>): string {
-	const settings = detector.provider === 'builtin' ? [detector.provider, detector.maxStars, detector.minSNR, detector.searchRegion] : [detector.provider, detector.maxStars, detector.minSNR, tool?.executable]
+	const settings = detector.provider === 'builtin' ? [detector.provider, detector.maxStars, detector.minSNR, detector.searchRegion, detector.maximumRadius] : [detector.provider, detector.maxStars, detector.minSNR, tool?.executable]
 	return JSON.stringify([imageId, settings, acceptance.minSNR, acceptance.minHfd, acceptance.maxHfd, acceptance.edgeMargin])
 }
 
@@ -395,9 +416,9 @@ export class StarDetectionService {
 		return tool && { request, tool }
 	}
 
-	// Submits a manual detection of an open image. An equivalent completed detection of the same image is
-	// answered instead of running again (cached).
-	async submit(imageId: string, request: StarDetectionRequest): Promise<StarDetectionSubmitOutcome> {
+	// Submits a detection of an open image with the manual priority, as origin (manual by default). An
+	// equivalent completed detection of the same image is answered instead of running again (cached).
+	async submit(imageId: string, request: StarDetectionRequest, origin: StarDetectionOrigin = MANUAL_ORIGIN): Promise<StarDetectionSubmitOutcome> {
 		const preparation = await this.prepare(request)
 		if (!preparation) return { status: 'astapUnavailable' }
 		if (this.images.name(imageId) === undefined) return { status: 'missing' }
@@ -406,7 +427,7 @@ export class StarDetectionService {
 		if (cached) return { status: 'cached', job: cached.job }
 		if (this.#full()) return { status: 'queueFull' }
 
-		const job = this.#enqueue(imageId, preparation, { kind: 'manual' }, 'manual', 'manual')
+		const job = this.#enqueue(imageId, preparation, origin, 'manual', 'manual')
 		return job ? { status: 'accepted', job } : { status: 'missing' }
 	}
 
@@ -470,9 +491,9 @@ export class StarDetectionService {
 	// Detects the stars of an open image and resolves to the result once the job completed, for a consumer
 	// that needs the measurement of one specific image, such as an Auto Focus step: the job runs with the
 	// manual priority and is never replaced by a newer frame. Aborting signal cancels the job. Throws
-	// StarDetectionError when the job does not complete.
-	async measure(imageId: string, request: StarDetectionRequest, signal?: AbortSignal): Promise<StarDetectionResult> {
-		const outcome = await this.submit(imageId, request)
+	// StarDetectionError when the job does not complete. origin names the requester, manual by default.
+	async measure(imageId: string, request: StarDetectionRequest, signal?: AbortSignal, origin?: StarDetectionOrigin): Promise<StarDetectionResult> {
+		const outcome = await this.submit(imageId, request, origin)
 		if (outcome.status === 'missing') throw new StarDetectionError('expired', 'The image is not open')
 		if (outcome.status === 'astapUnavailable') throw new StarDetectionError('astapUnavailable', 'ASTAP is not configured')
 		if (outcome.status === 'queueFull') throw new StarDetectionError('queueFull', 'Too many star detections are waiting')
@@ -699,7 +720,7 @@ export class StarDetectionService {
 		signal.addEventListener('abort', onAbort, { once: true })
 
 		try {
-			const options: Partial<DetectStarOptions> = { maxStars: detector.maxStars, minSNR: detector.minSNR, searchRegion: detector.searchRegion }
+			const options: Partial<DetectStarOptions> = { maxStars: detector.maxStars, minSNR: detector.minSNR, searchRegion: detector.searchRegion, ...(detector.maximumRadius !== undefined && { maximumRadius: detector.maximumRadius }) }
 			worker.postMessage({ jobId, image, options } satisfies StarWorkerRequest, [image.raw.buffer])
 			return await promise
 		} finally {

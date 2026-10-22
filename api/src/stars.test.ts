@@ -44,9 +44,9 @@ const STARS = [
 
 let files = 0
 
-// Writes a 256×256 32-bit float FITS file of Gaussian stars (sigma 1.5 px) at STARS over a background of 0.1
+// Writes a 256×256 32-bit float FITS file of Gaussian stars (sigma in px, 1.5 by default) at STARS over a background of 0.1
 // with deterministic noise, and returns its path.
-function writeStarField() {
+function writeStarField(sigma = 1.5) {
 	const width = 256
 	const height = 256
 	const cards = ['SIMPLE  =                    T', 'BITPIX  =                  -32', 'NAXIS   =                    2', `NAXIS1  = ${String(width).padStart(20)}`, `NAXIS2  = ${String(height).padStart(20)}`, 'END']
@@ -59,7 +59,7 @@ function writeStarField() {
 		for (let x = 0; x < width; x++) {
 			seed = (seed * 1103515245 + 12345) % 2147483648
 			let value = 0.1 + (seed / 2147483648 - 0.5) * 0.004
-			for (const star of STARS) value += star.peak * Math.exp(-((x - star.x) ** 2 + (y - star.y) ** 2) / (2 * 1.5 * 1.5))
+			for (const star of STARS) value += star.peak * Math.exp(-((x - star.x) ** 2 + (y - star.y) ** 2) / (2 * sigma * sigma))
 			data.writeFloatBE(value, (y * width + x) * 4)
 		}
 	}
@@ -357,6 +357,27 @@ describe('built-in detection', () => {
 
 		expect(error).toBeInstanceOf(StarDetectionError)
 		expect((error as StarDetectionError).code).toBe('cancelled')
+	})
+
+	test('a larger maximum radius measures the HFD of defocused stars the fixed aperture cannot', async () => {
+		const { images, service } = setup()
+		const info = await images.open(writeStarField(4))
+		const fixed = await service.measure(info.id, BUILTIN)
+		const grown = await service.measure(info.id, { ...BUILTIN, detector: { ...DEFAULT_BUILTIN_SETTINGS, maximumRadius: 32 } })
+
+		// A Gaussian of sigma 4 px has an HFD of about 2.355 × 4 = 9.4 px.
+		expect(grown.aggregateHfd).toBeGreaterThan(8.5)
+		expect(grown.aggregateHfd).toBeLessThan(10.5)
+		expect(fixed.aggregateHfd === undefined || fixed.aggregateHfd < grown.aggregateHfd! - 1).toBeTrue()
+	})
+
+	test('measure declares its origin on the job', async () => {
+		const { images, service, events } = setup()
+		const info = await images.open(writeStarField())
+		const origin = { kind: 'autofocus', sessionId: 's', connectionId: 'c', deviceId: 'd', frameId: 'op:1', capture: 1 } as const
+		await service.measure(info.id, BUILTIN, undefined, origin)
+
+		expect(events.at(-1)!.job.origin).toEqual(origin)
 	})
 })
 

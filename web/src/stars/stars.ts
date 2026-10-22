@@ -119,11 +119,15 @@ export function latestResult(state: Pick<StarsState, 'jobs' | 'latest' | 'result
 	return job?.state === 'completed' ? state.results[job.jobId] : undefined
 }
 
-// Records a job, making it the latest of its image unless a newer one is known.
-function track(state: StarsState, job: StarDetectionJob) {
+// Records a job. A job seen for the first time becomes the latest of its image unless a newer one is known;
+// a job already known never takes it back, so an update or a snapshot cannot undo a submission. submitted
+// makes the job the latest whatever its age, as the answer to a submission of this tab, which may be the
+// earlier completed job of an equivalent request.
+function track(state: StarsState, job: StarDetectionJob, submitted = false) {
+	const known = job.jobId in state.jobs
 	state.jobs[job.jobId] = job
 	const latest = latestJob(state, job.imageId)
-	if (!latest || latest.queuedAt <= job.queuedAt) state.latest[job.imageId] = job.jobId
+	if (submitted || !latest || (!known && latest.queuedAt <= job.queuedAt)) state.latest[job.imageId] = job.jobId
 	prune(state)
 }
 
@@ -181,7 +185,7 @@ export async function runDetection(state: StarsState, imageId: string, detection
 			return
 		}
 
-		track(state, (await response.json()) as StarDetectionJob)
+		track(state, (await response.json()) as StarDetectionJob, true)
 	} catch {
 		state.submitErrors[imageId] = 'Unable to reach the server'
 	}

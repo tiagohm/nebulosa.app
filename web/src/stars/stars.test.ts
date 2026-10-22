@@ -79,6 +79,21 @@ describe('jobs', () => {
 		expect(stars.submitErrors['image-2']).toBe('ASTAP is not configured')
 	})
 
+	test('a cached answer to a submission becomes the latest job again, even after a reconnection', async () => {
+		const stars = state()
+		const builtin = job({ state: 'completed' })
+		const astap = job({ jobId: 'job-2', state: 'completed', queuedAt: 2000 })
+		handleStarsEvent(stars, { type: 'stars:updated', job: builtin })
+		handleStarsEvent(stars, { type: 'stars:updated', job: astap })
+		expect(latestJob(stars, 'image-1')?.jobId).toBe('job-2')
+
+		await runDetection(stars, 'image-1', DEFAULT_STAR_REQUEST, fetcher({ '/api/images/image-1/stars': [200, builtin] }).request)
+		expect(latestJob(stars, 'image-1')?.jobId).toBe('job-1')
+
+		await refreshStars(stars, fetcher({ '/api/stars': [200, { jobs: [builtin, astap] }] }).request)
+		expect(latestJob(stars, 'image-1')?.jobId).toBe('job-1')
+	})
+
 	test('the result of a completed job is fetched once and matched to its image', async () => {
 		const stars = state()
 		const result = { ...RESULT, jobId: 'job-1', imageId: 'image-1' } as unknown as StarDetectionResult

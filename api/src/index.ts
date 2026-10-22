@@ -8,7 +8,8 @@ import { type DomeAltitudeRequest, type DomeBacklashRequest, DomeCommands, type 
 import { createExternalToolsRoutes, DEFAULT_SETTINGS_FILE, ExternalToolsStore } from './externaltools'
 import { handleListDirectory } from './files'
 import { FlatPanelCommands, type FlatPanelIntensityRequest, type FlatPanelLightRequest } from './flatpanels'
-import { FocuserCommands, type FocuserMoveRequest, type FocuserMoveToRequest, type FocuserReverseRequest, type FocuserSyncRequest } from './focusers'
+import { DEFAULT_FOCUSERS_FILE, FocuserBacklashStore } from './focuserbacklash'
+import { type FocuserBacklashSaveRequest, FocuserCommands, type FocuserMoveRequest, type FocuserMoveToRequest, type FocuserReverseRequest, type FocuserSyncRequest } from './focusers'
 import { GuideOutputCommands, type GuidePulseRequest, type GuideRateRequest } from './guideoutputs'
 import { handleDeriveImage, handleDownloadImage, handleOpenImage, handleRenderImage, handleSaveImage, images } from './images'
 import { MountCommands, type MountGoToRequest, type MountNudgeRequest, type MountSiteRequest, type MountSlewRateRequest, type MountSlewRequest, type MountSyncRequest, type MountTimeRequest, type MountTrackingRequest, type MountTrackModeRequest } from './mounts'
@@ -57,7 +58,8 @@ export type { ExternalToolCapability, ExternalToolCheck, ExternalToolCheckCode, 
 export type { LeasedPhase, LeasedSession, LeasedStartResponse, LeaseOptions } from './leases'
 export type { DirectoryListing, FileEntry } from './files'
 export type { FlatPanelIntensityRequest, FlatPanelLightRequest } from './flatpanels'
-export type { FocuserDirection, FocuserMoveRequest, FocuserMoveToRequest, FocuserReverseRequest, FocuserSyncRequest } from './focusers'
+export type { FocuserBacklashConfig, FocuserBacklashMode } from './focuserbacklash'
+export type { FocuserBacklashEvent, FocuserBacklashSaveRequest, FocuserBacklashState, FocuserDirection, FocuserMoveRequest, FocuserMoveToRequest, FocuserReverseRequest, FocuserSyncRequest } from './focusers'
 export type { GuidePulseRequest, GuideRateRequest } from './guideoutputs'
 export type {
 	MountCoordinate,
@@ -77,7 +79,7 @@ export type {
 	MountTrackingRequest,
 	MountTrackModeRequest,
 } from './mounts'
-export type { OperationDevice, OperationEvent, OperationKind, OperationRecord, OperationState } from './operations'
+export type { OperationDevice, OperationEvent, OperationKind, OperationProgress, OperationRecord, OperationState } from './operations'
 export type { RotatorMoveByRequest, RotatorMoveToRequest, RotatorReverseRequest, RotatorSyncRequest } from './rotators'
 export type { WheelMoveRequest, WheelNamesRequest } from './wheels'
 export type {
@@ -114,8 +116,9 @@ const mounts = new MountCommands(connections.devices, (id) => connections.client
 // Pulse guiding of the guide outputs of the open connections.
 const guideOutputs = new GuideOutputCommands(connections.devices, (id) => connections.client(id), operations)
 
-// Focuser, filter wheel, and rotator commands over the devices of the open connections.
-const focusers = new FocuserCommands(connections.devices, (id) => connections.client(id), operations)
+// Focuser, filter wheel, and rotator commands over the devices of the open connections; focuser moves apply the
+// backlash compensation saved for each focuser.
+const focusers = new FocuserCommands(connections.devices, (id) => connections.client(id), operations, new FocuserBacklashStore(DEFAULT_FOCUSERS_FILE), broadcast)
 const wheels = new WheelCommands(connections.devices, (id) => connections.client(id), operations)
 const rotators = new RotatorCommands(connections.devices, (id) => connections.client(id), operations)
 
@@ -293,6 +296,12 @@ export const routes = {
 	'/api/connections/:id/focusers/:deviceId/move': {
 		// Starts a move by a number of steps; the outcome arrives as operation:updated events.
 		POST: async (req) => focusers.move(req.params.id, req.params.deviceId, (await req.json()) as FocuserMoveRequest),
+	},
+	'/api/connections/:id/focusers/:deviceId/backlash': {
+		// Backlash compensation of a focuser, connected or not.
+		GET: (req) => focusers.backlashState(req.params.id, req.params.deviceId),
+		// Saves the backlash compensation of a focuser (FocuserBacklashSaveRequest), applied from the next move.
+		PUT: async (req) => focusers.saveBacklash(req.params.id, req.params.deviceId, (await req.json()) as FocuserBacklashSaveRequest),
 	},
 	'/api/connections/:id/focusers/:deviceId/sync': {
 		// Redefines the position counter without moving.

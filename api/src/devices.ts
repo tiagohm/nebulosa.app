@@ -256,6 +256,8 @@ export interface FocuserState extends DeviceStateBase {
 	readonly reversed: boolean
 	// Whether the position counter can be redefined without moving.
 	readonly canSync: boolean
+	// Whether the driver offers a backlash compensation of its own, whose state is not reported.
+	readonly hasBacklash: boolean
 	// Temperature in degrees Celsius; absent when the focuser has no thermometer.
 	readonly temperature?: number
 }
@@ -648,8 +650,8 @@ export function mountState(mount: Mount, connectionId: string): MountState {
 
 // Returns the state of a focuser, attributed to its connection.
 export function focuserState(focuser: Focuser, connectionId: string): FocuserState {
-	const { id, connected, moving, canAbsoluteMove, canRelativeMove, canAbort, canReverse, reversed, canSync } = focuser
-	return { connectionId, id, connected, moving, position: range(focuser.position), canAbsoluteMove, canRelativeMove, canAbort, canReverse, reversed, canSync, temperature: focuser.hasThermometer ? focuser.temperature : undefined }
+	const { id, connected, moving, canAbsoluteMove, canRelativeMove, canAbort, canReverse, reversed, canSync, hasBacklash } = focuser
+	return { connectionId, id, connected, moving, position: range(focuser.position), canAbsoluteMove, canRelativeMove, canAbort, canReverse, reversed, canSync, hasBacklash, temperature: focuser.hasThermometer ? focuser.temperature : undefined }
 }
 
 // Returns the state of a filter wheel, attributed to its connection.
@@ -904,6 +906,12 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 		}
 
 		return undefined
+	}
+
+	// Id of the open connection that provides a device; undefined when its client is not attached.
+	connectionOf(device: Device): string | undefined {
+		const client = device[CLIENT]
+		return client && this.#connections.get(client)
 	}
 
 	// Summarizes a device listed under type; undefined when its client is not attached.

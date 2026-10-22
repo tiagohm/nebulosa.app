@@ -1,8 +1,8 @@
-import { randomUUID } from 'crypto'
 import { constants } from 'fs'
-import { access, mkdir, readFile, rename, rm, stat, writeFile } from 'fs/promises'
+import { access, readFile, stat } from 'fs/promises'
 import { homedir } from 'os'
-import { dirname, isAbsolute, join, resolve } from 'path'
+import { isAbsolute, join, resolve } from 'path'
+import { errorCode, isRecord, writeAtomically } from './util'
 
 // Server-side settings of the external programs the backend runs, such as ASTAP. Each supported program
 // is registered here with the capabilities its adapters provide; nothing else can be configured, and no
@@ -172,11 +172,6 @@ function definition(id: ExternalToolId): ExternalToolDefinition {
 	return EXTERNAL_TOOLS.find((tool) => tool.id === id)!
 }
 
-// Whether value is a non-null, non-array object.
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 // Whether two configurations are the same.
 function sameConfig(a: ExternalToolConfig, b: ExternalToolConfig) {
 	return a.executable === b.executable && a.timeout === b.timeout
@@ -222,27 +217,6 @@ export function parseSettings(text: string): LoadedSettings {
 // Returns the content of the settings file for the settings of every program.
 function serializeSettings(tools: ReadonlyMap<ExternalToolId, StoredTool>) {
 	return `${JSON.stringify({ version: SETTINGS_VERSION, tools: Object.fromEntries(tools) }, undefined, '\t')}\n`
-}
-
-// Replaces a file so it never appears partially written: the content is written to a temporary file next
-// to it, readable and writable by the server's user only, then renamed over it. Creates the directory when
-// missing. Throws when the file cannot be written; the previous file is then left as it was.
-async function writeAtomically(file: string, text: string) {
-	await mkdir(dirname(file), { recursive: true })
-	const temporary = `${file}.${randomUUID()}.tmp`
-
-	try {
-		await writeFile(temporary, text, { mode: 0o600 })
-		await rename(temporary, file)
-	} catch (error) {
-		await rm(temporary, { force: true })
-		throw error
-	}
-}
-
-// Error code of a failed filesystem call, if any.
-function errorCode(error: unknown) {
-	return Error.isError(error) && 'code' in error ? (error.code as string) : undefined
 }
 
 // Outcome of inspecting an executable, before timing is added.

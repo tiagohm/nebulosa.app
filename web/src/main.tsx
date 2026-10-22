@@ -6,6 +6,7 @@ import { handleNudgeEvent, nudgeRuntime, refreshNudgeMount, refreshNudges } from
 import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
 import { controlRuntime, handleControlEvent, refreshStates } from './equipment-control/control'
 import { domeMotionRuntime, handleDomeMotionEvent, refreshDomeMotions } from './equipment-control/domeMotion'
+import { focuserBacklashRuntime, handleFocuserBacklashEvent, refreshFocuserBacklash } from './equipment-control/focuserBacklash'
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
 import { onOpen, subscribe } from './events'
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
@@ -35,6 +36,7 @@ const stops = [
 		handleDeviceEvent(deviceState, event)
 		handleControlEvent(controlRuntime, event)
 		handleDomeMotionEvent(domeMotionRuntime, event)
+		handleFocuserBacklashEvent(focuserBacklashRuntime, event)
 		handleMountEvent(mountRuntime, event)
 		handleOperationEvent(operationsState, event)
 		handleSensorEvent(sensorRuntime, event)
@@ -45,13 +47,14 @@ const stops = [
 	}),
 	// Every (re)open resynchronizes the open connections, the watched devices and their control states, the followed mount, the
 	// running operations, the camera sensors, the captures and camera capabilities, and the nudged mount
-	// and its nudge sessions, the dome rotation sessions, the external tool settings, and the star detection jobs, which may have changed while the socket was closed.
+	// and its nudge sessions, the dome rotation sessions, the focuser backlash compensations, the external tool settings, and the star detection jobs, which may have changed while the socket was closed.
 	onOpen(() => {
 		void refreshExternalTools(externalToolsState)
 		void refreshServers(connectionState)
 		void refreshDevices(deviceState)
 		void refreshStates(controlRuntime)
 		void refreshDomeMotions(domeMotionRuntime)
+		void refreshFocuserBacklash(focuserBacklashRuntime)
 		void refreshMount(mountRuntime)
 		void refreshOperations(operationsState)
 		refreshSensors(sensorRuntime)

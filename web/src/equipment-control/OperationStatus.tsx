@@ -41,7 +41,7 @@ export function OperationStatus({ group }: OperationStatusProps) {
 		<PanelSection title="Activity">
 			{Array.from(running.values(), (operation) => (
 				<p key={operation.operationId} className="m-0 text-accent">
-					{OPERATION_LABELS[operation.kind]} running…
+					{operation.progress ? `${OPERATION_LABELS[operation.kind]} — Step ${operation.progress.step} of ${operation.progress.steps}: ${operation.progress.message}…` : `${OPERATION_LABELS[operation.kind]} running…`}
 				</p>
 			))}
 			{pending.map((label) => (

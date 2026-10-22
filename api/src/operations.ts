@@ -48,6 +48,20 @@ export interface OperationDevice {
 	readonly deviceId: string
 }
 
+// Progress of a running operation made of several physical steps, such as the waypoints of a backlash
+// compensated focuser move.
+export interface OperationProgress {
+	// Step in execution, 1-based.
+	readonly step: number
+	// Number of steps of the operation, >= 1.
+	readonly steps: number
+	// What the step does, meant for people, such as "Moving to 1100".
+	readonly message: string
+}
+
+// Reports the progress of the operation it was given to.
+export type OperationProgressReporter = (progress: OperationProgress) => void
+
 // Operation as published to clients.
 export interface OperationRecord {
 	// Id of the operation.
@@ -64,9 +78,11 @@ export interface OperationRecord {
 	readonly error?: string
 	// Instant the operation started, Unix milliseconds (UTC).
 	readonly startedAt: number
+	// Latest progress reported while running; absent from a finished record.
+	readonly progress?: OperationProgress
 }
 
-// Notification published when an operation starts or ends.
+// Notification published when an operation starts, progresses, or ends.
 export type OperationEvent = { readonly type: 'operation:updated'; readonly operation: OperationRecord }
 
 // Receiver of operation events.
@@ -117,12 +133,19 @@ export class OperationRegistry implements Disposable {
 
 	// Starts and tracks the operation of a command identified by a token the client generated for one
 	// request, so a request repeated after a lost response, a retry, or a double submission never commands
-	// the device twice: a token already seen returns the record of its operation without calling start.
-	run(kind: OperationKind, devices: readonly OperationDevice[], token: string, start: () => Promise<OperationResult<unknown>>): OperationRecord {
+	// the device twice: a token already seen returns the record of its operation without calling start. start
+	// receives a reporter publishing the progress of the operation while it runs.
+	run(kind: OperationKind, devices: readonly OperationDevice[], token: string, start: (report: OperationProgressReporter) => Promise<OperationResult<unknown>>): OperationRecord {
 		const known = this.#tokens.get(token)
 		if (known) return known
 
-		const record = this.track(kind, devices, start())
+		const operationId = crypto.randomUUID()
+		const record = this.#track(
+			operationId,
+			kind,
+			devices,
+			start((progress) => this.#progress(operationId, progress)),
+		)
 		this.#tokens.set(token, record)
 		if (this.#tokens.size > MAX_TOKENS) this.#tokens.delete(this.#tokens.keys().next().value!)
 		return record
@@ -132,7 +155,12 @@ export class OperationRegistry implements Disposable {
 	// result settles; a rejected result fails with reason commandFailed. Returns the running record, whose
 	// id names the operation in every later event.
 	track(kind: OperationKind, devices: readonly OperationDevice[], result: Promise<OperationResult<unknown>>): OperationRecord {
-		const record: OperationRecord = { operationId: crypto.randomUUID(), kind, devices, state: 'running', startedAt: Date.now() }
+		return this.#track(crypto.randomUUID(), kind, devices, result)
+	}
+
+	// Publishes the operation operationId as running and as finished once result settles.
+	#track(operationId: string, kind: OperationKind, devices: readonly OperationDevice[], result: Promise<OperationResult<unknown>>): OperationRecord {
+		const record: OperationRecord = { operationId, kind, devices, state: 'running', startedAt: Date.now() }
 		this.#running.set(record.operationId, record)
 		this.listener({ type: 'operation:updated', operation: record })
 
@@ -142,6 +170,15 @@ export class OperationRegistry implements Disposable {
 		)
 
 		return record
+	}
+
+	// Publishes the progress of a running operation; ignored before it is tracked and once it finished.
+	#progress(operationId: string, progress: OperationProgress) {
+		const record = this.#running.get(operationId)
+		if (!record) return
+		const updated: OperationRecord = { ...record, progress }
+		this.#running.set(operationId, updated)
+		this.listener({ type: 'operation:updated', operation: updated })
 	}
 
 	// Forgets a finished operation and publishes its final record.

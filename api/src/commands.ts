@@ -2,7 +2,7 @@ import type { Client, Device } from 'nebulosa/src/devices/indi/device'
 import type { FailedOperationResult, OperationFailureReason, OperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { DeviceRegistry, ManagedDeviceMap, ManagedDeviceType } from './devices'
-import type { OperationKind, OperationRegistry } from './operations'
+import type { OperationKind, OperationProgressReporter, OperationRegistry } from './operations'
 
 // HTTP contract shared by the device command services. A command addresses one device of one open
 // connection by its exact id and answers in one of two ways:
@@ -141,8 +141,8 @@ export async function stopResponse(operations: OperationRegistry, device: Device
 
 // Starts a durable command on a device and responds 202 with its operation id. A token already seen
 // answers its first operation without commanding again; otherwise a device that cannot be granted now is
-// refused as busy before anything is sent.
-export function startCommand(operations: OperationRegistry, kind: OperationKind, connectionId: string, device: Device, { token }: CommandRequest, start: () => Promise<OperationResult<unknown>>): Response {
+// refused as busy before anything is sent. start receives the progress reporter of the operation.
+export function startCommand(operations: OperationRegistry, kind: OperationKind, connectionId: string, device: Device, { token }: CommandRequest, start: (report: OperationProgressReporter) => Promise<OperationResult<unknown>>): Response {
 	const known = operations.started(token)
 	if (known) return Response.json({ operationId: known.operationId } satisfies CommandAccepted, { status: 202 })
 	if (!operations.available(device)) return busy()

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, readdirSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -128,7 +128,7 @@ async function setup() {
 	// Whether the camera and the focuser are free for a new operation.
 	const released = () => operations.available(camera) && operations.available(focuser)
 
-	return { id, operations, operationEvents, images, captures, capturesDir, autoFocus, auxiliaryDir, events, camera, cameraId, focuser, focuserDevice: { connectionId: id, deviceId: focuserId }, summary, ended, session, released }
+	return { manager, client, id, operations, operationEvents, images, captures, capturesDir, autoFocus, auxiliaryDir, events, camera, cameraId, focuser, focuserDevice: { connectionId: id, deviceId: focuserId }, summary, ended, session, released }
 }
 
 // Starts a session and returns its ids.
@@ -197,6 +197,21 @@ describe('sessions', () => {
 		expect(focuser.position.value).toBe(START)
 		expect(released()).toBeTrue()
 	}, 180000)
+
+	test('every frame snoops the focuser of the session with the mount, filter wheel and rotator of the request', async () => {
+		const { manager, client, id, cameraId, autoFocus, camera, focuser, focuserDevice, summary, ended } = await setup()
+		const snoop = spyOn(manager.devices.cameras, 'snoop')
+		const devices = manager.devices.list(client)
+		const device = (type: string) => devices.find((device) => device.type === type)!
+		const { sessionId } = await start(autoFocus, id, cameraId, request(focuserDevice, { snoop: { mount: device('mount').id, wheel: device('wheel').id, rotator: device('rotator').id } }))
+		await waitUntil(() => summary()?.state === 'measuring')
+		await autoFocus.stop(sessionId)
+		await waitUntil(ended)
+
+		const [mount, wheel, rotator] = (['mount', 'wheel', 'rotator'] as const).map((type) => manager.devices.get(client, device(type).id))
+		expect(snoop).toHaveBeenCalledWith(camera, mount, focuser, wheel, rotator)
+		snoop.mockRestore()
+	}, 60000)
 
 	test('a stop during an exposure cancels the session where it stands and releases both devices', async () => {
 		const { id, cameraId, autoFocus, focuserDevice, focuser, ended, summary, events, released } = await setup()

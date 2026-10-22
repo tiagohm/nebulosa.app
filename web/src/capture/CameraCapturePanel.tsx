@@ -6,7 +6,7 @@ import { roleAvailability } from '../equipment/availability'
 import { useRoleDevice } from '../equipment/useEquipment'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { operationsState } from '../operations'
-import { acquisitionSettings, activeProfile, analysisSettings, type CameraAcquisitionSettings, profileState, setAcquisitionSettings } from '../profile/profile'
+import { acquisitionSettings, activeProfile, activeSetup, analysisSettings, type CameraAcquisitionSettings, profileState, setAcquisitionSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
@@ -15,7 +15,7 @@ import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
-import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, FRAME_STATE_LABELS, type FrameState, frameState, refreshCapabilities, startCapture, stopCapture } from './capture'
+import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureSnoop, captureStatus, FILE_STATE_LABELS, fileState, FRAME_STATE_LABELS, type FrameState, frameState, refreshCapabilities, startCapture, stopCapture } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import type { CaptureModePanelProps } from './modes'
 import { PostCaptureAnalysis } from './PostCaptureAnalysis'
@@ -28,7 +28,8 @@ import { PostCaptureAnalysis } from './PostCaptureAnalysis'
 // the capture it starts is the server's, run on the device the view's role resolves to when it starts, and
 // shown here from the server state whichever tab started it. Controls that would change a running capture
 // are disabled; a control the camera does not support is not shown, and the values sent are fitted to the
-// camera's reported capabilities.
+// camera's reported capabilities. Every capture snoops the mount, focuser, filter wheel, and rotator the
+// equipment setup assigns into its frame headers.
 
 // Acquisition modes, in display order.
 const EXPOSURE_MODES: readonly CaptureRequest['exposureMode'][] = ['single', 'fixed', 'loop']
@@ -96,7 +97,7 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 	}
 
 	function start() {
-		if (device) void startCapture(captureRuntime, device.connectionId, device.id, { ...captureRequest(settings, capabilities), ...(analysis.enabled && { analysis: { policy: analysis.policy, request: analysis.request } }) })
+		if (device) void startCapture(captureRuntime, device.connectionId, device.id, { ...captureRequest(settings, capabilities), snoop: captureSnoop(activeSetup(activeProfile(profiles))), ...(analysis.enabled && { analysis: { policy: analysis.policy, request: analysis.request } }) })
 	}
 
 	const xisf = capabilities?.transferFormats.includes('XISF') === true

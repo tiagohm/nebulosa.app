@@ -1,8 +1,8 @@
-import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusState, AutoFocusVerification, CameraCapabilities, ServerEvent } from 'api'
+import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusState, AutoFocusVerification, CameraCapabilities, CaptureRequest, CaptureSnoop, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import { responseError } from '../http'
 import { AUTO_FOCUS_APERTURE, type AutoFocusSettings } from '../profile/profile'
-import { cameraKey } from './capture'
+import { cameraKey, captureRequest } from './capture'
 
 // Auto Focus sessions as this tab knows them. The server owns every session, whichever tab started it, so
 // this store only mirrors it: the compact summary of the latest session of each camera arrives with every
@@ -71,29 +71,18 @@ export function defaultStepSize(min: number, max: number) {
 	return Math.max(1, Math.round((max - min) / 200))
 }
 
-// Builds the start request of the Auto Focus form of a view for a focuser, its frame settings fitted to the
-// camera's capabilities as Camera Capture does. stepSize is the step size shown, in steps.
-export function autoFocusRequest(settings: Readonly<AutoFocusSettings>, focuser: { readonly connectionId: string; readonly deviceId: string }, stepSize: number, capabilities?: CameraCapabilities): Omit<AutoFocusRequest, 'token'> {
-	const exposure = capabilities?.exposure
+// Builds the start request of the Auto Focus form of a view for a focuser. The frames take the exposure and camera
+// settings (gain, offset, binning, subframe, readout mode) of the view's Camera Capture form, fitted to the camera's
+// capabilities as a capture is, and snoop the mount, filter wheel, and rotator of snoop besides the focuser.
+// stepSize is the step size shown, in steps.
+export function autoFocusRequest(settings: Readonly<AutoFocusSettings>, acquisition: Readonly<CaptureRequest>, focuser: { readonly connectionId: string; readonly deviceId: string }, stepSize: number, snoop: Readonly<CaptureSnoop>, capabilities?: CameraCapabilities): Omit<AutoFocusRequest, 'token'> {
+	const { exposureTime, gain, offset, binX, binY, subframe, x, y, width, height, frameFormat } = captureRequest(acquisition, capabilities)
 	const { detector, acceptance } = settings.detection
-	const bin = capabilities?.bin ? Math.min(settings.bin, capabilities.bin.x, capabilities.bin.y) : 1
-	const clamp = (value: number, range?: { readonly min: number; readonly max: number }) => (range ? Math.min(range.max, Math.max(range.min, value)) : value)
 
 	return {
 		focuser,
-		capture: {
-			exposureTime: exposure && exposure.min > 0 ? clamp(settings.exposureTime, exposure) : Math.min(settings.exposureTime, exposure?.max ?? Infinity),
-			gain: clamp(settings.gain, capabilities?.gain),
-			offset: clamp(settings.offset, capabilities?.offset),
-			binX: bin,
-			binY: bin,
-			subframe: false,
-			x: 0,
-			y: 0,
-			width: 0,
-			height: 0,
-			frameFormat: '',
-		},
+		capture: { exposureTime, gain, offset, binX, binY, subframe, x, y, width, height, frameFormat },
+		snoop: { mount: snoop.mount, wheel: snoop.wheel, rotator: snoop.rotator },
 		// The built-in detector always measures with a grown aperture, the profile's or the default one.
 		detection: { acceptance: { ...acceptance }, detector: detector.provider === 'builtin' ? { ...detector, maximumRadius: detector.maximumRadius ?? AUTO_FOCUS_APERTURE } : { ...detector } },
 		fittingMode: settings.fittingMode,

@@ -11,7 +11,7 @@ import { SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/ty
 import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
 import { type AutoFocusCaptureOptions, type AutoFocusRunEvent, type AutoFocusRunResult, autoFocusCaptureRequest, runAutoFocus } from 'nebulosa/src/observation/focus/autofocus.runner'
 import { type FocusCurve, focusCurve } from './autofocus.curve'
-import type { CaptureSettings } from './captures'
+import { type CaptureSettings, type CaptureSnoop, snoopedDevices } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, errorResponse, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { ImageInfo, ImageStore } from './images'
@@ -33,7 +33,8 @@ import { StarDetectionError, type StarDetectionPreparation, type StarDetectionRe
 // stopped only by its stop route, an Equipment Control stop of its focuser, or a disconnection, and its record (the
 // measurements and the fitted curve, never pixels) is kept in memory until the next session of the same camera.
 // A stop never moves the focuser back; a failure lets the runner restore the start position. Positions are focuser
-// steps, HFD is in pixels, request durations are seconds.
+// steps, HFD is in pixels, request durations are seconds. Every frame snoops the focuser of the session and the
+// mount, filter wheel and rotator the request names into its header.
 
 // Settings of the frames of a session; the exposure in seconds. The frame type is always LIGHT.
 export type AutoFocusCaptureSettings = Pick<CaptureSettings, 'exposureTime' | 'gain' | 'offset' | 'binX' | 'binY' | 'subframe' | 'x' | 'y' | 'width' | 'height' | 'frameFormat'>
@@ -44,6 +45,9 @@ export interface AutoFocusRequest extends CommandRequest {
 	readonly focuser: OperationDevice
 	// Camera settings of every frame.
 	readonly capture: AutoFocusCaptureSettings
+	// Mount, filter wheel and rotator snooped into the frame headers besides the focuser, which always is; absent
+	// snoops only the focuser.
+	readonly snoop?: Omit<CaptureSnoop, 'focuser'>
 	// Star detector, its settings, and the acceptance criteria of the stars entering the aggregate HFD.
 	readonly detection: StarDetectionRequest
 	// Curve fitting that places the best focus.
@@ -346,7 +350,8 @@ export class AutoFocusSessions {
 
 			try {
 				const { request } = session.summary
-				const capture: AutoFocusCaptureOptions = { ...request.capture, exposureTimeUnit: 'second', frameType: 'LIGHT', compressed: false }
+				const { mount, wheel, rotator } = snoopedDevices(this.devices, camera, request.snoop)
+				const capture: AutoFocusCaptureOptions = { ...request.capture, exposureTimeUnit: 'second', frameType: 'LIGHT', compressed: false, mount, wheel, rotator }
 				const mover = this.#settlingMover(session, request.settleDelay)
 				const measure = (path: string, signal: AbortSignal) => this.#measure(session, path, preparation, signal)
 

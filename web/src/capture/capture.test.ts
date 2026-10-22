@@ -3,7 +3,7 @@ import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession }
 import { proxy } from 'valtio'
 import type { ImagesIo } from '../images/images'
 import { DEFAULT_ACQUISITION_SETTINGS } from '../profile/profile'
-import { cameraKey, captureCount, captureElapsed, captureRequest, type CaptureRuntime, captureRunning, captureStatus, fileState, frameState, handleCaptureEvent, refreshCaptures, renderFrame, startCapture, stopCapture } from './capture'
+import { cameraKey, captureCount, captureElapsed, captureRequest, type CaptureRuntime, captureRunning, captureSnoop, captureStatus, fileState, frameState, handleCaptureEvent, refreshCaptures, renderFrame, startCapture, stopCapture } from './capture'
 import { convertExposure, exposureUnitOf, fromSeconds, toSeconds } from './ExposureTimeInput'
 
 function newState() {
@@ -110,6 +110,12 @@ test('fits a form to the camera capabilities', () => {
 	expect(captureRequest({ ...settings, exposureTime: 0.000001 }, CAPABILITIES).exposureTime).toBe(0.00001)
 	expect(captureRequest(settings, { ...CAPABILITIES, subframe: undefined, bin: undefined, gain: undefined, transferFormats: ['FITS', 'XISF'] })).toMatchObject({ subframe: false, width: 0, height: 0, binX: 1, binY: 1, gain: 500, output: { format: 'XISF' } })
 	expect(captureRequest(settings)).toEqual(settings)
+})
+
+test('snoops the mount, focuser, filter wheel, and rotator of the equipment setup', () => {
+	const setup = { MAIN_CAMERA: { id: 'cam', name: 'Camera' }, MOUNT: { id: 'mount', name: 'Mount' }, FOCUSER: { id: 'focuser', name: 'Focuser' }, ROTATOR: { id: 'rotator', name: 'Rotator' }, DOME: { id: 'dome', name: 'Dome' } }
+	expect(captureSnoop(setup)).toEqual({ mount: 'mount', focuser: 'focuser', wheel: undefined, rotator: 'rotator' })
+	expect(captureSnoop({})).toEqual({})
 })
 
 test('describes the state of a capture', () => {

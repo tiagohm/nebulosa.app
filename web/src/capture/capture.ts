@@ -1,5 +1,6 @@
-import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession, CaptureSnapshot, ServerEvent } from 'api'
+import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession, CaptureSnapshot, CaptureSnoop, ServerEvent } from 'api'
 import { proxy } from 'valtio'
+import type { EquipmentSetup } from '../equipment/roles'
 import { type ImagesIo, ORIGINAL_DISPLAY_SETTINGS, browserIo } from '../images/images'
 
 // Camera captures as this tab knows them. The server owns every capture, whichever tab started it, so this
@@ -206,6 +207,12 @@ export function captureRequest(settings: Readonly<CaptureRequest>, capabilities?
 		frameFormat: capabilities.frameFormats.some((format) => format.name === settings.frameFormat) ? settings.frameFormat : '',
 		output: { ...settings.output, format: settings.output.format === 'XISF' && capabilities.transferFormats.includes('XISF') ? 'XISF' : 'FITS' },
 	}
+}
+
+// Returns the devices every capture of a setup's cameras snoops into its frame headers: the mount, focuser, filter
+// wheel, and rotator the setup assigns, by device id; a role with no device is not snooped.
+export function captureSnoop(setup: Readonly<EquipmentSetup>): CaptureSnoop {
+	return { mount: setup.MOUNT?.id, focuser: setup.FOCUSER?.id, wheel: setup.FILTER_WHEEL?.id, rotator: setup.ROTATOR?.id }
 }
 
 // Formats a duration in seconds with at most three decimals, such as 3.2 or 0.001.

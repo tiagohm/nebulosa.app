@@ -595,20 +595,20 @@ describe('post-capture analysis', () => {
 })
 
 describe('auto focus form', () => {
-	test('starts from the defaults with the camera settings of the Camera Capture form, and is kept apart from it per camera view', () => {
+	test('starts from the defaults and is kept per camera view, apart from the Camera Capture form', () => {
 		const state = load(newStores())
-		setAcquisitionSettings(state, 'MAIN_CAMERA', { gain: 120, offset: 10, binX: 2, binY: 2, exposureTime: 30 })
+		setAcquisitionSettings(state, 'MAIN_CAMERA', { gain: 120, exposureTime: 30 })
 
 		const capture = activeProfile(state).settings.capture
-		expect(autoFocusSettings(capture, 'MAIN_CAMERA')).toEqual({ ...DEFAULT_AUTO_FOCUS_SETTINGS, gain: 120, offset: 10, bin: 2 })
+		expect(autoFocusSettings(capture, 'MAIN_CAMERA')).toEqual(DEFAULT_AUTO_FOCUS_SETTINGS)
 
-		setAutoFocusSettings(state, 'MAIN_CAMERA', { exposureTime: 4, stepSize: 50 })
-		expect(autoFocusSettings(capture, 'MAIN_CAMERA')).toMatchObject({ exposureTime: 4, stepSize: 50, gain: 120 })
-		expect(acquisitionSettings(capture, 'MAIN_CAMERA').exposureTime).toBe(30)
+		setAutoFocusSettings(state, 'MAIN_CAMERA', { stepSize: 50 })
+		expect(autoFocusSettings(capture, 'MAIN_CAMERA')).toEqual({ ...DEFAULT_AUTO_FOCUS_SETTINGS, stepSize: 50 })
+		expect(acquisitionSettings(capture, 'MAIN_CAMERA')).toMatchObject({ gain: 120, exposureTime: 30 })
 		expect(autoFocusSettings(capture, 'GUIDE_CAMERA').stepSize).toBeUndefined()
 	})
 
-	test('is persisted and restored, replacing invalid fields with defaults and dropping an invalid step size', async () => {
+	test('is persisted and restored, replacing invalid fields with defaults and dropping an invalid step size and the frame settings it once had', async () => {
 		const stores = newStores()
 		const state = load(stores)
 		const detection = { detector: { provider: 'builtin', maxStars: 50, minSNR: 2, searchRegion: 0, maximumRadius: 24 }, acceptance: { minSNR: 0, minHfd: 1, maxHfd: 0, edgeMargin: 10 } } as const
@@ -619,7 +619,7 @@ describe('auto focus form', () => {
 		expect(autoFocusSettings(reloaded.profiles[0].settings.capture, 'MAIN_CAMERA')).toMatchObject({ fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, detection, settleDelay: 1.5, curve: false })
 
 		const invalid = newStores()
-		const autoFocus = { MAIN_CAMERA: { fittingMode: 'CUBIC', stepSize: 0, initialOffsetSteps: 0, exposureTime: -1, measureTimeout: 0, detection: { detector: { provider: 'builtin', maximumRadius: -3 } } } }
+		const autoFocus = { MAIN_CAMERA: { fittingMode: 'CUBIC', stepSize: 0, initialOffsetSteps: 0, exposureTime: 4, gain: 120, offset: 10, bin: 2, measureTimeout: 0, detection: { detector: { provider: 'builtin', maximumRadius: -3 } } } }
 		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {}, autoFocus } } }] }))
 		const restored = load(invalid).profiles[0].settings.capture.autoFocus!.MAIN_CAMERA!
 		expect(restored).toEqual({ ...DEFAULT_AUTO_FOCUS_SETTINGS, detection: { ...DEFAULT_AUTO_FOCUS_SETTINGS.detection, detector: { provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 } } })

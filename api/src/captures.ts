@@ -1,7 +1,7 @@
 import { homedir } from 'os'
 import { basename, join } from 'path'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
-import type { Camera, CameraTransferFormat, Client } from 'nebulosa/src/devices/indi/device'
+import { type Camera, type CameraTransferFormat, CLIENT, type Client } from 'nebulosa/src/devices/indi/device'
 import type { OperationFailureReason } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
@@ -28,7 +28,8 @@ import type { StarDetectionJob, StarDetectionPreparation, StarDetectionRequest, 
 // the write: the latest frame of each camera is kept and the previous one closed. Decoding never delays the
 // capture: while a frame of a camera is being decoded, only the newest of the frames arriving meanwhile is
 // kept for decoding next, so a fast loop previews fewer frames than it saves. Exposure and delay times are
-// in seconds in requests and microseconds in progress.
+// in seconds in requests and microseconds in progress. The mount, focuser, filter wheel and rotator a request
+// names by id on the connection of the camera are snooped into the frame headers, never acquired.
 //
 // A capture may also analyze its frames with the shared star detection service (post-capture analysis),
 // configured once by its request, with ASTAP's settings resolved when it starts. The analysis never changes
@@ -82,12 +83,27 @@ export interface CaptureOutput {
 // Gain, offset, binning, subframe, and readout mode a camera does not support are left unchanged.
 export type CaptureSettings = Pick<CameraCaptureStart, 'exposureMode' | 'count' | 'delay' | 'exposureTime' | 'frameType' | 'gain' | 'offset' | 'binX' | 'binY' | 'subframe' | 'x' | 'y' | 'width' | 'height' | 'frameFormat'>
 
+// Devices whose state the driver of a camera stamps into the frame headers, by exact device id on the connection of
+// the camera. A device that is absent, or an id the connection does not have, is not snooped.
+export interface CaptureSnoop {
+	// Id of the mount.
+	readonly mount?: string
+	// Id of the focuser.
+	readonly focuser?: string
+	// Id of the filter wheel.
+	readonly wheel?: string
+	// Id of the rotator.
+	readonly rotator?: string
+}
+
 // Body of POST /api/connections/:id/cameras/:deviceId/capture. exposureTime and delay are in seconds.
 export interface CaptureRequest extends CaptureSettings {
 	// Destination of the frames.
 	readonly output: CaptureOutput
 	// Star detection of the frames; absent when the capture does not analyze them.
 	readonly analysis?: PostCaptureAnalysis
+	// Devices snooped into the frame headers; absent snoops none.
+	readonly snoop?: CaptureSnoop
 }
 
 // Response of an accepted capture.
@@ -344,6 +360,19 @@ export function frameName(template: string, { camera, type, time, generation, ti
 	return sanitizeFileName(template.replaceAll(/\{(\w+)\}/g, (placeholder, key: string) => values[key] ?? placeholder)) || 'frame'
 }
 
+// Returns the names of the devices a request snoops on the connection of its camera, as the capture request of the
+// toolkit names them; an id the connection does not have resolves to no device.
+export function snoopedDevices(devices: DeviceRegistry, camera: Camera, snoop: CaptureSnoop | undefined): Pick<CameraCaptureStart, 'mount' | 'focuser' | 'wheel' | 'rotator'> {
+	const client = camera[CLIENT]
+
+	return {
+		mount: snoop?.mount && devices.get(client, snoop.mount, 'mount')?.name,
+		focuser: snoop?.focuser && devices.get(client, snoop.focuser, 'focuser')?.name,
+		wheel: snoop?.wheel && devices.get(client, snoop.wheel, 'wheel')?.name,
+		rotator: snoop?.rotator && devices.get(client, snoop.rotator, 'rotator')?.name,
+	}
+}
+
 // Returns a session with fields replaced.
 function changed(session: CaptureSession, patch: Partial<CaptureSession>): CaptureSession {
 	return { ...session, ...patch }
@@ -376,8 +405,8 @@ export class CameraCaptures implements Disposable {
 	) {
 		this.#capturer = new CameraCapturer(devices.cameras, operations.arbiter, {
 			capturesDir,
-			// The focuser a request names, such as the one of an Auto Focus, is snooped into the frame headers.
-			devices: { focuser: devices.focusers },
+			// The mount, focuser, filter wheel and rotator a request names are snooped into the frame headers.
+			devices: { mount: devices.mounts, focuser: devices.focusers, wheel: devices.wheels, rotator: devices.rotators },
 			publish: (frame, _, camera) => this.#published(frame, camera),
 			write: (path, data) => this.#write(path, data),
 		})
@@ -442,6 +471,7 @@ export class CameraCaptures implements Disposable {
 			frameFormat: request.frameFormat,
 			autoSave: saving,
 			transferFormat: request.output.format,
+			...snoopedDevices(this.devices, camera, request.snoop),
 		}
 
 		const capture: ActiveCapture = {

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, expect, test } from 'bun:test'
+import { afterAll, afterEach, expect, spyOn, test } from 'bun:test'
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -143,6 +143,23 @@ test('preview only writes no file', async () => {
 	expect(session()).toMatchObject({ phase: 'completed', captured: 2, saved: 0 })
 	expect(readdirSync(capture.output.directory!)).toEqual([])
 	expect(frames().every((frame: CaptureFrame) => frame.path === undefined && frame.file === undefined)).toBeTrue()
+})
+
+test('snoops the mount, focuser, filter wheel and rotator a request names by id, and none it does not resolve', async () => {
+	const { manager, client, id, cameraId, captures, camera, ended } = await setup()
+	const snoop = spyOn(manager.devices.cameras, 'snoop')
+	const devices = manager.devices.list(client)
+	const ids = (type: string) => devices.find((device) => device.type === type)!.id
+	const device = (type: string) => manager.devices.get(client, ids(type))
+
+	expect((await captures.start(id, cameraId, request({ output: { mode: 'preview-only', format: 'FITS' }, snoop: { mount: ids('mount'), focuser: ids('focuser'), wheel: ids('wheel'), rotator: ids('rotator') } }))).status).toBe(202)
+	await waitUntil(ended)
+	expect(snoop).toHaveBeenLastCalledWith(camera, device('mount'), device('focuser'), device('wheel'), device('rotator'))
+
+	expect((await captures.start(id, cameraId, request({ output: { mode: 'preview-only', format: 'FITS' }, snoop: { mount: 'unknown' } }))).status).toBe(202)
+	await waitUntil(() => snoop.mock.calls.length === 2)
+	expect(snoop).toHaveBeenLastCalledWith(camera, undefined, undefined, undefined, undefined)
+	snoop.mockRestore()
 })
 
 test('a failed write fails the capture, marks the frame file as failed, and leaves no file', async () => {

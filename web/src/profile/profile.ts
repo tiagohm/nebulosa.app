@@ -148,17 +148,10 @@ export interface CaptureAnalysisSettings {
 // and the markers shown.
 export const DEFAULT_ANALYSIS_SETTINGS: CaptureAnalysisSettings = { enabled: false, policy: 'everyFrame', request: DEFAULT_STAR_REQUEST, overlay: true }
 
-// Auto Focus form of one camera view: the routine the next session starts with, kept apart from the Camera
-// Capture form so changing one never changes the other. Durations are in seconds, positions in focuser steps.
+// Auto Focus form of one camera view: how the frames are measured and the routine the next session starts with.
+// The frames are taken with the exposure and camera settings of the view's Camera Capture form, which this form
+// never holds. Durations are in seconds, positions in focuser steps.
 export interface AutoFocusSettings {
-	// Exposure of each frame, in seconds; > 0.
-	exposureTime: number
-	// Gain of each frame, sent when the camera supports it.
-	gain: number
-	// Offset of each frame, sent when the camera supports it.
-	offset: number
-	// Binning of each frame on both axes, >= 1.
-	bin: number
 	// Star detector, its settings, and the acceptance criteria of the stars entering the aggregate HFD.
 	detection: StarDetectionRequest
 	// Whether the star markers of the frame shown are drawn; never changes the measurement.
@@ -185,14 +178,9 @@ export interface AutoFocusSettings {
 // defocused stars at the ends of a focus curve, which the fixed 4 px aperture saturates.
 export const AUTO_FOCUS_APERTURE = 32
 
-// Auto Focus form of a view that has none yet, besides the gain, offset, and binning, which start as those of
-// its Camera Capture form: 2 s frames measured by the built-in detector with a grown aperture, a hyperbolic
-// fit over 4 positions on each side, and the Focus Curve shown.
+// Auto Focus form of a view that has none yet: frames measured by the built-in detector with a grown aperture, a
+// hyperbolic fit over 4 positions on each side, and the Focus Curve shown.
 export const DEFAULT_AUTO_FOCUS_SETTINGS: AutoFocusSettings = {
-	exposureTime: 2,
-	gain: 0,
-	offset: 0,
-	bin: 1,
 	detection: { ...DEFAULT_STAR_REQUEST, detector: { ...DEFAULT_BUILTIN_SETTINGS, maximumRadius: AUTO_FOCUS_APERTURE } },
 	overlay: true,
 	fittingMode: 'HYPERBOLIC',
@@ -399,7 +387,8 @@ function normalizeStarRequest(value: unknown, fallback: StarDetectionRequest): S
 const FITTING_MODES: ReadonlySet<string> = new Set<AutoFocusSettings['fittingMode']>(['HYPERBOLIC', 'PARABOLIC', 'TRENDLINES', 'TREND_HYPERBOLIC', 'TREND_PARABOLIC'])
 
 // Restores a persisted Auto Focus form, filling every invalid field with its default; undefined for anything
-// that is not a record. A step size that is not valid is dropped, so the travel of the focuser sets it again.
+// that is not a record. A step size that is not valid is dropped, so the travel of the focuser sets it again, and the
+// frame settings of forms saved when the Auto Focus had its own are dropped too.
 function normalizeAutoFocus(value: unknown): AutoFocusSettings | undefined {
 	if (!isRecord(value)) return undefined
 
@@ -407,10 +396,6 @@ function normalizeAutoFocus(value: unknown): AutoFocusSettings | undefined {
 	const stepSize = numberAtLeast(value.stepSize, 1, Number.NaN, true)
 
 	return {
-		exposureTime: typeof value.exposureTime === 'number' && Number.isFinite(value.exposureTime) && value.exposureTime > 0 ? value.exposureTime : defaults.exposureTime,
-		gain: numberAtLeast(value.gain, -Infinity, defaults.gain),
-		offset: numberAtLeast(value.offset, -Infinity, defaults.offset),
-		bin: numberAtLeast(value.bin, 1, defaults.bin, true),
 		detection: normalizeStarRequest(value.detection, defaults.detection),
 		overlay: value.overlay !== false,
 		fittingMode: typeof value.fittingMode === 'string' && FITTING_MODES.has(value.fittingMode) ? (value.fittingMode as AutoFocusSettings['fittingMode']) : defaults.fittingMode,
@@ -878,13 +863,9 @@ export function setAnalysisSettings(state: ProfileState, role: CameraRole, patch
 	touch(profile)
 }
 
-// Returns the Auto Focus form of a camera view: the one edited last, or the defaults with the gain, offset,
-// and binning of the view's Camera Capture form.
+// Returns the Auto Focus form of a camera view: the one edited last, or the defaults.
 export function autoFocusSettings(capture: Readonly<CaptureSettings>, role: CameraRole): Readonly<AutoFocusSettings> {
-	const saved = capture.autoFocus?.[role]
-	if (saved) return saved
-	const { gain, offset, binX } = acquisitionSettings(capture, role)
-	return { ...DEFAULT_AUTO_FOCUS_SETTINGS, gain, offset, bin: binX }
+	return capture.autoFocus?.[role] ?? DEFAULT_AUTO_FOCUS_SETTINGS
 }
 
 // Replaces fields of the Auto Focus form of a camera view in the active profile; other views and the Camera

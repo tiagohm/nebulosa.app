@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, CameraCapabilities } from 'api'
 import { proxy } from 'valtio'
-import { DEFAULT_AUTO_FOCUS_SETTINGS } from '../profile/profile'
+import { DEFAULT_ACQUISITION_SETTINGS, DEFAULT_AUTO_FOCUS_SETTINGS } from '../profile/profile'
 import { autoFocusRequest, autoFocusRunning, type AutoFocusRuntime, defaultStepSize, handleAutoFocusEvent, refreshAutoFocus, startAutoFocus, stopAutoFocus } from './autofocus'
 import { cameraKey } from './capture'
 import { curveBounds, ticks } from './FocusCurve'
@@ -20,7 +20,7 @@ function summary(patch: Partial<AutoFocusSessionSummary> = {}): AutoFocusSession
 		cameraName: 'Camera',
 		focuser: FOCUSER,
 		focuserName: 'Focuser',
-		request: autoFocusRequest(DEFAULT_AUTO_FOCUS_SETTINGS, FOCUSER, 100),
+		request: autoFocusRequest(DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, FOCUSER, 100, {}),
 		provider: 'builtin',
 		state: 'exposing',
 		measurementCount: 0,
@@ -91,7 +91,7 @@ test('a start carries a fresh token and records a refusal; a stop names its sess
 	const state = newState()
 	const { request, requests } = fakeFetch((url) => (url.endsWith('/autofocus') ? Response.json({ error: 'The device is busy', code: 'busy' }, { status: 409 }) : new Response(null, { status: 204 })))
 
-	await startAutoFocus(state, 'c', 'cam', autoFocusRequest(DEFAULT_AUTO_FOCUS_SETTINGS, FOCUSER, 100), request)
+	await startAutoFocus(state, 'c', 'cam', autoFocusRequest(DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, FOCUSER, 100, {}), request)
 	expect(requests[0].url).toBe('/api/connections/c/cameras/cam/autofocus')
 	const body = JSON.parse(requests[0].init!.body as string) as AutoFocusRequest
 	expect(body.token).toBeString()
@@ -103,12 +103,14 @@ test('a start carries a fresh token and records a refusal; a stop names its sess
 	expect(state.errors[cameraKey('c', 'cam')]).toBeUndefined()
 })
 
-test('the request fits the frame settings to the camera and always grows the aperture of the built-in detector', () => {
-	const capabilities = { exposure: { min: 0.001, max: 60 }, gain: { min: 0, max: 100 }, offset: { min: 0, max: 50 }, bin: { x: 2, y: 2 } } as CameraCapabilities
-	const settings = { ...DEFAULT_AUTO_FOCUS_SETTINGS, exposureTime: 120, gain: 300, bin: 4, detection: { ...DEFAULT_AUTO_FOCUS_SETTINGS.detection, detector: { provider: 'builtin', maxStars: 100, minSNR: 0, searchRegion: 0 } } } as const
-	const request = autoFocusRequest(settings, FOCUSER, 250, capabilities)
+test('the request takes the frame settings of the Camera Capture form fitted to the camera, snoops the setup devices, and always grows the aperture of the built-in detector', () => {
+	const capabilities = { exposure: { min: 0.001, max: 60 }, gain: { min: 0, max: 100 }, offset: { min: 0, max: 50 }, bin: { x: 2, y: 2 }, subframe: { width: 1000, height: 800 }, frameFormats: [{ name: 'RAW16', label: 'Raw 16' }], transferFormats: ['FITS'] } as unknown as CameraCapabilities
+	const acquisition = { ...DEFAULT_ACQUISITION_SETTINGS, frameType: 'DARK', exposureTime: 120, gain: 300, offset: 20, binX: 4, binY: 4, subframe: true, x: 100, y: 50, width: 400, height: 300, frameFormat: 'RAW16' } as const
+	const settings = { ...DEFAULT_AUTO_FOCUS_SETTINGS, detection: { ...DEFAULT_AUTO_FOCUS_SETTINGS.detection, detector: { provider: 'builtin', maxStars: 100, minSNR: 0, searchRegion: 0 } } } as const
+	const request = autoFocusRequest(settings, acquisition, FOCUSER, 250, { mount: 'm', focuser: 'f', wheel: 'w', rotator: 'r' }, capabilities)
 
-	expect(request.capture).toMatchObject({ exposureTime: 60, gain: 100, binX: 2, binY: 2, subframe: false })
+	expect(request.capture).toEqual({ exposureTime: 60, gain: 100, offset: 20, binX: 2, binY: 2, subframe: true, x: 100, y: 50, width: 400, height: 300, frameFormat: 'RAW16' })
+	expect(request.snoop).toEqual({ mount: 'm', wheel: 'w', rotator: 'r' })
 	expect(request.detection.detector).toEqual({ provider: 'builtin', maxStars: 100, minSNR: 0, searchRegion: 0, maximumRadius: 32 })
 	expect(request.stepSize).toBe(250)
 	expect(defaultStepSize(0, 100000)).toBe(500)

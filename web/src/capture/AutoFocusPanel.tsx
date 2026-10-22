@@ -1,4 +1,4 @@
-import type { AutoFocusSessionSummary } from 'api'
+import type { AutoFocusSessionSummary, CameraCapabilities, CaptureRequest } from 'api'
 import { cn } from 'cn'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -7,7 +7,7 @@ import { Notice } from '../equipment-control/parts'
 import { roleAvailability } from '../equipment/availability'
 import { useRoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
-import { activeProfile, AUTO_FOCUS_APERTURE, type AutoFocusSettings, autoFocusSettings, profileState, setAutoFocusSettings } from '../profile/profile'
+import { acquisitionSettings, activeProfile, activeSetup, AUTO_FOCUS_APERTURE, type AutoFocusSettings, autoFocusSettings, profileState, setAutoFocusSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { AcceptanceControls, DetectorControls, DetectorSettingsControls, useAstapConfigured } from '../stars/StarRequestControls'
 import { PROVIDER_LABELS } from '../stars/stars'
@@ -16,17 +16,17 @@ import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusRequest, autoFocusRunning, autoFocusRuntime, defaultStepSize, FITTING_MODE_LABELS, FITTING_MODES, startAutoFocus, stopAutoFocus, VERIFICATION_LABELS } from './autofocus'
-import { cameraKey, captureRuntime, refreshCapabilities } from './capture'
-import { ExposureTimeInput } from './ExposureTimeInput'
+import { cameraKey, captureRequest, captureRuntime, captureSnoop, refreshCapabilities } from './capture'
 import type { CaptureModePanelProps } from './modes'
 
-// Contextual panel sections of the Auto Focus mode: how each frame is measured (exposure, camera settings, the
-// star detector with its grown aperture, the star overlay), the routine the server's runner follows (fitting,
-// step size, positions per side, and the advanced settings collapsed), and the state of the running or last
-// session with its Run and Stop commands. The camera is the view's and the focuser the one the equipment setup
-// assigns; the filter wheel, when assigned, is shown and never moved. The form is the view's, kept in the
-// profile apart from the Camera Capture form; the session is the server's, shown here from the server state
-// whichever tab started it, and keeps running when the panel unmounts.
+// Contextual panel sections of the Auto Focus mode: how each frame is measured (the star detector with its grown
+// aperture, the star overlay), the routine the server's runner follows (fitting, step size, positions per side,
+// and the advanced settings collapsed), and the state of the running or last session with its Run and Stop
+// commands. The frames are taken with the exposure and camera settings of the view's Camera Capture form, which
+// are only summarized here, and snoop the mount, filter wheel, and rotator of the equipment setup besides the
+// focuser. The camera is the view's and the focuser the one the equipment setup assigns; the filter wheel, when
+// assigned, is shown and never moved. The form is the view's, kept in the profile; the session is the server's,
+// shown here from the server state whichever tab started it, and keeps running when the panel unmounts.
 
 // Auto Focus panel sections.
 export function AutoFocusPanel({ camera: role }: CaptureModePanelProps) {
@@ -39,7 +39,9 @@ export function AutoFocusPanel({ camera: role }: CaptureModePanelProps) {
 	const focuser = useRoleDevice('FOCUSER')
 	const wheel = useRoleDevice('FILTER_WHEEL')
 	const astapConfigured = useAstapConfigured()
-	const settings = autoFocusSettings(activeProfile(profiles).settings.capture, role)
+	const profile = activeProfile(profiles)
+	const settings = autoFocusSettings(profile.settings.capture, role)
+	const acquisition = acquisitionSettings(profile.settings.capture, role)
 	const key = camera.device && cameraKey(camera.device.connectionId, camera.device.id)
 	const session = key ? runtime.sessions[key] : undefined
 	const capabilities = key ? captures.capabilities[key] : undefined
@@ -76,7 +78,7 @@ export function AutoFocusPanel({ camera: role }: CaptureModePanelProps) {
 
 	function start() {
 		if (!camera.device || !focuser.device) return
-		const request = autoFocusRequest(settings, { connectionId: focuser.device.connectionId, deviceId: focuser.device.id }, stepSize, capabilities)
+		const request = autoFocusRequest(settings, acquisition, { connectionId: focuser.device.connectionId, deviceId: focuser.device.id }, stepSize, captureSnoop(activeSetup(profile)), capabilities)
 		void startAutoFocus(autoFocusRuntime, camera.device.connectionId, camera.device.id, request)
 	}
 
@@ -87,10 +89,8 @@ export function AutoFocusPanel({ camera: role }: CaptureModePanelProps) {
 	return (
 		<>
 			<PanelSection title="Measurement">
-				<ExposureTimeInput value={settings.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
-				{capabilities?.gain && <NumberInput label="Gain" value={Math.min(capabilities.gain.max, Math.max(capabilities.gain.min, settings.gain))} min={capabilities.gain.min} max={capabilities.gain.max} disabled={locked} onChange={(gain) => update({ gain })} />}
-				{capabilities?.offset && <NumberInput label="Offset" value={Math.min(capabilities.offset.max, Math.max(capabilities.offset.min, settings.offset))} min={capabilities.offset.min} max={capabilities.offset.max} disabled={locked} onChange={(offset) => update({ offset })} />}
-				{capabilities?.bin && <NumberInput label="Binning" value={Math.min(capabilities.bin.x, settings.bin)} min={1} max={Math.min(capabilities.bin.x, capabilities.bin.y)} disabled={locked} onChange={(bin) => update({ bin })} />}
+				<FrameSettings acquisition={acquisition} capabilities={capabilities} />
+				<p className="m-0 text-xs leading-4 text-ink-300">Frames use the exposure and camera settings of Camera Capture.</p>
 				{wheel.device && <p className="m-0 text-xs leading-4 text-ink-300">Filter: {filter ?? 'unknown'} — the Auto Focus measures through the current filter and never changes it.</p>}
 				<DetectorControls request={detection} disabled={locked} onChange={(request) => update({ detection: request })} />
 				<details>
@@ -194,6 +194,31 @@ function SessionState({ session, position, moving }: SessionStateProps) {
 			{session.verificationError && <p className="m-0 text-xs leading-4 text-ink-300">{session.verificationError}</p>}
 			{session.state === 'cancelled' && <p className="m-0 text-xs leading-4 text-ink-300">The focuser was left where the stop found it.</p>}
 		</>
+	)
+}
+
+interface FrameSettingsProps {
+	// Camera Capture form of the view.
+	readonly acquisition: Readonly<CaptureRequest>
+	// Capabilities of the camera, when known.
+	readonly capabilities?: CameraCapabilities
+}
+
+// Exposure and camera settings the frames are taken with: those of the Camera Capture form, fitted to the camera as
+// the request sends them; a setting the camera does not report is not shown.
+function FrameSettings({ acquisition, capabilities }: FrameSettingsProps) {
+	const { exposureTime, gain, offset, binX, binY, subframe, width, height, frameFormat } = captureRequest(acquisition, capabilities)
+	const readout = capabilities?.frameFormats.find((format) => format.name === frameFormat)
+
+	return (
+		<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+			<Row label="Exposure">{`${Number(exposureTime.toPrecision(6))} s`}</Row>
+			{capabilities?.gain && <Row label="Gain">{gain}</Row>}
+			{capabilities?.offset && <Row label="Offset">{offset}</Row>}
+			{capabilities?.bin && <Row label="Binning">{`${binX} × ${binY}`}</Row>}
+			{subframe && <Row label="Subframe">{`${width} × ${height}`}</Row>}
+			{readout && <Row label="Readout Mode">{readout.label || readout.name}</Row>}
+		</dl>
 	)
 }
 

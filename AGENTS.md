@@ -17,6 +17,12 @@ Use the user's task to determine the authorized outcome:
 - An implementation request includes the smallest necessary source, test, and documentation updates.
 - Do not broaden a task into an unrelated refactor, compatibility layer, remote operation, or cleanup.
 
+## Architecture Reference
+
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) is the base documentation of the whole architecture: the layer map, the capability inventory, the workspace and mode contracts, operations and arbitration, persistence, and the contracts of each feature. Read the sections a task touches before designing a change, and treat it as binding alongside this file.
+
+Keep it current: every change that adds, removes, or alters a capability, a contract, an ownership boundary, a route or event, persisted state, or a documented limitation updates the owning section in the same commit. Do not leave it describing behavior the code no longer has.
+
 ## Working Principles
 
 - Inspect live code, configuration, and nearby patterns before editing. Treat plans and prior descriptions as hypotheses until verified.
@@ -146,6 +152,7 @@ Verification is proportional to the change, but the touched area must have zero 
 - Changes to `app/`, bundling, Tailwind, `bunfig.toml`, `package.json`, or HTML entry points: also run `bun compile` and smoke-test the executable (`/api/health` and the UI load with styles).
 - UI changes: run `bun dev` and check the affected screen in a browser.
 - Report every skipped or failed verification command and its exact reason, and distinguish pre-existing failures from ones introduced by the task.
+- Confirm `docs/ARCHITECTURE.md` still matches the change (see Architecture Reference).
 - Review the final diff and status before staging.
 
 ## Code Review

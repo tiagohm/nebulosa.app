@@ -4,7 +4,7 @@ import { proxy } from 'valtio'
 import type { ImagesIo } from '../images/images'
 import { DEFAULT_ACQUISITION_SETTINGS } from '../profile/profile'
 import { cameraKey, captureCount, captureElapsed, captureRequest, type CaptureRuntime, captureRunning, captureStatus, fileState, frameState, handleCaptureEvent, refreshCaptures, renderFrame, startCapture, stopCapture } from './capture'
-import { parseDecimal } from './DecimalInput'
+import { convertExposure, exposureUnitOf, fromSeconds, toSeconds } from './ExposureTimeInput'
 
 function newState() {
 	return proxy<CaptureRuntime>({ sessions: {}, frames: {}, capabilities: {}, pending: {}, errors: {}, renderings: {}, renderErrors: {} })
@@ -162,15 +162,21 @@ test('keeps the previous rendering until the next frame is rendered, and when it
 	expect(state.renderErrors[key]).toBeUndefined()
 })
 
-test('parses decimal times without rounding them', () => {
-	expect(parseDecimal('0.0001', 0, true)).toBe(0.0001)
-	expect(parseDecimal(' 1.5 ', 0)).toBe(1.5)
-	expect(parseDecimal('0', 0)).toBe(0)
-	expect(parseDecimal('0', 0, true)).toBeUndefined()
-	expect(parseDecimal('-1', 0)).toBeUndefined()
-	expect(parseDecimal('abc', 0)).toBeUndefined()
-	expect(parseDecimal('', 0)).toBeUndefined()
-	expect(parseDecimal('Infinity', 0)).toBeUndefined()
+test('converts exposure times between units without float noise', () => {
+	expect(fromSeconds(0.000032, 'μs')).toBe(32)
+	expect(fromSeconds(0.0015, 'ms')).toBe(1.5)
+	expect(toSeconds(32, 'μs')).toBe(0.000032)
+	expect(toSeconds(3, 'm')).toBe(180)
+
+	expect(exposureUnitOf(120)).toBe('m')
+	expect(exposureUnitOf(90)).toBe('s')
+	expect(exposureUnitOf(0.5)).toBe('ms')
+	expect(exposureUnitOf(0.000032)).toBe('μs')
+	expect(exposureUnitOf(1e-7)).toBe('μs')
+
+	expect(convertExposure(1.5, 'ms')).toBe(1.5)
+	expect(convertExposure(1.5, 's')).toBe(2)
+	expect(convertExposure(0.001, 'm')).toBe(60)
 })
 
 test('keeps the frame state apart from the capture outcome', () => {

@@ -16,7 +16,7 @@ import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, FRAME_STATE_LABELS, type FrameState, frameState, refreshCapabilities, startCapture, stopCapture } from './capture'
-import { DecimalInput } from './DecimalInput'
+import { ExposureTimeInput } from './ExposureTimeInput'
 import type { CaptureModePanelProps } from './modes'
 import { PostCaptureAnalysis } from './PostCaptureAnalysis'
 
@@ -47,6 +47,16 @@ const OUTPUT_MODES: readonly CaptureOutputMode[] = ['preview-save', 'preview-onl
 
 // Label of each output mode.
 const OUTPUT_MODE_LABELS: Readonly<Record<CaptureOutputMode, string>> = { 'preview-save': 'Preview + Save', 'preview-only': 'Preview Only' }
+
+// Placeholders of the filename template the server fills (see frameName of the API), with what each one
+// becomes; dates and times are the server's local time at the moment the exposure is commanded.
+const FILENAME_TAGS: readonly (readonly [string, string])[] = [
+	['camera', 'Camera name'],
+	['type', 'Frame type: LIGHT, DARK, FLAT, or BIAS'],
+	['date', 'Date the exposure started, as YYYY-MM-DD'],
+	['time', 'Time the exposure started, as HH-mm-ss-SSS'],
+	['seq', 'Frame number within the capture, from 0001'],
+]
 
 // Largest frame count of a fixed capture.
 const MAX_FRAME_COUNT = 100000
@@ -94,7 +104,7 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 	return (
 		<>
 			<PanelSection title="Exposure">
-				<DecimalInput label="Exposure Time" suffix="s" value={settings.exposureTime} min={0} exclusiveMin disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
+				<ExposureTimeInput value={settings.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
 				{capabilities?.exposure && (
 					<p className="m-0 text-xs leading-4 text-ink-300">
 						{formatSeconds(capabilities.exposure.min)} – {formatSeconds(capabilities.exposure.max)} s supported by the camera.
@@ -135,7 +145,18 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 							<IconButton icon="folder" label="Choose directory" className="size-[38px]" disabled={locked} onClick={() => setChoosingDirectory(true)} />
 						</div>
 						<TextInput label="Filename Template" placeholder="{date}_{time}_{camera}_{type}_{seq}" value={settings.output.filenameTemplate ?? ''} disabled={locked} onChange={(e) => updateOutput({ filenameTemplate: e.target.value || undefined })} />
-						<p className="m-0 text-xs leading-4 text-ink-300">{'{camera} {type} {date} {time} {seq}'}; existing files are never replaced.</p>
+						<details className="text-xs leading-4">
+							<summary className="cursor-pointer text-ink-200 select-none">Template tags</summary>
+							<dl className="m-0 mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+								{FILENAME_TAGS.map(([tag, description]) => (
+									<div key={tag} className="contents">
+										<dt className="font-mono text-ink-100">{`{${tag}}`}</dt>
+										<dd className="m-0 text-ink-300">{description}</dd>
+									</div>
+								))}
+							</dl>
+						</details>
+						<p className="m-0 text-xs leading-4 text-ink-300">Existing files are never replaced.</p>
 						<Select label="Format" options={xisf ? (['FITS', 'XISF'] as const) : (['FITS'] as const)} value={xisf ? settings.output.format : 'FITS'} disabled={locked} onChange={(format) => updateOutput({ format })} />
 					</>
 				)}
@@ -317,6 +338,9 @@ function CameraSettings({ settings, capabilities, disabled, onChange }: CameraSe
 									<NumberInput label="Y" value={settings.y} min={0} max={subframe.height - 1} disabled={disabled} onChange={(y) => onChange({ y })} />
 									<NumberInput label="Width" value={settings.width} min={1} max={subframe.width} disabled={disabled} onChange={(width) => onChange({ width })} />
 									<NumberInput label="Height" value={settings.height} min={1} max={subframe.height} disabled={disabled} onChange={(height) => onChange({ height })} />
+									<Button variant="secondary" size="sm" className="col-span-2" disabled={disabled} onClick={() => onChange({ x: 0, y: 0, width: subframe.width, height: subframe.height })}>
+										Fullscreen
+									</Button>
 								</div>
 							)}
 						</>
@@ -355,7 +379,7 @@ function LastFrame({ frame, state }: LastFrameProps) {
 	if (acquisition.binning) rows.push(['Binning', `${acquisition.binning.x} × ${acquisition.binning.y}`])
 	if (frame.bitpix !== undefined) rows.push(['Bit Depth', frame.bitpix < 0 ? `${-frame.bitpix}-bit float` : `${frame.bitpix}-bit`])
 	if (acquisition.temperature !== undefined) rows.push(['Temperature', `${acquisition.temperature.toFixed(1)} °C`])
-	rows.push(['Acquired', new Date(frame.time).toLocaleTimeString()])
+	rows.push(['Acquired', new Date(frame.time).toLocaleString()])
 
 	return (
 		<PanelSection title="Last Frame">

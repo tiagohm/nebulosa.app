@@ -16,6 +16,7 @@ import type { DomeMotionEvent } from './domes'
 import type { ExternalToolEvent } from './externaltools'
 import type { MountNudgeEvent } from './mounts'
 import type { OperationEvent } from './operations'
+import type { StarDetectionEvent } from './stars'
 
 // Application-wide registry of open device connections (INDI, Alpaca, and the in-process simulator).
 // Each endpoint is opened at most once, concurrent requests for it share the same attempt, and every
@@ -55,8 +56,8 @@ export type ConnectionEvent = { readonly type: 'connection:open'; readonly conne
 
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the
 // operation events of the operation registry, the events of the capture, mount nudge, and dome manual
-// rotation services, and the changes of the external program settings.
-export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent | CaptureEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent
+// rotation services, the changes of the external program settings, and the star detection jobs.
+export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent | CaptureEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent | StarDetectionEvent
 
 // Receiver of connection and device events.
 export type ConnectionListener = (event: ServerEvent) => void

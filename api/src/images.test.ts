@@ -369,3 +369,86 @@ describe('capture documents', () => {
 		expect(images.openCapture(new TextEncoder().encode('not an image'), 'Camera #2', capture)).rejects.toThrow('The camera frame is not a FITS or XISF image')
 	})
 })
+
+describe('retention', () => {
+	test('a retained document closed meanwhile keeps its pixels until the last release', async () => {
+		const info = await openFits(writeFits('retained.fits', 16, 8))
+		const discarded: string[] = []
+		const unsubscribe = images.onDiscard((id) => discarded.push(id))
+
+		try {
+			expect(images.retain(info.id)).toEqual({ width: 16, height: 8 })
+			expect(images.retain(info.id)).toEqual({ width: 16, height: 8 })
+			expect(images.close(info.id)).toBeTrue()
+
+			// Closed for every route at once, still readable by the analyses retaining it.
+			expect((await render(info.id, NEUTRAL)).status).toBe(404)
+			expect(await images.encode(info.id, 'fits')).toBeUndefined()
+			expect(images.retain(info.id)).toBeUndefined()
+			expect(await images.detectionImage(info.id)).toBeDefined()
+			expect(await images.detectionFile(info.id)).toBeDefined()
+
+			images.release(info.id)
+			expect(discarded).toEqual([])
+			images.release(info.id)
+			expect(discarded).toEqual([info.id])
+			expect(await images.detectionImage(info.id)).toBeUndefined()
+		} finally {
+			unsubscribe()
+		}
+	})
+
+	test('closing a document nobody retains releases it at once, and releasing an open one keeps it', async () => {
+		const info = await openFits(writeFits('unretained.fits', 16, 8))
+		const discarded: string[] = []
+		const unsubscribe = images.onDiscard((id) => discarded.push(id))
+
+		try {
+			images.retain(info.id)
+			images.release(info.id)
+			expect(discarded).toEqual([])
+			expect((await render(info.id, NEUTRAL)).status).toBe(200)
+			expect(images.close(info.id)).toBeTrue()
+			expect(discarded).toEqual([info.id])
+		} finally {
+			unsubscribe()
+		}
+	})
+})
+
+describe('detection image', () => {
+	test('is an owned copy of a mono image without a Bayer pattern', async () => {
+		const info = await openFits(writeFits('detect-mono.fits', 16, 8))
+		const first = (await images.detectionImage(info.id))!
+		const second = (await images.detectionImage(info.id))!
+
+		expect(first.metadata).toMatchObject({ width: 16, height: 8, channels: 1, bayer: undefined })
+		first.raw.fill(0)
+		expect(second.raw.some((value) => value !== 0)).toBeTrue()
+		images.close(info.id)
+	})
+
+	test('is the luminance of an RGB image', async () => {
+		const info = await openFits(writeFits('detect-rgb.fits', 16, 8, 3))
+		const image = (await images.detectionImage(info.id))!
+
+		expect(image.metadata).toMatchObject({ width: 16, height: 8, channels: 1 })
+		expect(image.raw).toHaveLength(16 * 8)
+		images.close(info.id)
+	})
+
+	test('is the luminance of a CFA mosaic debayered with its trusted pattern', async () => {
+		const info = await openFits(writeFits('detect-cfa.fits', 16, 8, 1, ["BAYERPAT= 'RGGB    '"]))
+		const image = (await images.detectionImage(info.id))!
+		const untrusted = await openFits(writeFits('detect-cfa-unknown.fits', 16, 8, 1, ["BAYERPAT= 'XYZW    '"]))
+		const mosaic = (await images.detectionImage(untrusted.id))!
+
+		expect(image.metadata).toMatchObject({ width: 16, height: 8, channels: 1, bayer: undefined })
+		// A mosaic without a trusted pattern is measured as is, so its samples differ from the luminance of the
+		// same samples debayered.
+		expect(mosaic.metadata).toMatchObject({ channels: 1, bayer: undefined })
+		expect(Array.from(image.raw)).not.toEqual(Array.from(mosaic.raw))
+		images.close(info.id)
+		images.close(untrusted.id)
+	})
+})

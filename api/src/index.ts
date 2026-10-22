@@ -15,6 +15,7 @@ import { MountCommands, type MountGoToRequest, type MountNudgeRequest, type Moun
 import { OperationRegistry } from './operations'
 import { RotatorCommands, type RotatorMoveByRequest, type RotatorMoveToRequest, type RotatorReverseRequest, type RotatorSyncRequest } from './rotators'
 import { skyLocator, skyRoutes } from './sky'
+import { createStarDetectionRoutes, StarDetectionService } from './stars'
 import { broadcast, websocket } from './websocket'
 import { WheelCommands, type WheelMoveRequest, type WheelNamesRequest } from './wheels'
 
@@ -79,6 +80,23 @@ export type {
 export type { OperationDevice, OperationEvent, OperationKind, OperationRecord, OperationState } from './operations'
 export type { RotatorMoveByRequest, RotatorMoveToRequest, RotatorReverseRequest, RotatorSyncRequest } from './rotators'
 export type { WheelMoveRequest, WheelNamesRequest } from './wheels'
+export type {
+	AstapStarDetectionSettings,
+	BuiltinStarDetectionSettings,
+	StarAcceptance,
+	StarDetectionErrorCode,
+	StarDetectionEvent,
+	StarDetectionJob,
+	StarDetectionJobState,
+	StarDetectionOrigin,
+	StarDetectionRequest,
+	StarDetectionResult,
+	StarDetectionSettings,
+	StarDetectionSnapshot,
+	StarDetectionSummary,
+	StarDetectorProvider,
+	StarMeasurement,
+} from './stars'
 export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
 export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
 export type { Binning, DeriveRequest, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageCapture, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from './images'
@@ -112,10 +130,13 @@ const domes = new DomeCommands(connections.devices, (id) => connections.client(i
 // Cooling of the cameras of the open connections, arbitrated against their captures.
 const cameras = new CameraCommands(connections.devices, (id) => connections.client(id), operations)
 
-const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, broadcast)
-
 // Settings of the external programs, such as ASTAP, read by the services that run them.
 const externalTools = new ExternalToolsStore(DEFAULT_SETTINGS_FILE, broadcast)
+
+// Star detection of the image documents, shared by the Images workspace and the captures.
+const stars = new StarDetectionService(images, externalTools, broadcast)
+
+const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, broadcast)
 
 // Opens a connection, or returns the existing one for the same endpoint. Responds 400 for an invalid
 // body and 502 when the endpoint cannot be reached.
@@ -509,6 +530,7 @@ export const routes = {
 		GET: (req) => handleDownloadImage(req, req.params.id),
 	},
 	...createExternalToolsRoutes(externalTools),
+	...createStarDetectionRoutes(stars),
 	...skyRoutes,
 	'/api/ws': {
 		// Upgrades to the event WebSocket; Bun sends the handshake response itself.

@@ -5,7 +5,7 @@ import type { CfaPattern, Image, ImageChannel } from 'nebulosa/src/imaging/model
 import { clone } from 'nebulosa/src/imaging/processing/arithmetic'
 import { adf } from 'nebulosa/src/imaging/processing/computation'
 import { debayer } from 'nebulosa/src/imaging/processing/debayer'
-import { invert } from 'nebulosa/src/imaging/processing/geometry'
+import { grayscale, invert } from 'nebulosa/src/imaging/processing/geometry'
 import { scnr } from 'nebulosa/src/imaging/processing/scnr'
 import { stf } from 'nebulosa/src/imaging/processing/stf'
 import { brightness, contrast, gamma, saturation } from 'nebulosa/src/imaging/processing/tone'
@@ -19,7 +19,8 @@ import { cfaPattern, DisplayError, precisionOf, type DisplaySettings, type Image
 
 // Worker thread that owns the decoded pixels of every open image document and does all the heavy
 // work on them: decoding FITS and XISF files and camera frames, the display pipeline, JPEG encoding, deriving new
-// documents from the pipeline in floating point, and encoding documents as files. Keeping the
+// documents from the pipeline in floating point, encoding documents as files, and preparing the grayscale
+// copies star detections measure on their own worker (stars.worker.ts). Keeping the
 // pixels here means they are never copied between threads, and the server event loop stays free while
 // a large image is decoded or rendered. Renderings run one at a time, always on a copy of the decoded
 // image, which is never modified; opens overlap them only while reading. A rendering waits in a
@@ -296,6 +297,25 @@ function renderImage(entry: DocumentEntry, request: RenderRequest): { readonly j
 	return { jpeg: bytes, result }
 }
 
+// Returns the grayscale copy of a document a star detection measures (see ImageStore.detectionImage): a
+// clone of a mono image, the luminance of an RGB image, or the luminance of a CFA mosaic debayered with
+// its trusted pattern, reusing the debayered image of a rendering. The result owns a buffer of its own that
+// can be transferred, and names no Bayer pattern.
+function detectionImage(entry: DocumentEntry): Image {
+	const { image, cfa } = entry
+	let source = image
+
+	if (image.metadata.channels === 1 && cfa) {
+		if (entry.debayered?.pattern === cfa) source = entry.debayered.image
+		else source = debayer(image, cfa) ?? image
+	}
+
+	// grayscale returns a mono image itself, which must not be handed over.
+	const mono = source.metadata.channels === 1 ? clone(source) : grayscale(source)
+	const raw = mono.raw.byteOffset === 0 && mono.raw.byteLength === mono.raw.buffer.byteLength ? mono.raw : mono.raw.slice()
+	return { ...mono, raw, metadata: { ...mono.metadata, bayer: undefined } }
+}
+
 // Posts a response to the server thread, transferring the given buffers instead of copying them.
 function reply(response: ImageWorkerResponse, transfer: Transferable[] = []): void {
 	self.postMessage(response, transfer)
@@ -376,7 +396,7 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 		return
 	}
 
-	if (request.type === 'derive' || request.type === 'encode') {
+	if (request.type === 'derive' || request.type === 'encode' || request.type === 'detectionImage') {
 		const entry = documents.get(request.document)
 
 		if (!entry) {
@@ -387,6 +407,9 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 		try {
 			if (request.type === 'derive') {
 				reply({ id: request.id, status: 'derived', info: deriveDocument(request.document, entry, request.request.settings) })
+			} else if (request.type === 'detectionImage') {
+				const image = detectionImage(entry)
+				reply({ id: request.id, status: 'detectionImage', image }, [image.raw.buffer])
 			} else {
 				const bytes = await encodeDocument(entry, request.format)
 				reply({ id: request.id, status: 'encoded', bytes }, [bytes.buffer])

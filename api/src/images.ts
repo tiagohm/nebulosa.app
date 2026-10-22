@@ -1,6 +1,6 @@
 import { rename, rm } from 'fs/promises'
 import { resolve } from 'path'
-import { type CfaPattern, type ImageChannel, shiftCfaPattern } from 'nebulosa/src/imaging/model/types'
+import { type CfaPattern, type Image, type ImageChannel, shiftCfaPattern } from 'nebulosa/src/imaging/model/types'
 import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/processing/scnr'
 import type { FitsHeader, FitsHeaderKey } from 'nebulosa/src/io/formats/fits/fits'
 import { cfaPatternKeyword, exposureTimeKeyword, numericKeyword, observationDateKeyword, textKeyword } from 'nebulosa/src/io/formats/fits/util'
@@ -13,6 +13,9 @@ import { cfaPatternKeyword, exposureTimeKeyword, numericKeyword, observationDate
 // a worker thread (images.worker.ts) that also holds the pixels, so a large image never blocks the
 // requests the server is handling meanwhile. A rendering still queued when a newer one of the same
 // document arrives, or whose request is aborted, is dropped without being computed.
+//
+// A document can be retained by an analysis while it uses the pixels, such as a star detection: closing it then
+// hides it from every route at once, but its pixels are released only when the last analysis lets it go.
 //
 // A document can also be derived from another by applying display settings in floating point: the
 // result is a new, independent document that lives only in memory until it is saved to a file of the
@@ -267,26 +270,28 @@ export interface SaveResult {
 	readonly path: string
 }
 
-// Message sent to the image worker. Open, open capture, render, derive, and encode carry an id that their
-// response echoes; open capture transfers its bytes to the worker; a close has no response, and a cancel drops the render with that id if it has not started
-// yet (the render then answers superseded).
+// Message sent to the image worker. Open, open capture, render, derive, encode, and detection image carry an
+// id that their response echoes; open capture transfers its bytes to the worker; a close has no response, and a
+// cancel drops the render with that id if it has not started yet (the render then answers superseded).
 export type ImageWorkerRequest =
 	| { readonly type: 'open'; readonly id: number; readonly path: string }
 	| { readonly type: 'openCapture'; readonly id: number; readonly bytes: Uint8Array<ArrayBuffer>; readonly name: string; readonly capture: ImageCapture }
 	| { readonly type: 'render'; readonly id: number; readonly document: string; readonly request: RenderRequest }
 	| { readonly type: 'derive'; readonly id: number; readonly document: string; readonly request: DeriveRequest }
 	| { readonly type: 'encode'; readonly id: number; readonly document: string; readonly format: ImageFormat }
+	| { readonly type: 'detectionImage'; readonly id: number; readonly document: string }
 	| { readonly type: 'cancel'; readonly id: number }
 	| { readonly type: 'close'; readonly document: string }
 
 // Message the image worker answers a request with, by request id: the opened or derived document, the
-// rendering, the encoded file, a document that is not open (missing), a render dropped before it
+// rendering, the encoded file, the grayscale copy a star detection measures (see ImageStore.detectionImage), a document that is not open (missing), a render dropped before it
 // started (superseded), settings that cannot be applied to the image (invalid), a file that cannot be
 // opened (with the status of its ImageOpenError), or any other failure.
 export type ImageWorkerResponse =
 	| { readonly id: number; readonly status: 'opened'; readonly info: ImageInfo }
 	| { readonly id: number; readonly status: 'derived'; readonly info: ImageInfo }
 	| { readonly id: number; readonly status: 'encoded'; readonly bytes: Uint8Array<ArrayBuffer> }
+	| { readonly id: number; readonly status: 'detectionImage'; readonly image: Image }
 	| ({ readonly id: number; readonly status: 'rendered' } & Rendering)
 	| { readonly id: number; readonly status: 'missing' }
 	| { readonly id: number; readonly status: 'superseded' }
@@ -346,9 +351,33 @@ function comparablePath(path: string): string {
 interface DocumentRecord {
 	// Name of the document, for downloads.
 	readonly name: string
+	// Width of the image, in pixels.
+	readonly width: number
+	// Height of the image, in pixels.
+	readonly height: number
 	// Absolute path of the file of a file document, or the file a captured frame is saved to; absent for a
 	// derived document and a frame that is only previewed.
 	readonly path?: string
+}
+
+// Size of a retained document, in pixels.
+export interface DocumentSize {
+	// Width of the image, in pixels.
+	readonly width: number
+	// Height of the image, in pixels.
+	readonly height: number
+}
+
+// Receives the id of a document whose pixels were released: closed with nothing retaining it, its last
+// retention released after it was closed, or lost with the worker.
+export type ImageDiscardListener = (id: string) => void
+
+// Retentions of a document by analyses, and its record, which outlives a close while it is retained.
+interface Retention {
+	// Record of the document.
+	readonly record: DocumentRecord
+	// Number of retentions not released yet; always positive.
+	holds: number
 }
 
 // Open image documents of every client. The pixels live in the image worker; this side tracks the
@@ -356,6 +385,10 @@ interface DocumentRecord {
 export class ImageStore {
 	// Open documents, by id.
 	readonly #documents = new Map<string, DocumentRecord>()
+	// Retained documents, open or closed, by id.
+	readonly #retained = new Map<string, Retention>()
+	// Receivers of released documents.
+	readonly #discardListeners = new Set<ImageDiscardListener>()
 	// Requests sent to the worker and not answered yet, by request id.
 	readonly #pending = new Map<number, PromiseWithResolvers<ImageWorkerResponse>>()
 	// Id of the next request.
@@ -367,7 +400,7 @@ export class ImageStore {
 	async open(path: string): Promise<ImageInfo> {
 		const response = await this.#request({ type: 'open', id: this.#id++, path })
 		if (response.status !== 'opened') throw responseError(response)
-		this.#documents.set(response.info.id, { name: response.info.name, path: resolve(path) })
+		this.#documents.set(response.info.id, { name: response.info.name, width: response.info.width, height: response.info.height, path: resolve(path) })
 		return response.info
 	}
 
@@ -377,7 +410,7 @@ export class ImageStore {
 	async openCapture(bytes: Uint8Array<ArrayBuffer>, name: string, capture: ImageCapture): Promise<ImageInfo> {
 		const response = await this.#request({ type: 'openCapture', id: this.#id++, bytes, name, capture }, [bytes.buffer])
 		if (response.status !== 'opened') throw responseError(response)
-		this.#documents.set(response.info.id, { name: response.info.name, path: capture.path === undefined ? undefined : resolve(capture.path) })
+		this.#documents.set(response.info.id, { name: response.info.name, width: response.info.width, height: response.info.height, path: capture.path === undefined ? undefined : resolve(capture.path) })
 		return response.info
 	}
 
@@ -409,7 +442,7 @@ export class ImageStore {
 		const response = await this.#request({ type: 'derive', id: this.#id++, document: id, request })
 
 		if (response.status === 'derived') {
-			this.#documents.set(response.info.id, { name: response.info.name })
+			this.#documents.set(response.info.id, { name: response.info.name, width: response.info.width, height: response.info.height })
 			return { status: 'derived', info: response.info }
 		}
 
@@ -420,8 +453,33 @@ export class ImageStore {
 
 	// Encodes a document as a FITS or XISF file in the scale of its source. Resolves to undefined for an
 	// unknown id.
-	async encode(id: string, format: ImageFormat): Promise<Uint8Array<ArrayBuffer> | undefined> {
-		if (!this.#documents.has(id)) return undefined
+	encode(id: string, format: ImageFormat): Promise<Uint8Array<ArrayBuffer> | undefined> {
+		if (!this.#documents.has(id)) return Promise.resolve(undefined)
+		return this.#encode(id, format)
+	}
+
+	// Encodes an open or retained document as a FITS file in the scale of its source, for a program that reads
+	// files, such as ASTAP. Resolves to undefined when it is neither.
+	detectionFile(id: string): Promise<Uint8Array<ArrayBuffer> | undefined> {
+		if (!this.#documents.has(id) && !this.#retained.has(id)) return Promise.resolve(undefined)
+		return this.#encode(id, 'fits')
+	}
+
+	// Returns a new grayscale copy of an open or retained document for a star detection, owned by the caller,
+	// whose buffer may be transferred: the mono image, the luminance of an RGB image, or the luminance of a mono
+	// CFA mosaic debayered with its trusted pattern (ImageInfo cfa; a mosaic without one is measured as is). Its
+	// metadata names no Bayer pattern, so the detector never debayers it again. Resolves to undefined when the
+	// document is neither open nor retained.
+	async detectionImage(id: string): Promise<Image | undefined> {
+		if (!this.#documents.has(id) && !this.#retained.has(id)) return undefined
+		const response = await this.#request({ type: 'detectionImage', id: this.#id++, document: id })
+		if (response.status === 'detectionImage') return response.image
+		if (response.status === 'missing') return undefined
+		throw responseError(response)
+	}
+
+	// Asks the worker to encode a document.
+	async #encode(id: string, format: ImageFormat): Promise<Uint8Array<ArrayBuffer> | undefined> {
 		const response = await this.#request({ type: 'encode', id: this.#id++, document: id, format })
 		if (response.status === 'encoded') return response.bytes
 		if (response.status === 'missing') return undefined
@@ -460,11 +518,46 @@ export class ImageStore {
 		return this.#documents.get(id)?.name
 	}
 
-	// Closes a document, releasing its pixels. Returns false for an unknown id.
+	// Closes a document: every route answers it as unknown from now on, and its pixels are released at once,
+	// or when its last retention is released. Returns false for an unknown id.
 	close(id: string): boolean {
 		if (!this.#documents.delete(id)) return false
-		this.#post({ type: 'close', document: id })
+		if (!this.#retained.has(id)) this.#discard(id)
 		return true
+	}
+
+	// Retains an open document, so its pixels stay until release(id) even if it is closed meanwhile. Every
+	// retain must be balanced by one release. Returns the size of the image, or undefined for an unknown id,
+	// which is not retained.
+	retain(id: string): DocumentSize | undefined {
+		const record = this.#documents.get(id)
+		if (!record) return undefined
+		const retention = this.#retained.get(id)
+		if (retention) retention.holds++
+		else this.#retained.set(id, { record, holds: 1 })
+		return { width: record.width, height: record.height }
+	}
+
+	// Releases one retention of a document, releasing its pixels when it was the last one and the document
+	// is closed. Ignored for a document that is not retained, such as one lost with the worker.
+	release(id: string): void {
+		const retention = this.#retained.get(id)
+		if (!retention) return
+		if (--retention.holds > 0) return
+		this.#retained.delete(id)
+		if (!this.#documents.has(id)) this.#discard(id)
+	}
+
+	// Registers a receiver of released documents and returns its unregistration.
+	onDiscard(listener: ImageDiscardListener): VoidFunction {
+		this.#discardListeners.add(listener)
+		return () => this.#discardListeners.delete(listener)
+	}
+
+	// Releases the pixels of a document that is neither open nor retained.
+	#discard(id: string): void {
+		this.#post({ type: 'close', document: id })
+		for (const listener of this.#discardListeners) listener(id)
 	}
 
 	// Sends a request to the worker, transferring the given buffers, and resolves to its response.
@@ -512,7 +605,10 @@ export class ImageStore {
 		console.error('image worker failed:', reason)
 		this.#worker?.terminate()
 		this.#worker = undefined
+		const lost = new Set([...this.#documents.keys(), ...this.#retained.keys()])
 		this.#documents.clear()
+		this.#retained.clear()
+		for (const id of lost) for (const listener of this.#discardListeners) listener(id)
 
 		const pending = [...this.#pending.values()]
 		this.#pending.clear()

@@ -376,9 +376,17 @@ export class CameraCaptures implements Disposable {
 	) {
 		this.#capturer = new CameraCapturer(devices.cameras, operations.arbiter, {
 			capturesDir,
+			// The focuser a request names, such as the one of an Auto Focus, is snooped into the frame headers.
+			devices: { focuser: devices.focusers },
 			publish: (frame, _, camera) => this.#published(frame, camera),
 			write: (path, data) => this.#write(path, data),
 		})
+	}
+
+	// Toolkit capturer of every camera, for composite features such as the Auto Focus that take their own frames
+	// inside their operation; frames it takes for them never enter the capture sessions or previews of this service.
+	get capturer(): CameraCapturer {
+		return this.#capturer
 	}
 
 	// Returns the latest session and previewed frame of every camera.

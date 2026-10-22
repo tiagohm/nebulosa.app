@@ -1,3 +1,4 @@
+import { type AutoFocusRequest, AutoFocusSessions } from './autofocus'
 import { type CameraCoolerRequest, CameraCommands, type CameraTemperatureRequest } from './cameras'
 import { CameraCaptures, type CaptureRequest } from './captures'
 import { type CommandRequest, errorResponse } from './commands'
@@ -22,6 +23,8 @@ import { WheelCommands, type WheelMoveRequest, type WheelNamesRequest } from './
 
 // HTTP routes and the WebSocket handler of the backend, mounted by the app server.
 
+export type { AutoFocusCaptureSettings, AutoFocusEvent, AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusStartResponse, AutoFocusState, AutoFocusVerification, FocusMeasurement } from './autofocus'
+export type { FocusCurve, FocusCurveHyperbola, FocusCurveParabola, FocusCurveSeries, FocusCurveSeriesKind, FocusCurveTrendLines } from './autofocus.curve'
 export type { CameraCoolerRequest, CameraTemperatureRequest } from './cameras'
 export type { CaptureAnalysisState, CaptureEvent, CaptureFormat, CaptureFrame, CaptureOutput, CaptureOutputMode, CapturePhase, CaptureRequest, CaptureSession, CaptureSettings, CaptureSnapshot, CaptureStartResponse, PostCaptureAnalysis, PostCaptureAnalysisPolicy } from './captures'
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
@@ -140,6 +143,10 @@ const externalTools = new ExternalToolsStore(DEFAULT_SETTINGS_FILE, broadcast)
 const stars = new StarDetectionService(images, externalTools, broadcast)
 
 const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, stars, broadcast)
+
+// Auto Focus sessions of the cameras of the open connections, taking their frames with the capturer of the captures and
+// moving the focusers with their backlash compensation.
+const autoFocus = new AutoFocusSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, focusers.mover, images, stars, broadcast)
 
 // Opens a connection, or returns the existing one for the same endpoint. Responds 400 for an invalid
 // body and 502 when the endpoint cannot be reached.
@@ -502,6 +509,22 @@ export const routes = {
 	'/api/connections/:id/cameras/:deviceId/capture/abort': {
 		// Aborts the exposure in flight and ends the capture of a camera.
 		POST: (req) => captures.abort(req.params.id, req.params.deviceId),
+	},
+	'/api/autofocus': {
+		// The latest Auto Focus session of every camera, started by any tab, without measurements.
+		GET: () => Response.json(autoFocus.snapshot()),
+	},
+	'/api/autofocus/:sessionId': {
+		// An Auto Focus session with its measurements and fitted curve; 404 when it is not the latest of its camera.
+		GET: (req) => autoFocus.session(req.params.sessionId),
+	},
+	'/api/autofocus/:sessionId/stop': {
+		// Stops an Auto Focus session where it stands, without moving the focuser back.
+		POST: (req) => autoFocus.stop(req.params.sessionId),
+	},
+	'/api/connections/:id/cameras/:deviceId/autofocus': {
+		// Starts an Auto Focus with this camera; its progress and outcome arrive as autofocus:updated and operation:updated events.
+		POST: async (req) => autoFocus.start(req.params.id, req.params.deviceId, (await req.json()) as AutoFocusRequest),
 	},
 	'/api/connections/:id/cameras/:deviceId/sensor': {
 		// Sensor geometry of a camera; 404 when the connection is not open or has no such camera.

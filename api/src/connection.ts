@@ -10,6 +10,7 @@ import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { RotatorSimulator } from 'nebulosa/src/devices/indi/simulator/rotator'
 import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
+import type { AutoFocusEvent } from './autofocus'
 import type { CaptureEvent } from './captures'
 import { type DeviceEvent, DeviceRegistry } from './devices'
 import type { DomeMotionEvent } from './domes'
@@ -56,9 +57,9 @@ export type ConnectionStatus = ConnectRequest & {
 export type ConnectionEvent = { readonly type: 'connection:open'; readonly connection: ConnectionStatus } | { readonly type: 'connection:close'; readonly id: string }
 
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the
-// operation events of the operation registry, the events of the capture, mount nudge, and dome manual
+// operation events of the operation registry, the events of the capture, Auto Focus, mount nudge, and dome manual
 // rotation services, the changes of the external program settings, and the star detection jobs.
-export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent | CaptureEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent | StarDetectionEvent | FocuserBacklashEvent
+export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent | CaptureEvent | AutoFocusEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent | StarDetectionEvent | FocuserBacklashEvent
 
 // Receiver of connection and device events.
 export type ConnectionListener = (event: ServerEvent) => void
@@ -122,7 +123,8 @@ async function openClient(id: string, request: ConnectRequest, handler: IndiClie
 			// Each simulator registers itself with the client, which disposes them all when it is disposed.
 			void [
 				new MountSimulator('Mount Simulator', client),
-				new CameraSimulator('Camera Simulator', client),
+				// The camera renders the defocus of the simulated focuser a capture snoops.
+				new CameraSimulator('Camera Simulator', client, { focuserManager: devices.focusers }),
 				new FocuserSimulator('Focuser Simulator', client),
 				new WheelSimulator('Filter Wheel Simulator', client),
 				new RotatorSimulator('Rotator Simulator', client),

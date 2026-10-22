@@ -36,6 +36,7 @@ export type OperationKind =
 	| 'dome.shutter'
 	| 'dome.move'
 	| 'camera.capture'
+	| 'focuser.autofocus'
 
 // Life stage of an operation.
 export type OperationState = 'running' | 'succeeded' | 'failed'

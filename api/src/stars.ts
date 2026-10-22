@@ -418,8 +418,9 @@ export class StarDetectionService {
 
 	// Submits a detection of an open image with the manual priority, as origin (manual by default). An
 	// equivalent completed detection of the same image is answered instead of running again (cached).
-	async submit(imageId: string, request: StarDetectionRequest, origin: StarDetectionOrigin = MANUAL_ORIGIN): Promise<StarDetectionSubmitOutcome> {
-		const preparation = await this.prepare(request)
+	// A preparation, resolved earlier by prepare, keeps the ASTAP settings it captured instead of reading them again.
+	async submit(imageId: string, request: StarDetectionRequest | StarDetectionPreparation, origin: StarDetectionOrigin = MANUAL_ORIGIN): Promise<StarDetectionSubmitOutcome> {
+		const preparation = 'detector' in request ? await this.prepare(request) : request
 		if (!preparation) return { status: 'astapUnavailable' }
 		if (this.images.name(imageId) === undefined) return { status: 'missing' }
 
@@ -491,8 +492,9 @@ export class StarDetectionService {
 	// Detects the stars of an open image and resolves to the result once the job completed, for a consumer
 	// that needs the measurement of one specific image, such as an Auto Focus step: the job runs with the
 	// manual priority and is never replaced by a newer frame. Aborting signal cancels the job. Throws
-	// StarDetectionError when the job does not complete. origin names the requester, manual by default.
-	async measure(imageId: string, request: StarDetectionRequest, signal?: AbortSignal, origin?: StarDetectionOrigin): Promise<StarDetectionResult> {
+	// StarDetectionError when the job does not complete. origin names the requester, manual by default; a
+	// preparation keeps the ASTAP settings of a whole session, as submit does.
+	async measure(imageId: string, request: StarDetectionRequest | StarDetectionPreparation, signal?: AbortSignal, origin?: StarDetectionOrigin): Promise<StarDetectionResult> {
 		const outcome = await this.submit(imageId, request, origin)
 		if (outcome.status === 'missing') throw new StarDetectionError('expired', 'The image is not open')
 		if (outcome.status === 'astapUnavailable') throw new StarDetectionError('astapUnavailable', 'ASTAP is not configured')

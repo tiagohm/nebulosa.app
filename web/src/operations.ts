@@ -37,6 +37,7 @@ export const OPERATION_LABELS: Readonly<Record<OperationKind, string>> = {
 	'dome.shutter': 'Dome shutter',
 	'dome.move': 'Dome rotation',
 	'camera.capture': 'Camera capture',
+	'focuser.autofocus': 'Auto Focus',
 }
 
 // Most finished operations kept; older ones are dropped. Running operations are always kept.

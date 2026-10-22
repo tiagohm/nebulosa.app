@@ -284,7 +284,7 @@ export function captureElapsed(session: Pick<CaptureSession, 'startedAt' | 'ende
 // is already rendered or being rendered. The rendering replaces the camera's previous one only once it is
 // ready; a frame closed on the server meanwhile (a newer one replaced it) is skipped silently, and any
 // other failure keeps the previous rendering and records why.
-export async function renderFrame(state: CaptureRuntime, key: string, frame: CaptureFrame, io: ImagesIo = browserIo) {
+export async function renderFrame(state: CaptureRuntime, key: string, frame: Pick<CaptureFrame, 'imageId' | 'cfa' | 'width' | 'height'>, io: ImagesIo = browserIo) {
 	if (state.renderings[key]?.imageId === frame.imageId || renders.get(key)?.imageId === frame.imageId) return
 
 	renders.get(key)?.controller.abort()

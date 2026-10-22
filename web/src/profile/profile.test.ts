@@ -3,7 +3,7 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { acquisitionSettings, ACTIVE_PROFILE_KEY, activeProfile, activeSetup, analysisSettings, assignDevice, createOpticalPreset, createProfile, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_ANALYSIS_SETTINGS, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectOpticalPreset, selectProfile, setAcquisitionSettings, setAnalysisSettings, setCameraReticle, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setTelescopeOptics, updateOpticalPreset } from './profile'
+import { acquisitionSettings, ACTIVE_PROFILE_KEY, activeProfile, activeSetup, analysisSettings, assignDevice, autoFocusSettings, DEFAULT_AUTO_FOCUS_SETTINGS, setAutoFocusSettings, createOpticalPreset, createProfile, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_ANALYSIS_SETTINGS, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectOpticalPreset, selectProfile, setAcquisitionSettings, setAnalysisSettings, setCameraReticle, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setTelescopeOptics, updateOpticalPreset } from './profile'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }
@@ -591,5 +591,38 @@ describe('post-capture analysis', () => {
 		const older = newStores()
 		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {} } } }] }))
 		expect(analysisSettings(load(older).profiles[0].settings.capture, 'MAIN_CAMERA').enabled).toBeFalse()
+	})
+})
+
+describe('auto focus form', () => {
+	test('starts from the defaults with the camera settings of the Camera Capture form, and is kept apart from it per camera view', () => {
+		const state = load(newStores())
+		setAcquisitionSettings(state, 'MAIN_CAMERA', { gain: 120, offset: 10, binX: 2, binY: 2, exposureTime: 30 })
+
+		const capture = activeProfile(state).settings.capture
+		expect(autoFocusSettings(capture, 'MAIN_CAMERA')).toEqual({ ...DEFAULT_AUTO_FOCUS_SETTINGS, gain: 120, offset: 10, bin: 2 })
+
+		setAutoFocusSettings(state, 'MAIN_CAMERA', { exposureTime: 4, stepSize: 50 })
+		expect(autoFocusSettings(capture, 'MAIN_CAMERA')).toMatchObject({ exposureTime: 4, stepSize: 50, gain: 120 })
+		expect(acquisitionSettings(capture, 'MAIN_CAMERA').exposureTime).toBe(30)
+		expect(autoFocusSettings(capture, 'GUIDE_CAMERA').stepSize).toBeUndefined()
+	})
+
+	test('is persisted and restored, replacing invalid fields with defaults and dropping an invalid step size', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		const detection = { detector: { provider: 'builtin', maxStars: 50, minSNR: 2, searchRegion: 0, maximumRadius: 24 }, acceptance: { minSNR: 0, minHfd: 1, maxHfd: 0, edgeMargin: 10 } } as const
+		setAutoFocusSettings(state, 'MAIN_CAMERA', { fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, detection, settleDelay: 1.5, curve: false })
+		await Bun.sleep(0)
+
+		const reloaded = load({ local: stores.local, session: new MemoryStorage() })
+		expect(autoFocusSettings(reloaded.profiles[0].settings.capture, 'MAIN_CAMERA')).toMatchObject({ fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, detection, settleDelay: 1.5, curve: false })
+
+		const invalid = newStores()
+		const autoFocus = { MAIN_CAMERA: { fittingMode: 'CUBIC', stepSize: 0, initialOffsetSteps: 0, exposureTime: -1, measureTimeout: 0, detection: { detector: { provider: 'builtin', maximumRadius: -3 } } } }
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {}, autoFocus } } }] }))
+		const restored = load(invalid).profiles[0].settings.capture.autoFocus!.MAIN_CAMERA!
+		expect(restored).toEqual({ ...DEFAULT_AUTO_FOCUS_SETTINGS, detection: { ...DEFAULT_AUTO_FOCUS_SETTINGS.detection, detector: { provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 } } })
+		expect(restored.stepSize).toBeUndefined()
 	})
 })

@@ -1,0 +1,135 @@
+import { expect, test } from 'bun:test'
+import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, CameraCapabilities } from 'api'
+import { proxy } from 'valtio'
+import { DEFAULT_AUTO_FOCUS_SETTINGS } from '../profile/profile'
+import { autoFocusRequest, autoFocusRunning, type AutoFocusRuntime, defaultStepSize, handleAutoFocusEvent, refreshAutoFocus, startAutoFocus, stopAutoFocus } from './autofocus'
+import { cameraKey } from './capture'
+import { curveBounds, ticks } from './FocusCurve'
+
+function newState() {
+	return proxy<AutoFocusRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
+}
+
+const FOCUSER = { connectionId: 'c', deviceId: 'foc' }
+
+function summary(patch: Partial<AutoFocusSessionSummary> = {}): AutoFocusSessionSummary {
+	return {
+		sessionId: 's1',
+		operationId: 'o1',
+		camera: { connectionId: 'c', deviceId: 'cam' },
+		cameraName: 'Camera',
+		focuser: FOCUSER,
+		focuserName: 'Focuser',
+		request: autoFocusRequest(DEFAULT_AUTO_FOCUS_SETTINGS, FOCUSER, 100),
+		provider: 'builtin',
+		state: 'exposing',
+		measurementCount: 0,
+		verification: 'pending',
+		startedAt: 1000,
+		...patch,
+	}
+}
+
+function details(patch: Partial<AutoFocusSession> = {}): AutoFocusSession {
+	return { ...summary(), measurements: [], ...patch }
+}
+
+// Fetch fake answering each URL with the response its handler builds, recording the requests.
+function fakeFetch(handler: (url: string, init?: RequestInit) => Response | Promise<Response>) {
+	const requests: { url: string; init?: RequestInit }[] = []
+	const request = ((url: string, init?: RequestInit) => {
+		requests.push({ url, init })
+		return Promise.resolve(handler(url, init))
+	}) as typeof fetch
+	return { request, requests }
+}
+
+test('mirrors the latest session of each camera and fetches its record when a measurement arrives', async () => {
+	const state = newState()
+	const key = cameraKey('c', 'cam')
+	const { request, requests } = fakeFetch(() => Response.json(details({ measurementCount: 1, measurements: [{ capture: 1, requestedPosition: 100, observedPosition: 100, hfd: 3, detectedCount: 9, acceptedCount: 8, elapsed: 5, warnings: [], time: 2 }] })))
+
+	handleAutoFocusEvent(state, { type: 'autofocus:updated', session: summary() }, request)
+	handleAutoFocusEvent(state, { type: 'autofocus:updated', session: summary({ measurementCount: 1 }) }, request)
+	await Bun.sleep(0)
+
+	expect(state.sessions[key]?.measurementCount).toBe(1)
+	expect(requests.map((r) => r.url)).toContain('/api/autofocus/s1')
+	expect(state.details.s1?.measurements).toHaveLength(1)
+
+	// An older session of the same camera never replaces the newer one.
+	handleAutoFocusEvent(state, { type: 'autofocus:updated', session: summary({ sessionId: 's0', startedAt: 500 }) }, request)
+	expect(state.sessions[key]?.sessionId).toBe('s1')
+	expect(autoFocusRunning(state.sessions[key])).toBeTrue()
+	expect(autoFocusRunning(summary({ endedAt: 3000 }))).toBeFalse()
+})
+
+test('a newer session forgets the record of the previous one', () => {
+	const state = newState()
+	const { request } = fakeFetch(() => new Response(null, { status: 404 }))
+	state.details.s1 = details()
+
+	handleAutoFocusEvent(state, { type: 'autofocus:updated', session: summary() }, request)
+	handleAutoFocusEvent(state, { type: 'autofocus:updated', session: summary({ sessionId: 's2', startedAt: 2000 }) }, request)
+
+	expect(state.details.s1).toBeUndefined()
+})
+
+test('the snapshot replaces the sessions after a reconnection', async () => {
+	const state = newState()
+	state.sessions.old = summary({ sessionId: 'gone' })
+	const { request } = fakeFetch((url) => (url === '/api/autofocus' ? Response.json({ sessions: [summary({ state: 'completed', endedAt: 5000 })] }) : Response.json(details({ state: 'completed', endedAt: 5000 }))))
+
+	await refreshAutoFocus(state, request)
+	await Bun.sleep(0)
+
+	expect(Object.keys(state.sessions)).toEqual([cameraKey('c', 'cam')])
+	expect(state.details.s1?.state).toBe('completed')
+})
+
+test('a start carries a fresh token and records a refusal; a stop names its session', async () => {
+	const state = newState()
+	const { request, requests } = fakeFetch((url) => (url.endsWith('/autofocus') ? Response.json({ error: 'The device is busy', code: 'busy' }, { status: 409 }) : new Response(null, { status: 204 })))
+
+	await startAutoFocus(state, 'c', 'cam', autoFocusRequest(DEFAULT_AUTO_FOCUS_SETTINGS, FOCUSER, 100), request)
+	expect(requests[0].url).toBe('/api/connections/c/cameras/cam/autofocus')
+	const body = JSON.parse(requests[0].init!.body as string) as AutoFocusRequest
+	expect(body.token).toBeString()
+	expect(body.focuser).toEqual(FOCUSER)
+	expect(state.errors[cameraKey('c', 'cam')]).toBe('The device is busy')
+
+	await stopAutoFocus(state, summary(), request)
+	expect(requests[1].url).toBe('/api/autofocus/s1/stop')
+	expect(state.errors[cameraKey('c', 'cam')]).toBeUndefined()
+})
+
+test('the request fits the frame settings to the camera and always grows the aperture of the built-in detector', () => {
+	const capabilities = { exposure: { min: 0.001, max: 60 }, gain: { min: 0, max: 100 }, offset: { min: 0, max: 50 }, bin: { x: 2, y: 2 } } as CameraCapabilities
+	const settings = { ...DEFAULT_AUTO_FOCUS_SETTINGS, exposureTime: 120, gain: 300, bin: 4, detection: { ...DEFAULT_AUTO_FOCUS_SETTINGS.detection, detector: { provider: 'builtin', maxStars: 100, minSNR: 0, searchRegion: 0 } } } as const
+	const request = autoFocusRequest(settings, FOCUSER, 250, capabilities)
+
+	expect(request.capture).toMatchObject({ exposureTime: 60, gain: 100, binX: 2, binY: 2, subframe: false })
+	expect(request.detection.detector).toEqual({ provider: 'builtin', maxStars: 100, minSNR: 0, searchRegion: 0, maximumRadius: 32 })
+	expect(request.stepSize).toBe(250)
+	expect(defaultStepSize(0, 100000)).toBe(500)
+	expect(defaultStepSize(0, 50)).toBe(1)
+})
+
+test('the chart spans the measurements, the fitted curves, and the outcome, padded by the step size', () => {
+	const session = details({
+		measurements: [
+			{ capture: 1, requestedPosition: 1000, observedPosition: 1000, hfd: 4, detectedCount: 1, acceptedCount: 1, elapsed: 1, warnings: [], time: 1 },
+			{ capture: 2, requestedPosition: 1400, observedPosition: 1400, detectedCount: 0, acceptedCount: 0, elapsed: 1, warnings: [], time: 2 },
+		],
+		curve: { fittingMode: 'HYPERBOLIC', series: [{ kind: 'hyperbolic', points: [{ x: 900, y: 5 }] }] },
+		finalPosition: 1500,
+	})
+	const bounds = curveBounds(session)!
+	expect(bounds.y).toEqual([3.5, 5.5])
+	expect(bounds.x).toEqual([850, 1550])
+	// A single sample still spans a step of the session.
+	expect(curveBounds(details({ measurements: [session.measurements[0]] }))!.x).toEqual([950, 1050])
+	expect(curveBounds(details())).toBeUndefined()
+	expect(ticks(0, 10, 4)).toEqual([0, 5, 10])
+	expect(ticks(980, 1520, 5)).toEqual([1000, 1200, 1400])
+})

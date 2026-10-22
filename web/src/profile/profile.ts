@@ -1,4 +1,4 @@
-import type { CaptureRequest, PostCaptureAnalysisPolicy, StarDetectionRequest } from 'api'
+import type { AutoFocusRequest, CaptureRequest, PostCaptureAnalysisPolicy, StarDetectionRequest } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
 import { CAMERA_ROLES, type CameraRole, conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
@@ -148,6 +148,62 @@ export interface CaptureAnalysisSettings {
 // and the markers shown.
 export const DEFAULT_ANALYSIS_SETTINGS: CaptureAnalysisSettings = { enabled: false, policy: 'everyFrame', request: DEFAULT_STAR_REQUEST, overlay: true }
 
+// Auto Focus form of one camera view: the routine the next session starts with, kept apart from the Camera
+// Capture form so changing one never changes the other. Durations are in seconds, positions in focuser steps.
+export interface AutoFocusSettings {
+	// Exposure of each frame, in seconds; > 0.
+	exposureTime: number
+	// Gain of each frame, sent when the camera supports it.
+	gain: number
+	// Offset of each frame, sent when the camera supports it.
+	offset: number
+	// Binning of each frame on both axes, >= 1.
+	bin: number
+	// Star detector, its settings, and the acceptance criteria of the stars entering the aggregate HFD.
+	detection: StarDetectionRequest
+	// Whether the star markers of the frame shown are drawn; never changes the measurement.
+	overlay: boolean
+	// Curve fitting that places the best focus.
+	fittingMode: AutoFocusRequest['fittingMode']
+	// Positions sampled on each side of the start, >= 1.
+	initialOffsetSteps: number
+	// Distance between sampled positions, in steps, >= 1; absent follows the travel of the focuser.
+	stepSize?: number
+	// Whether the sweep starts inwards instead of outwards.
+	reversed: boolean
+	// Largest RMSD of a fitted curve over its HFD at the best focus; 0 accepts any fit.
+	rmsdThreshold: number
+	// Wait after each focuser move before the next exposure, in seconds; >= 0.
+	settleDelay: number
+	// Longest star detection of one frame, in seconds; > 0.
+	measureTimeout: number
+	// Whether the Focus Curve is expanded below the viewer.
+	curve: boolean
+}
+
+// Signal aperture radius of the built-in detector of an Auto Focus, in pixels: large enough to measure the
+// defocused stars at the ends of a focus curve, which the fixed 4 px aperture saturates.
+export const AUTO_FOCUS_APERTURE = 32
+
+// Auto Focus form of a view that has none yet, besides the gain, offset, and binning, which start as those of
+// its Camera Capture form: 2 s frames measured by the built-in detector with a grown aperture, a hyperbolic
+// fit over 4 positions on each side, and the Focus Curve shown.
+export const DEFAULT_AUTO_FOCUS_SETTINGS: AutoFocusSettings = {
+	exposureTime: 2,
+	gain: 0,
+	offset: 0,
+	bin: 1,
+	detection: { ...DEFAULT_STAR_REQUEST, detector: { ...DEFAULT_BUILTIN_SETTINGS, maximumRadius: AUTO_FOCUS_APERTURE } },
+	overlay: true,
+	fittingMode: 'HYPERBOLIC',
+	initialOffsetSteps: 4,
+	reversed: false,
+	rmsdThreshold: 0,
+	settleDelay: 0,
+	measureTimeout: 60,
+	curve: true,
+}
+
 // Capture preferences of a profile. Only presentation and forms are kept: never images, devices, or
 // operations.
 export interface CaptureSettings {
@@ -159,6 +215,8 @@ export interface CaptureSettings {
 	acquisition?: Partial<Record<CameraRole, CameraAcquisitionSettings>>
 	// Post-capture analysis of each camera view edited so far, by camera role; absent before the first edit.
 	analysis?: Partial<Record<CameraRole, CaptureAnalysisSettings>>
+	// Auto Focus form of each camera view edited so far, by camera role; absent before the first edit.
+	autoFocus?: Partial<Record<CameraRole, AutoFocusSettings>>
 }
 
 // A complete working environment: the selected connection, the equipment assigned on each connection,
@@ -234,6 +292,15 @@ function normalizeCapture(value: unknown, capture: CaptureSettings) {
 		}
 	}
 
+	if (isRecord(value.autoFocus)) {
+		for (const role of CAMERA_ROLES) {
+			const autoFocus = normalizeAutoFocus(value.autoFocus[role])
+			if (!autoFocus) continue
+			capture.autoFocus ??= {}
+			capture.autoFocus[role] = autoFocus
+		}
+	}
+
 	if (!isRecord(value.views)) return
 
 	for (const role of CAMERA_ROLES) {
@@ -295,23 +362,65 @@ function normalizeAcquisition(value: unknown): CameraAcquisitionSettings | undef
 function normalizeAnalysis(value: unknown): CaptureAnalysisSettings | undefined {
 	if (!isRecord(value)) return undefined
 
-	const defaults = DEFAULT_ANALYSIS_SETTINGS
-	const request = isRecord(value.request) ? value.request : {}
-	const detector = isRecord(request.detector) ? request.detector : {}
-	const acceptance = isRecord(request.acceptance) ? request.acceptance : {}
-	const fallback = defaults.request.acceptance
-
 	return {
 		enabled: value.enabled === true,
 		policy: value.policy === 'latestFrame' ? 'latestFrame' : 'everyFrame',
-		request: {
-			detector:
-				detector.provider === 'astap'
-					? { provider: 'astap', maxStars: numberAtLeast(detector.maxStars, 0, DEFAULT_ASTAP_SETTINGS.maxStars, true), minSNR: numberAtLeast(detector.minSNR, 0, DEFAULT_ASTAP_SETTINGS.minSNR) }
-					: { provider: 'builtin', maxStars: numberAtLeast(detector.maxStars, 1, DEFAULT_BUILTIN_SETTINGS.maxStars, true), minSNR: numberAtLeast(detector.minSNR, 0, DEFAULT_BUILTIN_SETTINGS.minSNR), searchRegion: numberAtLeast(detector.searchRegion, 0, DEFAULT_BUILTIN_SETTINGS.searchRegion) },
-			acceptance: { minSNR: numberAtLeast(acceptance.minSNR, 0, fallback.minSNR), minHfd: numberAtLeast(acceptance.minHfd, 0, fallback.minHfd), maxHfd: numberAtLeast(acceptance.maxHfd, 0, fallback.maxHfd), edgeMargin: numberAtLeast(acceptance.edgeMargin, 0, fallback.edgeMargin) },
-		},
+		request: normalizeStarRequest(value.request, DEFAULT_ANALYSIS_SETTINGS.request),
 		overlay: value.overlay !== false,
+	}
+}
+
+// Restores a persisted star detection request, filling every invalid field with its default; the aperture of
+// the built-in detector is kept only when valid, and fallback is used when the value is not a record.
+function normalizeStarRequest(value: unknown, fallback: StarDetectionRequest): StarDetectionRequest {
+	if (!isRecord(value)) return JSON.parse(JSON.stringify(fallback)) as StarDetectionRequest
+
+	const detector = isRecord(value.detector) ? value.detector : {}
+	const acceptance = isRecord(value.acceptance) ? value.acceptance : {}
+	const defaults = DEFAULT_STAR_REQUEST.acceptance
+	const maximumRadius = numberAtLeast(detector.maximumRadius, 1, Number.NaN)
+
+	return {
+		detector:
+			detector.provider === 'astap'
+				? { provider: 'astap', maxStars: numberAtLeast(detector.maxStars, 0, DEFAULT_ASTAP_SETTINGS.maxStars, true), minSNR: numberAtLeast(detector.minSNR, 0, DEFAULT_ASTAP_SETTINGS.minSNR) }
+				: {
+						provider: 'builtin',
+						maxStars: numberAtLeast(detector.maxStars, 1, DEFAULT_BUILTIN_SETTINGS.maxStars, true),
+						minSNR: numberAtLeast(detector.minSNR, 0, DEFAULT_BUILTIN_SETTINGS.minSNR),
+						searchRegion: numberAtLeast(detector.searchRegion, 0, DEFAULT_BUILTIN_SETTINGS.searchRegion),
+						...(Number.isFinite(maximumRadius) && { maximumRadius }),
+					},
+		acceptance: { minSNR: numberAtLeast(acceptance.minSNR, 0, defaults.minSNR), minHfd: numberAtLeast(acceptance.minHfd, 0, defaults.minHfd), maxHfd: numberAtLeast(acceptance.maxHfd, 0, defaults.maxHfd), edgeMargin: numberAtLeast(acceptance.edgeMargin, 0, defaults.edgeMargin) },
+	}
+}
+
+// Fitting modes of the Auto Focus form.
+const FITTING_MODES: ReadonlySet<string> = new Set<AutoFocusSettings['fittingMode']>(['HYPERBOLIC', 'PARABOLIC', 'TRENDLINES', 'TREND_HYPERBOLIC', 'TREND_PARABOLIC'])
+
+// Restores a persisted Auto Focus form, filling every invalid field with its default; undefined for anything
+// that is not a record. A step size that is not valid is dropped, so the travel of the focuser sets it again.
+function normalizeAutoFocus(value: unknown): AutoFocusSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = DEFAULT_AUTO_FOCUS_SETTINGS
+	const stepSize = numberAtLeast(value.stepSize, 1, Number.NaN, true)
+
+	return {
+		exposureTime: typeof value.exposureTime === 'number' && Number.isFinite(value.exposureTime) && value.exposureTime > 0 ? value.exposureTime : defaults.exposureTime,
+		gain: numberAtLeast(value.gain, -Infinity, defaults.gain),
+		offset: numberAtLeast(value.offset, -Infinity, defaults.offset),
+		bin: numberAtLeast(value.bin, 1, defaults.bin, true),
+		detection: normalizeStarRequest(value.detection, defaults.detection),
+		overlay: value.overlay !== false,
+		fittingMode: typeof value.fittingMode === 'string' && FITTING_MODES.has(value.fittingMode) ? (value.fittingMode as AutoFocusSettings['fittingMode']) : defaults.fittingMode,
+		initialOffsetSteps: numberAtLeast(value.initialOffsetSteps, 1, defaults.initialOffsetSteps, true),
+		...(Number.isFinite(stepSize) && { stepSize }),
+		reversed: value.reversed === true,
+		rmsdThreshold: numberAtLeast(value.rmsdThreshold, 0, defaults.rmsdThreshold),
+		settleDelay: numberAtLeast(value.settleDelay, 0, defaults.settleDelay),
+		measureTimeout: typeof value.measureTimeout === 'number' && Number.isFinite(value.measureTimeout) && value.measureTimeout > 0 ? value.measureTimeout : defaults.measureTimeout,
+		curve: value.curve !== false,
 	}
 }
 
@@ -766,6 +875,27 @@ export function setAnalysisSettings(state: ProfileState, role: CameraRole, patch
 	const next = JSON.parse(JSON.stringify({ ...analysisSettings(capture, role), ...patch })) as CaptureAnalysisSettings
 	capture.analysis ??= {}
 	capture.analysis[role] = next
+	touch(profile)
+}
+
+// Returns the Auto Focus form of a camera view: the one edited last, or the defaults with the gain, offset,
+// and binning of the view's Camera Capture form.
+export function autoFocusSettings(capture: Readonly<CaptureSettings>, role: CameraRole): Readonly<AutoFocusSettings> {
+	const saved = capture.autoFocus?.[role]
+	if (saved) return saved
+	const { gain, offset, binX } = acquisitionSettings(capture, role)
+	return { ...DEFAULT_AUTO_FOCUS_SETTINGS, gain, offset, bin: binX }
+}
+
+// Replaces fields of the Auto Focus form of a camera view in the active profile; other views and the Camera
+// Capture form keep theirs. The detection is replaced as a whole when given.
+export function setAutoFocusSettings(state: ProfileState, role: CameraRole, patch: Partial<AutoFocusSettings>) {
+	const profile = activeProfile(state)
+	const capture = profile.settings.capture
+	// A plain copy: the stored settings are a proxy, and a default must never be shared with a view.
+	const next = JSON.parse(JSON.stringify({ ...autoFocusSettings(capture, role), ...patch })) as AutoFocusSettings
+	capture.autoFocus ??= {}
+	capture.autoFocus[role] = next
 	touch(profile)
 }
 

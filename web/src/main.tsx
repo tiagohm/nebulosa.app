@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { App } from './App'
+import { autoFocusRuntime, handleAutoFocusEvent, refreshAutoFocus } from './capture/autofocus'
 import { captureRuntime, handleCaptureEvent, refreshCameraCapabilities, refreshCaptures } from './capture/capture'
 import { handleNudgeEvent, nudgeRuntime, refreshNudgeMount, refreshNudges } from './capture/nudge'
 import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
@@ -42,12 +43,13 @@ const stops = [
 		handleSensorEvent(sensorRuntime, event)
 		handleCaptureEvent(captureRuntime, event)
 		handleNudgeEvent(nudgeRuntime, event)
+		handleAutoFocusEvent(autoFocusRuntime, event)
 		handleExternalToolEvent(externalToolsState, event)
 		handleStarsEvent(starsState, event)
 	}),
 	// Every (re)open resynchronizes the open connections, the watched devices and their control states, the followed mount, the
 	// running operations, the camera sensors, the captures and camera capabilities, and the nudged mount
-	// and its nudge sessions, the dome rotation sessions, the focuser backlash compensations, the external tool settings, and the star detection jobs, which may have changed while the socket was closed.
+	// and its nudge sessions, the Auto Focus sessions, the dome rotation sessions, the focuser backlash compensations, the external tool settings, and the star detection jobs, which may have changed while the socket was closed.
 	onOpen(() => {
 		void refreshExternalTools(externalToolsState)
 		void refreshServers(connectionState)
@@ -62,6 +64,7 @@ const stops = [
 		refreshCameraCapabilities(captureRuntime)
 		void refreshNudgeMount(nudgeRuntime)
 		void refreshNudges(nudgeRuntime)
+		void refreshAutoFocus(autoFocusRuntime)
 		void refreshStars(starsState)
 	}),
 ]

@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import type { CameraRole, EquipmentRole } from '../equipment/roles'
 import type { CaptureMode } from '../shell/route'
+import { AutoFocusPanel } from './AutoFocusPanel'
 import { CameraCapturePanel } from './CameraCapturePanel'
 import { MountNudgePanel } from './MountNudgePanel'
 
@@ -45,7 +46,7 @@ export const CAPTURE_MODE_DEFINITIONS: Readonly<Record<CaptureMode, CaptureModeD
 	camera: { id: 'camera', label: 'Camera Capture', panelTitle: 'Camera Capture', planned: false, panel: CameraCapturePanel, overlays: [], requires: [] },
 	'mount-nudge': { id: 'mount-nudge', label: 'Mount Nudge', panelTitle: 'Mount Nudge', planned: false, panel: MountNudgePanel, overlays: [], requires: ['MOUNT'] },
 	guiding: { id: 'guiding', label: 'Guiding', panelTitle: 'Guiding', planned: true, overlays: [], requires: [] },
-	'auto-focus': { id: 'auto-focus', label: 'Auto Focus', panelTitle: 'Auto Focus', planned: true, overlays: [], requires: ['FOCUSER'] },
+	'auto-focus': { id: 'auto-focus', label: 'Auto Focus', panelTitle: 'Auto Focus', planned: false, panel: AutoFocusPanel, overlays: [], requires: ['FOCUSER'] },
 	darv: { id: 'darv', label: 'DARV', panelTitle: 'Drift Alignment (DARV)', planned: true, overlays: ['reticle'], requires: ['MOUNT'] },
 	tppa: { id: 'tppa', label: 'TPPA', panelTitle: 'Three-Point Polar Alignment', planned: true, overlays: ['reticle'], requires: ['MOUNT'] },
 	'flat-wizard': { id: 'flat-wizard', label: 'Flat Wizard', panelTitle: 'Flat Wizard', planned: true, overlays: [], requires: [] },

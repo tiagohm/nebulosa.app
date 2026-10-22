@@ -171,6 +171,7 @@ describe('fitting modes', () => {
 
 			// Only the latest frame (the verification) stays open; earlier ones were closed.
 			expect(images.name(final.verificationImageId!)).toBeDefined()
+			expect(final.latestFrame).toMatchObject({ imageId: final.verificationImageId, capture: final.measurementCount + 1, width: 512, height: 512 })
 			expect(images.name(record.measurements[0].imageId!)).toBeUndefined()
 
 			expect(operationEvents.findLast((event) => event.operation.operationId === operationId)!.operation).toMatchObject({ kind: 'focuser.autofocus', state: 'succeeded', devices: [{ connectionId: id, deviceId: cameraId }, focuserDevice] })

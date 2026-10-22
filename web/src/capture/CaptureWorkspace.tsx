@@ -4,7 +4,7 @@ import { connectionState } from '../connection/connection'
 import { deviceState } from '../equipment/equipment'
 import { type CameraRole, roleDefinition } from '../equipment/roles'
 import { useRoleDevice } from '../equipment/useEquipment'
-import { activeProfile, activeSetup, analysisSettings, profileState, selectCameraView, setCameraReticle } from '../profile/profile'
+import { activeProfile, activeSetup, analysisSettings, autoFocusSettings, profileState, selectCameraView, setAutoFocusSettings, setCameraReticle } from '../profile/profile'
 import { CAPTURE_MODES, type CaptureMode, navigate, redirect, routeState } from '../shell/route'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { StarOverlay } from '../stars/StarOverlay'
@@ -15,8 +15,10 @@ import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
 import { Reticle } from '../viewer/Reticle'
 import { FIT_VIEW } from '../viewer/transform'
+import { autoFocusRuntime } from './autofocus'
 import { CameraTabs } from './CameraTabs'
 import { cameraKey, captureRuntime, renderFrame } from './capture'
+import { FocusCurve } from './FocusCurve'
 import { ModePanel } from './ModePanel'
 import { CAPTURE_MODE_DEFINITIONS, captureModeUnavailable } from './modes'
 import { type CameraTarget, cameraRole, cameraTabs, cameraView, captureRoute, captureViewerState, resolveCameraView, viewerKey, viewMode, viewReticle } from './views'
@@ -95,7 +97,15 @@ export function CaptureWorkspace() {
 				),
 			}}
 		>
-			<CaptureViewer key={viewerKey(role, setup)} viewer={viewerKey(role, setup)} role={role} reticle={viewReticle(capture, role, mode)} stars={analysisSettings(capture, role).overlay} />
+			<CaptureViewer
+				key={viewerKey(role, setup)}
+				viewer={viewerKey(role, setup)}
+				role={role}
+				focusing={mode === 'auto-focus'}
+				reticle={viewReticle(capture, role, mode)}
+				stars={mode === 'auto-focus' ? autoFocusSettings(capture, role).overlay : analysisSettings(capture, role).overlay}
+				curve={autoFocusSettings(capture, role).curve}
+			/>
 		</WorkspaceLayout>
 	)
 }
@@ -109,6 +119,10 @@ interface CaptureViewerProps {
 	readonly reticle: boolean
 	// Whether the star markers of the frame shown are drawn.
 	readonly stars: boolean
+	// Whether the view is in the Auto Focus mode, which shows the latest frame of its session and the Focus Curve.
+	readonly focusing: boolean
+	// Whether the Focus Curve is expanded.
+	readonly curve: boolean
 }
 
 // Viewer of the latest frame of the view's camera with the mode's overlays. It is keyed by the camera
@@ -117,29 +131,34 @@ interface CaptureViewerProps {
 // latest one the server previewed for the assigned device, whichever tab started its capture; while the
 // next one is exposed or rendered, the previous one stays visible. The star markers drawn are those of
 // the frame shown, matched by its image id, so a late result never lands on a newer frame. Before any frame it shows the state of
-// the camera and the flow that fixes it.
-function CaptureViewer({ role, viewer, reticle, stars }: CaptureViewerProps) {
+// the camera and the flow that fixes it. In the Auto Focus mode the frame shown is the latest one of the camera's
+// Auto Focus session, rendered apart from the captures, and the Focus Curve of the session is shown below.
+function CaptureViewer({ role, viewer, reticle, stars, focusing, curve }: CaptureViewerProps) {
 	const camera: CameraTarget = { role, ...useRoleDevice(role) }
 	const views = useSnapshot(captureViewerState)
 	const runtime = useSnapshot(captureRuntime)
+	const autoFocus = useSnapshot(autoFocusRuntime)
 	const key = camera.device && cameraKey(camera.device.connectionId, camera.device.id)
-	const frame = key ? runtime.frames[key] : undefined
-	const rendering = key ? runtime.renderings[key] : undefined
+	const session = focusing && key ? autoFocus.sessions[key] : undefined
+	// Auto Focus frames are rendered under their own key, so they never replace the rendering of a capture.
+	const renderKey = key && (focusing ? `autofocus:${key}` : key)
+	const frame = focusing ? session?.latestFrame : key ? runtime.frames[key] : undefined
+	const rendering = renderKey ? runtime.renderings[renderKey] : undefined
 	// The markers follow the frame on screen: the rendering's image, not a frame still being rendered.
 	const { result } = useStarResult(stars ? rendering?.imageId : undefined)
 
 	useEffect(() => {
-		if (key && frame) void renderFrame(captureRuntime, key, frame)
-	}, [key, frame])
+		if (renderKey && frame) void renderFrame(captureRuntime, renderKey, frame)
+	}, [renderKey, frame])
 
-	return (
+	const image = (
 		<ImageViewer
 			image={rendering}
 			loading={frame !== undefined && rendering?.imageId !== frame.imageId}
-			error={key ? runtime.renderErrors[key] : undefined}
+			error={renderKey ? runtime.renderErrors[renderKey] : undefined}
 			view={views[viewer] ?? FIT_VIEW}
 			onViewChange={(view) => (captureViewerState[viewer] = view)}
-			empty={<CameraState camera={camera} />}
+			empty={<CameraState camera={camera} focusing={focusing} />}
 			toolbar={<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={() => setCameraReticle(profileState, role, !reticle)} />}
 			overlays={
 				reticle || result
@@ -153,15 +172,32 @@ function CaptureViewer({ role, viewer, reticle, stars }: CaptureViewerProps) {
 			}
 		/>
 	)
+
+	if (!focusing) return image
+
+	return (
+		<div className="flex h-full min-h-0 flex-col">
+			<div className="relative min-h-0 flex-1">{image}</div>
+			<section className="shrink-0 border-t border-line-100 bg-base-100">
+				<button type="button" className="flex w-full cursor-pointer items-center justify-between border-0 bg-transparent px-3 py-1.5 text-xs font-medium text-ink-200 select-none hover:text-ink-100" onClick={() => setAutoFocusSettings(profileState, role, { curve: !curve })}>
+					<span>Focus Curve</span>
+					<span className="text-ink-300">{curve ? 'Hide' : 'Show'}</span>
+				</button>
+				{curve && <div className="px-2 pb-2">{session ? <FocusCurve summary={session} session={autoFocus.details[session.sessionId]} /> : <p className="m-0 py-6 text-center text-xs text-ink-300">Run Auto Focus to draw the curve of this camera.</p>}</div>}
+			</section>
+		</div>
+	)
 }
 
 interface CameraStateProps {
 	// Camera of the view.
 	readonly camera: CameraTarget
+	// Whether the view is in the Auto Focus mode.
+	readonly focusing: boolean
 }
 
 // Empty state of the viewer, from the real state of the view's camera.
-function CameraState({ camera: { role, status } }: CameraStateProps) {
+function CameraState({ camera: { role, status }, focusing }: CameraStateProps) {
 	const label = roleDefinition(role).label
 
 	switch (status) {
@@ -180,7 +216,7 @@ function CameraState({ camera: { role, status } }: CameraStateProps) {
 				/>
 			)
 		case 'connected':
-			return <EmptyState title="No image captured" description="Start a capture in the Camera Capture panel." />
+			return focusing ? <EmptyState title="No focus frame yet" description="Run Auto Focus in the panel." /> : <EmptyState title="No image captured" description="Start a capture in the Camera Capture panel." />
 		case 'connecting':
 		case 'disconnecting':
 			return <EmptyState title={`${label} ${status === 'connecting' ? 'connecting' : 'disconnecting'}…`} />

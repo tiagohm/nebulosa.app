@@ -14,7 +14,6 @@ import { FocuserBacklashStore } from './focuserbacklash'
 import { FocuserCommands } from './focusers'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry } from './operations'
-import { PlateSolvingService } from './platesolving'
 import { DEFAULT_BUILTIN_SETTINGS, DEFAULT_STAR_ACCEPTANCE, StarDetectionService } from './stars'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-autofocus-test-'))
@@ -93,8 +92,6 @@ async function setup() {
 		(connectionId) => manager.client(connectionId),
 		operations,
 		images,
-		stars,
-		new PlateSolvingService(images, tools, () => {}),
 		frames,
 		() => {},
 		capturesDir,
@@ -268,7 +265,7 @@ describe('sessions', () => {
 		expect(latest.origin).toBe('autofocus')
 
 		// A capture after the session becomes the latest frame of the same camera and closes the Auto Focus one.
-		expect((await captures.start(id, cameraId, captureRequest())).status).toBe(202)
+		expect(captures.start(id, cameraId, captureRequest()).status).toBe(202)
 		await waitUntil(() => frameEvents.some((event) => event.type === 'captureFrame:updated' && event.frame.origin === 'capture' && event.source.latestFrameId === event.frame.frameId))
 		const page = await frames.recent(id, cameraId)
 		expect(page.latest!.origin).toBe('capture')
@@ -282,12 +279,12 @@ describe('sessions', () => {
 		const { sessionId } = await start(autoFocus, id, cameraId, slow(focuserDevice))
 		await waitUntil(() => summary()?.state === 'exposing')
 
-		expect((await captures.start(id, cameraId, captureRequest())).status).toBe(409)
+		expect(captures.start(id, cameraId, captureRequest()).status).toBe(409)
 
 		await autoFocus.stop(sessionId)
 		await waitUntil(ended)
 
-		expect((await captures.start(id, cameraId, captureRequest({ exposureMode: 'loop', exposureTime: 0.5 }))).status).toBe(202)
+		expect(captures.start(id, cameraId, captureRequest({ exposureMode: 'loop', exposureTime: 0.5 })).status).toBe(202)
 		const busy = await autoFocus.start(id, cameraId, request(focuserDevice))
 		expect(busy.status).toBe(409)
 		expect(await busy.json()).toMatchObject({ code: 'busy' })

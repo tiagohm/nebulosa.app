@@ -1,4 +1,5 @@
 import type { ExternalToolCheck, ExternalToolConfig, ExternalToolState } from 'api'
+import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { useEffect, useState } from 'react'
 import { Actions, Notice, Readout } from '../equipment-control/parts'
 import { PanelSection } from '../shell/ContextualPanel'
@@ -7,7 +8,6 @@ import { NumberInput } from '../ui/NumberInput'
 import { TextInput } from '../ui/TextInput'
 import { CAPABILITY_LABELS, checkMatches, externalToolsState, sameConfig, saveExternalTool, signInExternalTool, signOutExternalTool, testExternalTool } from './externaltools'
 import { type CheckDisplay, CheckBadge, ConfigBadge } from './ExternalToolStatus'
-import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 
 // Settings of one external program or web service: the settings it takes (its executable path on the server,
 // the configuration file passed to it, or the endpoint of the service) and the default time limit of a run,

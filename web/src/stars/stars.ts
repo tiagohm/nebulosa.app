@@ -3,8 +3,8 @@ import { proxy, ref } from 'valtio'
 import { responseError } from '../http'
 import type { Point, Rect } from '../viewer/transform'
 
-// Star detection jobs of the server as this tab knows them, shared by the Images workspace (manual runs) and
-// Camera Capture (post-capture analysis). The server runs every job and keeps every result: this store
+// Star detection jobs of the server as this tab knows them, shared by the Images workspace (manual runs and
+// the Auto Focus measurements of its frames). The server runs every job and keeps every result: this store
 // mirrors the compact jobs of its snapshot and stars:updated events, remembers the latest job of each image
 // id, and fetches the full result of a completed job (the stars) only when a view needs it, so the frames of
 // a loop nobody looks at are never downloaded. A result is always matched to the image id it measured, so
@@ -163,8 +163,8 @@ export function handleStarsEvent(state: StarsState, event: ServerEvent) {
 // Images whose kept jobs were fetched, or are being fetched, by this tab.
 const fetchedImages = new Set<string>()
 
-// Fetches once the completed jobs the server keeps for an image, such as the post-capture analysis of a captured
-// frame opened later, which may be older than the jobs of the snapshot.
+// Fetches once the completed jobs the server keeps for an image, such as the Auto Focus measurement of a frame
+// shown later, which may be older than the jobs of the snapshot.
 export async function loadImageJobs(state: StarsState, imageId: string, request: typeof fetch = fetch) {
 	if (fetchedImages.has(imageId)) return
 	fetchedImages.add(imageId)

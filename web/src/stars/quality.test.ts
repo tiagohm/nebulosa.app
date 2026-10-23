@@ -41,9 +41,8 @@ describe('image quality', () => {
 		expect(quality.hfdPx).toBeUndefined()
 	})
 
-	test('a failed detection keeps why; a cancelled or skipped one is not a measurement', () => {
+	test('a failed detection keeps why; a cancelled one is not a measurement', () => {
 		expect(imageQuality(holding(job({ state: 'failed', error: 'ASTAP crashed' })), 'image-1')).toMatchObject({ status: 'failed', error: 'ASTAP crashed' })
 		expect(imageQuality(holding(job({ state: 'cancelled' })), 'image-1')).toEqual({ imageId: 'image-1', status: 'not-measured' })
-		expect(imageQuality(holding(job({ state: 'skipped' })), 'image-1')).toEqual({ imageId: 'image-1', status: 'not-measured' })
 	})
 })

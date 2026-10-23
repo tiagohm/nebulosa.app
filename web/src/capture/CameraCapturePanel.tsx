@@ -1,5 +1,6 @@
 import type { CameraCapabilities, CaptureFrame, CaptureOutputMode, CaptureRequest, CaptureSession, CaptureSnoop, DeviceSummary } from 'api'
 import { cn } from 'cn'
+import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
@@ -17,7 +18,6 @@ import { TextInput } from '../ui/TextInput'
 import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureSnoop, captureStatus, FILE_STATE_LABELS, fileState, FRAME_STATE_LABELS, type FrameState, frameState, refreshCapabilities, startCapture, stopCapture } from './capture'
 import { CameraSettings, ExposureSection, formatSeconds } from './ExposureSettings'
 import type { CaptureModePanelProps } from './modes'
-import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 
 // Contextual panel sections of Camera Acquisition, shared by the Images camera tabs and the Capture camera views: the
 // exposure, the acquisition mode with its start and stop commands, the state of the running or last capture, the

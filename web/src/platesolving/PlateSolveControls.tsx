@@ -14,8 +14,7 @@ import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { PROVIDER_LABELS, PROVIDER_TOOLS, PROVIDERS } from './platesolving'
 
-// Controls of a plate solving request, shared by the Plate Solver tool of the Images workspace and the post-capture
-// analysis of Camera Capture: the solver with its availability in External Tools, the strategy, the hints, and the
+// Controls of a plate solving request of the Plate Solver tool of the Images workspace: the solver with its availability in External Tools, the strategy, the hints, and the
 // advanced settings the chosen solver takes. They edit a request through onChange and solve nothing. Hints left empty
 // are taken from the image on the server; the values the image offers are shown as placeholders when known. Right
 // ascension is typed in hours and declination in degrees (sexagesimal or decimal), the radius in degrees and the scale

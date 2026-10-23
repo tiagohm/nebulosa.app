@@ -9,8 +9,8 @@ import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { BUILTIN_STAR_LIMIT, PROVIDER_LABELS, PROVIDERS, withAcceptance, withDetectorSettings, withProvider } from './stars'
 
-// Controls of a star detection request, shared by the Star Detection tool of the Images workspace and the
-// post-capture analysis of Camera Capture: the detector with the availability of ASTAP, the settings the
+// Controls of a star detection request, shared by the Star Detection tool of the Images workspace and Auto
+// Focus: the detector with the availability of ASTAP, the settings the
 // selected detector really has, and the acceptance criteria. They edit a request through onChange and run
 // nothing; ASTAP's executable and timeout stay in Settings → External Tools, which they link to.
 

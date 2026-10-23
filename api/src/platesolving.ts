@@ -6,14 +6,13 @@ import { localAstrometryNetPlateSolve } from 'nebulosa/src/astrometry/solvers/as
 import { type PlateSolution, PlateSolveError, plateSolutionFrom } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { heightKeyword, widthKeyword } from 'nebulosa/src/io/formats/fits/util'
-import { type AnalysisCompletion, type AnalysisEntry, type AnalysisJob, type AnalysisJobState, type AnalysisReservation, AnalysisScheduler } from './analysis'
+import { type AnalysisCompletion, type AnalysisEntry, type AnalysisJob, type AnalysisJobState, AnalysisScheduler } from './analysis'
 import { type ExternalToolConfig, type ExternalToolId, type ExternalToolsStore, type ResolvedExternalTool, serviceUrl } from './externaltools'
 import type { ImageStore } from './images'
 import { type PlateSolveHints, type PlateSolveStrategy, POINTING_KEYWORDS, type ResolvedPlateSolveHints, resolvePlateSolveHints } from './platesolving.hints'
 import { NOVA_POLL_INTERVAL, NovaError, type NovaStage, novaSolve } from './platesolving.nova'
 
-// Plate solving service shared by every consumer: manual solves of the Images workspace and of a camera frame,
-// and the post-capture analysis of Camera Capture. A solve finds the World Coordinate System of an image document
+// Plate solving service of the manual solves of the Images workspace, on files and camera frames alike. A solve finds the World Coordinate System of an image document
 // of the image store, addressed by its id (a document never changes, so the id is its scientific identity), with
 // one of three providers configured in External Tools, whose settings are resolved once per job (or once per
 // capture session) and never come from a request: ASTAP and the local solve-field of astrometry.net, run on a FITS
@@ -28,7 +27,7 @@ import { NOVA_POLL_INTERVAL, NovaError, type NovaStage, novaSolve } from './plat
 // used with their origins. The WCS a header already had is reported apart, never replaced, and no file is written.
 //
 // Jobs run in memory under the shared analysis scheduling (analysis.ts): one ASTAP and one solve-field process and
-// two nova solves at a time, at most MAX_QUEUED jobs waiting, manual jobs first, capture sessions in turn. A job
+// two nova solves at a time, at most MAX_QUEUED jobs waiting, in arrival order. A job
 // retains its image until it ends. An equivalent request is answered with the job already waiting or running, or
 // with its kept result, so a repeated request never solves twice. Results are kept only in memory until their image
 // is released; a nova job is not followed again after a restart. Every change of a job is published as a compact
@@ -51,26 +50,10 @@ export interface PlateSolveRequest {
 	readonly downsample?: number
 }
 
-// Who asked for a plate solve: a person (Images, or Solve Current Frame), or the post-capture analysis of a capture
-// session, for one of its frames.
-export type PlateSolveOrigin =
-	| { readonly kind: 'manual' }
-	| {
-			readonly kind: 'capture'
-			// Id of the capture session.
-			readonly sessionId: string
-			// Connection of the camera.
-			readonly connectionId: string
-			// Camera, by its device id.
-			readonly deviceId: string
-			// Id of the frame, unique within the server.
-			readonly frameId: string
-			// 1-based number of the frame in its session.
-			readonly generation: number
-	  }
+// Who asked for a plate solve: a person, in Images.
+export type PlateSolveOrigin = { readonly kind: 'manual' }
 
-// State of a job: waiting for its solver, running, or ended (completed, failed, cancelled, or skipped, which is a
-// job a newer frame replaced before it started).
+// State of a job: waiting for its solver, running, or ended (completed, failed, or cancelled).
 export type PlateSolveJobState = AnalysisJobState
 
 // Step a running job reached: preparing the image, solving it locally, or a step of a nova solve.
@@ -215,15 +198,6 @@ export type PlateSolveSubmitOutcome =
 	| { readonly status: 'notConfigured' }
 	| { readonly status: 'queueFull' }
 
-// Capacity held for the next frame of a capture session, so that frame can always be submitted.
-export interface PlateSolveReservation {
-	// Submits the frame with the held capacity, which it then occupies until the job ends. Returns undefined, and
-	// gives the capacity back, when the image is not open. A reservation is used once.
-	readonly submit: (imageId: string, preparation: PlateSolvePreparation, origin: Extract<PlateSolveOrigin, { kind: 'capture' }>) => PlateSolveJob | undefined
-	// Gives the capacity back unused. Idempotent, and ignored once submitted.
-	readonly release: VoidFunction
-}
-
 // Options of the service.
 export interface PlateSolvingOptions {
 	// Wait between two polls of a nova job, in milliseconds.
@@ -348,37 +322,8 @@ export class PlateSolvingService {
 		if (cached) return { status: 'cached', job: cached.job }
 		if (this.#scheduler.full()) return { status: 'queueFull' }
 
-		const queued = this.#scheduler.enqueue(imageId, preparation, job.key, job.fields, 'manual', 'manual')
+		const queued = this.#scheduler.enqueue(imageId, preparation, job.key, job.fields)
 		return queued ? { status: 'accepted', job: queued } : { status: 'missing' }
-	}
-
-	// Submits the solve of a capture frame without a reservation, for a Latest Frame Only analysis: the jobs of the
-	// same session still waiting are skipped first, so at most one waits per session. Returns the new job and the
-	// number of jobs skipped, or no job when the image is not open or the queue is full.
-	submitLatest(imageId: string, preparation: PlateSolvePreparation, origin: Extract<PlateSolveOrigin, { kind: 'capture' }>): { readonly job?: PlateSolveJob; readonly skipped: number; readonly full: boolean } {
-		const job = this.#job(imageId, preparation, origin)
-		if (!job) return { skipped: 0, full: false }
-		return this.#scheduler.submitLatest(imageId, preparation, job.key, job.fields, origin.sessionId)
-	}
-
-	// Holds capacity for the next frame of a capture session at once, or returns undefined when the session has
-	// SESSION_CAPACITY frames in flight or the queue is full (see reserve).
-	tryReserve(sessionId: string): PlateSolveReservation | undefined {
-		const reservation = this.#scheduler.tryReserve(sessionId)
-		return reservation && this.#reservation(reservation)
-	}
-
-	// Holds capacity for the next frame of a capture session: resolves once the session has fewer than
-	// SESSION_CAPACITY frames in flight and the queue has room, or to undefined when signal aborts first.
-	async reserve(sessionId: string, signal: AbortSignal): Promise<PlateSolveReservation | undefined> {
-		const reservation = await this.#scheduler.reserve(sessionId, signal)
-		return reservation && this.#reservation(reservation)
-	}
-
-	// Resolves to the final state of a job once it ended: at once for an ended job, and to undefined for a job no
-	// longer known.
-	ended(jobId: string): Promise<PlateSolveJob | undefined> {
-		return this.#scheduler.ended(jobId)
 	}
 
 	// Cancels a job: a waiting one ends at once, a running one is interrupted (ASTAP and solve-field are killed; nova
@@ -416,19 +361,6 @@ export class PlateSolvingService {
 		const hints = this.hints(imageId, preparation.request.strategy, preparation.request.hints)
 		if (!hints) return undefined
 		return { key: plateSolveCacheKey(imageId, preparation.request, hints, preparation.tool), fields: { origin, request: preparation.request, hints } }
-	}
-
-	// Adapts a scheduler reservation to the plate solving one, whose jobs carry their hints and origin.
-	#reservation(reservation: AnalysisReservation<PlateSolveJob, PlateSolvePreparation>): PlateSolveReservation {
-		return {
-			submit: (imageId, preparation, origin) => {
-				const job = this.#job(imageId, preparation, origin)
-				if (job) return reservation.submit(imageId, preparation, job.key, job.fields)
-				reservation.release()
-				return undefined
-			},
-			release: reservation.release,
-		}
 	}
 
 	// Runs a job with its provider and validates the WCS it found.

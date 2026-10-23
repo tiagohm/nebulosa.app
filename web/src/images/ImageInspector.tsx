@@ -199,7 +199,7 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 const QUALITY_LABELS: Readonly<Record<ImageQualityStatus, string>> = { 'not-measured': 'Not measured', pending: 'Measuring', measured: 'Measured', failed: 'Failed' }
 
 // Labels of who asked for a star detection.
-const MEASURED_BY_LABELS: Readonly<Record<StarDetectionOrigin['kind'], string>> = { manual: 'Star Detection', capture: 'Post-capture analysis', autofocus: 'Auto Focus' }
+const MEASURED_BY_LABELS: Readonly<Record<StarDetectionOrigin['kind'], string>> = { manual: 'Star Detection', autofocus: 'Auto Focus' }
 
 interface QualityProps {
 	// Id of the image document shown.

@@ -1,21 +1,14 @@
 import type { DocumentSize, ImageStore } from './images'
 
 // Scheduling shared by the analyses of image documents (star detection, plate solving): an in-memory queue of
-// jobs, each measuring one document of the image store, run under a concurrency limit per provider. At most
-// MAX_QUEUED jobs wait, reservations included; manual jobs run before capture jobs, and capture sessions are
-// served in turn so a loop cannot starve another one. A capture session holds at most SESSION_CAPACITY frames in
-// flight, through reservations taken before its exposures (Every Frame) or by replacing its waiting job (Latest
-// Frame Only). A job retains its image until it ends, so closing the document never pulls the pixels from under
+// jobs, each measuring one document of the image store, run in arrival order under a concurrency limit per provider.
+// At most MAX_QUEUED jobs wait. A job retains its image until it ends, so closing the document never pulls the pixels from under
 // it. Completed results are kept in memory, grouped by image, until their image is released or the bounded store
 // evicts them; ended jobs are kept for the snapshot. What a job does, how its failures are named, and how its
 // changes are published belong to the service that owns the scheduler.
 
-// Jobs waiting at most, reservations included; a job beyond it is refused as queueFull.
+// Jobs waiting at most; a job beyond it is refused as queueFull.
 export const MAX_QUEUED = 16
-
-// Frames of one capture session in flight at most, reserved, waiting, or running: the next exposure of an
-// Every Frame analysis waits for capacity beyond it.
-export const SESSION_CAPACITY = 2
 
 // Results kept per image, the most recent ones.
 const RESULTS_PER_IMAGE = 8
@@ -27,7 +20,7 @@ const MAX_RESULTS = 256
 const RECENT_JOBS = 64
 
 // State of an analysis job.
-export type AnalysisJobState = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'skipped'
+export type AnalysisJobState = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
 
 // Fields every analysis job has; a service adds its request, origin, outcome, and summary.
 export interface AnalysisJob {
@@ -48,9 +41,6 @@ export interface AnalysisJob {
 // Fields of a job that its service supplies when it is queued.
 export type AnalysisJobFields<J extends AnalysisJob> = Omit<J, keyof AnalysisJob>
 
-// Scheduling class: manual (and Auto Focus) jobs run before capture jobs.
-export type AnalysisPriority = 'manual' | 'capture'
-
 // A job the scheduler knows about while it waits or runs.
 export interface AnalysisEntry<J extends AnalysisJob, P> {
 	// Published state, replaced on every change.
@@ -59,10 +49,6 @@ export interface AnalysisEntry<J extends AnalysisJob, P> {
 	readonly preparation: P
 	// Key of equivalent jobs: the same image and the same effective request.
 	readonly key: string
-	// Scheduling class.
-	readonly priority: AnalysisPriority
-	// Group served in turn: the capture session, or manual.
-	readonly group: string
 	// Size of the retained image, in pixels.
 	readonly size: DocumentSize
 	// Aborted to cancel the job.
@@ -91,15 +77,6 @@ export interface AnalysisCompletion<J extends AnalysisJob, R> {
 	readonly result: R
 }
 
-// Capacity held for the next frame of a capture session, used once: submit queues the frame's job in it,
-// release gives it back unused. Both do nothing once the reservation was used or released.
-export interface AnalysisReservation<J extends AnalysisJob, P> {
-	// Queues the job of a frame; returns undefined when the reservation was used or the image is not open.
-	readonly submit: (imageId: string, preparation: P, key: string, fields: AnalysisJobFields<J>) => J | undefined
-	// Gives the capacity back without using it.
-	readonly release: VoidFunction
-}
-
 // How the owning service runs, names, and publishes its jobs.
 export interface AnalysisHandlers<J extends AnalysisJob, R, P, V extends string> {
 	// Concurrency limit of each provider: jobs of a provider running at once.
@@ -114,14 +91,6 @@ export interface AnalysisHandlers<J extends AnalysisJob, R, P, V extends string>
 	readonly cancelled: () => Partial<J>
 	// Publishes a changed job.
 	readonly publish: (job: J) => void
-}
-
-// A reservation request waiting for capacity.
-interface CapacityWaiter {
-	// Group of the capture session.
-	readonly group: string
-	// Grants the capacity.
-	readonly grant: VoidFunction
 }
 
 // The jobs of one analysis service, their scheduling, and their results. J is the published job, R the full
@@ -139,14 +108,6 @@ export class AnalysisScheduler<J extends AnalysisJob, R, P, V extends string> {
 	readonly #byImage = new Map<string, string[]>()
 	// Latest ended jobs, oldest first, by job id.
 	readonly #recent = new Map<string, J>()
-	// Reservations not used yet, by group.
-	readonly #reservations = new Map<string, number>()
-	// Reservations not used yet, in total.
-	#reserved = 0
-	// Reservation requests waiting for capacity, in arrival order.
-	readonly #waiters: CapacityWaiter[] = []
-	// Last time each group got a job running, performance.now() milliseconds.
-	readonly #served = new Map<string, number>()
 
 	// Creates the scheduler of a service over the image store. The results of an image are dropped when the store
 	// releases it.
@@ -159,7 +120,7 @@ export class AnalysisScheduler<J extends AnalysisJob, R, P, V extends string> {
 
 	// Whether the queue cannot take another job.
 	full(): boolean {
-		return this.#queue.length + this.#reserved >= MAX_QUEUED
+		return this.#queue.length >= MAX_QUEUED
 	}
 
 	// Returns the kept result of a job of an image equivalent to key.
@@ -178,76 +139,19 @@ export class AnalysisScheduler<J extends AnalysisJob, R, P, V extends string> {
 		return undefined
 	}
 
-	// Retains an image and queues a job of it with a priority, in a group. Returns undefined when the image is not
-	// open. The caller checks full() first.
-	enqueue(imageId: string, preparation: P, key: string, fields: AnalysisJobFields<J>, priority: AnalysisPriority, group: string): J | undefined {
+	// Retains an image and queues a job of it. Returns undefined when the image is not open. The caller checks full()
+	// first.
+	enqueue(imageId: string, preparation: P, key: string, fields: AnalysisJobFields<J>): J | undefined {
 		const size = this.images.retain(imageId)
 		if (!size) return undefined
 
 		const job = { ...fields, jobId: crypto.randomUUID(), imageId, state: 'queued', queuedAt: Date.now() } as J
-		const entry: AnalysisEntry<J, P> = { job, preparation, key, priority, group, size, controller: new AbortController(), done: Promise.withResolvers() }
+		const entry: AnalysisEntry<J, P> = { job, preparation, key, size, controller: new AbortController(), done: Promise.withResolvers() }
 		this.#entries.set(job.jobId, entry)
 		this.#queue.push(entry)
 		this.handlers.publish(job)
 		this.#pump()
 		return job
-	}
-
-	// Queues the job of a capture frame without a reservation, for a Latest Frame Only analysis: the jobs of the
-	// same group still waiting are skipped first, so at most one waits per group. Returns the new job and the
-	// number of jobs skipped, or no job when the image is not open or the queue is full.
-	submitLatest(imageId: string, preparation: P, key: string, fields: AnalysisJobFields<J>, group: string): { readonly job?: J; readonly skipped: number; readonly full: boolean } {
-		let skipped = 0
-
-		// Ending a job removes it from the queue, so the waiting jobs of the group are collected first.
-		for (const entry of this.#queue.filter((queued) => queued.group === group)) {
-			this.#end(entry, { state: 'skipped' } as Partial<J>)
-			skipped++
-		}
-
-		if (this.full()) return { skipped, full: true }
-		return { job: this.enqueue(imageId, preparation, key, fields, 'capture', group), skipped, full: false }
-	}
-
-	// Holds capacity for the next frame of a capture session at once, or returns undefined when the session has
-	// SESSION_CAPACITY frames in flight or the queue is full (see reserve).
-	tryReserve(group: string): AnalysisReservation<J, P> | undefined {
-		return this.#hasCapacity(group) ? this.#reservation(group) : undefined
-	}
-
-	// Holds capacity for the next frame of a capture session, for an Every Frame analysis: resolves once the
-	// session has fewer than SESSION_CAPACITY frames in flight and the queue has room, or to undefined when
-	// signal aborts first.
-	reserve(group: string, signal: AbortSignal): Promise<AnalysisReservation<J, P> | undefined> {
-		if (signal.aborted) return Promise.resolve(undefined)
-		if (this.#hasCapacity(group)) return Promise.resolve(this.#reservation(group))
-
-		return new Promise((resolve) => {
-			const waiter: CapacityWaiter = {
-				group,
-				grant: () => {
-					signal.removeEventListener('abort', onAbort)
-					resolve(this.#reservation(group))
-				},
-			}
-
-			const onAbort = () => {
-				const index = this.#waiters.indexOf(waiter)
-				if (index >= 0) this.#waiters.splice(index, 1)
-				resolve(undefined)
-			}
-
-			signal.addEventListener('abort', onAbort, { once: true })
-			this.#waiters.push(waiter)
-		})
-	}
-
-	// Resolves to the final state of a job once it ended: at once for an ended job, and to undefined for a job no
-	// longer known.
-	ended(jobId: string): Promise<J | undefined> {
-		const entry = this.#entries.get(jobId)
-		if (!entry) return Promise.resolve(this.job(jobId))
-		return entry.done.promise.then(() => entry.job)
 	}
 
 	// Resolves to the result of a job waiting or running once it ended, undefined when it did not complete; returns
@@ -308,58 +212,6 @@ export class AnalysisScheduler<J extends AnalysisJob, R, P, V extends string> {
 		return jobs.sort((a, b) => a.queuedAt - b.queuedAt)
 	}
 
-	// Whether a capture session can hold one more frame.
-	#hasCapacity(group: string): boolean {
-		let inFlight = this.#reservations.get(group) ?? 0
-		for (const entry of this.#entries.values()) if (entry.group === group) inFlight++
-		return inFlight < SESSION_CAPACITY && !this.full()
-	}
-
-	// Takes capacity for a capture session and returns the reservation holding it.
-	#reservation(group: string): AnalysisReservation<J, P> {
-		this.#reservations.set(group, (this.#reservations.get(group) ?? 0) + 1)
-		this.#reserved++
-		let held = true
-
-		const giveBack = () => {
-			if (!held) return
-			held = false
-			const count = this.#reservations.get(group)! - 1
-			if (count > 0) this.#reservations.set(group, count)
-			else this.#reservations.delete(group)
-			this.#reserved--
-		}
-
-		return {
-			submit: (imageId, preparation, key, fields) => {
-				if (!held) return undefined
-				giveBack()
-				const job = this.enqueue(imageId, preparation, key, fields, 'capture', group)
-				if (!job) this.#grant()
-				return job
-			},
-			release: () => {
-				if (!held) return
-				giveBack()
-				this.#grant()
-			},
-		}
-	}
-
-	// Grants capacity to the reservation requests that can now have it, in arrival order.
-	#grant(): void {
-		for (let i = 0; i < this.#waiters.length;) {
-			const waiter = this.#waiters[i]
-
-			if (this.#hasCapacity(waiter.group)) {
-				this.#waiters.splice(i, 1)
-				waiter.grant()
-			} else {
-				i++
-			}
-		}
-	}
-
 	// Starts the waiting jobs each provider has room for.
 	#pump(): void {
 		for (const provider of Object.keys(this.handlers.limits) as V[]) {
@@ -374,24 +226,14 @@ export class AnalysisScheduler<J extends AnalysisJob, R, P, V extends string> {
 		}
 	}
 
-	// Returns the next waiting job of a provider: the oldest manual one, otherwise the oldest one of the group
-	// served least recently.
+	// Returns the oldest waiting job of a provider.
 	#next(provider: V): AnalysisEntry<J, P> | undefined {
-		let next: AnalysisEntry<J, P> | undefined
-
-		for (const entry of this.#queue) {
-			if (this.handlers.provider(entry.preparation) !== provider) continue
-			if (entry.priority === 'manual') return entry
-			if (!next || (this.#served.get(entry.group) ?? -Infinity) < (this.#served.get(next.group) ?? -Infinity)) next = entry
-		}
-
-		return next
+		return this.#queue.find((entry) => this.handlers.provider(entry.preparation) === provider)
 	}
 
 	// Runs a job to its end. Never rejects.
 	async #run(entry: AnalysisEntry<J, P>, provider: V): Promise<void> {
 		this.#running.set(provider, (this.#running.get(provider) ?? 0) + 1)
-		this.#served.set(entry.group, performance.now())
 		entry.started = performance.now()
 		this.#update(entry, { state: 'running', startedAt: Date.now() } as Partial<J>)
 
@@ -436,8 +278,7 @@ export class AnalysisScheduler<J extends AnalysisJob, R, P, V extends string> {
 		this.#byImage.delete(imageId)
 	}
 
-	// Ends a job: publishes its final state, releases its image, settles its waiters, and lets the capacity it held
-	// go to the next ones.
+	// Ends a job: publishes its final state, releases its image, and settles its waiters.
 	#end(entry: AnalysisEntry<J, P>, patch: Partial<J>, stored?: AnalysisStoredResult<J, R>): void {
 		const index = this.#queue.indexOf(entry)
 		if (index >= 0) this.#queue.splice(index, 1)
@@ -449,7 +290,6 @@ export class AnalysisScheduler<J extends AnalysisJob, R, P, V extends string> {
 
 		entry.done.resolve(stored)
 		this.images.release(entry.job.imageId)
-		this.#grant()
 	}
 
 	// Publishes a changed job.

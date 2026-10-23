@@ -5,23 +5,23 @@ import { AstapError, astapDetectStars } from 'nebulosa/src/astrometry/solvers/as
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import type { DetectedStar, DetectStarOptions } from 'nebulosa/src/imaging/stars/detector'
 import { medianOf } from 'nebulosa/src/math/numerical/statistics'
-import { type AnalysisCompletion, type AnalysisEntry, type AnalysisJob, type AnalysisJobState, type AnalysisReservation, AnalysisScheduler } from './analysis'
+import { type AnalysisCompletion, type AnalysisEntry, type AnalysisJob, type AnalysisJobState, AnalysisScheduler } from './analysis'
 import type { ExternalToolConfig, ExternalToolsStore } from './externaltools'
 import type { DocumentSize, ImageStore } from './images'
 
-// Star detection service shared by every consumer: manual runs of the Images workspace, the post-capture
-// analysis of Camera Capture, and, later, the measurements of Auto Focus. A detection measures an image
+// Star detection service shared by every consumer: manual runs of the Images workspace and the measurements of
+// Auto Focus. A detection measures an image
 // document of the image store, addressed by its id (a document never changes, so the id is its scientific
 // identity), with one of two providers: the toolkit's detectStars on a worker thread of its own
 // (stars.worker.ts), fed a grayscale copy of the decoded pixels, or ASTAP, run on a FITS copy of the
 // document written into a directory of its own, with the executable and timeout of the External Tools
-// settings resolved once per job (or once per capture session). Both give the toolkit's DetectedStar, in
+// settings resolved once per job (or once per Auto Focus session). Both give the toolkit's DetectedStar, in
 // 0-based pixel coordinates of the image (origin at the upper-left sample, +X right, +Y down, integers at
 // pixel centres); their HFDs, in pixels, are computed differently and are not comparable with each other.
 //
 // Jobs run in memory under the shared analysis scheduling (analysis.ts): one built-in detection and one ASTAP
-// process at a time, at most MAX_QUEUED jobs waiting, manual jobs ahead of capture jobs, and capture sessions
-// served in turn so a loop cannot starve another one. A job retains its image until it ends, so closing the document never
+// process at a time, at most MAX_QUEUED jobs waiting, in arrival order. A job retains its image until it ends, so
+// closing the document never
 // pulls the pixels from under it. Results are kept only in memory, keyed by job and grouped by image, until
 // their image is released or the bounded store evicts them; they never survive a restart. Every change of
 // a job is published as a compact stars:updated event without the stars, which are fetched on demand. No
@@ -79,23 +79,9 @@ export interface StarDetectionRequest {
 	readonly acceptance: StarAcceptance
 }
 
-// Who asked for a job: a person (manual), the post-capture analysis of a frame, or the measurement of an Auto
-// Focus frame.
+// Who asked for a job: a person (manual), or the measurement of an Auto Focus frame.
 export type StarDetectionOrigin =
 	| { readonly kind: 'manual' }
-	| {
-			readonly kind: 'capture'
-			// Id of the capture session.
-			readonly sessionId: string
-			// Id of the open connection that provides the camera.
-			readonly connectionId: string
-			// Exact id of the camera.
-			readonly deviceId: string
-			// Identity of the frame: the capture session id and the frame generation.
-			readonly frameId: string
-			// Frame number within the session, from 1.
-			readonly generation: number
-	  }
 	| {
 			readonly kind: 'autofocus'
 			// Id of the Auto Focus session.
@@ -104,15 +90,14 @@ export type StarDetectionOrigin =
 			readonly connectionId: string
 			// Exact id of the camera.
 			readonly deviceId: string
-			// Identity of the frame: the operation id and the capture ordinal.
+			// Identity of the frame: the session id and the capture ordinal.
 			readonly frameId: string
 			// Auxiliary frame number within the session, from 1.
 			readonly capture: number
 	  }
 
-// State of a job: waiting for its detector, running, or ended (completed, failed, cancelled, or skipped,
-// which is a job a newer frame replaced before it started).
-export type StarDetectionJobState = AnalysisJobState | 'running' | 'completed' | 'failed' | 'cancelled' | 'skipped'
+// State of a job: waiting for its detector, running, or ended (completed, failed, or cancelled).
+export type StarDetectionJobState = AnalysisJobState
 
 // Why a job did not complete:
 // - queueFull: too many jobs were waiting when it was submitted.
@@ -236,15 +221,6 @@ export interface StarDetectionPreparation {
 // same image (cached), or why there is none.
 export type StarDetectionSubmitOutcome = { readonly status: 'accepted'; readonly job: StarDetectionJob } | { readonly status: 'cached'; readonly job: StarDetectionJob } | { readonly status: 'missing' } | { readonly status: 'astapUnavailable' } | { readonly status: 'queueFull' }
 
-// Capacity held for the next frame of a capture session, so that frame can always be submitted.
-export interface StarDetectionReservation {
-	// Submits the frame with the held capacity, which it then occupies until the job ends. Returns undefined,
-	// and gives the capacity back, when the image is not open. A reservation is used once.
-	readonly submit: (imageId: string, preparation: StarDetectionPreparation, origin: Extract<StarDetectionOrigin, { kind: 'capture' }>) => StarDetectionJob | undefined
-	// Gives the capacity back unused. Idempotent, and ignored once submitted.
-	readonly release: VoidFunction
-}
-
 // Error of a job that did not complete, with its reason.
 export class StarDetectionError extends Error {
 	// Creates the error of a reason.
@@ -268,7 +244,7 @@ export const DEFAULT_STAR_ACCEPTANCE: StarAcceptance = { minSNR: 0, minHfd: 0, m
 // Origin of a detection a person asked for.
 const MANUAL_ORIGIN: StarDetectionOrigin = { kind: 'manual' }
 
-export { MAX_QUEUED, SESSION_CAPACITY } from './analysis'
+export { MAX_QUEUED } from './analysis'
 
 // Most stars the built-in detector returns, whatever maxStars asks for (the capacity of its star list).
 export const BUILTIN_STAR_LIMIT = 2000
@@ -376,36 +352,8 @@ export class StarDetectionService {
 		if (cached) return { status: 'cached', job: cached.job }
 		if (this.#scheduler.full()) return { status: 'queueFull' }
 
-		const job = this.#scheduler.enqueue(imageId, preparation, key, { origin, request: preparation.request }, 'manual', 'manual')
+		const job = this.#scheduler.enqueue(imageId, preparation, key, { origin, request: preparation.request })
 		return job ? { status: 'accepted', job } : { status: 'missing' }
-	}
-
-	// Submits the detection of a capture frame without a reservation, for a Latest Frame Only analysis: the
-	// jobs of the same session still waiting are skipped first, so at most one waits per session. Returns the
-	// new job and the number of jobs skipped, or no job when the image is not open or the queue is full.
-	submitLatest(imageId: string, preparation: StarDetectionPreparation, origin: Extract<StarDetectionOrigin, { kind: 'capture' }>): { readonly job?: StarDetectionJob; readonly skipped: number; readonly full: boolean } {
-		return this.#scheduler.submitLatest(imageId, preparation, cacheKey(imageId, preparation.request, preparation.tool), { origin, request: preparation.request }, origin.sessionId)
-	}
-
-	// Holds capacity for the next frame of a capture session at once, or returns undefined when the session has
-	// SESSION_CAPACITY frames in flight or the queue is full (see reserve).
-	tryReserve(sessionId: string): StarDetectionReservation | undefined {
-		const reservation = this.#scheduler.tryReserve(sessionId)
-		return reservation && starReservation(reservation)
-	}
-
-	// Resolves to the final state of a job once it ended: at once for an ended job, and to undefined for a job
-	// no longer known.
-	ended(jobId: string): Promise<StarDetectionJob | undefined> {
-		return this.#scheduler.ended(jobId)
-	}
-
-	// Holds capacity for the next frame of a capture session, for an Every Frame analysis: resolves once the
-	// session has fewer than SESSION_CAPACITY frames in flight and the queue has room, or to undefined when
-	// signal aborts first.
-	async reserve(sessionId: string, signal: AbortSignal): Promise<StarDetectionReservation | undefined> {
-		const reservation = await this.#scheduler.reserve(sessionId, signal)
-		return reservation && starReservation(reservation)
 	}
 
 	// Detects the stars of an open image and resolves to the result once the job completed, for a consumer
@@ -575,14 +523,6 @@ export class StarDetectionService {
 		const summary: StarDetectionSummary = { detectedCount: stars.length, acceptedCount, ...(hfd !== undefined && { aggregateHfd: hfd }), measurement, elapsed }
 		const result: StarDetectionResult = { ...summary, jobId: entry.job.jobId, imageId: entry.job.imageId, request, ...(tool && { tool }), width, height, stars, accepted, queueTime, warnings }
 		return { patch: { summary }, result }
-	}
-}
-
-// Adapts a scheduler reservation to the star detection one, whose jobs are keyed and described by their origin.
-function starReservation(reservation: AnalysisReservation<StarDetectionJob, StarDetectionPreparation>): StarDetectionReservation {
-	return {
-		submit: (imageId, preparation, origin) => reservation.submit(imageId, preparation, cacheKey(imageId, preparation.request, preparation.tool), { origin, request: preparation.request }),
-		release: reservation.release,
 	}
 }
 

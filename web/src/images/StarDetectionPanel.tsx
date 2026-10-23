@@ -23,7 +23,7 @@ import type { ImageToolPanelProps } from './tools'
 const MISSING = '—'
 
 // Display names of the job states.
-const STATE_LABELS: Readonly<Record<StarDetectionJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled', skipped: 'Skipped' }
+const STATE_LABELS: Readonly<Record<StarDetectionJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }
 
 // Star Detection panel of the active document.
 export function StarDetectionPanel({ document, view, onOpen }: ImageToolPanelProps) {

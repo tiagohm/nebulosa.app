@@ -8,7 +8,7 @@ import { latestJob, type StarsState } from './stars'
 // absence of a measurement is never reported as zero. The model is the foundation of later per-frame quality history.
 
 // State of the quality of an image:
-// - not-measured: no detection of the image is known, or the latest one was cancelled or skipped.
+// - not-measured: no detection of the image is known, or the latest one was cancelled.
 // - pending: a detection is waiting or running.
 // - measured: a detection completed; its HFD is present only when enough stars were accepted.
 // - failed: the latest detection failed.
@@ -22,7 +22,7 @@ export interface ImageQualitySummary {
 	readonly status: ImageQualityStatus
 	// Id of the star detection job the values come from; absent when not measured.
 	readonly measurementId?: string
-	// Who asked for the measurement: manual, capture, or autofocus.
+	// Who asked for the measurement: manual or autofocus.
 	readonly origin?: StarDetectionOrigin['kind']
 	// Detector that measured it.
 	readonly provider?: StarDetectorProvider

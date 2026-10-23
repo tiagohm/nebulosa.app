@@ -3,12 +3,11 @@ import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { proxy, ref } from 'valtio'
 import { responseError } from '../http'
 
-// Plate solving jobs of the server as this tab knows them, shared by the Images workspace (manual solves) and Camera
-// Capture (Solve Current Frame and the post-capture analysis). The server runs every job and keeps every result: this
-// store mirrors the compact jobs of its snapshot and plateSolving:updated events, remembers the latest job of each image
-// id, and fetches the full result of a completed job (the WCS) only when a view needs it. A result is always matched to
-// the image id it solved, so a late result never lands on another image. The solution a header already had is fetched
-// apart, per image, and never replaced by a job.
+// Plate solving jobs of the server as this tab knows them, used by the Images workspace (manual solves). The server
+// runs every job and keeps every result: this store mirrors the compact jobs of its snapshot and plateSolving:updated
+// events, remembers the latest job of each image id, and fetches the full result of a completed job (the WCS) only
+// when a view needs it. A result is always matched to the image id it solved, so a late result never lands on another
+// image. The solution a header already had is fetched apart, per image, and never replaced by a job.
 
 // Mirror of the server's plate solving jobs.
 export interface PlateSolvingState {

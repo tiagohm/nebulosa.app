@@ -15,7 +15,6 @@ import {
 	DEFAULT_STAR_ACCEPTANCE,
 	isAcceptedStar,
 	MAX_QUEUED,
-	SESSION_CAPACITY,
 	StarDetectionError,
 	type StarDetectionEvent,
 	type StarDetectionJob,
@@ -132,11 +131,6 @@ function nearest(result: StarDetectionResult, x: number, y: number) {
 	let best = result.stars[0]
 	for (const star of result.stars) if (Math.hypot(star.x - x, star.y - y) < Math.hypot(best.x - x, best.y - y)) best = star
 	return best
-}
-
-// Origin of a capture frame of a session.
-function frame(sessionId: string, generation: number) {
-	return { kind: 'capture', sessionId, connectionId: 'c', deviceId: 'camera', frameId: `${sessionId}:${generation}`, generation } as const
 }
 
 type Handler = (req: Request & { params: Record<string, string> }) => Response | Promise<Response>
@@ -286,19 +280,6 @@ describe('built-in detection', () => {
 		expect(most).toBe(1)
 	})
 
-	test('runs manual jobs before waiting capture jobs', async () => {
-		const { images, service, events } = setup()
-		const info = await images.open(writeStarField())
-		const preparation = (await service.prepare(BUILTIN))!
-		const first = await submit(service, info.id)
-		const capture = service.submitLatest(info.id, preparation, frame('s1', 1)).job!
-		const manual = await submit(service, info.id, { ...BUILTIN, detector: { ...DEFAULT_BUILTIN_SETTINGS, minSNR: 1 } })
-
-		await ended(events, capture.jobId)
-		const started = events.filter((event) => event.job.state === 'running').map((event) => event.job.jobId)
-		expect(started).toEqual([first.jobId, manual.jobId, capture.jobId])
-	})
-
 	test('cancels a waiting and a running job, and keeps detecting afterwards', async () => {
 		const { images, service, events } = setup()
 		const info = await images.open(writeStarField())
@@ -378,64 +359,6 @@ describe('built-in detection', () => {
 		await service.measure(info.id, BUILTIN, undefined, origin)
 
 		expect(events.at(-1)!.job.origin).toEqual(origin)
-	})
-})
-
-describe('capture scheduling', () => {
-	test('holds at most SESSION_CAPACITY frames of a session', async () => {
-		const { images, service, events } = setup()
-		const info = await images.open(writeStarField())
-		const preparation = (await service.prepare(BUILTIN))!
-		const signal = new AbortController().signal
-		const reservations = await Promise.all(Array.from({ length: SESSION_CAPACITY }, () => service.reserve('s1', signal)))
-		let granted = false
-		const next = service.reserve('s1', signal).then((reservation) => {
-			granted = true
-			return reservation
-		})
-
-		await Bun.sleep(50)
-		expect(granted).toBeFalse()
-
-		// Another session is not held back.
-		const other = await service.reserve('s2', signal)
-		other!.release()
-
-		const job = reservations[0]!.submit(info.id, preparation, frame('s1', 1))!
-		reservations[1]!.release()
-		const reservation = await next
-		expect(granted).toBeTrue()
-		reservation!.release()
-		expect((await ended(events, job.jobId)).state).toBe('completed')
-	})
-
-	test('a reservation waiting for capacity resolves undefined when aborted', async () => {
-		const { service } = setup()
-		const signal = new AbortController().signal
-		const held = await Promise.all(Array.from({ length: SESSION_CAPACITY }, () => service.reserve('s1', signal)))
-		const controller = new AbortController()
-		const waiting = service.reserve('s1', controller.signal)
-		controller.abort()
-
-		expect(await waiting).toBeUndefined()
-		for (const reservation of held) reservation!.release()
-	})
-
-	test('a newer frame skips the waiting one of the same session only', async () => {
-		const { images, service, events } = setup()
-		const info = await images.open(writeStarField())
-		const preparation = (await service.prepare(BUILTIN))!
-		const running = await submit(service, info.id)
-		const older = service.submitLatest(info.id, preparation, frame('s1', 1))
-		const other = service.submitLatest(info.id, preparation, frame('s2', 1))
-		const newer = service.submitLatest(info.id, preparation, frame('s1', 2))
-
-		expect(older.skipped).toBe(0)
-		expect(newer.skipped).toBe(1)
-		expect(await ended(events, older.job!.jobId)).toMatchObject({ state: 'skipped' })
-		expect((await ended(events, other.job!.jobId)).state).toBe('completed')
-		expect((await ended(events, newer.job!.jobId)).state).toBe('completed')
-		expect((await ended(events, running.jobId)).state).toBe('completed')
 	})
 })
 

@@ -28,26 +28,7 @@ import { WheelCommands, type WheelMoveRequest, type WheelNamesRequest } from './
 export type { AutoFocusCaptureSettings, AutoFocusEvent, AutoFocusFrame, AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusStartResponse, AutoFocusState, AutoFocusVerification, FocusMeasurement } from './autofocus'
 export type { FocusCurve, FocusCurveHyperbola, FocusCurveParabola, FocusCurveSeries, FocusCurveSeriesKind, FocusCurveTrendLines } from './autofocus.curve'
 export type { CameraCoolerRequest, CameraTemperatureRequest } from './cameras'
-export type {
-	CaptureAnalysisState,
-	CaptureEvent,
-	CaptureFormat,
-	CaptureFrame,
-	CaptureOutput,
-	CaptureOutputMode,
-	CapturePhase,
-	CaptureRequest,
-	CaptureSession,
-	CaptureSettings,
-	CaptureSnapshot,
-	CaptureSnoop,
-	CaptureStartResponse,
-	CapturePlateSolvingState,
-	PostCaptureAnalysis,
-	PostCaptureAnalysisPolicy,
-	PostCapturePlateSolving,
-	PostCapturePlateSolvingPolicy,
-} from './captures'
+export type { CaptureEvent, CaptureFormat, CaptureFrame, CaptureOutput, CaptureOutputMode, CapturePhase, CaptureRequest, CaptureSession, CaptureSettings, CaptureSnapshot, CaptureSnoop, CaptureStartResponse } from './captures'
 export type {
 	CaptureFrameAvailability,
 	CaptureFrameErrorCode,
@@ -209,7 +190,7 @@ const captureFrames = new CaptureFrameRegistry(images, broadcast, {
 connections.listen((event) => captureFrames.deviceChanged(event))
 listenClients(captureFrames)
 
-const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, stars, plateSolving, captureFrames, broadcast)
+const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, captureFrames, broadcast)
 
 // Auto Focus sessions of the cameras of the open connections, taking their frames with the capturer of the captures and
 // moving the focusers with their backlash compensation.

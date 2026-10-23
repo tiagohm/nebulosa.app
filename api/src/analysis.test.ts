@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { type AnalysisEntry, type AnalysisJob, AnalysisScheduler, MAX_QUEUED, SESSION_CAPACITY } from './analysis'
+import { type AnalysisEntry, type AnalysisJob, AnalysisScheduler, MAX_QUEUED } from './analysis'
 import { ImageStore } from './images'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-analysis-test-'))
@@ -53,8 +53,8 @@ function setup() {
 		publish: (job) => published.push(job),
 	})
 
-	// Queues a job labelled label of a provider, in a group (manual by default).
-	const enqueue = (imageId: string, label: string, provider: Provider = 'fast', group = 'manual', key = label) => scheduler.enqueue(imageId, { provider }, key, { provider, label }, group === 'manual' ? 'manual' : 'capture', group)!
+	// Queues a job labelled label of a provider.
+	const enqueue = (imageId: string, label: string, provider: Provider = 'fast', key = label) => scheduler.enqueue(imageId, { provider }, key, { provider, label })!
 
 	return { images, scheduler, published, running, enqueue }
 }
@@ -63,13 +63,13 @@ function setup() {
 const tick = () => Bun.sleep(0)
 
 describe('scheduling', () => {
-	test('runs one job per provider at a time, manual jobs first', async () => {
+	test('runs one job per provider at a time, in arrival order', async () => {
 		const { images, scheduler, running, enqueue } = setup()
 		const { id } = await images.open(writeImage())
 
 		enqueue(id, 'f1')
-		enqueue(id, 'c1', 'fast', 'session')
 		enqueue(id, 'f2')
+		enqueue(id, 'f3')
 		enqueue(id, 's1', 'slow')
 
 		expect([...running.keys()]).toEqual(['f1', 's1'])
@@ -78,23 +78,8 @@ describe('scheduling', () => {
 		await tick()
 
 		expect([...running.keys()]).toContain('f2')
-		expect([...running.keys()]).not.toContain('c1')
+		expect([...running.keys()]).not.toContain('f3')
 		expect(scheduler.job(running.get('f1')!.entry.job.jobId)!.state).toBe('completed')
-	})
-
-	test('serves the capture groups in turn', async () => {
-		const { images, running, enqueue } = setup()
-		const { id } = await images.open(writeImage())
-
-		enqueue(id, 'a1', 'fast', 'a')
-		enqueue(id, 'a2', 'fast', 'a')
-		enqueue(id, 'b1', 'fast', 'b')
-
-		running.get('a1')!.finish('done')
-		await tick()
-
-		expect(running.has('b1')).toBeTrue()
-		expect(running.has('a2')).toBeFalse()
 	})
 
 	test('refuses a job beyond MAX_QUEUED waiting ones', async () => {
@@ -116,7 +101,7 @@ describe('results', () => {
 		const { images, scheduler, running, enqueue } = setup()
 		const { id } = await images.open(writeImage())
 
-		const job = enqueue(id, 'f1', 'fast', 'manual', 'same')
+		const job = enqueue(id, 'f1', 'fast', 'same')
 		expect(scheduler.active('same')?.jobId).toBe(job.jobId)
 		expect(scheduler.cached(id, 'same')).toBeUndefined()
 
@@ -178,9 +163,10 @@ describe('cancellation', () => {
 		expect(scheduler.cancel(second.jobId)).toBeTrue()
 		expect(scheduler.job(second.jobId)).toMatchObject({ state: 'cancelled', error: 'cancelled while waiting' })
 
-		const ended = scheduler.ended(first.jobId)
+		const settled = scheduler.settled(first.jobId)!
 		expect(scheduler.cancel(first.jobId)).toBeTrue()
-		expect(await ended).toMatchObject({ state: 'cancelled', error: 'aborted' })
+		expect(await settled).toBeUndefined()
+		expect(scheduler.job(first.jobId)).toMatchObject({ state: 'cancelled', error: 'aborted' })
 		expect(scheduler.cancel(first.jobId)).toBeFalse()
 	})
 
@@ -194,58 +180,5 @@ describe('cancellation', () => {
 
 		expect(await settled).toBeUndefined()
 		expect(scheduler.job(job.jobId)).toMatchObject({ state: 'failed', error: 'broken' })
-	})
-})
-
-describe('capture sessions', () => {
-	test('replaces the waiting job of a group with the latest one', async () => {
-		const { images, scheduler, enqueue } = setup()
-		const { id } = await images.open(writeImage())
-
-		enqueue(id, 'busy')
-		const older = scheduler.submitLatest(id, { provider: 'fast' }, 'k1', { provider: 'fast', label: 'older' }, 'session')
-		const newer = scheduler.submitLatest(id, { provider: 'fast' }, 'k2', { provider: 'fast', label: 'newer' }, 'session')
-
-		expect(older.skipped).toBe(0)
-		expect(newer.skipped).toBe(1)
-		expect(scheduler.job(older.job!.jobId)!.state).toBe('skipped')
-		expect(scheduler.job(newer.job!.jobId)!.state).toBe('queued')
-	})
-
-	test('holds at most SESSION_CAPACITY frames of a session in flight', async () => {
-		const { images, scheduler, running } = setup()
-		const { id } = await images.open(writeImage())
-		const signal = new AbortController().signal
-
-		const held = Array.from({ length: SESSION_CAPACITY }, () => scheduler.tryReserve('session')!)
-		expect(scheduler.tryReserve('session')).toBeUndefined()
-		expect(scheduler.tryReserve('other')).toBeDefined()
-
-		let granted = false
-		const next = scheduler.reserve('session', signal).then((reservation) => {
-			granted = true
-			return reservation
-		})
-
-		const job = held[0].submit(id, { provider: 'fast' }, 'k', { provider: 'fast', label: 'frame' })!
-		expect(scheduler.job(job.jobId)!.state).toBe('running')
-		expect(held[0].submit(id, { provider: 'fast' }, 'k', { provider: 'fast', label: 'again' })).toBeUndefined()
-
-		await tick()
-		expect(granted).toBeFalse()
-
-		running.get('frame')!.finish('result')
-		expect(await next).toBeDefined()
-	})
-
-	test('gives up waiting for capacity when its signal aborts', async () => {
-		const { scheduler } = setup()
-		const controller = new AbortController()
-
-		for (let i = 0; i < SESSION_CAPACITY; i++) scheduler.tryReserve('session')
-		const waiting = scheduler.reserve('session', controller.signal)
-		controller.abort()
-
-		expect(await waiting).toBeUndefined()
 	})
 })

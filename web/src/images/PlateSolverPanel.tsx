@@ -27,7 +27,7 @@ import type { ImageToolPanelProps } from './tools'
 const MISSING = '—'
 
 // Display names of the job states.
-const STATE_LABELS: Readonly<Record<PlateSolveJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled', skipped: 'Skipped' }
+const STATE_LABELS: Readonly<Record<PlateSolveJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }
 
 // Display names of the hint origins.
 const SOURCE_LABELS: Readonly<Record<PlateSolveHint['source'], string>> = { user: 'request', header: 'header', optics: 'optics', default: 'default' }

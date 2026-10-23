@@ -14,6 +14,9 @@ export const DEFAULT_PORT = 7624
 // localStorage key of the saved connections.
 export const CONNECTIONS_KEY = 'nebulosa:connections'
 
+// localStorage key of the id of the saved connection last highlighted in the modal's list.
+export const SELECTED_CONNECTION_KEY = 'nebulosa:selectedConnectionId'
+
 // Editable fields of a saved connection. Host and port are ignored for simulator connections.
 export interface ConnectionInput extends Omit<RemoteConnectRequest, 'type'> {
 	// Display name, trimmed and non-empty once saved.
@@ -66,8 +69,9 @@ function normalizeConnection(value: unknown): Connection | undefined {
 	return { id, name, host: typeof host === 'string' ? host : '', port: typeof port === 'number' ? port : DEFAULT_PORT, type }
 }
 
-// Loads the saved connections into state. Unreadable entries are skipped; an unreadable list loads as
-// empty and is left untouched until the next change.
+// Loads the saved connections into state and highlights the one last highlighted, or the first when it
+// no longer exists. Unreadable entries are skipped; an unreadable list loads as empty and is left
+// untouched until the next change.
 export function loadConnections(state: ConnectionState, storage: Storage) {
 	const text = readText(storage, CONNECTIONS_KEY)
 	const data = text === undefined ? undefined : parseJson(text)
@@ -80,20 +84,34 @@ export function loadConnections(state: ConnectionState, storage: Storage) {
 		}
 	}
 
+	const selected = readText(storage, SELECTED_CONNECTION_KEY)
 	state.connections = connections
-	state.selected = connections[0]?.id
+	state.selected = connections.some((c) => c.id === selected) ? selected : connections[0]?.id
 }
 
-// Persists every later change of the saved connections. Returns a function that stops it.
+// Persists every later change of the saved connections and of the highlighted one. Returns a function
+// that stops it.
 export function persistConnections(state: ConnectionState, storage: Storage): () => void {
-	let connections = snapshot(state).connections
+	let { connections, selected } = snapshot(state)
 
 	return subscribe(state, () => {
-		const current = snapshot(state).connections
-		if (current === connections) return
-		connections = current
-		state.storageError = writeText(storage, CONNECTIONS_KEY, JSON.stringify(current)) ? undefined : 'Unable to save connections: browser storage is unavailable or full.'
+		const current = snapshot(state)
+
+		if (current.selected !== selected) {
+			selected = current.selected
+			writeText(storage, SELECTED_CONNECTION_KEY, selected ?? '')
+		}
+
+		if (current.connections === connections) return
+		connections = current.connections
+		state.storageError = writeText(storage, CONNECTIONS_KEY, JSON.stringify(connections)) ? undefined : 'Unable to save connections: browser storage is unavailable or full.'
 	})
+}
+
+// Highlights the given saved connection, such as the one the active profile works with; the current
+// highlight stays when it is absent or no longer saved.
+export function highlightConnection(state: ConnectionState, connectionId: string | undefined) {
+	if (state.connections.some((c) => c.id === connectionId)) state.selected = connectionId
 }
 
 // Returns the request that opens a saved connection.

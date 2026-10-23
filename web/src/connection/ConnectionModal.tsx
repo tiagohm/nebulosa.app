@@ -1,5 +1,6 @@
-import { type SubmitEvent, useState } from 'react'
+import { type SubmitEvent, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { deviceState } from '../equipment/equipment'
 import { activeProfile, forgetConnection, profileState, selectConnection } from '../profile/profile'
 import { Button } from '../ui/Button'
 import { List, ListItem } from '../ui/List'
@@ -7,10 +8,11 @@ import { Modal } from '../ui/Modal'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
-import { connect, type Connection, type ConnectionInput, connectionState, DEFAULT_PORT, disconnect, removeConnection, saveConnection, serverOf } from './connection'
+import { connect, type Connection, type ConnectionInput, connectionState, DEFAULT_PORT, disconnect, highlightConnection, removeConnection, saveConnection, serverOf } from './connection'
 
 // Modal that creates, edits, and removes saved connections, selects the one the active profile works
-// with, and connects or disconnects the highlighted one on the server.
+// with, and connects or disconnects the highlighted one on the server. Opening it highlights the
+// profile's connection, and from it the Equipment Setup of that connection opens.
 
 // Initial form values for a new connection: an INDI server on the default port.
 const EMPTY_FORM: ConnectionInput = { name: '', host: '', port: DEFAULT_PORT, type: 'INDI' }
@@ -40,6 +42,11 @@ export function ConnectionModal() {
 	const selectedIsOpen = serverOf(servers, selectedConnection) !== undefined
 	// Pending request on the highlighted connection.
 	const selectedLoading = loading?.connectionId === selected ? loading?.kind : undefined
+
+	// Highlights the active profile's connection each time the modal opens.
+	useEffect(() => {
+		if (open && profileState.profiles.length > 0) highlightConnection(connectionState, activeProfile(profileState).connectionId)
+	}, [open])
 
 	// Clears the form and leaves edit mode.
 	function reset() {
@@ -80,6 +87,12 @@ export function ConnectionModal() {
 		if (selected !== undefined) selectConnection(profileState, selected)
 	}
 
+	// Closes this modal and opens the Equipment Setup of the profile's connection.
+	function handleEquipment() {
+		connectionState.open = false
+		deviceState.open = true
+	}
+
 	// Disconnects the highlighted connection when the server holds it open; otherwise selects it for the
 	// active profile and connects it.
 	function handleConnection() {
@@ -110,7 +123,7 @@ export function ConnectionModal() {
 			<div className="flex flex-wrap gap-6">
 				<form onSubmit={handleSubmit} className="flex flex-[1_1_280px] flex-col gap-4 border-r border-line-100 pr-6 max-sm:border-r-0 max-sm:pr-0">
 					<div className="text-xs font-medium tracking-[0.04em] text-ink-300 uppercase">{editing ? 'Edit connection' : 'New connection'}</div>
-					<TextInput data-autofocus label="Name" placeholder="Observatory" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+					<TextInput label="Name" placeholder="Observatory" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
 					<div className="grid grid-cols-2 gap-4">
 						<TextInput disabled={form.type === 'SIMULATOR'} label="Host" placeholder="192.168.0.10" value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
 						<NumberInput disabled={form.type === 'SIMULATOR'} label="Port" min={1} max={65535} value={form.port} onChange={(port) => setForm({ ...form, port })} />
@@ -140,9 +153,15 @@ export function ConnectionModal() {
 						<Button variant={selectedIsOpen ? 'secondary' : 'primary'} disabled={selected === undefined || loading !== undefined} onClick={handleConnection}>
 							{selectedLoading === 'connect' ? 'Connecting…' : selectedLoading === 'disconnect' ? 'Disconnecting…' : selectedIsOpen ? 'Disconnect' : 'Connect'}
 						</Button>
-						<Button variant="secondary" disabled={selected === undefined || selected === profileConnectionId} onClick={handleUse}>
-							Use in profile
-						</Button>
+						{selected !== undefined && selected === profileConnectionId ? (
+							<Button variant="secondary" onClick={handleEquipment}>
+								Equipment Setup
+							</Button>
+						) : (
+							<Button variant="secondary" disabled={selected === undefined} onClick={handleUse}>
+								Use in profile
+							</Button>
+						)}
 						<div className="ml-auto flex gap-2">
 							<Button variant="secondary" disabled={selected === undefined || selectedIsOpen} onClick={handleEdit}>
 								Edit

@@ -257,7 +257,7 @@ function CameraControls({ document, framesShown, onToggleFrames, reticle, onTogg
 				{restored ? 'Latest saved' : SELECTION_LABELS[camera.selection.kind]}
 				{camera.shown && ` · #${camera.shown.frame.generation}`}
 			</span>
-			{!following && <IconButton icon="play" label="Return to Latest" onClick={() => void selectCameraFrame(imagesState, document.key, { kind: 'latest' }, captureFramesState)} />}
+			{!following && <IconButton icon="skipToEnd" label="Return to Latest" onClick={() => void selectCameraFrame(imagesState, document.key, { kind: 'latest' }, captureFramesState)} />}
 			<IconButton icon="images" label={framesShown ? 'Hide frames and focus curve' : 'Show frames and focus curve'} pressed={framesShown} onClick={onToggleFrames} />
 			<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={onToggleReticle} />
 			<CaptureStatus connectionId={document.source.connectionId} deviceId={document.source.deviceId} />

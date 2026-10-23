@@ -35,13 +35,9 @@ function frameTooltip(frame: CaptureFrameSummary): string {
 	if (frame.acquisition?.exposure !== undefined) lines.push(`Exposure ${frame.acquisition.exposure} s`)
 	if (frame.width !== undefined && frame.height !== undefined) lines.push(`${frame.width} × ${frame.height} px`)
 	if (frame.fileName) lines.push(frame.fileName)
-	lines.push(frameUnavailableReason(frame) ?? (frame.availability === 'memory' ? 'In memory' : 'Saved file'))
+	const reason = frame.file === 'saved' ? 'Saved' : frameUnavailableReason(frame)
+	if (reason) lines.push(reason)
 	return lines.join('\n')
-}
-
-// Returns the availability of a frame, for people.
-function availabilityLabel(frame: CaptureFrameSummary): string {
-	return frameUnavailableReason(frame) ?? (frame.availability === 'memory' ? 'In memory' : 'Saved file')
 }
 
 // Carousel of the frames of a camera tab.
@@ -147,20 +143,21 @@ interface FrameCardProps {
 }
 
 // Card of a frame: an icon in the area reserved for a thumbnail, its label and number, the time of its acquisition,
-// its exposure, and a textual state; the selected card is outlined, not only colored. A saved frame that cannot be
+// its exposure, a textual state only when it is loading, failed, or missing, and a floppy disk icon on the right once
+// its file is written, the Latest one included; the selected card is outlined. A saved frame that cannot be
 // opened shows why and cannot be selected.
 function FrameCard({ card, selected, focusable, loading, error, restored, newer, onSelect }: FrameCardProps) {
 	const { frame } = card
-	const unavailable = card.kind === 'saved' ? frameUnavailableReason(card.frame) : undefined
+	const unavailable = frame ? frameUnavailableReason(frame) : undefined
 	const label = card.kind === 'latest' ? (restored ? 'Latest saved' : 'Latest') : `#${card.frame.generation}`
-	const state = error ? 'Error' : loading ? 'Loading…' : selected ? 'Selected' : frame ? availabilityLabel(frame) : 'No frame yet'
+	const state = unavailable ?? (error ? 'Error' : loading ? 'Loading…' : frame ? undefined : 'No frame yet')
 
 	return (
 		<button
 			type="button"
 			data-card
 			tabIndex={focusable ? 0 : -1}
-			disabled={!!unavailable}
+			disabled={card.kind === 'saved' && !!unavailable}
 			title={[frame ? frameTooltip(frame) : 'No captured image available', error].filter(Boolean).join('\n')}
 			onClick={onSelect}
 			className={cn(
@@ -180,7 +177,10 @@ function FrameCard({ card, selected, focusable, loading, error, restored, newer,
 				<span>{frame ? timeOf(frame.time) : '—'}</span>
 				{frame?.acquisition?.exposure !== undefined && <span>{frame.acquisition.exposure}s</span>}
 			</span>
-			<span className={cn('truncate', error || unavailable ? 'text-danger' : selected ? 'text-accent' : 'text-ink-300')}>{unavailable ?? state}</span>
+			<span className="flex h-4 items-center justify-between gap-1">
+				<span className={cn('truncate', error || unavailable ? 'text-danger' : 'text-ink-300')}>{state}</span>
+				{frame?.file === 'saved' && <Icon name="save" className="size-3.5 text-ink-300" />}
+			</span>
 		</button>
 	)
 }

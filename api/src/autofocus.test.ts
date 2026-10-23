@@ -6,6 +6,7 @@ import { failedOperationResult, type OperationResult } from 'nebulosa/src/device
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
 import { type AutoFocusEvent, type AutoFocusRequest, type AutoFocusSession, AutoFocusSessions, type AutoFocusSessionSummary } from './autofocus'
+import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures, type CaptureRequest } from './captures'
 import { ConnectionManager } from './connection'
 import { ExternalToolsStore } from './externaltools'
@@ -91,6 +92,7 @@ async function setup() {
 		images,
 		stars,
 		new PlateSolvingService(images, tools, () => {}),
+		new CaptureFrameRegistry(images, () => {}, { file: join(mkdtempSync(join(root, 'frames-')), 'capture-frames.json') }),
 		() => {},
 		capturesDir,
 	)

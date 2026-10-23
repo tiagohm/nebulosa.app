@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync }
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures, type CaptureEvent, type CaptureFrame, type CaptureRequest, type CaptureSession, frameName, sanitizeFileName } from './captures'
 import { ConnectionManager } from './connection'
 import type { CameraCapabilities } from './devices'
@@ -48,6 +49,9 @@ async function setup() {
 	const stars = new StarDetectionService(images, tools, (event) => starEvents.push(event))
 	const solveEvents: PlateSolvingEvent[] = []
 	const plateSolving = new PlateSolvingService(images, tools, (event) => solveEvents.push(event))
+	const frameEvents: CaptureFrameEvent[] = []
+	const frameRegistry = new CaptureFrameRegistry(images, (event) => frameEvents.push(event), { file: join(mkdtempSync(join(root, 'registry-')), 'capture-frames.json'), connected: () => true })
+	disposables.push(frameRegistry)
 	const events: CaptureEvent[] = []
 	const captures = new CameraCaptures(
 		manager.devices,
@@ -56,6 +60,7 @@ async function setup() {
 		images,
 		stars,
 		plateSolving,
+		frameRegistry,
 		(event) => events.push(event),
 		mkdtempSync(join(root, 'default-')),
 	)
@@ -71,7 +76,7 @@ async function setup() {
 	const frames = () => events.filter((event): event is Extract<CaptureEvent, { type: 'capture:frame' }> => event.type === 'capture:frame').map((event) => event.frame)
 	const ended = () => ['completed', 'stopped', 'aborted', 'failed'].includes(session()?.phase ?? '')
 
-	return { manager, id, client, operations, operationEvents, images, tools, stars, starEvents, plateSolving, solveEvents, captures, events, camera, cameraId, session, frames, ended }
+	return { manager, id, client, operations, operationEvents, images, tools, stars, starEvents, plateSolving, solveEvents, frameRegistry, frameEvents, captures, events, camera, cameraId, session, frames, ended }
 }
 
 test('a single capture saves one frame, previews it, and releases the camera', async () => {
@@ -118,6 +123,24 @@ test('a fixed capture takes exactly its frames, under unique names, and keeps on
 	expect(images.name(previewed.at(-1)!)).toBe('m42_0003.fit')
 	for (const imageId of previewed.slice(0, -1)) expect(images.name(imageId)).toBeUndefined()
 	expect(captures.snapshot().frames.map((frame) => frame.imageId)).toEqual([previewed.at(-1)!])
+})
+
+test('every saved frame is recorded in the frame registry, the latest one in memory', async () => {
+	const { id, cameraId, captures, frameRegistry, session, frames, ended } = await setup()
+	const capture = request({ exposureMode: 'fixed', count: 3, delay: 0.05, output: { mode: 'preview-save', directory: mkdtempSync(join(root, 'registry-')), filenameTemplate: 'frame_{seq}', format: 'FITS' } })
+
+	await captures.start(id, cameraId, capture)
+	await waitUntil(ended)
+	await waitUntil(() => frames().some((frame) => frame.generation === 3 && frame.file === 'saved'))
+
+	const { sessionId } = session()!
+	const recorded = (await frameRegistry.recent(id, cameraId))!.frames
+	expect(recorded.map((frame) => [frame.frameId, frame.availability, frame.fileName])).toEqual([
+		[`${sessionId}:3`, 'memory', 'frame_0003.fit'],
+		[`${sessionId}:2`, 'file', 'frame_0002.fit'],
+		[`${sessionId}:1`, 'file', 'frame_0001.fit'],
+	])
+	expect(recorded[0].imageId).toBe(captures.snapshot().frames[0].imageId)
 })
 
 test('stopping a loop during its delay ends it at once with the frames taken', async () => {

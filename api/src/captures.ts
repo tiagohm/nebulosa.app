@@ -7,6 +7,7 @@ import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { type CameraCaptureHandle, CameraCapturer, type CameraFramePathRequest, writeFrameExclusively } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureEvent, type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START } from 'nebulosa/src/observation/capture/types'
+import type { CaptureFrameRegistry } from './captureframes'
 import type { DeviceRegistry } from './devices'
 import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
 import type { OperationRegistry } from './operations'
@@ -26,7 +27,8 @@ import type { StarDetectionJob, StarDetectionPreparation, StarDetectionRequest, 
 // bytes the driver sent, under the configured directory and filename template, by an exclusive write that
 // never replaces a file; the saved count rises only once the write completed, and a failed write ends the
 // capture. Every frame is also decoded into the image store as its own capture document, independently of
-// the write: the latest frame of each camera is kept and the previous one closed. Decoding never delays the
+// the write, and recorded in the capture frame registry (captureframes.ts), which keeps the latest frame of each
+// camera open and closes the previous one unless the Images workspace holds it. Decoding never delays the
 // capture: while a frame of a camera is being decoded, only the newest of the frames arriving meanwhile is
 // kept for decoding next, so a fast loop previews fewer frames than it saves. Exposure and delay times are
 // in seconds in requests and microseconds in progress. The mount, focuser, filter wheel and rotator a request
@@ -470,7 +472,8 @@ export class CameraCaptures implements Disposable {
 
 	// Creates the service over the device registry. client resolves an open connection id to its client,
 	// operations holds and publishes every capture, images receives the frames, stars analyzes them, plateSolving
-	// solves them, and listener receives every capture event synchronously. capturesDir replaces DEFAULT_CAPTURES_DIR.
+	// solves them, frames records them and closes their documents, and listener receives every capture event
+	// synchronously. capturesDir replaces DEFAULT_CAPTURES_DIR.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: (connectionId: string) => Client | undefined,
@@ -478,6 +481,7 @@ export class CameraCaptures implements Disposable {
 		readonly images: ImageStore,
 		readonly stars: StarDetectionService,
 		readonly plateSolving: PlateSolvingService,
+		readonly frames: CaptureFrameRegistry,
 		readonly listener: CaptureListener,
 		readonly capturesDir: string = DEFAULT_CAPTURES_DIR,
 	) {
@@ -731,8 +735,8 @@ export class CameraCaptures implements Disposable {
 	}
 
 	// Decodes the waiting frames of a camera into the image store one at a time, in order, replaces the
-	// camera's previewed frame with each, closing the previous document, and hands each to the analysis of
-	// its capture.
+	// camera's previewed frame with each, recording it in the frame registry, which closes the previous document
+	// unless it is held, and hands each to the analysis of its capture.
 	async #preview(key: string, preview: CameraPreview) {
 		preview.decoding = true
 
@@ -742,7 +746,6 @@ export class CameraCaptures implements Disposable {
 
 			try {
 				const info = await this.images.openCapture(bytes, path === undefined ? `${cameraName} #${generation}` : basename(path), { connectionId, deviceId, frameId: `${sessionId}:${generation}`, time, path })
-				const previous = preview.frame
 				const bitpix = numericKeyword<number, undefined>(info.header, 'BITPIX', undefined)
 				const { width, height, channels, cfa, acquisition } = info
 				const file = path === undefined ? undefined : (capture.frames.get(generation)?.file ?? 'saving')
@@ -750,7 +753,7 @@ export class CameraCaptures implements Disposable {
 				// The analysis retains the frame before the previous one is closed, so neither is ever released early.
 				this.#analyze(capture, info.id, generation, reservation)
 				this.#solve(capture, info.id, generation, solveReservation)
-				if (previous) this.images.close(previous.imageId)
+				this.frames.previewed(info, preview.frame, cameraName)
 				this.listener({ type: 'capture:frame', frame: preview.frame })
 				if (capture.session.previewError !== undefined) this.#update(capture, { previewError: undefined })
 			} catch (error) {
@@ -964,6 +967,9 @@ export class CameraCaptures implements Disposable {
 		const { capture, generation } = write
 		const record = capture.frames.get(generation)
 		if (record) record.file = file
+
+		const { sessionId, connectionId, deviceId, cameraName, request } = capture.session
+		this.frames.written({ sessionId, generation, connectionId, deviceId, cameraName, time: record?.time ?? Date.now(), frameType: request.frameType, path }, file)
 
 		const preview = this.#previews.get(resourceKey(capture.camera))
 

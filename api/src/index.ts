@@ -1,5 +1,6 @@
 import { type AutoFocusRequest, AutoFocusSessions } from './autofocus'
 import { type CameraCoolerRequest, CameraCommands, type CameraTemperatureRequest } from './cameras'
+import { CaptureFrameRegistry, createCaptureFrameRoutes, DEFAULT_CAPTURE_FRAMES_FILE } from './captureframes'
 import { CameraCaptures, type CaptureRequest } from './captures'
 import { type CommandRequest, errorResponse } from './commands'
 import { connections } from './connection'
@@ -19,7 +20,7 @@ import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { RotatorCommands, type RotatorMoveByRequest, type RotatorMoveToRequest, type RotatorReverseRequest, type RotatorSyncRequest } from './rotators'
 import { skyLocator, skyRoutes } from './sky'
 import { createStarDetectionRoutes, StarDetectionService } from './stars'
-import { broadcast, websocket } from './websocket'
+import { broadcast, listenClients, type WebSocketData, websocket } from './websocket'
 import { WheelCommands, type WheelMoveRequest, type WheelNamesRequest } from './wheels'
 
 // HTTP routes and the WebSocket handler of the backend, mounted by the app server.
@@ -47,6 +48,20 @@ export type {
 	PostCapturePlateSolving,
 	PostCapturePlateSolvingPolicy,
 } from './captures'
+export type {
+	CaptureFrameAvailability,
+	CaptureFrameErrorCode,
+	CaptureFrameEvent,
+	CaptureFrameOpened,
+	CaptureFrameOpenRequest,
+	CaptureFramePage,
+	CaptureFramesSnapshot,
+	CaptureFrameSummary,
+	CaptureFrameUnavailableReason,
+	CaptureLeaseReconcileRequest,
+	CaptureLeaseReconcileResponse,
+	CaptureSourceSummary,
+} from './captureframes'
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
 export type { CommandAccepted, CommandError, CommandErrorCode, CommandRequest } from './commands'
 export type {
@@ -181,7 +196,19 @@ const externalTools = new ExternalToolsStore(DEFAULT_SETTINGS_FILE, broadcast)
 const stars = new StarDetectionService(images, externalTools, broadcast)
 const plateSolving = new PlateSolvingService(images, externalTools, broadcast)
 
-const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, stars, plateSolving, broadcast)
+// Index of the captured frames of every camera, holding their documents for the Images workspace; the leases of a tab
+// follow its event sockets, and cameras are republished when their connection state changes.
+const captureFrames = new CaptureFrameRegistry(images, broadcast, {
+	file: DEFAULT_CAPTURE_FRAMES_FILE,
+	connected: (connectionId, deviceId) => {
+		const client = connections.client(connectionId)
+		return !!client && !!connections.devices.camera(client, deviceId)?.connected
+	},
+})
+connections.listen((event) => captureFrames.deviceChanged(event))
+listenClients(captureFrames)
+
+const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, stars, plateSolving, captureFrames, broadcast)
 
 // Auto Focus sessions of the cameras of the open connections, taking their frames with the capturer of the captures and
 // moving the focusers with their backlash compensation.
@@ -603,9 +630,14 @@ export const routes = {
 	...createExternalToolsRoutes(externalTools),
 	...createStarDetectionRoutes(stars),
 	...createPlateSolvingRoutes(plateSolving),
+	...createCaptureFrameRoutes(captureFrames),
 	...skyRoutes,
 	'/api/ws': {
-		// Upgrades to the event WebSocket; Bun sends the handshake response itself.
-		GET: (req, server) => (server.upgrade(req) ? undefined : new Response('WebSocket upgrade failed', { status: 400 })),
+		// Upgrades to the event WebSocket, attaching the client id the tab names itself with; Bun sends the handshake
+		// response itself.
+		GET: (req, server) => {
+			const client = new URL(req.url).searchParams.get('client') || undefined
+			return server.upgrade(req, { data: { client } satisfies WebSocketData }) ? undefined : new Response('WebSocket upgrade failed', { status: 400 })
+		},
 	},
-} as Readonly<Bun.Serve.Routes<undefined, string>>
+} as Readonly<Bun.Serve.Routes<WebSocketData, string>>

@@ -30,6 +30,7 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
 | Focuser, wheel, rotator, cover, flat panel, dew heater, dome, camera cooling | Implemented          | `api/src/{focusers,wheels,rotators,covers,flatpanels,dewheaters,domes,cameras}.ts`, Equipment Control page        |
 | Equipment Control (manual device control)                                    | Implemented          | `web/src/equipment-control/`, route `/equipment` opened from Management                                           |
 | Camera capture and frames                                                    | Implemented          | `api/src/captures.ts` over `CameraCapturer`; `web/src/capture/CameraCapturePanel.tsx`, `capture.ts`               |
+| Capture frame registry (latest and recent frames per camera)                 | Implemented          | `api/src/captureframes.ts`                                                                                        |
 | Image documents (FITS/XISF)                                                  | Implemented          | `api/src/images.ts` + `images.worker.ts`, `web/src/images/images.ts`                                              |
 | Display pipeline, derive, save                                               | Implemented          | same as above                                                                                                     |
 | Histogram and statistics                                                     | Planned              | Inspector shows a placeholder                                                                                     |
@@ -79,9 +80,19 @@ There is **one** image store, `ImageStore` in `api/src/images.ts`, and the scien
 
 - An image document is addressed as `/api/images/:id/...` by every operation, whatever workspace requested it. There is no second solver or detector path for Capture.
 - Camera frames enter the store as documents of the origin `{ origin: 'capture', connectionId, deviceId, frameId, time, path? }` (`ImageStore.openCapture`), decoded from the bytes the driver sent. A frame is never identified by camera role.
-- In loop capture, each frame is its own document. An analysis stays bound to the id it was started on, and a newer frame never changes it. The capture service (`api/src/captures.ts`) keeps the latest frame of each camera and closes the previous one. An analysis retains its document (`ImageStore.retain`/`release`): closing it hides it from every route at once, but its pixels are released only when the last analysis lets it go.
+- In loop capture, each frame is its own document. An analysis stays bound to the id it was started on, and a newer frame never changes it. The capture frame registry (`api/src/captureframes.ts`) keeps the latest frame of each camera open and closes the previous one unless a lease of the Images workspace holds it (see Capture Frames Contract). An analysis retains its document (`ImageStore.retain`/`release`): closing it hides it from every route at once, but its pixels are released only when the last analysis lets it go.
 - Analysis results (solution, star list, streaks) are keyed by image id and the parameters applied, and are kept in memory with the document until its pixels are released. Re-running with the same parameters reuses the result.
 - A Sky Framing survey image is not an image document. Importing one into Images is an explicit action, available only when the cutout carries usable WCS metadata.
+
+## Capture Frames Contract
+
+- `CaptureFrameRegistry` (`api/src/captureframes.ts`) indexes the frames of Camera Capture by physical camera (connection id + device id, never a role, profile, or name). A frame is identified by its `frameId` (`sessionId:generation`), the acquisition; its `imageId` is only the document currently holding its pixels, and a saved frame reopened from its file gets a new one. Frames are ordered by a registry-wide `sequence`, never by time, and every change carries a `revision` so a late event never replaces a newer state. Auto Focus frames are not recorded.
+- The registry never holds pixels. A frame is `memory` while its document is open, `file` when its saved file exists (opened as a new `file` document on demand), `saving` while its file is written and its document closed, or `unavailable` (`expired`, `fileMissing`, `saveFailed`, `restarted`). A saved frame the preview skipped is recorded from its file; a skipped frame that was only previewed is not. Opening never substitutes another frame.
+- The registry owns the closing of capture documents: the latest previewed frame of each camera stays open, an older one only while a lease holds it. `POST /api/capture-frames/frames/:frameId/open` leases the document for a client (the id a tab opens `/api/ws?client=<id>` with, kept in its sessionStorage); `DELETE /api/capture-frames/leases/:lease` releases it. At most `MAX_LEASED_FRAMES` (16) documents are kept open by leases besides the latest frames; beyond that an open is refused with `limit`. Refusals carry the codes `notFound`, `expired`, `fileMissing`, `saveFailed`, `saving`, `limit`, and `unreadable`.
+- When the last socket of a client closes, its leases are released after `LEASE_GRACE` (10 min), so a phone whose screen locked finds its frames again; a tab that reopens its socket sends the leases it still uses to `PUT /api/capture-frames/clients/:client/leases`, which releases the others and answers the lost ones.
+- `GET /api/capture-frames` is the snapshot of the cameras (with an `epoch` per server run), `GET /api/capture-frames/sources/:connectionId/:deviceId` the frames of a camera, newest first (a page with a reserved `next` cursor), and `GET /api/capture-frames/frames/:frameId` one frame. Changes are published as `captureFrame:updated` (frame and camera) and `captureSource:updated` (connection state); neither carries pixels or server paths, only file names. A disconnected camera keeps its frames.
+- The latest `FRAMES_PER_SOURCE` (20) frames of at most `MAX_SOURCES` (32) cameras are persisted in `~/Nebulosa/capture-frames.json` (version 1, written atomically at most 2 s after a change). After a restart no frame is in memory: saved frames are available when their file still exists, previewed-only ones are `restarted`. No directory is scanned.
+- Limitations: a previewed-only frame can be opened only while it is the latest of its camera or leased; a tab asleep for longer than the grace period may lose such frames; analysis results are keyed by image id, so a frame reopened from its file shows none of the results of its first document; the records of the last 2 s may be lost in a crash.
 
 ## Overlay Contracts
 
@@ -197,15 +208,17 @@ Conflicts are resolved by the arbiter on the server, never only in the browser, 
 
 ## Persistence and State
 
-| State                                                | Owner                                          |
-| ---------------------------------------------------- | ---------------------------------------------- |
-| Profiles, presets, panel and view preferences        | browser localStorage, versioned (`profile.ts`) |
-| Active profile                                       | sessionStorage per tab                         |
-| Route, document view, zoom/pan                       | tab memory                                     |
-| Image pixels                                         | `api` image store                              |
-| Star detection and plate solving jobs and results    | `api` analysis services, memory only           |
-| External tool settings and the nova session          | `api`, `~/Nebulosa/settings.json`, versioned   |
-| Connections, devices, operations, sessions, services | `api`                                          |
+| State                                                | Owner                                              |
+| ---------------------------------------------------- | -------------------------------------------------- |
+| Profiles, presets, panel and view preferences        | browser localStorage, versioned (`profile.ts`)     |
+| Active profile                                       | sessionStorage per tab                             |
+| Route, document view, zoom/pan                       | tab memory                                         |
+| Image pixels                                         | `api` image store                                  |
+| Star detection and plate solving jobs and results    | `api` analysis services, memory only               |
+| Recent capture frames (metadata, no pixels)          | `api`, `~/Nebulosa/capture-frames.json`, versioned |
+| Capture frame leases                                 | `api`, memory, per client id                       |
+| External tool settings and the nova session          | `api`, `~/Nebulosa/settings.json`, versioned       |
+| Connections, devices, operations, sessions, services | `api`                                              |
 
 Profile format changes add a version and a case in `migrate`; older documents are read, and newer ones are never overwritten.
 

@@ -146,7 +146,7 @@ test('keeps the previous rendering until the next frame is rendered, and when it
 	}
 
 	await renderFrame(state, key, frame({ imageId: 'i1' }), io)
-	expect(state.renderings[key]).toEqual({ imageId: 'i1', url: 'blob:1', width: 64, height: 32 })
+	expect(state.renderings[key]).toEqual({ imageId: 'i1', frameId: 's1:1', url: 'blob:1', width: 64, height: 32 })
 
 	await renderFrame(state, key, frame({ imageId: 'i1', file: 'saved' }), io)
 	expect(created).toBe(1)
@@ -163,7 +163,7 @@ test('keeps the previous rendering until the next frame is rendered, and when it
 
 	status = 200
 	await renderFrame(state, key, frame({ imageId: 'i4', width: 10, height: 10 }), io)
-	expect(state.renderings[key]).toEqual({ imageId: 'i4', url: 'blob:2', width: 10, height: 10 })
+	expect(state.renderings[key]).toEqual({ imageId: 'i4', frameId: 's1:1', url: 'blob:2', width: 10, height: 10 })
 	expect(revoked).toEqual(['blob:1'])
 	expect(state.renderErrors[key]).toBeUndefined()
 })

@@ -19,6 +19,8 @@ const ENDED_PHASES: ReadonlySet<CaptureSession['phase']> = new Set(['completed',
 export interface FrameRendering {
 	// Image document the rendering was made from.
 	readonly imageId: string
+	// Identity of the captured frame shown (capture session id and generation); absent for an Auto Focus frame.
+	readonly frameId?: string
 	// Object URL of the rendered JPEG, owned by the store.
 	readonly url: string
 	// Width of the image, in pixels.
@@ -291,7 +293,7 @@ export function captureElapsed(session: Pick<CaptureSession, 'startedAt' | 'ende
 // is already rendered or being rendered. The rendering replaces the camera's previous one only once it is
 // ready; a frame closed on the server meanwhile (a newer one replaced it) is skipped silently, and any
 // other failure keeps the previous rendering and records why.
-export async function renderFrame(state: CaptureRuntime, key: string, frame: Pick<CaptureFrame, 'imageId' | 'cfa' | 'width' | 'height'>, io: ImagesIo = browserIo) {
+export async function renderFrame(state: CaptureRuntime, key: string, frame: Pick<CaptureFrame, 'imageId' | 'cfa' | 'width' | 'height'> & Partial<Pick<CaptureFrame, 'sessionId' | 'generation'>>, io: ImagesIo = browserIo) {
 	if (state.renderings[key]?.imageId === frame.imageId || renders.get(key)?.imageId === frame.imageId) return
 
 	renders.get(key)?.controller.abort()
@@ -307,7 +309,8 @@ export async function renderFrame(state: CaptureRuntime, key: string, frame: Pic
 		if (controller.signal.aborted) return
 
 		const previous = state.renderings[key]
-		state.renderings[key] = { imageId: frame.imageId, url: io.createObjectURL(blob), width: frame.width, height: frame.height }
+		const frameId = frame.sessionId !== undefined && frame.generation !== undefined ? `${frame.sessionId}:${frame.generation}` : undefined
+		state.renderings[key] = { imageId: frame.imageId, frameId, url: io.createObjectURL(blob), width: frame.width, height: frame.height }
 		delete state.renderErrors[key]
 		if (previous) io.revokeObjectURL(previous.url)
 	} catch (error) {

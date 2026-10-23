@@ -160,6 +160,24 @@ export function handleStarsEvent(state: StarsState, event: ServerEvent) {
 	if (event.type === 'stars:updated') track(state, event.job)
 }
 
+// Images whose kept jobs were fetched, or are being fetched, by this tab.
+const fetchedImages = new Set<string>()
+
+// Fetches once the completed jobs the server keeps for an image, such as the post-capture analysis of a captured
+// frame opened later, which may be older than the jobs of the snapshot.
+export async function loadImageJobs(state: StarsState, imageId: string, request: typeof fetch = fetch) {
+	if (fetchedImages.has(imageId)) return
+	fetchedImages.add(imageId)
+
+	try {
+		const response = await request(`/api/images/${encodeURIComponent(imageId)}/stars`)
+		if (!response.ok) return
+		for (const job of (await response.json()) as StarDetectionJob[]) if (!(job.jobId in state.jobs)) track(state, job)
+	} catch {
+		fetchedImages.delete(imageId)
+	}
+}
+
 // Fetches the snapshot of the server's jobs, after the socket (re)opened.
 export async function refreshStars(state: StarsState, request: typeof fetch = fetch) {
 	try {

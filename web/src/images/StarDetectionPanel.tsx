@@ -10,7 +10,7 @@ import { cancelDetection, isActive, PROVIDER_LABELS, runDetection, sameRequest, 
 import { useStarResult } from '../stars/useStarResult'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
-import { type ImageStarsState, imagesState, setStarMarkers, setStarRequest } from './images'
+import { type ImageStarsState, imagesState, pauseLive, setStarMarkers, setStarRequest } from './images'
 import type { ImageToolPanelProps } from './tools'
 
 // Star Detection tool of the Images workspace: runs a detection of the active document on the server with
@@ -79,7 +79,7 @@ function StarDetection({ documentKey, imageId, stars }: StarDetectionProps) {
 			<PanelSection title="Acceptance">
 				<AcceptanceControls request={request} onChange={edit} />
 			</PanelSection>
-			<Analysis imageId={imageId} request={request} job={job} submitError={submitErrors[imageId]} />
+			<Analysis documentKey={documentKey} imageId={imageId} request={request} job={job} submitError={submitErrors[imageId]} />
 			<Results job={job} result={result} resultError={resultError} />
 			<SelectedStar star={selected} />
 			<PanelSection title="Visualization">
@@ -92,6 +92,8 @@ function StarDetection({ documentKey, imageId, stars }: StarDetectionProps) {
 }
 
 interface AnalysisProps {
+	// Key of the document.
+	readonly documentKey: string
 	// Server id of the image.
 	readonly imageId: string
 	// Pending request of the document.
@@ -102,8 +104,8 @@ interface AnalysisProps {
 	readonly submitError?: string
 }
 
-// Run and Cancel, with the state of the latest job.
-function Analysis({ imageId, request, job, submitError }: AnalysisProps) {
+// Run and Cancel, with the state of the latest job. Running pauses a live tab first, so the frame analyzed stays shown.
+function Analysis({ documentKey, imageId, request, job, submitError }: AnalysisProps) {
 	const active = isActive(job)
 	const now = useNow(active)
 	const astapReady = useAstapConfigured() || request.detector.provider !== 'astap'
@@ -112,7 +114,13 @@ function Analysis({ imageId, request, job, submitError }: AnalysisProps) {
 	return (
 		<PanelSection title="Analysis">
 			<Actions>
-				<Button disabled={active || !astapReady} onClick={() => void runDetection(starsState, imageId, request)}>
+				<Button
+					disabled={active || !astapReady}
+					onClick={() => {
+						pauseLive(imagesState, documentKey, 'pausedForAnalysis')
+						void runDetection(starsState, imageId, request)
+					}}
+				>
 					Run Detection
 				</Button>
 				<Button variant="secondary" disabled={!active || !job} onClick={() => job && void cancelDetection(job.jobId)}>

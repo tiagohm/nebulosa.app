@@ -1,8 +1,15 @@
 import type { ServerEvent } from 'api'
+import { nanoid } from 'nanoid'
 
 // Client side of the server event WebSocket: keeps one socket open for the tab and fans parsed events
 // out to listeners, reconnecting when the server goes away (e.g. on a dev server restart). Open listeners
-// run every time the socket opens, so state missed while it was closed can be fetched again.
+// run every time the socket opens, so state missed while it was closed can be fetched again. The socket names the
+// page with a client id, the same for every reopen while the page lives, so the server keeps what the page holds
+// (such as the captured frames its Images tabs show) while its socket is closed, such as when a phone locks.
+
+// Id of this page for the server, generated on load: the documents of the page do not survive a reload, so
+// neither does the id.
+export const clientId = nanoid()
 
 // Receiver of server events.
 export type ServerEventListener = (event: ServerEvent) => void
@@ -23,6 +30,7 @@ let started = false
 // Opens the socket and schedules a reopen when it closes.
 function open() {
 	const url = new URL('/api/ws', location.href)
+	url.searchParams.set('client', clientId)
 	url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
 
 	const socket = new WebSocket(url)

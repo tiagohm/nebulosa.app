@@ -4,6 +4,7 @@ import { connectionState } from '../connection/connection'
 import { deviceState } from '../equipment/equipment'
 import { type CameraRole, roleDefinition } from '../equipment/roles'
 import { useRoleDevice } from '../equipment/useEquipment'
+import { imagesState, openCaptureFrame } from '../images/images'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { WcsOverlay } from '../platesolving/WcsOverlay'
 import { activeProfile, activeSetup, analysisSettings, autoFocusSettings, plateSolvingSettings, profileState, selectCameraView, setAutoFocusSettings, setCameraReticle } from '../profile/profile'
@@ -137,7 +138,9 @@ interface CaptureViewerProps {
 // next one is exposed or rendered, the previous one stays visible. The star markers drawn are those of
 // the frame shown, matched by its image id, so a late result never lands on a newer frame. Before any frame it shows the state of
 // the camera and the flow that fixes it. In the Auto Focus mode the frame shown is the latest one of the camera's
-// Auto Focus session, rendered apart from the captures, and the Focus Curve of the session is shown below.
+// Auto Focus session, rendered apart from the captures, and the Focus Curve of the session is shown below. Inspect in
+// Images opens exactly the frame on screen in the Images workspace, even when a newer frame arrives meanwhile; the
+// capture goes on.
 function CaptureViewer({ role, viewer, reticle, stars, wcs, focusing, curve }: CaptureViewerProps) {
 	const camera: CameraTarget = { role, ...useRoleDevice(role) }
 	const views = useSnapshot(captureViewerState)
@@ -166,7 +169,12 @@ function CaptureViewer({ role, viewer, reticle, stars, wcs, focusing, curve }: C
 			view={views[viewer] ?? FIT_VIEW}
 			onViewChange={(view) => (captureViewerState[viewer] = view)}
 			empty={<CameraState camera={camera} focusing={focusing} />}
-			toolbar={<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={() => setCameraReticle(profileState, role, !reticle)} />}
+			toolbar={
+				<>
+					<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={() => setCameraReticle(profileState, role, !reticle)} />
+					{!focusing && <IconButton icon="images" label="Inspect in Images" disabled={!rendering?.frameId} onClick={() => rendering?.frameId && inspectInImages(rendering.frameId)} />}
+				</>
+			}
 			overlays={
 				reticle || result || solution
 					? (size, view) => (
@@ -195,6 +203,13 @@ function CaptureViewer({ role, viewer, reticle, stars, wcs, focusing, curve }: C
 			</section>
 		</div>
 	)
+}
+
+// Opens a captured frame in the Images workspace and shows it there. The frame id is taken from the frame on screen
+// when the button is pressed, so a frame arriving meanwhile is never opened instead.
+function inspectInImages(frameId: string) {
+	void openCaptureFrame(imagesState, frameId)
+	navigate(routeState, { workspace: 'images' })
 }
 
 interface CameraStateProps {

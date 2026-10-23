@@ -1,11 +1,12 @@
 import type { StarDetectionJob, StarDetectionResult } from 'api'
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { latestJob, latestResult, loadResult, starsState } from './stars'
+import { latestJob, latestResult, loadImageJobs, loadResult, starsState } from './stars'
 
 // Hook of the latest star detection of an image, shared by the views that show one (the Images workspace
 // and Camera Capture): it returns the latest job of the image id and its result, and fetches the result
-// once the job completed, so only the images on screen ever download their stars.
+// once the job completed, so only the images on screen ever download their stars. An image without a known job has its
+// kept jobs fetched once, so a frame analyzed before it was opened shows its stars without a new detection.
 
 // Latest star detection of an image.
 export interface StarResultView {
@@ -26,6 +27,10 @@ export function useStarResult(imageId: string | undefined): StarResultView {
 	useEffect(() => {
 		if (completed) void loadResult(starsState, completed)
 	}, [completed])
+
+	useEffect(() => {
+		if (imageId && !job) void loadImageJobs(starsState, imageId)
+	}, [imageId, !job])
 
 	if (!imageId || !job) return {}
 	// A result is a valtio ref, so the snapshot hands out the stored object itself, never a deep copy.

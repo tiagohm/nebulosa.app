@@ -214,7 +214,7 @@ export interface CaptureFrameOpened {
 	readonly frame: CaptureFrameSummary
 }
 
-// Body of PUT /api/capture-frames/clients/:client/leases.
+// Body of PUT (or POST, for a beacon) /api/capture-frames/clients/:client/leases.
 export interface CaptureLeaseReconcileRequest {
 	// Leases the client still uses; its other leases are released.
 	readonly leases: readonly string[]
@@ -838,6 +838,11 @@ export function createCaptureFrameRoutes(registry: CaptureFrameRegistry) {
 		'/api/capture-frames/clients/:client/leases': {
 			// Reconciles the leases of a client (CaptureLeaseReconcileRequest) and answers the lost ones.
 			PUT: async (req) => {
+				const { leases } = (await req.json()) as CaptureLeaseReconcileRequest
+				return Response.json(registry.reconcile(req.params.client, leases) satisfies CaptureLeaseReconcileResponse)
+			},
+			// The same, for the beacon a page sends when it unloads, which can only POST.
+			POST: async (req) => {
 				const { leases } = (await req.json()) as CaptureLeaseReconcileRequest
 				return Response.json(registry.reconcile(req.params.client, leases) satisfies CaptureLeaseReconcileResponse)
 			},

@@ -1,10 +1,12 @@
-import type { DeriveRequest, DisplaySettings, ImageFormat, ImageInfo, PlateSolveRequest, RenderRequest, RenderResult, SaveRequest, SaveResult, StarDetectionRequest, Stretch } from 'api'
+import type { CaptureFrameOpened, CaptureFrameSummary, CaptureLeaseReconcileResponse, DeriveRequest, DisplaySettings, ImageFormat, ImageInfo, PlateSolveRequest, RenderRequest, RenderResult, SaveRequest, SaveResult, ServerEvent, StarDetectionRequest, Stretch } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
+import { clientId } from '../events'
 import { responseError } from '../http'
 import { DEFAULT_PLATE_SOLVE_REQUEST } from '../platesolving/platesolving'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { FIT_VIEW, type ViewerView } from '../viewer/transform'
+import { captureFrameUrl, frameLabel } from './captureframes'
 import type { ImageToolId } from './tools'
 
 // Image documents open in the tab's Images workspace. Each open image is split in three objects under the
@@ -30,10 +32,34 @@ import type { ImageToolId } from './tools'
 // A derived image, computed by the server from a document's pending settings, opens as a new document
 // that is unsaved until a save to a server file succeeds; the page asks before unloading while one
 // exists, and closing one is confirmed by the workspace.
+//
+// A captured frame opens by its frame id from the server's capture frame registry, under a lease that keeps its
+// document open on the server until the tab closes it; the same frame opens once, and a newer exposure never
+// changes it. A live tab follows a camera instead: it shows the latest frame of the camera, each one under its own
+// lease, and only the newest frame counts when several arrive while one is being opened. Pausing it keeps the frame
+// shown, and so does a manual analysis started on it; pinning opens the frame shown as a tab of its own. Leases
+// belong to the page (clientId); every socket reopen reconciles them, and a frame whose lease was lost is marked
+// unavailable rather than replaced by another.
 
-// Where a document's image comes from: a file of the server, or another document it was derived from
-// (by its name). Captured frames will add their own kind.
-export type ImageSource = { readonly kind: 'file'; readonly path: string } | { readonly kind: 'derived'; readonly sourceName: string }
+// Where a document's image comes from: a file of the server, another document it was derived from (by its name), a
+// captured frame (by its frame id), or the latest frames of a camera, for a live tab.
+export type ImageSource = { readonly kind: 'file'; readonly path: string } | { readonly kind: 'derived'; readonly sourceName: string } | { readonly kind: 'capture'; readonly frameId: string } | { readonly kind: 'live'; readonly connectionId: string; readonly deviceId: string }
+
+// Whether a live tab updates itself: following the camera, paused by the operator, or paused because a manual
+// analysis was started on the frame shown.
+export type LiveState = 'following' | 'paused' | 'pausedForAnalysis'
+
+// Captured frame shown by a capture or live document.
+export interface CapturedState {
+	// Frame shown, as the registry describes it; absent before a live tab shows one.
+	frame?: CaptureFrameSummary
+	// Lease keeping the document of the frame open on the server; absent when none is held.
+	lease?: string
+	// How a live tab updates itself; absent for a captured frame.
+	live?: LiveState
+	// Why the latest frame of a live tab could not be shown, or why the frame shown was lost.
+	error?: string
+}
 
 // Outcome of a save: written, refused because the file exists (a retry may overwrite it), or failed with
 // a message, such as a refused target or a write error.
@@ -65,6 +91,8 @@ export interface ImageDocument {
 	unsaved: boolean
 	// Absolute path of the server file a derived image was last saved to.
 	savedPath?: string
+	// Frame shown by a captured frame or a live tab.
+	capture?: CapturedState
 }
 
 // Display settings of a document: those being edited and those of the current rendering.
@@ -186,6 +214,9 @@ export const ORIGINAL_DISPLAY_SETTINGS: DisplaySettings = { debayer: { enabled: 
 // Pending rendering request of each document, by document key.
 const renders = new Map<string, AbortController>()
 
+// Frame a live tab is opening, by document key; only the latest one counts.
+const lives = new Map<string, string>()
+
 // Returns the initial display settings of an opened image: the unprocessed settings, debayered with the
 // image's own pattern when it is a CFA mosaic with a trusted one.
 // A derived image already stretched is shown linear, so it is not stretched twice; one derived without a
@@ -196,7 +227,8 @@ export function defaultDisplaySettings(info: ImageInfo): DisplaySettings {
 }
 
 // Returns the server file of a document: the file it was opened from, or the one a derived image was
-// last saved to; undefined for a derived image never saved.
+// last saved to; undefined for a derived image never saved and for a captured frame, whose server path is not
+// exposed.
 export function documentPath(document: Pick<ImageDocument, 'source' | 'savedPath'>): string | undefined {
 	return document.source.kind === 'file' ? document.source.path : document.savedPath
 }
@@ -562,10 +594,218 @@ export function closeImage(state: ImagesState, key: string, io: ImagesIo = brows
 	renders.delete(key)
 	if (view?.rendering) io.revokeObjectURL(view.rendering.url)
 	if (view?.display.original) io.revokeObjectURL(view.display.original.url)
-	if (document.info) release(document.info.id, io)
+	lives.delete(key)
+
+	if (document.capture) {
+		if (document.capture.lease) releaseLease(document.capture.lease, io)
+	} else if (document.info) {
+		release(document.info.id, io)
+	}
 
 	state.documents.splice(index, 1)
 	delete state.views[key]
 	delete state.tools[key]
 	if (state.activeKey === key) state.activeKey = (state.documents[index] ?? state.documents[index - 1])?.key
+}
+
+// Releases a lease of a captured frame, ignoring failures: the document is already gone from the tab.
+function releaseLease(lease: string, io: ImagesIo) {
+	void io.fetch(`/api/capture-frames/leases/${encodeURIComponent(lease)}`, { method: 'DELETE' }).catch(() => undefined)
+}
+
+// Opens a captured frame on the server under a lease of client. Resolves to the opened frame, or to the message
+// of the refusal.
+async function requestFrame(frameId: string, io: ImagesIo, client: string): Promise<CaptureFrameOpened | string> {
+	try {
+		const response = await io.fetch(`${captureFrameUrl(frameId)}/open`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ client }) })
+		if (!response.ok) return await responseError(response)
+		return (await response.json()) as CaptureFrameOpened
+	} catch (error) {
+		return message(error)
+	}
+}
+
+// Opens a captured frame as a new active document named after its file or its camera and number, rendered once with
+// its default display settings. A frame already open is shown instead, unless its document failed, which is
+// replaced. A refusal, such as a frame no longer in memory, is the document's error; another frame is never opened
+// in its place. A document closed before the server answers releases its lease.
+export async function openCaptureFrame(state: ImagesState, frameId: string, io: ImagesIo = browserIo, client: string = clientId) {
+	const existing = state.documents.find((d) => d.source.kind === 'capture' && d.source.frameId === frameId)
+
+	if (existing && existing.status !== 'error') {
+		state.activeKey = existing.key
+		return
+	}
+
+	if (existing) closeImage(state, existing.key, io)
+
+	const key = nanoid()
+	addDocument(state, { key, name: 'Captured frame', source: { kind: 'capture', frameId }, status: 'loading', unsaved: false, capture: {} })
+	const opened = await requestFrame(frameId, io, client)
+	const document = documentOf(state, key)
+
+	if (typeof opened === 'string') {
+		if (document) Object.assign(document, { status: 'error', error: opened })
+		return
+	}
+
+	if (!document) {
+		releaseLease(opened.lease, io)
+		return
+	}
+
+	document.info = ref(opened.info)
+	document.name = frameLabel(opened.frame)
+	document.status = 'ready'
+	document.capture = { frame: ref(opened.frame), lease: opened.lease }
+	const view = state.views[key]
+	if (view) view.display.pending = copySettings(defaultDisplaySettings(opened.info))
+	await applyDisplay(state, key, io)
+}
+
+// Camera a live tab follows.
+export interface LiveCamera {
+	// Id of the connection that provides it.
+	readonly connectionId: string
+	// Exact id of the camera.
+	readonly deviceId: string
+	// Name the tab is labelled with.
+	readonly name: string
+}
+
+// Opens a live tab of a camera as the active document, or shows the one already open, and shows frameId, the latest
+// available frame of the camera, when there is one; without it, the tab waits for the first captured frame.
+// Opening a live tab never commands the camera.
+export async function openLive(state: ImagesState, camera: LiveCamera, frameId?: string, io: ImagesIo = browserIo, client: string = clientId) {
+	const { connectionId, deviceId, name } = camera
+	const existing = state.documents.find((d) => d.source.kind === 'live' && d.source.connectionId === connectionId && d.source.deviceId === deviceId)
+
+	if (existing) {
+		state.activeKey = existing.key
+		return
+	}
+
+	const key = nanoid()
+	addDocument(state, { key, name: `Live · ${name}`, source: { kind: 'live', connectionId, deviceId }, status: 'ready', unsaved: false, capture: { live: 'following' } })
+	if (frameId) await showLiveFrame(state, key, frameId, io, client)
+}
+
+// Shows a frame in a live tab: opens it under a new lease and, unless a newer frame was asked for meanwhile or the
+// tab closed, replaces the frame shown, keeping zoom, pan, and display settings, then releases the lease of the
+// previous frame. The results of the previous frame (selected star, chosen solution, original rendering) are not
+// carried over. A refusal keeps the frame shown and is the tab's error.
+export async function showLiveFrame(state: ImagesState, key: string, frameId: string, io: ImagesIo = browserIo, client: string = clientId) {
+	if (!documentOf(state, key)?.capture) return
+	lives.set(key, frameId)
+	const opened = await requestFrame(frameId, io, client)
+	const document = documentOf(state, key)
+	const capture = document?.capture
+	const superseded = lives.get(key) !== frameId
+
+	if (typeof opened === 'string') {
+		if (capture && !superseded) {
+			capture.error = opened
+			lives.delete(key)
+		}
+
+		return
+	}
+
+	if (!document || !capture || superseded) {
+		releaseLease(opened.lease, io)
+		return
+	}
+
+	lives.delete(key)
+	const previous = capture.lease
+	const first = !document.info
+	document.info = ref(opened.info)
+	document.status = 'ready'
+	document.error = undefined
+	Object.assign(capture, { frame: ref(opened.frame), lease: opened.lease, error: undefined })
+
+	const view = state.views[key]
+
+	if (view) {
+		if (first) view.display.pending = copySettings(defaultDisplaySettings(opened.info))
+		if (view.display.original) io.revokeObjectURL(view.display.original.url)
+		view.display.original = undefined
+		view.stars.selected = undefined
+		view.plateSolving.selected = undefined
+	}
+
+	if (previous) releaseLease(previous, io)
+	await applyDisplay(state, key, io)
+}
+
+// Follows the registry events: a live tab following a camera shows each newer frame of it that is in memory, and
+// every open document of a frame takes the latest description of its frame (such as its file being saved).
+export function handleCapturedFrame(state: ImagesState, event: ServerEvent, io: ImagesIo = browserIo, client: string = clientId) {
+	if (event.type !== 'captureFrame:updated') return
+	const { frame, source } = event
+
+	for (const document of state.documents) {
+		const capture = document.capture
+		if (!capture) continue
+		if (capture.frame?.frameId === frame.frameId && capture.frame.revision < frame.revision) capture.frame = ref(frame)
+
+		if (document.source.kind !== 'live' || capture.live !== 'following' || document.source.connectionId !== frame.connectionId || document.source.deviceId !== frame.deviceId) continue
+		if (frame.availability !== 'memory' || frame.frameId !== source.latestFrameId || lives.get(document.key) === frame.frameId) continue
+		if (capture.frame && capture.frame.sequence >= frame.sequence) continue
+		void showLiveFrame(state, document.key, frame.frameId, io, client)
+	}
+}
+
+// Pauses a live tab, which keeps the frame shown while the camera goes on; reason tells whether the operator paused
+// it or a manual analysis did. Ignored unless the tab follows its camera.
+export function pauseLive(state: ImagesState, key: string, reason: Exclude<LiveState, 'following'> = 'paused') {
+	const capture = documentOf(state, key)?.capture
+	if (capture?.live !== 'following') return
+	capture.live = reason
+	lives.delete(key)
+}
+
+// Resumes a live tab, showing frameId, the latest available frame of its camera, when it is not the frame shown;
+// frames captured while it was paused are not replayed.
+export async function resumeLive(state: ImagesState, key: string, frameId?: string, io: ImagesIo = browserIo, client: string = clientId) {
+	const capture = documentOf(state, key)?.capture
+	if (!capture?.live || capture.live === 'following') return
+	capture.live = 'following'
+	if (frameId && frameId !== capture.frame?.frameId) await showLiveFrame(state, key, frameId, io, client)
+}
+
+// Opens the frame a live tab shows as a captured frame of its own, under its own lease; the live tab goes on.
+export async function pinLive(state: ImagesState, key: string, io: ImagesIo = browserIo, client: string = clientId) {
+	const frameId = documentOf(state, key)?.capture?.frame?.frameId
+	if (frameId) await openCaptureFrame(state, frameId, io, client)
+}
+
+// Sends the leases the documents hold to the server, which releases the other leases of the page and answers those
+// it no longer has: the frame of such a document is marked unavailable, never replaced. Run on every socket open.
+export async function reconcileCapturedFrames(state: ImagesState, io: ImagesIo = browserIo, client: string = clientId) {
+	const leases = state.documents.flatMap((d) => (d.capture?.lease ? [d.capture.lease] : []))
+	if (leases.length === 0) return
+
+	try {
+		const response = await io.fetch(`/api/capture-frames/clients/${encodeURIComponent(client)}/leases`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leases }) })
+		if (!response.ok) return
+		const { lost } = (await response.json()) as CaptureLeaseReconcileResponse
+
+		for (const document of state.documents) {
+			const capture = document.capture
+			if (!capture?.lease || !lost.includes(capture.lease)) continue
+			capture.lease = undefined
+			capture.error = 'The frame shown is no longer available on the server'
+			if (!capture.live) Object.assign(document, { status: 'error', error: 'The frame is no longer available on the server; open it again from Capture Frames' })
+		}
+	} catch {
+		// The server is unreachable; the next socket open reconciles again.
+	}
+}
+
+// Releases the leases of the page when it is unloaded, since its documents do not survive a reload.
+if (typeof window !== 'undefined') {
+	window.addEventListener('pagehide', () => {
+		if (imagesState.documents.some((d) => d.capture?.lease)) navigator.sendBeacon(`/api/capture-frames/clients/${encodeURIComponent(clientId)}/leases`, new Blob([JSON.stringify({ leases: [] })], { type: 'application/json' }))
+	})
 }

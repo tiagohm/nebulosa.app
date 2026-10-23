@@ -1,14 +1,17 @@
-import type { ImageAcquisition, ImageInfo, ImageProvenance, RenderResult } from 'api'
+import type { CaptureFrameSummary, ImageAcquisition, ImageInfo, ImageProvenance, RenderResult } from 'api'
 import type { ReactNode } from 'react'
+import { useSnapshot } from 'valtio'
+import { connectionState } from '../connection/connection'
 import { PanelSection, PlannedControls } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
+import { connectionLabel, frameUnavailableReason } from './captureframes'
 import { DisplayAdjustments } from './DisplayAdjustments'
 import { documentPath, downloadUrl, type ImageDocument } from './images'
 import type { ImageToolPanelProps } from './tools'
 
 // Image Inspector, the default contextual tool of the Images workspace: properties, the provenance and
-// save actions of a derived image, acquisition data, display adjustments with the parameters of the
+// save actions of a derived image, the camera, session, and storage of a captured frame, acquisition data, display adjustments with the parameters of the
 // current rendering, and the header of the active document, with the statistics section still to come.
 // The display adjustments edit the document's pending display settings and create derived images.
 
@@ -56,18 +59,20 @@ export function ImageInspector({ document, view, onOpen, onSaveAs }: ImageToolPa
 		<>
 			<PanelSection title="Properties">
 				<Property label="Name">{document.name}</Property>
-				<Property label="Folder">
-					{path ? (
-						<span title={path} className="block truncate">
-							{directoryOf(path)}
-						</span>
-					) : (
-						<span className="text-accent">Not saved</span>
-					)}
-				</Property>
+				{!document.capture && (
+					<Property label="Folder">
+						{path ? (
+							<span title={path} className="block truncate">
+								{directoryOf(path)}
+							</span>
+						) : (
+							<span className="text-accent">Not saved</span>
+						)}
+					</Property>
+				)}
 				{info ? (
 					<>
-						<Property label="Format">{info.origin === 'file' ? info.format.toUpperCase() : 'Derived'}</Property>
+						<Property label="Format">{info.origin === 'derived' ? 'Derived' : info.format.toUpperCase()}</Property>
 						<Property label="Size">
 							{info.width} × {info.height} px
 						</Property>
@@ -77,6 +82,7 @@ export function ImageInspector({ document, view, onOpen, onSaveAs }: ImageToolPa
 					<p className="m-0 text-ink-300">{document.status === 'loading' ? 'Opening…' : 'Unavailable'}</p>
 				)}
 			</PanelSection>
+			{document.capture?.frame && <CapturedFrame frame={document.capture.frame} live={!!document.capture.live} />}
 			{info?.origin === 'derived' && <Derivation document={document} provenance={info.provenance} infoId={info.id} onSaveAs={onSaveAs} />}
 			{info && <Acquisition info={info} />}
 			{info && view && <DisplayAdjustments documentKey={document.key} info={info} view={view} />}
@@ -114,6 +120,51 @@ function Property({ label, children }: PropertyProps) {
 			<span className="flex-none text-xs text-ink-300">{label}</span>
 			<span className="min-w-0 text-right text-ink-100 tabular-nums">{children}</span>
 		</div>
+	)
+}
+
+// Labels of the states of the write of a frame's file.
+const FILE_STATE_LABELS: Readonly<Record<NonNullable<CaptureFrameSummary['file']>, string>> = { saving: 'Saving', saved: 'Saved', failed: 'Save failed' }
+
+interface CapturedFrameProps {
+	// Frame shown.
+	readonly frame: CaptureFrameSummary
+	// Whether a live tab shows it.
+	readonly live: boolean
+}
+
+// Camera, session, and storage of a captured frame, as the capture frame registry describes it.
+function CapturedFrame({ frame, live }: CapturedFrameProps) {
+	const connections = useSnapshot(connectionState)
+	const unavailable = frameUnavailableReason(frame)
+
+	return (
+		<>
+			<PanelSection title="Capture">
+				<Property label="Camera">{frame.cameraName}</Property>
+				<Property label="Connection">{connectionLabel(frame.connectionId, connections.servers, connections.connections)}</Property>
+				<Property label="Frame">#{frame.generation}</Property>
+				<Property label="Frame type">{frame.frameType}</Property>
+				<Property label="Captured (UTC)">{formatDate(new Date(frame.time).toISOString())}</Property>
+				<Property label="Frame ID">
+					<span title={frame.frameId} className="block truncate">
+						{frame.frameId}
+					</span>
+				</Property>
+				{live && <Property label="Shown by">Live tab</Property>}
+			</PanelSection>
+			<PanelSection title="Storage">
+				<Property label="State">{frame.file ? FILE_STATE_LABELS[frame.file] : 'Temporary (preview only)'}</Property>
+				{frame.fileName && (
+					<Property label="File">
+						<span title={frame.fileName} className="block truncate">
+							{frame.fileName}
+						</span>
+					</Property>
+				)}
+				{unavailable && <Property label="Registry">{unavailable}</Property>}
+			</PanelSection>
+		</>
 	)
 }
 

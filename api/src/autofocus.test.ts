@@ -181,7 +181,6 @@ describe('fitting modes', () => {
 			expect(page.latest!.file).toBeUndefined()
 			expect(page.frames).toEqual([])
 			expect(images.name(final.verificationImageId!)).toBeDefined()
-			expect(final.latestFrame).toMatchObject({ imageId: final.verificationImageId, capture: final.measurementCount + 1, width: 512, height: 512 })
 			expect(record.measurements.every((measurement) => images.name(measurement.imageId!) === undefined)).toBeTrue()
 
 			expect(operationEvents.findLast((event) => event.operation.operationId === operationId)!.operation).toMatchObject({ kind: 'focuser.autofocus', state: 'succeeded', devices: [{ connectionId: id, deviceId: cameraId }, focuserDevice] })

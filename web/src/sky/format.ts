@@ -33,14 +33,14 @@ export function formatAngularSize(angle: number) {
 
 // Formats a solar-system distance in AU: kilometers near the Earth, AU otherwise.
 export function formatSolarSystemDistance(au: number) {
-	return au < KILOMETER_DISTANCE_LIMIT ? `${Math.round(au * AU_KM).toFixed(3)} km` : `${au.toFixed(au < 10 ? 4 : 2)} AU`
+	return au < KILOMETER_DISTANCE_LIMIT ? `${Math.round(au * AU_KM).toLocaleString('en-US')} km` : `${au.toFixed(au < 10 ? 4 : 2)} AU`
 }
 
 // Formats an interstellar distance in AU as light-years, or millions of light-years beyond that.
 export function formatStellarDistance(au: number) {
 	const ly = au / AU_PER_LIGHT_YEAR
 	if (ly >= 1e6) return `${(ly / 1e6).toFixed(ly >= 1e8 ? 0 : 1)} Mly`
-	return `${ly.toFixed(1)} ly`
+	return `${ly >= 100 ? Math.round(ly).toLocaleString('en-US') : ly.toFixed(1)} ly`
 }
 
 // Formats a visual magnitude with two decimals.

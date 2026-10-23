@@ -1,7 +1,6 @@
 import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession, CaptureSnapshot, CaptureSnoop, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import type { EquipmentSetup } from '../equipment/roles'
-import { type ImagesIo, ORIGINAL_DISPLAY_SETTINGS, browserIo } from '../images/images'
 import type { CameraAcquisitionSettings, CameraExposureSettings } from '../profile/profile'
 
 // Camera captures as this tab knows them. The server owns every capture, whichever tab started it, so this
@@ -9,26 +8,11 @@ import type { CameraAcquisitionSettings, CameraExposureSettings } from '../profi
 // and, on every socket (re)open, by the capture snapshot, so a reloaded tab or another tab shows a capture
 // in progress and never starts a second one because it found no local state. Cameras are addressed by
 // their exact connection and device ids, never by role. The store also keeps the capabilities of the
-// cameras the panel shows, the outcome of this tab's last command to each camera, and the rendering of
-// each camera's latest frame, which replaces the previous one only once it is ready, so the viewer never
-// goes blank while the next frame is exposed or a rendering fails.
+// cameras the panel shows and the outcome of this tab's last command to each camera. Frames are shown by the
+// Images camera tabs through the capture frame registry, never rendered here.
 
 // Phases of a capture that has ended.
 const ENDED_PHASES: ReadonlySet<CaptureSession['phase']> = new Set(['completed', 'stopped', 'aborted', 'failed'])
-
-// Rendering of a camera's latest frame.
-export interface FrameRendering {
-	// Image document the rendering was made from.
-	readonly imageId: string
-	// Identity of the captured frame shown (capture session id and generation); absent for an Auto Focus frame.
-	readonly frameId?: string
-	// Object URL of the rendered JPEG, owned by the store.
-	readonly url: string
-	// Width of the image, in pixels.
-	readonly width: number
-	// Height of the image, in pixels.
-	readonly height: number
-}
 
 // Capture state of the tab, by camera key (cameraKey).
 export interface CaptureRuntime {
@@ -42,20 +26,13 @@ export interface CaptureRuntime {
 	pending: Record<string, boolean>
 	// Why this tab's last command to a camera failed; cleared by its next command.
 	errors: Record<string, string>
-	// Rendering shown for each camera's latest frame.
-	renderings: Record<string, FrameRendering>
-	// Why the latest frame of a camera could not be rendered; cleared by its next rendering.
-	renderErrors: Record<string, string>
 }
 
 // Capture state of the tab.
-export const captureRuntime = proxy<CaptureRuntime>({ sessions: {}, frames: {}, capabilities: {}, pending: {}, errors: {}, renderings: {}, renderErrors: {} })
+export const captureRuntime = proxy<CaptureRuntime>({ sessions: {}, frames: {}, capabilities: {}, pending: {}, errors: {} })
 
 // Counter of snapshot refreshes; a response is applied only if no later refresh started.
 let generation = 0
-
-// Rendering request in flight of each camera, by camera key.
-const renders = new Map<string, { readonly imageId: string; readonly controller: AbortController }>()
 
 // Returns the key of a camera: its connection id and exact device id.
 export function cameraKey(connectionId: string, deviceId: string) {
@@ -259,27 +236,11 @@ export function captureCount(session: Pick<CaptureSession, 'captured' | 'count'>
 	return session.count === undefined ? `Captured ${session.captured}` : `Captured ${session.captured} / ${session.count}`
 }
 
-// State of a camera's latest frame in this tab, independent of the capture's outcome:
-// - received: the frame arrived and is not rendered yet.
-// - ready: the frame is rendered and shown.
-// - error: the frame could not be decoded on the server or rendered here.
-export type FrameState = 'received' | 'ready' | 'error'
-
-// Label of each frame state.
-export const FRAME_STATE_LABELS: Readonly<Record<FrameState, string>> = { received: 'Received', ready: 'Ready', error: 'Error' }
-
 // State of a frame's file: not-saved for a frame that is only previewed, otherwise its CaptureFileState.
 export type FileState = 'not-saved' | NonNullable<CaptureFrame['file']>
 
 // Label of each file state.
 export const FILE_STATE_LABELS: Readonly<Record<FileState, string>> = { 'not-saved': 'Not Saved', saving: 'Saving', saved: 'Saved', failed: 'Save Failed' }
-
-// Returns the state of a camera's latest frame from its rendering, the error of its last rendering, and the
-// session's preview error. A frame is ready once its own rendering is shown, whatever happened since.
-export function frameState(frame: Pick<CaptureFrame, 'imageId'>, rendering?: Pick<FrameRendering, 'imageId'>, renderError?: string, previewError?: string): FrameState {
-	if (rendering?.imageId === frame.imageId) return 'ready'
-	return renderError || previewError ? 'error' : 'received'
-}
 
 // Returns the state of a frame's file.
 export function fileState(frame: Pick<CaptureFrame, 'file'>): FileState {
@@ -289,35 +250,4 @@ export function fileState(frame: Pick<CaptureFrame, 'file'>): FileState {
 // Returns the time a session has run, or ran, in seconds; now is Unix milliseconds.
 export function captureElapsed(session: Pick<CaptureSession, 'startedAt' | 'endedAt'>, now: number) {
 	return Math.max(0, ((session.endedAt ?? now) - session.startedAt) / 1000)
-}
-
-// Renders a camera's latest frame with an auto stretch, debayering a mosaic with its own pattern, unless it
-// is already rendered or being rendered. The rendering replaces the camera's previous one only once it is
-// ready; a frame closed on the server meanwhile (a newer one replaced it) is skipped silently, and any
-// other failure keeps the previous rendering and records why.
-export async function renderFrame(state: CaptureRuntime, key: string, frame: Pick<CaptureFrame, 'imageId' | 'cfa' | 'width' | 'height'> & Partial<Pick<CaptureFrame, 'sessionId' | 'generation'>>, io: ImagesIo = browserIo) {
-	if (state.renderings[key]?.imageId === frame.imageId || renders.get(key)?.imageId === frame.imageId) return
-
-	renders.get(key)?.controller.abort()
-	const controller = new AbortController()
-	renders.set(key, { imageId: frame.imageId, controller })
-
-	try {
-		const settings = { ...ORIGINAL_DISPLAY_SETTINGS, ...(frame.cfa && { debayer: { enabled: true, pattern: 'auto' } as const }) }
-		const response = await io.fetch(`/api/images/${encodeURIComponent(frame.imageId)}/render`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ settings }), signal: controller.signal })
-		if (response.status === 404 || response.status === 409) return
-		if (!response.ok) throw new Error(await responseError(response, 'Unable to render the frame.'))
-		const blob = await response.blob()
-		if (controller.signal.aborted) return
-
-		const previous = state.renderings[key]
-		const frameId = frame.sessionId !== undefined && frame.generation !== undefined ? `${frame.sessionId}:${frame.generation}` : undefined
-		state.renderings[key] = { imageId: frame.imageId, frameId, url: io.createObjectURL(blob), width: frame.width, height: frame.height }
-		delete state.renderErrors[key]
-		if (previous) io.revokeObjectURL(previous.url)
-	} catch (error) {
-		if (!controller.signal.aborted) state.renderErrors[key] = error instanceof Error ? error.message : 'Unable to reach the server.'
-	} finally {
-		if (renders.get(key)?.controller === controller) renders.delete(key)
-	}
 }

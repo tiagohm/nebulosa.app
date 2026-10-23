@@ -13,7 +13,7 @@ import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
-import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, FRAME_STATE_LABELS, type FrameState, frameState, refreshCapabilities, startCapture, stopCapture } from './capture'
+import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, refreshCapabilities, startCapture, stopCapture } from './capture'
 import { CameraSettings, ExposureSection, formatSeconds } from './ExposureSettings'
 
 // Contextual panel sections of Camera Acquisition, the camera operation of the Images camera tabs: the exposure, the acquisition mode with its start and stop commands, the state of the running or last capture, the
@@ -166,7 +166,7 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 				)}
 				{settings.output.mode === 'preview-only' && <p className="m-0 text-xs leading-4 text-ink-300">Frames are kept in memory for viewing only; nothing is written.</p>}
 			</PanelSection>
-			{frame && <LastFrame frame={frame} state={frameState(frame, key ? runtime.renderings[key] : undefined, key ? runtime.renderErrors[key] : undefined, session?.previewError)} />}
+			{frame && <LastFrame frame={frame} />}
 			<FileExplorerModal
 				open={choosingDirectory}
 				mode="directory"
@@ -276,19 +276,17 @@ function formatElapsed(seconds: number) {
 interface LastFrameProps {
 	// Latest previewed frame of the camera.
 	readonly frame: CaptureFrame
-	// State of the frame in this tab.
-	readonly state: FrameState
 }
 
 // State and metadata of the camera's latest frame, as its header and the capture report them; a datum the
 // frame does not carry is not shown. The frame and its file keep their own states whatever the outcome of
-// the capture, so the last frame of an aborted capture is still shown as ready and saved.
-function LastFrame({ frame, state }: LastFrameProps) {
+// the capture, so the last frame of an aborted capture is still shown as saved. The frame itself is shown by the
+// Images camera tab.
+function LastFrame({ frame }: LastFrameProps) {
 	const { acquisition } = frame
 	const file = fileState(frame)
 	const rows: [string, string, boolean?][] = [
 		['Frame', `#${frame.generation} · ${frame.frameType}`],
-		['State', FRAME_STATE_LABELS[state], state === 'error'],
 		['File', FILE_STATE_LABELS[file], file === 'failed'],
 		['Dimensions', `${frame.width} × ${frame.height}${frame.channels === 3 ? ' RGB' : frame.cfa ? ` ${frame.cfa}` : ''}`],
 	]

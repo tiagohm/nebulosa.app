@@ -1,13 +1,12 @@
 import { expect, test } from 'bun:test'
 import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession } from 'api'
 import { proxy } from 'valtio'
-import type { ImagesIo } from '../images/images'
 import { DEFAULT_ACQUISITION_SETTINGS, DEFAULT_EXPOSURE_SETTINGS } from '../profile/profile'
-import { cameraKey, captureCount, captureElapsed, captureRequest, fitExposure, type CaptureRuntime, captureRunning, captureSnoop, captureStatus, fileState, frameState, handleCaptureEvent, refreshCaptures, renderFrame, startCapture, stopCapture } from './capture'
+import { cameraKey, captureCount, captureElapsed, captureRequest, fitExposure, type CaptureRuntime, captureRunning, captureSnoop, captureStatus, fileState, handleCaptureEvent, refreshCaptures, startCapture, stopCapture } from './capture'
 import { convertExposure, exposureUnitOf, fromSeconds, toSeconds } from './ExposureTimeInput'
 
 function newState() {
-	return proxy<CaptureRuntime>({ sessions: {}, frames: {}, capabilities: {}, pending: {}, errors: {}, renderings: {}, renderErrors: {} })
+	return proxy<CaptureRuntime>({ sessions: {}, frames: {}, capabilities: {}, pending: {}, errors: {} })
 }
 
 // The request of the default forms.
@@ -139,41 +138,6 @@ test('describes the state of a capture', () => {
 	expect(captureRunning(undefined)).toBeFalse()
 })
 
-test('keeps the previous rendering until the next frame is rendered, and when it was closed meanwhile', async () => {
-	const state = newState()
-	const key = cameraKey('c', 'cam')
-	const revoked: string[] = []
-	let status = 200
-	let created = 0
-	const io: ImagesIo = {
-		fetch: () => Promise.resolve(status === 200 ? new Response(new Blob(['jpeg'])) : Response.json({ error: 'Image not found' }, { status })),
-		createObjectURL: () => `blob:${++created}`,
-		revokeObjectURL: (url) => revoked.push(url),
-	}
-
-	await renderFrame(state, key, frame({ imageId: 'i1' }), io)
-	expect(state.renderings[key]).toEqual({ imageId: 'i1', frameId: 's1:1', url: 'blob:1', width: 64, height: 32 })
-
-	await renderFrame(state, key, frame({ imageId: 'i1', file: 'saved' }), io)
-	expect(created).toBe(1)
-
-	status = 404
-	await renderFrame(state, key, frame({ imageId: 'i2' }), io)
-	expect(state.renderings[key]?.imageId).toBe('i1')
-	expect(state.renderErrors[key]).toBeUndefined()
-
-	status = 500
-	await renderFrame(state, key, frame({ imageId: 'i3' }), io)
-	expect(state.renderings[key]?.imageId).toBe('i1')
-	expect(state.renderErrors[key]).toBe('Image not found')
-
-	status = 200
-	await renderFrame(state, key, frame({ imageId: 'i4', width: 10, height: 10 }), io)
-	expect(state.renderings[key]).toEqual({ imageId: 'i4', frameId: 's1:1', url: 'blob:2', width: 10, height: 10 })
-	expect(revoked).toEqual(['blob:1'])
-	expect(state.renderErrors[key]).toBeUndefined()
-})
-
 test('converts exposure times between units without float noise', () => {
 	expect(fromSeconds(0.000032, 'μs')).toBe(32)
 	expect(fromSeconds(0.0015, 'ms')).toBe(1.5)
@@ -189,14 +153,6 @@ test('converts exposure times between units without float noise', () => {
 	expect(convertExposure(1.5, 'ms')).toBe(1.5)
 	expect(convertExposure(1.5, 's')).toBe(2)
 	expect(convertExposure(0.001, 'm')).toBe(60)
-})
-
-test('keeps the frame state apart from the capture outcome', () => {
-	expect(frameState(frame({ imageId: 'i2' }))).toBe('received')
-	expect(frameState(frame({ imageId: 'i2' }), { imageId: 'i1' })).toBe('received')
-	expect(frameState(frame({ imageId: 'i2' }), { imageId: 'i2' }, 'Image not found')).toBe('ready')
-	expect(frameState(frame({ imageId: 'i2' }), { imageId: 'i1' }, 'Image not found')).toBe('error')
-	expect(frameState(frame({ imageId: 'i2' }), undefined, undefined, 'Unable to decode the frame')).toBe('error')
 })
 
 test('reports the file state of previewed and saved frames', () => {

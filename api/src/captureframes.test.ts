@@ -426,6 +426,21 @@ describe('persistence', () => {
 		expect(restarted.registry.snapshot().sources[0].latestRestored).toBeFalse()
 	})
 
+	test('a restart never brings back an Auto Focus frame, which offers the newest saved frame as Latest saved', async () => {
+		const { registry, preview, file } = setup()
+		await preview(1, { path: join(root, 'restart-saved-1.fits') })
+		await preview(1, { sessionId: 'focus', origin: 'autofocus' })
+		await registry.flush()
+		expect(readFileSync(file, 'utf-8')).not.toContain('focus:1')
+
+		const restarted = setup({ file })
+		const page = await restarted.registry.recent('connection', 'camera')
+		expect(page.latest).toBeUndefined()
+		expect(await restarted.registry.frame('focus:1')).toBeUndefined()
+		expect(page.frames.map((frame) => [frame.frameId, frame.origin])).toEqual([['session:1', 'capture']])
+		expect(restarted.registry.snapshot().sources[0]).toMatchObject({ latestFrameId: undefined, latestAvailableFrameId: 'session:1', latestRestored: true })
+	})
+
 	test('the file holds no document id nor previewed-only frame', async () => {
 		const { registry, preview, file } = setup()
 		const info = await preview(1)

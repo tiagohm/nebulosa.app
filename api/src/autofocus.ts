@@ -16,7 +16,7 @@ import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureFrame, type CaptureSettings, type CaptureSnoop, snoopedDevices } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, errorResponse, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
-import type { ImageInfo, ImageStore } from './images'
+import type { ImageStore } from './images'
 import type { OperationDevice, OperationRegistry } from './operations'
 import { StarDetectionError, type StarDetectionPreparation, type StarDetectionRequest, type StarDetectionService, type StarDetectorProvider } from './stars'
 
@@ -118,22 +118,6 @@ export interface FocusMeasurement {
 	readonly time: number
 }
 
-// Latest frame of a session, as recorded in the capture frame registry.
-export interface AutoFocusFrame {
-	// Id of the capture document.
-	readonly imageId: string
-	// Frame number within the session, from 1; the verification frame follows the sampled ones.
-	readonly capture: number
-	// Width of the image, in pixels.
-	readonly width: number
-	// Height of the image, in pixels.
-	readonly height: number
-	// Bayer pattern of a mono mosaic; absent for a plain mono or color image.
-	readonly cfa?: ImageInfo['cfa']
-	// Instant the exposure was commanded, Unix milliseconds (UTC).
-	readonly time: number
-}
-
 // Session record published to clients, without its measurements and curve.
 export interface AutoFocusSessionSummary {
 	// Id of the session.
@@ -162,8 +146,6 @@ export interface AutoFocusSessionSummary {
 	readonly measurementCount: number
 	// Latest sampled frame.
 	readonly lastMeasurement?: FocusMeasurement
-	// Latest frame taken, sampled or verifying; its document may since have been closed by the registry.
-	readonly latestFrame?: AutoFocusFrame
 	// Best focus the curve placed, in steps (rounded); present once the curve was accepted.
 	readonly estimatedPosition?: number
 	// HFD of the fitted curve at the best focus, in pixels.
@@ -467,7 +449,6 @@ export class AutoFocusSessions {
 			const frame: CaptureFrame = { imageId: info.id, sessionId, ...camera, generation: capture, time, frameType: 'LIGHT', width, height, channels, cfa, bitpix, acquisition }
 			this.frames.previewed(info, frame, cameraName, 'autofocus')
 			if (session.frame) session.frame.imageId = info.id
-			this.#update(session, { latestFrame: { imageId: info.id, capture, width: info.width, height: info.height, ...(info.cfa && { cfa: info.cfa }), time } })
 
 			const result = await this.stars.measure(info.id, preparation, signal, { kind: 'autofocus', sessionId, ...camera, frameId, capture })
 			detail = { detectedCount: result.detectedCount, acceptedCount: result.acceptedCount, elapsed: result.elapsed, warnings: result.measurement === 'ok' ? result.warnings : [...result.warnings, result.measurement === 'noStars' ? 'Too few accepted stars to measure the HFD.' : 'The HFD could not be measured.'] }

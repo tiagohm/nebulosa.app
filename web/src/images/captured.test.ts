@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { CaptureFrameSummary, CaptureSourceSummary, DisplaySettings, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import { type CaptureFramesState, frameLabel, frameUnavailableReason, handleCaptureFramesEvent, loadRecentFrames, refreshCaptureFrames } from './captureframes'
-import { applyDisplay, cameraTabKey, closeImage, editDisplay, handleCapturedFrame, holdCameraFrame, type ImagesIo, type ImagesState, isClosable, ORIGINAL_DISPLAY_SETTINGS, reconcileCameraTabs, reconcileCapturedFrames, selectCameraFrame, setImageView } from './images'
+import { applyDisplay, cameraTabKey, closeImage, connectionCameraTab, editDisplay, handleCapturedFrame, holdCameraFrame, type ImagesIo, type ImagesState, isClosable, ORIGINAL_DISPLAY_SETTINGS, reconcileCameraTabs, reconcileCapturedFrames, selectCameraFrame, setImageView } from './images'
 
 interface Call {
 	readonly url: string
@@ -505,5 +505,17 @@ describe('frame registry mirror', () => {
 		expect(frameLabel(frame(12, { fileName: 'm42_0012.fit' }))).toBe('m42_0012.fit')
 		expect(frameUnavailableReason(frame(1))).toBeUndefined()
 		expect(frameUnavailableReason(frame(1, { availability: 'unavailable', reason: 'fileMissing' }))).toBe('Saved file missing')
+	})
+})
+
+describe('mount nudge tab', () => {
+	test('opens on the preferred camera of the connection, then on its first camera tab, never on another connection', () => {
+		const tab = (connectionId: string, deviceId: string) => ({ key: cameraTabKey(connectionId, deviceId), source: { kind: 'camera', connectionId, deviceId } as const })
+		const state = { documents: [{ key: 'file', source: { kind: 'file', path: '/m42.fits' } as const }, tab('other', 'cam'), tab('conn', 'guide'), tab('conn', 'main')] }
+
+		expect(connectionCameraTab(state, 'conn', 'main')).toBe(cameraTabKey('conn', 'main'))
+		expect(connectionCameraTab(state, 'conn', 'gone')).toBe(cameraTabKey('conn', 'guide'))
+		expect(connectionCameraTab(state, 'conn')).toBe(cameraTabKey('conn', 'guide'))
+		expect(connectionCameraTab(state, 'none', 'main')).toBeUndefined()
 	})
 })

@@ -1,5 +1,4 @@
 import type { ComponentType } from 'react'
-import { CaptureWorkspace } from '../capture/CaptureWorkspace'
 import { ImagesWorkspace } from '../images/ImagesWorkspace'
 import { SkyWorkspace } from '../sky/SkyWorkspace'
 import { ToolsWorkspace } from '../tools/ToolsWorkspace'
@@ -23,7 +22,6 @@ export interface WorkspaceDefinition {
 
 // Definition of every workspace, by id.
 const DEFINITIONS: Readonly<Record<WorkspaceId, WorkspaceDefinition>> = {
-	capture: { id: 'capture', label: 'Capture', icon: 'capture', component: CaptureWorkspace },
 	images: { id: 'images', label: 'Images', icon: 'images', component: ImagesWorkspace },
 	sky: { id: 'sky', label: 'Sky', icon: 'sky', component: SkyWorkspace },
 	tools: { id: 'tools', label: 'Tools', icon: 'tools', component: ToolsWorkspace },

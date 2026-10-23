@@ -1,8 +1,8 @@
 import type { AutoFocusRequest, CaptureRequest, StarDetectionRequest } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
-import { CAMERA_ROLES, type CameraRole, conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
-import { type CaptureMode, captureModeOf, WORKSPACE_IDS, type WorkspaceId } from '../shell/route'
+import { CAMERA_ROLES, conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
+import { WORKSPACE_IDS, type WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
 import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
 import { DEFAULT_ASTAP_SETTINGS, DEFAULT_BUILTIN_SETTINGS, DEFAULT_STAR_REQUEST } from '../stars/stars'
@@ -26,7 +26,8 @@ export const LAST_PROFILE_KEY = 'nebulosa:lastProfileId'
 // version 2 stores the device id and name; version 3 names the Capture modes auto-focus and tppa,
 // which version 2 called focus-calibrator and polar-alignment; version 4 keeps the camera forms by
 // physical camera (cameras) instead of by camera role, and drops the post-capture analysis and plate
-// solving of the frames of a capture.
+// solving of the frames of a capture. The preferences of the Capture workspace (capture), removed since, are ignored
+// when read.
 export const PROFILES_VERSION = 4
 
 // Name of the profile created when none is stored.
@@ -41,8 +42,6 @@ export interface ProfileSettings {
 	// Server directory an image was opened from last, where the file explorer starts; absent before the
 	// first image is opened.
 	lastImageDirectory?: string
-	// Camera view and per-camera presentation preferences of the Capture workspace.
-	capture: CaptureSettings
 	// Forms of each physical camera edited so far, by saved connection id, then device id.
 	cameras: Record<string, Record<string, CameraSettings>>
 	// Preferences of the Sky workspace.
@@ -96,16 +95,6 @@ export interface SkyFramingSettings {
 	// Position angle of the Equipment Setup field's top edge in degrees, from north towards east, [0, 360);
 	// absent means 0.
 	equipmentRotation?: number
-}
-
-// Presentation preferences of one Capture camera view. They belong to the camera role, not to the
-// device assigned to it, so replacing the device keeps them.
-export interface CameraViewSettings {
-	// Operational mode selected last in the camera view.
-	mode: CaptureMode
-	// Whether the viewer's reticle is shown; absent follows the mode's default overlays. Selecting
-	// another mode clears it.
-	reticle?: boolean
 }
 
 // Exposure and camera settings of one physical camera, shared by every operation that takes its frames (Camera
@@ -164,16 +153,14 @@ export interface AutoFocusSettings {
 	settleDelay: number
 	// Longest star detection of one frame, in seconds; > 0.
 	measureTimeout: number
-	// Whether the Focus Curve is expanded below the viewer.
-	curve: boolean
 }
 
 // Signal aperture radius of the built-in detector of an Auto Focus, in pixels: large enough to measure the
 // defocused stars at the ends of a focus curve, which the fixed 4 px aperture saturates.
 export const AUTO_FOCUS_APERTURE = 32
 
-// Auto Focus form of a view that has none yet: frames measured by the built-in detector with a grown aperture, a
-// hyperbolic fit over 4 positions on each side, and the Focus Curve shown.
+// Auto Focus form of a camera that has none yet: frames measured by the built-in detector with a grown aperture, and
+// a hyperbolic fit over 4 positions on each side.
 export const DEFAULT_AUTO_FOCUS_SETTINGS: AutoFocusSettings = {
 	detection: { ...DEFAULT_STAR_REQUEST, detector: { ...DEFAULT_BUILTIN_SETTINGS, maximumRadius: AUTO_FOCUS_APERTURE } },
 	fittingMode: 'HYPERBOLIC',
@@ -182,15 +169,6 @@ export const DEFAULT_AUTO_FOCUS_SETTINGS: AutoFocusSettings = {
 	rmsdThreshold: 0,
 	settleDelay: 0,
 	measureTimeout: 60,
-	curve: true,
-}
-
-// Capture workspace preferences of a profile. Only presentation is kept: never images, devices, or operations.
-export interface CaptureSettings {
-	// Camera role of the view selected last; absent before Capture is first opened.
-	activeCamera?: CameraRole
-	// Preferences of each camera view used so far, by camera role.
-	views: Partial<Record<CameraRole, CameraViewSettings>>
 }
 
 // A complete working environment: the selected connection, the equipment assigned on each connection,
@@ -238,31 +216,13 @@ export const profileState = proxy<ProfileState>({ profiles: [], activeId: '', op
 
 // Returns the default preferences of a new profile.
 export function defaultSettings(): ProfileSettings {
-	return { panels: {}, capture: { views: {} }, cameras: {}, sky: {} }
+	return { panels: {}, cameras: {}, sky: {} }
 }
 
-// Restores persisted Capture preferences, dropping unknown camera roles and invalid values and reading
-// the mode ids of earlier versions. Profiles written before camera views existed have none and get the
-// defaults.
-function normalizeCapture(value: unknown, capture: CaptureSettings) {
-	if (!isRecord(value)) return
-	if (isCameraRole(value.activeCamera)) capture.activeCamera = value.activeCamera
-
-	if (!isRecord(value.views)) return
-
-	for (const role of CAMERA_ROLES) {
-		const view = value.views[role]
-		if (!isRecord(view)) continue
-		const settings: CameraViewSettings = { mode: captureModeOf(view.mode) ?? 'camera' }
-		if (typeof view.reticle === 'boolean') settings.reticle = view.reticle
-		capture.views[role] = settings
-	}
-}
-
-// Acquisition modes of the Camera Capture form.
+// Acquisition modes of the Camera Acquisition form.
 const EXPOSURE_MODES: ReadonlySet<string> = new Set<CameraAcquisitionSettings['exposureMode']>(['single', 'fixed', 'loop'])
 
-// Frame types of the Camera Capture form.
+// Frame types of the Camera Acquisition form.
 const FRAME_TYPES: ReadonlySet<string> = new Set<CameraAcquisitionSettings['frameType']>(['LIGHT', 'DARK', 'FLAT', 'BIAS'])
 
 // Returns a number at least min, or the fallback for anything else; integer keeps whole numbers only.
@@ -409,7 +369,6 @@ function normalizeAutoFocus(value: unknown): AutoFocusSettings | undefined {
 		rmsdThreshold: numberAtLeast(value.rmsdThreshold, 0, defaults.rmsdThreshold),
 		settleDelay: numberAtLeast(value.settleDelay, 0, defaults.settleDelay),
 		measureTimeout: typeof value.measureTimeout === 'number' && Number.isFinite(value.measureTimeout) && value.measureTimeout > 0 ? value.measureTimeout : defaults.measureTimeout,
-		curve: value.curve !== false,
 	}
 }
 
@@ -537,7 +496,6 @@ function normalizeSettings(value: unknown): ProfileSettings {
 
 	if (typeof value.lastImageDirectory === 'string' && value.lastImageDirectory) settings.lastImageDirectory = value.lastImageDirectory
 
-	normalizeCapture(value.capture, settings.capture)
 	settings.cameras = normalizeCameras(value.cameras)
 	normalizeSky(value.sky, settings.sky)
 	const telescope = normalizeTelescope(value.telescope)
@@ -812,28 +770,6 @@ export function setLastImageDirectory(state: ProfileState, directory: string) {
 	const profile = activeProfile(state)
 	if (profile.settings.lastImageDirectory === directory) return
 	profile.settings.lastImageDirectory = directory
-	touch(profile)
-}
-
-// Remembers in the active profile the Capture camera view shown and its mode. Selecting another mode
-// clears the view's reticle choice, so the new mode's default overlays apply. The equipment setup is
-// never changed, and nothing is started or stopped.
-export function selectCameraView(state: ProfileState, role: CameraRole, mode: CaptureMode) {
-	const capture = activeProfile(state).settings.capture
-	const view = capture.views[role]
-	if (capture.activeCamera === role && view?.mode === mode) return
-	capture.activeCamera = role
-	if (view?.mode !== mode) capture.views[role] = { mode }
-	touch(activeProfile(state))
-}
-
-// Shows or hides the viewer's reticle of a Capture camera view in the active profile; other camera views
-// keep theirs.
-export function setCameraReticle(state: ProfileState, role: CameraRole, reticle: boolean) {
-	const profile = activeProfile(state)
-	const view = (profile.settings.capture.views[role] ??= { mode: 'camera' })
-	if (view.reticle === reticle) return
-	view.reticle = reticle
 	touch(profile)
 }
 

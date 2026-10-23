@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { proxy } from 'valtio'
-import { type CaptureRoute, DEFAULT_ROUTE, navigate, openWorkspace, parseRoute, redirect, type RouteState, routePath } from './route'
+import { DEFAULT_ROUTE, navigate, openWorkspace, parseRoute, redirect, type RouteState, routePath } from './route'
 
 function newState(): RouteState {
 	return proxy<RouteState>({ route: DEFAULT_ROUTE })
@@ -13,12 +13,11 @@ function fakeHistory() {
 }
 
 describe('parse', () => {
-	test('reads workspaces, capture cameras, and capture modes', () => {
+	test('reads workspaces and tools', () => {
 		expect(parseRoute('/images')).toEqual({ workspace: 'images' })
 		expect(parseRoute('/tools/')).toEqual({ workspace: 'tools' })
 		expect(parseRoute('/tools/alpaca-server')).toEqual({ workspace: 'tools', tool: 'alpaca-server' })
 		expect(parseRoute('/tools/bogus')).toEqual({ workspace: 'tools' })
-		expect(parseRoute('/capture/guide/mount-nudge')).toEqual({ workspace: 'capture', camera: 'guide', mode: 'mount-nudge' })
 		expect(parseRoute('/equipment')).toEqual({ workspace: 'equipment' })
 		expect(parseRoute('/equipment/abc123/extra')).toEqual({ workspace: 'equipment', device: 'abc123' })
 		expect(routePath({ workspace: 'equipment' })).toBe('/equipment')
@@ -34,26 +33,16 @@ describe('parse', () => {
 		expect(routePath({ workspace: 'settings', tool: 'astap' })).toBe('/settings/external-tools/astap')
 	})
 
-	test('reads capture paths written before camera views', () => {
-		expect(parseRoute('/capture/mount-nudge')).toEqual({ workspace: 'capture', camera: 'main', mode: 'mount-nudge' })
-	})
-
-	test('reads the mode ids of earlier versions', () => {
-		expect(parseRoute('/capture/guide/focus-calibrator')).toEqual({ workspace: 'capture', camera: 'guide', mode: 'auto-focus' })
-		expect(parseRoute('/capture/polar-alignment')).toEqual({ workspace: 'capture', camera: 'main', mode: 'tppa' })
-		expect(parseRoute('/capture/main/constructor')).toEqual({ workspace: 'capture', camera: 'main', mode: 'camera' })
-	})
-
-	test('falls back for unknown paths, cameras, and modes', () => {
+	test('opens Images for empty and unknown paths, the removed Capture workspace included', () => {
+		expect(DEFAULT_ROUTE).toEqual({ workspace: 'images' })
 		expect(parseRoute('/')).toEqual(DEFAULT_ROUTE)
 		expect(parseRoute('/sequencer')).toEqual(DEFAULT_ROUTE)
-		expect(parseRoute('/capture')).toEqual({ workspace: 'capture', camera: 'main', mode: 'camera' })
-		expect(parseRoute('/capture/bogus')).toEqual({ workspace: 'capture', camera: 'main', mode: 'camera' })
-		expect(parseRoute('/capture/guide/bogus')).toEqual({ workspace: 'capture', camera: 'guide', mode: 'camera' })
+		expect(parseRoute('/capture')).toEqual(DEFAULT_ROUTE)
+		expect(parseRoute('/capture/main/auto-focus')).toEqual(DEFAULT_ROUTE)
 	})
 
 	test('round-trips canonical paths', () => {
-		for (const path of ['/capture/main/camera', '/capture/guide/tppa', '/images', '/sky', '/tools', '/tools/calculator']) expect(routePath(parseRoute(path))).toBe(path)
+		for (const path of ['/images', '/sky', '/tools', '/tools/calculator']) expect(routePath(parseRoute(path))).toBe(path)
 	})
 })
 
@@ -62,7 +51,7 @@ describe('navigate', () => {
 		const state = newState()
 		const history = fakeHistory()
 
-		navigate(state, { workspace: 'capture', camera: 'main', mode: 'camera' }, history)
+		navigate(state, { workspace: 'images' }, history)
 		navigate(state, { workspace: 'sky' }, history)
 
 		expect(history.paths).toEqual(['/sky'])
@@ -73,22 +62,21 @@ describe('navigate', () => {
 		const state = newState()
 		const history = fakeHistory()
 
-		redirect(state, { workspace: 'capture', camera: 'guide', mode: 'camera' }, history)
+		redirect(state, { workspace: 'tools' }, history)
 
 		expect(history.paths).toEqual([])
-		expect(history.replaced).toEqual(['/capture/guide/camera'])
-		expect(state.route).toEqual({ workspace: 'capture', camera: 'guide', mode: 'camera' })
+		expect(history.replaced).toEqual(['/tools'])
+		expect(state.route).toEqual({ workspace: 'tools' })
 	})
 
-	test('the rail opens the given capture route', () => {
+	test('the rail opens a workspace', () => {
 		const state = newState()
 		const history = fakeHistory()
-		const capture: CaptureRoute = { workspace: 'capture', camera: 'guide', mode: 'auto-focus' }
 
-		openWorkspace(state, 'images', capture, history)
-		openWorkspace(state, 'capture', capture, history)
+		openWorkspace(state, 'sky', history)
+		openWorkspace(state, 'images', history)
 
-		expect(state.route).toEqual(capture)
-		expect(history.paths).toEqual(['/images', '/capture/guide/auto-focus'])
+		expect(state.route).toEqual({ workspace: 'images' })
+		expect(history.paths).toEqual(['/sky', '/images'])
 	})
 })

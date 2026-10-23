@@ -3,7 +3,7 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { acquisitionSettings, ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, autoFocusSettings, DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, exposureSettings, profileCamera, setAutoFocusSettings, setExposureSettings, createOpticalPreset, createProfile, DEFAULT_ACQUISITION_SETTINGS, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectOpticalPreset, selectProfile, setAcquisitionSettings, setCameraReticle, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setTelescopeOptics, updateOpticalPreset } from './profile'
+import { acquisitionSettings, ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, autoFocusSettings, DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, exposureSettings, profileCamera, setAutoFocusSettings, setExposureSettings, createOpticalPreset, createProfile, DEFAULT_ACQUISITION_SETTINGS, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectConnection, selectOpticalPreset, selectProfile, setAcquisitionSettings, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setTelescopeOptics, updateOpticalPreset } from './profile'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }
@@ -263,9 +263,10 @@ describe('settings', () => {
 		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
 		const state = load(stores)
 
-		expect(state.profiles[0].settings).toEqual({ panels: { capture: false, images: true }, lastImageDirectory: '/data', capture: { views: {} }, cameras: {}, sky: {} })
-		expect(state.profiles[1].settings).toEqual({ panels: {}, capture: { views: {} }, cameras: {}, sky: {} })
-		expect(state.profiles[2].settings).toEqual({ panels: {}, capture: { views: {} }, cameras: {}, sky: {} })
+		// The Capture workspace and its preferences are gone, so its panel and views are dropped.
+		expect(state.profiles[0].settings).toEqual({ panels: { images: true }, lastImageDirectory: '/data', cameras: {}, sky: {} })
+		expect(state.profiles[1].settings).toEqual({ panels: {}, cameras: {}, sky: {} })
+		expect(state.profiles[2].settings).toEqual({ panels: {}, cameras: {}, sky: {} })
 	})
 
 	test('panels are expanded by default and persisted per profile', () => {
@@ -273,78 +274,21 @@ describe('settings', () => {
 		const state = load(stores)
 		const before = state.profiles[0].updatedAt
 
-		expect(panelOpen(state.profiles[0].settings, 'capture')).toBe(true)
-		setPanelOpen(state, 'capture', true)
+		expect(panelOpen(state.profiles[0].settings, 'images')).toBe(true)
+		setPanelOpen(state, 'images', true)
 		expect(state.profiles[0].updatedAt).toBe(before)
 
-		setPanelOpen(state, 'capture', false)
+		setPanelOpen(state, 'images', false)
 		const other = createProfile(state, 'Other')!
 
-		expect(panelOpen(state.profiles[0].settings, 'capture')).toBe(false)
-		expect(panelOpen(other.settings, 'capture')).toBe(true)
+		expect(panelOpen(state.profiles[0].settings, 'images')).toBe(false)
+		expect(panelOpen(other.settings, 'images')).toBe(true)
 	})
 
 	test('remembers the last image directory', () => {
 		const state = load(newStores())
 		setLastImageDirectory(state, '/data/m31')
 		expect(state.profiles[0].settings.lastImageDirectory).toBe('/data/m31')
-	})
-})
-
-describe('capture settings', () => {
-	test('restores camera views, renaming version 2 modes, and drops invalid entries', () => {
-		const stores = newStores()
-		const views = { MAIN_CAMERA: { mode: 'focus-calibrator', reticle: true }, GUIDE_CAMERA: { mode: 'bogus', reticle: 'yes' }, MOUNT: { mode: 'camera' } }
-		const profiles = [
-			{ id: 'a', name: 'A', settings: { capture: { activeCamera: 'GUIDE_CAMERA', views } } },
-			{ id: 'b', name: 'B', settings: { capture: { activeCamera: 'MOUNT', views: 'oops' } } },
-		]
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
-		const state = load(stores)
-
-		expect(state.profiles[0].settings.capture).toEqual({ activeCamera: 'GUIDE_CAMERA', views: { MAIN_CAMERA: { mode: 'auto-focus', reticle: true }, GUIDE_CAMERA: { mode: 'camera' } } })
-		expect(state.profiles[1].settings.capture).toEqual({ views: {} })
-	})
-
-	test('keeps the mode and reticle of each camera view apart', () => {
-		const state = load(newStores())
-		selectConnection(state, 'c')
-		assignDevice(state, 'MAIN_CAMERA', dev('cam'))
-		const equipment = JSON.stringify(activeProfile(state).equipment)
-
-		selectCameraView(state, 'MAIN_CAMERA', 'camera')
-		setCameraReticle(state, 'MAIN_CAMERA', true)
-		selectCameraView(state, 'GUIDE_CAMERA', 'mount-nudge')
-		setCameraReticle(state, 'GUIDE_CAMERA', false)
-
-		expect(activeProfile(state).settings.capture).toEqual({ activeCamera: 'GUIDE_CAMERA', views: { MAIN_CAMERA: { mode: 'camera', reticle: true }, GUIDE_CAMERA: { mode: 'mount-nudge', reticle: false } } })
-		expect(JSON.stringify(activeProfile(state).equipment)).toBe(equipment)
-	})
-
-	test('selecting another mode clears the reticle choice; reselecting changes nothing', () => {
-		const state = load(newStores())
-		selectCameraView(state, 'MAIN_CAMERA', 'mount-nudge')
-		setCameraReticle(state, 'MAIN_CAMERA', false)
-		const before = activeProfile(state).updatedAt
-
-		selectCameraView(state, 'MAIN_CAMERA', 'mount-nudge')
-		expect(activeProfile(state).updatedAt).toBe(before)
-		expect(activeProfile(state).settings.capture.views.MAIN_CAMERA).toEqual({ mode: 'mount-nudge', reticle: false })
-
-		selectCameraView(state, 'MAIN_CAMERA', 'camera')
-		expect(activeProfile(state).settings.capture.views.MAIN_CAMERA).toEqual({ mode: 'camera' })
-	})
-
-	test('is persisted per profile', async () => {
-		const stores = newStores()
-		const state = load(stores)
-		selectCameraView(state, 'GUIDE_CAMERA', 'tppa')
-		createProfile(state, 'Other')
-		await Bun.sleep(0)
-
-		const reloaded = load({ local: stores.local, session: new MemoryStorage() })
-		expect(reloaded.profiles[0].settings.capture).toEqual({ activeCamera: 'GUIDE_CAMERA', views: { GUIDE_CAMERA: { mode: 'tppa' } } })
-		expect(reloaded.profiles[1].settings.capture).toEqual({ views: {} })
 	})
 })
 
@@ -543,7 +487,6 @@ describe('camera forms', () => {
 		setAcquisitionSettings(state, MAIN, { exposureMode: 'loop', delay: 1.5 })
 		setAutoFocusSettings(state, MAIN, { stepSize: 50 })
 		setAcquisitionSettings(state, GUIDE, { output: { mode: 'preview-only', format: 'FITS' } })
-		selectCameraView(state, 'MAIN_CAMERA', 'mount-nudge')
 
 		expect(exposureSettings(settings, MAIN)).toEqual({ ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 0.0001, gain: 120 })
 		expect(acquisitionSettings(settings, MAIN)).toEqual({ ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'loop', delay: 1.5 })
@@ -571,13 +514,13 @@ describe('camera forms', () => {
 		const detection = { detector: { provider: 'builtin', maxStars: 50, minSNR: 2, searchRegion: 0, maximumRadius: 24 }, acceptance: { minSNR: 0, minHfd: 1, maxHfd: 0, edgeMargin: 10 } } as const
 		setExposureSettings(state, MAIN, { exposureTime: 0.0001, binX: 2, binY: 2, subframe: true, width: 100, height: 80 })
 		setAcquisitionSettings(state, MAIN, { exposureMode: 'fixed', count: 30, output: { mode: 'preview-save', directory: '/data/allsky', filenameTemplate: 'sky_{seq}', format: 'XISF' } })
-		setAutoFocusSettings(state, MAIN, { fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, detection, settleDelay: 1.5, curve: false })
+		setAutoFocusSettings(state, MAIN, { fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, detection, settleDelay: 1.5 })
 		await Bun.sleep(0)
 
 		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
 		expect(exposureSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 0.0001, binX: 2, binY: 2, subframe: true, width: 100, height: 80 })
 		expect(acquisitionSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'fixed', count: 30, output: { mode: 'preview-save', directory: '/data/allsky', filenameTemplate: 'sky_{seq}', format: 'XISF' } })
-		expect(autoFocusSettings(reloaded, MAIN)).toMatchObject({ fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, detection, settleDelay: 1.5, curve: false })
+		expect(autoFocusSettings(reloaded, MAIN)).toMatchObject({ fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, detection, settleDelay: 1.5 })
 
 		const invalid = newStores()
 		const cameras = {
@@ -613,7 +556,7 @@ describe('camera forms', () => {
 		const settings = load(stores).profiles[0].settings
 
 		const main = { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 30, gain: 120, binX: 2, binY: 2 }
-		expect(settings.capture).toEqual({ activeCamera: 'MAIN_CAMERA', views: { MAIN_CAMERA: { mode: 'auto-focus' } } })
+		expect('capture' in settings).toBeFalse()
 		expect(exposureSettings(settings, MAIN)).toEqual(main)
 		expect(acquisitionSettings(settings, MAIN)).toEqual({ ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'loop', delay: 2, frameType: 'DARK', output: { mode: 'preview-only', format: 'FITS' } })
 		expect(autoFocusSettings(settings, MAIN).stepSize).toBe(40)

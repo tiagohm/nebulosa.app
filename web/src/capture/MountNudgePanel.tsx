@@ -4,24 +4,23 @@ import { type PointerEvent, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
-import { type RoleDevice, useRoleDevice } from '../equipment/useEquipment'
+import type { RoleDevice } from '../equipment/useEquipment'
 import { operationsState, runningOn } from '../operations'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { Select } from '../ui/Select'
 import { cameraKey, captureRunning, captureRuntime } from './capture'
-import type { CaptureModePanelProps } from './modes'
 import { NUDGE_DIRECTION_LABELS, nudgeDirectionSupported, nudgeKey, type NudgePress, nudgeRunning, nudgeRuntime, pressNudge, releaseNudge, setNudgeSlewRate, stopNudges, watchNudgeMount } from './nudge'
 
-// Contextual panel sections of Mount Nudge, shared by the Images camera tabs and the Capture camera views:
+// Contextual panel sections of Mount Nudge, a camera operation of the Images camera tabs:
 // press-and-hold manual motion of a mount, named in the panel, in eight directions at a speed preset the mount
 // reports, with a STOP in the middle, and the state of the motion and, read only, of the camera's acquisition. The
 // mount is the MOUNT of the active equipment setup, the one associated with every camera of its connection; a missing
 // one is reported, never replaced by another connected mount. The motion is the server's: a press only lasts while
 // its pointer is held, and is released when the pointer is lifted or canceled, its capture is lost, the window loses
 // focus or is hidden, the mount followed changes (a profile switch), or the panel unmounts, which switching tool,
-// camera tab, mode, workspace, or camera view does. The panel never touches the camera: a capture keeps running
+// camera tab, or workspace does. The panel never touches the camera: a capture keeps running
 // underneath, and the viewer and its reticle stay as they are. Directions are those of the mount axes, never of the
 // image.
 
@@ -30,14 +29,6 @@ const BUSY = 'The mount is busy with another operation.'
 
 // Cells of the direction grid, row by row; STOP is the middle one.
 const GRID: readonly (MountNudgeDirection | 'STOP')[] = ['NW', 'N', 'NE', 'W', 'STOP', 'E', 'SW', 'S', 'SE']
-
-// Mount Nudge mode of a Capture camera view: the nudge panel of the MOUNT of the equipment setup, with the state of
-// the view's camera.
-export function MountNudgePanel({ camera }: CaptureModePanelProps) {
-	const mount = useRoleDevice('MOUNT')
-	const view = useRoleDevice(camera)
-	return <MountNudgeSections mount={mount} camera={view.device} />
-}
 
 // Mount a nudge panel moves and the camera whose acquisition it shows.
 export interface MountNudgeTarget {

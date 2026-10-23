@@ -3,11 +3,9 @@ import { cn } from 'cn'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { type RoleAvailability, roleAvailability } from '../equipment/availability'
-import { useRoleDevice } from '../equipment/useEquipment'
+import type { RoleAvailability } from '../equipment/availability'
 import { FileExplorerModal } from '../files/FileExplorerModal'
-import { operationsState } from '../operations'
-import { acquisitionSettings, activeProfile, activeSetup, type CameraAcquisitionSettings, type CameraExposureSettings, type CameraIdentity, exposureSettings, profileCamera, profileState, setAcquisitionSettings, setExposureSettings } from '../profile/profile'
+import { acquisitionSettings, activeProfile, type CameraAcquisitionSettings, type CameraExposureSettings, type CameraIdentity, exposureSettings, profileState, setAcquisitionSettings, setExposureSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
@@ -15,12 +13,10 @@ import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
-import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureSnoop, captureStatus, FILE_STATE_LABELS, fileState, FRAME_STATE_LABELS, type FrameState, frameState, refreshCapabilities, startCapture, stopCapture } from './capture'
+import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, FRAME_STATE_LABELS, type FrameState, frameState, refreshCapabilities, startCapture, stopCapture } from './capture'
 import { CameraSettings, ExposureSection, formatSeconds } from './ExposureSettings'
-import type { CaptureModePanelProps } from './modes'
 
-// Contextual panel sections of Camera Acquisition, shared by the Images camera tabs and the Capture camera views: the
-// exposure, the acquisition mode with its start and stop commands, the state of the running or last capture, the
+// Contextual panel sections of Camera Acquisition, the camera operation of the Images camera tabs: the exposure, the acquisition mode with its start and stop commands, the state of the running or last capture, the
 // less frequent camera settings, the output with a server directory chooser, and the latest frame, whose own state
 // and file state are shown apart from the outcome of the capture that took it. The exposure and camera settings are
 // the physical camera's, shared with its Auto Focus, and the rest of the form is its Camera Acquisition form, both
@@ -59,16 +55,6 @@ const FILENAME_TAGS: readonly (readonly [string, string])[] = [
 
 // Largest frame count of a fixed capture.
 const MAX_FRAME_COUNT = 100000
-
-// Camera Capture mode of a Capture camera view: the acquisition panel of the camera its role resolves to, snooping
-// the devices of the equipment setup.
-export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
-	const profiles = useSnapshot(profileState)
-	const operations = useSnapshot(operationsState)
-	const target = useRoleDevice(role)
-	const profile = activeProfile(profiles)
-	return <CameraAcquisitionSections device={target.device} availability={roleAvailability(role, target, operations)} settings={profileCamera(profile, target.device?.id)} snoop={captureSnoop(activeSetup(profile))} />
-}
 
 // Camera an acquisition panel commands and the forms it edits.
 export interface CameraAcquisitionTarget {

@@ -8,7 +8,7 @@ import { type RoleAvailability, roleAvailability } from '../equipment/availabili
 import { deviceState } from '../equipment/equipment'
 import { type RoleDevice, useRoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
-import { activeProfile, activeSetup, AUTO_FOCUS_APERTURE, type AutoFocusSettings, autoFocusSettings, type CameraIdentity, exposureSettings, profileCamera, profileState, setAutoFocusSettings, setExposureSettings } from '../profile/profile'
+import { activeProfile, AUTO_FOCUS_APERTURE, type AutoFocusSettings, autoFocusSettings, type CameraIdentity, exposureSettings, profileState, setAutoFocusSettings, setExposureSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { AcceptanceControls, DetectorControls, DetectorSettingsControls, useAstapConfigured } from '../stars/StarRequestControls'
 import { PROVIDER_LABELS } from '../stars/stars'
@@ -17,11 +17,10 @@ import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusBlocker, autoFocusRequest, autoFocusRunning, autoFocusRuntime, defaultStepSize, FITTING_MODE_LABELS, FITTING_MODES, startAutoFocus, stopAutoFocus, VERIFICATION_LABELS } from './autofocus'
-import { cameraKey, captureRuntime, captureSnoop, refreshCapabilities } from './capture'
+import { cameraKey, captureRuntime, refreshCapabilities } from './capture'
 import { CameraSettings, ExposureSection } from './ExposureSettings'
-import type { CaptureModePanelProps } from './modes'
 
-// Contextual panel sections of Auto Focus, shared by the Images camera tabs and the Capture camera views: the
+// Contextual panel sections of Auto Focus, a camera operation of the Images camera tabs: the
 // exposure and camera settings the frames are taken with, the camera's block shared with Camera Acquisition and
 // editable here; how each frame is measured (the star detector with its grown aperture); the routine the server's
 // runner follows (fitting, step size, positions per side, and the advanced settings collapsed); and the state of the
@@ -30,17 +29,6 @@ import type { CaptureModePanelProps } from './modes'
 // shown and never moved. The forms are the camera's, kept in the profile; the session is the server's, shown here
 // from the server state whichever tab started it, and keeps running when the panel unmounts. Its frames are shown by
 // the latest frame of the camera, never by a viewer of its own.
-
-// Auto Focus mode of a Capture camera view: the Auto Focus panel of the camera its role resolves to, moving the
-// focuser of the equipment setup and snooping its devices.
-export function AutoFocusPanel({ camera: role }: CaptureModePanelProps) {
-	const profiles = useSnapshot(profileState)
-	const operations = useSnapshot(operationsState)
-	const camera = useRoleDevice(role)
-	const focuser = useRoleDevice('FOCUSER')
-	const profile = activeProfile(profiles)
-	return <AutoFocusSections device={camera.device} availability={roleAvailability(role, camera, operations)} focuser={focuser} settings={profileCamera(profile, camera.device?.id)} snoop={captureSnoop(activeSetup(profile))} />
-}
 
 // Camera an Auto Focus panel focuses and the forms it edits.
 export interface AutoFocusTarget {

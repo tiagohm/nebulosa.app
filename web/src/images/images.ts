@@ -680,6 +680,14 @@ export function cameraTabKey(connectionId: string, deviceId: string): string {
 	return `camera:${frameSourceKey(connectionId, deviceId)}`
 }
 
+// Returns the key of the camera tab a connection's equipment opens an operation in: the tab of the preferred camera
+// (such as the Main Camera of the equipment setup) when it is open, otherwise the first camera tab of the connection;
+// undefined when the connection has none.
+export function connectionCameraTab(state: { readonly documents: readonly Pick<ImageDocument, 'key' | 'source'>[] }, connectionId: string, preferred?: string): string | undefined {
+	const tabs = state.documents.filter((document) => document.source.kind === 'camera' && document.source.connectionId === connectionId)
+	return (tabs.find((document) => document.source.kind === 'camera' && document.source.deviceId === preferred) ?? tabs[0])?.key
+}
+
 // Returns the camera tab with key, if open.
 function cameraTabOf(state: ImagesState, key: string): (ImageDocument & { camera: CameraTabState }) | undefined {
 	const document = documentOf(state, key)

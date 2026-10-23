@@ -1,7 +1,7 @@
 import type { MountCoordinate, MountState } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { captureRoute } from '../../capture/views'
+import { connectionCameraTab, imagesState, selectImage, selectImageTool } from '../../images/images'
 import { activeProfile, activeSetup, profileState } from '../../profile/profile'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { navigate, routeState } from '../../shell/route'
@@ -17,7 +17,7 @@ import { Actions, ConfirmButton, type InterfaceProps, Notice, Readout } from '..
 // Controls of a mount: where it points, a coordinate to go to, flip to, or sync on, tracking and its rate,
 // the manual-motion speed, park and home, and the site and clock it uses. Every value shown is the one the
 // mount reports; a command only says it was sent until the mount reports its effect. Manual motion stays in
-// the Capture Mount Nudge mode, reached from here.
+// the Mount Nudge operation of an Images camera tab, reached from here.
 
 // Frames a coordinate target can be entered in.
 const FRAMES = ['JNOW', 'J2000', 'ALTAZ', 'ECLIPTIC', 'GALACTIC'] as const satisfies readonly MountCoordinate['frame'][]
@@ -50,16 +50,27 @@ function motionOf(mount: MountState) {
 	return mount.tracking ? 'Tracking' : 'Stopped'
 }
 
+// Opens the Images workspace on a camera tab with its Mount Nudge tool; nothing moves until a direction is held.
+function openMountNudge(tab: string) {
+	selectImage(imagesState, tab)
+	selectImageTool(imagesState, tab, 'mount-nudge')
+	navigate(routeState, { workspace: 'images' })
+}
+
 // Controls of a mount.
 export function MountControls({ device }: InterfaceProps) {
 	const control = useSnapshot(controlRuntime)
 	const profiles = useSnapshot(profileState)
+	const images = useSnapshot(imagesState)
 	const mount = deviceStateOf(control.states, 'mount', device.id)!
 	const profile = activeProfile(profiles)
 	const observer = profile.settings.sky.observer
 	const busy = control.pending[device.id] !== undefined
 	const moving = mount.slewing || mount.parking || mount.homing || mount.moving
-	const nudgeable = activeSetup(profile).MOUNT?.id === device.id
+	const setup = activeSetup(profile)
+	const nudgeable = setup.MOUNT?.id === device.id
+	// Camera tab whose Mount Nudge moves this mount: the Main Camera's, or another camera of the connection.
+	const nudgeTab = connectionCameraTab(images, device.connectionId, setup.MAIN_CAMERA?.id)
 	const horizontal = observer && horizontalOf(mount, Date.now(), observer)
 
 	function run(action: string, label: string, body?: object) {
@@ -169,11 +180,14 @@ export function MountControls({ device }: InterfaceProps) {
 			{mount.canMove && (
 				<PanelSection title="Manual Motion">
 					{nudgeable ? (
-						<Actions>
-							<Button variant="secondary" onClick={() => navigate(routeState, captureRoute(profile.settings.capture, activeSetup(profile), 'mount-nudge'))}>
-								Open Mount Nudge
-							</Button>
-						</Actions>
+						<>
+							<Actions>
+								<Button variant="secondary" disabled={!nudgeTab} onClick={() => nudgeTab && openMountNudge(nudgeTab)}>
+									Open Mount Nudge
+								</Button>
+							</Actions>
+							{!nudgeTab && <Notice>Mount Nudge is a tool of the Images camera tabs; connect a camera of this connection to open it.</Notice>}
+						</>
 					) : (
 						<Notice>Mount Nudge moves the mount assigned to the Mount role in Equipment Setup; assign this mount to use it.</Notice>
 					)}

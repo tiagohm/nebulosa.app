@@ -1,4 +1,4 @@
-import { MountNudgeSections } from '../capture/MountNudgePanel'
+import { MountNudgeSections } from '../camera/MountNudgePanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import type { ImageToolPanelProps } from './tools'
 

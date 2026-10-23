@@ -1,7 +1,7 @@
 import type { CaptureFrameOrigin, CaptureFrameSummary, ImageAcquisition, ImageInfo, ImageProvenance, RenderResult, StarDetectionOrigin } from 'api'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { autoFocusFrameFocus, autoFocusRuntime } from '../capture/autofocus'
+import { autoFocusFrameFocus, autoFocusRuntime } from '../camera/autofocus'
 import { connectionState } from '../connection/connection'
 import { PanelSection, PlannedControls } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'

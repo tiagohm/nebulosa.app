@@ -1,5 +1,5 @@
 import { useSnapshot } from 'valtio'
-import { AutoFocusSections } from '../capture/AutoFocusPanel'
+import { AutoFocusSections } from '../camera/AutoFocusPanel'
 import { deviceAvailability } from '../equipment/availability'
 import { operationsState } from '../operations'
 import { EmptyState } from '../shell/WorkspaceLayout'

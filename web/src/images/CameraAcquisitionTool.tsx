@@ -1,5 +1,5 @@
 import { useSnapshot } from 'valtio'
-import { CameraAcquisitionSections } from '../capture/CameraCapturePanel'
+import { CameraAcquisitionSections } from '../camera/CameraCapturePanel'
 import { deviceAvailability } from '../equipment/availability'
 import { operationsState } from '../operations'
 import { EmptyState } from '../shell/WorkspaceLayout'

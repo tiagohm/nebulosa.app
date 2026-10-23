@@ -1,6 +1,6 @@
 import type { CaptureSnoop, OperationDevice } from 'api'
 import { useSnapshot } from 'valtio'
-import { captureSnoop } from '../capture/capture'
+import { captureSnoop } from '../camera/capture'
 import { type DeviceView, roleDevice, roleStatus } from '../equipment/equipment'
 import { CAMERA_ROLES, type CameraRole, type EquipmentRole, type EquipmentSetup } from '../equipment/roles'
 import { type RoleDevice, useWatchedDevices } from '../equipment/useEquipment'

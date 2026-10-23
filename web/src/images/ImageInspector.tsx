@@ -165,7 +165,7 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 						</span>
 					</Property>
 				)}
-				{unavailable && <Property label="Registry">{unavailable}</Property>}
+				<Property label="Availability">{unavailable ? <span className="text-danger">{unavailable}</span> : frame.availability === 'memory' ? 'In memory' : 'Saved file'}</Property>
 			</PanelSection>
 		</>
 	)

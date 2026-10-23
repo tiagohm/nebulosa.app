@@ -19,6 +19,7 @@ import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
 import { FIT_VIEW } from '../viewer/transform'
 import { captureFramesState, frameSourceKey } from './captureframes'
+import { CaptureFramesCarousel } from './CaptureFramesCarousel'
 import { ImageInspector } from './ImageInspector'
 import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, isClosable, openImage, selectCameraFrame, selectImage, selectImageTool, selectStar, setImageView, shownRendering, toggleOriginal } from './images'
 import { SaveImageModal } from './SaveImageModal'
@@ -45,6 +46,8 @@ export function ImagesWorkspace() {
 	const state = useSnapshot(imagesState)
 	const profiles = useSnapshot(profileState)
 	const [choosing, setChoosing] = useState(false)
+	// Whether camera tabs show the capture frames carousel; collapsing it keeps the selection.
+	const [framesShown, setFramesShown] = useState(true)
 	// Unsaved document whose closing waits for a confirmation.
 	const [closing, setClosing] = useState<string>()
 	// Document being saved, and whether it closes once saved.
@@ -93,7 +96,7 @@ export function ImagesWorkspace() {
 							view && (
 								<>
 									<OriginalToggle documentKey={document.key} view={view} mosaic={!!document.info && document.info.channels === 1 && !!document.info.bayer} />
-									{document.camera && <CameraControls document={document} />}
+									{document.camera && <CameraControls document={document} framesShown={framesShown} onToggleFrames={() => setFramesShown(!framesShown)} />}
 								</>
 							)
 						}
@@ -124,6 +127,7 @@ export function ImagesWorkspace() {
 						}
 					/>
 				</div>
+				{document?.camera && framesShown && <CaptureFramesCarousel document={document} />}
 			</div>
 			<FileExplorerModal
 				open={choosing}
@@ -199,14 +203,18 @@ function OriginalToggle({ documentKey, view, mosaic }: OriginalToggleProps) {
 interface CameraControlsProps {
 	// Camera tab.
 	readonly document: ImageDocument
+	// Whether the capture frames carousel is shown.
+	readonly framesShown: boolean
+	// Shows or hides the carousel.
+	readonly onToggleFrames: () => void
 }
 
 // Labels of the selections of a camera tab, as its toolbar shows them.
 const SELECTION_LABELS: Readonly<Record<NonNullable<ImageDocument['camera']>['selection']['kind'], string>> = { latest: 'Latest', saved: 'Saved frame', inspect: 'Held for analysis' }
 
-// Frame a camera tab shows, and Return to Latest while it does not follow the latest frame. Neither commands the
-// camera: they only change which frame the tab shows.
-function CameraControls({ document }: CameraControlsProps) {
+// Frame a camera tab shows, Return to Latest while it does not follow the latest frame, and the toggle of the capture
+// frames carousel. None commands the camera: they only change which frame the tab shows and how.
+function CameraControls({ document, framesShown, onToggleFrames }: CameraControlsProps) {
 	const frames = useSnapshot(captureFramesState)
 	const camera = document.camera
 	if (!camera || document.source.kind !== 'camera') return null
@@ -223,6 +231,7 @@ function CameraControls({ document }: CameraControlsProps) {
 				{camera.shown && ` · #${camera.shown.frame.generation}`}
 			</span>
 			{!following && <IconButton icon="play" label="Return to Latest" onClick={() => void selectCameraFrame(imagesState, document.key, { kind: 'latest' }, captureFramesState)} />}
+			<IconButton icon="images" label={framesShown ? 'Hide capture frames' : 'Show capture frames'} pressed={framesShown} onClick={onToggleFrames} />
 		</>
 	)
 }

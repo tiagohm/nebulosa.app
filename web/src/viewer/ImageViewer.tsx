@@ -32,8 +32,8 @@ export interface ImageViewerProps {
 	// Called with the new view when the user zooms or pans.
 	readonly onViewChange: (view: ViewerView) => void
 	// Draws SVG elements over the image, given its size and the current view, in image pixel coordinates; they
-	// follow zoom and pan. Use vectorEffect="non-scaling-stroke" for strokes that keep their width on screen,
-	// and the view's scale for sizes that do.
+	// follow zoom and pan, applied as an SVG transform. Use vectorEffect="non-scaling-stroke" for strokes (and dashes)
+	// that keep their width on screen, and the view's scale for other sizes that do.
 	readonly overlays?: (image: Size, view: OverlayView) => ReactNode
 	// Called with the image point under a click (a press released within CLICK_TOLERANCE of where it started,
 	// never a drag or a pinch), in image coordinates, and the current view.
@@ -236,12 +236,14 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 				{image && (
 					<div className="absolute top-0 left-0 origin-top-left" style={{ width, height, transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` }}>
 						<img src={image.url} alt="" draggable={false} className="block size-full max-w-none" style={{ imageRendering: transform.scale >= 2 ? 'pixelated' : 'auto' }} />
-						{overlays && (
-							<svg viewBox={`0 0 ${width} ${height}`} className="pointer-events-none absolute inset-0 size-full overflow-visible">
-								{overlays({ width, height }, { scale: transform.scale, visible: visibleRegion(transform, viewport) })}
-							</svg>
-						)}
 					</div>
+				)}
+				{image && overlays && (
+					// Outside the CSS-transformed image, with the same zoom and pan as an SVG transform, so that
+					// non-scaling-stroke sees the zoom and keeps strokes constant on screen.
+					<svg className="pointer-events-none absolute inset-0 size-full">
+						<g transform={`translate(${transform.x} ${transform.y}) scale(${transform.scale})`}>{overlays({ width, height }, { scale: transform.scale, visible: visibleRegion(transform, viewport) })}</g>
+					</svg>
 				)}
 				{!image && <div className="absolute inset-0">{error ? <ViewerMessage tone="error">{error}</ViewerMessage> : loading ? <ViewerMessage>Loading image…</ViewerMessage> : empty}</div>}
 			</div>

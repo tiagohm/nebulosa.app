@@ -7,9 +7,7 @@ import { wcsGeometry } from './wcs'
 // Capture alike: a marker at the solved centre of the image, arrows towards north and east from the WCS (so they follow
 // its rotation and parity), and an optional right ascension and declination grid. The geometry is computed once per
 // solution (wcs.ts); zoom and pan only change sizes kept constant on screen. It draws in image pixel coordinates and
-// is a pure function of the solution and the image shown, which the caller guarantees is the image it solved. The
-// viewer zooms with a CSS transform, which non-scaling-stroke does not undo, so stroke widths are given in image
-// pixels from the view's scale.
+// is a pure function of the solution and the image shown, which the caller guarantees is the image it solved.
 
 // Length of the direction arrows, in screen pixels.
 const ARROW_LENGTH = 56
@@ -20,8 +18,8 @@ const MARKER_SIZE = 10
 // Font size of the arrow labels, in screen pixels.
 const LABEL_SIZE = 12
 
-// Longest arrow as a fraction of the image's smaller dimension. When zoomed out past it, the arrows, marker, labels,
-// and their strokes shrink with the image instead of staying constant on screen.
+// Longest arrow as a fraction of the image's smaller dimension. When zoomed out past it, the arrows, marker, and labels
+// shrink with the image instead of staying constant on screen; their strokes keep their width.
 const MAX_ARROW_FRACTION = 0.25
 
 // Width of the grid lines, in screen pixels.
@@ -45,22 +43,21 @@ export interface WcsOverlayProps {
 export function WcsOverlay({ solution, image, view, grid }: WcsOverlayProps) {
 	const geometry = useMemo(() => wcsGeometry(solution, image.width, image.height), [solution, image.width, image.height])
 	const { center, north, east } = geometry
-	// Image pixels per screen pixel, for the grid, and the same capped so the arrows fit the image, for the symbols.
-	const pixel = 1 / view.scale
-	const unit = Math.min(pixel, (MAX_ARROW_FRACTION * Math.min(image.width, image.height)) / ARROW_LENGTH)
+	// Image pixels per screen pixel, capped so the arrows fit the image.
+	const unit = Math.min(1 / view.scale, (MAX_ARROW_FRACTION * Math.min(image.width, image.height)) / ARROW_LENGTH)
 
 	return (
 		<g fill="none">
 			{grid && (
-				<g stroke="var(--color-ink-200)" strokeOpacity={0.45} strokeWidth={GRID_STROKE * pixel}>
+				<g stroke="var(--color-ink-200)" strokeOpacity={0.45} strokeWidth={GRID_STROKE}>
 					{[...geometry.parallels, ...geometry.meridians].map((path) => (
-						<path key={path} d={path} />
+						<path key={path} d={path} vectorEffect="non-scaling-stroke" />
 					))}
 				</g>
 			)}
-			<g stroke="var(--color-success)" strokeWidth={SYMBOL_STROKE * unit}>
-				<line x1={center.x - MARKER_SIZE * unit} y1={center.y} x2={center.x + MARKER_SIZE * unit} y2={center.y} />
-				<line x1={center.x} y1={center.y - MARKER_SIZE * unit} x2={center.x} y2={center.y + MARKER_SIZE * unit} />
+			<g stroke="var(--color-success)" strokeWidth={SYMBOL_STROKE}>
+				<line x1={center.x - MARKER_SIZE * unit} y1={center.y} x2={center.x + MARKER_SIZE * unit} y2={center.y} vectorEffect="non-scaling-stroke" />
+				<line x1={center.x} y1={center.y - MARKER_SIZE * unit} x2={center.x} y2={center.y + MARKER_SIZE * unit} vectorEffect="non-scaling-stroke" />
 			</g>
 			{north && <Arrow from={center} direction={north} unit={unit} label="N" color="var(--color-accent)" />}
 			{east && <Arrow from={center} direction={east} unit={unit} label="E" color="var(--color-ink-100)" />}
@@ -96,7 +93,7 @@ function Arrow({ from, direction, unit, label, color }: ArrowProps) {
 
 	return (
 		<g stroke={color}>
-			<path d={`M${from.x} ${from.y}L${tip.x} ${tip.y}M${barb(0.44)}L${tip.x} ${tip.y}L${barb(-0.44)}`} strokeWidth={SYMBOL_STROKE * unit} />
+			<path d={`M${from.x} ${from.y}L${tip.x} ${tip.y}M${barb(0.44)}L${tip.x} ${tip.y}L${barb(-0.44)}`} strokeWidth={SYMBOL_STROKE} vectorEffect="non-scaling-stroke" />
 			<text x={text.x} y={text.y} fill={color} stroke="none" fontSize={LABEL_SIZE * unit} textAnchor="middle" dominantBaseline="central">
 				{label}
 			</text>

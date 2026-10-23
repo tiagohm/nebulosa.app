@@ -2,16 +2,19 @@ import { expect, test } from 'bun:test'
 import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession } from 'api'
 import { proxy } from 'valtio'
 import type { ImagesIo } from '../images/images'
-import { DEFAULT_ACQUISITION_SETTINGS } from '../profile/profile'
-import { cameraKey, captureCount, captureElapsed, captureRequest, type CaptureRuntime, captureRunning, captureSnoop, captureStatus, fileState, frameState, handleCaptureEvent, refreshCaptures, renderFrame, startCapture, stopCapture } from './capture'
+import { DEFAULT_ACQUISITION_SETTINGS, DEFAULT_EXPOSURE_SETTINGS } from '../profile/profile'
+import { cameraKey, captureCount, captureElapsed, captureRequest, fitExposure, type CaptureRuntime, captureRunning, captureSnoop, captureStatus, fileState, frameState, handleCaptureEvent, refreshCaptures, renderFrame, startCapture, stopCapture } from './capture'
 import { convertExposure, exposureUnitOf, fromSeconds, toSeconds } from './ExposureTimeInput'
 
 function newState() {
 	return proxy<CaptureRuntime>({ sessions: {}, frames: {}, capabilities: {}, pending: {}, errors: {}, renderings: {}, renderErrors: {} })
 }
 
+// The request of the default forms.
+const DEFAULT_REQUEST: CaptureRequest = { ...DEFAULT_EXPOSURE_SETTINGS, ...DEFAULT_ACQUISITION_SETTINGS }
+
 function session(patch: Partial<CaptureSession> = {}): CaptureSession {
-	return { sessionId: 's1', operationId: 'o1', connectionId: 'c', deviceId: 'cam', cameraName: 'Camera', request: { ...DEFAULT_ACQUISITION_SETTINGS, exposureTime: 5 }, phase: 'exposing', stopping: false, captured: 0, saved: 0, count: 1, startedAt: 1000, ...patch }
+	return { sessionId: 's1', operationId: 'o1', connectionId: 'c', deviceId: 'cam', cameraName: 'Camera', request: { ...DEFAULT_REQUEST, exposureTime: 5 }, phase: 'exposing', stopping: false, captured: 0, saved: 0, count: 1, startedAt: 1000, ...patch }
 }
 
 function frame(patch: Partial<CaptureFrame> = {}): CaptureFrame {
@@ -82,13 +85,13 @@ test('starts a capture once, reports a refusal, and refreshes after a lost respo
 	const key = cameraKey('c', 'cam')
 	const refused = fakeFetch(() => Response.json({ error: 'The camera is busy' }, { status: 409 }))
 
-	const first = startCapture(state, 'c', 'cam', DEFAULT_ACQUISITION_SETTINGS, refused.request)
-	const duplicate = startCapture(state, 'c', 'cam', DEFAULT_ACQUISITION_SETTINGS, refused.request)
+	const first = startCapture(state, 'c', 'cam', DEFAULT_REQUEST, refused.request)
+	const duplicate = startCapture(state, 'c', 'cam', DEFAULT_REQUEST, refused.request)
 	await Promise.all([first, duplicate])
 
 	expect(refused.requests).toHaveLength(1)
 	expect(refused.requests[0].url).toBe('/api/connections/c/cameras/cam/capture')
-	expect(JSON.parse(refused.requests[0].init!.body as string)).toEqual(DEFAULT_ACQUISITION_SETTINGS)
+	expect(JSON.parse(refused.requests[0].init!.body as string)).toEqual(DEFAULT_REQUEST)
 	expect(state.errors[key]).toBe('The camera is busy')
 	expect(state.pending[key]).toBeUndefined()
 
@@ -103,13 +106,16 @@ test('starts a capture once, reports a refusal, and refreshes after a lost respo
 	expect(state.sessions[key]?.phase).toBe('exposing')
 })
 
-test('fits a form to the camera capabilities', () => {
-	const settings: CaptureRequest = { ...DEFAULT_ACQUISITION_SETTINGS, exposureTime: 0.0001, gain: 500, binX: 8, binY: 8, subframe: true, x: 900, y: 0, width: 400, height: 200, frameFormat: 'RGB', output: { mode: 'preview-save', format: 'XISF' } }
+test('composes the exposure settings and the acquisition form of a camera, fitted to its capabilities', () => {
+	const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 0.0001, gain: 500, binX: 8, binY: 8, subframe: true, x: 900, y: 0, width: 400, height: 200, frameFormat: 'RGB' }
+	const acquisition = { ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'loop', delay: 3, frameType: 'FLAT', output: { mode: 'preview-save', format: 'XISF' } } as const
 
-	expect(captureRequest(settings, CAPABILITIES)).toEqual({ ...settings, exposureTime: 0.0001, gain: 300, binX: 4, binY: 4, x: 600, frameFormat: '', output: { mode: 'preview-save', format: 'FITS' } })
-	expect(captureRequest({ ...settings, exposureTime: 0.000001 }, CAPABILITIES).exposureTime).toBe(0.00001)
-	expect(captureRequest(settings, { ...CAPABILITIES, subframe: undefined, bin: undefined, gain: undefined, transferFormats: ['FITS', 'XISF'] })).toMatchObject({ subframe: false, width: 0, height: 0, binX: 1, binY: 1, gain: 500, output: { format: 'XISF' } })
-	expect(captureRequest(settings)).toEqual(settings)
+	expect(captureRequest(exposure, acquisition, CAPABILITIES)).toEqual({ ...exposure, ...acquisition, exposureTime: 0.0001, gain: 300, binX: 4, binY: 4, x: 600, frameFormat: '', output: { mode: 'preview-save', format: 'FITS' } })
+	expect(captureRequest({ ...exposure, exposureTime: 0.000001 }, acquisition, CAPABILITIES).exposureTime).toBe(0.00001)
+	expect(captureRequest(exposure, acquisition, { ...CAPABILITIES, subframe: undefined, bin: undefined, gain: undefined, transferFormats: ['FITS', 'XISF'] })).toMatchObject({ subframe: false, width: 0, height: 0, binX: 1, binY: 1, gain: 500, output: { format: 'XISF' } })
+	expect(captureRequest(exposure, acquisition)).toEqual({ ...exposure, ...acquisition })
+	// The exposure alone is fitted the same way, without any acquisition field.
+	expect(fitExposure(exposure, CAPABILITIES)).toEqual({ ...exposure, gain: 300, binX: 4, binY: 4, x: 600, frameFormat: '' })
 })
 
 test('snoops the mount, focuser, filter wheel, and rotator of the equipment setup', () => {

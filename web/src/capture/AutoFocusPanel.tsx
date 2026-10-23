@@ -1,4 +1,4 @@
-import type { AutoFocusSessionSummary, CameraCapabilities, CaptureRequest } from 'api'
+import type { AutoFocusSessionSummary, CameraCapabilities } from 'api'
 import { cn } from 'cn'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -7,7 +7,7 @@ import { Notice } from '../equipment-control/parts'
 import { roleAvailability } from '../equipment/availability'
 import { useRoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
-import { acquisitionSettings, activeProfile, activeSetup, AUTO_FOCUS_APERTURE, type AutoFocusSettings, autoFocusSettings, profileState, setAutoFocusSettings } from '../profile/profile'
+import { activeProfile, activeSetup, AUTO_FOCUS_APERTURE, type AutoFocusSettings, autoFocusSettings, type CameraExposureSettings, exposureSettings, profileCamera, profileState, setAutoFocusSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { AcceptanceControls, DetectorControls, DetectorSettingsControls, useAstapConfigured } from '../stars/StarRequestControls'
 import { PROVIDER_LABELS } from '../stars/stars'
@@ -16,7 +16,7 @@ import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusRequest, autoFocusRunning, autoFocusRuntime, defaultStepSize, FITTING_MODE_LABELS, FITTING_MODES, startAutoFocus, stopAutoFocus, VERIFICATION_LABELS } from './autofocus'
-import { cameraKey, captureRequest, captureRuntime, captureSnoop, refreshCapabilities } from './capture'
+import { cameraKey, captureRuntime, captureSnoop, fitExposure, refreshCapabilities } from './capture'
 import type { CaptureModePanelProps } from './modes'
 
 // Contextual panel sections of the Auto Focus mode: how each frame is measured (the star detector with its grown
@@ -40,8 +40,9 @@ export function AutoFocusPanel({ camera: role }: CaptureModePanelProps) {
 	const wheel = useRoleDevice('FILTER_WHEEL')
 	const astapConfigured = useAstapConfigured()
 	const profile = activeProfile(profiles)
-	const settings = autoFocusSettings(profile.settings.capture, role)
-	const acquisition = acquisitionSettings(profile.settings.capture, role)
+	const identity = profileCamera(profile, camera.device?.id)
+	const settings = autoFocusSettings(profile.settings, identity)
+	const exposure = exposureSettings(profile.settings, identity)
 	const key = camera.device && cameraKey(camera.device.connectionId, camera.device.id)
 	const session = key ? runtime.sessions[key] : undefined
 	const capabilities = key ? captures.capabilities[key] : undefined
@@ -73,12 +74,12 @@ export function AutoFocusPanel({ camera: role }: CaptureModePanelProps) {
 
 	// Updates fields of the view's form.
 	function update(patch: Partial<AutoFocusSettings>) {
-		setAutoFocusSettings(profileState, role, patch)
+		setAutoFocusSettings(profileState, identity, patch)
 	}
 
 	function start() {
 		if (!camera.device || !focuser.device) return
-		const request = autoFocusRequest(settings, acquisition, { connectionId: focuser.device.connectionId, deviceId: focuser.device.id }, stepSize, captureSnoop(activeSetup(profile)), capabilities)
+		const request = autoFocusRequest(settings, exposure, { connectionId: focuser.device.connectionId, deviceId: focuser.device.id }, stepSize, captureSnoop(activeSetup(profile)), capabilities)
 		void startAutoFocus(autoFocusRuntime, camera.device.connectionId, camera.device.id, request)
 	}
 
@@ -89,8 +90,8 @@ export function AutoFocusPanel({ camera: role }: CaptureModePanelProps) {
 	return (
 		<>
 			<PanelSection title="Measurement">
-				<FrameSettings acquisition={acquisition} capabilities={capabilities} />
-				<p className="m-0 text-xs leading-4 text-ink-300">Frames use the exposure and camera settings of Camera Capture.</p>
+				<FrameSettings exposure={exposure} capabilities={capabilities} />
+				<p className="m-0 text-xs leading-4 text-ink-300">Frames use the exposure and camera settings of the camera, shared with Camera Acquisition.</p>
 				{wheel.device && <p className="m-0 text-xs leading-4 text-ink-300">Filter: {filter ?? 'unknown'} — the Auto Focus measures through the current filter and never changes it.</p>}
 				<DetectorControls request={detection} disabled={locked} onChange={(request) => update({ detection: request })} />
 				<details>
@@ -198,16 +199,16 @@ function SessionState({ session, position, moving }: SessionStateProps) {
 }
 
 interface FrameSettingsProps {
-	// Camera Capture form of the view.
-	readonly acquisition: Readonly<CaptureRequest>
+	// Exposure and camera settings of the camera.
+	readonly exposure: Readonly<CameraExposureSettings>
 	// Capabilities of the camera, when known.
 	readonly capabilities?: CameraCapabilities
 }
 
-// Exposure and camera settings the frames are taken with: those of the Camera Capture form, fitted to the camera as
-// the request sends them; a setting the camera does not report is not shown.
-function FrameSettings({ acquisition, capabilities }: FrameSettingsProps) {
-	const { exposureTime, gain, offset, binX, binY, subframe, width, height, frameFormat } = captureRequest(acquisition, capabilities)
+// Exposure and camera settings the frames are taken with: those of the camera, fitted to it as the request sends
+// them; a setting the camera does not report is not shown.
+function FrameSettings({ exposure, capabilities }: FrameSettingsProps) {
+	const { exposureTime, gain, offset, binX, binY, subframe, width, height, frameFormat } = fitExposure(exposure, capabilities)
 	const readout = capabilities?.frameFormats.find((format) => format.name === frameFormat)
 
 	return (

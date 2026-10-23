@@ -1,12 +1,12 @@
-import type { CameraCapabilities, CaptureFrame, CaptureOutputMode, CaptureRequest, CaptureSession } from 'api'
+import type { CameraCapabilities, CaptureFrame, CaptureOutputMode, CaptureRequest, CaptureSession, CaptureSnoop, DeviceSummary } from 'api'
 import { cn } from 'cn'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { roleAvailability } from '../equipment/availability'
+import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { useRoleDevice } from '../equipment/useEquipment'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { operationsState } from '../operations'
-import { acquisitionSettings, activeProfile, activeSetup, analysisSettings, type CameraAcquisitionSettings, plateSolvingSettings, profileState, setAcquisitionSettings } from '../profile/profile'
+import { acquisitionSettings, activeProfile, activeSetup, type CameraAcquisitionSettings, type CameraExposureSettings, type CameraIdentity, exposureSettings, profileCamera, profileState, setAcquisitionSettings, setExposureSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
@@ -18,19 +18,16 @@ import { TextInput } from '../ui/TextInput'
 import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureSnoop, captureStatus, FILE_STATE_LABELS, fileState, FRAME_STATE_LABELS, type FrameState, frameState, refreshCapabilities, startCapture, stopCapture } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import type { CaptureModePanelProps } from './modes'
-import { PostCaptureAnalysis } from './PostCaptureAnalysis'
-import { PostCapturePlateSolving } from './PostCapturePlateSolving'
 
-// Contextual panel sections of the Camera Capture mode: the exposure, the acquisition mode with its start
-// and stop commands, the state of the running or last capture, the less frequent camera settings, the
-// output with a server directory chooser, the post-capture star detection, and the latest frame, whose own
-// state and file state are shown
-// apart from the outcome of the capture that took it. The form is the camera view's, kept in the profile;
-// the capture it starts is the server's, run on the device the view's role resolves to when it starts, and
-// shown here from the server state whichever tab started it. Controls that would change a running capture
-// are disabled; a control the camera does not support is not shown, and the values sent are fitted to the
-// camera's reported capabilities. Every capture snoops the mount, focuser, filter wheel, and rotator the
-// equipment setup assigns into its frame headers.
+// Contextual panel sections of Camera Acquisition, shared by the Images camera tabs and the Capture camera views: the
+// exposure, the acquisition mode with its start and stop commands, the state of the running or last capture, the
+// less frequent camera settings, the output with a server directory chooser, and the latest frame, whose own state
+// and file state are shown apart from the outcome of the capture that took it. The exposure and camera settings are
+// the physical camera's, shared with its Auto Focus, and the rest of the form is its Camera Acquisition form, both
+// kept in the profile; the capture it starts is the server's, run on the camera the panel targets when it starts, and
+// shown here from the server state whichever tab started it. Controls that would change a running capture are
+// disabled; a control the camera does not support is not shown, and the values sent are fitted to the camera's
+// reported capabilities. Every capture snoops the devices of its target into its frame headers.
 
 // Acquisition modes, in display order.
 const EXPOSURE_MODES: readonly CaptureRequest['exposureMode'][] = ['single', 'fixed', 'loop']
@@ -63,16 +60,36 @@ const FILENAME_TAGS: readonly (readonly [string, string])[] = [
 // Largest frame count of a fixed capture.
 const MAX_FRAME_COUNT = 100000
 
-// Camera Capture panel sections.
+// Camera Capture mode of a Capture camera view: the acquisition panel of the camera its role resolves to, snooping
+// the devices of the equipment setup.
 export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 	const profiles = useSnapshot(profileState)
-	const runtime = useSnapshot(captureRuntime)
 	const operations = useSnapshot(operationsState)
 	const target = useRoleDevice(role)
-	const settings = acquisitionSettings(activeProfile(profiles).settings.capture, role)
-	const analysis = analysisSettings(activeProfile(profiles).settings.capture, role)
-	const solving = plateSolvingSettings(activeProfile(profiles).settings.capture, role)
-	const { device } = target
+	const profile = activeProfile(profiles)
+	return <CameraAcquisitionSections device={target.device} availability={roleAvailability(role, target, operations)} settings={profileCamera(profile, target.device?.id)} snoop={captureSnoop(activeSetup(profile))} />
+}
+
+// Camera an acquisition panel commands and the forms it edits.
+export interface CameraAcquisitionTarget {
+	// Camera, when present on the watched connection.
+	readonly device?: DeviceSummary
+	// Whether the camera can take a new capture now, and why not.
+	readonly availability: RoleAvailability
+	// Camera whose forms are edited; absent when the profile has no saved connection, so the defaults are shown and
+	// nothing is kept.
+	readonly settings?: CameraIdentity
+	// Devices snooped into the frame headers.
+	readonly snoop: CaptureSnoop
+}
+
+// Camera Acquisition panel sections of a camera.
+export function CameraAcquisitionSections({ device, availability, settings: camera, snoop }: CameraAcquisitionTarget) {
+	const profiles = useSnapshot(profileState)
+	const runtime = useSnapshot(captureRuntime)
+	const profile = activeProfile(profiles)
+	const exposure = exposureSettings(profile.settings, camera)
+	const settings = acquisitionSettings(profile.settings, camera)
 	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
 	const capabilities = key ? runtime.capabilities[key] : undefined
@@ -80,7 +97,6 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 	const running = captureRunning(session)
 	const pending = key !== undefined && runtime.pending[key] === true
 	const error = key ? runtime.errors[key] : undefined
-	const availability = roleAvailability(role, target, operations)
 	const locked = running || pending
 	const [choosingDirectory, setChoosingDirectory] = useState(false)
 
@@ -88,25 +104,23 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 		if (device?.connected) void refreshCapabilities(captureRuntime, device.connectionId, device.id)
 	}, [device?.connectionId, device?.id, device?.connected])
 
-	// Updates fields of the view's form.
+	// Updates fields of the camera's Camera Acquisition form.
 	function update(patch: Partial<CameraAcquisitionSettings>) {
-		setAcquisitionSettings(profileState, role, patch)
+		setAcquisitionSettings(profileState, camera, patch)
 	}
 
-	// Updates fields of the view's output.
+	// Updates fields of the camera's exposure and camera settings.
+	function updateExposure(patch: Partial<CameraExposureSettings>) {
+		setExposureSettings(profileState, camera, patch)
+	}
+
+	// Updates fields of the output.
 	function updateOutput(patch: Partial<CameraAcquisitionSettings['output']>) {
 		update({ output: { ...settings.output, ...patch } })
 	}
 
 	function start() {
-		if (device) {
-			void startCapture(captureRuntime, device.connectionId, device.id, {
-				...captureRequest(settings, capabilities),
-				snoop: captureSnoop(activeSetup(activeProfile(profiles))),
-				...(analysis.enabled && { analysis: { policy: analysis.policy, request: analysis.request } }),
-				...(solving.enabled && { plateSolving: { policy: solving.policy, ...(solving.policy === 'everyNth' && { interval: solving.interval }), request: solving.request } }),
-			})
-		}
+		if (device) void startCapture(captureRuntime, device.connectionId, device.id, { ...captureRequest(exposure, settings, capabilities), snoop })
 	}
 
 	const xisf = capabilities?.transferFormats.includes('XISF') === true
@@ -114,7 +128,7 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 	return (
 		<>
 			<PanelSection title="Exposure">
-				<ExposureTimeInput value={settings.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
+				<ExposureTimeInput value={exposure.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => updateExposure({ exposureTime })} />
 				{capabilities?.exposure && (
 					<p className="m-0 text-xs leading-4 text-ink-300">
 						{formatSeconds(capabilities.exposure.min)} – {formatSeconds(capabilities.exposure.max)} s supported by the camera.
@@ -145,7 +159,7 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
 			</PanelSection>
 			{session && <CaptureState session={session} />}
-			<CameraSettings settings={settings} capabilities={capabilities} disabled={locked} onChange={update} />
+			<CameraSettings settings={exposure} capabilities={capabilities} disabled={locked} onChange={updateExposure} />
 			<PanelSection title="Output">
 				<SegmentedControl options={OUTPUT_MODES} value={settings.output.mode} format={(mode) => OUTPUT_MODE_LABELS[mode]} disabled={locked} onChange={(mode) => updateOutput({ mode })} />
 				{settings.output.mode === 'preview-save' && (
@@ -172,8 +186,6 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 				)}
 				{settings.output.mode === 'preview-only' && <p className="m-0 text-xs leading-4 text-ink-300">Frames are kept in memory for viewing only; nothing is written.</p>}
 			</PanelSection>
-			<PostCaptureAnalysis role={role} locked={locked} state={session?.analysis} frame={frame} />
-			<PostCapturePlateSolving role={role} locked={locked} state={session?.plateSolving} frame={frame} />
 			{frame && <LastFrame frame={frame} state={frameState(frame, key ? runtime.renderings[key] : undefined, key ? runtime.renderErrors[key] : undefined, session?.previewError)} />}
 			<FileExplorerModal
 				open={choosingDirectory}
@@ -287,14 +299,14 @@ function formatElapsed(seconds: number) {
 }
 
 interface CameraSettingsProps {
-	// Form of the view.
-	readonly settings: Readonly<CameraAcquisitionSettings>
+	// Exposure and camera settings of the camera.
+	readonly settings: Readonly<CameraExposureSettings>
 	// Capabilities of the camera, when known.
 	readonly capabilities?: CameraCapabilities
 	// Whether a running capture locks the controls.
 	readonly disabled: boolean
-	// Updates fields of the form.
-	readonly onChange: (patch: Partial<CameraAcquisitionSettings>) => void
+	// Updates fields of the settings.
+	readonly onChange: (patch: Partial<CameraExposureSettings>) => void
 }
 
 // Settings changed less often, collapsed by default: gain, offset, binning, readout mode, and subframe, each

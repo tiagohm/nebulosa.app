@@ -1,8 +1,7 @@
-import type { AutoFocusRequest, CaptureRequest, PlateSolveRequest, PlateSolverProvider, PostCaptureAnalysisPolicy, PostCapturePlateSolvingPolicy, StarDetectionRequest } from 'api'
+import type { AutoFocusRequest, CaptureRequest, StarDetectionRequest } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
 import { CAMERA_ROLES, type CameraRole, conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
-import { DEFAULT_PLATE_SOLVE_REQUEST } from '../platesolving/platesolving'
 import { type CaptureMode, captureModeOf, WORKSPACE_IDS, type WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
 import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
@@ -25,8 +24,10 @@ export const LAST_PROFILE_KEY = 'nebulosa:lastProfileId'
 
 // Current version of the persisted format. Version 1 stored each assignment as a bare device id;
 // version 2 stores the device id and name; version 3 names the Capture modes auto-focus and tppa,
-// which version 2 called focus-calibrator and polar-alignment.
-export const PROFILES_VERSION = 3
+// which version 2 called focus-calibrator and polar-alignment; version 4 keeps the camera forms by
+// physical camera (cameras) instead of by camera role, and drops the post-capture analysis and plate
+// solving of the frames of a capture.
+export const PROFILES_VERSION = 4
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -42,6 +43,8 @@ export interface ProfileSettings {
 	lastImageDirectory?: string
 	// Camera view and per-camera presentation preferences of the Capture workspace.
 	capture: CaptureSettings
+	// Forms of each physical camera edited so far, by saved connection id, then device id.
+	cameras: Record<string, Record<string, CameraSettings>>
 	// Preferences of the Sky workspace.
 	sky: SkySettings
 	// Telescope or lens of the profile's Equipment Setup, which no device reports; absent until entered.
@@ -105,75 +108,45 @@ export interface CameraViewSettings {
 	reticle?: boolean
 }
 
-// Camera Capture form of one camera view: the request the next capture starts with. It belongs to the
-// camera role, so it is kept when another device is assigned; the panel fits it to the capabilities of the
-// device actually assigned when a capture starts. Exposure time and delay are in seconds.
-export type CameraAcquisitionSettings = CaptureRequest
+// Exposure and camera settings of one physical camera, shared by every operation that takes its frames (Camera
+// Acquisition, Auto Focus); each operation fits them to the camera's capabilities when it starts and keeps that
+// snapshot while it runs, so editing them never changes a running operation. Exposure time in seconds; subframe in
+// pixels of the unbinned sensor.
+export type CameraExposureSettings = Pick<CaptureRequest, 'exposureTime' | 'gain' | 'offset' | 'binX' | 'binY' | 'subframe' | 'x' | 'y' | 'width' | 'height' | 'frameFormat'>
 
-// Camera Capture form of a view that has none yet: one 1 s light frame, previewed and saved in the server's
-// default directory with the server's default names, as FITS.
-export const DEFAULT_ACQUISITION_SETTINGS: CameraAcquisitionSettings = {
-	exposureMode: 'single',
-	count: 10,
-	delay: 0,
-	exposureTime: 1,
-	frameType: 'LIGHT',
-	gain: 0,
-	offset: 0,
-	binX: 1,
-	binY: 1,
-	subframe: false,
-	x: 0,
-	y: 0,
-	width: 0,
-	height: 0,
-	frameFormat: '',
-	output: { mode: 'preview-save', format: 'FITS' },
+// Exposure and camera settings of a camera that has none yet: a 1 s exposure at the driver's defaults, unbinned, on
+// the whole sensor.
+export const DEFAULT_EXPOSURE_SETTINGS: CameraExposureSettings = { exposureTime: 1, gain: 0, offset: 0, binX: 1, binY: 1, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '' }
+
+// Camera Acquisition form of one physical camera besides its exposure: the acquisition mode, the frame type, and the
+// output the next capture starts with. Delay in seconds.
+export type CameraAcquisitionSettings = Pick<CaptureRequest, 'exposureMode' | 'count' | 'delay' | 'frameType' | 'output'>
+
+// Camera Acquisition form of a camera that has none yet: one light frame, previewed and saved in the server's default
+// directory with the server's default names, as FITS.
+export const DEFAULT_ACQUISITION_SETTINGS: CameraAcquisitionSettings = { exposureMode: 'single', count: 10, delay: 0, frameType: 'LIGHT', output: { mode: 'preview-save', format: 'FITS' } }
+
+// Forms of one physical camera; a form not edited yet is absent and its defaults apply.
+export interface CameraSettings {
+	// Exposure and camera settings shared by the operations of the camera.
+	exposure?: CameraExposureSettings
+	// Camera Acquisition form.
+	acquisition?: CameraAcquisitionSettings
+	// Auto Focus form.
+	autoFocus?: AutoFocusSettings
 }
 
-// Post-capture analysis of one camera view: whether the next capture analyzes its frames, how, and whether
-// the star markers are drawn. Kept apart from the capture form, so turning the analysis off keeps its
-// settings; the server's ASTAP settings are never copied here.
-export interface CaptureAnalysisSettings {
-	// Whether the next capture analyzes its frames.
-	enabled: boolean
-	// How frames are forwarded to the star detection.
-	policy: PostCaptureAnalysisPolicy
-	// Detector, settings, and acceptance criteria.
-	request: StarDetectionRequest
-	// Whether the star markers of the frame shown are drawn; never changes the analysis.
-	overlay: boolean
+// Physical camera the forms of a profile belong to: the saved connection that provides it and its device id, stable
+// across reconnections. Never a camera role, so a camera keeps its forms whatever role it takes.
+export interface CameraIdentity {
+	// Id of the saved connection.
+	readonly connectionId: string
+	// Exact id of the camera.
+	readonly deviceId: string
 }
 
-// Post-capture analysis of a view that has none yet: off, Every Frame once turned on, the built-in detector,
-// and the markers shown.
-export const DEFAULT_ANALYSIS_SETTINGS: CaptureAnalysisSettings = { enabled: false, policy: 'everyFrame', request: DEFAULT_STAR_REQUEST, overlay: true }
-
-// Plate solving of the frames of one camera view: whether the next capture solves them, which ones, how, and whether
-// the solution overlay is drawn. Kept apart from the capture form, so turning it off keeps its settings; the server's
-// solver settings are never copied here.
-export interface CapturePlateSolvingSettings {
-	// Whether the next capture solves its frames.
-	enabled: boolean
-	// Which frames are solved.
-	policy: PostCapturePlateSolvingPolicy
-	// N of Every N Frames, a positive integer.
-	interval: number
-	// Solver, strategy, and hints.
-	request: PlateSolveRequest
-	// Whether the WCS overlay of the frame shown is drawn; never solves.
-	overlay: boolean
-	// Whether its RA/Dec grid is drawn too.
-	grid: boolean
-}
-
-// Plate solving of a view that has none yet: off, the first frame once turned on, ASTAP around the header pointing, and
-// the overlay shown without its grid.
-export const DEFAULT_PLATE_SOLVING_SETTINGS: CapturePlateSolvingSettings = { enabled: false, policy: 'firstFrame', interval: 5, request: DEFAULT_PLATE_SOLVE_REQUEST, overlay: true, grid: false }
-
-// Auto Focus form of one camera view: how the frames are measured and the routine the next session starts with.
-// The frames are taken with the exposure and camera settings of the view's Camera Capture form, which this form
-// never holds. Durations are in seconds, positions in focuser steps.
+// Auto Focus form of one physical camera: how the frames are measured and the routine the next session starts with.
+// The frames are taken with the exposure and camera settings of the camera, which this form never holds. Durations are in seconds, positions in focuser steps.
 export interface AutoFocusSettings {
 	// Star detector, its settings, and the acceptance criteria of the stars entering the aggregate HFD.
 	detection: StarDetectionRequest
@@ -215,21 +188,12 @@ export const DEFAULT_AUTO_FOCUS_SETTINGS: AutoFocusSettings = {
 	curve: true,
 }
 
-// Capture preferences of a profile. Only presentation and forms are kept: never images, devices, or
-// operations.
+// Capture workspace preferences of a profile. Only presentation is kept: never images, devices, or operations.
 export interface CaptureSettings {
 	// Camera role of the view selected last; absent before Capture is first opened.
 	activeCamera?: CameraRole
 	// Preferences of each camera view used so far, by camera role.
 	views: Partial<Record<CameraRole, CameraViewSettings>>
-	// Camera Capture form of each camera view edited so far, by camera role; absent before the first edit.
-	acquisition?: Partial<Record<CameraRole, CameraAcquisitionSettings>>
-	// Post-capture analysis of each camera view edited so far, by camera role; absent before the first edit.
-	analysis?: Partial<Record<CameraRole, CaptureAnalysisSettings>>
-	// Plate solving of each camera view edited so far, by camera role; absent before the first edit.
-	plateSolving?: Partial<Record<CameraRole, CapturePlateSolvingSettings>>
-	// Auto Focus form of each camera view edited so far, by camera role; absent before the first edit.
-	autoFocus?: Partial<Record<CameraRole, AutoFocusSettings>>
 }
 
 // A complete working environment: the selected connection, the equipment assigned on each connection,
@@ -277,7 +241,7 @@ export const profileState = proxy<ProfileState>({ profiles: [], activeId: '', op
 
 // Returns the default preferences of a new profile.
 export function defaultSettings(): ProfileSettings {
-	return { panels: {}, capture: { views: {} }, sky: {} }
+	return { panels: {}, capture: { views: {} }, cameras: {}, sky: {} }
 }
 
 // Restores persisted Capture preferences, dropping unknown camera roles and invalid values and reading
@@ -286,42 +250,6 @@ export function defaultSettings(): ProfileSettings {
 function normalizeCapture(value: unknown, capture: CaptureSettings) {
 	if (!isRecord(value)) return
 	if (isCameraRole(value.activeCamera)) capture.activeCamera = value.activeCamera
-
-	if (isRecord(value.acquisition)) {
-		for (const role of CAMERA_ROLES) {
-			const acquisition = normalizeAcquisition(value.acquisition[role])
-			if (!acquisition) continue
-			capture.acquisition ??= {}
-			capture.acquisition[role] = acquisition
-		}
-	}
-
-	if (isRecord(value.analysis)) {
-		for (const role of CAMERA_ROLES) {
-			const analysis = normalizeAnalysis(value.analysis[role])
-			if (!analysis) continue
-			capture.analysis ??= {}
-			capture.analysis[role] = analysis
-		}
-	}
-
-	if (isRecord(value.plateSolving)) {
-		for (const role of CAMERA_ROLES) {
-			const plateSolving = normalizePlateSolving(value.plateSolving[role])
-			if (!plateSolving) continue
-			capture.plateSolving ??= {}
-			capture.plateSolving[role] = plateSolving
-		}
-	}
-
-	if (isRecord(value.autoFocus)) {
-		for (const role of CAMERA_ROLES) {
-			const autoFocus = normalizeAutoFocus(value.autoFocus[role])
-			if (!autoFocus) continue
-			capture.autoFocus ??= {}
-			capture.autoFocus[role] = autoFocus
-		}
-	}
 
 	if (!isRecord(value.views)) return
 
@@ -345,19 +273,15 @@ function numberAtLeast(value: unknown, min: number, fallback: number, integer = 
 	return typeof value === 'number' && Number.isFinite(value) && value >= min && (!integer || Number.isInteger(value)) ? value : fallback
 }
 
-// Restores a persisted Camera Capture form, filling every invalid field with its default; undefined for
-// anything that is not a record.
-function normalizeAcquisition(value: unknown): CameraAcquisitionSettings | undefined {
+// Restores persisted exposure and camera settings, filling every invalid field with its default; undefined for
+// anything that is not a record. Reads the Camera Capture form of earlier versions too, which held them.
+function normalizeExposure(value: unknown): CameraExposureSettings | undefined {
 	if (!isRecord(value)) return undefined
 
-	const defaults = DEFAULT_ACQUISITION_SETTINGS
-	const output = isRecord(value.output) ? value.output : {}
-	const acquisition: CameraAcquisitionSettings = {
-		exposureMode: typeof value.exposureMode === 'string' && EXPOSURE_MODES.has(value.exposureMode) ? (value.exposureMode as CameraAcquisitionSettings['exposureMode']) : defaults.exposureMode,
-		count: numberAtLeast(value.count, 1, defaults.count, true),
-		delay: numberAtLeast(value.delay, 0, defaults.delay),
+	const defaults = DEFAULT_EXPOSURE_SETTINGS
+
+	return {
 		exposureTime: typeof value.exposureTime === 'number' && Number.isFinite(value.exposureTime) && value.exposureTime > 0 ? value.exposureTime : defaults.exposureTime,
-		frameType: typeof value.frameType === 'string' && FRAME_TYPES.has(value.frameType) ? (value.frameType as CameraAcquisitionSettings['frameType']) : defaults.frameType,
 		gain: numberAtLeast(value.gain, -Infinity, defaults.gain),
 		offset: numberAtLeast(value.offset, -Infinity, defaults.offset),
 		binX: numberAtLeast(value.binX, 1, defaults.binX, true),
@@ -368,6 +292,22 @@ function normalizeAcquisition(value: unknown): CameraAcquisitionSettings | undef
 		width: numberAtLeast(value.width, 0, defaults.width, true),
 		height: numberAtLeast(value.height, 0, defaults.height, true),
 		frameFormat: typeof value.frameFormat === 'string' ? value.frameFormat : defaults.frameFormat,
+	}
+}
+
+// Restores a persisted Camera Acquisition form, filling every invalid field with its default; undefined for anything
+// that is not a record. Reads the Camera Capture form of earlier versions too.
+function normalizeAcquisition(value: unknown): CameraAcquisitionSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = DEFAULT_ACQUISITION_SETTINGS
+	const output = isRecord(value.output) ? value.output : {}
+
+	return {
+		exposureMode: typeof value.exposureMode === 'string' && EXPOSURE_MODES.has(value.exposureMode) ? (value.exposureMode as CameraAcquisitionSettings['exposureMode']) : defaults.exposureMode,
+		count: numberAtLeast(value.count, 1, defaults.count, true),
+		delay: numberAtLeast(value.delay, 0, defaults.delay),
+		frameType: typeof value.frameType === 'string' && FRAME_TYPES.has(value.frameType) ? (value.frameType as CameraAcquisitionSettings['frameType']) : defaults.frameType,
 		output: {
 			mode: output.mode === 'preview-only' ? 'preview-only' : 'preview-save',
 			format: output.format === 'XISF' ? 'XISF' : 'FITS',
@@ -375,55 +315,55 @@ function normalizeAcquisition(value: unknown): CameraAcquisitionSettings | undef
 			...(typeof output.filenameTemplate === 'string' && output.filenameTemplate.trim() && { filenameTemplate: output.filenameTemplate.trim() }),
 		},
 	}
-
-	return acquisition
 }
 
-// Restores a persisted post-capture analysis, filling every invalid field with its default (off unless it was
-// explicitly on); undefined for anything that is not a record.
-function normalizeAnalysis(value: unknown): CaptureAnalysisSettings | undefined {
+// Restores the persisted forms of one camera, keeping only the valid ones; undefined when none is.
+function normalizeCamera(value: unknown): CameraSettings | undefined {
 	if (!isRecord(value)) return undefined
-
-	return {
-		enabled: value.enabled === true,
-		policy: value.policy === 'latestFrame' ? 'latestFrame' : 'everyFrame',
-		request: normalizeStarRequest(value.request, DEFAULT_ANALYSIS_SETTINGS.request),
-		overlay: value.overlay !== false,
-	}
+	const exposure = normalizeExposure(value.exposure)
+	const acquisition = normalizeAcquisition(value.acquisition)
+	const autoFocus = normalizeAutoFocus(value.autoFocus)
+	if (!exposure && !acquisition && !autoFocus) return undefined
+	return { ...(exposure && { exposure }), ...(acquisition && { acquisition }), ...(autoFocus && { autoFocus }) }
 }
 
-// Solvers a persisted plate solving request may name.
-const PLATE_SOLVERS: ReadonlySet<string> = new Set<PlateSolverProvider>(['astap', 'astrometryLocal', 'nova'])
+// Restores the persisted forms of the cameras (version 4), by saved connection id and device id.
+function normalizeCameras(value: unknown): ProfileSettings['cameras'] {
+	const cameras: ProfileSettings['cameras'] = {}
+	if (!isRecord(value)) return cameras
 
-// Restores a persisted plate solving of a view, filling every invalid field with its default (off unless it was
-// explicitly on); undefined for anything that is not a record. Hints that are not positive finite angles, or a
-// declination beyond the poles, are dropped.
-function normalizePlateSolving(value: unknown): CapturePlateSolvingSettings | undefined {
-	if (!isRecord(value)) return undefined
+	for (const [connectionId, devices] of Object.entries(value)) {
+		if (!isRecord(devices)) continue
 
-	const request = isRecord(value.request) ? value.request : {}
-	const hints = isRecord(request.hints) ? request.hints : {}
-	const angle = (field: unknown, min: number, max: number) => (typeof field === 'number' && field >= min && field <= max ? field : undefined)
-	const normalizedHints = Object.fromEntries(
-		Object.entries({ rightAscension: angle(hints.rightAscension, 0, 2 * Math.PI), declination: angle(hints.declination, -Math.PI / 2, Math.PI / 2), radius: angle(hints.radius, Number.MIN_VALUE, Math.PI), scale: angle(hints.scale, Number.MIN_VALUE, 0.1) }).filter(([, field]) => field !== undefined),
-	)
-	const downsample = numberAtLeast(request.downsample, 1, 0, true)
-	const scaleTolerance = typeof request.scaleTolerance === 'number' && request.scaleTolerance > 0 && request.scaleTolerance < 1 ? request.scaleTolerance : undefined
-
-	return {
-		enabled: value.enabled === true,
-		policy: value.policy === 'everyNth' || value.policy === 'latestFrame' ? value.policy : 'firstFrame',
-		interval: numberAtLeast(value.interval, 1, DEFAULT_PLATE_SOLVING_SETTINGS.interval, true),
-		request: {
-			provider: typeof request.provider === 'string' && PLATE_SOLVERS.has(request.provider) ? (request.provider as PlateSolverProvider) : 'astap',
-			strategy: request.strategy === 'blind' ? 'blind' : 'assisted',
-			...(Object.keys(normalizedHints).length > 0 && { hints: normalizedHints }),
-			...(downsample > 0 && { downsample }),
-			...(scaleTolerance !== undefined && { scaleTolerance }),
-		},
-		overlay: value.overlay !== false,
-		grid: value.grid === true,
+		for (const [deviceId, camera] of Object.entries(devices)) {
+			const settings = normalizeCamera(camera)
+			if (settings && deviceId) (cameras[connectionId] ??= {})[deviceId] = settings
+		}
 	}
+
+	return cameras
+}
+
+// Moves the camera forms of earlier versions, kept by camera role in the Capture preferences, to the physical
+// cameras: the form of a role goes to the camera that role is assigned in each equipment setup, so a form follows
+// the device it was used with and never reaches a camera that was not assigned that role. A role without an
+// assigned camera loses its form; the post-capture analysis and plate solving are dropped.
+function migrateRoleForms(capture: unknown, equipment: Readonly<Record<string, EquipmentSetup>>): ProfileSettings['cameras'] {
+	const cameras: ProfileSettings['cameras'] = {}
+	if (!isRecord(capture)) return cameras
+	const acquisitions = isRecord(capture.acquisition) ? capture.acquisition : {}
+	const autoFocuses = isRecord(capture.autoFocus) ? capture.autoFocus : {}
+
+	for (const [connectionId, setup] of Object.entries(equipment)) {
+		for (const role of CAMERA_ROLES) {
+			const deviceId = setup[role]?.id
+			if (!deviceId) continue
+			const settings = normalizeCamera({ exposure: acquisitions[role], acquisition: acquisitions[role], autoFocus: autoFocuses[role] })
+			if (settings) (cameras[connectionId] ??= {})[deviceId] = settings
+		}
+	}
+
+	return cameras
 }
 
 // Restores a persisted star detection request, filling every invalid field with its default; the aperture of
@@ -602,6 +542,7 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	if (typeof value.lastImageDirectory === 'string' && value.lastImageDirectory) settings.lastImageDirectory = value.lastImageDirectory
 
 	normalizeCapture(value.capture, settings.capture)
+	settings.cameras = normalizeCameras(value.cameras)
 	normalizeSky(value.sky, settings.sky)
 	const telescope = normalizeTelescope(value.telescope)
 	if (telescope) settings.telescope = telescope
@@ -637,8 +578,9 @@ function normalizeEquipment(value: unknown): Record<string, EquipmentSetup> {
 	return equipment
 }
 
-// Restores a persisted profile, filling missing fields with defaults. Returns undefined when it has no id.
-function normalizeProfile(value: unknown, now: string): Profile | undefined {
+// Restores a persisted profile of a format version, filling missing fields with defaults. Returns undefined when it
+// has no id.
+function normalizeProfile(value: unknown, now: string, version: number): Profile | undefined {
 	if (!isRecord(value) || typeof value.id !== 'string' || !value.id) return undefined
 
 	const name = typeof value.name === 'string' && value.name.trim() ? value.name.trim() : 'Unnamed'
@@ -653,6 +595,7 @@ function normalizeProfile(value: unknown, now: string): Profile | undefined {
 	}
 
 	if (typeof value.connectionId === 'string' && value.connectionId) profile.connectionId = value.connectionId
+	if (version < 4) profile.settings.cameras = migrateRoleForms(isRecord(value.settings) ? value.settings.capture : undefined, profile.equipment)
 
 	return profile
 }
@@ -665,11 +608,12 @@ function migrate(data: unknown, now: string): Profile[] | undefined {
 	switch (data.version) {
 		case 1:
 		case 2:
-		case 3: {
+		case 3:
+		case 4: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {
-				const profile = normalizeProfile(value, now)
+				const profile = normalizeProfile(value, now, data.version)
 				if (profile && !profiles.some((p) => p.id === profile.id)) profiles.push(profile)
 			}
 
@@ -897,72 +841,57 @@ export function setCameraReticle(state: ProfileState, role: CameraRole, reticle:
 	touch(profile)
 }
 
-// Returns the Camera Capture form of a camera view: the one edited last, or the defaults.
-export function acquisitionSettings(capture: Readonly<CaptureSettings>, role: CameraRole): Readonly<CameraAcquisitionSettings> {
-	return capture.acquisition?.[role] ?? DEFAULT_ACQUISITION_SETTINGS
+// Returns the identity of a camera of a profile's saved connection, or undefined when the profile has no connection
+// selected or there is no camera.
+export function profileCamera(profile: Pick<Profile, 'connectionId'>, deviceId: string | undefined): CameraIdentity | undefined {
+	return profile.connectionId && deviceId ? { connectionId: profile.connectionId, deviceId } : undefined
 }
 
-// Replaces fields of the Camera Capture form of a camera view in the active profile; other views keep
-// theirs. The output is replaced as a whole when given.
-export function setAcquisitionSettings(state: ProfileState, role: CameraRole, patch: Partial<CameraAcquisitionSettings>) {
+// Returns the forms of a camera, or undefined when it has none.
+function cameraSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<CameraSettings> | undefined {
+	return camera && settings.cameras[camera.connectionId]?.[camera.deviceId]
+}
+
+// Replaces fields of a form of a camera in the active profile with a plain copy (the stored form is a proxy, and a
+// default must never be shared with a camera); other cameras and forms keep theirs. Does nothing without a camera.
+function setCameraForm<K extends keyof CameraSettings>(state: ProfileState, camera: CameraIdentity | undefined, form: K, current: Readonly<NonNullable<CameraSettings[K]>>, patch: Partial<NonNullable<CameraSettings[K]>>) {
+	if (!camera) return
 	const profile = activeProfile(state)
-	const capture = profile.settings.capture
-	// A plain copy: the stored form is a proxy, and a default must never be shared with a view.
-	const next = JSON.parse(JSON.stringify({ ...acquisitionSettings(capture, role), ...patch })) as CameraAcquisitionSettings
-	capture.acquisition ??= {}
-	capture.acquisition[role] = next
+	const settings = ((profile.settings.cameras[camera.connectionId] ??= {})[camera.deviceId] ??= {})
+	settings[form] = JSON.parse(JSON.stringify({ ...current, ...patch })) as CameraSettings[K]
 	touch(profile)
 }
 
-// Returns the post-capture analysis of a camera view: the one edited last, or the defaults.
-export function analysisSettings(capture: Readonly<CaptureSettings>, role: CameraRole): Readonly<CaptureAnalysisSettings> {
-	return capture.analysis?.[role] ?? DEFAULT_ANALYSIS_SETTINGS
+// Returns the exposure and camera settings of a camera: the ones edited last, or the defaults.
+export function exposureSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<CameraExposureSettings> {
+	return cameraSettings(settings, camera)?.exposure ?? DEFAULT_EXPOSURE_SETTINGS
 }
 
-// Replaces fields of the post-capture analysis of a camera view in the active profile; other views keep
-// theirs. The request is replaced as a whole when given.
-export function setAnalysisSettings(state: ProfileState, role: CameraRole, patch: Partial<CaptureAnalysisSettings>) {
-	const profile = activeProfile(state)
-	const capture = profile.settings.capture
-	// A plain copy: the stored settings are a proxy, and a default must never be shared with a view.
-	const next = JSON.parse(JSON.stringify({ ...analysisSettings(capture, role), ...patch })) as CaptureAnalysisSettings
-	capture.analysis ??= {}
-	capture.analysis[role] = next
-	touch(profile)
+// Replaces fields of the exposure and camera settings of a camera in the active profile.
+export function setExposureSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<CameraExposureSettings>) {
+	setCameraForm(state, camera, 'exposure', exposureSettings(activeProfile(state).settings, camera), patch)
 }
 
-// Returns the plate solving of a camera view: the one edited last, or the defaults.
-export function plateSolvingSettings(capture: Readonly<CaptureSettings>, role: CameraRole): Readonly<CapturePlateSolvingSettings> {
-	return capture.plateSolving?.[role] ?? DEFAULT_PLATE_SOLVING_SETTINGS
+// Returns the Camera Acquisition form of a camera: the one edited last, or the defaults.
+export function acquisitionSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<CameraAcquisitionSettings> {
+	return cameraSettings(settings, camera)?.acquisition ?? DEFAULT_ACQUISITION_SETTINGS
 }
 
-// Replaces fields of the plate solving of a camera view in the active profile; other views keep theirs. The request is
-// replaced as a whole when given.
-export function setPlateSolvingSettings(state: ProfileState, role: CameraRole, patch: Partial<CapturePlateSolvingSettings>) {
-	const profile = activeProfile(state)
-	const capture = profile.settings.capture
-	// A plain copy: the stored settings are a proxy, and a default must never be shared with a view.
-	const next = JSON.parse(JSON.stringify({ ...plateSolvingSettings(capture, role), ...patch })) as CapturePlateSolvingSettings
-	capture.plateSolving ??= {}
-	capture.plateSolving[role] = next
-	touch(profile)
+// Replaces fields of the Camera Acquisition form of a camera in the active profile. The output is replaced as a whole
+// when given.
+export function setAcquisitionSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<CameraAcquisitionSettings>) {
+	setCameraForm(state, camera, 'acquisition', acquisitionSettings(activeProfile(state).settings, camera), patch)
 }
 
-// Returns the Auto Focus form of a camera view: the one edited last, or the defaults.
-export function autoFocusSettings(capture: Readonly<CaptureSettings>, role: CameraRole): Readonly<AutoFocusSettings> {
-	return capture.autoFocus?.[role] ?? DEFAULT_AUTO_FOCUS_SETTINGS
+// Returns the Auto Focus form of a camera: the one edited last, or the defaults.
+export function autoFocusSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<AutoFocusSettings> {
+	return cameraSettings(settings, camera)?.autoFocus ?? DEFAULT_AUTO_FOCUS_SETTINGS
 }
 
-// Replaces fields of the Auto Focus form of a camera view in the active profile; other views and the Camera
-// Capture form keep theirs. The detection is replaced as a whole when given.
-export function setAutoFocusSettings(state: ProfileState, role: CameraRole, patch: Partial<AutoFocusSettings>) {
-	const profile = activeProfile(state)
-	const capture = profile.settings.capture
-	// A plain copy: the stored settings are a proxy, and a default must never be shared with a view.
-	const next = JSON.parse(JSON.stringify({ ...autoFocusSettings(capture, role), ...patch })) as AutoFocusSettings
-	capture.autoFocus ??= {}
-	capture.autoFocus[role] = next
-	touch(profile)
+// Replaces fields of the Auto Focus form of a camera in the active profile. The detection is replaced as a whole when
+// given.
+export function setAutoFocusSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<AutoFocusSettings>) {
+	setCameraForm(state, camera, 'autoFocus', autoFocusSettings(activeProfile(state).settings, camera), patch)
 }
 
 // Sets the Sky observer of the active profile, or clears it with undefined. Returns false, changing

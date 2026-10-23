@@ -4,9 +4,7 @@ import { connectionState } from '../connection/connection'
 import { deviceState } from '../equipment/equipment'
 import { type CameraRole, roleDefinition } from '../equipment/roles'
 import { useRoleDevice } from '../equipment/useEquipment'
-import { usePlateSolution } from '../platesolving/usePlateSolution'
-import { WcsOverlay } from '../platesolving/WcsOverlay'
-import { activeProfile, activeSetup, analysisSettings, autoFocusSettings, plateSolvingSettings, profileState, selectCameraView, setAutoFocusSettings, setCameraReticle } from '../profile/profile'
+import { activeProfile, activeSetup, autoFocusSettings, type CameraIdentity, profileCamera, profileState, selectCameraView, setAutoFocusSettings, setCameraReticle } from '../profile/profile'
 import { CAPTURE_MODES, type CaptureMode, navigate, redirect, routeState } from '../shell/route'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { StarOverlay } from '../stars/StarOverlay'
@@ -105,9 +103,9 @@ export function CaptureWorkspace() {
 				role={role}
 				focusing={mode === 'auto-focus'}
 				reticle={viewReticle(capture, role, mode)}
-				stars={mode === 'auto-focus' ? autoFocusSettings(capture, role).overlay : analysisSettings(capture, role).overlay}
-				wcs={mode === 'auto-focus' || !plateSolvingSettings(capture, role).overlay ? undefined : { grid: plateSolvingSettings(capture, role).grid }}
-				curve={autoFocusSettings(capture, role).curve}
+				settings={profileCamera(profile, setup[role]?.id)}
+				stars={mode === 'auto-focus' && autoFocusSettings(profile.settings, profileCamera(profile, setup[role]?.id)).overlay}
+				curve={autoFocusSettings(profile.settings, profileCamera(profile, setup[role]?.id)).curve}
 			/>
 		</WorkspaceLayout>
 	)
@@ -120,10 +118,10 @@ interface CaptureViewerProps {
 	readonly viewer: string
 	// Whether the reticle is shown.
 	readonly reticle: boolean
-	// Whether the star markers of the frame shown are drawn.
+	// Camera whose Auto Focus form keeps the Focus Curve choice; absent without a saved connection.
+	readonly settings?: CameraIdentity
+	// Whether the star markers of the Auto Focus frame shown are drawn.
 	readonly stars: boolean
-	// How the WCS overlay of the frame shown is drawn; absent when it is not.
-	readonly wcs?: { readonly grid: boolean }
 	// Whether the view is in the Auto Focus mode, which shows the latest frame of its session and the Focus Curve.
 	readonly focusing: boolean
 	// Whether the Focus Curve is expanded.
@@ -140,7 +138,7 @@ interface CaptureViewerProps {
 // Auto Focus session, rendered apart from the captures, and the Focus Curve of the session is shown below. Inspect in
 // Images opens exactly the frame on screen in the Images workspace, even when a newer frame arrives meanwhile; the
 // capture goes on.
-function CaptureViewer({ role, viewer, reticle, stars, wcs, focusing, curve }: CaptureViewerProps) {
+function CaptureViewer({ role, viewer, reticle, settings, stars, focusing, curve }: CaptureViewerProps) {
 	const camera: CameraTarget = { role, ...useRoleDevice(role) }
 	const views = useSnapshot(captureViewerState)
 	const runtime = useSnapshot(captureRuntime)
@@ -153,8 +151,6 @@ function CaptureViewer({ role, viewer, reticle, stars, wcs, focusing, curve }: C
 	const rendering = renderKey ? runtime.renderings[renderKey] : undefined
 	// The markers follow the frame on screen: the rendering's image, not a frame still being rendered.
 	const { result } = useStarResult(stars ? rendering?.imageId : undefined)
-	// The solution follows the frame on screen the same way, so a late solution never lands on a newer frame.
-	const { solution } = usePlateSolution(wcs ? rendering?.imageId : undefined)
 
 	useEffect(() => {
 		if (renderKey && frame) void renderFrame(captureRuntime, renderKey, frame)
@@ -170,11 +166,10 @@ function CaptureViewer({ role, viewer, reticle, stars, wcs, focusing, curve }: C
 			empty={<CameraState camera={camera} focusing={focusing} />}
 			toolbar={<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={() => setCameraReticle(profileState, role, !reticle)} />}
 			overlays={
-				reticle || result || solution
+				reticle || result
 					? (size, view) => (
 							<>
 								{reticle && <Reticle {...size} />}
-								{solution && wcs && <WcsOverlay solution={solution} image={size} view={view} grid={wcs.grid} />}
 								{result && <StarOverlay result={result} view={view} acceptedOnly={false} />}
 							</>
 						)
@@ -189,7 +184,7 @@ function CaptureViewer({ role, viewer, reticle, stars, wcs, focusing, curve }: C
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="relative min-h-0 flex-1">{image}</div>
 			<section className="shrink-0 border-t border-line-100 bg-base-100">
-				<button type="button" className="flex w-full cursor-pointer items-center justify-between border-0 bg-transparent px-3 py-1.5 text-xs font-medium text-ink-200 select-none hover:text-ink-100" onClick={() => setAutoFocusSettings(profileState, role, { curve: !curve })}>
+				<button type="button" className="flex w-full cursor-pointer items-center justify-between border-0 bg-transparent px-3 py-1.5 text-xs font-medium text-ink-200 select-none hover:text-ink-100" onClick={() => setAutoFocusSettings(profileState, settings, { curve: !curve })}>
 					<span>Focus Curve</span>
 					<span className="text-ink-300">{curve ? 'Hide' : 'Show'}</span>
 				</button>

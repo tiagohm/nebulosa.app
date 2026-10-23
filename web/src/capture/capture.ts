@@ -2,6 +2,7 @@ import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession, 
 import { proxy } from 'valtio'
 import type { EquipmentSetup } from '../equipment/roles'
 import { type ImagesIo, ORIGINAL_DISPLAY_SETTINGS, browserIo } from '../images/images'
+import type { CameraAcquisitionSettings, CameraExposureSettings } from '../profile/profile'
 
 // Camera captures as this tab knows them. The server owns every capture, whichever tab started it, so this
 // store only mirrors it: sessions and previewed frames are fed by capture:updated and capture:frame events
@@ -181,34 +182,37 @@ function clamp(value: number, min?: number, max?: number) {
 	return Math.min(max ?? Infinity, Math.max(min ?? -Infinity, value))
 }
 
-// Fits a Camera Capture form to the capabilities of the camera it is sent to, since the server sends
-// every value to the driver as given: the exposure, gain, offset, and binning are limited to the ranges
-// the driver publishes, a subframe is sent only to a camera that can take one and is kept inside its
-// sensor, and XISF only to a driver that offers it. Without known capabilities the form is sent as is.
-export function captureRequest(settings: Readonly<CaptureRequest>, capabilities?: CameraCapabilities): CaptureRequest {
-	if (!capabilities) return { ...settings, output: { ...settings.output } }
+// Fits the exposure and camera settings of a camera to its capabilities, since the server sends every value to the
+// driver as given: the exposure, gain, offset, and binning are limited to the ranges the driver publishes, a subframe
+// is sent only to a camera that can take one and is kept inside its sensor, and an unknown readout mode is replaced
+// by the driver's default. Without known capabilities the settings are sent as they are.
+export function fitExposure(settings: Readonly<CameraExposureSettings>, capabilities?: CameraCapabilities): CameraExposureSettings {
+	const { exposureTime, gain, offset, binX, binY, subframe, x, y, width, height, frameFormat } = settings
+	if (!capabilities) return { exposureTime, gain, offset, binX, binY, subframe, x, y, width, height, frameFormat }
 
-	const { exposure, gain, offset, bin, subframe } = capabilities
-	const binX = bin ? clamp(settings.binX, 1, bin.x) : 1
-	const binY = bin ? clamp(settings.binY, 1, bin.y) : 1
-	const width = subframe ? clamp(settings.width, 0, subframe.width) : 0
-	const height = subframe ? clamp(settings.height, 0, subframe.height) : 0
+	const { exposure, bin } = capabilities
+	const fitted = { width: capabilities.subframe ? clamp(width, 0, capabilities.subframe.width) : 0, height: capabilities.subframe ? clamp(height, 0, capabilities.subframe.height) : 0 }
 
 	return {
-		...settings,
-		exposureTime: exposure && exposure.min > 0 ? clamp(settings.exposureTime, exposure.min, exposure.max) : clamp(settings.exposureTime, undefined, exposure?.max),
-		gain: gain ? clamp(settings.gain, gain.min, gain.max) : settings.gain,
-		offset: offset ? clamp(settings.offset, offset.min, offset.max) : settings.offset,
-		binX,
-		binY,
-		subframe: subframe !== undefined && settings.subframe && width > 0 && height > 0,
-		x: subframe ? clamp(settings.x, 0, subframe.width - width) : 0,
-		y: subframe ? clamp(settings.y, 0, subframe.height - height) : 0,
-		width,
-		height,
-		frameFormat: capabilities.frameFormats.some((format) => format.name === settings.frameFormat) ? settings.frameFormat : '',
-		output: { ...settings.output, format: settings.output.format === 'XISF' && capabilities.transferFormats.includes('XISF') ? 'XISF' : 'FITS' },
+		exposureTime: exposure && exposure.min > 0 ? clamp(exposureTime, exposure.min, exposure.max) : clamp(exposureTime, undefined, exposure?.max),
+		gain: capabilities.gain ? clamp(gain, capabilities.gain.min, capabilities.gain.max) : gain,
+		offset: capabilities.offset ? clamp(offset, capabilities.offset.min, capabilities.offset.max) : offset,
+		binX: bin ? clamp(binX, 1, bin.x) : 1,
+		binY: bin ? clamp(binY, 1, bin.y) : 1,
+		subframe: capabilities.subframe !== undefined && subframe && fitted.width > 0 && fitted.height > 0,
+		x: capabilities.subframe ? clamp(x, 0, capabilities.subframe.width - fitted.width) : 0,
+		y: capabilities.subframe ? clamp(y, 0, capabilities.subframe.height - fitted.height) : 0,
+		...fitted,
+		frameFormat: capabilities.frameFormats.some((format) => format.name === frameFormat) ? frameFormat : '',
 	}
+}
+
+// Builds the request of a capture from the exposure settings and the Camera Acquisition form of a camera, fitted to
+// its capabilities (see fitExposure); XISF is sent only to a driver that offers it.
+export function captureRequest(exposure: Readonly<CameraExposureSettings>, acquisition: Readonly<CameraAcquisitionSettings>, capabilities?: CameraCapabilities): CaptureRequest {
+	const { exposureMode, count, delay, frameType, output } = acquisition
+	const format = output.format === 'XISF' && capabilities && !capabilities.transferFormats.includes('XISF') ? 'FITS' : output.format
+	return { ...fitExposure(exposure, capabilities), exposureMode, count, delay, frameType, output: { ...output, format } }
 }
 
 // Returns the devices every capture of a setup's cameras snoops into its frame headers: the mount, focuser, filter

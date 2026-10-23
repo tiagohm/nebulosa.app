@@ -3,7 +3,7 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { acquisitionSettings, ACTIVE_PROFILE_KEY, activeProfile, activeSetup, analysisSettings, assignDevice, autoFocusSettings, DEFAULT_AUTO_FOCUS_SETTINGS, setAutoFocusSettings, createOpticalPreset, createProfile, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_ANALYSIS_SETTINGS, DEFAULT_PLATE_SOLVING_SETTINGS, plateSolvingSettings, setPlateSolvingSettings, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectOpticalPreset, selectProfile, setAcquisitionSettings, setAnalysisSettings, setCameraReticle, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setTelescopeOptics, updateOpticalPreset } from './profile'
+import { acquisitionSettings, ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, autoFocusSettings, DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, exposureSettings, profileCamera, setAutoFocusSettings, setExposureSettings, createOpticalPreset, createProfile, DEFAULT_ACQUISITION_SETTINGS, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectOpticalPreset, selectProfile, setAcquisitionSettings, setCameraReticle, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setTelescopeOptics, updateOpticalPreset } from './profile'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }
@@ -37,7 +37,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 3, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: 4, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -263,9 +263,9 @@ describe('settings', () => {
 		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
 		const state = load(stores)
 
-		expect(state.profiles[0].settings).toEqual({ panels: { capture: false, images: true }, lastImageDirectory: '/data', capture: { views: {} }, sky: {} })
-		expect(state.profiles[1].settings).toEqual({ panels: {}, capture: { views: {} }, sky: {} })
-		expect(state.profiles[2].settings).toEqual({ panels: {}, capture: { views: {} }, sky: {} })
+		expect(state.profiles[0].settings).toEqual({ panels: { capture: false, images: true }, lastImageDirectory: '/data', capture: { views: {} }, cameras: {}, sky: {} })
+		expect(state.profiles[1].settings).toEqual({ panels: {}, capture: { views: {} }, cameras: {}, sky: {} })
+		expect(state.profiles[2].settings).toEqual({ panels: {}, capture: { views: {} }, cameras: {}, sky: {} })
 	})
 
 	test('panels are expanded by default and persisted per profile', () => {
@@ -527,133 +527,106 @@ describe('sky settings', () => {
 	})
 })
 
-describe('camera capture form', () => {
-	test('starts from the defaults and keeps the form of each camera view apart', () => {
-		const state = load(newStores())
-		expect(acquisitionSettings(activeProfile(state).settings.capture, 'MAIN_CAMERA')).toEqual(DEFAULT_ACQUISITION_SETTINGS)
+// Physical cameras of the saved connection c.
+const MAIN = { connectionId: 'c', deviceId: 'cam-main' }
+const GUIDE = { connectionId: 'c', deviceId: 'cam-guide' }
 
-		setAcquisitionSettings(state, 'MAIN_CAMERA', { exposureMode: 'loop', exposureTime: 0.0001, delay: 1.5 })
-		setAcquisitionSettings(state, 'GUIDE_CAMERA', { output: { mode: 'preview-only', format: 'FITS' } })
+describe('camera forms', () => {
+	test('start from the defaults and are kept per physical camera, the exposure apart from the acquisition and Auto Focus forms', () => {
+		const state = load(newStores())
+		const settings = activeProfile(state).settings
+		expect(exposureSettings(settings, MAIN)).toEqual(DEFAULT_EXPOSURE_SETTINGS)
+		expect(acquisitionSettings(settings, MAIN)).toEqual(DEFAULT_ACQUISITION_SETTINGS)
+		expect(autoFocusSettings(settings, MAIN)).toEqual(DEFAULT_AUTO_FOCUS_SETTINGS)
+
+		setExposureSettings(state, MAIN, { exposureTime: 0.0001, gain: 120 })
+		setAcquisitionSettings(state, MAIN, { exposureMode: 'loop', delay: 1.5 })
+		setAutoFocusSettings(state, MAIN, { stepSize: 50 })
+		setAcquisitionSettings(state, GUIDE, { output: { mode: 'preview-only', format: 'FITS' } })
 		selectCameraView(state, 'MAIN_CAMERA', 'mount-nudge')
 
-		const capture = activeProfile(state).settings.capture
-		expect(acquisitionSettings(capture, 'MAIN_CAMERA')).toEqual({ ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'loop', exposureTime: 0.0001, delay: 1.5 })
-		expect(acquisitionSettings(capture, 'GUIDE_CAMERA').output).toEqual({ mode: 'preview-only', format: 'FITS' })
+		expect(exposureSettings(settings, MAIN)).toEqual({ ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 0.0001, gain: 120 })
+		expect(acquisitionSettings(settings, MAIN)).toEqual({ ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'loop', delay: 1.5 })
+		expect(autoFocusSettings(settings, MAIN)).toEqual({ ...DEFAULT_AUTO_FOCUS_SETTINGS, stepSize: 50 })
+		expect(exposureSettings(settings, GUIDE)).toEqual(DEFAULT_EXPOSURE_SETTINGS)
+		expect(acquisitionSettings(settings, GUIDE).output).toEqual({ mode: 'preview-only', format: 'FITS' })
+		expect(autoFocusSettings(settings, GUIDE).stepSize).toBeUndefined()
 		expect(DEFAULT_ACQUISITION_SETTINGS.exposureMode).toBe('single')
 	})
 
-	test('is persisted and restored, replacing invalid fields with defaults', async () => {
-		const stores = newStores()
-		const state = load(stores)
-		setAcquisitionSettings(state, 'MAIN_CAMERA', { exposureMode: 'fixed', count: 30, exposureTime: 0.0001, output: { mode: 'preview-save', directory: '/data/allsky', filenameTemplate: 'sky_{seq}', format: 'XISF' } })
-		await Bun.sleep(0)
-
-		const reloaded = load({ local: stores.local, session: new MemoryStorage() })
-		expect(acquisitionSettings(reloaded.profiles[0].settings.capture, 'MAIN_CAMERA')).toEqual({ ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'fixed', count: 30, exposureTime: 0.0001, output: { mode: 'preview-save', directory: '/data/allsky', filenameTemplate: 'sky_{seq}', format: 'XISF' } })
-
-		const invalid = newStores()
-		const acquisition = { MAIN_CAMERA: { exposureMode: 'burst', count: 2.5, delay: -1, exposureTime: 0, frameType: 'SKY', binX: 0, output: { mode: 'x', format: 'NATIVE', directory: '  ' } }, MOUNT: {} }
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {}, acquisition } } }] }))
-		expect(load(invalid).profiles[0].settings.capture).toEqual({ views: {}, acquisition: { MAIN_CAMERA: DEFAULT_ACQUISITION_SETTINGS } })
-	})
-})
-
-describe('post-capture analysis', () => {
-	test('is off by default, Every Frame once on, and kept per camera view', () => {
+	test('a camera without a saved connection reads the defaults and keeps nothing', () => {
 		const state = load(newStores())
-		expect(analysisSettings(activeProfile(state).settings.capture, 'MAIN_CAMERA')).toEqual({ enabled: false, policy: 'everyFrame', request: { detector: { provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 }, acceptance: { minSNR: 0, minHfd: 0, maxHfd: 0, edgeMargin: 0 } }, overlay: true })
+		const before = activeProfile(state).updatedAt
+		expect(profileCamera(activeProfile(state), 'cam-main')).toBeUndefined()
 
-		setAnalysisSettings(state, 'MAIN_CAMERA', { enabled: true })
-		setAnalysisSettings(state, 'GUIDE_CAMERA', { overlay: false })
-
-		const capture = activeProfile(state).settings.capture
-		expect(analysisSettings(capture, 'MAIN_CAMERA')).toMatchObject({ enabled: true, policy: 'everyFrame', overlay: true })
-		expect(analysisSettings(capture, 'GUIDE_CAMERA')).toMatchObject({ enabled: false, overlay: false })
-		expect(DEFAULT_ANALYSIS_SETTINGS.enabled).toBeFalse()
+		setExposureSettings(state, undefined, { gain: 120 })
+		expect(activeProfile(state).settings.cameras).toEqual({})
+		expect(activeProfile(state).updatedAt).toBe(before)
+		expect(profileCamera({ connectionId: 'c' }, 'cam-main')).toEqual(MAIN)
 	})
 
-	test('is persisted and restored, replacing invalid fields with defaults and staying off unless on', async () => {
-		const stores = newStores()
-		const state = load(stores)
-		const request = { detector: { provider: 'astap', maxStars: 200, minSNR: 15 }, acceptance: { minSNR: 5, minHfd: 1, maxHfd: 12, edgeMargin: 20 } } as const
-		setAnalysisSettings(state, 'MAIN_CAMERA', { enabled: true, policy: 'latestFrame', request, overlay: false })
-		await Bun.sleep(0)
-
-		const reloaded = load({ local: stores.local, session: new MemoryStorage() })
-		expect(analysisSettings(reloaded.profiles[0].settings.capture, 'MAIN_CAMERA')).toEqual({ enabled: true, policy: 'latestFrame', request, overlay: false })
-
-		const invalid = newStores()
-		const analysis = { MAIN_CAMERA: { enabled: 'yes', policy: 'sometimes', request: { detector: { provider: 'other', maxStars: -1, minSNR: 'high' }, acceptance: { minHfd: -2 } }, overlay: 0 }, MOUNT: { enabled: true } }
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {}, analysis } } }] }))
-		expect(load(invalid).profiles[0].settings.capture).toEqual({ views: {}, analysis: { MAIN_CAMERA: DEFAULT_ANALYSIS_SETTINGS } })
-
-		// Profiles written before the analysis existed have none, which reads as off.
-		const older = newStores()
-		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {} } } }] }))
-		expect(analysisSettings(load(older).profiles[0].settings.capture, 'MAIN_CAMERA').enabled).toBeFalse()
-	})
-})
-
-describe('post-capture plate solving', () => {
-	test('is off by default, First Frame once on, and kept per camera view', () => {
-		const state = load(newStores())
-		expect(plateSolvingSettings(activeProfile(state).settings.capture, 'MAIN_CAMERA')).toEqual({ enabled: false, policy: 'firstFrame', interval: 5, request: { provider: 'astap', strategy: 'assisted' }, overlay: true, grid: false })
-
-		setPlateSolvingSettings(state, 'MAIN_CAMERA', { enabled: true })
-		setPlateSolvingSettings(state, 'GUIDE_CAMERA', { overlay: false })
-
-		const capture = activeProfile(state).settings.capture
-		expect(plateSolvingSettings(capture, 'MAIN_CAMERA')).toMatchObject({ enabled: true, policy: 'firstFrame', overlay: true })
-		expect(plateSolvingSettings(capture, 'GUIDE_CAMERA')).toMatchObject({ enabled: false, overlay: false })
-		expect(DEFAULT_PLATE_SOLVING_SETTINGS.enabled).toBeFalse()
-	})
-
-	test('is persisted and restored, replacing invalid fields with defaults and dropping invalid hints', async () => {
-		const stores = newStores()
-		const state = load(stores)
-		const request = { provider: 'nova', strategy: 'blind', hints: { scale: 1e-5 }, downsample: 4, scaleTolerance: 0.3 } as const
-		setPlateSolvingSettings(state, 'MAIN_CAMERA', { enabled: true, policy: 'latestFrame', interval: 3, request, overlay: false, grid: true })
-		await Bun.sleep(0)
-
-		const reloaded = load({ local: stores.local, session: new MemoryStorage() })
-		expect(plateSolvingSettings(reloaded.profiles[0].settings.capture, 'MAIN_CAMERA')).toEqual({ enabled: true, policy: 'latestFrame', interval: 3, request, overlay: false, grid: true })
-
-		const invalid = newStores()
-		const plateSolving = { MAIN_CAMERA: { enabled: 'yes', policy: 'often', interval: -2, request: { provider: 'other', strategy: 'guess', hints: { declination: 9, radius: -1, rightAscension: 'x' }, downsample: 0, scaleTolerance: 2 }, overlay: 0, grid: 'on' }, MOUNT: { enabled: true } }
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {}, plateSolving } } }] }))
-		expect(load(invalid).profiles[0].settings.capture).toEqual({ views: {}, plateSolving: { MAIN_CAMERA: DEFAULT_PLATE_SOLVING_SETTINGS } })
-	})
-})
-
-describe('auto focus form', () => {
-	test('starts from the defaults and is kept per camera view, apart from the Camera Capture form', () => {
-		const state = load(newStores())
-		setAcquisitionSettings(state, 'MAIN_CAMERA', { gain: 120, exposureTime: 30 })
-
-		const capture = activeProfile(state).settings.capture
-		expect(autoFocusSettings(capture, 'MAIN_CAMERA')).toEqual(DEFAULT_AUTO_FOCUS_SETTINGS)
-
-		setAutoFocusSettings(state, 'MAIN_CAMERA', { stepSize: 50 })
-		expect(autoFocusSettings(capture, 'MAIN_CAMERA')).toEqual({ ...DEFAULT_AUTO_FOCUS_SETTINGS, stepSize: 50 })
-		expect(acquisitionSettings(capture, 'MAIN_CAMERA')).toMatchObject({ gain: 120, exposureTime: 30 })
-		expect(autoFocusSettings(capture, 'GUIDE_CAMERA').stepSize).toBeUndefined()
-	})
-
-	test('is persisted and restored, replacing invalid fields with defaults and dropping an invalid step size and the frame settings it once had', async () => {
+	test('are persisted and restored, replacing invalid fields with defaults', async () => {
 		const stores = newStores()
 		const state = load(stores)
 		const detection = { detector: { provider: 'builtin', maxStars: 50, minSNR: 2, searchRegion: 0, maximumRadius: 24 }, acceptance: { minSNR: 0, minHfd: 1, maxHfd: 0, edgeMargin: 10 } } as const
-		setAutoFocusSettings(state, 'MAIN_CAMERA', { fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, detection, settleDelay: 1.5, curve: false })
+		setExposureSettings(state, MAIN, { exposureTime: 0.0001, binX: 2, binY: 2, subframe: true, width: 100, height: 80 })
+		setAcquisitionSettings(state, MAIN, { exposureMode: 'fixed', count: 30, output: { mode: 'preview-save', directory: '/data/allsky', filenameTemplate: 'sky_{seq}', format: 'XISF' } })
+		setAutoFocusSettings(state, MAIN, { fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, detection, settleDelay: 1.5, curve: false })
 		await Bun.sleep(0)
 
-		const reloaded = load({ local: stores.local, session: new MemoryStorage() })
-		expect(autoFocusSettings(reloaded.profiles[0].settings.capture, 'MAIN_CAMERA')).toMatchObject({ fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, detection, settleDelay: 1.5, curve: false })
+		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
+		expect(exposureSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 0.0001, binX: 2, binY: 2, subframe: true, width: 100, height: 80 })
+		expect(acquisitionSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'fixed', count: 30, output: { mode: 'preview-save', directory: '/data/allsky', filenameTemplate: 'sky_{seq}', format: 'XISF' } })
+		expect(autoFocusSettings(reloaded, MAIN)).toMatchObject({ fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, detection, settleDelay: 1.5, curve: false })
 
 		const invalid = newStores()
-		const autoFocus = { MAIN_CAMERA: { fittingMode: 'CUBIC', stepSize: 0, initialOffsetSteps: 0, exposureTime: 4, gain: 120, offset: 10, bin: 2, measureTimeout: 0, detection: { detector: { provider: 'builtin', maximumRadius: -3 } } } }
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {}, autoFocus } } }] }))
-		const restored = load(invalid).profiles[0].settings.capture.autoFocus!.MAIN_CAMERA!
-		expect(restored).toEqual({ ...DEFAULT_AUTO_FOCUS_SETTINGS, detection: { ...DEFAULT_AUTO_FOCUS_SETTINGS.detection, detector: { provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 } } })
-		expect(restored.stepSize).toBeUndefined()
+		const cameras = {
+			c: {
+				'cam-main': {
+					exposure: { exposureTime: 0, binX: 0, gain: 'high' },
+					acquisition: { exposureMode: 'burst', count: 2.5, delay: -1, frameType: 'SKY', output: { mode: 'x', format: 'NATIVE', directory: '  ' } },
+					autoFocus: { fittingMode: 'CUBIC', stepSize: 0, initialOffsetSteps: 0, measureTimeout: 0, detection: { detector: { provider: 'builtin', maximumRadius: -3 } } },
+				},
+				'cam-empty': 'oops',
+			},
+			d: 'oops',
+		}
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 4, profiles: [{ id: 'a', name: 'A', settings: { cameras } }] }))
+		expect(load(invalid).profiles[0].settings.cameras).toEqual({
+			c: {
+				'cam-main': {
+					exposure: DEFAULT_EXPOSURE_SETTINGS,
+					acquisition: DEFAULT_ACQUISITION_SETTINGS,
+					autoFocus: { ...DEFAULT_AUTO_FOCUS_SETTINGS, detection: { ...DEFAULT_AUTO_FOCUS_SETTINGS.detection, detector: { provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 } } },
+				},
+			},
+		})
+	})
+
+	test('version 3 forms of a camera role move to the camera that role is assigned in each setup', () => {
+		const stores = newStores()
+		const acquisition = { MAIN_CAMERA: { exposureMode: 'loop', delay: 2, exposureTime: 30, frameType: 'DARK', gain: 120, binX: 2, binY: 2, output: { mode: 'preview-only', format: 'FITS' } }, GUIDE_CAMERA: { exposureTime: 2 } }
+		const autoFocus = { MAIN_CAMERA: { stepSize: 40 } }
+		const analysis = { MAIN_CAMERA: { enabled: true } }
+		const equipment = { c: { MAIN_CAMERA: dev('cam-main'), GUIDE_CAMERA: dev('cam-guide') }, d: { MAIN_CAMERA: dev('other-main') }, e: { MOUNT: dev('mount') } }
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', connectionId: 'c', equipment, settings: { capture: { activeCamera: 'MAIN_CAMERA', views: { MAIN_CAMERA: { mode: 'auto-focus' } }, acquisition, autoFocus, analysis } } }] }))
+		const settings = load(stores).profiles[0].settings
+
+		const main = { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 30, gain: 120, binX: 2, binY: 2 }
+		expect(settings.capture).toEqual({ activeCamera: 'MAIN_CAMERA', views: { MAIN_CAMERA: { mode: 'auto-focus' } } })
+		expect(exposureSettings(settings, MAIN)).toEqual(main)
+		expect(acquisitionSettings(settings, MAIN)).toEqual({ ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'loop', delay: 2, frameType: 'DARK', output: { mode: 'preview-only', format: 'FITS' } })
+		expect(autoFocusSettings(settings, MAIN).stepSize).toBe(40)
+		expect(exposureSettings(settings, GUIDE).exposureTime).toBe(2)
+		expect(autoFocusSettings(settings, GUIDE)).toEqual(DEFAULT_AUTO_FOCUS_SETTINGS)
+		// The Main Camera of another connection's setup took the same role, so it gets the same form.
+		expect(exposureSettings(settings, { connectionId: 'd', deviceId: 'other-main' })).toEqual(main)
+		expect(Object.keys(settings.cameras).sort()).toEqual(['c', 'd'])
+	})
+
+	test('version 3 forms of a role without an assigned camera are dropped', () => {
+		const stores = newStores()
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {}, acquisition: { MAIN_CAMERA: { exposureTime: 30 } } } } }] }))
+		expect(load(stores).profiles[0].settings.cameras).toEqual({})
 	})
 })

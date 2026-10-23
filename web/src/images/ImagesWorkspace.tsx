@@ -1,6 +1,7 @@
 import { cn } from 'cn'
 import { type KeyboardEvent, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { cameraKey, captureCount, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState } from '../capture/capture'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../files/files'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
@@ -27,9 +28,10 @@ import { SaveImageModal } from './SaveImageModal'
 import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolGroup, imageToolUnavailable } from './tools'
 
 // Images workspace: a permanent camera tab for each connected camera of the watched connection, showing the frames
-// Camera Capture takes with it, then FITS and XISF images opened from the server, one closable tab each, shown in the
-// shared viewer, with the contextual tool each document selected (the Image Inspector at first) in the contextual
-// panel. It works without any connection or equipment, and never commands a camera. Documents, with their own zoom,
+// its camera takes, then FITS and XISF images opened from the server, one closable tab each, shown in the shared
+// viewer, with the contextual tool each document selected (the Image Inspector at first) in the contextual panel. It
+// works without any connection or equipment; only the camera operations of a camera tab command its camera, and the
+// toolbar of a camera tab shows the state of its capture whatever tool is selected. Documents, with their own zoom,
 // pan, display settings, and tool, stay open while the tab lives, across document and workspace switches; a camera
 // tab follows the latest frame of its camera until a saved frame is selected or a manual analysis holds the frame
 // shown, and Return to Latest follows it again.
@@ -130,7 +132,7 @@ export function ImagesWorkspace() {
 						}
 						empty={
 							waiting ? (
-								<EmptyState title="No captured image available" description="Images never starts a capture: the next frame Camera Capture takes with this camera appears here." />
+								<EmptyState title="No captured image available" description="Take a frame with Camera Acquisition: the next frame of this camera appears here." />
 							) : (
 								<EmptyState title="No image open" description="Open a FITS or XISF image from the server, or connect a camera to follow its frames." action={openButton} />
 							)
@@ -242,6 +244,43 @@ function CameraControls({ document, framesShown, onToggleFrames }: CameraControl
 			</span>
 			{!following && <IconButton icon="play" label="Return to Latest" onClick={() => void selectCameraFrame(imagesState, document.key, { kind: 'latest' }, captureFramesState)} />}
 			<IconButton icon="images" label={framesShown ? 'Hide capture frames' : 'Show capture frames'} pressed={framesShown} onClick={onToggleFrames} />
+			<CaptureStatus connectionId={document.source.connectionId} deviceId={document.source.deviceId} />
+		</>
+	)
+}
+
+interface CaptureStatusProps {
+	// Id of the connection that provides the camera.
+	readonly connectionId: string
+	// Exact id of the camera.
+	readonly deviceId: string
+}
+
+// Compact state of the capture of a camera tab's camera, whatever tool is selected: what it does (with the time left
+// of an exposure or delay), its frame count, and the file state of its latest frame while it runs, or why it failed.
+// Nothing is shown for a camera that never captured or whose capture ended normally.
+function CaptureStatus({ connectionId, deviceId }: CaptureStatusProps) {
+	const runtime = useSnapshot(captureRuntime)
+	const key = cameraKey(connectionId, deviceId)
+	const session = runtime.sessions[key]
+	if (!session) return null
+
+	const running = captureRunning(session)
+	const failed = session.phase === 'failed' || session.phase === 'aborted'
+	if (!running && !failed) return null
+
+	const frame = runtime.frames[key]
+	const file = running && frame?.sessionId === session.sessionId && frame.file ? FILE_STATE_LABELS[fileState(frame)] : undefined
+	const status = captureStatus(session)
+
+	return (
+		<>
+			<span className="h-5 w-px bg-line-100" />
+			<span title={status} className={cn('max-w-72 truncate px-1 text-xs tabular-nums', failed ? 'text-danger' : 'text-ink-100')}>
+				{status}
+				{running && ` · ${captureCount(session)}`}
+				{file && ` · ${file}`}
+			</span>
 		</>
 	)
 }

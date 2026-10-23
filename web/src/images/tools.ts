@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react'
+import { CameraAcquisitionTool } from './CameraAcquisitionTool'
 import type { CameraOperationContext } from './cameracontext'
 import { ImageInspector } from './ImageInspector'
 import type { ImageDocument, ImageViewState } from './images'
@@ -89,7 +90,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'star-detection': { id: 'star-detection', label: 'Star Detection', panelTitle: 'Star Detection', category: 'image', outputs: ['analysis'], panel: StarDetectionPanel },
 	'streak-detection': plannedImageTool('streak-detection', 'Streak Detection', ['analysis']),
 	'image-processing': plannedImageTool('image-processing', 'Image Processing', ['derived']),
-	'camera-acquisition': plannedCameraOperation('camera-acquisition', 'Camera Acquisition'),
+	'camera-acquisition': { id: 'camera-acquisition', label: 'Camera Acquisition', panelTitle: 'Camera Acquisition', category: 'camera', panel: CameraAcquisitionTool },
 	'auto-focus': plannedCameraOperation('auto-focus', 'Auto Focus'),
 	'mount-nudge': plannedCameraOperation('mount-nudge', 'Mount Nudge'),
 	guiding: plannedCameraOperation('guiding', 'Guiding'),

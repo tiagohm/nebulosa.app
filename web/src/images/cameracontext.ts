@@ -4,20 +4,26 @@ import { captureSnoop } from '../capture/capture'
 import { type DeviceView, roleDevice, roleStatus } from '../equipment/equipment'
 import { CAMERA_ROLES, type CameraRole, type EquipmentRole, type EquipmentSetup } from '../equipment/roles'
 import { type RoleDevice, useWatchedDevices } from '../equipment/useEquipment'
-import { activeProfile, activeSetup, profileState } from '../profile/profile'
+import { activeProfile, activeSetup, type CameraIdentity, type Profile, profileCamera, profileState } from '../profile/profile'
 import type { ImageDocument } from './images'
 
 // Equipment a camera tab's operations command: the physical camera of the tab, and the focuser and mount of the
 // active profile's equipment setup associated with it. The setup assigns flat roles per connection, with no optical
 // train, so the association is a fixed rule: the focuser belongs to the Main Camera, and only that camera's Auto
 // Focus moves it; the mount is shared by every camera of the connection, since a nudge holds only the mount. A
-// camera without a role has no focuser and snoops nothing into its headers. An operation keeps the devices it
-// started with; changing tab or profile never redirects it.
+// camera without a role has no focuser and snoops nothing into its headers. The forms of the camera are those of the
+// physical camera in the active profile. An operation keeps the devices it started with; changing tab or profile
+// never redirects it.
 
 // Equipment of the operations of a camera tab.
 export interface CameraOperationContext {
 	// Camera of the tab, by its exact connection and device ids.
 	readonly camera: OperationDevice
+	// Camera of the tab as the watched connection lists it, and its state.
+	readonly device: RoleDevice
+	// Camera whose forms the operations edit in the active profile; absent when the camera is not on the profile's
+	// connection.
+	readonly settings?: CameraIdentity
 	// Role the camera is assigned in the active equipment setup; absent when it has none.
 	readonly role?: CameraRole
 	// Focuser Auto Focus moves: the FOCUSER of the setup when the camera is its Main Camera; absent otherwise,
@@ -30,18 +36,22 @@ export interface CameraOperationContext {
 	readonly snoop: CaptureSnoop
 }
 
-// Resolves the equipment of the camera tab of a document from the active equipment setup and the devices of the
-// watched connection, or undefined for a document that is not a camera tab. A camera of another connection than the
-// watched one has no role, and its mount is unavailable.
-export function cameraOperationContext(document: Pick<ImageDocument, 'source'> | undefined, setup: Readonly<EquipmentSetup>, runtime: Pick<DeviceView, 'watched' | 'devices' | 'pending' | 'errors'>): CameraOperationContext | undefined {
+// Resolves the equipment of the camera tab of a document from the active profile and the devices of the watched
+// connection, which is the profile's, or undefined for a document that is not a camera tab. A camera of another
+// connection than the watched one has no role, no forms, and its devices are unavailable.
+export function cameraOperationContext(document: Pick<ImageDocument, 'source'> | undefined, profile: Pick<Profile, 'connectionId' | 'equipment'>, runtime: Pick<DeviceView, 'watched' | 'devices' | 'pending' | 'errors'>): CameraOperationContext | undefined {
 	if (document?.source.kind !== 'camera') return undefined
 
 	const { connectionId, deviceId } = document.source
 	const camera = { connectionId, deviceId }
 	const watched = runtime.watched === connectionId
-	const resolve = (role: EquipmentRole): RoleDevice => (watched ? { device: roleDevice(setup, role, runtime), serverId: runtime.watched, status: roleStatus(setup, role, runtime) } : { status: 'unavailable' })
+	const setup = activeSetup(profile)
+	const resolve = (role: EquipmentRole, assignments: Readonly<EquipmentSetup> = setup): RoleDevice => (watched ? { device: roleDevice(assignments, role, runtime), serverId: runtime.watched, status: roleStatus(assignments, role, runtime) } : { status: 'unavailable' })
+	// The camera itself resolves as if assigned to a role, so it reports the same states as an assigned device.
+	const device = resolve('MAIN_CAMERA', { MAIN_CAMERA: { id: deviceId, name: '' } })
 	const role = watched ? CAMERA_ROLES.find((role) => setup[role]?.id === deviceId) : undefined
-	const context: CameraOperationContext = { camera, mount: resolve('MOUNT'), snoop: role ? captureSnoop(setup) : {} }
+	const settings = watched ? profileCamera(profile, deviceId) : undefined
+	const context: CameraOperationContext = { camera, device, ...(settings && { settings }), mount: resolve('MOUNT'), snoop: role ? captureSnoop(setup) : {} }
 
 	if (!role) return context
 	return role === 'MAIN_CAMERA' ? { ...context, role, focuser: resolve('FOCUSER') } : { ...context, role }
@@ -52,5 +62,5 @@ export function cameraOperationContext(document: Pick<ImageDocument, 'source'> |
 export function useCameraOperationContext(document: Pick<ImageDocument, 'source'> | undefined): CameraOperationContext | undefined {
 	const profiles = useSnapshot(profileState)
 	const runtime = useWatchedDevices()
-	return cameraOperationContext(document, activeSetup(activeProfile(profiles)), runtime)
+	return cameraOperationContext(document, activeProfile(profiles), runtime)
 }

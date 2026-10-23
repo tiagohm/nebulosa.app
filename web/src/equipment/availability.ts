@@ -17,10 +17,9 @@ export type RoleAvailability = { readonly status: 'ready' } | { readonly status:
 // Existing flow that resolves an unavailable role: opening Connections or Equipment Setup.
 export type RoleFix = 'connections' | 'equipment'
 
-// Returns why a role in a status cannot be used, or undefined when it is connected.
-function roleProblem(role: EquipmentRole, status: RoleStatus): string | undefined {
-	const label = roleDefinition(role).label
-
+// Returns why a device, named by label (a role, or "camera"), in a status cannot be used, or undefined when it is
+// connected.
+function deviceProblem(label: string, status: RoleStatus): string | undefined {
 	switch (status) {
 		case 'connected':
 			return undefined
@@ -40,11 +39,17 @@ function roleProblem(role: EquipmentRole, status: RoleStatus): string | undefine
 }
 
 // Evaluates the device a role resolves to (see useRoleDevice) against the running operations.
-export function roleAvailability(role: EquipmentRole, { device, status }: Pick<RoleDevice, 'device' | 'status'>, operations: Pick<OperationsState, 'operations'>): RoleAvailability {
-	if (status !== 'connected') return { status, message: roleProblem(role, status)! }
+export function roleAvailability(role: EquipmentRole, device: Pick<RoleDevice, 'device' | 'status'>, operations: Pick<OperationsState, 'operations'>): RoleAvailability {
+	return deviceAvailability(roleDefinition(role).label, device, operations)
+}
+
+// Evaluates a device and its state against the running operations, naming it by label in the messages, for a device
+// used for itself rather than through a role, such as the camera of an Images camera tab.
+export function deviceAvailability(label: string, { device, status }: Pick<RoleDevice, 'device' | 'status'>, operations: Pick<OperationsState, 'operations'>): RoleAvailability {
+	if (status !== 'connected') return { status, message: deviceProblem(label, status)! }
 
 	const running = device ? runningOn(operations, device.connectionId, device.id) : []
-	if (running.length > 0) return { status: 'busy', operations: running, message: `The ${roleDefinition(role).label} is busy.` }
+	if (running.length > 0) return { status: 'busy', operations: running, message: `The ${label} is busy.` }
 
 	return { status: 'ready' }
 }

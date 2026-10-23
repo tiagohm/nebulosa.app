@@ -3,7 +3,7 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { acquisitionSettings, ACTIVE_PROFILE_KEY, activeProfile, activeSetup, analysisSettings, assignDevice, autoFocusSettings, DEFAULT_AUTO_FOCUS_SETTINGS, setAutoFocusSettings, createOpticalPreset, createProfile, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_ANALYSIS_SETTINGS, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectOpticalPreset, selectProfile, setAcquisitionSettings, setAnalysisSettings, setCameraReticle, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setTelescopeOptics, updateOpticalPreset } from './profile'
+import { acquisitionSettings, ACTIVE_PROFILE_KEY, activeProfile, activeSetup, analysisSettings, assignDevice, autoFocusSettings, DEFAULT_AUTO_FOCUS_SETTINGS, setAutoFocusSettings, createOpticalPreset, createProfile, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_ANALYSIS_SETTINGS, DEFAULT_PLATE_SOLVING_SETTINGS, plateSolvingSettings, setPlateSolvingSettings, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectCameraView, selectConnection, selectOpticalPreset, selectProfile, setAcquisitionSettings, setAnalysisSettings, setCameraReticle, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setTelescopeOptics, updateOpticalPreset } from './profile'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }
@@ -591,6 +591,37 @@ describe('post-capture analysis', () => {
 		const older = newStores()
 		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {} } } }] }))
 		expect(analysisSettings(load(older).profiles[0].settings.capture, 'MAIN_CAMERA').enabled).toBeFalse()
+	})
+})
+
+describe('post-capture plate solving', () => {
+	test('is off by default, First Frame once on, and kept per camera view', () => {
+		const state = load(newStores())
+		expect(plateSolvingSettings(activeProfile(state).settings.capture, 'MAIN_CAMERA')).toEqual({ enabled: false, policy: 'firstFrame', interval: 5, request: { provider: 'astap', strategy: 'assisted' }, overlay: true, grid: false })
+
+		setPlateSolvingSettings(state, 'MAIN_CAMERA', { enabled: true })
+		setPlateSolvingSettings(state, 'GUIDE_CAMERA', { overlay: false })
+
+		const capture = activeProfile(state).settings.capture
+		expect(plateSolvingSettings(capture, 'MAIN_CAMERA')).toMatchObject({ enabled: true, policy: 'firstFrame', overlay: true })
+		expect(plateSolvingSettings(capture, 'GUIDE_CAMERA')).toMatchObject({ enabled: false, overlay: false })
+		expect(DEFAULT_PLATE_SOLVING_SETTINGS.enabled).toBeFalse()
+	})
+
+	test('is persisted and restored, replacing invalid fields with defaults and dropping invalid hints', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		const request = { provider: 'nova', strategy: 'blind', hints: { scale: 1e-5 }, downsample: 4, scaleTolerance: 0.3 } as const
+		setPlateSolvingSettings(state, 'MAIN_CAMERA', { enabled: true, policy: 'latestFrame', interval: 3, request, overlay: false, grid: true })
+		await Bun.sleep(0)
+
+		const reloaded = load({ local: stores.local, session: new MemoryStorage() })
+		expect(plateSolvingSettings(reloaded.profiles[0].settings.capture, 'MAIN_CAMERA')).toEqual({ enabled: true, policy: 'latestFrame', interval: 3, request, overlay: false, grid: true })
+
+		const invalid = newStores()
+		const plateSolving = { MAIN_CAMERA: { enabled: 'yes', policy: 'often', interval: -2, request: { provider: 'other', strategy: 'guess', hints: { declination: 9, radius: -1, rightAscension: 'x' }, downsample: 0, scaleTolerance: 2 }, overlay: 0, grid: 'on' }, MOUNT: { enabled: true } }
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {}, plateSolving } } }] }))
+		expect(load(invalid).profiles[0].settings.capture).toEqual({ views: {}, plateSolving: { MAIN_CAMERA: DEFAULT_PLATE_SOLVING_SETTINGS } })
 	})
 })
 

@@ -27,7 +27,26 @@ import { WheelCommands, type WheelMoveRequest, type WheelNamesRequest } from './
 export type { AutoFocusCaptureSettings, AutoFocusEvent, AutoFocusFrame, AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusStartResponse, AutoFocusState, AutoFocusVerification, FocusMeasurement } from './autofocus'
 export type { FocusCurve, FocusCurveHyperbola, FocusCurveParabola, FocusCurveSeries, FocusCurveSeriesKind, FocusCurveTrendLines } from './autofocus.curve'
 export type { CameraCoolerRequest, CameraTemperatureRequest } from './cameras'
-export type { CaptureAnalysisState, CaptureEvent, CaptureFormat, CaptureFrame, CaptureOutput, CaptureOutputMode, CapturePhase, CaptureRequest, CaptureSession, CaptureSettings, CaptureSnapshot, CaptureSnoop, CaptureStartResponse, PostCaptureAnalysis, PostCaptureAnalysisPolicy } from './captures'
+export type {
+	CaptureAnalysisState,
+	CaptureEvent,
+	CaptureFormat,
+	CaptureFrame,
+	CaptureOutput,
+	CaptureOutputMode,
+	CapturePhase,
+	CaptureRequest,
+	CaptureSession,
+	CaptureSettings,
+	CaptureSnapshot,
+	CaptureSnoop,
+	CaptureStartResponse,
+	CapturePlateSolvingState,
+	PostCaptureAnalysis,
+	PostCaptureAnalysisPolicy,
+	PostCapturePlateSolving,
+	PostCapturePlateSolvingPolicy,
+} from './captures'
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
 export type { CommandAccepted, CommandError, CommandErrorCode, CommandRequest } from './commands'
 export type {
@@ -162,7 +181,7 @@ const externalTools = new ExternalToolsStore(DEFAULT_SETTINGS_FILE, broadcast)
 const stars = new StarDetectionService(images, externalTools, broadcast)
 const plateSolving = new PlateSolvingService(images, externalTools, broadcast)
 
-const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, stars, broadcast)
+const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, stars, plateSolving, broadcast)
 
 // Auto Focus sessions of the cameras of the open connections, taking their frames with the capturer of the captures and
 // moving the focusers with their backlash compensation.

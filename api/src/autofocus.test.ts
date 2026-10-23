@@ -13,6 +13,7 @@ import { FocuserBacklashStore } from './focuserbacklash'
 import { FocuserCommands } from './focusers'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry } from './operations'
+import { PlateSolvingService } from './platesolving'
 import { DEFAULT_BUILTIN_SETTINGS, DEFAULT_STAR_ACCEPTANCE, StarDetectionService } from './stars'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-autofocus-test-'))
@@ -89,6 +90,7 @@ async function setup() {
 		operations,
 		images,
 		stars,
+		new PlateSolvingService(images, tools, () => {}),
 		() => {},
 		capturesDir,
 	)

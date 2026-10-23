@@ -10,6 +10,7 @@ import { type CameraCaptureEvent, type CameraCaptureStart, type CameraCaptureTim
 import type { DeviceRegistry } from './devices'
 import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
 import type { OperationRegistry } from './operations'
+import type { PlateSolveJob, PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, PlateSolveReservation, PlateSolvingService } from './platesolving'
 import type { StarDetectionJob, StarDetectionPreparation, StarDetectionRequest, StarDetectionReservation, StarDetectionService, StarDetectorProvider } from './stars'
 
 // Camera Capture service: single, fixed-count, and loop acquisitions of one camera, run on the server through
@@ -62,6 +63,21 @@ export interface PostCaptureAnalysis {
 	readonly request: StarDetectionRequest
 }
 
+// Which frames of a capture are plate solved: the first one only; every Nth one from the first (1, N + 1, 2N + 1…),
+// holding the next eligible exposure while the solver has no room; or the latest one, skipping a frame still waiting
+// when a newer one arrives. The interval counts frames, never time.
+export type PostCapturePlateSolvingPolicy = 'firstFrame' | 'everyNth' | 'latestFrame'
+
+// Plate solving of the frames of a capture.
+export interface PostCapturePlateSolving {
+	// Which frames are solved.
+	readonly policy: PostCapturePlateSolvingPolicy
+	// N of everyNth, a positive integer; 1 solves every frame.
+	readonly interval?: number
+	// Solver, strategy, and hints of every frame solved.
+	readonly request: PlateSolveRequest
+}
+
 // Payload format a frame is transferred and saved in; NATIVE payloads cannot be decoded or saved as frames.
 export type CaptureFormat = Exclude<CameraTransferFormat, 'NATIVE'>
 
@@ -102,6 +118,8 @@ export interface CaptureRequest extends CaptureSettings {
 	readonly output: CaptureOutput
 	// Star detection of the frames; absent when the capture does not analyze them.
 	readonly analysis?: PostCaptureAnalysis
+	// Plate solving of the frames; absent when the capture does not solve them.
+	readonly plateSolving?: PostCapturePlateSolving
 	// Devices snooped into the frame headers; absent snoops none.
 	readonly snoop?: CaptureSnoop
 }
@@ -120,7 +138,8 @@ export interface CaptureStartResponse {
 // - reading: the exposure finished and its frame is being transferred and decoded.
 // - saving: the frame is being written to its file.
 // - waiting: the delay before the next frame is running.
-// - analysisWait: the next exposure waits for room in the star detection of an Every Frame analysis.
+// - analysisWait: the next exposure waits for room in the star detection of an Every Frame analysis, or in the plate
+//   solving of an eligible frame of a First Frame or Every N Frames policy.
 // - completed: every requested frame was taken.
 // - stopped: the capture was stopped and ended after its last frame.
 // - aborted: the capture was aborted; the exposure in flight was lost.
@@ -187,6 +206,33 @@ export interface CaptureAnalysisState {
 	readonly halted?: string
 }
 
+// Progress of the plate solving of a session, counted apart from the captured and saved frames and from the star
+// detection.
+export interface CapturePlateSolvingState {
+	// Which frames are solved.
+	readonly policy: PostCapturePlateSolvingPolicy
+	// N of everyNth.
+	readonly interval?: number
+	// Solver of the frames.
+	readonly provider: PlateSolverProvider
+	// Frames submitted to the solver.
+	readonly requested: number
+	// Frames solved.
+	readonly solved: number
+	// Frames whose search ended without a solution.
+	readonly noSolution: number
+	// Frames whose solve failed, including frames that could not be decoded for it.
+	readonly failed: number
+	// Frames not solved: replaced by a newer frame, cancelled, or refused by a full queue.
+	readonly skipped: number
+	// Frames whose solve waits or runs.
+	readonly pending: number
+	// Whether the next exposure waits for room in the plate solving.
+	readonly waiting: boolean
+	// Why the plate solving stopped taking frames; absent while it runs.
+	readonly halted?: string
+}
+
 // State of a capture session as published to clients. It stays listed after it ends, until the next capture
 // of the same camera replaces it, so its outcome can still be shown.
 export interface CaptureSession {
@@ -228,6 +274,8 @@ export interface CaptureSession {
 	readonly previewError?: string
 	// Progress of the post-capture analysis; absent when the capture does not analyze its frames.
 	readonly analysis?: CaptureAnalysisState
+	// Progress of the plate solving; absent when the capture does not solve its frames.
+	readonly plateSolving?: CapturePlateSolvingState
 }
 
 // Snapshot of GET /api/captures: the latest session and the latest previewed frame of each camera.
@@ -273,6 +321,25 @@ interface PendingFrame {
 	readonly path?: string
 	// Star detection capacity reserved for the frame by an Every Frame analysis; such a frame is never dropped.
 	readonly reservation?: StarDetectionReservation
+	// Plate solving capacity reserved for an eligible frame of a First Frame or Every N Frames policy; such a frame is
+	// never dropped either.
+	readonly solveReservation?: PlateSolveReservation
+}
+
+// Plate solving of a running or ended session.
+interface ActivePlateSolving {
+	// Request and provider settings, resolved when the capture started.
+	readonly preparation: PlateSolvePreparation
+	// Which frames are solved.
+	readonly policy: PostCapturePlateSolvingPolicy
+	// N of everyNth.
+	readonly interval: number
+	// Scheduling group of the reservations of the session.
+	readonly group: string
+	// Capacity reserved for the frame whose exposure is next, until the frame is published.
+	reservation?: PlateSolveReservation
+	// Failed solves in a row; a search without a solution is not a failure.
+	consecutiveFailures: number
 }
 
 // Post-capture analysis of a running or ended session.
@@ -303,6 +370,16 @@ interface ActiveCapture {
 	generation: number
 	// Post-capture analysis; absent when the capture does not analyze its frames.
 	readonly analysis?: ActiveAnalysis
+	// Plate solving; absent when the capture does not solve its frames.
+	readonly plateSolving?: ActivePlateSolving
+}
+
+// Whether a frame of a generation (1-based) is solved by a First Frame or Every N Frames policy; Latest Frame Only
+// solves whichever frame is the newest instead.
+export function plateSolvingEligible(policy: PostCapturePlateSolvingPolicy, interval: number, generation: number): boolean {
+	if (policy === 'firstFrame') return generation === 1
+	if (policy === 'everyNth') return (generation - 1) % interval === 0
+	return true
 }
 
 // Preview state of one camera: the frame shown, and decoding in progress.
@@ -392,14 +469,15 @@ export class CameraCaptures implements Disposable {
 	readonly #writes = new Map<string, { readonly capture: ActiveCapture; readonly generation: number }>()
 
 	// Creates the service over the device registry. client resolves an open connection id to its client,
-	// operations holds and publishes every capture, images receives the frames, stars analyzes them, and
-	// listener receives every capture event synchronously. capturesDir replaces DEFAULT_CAPTURES_DIR.
+	// operations holds and publishes every capture, images receives the frames, stars analyzes them, plateSolving
+	// solves them, and listener receives every capture event synchronously. capturesDir replaces DEFAULT_CAPTURES_DIR.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: (connectionId: string) => Client | undefined,
 		readonly operations: OperationRegistry,
 		readonly images: ImageStore,
 		readonly stars: StarDetectionService,
+		readonly plateSolving: PlateSolvingService,
 		readonly listener: CaptureListener,
 		readonly capturesDir: string = DEFAULT_CAPTURES_DIR,
 	) {
@@ -441,6 +519,13 @@ export class CameraCaptures implements Disposable {
 		// below and the start.
 		const preparation = request.analysis && (await this.stars.prepare(request.analysis.request))
 		if (request.analysis && !preparation) return errorResponse('ASTAP is not configured; set it up in Settings → External Tools or analyze with the built-in detector', 422)
+
+		const solving = request.plateSolving
+		// Each nova solve waits for a remote service, which would hold every eligible exposure of Every N Frames.
+		if (solving?.policy === 'everyNth' && solving.request.provider === 'nova') return errorResponse('Astrometry.net Online solves the first or the latest frame only', 422)
+		const solvePreparation = solving && (await this.plateSolving.prepare(solving.request))
+		if (solving && !solvePreparation) return errorResponse('The plate solver is not configured; set it up in Settings → External Tools', 422)
+		const interval = Math.max(1, Math.trunc(solving?.interval ?? 1))
 
 		const client = this.client(connectionId)
 		const camera = client && this.devices.camera(client, deviceId)
@@ -489,19 +574,25 @@ export class CameraCaptures implements Disposable {
 				count: request.exposureMode === 'loop' ? undefined : request.exposureMode === 'single' ? 1 : request.count,
 				startedAt: Date.now(),
 				...(request.analysis && { analysis: { policy: request.analysis.policy, provider: request.analysis.request.detector.provider, analyzed: 0, pending: 0, failed: 0, skipped: 0, waiting: false } }),
+				...(solving && { plateSolving: { policy: solving.policy, ...(solving.policy === 'everyNth' && { interval }), provider: solving.request.provider, requested: 0, solved: 0, noSolution: 0, failed: 0, skipped: 0, pending: 0, waiting: false } }),
 			},
 			camera,
 			frames: new Map(),
 			generation: 0,
 			...(request.analysis && preparation && { analysis: { preparation, policy: request.analysis.policy, group: crypto.randomUUID(), consecutiveFailures: 0 } }),
+			...(solving && solvePreparation && { plateSolving: { preparation: solvePreparation, policy: solving.policy, interval, group: crypto.randomUUID(), consecutiveFailures: 0 } }),
 		}
 
 		this.#active.set(key, capture)
 
+		// The exposure of a frame waits for its capacity when every frame is analyzed or when the frame is solved by a
+		// First Frame or Every N Frames policy.
+		const gated = capture.analysis?.policy === 'everyFrame' || (!!capture.plateSolving && capture.plateSolving.policy !== 'latestFrame')
+
 		const handle = this.#capturer.start(this.operations.coordinator, camera, start, {
 			listener: (event, path) => this.#reported(capture, event, path),
 			framePath: (frame) => this.#framePath(capture, frame),
-			...(capture.analysis?.policy === 'everyFrame' && { beforeFrame: (_, signal) => this.#reserveFrame(capture, signal) }),
+			...(gated && { beforeFrame: ({ generation }, signal) => this.#beforeFrame(capture, generation, signal) }),
 		})
 
 		const { operationId } = this.operations.track('camera.capture', [{ connectionId, deviceId }], handle.result)
@@ -514,6 +605,9 @@ export class CameraCaptures implements Disposable {
 			capture.analysis?.reservation?.release()
 			if (capture.analysis) capture.analysis.reservation = undefined
 			if (capture.session.analysis?.waiting) this.#updateAnalysis(capture, { waiting: false })
+			capture.plateSolving?.reservation?.release()
+			if (capture.plateSolving) capture.plateSolving.reservation = undefined
+			if (capture.session.plateSolving?.waiting) this.#updatePlateSolving(capture, { waiting: false })
 			for (const [path, write] of this.#writes) if (write.capture === capture) this.#writes.delete(path)
 
 			if (result.ok) this.#update(capture, { phase: capture.session.stopping ? 'stopped' : 'completed', endedAt: Date.now(), exposure: undefined, delay: undefined })
@@ -623,12 +717,14 @@ export class CameraCaptures implements Disposable {
 		// The capacity reserved before this exposure now belongs to its frame.
 		const reservation = capture.analysis?.reservation
 		if (capture.analysis) capture.analysis.reservation = undefined
+		const solveReservation = capture.plateSolving?.reservation
+		if (capture.plateSolving) capture.plateSolving.reservation = undefined
 
-		const pending = { bytes: new Uint8Array(frame), generation, time: resolved?.time ?? Date.now(), path: resolved?.path, session: capture, reservation }
+		const pending = { bytes: new Uint8Array(frame), generation, time: resolved?.time ?? Date.now(), path: resolved?.path, session: capture, reservation, solveReservation }
 		const last = preview.queue.at(-1)
 
 		// A frame without a reservation only replaces the newest waiting frame without one.
-		if (!reservation && last && !last.reservation) preview.queue[preview.queue.length - 1] = pending
+		if (!reservation && !solveReservation && last && !last.reservation && !last.solveReservation) preview.queue[preview.queue.length - 1] = pending
 		else preview.queue.push(pending)
 
 		if (!preview.decoding) void this.#preview(key, preview)
@@ -641,7 +737,7 @@ export class CameraCaptures implements Disposable {
 		preview.decoding = true
 
 		for (let next = preview.queue.shift(); next; next = preview.queue.shift()) {
-			const { bytes, generation, time, path, session: capture, reservation } = next
+			const { bytes, generation, time, path, session: capture, reservation, solveReservation } = next
 			const { sessionId, connectionId, deviceId, cameraName } = capture.session
 
 			try {
@@ -653,6 +749,7 @@ export class CameraCaptures implements Disposable {
 				preview.frame = { imageId: info.id, sessionId, connectionId, deviceId, generation, time, path, file, frameType: capture.session.request.frameType, width, height, channels, cfa, bitpix, acquisition }
 				// The analysis retains the frame before the previous one is closed, so neither is ever released early.
 				this.#analyze(capture, info.id, generation, reservation)
+				this.#solve(capture, info.id, generation, solveReservation)
 				if (previous) this.images.close(previous.imageId)
 				this.listener({ type: 'capture:frame', frame: preview.frame })
 				if (capture.session.previewError !== undefined) this.#update(capture, { previewError: undefined })
@@ -663,10 +760,104 @@ export class CameraCaptures implements Disposable {
 					reservation.release()
 					this.#analysisEnded(capture, 'failed')
 				}
+
+				if (solveReservation) {
+					solveReservation.release()
+					this.#solveEnded(capture, 'failed')
+				}
 			}
 		}
 
 		preview.decoding = false
+	}
+
+	// Holds the next exposure, of generation (1-based), until the star detection of an Every Frame analysis and the plate
+	// solving of an eligible frame have capacity for it. Never refuses a frame.
+	async #beforeFrame(capture: ActiveCapture, generation: number, signal: AbortSignal): Promise<undefined> {
+		if (capture.analysis?.policy === 'everyFrame') await this.#reserveFrame(capture, signal)
+		const solving = capture.plateSolving
+		if (solving && solving.policy !== 'latestFrame' && plateSolvingEligible(solving.policy, solving.interval, generation)) await this.#reserveSolve(capture, signal)
+		return undefined
+	}
+
+	// Holds the next exposure, an eligible frame of a First Frame or Every N Frames policy, until plate solving capacity is
+	// reserved for it, publishing the wait while there is none. Lets the frame go without a reservation once the plate
+	// solving halted, or when signal aborts the wait.
+	async #reserveSolve(capture: ActiveCapture, signal: AbortSignal): Promise<void> {
+		const solving = capture.plateSolving!
+		if (capture.session.plateSolving?.halted || solving.reservation) return
+
+		solving.reservation = this.plateSolving.tryReserve(solving.group)
+		if (solving.reservation) return
+
+		this.#updatePlateSolving(capture, { waiting: true }, { phase: 'analysisWait', exposure: undefined, delay: undefined })
+		solving.reservation = await this.plateSolving.reserve(solving.group, signal)
+		this.#updatePlateSolving(capture, { waiting: false })
+	}
+
+	// Submits the plate solve of a decoded frame by the policy of its capture: the reserved frames of First Frame and
+	// Every N Frames, and every frame of Latest Frame Only, which replaces a frame still waiting. Counts a frame the queue
+	// refused as skipped.
+	#solve(capture: ActiveCapture, imageId: string, generation: number, reservation?: PlateSolveReservation) {
+		const solving = capture.plateSolving
+		const state = capture.session.plateSolving
+
+		if (!solving || !state || state.halted) {
+			reservation?.release()
+			return
+		}
+
+		const { sessionId, connectionId, deviceId } = capture.session
+		const origin = { kind: 'capture', sessionId, connectionId, deviceId, frameId: `${sessionId}:${generation}`, generation } as const
+
+		if (solving.policy !== 'latestFrame') {
+			// A frame without a reservation is not eligible, or was taken after the plate solving halted.
+			const job = reservation?.submit(imageId, solving.preparation, origin)
+			if (job) this.#followSolve(capture, job)
+			return
+		}
+
+		const { job, skipped, full } = this.plateSolving.submitLatest(imageId, solving.preparation, origin)
+		if (skipped > 0 || full) this.#updatePlateSolving(capture, { skipped: state.skipped + skipped + (full ? 1 : 0), pending: state.pending - skipped })
+		if (job) this.#followSolve(capture, job)
+	}
+
+	// Counts a submitted plate solve as requested and pending, then by its outcome once it ended.
+	#followSolve(capture: ActiveCapture, job: PlateSolveJob) {
+		const state = capture.session.plateSolving!
+		this.#updatePlateSolving(capture, { requested: state.requested + 1, pending: state.pending + 1 })
+
+		void this.plateSolving.ended(job.jobId).then((ended) => {
+			// A skipped job of Latest Frame Only was already counted when the newer frame replaced it.
+			if (ended?.state === 'skipped') return
+			const outcome = ended?.state === 'completed' ? (ended.summary?.outcome === 'solved' ? 'solved' : 'noSolution') : ended?.state === 'failed' ? 'failed' : 'skipped'
+			this.#solveEnded(capture, outcome, true, ended)
+		})
+	}
+
+	// Counts the outcome of the plate solve of one frame, and halts the plate solving when its solver cannot run or too
+	// many frames failed in a row. A search without a solution is not a failure.
+	#solveEnded(capture: ActiveCapture, outcome: 'solved' | 'noSolution' | 'failed' | 'skipped', wasPending = false, job?: PlateSolveJob) {
+		const state = capture.session.plateSolving
+		const solving = capture.plateSolving
+		if (!state || !solving) return
+
+		solving.consecutiveFailures = outcome === 'failed' ? solving.consecutiveFailures + 1 : outcome === 'skipped' ? solving.consecutiveFailures : 0
+		const patch: { -readonly [K in keyof CapturePlateSolvingState]?: CapturePlateSolvingState[K] } = { [outcome]: state[outcome] + 1 }
+		if (wasPending) patch.pending = state.pending - 1
+
+		if (!state.halted && (job?.code === 'notConfigured' || job?.code === 'unavailable' || job?.code === 'sessionExpired')) patch.halted = `The plate solver cannot run: ${job.error ?? job.code}`
+		else if (!state.halted && solving.consecutiveFailures >= MAX_CONSECUTIVE_ANALYSIS_FAILURES) patch.halted = `${solving.consecutiveFailures} frames in a row could not be solved${job?.error ? `: ${job.error}` : ''}`
+
+		this.#updatePlateSolving(capture, patch)
+	}
+
+	// Publishes a changed plate solving state of a session, with other session fields, as #updateAnalysis does.
+	#updatePlateSolving(capture: ActiveCapture, patch: Partial<CapturePlateSolvingState>, session: Partial<CaptureSession> = {}) {
+		const plateSolving = { ...capture.session.plateSolving!, ...patch }
+		const latest = this.#sessions.get(resourceKey(capture.camera))
+		if (!latest || latest.sessionId === capture.session.sessionId) this.#update(capture, { ...session, plateSolving })
+		else capture.session = changed(capture.session, { plateSolving })
 	}
 
 	// Holds the next exposure of an Every Frame analysis until star detection capacity is reserved for its

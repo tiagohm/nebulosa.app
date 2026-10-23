@@ -6,7 +6,7 @@ import { roleAvailability } from '../equipment/availability'
 import { useRoleDevice } from '../equipment/useEquipment'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { operationsState } from '../operations'
-import { acquisitionSettings, activeProfile, activeSetup, analysisSettings, type CameraAcquisitionSettings, profileState, setAcquisitionSettings } from '../profile/profile'
+import { acquisitionSettings, activeProfile, activeSetup, analysisSettings, type CameraAcquisitionSettings, plateSolvingSettings, profileState, setAcquisitionSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
@@ -19,6 +19,7 @@ import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, 
 import { ExposureTimeInput } from './ExposureTimeInput'
 import type { CaptureModePanelProps } from './modes'
 import { PostCaptureAnalysis } from './PostCaptureAnalysis'
+import { PostCapturePlateSolving } from './PostCapturePlateSolving'
 
 // Contextual panel sections of the Camera Capture mode: the exposure, the acquisition mode with its start
 // and stop commands, the state of the running or last capture, the less frequent camera settings, the
@@ -70,6 +71,7 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 	const target = useRoleDevice(role)
 	const settings = acquisitionSettings(activeProfile(profiles).settings.capture, role)
 	const analysis = analysisSettings(activeProfile(profiles).settings.capture, role)
+	const solving = plateSolvingSettings(activeProfile(profiles).settings.capture, role)
 	const { device } = target
 	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
@@ -97,7 +99,14 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 	}
 
 	function start() {
-		if (device) void startCapture(captureRuntime, device.connectionId, device.id, { ...captureRequest(settings, capabilities), snoop: captureSnoop(activeSetup(activeProfile(profiles))), ...(analysis.enabled && { analysis: { policy: analysis.policy, request: analysis.request } }) })
+		if (device) {
+			void startCapture(captureRuntime, device.connectionId, device.id, {
+				...captureRequest(settings, capabilities),
+				snoop: captureSnoop(activeSetup(activeProfile(profiles))),
+				...(analysis.enabled && { analysis: { policy: analysis.policy, request: analysis.request } }),
+				...(solving.enabled && { plateSolving: { policy: solving.policy, ...(solving.policy === 'everyNth' && { interval: solving.interval }), request: solving.request } }),
+			})
+		}
 	}
 
 	const xisf = capabilities?.transferFormats.includes('XISF') === true
@@ -164,6 +173,7 @@ export function CameraCapturePanel({ camera: role }: CaptureModePanelProps) {
 				{settings.output.mode === 'preview-only' && <p className="m-0 text-xs leading-4 text-ink-300">Frames are kept in memory for viewing only; nothing is written.</p>}
 			</PanelSection>
 			<PostCaptureAnalysis role={role} locked={locked} state={session?.analysis} frame={frame} />
+			<PostCapturePlateSolving role={role} locked={locked} state={session?.plateSolving} frame={frame} />
 			{frame && <LastFrame frame={frame} state={frameState(frame, key ? runtime.renderings[key] : undefined, key ? runtime.renderErrors[key] : undefined, session?.previewError)} />}
 			<FileExplorerModal
 				open={choosingDirectory}

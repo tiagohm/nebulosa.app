@@ -1,7 +1,8 @@
-import type { AutoFocusRequest, CaptureRequest, PostCaptureAnalysisPolicy, StarDetectionRequest } from 'api'
+import type { AutoFocusRequest, CaptureRequest, PlateSolveRequest, PlateSolverProvider, PostCaptureAnalysisPolicy, PostCapturePlateSolvingPolicy, StarDetectionRequest } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
 import { CAMERA_ROLES, type CameraRole, conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
+import { DEFAULT_PLATE_SOLVE_REQUEST } from '../platesolving/platesolving'
 import { type CaptureMode, captureModeOf, WORKSPACE_IDS, type WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
 import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
@@ -148,6 +149,28 @@ export interface CaptureAnalysisSettings {
 // and the markers shown.
 export const DEFAULT_ANALYSIS_SETTINGS: CaptureAnalysisSettings = { enabled: false, policy: 'everyFrame', request: DEFAULT_STAR_REQUEST, overlay: true }
 
+// Plate solving of the frames of one camera view: whether the next capture solves them, which ones, how, and whether
+// the solution overlay is drawn. Kept apart from the capture form, so turning it off keeps its settings; the server's
+// solver settings are never copied here.
+export interface CapturePlateSolvingSettings {
+	// Whether the next capture solves its frames.
+	enabled: boolean
+	// Which frames are solved.
+	policy: PostCapturePlateSolvingPolicy
+	// N of Every N Frames, a positive integer.
+	interval: number
+	// Solver, strategy, and hints.
+	request: PlateSolveRequest
+	// Whether the WCS overlay of the frame shown is drawn; never solves.
+	overlay: boolean
+	// Whether its RA/Dec grid is drawn too.
+	grid: boolean
+}
+
+// Plate solving of a view that has none yet: off, the first frame once turned on, ASTAP around the header pointing, and
+// the overlay shown without its grid.
+export const DEFAULT_PLATE_SOLVING_SETTINGS: CapturePlateSolvingSettings = { enabled: false, policy: 'firstFrame', interval: 5, request: DEFAULT_PLATE_SOLVE_REQUEST, overlay: true, grid: false }
+
 // Auto Focus form of one camera view: how the frames are measured and the routine the next session starts with.
 // The frames are taken with the exposure and camera settings of the view's Camera Capture form, which this form
 // never holds. Durations are in seconds, positions in focuser steps.
@@ -203,6 +226,8 @@ export interface CaptureSettings {
 	acquisition?: Partial<Record<CameraRole, CameraAcquisitionSettings>>
 	// Post-capture analysis of each camera view edited so far, by camera role; absent before the first edit.
 	analysis?: Partial<Record<CameraRole, CaptureAnalysisSettings>>
+	// Plate solving of each camera view edited so far, by camera role; absent before the first edit.
+	plateSolving?: Partial<Record<CameraRole, CapturePlateSolvingSettings>>
 	// Auto Focus form of each camera view edited so far, by camera role; absent before the first edit.
 	autoFocus?: Partial<Record<CameraRole, AutoFocusSettings>>
 }
@@ -277,6 +302,15 @@ function normalizeCapture(value: unknown, capture: CaptureSettings) {
 			if (!analysis) continue
 			capture.analysis ??= {}
 			capture.analysis[role] = analysis
+		}
+	}
+
+	if (isRecord(value.plateSolving)) {
+		for (const role of CAMERA_ROLES) {
+			const plateSolving = normalizePlateSolving(value.plateSolving[role])
+			if (!plateSolving) continue
+			capture.plateSolving ??= {}
+			capture.plateSolving[role] = plateSolving
 		}
 	}
 
@@ -355,6 +389,40 @@ function normalizeAnalysis(value: unknown): CaptureAnalysisSettings | undefined 
 		policy: value.policy === 'latestFrame' ? 'latestFrame' : 'everyFrame',
 		request: normalizeStarRequest(value.request, DEFAULT_ANALYSIS_SETTINGS.request),
 		overlay: value.overlay !== false,
+	}
+}
+
+// Solvers a persisted plate solving request may name.
+const PLATE_SOLVERS: ReadonlySet<string> = new Set<PlateSolverProvider>(['astap', 'astrometryLocal', 'nova'])
+
+// Restores a persisted plate solving of a view, filling every invalid field with its default (off unless it was
+// explicitly on); undefined for anything that is not a record. Hints that are not positive finite angles, or a
+// declination beyond the poles, are dropped.
+function normalizePlateSolving(value: unknown): CapturePlateSolvingSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const request = isRecord(value.request) ? value.request : {}
+	const hints = isRecord(request.hints) ? request.hints : {}
+	const angle = (field: unknown, min: number, max: number) => (typeof field === 'number' && field >= min && field <= max ? field : undefined)
+	const normalizedHints = Object.fromEntries(
+		Object.entries({ rightAscension: angle(hints.rightAscension, 0, 2 * Math.PI), declination: angle(hints.declination, -Math.PI / 2, Math.PI / 2), radius: angle(hints.radius, Number.MIN_VALUE, Math.PI), scale: angle(hints.scale, Number.MIN_VALUE, 0.1) }).filter(([, field]) => field !== undefined),
+	)
+	const downsample = numberAtLeast(request.downsample, 1, 0, true)
+	const scaleTolerance = typeof request.scaleTolerance === 'number' && request.scaleTolerance > 0 && request.scaleTolerance < 1 ? request.scaleTolerance : undefined
+
+	return {
+		enabled: value.enabled === true,
+		policy: value.policy === 'everyNth' || value.policy === 'latestFrame' ? value.policy : 'firstFrame',
+		interval: numberAtLeast(value.interval, 1, DEFAULT_PLATE_SOLVING_SETTINGS.interval, true),
+		request: {
+			provider: typeof request.provider === 'string' && PLATE_SOLVERS.has(request.provider) ? (request.provider as PlateSolverProvider) : 'astap',
+			strategy: request.strategy === 'blind' ? 'blind' : 'assisted',
+			...(Object.keys(normalizedHints).length > 0 && { hints: normalizedHints }),
+			...(downsample > 0 && { downsample }),
+			...(scaleTolerance !== undefined && { scaleTolerance }),
+		},
+		overlay: value.overlay !== false,
+		grid: value.grid === true,
 	}
 }
 
@@ -860,6 +928,23 @@ export function setAnalysisSettings(state: ProfileState, role: CameraRole, patch
 	const next = JSON.parse(JSON.stringify({ ...analysisSettings(capture, role), ...patch })) as CaptureAnalysisSettings
 	capture.analysis ??= {}
 	capture.analysis[role] = next
+	touch(profile)
+}
+
+// Returns the plate solving of a camera view: the one edited last, or the defaults.
+export function plateSolvingSettings(capture: Readonly<CaptureSettings>, role: CameraRole): Readonly<CapturePlateSolvingSettings> {
+	return capture.plateSolving?.[role] ?? DEFAULT_PLATE_SOLVING_SETTINGS
+}
+
+// Replaces fields of the plate solving of a camera view in the active profile; other views keep theirs. The request is
+// replaced as a whole when given.
+export function setPlateSolvingSettings(state: ProfileState, role: CameraRole, patch: Partial<CapturePlateSolvingSettings>) {
+	const profile = activeProfile(state)
+	const capture = profile.settings.capture
+	// A plain copy: the stored settings are a proxy, and a default must never be shared with a view.
+	const next = JSON.parse(JSON.stringify({ ...plateSolvingSettings(capture, role), ...patch })) as CapturePlateSolvingSettings
+	capture.plateSolving ??= {}
+	capture.plateSolving[role] = next
 	touch(profile)
 }
 

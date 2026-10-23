@@ -9,6 +9,7 @@ import type { CameraCapabilities } from './devices'
 import { ExternalToolsStore } from './externaltools'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry } from './operations'
+import { type PlateSolvingEvent, PlateSolvingService } from './platesolving'
 import { DEFAULT_ASTAP_SETTINGS, DEFAULT_BUILTIN_SETTINGS, DEFAULT_STAR_ACCEPTANCE, type StarDetectionEvent, StarDetectionService } from './stars'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-captures-'))
@@ -45,6 +46,8 @@ async function setup() {
 	const tools = new ExternalToolsStore(join(mkdtempSync(join(root, 'settings-')), 'settings.json'))
 	const starEvents: StarDetectionEvent[] = []
 	const stars = new StarDetectionService(images, tools, (event) => starEvents.push(event))
+	const solveEvents: PlateSolvingEvent[] = []
+	const plateSolving = new PlateSolvingService(images, tools, (event) => solveEvents.push(event))
 	const events: CaptureEvent[] = []
 	const captures = new CameraCaptures(
 		manager.devices,
@@ -52,6 +55,7 @@ async function setup() {
 		operations,
 		images,
 		stars,
+		plateSolving,
 		(event) => events.push(event),
 		mkdtempSync(join(root, 'default-')),
 	)
@@ -67,7 +71,7 @@ async function setup() {
 	const frames = () => events.filter((event): event is Extract<CaptureEvent, { type: 'capture:frame' }> => event.type === 'capture:frame').map((event) => event.frame)
 	const ended = () => ['completed', 'stopped', 'aborted', 'failed'].includes(session()?.phase ?? '')
 
-	return { manager, id, client, operations, operationEvents, images, tools, stars, starEvents, captures, events, camera, cameraId, session, frames, ended }
+	return { manager, id, client, operations, operationEvents, images, tools, stars, starEvents, plateSolving, solveEvents, captures, events, camera, cameraId, session, frames, ended }
 }
 
 test('a single capture saves one frame, previews it, and releases the camera', async () => {
@@ -364,4 +368,112 @@ test('a stop while waiting for analysis capacity ends the capture and lets the a
 	await waitUntil(() => settled(session()), 30000)
 	expect(session()!.analysis).toMatchObject({ failed: 0, skipped: 0, waiting: false })
 	expect(session()!.analysis!.analyzed).toBe(session()!.captured)
+}, 40000)
+
+// Environment variable that makes a fake program exit at once, so settleProgram can probe it.
+const PROBE = 'NEBULOSA_FAKE_PROBE'
+
+// Waits until a freshly written fake program can be started: on Windows a scanner may still hold the new file.
+async function settleProgram(path: string) {
+	const deadline = performance.now() + 5000
+
+	while (true) {
+		try {
+			await Bun.spawn([path], { env: { ...process.env, [PROBE]: '1' }, stdout: 'ignore', stderr: 'ignore' }).exited
+			return
+		} catch (error) {
+			if (performance.now() >= deadline) throw error
+			await Bun.sleep(20)
+		}
+	}
+}
+
+// Writes an executable standing in for an ASTAP solve of the 32×32 frames of request(): after sleep seconds it writes
+// a solved .ini and a TAN WCS for the -o base (its second argument) and exits 0, or exits with exitCode without
+// writing anything.
+async function fakeAstapSolve(sleep: number, exitCode = 0) {
+	const directory = mkdtempSync(join(root, 'astap-solve-'))
+	const cards = ["CTYPE1  = 'RA---TAN'", "CTYPE2  = 'DEC--TAN'", 'CRPIX1  = 16.5', 'CRPIX2  = 16.5', 'CRVAL1  = 42', 'CRVAL2  = -17', 'CD1_1   = -0.0005', 'CD1_2   = 0', 'CD2_1   = 0', 'CD2_2   = 0.0005']
+	const text = ['SIMPLE  = T', 'BITPIX  = 8', 'NAXIS   = 0', ...cards, 'END'].map((card) => card.padEnd(80)).join('')
+	writeFileSync(join(directory, 'out.wcs'), text.padEnd(Math.ceil(text.length / 2880) * 2880))
+	writeFileSync(join(directory, 'out.ini'), 'PLTSOLVD=T\n')
+
+	if (process.platform === 'win32') {
+		const path = join(directory, 'astap.cmd')
+		const copies = exitCode === 0 ? [`copy /y "${join(directory, 'out.ini')}" "%~dpn2.ini" >nul`, `copy /y "${join(directory, 'out.wcs')}" "%~dpn2.wcs" >nul`] : []
+		writeFileSync(path, ['@echo off', `if defined ${PROBE} exit /b 0`, ...(sleep > 0 ? [`ping -n ${sleep + 1} 127.0.0.1 >nul`] : []), ...copies, `exit /b ${exitCode}`].join('\r\n'))
+		await settleProgram(path)
+		return path
+	}
+
+	const path = join(directory, 'astap')
+	const copies = exitCode === 0 ? [`cp '${join(directory, 'out.ini')}' "\${2%.*}.ini"`, `cp '${join(directory, 'out.wcs')}' "\${2%.*}.wcs"`] : []
+	writeFileSync(path, ['#!/bin/sh', `[ -n "$${PROBE}" ] && exit 0`, ...(sleep > 0 ? [`sleep ${sleep}`] : []), ...copies, `exit ${exitCode}`].join('\n'))
+	chmodSync(path, 0o755)
+	await settleProgram(path)
+	return path
+}
+
+// Whether a session ended, its last frame was decoded (so every frame it solves was submitted), and every plate solve
+// it submitted ended.
+function solvesSettled(session: CaptureSession | undefined, frames: readonly CaptureFrame[]) {
+	const state = session?.plateSolving
+	const ended = ['completed', 'stopped', 'aborted', 'failed'].includes(session?.phase ?? '')
+	return !!state && ended && frames.some((frame) => frame.sessionId === session.sessionId && frame.generation === session.captured) && state.pending === 0 && !state.waiting
+}
+
+test('First Frame solves only the first frame, with its WCS bound to that frame', async () => {
+	const { id, cameraId, captures, session, frames, tools, solveEvents } = await setup()
+	await configureAstap(tools, await fakeAstapSolve(0))
+	await captures.start(id, cameraId, request({ exposureMode: 'fixed', count: 3, output: { mode: 'preview-only', format: 'FITS' }, plateSolving: { policy: 'firstFrame', request: { provider: 'astap', strategy: 'blind' } } }))
+	await waitUntil(() => solvesSettled(session(), frames()), 30000)
+
+	expect(session()).toMatchObject({ phase: 'completed', captured: 3, plateSolving: { policy: 'firstFrame', provider: 'astap', requested: 1, solved: 1, noSolution: 0, failed: 0, pending: 0 } })
+	const solved = solveEvents.filter((event) => event.job.state === 'completed').map((event) => event.job)
+	expect(solved.map((job) => (job.origin.kind === 'capture' ? job.origin.generation : 0))).toEqual([1])
+	expect(frames().find((frame) => frame.generation === 1)?.imageId).toBe(solved[0].imageId)
+}, 40000)
+
+test('Every N Frames solves frames 1, N + 1… holding the eligible exposures, never the delay', async () => {
+	const { id, cameraId, captures, session, events, frames, tools, solveEvents } = await setup()
+	await configureAstap(tools, await fakeAstapSolve(1))
+	await captures.start(id, cameraId, request({ exposureMode: 'fixed', count: 5, plateSolving: { policy: 'everyNth', interval: 2, request: { provider: 'astap', strategy: 'blind' } } }))
+	await waitUntil(() => solvesSettled(session(), frames()), 40000)
+
+	expect(session()).toMatchObject({ phase: 'completed', captured: 5, saved: 5, request: { delay: 0 }, plateSolving: { interval: 2, requested: 3, solved: 3, failed: 0, skipped: 0 } })
+	const generations = solveEvents.filter((event) => event.job.state === 'completed').map((event) => (event.job.origin.kind === 'capture' ? event.job.origin.generation : 0))
+	expect(generations.toSorted((a, b) => a - b)).toEqual([1, 3, 5])
+	expect(events.some((event) => event.type === 'capture:updated' && event.session.phase === 'analysisWait')).toBeTrue()
+}, 50000)
+
+test('Latest Frame Only never holds the capture and skips the frames still waiting', async () => {
+	const { id, cameraId, captures, ended, session, events, frames, tools } = await setup()
+	await configureAstap(tools, await fakeAstapSolve(1))
+	await captures.start(id, cameraId, request({ exposureMode: 'fixed', count: 6, output: { mode: 'preview-only', format: 'FITS' }, plateSolving: { policy: 'latestFrame', request: { provider: 'astap', strategy: 'blind' } } }))
+	await waitUntil(ended, 30000)
+
+	expect(events.some((event) => event.type === 'capture:updated' && event.session.phase === 'analysisWait')).toBeFalse()
+	await waitUntil(() => solvesSettled(session(), frames()), 30000)
+	const state = session()!.plateSolving!
+	expect(state.solved).toBeGreaterThan(0)
+	expect(state.skipped).toBeGreaterThan(0)
+	expect(state.failed).toBe(0)
+}, 40000)
+
+test('a plate solved capture refuses to start without its solver, or with nova on every Nth frame', async () => {
+	const { id, cameraId, captures, operations } = await setup()
+
+	expect((await captures.start(id, cameraId, request({ plateSolving: { policy: 'firstFrame', request: { provider: 'astap', strategy: 'blind' } } }))).status).toBe(422)
+	expect((await captures.start(id, cameraId, request({ plateSolving: { policy: 'everyNth', interval: 5, request: { provider: 'nova', strategy: 'blind' } } }))).status).toBe(422)
+	expect(operations.running()).toEqual([])
+})
+
+test('failing plate solves halt the plate solving, never the capture', async () => {
+	const { id, cameraId, captures, session, frames, tools } = await setup()
+	await configureAstap(tools, await fakeAstapSolve(0, 16))
+	await captures.start(id, cameraId, request({ exposureMode: 'fixed', count: 5, plateSolving: { policy: 'everyNth', interval: 1, request: { provider: 'astap', strategy: 'blind' } } }))
+	await waitUntil(() => solvesSettled(session(), frames()), 30000)
+
+	expect(session()).toMatchObject({ phase: 'completed', captured: 5, saved: 5, plateSolving: { solved: 0, failed: 3 } })
+	expect(session()!.plateSolving!.halted).toContain('3 frames in a row')
 }, 40000)

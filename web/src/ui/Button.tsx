@@ -2,7 +2,7 @@ import type { ComponentProps } from 'react'
 import { tv, type VariantProps } from 'tailwind-variants'
 
 const button = tv({
-	base: 'inline-flex cursor-pointer items-center justify-center gap-2 border border-transparent font-medium whitespace-nowrap transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:border-transparent disabled:bg-base-300 disabled:text-ink-300',
+	base: 'inline-flex cursor-pointer items-center justify-center gap-2 border border-transparent font-medium whitespace-break-spaces transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:border-transparent disabled:bg-base-300 disabled:text-ink-300',
 	variants: {
 		variant: {
 			primary: 'bg-accent text-on-accent hover:bg-accent-hover',

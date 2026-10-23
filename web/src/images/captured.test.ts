@@ -10,7 +10,7 @@ interface Call {
 	readonly body?: unknown
 }
 
-const SOURCE: CaptureSourceSummary = { connectionId: 'conn', deviceId: 'cam', cameraName: 'Camera', connected: true, count: 1, revision: 1 }
+const SOURCE: CaptureSourceSummary = { connectionId: 'conn', deviceId: 'cam', cameraName: 'Camera', connected: true, latestRestored: false, count: 1, revision: 1 }
 
 // Returns a frame of the camera, with fields replaced.
 function frame(generation: number, patch: Partial<CaptureFrameSummary> = {}): CaptureFrameSummary {

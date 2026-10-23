@@ -134,7 +134,7 @@ test('every saved frame is recorded in the frame registry, the latest one in mem
 	await waitUntil(() => frames().some((frame) => frame.generation === 3 && frame.file === 'saved'))
 
 	const { sessionId } = session()!
-	const recorded = (await frameRegistry.recent(id, cameraId))!.frames
+	const recorded = (await frameRegistry.recent(id, cameraId)).frames
 	expect(recorded.map((frame) => [frame.frameId, frame.availability, frame.fileName])).toEqual([
 		[`${sessionId}:3`, 'memory', 'frame_0003.fit'],
 		[`${sessionId}:2`, 'file', 'frame_0002.fit'],

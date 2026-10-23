@@ -49,27 +49,72 @@ function setup(options: CaptureFrameRegistryOptions = {}) {
 }
 
 describe('frames', () => {
-	test('the first frame is the latest, in memory', async () => {
+	test('the first frame is the latest, in memory, and not saved', async () => {
 		const { registry, preview, events } = setup()
 		await preview(1)
 
 		const { sources } = registry.snapshot()
 		expect(sources).toHaveLength(1)
-		expect(sources[0]).toMatchObject({ connectionId: 'connection', deviceId: 'camera', cameraName: 'Camera', connected: true, latestFrameId: 'session:1', latestAvailableFrameId: 'session:1', count: 1 })
-		expect((await registry.recent('connection', 'camera'))!.frames[0]).toMatchObject({ frameId: 'session:1', availability: 'memory', width: 8, height: 4, acquisition: { exposure: 2.5 } })
+		expect(sources[0]).toMatchObject({ connectionId: 'connection', deviceId: 'camera', cameraName: 'Camera', connected: true, latestFrameId: 'session:1', latestAvailableFrameId: 'session:1', latestRestored: false, count: 0 })
+		const page = await registry.recent('connection', 'camera')
+		expect(page.latest).toMatchObject({ frameId: 'session:1', availability: 'memory', width: 8, height: 4, acquisition: { exposure: 2.5 } })
+		expect(page.frames).toEqual([])
 		expect(events.at(-1)).toMatchObject({ type: 'captureFrame:updated', frame: { frameId: 'session:1' } })
 	})
 
-	test('a newer frame closes the previous document, whose frame stays listed as expired', async () => {
+	test('a newer previewed-only frame replaces the latest, whose frame is expired and never listed', async () => {
 		const { registry, preview, images } = setup()
 		const first = await preview(1)
 		await preview(2)
 
 		expect(images.name(first.id)).toBeUndefined()
-		const { frames } = (await registry.recent('connection', 'camera'))!
-		expect(frames.map((frame) => frame.frameId)).toEqual(['session:2', 'session:1'])
-		expect(frames[1]).toMatchObject({ availability: 'unavailable', reason: 'expired', imageId: undefined })
-		expect(registry.snapshot().sources[0]).toMatchObject({ latestFrameId: 'session:2', latestAvailableFrameId: 'session:2' })
+		const page = await registry.recent('connection', 'camera')
+		expect(page.latest?.frameId).toBe('session:2')
+		expect(page.frames).toEqual([])
+		expect((await registry.frame('session:1'))!).toMatchObject({ availability: 'unavailable', reason: 'expired', imageId: undefined })
+		expect(registry.snapshot().sources[0]).toMatchObject({ latestFrameId: 'session:2', latestAvailableFrameId: 'session:2', count: 0 })
+	})
+
+	test('a saved latest frame is also the newest saved frame', async () => {
+		const { registry, preview } = setup()
+		await preview(1, { path: join(root, 'latest-saved-1.fits') })
+
+		const page = await registry.recent('connection', 'camera')
+		expect(page.latest?.frameId).toBe('session:1')
+		expect(page.frames.map((frame) => frame.frameId)).toEqual(['session:1'])
+		expect(registry.snapshot().sources[0].count).toBe(1)
+	})
+
+	test('previewed-only frames never evict saved frames', async () => {
+		const { registry, preview } = setup()
+		await preview(1, { path: join(root, 'kept-1.fits') })
+		await preview(2, { path: join(root, 'kept-2.fits') })
+		for (let generation = 3; generation <= 102; generation++) await preview(generation)
+
+		const page = await registry.recent('connection', 'camera')
+		expect(page.latest?.frameId).toBe('session:102')
+		expect(page.frames.map((frame) => [frame.frameId, frame.availability])).toEqual([
+			['session:2', 'file'],
+			['session:1', 'file'],
+		])
+	})
+
+	test(`only the latest ${FRAMES_PER_SOURCE} saved frames of a camera are remembered, and a previewed-only latest takes none of them`, async () => {
+		const { registry, preview } = setup()
+		for (let generation = 1; generation <= FRAMES_PER_SOURCE + 3; generation++) await preview(generation, { path: join(root, `limit-${generation}.fits`) })
+		await preview(FRAMES_PER_SOURCE + 4)
+
+		const { latest, frames } = await registry.recent('connection', 'camera')
+		expect(latest?.frameId).toBe(`session:${FRAMES_PER_SOURCE + 4}`)
+		expect(frames).toHaveLength(FRAMES_PER_SOURCE)
+		expect(frames[0].frameId).toBe(`session:${FRAMES_PER_SOURCE + 3}`)
+		expect(frames.at(-1)!.frameId).toBe('session:4')
+		expect(registry.snapshot().sources[0].count).toBe(FRAMES_PER_SOURCE)
+	})
+
+	test('a camera without frames has an empty page', async () => {
+		const { registry } = setup()
+		expect(await registry.recent('connection', 'unknown')).toEqual({ frames: [] })
 	})
 
 	test('cameras of the same name on different connections are kept apart', async () => {
@@ -79,19 +124,9 @@ describe('frames', () => {
 
 		const { sources } = registry.snapshot()
 		expect(sources.map((source) => source.connectionId).sort()).toEqual(['a', 'b'])
-		expect((await registry.recent('a', 'camera'))!.frames.map((frame) => frame.frameId)).toEqual(['sa:1'])
 		// The latest frame of one camera never closes the latest frame of another.
-		expect((await registry.recent('a', 'camera'))!.frames[0].availability).toBe('memory')
-	})
-
-	test(`only the latest ${FRAMES_PER_SOURCE} frames of a camera are remembered`, async () => {
-		const { registry, preview } = setup()
-		for (let generation = 1; generation <= FRAMES_PER_SOURCE + 3; generation++) await preview(generation)
-
-		const { frames } = (await registry.recent('connection', 'camera'))!
-		expect(frames).toHaveLength(FRAMES_PER_SOURCE)
-		expect(frames[0].frameId).toBe(`session:${FRAMES_PER_SOURCE + 3}`)
-		expect(frames.at(-1)!.frameId).toBe('session:4')
+		expect((await registry.recent('a', 'camera')).latest).toMatchObject({ frameId: 'sa:1', availability: 'memory' })
+		expect((await registry.recent('b', 'camera')).latest).toMatchObject({ frameId: 'sb:1', availability: 'memory' })
 	})
 
 	test(`only ${MAX_SOURCES} cameras are remembered`, async () => {
@@ -111,9 +146,10 @@ describe('frames', () => {
 
 		expect((await registry.frame('session:1'))!).toMatchObject({ availability: 'file', file: 'saved', fileName: 'saved-1.fits' })
 		expect(JSON.stringify(await registry.frame('session:1'))).not.toContain(root.replaceAll('\\', '\\\\'))
+		expect((await registry.recent('connection', 'camera')).frames.map((frame) => frame.frameId)).toEqual(['session:1'])
 	})
 
-	test('a removed saved file makes its frame unavailable', async () => {
+	test('a removed saved file makes its frame unavailable, and it stays listed', async () => {
 		const { registry, preview } = setup()
 		const path = join(root, 'removed-1.fits')
 		await preview(1, { path })
@@ -122,6 +158,7 @@ describe('frames', () => {
 
 		expect((await registry.frame('session:1'))!).toMatchObject({ availability: 'unavailable', reason: 'fileMissing' })
 		expect(await registry.open('session:1', 'tab')).toEqual({ status: 'refused', code: 'fileMissing' })
+		expect((await registry.recent('connection', 'camera')).frames[0]).toMatchObject({ frameId: 'session:1', reason: 'fileMissing' })
 	})
 
 	test('a saved frame the preview skipped is recorded from its file; a failed one is not', () => {
@@ -130,10 +167,27 @@ describe('frames', () => {
 		registry.written({ ...frame, generation: 1, path: join(root, 'skipped-1.fits') }, 'saved')
 		registry.written({ ...frame, generation: 2, path: join(root, 'skipped-2.fits') }, 'failed')
 
-		expect(registry.snapshot().sources[0]).toMatchObject({ latestFrameId: 'session:1', count: 1 })
+		expect(registry.snapshot().sources[0]).toMatchObject({ latestFrameId: undefined, latestAvailableFrameId: 'session:1', latestRestored: true, count: 1 })
 	})
 
-	test('the outcome of a write updates its frame, never its identity', async () => {
+	test('a latest frame being saved joins the saved frames once written, even after a newer frame', async () => {
+		const { registry, preview, images } = setup()
+		const path = join(root, 'writing-1.fits')
+		writeFileSync(path, fits())
+		const time = Date.UTC(2026, 9, 23)
+		const info = await images.openCapture(fits(), 'Camera #1', { connectionId: 'connection', deviceId: 'camera', frameId: 'session:1', time, path })
+		registry.previewed(info, { imageId: info.id, sessionId: 'session', connectionId: 'connection', deviceId: 'camera', generation: 1, time, path, file: 'saving', frameType: 'LIGHT', width: info.width, height: info.height, channels: info.channels, acquisition: info.acquisition }, 'Camera')
+		expect((await registry.recent('connection', 'camera')).frames).toEqual([])
+
+		await preview(2)
+		registry.written({ sessionId: 'session', generation: 1, connectionId: 'connection', deviceId: 'camera', cameraName: 'Camera', time, frameType: 'LIGHT', path }, 'saved')
+
+		const page = await registry.recent('connection', 'camera')
+		expect(page.latest?.frameId).toBe('session:2')
+		expect(page.frames.map((frame) => [frame.frameId, frame.availability])).toEqual([['session:1', 'file']])
+	})
+
+	test('a failed write never joins the saved frames', async () => {
 		const { registry, preview } = setup()
 		const path = join(root, 'failing-1.fits')
 		await preview(1, { path })
@@ -141,6 +195,7 @@ describe('frames', () => {
 		await preview(2)
 
 		expect((await registry.frame('session:1'))!).toMatchObject({ frameId: 'session:1', file: 'failed', availability: 'unavailable', reason: 'saveFailed' })
+		expect((await registry.recent('connection', 'camera')).frames).toEqual([])
 	})
 
 	test('revisions increase with every change', async () => {
@@ -158,7 +213,7 @@ describe('frames', () => {
 		await preview(1)
 		registry.deviceChanged({ type: 'device:removed', connectionId: 'connection', id: 'camera' })
 
-		expect(events.at(-1)).toMatchObject({ type: 'captureSource:updated', source: { deviceId: 'camera', count: 1 } })
+		expect(events.at(-1)).toMatchObject({ type: 'captureSource:updated', source: { deviceId: 'camera', latestFrameId: 'session:1' } })
 		expect((await registry.frame('session:1'))!.availability).toBe('memory')
 	})
 })
@@ -296,7 +351,7 @@ describe('leases', () => {
 })
 
 describe('persistence', () => {
-	test('frames survive a restart; only the saved ones can be opened', async () => {
+	test('saved frames survive a restart, without a latest frame; previewed-only ones do not', async () => {
 		const { registry, preview, file } = setup()
 		const path = join(root, 'persisted-1.fits')
 		await preview(1, { path })
@@ -304,33 +359,70 @@ describe('persistence', () => {
 		await registry.flush()
 
 		const restarted = setup({ file })
-		const { frames } = (await restarted.registry.recent('connection', 'camera'))!
-		expect(frames.map((frame) => [frame.frameId, frame.availability, frame.reason])).toEqual([
-			['session:2', 'unavailable', 'restarted'],
-			['session:1', 'file', undefined],
-		])
+		const page = await restarted.registry.recent('connection', 'camera')
+		expect(page.latest).toBeUndefined()
+		expect(page.frames.map((frame) => [frame.frameId, frame.availability])).toEqual([['session:1', 'file']])
+		expect(await restarted.registry.frame('session:2')).toBeUndefined()
+		expect(restarted.registry.snapshot().sources[0]).toMatchObject({ latestFrameId: undefined, latestAvailableFrameId: 'session:1', latestRestored: true })
 		expect(restarted.registry.snapshot().epoch).not.toBe(registry.snapshot().epoch)
 
 		await restarted.preview(1, { sessionId: 'next' })
-		const reloaded = (await restarted.registry.recent('connection', 'camera'))!.frames
-		expect(reloaded[0].frameId).toBe('next:1')
-		expect(reloaded[0].sequence).toBeGreaterThan(reloaded[1].sequence)
+		const reloaded = await restarted.registry.recent('connection', 'camera')
+		expect(reloaded.latest!.frameId).toBe('next:1')
+		expect(reloaded.latest!.sequence).toBeGreaterThan(reloaded.frames[0].sequence)
+		expect(restarted.registry.snapshot().sources[0].latestRestored).toBeFalse()
 	})
 
-	test('the file holds no document id', async () => {
+	test('the file holds no document id nor previewed-only frame', async () => {
 		const { registry, preview, file } = setup()
 		const info = await preview(1)
+		await preview(2, { path: join(root, 'persisted-2.fits') })
 		await registry.flush()
 
-		expect(readFileSync(file, 'utf-8')).not.toContain(info.id)
+		const text = readFileSync(file, 'utf-8')
+		expect(text).not.toContain(info.id)
+		expect(JSON.parse(text)).toMatchObject({ version: 2, sources: [{ connectionId: 'connection', deviceId: 'camera', saved: [{ frameId: 'session:2' }] }] })
+		expect(text).not.toContain('session:1')
+	})
+
+	test('a version 1 file keeps its saved frames only', async () => {
+		const file = join(root, 'version-1.json')
+		const path = join(root, 'migrated.fits')
+		writeFileSync(path, fits())
+		const frame = (generation: number, extra: object = {}) => ({ frameId: `s:${generation}`, sequence: generation, sessionId: 's', generation, time: generation, frameType: 'LIGHT', ...extra })
+		const frames = [frame(1), frame(2, { path, file: 'saved' }), frame(3, { path, file: 'failed' }), frame(4, { path, file: 'saving' }), frame(5)]
+		writeFileSync(
+			file,
+			JSON.stringify({
+				version: 1,
+				sequence: 5,
+				sources: [
+					{ connectionId: 'connection', deviceId: 'camera', cameraName: 'Camera', frames },
+					{ connectionId: 'connection', deviceId: 'preview', cameraName: 'Preview', frames: [frame(6)] },
+				],
+			}),
+		)
+
+		const { registry, preview } = setup({ file })
+		expect(registry.snapshot().sources.map((source) => source.deviceId)).toEqual(['camera'])
+		const page = await registry.recent('connection', 'camera')
+		expect(page.frames.map((f) => [f.frameId, f.file, f.availability])).toEqual([
+			['s:4', 'saved', 'file'],
+			['s:2', 'saved', 'file'],
+		])
+
+		await preview(1, { sessionId: 'next' })
+		expect((await registry.recent('connection', 'camera')).latest!.sequence).toBeGreaterThan(6)
+		await registry.flush()
+		expect(JSON.parse(readFileSync(file, 'utf-8'))).toMatchObject({ version: 2, sources: [{ saved: [{ frameId: 's:2' }, { frameId: 's:4' }] }] })
 	})
 
 	test('a file of a newer version is read and never overwritten', async () => {
 		const file = join(root, 'newer.json')
-		const text = JSON.stringify({ version: 99, sequence: 5, sources: [{ connectionId: 'connection', deviceId: 'camera', cameraName: 'Camera', frames: [{ frameId: 's:1', sequence: 5, sessionId: 's', generation: 1, time: 0, frameType: 'LIGHT' }] }] })
+		const text = JSON.stringify({ version: 99, sequence: 5, sources: [{ connectionId: 'connection', deviceId: 'camera', cameraName: 'Camera', saved: [{ frameId: 's:1', sequence: 5, sessionId: 's', generation: 1, time: 0, frameType: 'LIGHT', path: join(root, 'newer.fits'), file: 'saved' }] }] })
 		writeFileSync(file, text)
 		const { registry, preview } = setup({ file })
-		await preview(1)
+		await preview(1, { path: join(root, 'newer-2.fits') })
 		await registry.flush()
 
 		expect(readFileSync(file, 'utf-8')).toBe(text)
@@ -339,7 +431,7 @@ describe('persistence', () => {
 
 	test('invalid content is read as empty, and invalid frames are skipped', () => {
 		expect(parseCaptureFrames('not json')).toEqual({ sources: [], sequence: 0 })
-		const { sources } = parseCaptureFrames(JSON.stringify({ version: 1, sources: [{ connectionId: 'c', deviceId: 'd', frames: [{ frameId: 'x' }, { frameId: 's:1', sequence: 1, sessionId: 's', generation: 1, time: 0 }] }] }))
-		expect(sources[0].frames.map((frame) => frame.frameId)).toEqual(['s:1'])
+		const { sources } = parseCaptureFrames(JSON.stringify({ version: 2, sources: [{ connectionId: 'c', deviceId: 'd', saved: [{ frameId: 'x' }, { frameId: 's:1', sequence: 1, sessionId: 's', generation: 1, time: 0, path: 'a.fits', file: 'saved' }] }] }))
+		expect(sources[0].saved.map((frame) => frame.frameId)).toEqual(['s:1'])
 	})
 })

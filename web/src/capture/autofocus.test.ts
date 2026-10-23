@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, CameraCapabilities } from 'api'
 import { proxy } from 'valtio'
 import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_AUTO_FOCUS_SETTINGS } from '../profile/profile'
-import { autoFocusBlocker, autoFocusRequest, autoFocusRunning, type AutoFocusRuntime, defaultStepSize, handleAutoFocusEvent, refreshAutoFocus, NO_FOCUSER, startAutoFocus, stopAutoFocus } from './autofocus'
+import { autoFocusBlocker, autoFocusFrameFocus, autoFocusRequest, autoFocusRunning, type AutoFocusRuntime, defaultStepSize, handleAutoFocusEvent, refreshAutoFocus, NO_FOCUSER, startAutoFocus, stopAutoFocus } from './autofocus'
 import { cameraKey } from './capture'
 import { curveBounds, ticks } from './FocusCurve'
 
@@ -148,4 +148,23 @@ test('a session starts only on a ready camera with an associated, ready focuser 
 	expect(autoFocusBlocker(ready, ready, undefined, false)).toBe('The focuser state is not known yet.')
 	expect(autoFocusBlocker(ready, ready, { canAbsoluteMove: false }, false)).toBe('The focuser cannot move to absolute positions, which the Auto Focus needs.')
 	expect(autoFocusBlocker(ready, ready, focuser, true)).toBe('ASTAP is not configured.')
+})
+
+test('an Auto Focus frame takes the focuser position its session recorded, and nothing is guessed', () => {
+	const measurement = { requestedPosition: 1000, detectedCount: 1, acceptedCount: 1, elapsed: 1, warnings: [], time: 1 }
+	const session = details({
+		measurements: [
+			{ ...measurement, capture: 1, observedPosition: 1002 },
+			{ ...measurement, capture: 2, observedPosition: 1398 },
+		],
+		verificationImageId: 'img-v',
+		finalPosition: 1200,
+	})
+
+	expect(autoFocusFrameFocus(session, { sessionId: 's1', generation: 2, imageId: 'img-2' })).toEqual({ position: 1398, verification: false })
+	expect(autoFocusFrameFocus(session, { sessionId: 's1', generation: 3, imageId: 'img-v' })).toEqual({ position: 1200, verification: true })
+	// A frame published before its measurement is recorded has no position yet.
+	expect(autoFocusFrameFocus(session, { sessionId: 's1', generation: 3, imageId: 'img-3' })).toBeUndefined()
+	expect(autoFocusFrameFocus(session, { sessionId: 'other', generation: 1 })).toBeUndefined()
+	expect(autoFocusFrameFocus(undefined, { sessionId: 's1', generation: 1 })).toBeUndefined()
 })

@@ -77,6 +77,25 @@ export function autoFocusBlocker(camera: RoleAvailability, focuser: RoleAvailabi
 	return undefined
 }
 
+// Focuser position of an Auto Focus frame, as its session recorded it.
+export interface AutoFocusFrameFocus {
+	// Logical focuser position the frame was taken at, in steps.
+	readonly position: number
+	// Whether the frame is the verification frame at the best focus rather than a sample.
+	readonly verification: boolean
+}
+
+// Returns where the focuser stood for a frame of a session (by its session id, frame number, and document), from the
+// session's record: the observed position of its measurement, or the final position for the verification frame; undefined
+// for a frame of another session or one not recorded yet, never a guess.
+export function autoFocusFrameFocus(session: Pick<AutoFocusSession, 'sessionId' | 'measurements' | 'verificationImageId' | 'finalPosition'> | undefined, frame: { readonly sessionId: string; readonly generation: number; readonly imageId?: string }): AutoFocusFrameFocus | undefined {
+	if (!session || session.sessionId !== frame.sessionId) return undefined
+	const measurement = session.measurements.find((m) => m.capture === frame.generation)
+	if (measurement) return { position: measurement.observedPosition, verification: false }
+	if (frame.imageId !== undefined && frame.imageId === session.verificationImageId && session.finalPosition !== undefined) return { position: session.finalPosition, verification: true }
+	return undefined
+}
+
 // Returns whether a session is still running.
 export function autoFocusRunning(session: Pick<AutoFocusSessionSummary, 'endedAt'> | undefined): boolean {
 	return session !== undefined && session.endedAt === undefined

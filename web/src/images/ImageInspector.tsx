@@ -1,9 +1,12 @@
-import type { CaptureFrameSummary, ImageAcquisition, ImageInfo, ImageProvenance, RenderResult } from 'api'
+import type { CaptureFrameOrigin, CaptureFrameSummary, ImageAcquisition, ImageInfo, ImageProvenance, RenderResult, StarDetectionOrigin } from 'api'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
+import { autoFocusFrameFocus, autoFocusRuntime } from '../capture/autofocus'
 import { connectionState } from '../connection/connection'
 import { PanelSection, PlannedControls } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
+import { type ImageQualityStatus, imageQuality } from '../stars/quality'
+import { PROVIDER_LABELS, starsState } from '../stars/stars'
 import { Button } from '../ui/Button'
 import { connectionLabel, frameUnavailableReason } from './captureframes'
 import { DisplayAdjustments } from './DisplayAdjustments'
@@ -11,8 +14,10 @@ import { type CameraFrameSelection, documentPath, downloadUrl, type ImageDocumen
 import type { ImageToolPanelProps } from './tools'
 
 // Image Inspector, the default contextual tool of the Images workspace: properties, the provenance and
-// save actions of a derived image, the camera, session, and storage of the frame a camera tab shows, acquisition data, display adjustments with the parameters of the
-// current rendering, and the header of the active document, with the statistics section still to come.
+// save actions of a derived image, the camera, origin, session, and storage of the frame a camera tab shows (with the
+// focuser position of an Auto Focus frame when its session recorded it), the quality the measurements already made
+// on the image give (never measured here), acquisition data, display adjustments with the parameters of the current
+// rendering, and the header of the active document, with the statistics section still to come.
 // The display adjustments edit the document's pending display settings and create derived images.
 
 // Text shown for a datum the image does not have.
@@ -83,6 +88,7 @@ export function ImageInspector({ document, view, onOpen, onSaveAs }: ImageToolPa
 				)}
 			</PanelSection>
 			{document.camera?.shown && <CapturedFrame frame={document.camera.shown.frame} selection={document.camera.selection.kind} />}
+			{info && <Quality imageId={info.id} />}
 			{info?.origin === 'derived' && <Derivation document={document} provenance={info.provenance} infoId={info.id} onSaveAs={onSaveAs} />}
 			{info && <Acquisition info={info} />}
 			{info && view && <DisplayAdjustments documentKey={document.key} info={info} view={view} />}
@@ -136,16 +142,34 @@ interface CapturedFrameProps {
 	readonly selection: CameraFrameSelection['kind']
 }
 
-// Camera, session, and storage of the frame a camera tab shows, as the capture frame registry describes it.
+// Labels of the operations that take frames.
+const ORIGIN_LABELS: Readonly<Record<CaptureFrameOrigin, string>> = { capture: 'Camera Acquisition', autofocus: 'Auto Focus' }
+
+// Camera, origin, session, and storage of the frame a camera tab shows, as the capture frame registry describes it,
+// and, for an Auto Focus frame, its measurement and the focuser position its session recorded.
 function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 	const connections = useSnapshot(connectionState)
+	const autoFocus = useSnapshot(autoFocusRuntime)
 	const unavailable = frameUnavailableReason(frame)
+	const focus = frame.origin === 'autofocus' ? autoFocusFrameFocus(autoFocus.details[frame.sessionId], frame) : undefined
 
 	return (
 		<>
 			<PanelSection title="Capture">
 				<Property label="Camera">{frame.cameraName}</Property>
 				<Property label="Connection">{connectionLabel(frame.connectionId, connections.servers, connections.connections)}</Property>
+				<Property label="Origin">{ORIGIN_LABELS[frame.origin]}</Property>
+				{frame.origin === 'autofocus' && (
+					<>
+						<Property label="Auto Focus session">
+							<span title={frame.sessionId} className="block truncate">
+								{frame.sessionId}
+							</span>
+						</Property>
+						<Property label="Measurement">{focus?.verification ? 'Verification' : `#${frame.generation}`}</Property>
+						<Property label="Focuser position">{focus ? `${focus.position} steps` : MISSING}</Property>
+					</>
+				)}
 				<Property label="Frame">#{frame.generation}</Property>
 				<Property label="Frame type">{frame.frameType}</Property>
 				<Property label="Captured (UTC)">{formatDate(new Date(frame.time).toISOString())}</Property>
@@ -168,6 +192,37 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 				<Property label="Availability">{unavailable ? <span className="text-danger">{unavailable}</span> : frame.availability === 'memory' ? 'In memory' : 'Saved file'}</Property>
 			</PanelSection>
 		</>
+	)
+}
+
+// Labels of the states of the quality of an image.
+const QUALITY_LABELS: Readonly<Record<ImageQualityStatus, string>> = { 'not-measured': 'Not measured', pending: 'Measuring', measured: 'Measured', failed: 'Failed' }
+
+// Labels of who asked for a star detection.
+const MEASURED_BY_LABELS: Readonly<Record<StarDetectionOrigin['kind'], string>> = { manual: 'Star Detection', capture: 'Post-capture analysis', autofocus: 'Auto Focus' }
+
+interface QualityProps {
+	// Id of the image document shown.
+	readonly imageId: string
+}
+
+// Quality of the image shown, from the latest star detection of its image id: its state, the aggregate HFD (in
+// pixels, only when measured), the star counts, the detector, and who measured it. Nothing is measured here.
+function Quality({ imageId }: QualityProps) {
+	const stars = useSnapshot(starsState)
+	const quality = imageQuality(stars, imageId)
+	const measured = quality.status === 'measured'
+
+	return (
+		<PanelSection title="Quality">
+			<Property label="State">{quality.status === 'failed' ? <span className="text-danger">{QUALITY_LABELS.failed}</span> : QUALITY_LABELS[quality.status]}</Property>
+			{measured && <Property label="HFD (px)">{quality.hfdPx === undefined ? MISSING : quality.hfdPx.toFixed(2)}</Property>}
+			{measured && <Property label="Stars (accepted / detected)">{`${quality.acceptedStars ?? 0} / ${quality.detectedStars ?? 0}`}</Property>}
+			{quality.provider && <Property label="Detector">{PROVIDER_LABELS[quality.provider]}</Property>}
+			{quality.origin && <Property label="Measured by">{MEASURED_BY_LABELS[quality.origin]}</Property>}
+			{quality.error && <p className="m-0 text-xs leading-4 text-danger">{quality.error}</p>}
+			{quality.status === 'not-measured' && <p className="m-0 text-xs leading-4 text-ink-300">Run Star Detection to measure the HFD of this image.</p>}
+		</PanelSection>
 	)
 }
 

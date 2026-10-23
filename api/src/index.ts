@@ -54,6 +54,7 @@ export type {
 	CaptureFrameEvent,
 	CaptureFrameOpened,
 	CaptureFrameOpenRequest,
+	CaptureFrameOrigin,
 	CaptureFramePage,
 	CaptureFramesSnapshot,
 	CaptureFrameSummary,

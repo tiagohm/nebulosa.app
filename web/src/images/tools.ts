@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { ImageInspector } from './ImageInspector'
 import type { ImageDocument, ImageViewState } from './images'
+import { PlateSolverPanel } from './PlateSolverPanel'
 import { StarDetectionPanel } from './StarDetectionPanel'
 
 // Static registry of the contextual tools of the Images workspace. A tool replaces the contextual panel
@@ -54,7 +55,7 @@ function plannedTool(id: Exclude<ImageToolId, 'inspector'>, label: string, outpu
 // Definition of every Images contextual tool, by id.
 export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefinition>> = {
 	inspector: { id: 'inspector', label: 'Image Inspector', panelTitle: 'Image Inspector', outputs: ['display', 'derived'], panel: ImageInspector },
-	'plate-solver': plannedTool('plate-solver', 'Plate Solver', ['analysis']),
+	'plate-solver': { id: 'plate-solver', label: 'Plate Solver', panelTitle: 'Plate Solving', outputs: ['analysis'], panel: PlateSolverPanel },
 	'star-detection': { id: 'star-detection', label: 'Star Detection', panelTitle: 'Star Detection', outputs: ['analysis'], panel: StarDetectionPanel },
 	'streak-detection': plannedTool('streak-detection', 'Streak Detection', ['analysis']),
 	'image-processing': plannedTool('image-processing', 'Image Processing', ['derived']),

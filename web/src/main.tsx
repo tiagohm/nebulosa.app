@@ -11,6 +11,7 @@ import { focuserBacklashRuntime, handleFocuserBacklashEvent, refreshFocuserBackl
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
 import { onOpen, subscribe } from './events'
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
+import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from './platesolving/platesolving'
 import { loadProfiles, persistProfiles, profileState } from './profile/profile'
 import { externalToolsState, handleExternalToolEvent, refreshExternalTools } from './settings/externaltools'
 import { routeState, watchHistory } from './shell/route'
@@ -46,10 +47,11 @@ const stops = [
 		handleAutoFocusEvent(autoFocusRuntime, event)
 		handleExternalToolEvent(externalToolsState, event)
 		handleStarsEvent(starsState, event)
+		handlePlateSolvingEvent(plateSolvingState, event)
 	}),
 	// Every (re)open resynchronizes the open connections, the watched devices and their control states, the followed mount, the
 	// running operations, the camera sensors, the captures and camera capabilities, and the nudged mount
-	// and its nudge sessions, the Auto Focus sessions, the dome rotation sessions, the focuser backlash compensations, the external tool settings, and the star detection jobs, which may have changed while the socket was closed.
+	// and its nudge sessions, the Auto Focus sessions, the dome rotation sessions, the focuser backlash compensations, the external tool settings, and the star detection and plate solving jobs, which may have changed while the socket was closed.
 	onOpen(() => {
 		void refreshExternalTools(externalToolsState)
 		void refreshServers(connectionState)
@@ -66,6 +68,7 @@ const stops = [
 		void refreshNudges(nudgeRuntime)
 		void refreshAutoFocus(autoFocusRuntime)
 		void refreshStars(starsState)
+		void refreshPlateSolving(plateSolvingState)
 	}),
 ]
 

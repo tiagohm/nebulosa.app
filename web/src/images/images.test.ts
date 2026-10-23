@@ -23,8 +23,11 @@ import {
 	revertDisplay,
 	selectImage,
 	selectImageTool,
+	selectPlateSolution,
 	selectStar,
 	setImageView,
+	setPlateSolveOverlay,
+	setPlateSolveRequest,
 	setStarMarkers,
 	setStarRequest,
 	shownRendering,
@@ -511,6 +514,33 @@ describe('star detection', () => {
 		expect(state.views[a]?.stars).toMatchObject({ visible: true, acceptedOnly: true, selected: { jobId: 'job-1', index: 3 } })
 
 		// Editing and showing never reach the server.
+		expect(calls.length).toBe(requests)
+	})
+})
+
+describe('plate solving', () => {
+	test('a new document starts with ASTAP around the header, its overlay shown, and the latest solution', async () => {
+		const state = newState()
+		await openImage(state, '/a.fits', fakeIo().io)
+		const key = state.documents[0].key
+
+		expect(state.views[key]?.plateSolving).toEqual({ request: { provider: 'astap', strategy: 'assisted' }, overlay: true, grid: false })
+	})
+
+	test('edits the request, the solution shown, and the overlay of one document only, without the server', async () => {
+		const state = newState()
+		const { io, calls } = fakeIo()
+		await openImage(state, '/a.fits', io)
+		await openImage(state, '/b.fits', io)
+		const [a, b] = state.documents.map((d) => d.key)
+		const requests = calls.length
+
+		setPlateSolveRequest(state, a, { provider: 'nova', strategy: 'blind', downsample: 4 })
+		selectPlateSolution(state, a, 'header')
+		setPlateSolveOverlay(state, a, { grid: true })
+
+		expect(state.views[a]?.plateSolving).toEqual({ request: { provider: 'nova', strategy: 'blind', downsample: 4 }, selected: 'header', overlay: true, grid: true })
+		expect(state.views[b]?.plateSolving).toEqual({ request: { provider: 'astap', strategy: 'assisted' }, overlay: true, grid: false })
 		expect(calls.length).toBe(requests)
 	})
 })

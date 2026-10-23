@@ -1,7 +1,8 @@
-import type { DeriveRequest, DisplaySettings, ImageFormat, ImageInfo, RenderRequest, RenderResult, SaveRequest, SaveResult, StarDetectionRequest, Stretch } from 'api'
+import type { DeriveRequest, DisplaySettings, ImageFormat, ImageInfo, PlateSolveRequest, RenderRequest, RenderResult, SaveRequest, SaveResult, StarDetectionRequest, Stretch } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { responseError } from '../http'
+import { DEFAULT_PLATE_SOLVE_REQUEST } from '../platesolving/platesolving'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { FIT_VIEW, type ViewerView } from '../viewer/transform'
 import type { ImageToolId } from './tools'
@@ -90,6 +91,19 @@ export interface ImageStarsState {
 	selected?: { readonly jobId: string; readonly index: number }
 }
 
+// Plate solving of a document as the tab shows it: the request being edited, the solution shown, and its overlay.
+export interface ImagePlateSolvingState {
+	// Request the next Solve Image sends; editing it never solves.
+	request: PlateSolveRequest
+	// Solution shown: a job id of the image, 'header' for the WCS of its header, or absent for its latest job. Only a
+	// choice of the operator changes it; a job that ends never does.
+	selected?: string
+	// Whether the centre and the north and east directions of the solution shown are drawn.
+	overlay: boolean
+	// Whether its right ascension and declination grid is drawn too.
+	grid: boolean
+}
+
 // How a document is shown: its own zoom, pan, display settings, and rendering.
 export interface ImageViewState {
 	// Zoom and pan of the viewer.
@@ -108,6 +122,8 @@ export interface ImageViewState {
 	deriveError?: string
 	// Star detection request and markers.
 	stars: ImageStarsState
+	// Plate solving request, solution shown, and overlay.
+	plateSolving: ImagePlateSolvingState
 }
 
 // State of a document's display settings: rendering, the latest rendering failed, the pending settings
@@ -307,7 +323,14 @@ export async function openImage(state: ImagesState, path: string, io: ImagesIo =
 function addDocument(state: ImagesState, document: ImageDocument) {
 	const pending = copySettings(document.info ? defaultDisplaySettings(document.info) : ORIGINAL_DISPLAY_SETTINGS)
 	state.documents.push(document)
-	state.views[document.key] = { view: FIT_VIEW, display: { pending, showOriginal: false }, renderPending: false, deriving: false, stars: { request: { detector: { ...DEFAULT_STAR_REQUEST.detector }, acceptance: { ...DEFAULT_STAR_REQUEST.acceptance } }, visible: true, acceptedOnly: false } }
+	state.views[document.key] = {
+		view: FIT_VIEW,
+		display: { pending, showOriginal: false },
+		renderPending: false,
+		deriving: false,
+		stars: { request: { detector: { ...DEFAULT_STAR_REQUEST.detector }, acceptance: { ...DEFAULT_STAR_REQUEST.acceptance } }, visible: true, acceptedOnly: false },
+		plateSolving: { request: { ...DEFAULT_PLATE_SOLVE_REQUEST }, overlay: true, grid: false },
+	}
 	state.tools[document.key] = { tool: 'inspector' }
 	state.activeKey = document.key
 }
@@ -495,6 +518,25 @@ export function setStarMarkers(state: ImagesState, key: string, patch: Partial<P
 export function selectStar(state: ImagesState, key: string, selected?: ImageStarsState['selected']) {
 	const stars = state.views[key]?.stars
 	if (stars) stars.selected = selected
+}
+
+// Replaces the plate solving request of a document, which only the next Solve Image sends. Ignored for an unknown key.
+export function setPlateSolveRequest(state: ImagesState, key: string, request: PlateSolveRequest) {
+	const plateSolving = state.views[key]?.plateSolving
+	if (plateSolving) plateSolving.request = request
+}
+
+// Chooses the solution of a document that is shown: a job id, 'header', or undefined for its latest job. Ignored for an
+// unknown key.
+export function selectPlateSolution(state: ImagesState, key: string, selected: string | undefined) {
+	const plateSolving = state.views[key]?.plateSolving
+	if (plateSolving) plateSolving.selected = selected
+}
+
+// Changes how the overlay of the solution of a document is drawn; never solves. Ignored for an unknown key.
+export function setPlateSolveOverlay(state: ImagesState, key: string, patch: Partial<Pick<ImagePlateSolvingState, 'overlay' | 'grid'>>) {
+	const plateSolving = state.views[key]?.plateSolving
+	if (plateSolving) Object.assign(plateSolving, patch)
 }
 
 // Shows a tool in the contextual panel of a document. Ignored for an unknown key.

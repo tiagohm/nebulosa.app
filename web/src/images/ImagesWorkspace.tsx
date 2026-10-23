@@ -3,6 +3,8 @@ import { type KeyboardEvent, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../files/files'
+import { usePlateSolution } from '../platesolving/usePlateSolution'
+import { WcsOverlay } from '../platesolving/WcsOverlay'
 import { activeProfile, profileState, setLastImageDirectory } from '../profile/profile'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { StarOverlay } from '../stars/StarOverlay'
@@ -51,6 +53,8 @@ export function ImagesWorkspace() {
 	const Panel = definition.panel ?? ImageInspector
 	const { result: stars } = useStarResult(document?.info?.id)
 	const markers = view?.stars.visible && stars ? stars : undefined
+	const { solution } = usePlateSolution(document?.info?.id, view?.plateSolving.selected)
+	const wcs = view?.plateSolving.overlay ? solution : undefined
 	const toolSelector = <Select options={IMAGE_TOOLS} value={tool} disabled={!document} format={(t) => IMAGE_TOOL_DEFINITIONS[t].label} disabledReason={imageToolUnavailable} onChange={(t) => document && selectImageTool(imagesState, document.key, t)} className="w-52 max-sm:w-40" />
 	const openButton = (
 		<Button variant="secondary" onClick={() => setChoosing(true)}>
@@ -80,7 +84,16 @@ export function ImagesWorkspace() {
 						loading={document?.status === 'loading' || view?.renderPending}
 						error={document?.error ?? view?.error}
 						toolbar={document && view && <OriginalToggle documentKey={document.key} view={view} mosaic={!!document.info && document.info.channels === 1 && !!document.info.bayer} />}
-						overlays={markers && view ? (_, overlay) => <StarOverlay result={markers} view={overlay} acceptedOnly={view.stars.acceptedOnly} selected={view.stars.selected?.jobId === markers.jobId ? view.stars.selected.index : undefined} /> : undefined}
+						overlays={
+							(markers || wcs) && view
+								? (size, overlay) => (
+										<>
+											{wcs && <WcsOverlay solution={wcs} image={size} view={overlay} grid={view.plateSolving.grid} />}
+											{markers && <StarOverlay result={markers} view={overlay} acceptedOnly={view.stars.acceptedOnly} selected={view.stars.selected?.jobId === markers.jobId ? view.stars.selected.index : undefined} />}
+										</>
+									)
+								: undefined
+						}
 						onImageClick={
 							markers && view && document && tool === 'star-detection'
 								? (point, overlay) => {

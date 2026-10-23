@@ -3,6 +3,7 @@ import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { Actions, Notice } from '../equipment-control/parts'
+import { activeProfile, profileState, setStarDetectionSettings, starDetectionSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { AcceptanceControls, DetectorControls, DetectorSettingsControls, useAstapConfigured } from '../stars/StarRequestControls'
@@ -10,13 +11,13 @@ import { cancelDetection, isActive, PROVIDER_LABELS, runDetection, sameRequest, 
 import { useStarResult } from '../stars/useStarResult'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
-import { type ImageStarsState, imagesState, holdCameraFrame, setStarMarkers, setStarRequest } from './images'
+import { type ImageStarsState, imagesState, holdCameraFrame, setStarMarkers } from './images'
 import type { ImageToolPanelProps } from './tools'
 
 // Star Detection tool of the Images workspace: runs a detection of the active document on the server with
 // the built-in detector or ASTAP, and shows the outcome, the aggregate HFD, the star selected in the viewer,
-// and how the markers are drawn. Settings are edited as the document's pending request and sent only by Run
-// Detection; a result always belongs to the image it measured. ASTAP's executable and timeout are not set
+// and how the markers are drawn. Settings are the profile's star detection request, shared by every document and by
+// the frames of Auto Focus, and sent only by Run Detection; a result always belongs to the image it measured. ASTAP's executable and timeout are not set
 // here but in Settings → External Tools, which the detector section links to.
 
 // Text shown for a value the result does not have.
@@ -56,7 +57,7 @@ interface StarDetectionProps {
 	readonly documentKey: string
 	// Server id of its image.
 	readonly imageId: string
-	// Star detection request and markers of the document.
+	// Star markers of the document.
 	readonly stars: ImageStarsState
 }
 
@@ -64,9 +65,10 @@ interface StarDetectionProps {
 function StarDetection({ documentKey, imageId, stars }: StarDetectionProps) {
 	const { job, result, resultError } = useStarResult(imageId)
 	const { submitErrors } = useSnapshot(starsState)
-	const { request } = stars
+	const profiles = useSnapshot(profileState)
+	const request = starDetectionSettings(activeProfile(profiles).settings)
 	const selected = result && stars.selected?.jobId === result.jobId ? result.stars[stars.selected.index] : undefined
-	const edit = (next: StarDetectionRequest) => setStarRequest(imagesState, documentKey, next)
+	const edit = (next: StarDetectionRequest) => setStarDetectionSettings(profileState, next)
 
 	return (
 		<>
@@ -96,7 +98,7 @@ interface AnalysisProps {
 	readonly documentKey: string
 	// Server id of the image.
 	readonly imageId: string
-	// Pending request of the document.
+	// Star detection request of the profile.
 	readonly request: StarDetectionRequest
 	// Latest job of the image.
 	readonly job?: StarDetectionJob

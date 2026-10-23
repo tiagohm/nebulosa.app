@@ -5,7 +5,7 @@ import { CAMERA_ROLES, conflictingRole, type DeviceAssignment, type EquipmentRol
 import { WORKSPACE_IDS, type WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
 import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
-import { DEFAULT_ASTAP_SETTINGS, DEFAULT_BUILTIN_SETTINGS, DEFAULT_STAR_REQUEST } from '../stars/stars'
+import { DEFAULT_APERTURE_RADIUS, DEFAULT_ASTAP_SETTINGS, DEFAULT_BUILTIN_SETTINGS, DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { isRecord, parseJson, readText, type Stores, writeText } from '../storage'
 
 // Profiles of the browser and the profile active in this tab. Profiles are a versioned collection in
@@ -44,6 +44,9 @@ export interface ProfileSettings {
 	lastImageDirectory?: string
 	// Forms of each physical camera edited so far, by saved connection id, then device id.
 	cameras: Record<string, Record<string, CameraSettings>>
+	// Star detection request edited in Images → Star Detection, shared by every document and by the frames of Auto
+	// Focus; absent until edited, and then DEFAULT_STAR_REQUEST holds.
+	starDetection?: StarDetectionRequest
 	// Preferences of the Sky workspace.
 	sky: SkySettings
 	// Telescope or lens of the profile's Equipment Setup, which no device reports; absent until entered.
@@ -134,11 +137,10 @@ export interface CameraIdentity {
 	readonly deviceId: string
 }
 
-// Auto Focus form of one physical camera: how the frames are measured and the routine the next session starts with.
-// The frames are taken with the exposure and camera settings of the camera, which this form never holds. Durations are in seconds, positions in focuser steps.
+// Auto Focus form of one physical camera: the routine the next session starts with. The frames are taken with the
+// exposure and camera settings of the camera and measured with the star detection request of the profile, which this
+// form never holds. Durations are in seconds, positions in focuser steps.
 export interface AutoFocusSettings {
-	// Star detector, its settings, and the acceptance criteria of the stars entering the aggregate HFD.
-	detection: StarDetectionRequest
 	// Curve fitting that places the best focus.
 	fittingMode: AutoFocusRequest['fittingMode']
 	// Positions sampled on each side of the start, >= 1.
@@ -155,14 +157,8 @@ export interface AutoFocusSettings {
 	measureTimeout: number
 }
 
-// Signal aperture radius of the built-in detector of an Auto Focus, in pixels: large enough to measure the
-// defocused stars at the ends of a focus curve, which the fixed 4 px aperture saturates.
-export const AUTO_FOCUS_APERTURE = 32
-
-// Auto Focus form of a camera that has none yet: frames measured by the built-in detector with a grown aperture, and
-// a hyperbolic fit over 4 positions on each side.
+// Auto Focus form of a camera that has none yet: a hyperbolic fit over 4 positions on each side.
 export const DEFAULT_AUTO_FOCUS_SETTINGS: AutoFocusSettings = {
-	detection: { ...DEFAULT_STAR_REQUEST, detector: { ...DEFAULT_BUILTIN_SETTINGS, maximumRadius: AUTO_FOCUS_APERTURE } },
 	fittingMode: 'HYPERBOLIC',
 	initialOffsetSteps: 4,
 	reversed: false,
@@ -323,15 +319,14 @@ function migrateRoleForms(capture: unknown, equipment: Readonly<Record<string, E
 	return cameras
 }
 
-// Restores a persisted star detection request, filling every invalid field with its default; the aperture of
-// the built-in detector is kept only when valid, and fallback is used when the value is not a record.
-function normalizeStarRequest(value: unknown, fallback: StarDetectionRequest): StarDetectionRequest {
-	if (!isRecord(value)) return JSON.parse(JSON.stringify(fallback)) as StarDetectionRequest
+// Restores a persisted star detection request, filling every invalid field with its default; undefined for anything
+// that is not a record. The aperture of the built-in detector is at least the fixed 4 px one.
+function normalizeStarRequest(value: unknown): StarDetectionRequest | undefined {
+	if (!isRecord(value)) return undefined
 
 	const detector = isRecord(value.detector) ? value.detector : {}
 	const acceptance = isRecord(value.acceptance) ? value.acceptance : {}
 	const defaults = DEFAULT_STAR_REQUEST.acceptance
-	const maximumRadius = numberAtLeast(detector.maximumRadius, 1, Number.NaN)
 
 	return {
 		detector:
@@ -342,7 +337,7 @@ function normalizeStarRequest(value: unknown, fallback: StarDetectionRequest): S
 						maxStars: numberAtLeast(detector.maxStars, 1, DEFAULT_BUILTIN_SETTINGS.maxStars, true),
 						minSNR: numberAtLeast(detector.minSNR, 0, DEFAULT_BUILTIN_SETTINGS.minSNR),
 						searchRegion: numberAtLeast(detector.searchRegion, 0, DEFAULT_BUILTIN_SETTINGS.searchRegion),
-						...(Number.isFinite(maximumRadius) && { maximumRadius }),
+						maximumRadius: numberAtLeast(detector.maximumRadius, 4, DEFAULT_APERTURE_RADIUS),
 					},
 		acceptance: { minSNR: numberAtLeast(acceptance.minSNR, 0, defaults.minSNR), minHfd: numberAtLeast(acceptance.minHfd, 0, defaults.minHfd), maxHfd: numberAtLeast(acceptance.maxHfd, 0, defaults.maxHfd), edgeMargin: numberAtLeast(acceptance.edgeMargin, 0, defaults.edgeMargin) },
 	}
@@ -353,7 +348,7 @@ const FITTING_MODES: ReadonlySet<string> = new Set<AutoFocusSettings['fittingMod
 
 // Restores a persisted Auto Focus form, filling every invalid field with its default; undefined for anything
 // that is not a record. A step size that is not valid is dropped, so the travel of the focuser sets it again, and the
-// frame settings of forms saved when the Auto Focus had its own are dropped too.
+// frame settings and star detection of forms saved when the Auto Focus had its own are dropped too.
 function normalizeAutoFocus(value: unknown): AutoFocusSettings | undefined {
 	if (!isRecord(value)) return undefined
 
@@ -361,7 +356,6 @@ function normalizeAutoFocus(value: unknown): AutoFocusSettings | undefined {
 	const stepSize = numberAtLeast(value.stepSize, 1, Number.NaN, true)
 
 	return {
-		detection: normalizeStarRequest(value.detection, defaults.detection),
 		fittingMode: typeof value.fittingMode === 'string' && FITTING_MODES.has(value.fittingMode) ? (value.fittingMode as AutoFocusSettings['fittingMode']) : defaults.fittingMode,
 		initialOffsetSteps: numberAtLeast(value.initialOffsetSteps, 1, defaults.initialOffsetSteps, true),
 		...(Number.isFinite(stepSize) && { stepSize }),
@@ -497,6 +491,8 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	if (typeof value.lastImageDirectory === 'string' && value.lastImageDirectory) settings.lastImageDirectory = value.lastImageDirectory
 
 	settings.cameras = normalizeCameras(value.cameras)
+	const starDetection = normalizeStarRequest(value.starDetection)
+	if (starDetection) settings.starDetection = starDetection
 	normalizeSky(value.sky, settings.sky)
 	const telescope = normalizeTelescope(value.telescope)
 	if (telescope) settings.telescope = telescope
@@ -820,10 +816,22 @@ export function autoFocusSettings(settings: Pick<ProfileSettings, 'cameras'>, ca
 	return cameraSettings(settings, camera)?.autoFocus ?? DEFAULT_AUTO_FOCUS_SETTINGS
 }
 
-// Replaces fields of the Auto Focus form of a camera in the active profile. The detection is replaced as a whole when
-// given.
+// Replaces fields of the Auto Focus form of a camera in the active profile.
 export function setAutoFocusSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<AutoFocusSettings>) {
 	setCameraForm(state, camera, 'autoFocus', autoFocusSettings(activeProfile(state).settings, camera), patch)
+}
+
+// Returns the star detection request of a profile: the one edited last, or the defaults.
+export function starDetectionSettings(settings: Pick<ProfileSettings, 'starDetection'>): Readonly<StarDetectionRequest> {
+	return settings.starDetection ?? DEFAULT_STAR_REQUEST
+}
+
+// Replaces the star detection request of the active profile with a plain copy, which the next detection of any
+// document and the next Auto Focus session use; a running session keeps the request it started with.
+export function setStarDetectionSettings(state: ProfileState, request: StarDetectionRequest) {
+	const profile = activeProfile(state)
+	profile.settings.starDetection = JSON.parse(JSON.stringify(request)) as StarDetectionRequest
+	touch(profile)
 }
 
 // Sets the Sky observer of the active profile, or clears it with undefined. Returns false, changing

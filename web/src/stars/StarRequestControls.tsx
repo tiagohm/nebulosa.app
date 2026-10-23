@@ -7,11 +7,11 @@ import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
-import { BUILTIN_STAR_LIMIT, PROVIDER_LABELS, PROVIDERS, withAcceptance, withDetectorSettings, withProvider } from './stars'
+import { BUILTIN_STAR_LIMIT, DEFAULT_APERTURE_RADIUS, PROVIDER_LABELS, PROVIDERS, withAcceptance, withDetectorSettings, withProvider } from './stars'
 
-// Controls of a star detection request, shared by the Star Detection tool of the Images workspace and Auto
-// Focus: the detector with the availability of ASTAP, the settings the
-// selected detector really has, and the acceptance criteria. They edit a request through onChange and run
+// Controls of the star detection request of the profile, edited in the Star Detection tool of the Images workspace
+// and used by Auto Focus too: the detector with the availability of ASTAP, the settings the selected detector really
+// has, and the acceptance criteria. They edit a request through onChange and run
 // nothing; ASTAP's executable and timeout stay in Settings → External Tools, which they link to.
 
 export interface StarRequestControlsProps {
@@ -69,6 +69,8 @@ export function DetectorSettingsControls({ request, onChange, disabled }: StarRe
 			<NumberInput label="Min SNR" value={detector.minSNR} min={0} step={0.5} disabled={disabled} onChange={(minSNR) => edit({ minSNR })} />
 			<NumberInput label="Search region" value={detector.searchRegion} min={0} max={500} suffix="px" disabled={disabled} onChange={(searchRegion) => edit({ searchRegion })} />
 			<Notice>Search region removes pairs of similar stars closer than it; 0 keeps every star.</Notice>
+			<NumberInput label="Aperture radius" value={detector.maximumRadius ?? DEFAULT_APERTURE_RADIUS} min={4} max={256} suffix="px" disabled={disabled} onChange={(maximumRadius) => edit({ maximumRadius })} />
+			<Notice>Largest aperture the HFD of a star is measured in; it must hold the most defocused stars, such as the ends of an Auto Focus curve.</Notice>
 		</>
 	) : (
 		<>

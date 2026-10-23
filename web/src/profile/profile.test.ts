@@ -3,7 +3,8 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { acquisitionSettings, ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, autoFocusSettings, DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, exposureSettings, profileCamera, setAutoFocusSettings, setExposureSettings, createOpticalPreset, createProfile, DEFAULT_ACQUISITION_SETTINGS, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectConnection, selectOpticalPreset, selectProfile, setAcquisitionSettings, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setTelescopeOptics, updateOpticalPreset } from './profile'
+import { acquisitionSettings, ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, autoFocusSettings, DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, exposureSettings, profileCamera, setAutoFocusSettings, setExposureSettings, createOpticalPreset, createProfile, DEFAULT_ACQUISITION_SETTINGS, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectConnection, selectOpticalPreset, selectProfile, setAcquisitionSettings, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setStarDetectionSettings, setTelescopeOptics, starDetectionSettings, updateOpticalPreset } from './profile'
+import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }
@@ -511,16 +512,15 @@ describe('camera forms', () => {
 	test('are persisted and restored, replacing invalid fields with defaults', async () => {
 		const stores = newStores()
 		const state = load(stores)
-		const detection = { detector: { provider: 'builtin', maxStars: 50, minSNR: 2, searchRegion: 0, maximumRadius: 24 }, acceptance: { minSNR: 0, minHfd: 1, maxHfd: 0, edgeMargin: 10 } } as const
 		setExposureSettings(state, MAIN, { exposureTime: 0.0001, binX: 2, binY: 2, subframe: true, width: 100, height: 80 })
 		setAcquisitionSettings(state, MAIN, { exposureMode: 'fixed', count: 30, output: { mode: 'preview-save', directory: '/data/allsky', filenameTemplate: 'sky_{seq}', format: 'XISF' } })
-		setAutoFocusSettings(state, MAIN, { fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, detection, settleDelay: 1.5 })
+		setAutoFocusSettings(state, MAIN, { fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, settleDelay: 1.5 })
 		await Bun.sleep(0)
 
 		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
 		expect(exposureSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 0.0001, binX: 2, binY: 2, subframe: true, width: 100, height: 80 })
 		expect(acquisitionSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'fixed', count: 30, output: { mode: 'preview-save', directory: '/data/allsky', filenameTemplate: 'sky_{seq}', format: 'XISF' } })
-		expect(autoFocusSettings(reloaded, MAIN)).toMatchObject({ fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, detection, settleDelay: 1.5 })
+		expect(autoFocusSettings(reloaded, MAIN)).toMatchObject({ fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, settleDelay: 1.5 })
 
 		const invalid = newStores()
 		const cameras = {
@@ -528,7 +528,7 @@ describe('camera forms', () => {
 				'cam-main': {
 					exposure: { exposureTime: 0, binX: 0, gain: 'high' },
 					acquisition: { exposureMode: 'burst', count: 2.5, delay: -1, frameType: 'SKY', output: { mode: 'x', format: 'NATIVE', directory: '  ' } },
-					autoFocus: { fittingMode: 'CUBIC', stepSize: 0, initialOffsetSteps: 0, measureTimeout: 0, detection: { detector: { provider: 'builtin', maximumRadius: -3 } } },
+					autoFocus: { fittingMode: 'CUBIC', stepSize: 0, initialOffsetSteps: 0, measureTimeout: 0, detection: { detector: { provider: 'astap' } } },
 				},
 				'cam-empty': 'oops',
 			},
@@ -540,10 +540,25 @@ describe('camera forms', () => {
 				'cam-main': {
 					exposure: DEFAULT_EXPOSURE_SETTINGS,
 					acquisition: DEFAULT_ACQUISITION_SETTINGS,
-					autoFocus: { ...DEFAULT_AUTO_FOCUS_SETTINGS, detection: { ...DEFAULT_AUTO_FOCUS_SETTINGS.detection, detector: { provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 } } },
+					autoFocus: DEFAULT_AUTO_FOCUS_SETTINGS,
 				},
 			},
 		})
+	})
+
+	test('the star detection request is the profile one, persisted and restored with defaults for invalid fields', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		expect(starDetectionSettings(activeProfile(state).settings)).toEqual(DEFAULT_STAR_REQUEST)
+
+		const request = { detector: { provider: 'builtin', maxStars: 50, minSNR: 2, searchRegion: 0, maximumRadius: 24 }, acceptance: { minSNR: 0, minHfd: 1, maxHfd: 0, edgeMargin: 10 } } as const
+		setStarDetectionSettings(state, request)
+		await Bun.sleep(0)
+		expect(starDetectionSettings(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual(request)
+
+		const invalid = newStores()
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 4, profiles: [{ id: 'a', name: 'A', settings: { starDetection: { detector: { provider: 'builtin', maximumRadius: 2 } } } }] }))
+		expect(starDetectionSettings(load(invalid).profiles[0].settings)).toEqual(DEFAULT_STAR_REQUEST)
 	})
 
 	test('version 3 forms of a camera role move to the camera that role is assigned in each setup', () => {

@@ -8,9 +8,9 @@ import { type RoleAvailability, roleAvailability } from '../equipment/availabili
 import { deviceState } from '../equipment/equipment'
 import { type RoleDevice, useRoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
-import { activeProfile, AUTO_FOCUS_APERTURE, type AutoFocusSettings, autoFocusSettings, type CameraIdentity, exposureSettings, profileState, setAutoFocusSettings, setExposureSettings } from '../profile/profile'
+import { activeProfile, type AutoFocusSettings, autoFocusSettings, type CameraIdentity, exposureSettings, profileState, setAutoFocusSettings, starDetectionSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
-import { AcceptanceControls, DetectorControls, DetectorSettingsControls, useAstapConfigured } from '../stars/StarRequestControls'
+import { useAstapConfigured } from '../stars/StarRequestControls'
 import { PROVIDER_LABELS } from '../stars/stars'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
@@ -18,13 +18,12 @@ import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusBlocker, autoFocusRequest, autoFocusRunning, autoFocusRuntime, defaultStepSize, FITTING_MODE_LABELS, FITTING_MODES, startAutoFocus, stopAutoFocus, VERIFICATION_LABELS } from './autofocus'
 import { cameraKey, captureRuntime, refreshCapabilities } from './capture'
-import { CameraSettings, ExposureSection } from './ExposureSettings'
 
-// Contextual panel sections of Auto Focus, a camera operation of the Images camera tabs: the
-// exposure and camera settings the frames are taken with, the camera's block shared with Camera Acquisition and
-// editable here; how each frame is measured (the star detector with its grown aperture); the routine the server's
-// runner follows (fitting, step size, positions per side, and the advanced settings collapsed); and the state of the
-// running or last session with its Run and Stop commands. The camera is the panel's target and the focuser the one
+// Contextual panel sections of Auto Focus, a camera operation of the Images camera tabs: the routine the server's
+// runner follows (fitting, step size, positions per side, and the advanced settings collapsed), and the state of the
+// running or last session with its Run and Stop commands. Frames are taken with the camera's exposure and camera
+// settings, edited only in Camera Acquisition, and measured with the profile's star detection request, edited in
+// Images → Star Detection. The camera is the panel's target and the focuser the one
 // associated with it; a camera without a focuser says how to associate one. The filter wheel, when assigned, is
 // shown and never moved. The forms are the camera's, kept in the profile; the session is the server's, shown here
 // from the server state whichever tab started it, and keeps running when the panel unmounts. Its frames are shown by
@@ -56,6 +55,7 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 	const astapConfigured = useAstapConfigured()
 	const profile = activeProfile(profiles)
 	const settings = autoFocusSettings(profile.settings, identity)
+	const detection = starDetectionSettings(profile.settings)
 	const exposure = exposureSettings(profile.settings, identity)
 	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
@@ -68,7 +68,7 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 	const error = key ? runtime.errors[key] : undefined
 	const locked = running || pending
 	const stepSize = settings.stepSize ?? (focuserState ? defaultStepSize(focuserState.position.min, focuserState.position.max) : 100)
-	const blocker = running ? undefined : autoFocusBlocker(availability, focuser && roleAvailability('FOCUSER', focuser, operations), focuserState, settings.detection.detector.provider === 'astap' && !astapConfigured)
+	const blocker = running ? undefined : autoFocusBlocker(availability, focuser && roleAvailability('FOCUSER', focuser, operations), focuserState, detection.detector.provider === 'astap' && !astapConfigured)
 
 	useEffect(() => {
 		if (device?.connected) void refreshCapabilities(captureRuntime, device.connectionId, device.id)
@@ -81,39 +81,18 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 
 	function start() {
 		if (!device || !focuserDevice) return
-		const request = autoFocusRequest(settings, exposure, { connectionId: focuserDevice.connectionId, deviceId: focuserDevice.id }, stepSize, snoop, capabilities)
+		const request = autoFocusRequest(settings, detection, exposure, { connectionId: focuserDevice.connectionId, deviceId: focuserDevice.id }, stepSize, snoop, capabilities)
 		void startAutoFocus(autoFocusRuntime, device.connectionId, device.id, request)
 	}
 
-	const { detection } = settings
-	const builtin = detection.detector.provider === 'builtin' ? detection.detector : undefined
 	const filter = wheelState && (wheelState.names[wheelState.position] || `Slot ${wheelState.position + 1}`)
 
 	return (
 		<>
-			<ExposureSection settings={exposure} capabilities={capabilities} disabled={locked} onChange={(patch) => setExposureSettings(profileState, identity, patch)}>
-				<p className="m-0 text-xs leading-4 text-ink-300">Shared with Camera Acquisition; frames are always LIGHT.</p>
-			</ExposureSection>
-			<CameraSettings settings={exposure} capabilities={capabilities} disabled={locked} onChange={(patch) => setExposureSettings(profileState, identity, patch)} />
-			<PanelSection title="Measurement">
-				{wheel.device && <p className="m-0 text-xs leading-4 text-ink-300">Filter: {filter ?? 'unknown'} — the Auto Focus measures through the current filter and never changes it.</p>}
-				<DetectorControls request={detection} disabled={locked} onChange={(request) => update({ detection: request })} />
-				<details>
-					<summary className="cursor-pointer text-ink-200 select-none">{PROVIDER_LABELS[detection.detector.provider]} detector settings</summary>
-					<div className="mt-2 flex flex-col gap-2">
-						<DetectorSettingsControls request={detection} disabled={locked} onChange={(request) => update({ detection: request })} />
-						{builtin && (
-							<>
-								<NumberInput label="Aperture radius" value={builtin.maximumRadius ?? AUTO_FOCUS_APERTURE} min={4} max={256} suffix="px" disabled={locked} onChange={(maximumRadius) => update({ detection: { ...detection, detector: { ...builtin, maximumRadius } } })} />
-								<Notice>Largest aperture the HFD of a star is measured in; it must hold the most defocused stars of the curve.</Notice>
-							</>
-						)}
-						<AcceptanceControls request={detection} disabled={locked} onChange={(request) => update({ detection: request })} />
-					</div>
-				</details>
-				<p className="m-0 text-xs leading-4 text-ink-300">Each frame is measured by the median HFD of its accepted stars (Multi-Star) and shown as the latest frame of the camera; frames are kept in memory only.</p>
-			</PanelSection>
 			<PanelSection title="Focus Routine">
+				{wheel.device && <p className="m-0 text-xs leading-4 text-ink-300">Filter: {filter ?? 'unknown'} — the Auto Focus measures through the current filter and never changes it.</p>}
+				<p className="m-0 text-xs leading-4 text-ink-300">Frames are LIGHT, taken with the exposure and camera settings of Camera Acquisition ({exposure.exposureTime} s).</p>
+				<p className="m-0 text-xs leading-4 text-ink-300">Each frame is measured by the median HFD of its accepted stars (Multi-Star) with the Star Detection settings ({PROVIDER_LABELS[detection.detector.provider]} detector) and shown as the latest frame of the camera; frames are kept in memory only.</p>
 				<Select label="Curve Fitting" options={FITTING_MODES} value={settings.fittingMode} format={(mode) => FITTING_MODE_LABELS[mode]} disabled={locked} onChange={(fittingMode) => update({ fittingMode })} />
 				<NumberInput label="Step Size" value={stepSize} min={1} max={focuserState ? Math.max(1, focuserState.position.max - focuserState.position.min) : undefined} suffix="steps" disabled={locked} onChange={(value) => update({ stepSize: value })} />
 				<NumberInput label="Positions per Side" value={settings.initialOffsetSteps} min={1} max={50} disabled={locked} onChange={(initialOffsetSteps) => update({ initialOffsetSteps })} />

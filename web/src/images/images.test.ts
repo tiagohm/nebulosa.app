@@ -29,7 +29,6 @@ import {
 	setPlateSolveOverlay,
 	setPlateSolveRequest,
 	setStarMarkers,
-	setStarRequest,
 	shownRendering,
 	summaryStretch,
 	toggleOriginal,
@@ -488,15 +487,15 @@ describe('tool context', () => {
 })
 
 describe('star detection', () => {
-	test('a new document starts with the built-in detector, shown markers, and nothing selected', async () => {
+	test('a new document starts with shown markers and nothing selected', async () => {
 		const state = newState()
 		await openImage(state, '/a.fits', fakeIo().io)
 		const key = state.documents[0].key
 
-		expect(state.views[key]?.stars).toEqual({ request: { detector: { provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 }, acceptance: { minSNR: 0, minHfd: 0, maxHfd: 0, edgeMargin: 0 } }, visible: true, acceptedOnly: false })
+		expect(state.views[key]?.stars).toEqual({ visible: true, acceptedOnly: false })
 	})
 
-	test('edits the request and markers of one document only', async () => {
+	test('edits the markers of one document only', async () => {
 		const state = newState()
 		const { io, calls } = fakeIo()
 		await openImage(state, '/a.fits', io)
@@ -504,14 +503,10 @@ describe('star detection', () => {
 		const [a, b] = state.documents.map((d) => d.key)
 		const requests = calls.length
 
-		const request = { detector: { provider: 'astap', maxStars: 0, minSNR: 20 }, acceptance: { minSNR: 0, minHfd: 1.5, maxHfd: 0, edgeMargin: 0 } } as const
-		setStarRequest(state, a, request)
-		expect(state.views[a]?.stars.request).toEqual(request)
-		expect(state.views[b]?.stars.request.detector).toEqual({ provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 })
-
 		setStarMarkers(state, a, { acceptedOnly: true })
 		selectStar(state, a, { jobId: 'job-1', index: 3 })
 		expect(state.views[a]?.stars).toMatchObject({ visible: true, acceptedOnly: true, selected: { jobId: 'job-1', index: 3 } })
+		expect(state.views[b]?.stars).toEqual({ visible: true, acceptedOnly: false })
 
 		// Editing and showing never reach the server.
 		expect(calls.length).toBe(requests)

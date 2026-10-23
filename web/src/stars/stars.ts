@@ -31,8 +31,14 @@ export const PROVIDER_LABELS: Readonly<Record<StarDetectorProvider, string>> = {
 // Detectors, in selector order.
 export const PROVIDERS: readonly StarDetectorProvider[] = ['builtin', 'astap']
 
-// Defaults of the built-in detector, as the server's: the 500 brightest stars, any SNR, no uniqueness filter.
-export const DEFAULT_BUILTIN_SETTINGS: BuiltinStarDetectionSettings = { provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 }
+// Largest signal-aperture radius of the built-in detector, in pixels: large enough to measure the defocused stars at
+// the ends of an Auto Focus curve, which the fixed 4 px aperture saturates. The aperture grows only while a star
+// extends beyond it, so focused stars are measured as with the fixed one.
+export const DEFAULT_APERTURE_RADIUS = 32
+
+// Defaults of the built-in detector: the 500 brightest stars, any SNR, no uniqueness filter, and an aperture grown up
+// to DEFAULT_APERTURE_RADIUS.
+export const DEFAULT_BUILTIN_SETTINGS: BuiltinStarDetectionSettings = { provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0, maximumRadius: DEFAULT_APERTURE_RADIUS }
 
 // Defaults of ASTAP, as the server's: every star of SNR 10 or more.
 export const DEFAULT_ASTAP_SETTINGS: AstapStarDetectionSettings = { provider: 'astap', maxStars: 0, minSNR: 10 }
@@ -68,7 +74,7 @@ export function withProvider(request: StarDetectionRequest, provider: StarDetect
 	return request.detector.provider === provider ? request : { ...request, detector: { ...defaultSettings(provider) } }
 }
 
-// Settings of a detector a control edits; searchRegion applies to the built-in detector only.
+// Settings of a detector a control edits; searchRegion and maximumRadius apply to the built-in detector only.
 export interface StarDetectorPatch {
 	// Maximum number of stars kept.
 	readonly maxStars?: number
@@ -76,13 +82,17 @@ export interface StarDetectorPatch {
 	readonly minSNR?: number
 	// Uniqueness box of the built-in detector, in pixels.
 	readonly searchRegion?: number
+	// Largest signal-aperture radius of the built-in detector, in pixels.
+	readonly maximumRadius?: number
 }
 
 // Returns a request with settings of its detector replaced; a field its detector does not have is ignored.
-export function withDetectorSettings(request: StarDetectionRequest, { maxStars, minSNR, searchRegion }: StarDetectorPatch): StarDetectionRequest {
+export function withDetectorSettings(request: StarDetectionRequest, { maxStars, minSNR, searchRegion, maximumRadius }: StarDetectorPatch): StarDetectionRequest {
 	const { detector } = request
 	const common = { maxStars: maxStars ?? detector.maxStars, minSNR: minSNR ?? detector.minSNR }
-	return { ...request, detector: detector.provider === 'builtin' ? { ...detector, ...common, searchRegion: searchRegion ?? detector.searchRegion } : { ...detector, ...common } }
+	if (detector.provider !== 'builtin') return { ...request, detector: { ...detector, ...common } }
+	const radius = maximumRadius ?? detector.maximumRadius
+	return { ...request, detector: { ...detector, ...common, searchRegion: searchRegion ?? detector.searchRegion, ...(radius !== undefined && { maximumRadius: radius }) } }
 }
 
 // Returns a request with acceptance criteria replaced.

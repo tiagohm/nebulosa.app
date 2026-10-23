@@ -148,13 +148,14 @@ describe('overlay geometry', () => {
 
 describe('request edits', () => {
 	test('switch detectors from their defaults and keep only the settings a detector has', () => {
-		const builtin = withDetectorSettings(DEFAULT_STAR_REQUEST, { maxStars: 100, searchRegion: 12 })
-		expect(builtin.detector).toEqual({ provider: 'builtin', maxStars: 100, minSNR: 0, searchRegion: 12 })
+		const builtin = withDetectorSettings(DEFAULT_STAR_REQUEST, { maxStars: 100, searchRegion: 12, maximumRadius: 48 })
+		expect(builtin.detector).toEqual({ provider: 'builtin', maxStars: 100, minSNR: 0, searchRegion: 12, maximumRadius: 48 })
 		expect(withProvider(builtin, 'builtin')).toBe(builtin)
 
-		const astap = withDetectorSettings(withProvider(builtin, 'astap'), { minSNR: 20, searchRegion: 5 })
+		const astap = withDetectorSettings(withProvider(builtin, 'astap'), { minSNR: 20, searchRegion: 5, maximumRadius: 16 })
 		expect(astap.detector).toEqual({ provider: 'astap', maxStars: 0, minSNR: 20 })
 		expect(withAcceptance(astap, { minHfd: 1.5 }).acceptance).toEqual({ minSNR: 0, minHfd: 1.5, maxHfd: 0, edgeMargin: 0 })
-		expect(DEFAULT_STAR_REQUEST.detector).toEqual({ provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 })
+		expect(DEFAULT_STAR_REQUEST.detector).toEqual({ provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0, maximumRadius: 32 })
+		expect(withProvider(astap, 'builtin').detector).toEqual(DEFAULT_STAR_REQUEST.detector)
 	})
 })

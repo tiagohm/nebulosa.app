@@ -1,8 +1,9 @@
-import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusState, AutoFocusVerification, CameraCapabilities, CaptureSnoop, ServerEvent } from 'api'
+import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusState, AutoFocusVerification, CameraCapabilities, CaptureSnoop, ServerEvent, StarDetectionRequest } from 'api'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { responseError } from '../http'
-import { AUTO_FOCUS_APERTURE, type AutoFocusSettings, type CameraExposureSettings } from '../profile/profile'
+import type { AutoFocusSettings, CameraExposureSettings } from '../profile/profile'
+import { DEFAULT_APERTURE_RADIUS } from '../stars/stars'
 import { cameraKey, fitExposure } from './capture'
 
 // Auto Focus sessions as this tab knows them. The server owns every session, whichever tab started it, so
@@ -109,17 +110,25 @@ export function defaultStepSize(min: number, max: number) {
 
 // Builds the start request of the Auto Focus form of a camera for a focuser. The frames take the exposure and camera
 // settings (gain, offset, binning, subframe, readout mode) of the camera, fitted to its capabilities as a capture is,
-// and snoop the mount, filter wheel, and rotator of snoop besides the focuser. stepSize is the step size shown, in
-// steps.
-export function autoFocusRequest(settings: Readonly<AutoFocusSettings>, exposure: Readonly<CameraExposureSettings>, focuser: { readonly connectionId: string; readonly deviceId: string }, stepSize: number, snoop: Readonly<CaptureSnoop>, capabilities?: CameraCapabilities): Omit<AutoFocusRequest, 'token'> {
-	const { detector, acceptance } = settings.detection
+// and snoop the mount, filter wheel, and rotator of snoop besides the focuser; they are measured with detection, the
+// star detection request of the profile. stepSize is the step size shown, in steps.
+export function autoFocusRequest(
+	settings: Readonly<AutoFocusSettings>,
+	detection: Readonly<StarDetectionRequest>,
+	exposure: Readonly<CameraExposureSettings>,
+	focuser: { readonly connectionId: string; readonly deviceId: string },
+	stepSize: number,
+	snoop: Readonly<CaptureSnoop>,
+	capabilities?: CameraCapabilities,
+): Omit<AutoFocusRequest, 'token'> {
+	const { detector, acceptance } = detection
 
 	return {
 		focuser,
 		capture: fitExposure(exposure, capabilities),
 		snoop: { mount: snoop.mount, wheel: snoop.wheel, rotator: snoop.rotator },
 		// The built-in detector always measures with a grown aperture, the profile's or the default one.
-		detection: { acceptance: { ...acceptance }, detector: detector.provider === 'builtin' ? { ...detector, maximumRadius: detector.maximumRadius ?? AUTO_FOCUS_APERTURE } : { ...detector } },
+		detection: { acceptance: { ...acceptance }, detector: detector.provider === 'builtin' ? { ...detector, maximumRadius: detector.maximumRadius ?? DEFAULT_APERTURE_RADIUS } : { ...detector } },
 		fittingMode: settings.fittingMode,
 		initialOffsetSteps: settings.initialOffsetSteps,
 		stepSize,

@@ -15,6 +15,7 @@ import { GuideOutputCommands, type GuidePulseRequest, type GuideRateRequest } fr
 import { handleDeriveImage, handleDownloadImage, handleOpenImage, handleRenderImage, handleSaveImage, images } from './images'
 import { MountCommands, type MountGoToRequest, type MountNudgeRequest, type MountSiteRequest, type MountSlewRateRequest, type MountSlewRequest, type MountSyncRequest, type MountTimeRequest, type MountTrackingRequest, type MountTrackModeRequest } from './mounts'
 import { OperationRegistry } from './operations'
+import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { RotatorCommands, type RotatorMoveByRequest, type RotatorMoveToRequest, type RotatorReverseRequest, type RotatorSyncRequest } from './rotators'
 import { skyLocator, skyRoutes } from './sky'
 import { createStarDetectionRoutes, StarDetectionService } from './stars'
@@ -57,7 +58,23 @@ export type {
 } from './devices'
 export type { DewHeaterDutyCycleRequest } from './dewheaters'
 export type { DomeAltitudeRequest, DomeBacklashRequest, DomeMotionEvent, DomeMotionRequest, DomeMotionSession, DomeMotionStartResponse, DomeMoveByRequest, DomeShutterRequest, DomeSlavingRequest, DomeSlewRequest, DomeSpeedRequest, DomeSyncRequest } from './domes'
-export type { ExternalToolCapability, ExternalToolCheck, ExternalToolCheckCode, ExternalToolCheckStatus, ExternalToolConfig, ExternalToolConfigStatus, ExternalToolDefinition, ExternalToolEvent, ExternalToolId, ExternalToolSaveRequest, ExternalToolState, ExternalToolTestRequest, TimeoutLimits } from './externaltools'
+export type {
+	ExternalToolCapability,
+	ExternalToolCheck,
+	ExternalToolCheckCode,
+	ExternalToolCheckStatus,
+	ExternalToolConfig,
+	ExternalToolConfigStatus,
+	ExternalToolDefinition,
+	ExternalToolEvent,
+	ExternalToolField,
+	ExternalToolId,
+	ExternalToolLoginRequest,
+	ExternalToolSaveRequest,
+	ExternalToolState,
+	ExternalToolTestRequest,
+	TimeoutLimits,
+} from './externaltools'
 export type { LeasedPhase, LeasedSession, LeasedStartResponse, LeaseOptions } from './leases'
 export type { DirectoryListing, FileEntry } from './files'
 export type { FlatPanelIntensityRequest, FlatPanelLightRequest } from './flatpanels'
@@ -102,6 +119,8 @@ export type {
 	StarDetectorProvider,
 	StarMeasurement,
 } from './stars'
+export type { PlateSolutions, PlateSolveErrorCode, PlateSolveJob, PlateSolveJobState, PlateSolveOrigin, PlateSolveOutcome, PlateSolveRemote, PlateSolveRequest, PlateSolveResult, PlateSolverProvider, PlateSolverSettings, PlateSolveSnapshot, PlateSolveStage, PlateSolveSummary, PlateSolvingEvent } from './platesolving'
+export type { PlateSolveHint, PlateSolveHints, PlateSolveHintSource, PlateSolveStrategy, ResolvedPlateSolveHints } from './platesolving.hints'
 export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
 export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
 export type { Binning, DeriveRequest, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageCapture, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from './images'
@@ -141,6 +160,7 @@ const externalTools = new ExternalToolsStore(DEFAULT_SETTINGS_FILE, broadcast)
 
 // Star detection of the image documents, shared by the Images workspace and the captures.
 const stars = new StarDetectionService(images, externalTools, broadcast)
+const plateSolving = new PlateSolvingService(images, externalTools, broadcast)
 
 const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, stars, broadcast)
 
@@ -563,6 +583,7 @@ export const routes = {
 	},
 	...createExternalToolsRoutes(externalTools),
 	...createStarDetectionRoutes(stars),
+	...createPlateSolvingRoutes(plateSolving),
 	...skyRoutes,
 	'/api/ws': {
 		// Upgrades to the event WebSocket; Bun sends the handshake response itself.

@@ -18,6 +18,7 @@ import type { ExternalToolEvent } from './externaltools'
 import type { FocuserBacklashEvent } from './focusers'
 import type { MountNudgeEvent } from './mounts'
 import type { OperationEvent } from './operations'
+import type { PlateSolvingEvent } from './platesolving'
 import type { StarDetectionEvent } from './stars'
 
 // Application-wide registry of open device connections (INDI, Alpaca, and the in-process simulator).
@@ -59,7 +60,7 @@ export type ConnectionEvent = { readonly type: 'connection:open'; readonly conne
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the
 // operation events of the operation registry, the events of the capture, Auto Focus, mount nudge, and dome manual
 // rotation services, the changes of the external program settings, and the star detection jobs.
-export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent | CaptureEvent | AutoFocusEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent | StarDetectionEvent | FocuserBacklashEvent
+export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent | CaptureEvent | AutoFocusEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent | StarDetectionEvent | PlateSolvingEvent | FocuserBacklashEvent
 
 // Receiver of connection and device events.
 export type ConnectionListener = (event: ServerEvent) => void

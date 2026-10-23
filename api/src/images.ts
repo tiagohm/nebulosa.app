@@ -278,7 +278,7 @@ export type ImageWorkerRequest =
 	| { readonly type: 'openCapture'; readonly id: number; readonly bytes: Uint8Array<ArrayBuffer>; readonly name: string; readonly capture: ImageCapture }
 	| { readonly type: 'render'; readonly id: number; readonly document: string; readonly request: RenderRequest }
 	| { readonly type: 'derive'; readonly id: number; readonly document: string; readonly request: DeriveRequest }
-	| { readonly type: 'encode'; readonly id: number; readonly document: string; readonly format: ImageFormat }
+	| { readonly type: 'encode'; readonly id: number; readonly document: string; readonly format: ImageFormat; readonly omit?: readonly string[] }
 	| { readonly type: 'detectionImage'; readonly id: number; readonly document: string }
 	| { readonly type: 'cancel'; readonly id: number }
 	| { readonly type: 'close'; readonly document: string }
@@ -358,6 +358,18 @@ interface DocumentRecord {
 	// Absolute path of the file of a file document, or the file a captured frame is saved to; absent for a
 	// derived document and a frame that is only previewed.
 	readonly path?: string
+	// FITS-compatible header of the image.
+	readonly header: FitsHeader
+	// Acquisition data normalized from the header.
+	readonly acquisition: ImageAcquisition
+}
+
+// Metadata of an open or retained document, for an analysis that derives hints from it.
+export interface DocumentMetadata extends DocumentSize {
+	// FITS-compatible header of the image.
+	readonly header: FitsHeader
+	// Acquisition data normalized from the header.
+	readonly acquisition: ImageAcquisition
 }
 
 // Size of a retained document, in pixels.
@@ -380,6 +392,11 @@ interface Retention {
 	holds: number
 }
 
+// Returns the record of a document from its description, without a path.
+function documentRecord({ name, width, height, header, acquisition }: ImageInfo): DocumentRecord {
+	return { name, width, height, header, acquisition }
+}
+
 // Open image documents of every client. The pixels live in the image worker; this side tracks the
 // open ids, so unknown ones are answered without a round trip, and relays requests to the worker.
 export class ImageStore {
@@ -400,7 +417,7 @@ export class ImageStore {
 	async open(path: string): Promise<ImageInfo> {
 		const response = await this.#request({ type: 'open', id: this.#id++, path })
 		if (response.status !== 'opened') throw responseError(response)
-		this.#documents.set(response.info.id, { name: response.info.name, width: response.info.width, height: response.info.height, path: resolve(path) })
+		this.#documents.set(response.info.id, { ...documentRecord(response.info), path: resolve(path) })
 		return response.info
 	}
 
@@ -410,7 +427,7 @@ export class ImageStore {
 	async openCapture(bytes: Uint8Array<ArrayBuffer>, name: string, capture: ImageCapture): Promise<ImageInfo> {
 		const response = await this.#request({ type: 'openCapture', id: this.#id++, bytes, name, capture }, [bytes.buffer])
 		if (response.status !== 'opened') throw responseError(response)
-		this.#documents.set(response.info.id, { name: response.info.name, width: response.info.width, height: response.info.height, path: capture.path === undefined ? undefined : resolve(capture.path) })
+		this.#documents.set(response.info.id, { ...documentRecord(response.info), path: capture.path === undefined ? undefined : resolve(capture.path) })
 		return response.info
 	}
 
@@ -442,7 +459,7 @@ export class ImageStore {
 		const response = await this.#request({ type: 'derive', id: this.#id++, document: id, request })
 
 		if (response.status === 'derived') {
-			this.#documents.set(response.info.id, { name: response.info.name, width: response.info.width, height: response.info.height })
+			this.#documents.set(response.info.id, documentRecord(response.info))
 			return { status: 'derived', info: response.info }
 		}
 
@@ -459,10 +476,17 @@ export class ImageStore {
 	}
 
 	// Encodes an open or retained document as a FITS file in the scale of its source, for a program that reads
-	// files, such as ASTAP. Resolves to undefined when it is neither.
-	detectionFile(id: string): Promise<Uint8Array<ArrayBuffer> | undefined> {
+	// files, such as ASTAP, leaving out the header keywords named in omit (such as the pointing a blind plate solve
+	// must not use). The document itself is unchanged. Resolves to undefined when it is neither open nor retained.
+	detectionFile(id: string, omit?: readonly string[]): Promise<Uint8Array<ArrayBuffer> | undefined> {
 		if (!this.#documents.has(id) && !this.#retained.has(id)) return Promise.resolve(undefined)
-		return this.#encode(id, 'fits')
+		return this.#encode(id, 'fits', omit)
+	}
+
+	// Returns the size, header, and acquisition data of an open or retained document, or undefined when it is neither.
+	metadata(id: string): DocumentMetadata | undefined {
+		const record = this.#documents.get(id) ?? this.#retained.get(id)?.record
+		return record && { width: record.width, height: record.height, header: record.header, acquisition: record.acquisition }
 	}
 
 	// Returns a new grayscale copy of an open or retained document for a star detection, owned by the caller,
@@ -478,9 +502,9 @@ export class ImageStore {
 		throw responseError(response)
 	}
 
-	// Asks the worker to encode a document.
-	async #encode(id: string, format: ImageFormat): Promise<Uint8Array<ArrayBuffer> | undefined> {
-		const response = await this.#request({ type: 'encode', id: this.#id++, document: id, format })
+	// Asks the worker to encode a document, without the header keywords named in omit.
+	async #encode(id: string, format: ImageFormat, omit?: readonly string[]): Promise<Uint8Array<ArrayBuffer> | undefined> {
+		const response = await this.#request({ type: 'encode', id: this.#id++, document: id, format, ...(omit?.length && { omit }) })
 		if (response.status === 'encoded') return response.bytes
 		if (response.status === 'missing') return undefined
 		throw responseError(response)

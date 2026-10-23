@@ -267,6 +267,12 @@ export class AnalysisScheduler<J extends AnalysisJob, R, P, V extends string> {
 		return true
 	}
 
+	// Publishes a change of a job waiting or running, such as the stage it reached; ignored for any other job.
+	update(jobId: string, patch: Partial<J>): void {
+		const entry = this.#entries.get(jobId)
+		if (entry) this.#update(entry, patch)
+	}
+
 	// Returns a job waiting, running, recently ended, or completed with its result kept.
 	job(jobId: string): J | undefined {
 		return this.#entries.get(jobId)?.job ?? this.#results.get(jobId)?.job ?? this.#recent.get(jobId)

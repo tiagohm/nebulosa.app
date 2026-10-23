@@ -42,13 +42,16 @@ function call(routes: ExternalToolsRoutes, path: keyof ExternalToolsRoutes, meth
 }
 
 describe('catalog', () => {
-	test('lists only ASTAP, with its capabilities', async () => {
+	test('lists ASTAP, solve-field, and nova, with their capabilities and settings', async () => {
 		const routes = createExternalToolsRoutes(store().store)
 		const tools = (await (await call(routes, '/api/settings/external-tools', 'GET')).json()) as ExternalToolState[]
 
-		expect(tools.map((tool) => tool.id)).toEqual(['astap'])
-		expect(tools[0]).toMatchObject({ name: 'ASTAP', capabilities: ['plate-solving', 'star-detection'], status: 'notConfigured', revision: 0, config: { executable: '', timeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT } })
+		expect(tools.map((tool) => tool.id)).toEqual(['astap', 'astrometryLocal', 'nova'])
+		expect(tools[0]).toMatchObject({ name: 'ASTAP', capabilities: ['plate-solving', 'star-detection'], fields: ['executable'], session: false, status: 'notConfigured', revision: 0, config: { executable: '', timeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT } })
 		expect(tools[0].lastCheck).toBeUndefined()
+		expect(tools[0].signedIn).toBeUndefined()
+		expect(tools[1]).toMatchObject({ capabilities: ['plate-solving'], fields: ['executable', 'config'], status: 'notConfigured', config: { executable: '', config: '' } })
+		expect(tools[2]).toMatchObject({ capabilities: ['plate-solving'], fields: ['endpoint'], session: true, status: 'notConfigured', signedIn: false, config: { executable: '', endpoint: '' } })
 	})
 
 	test('native providers are not external tools', () => {
@@ -76,7 +79,7 @@ describe('persistence', () => {
 
 		const second = new ExternalToolsStore(file)
 		expect(await second.get('astap')).toMatchObject({ status: 'configured', revision: 1, config: { executable: path, timeout: 60000 } })
-		expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({ version: 1, tools: { astap: { executable: path, timeout: 60000, revision: 1 } } })
+		expect(JSON.parse(readFileSync(file, 'utf-8')).tools.astap).toEqual({ executable: path, timeout: 60000, revision: 1 })
 	})
 
 	test('a save from an outdated revision is refused', async () => {
@@ -231,5 +234,133 @@ describe('resolve', () => {
 		expect(snapshot).toEqual({ executable: '/opt/astap/astap', timeout: 5000 })
 		expect(Object.isFrozen(snapshot)).toBeTrue()
 		expect(await tools.resolve('astap')).toEqual({ executable: '/usr/bin/astap', timeout: 9000 })
+	})
+})
+
+describe('solve-field', () => {
+	test('checks the configuration file besides the executable', async () => {
+		const { store: tools } = store()
+		const path = executable('solve-field')
+		const config = join(root, `backend-${files++}.cfg`)
+
+		expect(await tools.check('astrometryLocal', { executable: path, timeout: 60000, config })).toMatchObject({ status: 'unavailable', code: 'configMissing' })
+
+		writeFileSync(config, 'add_path /data/indexes\n')
+		expect(await tools.check('astrometryLocal', { executable: path, timeout: 60000, config })).toMatchObject({ status: 'available', code: 'ok' })
+		expect(await tools.check('astrometryLocal', { executable: path, timeout: 60000, config: '' })).toMatchObject({ status: 'available', code: 'ok' })
+	})
+
+	test('saves and resolves the configuration file', async () => {
+		const { store: tools } = store()
+		const path = executable('solve-field-saved')
+		await tools.save('astrometryLocal', { executable: path, timeout: 60000, config: '/etc/astrometry.cfg', endpoint: 'ignored' }, 0)
+
+		expect(await tools.resolve('astrometryLocal')).toEqual({ executable: path, timeout: 60000, config: '/etc/astrometry.cfg' })
+	})
+})
+
+describe('nova', () => {
+	// Starts a fake nova service accepting the API key "good", recording the request-json bodies of its sign-ins.
+	function nova() {
+		const logins: unknown[] = []
+
+		const server = Bun.serve({
+			port: 0,
+			async fetch(req) {
+				if (new URL(req.url).pathname !== '/api/login') return new Response(undefined, { status: 404 })
+				const body = JSON.parse((await req.formData()).get('request-json') as string) as { apikey: string }
+				logins.push(body)
+				return Response.json(body.apikey === 'good' ? { status: 'success', session: 'session-1' } : { status: 'error', errormessage: 'bad apikey' })
+			},
+		})
+
+		return { server, logins, endpoint: server.url.origin }
+	}
+
+	test('signs in with the API key and saves only the session', async () => {
+		using service = nova().server
+		const { store: tools, events, file } = store()
+		const endpoint = service.url.origin
+		await tools.save('nova', { executable: '', timeout: 60000, endpoint }, 0)
+
+		const outcome = await tools.login('nova', 'good')
+
+		expect(outcome).toMatchObject({ status: 'signedIn', tool: { status: 'configured', signedIn: true, revision: 2 } })
+		expect(JSON.stringify(events)).not.toContain('session-1')
+		expect(JSON.stringify(await tools.list())).not.toContain('session-1')
+
+		const saved = readFileSync(file, 'utf-8')
+		expect(saved).toContain('session-1')
+		expect(saved).not.toContain('good')
+
+		expect(await tools.resolve('nova')).toEqual({ executable: '', timeout: 60000, endpoint, session: 'session-1' })
+		expect(await tools.check('nova', { executable: '', timeout: 60000, endpoint })).toMatchObject({ status: 'available', code: 'ok' })
+	})
+
+	test('keeps the settings when the service refuses the key', async () => {
+		const { server, logins, endpoint } = nova()
+		using _ = server
+		const { store: tools } = store()
+		await tools.save('nova', { executable: '', timeout: 60000, endpoint }, 0)
+		const routes = createExternalToolsRoutes(tools)
+
+		const response = await call(routes, '/api/settings/external-tools/:id/login', 'POST', 'nova', { apiKey: 'wrong' })
+
+		expect(response.status).toBe(422)
+		expect(await response.json()).toMatchObject({ code: 'refused', error: 'bad apikey' })
+		expect(logins).toEqual([{ apikey: 'wrong' }])
+		expect(await tools.get('nova')).toMatchObject({ status: 'notConfigured', signedIn: false, revision: 1 })
+		expect(await tools.resolve('nova')).toBeUndefined()
+	})
+
+	test('reports an unreachable service', async () => {
+		const { server, endpoint } = nova()
+		await server.stop(true)
+		const { store: tools } = store()
+		await tools.save('nova', { executable: '', timeout: 60000, endpoint }, 0)
+
+		expect(await tools.login('nova', 'good')).toMatchObject({ status: 'unreachable' })
+	})
+
+	test('signs out, and a new endpoint signs out too', async () => {
+		const { server, endpoint } = nova()
+		using _ = server
+		const { store: tools } = store()
+		await tools.save('nova', { executable: '', timeout: 60000, endpoint }, 0)
+		await tools.login('nova', 'good')
+
+		// A save keeping the endpoint keeps the session.
+		const kept = await tools.save('nova', { executable: '', timeout: 120000, endpoint }, 2)
+		expect(kept).toMatchObject({ status: 'saved', tool: { signedIn: true } })
+
+		const moved = await tools.save('nova', { executable: '', timeout: 120000, endpoint: 'https://example.com' }, 3)
+		expect(moved).toMatchObject({ status: 'saved', tool: { signedIn: false, status: 'notConfigured' } })
+
+		await tools.save('nova', { executable: '', timeout: 120000, endpoint }, 4)
+		await tools.login('nova', 'good')
+		const routes = createExternalToolsRoutes(tools)
+		const response = await call(routes, '/api/settings/external-tools/:id/logout', 'POST', 'nova')
+
+		expect(response.status).toBe(200)
+		expect(await response.json()).toMatchObject({ signedIn: false, status: 'notConfigured' })
+		expect(await tools.resolve('nova')).toBeUndefined()
+	})
+
+	test('refuses to sign in to a program or with an invalid endpoint', async () => {
+		const { store: tools } = store()
+		const routes = createExternalToolsRoutes(tools)
+
+		expect((await call(routes, '/api/settings/external-tools/:id/login', 'POST', 'astap', { apiKey: 'good' })).status).toBe(404)
+
+		await tools.save('nova', { executable: '', timeout: 60000, endpoint: 'ftp://example.com' }, 0)
+		expect(await tools.login('nova', 'good')).toMatchObject({ status: 'refused' })
+		expect(await tools.check('nova', { executable: '', timeout: 60000, endpoint: 'ftp://example.com' })).toMatchObject({ status: 'failed', code: 'invalidEndpoint' })
+	})
+
+	test('ignores a session stored for a program', () => {
+		const { tools } = parseSettings(JSON.stringify({ version: 1, tools: { astap: { executable: '/opt/astap', timeout: 60000, revision: 1, session: 'x' }, nova: { timeout: 60000, endpoint: 7, session: 'y', revision: 1 } } }))
+
+		expect(tools.get('astap')).toEqual({ executable: '/opt/astap', timeout: 60000, revision: 1 })
+		expect(tools.get('nova')).toEqual({ executable: '', timeout: 60000, endpoint: '', revision: 1, session: 'y' })
 	})
 })

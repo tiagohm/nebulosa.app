@@ -2,9 +2,10 @@ import type { ExternalToolCapability, ExternalToolCheck, ExternalToolConfig, Ext
 import { proxy } from 'valtio'
 import { responseError } from '../http'
 
-// External programs the server supports, such as ASTAP, with their saved settings and latest check, as
-// the server reports them. The server owns the settings: this store mirrors its snapshot and its
-// externalTool:updated events, and sends saves and checks. The edits of a tab stay in the page until
+// External programs and web services the server supports (ASTAP, solve-field, nova.astrometry.net), with their
+// saved settings and latest check, as the server reports them. The server owns the settings: this store mirrors
+// its snapshot and its externalTool:updated events, and sends saves, checks, sign-ins, and sign-outs. An API key is
+// only sent with a sign-in, never kept here. The edits of a tab stay in the page until
 // saved; a check never saves anything.
 
 // Mirror of the server's external programs.
@@ -41,9 +42,9 @@ function toolUrl(id: string) {
 	return `/api/settings/external-tools/${encodeURIComponent(id)}`
 }
 
-// Whether two configurations are the same.
+// Whether two configurations are the same; an absent field equals an empty one.
 export function sameConfig(a: ExternalToolConfig, b: ExternalToolConfig) {
-	return a.executable === b.executable && a.timeout === b.timeout
+	return a.executable === b.executable && a.timeout === b.timeout && (a.config ?? '') === (b.config ?? '') && (a.endpoint ?? '') === (b.endpoint ?? '')
 }
 
 // Whether a check was made with the given configuration, so it still describes it.
@@ -131,6 +132,33 @@ export async function testExternalTool(id: string, config: ExternalToolConfig, r
 		const response = await request(`${toolUrl(id)}/test`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config }) })
 		if (!response.ok) return { error: await responseError(response) }
 		return { check: (await response.json()) as ExternalToolCheck }
+	} catch {
+		return { error: 'Unable to reach the server' }
+	}
+}
+
+// Outcome of signing in or out of a web service: its new state, or an error message.
+export type ExternalToolLoginResult = { readonly tool: ExternalToolState } | { readonly error: string }
+
+// Signs in to a web service with the API key of an account; the server sends it once to the service and stores
+// only the session it returns.
+export function signInExternalTool(state: ExternalToolsState, id: string, apiKey: string, request: typeof fetch = fetch) {
+	return changeSession(state, `${toolUrl(id)}/login`, JSON.stringify({ apiKey }), request)
+}
+
+// Signs out of a web service: the server removes its saved session.
+export function signOutExternalTool(state: ExternalToolsState, id: string, request: typeof fetch = fetch) {
+	return changeSession(state, `${toolUrl(id)}/logout`, undefined, request)
+}
+
+// Posts a sign-in or sign-out and stores the new state of the service.
+async function changeSession(state: ExternalToolsState, url: string, body: string | undefined, request: typeof fetch): Promise<ExternalToolLoginResult> {
+	try {
+		const response = await request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
+		if (!response.ok) return { error: await responseError(response) }
+		const tool = (await response.json()) as ExternalToolState
+		upsert(state, tool)
+		return { tool }
 	} catch {
 		return { error: 'Unable to reach the server' }
 	}

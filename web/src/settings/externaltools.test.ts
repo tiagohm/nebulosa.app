@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { ExternalToolCheck, ExternalToolState } from 'api'
 import { proxy } from 'valtio'
-import { checkMatches, type ExternalToolsState, handleExternalToolEvent, refreshExternalTools, saveExternalTool, testExternalTool } from './externaltools'
+import { checkMatches, type ExternalToolsState, handleExternalToolEvent, refreshExternalTools, sameConfig, saveExternalTool, signInExternalTool, signOutExternalTool, testExternalTool } from './externaltools'
 
 function astap(patch: Partial<ExternalToolState> = {}): ExternalToolState {
 	return {
@@ -9,6 +9,8 @@ function astap(patch: Partial<ExternalToolState> = {}): ExternalToolState {
 		name: 'ASTAP',
 		description: 'Astronomical software',
 		capabilities: ['plate-solving', 'star-detection'],
+		fields: ['executable'],
+		session: false,
 		timeoutLimits: { min: 1000, max: 3600000 },
 		status: 'notConfigured',
 		config: { executable: '', timeout: 300000 },
@@ -116,4 +118,43 @@ test('a check describes only the values it checked', () => {
 	expect(checkMatches(check(), { executable: '/opt/astap', timeout: 300000 })).toBeTrue()
 	expect(checkMatches(check(), { executable: '/opt/astap', timeout: 60000 })).toBeFalse()
 	expect(checkMatches(check(), { executable: '/usr/bin/astap', timeout: 300000 })).toBeFalse()
+})
+
+function nova(patch: Partial<ExternalToolState> = {}): ExternalToolState {
+	return { ...astap(), id: 'nova', name: 'Nova Astrometry.net', capabilities: ['plate-solving'], fields: ['endpoint'], session: true, signedIn: false, config: { executable: '', timeout: 300000, endpoint: '' }, ...patch }
+}
+
+test('the endpoint and the configuration file are part of a configuration', () => {
+	expect(sameConfig({ executable: '', timeout: 1000 }, { executable: '', timeout: 1000, endpoint: '' })).toBeTrue()
+	expect(sameConfig({ executable: '', timeout: 1000, endpoint: 'a' }, { executable: '', timeout: 1000, endpoint: 'b' })).toBeFalse()
+	expect(sameConfig({ executable: 'x', timeout: 1000, config: 'a.cfg' }, { executable: 'x', timeout: 1000 })).toBeFalse()
+})
+
+test('signing in sends the key once and stores the new state', async () => {
+	const state = newState([nova()])
+	const { requests, request } = fakeFetch(() => Response.json(nova({ signedIn: true, status: 'configured', revision: 1 })))
+	const result = await signInExternalTool(state, 'nova', 'key', request)
+
+	expect(requests[0].url).toBe('/api/settings/external-tools/nova/login')
+	expect(JSON.parse(requests[0].init!.body as string)).toEqual({ apiKey: 'key' })
+	expect('tool' in result && result.tool.signedIn).toBeTrue()
+	expect(state.tools[0].signedIn).toBeTrue()
+	expect(JSON.stringify(state)).not.toContain('key')
+})
+
+test('a refused sign-in reports the message of the service', async () => {
+	const state = newState([nova()])
+	const result = await signInExternalTool(state, 'nova', 'bad', fakeFetch(() => Response.json({ error: 'bad apikey', code: 'refused' }, { status: 422 })).request)
+
+	expect(result).toEqual({ error: 'bad apikey' })
+	expect(state.tools[0].signedIn).toBeFalse()
+})
+
+test('signing out stores the new state', async () => {
+	const state = newState([nova({ signedIn: true, status: 'configured', revision: 1 })])
+	const { requests, request } = fakeFetch(() => Response.json(nova({ revision: 2 })))
+	await signOutExternalTool(state, 'nova', request)
+
+	expect(requests[0].url).toBe('/api/settings/external-tools/nova/logout')
+	expect(state.tools[0]).toMatchObject({ signedIn: false, revision: 2 })
 })

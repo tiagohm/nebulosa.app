@@ -5,6 +5,7 @@ import { AstapError, astapDetectStars } from 'nebulosa/src/astrometry/solvers/as
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import type { DetectedStar, DetectStarOptions } from 'nebulosa/src/imaging/stars/detector'
 import { medianOf } from 'nebulosa/src/math/numerical/statistics'
+import { type AnalysisCompletion, type AnalysisEntry, type AnalysisJob, type AnalysisJobState, type AnalysisReservation, AnalysisScheduler } from './analysis'
 import type { ExternalToolConfig, ExternalToolsStore } from './externaltools'
 import type { DocumentSize, ImageStore } from './images'
 
@@ -18,9 +19,9 @@ import type { DocumentSize, ImageStore } from './images'
 // 0-based pixel coordinates of the image (origin at the upper-left sample, +X right, +Y down, integers at
 // pixel centres); their HFDs, in pixels, are computed differently and are not comparable with each other.
 //
-// Jobs run in memory under explicit limits: one built-in detection and one ASTAP process at a time, at
-// most MAX_QUEUED jobs waiting, manual jobs ahead of capture jobs, and capture sessions served in turn so a
-// loop cannot starve another one. A job retains its image until it ends, so closing the document never
+// Jobs run in memory under the shared analysis scheduling (analysis.ts): one built-in detection and one ASTAP
+// process at a time, at most MAX_QUEUED jobs waiting, manual jobs ahead of capture jobs, and capture sessions
+// served in turn so a loop cannot starve another one. A job retains its image until it ends, so closing the document never
 // pulls the pixels from under it. Results are kept only in memory, keyed by job and grouped by image, until
 // their image is released or the bounded store evicts them; they never survive a restart. Every change of
 // a job is published as a compact stars:updated event without the stars, which are fetched on demand. No
@@ -111,7 +112,7 @@ export type StarDetectionOrigin =
 
 // State of a job: waiting for its detector, running, or ended (completed, failed, cancelled, or skipped,
 // which is a job a newer frame replaced before it started).
-export type StarDetectionJobState = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'skipped'
+export type StarDetectionJobState = AnalysisJobState | 'running' | 'completed' | 'failed' | 'cancelled' | 'skipped'
 
 // Why a job did not complete:
 // - queueFull: too many jobs were waiting when it was submitted.
@@ -144,7 +145,7 @@ export interface StarDetectionSummary {
 }
 
 // A star detection job as published to clients; never carries the stars.
-export interface StarDetectionJob {
+export interface StarDetectionJob extends AnalysisJob {
 	// Id of the job.
 	readonly jobId: string
 	// Id of the image document measured.
@@ -267,6 +268,8 @@ export const DEFAULT_STAR_ACCEPTANCE: StarAcceptance = { minSNR: 0, minHfd: 0, m
 // Origin of a detection a person asked for.
 const MANUAL_ORIGIN: StarDetectionOrigin = { kind: 'manual' }
 
+export { MAX_QUEUED, SESSION_CAPACITY } from './analysis'
+
 // Most stars the built-in detector returns, whatever maxStars asks for (the capacity of its star list).
 export const BUILTIN_STAR_LIMIT = 2000
 
@@ -280,24 +283,8 @@ const BUILTIN_CONCURRENCY = 1
 // ASTAP processes running at once; each one is a full multithreaded process with a FITS copy on disk.
 const ASTAP_CONCURRENCY = 1
 
-// Jobs waiting at most, reservations included; a job beyond it is refused as queueFull.
-export const MAX_QUEUED = 16
-
-// Frames of one capture session in flight at most, reserved, waiting, or running: the next exposure of an
-// Every Frame analysis waits for capacity beyond it.
-export const SESSION_CAPACITY = 2
-
 // Time a built-in detection may run, in milliseconds, before its worker is terminated.
 const BUILTIN_TIMEOUT = 120000
-
-// Results kept per image, the most recent ones.
-const RESULTS_PER_IMAGE = 8
-
-// Results kept at most, least recently used evicted first.
-const MAX_RESULTS = 256
-
-// Ended jobs kept for the snapshot.
-const RECENT_JOBS = 64
 
 // Whether a star meets the acceptance criteria inside an image of width × height pixels: finite
 // coordinates within the pixel area of the image less the edge margin ([-0.5, width - 0.5) since pixel
@@ -337,66 +324,15 @@ export function cacheKey(imageId: string, { detector, acceptance }: StarDetectio
 // Worker thread of the built-in detector. `unref` is a Bun extension that the DOM Worker type lacks.
 type StarWorker = Worker & Pick<Bun.Worker, 'unref'>
 
-// A job the service knows about while it waits or runs.
-interface JobEntry {
-	// Published state, replaced on every change.
-	job: StarDetectionJob
-	// Request and resolved provider settings.
-	readonly preparation: StarDetectionPreparation
-	// Scheduling class: manual and Auto Focus jobs run before capture jobs.
-	readonly priority: 'manual' | 'capture'
-	// Group served in turn: the capture session, or manual.
-	readonly group: string
-	// Size of the retained image, in pixels.
-	readonly size: DocumentSize
-	// Aborted to cancel the job.
-	readonly controller: AbortController
-	// Settles once the job ended, with its result when it completed.
-	readonly done: PromiseWithResolvers<StoredResult | undefined>
-	// Instant it started running, performance.now() milliseconds.
-	started?: number
-}
+// A job of the service while it waits or runs, with its scheduling state.
+type JobEntry = AnalysisEntry<StarDetectionJob, StarDetectionPreparation>
 
-// A completed job and its result.
-interface StoredResult {
-	// The job as it completed.
-	readonly job: StarDetectionJob
-	// Its full result.
-	readonly result: StarDetectionResult
-}
-
-// A reservation request waiting for capacity.
-interface CapacityWaiter {
-	// Group of the capture session.
-	readonly group: string
-	// Grants the capacity.
-	readonly grant: VoidFunction
-}
-
-// Star detection jobs of the server, their scheduling, and their results.
+// Star detection jobs of the server, their scheduling (see analysis.ts), and their results.
 export class StarDetectionService {
-	// Jobs waiting or running, by job id.
-	readonly #entries = new Map<string, JobEntry>()
-	// Jobs waiting, in arrival order.
-	readonly #queue: JobEntry[] = []
-	// Jobs running, by provider.
-	readonly #running: Record<StarDetectorProvider, number> = { builtin: 0, astap: 0 }
+	// Queue, limits, reservations, and kept results.
+	readonly #scheduler: AnalysisScheduler<StarDetectionJob, StarDetectionResult, StarDetectionPreparation, StarDetectorProvider>
 	// Idle built-in workers.
 	readonly #idle: StarWorker[] = []
-	// Results, least recently used first, by job id.
-	readonly #results = new Map<string, StoredResult>()
-	// Job ids of the results of each image, oldest first.
-	readonly #byImage = new Map<string, string[]>()
-	// Latest ended jobs, oldest first, by job id.
-	readonly #recent = new Map<string, StarDetectionJob>()
-	// Reservations not used yet, by group.
-	readonly #reservations = new Map<string, number>()
-	// Reservations not used yet, in total.
-	#reserved = 0
-	// Reservation requests waiting for capacity, in arrival order.
-	readonly #waiters: CapacityWaiter[] = []
-	// Last time each group got a job running, performance.now() milliseconds.
-	readonly #served = new Map<string, number>()
 
 	// Creates the service over the image store and the External Tools settings, publishing every job change
 	// to listener. The results of an image are dropped when the store releases it.
@@ -405,7 +341,18 @@ export class StarDetectionService {
 		readonly tools: ExternalToolsStore,
 		readonly listener: StarDetectionListener,
 	) {
-		images.onDiscard((id) => this.#dropResults(id))
+		this.#scheduler = new AnalysisScheduler<StarDetectionJob, StarDetectionResult, StarDetectionPreparation, StarDetectorProvider>(images, {
+			limits: { builtin: BUILTIN_CONCURRENCY, astap: ASTAP_CONCURRENCY },
+			provider: (preparation) => preparation.request.detector.provider,
+			execute: (entry) => this.#execute(entry),
+			failed: (entry, error) => {
+				if (entry.controller.signal.aborted) return { state: 'cancelled', code: 'cancelled', error: 'The star detection was cancelled' }
+				if (error instanceof StarDetectionError) return { state: 'failed', code: error.code, error: error.message }
+				return { state: 'failed', code: 'invalidImage', error: Error.isError(error) ? error.message : String(error) }
+			},
+			cancelled: () => ({ code: 'cancelled', error: 'The star detection was cancelled' }),
+			publish: (job) => this.listener({ type: 'stars:updated', job }),
+		})
 	}
 
 	// Resolves the provider settings of a request: ASTAP's executable and timeout are read once, here. Resolves
@@ -424,11 +371,12 @@ export class StarDetectionService {
 		if (!preparation) return { status: 'astapUnavailable' }
 		if (this.images.name(imageId) === undefined) return { status: 'missing' }
 
-		const cached = this.#cached(imageId, preparation)
+		const key = cacheKey(imageId, preparation.request, preparation.tool)
+		const cached = this.#scheduler.cached(imageId, key)
 		if (cached) return { status: 'cached', job: cached.job }
-		if (this.#full()) return { status: 'queueFull' }
+		if (this.#scheduler.full()) return { status: 'queueFull' }
 
-		const job = this.#enqueue(imageId, preparation, origin, 'manual', 'manual')
+		const job = this.#scheduler.enqueue(imageId, preparation, key, { origin, request: preparation.request }, 'manual', 'manual')
 		return job ? { status: 'accepted', job } : { status: 'missing' }
 	}
 
@@ -436,57 +384,28 @@ export class StarDetectionService {
 	// jobs of the same session still waiting are skipped first, so at most one waits per session. Returns the
 	// new job and the number of jobs skipped, or no job when the image is not open or the queue is full.
 	submitLatest(imageId: string, preparation: StarDetectionPreparation, origin: Extract<StarDetectionOrigin, { kind: 'capture' }>): { readonly job?: StarDetectionJob; readonly skipped: number; readonly full: boolean } {
-		let skipped = 0
-
-		// Ending a job removes it from the queue, so the waiting jobs of the session are collected first.
-		for (const entry of this.#queue.filter((queued) => queued.group === origin.sessionId)) {
-			this.#end(entry, { state: 'skipped' })
-			skipped++
-		}
-
-		if (this.#full()) return { skipped, full: true }
-		return { job: this.#enqueue(imageId, preparation, origin, 'capture', origin.sessionId), skipped, full: false }
+		return this.#scheduler.submitLatest(imageId, preparation, cacheKey(imageId, preparation.request, preparation.tool), { origin, request: preparation.request }, origin.sessionId)
 	}
 
 	// Holds capacity for the next frame of a capture session at once, or returns undefined when the session has
 	// SESSION_CAPACITY frames in flight or the queue is full (see reserve).
 	tryReserve(sessionId: string): StarDetectionReservation | undefined {
-		return this.#hasCapacity(sessionId) ? this.#reservation(sessionId) : undefined
+		const reservation = this.#scheduler.tryReserve(sessionId)
+		return reservation && starReservation(reservation)
 	}
 
 	// Resolves to the final state of a job once it ended: at once for an ended job, and to undefined for a job
 	// no longer known.
 	ended(jobId: string): Promise<StarDetectionJob | undefined> {
-		const entry = this.#entries.get(jobId)
-		if (!entry) return Promise.resolve(this.job(jobId))
-		return entry.done.promise.then(() => entry.job)
+		return this.#scheduler.ended(jobId)
 	}
 
 	// Holds capacity for the next frame of a capture session, for an Every Frame analysis: resolves once the
 	// session has fewer than SESSION_CAPACITY frames in flight and the queue has room, or to undefined when
 	// signal aborts first.
-	reserve(sessionId: string, signal: AbortSignal): Promise<StarDetectionReservation | undefined> {
-		if (signal.aborted) return Promise.resolve(undefined)
-		if (this.#hasCapacity(sessionId)) return Promise.resolve(this.#reservation(sessionId))
-
-		return new Promise((resolve) => {
-			const waiter: CapacityWaiter = {
-				group: sessionId,
-				grant: () => {
-					signal.removeEventListener('abort', onAbort)
-					resolve(this.#reservation(sessionId))
-				},
-			}
-
-			const onAbort = () => {
-				const index = this.#waiters.indexOf(waiter)
-				if (index >= 0) this.#waiters.splice(index, 1)
-				resolve(undefined)
-			}
-
-			signal.addEventListener('abort', onAbort, { once: true })
-			this.#waiters.push(waiter)
-		})
+	async reserve(sessionId: string, signal: AbortSignal): Promise<StarDetectionReservation | undefined> {
+		const reservation = await this.#scheduler.reserve(sessionId, signal)
+		return reservation && starReservation(reservation)
 	}
 
 	// Detects the stars of an open image and resolves to the result once the job completed, for a consumer
@@ -501,11 +420,12 @@ export class StarDetectionService {
 		if (outcome.status === 'queueFull') throw new StarDetectionError('queueFull', 'Too many star detections are waiting')
 
 		const { jobId } = outcome.job
-		const stored = this.#results.get(jobId)
+		const stored = this.#scheduler.stored(jobId)
 		if (outcome.status === 'cached' && stored) return stored.result
 
-		const entry = this.#entries.get(jobId)
-		if (!entry) throw new StarDetectionError('expired', 'The result is no longer kept')
+		const settled = this.#scheduler.settled(jobId)
+		const entry = this.#scheduler.entry(jobId)
+		if (!settled || !entry) throw new StarDetectionError('expired', 'The result is no longer kept')
 
 		const cancel = () => this.cancel(jobId)
 		// The signal may have aborted while the request was being submitted.
@@ -513,8 +433,8 @@ export class StarDetectionService {
 		else signal?.addEventListener('abort', cancel, { once: true })
 
 		try {
-			const ended = await entry.done.promise
-			if (ended) return ended.result
+			const result = await settled
+			if (result) return result
 			const { code = 'cancelled', error = 'The star detection did not complete' } = entry.job
 			throw new StarDetectionError(code, error)
 		} finally {
@@ -525,170 +445,33 @@ export class StarDetectionService {
 	// Cancels a job: a waiting one ends at once, a running one is interrupted (the built-in worker is
 	// terminated, ASTAP is killed). Returns false when the job is not waiting or running.
 	cancel(jobId: string): boolean {
-		const entry = this.#entries.get(jobId)
-		if (!entry) return false
-		if (entry.job.state === 'queued') this.#end(entry, { state: 'cancelled', code: 'cancelled', error: 'The star detection was cancelled' })
-		else entry.controller.abort()
-		return true
+		return this.#scheduler.cancel(jobId)
 	}
 
 	// Returns a job waiting, running, recently ended, or completed with its result kept.
 	job(jobId: string): StarDetectionJob | undefined {
-		return this.#entries.get(jobId)?.job ?? this.#results.get(jobId)?.job ?? this.#recent.get(jobId)
+		return this.#scheduler.job(jobId)
 	}
 
 	// Returns the result of a completed job while it is kept.
 	result(jobId: string): StarDetectionResult | undefined {
-		const stored = this.#results.get(jobId)
-		if (!stored) return undefined
-		// Reading a result makes it the most recently used.
-		this.#results.delete(jobId)
-		this.#results.set(jobId, stored)
-		return stored.result
+		return this.#scheduler.result(jobId)
 	}
 
 	// Returns the completed jobs of an image whose results are kept, oldest first.
 	results(imageId: string): StarDetectionJob[] {
-		return (this.#byImage.get(imageId) ?? []).map((jobId) => this.#results.get(jobId)!.job)
+		return this.#scheduler.results(imageId)
 	}
 
 	// Returns the jobs waiting or running and the latest ended ones, oldest first.
 	snapshot(): StarDetectionSnapshot {
-		const jobs = [...this.#recent.values(), ...[...this.#entries.values()].map((entry) => entry.job)]
-		return { jobs: jobs.sort((a, b) => a.queuedAt - b.queuedAt) }
+		return { jobs: this.#scheduler.snapshot() }
 	}
 
-	// Whether the queue cannot take another job.
-	#full(): boolean {
-		return this.#queue.length + this.#reserved >= MAX_QUEUED
-	}
-
-	// Whether a capture session can hold one more frame.
-	#hasCapacity(group: string): boolean {
-		let inFlight = this.#reservations.get(group) ?? 0
-		for (const entry of this.#entries.values()) if (entry.group === group) inFlight++
-		return inFlight < SESSION_CAPACITY && !this.#full()
-	}
-
-	// Takes capacity for a capture session and returns the reservation holding it.
-	#reservation(group: string): StarDetectionReservation {
-		this.#reservations.set(group, (this.#reservations.get(group) ?? 0) + 1)
-		this.#reserved++
-		let held = true
-
-		const giveBack = () => {
-			if (!held) return
-			held = false
-			const count = this.#reservations.get(group)! - 1
-			if (count > 0) this.#reservations.set(group, count)
-			else this.#reservations.delete(group)
-			this.#reserved--
-		}
-
-		return {
-			submit: (imageId, preparation, origin) => {
-				if (!held) return undefined
-				giveBack()
-				const job = this.#enqueue(imageId, preparation, origin, 'capture', group)
-				if (!job) this.#grant()
-				return job
-			},
-			release: () => {
-				if (!held) return
-				giveBack()
-				this.#grant()
-			},
-		}
-	}
-
-	// Grants capacity to the reservation requests that can now have it, in arrival order.
-	#grant(): void {
-		for (let i = 0; i < this.#waiters.length;) {
-			const waiter = this.#waiters[i]
-
-			if (this.#hasCapacity(waiter.group)) {
-				this.#waiters.splice(i, 1)
-				waiter.grant()
-			} else {
-				i++
-			}
-		}
-	}
-
-	// Returns the kept result of a detection equivalent to a preparation of an image.
-	#cached(imageId: string, { request, tool }: StarDetectionPreparation): StoredResult | undefined {
-		const key = cacheKey(imageId, request, tool)
-
-		for (const jobId of this.#byImage.get(imageId) ?? []) {
-			const stored = this.#results.get(jobId)!
-			if (cacheKey(imageId, stored.result.request, stored.result.tool) === key) return stored
-		}
-
-		return undefined
-	}
-
-	// Retains an image and queues a job measuring it. Returns undefined when the image is not open.
-	#enqueue(imageId: string, preparation: StarDetectionPreparation, origin: StarDetectionOrigin, priority: JobEntry['priority'], group: string): StarDetectionJob | undefined {
-		const size = this.images.retain(imageId)
-		if (!size) return undefined
-
-		const job: StarDetectionJob = { jobId: crypto.randomUUID(), imageId, origin, request: preparation.request, state: 'queued', queuedAt: Date.now() }
-		const entry: JobEntry = { job, preparation, priority, group, size, controller: new AbortController(), done: Promise.withResolvers() }
-		this.#entries.set(job.jobId, entry)
-		this.#queue.push(entry)
-		this.#publish(job)
-		this.#pump()
-		return job
-	}
-
-	// Starts the waiting jobs each provider has room for.
-	#pump(): void {
-		for (const provider of ['builtin', 'astap'] as const) {
-			const limit = provider === 'builtin' ? BUILTIN_CONCURRENCY : ASTAP_CONCURRENCY
-
-			while (this.#running[provider] < limit) {
-				const entry = this.#next(provider)
-				if (!entry) break
-				this.#queue.splice(this.#queue.indexOf(entry), 1)
-				void this.#run(entry)
-			}
-		}
-	}
-
-	// Returns the next waiting job of a provider: the oldest manual one, otherwise the oldest one of the
-	// capture session served least recently.
-	#next(provider: StarDetectorProvider): JobEntry | undefined {
-		let next: JobEntry | undefined
-
-		for (const entry of this.#queue) {
-			if (entry.preparation.request.detector.provider !== provider) continue
-			if (entry.priority === 'manual') return entry
-			if (!next || (this.#served.get(entry.group) ?? -Infinity) < (this.#served.get(next.group) ?? -Infinity)) next = entry
-		}
-
-		return next
-	}
-
-	// Runs a job to its end. Never rejects.
-	async #run(entry: JobEntry): Promise<void> {
-		const { provider } = entry.preparation.request.detector
-		this.#running[provider]++
-		this.#served.set(entry.group, performance.now())
-		entry.started = performance.now()
-		this.#update(entry, { state: 'running', startedAt: Date.now() })
-
-		try {
-			const stars = provider === 'builtin' ? await this.#detectBuiltin(entry) : await this.#detectAstap(entry)
-			const stored = this.#complete(entry, stars)
-			this.#end(entry, { state: 'completed', summary: stored.job.summary }, stored)
-		} catch (error) {
-			if (entry.controller.signal.aborted) this.#end(entry, { state: 'cancelled', code: 'cancelled', error: 'The star detection was cancelled' })
-			else if (error instanceof StarDetectionError) this.#end(entry, { state: 'failed', code: error.code, error: error.message })
-			else this.#end(entry, { state: 'failed', code: 'invalidImage', error: Error.isError(error) ? error.message : String(error) })
-		} finally {
-			this.#running[provider]--
-			this.#pump()
-		}
+	// Runs a job with its provider and measures the stars it found.
+	async #execute(entry: JobEntry): Promise<AnalysisCompletion<StarDetectionJob, StarDetectionResult>> {
+		const stars = entry.preparation.request.detector.provider === 'builtin' ? await this.#detectBuiltin(entry) : await this.#detectAstap(entry)
+		return this.#complete(entry, stars)
 	}
 
 	// Detects the stars of a job with the built-in detector on a worker. Throws StarDetectionError.
@@ -771,8 +554,8 @@ export class StarDetectionService {
 		}
 	}
 
-	// Measures the stars of a completed job and keeps its result.
-	#complete(entry: JobEntry, stars: readonly DetectedStar[]): StoredResult {
+	// Measures the stars of a completed job into its summary and full result.
+	#complete(entry: JobEntry, stars: readonly DetectedStar[]): AnalysisCompletion<StarDetectionJob, StarDetectionResult> {
 		const { request, tool } = entry.preparation
 		const { width, height } = entry.size
 		const accepted = acceptStars(stars, width, height, request.acceptance)
@@ -791,62 +574,15 @@ export class StarDetectionService {
 
 		const summary: StarDetectionSummary = { detectedCount: stars.length, acceptedCount, ...(hfd !== undefined && { aggregateHfd: hfd }), measurement, elapsed }
 		const result: StarDetectionResult = { ...summary, jobId: entry.job.jobId, imageId: entry.job.imageId, request, ...(tool && { tool }), width, height, stars, accepted, queueTime, warnings }
-		const stored: StoredResult = { job: { ...entry.job, state: 'completed', endedAt: Date.now(), summary }, result }
-		this.#store(stored)
-		return stored
+		return { patch: { summary }, result }
 	}
+}
 
-	// Keeps a result, evicting the oldest of its image beyond RESULTS_PER_IMAGE and the least recently used
-	// beyond MAX_RESULTS.
-	#store(stored: StoredResult): void {
-		const { jobId, imageId } = stored.result
-		this.#results.set(jobId, stored)
-		const ids = this.#byImage.get(imageId) ?? []
-		ids.push(jobId)
-		this.#byImage.set(imageId, ids)
-
-		while (ids.length > RESULTS_PER_IMAGE) this.#results.delete(ids.shift()!)
-
-		while (this.#results.size > MAX_RESULTS) {
-			const oldest = this.#results.keys().next().value!
-			const imageIds = this.#byImage.get(this.#results.get(oldest)!.result.imageId)!
-			imageIds.splice(imageIds.indexOf(oldest), 1)
-			if (imageIds.length === 0) this.#byImage.delete(this.#results.get(oldest)!.result.imageId)
-			this.#results.delete(oldest)
-		}
-	}
-
-	// Drops the results of a released image.
-	#dropResults(imageId: string): void {
-		for (const jobId of this.#byImage.get(imageId) ?? []) this.#results.delete(jobId)
-		this.#byImage.delete(imageId)
-	}
-
-	// Ends a job: publishes its final state, releases its image, settles its waiters, and lets the capacity
-	// it held go to the next ones.
-	#end(entry: JobEntry, patch: Partial<StarDetectionJob>, stored?: StoredResult): void {
-		const index = this.#queue.indexOf(entry)
-		if (index >= 0) this.#queue.splice(index, 1)
-		this.#entries.delete(entry.job.jobId)
-		this.#update(entry, { endedAt: stored?.job.endedAt ?? Date.now(), ...patch })
-
-		this.#recent.set(entry.job.jobId, entry.job)
-		if (this.#recent.size > RECENT_JOBS) this.#recent.delete(this.#recent.keys().next().value!)
-
-		entry.done.resolve(stored)
-		this.images.release(entry.job.imageId)
-		this.#grant()
-	}
-
-	// Publishes a changed job.
-	#update(entry: JobEntry, patch: Partial<StarDetectionJob>): void {
-		entry.job = { ...entry.job, ...patch }
-		this.#publish(entry.job)
-	}
-
-	// Publishes a job.
-	#publish(job: StarDetectionJob): void {
-		this.listener({ type: 'stars:updated', job })
+// Adapts a scheduler reservation to the star detection one, whose jobs are keyed and described by their origin.
+function starReservation(reservation: AnalysisReservation<StarDetectionJob, StarDetectionPreparation>): StarDetectionReservation {
+	return {
+		submit: (imageId, preparation, origin) => reservation.submit(imageId, preparation, cacheKey(imageId, preparation.request, preparation.tool), { origin, request: preparation.request }),
+		release: reservation.release,
 	}
 }
 

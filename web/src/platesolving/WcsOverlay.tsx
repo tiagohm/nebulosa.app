@@ -7,7 +7,9 @@ import { wcsGeometry } from './wcs'
 // Capture alike: a marker at the solved centre of the image, arrows towards north and east from the WCS (so they follow
 // its rotation and parity), and an optional right ascension and declination grid. The geometry is computed once per
 // solution (wcs.ts); zoom and pan only change sizes kept constant on screen. It draws in image pixel coordinates and
-// is a pure function of the solution and the image shown, which the caller guarantees is the image it solved.
+// is a pure function of the solution and the image shown, which the caller guarantees is the image it solved. The
+// viewer zooms with a CSS transform, which non-scaling-stroke does not undo, so stroke widths are given in image
+// pixels from the view's scale.
 
 // Length of the direction arrows, in screen pixels.
 const ARROW_LENGTH = 56
@@ -17,6 +19,16 @@ const MARKER_SIZE = 10
 
 // Font size of the arrow labels, in screen pixels.
 const LABEL_SIZE = 12
+
+// Longest arrow as a fraction of the image's smaller dimension. When zoomed out past it, the arrows, marker, labels,
+// and their strokes shrink with the image instead of staying constant on screen.
+const MAX_ARROW_FRACTION = 0.25
+
+// Width of the grid lines, in screen pixels.
+const GRID_STROKE = 1
+
+// Width of the marker and arrow strokes, in screen pixels.
+const SYMBOL_STROKE = 1.5
 
 export interface WcsOverlayProps {
 	// Solution drawn, of the image shown.
@@ -33,20 +45,22 @@ export interface WcsOverlayProps {
 export function WcsOverlay({ solution, image, view, grid }: WcsOverlayProps) {
 	const geometry = useMemo(() => wcsGeometry(solution, image.width, image.height), [solution, image.width, image.height])
 	const { center, north, east } = geometry
-	const unit = 1 / view.scale
+	// Image pixels per screen pixel, for the grid, and the same capped so the arrows fit the image, for the symbols.
+	const pixel = 1 / view.scale
+	const unit = Math.min(pixel, (MAX_ARROW_FRACTION * Math.min(image.width, image.height)) / ARROW_LENGTH)
 
 	return (
-		<g fill="none" strokeWidth={1} vectorEffect="non-scaling-stroke">
+		<g fill="none">
 			{grid && (
-				<g stroke="var(--color-ink-200)" strokeOpacity={0.45}>
+				<g stroke="var(--color-ink-200)" strokeOpacity={0.45} strokeWidth={GRID_STROKE * pixel}>
 					{[...geometry.parallels, ...geometry.meridians].map((path) => (
-						<path key={path} d={path} vectorEffect="non-scaling-stroke" />
+						<path key={path} d={path} />
 					))}
 				</g>
 			)}
-			<g stroke="var(--color-success)" strokeWidth={1.5}>
-				<line x1={center.x - MARKER_SIZE * unit} y1={center.y} x2={center.x + MARKER_SIZE * unit} y2={center.y} vectorEffect="non-scaling-stroke" />
-				<line x1={center.x} y1={center.y - MARKER_SIZE * unit} x2={center.x} y2={center.y + MARKER_SIZE * unit} vectorEffect="non-scaling-stroke" />
+			<g stroke="var(--color-success)" strokeWidth={SYMBOL_STROKE * unit}>
+				<line x1={center.x - MARKER_SIZE * unit} y1={center.y} x2={center.x + MARKER_SIZE * unit} y2={center.y} />
+				<line x1={center.x} y1={center.y - MARKER_SIZE * unit} x2={center.x} y2={center.y + MARKER_SIZE * unit} />
 			</g>
 			{north && <Arrow from={center} direction={north} unit={unit} label="N" color="var(--color-accent)" />}
 			{east && <Arrow from={center} direction={east} unit={unit} label="E" color="var(--color-ink-100)" />}
@@ -59,7 +73,7 @@ interface ArrowProps {
 	readonly from: Point
 	// Unit direction, in image pixels.
 	readonly direction: Point
-	// Image pixels per screen pixel.
+	// Image pixels per screen pixel of the symbol, at most the viewer's.
 	readonly unit: number
 	// Letter drawn past the tip.
 	readonly label: string
@@ -67,7 +81,7 @@ interface ArrowProps {
 	readonly color: string
 }
 
-// Arrow of a sky direction, constant in length on screen, with its letter.
+// Arrow of a sky direction, constant in length on screen unless capped by the image, with its letter.
 function Arrow({ from, direction, unit, label, color }: ArrowProps) {
 	const length = ARROW_LENGTH * unit
 	const tip = { x: from.x + direction.x * length, y: from.y + direction.y * length }
@@ -82,7 +96,7 @@ function Arrow({ from, direction, unit, label, color }: ArrowProps) {
 
 	return (
 		<g stroke={color}>
-			<path d={`M${from.x} ${from.y}L${tip.x} ${tip.y}M${barb(0.44)}L${tip.x} ${tip.y}L${barb(-0.44)}`} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+			<path d={`M${from.x} ${from.y}L${tip.x} ${tip.y}M${barb(0.44)}L${tip.x} ${tip.y}L${barb(-0.44)}`} strokeWidth={SYMBOL_STROKE * unit} />
 			<text x={text.x} y={text.y} fill={color} stroke="none" fontSize={LABEL_SIZE * unit} textAnchor="middle" dominantBaseline="central">
 				{label}
 			</text>

@@ -18,12 +18,13 @@ import { moveIndex } from '../ui/navigation'
 import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
 import { FIT_VIEW } from '../viewer/transform'
+import { useCameraOperationContext } from './cameracontext'
 import { captureFramesState, frameSourceKey } from './captureframes'
 import { CaptureFramesCarousel } from './CaptureFramesCarousel'
 import { ImageInspector } from './ImageInspector'
 import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, isClosable, openImage, selectCameraFrame, selectImage, selectImageTool, selectStar, setImageView, shownRendering, toggleOriginal } from './images'
 import { SaveImageModal } from './SaveImageModal'
-import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolUnavailable } from './tools'
+import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolGroup, imageToolUnavailable } from './tools'
 
 // Images workspace: a permanent camera tab for each connected camera of the watched connection, showing the frames
 // Camera Capture takes with it, then FITS and XISF images opened from the server, one closable tab each, shown in the
@@ -62,7 +63,10 @@ export function ImagesWorkspace() {
 	const markers = view?.stars.visible && stars ? stars : undefined
 	const { solution } = usePlateSolution(document?.info?.id, view?.plateSolving.selected)
 	const wcs = view?.plateSolving.overlay ? solution : undefined
-	const toolSelector = <Select options={IMAGE_TOOLS} value={tool} disabled={!document} format={(t) => IMAGE_TOOL_DEFINITIONS[t].label} disabledReason={imageToolUnavailable} onChange={(t) => document && selectImageTool(imagesState, document.key, t)} className="w-52 max-sm:w-40" />
+	const camera = useCameraOperationContext(document)
+	const toolSelector = (
+		<Select options={IMAGE_TOOLS} value={tool} disabled={!document} format={(t) => IMAGE_TOOL_DEFINITIONS[t].label} group={imageToolGroup} disabledReason={(t) => imageToolUnavailable(t, document)} onChange={(t) => document && selectImageTool(imagesState, document.key, t)} className="w-52 max-sm:w-40" />
+	)
 	const openButton = (
 		<Button variant="secondary" onClick={() => setChoosing(true)}>
 			<Icon name="folder" className="size-4" />
@@ -81,7 +85,13 @@ export function ImagesWorkspace() {
 	const savingDocument = state.documents.find((d) => d.key === saving?.key)
 
 	return (
-		<WorkspaceLayout workspace="images" title="Images" actions={openButton} context={toolSelector} panel={{ title: definition.panelTitle, content: <Panel document={document} view={view} onOpen={() => setChoosing(true)} onSaveAs={() => document && setSaving({ key: document.key, closeAfter: false })} /> }}>
+		<WorkspaceLayout
+			workspace="images"
+			title="Images"
+			actions={openButton}
+			context={toolSelector}
+			panel={{ title: definition.panelTitle, content: <Panel document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} onSaveAs={() => document && setSaving({ key: document.key, closeAfter: false })} /> }}
+		>
 			<div className="flex h-full flex-col">
 				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} onClose={requestClose} />}
 				<div className="min-h-0 flex-1">

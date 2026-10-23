@@ -14,6 +14,9 @@ export interface SelectProps<T extends string> {
 	readonly disabledReason?: (value: T) => string | undefined
 	// Whether the whole control is disabled.
 	readonly disabled?: boolean
+	// Heading of the group an option belongs to, shown once above each run of options of the same group; options of a
+	// group must be consecutive. Ungrouped when absent.
+	readonly group?: (value: T) => string
 }
 
 // Select-only combobox (WAI-ARIA) with a custom listbox, so the open list matches the theme.
@@ -40,7 +43,7 @@ function visibleRange(element: HTMLElement): { top: number; bottom: number } {
 	return { top, bottom }
 }
 
-export function Select<T extends string>({ label, options, value, onChange, className, format = String, disabledReason, disabled = false }: SelectProps<T>) {
+export function Select<T extends string>({ label, options, value, onChange, className, format = String, disabledReason, disabled = false, group }: SelectProps<T>) {
 	const [open, setOpen] = useState(false)
 	const [active, setActive] = useState(-1)
 	const [up, setUp] = useState(false)
@@ -162,7 +165,7 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 	}, [open])
 
 	useEffect(() => {
-		if (open && active >= 0) listRef.current?.children[active]?.scrollIntoView({ block: 'nearest' })
+		if (open && active >= 0) listRef.current?.querySelector(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' })
 	}, [open, active])
 
 	return (
@@ -190,10 +193,19 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 				>
 					{options.map((option, index) => {
 						const reason = disabledReason?.(option)
+						const heading = group?.(option)
+						const previous = options[index - 1]
+						const startsGroup = heading !== undefined && (previous === undefined || group?.(previous) !== heading)
 
-						return (
+						return [
+							startsGroup && (
+								<li key={`group:${heading}`} role="presentation" className={cn('px-2 pb-1 text-xs font-medium tracking-wide text-ink-300 uppercase select-none', index > 0 ? 'mt-1 border-t border-line-100 pt-2' : 'pt-1')}>
+									{heading}
+								</li>
+							),
 							<li
 								key={option}
+								data-index={index}
 								role="option"
 								onMouseDown={(e) => e.preventDefault()}
 								onMouseMove={() => active !== index && setActive(index)}
@@ -205,8 +217,8 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 									<span>{format(option)}</span>
 									{reason && <span className="text-xs leading-4">{reason}</span>}
 								</span>
-							</li>
-						)
+							</li>,
+						]
 					})}
 				</ul>
 			</div>

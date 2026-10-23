@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react'
+import { AutoFocusTool } from './AutoFocusTool'
 import { CameraAcquisitionTool } from './CameraAcquisitionTool'
 import type { CameraOperationContext } from './cameracontext'
 import { ImageInspector } from './ImageInspector'
@@ -91,7 +92,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'streak-detection': plannedImageTool('streak-detection', 'Streak Detection', ['analysis']),
 	'image-processing': plannedImageTool('image-processing', 'Image Processing', ['derived']),
 	'camera-acquisition': { id: 'camera-acquisition', label: 'Camera Acquisition', panelTitle: 'Camera Acquisition', category: 'camera', panel: CameraAcquisitionTool },
-	'auto-focus': plannedCameraOperation('auto-focus', 'Auto Focus'),
+	'auto-focus': { id: 'auto-focus', label: 'Auto Focus', panelTitle: 'Auto Focus', category: 'camera', panel: AutoFocusTool },
 	'mount-nudge': plannedCameraOperation('mount-nudge', 'Mount Nudge'),
 	guiding: plannedCameraOperation('guiding', 'Guiding'),
 	darv: plannedCameraOperation('darv', 'DARV Alignment'),

@@ -1,6 +1,6 @@
 import type { CaptureFrameSummary } from 'api'
 import { cn } from 'cn'
-import { type KeyboardEvent, useEffect, useRef } from 'react'
+import { type KeyboardEvent, type ReactNode, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { Icon } from '../ui/Icon'
 import { moveIndex } from '../ui/navigation'
@@ -17,6 +17,8 @@ import { type CameraFrameSelection, type ImageDocument, imagesState, selectCamer
 interface CaptureFramesCarouselProps {
 	// Camera tab.
 	readonly document: ImageDocument
+	// Heading of the strip, such as the switch between the views of the bottom area; "Capture Frames" when absent.
+	readonly title?: ReactNode
 }
 
 // Card of the carousel: the Latest card or a saved frame.
@@ -43,7 +45,7 @@ function availabilityLabel(frame: CaptureFrameSummary): string {
 }
 
 // Carousel of the frames of a camera tab.
-export function CaptureFramesCarousel({ document }: CaptureFramesCarouselProps) {
+export function CaptureFramesCarousel({ document, title }: CaptureFramesCarouselProps) {
 	const frames = useSnapshot(captureFramesState)
 	const stripRef = useRef<HTMLDivElement>(null)
 	const camera = document.camera
@@ -98,7 +100,7 @@ export function CaptureFramesCarousel({ document }: CaptureFramesCarouselProps) 
 	return (
 		<div className="flex-none border-t border-line-100 bg-base-100">
 			<div className="flex items-center justify-between px-3 pt-1.5 font-mono text-[11px] tracking-wide text-ink-300 uppercase">
-				<span>Capture Frames</span>
+				{title ?? <span>Capture Frames</span>}
 				<span>{summary?.count ?? saved.length} saved</span>
 			</div>
 			<div ref={stripRef} onKeyDown={handleKeyDown} className="flex gap-2 overflow-x-auto px-3 pt-1.5 pb-2">

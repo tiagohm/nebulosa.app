@@ -1,5 +1,6 @@
 import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusState, AutoFocusVerification, CameraCapabilities, CaptureSnoop, ServerEvent } from 'api'
 import { proxy } from 'valtio'
+import type { RoleAvailability } from '../equipment/availability'
 import { responseError } from '../http'
 import { AUTO_FOCUS_APERTURE, type AutoFocusSettings, type CameraExposureSettings } from '../profile/profile'
 import { cameraKey, fitExposure } from './capture'
@@ -59,6 +60,22 @@ export const FITTING_MODE_LABELS: Readonly<Record<AutoFocusRequest['fittingMode'
 
 // Fitting modes, in selector order.
 export const FITTING_MODES = Object.keys(FITTING_MODE_LABELS) as AutoFocusRequest['fittingMode'][]
+
+// Why an Auto Focus cannot run on a camera that has no focuser associated with it.
+export const NO_FOCUSER = 'Auto Focus moves the Focuser of the Equipment Setup, which belongs to its Main Camera; assign this camera as the Main Camera to focus with it.'
+
+// Returns why no session can start now, or undefined when one can, from the availability of the camera and of its
+// focuser (undefined when the camera has no focuser associated with it), the focuser's reported state (undefined
+// while unknown), and whether the detector is ASTAP while ASTAP is not configured. The server checks again.
+export function autoFocusBlocker(camera: RoleAvailability, focuser: RoleAvailability | undefined, focuserState: { readonly canAbsoluteMove: boolean } | undefined, astapMissing: boolean): string | undefined {
+	if (camera.status !== 'ready') return camera.message
+	if (!focuser) return NO_FOCUSER
+	if (focuser.status !== 'ready') return focuser.message
+	if (!focuserState) return 'The focuser state is not known yet.'
+	if (!focuserState.canAbsoluteMove) return 'The focuser cannot move to absolute positions, which the Auto Focus needs.'
+	if (astapMissing) return 'ASTAP is not configured.'
+	return undefined
+}
 
 // Returns whether a session is still running.
 export function autoFocusRunning(session: Pick<AutoFocusSessionSummary, 'endedAt'> | undefined): boolean {

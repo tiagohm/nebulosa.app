@@ -1,7 +1,9 @@
 import { cn } from 'cn'
 import { type KeyboardEvent, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { AUTO_FOCUS_STATE_LABELS, autoFocusRuntime } from '../capture/autofocus'
 import { cameraKey, captureCount, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState } from '../capture/capture'
+import { FocusCurve } from '../capture/FocusCurve'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../files/files'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
@@ -31,7 +33,8 @@ import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolGroup, imageToolUnavailab
 // its camera takes, then FITS and XISF images opened from the server, one closable tab each, shown in the shared
 // viewer, with the contextual tool each document selected (the Image Inspector at first) in the contextual panel. It
 // works without any connection or equipment; only the camera operations of a camera tab command its camera, and the
-// toolbar of a camera tab shows the state of its capture whatever tool is selected. Documents, with their own zoom,
+// toolbar of a camera tab shows the state of its capture whatever tool is selected, and its bottom area the Focus
+// Curve of its Auto Focus on request. Documents, with their own zoom,
 // pan, display settings, and tool, stay open while the tab lives, across document and workspace switches; a camera
 // tab follows the latest frame of its camera until a saved frame is selected or a manual analysis holds the frame
 // shown, and Return to Latest follows it again.
@@ -49,8 +52,10 @@ export function ImagesWorkspace() {
 	const state = useSnapshot(imagesState)
 	const profiles = useSnapshot(profileState)
 	const [choosing, setChoosing] = useState(false)
-	// Whether camera tabs show the capture frames carousel; collapsing it keeps the selection.
+	// Whether camera tabs show their bottom area (frames carousel or Focus Curve); collapsing it keeps the selection.
 	const [framesShown, setFramesShown] = useState(true)
+	// View of the bottom area of each camera tab, by document key; the frames carousel when absent.
+	const [bottomViews, setBottomViews] = useState<Readonly<Record<string, BottomView>>>({})
 	// Unsaved document whose closing waits for a confirmation.
 	const [closing, setClosing] = useState<string>()
 	// Document being saved, and whether it closes once saved.
@@ -139,7 +144,7 @@ export function ImagesWorkspace() {
 						}
 					/>
 				</div>
-				{document?.camera && framesShown && <CaptureFramesCarousel document={document} />}
+				{document?.camera && framesShown && <CameraBottom document={document} view={bottomViews[document.key] ?? 'frames'} onView={(next) => setBottomViews({ ...bottomViews, [document.key]: next })} />}
 			</div>
 			<FileExplorerModal
 				open={choosing}
@@ -243,7 +248,7 @@ function CameraControls({ document, framesShown, onToggleFrames }: CameraControl
 				{camera.shown && ` · #${camera.shown.frame.generation}`}
 			</span>
 			{!following && <IconButton icon="play" label="Return to Latest" onClick={() => void selectCameraFrame(imagesState, document.key, { kind: 'latest' }, captureFramesState)} />}
-			<IconButton icon="images" label={framesShown ? 'Hide capture frames' : 'Show capture frames'} pressed={framesShown} onClick={onToggleFrames} />
+			<IconButton icon="images" label={framesShown ? 'Hide frames and focus curve' : 'Show frames and focus curve'} pressed={framesShown} onClick={onToggleFrames} />
 			<CaptureStatus connectionId={document.source.connectionId} deviceId={document.source.deviceId} />
 		</>
 	)
@@ -282,6 +287,64 @@ function CaptureStatus({ connectionId, deviceId }: CaptureStatusProps) {
 				{file && ` · ${file}`}
 			</span>
 		</>
+	)
+}
+
+// View of the bottom area of a camera tab: the capture frames carousel, or the Focus Curve of its camera's Auto Focus.
+type BottomView = 'frames' | 'curve'
+
+// Views of the bottom area, in display order.
+const BOTTOM_VIEWS: readonly BottomView[] = ['frames', 'curve']
+
+// Label of each view of the bottom area.
+const BOTTOM_VIEW_LABELS: Readonly<Record<BottomView, string>> = { frames: 'Capture Frames', curve: 'Focus Curve' }
+
+interface CameraBottomProps {
+	// Camera tab.
+	readonly document: ImageDocument
+	// View chosen for the tab.
+	readonly view: BottomView
+	// Chooses the view of the tab.
+	readonly onView: (view: BottomView) => void
+}
+
+// Bottom area of a camera tab: the capture frames carousel, and, once its camera has an Auto Focus session, a switch to
+// the Focus Curve of that session. The curve belongs to the session, never to the frame selected, so it keeps
+// updating whatever frame or tool is shown; choosing a view never changes the selection.
+function CameraBottom({ document, view, onView }: CameraBottomProps) {
+	const autoFocus = useSnapshot(autoFocusRuntime)
+	if (document.source.kind !== 'camera') return null
+
+	const session = autoFocus.sessions[cameraKey(document.source.connectionId, document.source.deviceId)]
+	if (!session) return <CaptureFramesCarousel document={document} />
+
+	const views = (
+		<span className="flex gap-3">
+			{BOTTOM_VIEWS.map((option) => (
+				<button
+					key={option}
+					type="button"
+					onClick={() => onView(option)}
+					className={cn('cursor-pointer border-0 bg-transparent p-0 font-mono text-[11px] tracking-wide uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent', option === view ? 'text-accent' : 'text-ink-300 hover:text-ink-100')}
+				>
+					{BOTTOM_VIEW_LABELS[option]}
+				</button>
+			))}
+		</span>
+	)
+
+	if (view === 'frames') return <CaptureFramesCarousel document={document} title={views} />
+
+	return (
+		<div className="flex-none border-t border-line-100 bg-base-100">
+			<div className="flex items-center justify-between px-3 pt-1.5 font-mono text-[11px] tracking-wide text-ink-300 uppercase">
+				{views}
+				<span>{AUTO_FOCUS_STATE_LABELS[session.state]}</span>
+			</div>
+			<div className="px-2 pb-2">
+				<FocusCurve summary={session} session={autoFocus.details[session.sessionId]} />
+			</div>
+		</div>
 	)
 }
 

@@ -104,7 +104,7 @@ export function CaptureWorkspace() {
 				focusing={mode === 'auto-focus'}
 				reticle={viewReticle(capture, role, mode)}
 				settings={profileCamera(profile, setup[role]?.id)}
-				stars={mode === 'auto-focus' && autoFocusSettings(profile.settings, profileCamera(profile, setup[role]?.id)).overlay}
+				stars={mode === 'auto-focus'}
 				curve={autoFocusSettings(profile.settings, profileCamera(profile, setup[role]?.id)).curve}
 			/>
 		</WorkspaceLayout>

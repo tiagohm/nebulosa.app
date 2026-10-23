@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, CameraCapabilities } from 'api'
 import { proxy } from 'valtio'
 import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_AUTO_FOCUS_SETTINGS } from '../profile/profile'
-import { autoFocusRequest, autoFocusRunning, type AutoFocusRuntime, defaultStepSize, handleAutoFocusEvent, refreshAutoFocus, startAutoFocus, stopAutoFocus } from './autofocus'
+import { autoFocusBlocker, autoFocusRequest, autoFocusRunning, type AutoFocusRuntime, defaultStepSize, handleAutoFocusEvent, refreshAutoFocus, NO_FOCUSER, startAutoFocus, stopAutoFocus } from './autofocus'
 import { cameraKey } from './capture'
 import { curveBounds, ticks } from './FocusCurve'
 
@@ -134,4 +134,18 @@ test('the chart spans the measurements, the fitted curves, and the outcome, padd
 	expect(curveBounds(details())).toBeUndefined()
 	expect(ticks(0, 10, 4)).toEqual([0, 5, 10])
 	expect(ticks(980, 1520, 5)).toEqual([1000, 1200, 1400])
+})
+
+test('a session starts only on a ready camera with an associated, ready focuser that moves to absolute positions', () => {
+	const ready = { status: 'ready' } as const
+	const busy = { status: 'busy', operations: [], message: 'The camera is busy.' } as const
+	const focuser = { canAbsoluteMove: true }
+
+	expect(autoFocusBlocker(ready, ready, focuser, false)).toBeUndefined()
+	expect(autoFocusBlocker(busy, ready, focuser, false)).toBe('The camera is busy.')
+	expect(autoFocusBlocker(ready, undefined, focuser, false)).toBe(NO_FOCUSER)
+	expect(autoFocusBlocker(ready, { status: 'notSelected', message: 'No Focuser selected in Equipment Setup.' }, focuser, false)).toBe('No Focuser selected in Equipment Setup.')
+	expect(autoFocusBlocker(ready, ready, undefined, false)).toBe('The focuser state is not known yet.')
+	expect(autoFocusBlocker(ready, ready, { canAbsoluteMove: false }, false)).toBe('The focuser cannot move to absolute positions, which the Auto Focus needs.')
+	expect(autoFocusBlocker(ready, ready, focuser, true)).toBe('ASTAP is not configured.')
 })

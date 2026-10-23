@@ -150,8 +150,6 @@ export interface CameraIdentity {
 export interface AutoFocusSettings {
 	// Star detector, its settings, and the acceptance criteria of the stars entering the aggregate HFD.
 	detection: StarDetectionRequest
-	// Whether the star markers of the frame shown are drawn; never changes the measurement.
-	overlay: boolean
 	// Curve fitting that places the best focus.
 	fittingMode: AutoFocusRequest['fittingMode']
 	// Positions sampled on each side of the start, >= 1.
@@ -178,7 +176,6 @@ export const AUTO_FOCUS_APERTURE = 32
 // hyperbolic fit over 4 positions on each side, and the Focus Curve shown.
 export const DEFAULT_AUTO_FOCUS_SETTINGS: AutoFocusSettings = {
 	detection: { ...DEFAULT_STAR_REQUEST, detector: { ...DEFAULT_BUILTIN_SETTINGS, maximumRadius: AUTO_FOCUS_APERTURE } },
-	overlay: true,
 	fittingMode: 'HYPERBOLIC',
 	initialOffsetSteps: 4,
 	reversed: false,
@@ -405,7 +402,6 @@ function normalizeAutoFocus(value: unknown): AutoFocusSettings | undefined {
 
 	return {
 		detection: normalizeStarRequest(value.detection, defaults.detection),
-		overlay: value.overlay !== false,
 		fittingMode: typeof value.fittingMode === 'string' && FITTING_MODES.has(value.fittingMode) ? (value.fittingMode as AutoFocusSettings['fittingMode']) : defaults.fittingMode,
 		initialOffsetSteps: numberAtLeast(value.initialOffsetSteps, 1, defaults.initialOffsetSteps, true),
 		...(Number.isFinite(stepSize) && { stepSize }),

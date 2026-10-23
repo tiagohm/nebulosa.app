@@ -20,9 +20,10 @@ describe('tool registry', () => {
 		}
 	})
 
-	test('Camera Acquisition can be selected on a camera tab', () => {
+	test('Camera Acquisition and Auto Focus can be selected on a camera tab', () => {
 		expect(imageToolUnavailable('camera-acquisition', CAMERA_TAB)).toBeUndefined()
 		expect(imageToolUnavailable('camera-acquisition', FILE)).toBe('Only on a camera tab.')
+		expect(imageToolUnavailable('auto-focus', CAMERA_TAB)).toBeUndefined()
 	})
 
 	test('camera operations are offered only on camera tabs', () => {

@@ -9,14 +9,13 @@ import { operationsState } from '../operations'
 import { acquisitionSettings, activeProfile, activeSetup, type CameraAcquisitionSettings, type CameraExposureSettings, type CameraIdentity, exposureSettings, profileCamera, profileState, setAcquisitionSettings, setExposureSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
-import { Checkbox } from '../ui/Checkbox'
 import { IconButton } from '../ui/IconButton'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureSnoop, captureStatus, FILE_STATE_LABELS, fileState, FRAME_STATE_LABELS, type FrameState, frameState, refreshCapabilities, startCapture, stopCapture } from './capture'
-import { ExposureTimeInput } from './ExposureTimeInput'
+import { CameraSettings, ExposureSection, formatSeconds } from './ExposureSettings'
 import type { CaptureModePanelProps } from './modes'
 
 // Contextual panel sections of Camera Acquisition, shared by the Images camera tabs and the Capture camera views: the
@@ -127,15 +126,9 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 
 	return (
 		<>
-			<PanelSection title="Exposure">
-				<ExposureTimeInput value={exposure.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => updateExposure({ exposureTime })} />
-				{capabilities?.exposure && (
-					<p className="m-0 text-xs leading-4 text-ink-300">
-						{formatSeconds(capabilities.exposure.min)} – {formatSeconds(capabilities.exposure.max)} s supported by the camera.
-					</p>
-				)}
+			<ExposureSection settings={exposure} capabilities={capabilities} disabled={locked} onChange={updateExposure}>
 				<Select label="Frame Type" options={FRAME_TYPES} value={settings.frameType} disabled={locked} onChange={(frameType) => update({ frameType })} />
-			</PanelSection>
+			</ExposureSection>
 			<PanelSection title="Acquisition">
 				<SegmentedControl label="Mode" options={EXPOSURE_MODES} value={settings.exposureMode} format={(mode) => EXPOSURE_MODE_LABELS[mode]} disabled={locked} onChange={(exposureMode) => update({ exposureMode })} />
 				{settings.exposureMode === 'fixed' && <NumberInput label="Frame Count" value={settings.count} min={1} max={MAX_FRAME_COUNT} disabled={locked} onChange={(count) => update({ count })} />}
@@ -243,11 +236,6 @@ function CaptureCommands({ session, capabilities, mode, pending, startable, onSt
 	)
 }
 
-// Formats a duration in seconds without float noise, such as 0.0001 or 3600.
-function formatSeconds(value: number) {
-	return String(Number(value.toPrecision(6)))
-}
-
 interface CaptureStateProps {
 	// Session shown.
 	readonly session: CaptureSession
@@ -296,83 +284,6 @@ function formatElapsed(seconds: number) {
 	const m = Math.floor(total / 60) % 60
 	const h = Math.floor(total / 3600)
 	return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`
-}
-
-interface CameraSettingsProps {
-	// Exposure and camera settings of the camera.
-	readonly settings: Readonly<CameraExposureSettings>
-	// Capabilities of the camera, when known.
-	readonly capabilities?: CameraCapabilities
-	// Whether a running capture locks the controls.
-	readonly disabled: boolean
-	// Updates fields of the settings.
-	readonly onChange: (patch: Partial<CameraExposureSettings>) => void
-}
-
-// Settings changed less often, collapsed by default: gain, offset, binning, readout mode, and subframe, each
-// only when the camera reports it, and the sensor temperature and cooler state.
-function CameraSettings({ settings, capabilities, disabled, onChange }: CameraSettingsProps) {
-	const [open, setOpen] = useState(false)
-
-	if (!capabilities) {
-		return (
-			<PanelSection title="Camera">
-				<p className="m-0 text-ink-300">Camera settings appear once the camera reports them.</p>
-			</PanelSection>
-		)
-	}
-
-	const { gain, offset, bin, subframe, frameFormats, temperature, cooler } = capabilities
-	const formats = frameFormats.map((format) => format.name)
-
-	return (
-		<PanelSection title="Camera">
-			{(temperature !== undefined || cooler) && (
-				<p className="m-0 tabular-nums">
-					{temperature !== undefined && `Sensor ${temperature.toFixed(1)} °C`}
-					{temperature !== undefined && cooler && ' · '}
-					{cooler && `Cooler ${cooler.enabled === false ? 'off' : `${Math.round(cooler.power)} %`}`}
-				</p>
-			)}
-			<Button variant="ghost" className="self-start px-1" onClick={() => setOpen(!open)}>
-				{open ? 'Hide settings' : 'Show settings'}
-			</Button>
-			{open && (
-				<>
-					{gain && <NumberInput label="Gain" value={Math.min(gain.max, Math.max(gain.min, settings.gain))} min={gain.min} max={gain.max} disabled={disabled} onChange={(value) => onChange({ gain: value })} />}
-					{offset && <NumberInput label="Offset" value={Math.min(offset.max, Math.max(offset.min, settings.offset))} min={offset.min} max={offset.max} disabled={disabled} onChange={(value) => onChange({ offset: value })} />}
-					{bin && <NumberInput label="Binning" value={Math.min(bin.x, settings.binX)} min={1} max={Math.min(bin.x, bin.y)} disabled={disabled} onChange={(value) => onChange({ binX: value, binY: value })} />}
-					{formats.length > 0 && (
-						<Select
-							label="Readout Mode"
-							options={formats}
-							value={formats.includes(settings.frameFormat) ? settings.frameFormat : capabilities.frameFormat || formats[0]}
-							format={(name) => frameFormats.find((format) => format.name === name)?.label || name}
-							disabled={disabled}
-							onChange={(frameFormat) => onChange({ frameFormat })}
-						/>
-					)}
-					{subframe && (
-						<>
-							<Checkbox label="Subframe (ROI)" checked={settings.subframe} disabled={disabled} onChange={(checked) => onChange({ subframe: checked, ...(checked && settings.width <= 0 && { x: 0, y: 0, width: subframe.width, height: subframe.height }) })} />
-							{settings.subframe && (
-								<div className="grid grid-cols-2 gap-2">
-									<NumberInput label="X" value={settings.x} min={0} max={subframe.width - 1} disabled={disabled} onChange={(x) => onChange({ x })} />
-									<NumberInput label="Y" value={settings.y} min={0} max={subframe.height - 1} disabled={disabled} onChange={(y) => onChange({ y })} />
-									<NumberInput label="Width" value={settings.width} min={1} max={subframe.width} disabled={disabled} onChange={(width) => onChange({ width })} />
-									<NumberInput label="Height" value={settings.height} min={1} max={subframe.height} disabled={disabled} onChange={(height) => onChange({ height })} />
-									<Button variant="secondary" size="sm" className="col-span-2" disabled={disabled} onClick={() => onChange({ x: 0, y: 0, width: subframe.width, height: subframe.height })}>
-										Fullscreen
-									</Button>
-								</div>
-							)}
-						</>
-					)}
-					{!gain && !offset && !bin && formats.length === 0 && !subframe && <p className="m-0 text-ink-300">The camera reports no adjustable settings.</p>}
-				</>
-			)}
-		</PanelSection>
-	)
 }
 
 interface LastFrameProps {

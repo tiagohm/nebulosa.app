@@ -1,13 +1,14 @@
-import type { AutoFocusSessionSummary, CameraCapabilities } from 'api'
+import type { AutoFocusSessionSummary, CaptureSnoop, DeviceSummary } from 'api'
 import { cn } from 'cn'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, deviceStateOf } from '../equipment-control/control'
 import { Notice } from '../equipment-control/parts'
-import { roleAvailability } from '../equipment/availability'
-import { useRoleDevice } from '../equipment/useEquipment'
+import { type RoleAvailability, roleAvailability } from '../equipment/availability'
+import { deviceState } from '../equipment/equipment'
+import { type RoleDevice, useRoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
-import { activeProfile, activeSetup, AUTO_FOCUS_APERTURE, type AutoFocusSettings, autoFocusSettings, type CameraExposureSettings, exposureSettings, profileCamera, profileState, setAutoFocusSettings } from '../profile/profile'
+import { activeProfile, activeSetup, AUTO_FOCUS_APERTURE, type AutoFocusSettings, autoFocusSettings, type CameraIdentity, exposureSettings, profileCamera, profileState, setAutoFocusSettings, setExposureSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { AcceptanceControls, DetectorControls, DetectorSettingsControls, useAstapConfigured } from '../stars/StarRequestControls'
 import { PROVIDER_LABELS } from '../stars/stars'
@@ -15,72 +16,85 @@ import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
-import { AUTO_FOCUS_STATE_LABELS, autoFocusRequest, autoFocusRunning, autoFocusRuntime, defaultStepSize, FITTING_MODE_LABELS, FITTING_MODES, startAutoFocus, stopAutoFocus, VERIFICATION_LABELS } from './autofocus'
-import { cameraKey, captureRuntime, captureSnoop, fitExposure, refreshCapabilities } from './capture'
+import { AUTO_FOCUS_STATE_LABELS, autoFocusBlocker, autoFocusRequest, autoFocusRunning, autoFocusRuntime, defaultStepSize, FITTING_MODE_LABELS, FITTING_MODES, startAutoFocus, stopAutoFocus, VERIFICATION_LABELS } from './autofocus'
+import { cameraKey, captureRuntime, captureSnoop, refreshCapabilities } from './capture'
+import { CameraSettings, ExposureSection } from './ExposureSettings'
 import type { CaptureModePanelProps } from './modes'
 
-// Contextual panel sections of the Auto Focus mode: how each frame is measured (the star detector with its grown
-// aperture, the star overlay), the routine the server's runner follows (fitting, step size, positions per side,
-// and the advanced settings collapsed), and the state of the running or last session with its Run and Stop
-// commands. The frames are taken with the exposure and camera settings of the view's Camera Capture form, which
-// are only summarized here, and snoop the mount, filter wheel, and rotator of the equipment setup besides the
-// focuser. The camera is the view's and the focuser the one the equipment setup assigns; the filter wheel, when
-// assigned, is shown and never moved. The form is the view's, kept in the profile; the session is the server's,
-// shown here from the server state whichever tab started it, and keeps running when the panel unmounts.
+// Contextual panel sections of Auto Focus, shared by the Images camera tabs and the Capture camera views: the
+// exposure and camera settings the frames are taken with, the camera's block shared with Camera Acquisition and
+// editable here; how each frame is measured (the star detector with its grown aperture); the routine the server's
+// runner follows (fitting, step size, positions per side, and the advanced settings collapsed); and the state of the
+// running or last session with its Run and Stop commands. The camera is the panel's target and the focuser the one
+// associated with it; a camera without a focuser says how to associate one. The filter wheel, when assigned, is
+// shown and never moved. The forms are the camera's, kept in the profile; the session is the server's, shown here
+// from the server state whichever tab started it, and keeps running when the panel unmounts. Its frames are shown by
+// the latest frame of the camera, never by a viewer of its own.
 
-// Auto Focus panel sections.
+// Auto Focus mode of a Capture camera view: the Auto Focus panel of the camera its role resolves to, moving the
+// focuser of the equipment setup and snooping its devices.
 export function AutoFocusPanel({ camera: role }: CaptureModePanelProps) {
+	const profiles = useSnapshot(profileState)
+	const operations = useSnapshot(operationsState)
+	const camera = useRoleDevice(role)
+	const focuser = useRoleDevice('FOCUSER')
+	const profile = activeProfile(profiles)
+	return <AutoFocusSections device={camera.device} availability={roleAvailability(role, camera, operations)} focuser={focuser} settings={profileCamera(profile, camera.device?.id)} snoop={captureSnoop(activeSetup(profile))} />
+}
+
+// Camera an Auto Focus panel focuses and the forms it edits.
+export interface AutoFocusTarget {
+	// Camera, when present on the watched connection.
+	readonly device?: DeviceSummary
+	// Whether the camera can take frames now, and why not.
+	readonly availability: RoleAvailability
+	// Focuser associated with the camera and its state; absent when the camera has none.
+	readonly focuser?: RoleDevice
+	// Camera whose forms are edited; absent when the profile has no saved connection, so the defaults are shown and
+	// nothing is kept.
+	readonly settings?: CameraIdentity
+	// Devices snooped into the frame headers; the focuser of the session always is.
+	readonly snoop: CaptureSnoop
+}
+
+// Auto Focus panel sections of a camera.
+export function AutoFocusSections({ device, availability, focuser, settings: identity, snoop }: AutoFocusTarget) {
 	const profiles = useSnapshot(profileState)
 	const runtime = useSnapshot(autoFocusRuntime)
 	const captures = useSnapshot(captureRuntime)
 	const operations = useSnapshot(operationsState)
 	const control = useSnapshot(controlRuntime)
-	const camera = useRoleDevice(role)
-	const focuser = useRoleDevice('FOCUSER')
 	const wheel = useRoleDevice('FILTER_WHEEL')
 	const astapConfigured = useAstapConfigured()
 	const profile = activeProfile(profiles)
-	const identity = profileCamera(profile, camera.device?.id)
 	const settings = autoFocusSettings(profile.settings, identity)
 	const exposure = exposureSettings(profile.settings, identity)
-	const key = camera.device && cameraKey(camera.device.connectionId, camera.device.id)
+	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
 	const capabilities = key ? captures.capabilities[key] : undefined
-	const focuserState = focuser.device && deviceStateOf(control.states, 'focuser', focuser.device.id)
+	const focuserDevice = focuser?.device
+	const focuserState = focuserDevice && deviceStateOf(control.states, 'focuser', focuserDevice.id)
 	const wheelState = wheel.device && deviceStateOf(control.states, 'wheel', wheel.device.id)
 	const running = autoFocusRunning(session)
 	const pending = key !== undefined && runtime.pending[key] === true
 	const error = key ? runtime.errors[key] : undefined
 	const locked = running || pending
 	const stepSize = settings.stepSize ?? (focuserState ? defaultStepSize(focuserState.position.min, focuserState.position.max) : 100)
-	const blocker = running ? undefined : startBlocker()
+	const blocker = running ? undefined : autoFocusBlocker(availability, focuser && roleAvailability('FOCUSER', focuser, operations), focuserState, settings.detection.detector.provider === 'astap' && !astapConfigured)
 
 	useEffect(() => {
-		if (camera.device?.connected) void refreshCapabilities(captureRuntime, camera.device.connectionId, camera.device.id)
-	}, [camera.device?.connectionId, camera.device?.id, camera.device?.connected])
+		if (device?.connected) void refreshCapabilities(captureRuntime, device.connectionId, device.id)
+	}, [device?.connectionId, device?.id, device?.connected])
 
-	// Returns why no session can start now, from the availability of both devices, the capabilities of the
-	// focuser, and the detector; the server checks again.
-	function startBlocker(): string | undefined {
-		const cameraAvailability = roleAvailability(role, camera, operations)
-		if (cameraAvailability.status !== 'ready') return cameraAvailability.message
-		const focuserAvailability = roleAvailability('FOCUSER', focuser, operations)
-		if (focuserAvailability.status !== 'ready') return focuserAvailability.message
-		if (!focuserState) return 'The focuser state is not known yet.'
-		if (!focuserState.canAbsoluteMove) return 'The focuser cannot move to absolute positions, which the Auto Focus needs.'
-		if (settings.detection.detector.provider === 'astap' && !astapConfigured) return 'ASTAP is not configured.'
-		return undefined
-	}
-
-	// Updates fields of the view's form.
+	// Updates fields of the camera's Auto Focus form.
 	function update(patch: Partial<AutoFocusSettings>) {
 		setAutoFocusSettings(profileState, identity, patch)
 	}
 
 	function start() {
-		if (!camera.device || !focuser.device) return
-		const request = autoFocusRequest(settings, exposure, { connectionId: focuser.device.connectionId, deviceId: focuser.device.id }, stepSize, captureSnoop(activeSetup(profile)), capabilities)
-		void startAutoFocus(autoFocusRuntime, camera.device.connectionId, camera.device.id, request)
+		if (!device || !focuserDevice) return
+		const request = autoFocusRequest(settings, exposure, { connectionId: focuserDevice.connectionId, deviceId: focuserDevice.id }, stepSize, snoop, capabilities)
+		void startAutoFocus(autoFocusRuntime, device.connectionId, device.id, request)
 	}
 
 	const { detection } = settings
@@ -89,9 +103,11 @@ export function AutoFocusPanel({ camera: role }: CaptureModePanelProps) {
 
 	return (
 		<>
+			<ExposureSection settings={exposure} capabilities={capabilities} disabled={locked} onChange={(patch) => setExposureSettings(profileState, identity, patch)}>
+				<p className="m-0 text-xs leading-4 text-ink-300">Shared with Camera Acquisition; frames are always LIGHT.</p>
+			</ExposureSection>
+			<CameraSettings settings={exposure} capabilities={capabilities} disabled={locked} onChange={(patch) => setExposureSettings(profileState, identity, patch)} />
 			<PanelSection title="Measurement">
-				<FrameSettings exposure={exposure} capabilities={capabilities} />
-				<p className="m-0 text-xs leading-4 text-ink-300">Frames use the exposure and camera settings of the camera, shared with Camera Acquisition.</p>
 				{wheel.device && <p className="m-0 text-xs leading-4 text-ink-300">Filter: {filter ?? 'unknown'} — the Auto Focus measures through the current filter and never changes it.</p>}
 				<DetectorControls request={detection} disabled={locked} onChange={(request) => update({ detection: request })} />
 				<details>
@@ -107,8 +123,7 @@ export function AutoFocusPanel({ camera: role }: CaptureModePanelProps) {
 						<AcceptanceControls request={detection} disabled={locked} onChange={(request) => update({ detection: request })} />
 					</div>
 				</details>
-				<p className="m-0 text-xs leading-4 text-ink-300">Each frame is measured by the median HFD of its accepted stars (Multi-Star); frames are kept in memory only.</p>
-				<Checkbox label="Show star overlay" checked={settings.overlay} onChange={(overlay) => update({ overlay })} />
+				<p className="m-0 text-xs leading-4 text-ink-300">Each frame is measured by the median HFD of its accepted stars (Multi-Star) and shown as the latest frame of the camera; frames are kept in memory only.</p>
 			</PanelSection>
 			<PanelSection title="Focus Routine">
 				<Select label="Curve Fitting" options={FITTING_MODES} value={settings.fittingMode} format={(mode) => FITTING_MODE_LABELS[mode]} disabled={locked} onChange={(fittingMode) => update({ fittingMode })} />
@@ -140,6 +155,11 @@ export function AutoFocusPanel({ camera: role }: CaptureModePanelProps) {
 					</Button>
 				)}
 				{blocker && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}</p>}
+				{!focuser && !running && (
+					<Button variant="secondary" size="sm" className="self-start" onClick={() => (deviceState.open = true)}>
+						Equipment Setup
+					</Button>
+				)}
 				{running && <p className="m-0 text-xs leading-4 text-ink-300">A stop leaves the focuser where it stands.</p>}
 				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
 			</PanelSection>
@@ -195,31 +215,6 @@ function SessionState({ session, position, moving }: SessionStateProps) {
 			{session.verificationError && <p className="m-0 text-xs leading-4 text-ink-300">{session.verificationError}</p>}
 			{session.state === 'cancelled' && <p className="m-0 text-xs leading-4 text-ink-300">The focuser was left where the stop found it.</p>}
 		</>
-	)
-}
-
-interface FrameSettingsProps {
-	// Exposure and camera settings of the camera.
-	readonly exposure: Readonly<CameraExposureSettings>
-	// Capabilities of the camera, when known.
-	readonly capabilities?: CameraCapabilities
-}
-
-// Exposure and camera settings the frames are taken with: those of the camera, fitted to it as the request sends
-// them; a setting the camera does not report is not shown.
-function FrameSettings({ exposure, capabilities }: FrameSettingsProps) {
-	const { exposureTime, gain, offset, binX, binY, subframe, width, height, frameFormat } = fitExposure(exposure, capabilities)
-	const readout = capabilities?.frameFormats.find((format) => format.name === frameFormat)
-
-	return (
-		<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-			<Row label="Exposure">{`${Number(exposureTime.toPrecision(6))} s`}</Row>
-			{capabilities?.gain && <Row label="Gain">{gain}</Row>}
-			{capabilities?.offset && <Row label="Offset">{offset}</Row>}
-			{capabilities?.bin && <Row label="Binning">{`${binX} × ${binY}`}</Row>}
-			{subframe && <Row label="Subframe">{`${width} × ${height}`}</Row>}
-			{readout && <Row label="Readout Mode">{readout.label || readout.name}</Row>}
-		</dl>
 	)
 }
 

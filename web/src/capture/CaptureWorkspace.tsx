@@ -4,7 +4,6 @@ import { connectionState } from '../connection/connection'
 import { deviceState } from '../equipment/equipment'
 import { type CameraRole, roleDefinition } from '../equipment/roles'
 import { useRoleDevice } from '../equipment/useEquipment'
-import { imagesState, openCaptureFrame } from '../images/images'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { WcsOverlay } from '../platesolving/WcsOverlay'
 import { activeProfile, activeSetup, analysisSettings, autoFocusSettings, plateSolvingSettings, profileState, selectCameraView, setAutoFocusSettings, setCameraReticle } from '../profile/profile'
@@ -169,12 +168,7 @@ function CaptureViewer({ role, viewer, reticle, stars, wcs, focusing, curve }: C
 			view={views[viewer] ?? FIT_VIEW}
 			onViewChange={(view) => (captureViewerState[viewer] = view)}
 			empty={<CameraState camera={camera} focusing={focusing} />}
-			toolbar={
-				<>
-					<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={() => setCameraReticle(profileState, role, !reticle)} />
-					{!focusing && <IconButton icon="images" label="Inspect in Images" disabled={!rendering?.frameId} onClick={() => rendering?.frameId && inspectInImages(rendering.frameId)} />}
-				</>
-			}
+			toolbar={<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={() => setCameraReticle(profileState, role, !reticle)} />}
 			overlays={
 				reticle || result || solution
 					? (size, view) => (
@@ -203,13 +197,6 @@ function CaptureViewer({ role, viewer, reticle, stars, wcs, focusing, curve }: C
 			</section>
 		</div>
 	)
-}
-
-// Opens a captured frame in the Images workspace and shows it there. The frame id is taken from the frame on screen
-// when the button is pressed, so a frame arriving meanwhile is never opened instead.
-function inspectInImages(frameId: string) {
-	void openCaptureFrame(imagesState, frameId)
-	navigate(routeState, { workspace: 'images' })
 }
 
 interface CameraStateProps {

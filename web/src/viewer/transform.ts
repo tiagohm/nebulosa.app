@@ -120,3 +120,15 @@ export function viewTransform(view: ViewerView, image: Size, viewport: Size): Vi
 export function manualView(view: ViewTransform, viewport: Size): ViewerView {
 	return { kind: 'manual', scale: view.scale, center: toImage(view, { x: viewport.width / 2, y: viewport.height / 2 }) }
 }
+
+// Returns the view of an image of size to that replaces one of size from in the same viewer, such as the next
+// frame of a camera. A fitted view stays fitted, and a view of an image of the same size is kept as it is. Otherwise
+// the center keeps its position relative to the image size, and the scale changes by the ratio of the widths, so
+// the viewer shows the same fraction of the image (the same field after a change of binning); it stays within
+// [MIN_SCALE, MAX_SCALE]. An empty size keeps the view.
+export function adaptView(view: ViewerView, from: Size, to: Size): ViewerView {
+	if (view.kind === 'fit' || (from.width === to.width && from.height === to.height)) return view
+	if (from.width <= 0 || from.height <= 0 || to.width <= 0 || to.height <= 0) return view
+	const scale = clampScale((view.scale * from.width) / to.width)
+	return { kind: 'manual', scale, center: { x: (view.center.x / from.width) * to.width, y: (view.center.y / from.height) * to.height } }
+}

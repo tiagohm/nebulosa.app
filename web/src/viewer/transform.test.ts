@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { centered, FIT_VIEW, fit, MAX_SCALE, MIN_SCALE, manualView, panBy, pixelAt, toImage, viewTransform, zoomAt } from './transform'
+import { adaptView, centered, FIT_VIEW, fit, MAX_SCALE, MIN_SCALE, manualView, panBy, pixelAt, toImage, viewTransform, zoomAt } from './transform'
 
 describe('fit', () => {
 	test('fits the limiting dimension and centers the other', () => {
@@ -69,5 +69,22 @@ describe('viewer view', () => {
 		const resized = viewTransform(view, image, { width: 500, height: 300 })
 		expect(toImage(resized, { x: 250, y: 150 })).toEqual(view.kind === 'manual' ? view.center : { x: 0, y: 0 })
 		expect(resized.scale).toBe(2)
+	})
+})
+
+describe('adaptView', () => {
+	const view = { kind: 'manual', scale: 2, center: { x: 100, y: 50 } } as const
+
+	test('keeps a fitted view and a view of an image of the same size', () => {
+		expect(adaptView(FIT_VIEW, { width: 400, height: 200 }, { width: 200, height: 100 })).toBe(FIT_VIEW)
+		expect(adaptView(view, { width: 400, height: 200 }, { width: 400, height: 200 })).toBe(view)
+	})
+
+	test('keeps the relative center and the fraction of the image shown when the size changes', () => {
+		expect(adaptView(view, { width: 400, height: 200 }, { width: 200, height: 100 })).toEqual({ kind: 'manual', scale: 4, center: { x: 50, y: 25 } })
+	})
+
+	test('keeps the scale within its limits', () => {
+		expect(adaptView({ kind: 'manual', scale: MAX_SCALE, center: { x: 0, y: 0 } }, { width: 400, height: 200 }, { width: 100, height: 50 })).toMatchObject({ scale: MAX_SCALE })
 	})
 })

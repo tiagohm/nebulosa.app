@@ -7,11 +7,11 @@ import { EmptyState } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { connectionLabel, frameUnavailableReason } from './captureframes'
 import { DisplayAdjustments } from './DisplayAdjustments'
-import { documentPath, downloadUrl, type ImageDocument } from './images'
+import { type CameraFrameSelection, documentPath, downloadUrl, type ImageDocument } from './images'
 import type { ImageToolPanelProps } from './tools'
 
 // Image Inspector, the default contextual tool of the Images workspace: properties, the provenance and
-// save actions of a derived image, the camera, session, and storage of a captured frame, acquisition data, display adjustments with the parameters of the
+// save actions of a derived image, the camera, session, and storage of the frame a camera tab shows, acquisition data, display adjustments with the parameters of the
 // current rendering, and the header of the active document, with the statistics section still to come.
 // The display adjustments edit the document's pending display settings and create derived images.
 
@@ -59,7 +59,7 @@ export function ImageInspector({ document, view, onOpen, onSaveAs }: ImageToolPa
 		<>
 			<PanelSection title="Properties">
 				<Property label="Name">{document.name}</Property>
-				{!document.capture && (
+				{!document.camera && (
 					<Property label="Folder">
 						{path ? (
 							<span title={path} className="block truncate">
@@ -82,7 +82,7 @@ export function ImageInspector({ document, view, onOpen, onSaveAs }: ImageToolPa
 					<p className="m-0 text-ink-300">{document.status === 'loading' ? 'Opening…' : 'Unavailable'}</p>
 				)}
 			</PanelSection>
-			{document.capture?.frame && <CapturedFrame frame={document.capture.frame} live={!!document.capture.live} />}
+			{document.camera?.shown && <CapturedFrame frame={document.camera.shown.frame} selection={document.camera.selection.kind} />}
 			{info?.origin === 'derived' && <Derivation document={document} provenance={info.provenance} infoId={info.id} onSaveAs={onSaveAs} />}
 			{info && <Acquisition info={info} />}
 			{info && view && <DisplayAdjustments documentKey={document.key} info={info} view={view} />}
@@ -126,15 +126,18 @@ function Property({ label, children }: PropertyProps) {
 // Labels of the states of the write of a frame's file.
 const FILE_STATE_LABELS: Readonly<Record<NonNullable<CaptureFrameSummary['file']>, string>> = { saving: 'Saving', saved: 'Saved', failed: 'Save failed' }
 
+// Labels of why a camera tab shows its frame.
+const SELECTION_LABELS: Readonly<Record<CameraFrameSelection['kind'], string>> = { latest: 'Latest frame', saved: 'Saved frame', inspect: 'Held for analysis' }
+
 interface CapturedFrameProps {
 	// Frame shown.
 	readonly frame: CaptureFrameSummary
-	// Whether a live tab shows it.
-	readonly live: boolean
+	// Why the camera tab shows it.
+	readonly selection: CameraFrameSelection['kind']
 }
 
-// Camera, session, and storage of a captured frame, as the capture frame registry describes it.
-function CapturedFrame({ frame, live }: CapturedFrameProps) {
+// Camera, session, and storage of the frame a camera tab shows, as the capture frame registry describes it.
+function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 	const connections = useSnapshot(connectionState)
 	const unavailable = frameUnavailableReason(frame)
 
@@ -151,7 +154,7 @@ function CapturedFrame({ frame, live }: CapturedFrameProps) {
 						{frame.frameId}
 					</span>
 				</Property>
-				{live && <Property label="Shown by">Live tab</Property>}
+				<Property label="Shown as">{SELECTION_LABELS[selection]}</Property>
 			</PanelSection>
 			<PanelSection title="Storage">
 				<Property label="State">{frame.file ? FILE_STATE_LABELS[frame.file] : 'Temporary (preview only)'}</Property>

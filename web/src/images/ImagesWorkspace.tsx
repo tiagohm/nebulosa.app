@@ -19,17 +19,18 @@ import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
 import { FIT_VIEW } from '../viewer/transform'
 import { captureFramesState, frameSourceKey } from './captureframes'
-import { CaptureFramesModal } from './CaptureFramesModal'
 import { ImageInspector } from './ImageInspector'
-import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, openImage, pauseLive, pinLive, resumeLive, selectImage, selectImageTool, selectStar, setImageView, shownRendering, toggleOriginal } from './images'
+import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, isClosable, openImage, selectCameraFrame, selectImage, selectImageTool, selectStar, setImageView, shownRendering, toggleOriginal } from './images'
 import { SaveImageModal } from './SaveImageModal'
 import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolUnavailable } from './tools'
 
-// Images workspace: FITS and XISF images opened from the server, and frames captured by Camera Capture opened from
-// Capture Frames (a frame of its own, or a live tab following a camera, with Pause, Resume, and Pin), one tab each,
-// shown in the shared viewer, with the contextual tool each document selected (the Image Inspector at first) in the
-// contextual panel. It works without any connection or equipment. Documents, with their own zoom, pan,
-// display settings, and tool, stay open while the tab lives, across document and workspace switches.
+// Images workspace: a permanent camera tab for each connected camera of the watched connection, showing the frames
+// Camera Capture takes with it, then FITS and XISF images opened from the server, one closable tab each, shown in the
+// shared viewer, with the contextual tool each document selected (the Image Inspector at first) in the contextual
+// panel. It works without any connection or equipment, and never commands a camera. Documents, with their own zoom,
+// pan, display settings, and tool, stay open while the tab lives, across document and workspace switches; a camera
+// tab follows the latest frame of its camera until a saved frame is selected or a manual analysis holds the frame
+// shown, and Return to Latest follows it again.
 // The viewer toolbar switches a document between its adjusted rendering and its original one. The star
 // markers of the latest detection of the document's image are drawn over it while shown, and a click
 // selects a star while the Star Detection tool is open. Closing
@@ -44,7 +45,6 @@ export function ImagesWorkspace() {
 	const state = useSnapshot(imagesState)
 	const profiles = useSnapshot(profileState)
 	const [choosing, setChoosing] = useState(false)
-	const [choosingFrame, setChoosingFrame] = useState(false)
 	// Unsaved document whose closing waits for a confirmation.
 	const [closing, setClosing] = useState<string>()
 	// Document being saved, and whether it closes once saved.
@@ -61,18 +61,12 @@ export function ImagesWorkspace() {
 	const wcs = view?.plateSolving.overlay ? solution : undefined
 	const toolSelector = <Select options={IMAGE_TOOLS} value={tool} disabled={!document} format={(t) => IMAGE_TOOL_DEFINITIONS[t].label} disabledReason={imageToolUnavailable} onChange={(t) => document && selectImageTool(imagesState, document.key, t)} className="w-52 max-sm:w-40" />
 	const openButton = (
-		<div className="flex flex-wrap justify-center gap-2">
-			<Button variant="secondary" onClick={() => setChoosing(true)}>
-				<Icon name="folder" className="size-4" />
-				Open File
-			</Button>
-			<Button variant="secondary" onClick={() => setChoosingFrame(true)}>
-				<Icon name="camera" className="size-4" />
-				Capture Frames
-			</Button>
-		</div>
+		<Button variant="secondary" onClick={() => setChoosing(true)}>
+			<Icon name="folder" className="size-4" />
+			Open File
+		</Button>
 	)
-	const waiting = document?.capture?.live && !document.info
+	const waiting = document?.camera && !document.info
 
 	// Closes a document, asking first when it is unsaved.
 	function requestClose(key: string) {
@@ -92,14 +86,14 @@ export function ImagesWorkspace() {
 						view={view?.view ?? FIT_VIEW}
 						onViewChange={(next) => document && setImageView(imagesState, document.key, next)}
 						image={shown && document?.info ? { url: shown.url, width: document.info.width, height: document.info.height } : undefined}
-						loading={document?.status === 'loading' || view?.renderPending}
-						error={document?.error ?? view?.error}
+						loading={document?.status === 'loading' || view?.renderPending || !!document?.camera?.requested}
+						error={document?.error ?? document?.camera?.error ?? view?.error}
 						toolbar={
 							document &&
 							view && (
 								<>
 									<OriginalToggle documentKey={document.key} view={view} mosaic={!!document.info && document.info.channels === 1 && !!document.info.bayer} />
-									{document.capture?.live && <LiveControls document={document} />}
+									{document.camera && <CameraControls document={document} />}
 								</>
 							)
 						}
@@ -123,9 +117,9 @@ export function ImagesWorkspace() {
 						}
 						empty={
 							waiting ? (
-								<EmptyState title="Waiting for first captured frame" description="Images never starts a capture: the next frame Camera Capture takes with this camera appears here." />
+								<EmptyState title="No captured image available" description="Images never starts a capture: the next frame Camera Capture takes with this camera appears here." />
 							) : (
-								<EmptyState title="No image open" description="Open a FITS or XISF image from the server, or a frame captured by a camera." action={openButton} />
+								<EmptyState title="No image open" description="Open a FITS or XISF image from the server, or connect a camera to follow its frames." action={openButton} />
 							)
 						}
 					/>
@@ -143,7 +137,6 @@ export function ImagesWorkspace() {
 					void openImage(imagesState, path)
 				}}
 			/>
-			<CaptureFramesModal open={choosingFrame} onClose={() => setChoosingFrame(false)} />
 			<SaveImageModal
 				document={savingDocument}
 				onClose={() => setSaving(undefined)}
@@ -203,31 +196,33 @@ function OriginalToggle({ documentKey, view, mosaic }: OriginalToggleProps) {
 	)
 }
 
-interface LiveControlsProps {
-	// Live document.
+interface CameraControlsProps {
+	// Camera tab.
 	readonly document: ImageDocument
 }
 
-// State, Pause or Resume, and Pin of a live tab in the viewer toolbar. Neither commands the camera: they only change
-// which frame the tab shows.
-function LiveControls({ document }: LiveControlsProps) {
+// Labels of the selections of a camera tab, as its toolbar shows them.
+const SELECTION_LABELS: Readonly<Record<NonNullable<ImageDocument['camera']>['selection']['kind'], string>> = { latest: 'Latest', saved: 'Saved frame', inspect: 'Held for analysis' }
+
+// Frame a camera tab shows, and Return to Latest while it does not follow the latest frame. Neither commands the
+// camera: they only change which frame the tab shows.
+function CameraControls({ document }: CameraControlsProps) {
 	const frames = useSnapshot(captureFramesState)
-	const capture = document.capture
-	if (!capture?.live || document.source.kind !== 'live') return null
+	const camera = document.camera
+	if (!camera || document.source.kind !== 'camera') return null
 
 	const source = frames.sources[frameSourceKey(document.source.connectionId, document.source.deviceId)]
-	const following = capture.live === 'following'
-	const status = capture.error ? 'Frame unavailable' : !capture.frame ? 'Waiting for frame' : capture.live === 'pausedForAnalysis' ? 'Paused for analysis' : !following ? 'Paused' : source && !source.connected ? 'Source offline' : 'Following'
+	const following = camera.selection.kind === 'latest'
+	const restored = following && source?.latestRestored && !!camera.shown
 
 	return (
 		<>
 			<span className="h-5 w-px bg-line-100" />
-			<span title={capture.error} className={cn('px-1 text-xs', capture.error ? 'text-danger' : following ? 'text-success' : 'text-accent')}>
-				{status}
-				{capture.frame && ` · #${capture.frame.generation}`}
+			<span title={camera.error} className={cn('px-1 text-xs', camera.error ? 'text-danger' : following ? 'text-success' : 'text-accent')}>
+				{restored ? 'Latest saved' : SELECTION_LABELS[camera.selection.kind]}
+				{camera.shown && ` · #${camera.shown.frame.generation}`}
 			</span>
-			{following ? <IconButton icon="pause" label="Pause" onClick={() => pauseLive(imagesState, document.key)} /> : <IconButton icon="play" label="Resume" onClick={() => void resumeLive(imagesState, document.key, source?.latestAvailableFrameId)} />}
-			<IconButton icon="pin" label="Pin as image tab" disabled={!capture.frame || !capture.lease} onClick={() => void pinLive(imagesState, document.key)} />
+			{!following && <IconButton icon="play" label="Return to Latest" onClick={() => void selectCameraFrame(imagesState, document.key, { kind: 'latest' }, captureFramesState)} />}
 		</>
 	)
 }
@@ -241,18 +236,17 @@ interface DocumentTabsProps {
 	readonly onClose: (key: string) => void
 }
 
-// Returns the tooltip of a document tab: where its file is, where it was derived from, or which frame or camera it
+// Returns the tooltip of a document tab: where its file is, where it was derived from, or which camera and frame it
 // shows.
 function documentTooltip(document: ImageDocument): string {
-	if (document.source.kind === 'live') return `Follows ${document.capture?.frame?.cameraName ?? 'the camera'}${document.capture?.frame ? `, showing frame #${document.capture.frame.generation}` : ''}`
-	if (document.source.kind === 'capture') return document.capture?.frame ? `${document.capture.frame.cameraName}, frame #${document.capture.frame.generation}` : document.name
+	if (document.camera) return `Frames of ${document.name}${document.camera.shown ? `, showing frame #${document.camera.shown.frame.generation}` : ''}`
 	const path = documentPath(document)
 	if (path) return path
 	return document.source.kind === 'derived' ? `Derived from ${document.source.sourceName}, not saved` : document.name
 }
 
 // Tab strip of the open documents. Arrow keys move between tabs, Delete closes the focused one; an
-// unsaved document is marked with an accent dot.
+// unsaved document is marked with an accent dot. A camera tab has a camera icon and no way to close it.
 function DocumentTabs({ documents, activeKey, onClose }: DocumentTabsProps) {
 	const stripRef = useRef<HTMLDivElement>(null)
 
@@ -264,9 +258,9 @@ function DocumentTabs({ documents, activeKey, onClose }: DocumentTabsProps) {
 			e.preventDefault()
 			selectImage(imagesState, documents[next].key)
 			stripRef.current?.querySelectorAll<HTMLElement>('[data-tab]')[next]?.focus()
-		} else if (e.key === 'Delete' && activeKey) {
+		} else if (e.key === 'Delete' && index >= 0 && isClosable(documents[index])) {
 			e.preventDefault()
-			onClose(activeKey)
+			onClose(documents[index].key)
 		}
 	}
 
@@ -274,6 +268,7 @@ function DocumentTabs({ documents, activeKey, onClose }: DocumentTabsProps) {
 		<div ref={stripRef} onKeyDown={handleKeyDown} className="flex h-9 flex-none items-end gap-px overflow-x-auto border-b border-line-100 bg-base-100 px-2">
 			{documents.map((document) => {
 				const active = document.key === activeKey
+				const closable = isClosable(document)
 
 				return (
 					<div key={document.key} className={cn('group flex h-8 max-w-56 flex-none items-center rounded-t-sm border border-b-0', active ? 'border-line-100 bg-base-000 text-ink-100' : 'border-transparent text-ink-300 hover:bg-base-200 hover:text-ink-100')}>
@@ -283,23 +278,26 @@ function DocumentTabs({ documents, activeKey, onClose }: DocumentTabsProps) {
 							tabIndex={active ? 0 : -1}
 							title={documentTooltip(document)}
 							onClick={() => selectImage(imagesState, document.key)}
-							onAuxClick={(e) => e.button === 1 && onClose(document.key)}
-							className="flex h-full min-w-0 cursor-pointer items-center gap-2 border-0 bg-transparent pr-1 pl-3 font-mono text-xs text-inherit focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+							onAuxClick={(e) => e.button === 1 && closable && onClose(document.key)}
+							className={cn('flex h-full min-w-0 cursor-pointer items-center gap-2 border-0 bg-transparent pl-3 font-mono text-xs text-inherit focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', closable ? 'pr-1' : 'pr-3')}
 						>
+							{document.camera && <Icon name="camera" className="size-3.5 flex-none" />}
 							{document.status === 'error' && <span className="size-1.5 flex-none rounded-full bg-danger" />}
 							{document.unsaved && <span title="Not saved" className="size-1.5 flex-none rounded-full bg-accent" />}
 							<span className="truncate">{document.name}</span>
 						</button>
-						<button
-							type="button"
-							tabIndex={-1}
-							title={`Close ${document.name}`}
-							onClick={() => onClose(document.key)}
-							className={cn('mr-1 flex size-5 flex-none cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-ink-300 hover:bg-base-300 hover:text-ink-100', active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}
-						>
-							<Icon name="close" className="size-3.5" strokeWidth={2} />
-							<span className="sr-only">Close</span>
-						</button>
+						{closable && (
+							<button
+								type="button"
+								tabIndex={-1}
+								title={`Close ${document.name}`}
+								onClick={() => onClose(document.key)}
+								className={cn('mr-1 flex size-5 flex-none cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-ink-300 hover:bg-base-300 hover:text-ink-100', active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}
+							>
+								<Icon name="close" className="size-3.5" strokeWidth={2} />
+								<span className="sr-only">Close</span>
+							</button>
+						)}
 					</div>
 				)
 			})}

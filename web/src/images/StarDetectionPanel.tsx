@@ -10,7 +10,7 @@ import { cancelDetection, isActive, PROVIDER_LABELS, runDetection, sameRequest, 
 import { useStarResult } from '../stars/useStarResult'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
-import { type ImageStarsState, imagesState, pauseLive, setStarMarkers, setStarRequest } from './images'
+import { type ImageStarsState, imagesState, holdCameraFrame, setStarMarkers, setStarRequest } from './images'
 import type { ImageToolPanelProps } from './tools'
 
 // Star Detection tool of the Images workspace: runs a detection of the active document on the server with
@@ -104,7 +104,7 @@ interface AnalysisProps {
 	readonly submitError?: string
 }
 
-// Run and Cancel, with the state of the latest job. Running pauses a live tab first, so the frame analyzed stays shown.
+// Run and Cancel, with the state of the latest job. Running holds the frame a camera tab shows first, so the frame analyzed stays shown.
 function Analysis({ documentKey, imageId, request, job, submitError }: AnalysisProps) {
 	const active = isActive(job)
 	const now = useNow(active)
@@ -117,7 +117,7 @@ function Analysis({ documentKey, imageId, request, job, submitError }: AnalysisP
 				<Button
 					disabled={active || !astapReady}
 					onClick={() => {
-						pauseLive(imagesState, documentKey, 'pausedForAnalysis')
+						holdCameraFrame(imagesState, documentKey)
 						void runDetection(starsState, imageId, request)
 					}}
 				>

@@ -212,7 +212,7 @@ const captures = new CameraCaptures(connections.devices, (id) => connections.cli
 
 // Auto Focus sessions of the cameras of the open connections, taking their frames with the capturer of the captures and
 // moving the focusers with their backlash compensation.
-const autoFocus = new AutoFocusSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, focusers.mover, images, stars, broadcast)
+const autoFocus = new AutoFocusSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, focusers.mover, images, captureFrames, stars, broadcast)
 
 // Opens a connection, or returns the existing one for the same endpoint. Responds 400 for an invalid
 // body and 502 when the endpoint cannot be reached.

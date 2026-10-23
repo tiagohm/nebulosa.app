@@ -6,12 +6,14 @@ import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
 import { type OperationContext, type OperationFailureReason, type OperationHandle, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { abortableDelay } from 'nebulosa/src/devices/orchestration/operation.wait'
 import { type ResourceRequest, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
 import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
 import { type AutoFocusCaptureOptions, type AutoFocusRunEvent, type AutoFocusRunResult, autoFocusCaptureRequest, runAutoFocus } from 'nebulosa/src/observation/focus/autofocus.runner'
 import { type FocusCurve, focusCurve } from './autofocus.curve'
-import { type CaptureSettings, type CaptureSnoop, snoopedDevices } from './captures'
+import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
+import { type CaptureFrame, type CaptureSettings, type CaptureSnoop, snoopedDevices } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, errorResponse, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { ImageInfo, ImageStore } from './images'
@@ -27,9 +29,11 @@ import { StarDetectionError, type StarDetectionPreparation, type StarDetectionRe
 // captures), and the shared star detection, whose median HFD of the accepted stars is the measurement. The provider
 // and its ASTAP settings are resolved once when a session starts and never change during it.
 //
-// Each frame is decoded into the image store as a capture document, the latest kept open per session for the
-// viewer and the previous one closed. Once the runner placed the focuser at the best focus, one more frame there
-// verifies the HFD reached. A session belongs to the server: it survives tab reloads and workspace changes, is
+// Each frame is decoded into the image store as a capture document and recorded in the capture frame registry as
+// the latest frame of its camera (origin autofocus, identified by the session id and the frame number), the same
+// latest frame Camera Capture updates, before it is measured; the registry owns its closing, so only the latest
+// frame of each camera and the frames leased by clients stay open, and none is ever among the saved frames. Once the
+// runner placed the focuser at the best focus, one more frame there verifies the HFD reached. A session belongs to the server: it survives tab reloads and workspace changes, is
 // stopped only by its stop route, an Equipment Control stop of its focuser, or a disconnection, and its record (the
 // measurements and the fitted curve, never pixels) is kept in memory until the next session of the same camera.
 // A stop never moves the focuser back; a failure lets the runner restore the start position. Positions are focuser
@@ -97,7 +101,8 @@ export interface FocusMeasurement {
 	readonly requestedPosition: number
 	// Logical position the focuser reported once the move ended, in steps.
 	readonly observedPosition: number
-	// Id of the capture document of the frame in the image store; it stays open only while it is the latest.
+	// Id of the capture document of the frame in the image store; it stays open only while it is the latest frame of
+	// its camera in the capture frame registry, or a client leases it.
 	readonly imageId?: string
 	// Aggregate HFD of the accepted stars, in pixels; absent when the frame is an invalid point of the curve.
 	readonly hfd?: number
@@ -113,7 +118,7 @@ export interface FocusMeasurement {
 	readonly time: number
 }
 
-// Latest frame of a session open in the image store, for a viewer.
+// Latest frame of a session, as recorded in the capture frame registry.
 export interface AutoFocusFrame {
 	// Id of the capture document.
 	readonly imageId: string
@@ -157,7 +162,7 @@ export interface AutoFocusSessionSummary {
 	readonly measurementCount: number
 	// Latest sampled frame.
 	readonly lastMeasurement?: FocusMeasurement
-	// Latest frame taken, sampled or verifying, while it is open in the image store.
+	// Latest frame taken, sampled or verifying; its document may since have been closed by the registry.
 	readonly latestFrame?: AutoFocusFrame
 	// Best focus the curve placed, in steps (rounded); present once the curve was accepted.
 	readonly estimatedPosition?: number
@@ -169,7 +174,7 @@ export interface AutoFocusSessionSummary {
 	readonly verification: AutoFocusVerification
 	// Aggregate HFD measured at the best focus, in pixels; present when verification is measured.
 	readonly verifiedHfd?: number
-	// Id of the capture document of the verification frame, while it is the latest.
+	// Id of the capture document of the verification frame; open while it is the latest frame of its camera.
 	readonly verificationImageId?: string
 	// Why the verification failed.
 	readonly verificationError?: string
@@ -222,8 +227,6 @@ interface Session {
 	handle?: OperationHandle<AutoFocusRunResult>
 	// Frame being taken or measured, before the runner reports its sample.
 	frame?: { readonly capture: number; readonly requestedPosition: number; readonly observedPosition: number; readonly time: number; imageId?: string; detail?: Pick<FocusMeasurement, 'detectedCount' | 'acceptedCount' | 'elapsed' | 'warnings'> }
-	// Id of the open capture document of the latest frame, closed when a newer one replaces it.
-	openImage?: string
 }
 
 // Result of measuring one frame.
@@ -245,7 +248,8 @@ export class AutoFocusSessions {
 
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes
 	// every session, capturer takes the frames (the one of the capture service), mover moves the focusers with
-	// their backlash compensation, images receives the frames, stars measures them, and listener receives every
+	// their backlash compensation, images receives the frames, frames records them as the latest frame of their camera
+	// and closes them, stars measures them, and listener receives every
 	// session change synchronously. auxiliaryDir is the parent of the temporary directory of each session.
 	constructor(
 		readonly devices: DeviceRegistry,
@@ -254,6 +258,7 @@ export class AutoFocusSessions {
 		readonly capturer: CameraCapturer,
 		readonly mover: FocuserMover,
 		readonly images: ImageStore,
+		readonly frames: CaptureFrameRegistry,
 		readonly stars: StarDetectionService,
 		readonly listener: AutoFocusListener,
 		readonly auxiliaryDir: string = tmpdir(),
@@ -441,11 +446,12 @@ export class AutoFocusSessions {
 		}
 	}
 
-	// Decodes a frame file into the image store as the latest frame of the session, closing the previous one, and
-	// measures its aggregate HFD with the prepared detector. A frame that cannot be decoded or measured is an invalid
+	// Decodes a frame file into the image store, records it as the latest frame of the camera in the capture frame
+	// registry, which closes the previous one unless leased, and measures its aggregate HFD with the prepared
+	// detector, whose job retains the document until it ends. A frame that cannot be decoded or measured is an invalid
 	// point, with the reason in its warnings; a cancellation rejects, so the runner ends the session.
 	async #measure(session: Session, path: string, preparation: StarDetectionPreparation, signal: AbortSignal): Promise<FrameMeasurement> {
-		const { camera, sessionId, operationId } = session.summary
+		const { camera, cameraName, sessionId } = session.summary
 		const capture = session.frame?.capture ?? 0
 		let imageId: string | undefined
 		let detail: FrameMeasurement['detail'] = { detectedCount: 0, acceptedCount: 0, elapsed: 0, warnings: [] }
@@ -453,13 +459,17 @@ export class AutoFocusSessions {
 		try {
 			const bytes = new Uint8Array(await Bun.file(path).arrayBuffer())
 			const time = session.frame?.time ?? Date.now()
-			const info = await this.images.openCapture(bytes, basename(path), { ...camera, frameId: `${operationId}:${capture}`, time })
+			const frameId = captureFrameId(sessionId, capture)
+			const info = await this.images.openCapture(bytes, basename(path), { ...camera, frameId, time })
 			imageId = info.id
-			this.#replaceImage(session, info.id)
+			const { width, height, channels, cfa, acquisition } = info
+			const bitpix = numericKeyword<number, undefined>(info.header, 'BITPIX', undefined)
+			const frame: CaptureFrame = { imageId: info.id, sessionId, ...camera, generation: capture, time, frameType: 'LIGHT', width, height, channels, cfa, bitpix, acquisition }
+			this.frames.previewed(info, frame, cameraName, 'autofocus')
 			if (session.frame) session.frame.imageId = info.id
 			this.#update(session, { latestFrame: { imageId: info.id, capture, width: info.width, height: info.height, ...(info.cfa && { cfa: info.cfa }), time } })
 
-			const result = await this.stars.measure(info.id, preparation, signal, { kind: 'autofocus', sessionId, ...camera, frameId: `${operationId}:${capture}`, capture })
+			const result = await this.stars.measure(info.id, preparation, signal, { kind: 'autofocus', sessionId, ...camera, frameId, capture })
 			detail = { detectedCount: result.detectedCount, acceptedCount: result.acceptedCount, elapsed: result.elapsed, warnings: result.measurement === 'ok' ? result.warnings : [...result.warnings, result.measurement === 'noStars' ? 'Too few accepted stars to measure the HFD.' : 'The HFD could not be measured.'] }
 			if (session.frame) session.frame.detail = detail
 			return { measured: true, hfd: result.aggregateHfd, imageId, detail }
@@ -518,18 +528,9 @@ export class AutoFocusSessions {
 		else this.#update(session, { state: 'failed', target: undefined, verification, reason: result.reason, ...(result.error !== undefined && { error: result.error }), endedAt })
 	}
 
-	// Makes a document the latest frame of a session and closes the previous one.
-	#replaceImage(session: Session, imageId: string) {
-		const previous = session.openImage
-		session.openImage = imageId
-		if (previous !== undefined) this.images.close(previous)
-	}
-
-	// Forgets a session replaced by a newer one of its camera, closing its latest frame.
+	// Forgets a session replaced by a newer one of its camera; its latest frame stays with the registry.
 	#forget(session: Session) {
 		this.#byOperation.delete(session.summary.operationId)
-		if (session.openImage !== undefined) this.images.close(session.openImage)
-		session.openImage = undefined
 	}
 
 	// Returns the latest session with this id.

@@ -6,7 +6,7 @@ import { failedOperationResult, type OperationResult } from 'nebulosa/src/device
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
 import { type AutoFocusEvent, type AutoFocusRequest, type AutoFocusSession, AutoFocusSessions, type AutoFocusSessionSummary } from './autofocus'
-import { CaptureFrameRegistry } from './captureframes'
+import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures, type CaptureRequest } from './captures'
 import { ConnectionManager } from './connection'
 import { ExternalToolsStore } from './externaltools'
@@ -85,6 +85,9 @@ async function setup() {
 	const tools = new ExternalToolsStore(join(mkdtempSync(join(root, 'settings-')), 'settings.json'))
 	const stars = new StarDetectionService(images, tools, () => {})
 	const capturesDir = mkdtempSync(join(root, 'captures-'))
+	const frameEvents: CaptureFrameEvent[] = []
+	const frames = new CaptureFrameRegistry(images, (event) => frameEvents.push(event), { file: join(mkdtempSync(join(root, 'frames-')), 'capture-frames.json') })
+	disposables.push(frames)
 	const captures = new CameraCaptures(
 		manager.devices,
 		(connectionId) => manager.client(connectionId),
@@ -92,7 +95,7 @@ async function setup() {
 		images,
 		stars,
 		new PlateSolvingService(images, tools, () => {}),
-		new CaptureFrameRegistry(images, () => {}, { file: join(mkdtempSync(join(root, 'frames-')), 'capture-frames.json') }),
+		frames,
 		() => {},
 		capturesDir,
 	)
@@ -108,6 +111,7 @@ async function setup() {
 		captures.capturer,
 		focusers.mover,
 		images,
+		frames,
 		stars,
 		(event) => events.push(event),
 		auxiliaryDir,
@@ -132,7 +136,7 @@ async function setup() {
 	// Whether the camera and the focuser are free for a new operation.
 	const released = () => operations.available(camera) && operations.available(focuser)
 
-	return { manager, client, id, operations, operationEvents, images, captures, capturesDir, autoFocus, auxiliaryDir, events, camera, cameraId, focuser, focuserDevice: { connectionId: id, deviceId: focuserId }, summary, ended, session, released }
+	return { manager, client, id, operations, operationEvents, images, frames, frameEvents, captures, capturesDir, autoFocus, auxiliaryDir, events, camera, cameraId, focuser, focuserDevice: { connectionId: id, deviceId: focuserId }, summary, ended, session, released }
 }
 
 // Starts a session and returns its ids.
@@ -154,7 +158,7 @@ describe('fitting modes', () => {
 	test.each(Object.keys(series) as AutoFocusFittingMode[])(
 		'%s finds the best focus of the simulated optics, verifies it there, and saves nothing',
 		async (fittingMode) => {
-			const { id, cameraId, autoFocus, focuserDevice, focuser, ended, summary, session, operationEvents, capturesDir, auxiliaryDir, images, released } = await setup()
+			const { id, cameraId, autoFocus, focuserDevice, focuser, ended, summary, session, operationEvents, capturesDir, auxiliaryDir, images, frames, released } = await setup()
 			const { sessionId, operationId } = await start(autoFocus, id, cameraId, request(focuserDevice, { fittingMode }))
 			await waitUntil(ended, 120000)
 
@@ -173,10 +177,15 @@ describe('fitting modes', () => {
 			expect(record.curve!.fittingMode).toBe(fittingMode)
 			expect(record.curve!.series.map((curve) => curve.kind as string)).toEqual([...series[fittingMode]])
 
-			// Only the latest frame (the verification) stays open; earlier ones were closed.
+			// The verification is the latest frame of the camera in the registry and the only one open; the sampled frames
+			// were closed as each newer one replaced them, and none is among the saved frames.
+			const page = await frames.recent(id, cameraId)
+			expect(page.latest).toMatchObject({ frameId: `${sessionId}:${final.measurementCount + 1}`, origin: 'autofocus', sessionId, generation: final.measurementCount + 1, imageId: final.verificationImageId, frameType: 'LIGHT', width: 512, height: 512, availability: 'memory' })
+			expect(page.latest!.file).toBeUndefined()
+			expect(page.frames).toEqual([])
 			expect(images.name(final.verificationImageId!)).toBeDefined()
 			expect(final.latestFrame).toMatchObject({ imageId: final.verificationImageId, capture: final.measurementCount + 1, width: 512, height: 512 })
-			expect(images.name(record.measurements[0].imageId!)).toBeUndefined()
+			expect(record.measurements.every((measurement) => images.name(measurement.imageId!) === undefined)).toBeTrue()
 
 			expect(operationEvents.findLast((event) => event.operation.operationId === operationId)!.operation).toMatchObject({ kind: 'focuser.autofocus', state: 'succeeded', devices: [{ connectionId: id, deviceId: cameraId }, focuserDevice] })
 			expect(readdirSync(capturesDir)).toEqual([])
@@ -244,6 +253,29 @@ describe('sessions', () => {
 		expect(summary()!.state).toBe('cancelled')
 		expect(released()).toBeTrue()
 	}, 60000)
+
+	test('every frame becomes the latest frame of its camera, and a later capture replaces it', async () => {
+		const { id, cameraId, autoFocus, captures, frames, frameEvents, images, focuserDevice, ended, session } = await setup()
+		const { sessionId } = await start(autoFocus, id, cameraId, request(focuserDevice, { initialOffsetSteps: 1 }))
+		await waitUntil(ended, 120000)
+
+		// Each sampled frame was published as the latest frame of the camera, holding the document it was measured on.
+		const { measurements } = await session(sessionId)
+		const published = frameEvents.flatMap((event) => (event.type === 'captureFrame:updated' && event.source.latestFrameId === event.frame.frameId && event.frame.availability === 'memory' ? [event.frame] : []))
+		for (const measurement of measurements) expect(published.find((frame) => frame.frameId === `${sessionId}:${measurement.capture}`)).toMatchObject({ origin: 'autofocus', imageId: measurement.imageId })
+		expect(published.every((frame) => frame.file === undefined)).toBeTrue()
+		const latest = (await frames.recent(id, cameraId)).latest!
+		expect(latest.origin).toBe('autofocus')
+
+		// A capture after the session becomes the latest frame of the same camera and closes the Auto Focus one.
+		expect((await captures.start(id, cameraId, captureRequest())).status).toBe(202)
+		await waitUntil(() => frameEvents.some((event) => event.type === 'captureFrame:updated' && event.frame.origin === 'capture' && event.source.latestFrameId === event.frame.frameId))
+		const page = await frames.recent(id, cameraId)
+		expect(page.latest!.origin).toBe('capture')
+		expect(page.latest!.sequence).toBeGreaterThan(latest.sequence)
+		expect(page.frames).toEqual([])
+		expect(images.name(latest.imageId!)).toBeUndefined()
+	}, 180000)
 
 	test('a camera capture cannot start while a session holds the camera, and a session cannot start on a capturing camera', async () => {
 		const { id, cameraId, autoFocus, captures, focuserDevice, ended, summary } = await setup()

@@ -2,7 +2,7 @@ import { afterAll, afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { type CaptureFrameEvent, CaptureFrameRegistry, type CaptureFrameRegistryOptions, FRAMES_PER_SOURCE, MAX_LEASED_FRAMES, MAX_SOURCES, parseCaptureFrames } from './captureframes'
+import { type CaptureFrameEvent, type CaptureFrameOrigin, CaptureFrameRegistry, type CaptureFrameRegistryOptions, FRAMES_PER_SOURCE, MAX_LEASED_FRAMES, MAX_SOURCES, parseCaptureFrames } from './captureframes'
 import type { CaptureFrame } from './captures'
 import { ImageStore } from './images'
 
@@ -35,13 +35,25 @@ function setup(options: CaptureFrameRegistryOptions = {}) {
 	const registry = new CaptureFrameRegistry(images, (event) => events.push(event), { connected: () => true, ...options, file })
 	disposables.push(registry)
 
-	// Decodes a frame of a camera and records it as previewed, as the capture service does.
-	async function preview(generation: number, { sessionId = 'session', connectionId = 'connection', deviceId = 'camera', cameraName = 'Camera', path }: { sessionId?: string; connectionId?: string; deviceId?: string; cameraName?: string; path?: string } = {}) {
+	// Decodes a frame of a camera and records it as previewed, as the capture service (or Auto Focus, by origin) does;
+	// a frame with a path is saved unless its file state is given.
+	async function preview(
+		generation: number,
+		{
+			sessionId = 'session',
+			connectionId = 'connection',
+			deviceId = 'camera',
+			cameraName = 'Camera',
+			path,
+			file = path ? 'saved' : undefined,
+			origin,
+		}: { sessionId?: string; connectionId?: string; deviceId?: string; cameraName?: string; path?: string; file?: CaptureFrame['file']; origin?: CaptureFrameOrigin } = {},
+	) {
 		const time = Date.UTC(2026, 9, 23, 0, 0, generation)
 		if (path) writeFileSync(path, fits())
 		const info = await images.openCapture(fits(), `${cameraName} #${generation}`, { connectionId, deviceId, frameId: `${sessionId}:${generation}`, time, path })
-		const frame: CaptureFrame = { imageId: info.id, sessionId, connectionId, deviceId, generation, time, path, file: path ? 'saved' : undefined, frameType: 'LIGHT', width: info.width, height: info.height, channels: info.channels, acquisition: info.acquisition }
-		registry.previewed(info, frame, cameraName)
+		const frame: CaptureFrame = { imageId: info.id, sessionId, connectionId, deviceId, generation, time, path, file, frameType: 'LIGHT', width: info.width, height: info.height, channels: info.channels, acquisition: info.acquisition }
+		registry.previewed(info, frame, cameraName, origin)
 		return info
 	}
 
@@ -110,6 +122,47 @@ describe('frames', () => {
 		expect(frames[0].frameId).toBe(`session:${FRAMES_PER_SOURCE + 3}`)
 		expect(frames.at(-1)!.frameId).toBe('session:4')
 		expect(registry.snapshot().sources[0].count).toBe(FRAMES_PER_SOURCE)
+	})
+
+	test('an Auto Focus frame becomes the latest frame of its camera, is never saved, and closes the previous one', async () => {
+		const { registry, preview, images } = setup()
+		await preview(1, { path: join(root, 'autofocus-saved-1.fits') })
+		const first = await preview(1, { sessionId: 'focus', origin: 'autofocus' })
+
+		let page = await registry.recent('connection', 'camera')
+		expect(page.latest).toMatchObject({ frameId: 'focus:1', origin: 'autofocus', availability: 'memory' })
+		expect(page.latest!.file).toBeUndefined()
+		expect(page.frames.map((frame) => [frame.frameId, frame.origin])).toEqual([['session:1', 'capture']])
+
+		await preview(2, { sessionId: 'focus', origin: 'autofocus' })
+		expect(images.name(first.id)).toBeUndefined()
+		expect((await registry.frame('focus:1'))!).toMatchObject({ availability: 'unavailable', reason: 'expired' })
+		page = await registry.recent('connection', 'camera')
+		expect(page.latest?.frameId).toBe('focus:2')
+		expect(page.frames.map((frame) => frame.frameId)).toEqual(['session:1'])
+		expect(registry.snapshot().sources[0]).toMatchObject({ latestFrameId: 'focus:2', latestAvailableFrameId: 'focus:2', count: 1 })
+	})
+
+	test('the write of a capture frame completing after an Auto Focus frame never takes the latest frame back', async () => {
+		const { registry, preview } = setup()
+		const path = join(root, 'late-1.fits')
+		await preview(1, { path, file: 'saving' })
+		await preview(1, { sessionId: 'focus', origin: 'autofocus' })
+		registry.written({ sessionId: 'session', generation: 1, connectionId: 'connection', deviceId: 'camera', time: Date.UTC(2026, 9, 23, 0, 0, 1), frameType: 'LIGHT', path, cameraName: 'Camera' }, 'saved')
+
+		const page = await registry.recent('connection', 'camera')
+		expect(page.latest).toMatchObject({ frameId: 'focus:1', origin: 'autofocus' })
+		expect(page.frames.map((frame) => [frame.frameId, frame.file, frame.availability])).toEqual([['session:1', 'saved', 'file']])
+		expect(page.latest!.sequence).toBeGreaterThan(page.frames[0].sequence)
+	})
+
+	test('an Auto Focus frame of one camera never replaces the latest frame of another', async () => {
+		const { registry, preview } = setup()
+		await preview(1, { deviceId: 'main' })
+		await preview(1, { deviceId: 'guide', sessionId: 'focus', origin: 'autofocus' })
+
+		expect((await registry.recent('connection', 'main')).latest).toMatchObject({ frameId: 'session:1', origin: 'capture', availability: 'memory' })
+		expect((await registry.recent('connection', 'guide')).latest).toMatchObject({ frameId: 'focus:1', origin: 'autofocus', availability: 'memory' })
 	})
 
 	test('a camera without frames has an empty page', async () => {

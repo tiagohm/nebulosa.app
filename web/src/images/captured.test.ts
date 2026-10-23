@@ -18,7 +18,7 @@ const KEY = cameraTabKey('conn', 'cam')
 
 // Returns a frame of the camera, with fields replaced.
 function frame(generation: number, patch: Partial<CaptureFrameSummary> = {}): CaptureFrameSummary {
-	return { frameId: `s:${generation}`, sequence: generation, revision: generation, connectionId: 'conn', deviceId: 'cam', cameraName: 'Camera', sessionId: 's', generation, time: 0, frameType: 'LIGHT', width: 4, height: 2, channels: 1, availability: 'memory', imageId: `img-${generation}`, ...patch }
+	return { frameId: `s:${generation}`, origin: 'capture', sequence: generation, revision: generation, connectionId: 'conn', deviceId: 'cam', cameraName: 'Camera', sessionId: 's', generation, time: 0, frameType: 'LIGHT', width: 4, height: 2, channels: 1, availability: 'memory', imageId: `img-${generation}`, ...patch }
 }
 
 // Returns the registry event of a new frame, which is the latest of its camera.

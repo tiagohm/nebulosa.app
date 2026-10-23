@@ -17,7 +17,7 @@ import { type CameraFrameSelection, type ImageDocument, imagesState, selectCamer
 interface CaptureFramesCarouselProps {
 	// Camera tab.
 	readonly document: ImageDocument
-	// Heading of the strip, such as the switch between the views of the bottom area; "Capture Frames" when absent.
+	// Heading of the strip, such as the switch between the views of the bottom area; "Captured Frames" when absent.
 	readonly title?: ReactNode
 }
 
@@ -100,7 +100,7 @@ export function CaptureFramesCarousel({ document, title }: CaptureFramesCarousel
 	return (
 		<div className="flex-none border-t border-line-100 bg-base-100">
 			<div className="flex items-center justify-between px-3 pt-1.5 font-mono text-[11px] tracking-wide text-ink-300 uppercase">
-				{title ?? <span>Capture Frames</span>}
+				{title ?? <span>Captured Frames</span>}
 				<span>{summary?.count ?? saved.length} saved</span>
 			</div>
 			<div ref={stripRef} onKeyDown={handleKeyDown} className="flex gap-2 overflow-x-auto px-3 pt-1.5 pb-2">
@@ -164,7 +164,7 @@ function FrameCard({ card, selected, focusable, loading, error, restored, newer,
 			title={[frame ? frameTooltip(frame) : 'No captured image available', error].filter(Boolean).join('\n')}
 			onClick={onSelect}
 			className={cn(
-				'flex h-[108px] w-36 flex-none cursor-pointer flex-col gap-1 rounded-sm border bg-base-000 p-1.5 text-left font-mono text-[11px] text-ink-200 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60',
+				'flex h-36 w-36 flex-none cursor-pointer flex-col gap-1 rounded-sm border bg-base-000 p-1.5 text-left font-mono text-[11px] text-ink-200 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60',
 				selected ? 'border-accent ring-1 ring-accent' : 'border-line-100 hover:border-line-200',
 			)}
 		>

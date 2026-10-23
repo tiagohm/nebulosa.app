@@ -20,6 +20,7 @@ import { Modal } from '../ui/Modal'
 import { moveIndex } from '../ui/navigation'
 import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
+import { Reticle } from '../viewer/Reticle'
 import { FIT_VIEW } from '../viewer/transform'
 import { useCameraOperationContext } from './cameracontext'
 import { captureFramesState, frameSourceKey } from './captureframes'
@@ -56,6 +57,8 @@ export function ImagesWorkspace() {
 	const [framesShown, setFramesShown] = useState(true)
 	// View of the bottom area of each camera tab, by document key; the frames carousel when absent.
 	const [bottomViews, setBottomViews] = useState<Readonly<Record<string, BottomView>>>({})
+	// Camera tabs whose viewer draws the central reticle, by document key; a presentation choice of the tab only.
+	const [reticles, setReticles] = useState<Readonly<Record<string, boolean>>>({})
 	// Unsaved document whose closing waits for a confirmation.
 	const [closing, setClosing] = useState<string>()
 	// Document being saved, and whether it closes once saved.
@@ -81,6 +84,7 @@ export function ImagesWorkspace() {
 		</Button>
 	)
 	const waiting = document?.camera && !document.info
+	const reticle = !!document?.camera && reticles[document.key] === true
 
 	// Closes a document, asking first when it is unsaved.
 	function requestClose(key: string) {
@@ -97,7 +101,7 @@ export function ImagesWorkspace() {
 			title="Images"
 			actions={openButton}
 			context={toolSelector}
-			panel={{ title: definition.panelTitle, content: <Panel document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} onSaveAs={() => document && setSaving({ key: document.key, closeAfter: false })} /> }}
+			panel={{ title: definition.panelTitle, content: <Panel key={document?.key} document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} onSaveAs={() => document && setSaving({ key: document.key, closeAfter: false })} /> }}
 		>
 			<div className="flex h-full flex-col">
 				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} onClose={requestClose} />}
@@ -113,14 +117,15 @@ export function ImagesWorkspace() {
 							view && (
 								<>
 									<OriginalToggle documentKey={document.key} view={view} mosaic={!!document.info && document.info.channels === 1 && !!document.info.bayer} />
-									{document.camera && <CameraControls document={document} framesShown={framesShown} onToggleFrames={() => setFramesShown(!framesShown)} />}
+									{document.camera && <CameraControls document={document} framesShown={framesShown} onToggleFrames={() => setFramesShown(!framesShown)} reticle={reticle} onToggleReticle={() => setReticles({ ...reticles, [document.key]: !reticle })} />}
 								</>
 							)
 						}
 						overlays={
-							(markers || wcs) && view
+							(markers || wcs || reticle) && view
 								? (size, overlay) => (
 										<>
+											{reticle && <Reticle {...size} />}
 											{wcs && <WcsOverlay solution={wcs} image={size} view={overlay} grid={view.plateSolving.grid} />}
 											{markers && <StarOverlay result={markers} view={overlay} acceptedOnly={view.stars.acceptedOnly} selected={view.stars.selected?.jobId === markers.jobId ? view.stars.selected.index : undefined} />}
 										</>
@@ -224,14 +229,19 @@ interface CameraControlsProps {
 	readonly framesShown: boolean
 	// Shows or hides the carousel.
 	readonly onToggleFrames: () => void
+	// Whether the central reticle is drawn over the frame.
+	readonly reticle: boolean
+	// Shows or hides the reticle.
+	readonly onToggleReticle: () => void
 }
 
 // Labels of the selections of a camera tab, as its toolbar shows them.
 const SELECTION_LABELS: Readonly<Record<NonNullable<ImageDocument['camera']>['selection']['kind'], string>> = { latest: 'Latest', saved: 'Saved frame', inspect: 'Held for analysis' }
 
-// Frame a camera tab shows, Return to Latest while it does not follow the latest frame, and the toggle of the capture
-// frames carousel. None commands the camera: they only change which frame the tab shows and how.
-function CameraControls({ document, framesShown, onToggleFrames }: CameraControlsProps) {
+// Frame a camera tab shows, Return to Latest while it does not follow the latest frame, and the toggles of the bottom
+// area and of the central reticle (for Mount Nudge or framing). None commands the camera: they only change which frame
+// the tab shows and how.
+function CameraControls({ document, framesShown, onToggleFrames, reticle, onToggleReticle }: CameraControlsProps) {
 	const frames = useSnapshot(captureFramesState)
 	const camera = document.camera
 	if (!camera || document.source.kind !== 'camera') return null
@@ -249,6 +259,7 @@ function CameraControls({ document, framesShown, onToggleFrames }: CameraControl
 			</span>
 			{!following && <IconButton icon="play" label="Return to Latest" onClick={() => void selectCameraFrame(imagesState, document.key, { kind: 'latest' }, captureFramesState)} />}
 			<IconButton icon="images" label={framesShown ? 'Hide frames and focus curve' : 'Show frames and focus curve'} pressed={framesShown} onClick={onToggleFrames} />
+			<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={onToggleReticle} />
 			<CaptureStatus connectionId={document.source.connectionId} deviceId={document.source.deviceId} />
 		</>
 	)
@@ -297,7 +308,7 @@ type BottomView = 'frames' | 'curve'
 const BOTTOM_VIEWS: readonly BottomView[] = ['frames', 'curve']
 
 // Label of each view of the bottom area.
-const BOTTOM_VIEW_LABELS: Readonly<Record<BottomView, string>> = { frames: 'Capture Frames', curve: 'Focus Curve' }
+const BOTTOM_VIEW_LABELS: Readonly<Record<BottomView, string>> = { frames: 'Captured Frames', curve: 'Focus Curve' }
 
 interface CameraBottomProps {
 	// Camera tab.

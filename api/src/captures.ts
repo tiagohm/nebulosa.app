@@ -1,6 +1,6 @@
 import { homedir } from 'os'
 import { basename, join } from 'path'
-import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
+import { formatTemporal, TIMEZONE } from 'nebulosa/src/astronomy/time/temporal'
 import { type Camera, type CameraTransferFormat, CLIENT, type Client } from 'nebulosa/src/devices/indi/device'
 import type { OperationFailureReason } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
@@ -661,7 +661,7 @@ export class CameraCaptures implements Disposable {
 	// Resolves the file of a saved frame from the request's directory and template.
 	#framePath(capture: ActiveCapture, { generation, time, camera }: CameraFramePathRequest) {
 		const { output, frameType } = capture.session.request
-		const name = frameName(output.filenameTemplate ?? DEFAULT_FILENAME_TEMPLATE, { camera: camera.name, type: frameType, time, generation, timezoneOffset: -new Date(time).getTimezoneOffset() })
+		const name = frameName(output.filenameTemplate ?? DEFAULT_FILENAME_TEMPLATE, { camera: camera.name, type: frameType, time, generation, timezoneOffset: TIMEZONE })
 		const path = join(output.directory || this.capturesDir, `${name}.${output.format === 'XISF' ? 'xisf' : 'fit'}`)
 		capture.frames.set(generation, { time, path, file: 'saving' })
 		capture.frames.delete(generation - FRAME_HISTORY)

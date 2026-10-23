@@ -7,6 +7,7 @@ import { NumberInput } from '../ui/NumberInput'
 import { TextInput } from '../ui/TextInput'
 import { CAPABILITY_LABELS, checkMatches, externalToolsState, sameConfig, saveExternalTool, signInExternalTool, signOutExternalTool, testExternalTool } from './externaltools'
 import { type CheckDisplay, CheckBadge, ConfigBadge } from './ExternalToolStatus'
+import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 
 // Settings of one external program or web service: the settings it takes (its executable path on the server,
 // the configuration file passed to it, or the endpoint of the service) and the default time limit of a run,
@@ -32,11 +33,6 @@ interface Base {
 	readonly config: ExternalToolConfig
 }
 
-// Formats an instant (milliseconds since the Unix epoch) as local date and time.
-function formatInstant(time: number) {
-	return new Date(time).toLocaleString()
-}
-
 // Diagnostics of a check, collapsed by default.
 function CheckDiagnostics({ check }: { readonly check: ExternalToolCheck }) {
 	return (
@@ -47,7 +43,7 @@ function CheckDiagnostics({ check }: { readonly check: ExternalToolCheck }) {
 				{check.config.config !== undefined && <Readout label="Configuration file">{check.config.config || 'Default'}</Readout>}
 				<Readout label="Resolved path">{check.resolvedPath ?? '—'}</Readout>
 				<Readout label="Version">{check.version ?? 'Unknown'}</Readout>
-				<Readout label="Checked at">{formatInstant(check.checkedAt)}</Readout>
+				<Readout label="Checked at">{formatTemporal(check.checkedAt, undefined, true)}</Readout>
 				<Readout label="Duration">{check.duration.toFixed(1)} ms</Readout>
 				<Readout label="Code">{check.code}</Readout>
 			</div>

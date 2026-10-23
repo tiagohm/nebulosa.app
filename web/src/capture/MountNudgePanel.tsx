@@ -1,24 +1,29 @@
-import type { CaptureSession, MountNudgeDirection, MountState } from 'api'
+import type { CaptureSession, DeviceSummary, MountNudgeDirection, MountState } from 'api'
 import { cn } from 'cn'
 import { type PointerEvent, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { roleAvailability } from '../equipment/availability'
-import { useRoleDevice } from '../equipment/useEquipment'
+import { deviceState } from '../equipment/equipment'
+import { type RoleDevice, useRoleDevice } from '../equipment/useEquipment'
 import { operationsState, runningOn } from '../operations'
 import { PanelSection } from '../shell/ContextualPanel'
+import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { Select } from '../ui/Select'
 import { cameraKey, captureRunning, captureRuntime } from './capture'
 import type { CaptureModePanelProps } from './modes'
 import { NUDGE_DIRECTION_LABELS, nudgeDirectionSupported, nudgeKey, type NudgePress, nudgeRunning, nudgeRuntime, pressNudge, releaseNudge, setNudgeSlewRate, stopNudges, watchNudgeMount } from './nudge'
 
-// Contextual panel sections of the Mount Nudge mode: press-and-hold manual motion of the mount the active
-// profile assigns to the MOUNT role, in eight directions at a speed preset the mount reports, with a STOP
-// in the middle, and the state of the motion and, read only, of the view's camera acquisition. The motion
-// is the server's: a press only lasts while its pointer is held, and is released when the pointer is
-// lifted or canceled, its capture is lost, the window loses focus or is hidden, or the panel unmounts,
-// which switching mode, workspace, camera view, or profile does. The panel never touches the camera:
-// a capture keeps running underneath, and the viewer and its reticle stay as they are.
+// Contextual panel sections of Mount Nudge, shared by the Images camera tabs and the Capture camera views:
+// press-and-hold manual motion of a mount, named in the panel, in eight directions at a speed preset the mount
+// reports, with a STOP in the middle, and the state of the motion and, read only, of the camera's acquisition. The
+// mount is the MOUNT of the active equipment setup, the one associated with every camera of its connection; a missing
+// one is reported, never replaced by another connected mount. The motion is the server's: a press only lasts while
+// its pointer is held, and is released when the pointer is lifted or canceled, its capture is lost, the window loses
+// focus or is hidden, the mount followed changes (a profile switch), or the panel unmounts, which switching tool,
+// camera tab, mode, workspace, or camera view does. The panel never touches the camera: a capture keeps running
+// underneath, and the viewer and its reticle stay as they are. Directions are those of the mount axes, never of the
+// image.
 
 // Why no press can start while another operation holds the mount.
 const BUSY = 'The mount is busy with another operation.'
@@ -26,13 +31,27 @@ const BUSY = 'The mount is busy with another operation.'
 // Cells of the direction grid, row by row; STOP is the middle one.
 const GRID: readonly (MountNudgeDirection | 'STOP')[] = ['NW', 'N', 'NE', 'W', 'STOP', 'E', 'SW', 'S', 'SE']
 
-// Mount Nudge panel sections.
+// Mount Nudge mode of a Capture camera view: the nudge panel of the MOUNT of the equipment setup, with the state of
+// the view's camera.
 export function MountNudgePanel({ camera }: CaptureModePanelProps) {
+	const mount = useRoleDevice('MOUNT')
+	const view = useRoleDevice(camera)
+	return <MountNudgeSections mount={mount} camera={view.device} />
+}
+
+// Mount a nudge panel moves and the camera whose acquisition it shows.
+export interface MountNudgeTarget {
+	// Mount and its state.
+	readonly mount: RoleDevice
+	// Camera whose acquisition is shown, read only.
+	readonly camera?: DeviceSummary
+}
+
+// Mount Nudge panel sections of a mount.
+export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 	const runtime = useSnapshot(nudgeRuntime)
 	const operations = useSnapshot(operationsState)
 	const captures = useSnapshot(captureRuntime)
-	const mount = useRoleDevice('MOUNT')
-	const view = useRoleDevice(camera)
 	const device = mount.device
 	const connectionId = device?.connectionId
 	const id = device?.id
@@ -44,7 +63,7 @@ export function MountNudgePanel({ camera }: CaptureModePanelProps) {
 	// Busy is judged here from the other holders, so the role only contributes connection problems.
 	const roleProblem = availability.status === 'ready' || availability.status === 'busy' ? undefined : availability.message
 	const blocker = press ? undefined : nudgeBlocker(roleProblem, state, holders.length > 0)
-	const cameraSession = view.device ? captures.sessions[cameraKey(view.device.connectionId, view.device.id)] : undefined
+	const cameraSession = camera ? captures.sessions[cameraKey(camera.connectionId, camera.id)] : undefined
 
 	useEffect(() => {
 		watchNudgeMount(nudgeRuntime, connectionId && id ? { connectionId, id } : undefined)
@@ -108,6 +127,8 @@ export function MountNudgePanel({ camera }: CaptureModePanelProps) {
 			</PanelSection>
 			<PanelSection title="Movement Status">
 				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+					<dt className="text-ink-300">Mount</dt>
+					<dd className="m-0 truncate text-right">{device?.name ?? (mount.status === 'notSelected' ? 'None selected' : 'Unavailable')}</dd>
 					<dt className="text-ink-300">Movement</dt>
 					<dd className={cn('m-0 text-right', runtime.error && !press && 'text-danger')}>{movementStatus(press, blocker, nudgeRunning(session) && session?.token !== press?.token, runtime.error !== undefined)}</dd>
 					<dt className="text-ink-300">Slew Rate</dt>
@@ -116,6 +137,11 @@ export function MountNudgePanel({ camera }: CaptureModePanelProps) {
 					<dd className="m-0 text-right">{cameraStatus(cameraSession)}</dd>
 				</dl>
 				{blocker && !press && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}</p>}
+				{mount.status === 'notSelected' && (
+					<Button variant="secondary" size="sm" className="self-start" onClick={() => (deviceState.open = true)}>
+						Equipment Setup
+					</Button>
+				)}
 				{runtime.error && <p className="m-0 text-xs leading-4 text-danger">{runtime.error}</p>}
 			</PanelSection>
 		</>
@@ -192,7 +218,7 @@ function movementStatus(press: Readonly<NudgePress> | undefined, blocker: string
 	return failed ? 'Error' : 'Idle'
 }
 
-// Text of the camera acquisition of the view, read only.
+// Text of the camera acquisition, read only.
 function cameraStatus(session: Readonly<CaptureSession> | undefined) {
 	if (!session) return 'Camera idle'
 	if (captureRunning(session)) return session.request.exposureMode === 'loop' ? 'Camera loop running' : 'Camera capturing'

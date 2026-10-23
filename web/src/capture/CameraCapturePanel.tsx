@@ -17,6 +17,7 @@ import { TextInput } from '../ui/TextInput'
 import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureSnoop, captureStatus, FILE_STATE_LABELS, fileState, FRAME_STATE_LABELS, type FrameState, frameState, refreshCapabilities, startCapture, stopCapture } from './capture'
 import { CameraSettings, ExposureSection, formatSeconds } from './ExposureSettings'
 import type { CaptureModePanelProps } from './modes'
+import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 
 // Contextual panel sections of Camera Acquisition, shared by the Images camera tabs and the Capture camera views: the
 // exposure, the acquisition mode with its start and stop commands, the state of the running or last capture, the
@@ -313,7 +314,7 @@ function LastFrame({ frame, state }: LastFrameProps) {
 	if (acquisition.binning) rows.push(['Binning', `${acquisition.binning.x} × ${acquisition.binning.y}`])
 	if (frame.bitpix !== undefined) rows.push(['Bit Depth', frame.bitpix < 0 ? `${-frame.bitpix}-bit float` : `${frame.bitpix}-bit`])
 	if (acquisition.temperature !== undefined) rows.push(['Temperature', `${acquisition.temperature.toFixed(1)} °C`])
-	rows.push(['Acquired', new Date(frame.time).toLocaleString()])
+	rows.push(['Acquired', formatTemporal(frame.time, undefined, true)])
 
 	return (
 		<PanelSection title="Last Frame">

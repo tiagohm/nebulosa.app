@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { MountNudgeSession, MountState } from 'api'
 import { proxy } from 'valtio'
-import { handleNudgeEvent, nudgeDirectionSupported, nudgeEndProblem, nudgeKey, type NudgeRuntime, pressNudge, refreshNudges, releaseNudge, stopNudges } from './nudge'
+import { handleNudgeEvent, nudgeDirectionSupported, nudgeEndProblem, nudgeKey, type NudgeRuntime, pressNudge, refreshNudges, releaseNudge, stopNudges, watchNudgeMount } from './nudge'
 
 const TARGET = { connectionId: 'c', id: 'm' }
 
@@ -184,4 +184,19 @@ test('describes abnormal ends only', () => {
 	expect(nudgeEndProblem(session({ phase: 'stopped', stopConfirmed: true }))).toBeUndefined()
 	expect(nudgeEndProblem(session({ phase: 'failed', reason: 'disconnected', stopConfirmed: false }))).toBe('Stopped: the mount disconnected. The mount was not observed to stop.')
 	expect(nudgeEndProblem(session({ phase: 'failed', reason: 'commandFailed', error: 'transport closed' }))).toBe('transport closed')
+})
+
+test('following another mount releases the press held on the previous one, which keeps its own target', async () => {
+	const state = newState()
+	const { request, requests } = fakeFetch((url, init) => (url.endsWith('/nudge') ? started(init) : url.endsWith('/mounts/m2') ? Response.json(mountState({ id: 'm2' })) : new Response(null, { status: 204 })))
+
+	await pressNudge(state, 'N', request)
+	const token = state.press!.token
+	watchNudgeMount(state, { connectionId: 'c', id: 'm2' }, request)
+	await Bun.sleep(0)
+
+	expect(requests.some((r) => r.url === `/api/mounts/nudges/${token}/stop`)).toBeTrue()
+	expect(state.press).toBeUndefined()
+	expect(state.target).toEqual({ connectionId: 'c', id: 'm2' })
+	expect(requests.filter((r) => r.url === '/api/connections/c/mounts/m/nudge')).toHaveLength(1)
 })

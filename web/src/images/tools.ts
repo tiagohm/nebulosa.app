@@ -4,6 +4,7 @@ import { CameraAcquisitionTool } from './CameraAcquisitionTool'
 import type { CameraOperationContext } from './cameracontext'
 import { ImageInspector } from './ImageInspector'
 import type { ImageDocument, ImageViewState } from './images'
+import { MountNudgeTool } from './MountNudgeTool'
 import { PlateSolverPanel } from './PlateSolverPanel'
 import { StarDetectionPanel } from './StarDetectionPanel'
 
@@ -93,7 +94,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'image-processing': plannedImageTool('image-processing', 'Image Processing', ['derived']),
 	'camera-acquisition': { id: 'camera-acquisition', label: 'Camera Acquisition', panelTitle: 'Camera Acquisition', category: 'camera', panel: CameraAcquisitionTool },
 	'auto-focus': { id: 'auto-focus', label: 'Auto Focus', panelTitle: 'Auto Focus', category: 'camera', panel: AutoFocusTool },
-	'mount-nudge': plannedCameraOperation('mount-nudge', 'Mount Nudge'),
+	'mount-nudge': { id: 'mount-nudge', label: 'Mount Nudge', panelTitle: 'Mount Nudge', category: 'camera', panel: MountNudgeTool },
 	guiding: plannedCameraOperation('guiding', 'Guiding'),
 	darv: plannedCameraOperation('darv', 'DARV Alignment'),
 	tppa: plannedCameraOperation('tppa', 'TPPA Polar Alignment'),

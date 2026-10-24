@@ -273,11 +273,11 @@ describe('derived images', () => {
 
 		const original = await save(derived.id, { path, format: 'fits', overwrite: true })
 		expect(original.status).toBe(409)
-		expect(await original.json()).toMatchObject({ reason: 'original' })
+		expect(await original.json()).toMatchObject({ code: 'original' })
 
 		const exists = await save(derived.id, { path: existing, format: 'xisf' })
 		expect(exists.status).toBe(409)
-		expect(await exists.json()).toMatchObject({ reason: 'exists' })
+		expect(await exists.json()).toMatchObject({ code: 'exists' })
 		expect(readFileSync(existing, 'latin1')).toBe('old')
 
 		expect((await save(derived.id, { path: existing, format: 'xisf', overwrite: true })).status).toBe(200)

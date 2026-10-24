@@ -201,7 +201,7 @@ test('a busy camera refuses a second capture, and abort ends the first', async (
 
 	const second = captures.start(id, cameraId, request())
 	expect(second.status).toBe(409)
-	expect(await second.json()).toEqual({ error: 'The camera is busy' })
+	expect(await second.json()).toEqual({ error: 'The camera is busy', code: 'busy' })
 
 	expect((await captures.abort(id, cameraId)).status).toBe(204)
 	await waitUntil(ended)

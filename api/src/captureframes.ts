@@ -3,8 +3,8 @@ import { stat } from 'fs/promises'
 import { homedir } from 'os'
 import { basename, join } from 'path'
 import type { CaptureFileState, CaptureFrame, CaptureSettings } from './captures'
-import { errorResponse } from './commands'
 import type { ServerEvent } from './connection'
+import { errorResponse } from './http'
 import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
 import { errorCode, isRecord, writeAtomically } from './util'
 
@@ -913,7 +913,7 @@ export function createCaptureFrameRoutes(registry: CaptureFrameRegistry) {
 				const outcome = await registry.open(decodeURIComponent(req.params.frameId), client)
 				if (outcome.status === 'opened') return Response.json({ lease: outcome.lease, info: outcome.info, frame: outcome.frame } satisfies CaptureFrameOpened)
 				const [status, message] = OPEN_FAILURES[outcome.code]
-				return Response.json({ error: message, code: outcome.code }, { status })
+				return errorResponse(message, status, outcome.code)
 			},
 		},
 		'/api/capture-frames/leases/:lease': {

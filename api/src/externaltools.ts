@@ -3,6 +3,7 @@ import { access, readFile, stat } from 'fs/promises'
 import { homedir } from 'os'
 import { isAbsolute, join, resolve } from 'path'
 import { login, NOVA_ASTROMETRY_NET_URL } from 'nebulosa/src/astrometry/solvers/astrometrynet'
+import { errorResponse } from './http'
 import { errorCode, isRecord, writeAtomically } from './util'
 
 // Server-side settings of the external programs and services the backend uses: ASTAP, the local solve-field
@@ -540,7 +541,7 @@ export class ExternalToolsStore {
 
 // Responds 404 for an unknown external program.
 function toolNotFound() {
-	return Response.json({ error: 'External tool not found' }, { status: 404 })
+	return errorResponse('External tool not found', 404, 'notFound')
 }
 
 // Creates the routes of the external program settings under /api/settings/external-tools.
@@ -563,11 +564,11 @@ export function createExternalToolsRoutes(store: ExternalToolsStore) {
 
 				try {
 					const outcome = await store.save(id, config, revision)
-					if (outcome.status === 'conflict') return Response.json({ error: 'The settings were changed by another client', code: 'conflict', tool: outcome.tool }, { status: 409 })
-					if (outcome.status === 'newerVersion') return Response.json({ error: 'The settings file was written by a newer version of Nebulosa', code: 'newerVersion' }, { status: 409 })
+					if (outcome.status === 'conflict') return errorResponse('The settings were changed by another client', 409, 'conflict', { tool: outcome.tool })
+					if (outcome.status === 'newerVersion') return errorResponse('The settings file was written by a newer version of Nebulosa', 409, 'newerVersion')
 					return Response.json(outcome.tool)
 				} catch (error) {
-					return Response.json({ error: `Unable to write the settings: ${Error.isError(error) ? error.message : String(error)}` }, { status: 500 })
+					return errorResponse(`Unable to write the settings: ${Error.isError(error) ? error.message : String(error)}`, 500, 'writeFailed')
 				}
 			},
 		},
@@ -606,11 +607,11 @@ async function loginResponse(change: () => Promise<ExternalToolLoginOutcome>): P
 	try {
 		const outcome = await change()
 		if (outcome.status === 'notService') return toolNotFound()
-		if (outcome.status === 'newerVersion') return Response.json({ error: 'The settings file was written by a newer version of Nebulosa', code: 'newerVersion' }, { status: 409 })
-		if (outcome.status === 'refused') return Response.json({ error: outcome.error, code: 'refused' }, { status: 422 })
-		if (outcome.status === 'unreachable') return Response.json({ error: outcome.error, code: 'unreachable' }, { status: 502 })
+		if (outcome.status === 'newerVersion') return errorResponse('The settings file was written by a newer version of Nebulosa', 409, 'newerVersion')
+		if (outcome.status === 'refused') return errorResponse(outcome.error, 422, 'refused')
+		if (outcome.status === 'unreachable') return errorResponse(outcome.error, 502, 'unreachable')
 		return Response.json(outcome.tool)
 	} catch (error) {
-		return Response.json({ error: `Unable to write the settings: ${Error.isError(error) ? error.message : String(error)}` }, { status: 500 })
+		return errorResponse(`Unable to write the settings: ${Error.isError(error) ? error.message : String(error)}`, 500, 'writeFailed')
 	}
 }

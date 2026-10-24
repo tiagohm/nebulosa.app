@@ -2,7 +2,7 @@ import { type AutoFocusRequest, AutoFocusSessions } from './autofocus'
 import { type CameraCoolerRequest, CameraCommands, type CameraTemperatureRequest } from './cameras'
 import { CaptureFrameRegistry, createCaptureFrameRoutes, DEFAULT_CAPTURE_FRAMES_FILE } from './captureframes'
 import { CameraCaptures, type CaptureRequest } from './captures'
-import { type CommandRequest, errorResponse } from './commands'
+import type { CommandRequest } from './commands'
 import { connections } from './connection'
 import { CoverCommands } from './covers'
 import { DewHeaterCommands, type DewHeaterDutyCycleRequest } from './dewheaters'
@@ -13,6 +13,7 @@ import { FlatPanelCommands, type FlatPanelIntensityRequest, type FlatPanelLightR
 import { DEFAULT_FOCUSERS_FILE, FocuserBacklashStore } from './focuserbacklash'
 import { type FocuserBacklashSaveRequest, FocuserCommands, type FocuserMoveRequest, type FocuserMoveToRequest, type FocuserReverseRequest, type FocuserSyncRequest } from './focusers'
 import { GuideOutputCommands, type GuidePulseRequest, type GuideRateRequest } from './guideoutputs'
+import { errorResponse } from './http'
 import { handleDeriveImage, handleDownloadImage, handleOpenImage, handleRenderImage, handleSaveImage, images } from './images'
 import { MountCommands, type MountGoToRequest, type MountNudgeRequest, type MountSiteRequest, type MountSlewRateRequest, type MountSlewRequest, type MountSyncRequest, type MountTimeRequest, type MountTrackingRequest, type MountTrackModeRequest } from './mounts'
 import { OperationRegistry } from './operations'
@@ -46,6 +47,7 @@ export type {
 } from './captureframes'
 export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
 export type { CommandAccepted, CommandError, CommandErrorCode, CommandRequest } from './commands'
+export type { ApiError } from './http'
 export type {
 	CameraCapabilities,
 	CameraRange,
@@ -196,13 +198,13 @@ const captures = new CameraCaptures(connections.devices, (id) => connections.cli
 // moving the focusers with their backlash compensation.
 const autoFocus = new AutoFocusSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, focusers.mover, images, captureFrames, stars, broadcast)
 
-// Opens a connection, or returns the existing one for the same endpoint. Responds 400 for an invalid
-// body and 502 when the endpoint cannot be reached.
+// Opens a connection, or returns the existing one for the same endpoint. Responds 502 (unreachable) when the
+// endpoint cannot be reached.
 async function connect(req: Request): Promise<Response> {
 	try {
 		return Response.json(await connections.connect(await req.json()))
 	} catch (error) {
-		return Response.json({ error: Error.isError(error) ? error.message : 'Unable to connect' }, { status: 502 })
+		return errorResponse(Error.isError(error) ? error.message : 'Unable to connect', 502, 'unreachable')
 	}
 }
 
@@ -210,7 +212,7 @@ async function connect(req: Request): Promise<Response> {
 // arrives as a device:updated event) and 404 when the connection is not open or has no such device.
 function switchDevice(id: string, deviceId: string, connect: boolean): Response {
 	const client = connections.client(id)
-	if (!client || !connections.devices.switch(client, deviceId, connect)) return Response.json({ error: 'Device not found' }, { status: 404 })
+	if (!client || !connections.devices.switch(client, deviceId, connect)) return errorResponse('Device not found', 404, 'notFound')
 	return new Response(null, { status: 202 })
 }
 
@@ -236,7 +238,7 @@ export const routes = {
 		// The managed devices of an open connection; 404 when it is not open.
 		GET: (req) => {
 			const client = connections.client(req.params.id)
-			return client ? Response.json(connections.devices.list(client)) : Response.json({ error: 'Connection not found' }, { status: 404 })
+			return client ? Response.json(connections.devices.list(client)) : errorResponse('Connection not found', 404, 'notFound')
 		},
 	},
 	'/api/connections/:id/states': {
@@ -579,7 +581,7 @@ export const routes = {
 		GET: (req) => {
 			const client = connections.client(req.params.id)
 			const sensor = client && connections.devices.cameraSensor(client, req.params.deviceId)
-			return sensor ? Response.json(sensor) : Response.json({ error: 'Camera not found' }, { status: 404 })
+			return sensor ? Response.json(sensor) : errorResponse('Camera not found', 404, 'notFound')
 		},
 	},
 	'/api/files': {

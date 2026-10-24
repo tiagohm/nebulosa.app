@@ -8,6 +8,7 @@ import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { heightKeyword, widthKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { type AnalysisCompletion, type AnalysisEntry, type AnalysisJob, type AnalysisJobState, AnalysisScheduler } from './analysis'
 import { type ExternalToolConfig, type ExternalToolId, type ExternalToolsStore, type ResolvedExternalTool, serviceUrl } from './externaltools'
+import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import { type PlateSolveHints, type PlateSolveStrategy, POINTING_KEYWORDS, type ResolvedPlateSolveHints, resolvePlateSolveHints } from './platesolving.hints'
 import { NOVA_POLL_INTERVAL, NovaError, type NovaStage, novaSolve } from './platesolving.nova'
@@ -468,11 +469,6 @@ function warnings(request: PlateSolveRequest, hints: ResolvedPlateSolveHints, so
 	return warnings
 }
 
-// Responds with an error message, its code, and a status.
-function errorResponse(message: string, code: PlateSolveErrorCode | 'notFound', status: number): Response {
-	return Response.json({ error: message, code }, { status })
-}
-
 // Creates the plate solving routes over a service.
 export function createPlateSolvingRoutes(service: PlateSolvingService) {
 	return {
@@ -483,9 +479,9 @@ export function createPlateSolvingRoutes(service: PlateSolvingService) {
 			POST: async (req) => {
 				const request = (await req.json()) as PlateSolveRequest
 				const outcome = await service.submit(req.params.id, request)
-				if (outcome.status === 'missing') return errorResponse('Image not found', 'notFound', 404)
-				if (outcome.status === 'notConfigured') return errorResponse(`${PROVIDER_NAMES[request.provider]} is not configured; set it up in Settings → External Tools`, 'notConfigured', 422)
-				if (outcome.status === 'queueFull') return errorResponse('Too many plate solves are waiting; try again later', 'queueFull', 503)
+				if (outcome.status === 'missing') return errorResponse('Image not found', 404, 'notFound')
+				if (outcome.status === 'notConfigured') return errorResponse(`${PROVIDER_NAMES[request.provider]} is not configured; set it up in Settings → External Tools`, 422, 'notConfigured')
+				if (outcome.status === 'queueFull') return errorResponse('Too many plate solves are waiting; try again later', 503, 'queueFull')
 				return Response.json(outcome.job, { status: outcome.status === 'accepted' ? 202 : 200 })
 			},
 		},
@@ -495,7 +491,7 @@ export function createPlateSolvingRoutes(service: PlateSolvingService) {
 			GET: (req) => {
 				const strategy = new URL(req.url).searchParams.get('strategy') === 'blind' ? 'blind' : 'assisted'
 				const hints = service.hints(req.params.id, strategy)
-				return hints ? Response.json(hints) : errorResponse('Image not found', 'notFound', 404)
+				return hints ? Response.json(hints) : errorResponse('Image not found', 404, 'notFound')
 			},
 		},
 		'/api/images/:id/plate-solutions': {
@@ -503,7 +499,7 @@ export function createPlateSolvingRoutes(service: PlateSolvingService) {
 			// is not open.
 			GET: (req) => {
 				const solutions = service.solutions(req.params.id)
-				return solutions ? Response.json(solutions) : errorResponse('Image not found', 'notFound', 404)
+				return solutions ? Response.json(solutions) : errorResponse('Image not found', 404, 'notFound')
 			},
 		},
 		'/api/plate-solving': {
@@ -514,14 +510,14 @@ export function createPlateSolvingRoutes(service: PlateSolvingService) {
 			// A job; 404 when it is unknown or long forgotten.
 			GET: (req) => {
 				const job = service.job(req.params.jobId)
-				return job ? Response.json(job) : errorResponse('Plate solve not found', 'notFound', 404)
+				return job ? Response.json(job) : errorResponse('Plate solve not found', 404, 'notFound')
 			},
 		},
 		'/api/plate-solving/:jobId/result': {
 			// The full result of a completed job, with the WCS; 404 with code expired when it is not kept (anymore).
 			GET: (req) => {
 				const result = service.result(req.params.jobId)
-				return result ? Response.json(result) : errorResponse('The result is not available', 'expired', 404)
+				return result ? Response.json(result) : errorResponse('The result is not available', 404, 'expired')
 			},
 		},
 		'/api/plate-solving/:jobId/cancel': {

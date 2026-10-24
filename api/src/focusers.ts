@@ -8,6 +8,7 @@ import { BacklashCompensator } from 'nebulosa/src/observation/focus/backlash'
 import { type ClientResolver, type CommandRequest, connectedDevice, notFound, findDevice, settle, startCommand, stateResponse, stopResponse, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import { type FocuserBacklashConfig, type FocuserBacklashStore, focuserKey, type StoredFocuserBacklash } from './focuserbacklash'
+import { errorResponse } from './http'
 import type { OperationProgressReporter, OperationRegistry } from './operations'
 
 // Focuser commands of every open connection, over the toolkit's FocuserCommander: a move to an absolute
@@ -228,14 +229,14 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 
 		try {
 			const outcome = await this.backlash.save(connectionId, deviceId, config, revision)
-			if (outcome.status === 'newerVersion') return Response.json({ error: 'The focuser settings file was written by a newer version of Nebulosa', code: 'newerVersion' }, { status: 409 })
-			if (outcome.status === 'conflict') return Response.json({ error: 'The settings were changed by another client', code: 'conflict', backlash: await this.#backlashState(connectionId, focuser) }, { status: 409 })
+			if (outcome.status === 'newerVersion') return errorResponse('The focuser settings file was written by a newer version of Nebulosa', 409, 'newerVersion')
+			if (outcome.status === 'conflict') return errorResponse('The settings were changed by another client', 409, 'conflict', { backlash: await this.#backlashState(connectionId, focuser) })
 			this.#compensations.delete(focuser)
 			const backlash = await this.#backlashState(connectionId, focuser)
 			this.listener?.({ type: 'focuserBacklash:updated', backlash })
 			return Response.json(backlash)
 		} catch (error) {
-			return Response.json({ error: `Unable to write the focuser settings: ${Error.isError(error) ? error.message : String(error)}` }, { status: 500 })
+			return errorResponse(`Unable to write the focuser settings: ${Error.isError(error) ? error.message : String(error)}`, 500, 'writeFailed')
 		}
 	}
 

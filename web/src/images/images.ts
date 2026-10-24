@@ -436,8 +436,8 @@ export async function saveImage(state: ImagesState, key: string, path: string, f
 		const response = await io.fetch(`/api/images/${encodeURIComponent(id)}/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) })
 
 		if (response.status === 409) {
-			const body = (await response.json()) as { readonly error: string; readonly reason: string }
-			return body.reason === 'exists' ? { status: 'exists' } : { status: 'failed', error: body.error }
+			const body = (await response.json()) as { readonly error: string; readonly code: string }
+			return body.code === 'exists' ? { status: 'exists' } : { status: 'failed', error: body.error }
 		}
 
 		if (!response.ok) return { status: 'failed', error: await responseError(response) }

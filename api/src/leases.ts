@@ -3,7 +3,8 @@ import { isDeviceQuiescent } from 'nebulosa/src/devices/orchestration/device.lif
 import { failedOperationResult, type OperationContext, type OperationFailureReason, type OperationHandle, type OperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { abortReason } from 'nebulosa/src/devices/orchestration/operation.wait'
 import { type ResourceKey, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
-import { errorResponse, failureCode } from './commands'
+import { failureCode } from './commands'
+import { errorResponse } from './http'
 import type { OperationKind, OperationRegistry } from './operations'
 
 // Manual motion authorized only while a tab keeps renewing it, shared by the mount nudge and the manual
@@ -233,7 +234,7 @@ export class LeasedMotions<S extends LeasedSession> implements Disposable {
 		const { session } = active
 
 		if (session.phase === 'failed' && session.reason !== undefined) {
-			return Response.json({ error: session.error ?? `The ${this.labels.motion} failed (${session.reason})`, code: failureCode(session.reason), session }, { status: leasedFailureStatus(session.reason) })
+			return errorResponse(session.error ?? `The ${this.labels.motion} failed (${session.reason})`, leasedFailureStatus(session.reason), failureCode(session.reason), { session })
 		}
 
 		return Response.json({ session, ...this.options } satisfies LeasedStartResponse<S>, { status: 202 })

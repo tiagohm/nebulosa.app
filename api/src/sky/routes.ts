@@ -1,4 +1,5 @@
 import type { Database } from 'bun:sqlite'
+import { errorResponse } from '../http'
 import { SOLAR_SYSTEM_BODIES, searchSolarSystem } from './bodies'
 import { type ConstellationSource, catalogObject, DEFAULT_DEEP_SKY_MAGNITUDE_LIMIT, renderConstellations, renderDeepSky, renderStars, searchCatalog } from './catalog'
 import { constellationDetails, searchConstellations } from './constellations'
@@ -34,11 +35,6 @@ function refKey(ref: SkyObjectRef) {
 	if (ref.kind === 'body') return `body:${ref.code}`
 	if (ref.kind === 'constellation') return `constellation:${ref.code}`
 	return `minor:${ref.spkId}`
-}
-
-// Responds with an error message and a status.
-function errorResponse(message: string, status: number) {
-	return Response.json({ error: message }, { status })
 }
 
 // Locates an object at an instant (PositionRequest.time) for an observer. Resolves undefined for an
@@ -107,7 +103,7 @@ export function createSkyRoutes(services: SkyServices) {
 			// A constellation by its upper-case IAU code; 404 when unknown.
 			GET: (req) => {
 				const constellation = constellationDetails(constellations, req.params.code.toUpperCase())
-				return constellation ? Response.json(constellation) : errorResponse('Constellation not found', 404)
+				return constellation ? Response.json(constellation) : errorResponse('Constellation not found', 404, 'notFound')
 			},
 		},
 		'/api/sky/search': {
@@ -126,7 +122,7 @@ export function createSkyRoutes(services: SkyServices) {
 				try {
 					return Response.json(await minorBodies.search(new URL(req.url).searchParams.get('q') ?? '', req.signal))
 				} catch (error) {
-					if (error instanceof SbdbUnavailableError) return errorResponse(error.message, 503)
+					if (error instanceof SbdbUnavailableError) return errorResponse(error.message, 503, 'serviceUnavailable')
 					throw error
 				}
 			},
@@ -135,7 +131,7 @@ export function createSkyRoutes(services: SkyServices) {
 			// Catalog data of a star or deep-sky object; 404 when unknown.
 			GET: (req) => {
 				const object = catalogObject(catalog, +req.params.id)
-				return object ? Response.json(object) : errorResponse('Object not found', 404)
+				return object ? Response.json(object) : errorResponse('Object not found', 404, 'notFound')
 			},
 		},
 		'/api/sky/position': {
@@ -144,15 +140,15 @@ export function createSkyRoutes(services: SkyServices) {
 			POST: async (req) => {
 				const { target: ref, time, observer, mode } = (await req.json()) as SkyPositionRequest
 				const target = await resolveTarget(services, ref, req.signal)
-				if (!target) return errorResponse('Object not found', 404)
+				if (!target) return errorResponse('Object not found', 404, 'notFound')
 
 				try {
 					const position = await ephemeris.position(target, { time, observer, mode, signal: req.signal })
 					const events = observer && mode !== 'fast' ? ephemeris.events(target, time, observer, refKey(ref)) : undefined
 					return Response.json({ position, events } satisfies SkyPositionResponse)
 				} catch (error) {
-					if (error instanceof EphemerisUnavailableError) return errorResponse(error.message, 503)
-					if (error instanceof HorizonsEphemerisError) return errorResponse(error.message, 502)
+					if (error instanceof EphemerisUnavailableError) return errorResponse(error.message, 503, 'serviceUnavailable')
+					if (error instanceof HorizonsEphemerisError) return errorResponse(error.message, 502, 'rejected')
 					throw error
 				}
 			},

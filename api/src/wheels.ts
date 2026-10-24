@@ -1,6 +1,7 @@
 import { WheelCommander } from 'nebulosa/src/devices/commanders/wheel'
-import { type ClientResolver, type CommandRequest, connectedDevice, errorResponse, settle, startCommand, stateResponse, unsupported } from './commands'
+import { type ClientResolver, type CommandRequest, connectedDevice, settle, startCommand, stateResponse, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
+import { errorResponse } from './http'
 import type { OperationRegistry } from './operations'
 
 // Filter wheel commands of every open connection, over the toolkit's WheelCommander: a change of slot and

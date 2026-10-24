@@ -9,6 +9,7 @@ import { type CameraCaptureHandle, CameraCapturer, type CameraFramePathRequest, 
 import { type CameraCaptureEvent, type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START } from 'nebulosa/src/observation/capture/types'
 import type { CaptureFrameRegistry } from './captureframes'
 import type { DeviceRegistry } from './devices'
+import { errorResponse } from './http'
 import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
 import type { OperationRegistry } from './operations'
 
@@ -251,11 +252,6 @@ interface CameraPreview {
 	next?: PendingFrame & { readonly session: ActiveCapture }
 }
 
-// Responds with an error message and a status.
-function errorResponse(message: string, status: number) {
-	return Response.json({ error: message }, { status })
-}
-
 // Characters no file name may contain on some supported platform, besides the control characters.
 const FORBIDDEN_FILE_NAME_CHARACTERS: ReadonlySet<string> = new Set(['\\', '/', '<', '>', ':', '"', '|', '?', '*'])
 
@@ -364,7 +360,7 @@ export class CameraCaptures implements Disposable {
 	capabilities(connectionId: string, deviceId: string): Response {
 		const client = this.client(connectionId)
 		const capabilities = client && this.devices.cameraCapabilities(client, deviceId)
-		return capabilities ? Response.json(capabilities) : errorResponse('Camera not found', 404)
+		return capabilities ? Response.json(capabilities) : errorResponse('Camera not found', 404, 'notFound')
 	}
 
 	// Starts a capture. Responds 202 with CaptureStartResponse once it is accepted; its progress and outcome
@@ -373,11 +369,11 @@ export class CameraCaptures implements Disposable {
 	start(connectionId: string, deviceId: string, request: CaptureRequest): Response {
 		const client = this.client(connectionId)
 		const camera = client && this.devices.camera(client, deviceId)
-		if (!camera) return errorResponse('Camera not found', 404)
-		if (!camera.connected) return errorResponse('The camera is disconnected', 409)
+		if (!camera) return errorResponse('Camera not found', 404, 'notFound')
+		if (!camera.connected) return errorResponse('The camera is disconnected', 409, 'disconnected')
 
 		const key = resourceKey(camera)
-		if (this.#active.has(key) || this.operations.arbiter.availability(key) !== 'available') return errorResponse('The camera is busy', 409)
+		if (this.#active.has(key) || this.operations.arbiter.availability(key) !== 'available') return errorResponse('The camera is busy', 409, 'busy')
 
 		const saving = request.output.mode === 'preview-save'
 		const start: CameraCaptureStart = {
@@ -449,7 +445,7 @@ export class CameraCaptures implements Disposable {
 	// requested (the end arrives as a capture:updated event) and 404 when the camera captures nothing.
 	stop(connectionId: string, deviceId: string): Response {
 		const capture = this.#running(connectionId, deviceId)
-		if (!capture?.handle) return errorResponse('No capture is running on this camera', 404)
+		if (!capture?.handle) return errorResponse('No capture is running on this camera', 404, 'notFound')
 
 		capture.handle.stop()
 		if (!capture.session.stopping) this.#update(capture, { stopping: true })
@@ -461,8 +457,8 @@ export class CameraCaptures implements Disposable {
 	// 409 when its driver cannot abort an exposure.
 	async abort(connectionId: string, deviceId: string): Promise<Response> {
 		const capture = this.#running(connectionId, deviceId)
-		if (!capture?.handle) return errorResponse('No capture is running on this camera', 404)
-		if (!capture.camera.canAbort) return errorResponse('The camera cannot abort an exposure', 409)
+		if (!capture?.handle) return errorResponse('No capture is running on this camera', 404, 'notFound')
+		if (!capture.camera.canAbort) return errorResponse('The camera cannot abort an exposure', 409, 'unsupported')
 
 		await capture.handle.cancel()
 		return new Response(null, { status: 204 })

@@ -1,7 +1,8 @@
 import { CameraCommander } from 'nebulosa/src/devices/commanders/camera'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
-import { type ClientResolver, connectedDevice, errorResponse, settle, unsupported } from './commands'
+import { type ClientResolver, connectedDevice, settle, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
+import { errorResponse } from './http'
 import type { OperationRegistry } from './operations'
 
 // Thermal commands of the cameras of every open connection, over the toolkit's CameraCommander: switching

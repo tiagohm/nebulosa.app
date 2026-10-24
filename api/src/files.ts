@@ -1,6 +1,7 @@
 import { existsSync } from 'fs'
 import { readdir, stat } from 'fs/promises'
 import { dirname, extname, join, resolve } from 'path'
+import { errorResponse } from './http'
 
 // Browsing of the server's filesystem, so a client on another machine can choose files the server reads,
 // such as images to open. Any directory the server process can read is listed to any client that can
@@ -115,7 +116,7 @@ export async function handleListDirectory(req: Request): Promise<Response> {
 	try {
 		return Response.json(await listDirectory(params.get('path') ?? '.', extensions ? new Set(extensions.toLowerCase().split(',')) : undefined))
 	} catch (error) {
-		if (error instanceof DirectoryError) return Response.json({ error: error.message }, { status: error.status })
+		if (error instanceof DirectoryError) return errorResponse(error.message, error.status, error.status === 404 ? 'notFound' : 'forbidden')
 		throw error
 	}
 }

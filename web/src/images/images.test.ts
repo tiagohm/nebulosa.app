@@ -78,7 +78,7 @@ function fakeIo(gated = false) {
 
 			if (input.endsWith('/save')) {
 				const { path, overwrite } = body as { path: string; overwrite: boolean }
-				if (path.includes('existing') && !overwrite) return Response.json({ error: 'The file already exists', reason: 'exists' }, { status: 409 })
+				if (path.includes('existing') && !overwrite) return Response.json({ error: 'The file already exists', code: 'exists' }, { status: 409 })
 				if (path.includes('readonly')) return Response.json({ error: 'Unable to write the file: EACCES' }, { status: 500 })
 				return Response.json({ path })
 			}

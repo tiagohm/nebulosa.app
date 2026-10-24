@@ -13,6 +13,8 @@ This document maps what Nebulosa already has, where each feature belongs, and th
 
 Server state reaches every tab through `GET` snapshots plus the `/api/ws` event stream (`ServerEvent` in `api/src/connection.ts`). A tab refreshes its snapshots on every socket open (`onOpen` in `web/src/main.tsx`), so a reload never loses running work.
 
+Every error response of `api` is `{ error, code }` (`ApiError` and `errorResponse` in `api/src/http.ts`): a message meant for people and a stable code a client branches on, never the message. Each service names its codes (`CommandErrorCode`, `StarDetectionErrorCode`, `PlateSolveErrorCode`, `CaptureFrameErrorCode`, and the codes its routes document), and a route may add documented fields, such as the current state after a `conflict`.
+
 ## Capability Inventory
 
 Status: **Implemented** (works end to end), **Integration Required** (exists in `core`, not exposed by `api`/`web`), **Partial**, **Planned** (nothing yet).

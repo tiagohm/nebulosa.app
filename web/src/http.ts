@@ -1,6 +1,6 @@
 // Helpers shared by the stores that call the API over HTTP.
 
-// Reads the error message of a failed API response, which the API sends as { error: string }, falling
+// Reads the error message of a failed API response, which the API sends as { error, code } (ApiError), falling
 // back to the response's status line.
 export async function responseError(response: Response): Promise<string> {
 	try {

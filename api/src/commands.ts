@@ -2,6 +2,7 @@ import type { Client, Device } from 'nebulosa/src/devices/indi/device'
 import type { FailedOperationResult, OperationFailureReason, OperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { DeviceRegistry, ManagedDeviceMap, ManagedDeviceType } from './devices'
+import { type ApiError, errorResponse } from './http'
 import type { OperationKind, OperationProgressReporter, OperationRegistry } from './operations'
 
 // HTTP contract shared by the device command services. A command addresses one device of one open
@@ -29,13 +30,8 @@ import type { OperationKind, OperationProgressReporter, OperationRegistry } from
 // - serviceUnavailable: a service the command depends on, such as an ephemeris provider, failed or is absent.
 export type CommandErrorCode = 'notFound' | 'disconnected' | 'busy' | 'unsupported' | 'invalidParameter' | 'timeout' | 'rejected' | 'deviceError' | 'connectionLost' | 'unknownResult' | 'serviceUnavailable'
 
-// Body of an error response.
-export interface CommandError {
-	// Message meant for people.
-	readonly error: string
-	// Stable code of the error.
-	readonly code: CommandErrorCode
-}
+// Body of an error response of a command.
+export type CommandError = ApiError<CommandErrorCode>
 
 // Body of every durable command request: the identity of the request.
 export interface CommandRequest {
@@ -62,11 +58,6 @@ const FAILURES: Readonly<Record<OperationFailureReason, readonly [number, Comman
 	alert: [502, 'deviceError'],
 	commandFailed: [502, 'unknownResult'],
 	unexpectedState: [422, 'unsupported'],
-}
-
-// Responds with an error message, a status, and a stable code.
-export function errorResponse(message: string, status: number, code: CommandErrorCode): Response {
-	return Response.json({ error: message, code } satisfies CommandError, { status })
 }
 
 // Returns the stable code of an operation failure reason.

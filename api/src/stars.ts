@@ -7,6 +7,7 @@ import type { DetectedStar, DetectStarOptions } from 'nebulosa/src/imaging/stars
 import { medianOf } from 'nebulosa/src/math/numerical/statistics'
 import { type AnalysisCompletion, type AnalysisEntry, type AnalysisJob, type AnalysisJobState, AnalysisScheduler } from './analysis'
 import type { ExternalToolConfig, ExternalToolsStore } from './externaltools'
+import { errorResponse } from './http'
 import type { DocumentSize, ImageStore } from './images'
 
 // Star detection service shared by every consumer: manual runs of the Images workspace and the measurements of
@@ -526,11 +527,6 @@ export class StarDetectionService {
 	}
 }
 
-// Responds with an error message, its code, and a status.
-function errorResponse(message: string, code: StarDetectionErrorCode | 'notFound', status: number): Response {
-	return Response.json({ error: message, code }, { status })
-}
-
 // Creates the star detection routes over a service.
 export function createStarDetectionRoutes(service: StarDetectionService) {
 	return {
@@ -542,9 +538,9 @@ export function createStarDetectionRoutes(service: StarDetectionService) {
 			// when ASTAP is not configured, and 503 when too many jobs are waiting.
 			POST: async (req) => {
 				const outcome = await service.submit(req.params.id, (await req.json()) as StarDetectionRequest)
-				if (outcome.status === 'missing') return errorResponse('Image not found', 'notFound', 404)
-				if (outcome.status === 'astapUnavailable') return errorResponse('ASTAP is not configured; set it up in Settings → External Tools', 'astapUnavailable', 422)
-				if (outcome.status === 'queueFull') return errorResponse('Too many star detections are waiting; try again later', 'queueFull', 503)
+				if (outcome.status === 'missing') return errorResponse('Image not found', 404, 'notFound')
+				if (outcome.status === 'astapUnavailable') return errorResponse('ASTAP is not configured; set it up in Settings → External Tools', 422, 'astapUnavailable')
+				if (outcome.status === 'queueFull') return errorResponse('Too many star detections are waiting; try again later', 503, 'queueFull')
 				return Response.json(outcome.job, { status: outcome.status === 'accepted' ? 202 : 200 })
 			},
 		},
@@ -556,14 +552,14 @@ export function createStarDetectionRoutes(service: StarDetectionService) {
 			// A job; 404 when it is unknown or long forgotten.
 			GET: (req) => {
 				const job = service.job(req.params.jobId)
-				return job ? Response.json(job) : errorResponse('Star detection not found', 'notFound', 404)
+				return job ? Response.json(job) : errorResponse('Star detection not found', 404, 'notFound')
 			},
 		},
 		'/api/stars/:jobId/result': {
 			// The full result of a completed job; 404 with code expired when it is not kept (anymore).
 			GET: (req) => {
 				const result = service.result(req.params.jobId)
-				return result ? Response.json(result) : errorResponse('The result is not available', 'expired', 404)
+				return result ? Response.json(result) : errorResponse('The result is not available', 404, 'expired')
 			},
 		},
 		'/api/stars/:jobId/cancel': {

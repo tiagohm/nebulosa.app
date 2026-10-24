@@ -4,6 +4,7 @@ import { type CfaPattern, type Image, type ImageChannel, shiftCfaPattern } from 
 import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/processing/scnr'
 import type { FitsHeader, FitsHeaderKey } from 'nebulosa/src/io/formats/fits/fits'
 import { cfaPatternKeyword, exposureTimeKeyword, numericKeyword, observationDateKeyword, textKeyword } from 'nebulosa/src/io/formats/fits/util'
+import { errorResponse } from './http'
 
 // Image documents opened by clients: FITS and XISF files read from the server's filesystem, or camera
 // frames handed over by the capture service, kept decoded in memory under an id until they are closed, so later renderings (and future
@@ -652,7 +653,7 @@ export async function handleOpenImage(req: Request): Promise<Response> {
 	try {
 		return Response.json(await images.open(path), { status: 201 })
 	} catch (error) {
-		if (error instanceof ImageOpenError) return Response.json({ error: error.message }, { status: error.status })
+		if (error instanceof ImageOpenError) return errorResponse(error.message, error.status, error.status === 404 ? 'notFound' : 'unsupportedFormat')
 		throw error
 	}
 }
@@ -662,9 +663,9 @@ export async function handleOpenImage(req: Request): Promise<Response> {
 // aborted request dropped it, and 422 when the settings cannot be applied to the image.
 export async function handleRenderImage(req: Request, id: string): Promise<Response> {
 	const outcome = await images.render(id, (await req.json()) as RenderRequest, req.signal)
-	if (outcome.status === 'missing') return Response.json({ error: 'Image not found' }, { status: 404 })
-	if (outcome.status === 'superseded') return Response.json({ error: 'Rendering superseded' }, { status: 409 })
-	if (outcome.status === 'invalid') return Response.json({ error: outcome.error }, { status: 422 })
+	if (outcome.status === 'missing') return errorResponse('Image not found', 404, 'notFound')
+	if (outcome.status === 'superseded') return errorResponse('Rendering superseded', 409, 'superseded')
+	if (outcome.status === 'invalid') return errorResponse(outcome.error, 422, 'invalidSettings')
 	return new Response(outcome.jpeg, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', [RENDER_HEADER]: JSON.stringify(outcome.result) } })
 }
 
@@ -672,8 +673,8 @@ export async function handleRenderImage(req: Request, id: string): Promise<Respo
 // unsaved document, 404 when the source is not open, and 422 when the settings cannot be applied.
 export async function handleDeriveImage(req: Request, id: string): Promise<Response> {
 	const outcome = await images.derive(id, (await req.json()) as DeriveRequest)
-	if (outcome.status === 'missing') return Response.json({ error: 'Image not found' }, { status: 404 })
-	if (outcome.status === 'invalid') return Response.json({ error: outcome.error }, { status: 422 })
+	if (outcome.status === 'missing') return errorResponse('Image not found', 404, 'notFound')
+	if (outcome.status === 'invalid') return errorResponse(outcome.error, 422, 'invalidSettings')
 	return Response.json(outcome.info, { status: 201 })
 }
 
@@ -683,12 +684,12 @@ export async function handleDeriveImage(req: Request, id: string): Promise<Respo
 export async function handleSaveImage(req: Request, id: string): Promise<Response> {
 	try {
 		const outcome = await images.save(id, (await req.json()) as SaveRequest)
-		if (outcome.status === 'missing') return Response.json({ error: 'Image not found' }, { status: 404 })
-		if (outcome.status === 'original') return Response.json({ error: 'An open image is read from this file; choose another one', reason: 'original' }, { status: 409 })
-		if (outcome.status === 'exists') return Response.json({ error: 'The file already exists', reason: 'exists' }, { status: 409 })
+		if (outcome.status === 'missing') return errorResponse('Image not found', 404, 'notFound')
+		if (outcome.status === 'original') return errorResponse('An open image is read from this file; choose another one', 409, 'original')
+		if (outcome.status === 'exists') return errorResponse('The file already exists', 409, 'exists')
 		return Response.json({ path: outcome.path } satisfies SaveResult)
 	} catch (error) {
-		return Response.json({ error: `Unable to write the file: ${Error.isError(error) ? error.message : String(error)}` }, { status: 500 })
+		return errorResponse(`Unable to write the file: ${Error.isError(error) ? error.message : String(error)}`, 500, 'writeFailed')
 	}
 }
 
@@ -700,7 +701,7 @@ const FORMAT_EXTENSIONS: Readonly<Record<ImageFormat, string>> = { fits: 'fits',
 export async function handleDownloadImage(req: Request, id: string): Promise<Response> {
 	const format = (new URL(req.url).searchParams.get('format') ?? 'fits') as ImageFormat
 	const bytes = await images.encode(id, format)
-	if (!bytes) return Response.json({ error: 'Image not found' }, { status: 404 })
+	if (!bytes) return errorResponse('Image not found', 404, 'notFound')
 	const name = `${images.name(id) ?? 'image'}.${FORMAT_EXTENSIONS[format]}`
 	// The plain filename keeps only ASCII for old clients; filename* carries the exact UTF-8 name.
 	const disposition = `attachment; filename="${name.replaceAll(/[^\u0020-\u007E]|["\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`

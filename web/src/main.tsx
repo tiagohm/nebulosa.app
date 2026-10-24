@@ -18,7 +18,6 @@ import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from 
 import { loadProfiles, persistProfiles, profileState } from './profile/profile'
 import { externalToolsState, handleExternalToolEvent, refreshExternalTools } from './settings/externaltools'
 import { routeState, watchHistory } from './shell/route'
-import { handleSensorEvent, refreshSensors, sensorRuntime } from './sky/sensors'
 import { handleStarsEvent, refreshStars, starsState } from './stars/stars'
 import { browserStores } from './storage'
 
@@ -53,7 +52,6 @@ const stops = [
 		handleDomeMotionEvent(domeMotionRuntime, event)
 		handleFocuserBacklashEvent(focuserBacklashRuntime, event)
 		handleOperationEvent(operationsState, event)
-		handleSensorEvent(sensorRuntime, event)
 		handleCaptureEvent(captureRuntime, event)
 		handleNudgeEvent(nudgeRuntime, event)
 		handleAutoFocusEvent(autoFocusRuntime, event)
@@ -64,7 +62,7 @@ const stops = [
 		handleCapturedFrame(imagesState, event)
 	}),
 	// Every (re)open resynchronizes the open connections, the watched devices and their control states, the running
-	// operations, the camera sensors, the captures, the nudge sessions, the Auto Focus sessions, the dome rotation sessions, the focuser backlash compensations, the external tool settings, the star detection and plate solving jobs, and the captured frames, which may have changed while the socket was closed; then the leases of the frames the camera tabs of Images show are reconciled and their selections shown again.
+	// operations, the captures, the nudge sessions, the Auto Focus sessions, the dome rotation sessions, the focuser backlash compensations, the external tool settings, the star detection and plate solving jobs, and the captured frames, which may have changed while the socket was closed; then the leases of the frames the camera tabs of Images show are reconciled and their selections shown again.
 	onOpen(() => {
 		void refreshExternalTools(externalToolsState)
 		void refreshServers(connectionState)
@@ -73,7 +71,6 @@ const stops = [
 		void refreshDomeMotions(domeMotionRuntime)
 		void refreshFocuserBacklash(focuserBacklashRuntime)
 		void refreshOperations(operationsState)
-		refreshSensors(sensorRuntime)
 		void refreshCaptures(captureRuntime)
 		void refreshNudges(nudgeRuntime)
 		void refreshAutoFocus(autoFocusRuntime)

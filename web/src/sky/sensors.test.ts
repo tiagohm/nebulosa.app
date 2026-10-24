@@ -1,37 +1,40 @@
 import { expect, test } from 'bun:test'
-import type { CameraSensorState } from 'api'
+import type { CameraCapabilities } from 'api'
 import { proxy } from 'valtio'
-import { handleSensorEvent, liveSensors, type SensorRuntime, watchSensors } from './sensors'
+import { newControlRuntime } from '../equipment-control/control'
+import { liveSensors, type SensorRuntime, watchSensors } from './sensors'
 
 const SENSOR = { width: 6000, height: 4000, pixelSize: 3.76 }
 
-// Fake fetch answering every sensor request with the camera's id and SENSOR.
-const request = ((url: string) => {
-	const id = decodeURIComponent(url.split('/')[5])
-	return Promise.resolve(Response.json({ connectionId: 'a', id, sensor: id === 'main' ? SENSOR : undefined } satisfies CameraSensorState))
-}) as typeof fetch
+function camera(id: string, sensor = SENSOR): CameraCapabilities {
+	return { connectionId: 'a', id, name: id, connected: true, sensor, canAbort: true, frameFormats: [], frameFormat: '', transferFormats: [], canSetTemperature: false }
+}
 
-test('follows the sensors of the role cameras on their connection only', async () => {
+test('reads the sensors of the role cameras on the watched connection only', () => {
 	const runtime = proxy<SensorRuntime>({ cameras: {} })
-	watchSensors(runtime, { MAIN_CAMERA: { connectionId: 'a', id: 'main' }, GUIDE_CAMERA: { connectionId: 'a', id: 'guide' } }, request)
-	await Bun.sleep(0)
-	expect(liveSensors(runtime)).toEqual({ MAIN_CAMERA: SENSOR })
+	const control = newControlRuntime()
+	control.states.camera = { main: camera('main'), guide: { ...camera('guide'), sensor: undefined } }
 
-	handleSensorEvent(runtime, { type: 'camera:sensor', state: { connectionId: 'b', id: 'guide', sensor: SENSOR } })
-	expect(liveSensors(runtime).GUIDE_CAMERA).toBeUndefined()
-	handleSensorEvent(runtime, { type: 'camera:sensor', state: { connectionId: 'a', id: 'guide', sensor: SENSOR } })
-	expect(liveSensors(runtime).GUIDE_CAMERA).toEqual(SENSOR)
+	watchSensors(runtime, { MAIN_CAMERA: { connectionId: 'a', id: 'main' }, GUIDE_CAMERA: { connectionId: 'a', id: 'guide' } })
+	expect(liveSensors(runtime, control)).toEqual({})
 
-	handleSensorEvent(runtime, { type: 'connection:close', id: 'a' })
-	expect(liveSensors(runtime)).toEqual({})
+	control.watched = 'a'
+	expect(liveSensors(runtime, control)).toEqual({ MAIN_CAMERA: SENSOR })
+
+	control.states.camera.guide = camera('guide')
+	expect(liveSensors(runtime, control).GUIDE_CAMERA).toEqual(SENSOR)
 })
 
-test('a role whose camera changes or goes away drops its sensor', async () => {
+test('a role whose camera changes or goes away drops its sensor', () => {
 	const runtime = proxy<SensorRuntime>({ cameras: {} })
-	watchSensors(runtime, { MAIN_CAMERA: { connectionId: 'a', id: 'main' } }, request)
-	await Bun.sleep(0)
-	watchSensors(runtime, { MAIN_CAMERA: { connectionId: 'a', id: 'other' } }, request)
-	expect(liveSensors(runtime)).toEqual({})
-	watchSensors(runtime, {}, request)
+	const control = newControlRuntime()
+	control.watched = 'a'
+	control.states.camera = { main: camera('main') }
+
+	watchSensors(runtime, { MAIN_CAMERA: { connectionId: 'a', id: 'main' } })
+	expect(liveSensors(runtime, control)).toEqual({ MAIN_CAMERA: SENSOR })
+	watchSensors(runtime, { MAIN_CAMERA: { connectionId: 'a', id: 'other' } })
+	expect(liveSensors(runtime, control)).toEqual({})
+	watchSensors(runtime, {})
 	expect(runtime.cameras).toEqual({})
 })

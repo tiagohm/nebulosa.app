@@ -189,16 +189,6 @@ export interface CameraSensor {
 	readonly pixelSize: number
 }
 
-// Sensor geometry of a camera as reported to clients.
-export interface CameraSensorState {
-	// Id of the open connection that provides the camera.
-	readonly connectionId: string
-	// Stable id of the camera.
-	readonly id: string
-	// Sensor geometry; absent while the driver has not reported a positive frame size and pixel size.
-	readonly sensor?: CameraSensor
-}
-
 // Range of a numeric camera control, in the units of the driver.
 export interface CameraRange {
 	// Lowest accepted value.
@@ -220,6 +210,8 @@ export interface CameraCapabilities extends DeviceStateBase {
 	readonly offset?: CameraRange
 	// Largest horizontal and vertical binning factors; absent when the driver cannot bin.
 	readonly bin?: { readonly x: number; readonly y: number }
+	// Full-frame sensor geometry; absent while the driver has not reported a positive frame size and pixel size.
+	readonly sensor?: CameraSensor
 	// Sensor size a subframe must fit in, in unbinned pixels; absent when the driver cannot take subframes.
 	readonly subframe?: { readonly width: number; readonly height: number }
 	// Whether an exposure in progress can be aborted.
@@ -457,14 +449,13 @@ export type DeviceStates = { readonly [T in ManagedDeviceType]: readonly DeviceS
 // every other type publishes a `<type>:updated` event with the whole state.
 export type DeviceStateEvent = { readonly type: 'camera:capabilities'; readonly capabilities: CameraCapabilities } | { readonly [T in Exclude<ManagedDeviceType, 'camera'>]: { readonly type: `${T}:updated`; readonly state: DeviceStateMap[T] } }[Exclude<ManagedDeviceType, 'camera'>]
 
-// Notification published when a device appears, disappears, or changes its connection state, when its
-// control state changes, and when a camera reports a different sensor geometry.
+// Notification published when a device appears, disappears, or changes its connection state, and when its
+// control state changes.
 export type DeviceEvent =
 	| { readonly type: 'device:added'; readonly device: DeviceSummary }
 	| { readonly type: 'device:removed'; readonly connectionId: string; readonly id: string }
 	// State is the driver's CONNECTION property state: Busy while switching, Alert on failure.
 	| { readonly type: 'device:updated'; readonly connectionId: string; readonly id: string; readonly connected: boolean; readonly state?: PropertyState }
-	| { readonly type: 'camera:sensor'; readonly state: CameraSensorState }
 	| DeviceStateEvent
 
 // Receiver of device events.
@@ -528,9 +519,6 @@ const MOUNT_FIELDS: ReadonlySet<string> = new Set([
 	'time',
 ])
 
-// Camera fields the sensor geometry depends on.
-const CAMERA_SENSOR_FIELDS: ReadonlySet<string> = new Set(['connected', 'frame', 'pixelSize'])
-
 // Camera fields the capabilities depend on. The exposure field changes on every progress update, so its
 // changes are published only when the capabilities themselves differ.
 const CAMERA_CAPABILITY_FIELDS: ReadonlySet<string> = new Set([
@@ -542,6 +530,7 @@ const CAMERA_CAPABILITY_FIELDS: ReadonlySet<string> = new Set([
 	'bin',
 	'canSubFrame',
 	'frame',
+	'pixelSize',
 	'canAbort',
 	'frameFormats',
 	'frameFormat',
@@ -629,6 +618,7 @@ export function cameraCapabilities(camera: Camera, connectionId: string): Camera
 		gain: cameraRange(camera.gain),
 		offset: cameraRange(camera.offset),
 		bin: camera.canBin ? { x: Math.max(1, camera.bin.x.max), y: Math.max(1, camera.bin.y.max) } : undefined,
+		sensor: cameraSensor(camera),
 		subframe: camera.canSubFrame && camera.frame.width.max > 0 && camera.frame.height.max > 0 ? { width: camera.frame.width.max, height: camera.frame.height.max } : undefined,
 		canAbort: camera.canAbort,
 		frameFormats: camera.frameFormats,
@@ -715,11 +705,6 @@ const PUBLISHERS: StatePublishers = {
 	dewHeater: { state: dewHeaterState, event: (state) => ({ type: 'dewHeater:updated', state }) },
 }
 
-// Whether two optional sensor geometries are equal.
-function sameSensor(a?: CameraSensor, b?: CameraSensor) {
-	return a === b || (a !== undefined && b !== undefined && a.width === b.width && a.height === b.height && a.pixelSize === b.pixelSize)
-}
-
 // Wraps a manager as ManagedDevices and registers handler for its device lifecycle.
 function managed<D extends Device>(manager: DeviceManager<D>, handler: LifecycleHandler): ManagedDevices {
 	manager.addHandler(handler)
@@ -751,8 +736,6 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 	readonly #listener: DeviceListener
 	// Publication state of each device's control state, by device id.
 	readonly #publications = new Map<string, StatePublication>()
-	// Last published sensor geometry of each camera, by device id.
-	readonly #cameraSensors = new Map<string, CameraSensor | undefined>()
 	// Manager of the cameras of every connection, shared with the camera services.
 	readonly cameras = new CameraManager()
 	// Manager of the mounts of every connection, shared with the mount commands.
@@ -894,13 +877,6 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 		return this.state(client, 'camera', id)
 	}
 
-	// Returns the sensor geometry of the client's camera with this id; undefined when it has no such camera.
-	cameraSensor(client: Client, id: string): CameraSensorState | undefined {
-		const camera = this.camera(client, id)
-		const connectionId = camera && this.#connections.get(client)
-		return connectionId ? { connectionId, id, sensor: cameraSensor(camera) } : undefined
-	}
-
 	// Resolves a device by client and id or name, optionally constrained to a managed type (DeviceProvider).
 	get(client: Client | string | undefined, id: string, type?: DeviceType): Device | undefined {
 		for (const managed of MANAGED_TYPES) {
@@ -972,25 +948,10 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 		else pending.timer = setTimeout(() => this.#publishState(type, device, pending), delay)
 	}
 
-	// Publishes the sensor geometry of a camera when a change of one of its source fields altered it.
-	#cameraSensorUpdated(camera: Camera, property: string) {
-		if (!CAMERA_SENSOR_FIELDS.has(property)) return
-
-		const client = camera[CLIENT]
-		const connectionId = client && this.#connections.get(client)
-		if (!connectionId) return
-
-		const sensor = cameraSensor(camera)
-		if (this.#cameraSensors.has(camera.id) && sameSensor(this.#cameraSensors.get(camera.id), sensor)) return
-		this.#cameraSensors.set(camera.id, sensor)
-		this.#listener({ type: 'camera:sensor', state: { connectionId, id: camera.id, sensor } })
-	}
-
 	// Forgets the publication state of a removed device, cancelling its pending publication.
 	#forget(device: Device) {
 		clearTimeout(this.#publications.get(device.id)?.timer)
 		this.#publications.delete(device.id)
-		this.#cameraSensors.delete(device.id)
 	}
 
 	// Builds the handler that publishes the lifecycle and the control state of the devices of one managed
@@ -1011,7 +972,6 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 				}
 
 				this.#stateUpdated(type, device as never, property)
-				if (type === 'camera') this.#cameraSensorUpdated(device as Camera, property)
 			},
 			removed: (device) => {
 				if (device.type === type) this.#forget(device)

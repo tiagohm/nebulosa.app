@@ -1,6 +1,7 @@
 import { toDeg } from 'nebulosa/src/math/units/angle'
 import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { controlRuntime } from '../equipment-control/control'
 import { roleDefinition } from '../equipment/roles'
 import { createOpticalPreset, deleteOpticalPreset, duplicateOpticalPreset, profileState, selectOpticalPreset, setEquipmentRotation, setFramingSource, setFramingVisible, setManualSensor, setSensorSource, setTelescopeOptics, type SkyFramingSettings, updateOpticalPreset } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
@@ -167,9 +168,8 @@ function PresetOptics({ preset, visible, hasTarget }: { readonly preset: Readonl
 // Equipment Setup source: the profile's telescope optics, the sensor of a camera role or a manual one,
 // the computed field, and its display.
 function EquipmentSource({ framing, telescope, hasTarget }: { readonly framing?: Readonly<SkyFramingSettings>; readonly telescope?: Readonly<TelescopeOptics>; readonly hasTarget: boolean }) {
-	const sensors = useSnapshot(sensorRuntime)
 	const sensorSource = framing?.sensorSource ?? 'MAIN_CAMERA'
-	const live = liveSensors(sensors)
+	const live = liveSensors(useSnapshot(sensorRuntime), useSnapshot(controlRuntime))
 	const { optics, missingCamera } = equipmentOptics(telescope, sensorSource, live, framing?.manualSensor, framing?.equipmentRotation ?? 0)
 	const current = telescope ?? DEFAULT_TELESCOPE
 	const reported = sensorSource === 'manual' ? undefined : live[sensorSource]

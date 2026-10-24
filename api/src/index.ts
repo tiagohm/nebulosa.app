@@ -52,7 +52,6 @@ export type {
 	CameraCapabilities,
 	CameraRange,
 	CameraSensor,
-	CameraSensorState,
 	CoverState,
 	DeviceEvent,
 	DeviceRange,
@@ -575,14 +574,6 @@ export const routes = {
 	'/api/connections/:id/cameras/:deviceId/autofocus': {
 		// Starts an Auto Focus with this camera; its progress and outcome arrive as autofocus:updated and operation:updated events.
 		POST: async (req) => autoFocus.start(req.params.id, req.params.deviceId, (await req.json()) as AutoFocusRequest),
-	},
-	'/api/connections/:id/cameras/:deviceId/sensor': {
-		// Sensor geometry of a camera; 404 when the connection is not open or has no such camera.
-		GET: (req) => {
-			const client = connections.client(req.params.id)
-			const sensor = client && connections.devices.cameraSensor(client, req.params.deviceId)
-			return sensor ? Response.json(sensor) : errorResponse('Camera not found', 404, 'notFound')
-		},
 	},
 	'/api/files': {
 		// A directory of the server's filesystem; 404 when missing, 403 when unreadable.

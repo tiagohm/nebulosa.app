@@ -70,20 +70,20 @@ test('mount state is published at once on motion changes and coalesced while mov
 	expect(mountStates(events).at(-1)).toMatchObject({ slewing: false, rightAscension: device.equatorialCoordinate.rightAscension })
 }, 20000)
 
-test('camera sensor is published when reported and looked up by exact connection', async () => {
+test('camera sensor is published with the capabilities and looked up by exact connection', async () => {
 	const { registry, events, clients } = setup('a', 'b')
 	const camera = registry.list(clients[0]).find((d) => d.type === 'camera')!
 	const other = registry.list(clients[1]).find((d) => d.type === 'camera')!
 	expect(other.id).not.toBe(camera.id)
 
 	registry.switch(clients[0], camera.id, true)
-	await waitUntil(() => events.some((event) => event.type === 'camera:sensor' && event.state.sensor !== undefined))
+	await waitUntil(() => events.some((event) => event.type === 'camera:capabilities' && event.capabilities.sensor !== undefined))
 
-	const published = events.find((event) => event.type === 'camera:sensor' && event.state.sensor !== undefined)
-	expect(published).toMatchObject({ state: { connectionId: 'a', id: camera.id } })
-	expect(registry.cameraSensor(clients[0], camera.id)?.sensor).toEqual(published?.type === 'camera:sensor' ? published.state.sensor : undefined)
-	expect(registry.cameraSensor(clients[1], camera.id)).toBeUndefined()
-	expect(registry.cameraSensor(clients[1], other.id)?.sensor).toBeUndefined()
+	const published = events.find((event) => event.type === 'camera:capabilities' && event.capabilities.sensor !== undefined)
+	expect(published).toMatchObject({ capabilities: { connectionId: 'a', id: camera.id } })
+	expect(registry.cameraCapabilities(clients[0], camera.id)?.sensor).toEqual(published?.type === 'camera:capabilities' ? published.capabilities.sensor : undefined)
+	expect(registry.cameraCapabilities(clients[1], camera.id)).toBeUndefined()
+	expect(registry.cameraCapabilities(clients[1], other.id)?.sensor).toBeUndefined()
 	expect(registry.mount(clients[1], registry.list(clients[0]).find((d) => d.type === 'mount')!.id)).toBeUndefined()
 })
 

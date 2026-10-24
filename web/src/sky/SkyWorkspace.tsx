@@ -52,7 +52,8 @@ export function SkyWorkspace() {
 	const key = observerKey(observer)
 	const map = useMemo(() => planetarium(coordinateSystem, activeProfile(profileState).settings.sky.observer), [coordinateSystem])
 	const selectionKey = sky.selection?.key
-	const mount = mountView(useSnapshot(mountRuntime), useSnapshot(controlRuntime))
+	const control = useSnapshot(controlRuntime)
+	const mount = mountView(useSnapshot(mountRuntime), control)
 	const live = clock.mode === 'now'
 	const selectionCenter = selectionPoint(sky.selection, mount, live)
 	const mountCenter = mountPoint(mount, live)
@@ -75,12 +76,15 @@ export function SkyWorkspace() {
 	// following its position.
 	const framing = settings.framing
 	const telescope = activeProfile(profiles).settings.telescope
-	const sensors = useSnapshot(sensorRuntime)
+	const sensors = liveSensors(useSnapshot(sensorRuntime), control)
+	// The sensors of the camera states the snapshot keeps while they do not change, so the frame follows them only.
+	const mainSensor = sensors.MAIN_CAMERA
+	const guideSensor = sensors.GUIDE_CAMERA
 	const equipment = framing?.source === 'equipment'
 	const preset = framing?.presets.find((e) => e.id === framing.activePresetId)
 	const equipmentFrame = useMemo(
-		() => (equipment ? { name: 'Equipment Setup', optics: equipmentOptics(telescope, framing?.sensorSource ?? 'MAIN_CAMERA', liveSensors(sensors), framing?.manualSensor, framing?.equipmentRotation ?? 0).optics } : undefined),
-		[equipment, telescope, framing?.sensorSource, framing?.manualSensor, framing?.equipmentRotation, sensors],
+		() => (equipment ? { name: 'Equipment Setup', optics: equipmentOptics(telescope, framing?.sensorSource ?? 'MAIN_CAMERA', { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor }, framing?.manualSensor, framing?.equipmentRotation ?? 0).optics } : undefined),
+		[equipment, telescope, framing?.sensorSource, framing?.manualSensor, framing?.equipmentRotation, mainSensor, guideSensor],
 	)
 	const frameSource = equipment ? equipmentFrame : preset
 

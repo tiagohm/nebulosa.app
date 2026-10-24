@@ -13,7 +13,8 @@ import { formatDeclination, formatRightAscension } from '../sky/format'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { Select } from '../ui/Select'
-import { type ImagePlateSolvingState, imagesState, holdCameraFrame, selectPlateSolution, setPlateSolveOverlay, setPlateSolveRequest } from './images'
+import { holdCameraFrame } from './cameratabs'
+import { type ImagePlateSolvingState, imagesState, selectPlateSolution, setPlateSolveOverlay, setPlateSolveRequest } from './images'
 import type { ImageToolPanelProps } from './tools'
 
 // Plate Solver tool of the Images workspace: solves the active document on the server with ASTAP, Astrometry.net Local,

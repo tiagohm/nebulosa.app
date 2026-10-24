@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import type { CaptureFrameSummary, CaptureSourceSummary, DisplaySettings, ServerEvent } from 'api'
 import { proxy } from 'valtio'
+import { cameraTabKey, connectionCameraTab, handleCapturedFrame, holdCameraFrame, reconcileCameraTabs, reconcileCapturedFrames, selectCameraFrame } from './cameratabs'
 import { type CaptureFramesState, frameLabel, frameUnavailableReason, handleCaptureFramesEvent, loadRecentFrames, refreshCaptureFrames } from './captureframes'
-import { applyDisplay, cameraTabKey, closeImage, connectionCameraTab, editDisplay, handleCapturedFrame, holdCameraFrame, type ImagesIo, type ImagesState, isClosable, ORIGINAL_DISPLAY_SETTINGS, reconcileCameraTabs, reconcileCapturedFrames, selectCameraFrame, setImageView } from './images'
+import { applyDisplay, closeImage, editDisplay, type ImagesIo, type ImagesState, isClosable, ORIGINAL_DISPLAY_SETTINGS, setImageView } from './images'
 
 interface Call {
 	readonly url: string

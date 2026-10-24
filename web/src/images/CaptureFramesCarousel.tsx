@@ -4,8 +4,9 @@ import { type KeyboardEvent, type ReactNode, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { Icon } from '../ui/Icon'
 import { moveIndex } from '../ui/navigation'
+import { type CameraFrameSelection, selectCameraFrame } from './cameratabs'
 import { captureFramesState, frameSourceKey, frameUnavailableReason, loadRecentFrames } from './captureframes'
-import { type CameraFrameSelection, type ImageDocument, imagesState, selectCameraFrame } from './images'
+import { type ImageDocument, imagesState } from './images'
 
 // Capture frames carousel of a camera tab, below the viewer: the Latest card first, the dynamic reference to the latest
 // frame of the camera, then a card for each saved frame, newest first, without the one Latest already shows. Selecting

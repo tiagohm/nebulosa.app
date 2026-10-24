@@ -11,7 +11,8 @@ import { cancelDetection, isActive, PROVIDER_LABELS, runDetection, sameRequest, 
 import { useStarResult } from '../stars/useStarResult'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
-import { type ImageStarsState, imagesState, holdCameraFrame, setStarMarkers } from './images'
+import { holdCameraFrame } from './cameratabs'
+import { type ImageStarsState, imagesState, setStarMarkers } from './images'
 import type { ImageToolPanelProps } from './tools'
 
 // Star Detection tool of the Images workspace: runs a detection of the active document on the server with

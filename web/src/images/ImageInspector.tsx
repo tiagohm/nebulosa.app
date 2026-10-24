@@ -8,9 +8,10 @@ import { EmptyState } from '../shell/WorkspaceLayout'
 import { type ImageQualityStatus, imageQuality } from '../stars/quality'
 import { PROVIDER_LABELS, starsState } from '../stars/stars'
 import { Button } from '../ui/Button'
+import type { CameraFrameSelection } from './cameratabs'
 import { connectionLabel, frameUnavailableReason } from './captureframes'
 import { DisplayAdjustments } from './DisplayAdjustments'
-import { type CameraFrameSelection, documentPath, downloadUrl, type ImageDocument } from './images'
+import { documentPath, downloadUrl, type ImageDocument } from './images'
 import type { ImageToolPanelProps } from './tools'
 
 // Image Inspector, the default contextual tool of the Images workspace: properties, the provenance and

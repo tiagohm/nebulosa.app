@@ -12,8 +12,9 @@ import { domeMotionRuntime, handleDomeMotionEvent, refreshDomeMotions } from './
 import { focuserBacklashRuntime, handleFocuserBacklashEvent, refreshFocuserBacklash } from './equipment-control/focuserBacklash'
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
 import { onOpen, subscribe } from './events'
+import { handleCapturedFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseLeasesOnHide } from './images/cameratabs'
 import { captureFramesState, handleCaptureFramesEvent, refreshCaptureFrames } from './images/captureframes'
-import { handleCapturedFrame, imagesState, reconcileCameraTabs, reconcileCapturedFrames } from './images/images'
+import { confirmUnsavedOnUnload, imagesState } from './images/images'
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
 import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from './platesolving/platesolving'
 import { loadProfiles, persistProfiles, profileState } from './profile/profile'
@@ -74,6 +75,8 @@ const stops = [
 	persistConnections(connectionState, stores.local),
 	persistProfiles(profileState, stores),
 	watchHistory(routeState),
+	confirmUnsavedOnUnload(imagesState),
+	releaseLeasesOnHide(imagesState),
 	subscribe((event) => {
 		for (const store of SERVER_STORES) store.handle(event)
 	}),

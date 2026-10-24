@@ -3,6 +3,7 @@ import { cn } from 'cn'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import type { RoleAvailability } from '../equipment/availability'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { acquisitionSettings, activeProfile, type CameraAcquisitionSettings, type CameraExposureSettings, type CameraIdentity, exposureSettings, profileState, setAcquisitionSettings, setExposureSettings } from '../profile/profile'
@@ -13,7 +14,7 @@ import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
-import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, refreshCapabilities, startCapture, stopCapture } from './capture'
+import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, startCapture, stopCapture } from './capture'
 import { CameraSettings, ExposureSection, formatSeconds } from './ExposureSettings'
 
 // Contextual panel sections of Camera Acquisition, the camera operation of the Images camera tabs: the exposure, the acquisition mode with its start and stop commands, the state of the running or last capture, the
@@ -73,22 +74,19 @@ export interface CameraAcquisitionTarget {
 export function CameraAcquisitionSections({ device, availability, settings: camera, snoop }: CameraAcquisitionTarget) {
 	const profiles = useSnapshot(profileState)
 	const runtime = useSnapshot(captureRuntime)
+	const control = useSnapshot(controlRuntime)
 	const profile = activeProfile(profiles)
 	const exposure = exposureSettings(profile.settings, camera)
 	const settings = acquisitionSettings(profile.settings, camera)
 	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
-	const capabilities = key ? runtime.capabilities[key] : undefined
+	const capabilities = watchedDeviceState(control, 'camera', device)
 	const frame = key ? runtime.frames[key] : undefined
 	const running = captureRunning(session)
 	const pending = key !== undefined && runtime.pending[key] === true
 	const error = key ? runtime.errors[key] : undefined
 	const locked = running || pending
 	const [choosingDirectory, setChoosingDirectory] = useState(false)
-
-	useEffect(() => {
-		if (device?.connected) void refreshCapabilities(captureRuntime, device.connectionId, device.id)
-	}, [device?.connectionId, device?.id, device?.connected])
 
 	// Updates fields of the camera's Camera Acquisition form.
 	function update(patch: Partial<CameraAcquisitionSettings>) {

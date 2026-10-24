@@ -13,7 +13,7 @@ This document maps what Nebulosa already has, where each feature belongs, and th
 
 Server state reaches every tab through `GET` snapshots plus the `/api/ws` event stream (`ServerEvent` in `api/src/connection.ts`). A tab refreshes its snapshots on every socket open (`onOpen` in `web/src/main.tsx`), so a reload never loses running work.
 
-The control states of the devices of the active profile's connection are mirrored once in the web, by `controlRuntime` (`web/src/equipment-control/control.ts`), from `GET /api/connections/:id/states` and the `<type>:updated` events. A store that follows one device, such as the Sky mount (`mountView`) or Mount Nudge, reads that mirror (`watchedDeviceState`) and never fetches or tracks the device's state apart.
+The control states of the devices of the active profile's connection are mirrored once in the web, by `controlRuntime` (`web/src/equipment-control/control.ts`), from `GET /api/connections/:id/states` and the `<type>:updated` events. A view that follows one device, such as the Sky mount (`mountView`), Mount Nudge, or the camera capabilities of Camera Acquisition and Auto Focus, reads that mirror (`watchedDeviceState`) and never fetches or tracks the device's state apart.
 
 Every error response of `api` is `{ error, code }` (`ApiError` and `errorResponse` in `api/src/http.ts`): a message meant for people and a stable code a client branches on, never the message. Each service names its codes (`CommandErrorCode`, `StarDetectionErrorCode`, `PlateSolveErrorCode`, `CaptureFrameErrorCode`, and the codes its routes document), and a route may add documented fields, such as the current state after a `conflict`.
 

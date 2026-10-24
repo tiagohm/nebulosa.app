@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { subscribe as subscribeState } from 'valtio'
 import { App } from './App'
 import { autoFocusRuntime, handleAutoFocusEvent, refreshAutoFocus } from './camera/autofocus'
-import { captureRuntime, handleCaptureEvent, refreshCameraCapabilities, refreshCaptures } from './camera/capture'
+import { captureRuntime, handleCaptureEvent, refreshCaptures } from './camera/capture'
 import { handleNudgeEvent, nudgeRuntime, refreshNudges } from './camera/nudge'
 import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
 import { controlRuntime, handleControlEvent, refreshStates } from './equipment-control/control'
@@ -64,7 +64,7 @@ const stops = [
 		handleCapturedFrame(imagesState, event)
 	}),
 	// Every (re)open resynchronizes the open connections, the watched devices and their control states, the running
-	// operations, the camera sensors, the captures and camera capabilities, the nudge sessions, the Auto Focus sessions, the dome rotation sessions, the focuser backlash compensations, the external tool settings, the star detection and plate solving jobs, and the captured frames, which may have changed while the socket was closed; then the leases of the frames the camera tabs of Images show are reconciled and their selections shown again.
+	// operations, the camera sensors, the captures, the nudge sessions, the Auto Focus sessions, the dome rotation sessions, the focuser backlash compensations, the external tool settings, the star detection and plate solving jobs, and the captured frames, which may have changed while the socket was closed; then the leases of the frames the camera tabs of Images show are reconciled and their selections shown again.
 	onOpen(() => {
 		void refreshExternalTools(externalToolsState)
 		void refreshServers(connectionState)
@@ -75,7 +75,6 @@ const stops = [
 		void refreshOperations(operationsState)
 		refreshSensors(sensorRuntime)
 		void refreshCaptures(captureRuntime)
-		refreshCameraCapabilities(captureRuntime)
 		void refreshNudges(nudgeRuntime)
 		void refreshAutoFocus(autoFocusRuntime)
 		void refreshStars(starsState)

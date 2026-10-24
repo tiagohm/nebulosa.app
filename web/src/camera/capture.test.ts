@@ -6,7 +6,7 @@ import { cameraKey, captureCount, captureElapsed, captureRequest, fitExposure, t
 import { convertExposure, exposureUnitOf, fromSeconds, toSeconds } from './ExposureTimeInput'
 
 function newState() {
-	return proxy<CaptureRuntime>({ sessions: {}, frames: {}, capabilities: {}, pending: {}, errors: {} })
+	return proxy<CaptureRuntime>({ sessions: {}, frames: {}, pending: {}, errors: {} })
 }
 
 // The request of the default forms.
@@ -46,7 +46,7 @@ function fakeFetch(handler: (url: string, init?: RequestInit) => Response | Prom
 	return { request, requests }
 }
 
-test('mirrors sessions, frames, and capabilities by exact camera, ignoring late frames', () => {
+test('mirrors sessions and frames by exact camera, ignoring late frames', () => {
 	const state = newState()
 	const key = cameraKey('c', 'cam')
 
@@ -54,15 +54,12 @@ test('mirrors sessions, frames, and capabilities by exact camera, ignoring late 
 	handleCaptureEvent(state, { type: 'capture:frame', frame: frame({ imageId: 'i2', time: 20 }) })
 	handleCaptureEvent(state, { type: 'capture:frame', frame: frame({ imageId: 'i1', time: 10 }) })
 	handleCaptureEvent(state, { type: 'capture:frame', frame: frame({ imageId: 'i2', time: 20, file: 'saved' }) })
-	handleCaptureEvent(state, { type: 'camera:capabilities', capabilities: CAPABILITIES })
 
 	expect(state.sessions[key]?.phase).toBe('exposing')
 	expect(state.frames[key]).toMatchObject({ imageId: 'i2', file: 'saved' })
-	expect(state.capabilities[key]?.name).toBe('Camera')
 	expect(state.sessions[cameraKey('other', 'cam')]).toBeUndefined()
 
 	handleCaptureEvent(state, { type: 'connection:close', id: 'c' })
-	expect(state.capabilities[key]).toBeUndefined()
 	// A session belongs to the server and stays known until the server replaces it.
 	expect(state.sessions[key]).toBeDefined()
 })

@@ -8,8 +8,8 @@ import type { CameraAcquisitionSettings, CameraExposureSettings } from '../profi
 // store only mirrors it: sessions and previewed frames are fed by capture:updated and capture:frame events
 // and, on every socket (re)open, by the capture snapshot, so a reloaded tab or another tab shows a capture
 // in progress and never starts a second one because it found no local state. Cameras are addressed by
-// their exact connection and device ids, never by role. The store also keeps the capabilities of the
-// cameras the panel shows and the outcome of this tab's last command to each camera. Frames are shown by the
+// their exact connection and device ids, never by role; their capabilities are the camera states the control
+// runtime mirrors. The store also keeps the outcome of this tab's last command to each camera. Frames are shown by the
 // Images camera tabs through the capture frame registry, never rendered here.
 
 // Phases of a capture that has ended.
@@ -21,8 +21,6 @@ export interface CaptureRuntime {
 	sessions: Record<string, CaptureSession>
 	// Latest previewed frame of each camera.
 	frames: Record<string, CaptureFrame>
-	// Capabilities of each camera fetched or published so far.
-	capabilities: Record<string, CameraCapabilities>
 	// Cameras with a start, stop, or abort of this tab waiting for the server.
 	pending: Record<string, boolean>
 	// Why this tab's last command to a camera failed; cleared by its next command.
@@ -30,7 +28,7 @@ export interface CaptureRuntime {
 }
 
 // Capture state of the tab.
-export const captureRuntime = proxy<CaptureRuntime>({ sessions: {}, frames: {}, capabilities: {}, pending: {}, errors: {} })
+export const captureRuntime = proxy<CaptureRuntime>({ sessions: {}, frames: {}, pending: {}, errors: {} })
 
 // Counter of snapshot refreshes; a response is applied only if no later refresh started.
 let generation = 0
@@ -45,7 +43,7 @@ export function captureRunning(session: Pick<CaptureSession, 'phase'> | undefine
 	return session !== undefined && !ENDED_PHASES.has(session.phase)
 }
 
-// Applies a capture or camera event; any other event is ignored. A frame older than the one known for its
+// Applies a capture event; any other event is ignored. A frame older than the one known for its
 // camera, as a late event can be, never replaces it.
 export function handleCaptureEvent(state: CaptureRuntime, event: ServerEvent) {
 	if (event.type === 'capture:updated') {
@@ -56,13 +54,6 @@ export function handleCaptureEvent(state: CaptureRuntime, event: ServerEvent) {
 		const key = cameraKey(frame.connectionId, frame.deviceId)
 		const known = state.frames[key]
 		if (!known || known.imageId === frame.imageId || frame.time >= known.time) state.frames[key] = frame
-	} else if (event.type === 'camera:capabilities') {
-		const { capabilities } = event
-		state.capabilities[cameraKey(capabilities.connectionId, capabilities.id)] = capabilities
-	} else if (event.type === 'device:removed') {
-		delete state.capabilities[cameraKey(event.connectionId, event.id)]
-	} else if (event.type === 'connection:close') {
-		for (const key of Object.keys(state.capabilities)) if (state.capabilities[key].connectionId === event.id) delete state.capabilities[key]
 	}
 }
 
@@ -84,25 +75,6 @@ export async function refreshCaptures(state: CaptureRuntime, request: typeof fet
 	} catch {
 		// The server is unreachable; the next socket open refreshes the captures.
 	}
-}
-
-// Fetches the capabilities of a camera; a camera that is not found has none.
-export async function refreshCapabilities(state: CaptureRuntime, connectionId: string, deviceId: string, request: typeof fetch = fetch) {
-	const key = cameraKey(connectionId, deviceId)
-
-	try {
-		const response = await request(deviceUrl(connectionId, 'camera', deviceId))
-		if (response.ok) state.capabilities[key] = (await response.json()) as CameraCapabilities
-		else if (response.status === 404) delete state.capabilities[key]
-	} catch {
-		// The server is unreachable; the next socket open refreshes them.
-	}
-}
-
-// Fetches again the capabilities of every camera known so far, which may have changed while the event
-// socket was closed.
-export function refreshCameraCapabilities(state: CaptureRuntime, request: typeof fetch = fetch) {
-	for (const { connectionId, id } of Object.values(state.capabilities)) void refreshCapabilities(state, connectionId, id, request)
 }
 
 // Sends a command to a camera's capture route and records its failure. When the server cannot be reached,

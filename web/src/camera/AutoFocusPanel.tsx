@@ -2,7 +2,7 @@ import type { AutoFocusSessionSummary, CaptureSnoop, DeviceSummary } from 'api'
 import { cn } from 'cn'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { controlRuntime, deviceStateOf } from '../equipment-control/control'
+import { controlRuntime, deviceStateOf, watchedDeviceState } from '../equipment-control/control'
 import { Notice } from '../equipment-control/parts'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
@@ -17,7 +17,7 @@ import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusBlocker, autoFocusRequest, autoFocusRunning, autoFocusRuntime, defaultStepSize, FITTING_MODE_LABELS, FITTING_MODES, startAutoFocus, stopAutoFocus, VERIFICATION_LABELS } from './autofocus'
-import { cameraKey, captureRuntime, refreshCapabilities } from './capture'
+import { cameraKey } from './capture'
 
 // Contextual panel sections of Auto Focus, a camera operation of the Images camera tabs: the routine the server's
 // runner follows (fitting, step size, positions per side, and the advanced settings collapsed), and the state of the
@@ -48,7 +48,6 @@ export interface AutoFocusTarget {
 export function AutoFocusSections({ device, availability, focuser, settings: identity, snoop }: AutoFocusTarget) {
 	const profiles = useSnapshot(profileState)
 	const runtime = useSnapshot(autoFocusRuntime)
-	const captures = useSnapshot(captureRuntime)
 	const operations = useSnapshot(operationsState)
 	const control = useSnapshot(controlRuntime)
 	const wheel = useRoleDevice('FILTER_WHEEL')
@@ -59,7 +58,7 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 	const exposure = exposureSettings(profile.settings, identity)
 	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
-	const capabilities = key ? captures.capabilities[key] : undefined
+	const capabilities = watchedDeviceState(control, 'camera', device)
 	const focuserDevice = focuser?.device
 	const focuserState = focuserDevice && deviceStateOf(control.states, 'focuser', focuserDevice.id)
 	const wheelState = wheel.device && deviceStateOf(control.states, 'wheel', wheel.device.id)
@@ -69,10 +68,6 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 	const locked = running || pending
 	const stepSize = settings.stepSize ?? (focuserState ? defaultStepSize(focuserState.position.min, focuserState.position.max) : 100)
 	const blocker = running ? undefined : autoFocusBlocker(availability, focuser && roleAvailability('FOCUSER', focuser, operations), focuserState, detection.detector.provider === 'astap' && !astapConfigured)
-
-	useEffect(() => {
-		if (device?.connected) void refreshCapabilities(captureRuntime, device.connectionId, device.id)
-	}, [device?.connectionId, device?.id, device?.connected])
 
 	// Updates fields of the camera's Auto Focus form.
 	function update(patch: Partial<AutoFocusSettings>) {

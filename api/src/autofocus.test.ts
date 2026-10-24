@@ -57,6 +57,7 @@ function request(focuser: { connectionId: string; deviceId: string }, patch: Par
 		rmsdThreshold: 0,
 		settleDelay: 0,
 		measureTimeout: 30,
+		restoreOnStop: false,
 		...patch,
 	}
 }
@@ -237,6 +238,35 @@ describe('sessions', () => {
 		expect(released()).toBeTrue()
 		expect((await autoFocus.stop(sessionId)).status).toBe(404)
 	}, 60000)
+
+	test('a stop of a session that restores on stop moves the focuser back to the start position', async () => {
+		const { id, cameraId, autoFocus, focuserDevice, focuser, ended, summary, events, released } = await setup()
+		const { sessionId } = await start(autoFocus, id, cameraId, { ...slow(focuserDevice), restoreOnStop: true })
+		await waitUntil(() => summary()?.state === 'exposing' && summary()?.exposure !== undefined)
+		expect(focuser.position.value).not.toBe(START)
+
+		expect((await autoFocus.stop(sessionId)).status).toBe(204)
+		await waitUntil(ended)
+
+		expect(events.some((event) => event.session.state === 'restoring')).toBeTrue()
+		expect(summary()).toMatchObject({ state: 'cancelled', restored: true, initialPosition: START })
+		expect(summary()!.exposure).toBeUndefined()
+		expect(focuser.position.value).toBe(START)
+		expect(released()).toBeTrue()
+	}, 60000)
+
+	test('the progress of the frame being exposed is published and cleared once it is measured', async () => {
+		const { id, cameraId, autoFocus, focuserDevice, ended, events } = await setup()
+		const body = request(focuserDevice, { initialOffsetSteps: 1 })
+		await start(autoFocus, id, cameraId, { ...body, capture: { ...body.capture, exposureTime: 1 } })
+		await waitUntil(ended, 120000)
+
+		const reported = events.flatMap((event) => (event.session.exposure ? [{ state: event.session.state, ...event.session.exposure }] : []))
+		expect(reported.length).toBeGreaterThan(0)
+		expect(reported.every((progress) => (progress.state === 'exposing' || progress.state === 'verifying') && progress.progress >= 0 && progress.progress <= 100)).toBeTrue()
+		expect(reported.some((progress) => progress.state === 'verifying')).toBeTrue()
+		expect(events.filter((event) => event.session.state === 'measuring').every((event) => event.session.exposure === undefined)).toBeTrue()
+	}, 180000)
 
 	test('a stop of the focuser from Equipment Control cancels the session holding it', async () => {
 		const { id, cameraId, autoFocus, focuserDevice, focuser, operations, ended, summary, released } = await setup()

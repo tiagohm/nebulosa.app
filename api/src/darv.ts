@@ -30,8 +30,9 @@ import type { OperationDevice, OperationRegistry } from './operations'
 // to it (the mount commander of the mount commands, the camera capturer of the capture service, one auxiliary FITS in
 // a temporary directory deleted with the measurement, never saved as a capture), decodes the frame into the image
 // store, and records it in the capture frame registry as the latest frame of its camera (origin darv), which owns
-// its closing. Once the devices are released, the slew-rate preset the runner replaced is restored if the mount is
-// free, and the frame is analyzed on a worker without a sky transform, so the drift is unsigned and in pixels per
+// its closing. A measurement starts the tracking of a mount that is not tracking before the runner; once the devices
+// are released, the slew-rate preset the runner replaced is restored and the tracking it started is stopped if the
+// mount is free, and the frame is analyzed on a worker without a sky transform, so the drift is unsigned and in pixels per
 // second, never a polar error. A session belongs to the server: it survives tab reloads and workspace changes.
 // Durations are seconds, instants Unix milliseconds. Records live in memory, the latest session per camera.
 
@@ -59,7 +60,7 @@ export interface DarvRequest extends DarvMeasurementRequest {
 }
 
 // What a measurement is doing:
-// - preparing: the measurement is acquiring the devices and applying the slew rate.
+// - preparing: the measurement is acquiring the devices, starting the tracking, and applying the slew rate.
 // - exposing: the exposure started; the stars stand still before the outbound motion.
 // - outbound: the mount moves in the requested direction.
 // - reversing: the mount stops before moving back.
@@ -103,6 +104,11 @@ export interface DarvMeasurement {
 	readonly previousSlewRate?: string
 	// Whether the previous preset was restored; absent before the operation ended or with nothing to restore.
 	readonly slewRateRestored?: boolean
+	// Whether the measurement started the tracking of a mount that was not tracking; absent when it was already on.
+	readonly trackingStarted?: boolean
+	// Whether the tracking the measurement started was stopped again once it ended; absent before the operation ended
+	// or when it started none.
+	readonly trackingStopped?: boolean
 	// Why the measurement failed.
 	readonly reason?: OperationFailureReason
 	// Detail of the failure or of a problem meant for people.
@@ -236,8 +242,8 @@ export class DarvSessions {
 	// with DarvStartResponse once accepted (a repeated token answers its first measurement); progress and outcome
 	// arrive as darv:updated and operation:updated events. Responds 404 for an unknown camera or mount, 409 when
 	// either is disconnected or held by another operation or the camera's session is measuring, and 422 when the
-	// mount cannot run DARV (not equatorial, no west-east motion or abort, no such slew rate, parked, or not
-	// tracking at the sidereal rate).
+	// mount cannot run DARV (not equatorial, no west-east motion or abort, no such slew rate, parked, not tracking
+	// and unable to switch tracking, or tracking at another rate than sidereal).
 	start(connectionId: string, deviceId: string, request: DarvRequest): Response {
 		const repeated = this.#repeated(request.token)
 		if (repeated) return repeated
@@ -321,9 +327,10 @@ export class DarvSessions {
 		return Response.json({ sessionId: repeated.session.summary.sessionId, operationId: known.operationId, generation: repeated.generation } satisfies DarvStartResponse, { status: 202 })
 	}
 
-	// Responds 422 when the mount cannot run DARV at slewRate, or 409 when a device is held; undefined when both can.
+	// Responds 422 when the mount cannot run DARV at slewRate, or 409 when a device is held; undefined when both can. A
+	// mount that is not tracking is accepted when it can switch tracking, which the measurement starts.
 	#refusal(camera: Camera, mount: Mount, slewRate: string): Response | undefined {
-		const refused = polarAlignmentMountRefusal(mount, slewRate)
+		const refused = polarAlignmentMountRefusal(mount.tracking || !mount.canTracking ? mount : { ...mount, tracking: true }, slewRate)
 		if (refused) return unsupported(refused)
 		if (!this.operations.available(camera) || !this.operations.available(mount)) return busy()
 		return undefined
@@ -363,6 +370,13 @@ export class DarvSessions {
 			const directory = await mkdtemp(join(this.auxiliaryDir, 'nebulosa-darv-'))
 
 			try {
+				// A drift measured on a mount that does not track is the sidereal motion, so the tracking is started first.
+				if (!mount.tracking) {
+					const started = await this.commander.setTracking(context, mount, true)
+					if (!started.ok) return started
+					this.#patch(session, generation, { trackingStarted: true })
+				}
+
 				const path = join(directory, `darv-${generation}.fit`)
 				const result = await runDarv(
 					context,
@@ -436,15 +450,22 @@ export class DarvSessions {
 		if (session.summary.state === 'measuring') this.#update(session, { state: 'idle' })
 	}
 
-	// Restores the slew-rate preset a measurement replaced, if the mount is free.
+	// Restores the slew-rate preset a measurement replaced and stops the tracking it started, if the mount is free.
 	async #restore(session: Session, generation: number, mount: Mount) {
-		const previous = this.#measurement(session, generation)?.previousSlewRate
-		if (previous === undefined || mount.slewRate === previous) return
+		const measurement = this.#measurement(session, generation)
+		const previous = measurement?.previousSlewRate
 
-		// The operation released the mount, so the restoration takes it again for itself; another operation that took
-		// it first, or a disconnection, leaves the preset changed.
-		const restored = mount.connected && this.operations.available(mount) ? await this.commander.setSlewRate(this.operations.coordinator, mount, previous) : undefined
-		this.#patch(session, generation, { slewRateRestored: restored?.ok === true })
+		// The operation released the mount, so each restoration takes it again for itself; another operation that took
+		// it first, or a disconnection, leaves the mount as the measurement left it.
+		if (previous !== undefined && mount.slewRate !== previous) {
+			const restored = mount.connected && this.operations.available(mount) ? await this.commander.setSlewRate(this.operations.coordinator, mount, previous) : undefined
+			this.#patch(session, generation, { slewRateRestored: restored?.ok === true })
+		}
+
+		if (measurement?.trackingStarted) {
+			const stopped = !mount.tracking || (mount.connected && this.operations.available(mount) && (await this.commander.setTracking(this.operations.coordinator, mount, false)).ok)
+			this.#patch(session, generation, { trackingStopped: stopped })
+		}
 	}
 
 	// Forgets a measurement dropped from the history of its session.

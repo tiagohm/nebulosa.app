@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession } from 'api'
 import { proxy } from 'valtio'
 import { DEFAULT_ACQUISITION_SETTINGS, DEFAULT_EXPOSURE_SETTINGS } from '../profile/schema'
-import { cameraKey, captureCount, captureElapsed, captureRequest, fitExposure, type CaptureRuntime, captureRunning, captureSnoop, captureStatus, fileState, handleCaptureEvent, refreshCaptures, startCapture, stopCapture } from './capture'
+import { cameraKey, captureCount, captureElapsed, captureRequest, fitExposure, frameProgress, type CaptureRuntime, captureRunning, captureSnoop, captureStatus, fileState, handleCaptureEvent, refreshCaptures, startCapture, stopCapture } from './capture'
 import { convertExposure, exposureUnitOf, fromSeconds, toSeconds } from './ExposureTimeInput'
 
 function newState() {
@@ -157,4 +157,11 @@ test('reports the file state of previewed and saved frames', () => {
 	expect(fileState(frame({ path: '/f.fit', file: 'saving' }))).toBe('saving')
 	expect(fileState(frame({ path: '/f.fit', file: 'saved' }))).toBe('saved')
 	expect(fileState(frame({ path: '/f.fit', file: 'failed' }))).toBe('failed')
+})
+
+test('the frame progress converts the driver countdown to seconds and a bounded fraction', () => {
+	expect(frameProgress(undefined)).toBeUndefined()
+	expect(frameProgress({ elapsedTime: 2_500_000, remainingTime: 7_500_000, progress: 25 })).toEqual({ elapsed: 2.5, remaining: 7.5, fraction: 0.25 })
+	expect(frameProgress({ elapsedTime: 10_000_000, remainingTime: -1, progress: 104 })).toEqual({ elapsed: 10, remaining: 0, fraction: 1 })
+	expect(frameProgress({ elapsedTime: 0, remainingTime: 0, progress: Number.NaN })).toBeUndefined()
 })

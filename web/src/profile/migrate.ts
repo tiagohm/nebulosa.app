@@ -192,6 +192,8 @@ function normalizeAutoFocus(value: unknown): AutoFocusSettings | undefined {
 		rmsdThreshold: numberAtLeast(value.rmsdThreshold, 0, defaults.rmsdThreshold),
 		settleDelay: numberAtLeast(value.settleDelay, 0, defaults.settleDelay),
 		measureTimeout: typeof value.measureTimeout === 'number' && Number.isFinite(value.measureTimeout) && value.measureTimeout > 0 ? value.measureTimeout : defaults.measureTimeout,
+		// Forms saved before the option existed return to the start position, its default.
+		restoreOnStop: value.restoreOnStop !== false,
 	}
 }
 

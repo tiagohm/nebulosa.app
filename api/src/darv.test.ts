@@ -257,12 +257,26 @@ describe('DARV sessions', () => {
 		await hold.cancel()
 	}, 60000)
 
-	test('a mount without the slew rate or without tracking is refused before anything starts', async () => {
-		const { id, cameraId, darv, mountDevice, mount, commander, operations, events } = await setup()
+	test('a measurement starts the tracking of a mount that is not tracking and stops it once it ended', async () => {
+		const { id, cameraId, darv, mountDevice, mount, commander, operations, latest, ended, states, released } = await setup()
+		expect(await commander.setTracking(operations.coordinator, mount, false)).toMatchObject({ ok: true })
+		await start(darv, id, cameraId, request(mountDevice))
+
+		await waitUntil(() => latest()?.state === 'outbound', 30000)
+		expect(mount.tracking).toBeTrue()
+		expect(latest()!.trackingStarted).toBeTrue()
+
+		await waitUntil(ended, 60000)
+		expect(states()).toEqual(['preparing', 'exposing', 'outbound', 'reversing', 'inbound', 'finishing', 'analyzing', 'ready'])
+		expect(latest()).toMatchObject({ state: 'ready', trackingStarted: true, trackingStopped: true, slewRateRestored: true })
+		expect(mount.tracking).toBeFalse()
+		expect(released()).toBeTrue()
+	}, 90000)
+
+	test('a mount without the slew rate is refused before anything starts', async () => {
+		const { id, cameraId, darv, mountDevice, events } = await setup()
 
 		expect(darv.start(id, cameraId, request(mountDevice, { slewRate: 'WARP' })).status).toBe(422)
-		expect(await commander.setTracking(operations.coordinator, mount, false)).toMatchObject({ ok: true })
-		expect(darv.start(id, cameraId, request(mountDevice)).status).toBe(422)
 		expect(events).toEqual([])
 		expect(darv.session('unknown').status).toBe(404)
 	}, 60000)

@@ -20,21 +20,8 @@ import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { cameraKey } from './capture'
-import {
-	continueFlatWizard,
-	flatWizardFilterName,
-	flatWizardFrameProgress,
-	FLAT_WIZARD_DIAGNOSTIC_LABELS,
-	FLAT_WIZARD_FILTER_STATE_LABELS,
-	FLAT_WIZARD_STATE_LABELS,
-	FLAT_WIZARD_VERDICT_LABELS,
-	flatWizardBlocker,
-	flatWizardRequest,
-	flatWizardRunning,
-	flatWizardRuntime,
-	startFlatWizard,
-	stopFlatWizard,
-} from './flatwizard'
+import { continueFlatWizard, flatWizardFilterName, FLAT_WIZARD_DIAGNOSTIC_LABELS, FLAT_WIZARD_FILTER_STATE_LABELS, FLAT_WIZARD_STATE_LABELS, FLAT_WIZARD_VERDICT_LABELS, flatWizardBlocker, flatWizardRequest, flatWizardRunning, flatWizardRuntime, startFlatWizard, stopFlatWizard } from './flatwizard'
+import { FrameProgress, formatExposure } from './FrameProgress'
 
 // Contextual panel sections of Flat Wizard, a camera operation of the Images camera tabs: the equipment it uses (the
 // tab's camera, and the filter wheel, flat panel, and cover of the setup when the camera has a role, else manual
@@ -293,7 +280,7 @@ function Progress({ session, pending }: ProgressProps) {
 	return (
 		<PanelSection title="Progress">
 			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>{FLAT_WIZARD_STATE_LABELS[session.state]}</p>
-			{session.state === 'exposing' && <FrameProgress session={session} />}
+			{session.state === 'exposing' && <FrameProgress exposure={session.exposure} />}
 			{failed && session.error && <Notice error>{session.error}</Notice>}
 			{step && (
 				<>
@@ -318,24 +305,6 @@ function Progress({ session, pending }: ProgressProps) {
 			{notes.length > 0 && <Notice>{notes.join(' ')}</Notice>}
 			{session.previewError && <Notice>{session.previewError}</Notice>}
 		</PanelSection>
-	)
-}
-
-// Progress of the frame being exposed, as the driver reports it: a bar of the exposure completed with the time elapsed
-// and left; before the driver reports any, or while the frame is read, the bar pulses instead.
-function FrameProgress({ session }: { readonly session: FlatWizardSessionSummary }) {
-	const progress = flatWizardFrameProgress(session.exposure)
-
-	return (
-		<div className="flex flex-col gap-1">
-			<div className="h-1 overflow-hidden rounded-full bg-base-300">{progress === undefined ? <div className="h-full w-1/3 animate-pulse bg-accent/60" /> : <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${progress.fraction * 100}%` }} />}</div>
-			{progress && (
-				<p className="m-0 flex justify-between text-xs leading-4 text-ink-300 tabular-nums">
-					<span>{`${formatExposure(progress.elapsed)} elapsed`}</span>
-					<span>{`${formatExposure(progress.remaining)} left`}</span>
-				</p>
-			)}
-		</div>
 	)
 }
 
@@ -378,9 +347,4 @@ function Row({ label, children }: { readonly label: string; readonly children: R
 			<dd className="m-0 min-w-0 truncate text-right tabular-nums">{children}</dd>
 		</div>
 	)
-}
-
-// Formats an exposure in seconds.
-function formatExposure(seconds: number) {
-	return `${seconds < 1 ? seconds.toPrecision(3) : seconds.toFixed(2)} s`
 }

@@ -1,4 +1,5 @@
 import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession, CaptureSnapshot, CaptureSnoop, ServerEvent } from 'api'
+import type { CameraCaptureTime } from 'nebulosa/src/observation/capture/types'
 import { proxy } from 'valtio'
 import type { EquipmentSetup } from '../equipment/roles'
 import { deviceUrl, jsonInit, responseError } from '../http'
@@ -208,4 +209,21 @@ export function fileState(frame: Pick<CaptureFrame, 'file'>): FileState {
 // Returns the time a session has run, or ran, in seconds; now is Unix milliseconds.
 export function captureElapsed(session: Pick<CaptureSession, 'startedAt' | 'endedAt'>, now: number) {
 	return Math.max(0, ((session.endedAt ?? now) - session.startedAt) / 1000)
+}
+
+// Progress of a frame being exposed, in seconds and as a completed fraction.
+export interface FrameProgressValue {
+	// Exposure time elapsed, in seconds; >= 0.
+	readonly elapsed: number
+	// Exposure time left, in seconds; >= 0.
+	readonly remaining: number
+	// Completed part of the exposure, in [0, 1].
+	readonly fraction: number
+}
+
+// Returns the progress of the frame being exposed from what the driver reports (times in microseconds, progress in
+// percent); undefined before the driver reported any, or when it reports a progress that is not finite.
+export function frameProgress(exposure: CameraCaptureTime | undefined): FrameProgressValue | undefined {
+	if (!exposure || !Number.isFinite(exposure.progress)) return undefined
+	return { elapsed: Math.max(0, exposure.elapsedTime) / 1e6, remaining: Math.max(0, exposure.remainingTime) / 1e6, fraction: Math.min(1, Math.max(0, exposure.progress / 100)) }
 }

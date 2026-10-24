@@ -5,7 +5,8 @@ import { type Camera, type CameraTransferFormat, CLIENT, type Client } from 'neb
 import type { OperationFailureReason } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
-import { type CameraCaptureHandle, CameraCapturer, type CameraFramePathRequest, writeFrameExclusively } from 'nebulosa/src/observation/capture/capture'
+import { type CameraCaptureHandle, type CameraCaptureHooks, CameraCapturer, type CameraFramePathRequest, writeFrameExclusively } from 'nebulosa/src/observation/capture/capture'
+import type { CameraCaptureListener } from 'nebulosa/src/observation/capture/reporter'
 import { type CameraCaptureEvent, type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START } from 'nebulosa/src/observation/capture/types'
 import type { CaptureFrameRegistry } from './captureframes'
 import type { DeviceRegistry } from './devices'
@@ -302,6 +303,34 @@ export function snoopedDevices(devices: DeviceRegistry, camera: Camera, snoop: C
 		wheel: snoop?.wheel && devices.get(client, snoop.wheel, 'wheel')?.name,
 		rotator: snoop?.rotator && devices.get(client, snoop.rotator, 'rotator')?.name,
 	}
+}
+
+// Returns a capture listener that follows the progress of the frame being exposed for an operation that takes its own
+// frames: report receives undefined when a new exposure starts, then the driver's countdown (times in microseconds,
+// progress in percent) while it exposes and once it finished. A report with a path is the frame itself, which carries
+// no progress, so the caller clears the progress once the frame was read.
+export function exposureProgressListener(report: (exposure: CameraCaptureTime | undefined) => void): CameraCaptureListener {
+	return (event, path) => {
+		if (path !== undefined) return
+		if (event.state === 'exposureStarted') report(undefined)
+		else if (event.state === 'exposing' || event.state === 'exposureFinished') report({ ...event.frameProgress })
+	}
+}
+
+// Returns a capturer that runs every capture on capturer with listener added to the hooks of the caller, for a toolkit
+// runner that takes a capturer but no capture listener; the captures, their sessions, and their leases stay the ones of
+// capturer.
+export function listenedCapturer(capturer: CameraCapturer, listener: CameraCaptureListener): CameraCapturer {
+	const listened = Object.create(capturer) as CameraCapturer
+	listened.start = (scope, camera, request, hooks?: CameraCaptureHooks) =>
+		capturer.start(scope, camera, request, {
+			...hooks,
+			listener: (event, path) => {
+				hooks?.listener?.(event, path)
+				listener(event, path)
+			},
+		})
+	return listened
 }
 
 // Returns a session with fields replaced.

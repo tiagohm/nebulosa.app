@@ -72,7 +72,9 @@ test('the mount must be equatorial, move west-east, abort, track, and announce t
 	expect(darvMountSupport(mountState({ canAbort: false }))).toContain('abort')
 	expect(darvBlocker(READY, READY, mountState(), 'SPEED_1')).toBeUndefined()
 	expect(darvBlocker(READY, READY, mountState(), 'WARP')).toBe('Choose a slew rate.')
-	expect(darvBlocker(READY, READY, mountState({ tracking: false }), 'SPEED_1')).toContain('not tracking')
+	expect(darvBlocker(READY, READY, mountState({ tracking: false, canTracking: false }), 'SPEED_1')).toContain('not tracking')
+	// The server starts the tracking of a mount that can switch it.
+	expect(darvBlocker(READY, READY, mountState({ tracking: false, canTracking: true }), 'SPEED_1')).toBeUndefined()
 	expect(darvBlocker(READY, READY, mountState({ parked: true }), 'SPEED_1')).toBe('The mount is parked.')
 	// No site is needed: DARV never converts the drift into a polar error.
 	expect(darvBlocker(READY, READY, mountState({ site: { latitude: 0, longitude: 0, elevation: 0 } }), 'SPEED_1')).toBeUndefined()

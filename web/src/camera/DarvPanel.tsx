@@ -219,7 +219,7 @@ function History({ measurements }: { readonly measurements: readonly DarvMeasure
 	)
 }
 
-// Phase of the running or last measurement, its failure, and the slew rate restoration.
+// Phase of the running or last measurement, its failure, the slew rate restoration, and the tracking it started.
 function MeasurementState({ measurement }: { readonly measurement: DarvMeasurement }) {
 	const failed = measurement.state === 'failed'
 
@@ -228,6 +228,8 @@ function MeasurementState({ measurement }: { readonly measurement: DarvMeasureme
 			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>{DARV_STATE_LABELS[measurement.state]}</p>
 			{failed && measurement.error && <p className="m-0 text-xs leading-4 text-danger">{measurement.error}</p>}
 			{measurement.slewRateRestored === false && measurement.previousSlewRate && <p className="m-0 text-xs leading-4 text-ink-300">The slew rate could not be restored to {measurement.previousSlewRate}.</p>}
+			{measurement.trackingStarted && measurement.trackingStopped === undefined && <p className="m-0 text-xs leading-4 text-ink-300">The tracking was started for the measurement and is stopped again once it ends.</p>}
+			{measurement.trackingStopped === false && <p className="m-0 text-xs leading-4 text-ink-300">The tracking started for the measurement could not be stopped.</p>}
 		</>
 	)
 }

@@ -20,6 +20,7 @@ import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusBlocker, autoFocusRequest, autoFocusRunning, autoFocusRuntime, defaultStepSize, FITTING_MODE_LABELS, FITTING_MODES, startAutoFocus, stopAutoFocus, VERIFICATION_LABELS } from './autofocus'
 import { cameraKey } from './capture'
+import { FrameProgress } from './FrameProgress'
 
 // Contextual panel sections of Auto Focus, a camera operation of the Images camera tabs: the equipment it uses, each
 // device linked to Equipment Control, the routine the server's
@@ -117,6 +118,7 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 				<p className="m-0 text-xs leading-4 text-ink-300">
 					The sweep starts {settings.initialOffsetSteps * stepSize} steps {settings.reversed ? 'inward' : 'outward'} and extends until both sides of the minimum have {settings.initialOffsetSteps} positions.
 				</p>
+				<Checkbox label="Return to the start position when stopped" checked={settings.restoreOnStop} disabled={locked} onChange={(restoreOnStop) => update({ restoreOnStop })} />
 				<details>
 					<summary className="cursor-pointer text-ink-200 select-none">Advanced settings</summary>
 					<div className="mt-2 flex flex-col gap-2">
@@ -140,7 +142,7 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 					</Button>
 				)}
 				{blocker && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}</p>}
-				{running && <p className="m-0 text-xs leading-4 text-ink-300">A stop leaves the focuser where it stands.</p>}
+				{running && <p className="m-0 text-xs leading-4 text-ink-300">{session!.request.restoreOnStop ? 'A stop moves the focuser back to the start position; a second stop leaves it where it stands.' : 'A stop leaves the focuser where it stands.'}</p>}
 				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
 			</PanelSection>
 		</>
@@ -178,6 +180,7 @@ function SessionState({ session, position, moving }: SessionStateProps) {
 				{AUTO_FOCUS_STATE_LABELS[session.state]}
 				{session.target !== undefined && running && ` — ${session.target}`}
 			</p>
+			{(session.state === 'exposing' || (session.state === 'verifying' && session.exposure)) && <FrameProgress exposure={session.exposure} />}
 			{failed && session.error && <p className="m-0 text-xs leading-4 text-danger">{session.error}</p>}
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 				<Row label="Focuser">{position === undefined ? '—' : `${position}${moving ? ' (moving)' : ''}`}</Row>
@@ -193,7 +196,9 @@ function SessionState({ session, position, moving }: SessionStateProps) {
 			</dl>
 			{last && last.warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{last.warnings.join(' ')}</p>}
 			{session.verificationError && <p className="m-0 text-xs leading-4 text-ink-300">{session.verificationError}</p>}
-			{session.state === 'cancelled' && <p className="m-0 text-xs leading-4 text-ink-300">The focuser was left where the stop found it.</p>}
+			{session.state === 'cancelled' && (
+				<p className="m-0 text-xs leading-4 text-ink-300">{session.restored ? 'The focuser was moved back to the start position.' : session.restored === false ? 'The focuser could not be moved back to the start position and was left where it stood.' : 'The focuser was left where the stop found it.'}</p>
+			)}
 		</>
 	)
 }

@@ -237,12 +237,34 @@ describe('TPPA sessions', () => {
 		await hold.cancel()
 	}, 60000)
 
-	test('a mount without the slew rate, without tracking, or a solver not configured is refused before anything starts', async () => {
-		const { id, cameraId, tppa, mountDevice, mount, commander, operations, solving, events } = await setup()
+	test('a session starts the tracking of a mount that is not tracking, publishes the frame progress, and stops the tracking when it ends', async () => {
+		const { id, cameraId, tppa, mountDevice, mount, commander, operations, events, summary, ended, released } = await setup()
+		expect(await commander.setTracking(operations.coordinator, mount, false)).toMatchObject({ ok: true })
+		const body = request(mountDevice)
+		const { sessionId } = await start(tppa, id, cameraId, { ...body, capture: { ...body.capture, exposureTime: 1 } })
+
+		await waitUntil(() => summary()?.state === 'readyToRefine' || ended(), 90000)
+		expect(summary()).toMatchObject({ state: 'readyToRefine', trackingStarted: true })
+		expect(summary()!.trackingStopped).toBeUndefined()
+		expect(mount.tracking).toBeTrue()
+
+		const reported = events.flatMap((event) => (event.session.exposure ? [{ state: event.session.state, ...event.session.exposure }] : []))
+		expect(reported.length).toBeGreaterThan(0)
+		expect(reported.every((progress) => progress.state === 'capturing' && progress.progress >= 0 && progress.progress <= 100)).toBeTrue()
+		expect(events.filter((event) => event.session.state === 'solving').every((event) => event.session.exposure === undefined)).toBeTrue()
+
+		expect((await tppa.stop(sessionId)).status).toBe(204)
+		await waitUntil(() => summary()?.trackingStopped !== undefined)
+		expect(summary()).toMatchObject({ state: 'completed', trackingStopped: true })
+		expect(summary()!.exposure).toBeUndefined()
+		expect(mount.tracking).toBeFalse()
+		expect(released()).toBeTrue()
+	}, 120000)
+
+	test('a mount without the slew rate or a solver not configured is refused before anything starts', async () => {
+		const { id, cameraId, tppa, mountDevice, solving, events } = await setup()
 
 		expect((await tppa.start(id, cameraId, request(mountDevice, { slewRate: 'WARP' }))).status).toBe(422)
-		expect(await commander.setTracking(operations.coordinator, mount, false)).toMatchObject({ ok: true })
-		expect((await tppa.start(id, cameraId, request(mountDevice))).status).toBe(422)
 		solving.unconfigure()
 		expect((await tppa.start(id, cameraId, request(mountDevice))).status).toBe(422)
 		expect(events).toEqual([])

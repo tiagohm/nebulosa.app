@@ -17,10 +17,10 @@ import { computeThreePointPolarAlignmentOverlay, type ThreePointPolarAlignmentOv
 // oxfmt-ignore
 import { acquireThreePointPolarAlignment, refineThreePointPolarAlignment, type ThreePointPolarAlignmentEvent, type ThreePointPolarAlignmentFrame, type ThreePointPolarAlignmentServices } from 'nebulosa/src/observation/alignment/polaralignment.runner'
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
-import { SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
+import { type CameraCaptureTime, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
 import type { CenteringCaptureOptions } from 'nebulosa/src/observation/mount/centering'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
-import type { CaptureFrame, CaptureSettings } from './captures'
+import { type CaptureFrame, type CaptureSettings, exposureProgressListener, listenedCapturer } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
@@ -43,7 +43,9 @@ import type { PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, Pla
 // the devices. The overlay of every solved estimate is computed here from the toolkit's overlay geometry, referenced
 // to the center of the third pose. A session belongs to the server: it survives tab reloads and workspace changes,
 // and is stopped only by its stop route, an Equipment Control stop of its camera or mount, or a disconnection. When it
-// ends, the slew-rate preset it replaced is restored if the mount is free; otherwise the session says it was not.
+// starts, the tracking of a mount that is not tracking is started; when it ends, the slew-rate preset it replaced is
+// restored and the tracking it started is stopped if the mount is free; otherwise the session says it was not. The
+// progress of the frame being exposed is published as the driver reports it.
 // Angles are radians, durations seconds, instants Unix milliseconds. Records live in memory, the latest per camera.
 
 // Settings of the frames of a session; the exposure in seconds. The frame type is always LIGHT.
@@ -70,7 +72,7 @@ export interface TppaRequest extends CommandRequest {
 }
 
 // What a session is doing:
-// - preparing: the session is acquiring the devices and applying the slew rate.
+// - preparing: the session is acquiring the devices, starting the tracking, and applying the slew rate.
 // - moving: the mount rotates in RA towards the next pose, then settles.
 // - capturing: the camera takes a frame.
 // - solving: the frame is being solved and judged.
@@ -191,6 +193,14 @@ export interface TppaSessionSummary {
 	// Whether the previous preset was restored when the session ended; absent before it ended or when there was
 	// nothing to restore.
 	readonly slewRateRestored?: boolean
+	// Whether the session started the tracking of a mount that was not tracking; absent when it was already on.
+	readonly trackingStarted?: boolean
+	// Whether the tracking the session started was stopped again when it ended; absent before it ended or when it
+	// started none.
+	readonly trackingStopped?: boolean
+	// Progress of the frame being exposed, as the driver reports it (times in microseconds, progress in percent);
+	// absent outside an exposure and before the driver reported any.
+	readonly exposure?: CameraCaptureTime
 	// Problems meant for people, latest last, such as frames that did not solve.
 	readonly warnings: readonly string[]
 	// Why the session failed.
@@ -323,7 +333,7 @@ export class TppaSessions {
 	// its progress and outcome arrive as tppa:updated and operation:updated events. Responds 404 for an unknown camera
 	// or mount, 409 when either is disconnected or held by another operation, and 422 when the plate solver is not
 	// configured or the mount cannot run a polar alignment (not equatorial, no west-east motion or abort, no such slew
-	// rate, no site, parked, or not tracking).
+	// rate, no site, parked, or not tracking and unable to switch tracking).
 	async start(connectionId: string, deviceId: string, request: TppaRequest): Promise<Response> {
 		const known = this.operations.started(request.token)
 		const repeated = known && this.#byOperation.get(known.operationId)
@@ -429,12 +439,22 @@ export class TppaSessions {
 			const directory = await mkdtemp(join(this.auxiliaryDir, 'nebulosa-tppa-'))
 
 			try {
+				// The poses are solved against the sky the mount tracks, so the tracking is started first.
+				if (!mount.tracking) {
+					const started = await this.commander.setTracking(context, mount, true)
+					if (!started.ok) return started
+					this.#update(session, { trackingStarted: true })
+				}
+
 				const { request } = session.summary
 				const { latitude, longitude, elevation } = mount.geographicCoordinate
 				const capture: CenteringCaptureOptions = { ...request.capture, exposureTimeUnit: 'second', frameType: 'LIGHT', compressed: false }
 				const services: ThreePointPolarAlignmentServices = {
 					mountCommander: this.commander,
-					cameraCapturer: this.capturer,
+					cameraCapturer: listenedCapturer(
+						this.capturer,
+						exposureProgressListener((exposure) => this.#update(session, { exposure })),
+					),
 					solver: (frame, signal) => this.#solve(session, frame, preparation, signal),
 					auxiliaryPath: (stage, index) => join(directory, `tppa-${stage}-${index}.fit`),
 					clock: { ...SYSTEM_CAMERA_CAPTURE_CLOCK, delay: abortableDelay },
@@ -479,7 +499,7 @@ export class TppaSessions {
 
 					if (context.signal.aborted) return failedOperationResult('aborted')
 					if (result.ok || result.reason !== 'aborted') return result.ok ? successfulOperationResult(undefined) : result
-					this.#update(session, { state: 'refinementPaused' })
+					this.#update(session, { state: 'refinementPaused', exposure: undefined })
 				}
 			} finally {
 				await rm(directory, { recursive: true, force: true })
@@ -512,6 +532,7 @@ export class TppaSessions {
 		const { camera, cameraName, sessionId } = session.summary
 		const current = session.frame
 		const number = current?.number ?? session.summary.frameCount
+		this.#update(session, { exposure: undefined })
 		this.#phase(session, 'solving')
 
 		try {
@@ -626,25 +647,33 @@ export class TppaSessions {
 		if (!session.refinement && session.summary.state !== state) this.#update(session, { state })
 	}
 
-	// Records the end of a session from the result of its operation, then restores the slew rate it replaced.
+	// Records the end of a session from the result of its operation, then restores the slew rate it replaced and stops
+	// the tracking it started.
 	async #ended(session: Session, result: OperationResult<void>) {
 		session.frame = undefined
 		const endedAt = Date.now()
 		const estimated = session.summary.alignment !== undefined
 
-		if (result.ok || (result.reason === 'aborted' && estimated)) this.#update(session, { state: 'completed', endedAt })
-		else if (result.reason === 'aborted') this.#update(session, { state: 'cancelled', endedAt })
-		else this.#update(session, { state: 'failed', reason: result.reason, ...(result.error !== undefined && { error: result.error }), endedAt })
+		if (result.ok || (result.reason === 'aborted' && estimated)) this.#update(session, { state: 'completed', exposure: undefined, endedAt })
+		else if (result.reason === 'aborted') this.#update(session, { state: 'cancelled', exposure: undefined, endedAt })
+		else this.#update(session, { state: 'failed', exposure: undefined, reason: result.reason, ...(result.error !== undefined && { error: result.error }), endedAt })
 
 		const previous = session.summary.previousSlewRate
 		const { mount } = session
-		if (previous === undefined || mount.slewRate === previous) return
 
-		// The operation released the mount, so the restoration takes it again for itself; another operation that took
-		// it first, or a disconnection, leaves the preset changed.
-		const restored = mount.connected && this.operations.available(mount) ? await this.commander.setSlewRate(this.operations.coordinator, mount, previous) : undefined
-		if (restored?.ok) this.#update(session, { slewRateRestored: true })
-		else this.#update(session, { slewRateRestored: false, warnings: appendWarning(session.summary.warnings, `The slew rate of ${mount.name} was left at ${mount.slewRate ?? 'an unknown preset'} instead of ${previous}.`) })
+		// The operation released the mount, so each restoration takes it again for itself; another operation that took
+		// it first, or a disconnection, leaves the mount as the session left it.
+		if (previous !== undefined && mount.slewRate !== previous) {
+			const restored = mount.connected && this.operations.available(mount) ? await this.commander.setSlewRate(this.operations.coordinator, mount, previous) : undefined
+			if (restored?.ok) this.#update(session, { slewRateRestored: true })
+			else this.#update(session, { slewRateRestored: false, warnings: appendWarning(session.summary.warnings, `The slew rate of ${mount.name} was left at ${mount.slewRate ?? 'an unknown preset'} instead of ${previous}.`) })
+		}
+
+		if (session.summary.trackingStarted) {
+			const stopped = !mount.tracking || (mount.connected && this.operations.available(mount) && (await this.commander.setTracking(this.operations.coordinator, mount, false)).ok)
+			if (stopped) this.#update(session, { trackingStopped: true })
+			else this.#update(session, { trackingStopped: false, warnings: appendWarning(session.summary.warnings, `The tracking of ${mount.name} that the session started was left on.`) })
+		}
 	}
 
 	// Records a warning of a session.
@@ -686,7 +715,7 @@ function mountRefusal(mount: Mount, slewRate: string) {
 	const { latitude, longitude } = mount.geographicCoordinate
 	if (latitude === 0 && longitude === 0) return `${mount.name} reports no site`
 	if (mount.parked || mount.parking) return `${mount.name} is parked`
-	if (!mount.tracking) return `${mount.name} is not tracking`
+	if (!mount.tracking && !mount.canTracking) return `${mount.name} is not tracking and cannot start tracking`
 	return undefined
 }
 

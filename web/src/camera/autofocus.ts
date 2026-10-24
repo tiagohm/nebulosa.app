@@ -136,6 +136,7 @@ export function autoFocusRequest(
 		rmsdThreshold: settings.rmsdThreshold,
 		settleDelay: settings.settleDelay,
 		measureTimeout: settings.measureTimeout,
+		restoreOnStop: settings.restoreOnStop,
 	}
 }
 

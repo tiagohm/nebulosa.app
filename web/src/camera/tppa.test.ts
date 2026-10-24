@@ -98,7 +98,9 @@ test('a mount that can never align is unsupported, and a start needs a ready, tr
 	expect(tppaBlocker(READY, READY, undefined, 'SPEED_4', true)).toContain('not known')
 	expect(tppaBlocker(READY, READY, state, undefined, true)).toContain('slew rate')
 	expect(tppaBlocker(READY, READY, mountState({ site: { latitude: 0, longitude: 0, elevation: 0 } }), 'SPEED_4', true)).toContain('site')
-	expect(tppaBlocker(READY, READY, mountState({ tracking: false }), 'SPEED_4', true)).toContain('tracking')
+	expect(tppaBlocker(READY, READY, mountState({ tracking: false, canTracking: false }), 'SPEED_4', true)).toContain('tracking')
+	// The server starts the tracking of a mount that can switch it.
+	expect(tppaBlocker(READY, READY, mountState({ tracking: false, canTracking: true }), 'SPEED_4', true)).toBeUndefined()
 	expect(tppaBlocker(READY, READY, state, 'SPEED_4', false)).toContain('not configured')
 })
 

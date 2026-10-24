@@ -15,9 +15,9 @@ import type { FlatAnalysis, FlatDiagnosticCode, FlatExposureEstimate, FlatExposu
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { clamp } from 'nebulosa/src/math/numerical/math'
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
-import { type CameraCaptureEvent, type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
+import { type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
-import { type CaptureSettings, type CaptureSnoop, DEFAULT_CAPTURES_DIR, frameName, snoopedDevices } from './captures'
+import { type CaptureSettings, type CaptureSnoop, DEFAULT_CAPTURES_DIR, exposureProgressListener, frameName, snoopedDevices } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { FlatFrameContext, FlatFrameMeasurement, FlatMeasurementOptions, FlatWizardAnalyzer } from './flatwizard.analysis'
@@ -764,7 +764,7 @@ export class FlatWizardSessions {
 		const { name: filterLabel } = session.summary.filters[index]
 		this.#update(session, { state: 'exposing' })
 
-		const captured = await this.capturer.start(context, camera, this.#captureRequest(session, camera, exposure, staging, name), { clock: SYSTEM_CAMERA_CAPTURE_CLOCK, listener: (event, path) => this.#exposureProgress(session, event.state, event.frameProgress, path) }).result
+		const captured = await this.capturer.start(context, camera, this.#captureRequest(session, camera, exposure, staging, name), { clock: SYSTEM_CAMERA_CAPTURE_CLOCK, listener: exposureProgressListener((exposure) => this.#update(session, { exposure })) }).result
 		this.#update(session, { exposure: undefined })
 		if (!captured.ok) return captured
 
@@ -802,15 +802,6 @@ export class FlatWizardSessions {
 			this.#update(session, { previewError: `Unable to decode the frame: ${Error.isError(error) ? error.message : String(error)}` })
 			return undefined
 		}
-	}
-
-	// Follows the progress the capturer reports for the frame being exposed: a new exposure clears the previous
-	// progress, and the driver's countdown replaces it until the exposure finished. A report with a path is the frame
-	// itself, which carries no progress.
-	#exposureProgress(session: Session, state: CameraCaptureEvent['state'], progress: CameraCaptureTime, path?: string) {
-		if (path !== undefined) return
-		if (state === 'exposureStarted') this.#update(session, { exposure: undefined })
-		else if (state === 'exposing' || state === 'exposureFinished') this.#update(session, { exposure: { ...progress } })
 	}
 
 	// Builds the capture request of one frame: the session's camera settings, a FLAT frame of exposure seconds

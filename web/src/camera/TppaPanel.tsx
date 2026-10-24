@@ -19,6 +19,7 @@ import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { cameraKey } from './capture'
+import { FrameProgress } from './FrameProgress'
 import { startTppa, startTppaRefinement, stopTppa, stopTppaRefinement, TPPA_DIRECTION_LABELS, TPPA_DIRECTIONS, TPPA_STATE_LABELS, tppaBlocker, tppaMountSupport, tppaRequest, tppaRunning, tppaRuntime, tppaSlewRate } from './tppa'
 
 // Contextual panel sections of TPPA, a camera operation of the Images camera tabs: the equipment it uses, the
@@ -235,15 +236,20 @@ function PolarError({ alignment, details }: PolarErrorProps) {
 	)
 }
 
-// Step of the running or last session, its failure, and the slew rate restoration.
+// Step of the running or last session, the progress of the frame being exposed (a refinement frame only once the
+// driver reports it, since the refinement stays refining while it solves), its failure, the slew rate restoration,
+// and the tracking it started.
 function SessionState({ session }: { readonly session: TppaSessionSummary }) {
 	const failed = session.state === 'failed'
 
 	return (
 		<>
 			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>{TPPA_STATE_LABELS[session.state]}</p>
+			{(session.state === 'capturing' || (session.state === 'refining' && session.exposure)) && <FrameProgress exposure={session.exposure} />}
 			{failed && session.error && <p className="m-0 text-xs leading-4 text-danger">{session.error}</p>}
 			{session.slewRateRestored === true && session.previousSlewRate && <p className="m-0 text-xs leading-4 text-ink-300">The slew rate was restored to {session.previousSlewRate}.</p>}
+			{session.trackingStarted && session.trackingStopped === undefined && <p className="m-0 text-xs leading-4 text-ink-300">The tracking was started for the session and is stopped again once it ends.</p>}
+			{session.trackingStopped === true && <p className="m-0 text-xs leading-4 text-ink-300">The tracking started for the session was stopped.</p>}
 			{session.warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{session.warnings.at(-1)}</p>}
 		</>
 	)

@@ -149,6 +149,8 @@ export interface AutoFocusSettings {
 	settleDelay: number
 	// Longest star detection of one frame, in seconds; > 0.
 	measureTimeout: number
+	// Whether a stop moves the focuser back to the start position.
+	restoreOnStop: boolean
 }
 
 // Auto Focus form of a camera that has none yet: a hyperbolic fit over 4 positions on each side.
@@ -159,6 +161,7 @@ export const DEFAULT_AUTO_FOCUS_SETTINGS: AutoFocusSettings = {
 	rmsdThreshold: 0,
 	settleDelay: 0,
 	measureTimeout: 60,
+	restoreOnStop: true,
 }
 
 // TPPA form of one physical camera: how the next three-point polar alignment moves the mount and solves its frames.

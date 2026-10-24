@@ -3,7 +3,7 @@ import type { FlatWizardSession, FlatWizardSessionSummary } from 'api'
 import { proxy } from 'valtio'
 import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, type FlatWizardSettings } from '../profile/schema'
 import { cameraKey } from './capture'
-import { continueFlatWizard, flatWizardBlocker, flatWizardFilterName, flatWizardFrameProgress, flatWizardRequest, flatWizardRunning, type FlatWizardRuntime, handleFlatWizardEvent, refreshFlatWizard, startFlatWizard, stopFlatWizard } from './flatwizard'
+import { continueFlatWizard, flatWizardBlocker, flatWizardFilterName, flatWizardRequest, flatWizardRunning, type FlatWizardRuntime, handleFlatWizardEvent, refreshFlatWizard, startFlatWizard, stopFlatWizard } from './flatwizard'
 
 function newState() {
 	return proxy<FlatWizardRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
@@ -151,11 +151,4 @@ test('a filter is named as the wheel names its slot, or by its 1-based slot numb
 	expect(flatWizardFilterName(['Luminance', ' ', 'Red'], 1)).toBe('Filter 2')
 	expect(flatWizardFilterName(['Luminance'], 4)).toBe('Filter 5')
 	expect(flatWizardFilterName(undefined, 2)).toBe('Filter 3')
-})
-
-test('the frame progress converts the driver countdown to seconds and a bounded fraction', () => {
-	expect(flatWizardFrameProgress(undefined)).toBeUndefined()
-	expect(flatWizardFrameProgress({ elapsedTime: 2_500_000, remainingTime: 7_500_000, progress: 25 })).toEqual({ elapsed: 2.5, remaining: 7.5, fraction: 0.25 })
-	expect(flatWizardFrameProgress({ elapsedTime: 10_000_000, remainingTime: -1, progress: 104 })).toEqual({ elapsed: 10, remaining: 0, fraction: 1 })
-	expect(flatWizardFrameProgress({ elapsedTime: 0, remainingTime: 0, progress: Number.NaN })).toBeUndefined()
 })

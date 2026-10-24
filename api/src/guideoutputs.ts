@@ -91,3 +91,25 @@ export class GuideOutputCommands implements Disposable {
 		this.#commander.dispose()
 	}
 }
+
+// Routes of the guide output commands.
+export function createGuideOutputRoutes(guideOutputs: GuideOutputCommands) {
+	return {
+		'/api/connections/:id/guide-outputs/:deviceId': {
+			// Pulse-guide state of a guide output; 404 when the connection is not open or has no such output.
+			GET: (req) => guideOutputs.state(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/guide-outputs/:deviceId/pulse': {
+			// Starts a guide pulse; the outcome arrives as operation:updated events.
+			POST: async (req) => guideOutputs.pulse(req.params.id, req.params.deviceId, (await req.json()) as GuidePulseRequest),
+		},
+		'/api/connections/:id/guide-outputs/:deviceId/guide-rate': {
+			// Sets the guide rates; the new rates arrive as a guideOutput:updated event.
+			POST: async (req) => guideOutputs.setGuideRate(req.params.id, req.params.deviceId, (await req.json()) as GuideRateRequest),
+		},
+		'/api/connections/:id/guide-outputs/:deviceId/stop': {
+			// Stops every pulse of a guide output.
+			POST: (req) => guideOutputs.stop(req.params.id, req.params.deviceId),
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
+}

@@ -108,3 +108,37 @@ export class RotatorCommands implements Disposable {
 		this.#commander.dispose()
 	}
 }
+
+// Routes of the rotator commands.
+export function createRotatorRoutes(rotators: RotatorCommands) {
+	return {
+		'/api/connections/:id/rotators/:deviceId': {
+			// Angle, motion, and capabilities of a rotator; 404 when the connection is not open or has no such rotator.
+			GET: (req) => rotators.state(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/rotators/:deviceId/move-to': {
+			// Starts a move to a mechanical angle; the outcome arrives as operation:updated events.
+			POST: async (req) => rotators.moveTo(req.params.id, req.params.deviceId, (await req.json()) as RotatorMoveToRequest),
+		},
+		'/api/connections/:id/rotators/:deviceId/move-by': {
+			// Starts a move by an angle; the outcome arrives as operation:updated events.
+			POST: async (req) => rotators.moveBy(req.params.id, req.params.deviceId, (await req.json()) as RotatorMoveByRequest),
+		},
+		'/api/connections/:id/rotators/:deviceId/home': {
+			// Starts a move to the home position; the outcome arrives as operation:updated events.
+			POST: async (req) => rotators.home(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+		},
+		'/api/connections/:id/rotators/:deviceId/sync': {
+			// Redefines the angle without moving.
+			POST: async (req) => rotators.sync(req.params.id, req.params.deviceId, (await req.json()) as RotatorSyncRequest),
+		},
+		'/api/connections/:id/rotators/:deviceId/reverse': {
+			// Reverses or restores the rotation direction.
+			POST: async (req) => rotators.reverse(req.params.id, req.params.deviceId, (await req.json()) as RotatorReverseRequest),
+		},
+		'/api/connections/:id/rotators/:deviceId/stop': {
+			// Cancels the move of a rotator and stops it.
+			POST: (req) => rotators.stop(req.params.id, req.params.deviceId),
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
+}

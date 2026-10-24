@@ -17,6 +17,7 @@ import { type DeviceEvent, DeviceRegistry } from './devices'
 import type { DomeMotionEvent } from './domes'
 import type { ExternalToolEvent } from './externaltools'
 import type { FocuserBacklashEvent } from './focusers'
+import { errorResponse } from './http'
 import type { MountNudgeEvent } from './mounts'
 import type { OperationEvent } from './operations'
 import type { PlateSolvingEvent } from './platesolving'
@@ -233,3 +234,54 @@ export class ConnectionManager implements Disposable {
 
 // Connection registry shared by the whole application.
 export const connections = new ConnectionManager()
+
+// Routes of the connections and of the devices they provide.
+export function createConnectionRoutes(connections: ConnectionManager) {
+	// Sends the CONNECTION switch to a device of an open connection. Responds 202 once sent (the new state arrives as a
+	// device:updated event) and 404 when the connection is not open or has no such device.
+	function switchDevice(id: string, deviceId: string, connect: boolean): Response {
+		const client = connections.client(id)
+		if (!client || !connections.devices.switch(client, deviceId, connect)) return errorResponse('Device not found', 404, 'notFound')
+		return new Response(null, { status: 202 })
+	}
+
+	return {
+		'/api/connections': {
+			// The open connections, shared by every tab.
+			GET: () => Response.json(connections.list()),
+			// Opens a connection, or returns the existing one for the same endpoint. Responds 502 (unreachable) when the
+			// endpoint cannot be reached.
+			POST: async (req) => {
+				try {
+					return Response.json(await connections.connect((await req.json()) as ConnectRequest))
+				} catch (error) {
+					return errorResponse(Error.isError(error) ? error.message : 'Unable to connect', 502, 'unreachable')
+				}
+			},
+		},
+		'/api/connections/:id': {
+			// Closes the connection for every tab; 404 when it is not open.
+			DELETE: (req) => new Response(null, { status: connections.disconnect(req.params.id) ? 204 : 404 }),
+		},
+		'/api/connections/:id/devices': {
+			// The managed devices of an open connection; 404 when it is not open.
+			GET: (req) => {
+				const client = connections.client(req.params.id)
+				return client ? Response.json(connections.devices.list(client)) : errorResponse('Connection not found', 404, 'notFound')
+			},
+		},
+		'/api/connections/:id/states': {
+			// The control state of every managed device of an open connection, by type; 404 when it is not open.
+			GET: (req) => {
+				const client = connections.client(req.params.id)
+				return client ? Response.json(connections.devices.states(client)) : errorResponse('Connection not found', 404, 'notFound')
+			},
+		},
+		'/api/connections/:id/devices/:deviceId/connect': {
+			POST: (req) => switchDevice(req.params.id, req.params.deviceId, true),
+		},
+		'/api/connections/:id/devices/:deviceId/disconnect': {
+			POST: (req) => switchDevice(req.params.id, req.params.deviceId, false),
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
+}

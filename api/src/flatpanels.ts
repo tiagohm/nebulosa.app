@@ -58,3 +58,21 @@ export class FlatPanelCommands {
 		return await settle(this.#commander.intensity(this.operations.coordinator, panel, value), 'Setting the brightness')
 	}
 }
+
+// Routes of the flat panel commands.
+export function createFlatPanelRoutes(flatPanels: FlatPanelCommands) {
+	return {
+		'/api/connections/:id/flat-panels/:deviceId': {
+			// Light state of a flat panel; 404 when the connection is not open or has no such panel.
+			GET: (req) => flatPanels.state(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/flat-panels/:deviceId/light': {
+			// Switches the light; the new state arrives as a flatPanel:updated event.
+			POST: async (req) => flatPanels.setLight(req.params.id, req.params.deviceId, (await req.json()) as FlatPanelLightRequest),
+		},
+		'/api/connections/:id/flat-panels/:deviceId/intensity': {
+			// Sets the brightness; the new value arrives as a flatPanel:updated event.
+			POST: async (req) => flatPanels.setIntensity(req.params.id, req.params.deviceId, (await req.json()) as FlatPanelIntensityRequest),
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
+}

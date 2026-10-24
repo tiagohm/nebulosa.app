@@ -351,3 +351,39 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 		return { connectionId, deviceId: focuser.id, config: { enabled, mode, backlashIn, backlashOut }, revision, offset: this.#offset(focuser), ...(error && { error }) }
 	}
 }
+
+// Routes of the focuser commands and backlash compensation.
+export function createFocuserRoutes(focusers: FocuserCommands) {
+	return {
+		'/api/connections/:id/focusers/:deviceId': {
+			// Position, motion, and capabilities of a focuser; 404 when the connection is not open or has no such focuser.
+			GET: (req) => focusers.state(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/focusers/:deviceId/move-to': {
+			// Starts a move to an absolute position; the outcome arrives as operation:updated events.
+			POST: async (req) => focusers.moveTo(req.params.id, req.params.deviceId, (await req.json()) as FocuserMoveToRequest),
+		},
+		'/api/connections/:id/focusers/:deviceId/move': {
+			// Starts a move by a number of steps; the outcome arrives as operation:updated events.
+			POST: async (req) => focusers.move(req.params.id, req.params.deviceId, (await req.json()) as FocuserMoveRequest),
+		},
+		'/api/connections/:id/focusers/:deviceId/backlash': {
+			// Backlash compensation of a focuser, connected or not.
+			GET: (req) => focusers.backlashState(req.params.id, req.params.deviceId),
+			// Saves the backlash compensation of a focuser (FocuserBacklashSaveRequest), applied from the next move.
+			PUT: async (req) => focusers.saveBacklash(req.params.id, req.params.deviceId, (await req.json()) as FocuserBacklashSaveRequest),
+		},
+		'/api/connections/:id/focusers/:deviceId/sync': {
+			// Redefines the position counter without moving.
+			POST: async (req) => focusers.sync(req.params.id, req.params.deviceId, (await req.json()) as FocuserSyncRequest),
+		},
+		'/api/connections/:id/focusers/:deviceId/reverse': {
+			// Reverses or restores the motion direction.
+			POST: async (req) => focusers.reverse(req.params.id, req.params.deviceId, (await req.json()) as FocuserReverseRequest),
+		},
+		'/api/connections/:id/focusers/:deviceId/stop': {
+			// Cancels the move of a focuser and stops it.
+			POST: (req) => focusers.stop(req.params.id, req.params.deviceId),
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
+}

@@ -645,65 +645,80 @@ export class ImageStore {
 // Image documents of the server.
 export const images = new ImageStore()
 
-// Handles POST /api/images with { path }: responds 201 with the ImageInfo, 404 when the file does not
-// exist, and 415 when it is not a FITS or XISF image.
-export async function handleOpenImage(req: Request): Promise<Response> {
-	const { path } = (await req.json()) as { readonly path: string }
-
-	try {
-		return Response.json(await images.open(path), { status: 201 })
-	} catch (error) {
-		if (error instanceof ImageOpenError) return errorResponse(error.message, error.status, error.status === 404 ? 'notFound' : 'unsupportedFormat')
-		throw error
-	}
-}
-
-// Handles POST /api/images/:id/render with a RenderRequest: responds with the JPEG and its RenderResult
-// in RENDER_HEADER, 404 when the document is not open, 409 when a newer rendering of the document or an
-// aborted request dropped it, and 422 when the settings cannot be applied to the image.
-export async function handleRenderImage(req: Request, id: string): Promise<Response> {
-	const outcome = await images.render(id, (await req.json()) as RenderRequest, req.signal)
-	if (outcome.status === 'missing') return errorResponse('Image not found', 404, 'notFound')
-	if (outcome.status === 'superseded') return errorResponse('Rendering superseded', 409, 'superseded')
-	if (outcome.status === 'invalid') return errorResponse(outcome.error, 422, 'invalidSettings')
-	return new Response(outcome.jpeg, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', [RENDER_HEADER]: JSON.stringify(outcome.result) } })
-}
-
-// Handles POST /api/images/:id/derive with a DeriveRequest: responds 201 with the ImageInfo of the new,
-// unsaved document, 404 when the source is not open, and 422 when the settings cannot be applied.
-export async function handleDeriveImage(req: Request, id: string): Promise<Response> {
-	const outcome = await images.derive(id, (await req.json()) as DeriveRequest)
-	if (outcome.status === 'missing') return errorResponse('Image not found', 404, 'notFound')
-	if (outcome.status === 'invalid') return errorResponse(outcome.error, 422, 'invalidSettings')
-	return Response.json(outcome.info, { status: 201 })
-}
-
-// Handles POST /api/images/:id/save with a SaveRequest: responds with the SaveResult once the file is
-// written, 404 when the document is not open, 409 when the target is the file of an open document or
-// exists without overwrite, and 500 when the file cannot be written.
-export async function handleSaveImage(req: Request, id: string): Promise<Response> {
-	try {
-		const outcome = await images.save(id, (await req.json()) as SaveRequest)
-		if (outcome.status === 'missing') return errorResponse('Image not found', 404, 'notFound')
-		if (outcome.status === 'original') return errorResponse('An open image is read from this file; choose another one', 409, 'original')
-		if (outcome.status === 'exists') return errorResponse('The file already exists', 409, 'exists')
-		return Response.json({ path: outcome.path } satisfies SaveResult)
-	} catch (error) {
-		return errorResponse(`Unable to write the file: ${Error.isError(error) ? error.message : String(error)}`, 500, 'writeFailed')
-	}
-}
-
 // Extensions of the files of each format.
 const FORMAT_EXTENSIONS: Readonly<Record<ImageFormat, string>> = { fits: 'fits', xisf: 'xisf' }
 
-// Handles GET /api/images/:id/file?format=fits|xisf: responds with the document encoded as an attachment
-// named after it, or 404 when it is not open.
-export async function handleDownloadImage(req: Request, id: string): Promise<Response> {
-	const format = (new URL(req.url).searchParams.get('format') ?? 'fits') as ImageFormat
-	const bytes = await images.encode(id, format)
-	if (!bytes) return errorResponse('Image not found', 404, 'notFound')
-	const name = `${images.name(id) ?? 'image'}.${FORMAT_EXTENSIONS[format]}`
-	// The plain filename keeps only ASCII for old clients; filename* carries the exact UTF-8 name.
-	const disposition = `attachment; filename="${name.replaceAll(/[^\u0020-\u007E]|["\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`
-	return new Response(bytes, { headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': disposition, 'Cache-Control': 'no-store' } })
+// Routes of the image documents.
+export function createImageRoutes(images: ImageStore) {
+	return {
+		'/api/images': {
+			// Opens a FITS or XISF file of the server ({ path }) as an image document: responds 201 with the ImageInfo,
+			// 404 when the file does not exist, and 415 when it is not a FITS or XISF image.
+			POST: async (req) => {
+				const { path } = (await req.json()) as { readonly path: string }
+
+				try {
+					return Response.json(await images.open(path), { status: 201 })
+				} catch (error) {
+					if (error instanceof ImageOpenError) return errorResponse(error.message, error.status, error.status === 404 ? 'notFound' : 'unsupportedFormat')
+					throw error
+				}
+			},
+		},
+		'/api/images/:id': {
+			// Closes an image document; 404 when it is not open.
+			DELETE: (req) => new Response(null, { status: images.close(req.params.id) ? 204 : 404 }),
+		},
+		'/api/images/:id/render': {
+			// Renders an image document with a RenderRequest: responds with the JPEG and its RenderResult in RENDER_HEADER,
+			// 404 when the document is not open, 409 when a newer rendering of the document or an aborted request dropped
+			// it, and 422 when the settings cannot be applied to the image.
+			POST: async (req) => {
+				const outcome = await images.render(req.params.id, (await req.json()) as RenderRequest, req.signal)
+				if (outcome.status === 'missing') return errorResponse('Image not found', 404, 'notFound')
+				if (outcome.status === 'superseded') return errorResponse('Rendering superseded', 409, 'superseded')
+				if (outcome.status === 'invalid') return errorResponse(outcome.error, 422, 'invalidSettings')
+				return new Response(outcome.jpeg, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', [RENDER_HEADER]: JSON.stringify(outcome.result) } })
+			},
+		},
+		'/api/images/:id/derive': {
+			// Creates an unsaved document from an image document and a DeriveRequest: responds 201 with the ImageInfo of
+			// the new document, 404 when the source is not open, and 422 when the settings cannot be applied.
+			POST: async (req) => {
+				const outcome = await images.derive(req.params.id, (await req.json()) as DeriveRequest)
+				if (outcome.status === 'missing') return errorResponse('Image not found', 404, 'notFound')
+				if (outcome.status === 'invalid') return errorResponse(outcome.error, 422, 'invalidSettings')
+				return Response.json(outcome.info, { status: 201 })
+			},
+		},
+		'/api/images/:id/save': {
+			// Writes an image document to a file of the server with a SaveRequest: responds with the SaveResult once the
+			// file is written, 404 when the document is not open, 409 when the target is the file of an open document or
+			// exists without overwrite, and 500 when the file cannot be written.
+			POST: async (req) => {
+				try {
+					const outcome = await images.save(req.params.id, (await req.json()) as SaveRequest)
+					if (outcome.status === 'missing') return errorResponse('Image not found', 404, 'notFound')
+					if (outcome.status === 'original') return errorResponse('An open image is read from this file; choose another one', 409, 'original')
+					if (outcome.status === 'exists') return errorResponse('The file already exists', 409, 'exists')
+					return Response.json({ path: outcome.path } satisfies SaveResult)
+				} catch (error) {
+					return errorResponse(`Unable to write the file: ${Error.isError(error) ? error.message : String(error)}`, 500, 'writeFailed')
+				}
+			},
+		},
+		'/api/images/:id/file': {
+			// Downloads an image document (?format=fits|xisf) as an attachment named after it; 404 when it is not open.
+			GET: async (req) => {
+				const id = req.params.id
+				const format = (new URL(req.url).searchParams.get('format') ?? 'fits') as ImageFormat
+				const bytes = await images.encode(id, format)
+				if (!bytes) return errorResponse('Image not found', 404, 'notFound')
+				const name = `${images.name(id) ?? 'image'}.${FORMAT_EXTENSIONS[format]}`
+				// The plain filename keeps only ASCII for old clients; filename* carries the exact UTF-8 name.
+				const disposition = `attachment; filename="${name.replaceAll(/[^\u0020-\u007E]|["\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`
+				return new Response(bytes, { headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': disposition, 'Cache-Control': 'no-store' } })
+			},
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
 }

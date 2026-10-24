@@ -58,3 +58,25 @@ export class CoverCommands implements Disposable {
 		this.#commander.dispose()
 	}
 }
+
+// Routes of the dust cover commands.
+export function createCoverRoutes(covers: CoverCommands) {
+	return {
+		'/api/connections/:id/covers/:deviceId': {
+			// Position and capabilities of a cover; 404 when the connection is not open or has no such cover.
+			GET: (req) => covers.state(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/covers/:deviceId/open': {
+			// Starts opening a cover; the outcome arrives as operation:updated events.
+			POST: async (req) => covers.open(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+		},
+		'/api/connections/:id/covers/:deviceId/close': {
+			// Starts closing a cover; the outcome arrives as operation:updated events.
+			POST: async (req) => covers.close(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+		},
+		'/api/connections/:id/covers/:deviceId/stop': {
+			// Cancels the motion of a cover and stops it.
+			POST: (req) => covers.stop(req.params.id, req.params.deviceId),
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
+}

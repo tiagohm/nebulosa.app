@@ -15,6 +15,8 @@ Server state reaches every tab through `GET` snapshots plus the `/api/ws` event 
 
 The control states of the devices of the active profile's connection are mirrored once in the web, by `controlRuntime` (`web/src/equipment-control/control.ts`), from `GET /api/connections/:id/states` and the `<type>:updated` events. A view that follows one device, such as the Sky mount (`mountView`), Mount Nudge, the camera capabilities of Camera Acquisition and Auto Focus, or the sensor geometry of the Equipment Setup field of view (`CameraCapabilities.sensor`, `liveSensors`), reads that mirror (`watchedDeviceState`) and never fetches or tracks the device's state apart.
 
+Each `api` service exposes its routes through a `create<Name>Routes(service)` factory in its own module; `api/src/index.ts` only composes the services, spreads their routes, and serves `/api/health` and `/api/ws`.
+
 Every error response of `api` is `{ error, code }` (`ApiError` and `errorResponse` in `api/src/http.ts`): a message meant for people and a stable code a client branches on, never the message. Each service names its codes (`CommandErrorCode`, `StarDetectionErrorCode`, `PlateSolveErrorCode`, `CaptureFrameErrorCode`, and the codes its routes document), and a route may add documented fields, such as the current state after a `conflict`.
 
 ## Capability Inventory

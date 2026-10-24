@@ -65,3 +65,21 @@ export class WheelCommands implements Disposable {
 		this.#commander.dispose()
 	}
 }
+
+// Routes of the filter wheel commands.
+export function createWheelRoutes(wheels: WheelCommands) {
+	return {
+		'/api/connections/:id/wheels/:deviceId': {
+			// Slot, motion, and names of a filter wheel; 404 when the connection is not open or has no such wheel.
+			GET: (req) => wheels.state(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/wheels/:deviceId/move': {
+			// Starts a change of slot; the outcome arrives as operation:updated events.
+			POST: async (req) => wheels.move(req.params.id, req.params.deviceId, (await req.json()) as WheelMoveRequest),
+		},
+		'/api/connections/:id/wheels/:deviceId/names': {
+			// Renames the slots; the new names arrive as a wheel:updated event.
+			POST: async (req) => wheels.setNames(req.params.id, req.params.deviceId, (await req.json()) as WheelNamesRequest),
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
+}

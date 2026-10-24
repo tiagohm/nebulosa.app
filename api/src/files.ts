@@ -107,16 +107,23 @@ export async function listDirectory(path: string, extensions?: ReadonlySet<strin
 	return parent === undefined ? { path: directory, entries } : { path: directory, parent, entries }
 }
 
-// Handles GET /api/files?path=<directory>&extensions=<ext,ext>: responds with the DirectoryListing, 404
-// when the directory does not exist, and 403 when it cannot be read.
-export async function handleListDirectory(req: Request): Promise<Response> {
-	const params = new URL(req.url).searchParams
-	const extensions = params.get('extensions')
+// Routes of the server filesystem browser.
+export function createFileRoutes() {
+	return {
+		'/api/files': {
+			// Lists a directory of the server (?path=<directory>&extensions=<ext,ext>): responds with the DirectoryListing,
+			// 404 when the directory does not exist, and 403 when it cannot be read.
+			GET: async (req) => {
+				const params = new URL(req.url).searchParams
+				const extensions = params.get('extensions')
 
-	try {
-		return Response.json(await listDirectory(params.get('path') ?? '.', extensions ? new Set(extensions.toLowerCase().split(',')) : undefined))
-	} catch (error) {
-		if (error instanceof DirectoryError) return errorResponse(error.message, error.status, error.status === 404 ? 'notFound' : 'forbidden')
-		throw error
-	}
+				try {
+					return Response.json(await listDirectory(params.get('path') ?? '.', extensions ? new Set(extensions.toLowerCase().split(',')) : undefined))
+				} catch (error) {
+					if (error instanceof DirectoryError) return errorResponse(error.message, error.status, error.status === 404 ? 'notFound' : 'forbidden')
+					throw error
+				}
+			},
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
 }

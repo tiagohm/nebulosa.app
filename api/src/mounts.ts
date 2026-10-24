@@ -493,3 +493,93 @@ export class MountCommands implements Disposable {
 		this.#commander.dispose()
 	}
 }
+
+// Routes of the mount commands and nudge sessions.
+export function createMountRoutes(mounts: MountCommands) {
+	return {
+		'/api/connections/:id/mounts/:deviceId': {
+			// Pointing and motion state of a mount; 404 when the connection is not open or has no such mount.
+			GET: (req) => mounts.state(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/mounts/:deviceId/slew': {
+			// Slews a mount to an object resolved at the current time; the outcome arrives as operation:updated events.
+			POST: async (req) => mounts.slew(req.params.id, req.params.deviceId, (await req.json()) as MountSlewRequest, req.signal),
+		},
+		'/api/connections/:id/mounts/:deviceId/stop': {
+			// Cancels the operation of a mount and stops its motion.
+			POST: (req) => mounts.stop(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/mounts/:deviceId/slew-rate': {
+			// Selects the speed preset of manual motion; the new preset arrives as a mount:updated event.
+			POST: async (req) => mounts.setSlewRate(req.params.id, req.params.deviceId, (await req.json()) as MountSlewRateRequest),
+		},
+		'/api/connections/:id/mounts/:deviceId/nudge': {
+			// Starts a nudge held by a lease; its changes arrive as mount:nudge and operation:updated events.
+			POST: async (req) => mounts.startNudge(req.params.id, req.params.deviceId, (await req.json()) as MountNudgeRequest),
+		},
+		'/api/connections/:id/mounts/:deviceId/goto': {
+			// Starts a goto to a coordinate; the outcome arrives as operation:updated events.
+			POST: async (req) => mounts.goTo(req.params.id, req.params.deviceId, (await req.json()) as MountGoToRequest),
+		},
+		'/api/connections/:id/mounts/:deviceId/flip': {
+			// Starts a meridian flip to a coordinate; the outcome arrives as operation:updated events.
+			POST: async (req) => mounts.flip(req.params.id, req.params.deviceId, (await req.json()) as MountGoToRequest),
+		},
+		'/api/connections/:id/mounts/:deviceId/sync': {
+			// Redefines where the mount points.
+			POST: async (req) => mounts.sync(req.params.id, req.params.deviceId, (await req.json()) as MountSyncRequest),
+		},
+		'/api/connections/:id/mounts/:deviceId/park': {
+			// Starts parking; the outcome arrives as operation:updated events.
+			POST: async (req) => mounts.park(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+		},
+		'/api/connections/:id/mounts/:deviceId/unpark': {
+			// Starts unparking; the outcome arrives as operation:updated events.
+			POST: async (req) => mounts.unpark(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+		},
+		'/api/connections/:id/mounts/:deviceId/home': {
+			// Starts a slew to the home position; the outcome arrives as operation:updated events.
+			POST: async (req) => mounts.home(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+		},
+		'/api/connections/:id/mounts/:deviceId/find-home': {
+			// Starts the search for the home position; the outcome arrives as operation:updated events.
+			POST: async (req) => mounts.findHome(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+		},
+		'/api/connections/:id/mounts/:deviceId/set-home': {
+			// Stores the current position as the home position.
+			POST: (req) => mounts.setHome(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/mounts/:deviceId/set-park': {
+			// Stores the current position as the park position.
+			POST: (req) => mounts.setPark(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/mounts/:deviceId/tracking': {
+			// Switches tracking, answered once the mount reports it.
+			POST: async (req) => mounts.setTracking(req.params.id, req.params.deviceId, (await req.json()) as MountTrackingRequest),
+		},
+		'/api/connections/:id/mounts/:deviceId/track-mode': {
+			// Selects the tracking rate; the new rate arrives as a mount:updated event.
+			POST: async (req) => mounts.setTrackMode(req.params.id, req.params.deviceId, (await req.json()) as MountTrackModeRequest),
+		},
+		'/api/connections/:id/mounts/:deviceId/site': {
+			// Sends a site to the mount.
+			POST: async (req) => mounts.setSite(req.params.id, req.params.deviceId, (await req.json()) as MountSiteRequest),
+		},
+		'/api/connections/:id/mounts/:deviceId/time': {
+			// Sends a clock to the mount.
+			POST: async (req) => mounts.setTime(req.params.id, req.params.deviceId, (await req.json()) as MountTimeRequest),
+		},
+		'/api/mounts/nudges': {
+			// The nudge sessions still running, started by any tab.
+			GET: () => Response.json(mounts.nudges()),
+		},
+		'/api/mounts/nudges/:token/heartbeat': {
+			// Renews the lease of a running nudge.
+			POST: (req) => mounts.heartbeatNudge(req.params.token),
+		},
+		'/api/mounts/nudges/:token/stop': {
+			// Ends a nudge, or records a press that has not started yet as ended; idempotent.
+			POST: (req) => mounts.stopNudge(req.params.token),
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
+}

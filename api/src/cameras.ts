@@ -66,3 +66,17 @@ export class CameraCommands {
 		return camera
 	}
 }
+
+// Routes of the camera cooling commands.
+export function createCameraRoutes(cameras: CameraCommands) {
+	return {
+		'/api/connections/:id/cameras/:deviceId/cooler': {
+			// Switches the cooler; the new state arrives as a camera:capabilities event.
+			POST: async (req) => cameras.setCooler(req.params.id, req.params.deviceId, (await req.json()) as CameraCoolerRequest),
+		},
+		'/api/connections/:id/cameras/:deviceId/temperature': {
+			// Sets the cooling target; the sensor temperature arrives as camera:capabilities events.
+			POST: async (req) => cameras.setTemperature(req.params.id, req.params.deviceId, (await req.json()) as CameraTemperatureRequest),
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
+}

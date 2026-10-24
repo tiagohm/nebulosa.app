@@ -533,3 +533,25 @@ export class AutoFocusSessions {
 		if (latest) this.listener({ type: 'autofocus:updated', session: session.summary })
 	}
 }
+
+// Routes of the Auto Focus sessions.
+export function createAutoFocusRoutes(autoFocus: AutoFocusSessions) {
+	return {
+		'/api/autofocus': {
+			// The latest Auto Focus session of every camera, started by any tab, without measurements.
+			GET: () => Response.json(autoFocus.snapshot()),
+		},
+		'/api/autofocus/:sessionId': {
+			// An Auto Focus session with its measurements and fitted curve; 404 when it is not the latest of its camera.
+			GET: (req) => autoFocus.session(req.params.sessionId),
+		},
+		'/api/autofocus/:sessionId/stop': {
+			// Stops an Auto Focus session where it stands, without moving the focuser back.
+			POST: (req) => autoFocus.stop(req.params.sessionId),
+		},
+		'/api/connections/:id/cameras/:deviceId/autofocus': {
+			// Starts an Auto Focus with this camera; its progress and outcome arrive as autofocus:updated and operation:updated events.
+			POST: async (req) => autoFocus.start(req.params.id, req.params.deviceId, (await req.json()) as AutoFocusRequest),
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
+}

@@ -310,3 +310,81 @@ export class DomeCommands implements Disposable {
 		this.#commander.dispose()
 	}
 }
+
+// Routes of the dome commands and manual rotation sessions.
+export function createDomeRoutes(domes: DomeCommands) {
+	return {
+		'/api/connections/:id/domes/:deviceId': {
+			// Position, shutter, and capabilities of a dome; 404 when the connection is not open or has no such dome.
+			GET: (req) => domes.state(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/domes/:deviceId/slew': {
+			// Starts a slew to an azimuth; the outcome arrives as operation:updated events.
+			POST: async (req) => domes.slew(req.params.id, req.params.deviceId, (await req.json()) as DomeSlewRequest),
+		},
+		'/api/connections/:id/domes/:deviceId/move-by': {
+			// Starts a rotation by an angle; the outcome arrives as operation:updated events.
+			POST: async (req) => domes.moveBy(req.params.id, req.params.deviceId, (await req.json()) as DomeMoveByRequest),
+		},
+		'/api/connections/:id/domes/:deviceId/altitude': {
+			// Starts a move of the shutter to an altitude; the outcome arrives as operation:updated events.
+			POST: async (req) => domes.moveToAltitude(req.params.id, req.params.deviceId, (await req.json()) as DomeAltitudeRequest),
+		},
+		'/api/connections/:id/domes/:deviceId/home': {
+			// Starts the search for the home position; the outcome arrives as operation:updated events.
+			POST: async (req) => domes.home(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+		},
+		'/api/connections/:id/domes/:deviceId/park': {
+			// Starts parking; the outcome arrives as operation:updated events.
+			POST: async (req) => domes.park(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+		},
+		'/api/connections/:id/domes/:deviceId/unpark': {
+			// Starts unparking; the outcome arrives as operation:updated events.
+			POST: async (req) => domes.unpark(req.params.id, req.params.deviceId, (await req.json()) as CommandRequest),
+		},
+		'/api/connections/:id/domes/:deviceId/shutter': {
+			// Starts opening or closing the shutter; the outcome arrives as operation:updated events.
+			POST: async (req) => domes.shutter(req.params.id, req.params.deviceId, (await req.json()) as DomeShutterRequest),
+		},
+		'/api/connections/:id/domes/:deviceId/slaving': {
+			// Switches the driver's slaving to the mount, answered once the dome reports it.
+			POST: async (req) => domes.setSlaving(req.params.id, req.params.deviceId, (await req.json()) as DomeSlavingRequest),
+		},
+		'/api/connections/:id/domes/:deviceId/sync': {
+			// Redefines the azimuth without moving.
+			POST: async (req) => domes.sync(req.params.id, req.params.deviceId, (await req.json()) as DomeSyncRequest),
+		},
+		'/api/connections/:id/domes/:deviceId/set-park': {
+			// Stores the current position as the park position.
+			POST: (req) => domes.setPark(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/domes/:deviceId/speed': {
+			// Sets the rotation speed.
+			POST: async (req) => domes.setSpeed(req.params.id, req.params.deviceId, (await req.json()) as DomeSpeedRequest),
+		},
+		'/api/connections/:id/domes/:deviceId/backlash': {
+			// Switches backlash compensation and sets its steps.
+			POST: async (req) => domes.setBacklash(req.params.id, req.params.deviceId, (await req.json()) as DomeBacklashRequest),
+		},
+		'/api/connections/:id/domes/:deviceId/stop': {
+			// Cancels the operation of a dome and stops its motion.
+			POST: (req) => domes.stop(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/domes/:deviceId/motion': {
+			// Starts a manual rotation held by a lease; its changes arrive as dome:motion and operation:updated events.
+			POST: async (req) => domes.startMotion(req.params.id, req.params.deviceId, (await req.json()) as DomeMotionRequest),
+		},
+		'/api/domes/motions': {
+			// The manual rotations still running, started by any tab.
+			GET: () => Response.json(domes.motions()),
+		},
+		'/api/domes/motions/:token/heartbeat': {
+			// Renews the lease of a running manual rotation.
+			POST: (req) => domes.heartbeatMotion(req.params.token),
+		},
+		'/api/domes/motions/:token/stop': {
+			// Ends a manual rotation, or records a press that has not started yet as ended; idempotent.
+			POST: (req) => domes.stopMotion(req.params.token),
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
+}

@@ -42,3 +42,17 @@ export class DewHeaterCommands {
 		return await settle(this.#commander.dutyCycle(this.operations.coordinator, heater, value), 'Setting the duty cycle')
 	}
 }
+
+// Routes of the dew heater commands.
+export function createDewHeaterRoutes(dewHeaters: DewHeaterCommands) {
+	return {
+		'/api/connections/:id/dew-heaters/:deviceId': {
+			// Heating level of a dew heater; 404 when the connection is not open or has no such heater.
+			GET: (req) => dewHeaters.state(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/dew-heaters/:deviceId/duty-cycle': {
+			// Sets the duty cycle; the new value arrives as a dewHeater:updated event.
+			POST: async (req) => dewHeaters.setDutyCycle(req.params.id, req.params.deviceId, (await req.json()) as DewHeaterDutyCycleRequest),
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
+}

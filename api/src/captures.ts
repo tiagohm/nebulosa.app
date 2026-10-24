@@ -614,3 +614,29 @@ export class CameraCaptures implements Disposable {
 		this.#capturer.dispose()
 	}
 }
+
+// Routes of the camera captures.
+export function createCaptureRoutes(captures: CameraCaptures) {
+	return {
+		'/api/captures': {
+			// The latest capture session and previewed frame of every camera, started by any tab.
+			GET: () => Response.json(captures.snapshot()),
+		},
+		'/api/connections/:id/cameras/:deviceId': {
+			// Capture capabilities and thermal state of a camera; 404 when the connection is not open or has no such camera.
+			GET: (req) => captures.capabilities(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/cameras/:deviceId/capture': {
+			// Starts a capture; its progress and outcome arrive as capture:updated and operation:updated events.
+			POST: async (req) => captures.start(req.params.id, req.params.deviceId, (await req.json()) as CaptureRequest),
+		},
+		'/api/connections/:id/cameras/:deviceId/capture/stop': {
+			// Stops the capture of a camera after the exposure in flight.
+			POST: (req) => captures.stop(req.params.id, req.params.deviceId),
+		},
+		'/api/connections/:id/cameras/:deviceId/capture/abort': {
+			// Aborts the exposure in flight and ends the capture of a camera.
+			POST: (req) => captures.abort(req.params.id, req.params.deviceId),
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
+}

@@ -195,3 +195,13 @@ export class OperationRegistry implements Disposable {
 		this.#lifecycle.dispose()
 	}
 }
+
+// Routes of the device operations.
+export function createOperationRoutes(operations: OperationRegistry) {
+	return {
+		'/api/operations': {
+			// The device operations still running, started by any tab.
+			GET: () => Response.json(operations.running()),
+		},
+	} as const satisfies Bun.Serve.Routes<undefined, string>
+}

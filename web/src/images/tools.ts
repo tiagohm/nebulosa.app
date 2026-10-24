@@ -3,6 +3,7 @@ import { AutoFocusTool } from './AutoFocusTool'
 import { CameraAcquisitionTool } from './CameraAcquisitionTool'
 import type { CameraOperationContext } from './cameracontext'
 import { DarvTool } from './DarvTool'
+import { FlatWizardTool } from './FlatWizardTool'
 import { ImageInspector } from './ImageInspector'
 import type { ImageDocument, ImageViewState } from './images'
 import { MountNudgeTool } from './MountNudgeTool'
@@ -100,7 +101,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	guiding: plannedCameraOperation('guiding', 'Guiding'),
 	darv: { id: 'darv', label: 'DARV', panelTitle: 'DARV', category: 'camera', panel: DarvTool },
 	tppa: { id: 'tppa', label: 'TPPA', panelTitle: 'TPPA', category: 'camera', panel: TppaTool },
-	'flat-wizard': plannedCameraOperation('flat-wizard', 'Flat Wizard'),
+	'flat-wizard': { id: 'flat-wizard', label: 'Flat Wizard', panelTitle: 'Flat Wizard', category: 'camera', panel: FlatWizardTool },
 }
 
 // Returns the category heading a tool is listed under in the selector.

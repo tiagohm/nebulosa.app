@@ -1,4 +1,4 @@
-import type { AutoFocusRequest, CaptureRequest, PlateSolveRequest, StarDetectionRequest } from 'api'
+import type { AutoFocusRequest, CaptureRequest, FlatWizardFilter, PlateSolveRequest, StarDetectionRequest } from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
@@ -12,8 +12,9 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // which version 2 called focus-calibrator and polar-alignment; version 4 keeps the camera forms by
 // physical camera (cameras) instead of by camera role, and drops the post-capture analysis and plate
 // solving of the frames of a capture. The preferences of the Capture workspace (capture), removed since, are ignored
-// when read. Version 5 adds the TPPA form of each camera (tppa), and version 6 its DARV form (darv).
-export const PROFILES_VERSION = 6
+// when read. Version 5 adds the TPPA form of each camera (tppa), version 6 its DARV form (darv), and version 7 its Flat
+// Wizard form (flatWizard).
+export const PROFILES_VERSION = 7
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -117,6 +118,8 @@ export interface CameraSettings {
 	tppa?: TppaSettings
 	// DARV form.
 	darv?: DarvSettings
+	// Flat Wizard form.
+	flatWizard?: FlatWizardSettings
 }
 
 // Physical camera the forms of a profile belong to: the saved connection that provides it and its device id, stable
@@ -216,6 +219,46 @@ export const DARV_MAXIMUM_LEG_DURATION = 600
 
 // DARV form of a camera that has none yet: the classic one-minute legs, eastward first, adjusting the azimuth.
 export const DEFAULT_DARV_SETTINGS: DarvSettings = { axis: 'azimuth', direction: 'EAST', legDuration: 60 }
+
+// Flat Wizard form of one physical camera: the filter groups to acquire and the limits of the next session. The camera
+// settings come from Camera Acquisition (without its exposure time); the wheel and panel are those of the setup.
+export interface FlatWizardSettings {
+	// Filter groups, in acquisition order; at least one. Exposures in seconds, targets in observed DN, brightness in
+	// the panel's own units.
+	filters: readonly FlatWizardFilter[]
+	// Wait after the panel light or brightness changed, in seconds, in [0, 600].
+	settleTime: number
+	// Absolute server directory the frames are saved into; absent uses the server's default captures directory.
+	directory?: string
+	// Effective upper clipping code of the camera, in DN; absent leaves saturation evidence unknown.
+	effectiveClip?: number
+	// Trial frames allowed per filter, in [1, FLAT_WIZARD_MAXIMUM_TRIALS].
+	maximumTrials: number
+	// Rejected or inconclusive final frames allowed per filter, in [0, FLAT_WIZARD_MAXIMUM_REJECTIONS].
+	maximumRejections: number
+}
+
+// Most filter groups a Flat Wizard form keeps.
+export const FLAT_WIZARD_MAXIMUM_FILTERS = 16
+
+// Most accepted frames requested per filter group.
+export const FLAT_WIZARD_MAXIMUM_COUNT = 500
+
+// Most trial frames allowed per filter group.
+export const FLAT_WIZARD_MAXIMUM_TRIALS = 20
+
+// Most rejected or inconclusive frames allowed per filter group.
+export const FLAT_WIZARD_MAXIMUM_REJECTIONS = 100
+
+// Longest exposure of a Flat Wizard form, in seconds (10 minutes).
+export const FLAT_WIZARD_MAXIMUM_EXPOSURE = 600
+
+// Filter group a new row of the Flat Wizard form starts with: 20 frames searched from 1 s within [0.01 s, 30 s], aimed
+// at 20000–35000 DN, about a third to a half of a 16-bit range; edit the target for cameras of another depth.
+export const DEFAULT_FLAT_WIZARD_FILTER: FlatWizardFilter = { label: 'L', count: 20, initialExposure: 1, minimumExposure: 0.01, maximumExposure: 30, targetRange: [20000, 35000] }
+
+// Flat Wizard form of a camera that has none yet: one luminance group, a 2 s settle, and the default limits.
+export const DEFAULT_FLAT_WIZARD_SETTINGS: FlatWizardSettings = { filters: [DEFAULT_FLAT_WIZARD_FILTER], settleTime: 2, maximumTrials: 8, maximumRejections: 5 }
 
 // A complete working environment: the selected connection, the equipment assigned on each connection,
 // and preferences.

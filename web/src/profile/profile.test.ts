@@ -3,7 +3,7 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DARV_SETTINGS, DEFAULT_TPPA_SETTINGS } from './schema'
+import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DARV_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, DEFAULT_TPPA_SETTINGS } from './schema'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import {
 	acquisitionSettings,
@@ -19,7 +19,9 @@ import {
 	setTppaSettings,
 	tppaSettings,
 	darvSettings,
+	flatWizardSettings,
 	setDarvSettings,
+	setFlatWizardSettings,
 	createOpticalPreset,
 	createProfile,
 	deleteOpticalPreset,
@@ -89,7 +91,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 6, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: 7, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -655,6 +657,42 @@ describe('camera forms', () => {
 		const forms = { c: { 'cam-main': { exposure: { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 4 }, tppa: { ...DEFAULT_TPPA_SETTINGS, rotation: 12 } } } }
 		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 5, profiles: [{ id: 'a', name: 'A', settings: { cameras: forms } }] }))
 		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
+	})
+
+	test('the Flat Wizard form is kept per camera, persisted, restored with defaults for invalid fields, and a version 6 document keeps its forms', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		expect(flatWizardSettings(activeProfile(state).settings, MAIN)).toEqual(DEFAULT_FLAT_WIZARD_SETTINGS)
+
+		const filters = [
+			{ ...DEFAULT_FLAT_WIZARD_FILTER, label: 'Ha', slot: 2, count: 30, brightness: 120 },
+			{ ...DEFAULT_FLAT_WIZARD_FILTER, label: 'OIII', targetRange: [15000, 25000] as const },
+		]
+		setFlatWizardSettings(state, MAIN, { filters, directory: '/flats', effectiveClip: 60000, settleTime: 5 })
+		expect(flatWizardSettings(activeProfile(state).settings, GUIDE)).toEqual(DEFAULT_FLAT_WIZARD_SETTINGS)
+		await Bun.sleep(0)
+
+		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
+		expect(flatWizardSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_FLAT_WIZARD_SETTINGS, filters, directory: '/flats', effectiveClip: 60000, settleTime: 5 })
+
+		const invalid = newStores()
+		const bad = { label: ' ', slot: -1, count: 0, initialExposure: 99, minimumExposure: 5, maximumExposure: 1, targetRange: [3, 2], brightness: -1 }
+		const cameras = { c: { 'cam-main': { flatWizard: { filters: [bad, 'x'], settleTime: -1, directory: ' ', effectiveClip: 0, maximumTrials: 0, maximumRejections: 1.5 } } } }
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 7, profiles: [{ id: 'a', name: 'A', settings: { cameras } }] }))
+		expect(load(invalid).profiles[0].settings.cameras).toEqual({ c: { 'cam-main': { flatWizard: DEFAULT_FLAT_WIZARD_SETTINGS } } })
+
+		const empty = newStores()
+		empty.local.setItem(PROFILES_KEY, JSON.stringify({ version: 7, profiles: [{ id: 'a', name: 'A', settings: { cameras: { c: { 'cam-main': { flatWizard: { filters: [] } } } } } }] }))
+		expect(flatWizardSettings(load(empty).profiles[0].settings, MAIN).filters).toEqual([DEFAULT_FLAT_WIZARD_FILTER])
+
+		const older = newStores()
+		const forms = { c: { 'cam-main': { darv: { ...DEFAULT_DARV_SETTINGS, legDuration: 90 } } } }
+		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 6, profiles: [{ id: 'a', name: 'A', settings: { cameras: forms } }] }))
+		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
+
+		const newer = newStores()
+		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 8, profiles: [{ id: 'a', name: 'A' }] }))
+		expect(load(newer).profiles.map((profile) => profile.id)).not.toContain('a')
 	})
 
 	test('the star detection request is the profile one, persisted and restored with defaults for invalid fields', async () => {

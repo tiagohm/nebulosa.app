@@ -1,4 +1,4 @@
-import type { StarDetectionRequest } from 'api'
+import type { FlatWizardFilter, StarDetectionRequest } from 'api'
 import { CAMERA_ROLES, type DeviceAssignment, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
 import { WORKSPACE_IDS } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
@@ -23,6 +23,14 @@ import {
 	DARV_MINIMUM_LEG_DURATION,
 	type DarvSettings,
 	DEFAULT_DARV_SETTINGS,
+	DEFAULT_FLAT_WIZARD_FILTER,
+	DEFAULT_FLAT_WIZARD_SETTINGS,
+	FLAT_WIZARD_MAXIMUM_COUNT,
+	FLAT_WIZARD_MAXIMUM_EXPOSURE,
+	FLAT_WIZARD_MAXIMUM_FILTERS,
+	FLAT_WIZARD_MAXIMUM_REJECTIONS,
+	FLAT_WIZARD_MAXIMUM_TRIALS,
+	type FlatWizardSettings,
 	DEFAULT_TPPA_SETTINGS,
 	TPPA_MAXIMUM_ROTATION,
 	TPPA_MINIMUM_ROTATION,
@@ -96,8 +104,9 @@ function normalizeCamera(value: unknown): CameraSettings | undefined {
 	const autoFocus = normalizeAutoFocus(value.autoFocus)
 	const tppa = normalizeTppa(value.tppa)
 	const darv = normalizeDarv(value.darv)
-	if (!exposure && !acquisition && !autoFocus && !tppa && !darv) return undefined
-	return { ...(exposure && { exposure }), ...(acquisition && { acquisition }), ...(autoFocus && { autoFocus }), ...(tppa && { tppa }), ...(darv && { darv }) }
+	const flatWizard = normalizeFlatWizard(value.flatWizard)
+	if (!exposure && !acquisition && !autoFocus && !tppa && !darv && !flatWizard) return undefined
+	return { ...(exposure && { exposure }), ...(acquisition && { acquisition }), ...(autoFocus && { autoFocus }), ...(tppa && { tppa }), ...(darv && { darv }), ...(flatWizard && { flatWizard }) }
 }
 
 // Restores the persisted forms of the cameras (version 4), by saved connection id and device id.
@@ -226,6 +235,57 @@ function normalizeDarv(value: unknown): DarvSettings | undefined {
 		direction: value.direction === 'WEST' ? 'WEST' : value.direction === 'EAST' ? 'EAST' : defaults.direction,
 		...(typeof value.slewRate === 'string' && value.slewRate && { slewRate: value.slewRate }),
 		legDuration,
+	}
+}
+
+// Returns value when it is a finite number in [minimum, maximum], else fallback.
+function boundedNumber(value: unknown, minimum: number, maximum: number, fallback: number) {
+	return typeof value === 'number' && value >= minimum && value <= maximum ? value : fallback
+}
+
+// Restores a persisted filter group of the Flat Wizard form, filling every invalid field with its default; undefined
+// for anything that is not a record. The exposure bounds stay ordered, the initial exposure inside them, and the
+// target ordered; a slot that is not a non-negative integer or a brightness that is not a non-negative number is
+// dropped.
+function normalizeFlatWizardFilter(value: unknown): FlatWizardFilter | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = DEFAULT_FLAT_WIZARD_FILTER
+	const label = typeof value.label === 'string' && value.label.trim() ? value.label.trim() : defaults.label
+	let minimumExposure = boundedNumber(value.minimumExposure, Number.MIN_VALUE, FLAT_WIZARD_MAXIMUM_EXPOSURE, defaults.minimumExposure)
+	let maximumExposure = boundedNumber(value.maximumExposure, Number.MIN_VALUE, FLAT_WIZARD_MAXIMUM_EXPOSURE, defaults.maximumExposure)
+	if (!(minimumExposure < maximumExposure)) [minimumExposure, maximumExposure] = [defaults.minimumExposure, defaults.maximumExposure]
+	const initialExposure = boundedNumber(value.initialExposure, minimumExposure, maximumExposure, Math.min(Math.max(defaults.initialExposure, minimumExposure), maximumExposure))
+	const range = Array.isArray(value.targetRange) ? value.targetRange : []
+	const targetRange: FlatWizardFilter['targetRange'] = typeof range[0] === 'number' && typeof range[1] === 'number' && Number.isFinite(range[0]) && Number.isFinite(range[1]) && range[0] < range[1] ? [range[0], range[1]] : defaults.targetRange
+
+	return {
+		label,
+		...(Number.isInteger(value.slot) && (value.slot as number) >= 0 && { slot: value.slot as number }),
+		count: Number.isInteger(value.count) ? boundedNumber(value.count, 1, FLAT_WIZARD_MAXIMUM_COUNT, defaults.count) : defaults.count,
+		initialExposure,
+		minimumExposure,
+		maximumExposure,
+		targetRange,
+		...(typeof value.brightness === 'number' && Number.isFinite(value.brightness) && value.brightness >= 0 && { brightness: value.brightness }),
+	}
+}
+
+// Restores a persisted Flat Wizard form, filling every invalid field with its default; undefined for anything that is
+// not a record. At most FLAT_WIZARD_MAXIMUM_FILTERS valid filter groups are kept, and the default one when none is.
+function normalizeFlatWizard(value: unknown): FlatWizardSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = DEFAULT_FLAT_WIZARD_SETTINGS
+	const filters = (Array.isArray(value.filters) ? value.filters : []).flatMap((filter) => normalizeFlatWizardFilter(filter) ?? []).slice(0, FLAT_WIZARD_MAXIMUM_FILTERS)
+
+	return {
+		filters: filters.length > 0 ? filters : [{ ...DEFAULT_FLAT_WIZARD_FILTER }],
+		settleTime: boundedNumber(value.settleTime, 0, 600, defaults.settleTime),
+		...(typeof value.directory === 'string' && value.directory.trim() && { directory: value.directory.trim() }),
+		...(typeof value.effectiveClip === 'number' && Number.isFinite(value.effectiveClip) && value.effectiveClip > 0 && { effectiveClip: value.effectiveClip }),
+		maximumTrials: Number.isInteger(value.maximumTrials) ? boundedNumber(value.maximumTrials, 1, FLAT_WIZARD_MAXIMUM_TRIALS, defaults.maximumTrials) : defaults.maximumTrials,
+		maximumRejections: Number.isInteger(value.maximumRejections) ? boundedNumber(value.maximumRejections, 0, FLAT_WIZARD_MAXIMUM_REJECTIONS, defaults.maximumRejections) : defaults.maximumRejections,
 	}
 }
 
@@ -424,7 +484,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 3:
 		case 4:
 		case 5:
-		case 6: {
+		case 6:
+		case 7: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

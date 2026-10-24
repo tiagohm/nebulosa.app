@@ -54,6 +54,20 @@ describe('camera operation context', () => {
 		expect(context.mount).toMatchObject({ device: { id: 'mount' }, status: 'connected' })
 	})
 
+	test('a camera with a role gets the wheel and the flat panel of the setup, an unassigned one reported as such, and a camera without a role gets neither', () => {
+		const panelRuntime = { ...RUNTIME, devices: [...RUNTIME.devices, device('panel', 'flatPanel')] }
+		const guide = cameraOperationContext(tab('guide'), { connectionId: 'saved', equipment: { saved: { ...SETUP, FLAT_PANEL: { id: 'panel', name: 'panel' } } } }, panelRuntime)!
+		expect(guide.wheel).toMatchObject({ device: { id: 'wheel' }, status: 'connected' })
+		expect(guide.flatPanel).toMatchObject({ device: { id: 'panel' }, status: 'connected' })
+
+		const main = cameraOperationContext(tab('main'), PROFILE, RUNTIME)!
+		expect(main.flatPanel).toEqual({ device: undefined, serverId: 'conn', status: 'notSelected' })
+
+		const spare = cameraOperationContext(tab('spare'), PROFILE, RUNTIME)!
+		expect(spare.wheel).toBeUndefined()
+		expect(spare.flatPanel).toBeUndefined()
+	})
+
 	test('a missing mount assignment is reported, never replaced by another connected mount', () => {
 		const { MOUNT: _, ...setup } = SETUP
 		expect(cameraOperationContext(tab('main'), { connectionId: 'saved', equipment: { saved: setup } }, RUNTIME)!.mount).toEqual({ device: undefined, serverId: 'conn', status: 'notSelected' })

@@ -1,4 +1,4 @@
-import type { CameraCapabilities, CaptureSnoop, FlatWizardCaptureSettings, FlatWizardFilterState, FlatWizardRequest, FlatWizardSession, FlatWizardSessionSummary, FlatWizardSnapshot, FlatWizardState, FlatWizardVerdict, OperationDevice, ServerEvent } from 'api'
+import type { CameraCapabilities, CaptureSnoop, FlatWizardCaptureSettings, FlatWizardFilterState, FlatWizardRequest, FlatWizardSession, FlatWizardSessionSummary, FlatWizardSnapshot, FlatWizardState, FlatWizardVerdict, OperationDevice, ServerEvent, WheelState } from 'api'
 import type { FlatDiagnosticCode } from 'nebulosa/src/imaging/analysis/flat/types'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
@@ -84,12 +84,18 @@ export interface FlatWizardEquipment {
 	readonly panel?: OperationDevice
 }
 
+// Returns the name of the filter at a 0-based slot, as the server names it: the name the wheel reports (names in slot
+// order), or "Filter <slot + 1>" when the wheel names it not or there is no wheel.
+export function flatWizardFilterName(names: readonly string[] | undefined, slot: number) {
+	return names?.[slot]?.trim() || `Filter ${slot + 1}`
+}
+
 // Builds the start request of the Flat Wizard form of a camera. The frames take the camera settings of Camera
 // Acquisition, fitted to the camera's capabilities as a capture is, but never its exposure time, which the wizard
-// searches. Slots are sent only with a wheel and brightness only with a panel.
+// searches. Brightness is sent only with a panel.
 export function flatWizardRequest(settings: Readonly<FlatWizardSettings>, exposure: Readonly<CameraExposureSettings>, { wheel, panel }: FlatWizardEquipment, snoop: CaptureSnoop, capabilities?: CameraCapabilities): Omit<FlatWizardRequest, 'token'> {
 	const { exposureTime: _, ...capture } = fitExposure(exposure, capabilities)
-	const filters = settings.filters.map(({ slot, brightness, ...filter }) => ({ ...filter, ...(wheel && slot !== undefined && { slot }), ...(panel && brightness !== undefined && { brightness }) }))
+	const filters = settings.filters.map(({ brightness, ...filter }) => ({ ...filter, ...(panel && brightness !== undefined && { brightness }) }))
 
 	return {
 		capture: capture satisfies FlatWizardCaptureSettings,
@@ -106,18 +112,20 @@ export function flatWizardRequest(settings: Readonly<FlatWizardSettings>, exposu
 }
 
 // Returns why no session can start now, or undefined when one can, from the availability of the camera and of the
-// assigned wheel and panel (absent when not assigned, so manual) and the form. An assigned device that cannot be used
-// blocks the start instead of being replaced by a manual step. The server checks again.
-export function flatWizardBlocker(camera: RoleAvailability, wheel: RoleAvailability | undefined, panel: RoleAvailability | undefined, settings: Readonly<FlatWizardSettings>): string | undefined {
+// assigned wheel and panel (absent when not assigned, so manual), the slots and names that wheel reports (absent while
+// unknown), and the form. An assigned device that cannot be used blocks the start instead of being replaced by a
+// manual step. The server checks again.
+export function flatWizardBlocker(camera: RoleAvailability, wheel: RoleAvailability | undefined, panel: RoleAvailability | undefined, settings: Readonly<FlatWizardSettings>, wheelState?: Pick<WheelState, 'count' | 'names'>): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 	if (wheel && wheel.status !== 'ready') return wheel.message
 	if (panel && panel.status !== 'ready') return panel.message
 	if (settings.filters.length === 0) return 'Add a filter.'
 
 	for (const filter of settings.filters) {
-		if (!filter.label.trim()) return 'Name every filter.'
-		if (!(filter.minimumExposure > 0 && filter.minimumExposure < filter.maximumExposure)) return `The exposure range of ${filter.label} is empty.`
-		if (!(filter.targetRange[0] < filter.targetRange[1])) return `The target of ${filter.label} is empty.`
+		const name = flatWizardFilterName(wheel ? wheelState?.names : undefined, filter.slot)
+		if (wheel && wheelState && filter.slot >= wheelState.count) return `The wheel has no slot ${filter.slot + 1}.`
+		if (!(filter.minimumExposure > 0 && filter.minimumExposure < filter.maximumExposure)) return `The exposure range of ${name} is empty.`
+		if (!(filter.targetRange[0] < filter.targetRange[1])) return `The target of ${name} is empty.`
 	}
 
 	return undefined

@@ -12,7 +12,7 @@ import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures } from './captures'
 import { ConnectionManager } from './connection'
 import { FlatPanelCommands } from './flatpanels'
-import { type FlatWizardEvent, type FlatWizardFilter, type FlatWizardRequest, type FlatWizardSession, FlatWizardSessions, finalVerdict, publishFrame } from './flatwizard'
+import { type FlatWizardEvent, type FlatWizardFilter, type FlatWizardRequest, type FlatWizardSession, FlatWizardSessions, finalVerdict, filterName, publishFrame } from './flatwizard'
 import type { FlatFrameContext, FlatFrameMeasurement, FlatMeasurementOptions } from './flatwizard.analysis'
 import { ImageStore } from './images'
 import { OperationRegistry } from './operations'
@@ -39,7 +39,7 @@ async function waitUntil(condition: () => boolean, timeout = 30000) {
 const PEDESTAL = 1000
 
 // Analyzer standing for the worker: measures a noise-free synthetic flat whose median is PEDESTAL plus rate times
-// the exposure (rate in DN per second, from the filter label), and records the bytes of every file it was given,
+// the exposure (rate in DN per second, from the frame context), and records the bytes of every file it was given,
 // which the capture really wrote into the staging directory.
 function fakeAnalyzer(rate: (context: FlatFrameContext) => number, finals: (context: FlatFrameContext) => Partial<{ readonly nonFinite: boolean }> = () => ({})) {
 	const calls: { path: string; context: FlatFrameContext; sample: boolean; bytes: Buffer }[] = []
@@ -63,7 +63,7 @@ let tokens = 0
 
 // One filter of 3 frames whose target [20000, 30000] DN is reached at 0.2 s with the default rate of the fake.
 function filter(patch: Partial<FlatWizardFilter> = {}): FlatWizardFilter {
-	return { label: 'L', count: 3, initialExposure: 0.1, minimumExposure: 0.01, maximumExposure: 2, targetRange: [20000, 30000], ...patch }
+	return { slot: 0, count: 3, initialExposure: 0.1, minimumExposure: 0.01, maximumExposure: 2, targetRange: [20000, 30000], ...patch }
 }
 
 function request(directory: string, patch: Partial<FlatWizardRequest> = {}): FlatWizardRequest {
@@ -178,10 +178,10 @@ describe('Flat Wizard sessions', () => {
 
 		// Only the accepted frames remain, byte for byte what was measured; the staging directory is gone.
 		expect(readdirSync(directory).toSorted()).toEqual(run.files.toSorted())
-		expect(run.files.every((file) => file.includes('_FLAT_L_'))).toBeTrue()
+		expect(run.files.every((file) => file.includes('_FLAT_Filter 1_'))).toBeTrue()
 		const finals = measurement.calls.filter((call) => call.sample)
 		expect(finals.map((call) => readFileSync(join(directory, run.files[finals.indexOf(call)])).equals(call.bytes))).toEqual([true, true, true])
-		expect(finals[0].context).toMatchObject({ exposure: 0.2, filter: 'L', illumination: { source: 'manual' } })
+		expect(finals[0].context).toMatchObject({ exposure: 0.2, filter: 'Filter 1', illumination: { source: 'manual' } })
 
 		// Every exposure was previewed as a Flat Wizard frame; only the published ones are saved, under their final names.
 		expect(record.attempts.map((attempt) => attempt.frameId)).toEqual([1, 2, 3, 4, 5].map((generation) => `${sessionId}:${generation}`))
@@ -193,8 +193,8 @@ describe('Flat Wizard sessions', () => {
 	}, 120000)
 
 	test('a wheel and a panel select each filter and its brightness, and the light the session switched on is switched off', async () => {
-		const { id, cameraId, flatWizard, wheel, wheelDevice, panel, panelDevice, directory, summary, ended, released } = await setup((context) => (context.filter === 'R' ? 50000 : 100000))
-		const filters = [filter({ label: 'L', slot: 1, count: 1, brightness: 40 }), filter({ label: 'R', slot: 2, count: 1, brightness: 80 })]
+		const { id, cameraId, flatWizard, wheel, wheelDevice, panel, panelDevice, directory, summary, ended, released } = await setup((context) => (context.illumination?.brightness === 80 ? 50000 : 100000))
+		const filters = [filter({ slot: 1, count: 1, brightness: 40 }), filter({ slot: 2, count: 1, brightness: 80 })]
 		await start(flatWizard, id, cameraId, request(directory, { filters, wheel: wheelDevice, panel: panelDevice, settleTime: 0.05 }))
 
 		await waitUntil(() => summary()?.filter === 1 && summary()?.filters[1].state === 'acquiring', 60000)
@@ -205,9 +205,9 @@ describe('Flat Wizard sessions', () => {
 		await waitUntil(ended, 60000)
 		expect(summary()).toMatchObject({ state: 'completed', wheelName: wheel.name, panelName: panel.name })
 		expect(summary()!.cleanupWarning).toBeUndefined()
-		expect(summary()!.filters.map((run) => [run.label, run.slot, run.brightness, run.accepted])).toEqual([
-			['L', 1, 40, 1],
-			['R', 2, 80, 1],
+		expect(summary()!.filters.map((run) => [run.name, run.slot, run.brightness, run.accepted])).toEqual([
+			[filterName(wheel, 1), 1, 40, 1],
+			[filterName(wheel, 2), 2, 80, 1],
 		])
 		// R needed an affine estimate from two trials below its target: (25000 - 1000) / 50000 DN/s.
 		expect(summary()!.filters[0].exposure).toBe(0.2)
@@ -236,7 +236,7 @@ describe('Flat Wizard sessions', () => {
 
 	test('a stop during an exposure keeps the published frames and switches the light off', async () => {
 		const { id, cameraId, flatWizard, panel, panelDevice, directory, summary, ended, released } = await setup()
-		const { sessionId } = await start(flatWizard, id, cameraId, request(directory, { panel: panelDevice, filters: [filter({ label: 'L', count: 20 })] }))
+		const { sessionId } = await start(flatWizard, id, cameraId, request(directory, { panel: panelDevice, filters: [filter({ count: 20 })] }))
 		await waitUntil(() => summary()?.pending !== undefined)
 		// Without a wheel the operator puts the filter in place; the panel needs no confirmation.
 		expect(summary()!.pending!.kind).toBe('filter')
@@ -352,5 +352,14 @@ describe('Flat Wizard frames', () => {
 		expect(finalVerdict(assessment('pass', 'fail', 'pass'))).toBe('rejected')
 		expect(finalVerdict(assessment('fail', 'pass', 'pass'))).toBe('rejected')
 		expect(finalVerdict(assessment('unknown', 'pass', 'pass'))).toBe('inconclusive')
+	})
+})
+
+describe('Flat Wizard filter names', () => {
+	test('a filter is named by its wheel slot, or by its 1-based slot number without a name or a wheel', () => {
+		expect(filterName({ names: ['Luminance', ' ', 'Red'] }, 0)).toBe('Luminance')
+		expect(filterName({ names: ['Luminance', ' ', 'Red'] }, 1)).toBe('Filter 2')
+		expect(filterName({ names: ['Luminance'] }, 4)).toBe('Filter 5')
+		expect(filterName(undefined, 0)).toBe('Filter 1')
 	})
 })

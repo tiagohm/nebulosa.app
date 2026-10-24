@@ -46,10 +46,10 @@ export type FlatWizardCaptureSettings = Pick<CaptureSettings, 'gain' | 'offset' 
 
 // One group of frames taken through one filter.
 export interface FlatWizardFilter {
-	// Name of the filter, used in the file names and shown to the operator.
-	readonly label: string
-	// Slot of the assigned wheel, 0-based; absent asks the operator to put the filter in place.
-	readonly slot?: number
+	// Filter slot, 0-based: the wheel moves to it, or, without a wheel, the operator puts that filter in place. The
+	// filter is named by the slot name the wheel reports, or "Filter <slot + 1>" when it reports none or there is no
+	// wheel (see filterName).
+	readonly slot: number
 	// Number of accepted frames to save, at least 1.
 	readonly count: number
 	// Exposure of the first trial frame, in seconds.
@@ -180,10 +180,10 @@ export type FlatWizardSequenceResult =
 
 // Progress and result of one filter group.
 export interface FlatWizardFilterRun {
-	// Name of the filter.
-	readonly label: string
-	// Wheel slot, 0-based, when the wheel selects it.
-	readonly slot?: number
+	// Name of the filter as resolved when the session started (filterName); used in the file names.
+	readonly name: string
+	// Filter slot, 0-based.
+	readonly slot: number
 	// Accepted frames requested.
 	readonly required: number
 	// Progress of the group.
@@ -311,7 +311,7 @@ const SEQUENCE_OUTLIER_SIGMA = 5
 // Relative difference under which two exposures are the same, so the search cannot retry one forever.
 const SAME_EXPOSURE = 1e-6
 
-// Name of the published frames: the capture placeholders plus the filter label.
+// Name of the published frames: the capture placeholders plus the filter name.
 const FILENAME_TEMPLATE = '{date}_{time}_{camera}_{type}_{filter}_{seq}'
 
 // A session while its service knows it.
@@ -413,7 +413,7 @@ export class FlatWizardSessions {
 				request: structuredClone(request),
 				state: 'preparing',
 				filter: 0,
-				filters: request.filters.map((filter) => ({ label: filter.label, slot: wheel ? filter.slot : undefined, required: filter.count, state: 'pending', trials: 0, accepted: 0, rejected: 0, inconclusive: 0, saveFailed: 0, files: [] })),
+				filters: request.filters.map((filter) => ({ name: filterName(wheel, filter.slot), slot: filter.slot, required: filter.count, state: 'pending', trials: 0, accepted: 0, rejected: 0, inconclusive: 0, saveFailed: 0, files: [] })),
 				startedAt: Date.now(),
 				revision: 0,
 			},
@@ -519,12 +519,13 @@ export class FlatWizardSessions {
 	// the brightness of the filter and switched on, then settles, or the operator confirms a manual light.
 	async #prepare(session: Session, context: OperationContext, { wheel, panel }: SessionDevices, index: number): Promise<OperationResult<void>> {
 		const filter = session.summary.request.filters[index]
+		const { name } = session.summary.filters[index]
 		let confirmed = false
 
-		if (wheel && filter.slot !== undefined) {
+		if (wheel) {
 			this.#update(session, { state: 'movingFilter' })
 			const moved = await this.wheels.moveTo(context, wheel, filter.slot)
-			if (!moved.ok) return failedWith(moved, `The wheel did not reach the slot of ${filter.label}`)
+			if (!moved.ok) return failedWith(moved, `The wheel did not reach the slot of ${name}`)
 		} else {
 			const answered = await this.#gate(session, context, 'filter', index)
 			if (!answered.ok) return answered
@@ -589,6 +590,7 @@ export class FlatWizardSessions {
 	async #calibrate(session: Session, context: OperationContext, { camera, panel }: SessionDevices, index: number, staging: string): Promise<OperationResult<{ readonly exposure: number; readonly plane: FlatPlane }>> {
 		const { request } = session.summary
 		const filter = request.filters[index]
+		const { name } = session.summary.filters[index]
 		const [minimum, maximum] = [filter.minimumExposure, filter.maximumExposure]
 		const observations: FlatExposureObservation[] = []
 		const tried: number[] = []
@@ -596,13 +598,13 @@ export class FlatWizardSessions {
 		let plane: FlatPlane | undefined
 
 		for (let trial = 1; ; trial++) {
-			if (trial > request.maximumTrials) return failedOperationResult('unexpectedState', `No exposure of ${filter.label} reached the target in ${request.maximumTrials} trial frames`)
+			if (trial > request.maximumTrials) return failedOperationResult('unexpectedState', `No exposure of ${name} reached the target in ${request.maximumTrials} trial frames`)
 
 			tried.push(exposure)
 			this.#patch(session, index, { candidateExposure: exposure, trials: trial })
-			const name = `trial-${index + 1}-${trial}.fit`
-			const measured = await this.#take(session, context, camera, panel, index, exposure, name, staging, undefined, false)
-			await rm(join(staging, name), { force: true })
+			const frameFile = `trial-${index + 1}-${trial}.fit`
+			const measured = await this.#take(session, context, camera, panel, index, exposure, frameFile, staging, undefined, false)
+			await rm(join(staging, frameFile), { force: true })
 			if (!measured.ok) return measured
 
 			const { analysis, time, generation, frameId } = measured.value
@@ -620,10 +622,10 @@ export class FlatWizardSessions {
 			let estimate: FlatExposureEstimate | undefined
 
 			if (verdict === 'clipped') {
-				if (exposure <= minimum) return failedOperationResult('unexpectedState', `${filter.label} saturates even at the minimum exposure of ${minimum} s; dim the light`)
+				if (exposure <= minimum) return failedOperationResult('unexpectedState', `${name} saturates even at the minimum exposure of ${minimum} s; dim the light`)
 				next = Math.max(minimum, exposure / 2)
 			} else if (verdict === 'noSignal') {
-				return failedOperationResult('unexpectedState', `${filter.label} shows no measurable signal at ${exposure} s`)
+				return failedOperationResult('unexpectedState', `${name} shows no measurable signal at ${exposure} s`)
 			} else {
 				observations.push({ exposure, level: level! })
 				estimate = estimateFlatExposure({ observations: observations as [FlatExposureObservation, ...FlatExposureObservation[]], levelMode: 'observed', targetRange: filter.targetRange, exposureRange: [minimum, maximum] })
@@ -631,7 +633,7 @@ export class FlatWizardSessions {
 				if (estimate.status === 'accepted') return successfulOperationResult({ exposure, plane: plane! })
 				if (estimate.status === 'invalid') {
 					// A single observation cannot separate the light from the pedestal: a second distinct exposure can.
-					if (observations.length > 1 || !estimate.diagnostics.some((diagnostic) => diagnostic.code === 'insufficientSamples')) return failedOperationResult('unexpectedState', `The exposure of ${filter.label} cannot be estimated: ${estimate.diagnostics.map((diagnostic) => diagnostic.message).join('; ')}`)
+					if (observations.length > 1 || !estimate.diagnostics.some((diagnostic) => diagnostic.code === 'insufficientSamples')) return failedOperationResult('unexpectedState', `The exposure of ${name} cannot be estimated: ${estimate.diagnostics.map((diagnostic) => diagnostic.message).join('; ')}`)
 					next = clamp(level! < filter.targetRange[0] ? exposure * 2 : exposure / 2, minimum, maximum)
 				} else {
 					next = estimate.recommendedExposure
@@ -639,9 +641,9 @@ export class FlatWizardSessions {
 			}
 
 			if (next === undefined || tried.some((value) => Math.abs(value - next) <= SAME_EXPOSURE * value)) {
-				if (estimate?.status === 'belowMinimum') return failedOperationResult('unexpectedState', `${filter.label} is too bright: the target needs less than the minimum exposure of ${minimum} s`)
-				if (estimate?.status === 'aboveMaximum') return failedOperationResult('unexpectedState', `${filter.label} is too dim: the target needs more than the maximum exposure of ${maximum} s`)
-				return failedOperationResult('unexpectedState', `The exposure search of ${filter.label} stalled at ${exposure} s`)
+				if (estimate?.status === 'belowMinimum') return failedOperationResult('unexpectedState', `${name} is too bright: the target needs less than the minimum exposure of ${minimum} s`)
+				if (estimate?.status === 'aboveMaximum') return failedOperationResult('unexpectedState', `${name} is too dim: the target needs more than the maximum exposure of ${maximum} s`)
+				return failedOperationResult('unexpectedState', `The exposure search of ${name} stalled at ${exposure} s`)
 			}
 
 			exposure = next
@@ -653,15 +655,16 @@ export class FlatWizardSessions {
 	async #acquire(session: Session, context: OperationContext, { camera, panel }: SessionDevices, index: number, exposure: number, plane: FlatPlane, directory: string, staging: string): Promise<OperationResult<readonly AcceptedFrame[]>> {
 		const { request, cameraName } = session.summary
 		const filter = request.filters[index]
+		const { name } = session.summary.filters[index]
 		const accepted: AcceptedFrame[] = []
 		let rejections = 0
 
 		for (let candidate = 1; accepted.length < filter.count; candidate++) {
-			if (rejections > request.maximumRejections) return failedOperationResult('unexpectedState', `${rejections} frames of ${filter.label} were rejected or inconclusive; check the light and the target`)
+			if (rejections > request.maximumRejections) return failedOperationResult('unexpectedState', `${rejections} frames of ${name} were rejected or inconclusive; check the light and the target`)
 
-			const name = `final-${index + 1}-${candidate}.fit`
-			const staged = join(staging, name)
-			const measured = await this.#take(session, context, camera, panel, index, exposure, name, staging, name, true, plane)
+			const frameFile = `final-${index + 1}-${candidate}.fit`
+			const staged = join(staging, frameFile)
+			const measured = await this.#take(session, context, camera, panel, index, exposure, frameFile, staging, frameFile, true, plane)
 
 			if (!measured.ok) {
 				await rm(staged, { force: true })
@@ -682,7 +685,7 @@ export class FlatWizardSessions {
 			}
 
 			this.#update(session, { state: 'saving' })
-			const file = `${frameName(FILENAME_TEMPLATE.replace('{filter}', filter.label.replaceAll(/[{}]/g, '')), { camera: cameraName, type: 'FLAT', time, generation: accepted.length + 1, timezoneOffset: TIMEZONE })}.fit`
+			const file = `${frameName(FILENAME_TEMPLATE.replace('{filter}', name.replaceAll(/[{}]/g, '')), { camera: cameraName, type: 'FLAT', time, generation: accepted.length + 1, timezoneOffset: TIMEZONE })}.fit`
 
 			try {
 				await publishFrame(staged, join(directory, file))
@@ -720,6 +723,7 @@ export class FlatWizardSessions {
 	): Promise<OperationResult<FlatFrameMeasurement & { readonly time: number; readonly generation: number; readonly frameId?: string }>> {
 		const { request } = session.summary
 		const filter = request.filters[index]
+		const { name: filterLabel } = session.summary.filters[index]
 		this.#update(session, { state: 'exposing' })
 
 		const captured = await this.capturer.start(context, camera, this.#captureRequest(session, camera, exposure, staging, name), { clock: SYSTEM_CAMERA_CAPTURE_CLOCK }).result
@@ -728,7 +732,7 @@ export class FlatWizardSessions {
 		const time = captured.value.frames[0]?.exposureStartedAt ?? Date.now()
 		const generation = ++session.exposures
 		const frameId = await this.#preview(session, join(staging, name), name, generation, time)
-		const frame: FlatFrameContext = { id, exposure, timestamp: time, filter: filter.label, illumination: panel ? { source: panel.name, brightness: panel.intensity.value } : { source: 'manual' } }
+		const frame: FlatFrameContext = { id, exposure, timestamp: time, filter: filterLabel, illumination: panel ? { source: panel.name, brightness: panel.intensity.value } : { source: 'manual' } }
 		this.#update(session, { state: 'measuring' })
 
 		try {
@@ -871,6 +875,12 @@ export function finalVerdict(analysis: FlatAnalysis): 'accepted' | 'rejected' | 
 	const { target, clipping, finiteSamples } = analysis.assessment
 	if (target.status === 'fail' || clipping.status === 'fail' || finiteSamples.status === 'fail') return 'rejected'
 	return target.status === 'pass' && finiteSamples.status === 'pass' ? 'accepted' : 'inconclusive'
+}
+
+// Returns the name of the filter at a 0-based slot: the name the wheel reports for it, or "Filter <slot + 1>" when the
+// wheel names it not or there is no wheel.
+export function filterName(wheel: Pick<Wheel, 'names'> | undefined, slot: number) {
+	return wheel?.names[slot]?.trim() || `Filter ${slot + 1}`
 }
 
 // Returns the plane with the highest finite observed median, or undefined when none has one.

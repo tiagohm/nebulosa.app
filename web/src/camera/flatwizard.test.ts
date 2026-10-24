@@ -3,7 +3,7 @@ import type { FlatWizardSession, FlatWizardSessionSummary } from 'api'
 import { proxy } from 'valtio'
 import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, type FlatWizardSettings } from '../profile/schema'
 import { cameraKey } from './capture'
-import { continueFlatWizard, flatWizardBlocker, flatWizardRequest, flatWizardRunning, type FlatWizardRuntime, handleFlatWizardEvent, refreshFlatWizard, startFlatWizard, stopFlatWizard } from './flatwizard'
+import { continueFlatWizard, flatWizardBlocker, flatWizardFilterName, flatWizardRequest, flatWizardRunning, type FlatWizardRuntime, handleFlatWizardEvent, refreshFlatWizard, startFlatWizard, stopFlatWizard } from './flatwizard'
 
 function newState() {
 	return proxy<FlatWizardRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
@@ -43,7 +43,7 @@ function fakeFetch(handler: (url: string, init?: RequestInit) => Response | Prom
 	return { request, requests }
 }
 
-test('the request takes the camera settings without the exposure, and slots and brightness only with their devices', () => {
+test('the request takes the camera settings without the exposure, the slot always, and the brightness only with a panel', () => {
 	const settings: FlatWizardSettings = { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, slot: 2, brightness: 80 }], directory: '/flats', effectiveClip: 60000 }
 	const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 5, gain: 100 }
 	const wheel = { connectionId: 'c', deviceId: 'w' }
@@ -52,7 +52,7 @@ test('the request takes the camera settings without the exposure, and slots and 
 	const manual = flatWizardRequest(settings, exposure, {}, { mount: 'm' })
 	expect('exposureTime' in manual.capture).toBeFalse()
 	expect(manual.capture.gain).toBe(100)
-	expect(manual.filters[0].slot).toBeUndefined()
+	expect(manual.filters[0].slot).toBe(2)
 	expect(manual.filters[0].brightness).toBeUndefined()
 	expect(manual).toMatchObject({ directory: '/flats', effectiveClip: 60000, snoop: { mount: 'm' } })
 	expect('wheel' in manual || 'panel' in manual).toBeFalse()
@@ -66,7 +66,10 @@ test('an assigned device that cannot be used, or an incomplete form, blocks the 
 	expect(flatWizardBlocker(READY, undefined, undefined, DEFAULT_FLAT_WIZARD_SETTINGS)).toBeUndefined()
 	expect(flatWizardBlocker({ status: 'disconnected', message: 'The camera is disconnected.' }, undefined, undefined, DEFAULT_FLAT_WIZARD_SETTINGS)).toBe('The camera is disconnected.')
 	expect(flatWizardBlocker(READY, busy, undefined, DEFAULT_FLAT_WIZARD_SETTINGS)).toBe('The Filter Wheel is busy.')
-	expect(flatWizardBlocker(READY, undefined, undefined, { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, label: ' ' }] })).toBe('Name every filter.')
+	const wheelState = { count: 3, names: ['L', 'R', ''] }
+	expect(flatWizardBlocker(READY, READY, undefined, { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, slot: 3 }] }, wheelState)).toBe('The wheel has no slot 4.')
+	expect(flatWizardBlocker(READY, READY, undefined, { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, slot: 1, targetRange: [5, 5] }] }, wheelState)).toBe('The target of R is empty.')
+	expect(flatWizardBlocker(READY, undefined, undefined, { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, slot: 7 }] }, wheelState)).toBeUndefined()
 	expect(flatWizardBlocker(READY, undefined, undefined, { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, targetRange: [5, 5] }] })).toContain('target')
 })
 
@@ -139,4 +142,11 @@ test('commands carry a fresh token, the step id, and record failures', async () 
 	expect(requests[3].url).toBe('/api/flat-wizard/s1/stop')
 	expect(state.errors[KEY]).toBeUndefined()
 	expect(state.pending[KEY]).toBeUndefined()
+})
+
+test('a filter is named as the wheel names its slot, or by its 1-based slot number', () => {
+	expect(flatWizardFilterName(['Luminance', ' ', 'Red'], 0)).toBe('Luminance')
+	expect(flatWizardFilterName(['Luminance', ' ', 'Red'], 1)).toBe('Filter 2')
+	expect(flatWizardFilterName(['Luminance'], 4)).toBe('Filter 5')
+	expect(flatWizardFilterName(undefined, 2)).toBe('Filter 3')
 })

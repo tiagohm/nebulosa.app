@@ -665,8 +665,8 @@ describe('camera forms', () => {
 		expect(flatWizardSettings(activeProfile(state).settings, MAIN)).toEqual(DEFAULT_FLAT_WIZARD_SETTINGS)
 
 		const filters = [
-			{ ...DEFAULT_FLAT_WIZARD_FILTER, label: 'Ha', slot: 2, count: 30, brightness: 120 },
-			{ ...DEFAULT_FLAT_WIZARD_FILTER, label: 'OIII', targetRange: [15000, 25000] as const },
+			{ ...DEFAULT_FLAT_WIZARD_FILTER, slot: 2, count: 30, brightness: 120 },
+			{ ...DEFAULT_FLAT_WIZARD_FILTER, slot: 3, targetRange: [15000, 25000] as const },
 		]
 		setFlatWizardSettings(state, MAIN, { filters, directory: '/flats', effectiveClip: 60000, settleTime: 5 })
 		expect(flatWizardSettings(activeProfile(state).settings, GUIDE)).toEqual(DEFAULT_FLAT_WIZARD_SETTINGS)

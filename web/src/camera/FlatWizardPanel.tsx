@@ -1,4 +1,4 @@
-import type { CaptureSnoop, DeviceSummary, FlatWizardFilter, FlatWizardFilterRun, FlatWizardSessionSummary } from 'api'
+import type { CaptureSnoop, DeviceSummary, FlatWizardFilter, FlatWizardFilterRun, FlatWizardSessionSummary, WheelState } from 'api'
 import { cn } from 'cn'
 import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -20,13 +20,13 @@ import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { cameraKey } from './capture'
-import { continueFlatWizard, FLAT_WIZARD_DIAGNOSTIC_LABELS, FLAT_WIZARD_FILTER_STATE_LABELS, FLAT_WIZARD_STATE_LABELS, FLAT_WIZARD_VERDICT_LABELS, flatWizardBlocker, flatWizardRequest, flatWizardRunning, flatWizardRuntime, startFlatWizard, stopFlatWizard } from './flatwizard'
+import { continueFlatWizard, flatWizardFilterName, FLAT_WIZARD_DIAGNOSTIC_LABELS, FLAT_WIZARD_FILTER_STATE_LABELS, FLAT_WIZARD_STATE_LABELS, FLAT_WIZARD_VERDICT_LABELS, flatWizardBlocker, flatWizardRequest, flatWizardRunning, flatWizardRuntime, startFlatWizard, stopFlatWizard } from './flatwizard'
 
 // Contextual panel sections of Flat Wizard, a camera operation of the Images camera tabs: the equipment it uses (the
 // tab's camera, and the filter wheel and flat panel of the setup when the camera has a role, else manual filters and
 // light), the settings of the next session (output directory, effective clipping level, settle time, and limits), the
-// filter groups (name, wheel slot, frame count, exposure bounds, DN target, panel brightness), the progress of the
-// running session with its Continue and Stop commands, and the results of each group. Frames take the camera settings
+// filter groups (filter slot, named as the wheel names it or "Filter <slot + 1>", frame count, exposure bounds, DN
+// target, panel brightness), the progress of the running session with its Continue and Stop commands, and the results of each group. Frames take the camera settings
 // of Camera Acquisition, but never its exposure time, which the wizard searches. Levels are the camera's original
 // digital numbers (DN), never the stretched view. The form is the camera's, kept in the profile, and shows the values
 // applied while a session runs; the session is the server's, shown here whichever tab started it, and keeps running
@@ -72,11 +72,10 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, set
 	const panelAssigned = flatPanel !== undefined && flatPanel.status !== 'notSelected'
 	const wheelAvailability = wheelAssigned ? roleAvailability('FILTER_WHEEL', wheel, operations) : undefined
 	const panelAvailability = panelAssigned ? roleAvailability('FLAT_PANEL', flatPanel, operations) : undefined
-	const blocker = running ? undefined : flatWizardBlocker(availability, wheelAvailability, panelAvailability, settings)
 	const wheelState = wheelAssigned ? watchedDeviceState(control, 'wheel', wheel.device) : undefined
+	const blocker = running ? undefined : flatWizardBlocker(availability, wheelAvailability, panelAvailability, settings, wheelState)
 	const panelState = panelAssigned ? watchedDeviceState(control, 'flatPanel', flatPanel.device) : undefined
 	const capabilities = watchedDeviceState(control, 'camera', device)
-	const slots = wheelState ? Array.from({ length: wheelState.count }, (_, slot) => String(slot)) : []
 
 	// Updates fields of the camera's Flat Wizard form.
 	function update(patch: Partial<FlatWizardSettings>) {
@@ -135,8 +134,7 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, set
 						key={index}
 						index={index}
 						filter={filter}
-						slots={wheelAssigned ? slots : undefined}
-						slotName={(slot) => wheelState?.names[slot] || `Slot ${slot + 1}`}
+						wheel={wheelState}
 						brightness={panelAssigned ? (panelState?.intensity ?? { min: 0, max: 0 }) : undefined}
 						removable={shown.filters.length > 1}
 						disabled={locked}
@@ -145,7 +143,7 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, set
 					/>
 				))}
 				{shown.filters.length < FLAT_WIZARD_MAXIMUM_FILTERS && (
-					<Button variant="secondary" size="sm" className="self-start" disabled={locked} onClick={() => update({ filters: [...settings.filters, { ...(settings.filters.at(-1) ?? DEFAULT_FLAT_WIZARD_FILTER), label: '' }] })}>
+					<Button variant="secondary" size="sm" className="self-start" disabled={locked} onClick={() => update({ filters: [...settings.filters, nextFilter(settings.filters, wheelState?.count)] })}>
 						Add Filter
 					</Button>
 				)}
@@ -182,6 +180,14 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, set
 	)
 }
 
+// Returns the filter group a new row starts with: the settings of the last group at the next slot, wrapping around
+// the slots of the wheel when known, or the default group when there is none.
+function nextFilter(filters: readonly FlatWizardFilter[], slots: number | undefined): FlatWizardFilter {
+	const last = filters.at(-1)
+	if (!last) return DEFAULT_FLAT_WIZARD_FILTER
+	return { ...last, slot: slots !== undefined && slots > 0 ? (last.slot + 1) % slots : last.slot + 1 }
+}
+
 // Returns the form values a session applied, to show while it runs.
 function appliedSettings({ request }: Pick<FlatWizardSessionSummary, 'request'>): FlatWizardSettings {
 	const { filters, settleTime, directory, effectiveClip, maximumTrials, maximumRejections } = request
@@ -193,10 +199,9 @@ interface FilterFormProps {
 	readonly index: number
 	// Group shown.
 	readonly filter: Readonly<FlatWizardFilter>
-	// Slots of the assigned wheel, as strings of their 0-based number; absent without a wheel.
-	readonly slots?: readonly string[]
-	// Name of a slot.
-	readonly slotName: (slot: number) => string
+	// Slots and names the assigned wheel reports; absent without a wheel or while its state is unknown, when the slot
+	// is typed as a number.
+	readonly wheel?: Pick<WheelState, 'count' | 'names'>
 	// Brightness range of the assigned panel; absent without a panel.
 	readonly brightness?: { readonly min: number; readonly max: number }
 	// Whether the group can be removed.
@@ -210,24 +215,20 @@ interface FilterFormProps {
 }
 
 // Fields of one filter group.
-function FilterForm({ index, filter, slots, slotName, brightness, removable, disabled, onChange, onRemove }: FilterFormProps) {
-	const slot = filter.slot !== undefined && slots?.includes(String(filter.slot)) ? String(filter.slot) : undefined
+function FilterForm({ index, filter, wheel, brightness, removable, disabled, onChange, onRemove }: FilterFormProps) {
+	// A slot beyond the wheel stays listed, so the form never shows another slot than the one it holds.
+	const slots = wheel ? Array.from({ length: Math.max(wheel.count, filter.slot + 1) }, (_, slot) => String(slot)) : undefined
 
 	return (
 		<fieldset className="m-0 flex flex-col gap-2 border-0 border-t border-line-200 p-0 pt-2 first:border-t-0 first:pt-0">
-			<div className="flex items-end gap-1">
-				<TextInput label={`Filter ${index + 1}`} className="flex-1" placeholder="Name" value={filter.label} disabled={disabled} onChange={(e) => onChange({ label: e.target.value })} />
+			<div className="flex items-center gap-1">
+				<p className="m-0 flex-1 truncate text-ink-100">{`${index + 1}. ${flatWizardFilterName(wheel?.names, filter.slot)}`}</p>
 				{removable && <IconButton icon="close" label={`Remove filter ${index + 1}`} className="size-[38px]" disabled={disabled} onClick={onRemove} />}
 			</div>
-			{slots && slots.length > 0 && (
-				<Select
-					label="Wheel Slot"
-					options={['manual', ...slots]}
-					value={slot ?? 'manual'}
-					format={(value) => (value === 'manual' ? 'Manual' : slotName(Number(value)))}
-					disabled={disabled}
-					onChange={(value) => onChange(value === 'manual' ? { slot: undefined } : { slot: Number(value), ...(!filter.label.trim() && { label: slotName(Number(value)) }) })}
-				/>
+			{slots ? (
+				<Select label="Wheel Slot" options={slots} value={String(filter.slot)} format={(value) => `${Number(value) + 1}: ${flatWizardFilterName(wheel?.names, Number(value))}`} disabled={disabled} onChange={(value) => onChange({ slot: Number(value) })} />
+			) : (
+				<NumberInput label="Filter Slot" value={filter.slot + 1} min={1} disabled={disabled} onChange={(slot) => onChange({ slot: slot - 1 })} />
 			)}
 			<div className="flex flex-col gap-2">
 				<NumberInput label="Frames" value={filter.count} min={1} max={FLAT_WIZARD_MAXIMUM_COUNT} disabled={disabled} onChange={(count) => onChange({ count })} />
@@ -269,14 +270,14 @@ function Progress({ session, pending }: ProgressProps) {
 			{failed && session.error && <Notice error>{session.error}</Notice>}
 			{step && (
 				<>
-					<Notice>{step.kind === 'filter' ? `Put the ${session.filters[step.filter].label} filter in place${session.panel ? '' : ' and switch the light on'}, then continue.` : `Make sure the light is on and stable for ${session.filters[step.filter].label}, then continue.`}</Notice>
+					<Notice>{step.kind === 'filter' ? `Put the ${session.filters[step.filter].name} filter in place${session.panel ? '' : ' and switch the light on'}, then continue.` : `Make sure the light is on and stable for ${session.filters[step.filter].name}, then continue.`}</Notice>
 					<Button disabled={pending} onClick={() => void continueFlatWizard(flatWizardRuntime, session, step.stepId)}>
 						Continue
 					</Button>
 				</>
 			)}
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				{run && <Row label="Filter">{`${run.label} (${session.filter + 1} of ${session.filters.length})`}</Row>}
+				{run && <Row label="Filter">{`${run.name} (${session.filter + 1} of ${session.filters.length})`}</Row>}
 				{run && <Row label="Step">{FLAT_WIZARD_FILTER_STATE_LABELS[run.state]}</Row>}
 				{run?.exposure !== undefined ? <Row label="Exposure">{formatExposure(run.exposure)}</Row> : run?.candidateExposure !== undefined && <Row label="Trying">{formatExposure(run.candidateExposure)}</Row>}
 				{run && <Row label="Accepted">{`${run.accepted} of ${run.required}`}</Row>}
@@ -299,7 +300,7 @@ function Results({ session }: { readonly session: FlatWizardSessionSummary }) {
 		<PanelSection title="Results">
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 				{session.filters.map((run, index) => (
-					<Row key={index} label={run.label}>
+					<Row key={index} label={run.name}>
 						{run.state === 'pending' ? FLAT_WIZARD_FILTER_STATE_LABELS.pending : `${run.accepted}/${run.required} saved${run.rejected + run.inconclusive > 0 ? `, ${run.rejected + run.inconclusive} discarded` : ''}${run.exposure !== undefined ? ` at ${formatExposure(run.exposure)}` : ''}`}
 					</Row>
 				))}
@@ -315,13 +316,13 @@ function Results({ session }: { readonly session: FlatWizardSessionSummary }) {
 // Failure and sequence assessment of one filter group.
 function FilterNotes({ run }: { readonly run: FlatWizardFilterRun }) {
 	const { sequence } = run
-	if (run.error) return <Notice error>{`${run.label}: ${run.error}`}</Notice>
+	if (run.error) return <Notice error>{`${run.name}: ${run.error}`}</Notice>
 	if (!sequence) return null
-	if (sequence.status === 'notEvaluated') return <Notice>{`${run.label}: stability not evaluated (${sequence.reason}).`}</Notice>
+	if (sequence.status === 'notEvaluated') return <Notice>{`${run.name}: stability not evaluated (${sequence.reason}).`}</Notice>
 
 	const notes = sequence.reasons.flatMap((reason) => FLAT_WIZARD_DIAGNOSTIC_LABELS[reason] ?? [])
 	const verdict = sequence.verdict === 'accepted' ? 'stable' : sequence.verdict === 'rejected' ? 'unstable' : 'not proven stable'
-	return <Notice error={sequence.verdict === 'rejected'}>{`${run.label}: ${verdict}.${sequence.outliers.length > 0 ? ` Outliers: ${sequence.outliers.join(', ')}.` : ''}${notes.length > 0 ? ` ${notes.join(' ')}` : ''}`}</Notice>
+	return <Notice error={sequence.verdict === 'rejected'}>{`${run.name}: ${verdict}.${sequence.outliers.length > 0 ? ` Outliers: ${sequence.outliers.join(', ')}.` : ''}${notes.length > 0 ? ` ${notes.join(' ')}` : ''}`}</Notice>
 }
 
 // Label and value of a row.

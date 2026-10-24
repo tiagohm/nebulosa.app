@@ -253,9 +253,9 @@ export const FLAT_WIZARD_MAXIMUM_REJECTIONS = 100
 // Longest exposure of a Flat Wizard form, in seconds (10 minutes).
 export const FLAT_WIZARD_MAXIMUM_EXPOSURE = 600
 
-// Filter group a new row of the Flat Wizard form starts with: 20 frames searched from 1 s within [0.01 s, 30 s], aimed
+// Filter group a new row of the Flat Wizard form starts with: the first slot, 20 frames searched from 1 s within [0.01 s, 30 s], aimed
 // at 20000–35000 DN, about a third to a half of a 16-bit range; edit the target for cameras of another depth.
-export const DEFAULT_FLAT_WIZARD_FILTER: FlatWizardFilter = { label: 'L', count: 20, initialExposure: 1, minimumExposure: 0.01, maximumExposure: 30, targetRange: [20000, 35000] }
+export const DEFAULT_FLAT_WIZARD_FILTER: FlatWizardFilter = { slot: 0, count: 20, initialExposure: 1, minimumExposure: 0.01, maximumExposure: 30, targetRange: [20000, 35000] }
 
 // Flat Wizard form of a camera that has none yet: one luminance group, a 2 s settle, and the default limits.
 export const DEFAULT_FLAT_WIZARD_SETTINGS: FlatWizardSettings = { filters: [DEFAULT_FLAT_WIZARD_FILTER], settleTime: 2, maximumTrials: 8, maximumRejections: 5 }

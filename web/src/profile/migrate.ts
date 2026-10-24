@@ -245,13 +245,12 @@ function boundedNumber(value: unknown, minimum: number, maximum: number, fallbac
 
 // Restores a persisted filter group of the Flat Wizard form, filling every invalid field with its default; undefined
 // for anything that is not a record. The exposure bounds stay ordered, the initial exposure inside them, and the
-// target ordered; a slot that is not a non-negative integer or a brightness that is not a non-negative number is
-// dropped.
+// target ordered; a slot that is not a non-negative integer is the first one, and a brightness that is not a
+// non-negative number is dropped. A label of an earlier form is ignored: the filter is named by its slot.
 function normalizeFlatWizardFilter(value: unknown): FlatWizardFilter | undefined {
 	if (!isRecord(value)) return undefined
 
 	const defaults = DEFAULT_FLAT_WIZARD_FILTER
-	const label = typeof value.label === 'string' && value.label.trim() ? value.label.trim() : defaults.label
 	let minimumExposure = boundedNumber(value.minimumExposure, Number.MIN_VALUE, FLAT_WIZARD_MAXIMUM_EXPOSURE, defaults.minimumExposure)
 	let maximumExposure = boundedNumber(value.maximumExposure, Number.MIN_VALUE, FLAT_WIZARD_MAXIMUM_EXPOSURE, defaults.maximumExposure)
 	if (!(minimumExposure < maximumExposure)) [minimumExposure, maximumExposure] = [defaults.minimumExposure, defaults.maximumExposure]
@@ -260,8 +259,7 @@ function normalizeFlatWizardFilter(value: unknown): FlatWizardFilter | undefined
 	const targetRange: FlatWizardFilter['targetRange'] = typeof range[0] === 'number' && typeof range[1] === 'number' && Number.isFinite(range[0]) && Number.isFinite(range[1]) && range[0] < range[1] ? [range[0], range[1]] : defaults.targetRange
 
 	return {
-		label,
-		...(Number.isInteger(value.slot) && (value.slot as number) >= 0 && { slot: value.slot as number }),
+		slot: Number.isInteger(value.slot) && (value.slot as number) >= 0 ? (value.slot as number) : defaults.slot,
 		count: Number.isInteger(value.count) ? boundedNumber(value.count, 1, FLAT_WIZARD_MAXIMUM_COUNT, defaults.count) : defaults.count,
 		initialExposure,
 		minimumExposure,

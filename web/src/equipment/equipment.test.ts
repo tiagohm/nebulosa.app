@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import type { DeviceSummary } from 'api'
 import { proxy } from 'valtio'
-import { type DeviceState, handleDeviceEvent, refreshDevices, roleStatus, switchDevice, watchServer } from './equipment'
+import { type DeviceState, handleDeviceEvent, refreshDevices, roleStatus, switchDevice, switchSetup, watchServer } from './equipment'
 
 const fetchSpy = spyOn(globalThis, 'fetch')
 
@@ -139,6 +139,29 @@ describe('switching a device', () => {
 		await refreshDevices(state)
 
 		expect(fetchSpy).not.toHaveBeenCalled()
+	})
+})
+
+describe('switching a setup', () => {
+	test('connects each assigned device once and skips the rest', async () => {
+		fetchSpy.mockResolvedValue(new Response(null, { status: 202 }))
+		const state = newState([device('a'), device('b', true), device('c'), device('d')])
+		state.pending.d = 'connect'
+		const setup = { MAIN_CAMERA: { id: 'a', name: 'a' }, GUIDE_CAMERA: { id: 'b', name: 'b' }, MOUNT: { id: 'd', name: 'd' }, FOCUSER: { id: 'gone', name: 'gone' }, GUIDE_OUTPUT: { id: 'a', name: 'a' } }
+
+		await switchSetup(state, setup, true)
+
+		expect(fetchSpy.mock.calls.map((c) => c[0])).toEqual(['/api/connections/s1/devices/a/connect'])
+		expect(state.pending.a).toBe('connect')
+	})
+
+	test('disconnects only the connected assigned devices', async () => {
+		fetchSpy.mockResolvedValue(new Response(null, { status: 202 }))
+		const state = newState([device('a', true), device('b'), device('c', true)])
+
+		await switchSetup(state, { MAIN_CAMERA: { id: 'a', name: 'a' }, GUIDE_CAMERA: { id: 'b', name: 'b' } }, false)
+
+		expect(fetchSpy.mock.calls.map((c) => c[0])).toEqual(['/api/connections/s1/devices/a/disconnect'])
 	})
 })
 

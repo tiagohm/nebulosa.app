@@ -119,7 +119,7 @@ export function CameraSettings({ device, settings, capabilities, disabled, onCha
 									<NumberInput label="Y" value={settings.y} min={0} max={subframe.height - 1} disabled={disabled} onChange={(y) => onChange({ y })} />
 									<NumberInput label="Width" value={settings.width} min={1} max={subframe.width} disabled={disabled} onChange={(width) => onChange({ width })} />
 									<NumberInput label="Height" value={settings.height} min={1} max={subframe.height} disabled={disabled} onChange={(height) => onChange({ height })} />
-									<Button variant="secondary" size="sm" className="col-span-2" disabled={disabled} onClick={() => onChange({ x: 0, y: 0, width: subframe.width, height: subframe.height })}>
+									<Button variant="secondary" className="col-span-2" disabled={disabled} onClick={() => onChange({ x: 0, y: 0, width: subframe.width, height: subframe.height })}>
 										Fullscreen
 									</Button>
 								</div>

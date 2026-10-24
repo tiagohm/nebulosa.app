@@ -208,6 +208,15 @@ export async function switchDevice(state: DeviceState, deviceId: string, connect
 	}
 }
 
+// Connects (connect = true) or disconnects every device assigned to a role of the setup and present on
+// the watched connection, each once even when several roles share it. Devices already in the requested
+// state or with a pending request are skipped; each request settles or fails on its own, as switchDevice.
+export async function switchSetup(state: DeviceState, setup: Readonly<EquipmentSetup>, connect: boolean) {
+	const ids = new Set(Object.values(setup).map((assignment) => assignment?.id))
+	const devices = state.devices.filter((d) => ids.has(d.id))
+	await Promise.all(devices.map((d) => switchDevice(state, d.id, connect)))
+}
+
 // Returns the device assigned to a role among the watched connection's devices.
 export function roleDevice(setup: Readonly<EquipmentSetup>, role: EquipmentRole, state: Pick<DeviceView, 'devices'>): DeviceSummary | undefined {
 	const id = setup[role]?.id

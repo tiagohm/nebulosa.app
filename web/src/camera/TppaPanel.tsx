@@ -97,7 +97,7 @@ export function TppaSections({ device, availability, mount, settings: identity }
 				</dl>
 				{!running && mountAvailability.status !== 'ready' && <p className="m-0 text-xs leading-4 text-ink-300">{mountAvailability.message}</p>}
 				{!running && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') && (
-					<Button variant="secondary" size="sm" className="self-start" onClick={() => (deviceState.open = true)}>
+					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
 						Equipment Setup
 					</Button>
 				)}

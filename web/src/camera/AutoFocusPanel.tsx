@@ -103,7 +103,7 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 					)}
 				</dl>
 				{!focuser && !running && (
-					<Button variant="secondary" size="sm" className="self-start" onClick={() => (deviceState.open = true)}>
+					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
 						Equipment Setup
 					</Button>
 				)}

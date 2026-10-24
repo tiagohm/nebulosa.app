@@ -51,7 +51,7 @@ function AstapAvailability() {
 				ASTAP: <span className={summary?.className}>{summary?.label ?? 'Loading…'}</span>
 				{astap?.lastCheck && astap.lastCheck.status !== 'available' && ` — ${astap.lastCheck.message}`}
 			</p>
-			<Button variant="ghost" size="sm" className="self-start px-1" onClick={() => navigate(routeState, { workspace: 'settings', tool: 'astap' })}>
+			<Button variant="ghost" className="self-start px-1" onClick={() => navigate(routeState, { workspace: 'settings', tool: 'astap' })}>
 				Settings → External Tools → ASTAP
 			</Button>
 		</div>

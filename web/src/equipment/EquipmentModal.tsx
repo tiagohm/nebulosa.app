@@ -10,12 +10,12 @@ import { Icon } from '../ui/Icon'
 import { Modal } from '../ui/Modal'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
-import { deviceState, ROLE_STATUS_LABELS, type RoleStatus, roleDevice, roleStatus, switchDevice } from './equipment'
+import { deviceState, ROLE_STATUS_LABELS, type RoleStatus, roleDevice, roleStatus, switchDevice, switchSetup } from './equipment'
 import { conflictingRole, type EquipmentSetup, type RoleDefinition, roleDefinition, ROLE_GROUPS, ROLES } from './roles'
 import { useWatchedDevices } from './useEquipment'
 
 // Modal that assigns the devices of the active profile's connection to the equipment roles and connects
-// or disconnects them one by one. Selecting a device never connects it, and closing the modal never
+// or disconnects them one by one or all at once. Selecting a device never connects it, and closing the modal never
 // disconnects anything. It also holds the profile's telescope optics, which no device reports and the
 // Sky's Equipment Setup field of view uses.
 
@@ -54,6 +54,12 @@ export function EquipmentModal() {
 	const serverConnecting = connection !== undefined && loading?.kind === 'connect' && loading.connectionId === connection.id
 	// Failure of the last connect or disconnect of the profile's connection.
 	const connectionError = connection && errors[connection.id]
+	// Assigned devices present on the connection and without a pending request: those Connect all or
+	// Disconnect all would switch.
+	const assignedIds = new Set(Object.values(setup).map((assignment) => assignment?.id))
+	const idle = runtime.devices.filter((d) => assignedIds.has(d.id) && !runtime.pending[d.id])
+	const canConnectAll = idle.some((d) => !d.connected)
+	const canDisconnectAll = idle.some((d) => d.connected)
 
 	// Closes this modal and opens the Connections modal, where the profile's connection is chosen.
 	function openConnections() {
@@ -88,6 +94,14 @@ export function EquipmentModal() {
 						)}
 						{connectionError && !serverOpen && <p className="m-0 text-[13px] leading-5 text-danger">{connectionError}</p>}
 						{serverOpen && runtime.loading && <p className="m-0 text-[13px] leading-5 text-ink-300">Loading devices…</p>}
+						<div className="flex justify-end gap-2">
+							<Button variant="primary" disabled={!serverOpen || !canConnectAll} onClick={() => void switchSetup(deviceState, setup, true)}>
+								Connect all
+							</Button>
+							<Button variant="ghost" disabled={!serverOpen || !canDisconnectAll} onClick={() => void switchSetup(deviceState, setup, false)}>
+								Disconnect all
+							</Button>
+						</div>
 						<div className="-mr-2 flex min-h-0 flex-col gap-4 overflow-y-auto overscroll-contain pr-2">
 							{ROLE_GROUPS.map(({ group, label }) => (
 								<section key={group} className="flex flex-col gap-2">

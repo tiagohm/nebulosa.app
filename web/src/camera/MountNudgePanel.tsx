@@ -99,7 +99,7 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 					</dd>
 				</dl>
 				{mount.status === 'notSelected' && (
-					<Button variant="secondary" size="sm" className="self-start" onClick={() => (deviceState.open = true)}>
+					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
 						Equipment Setup
 					</Button>
 				)}

@@ -119,7 +119,7 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 				{!running && coverAvailability && coverAvailability.status !== 'ready' && <Notice>{coverAvailability.message}</Notice>}
 				{coverAssigned && <Notice>The cover closes before the first frame and opens again when the session ends, unless it was already closed.</Notice>}
 				{!running && (!wheelAssigned || !panelAssigned || !coverAssigned || coverAvailability?.status === 'unsupported') && wheel !== undefined && (
-					<Button variant="secondary" size="sm" className="self-start" onClick={() => (deviceState.open = true)}>
+					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
 						Equipment Setup
 					</Button>
 				)}
@@ -156,7 +156,7 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 					/>
 				))}
 				{shown.filters.length < FLAT_WIZARD_MAXIMUM_FILTERS && (
-					<Button variant="secondary" size="sm" className="self-start" disabled={locked} onClick={() => update({ filters: [...settings.filters, nextFilter(settings.filters, wheelState?.count)] })}>
+					<Button variant="secondary" className="self-start" disabled={locked} onClick={() => update({ filters: [...settings.filters, nextFilter(settings.filters, wheelState?.count)] })}>
 						Add Filter
 					</Button>
 				)}

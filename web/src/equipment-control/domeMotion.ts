@@ -1,5 +1,6 @@
 import type { DomeMotionSession, ServerEvent } from 'api'
 import { proxy } from 'valtio'
+import { deviceUrl } from '../http'
 import { followPress, type Press, type PressHolder, pressRunning, reconcilePress, releasePress, startPress } from '../press'
 
 // Manual rotation of domes from this tab: the rotation sessions the server reports, started by any tab,
@@ -58,7 +59,7 @@ export function domeMotionEndProblem(session: DomeMotionSession): string | undef
 
 // Starts a press of a dome in a direction; ignored while this tab already holds a press.
 export async function pressDomeMotion(runtime: DomeMotionRuntime, connectionId: string, deviceId: string, direction: DomeDirection, request: typeof fetch = fetch) {
-	const url = `/api/connections/${encodeURIComponent(connectionId)}/domes/${encodeURIComponent(deviceId)}/motion`
+	const url = deviceUrl(connectionId, 'dome', deviceId, 'motion')
 	await startPress(runtime, { token: crypto.randomUUID(), connectionId, deviceId, direction, phase: 'starting' }, url, { direction }, motionPath, request)
 }
 

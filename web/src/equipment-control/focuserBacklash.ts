@@ -1,6 +1,6 @@
 import type { FocuserBacklashConfig, FocuserBacklashState, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { responseError } from '../http'
+import { deviceUrl, jsonInit, responseError } from '../http'
 
 // Backlash compensation of the focusers, as the server reports it. The server owns the settings and applies
 // them to every focuser move: this store mirrors the state fetched for each focuser shown and its
@@ -26,11 +26,6 @@ export function focuserBacklashKey(connectionId: string, deviceId: string) {
 	return `${connectionId}:${deviceId}`
 }
 
-// URL of the compensation of a focuser.
-function backlashUrl(connectionId: string, deviceId: string) {
-	return `/api/connections/${encodeURIComponent(connectionId)}/focusers/${encodeURIComponent(deviceId)}/backlash`
-}
-
 // Stores the state of a focuser unless the store holds one of a later saved revision.
 function upsert(state: FocuserBacklashRuntime, backlash: FocuserBacklashState) {
 	const key = focuserBacklashKey(backlash.connectionId, backlash.deviceId)
@@ -44,7 +39,7 @@ export async function loadFocuserBacklash(state: FocuserBacklashRuntime, connect
 	const key = focuserBacklashKey(connectionId, deviceId)
 
 	try {
-		const response = await request(backlashUrl(connectionId, deviceId))
+		const response = await request(deviceUrl(connectionId, 'focuser', deviceId, 'backlash'))
 		if (response.ok) upsert(state, (await response.json()) as FocuserBacklashState)
 		else state.errors[key] = await responseError(response)
 	} catch {
@@ -65,7 +60,7 @@ export function handleFocuserBacklashEvent(state: FocuserBacklashRuntime, event:
 // Saves the compensation of a focuser, edited from revision.
 export async function saveFocuserBacklash(state: FocuserBacklashRuntime, connectionId: string, deviceId: string, config: FocuserBacklashConfig, revision: number, request: typeof fetch = fetch): Promise<FocuserBacklashSaveResult> {
 	try {
-		const response = await request(backlashUrl(connectionId, deviceId), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config, revision }) })
+		const response = await request(deviceUrl(connectionId, 'focuser', deviceId, 'backlash'), jsonInit('PUT', { config, revision }))
 
 		if (response.ok) {
 			upsert(state, (await response.json()) as FocuserBacklashState)

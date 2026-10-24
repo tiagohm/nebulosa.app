@@ -1,5 +1,5 @@
 import type { LeasedSession } from 'api'
-import { responseError } from './http'
+import { jsonInit, responseError } from './http'
 
 // Client side of a manual motion held by a lease (the mount nudge and the manual rotation of a dome): the
 // one press a tab holds, its heartbeats, and its release. The server owns every session and stops it when
@@ -67,7 +67,7 @@ export async function startPress<P extends Press>(holder: PressHolder<P>, press:
 	holder.error = undefined
 
 	try {
-		const response = await request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, token }) })
+		const response = await request(url, jsonInit('POST', { ...body, token }))
 
 		if (!response.ok) {
 			const message = await responseError(response)

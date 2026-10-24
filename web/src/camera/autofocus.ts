@@ -1,7 +1,7 @@
 import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusState, AutoFocusVerification, CameraCapabilities, CaptureSnoop, ServerEvent, StarDetectionRequest } from 'api'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { responseError } from '../http'
+import { deviceUrl, jsonInit, responseError } from '../http'
 import type { AutoFocusSettings, CameraExposureSettings } from '../profile/profile'
 import { DEFAULT_APERTURE_RADIUS } from '../stars/stars'
 import { cameraKey, fitExposure } from './capture'
@@ -205,7 +205,7 @@ async function command(state: AutoFocusRuntime, key: string, url: string, body: 
 	delete state.errors[key]
 
 	try {
-		const response = await request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
+		const response = await request(url, jsonInit('POST', body))
 		if (!response.ok) state.errors[key] = await responseError(response)
 	} catch {
 		state.errors[key] = 'Unable to reach the server.'
@@ -217,7 +217,7 @@ async function command(state: AutoFocusRuntime, key: string, url: string, body: 
 
 // Starts an Auto Focus with a camera; its progress arrives as events.
 export function startAutoFocus(state: AutoFocusRuntime, connectionId: string, deviceId: string, body: Omit<AutoFocusRequest, 'token'>, request: typeof fetch = fetch) {
-	const url = `/api/connections/${encodeURIComponent(connectionId)}/cameras/${encodeURIComponent(deviceId)}/autofocus`
+	const url = deviceUrl(connectionId, 'camera', deviceId, 'autofocus')
 	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: crypto.randomUUID() } satisfies AutoFocusRequest, request)
 }
 

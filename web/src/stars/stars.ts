@@ -1,6 +1,6 @@
 import type { AstapStarDetectionSettings, BuiltinStarDetectionSettings, ServerEvent, StarAcceptance, StarDetectionJob, StarDetectionRequest, StarDetectionResult, StarDetectionSettings, StarDetectionSnapshot, StarDetectorProvider } from 'api'
 import { proxy, ref } from 'valtio'
-import { responseError } from '../http'
+import { jsonInit, responseError } from '../http'
 import type { Point, Rect } from '../viewer/transform'
 
 // Star detection jobs of the server as this tab knows them, shared by the Images workspace (manual runs and
@@ -206,7 +206,7 @@ export async function runDetection(state: StarsState, imageId: string, detection
 	delete state.submitErrors[imageId]
 
 	try {
-		const response = await request(`/api/images/${encodeURIComponent(imageId)}/stars`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(detection) })
+		const response = await request(`/api/images/${encodeURIComponent(imageId)}/stars`, jsonInit('POST', detection))
 
 		if (!response.ok) {
 			state.submitErrors[imageId] = await responseError(response)

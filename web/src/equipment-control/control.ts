@@ -1,6 +1,6 @@
 import type { CommandAccepted, DeviceStateMap, DeviceStates, ManagedDeviceType, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { responseError } from '../http'
+import { deviceUrl, jsonInit, responseError } from '../http'
 
 // Control state of the devices of the active profile's server connection, as the server reports it, and
 // the commands this tab sends to them. The server owns every physical state: this store only mirrors it,
@@ -12,20 +12,6 @@ import { responseError } from '../http'
 
 // Managed device types, in the order the server lists them.
 export const DEVICE_TYPES = ['camera', 'mount', 'focuser', 'wheel', 'rotator', 'guideOutput', 'dome', 'cover', 'flatPanel', 'dewHeater'] as const satisfies readonly ManagedDeviceType[]
-
-// URL segment of the command routes of each device type.
-export const DEVICE_PATHS: Readonly<Record<ManagedDeviceType, string>> = {
-	camera: 'cameras',
-	mount: 'mounts',
-	focuser: 'focusers',
-	wheel: 'wheels',
-	rotator: 'rotators',
-	guideOutput: 'guide-outputs',
-	dome: 'domes',
-	cover: 'covers',
-	flatPanel: 'flat-panels',
-	dewHeater: 'dew-heaters',
-}
 
 // Control states of the watched connection, by device type and then by device id.
 export type ControlStates = { [T in ManagedDeviceType]: Record<string, DeviceStateMap[T]> }
@@ -196,11 +182,6 @@ export function handleControlEvent(state: ControlRuntime, event: ServerEvent, re
 	applyUpdate(state, update)
 }
 
-// URL of a command of a device of the watched connection.
-export function commandUrl(connectionId: string, type: ManagedDeviceType, deviceId: string, action: string) {
-	return `/api/connections/${encodeURIComponent(connectionId)}/${DEVICE_PATHS[type]}/${encodeURIComponent(deviceId)}/${action}`
-}
-
 // Command a panel sends to a device of the watched connection.
 export interface DeviceCommand {
 	// Type of the device, which selects its routes.
@@ -226,7 +207,7 @@ async function send(state: ControlRuntime, { type, deviceId, action, label, body
 	delete state.errors[deviceId]
 
 	try {
-		const response = await request(commandUrl(serverId, type, deviceId, action), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) })
+		const response = await request(deviceUrl(serverId, type, deviceId, action), jsonInit('POST', body ?? {}))
 		if (state.watched !== serverId) return undefined
 
 		if (!response.ok) {
@@ -259,7 +240,7 @@ export async function stopCommand(state: ControlRuntime, { type, deviceId, actio
 	if (!serverId) return false
 
 	try {
-		const response = await request(commandUrl(serverId, type, deviceId, action), { method: 'POST' })
+		const response = await request(deviceUrl(serverId, type, deviceId, action), { method: 'POST' })
 		if (response.ok) return true
 		if (state.watched === serverId) state.errors[deviceId] = await responseError(response)
 	} catch {

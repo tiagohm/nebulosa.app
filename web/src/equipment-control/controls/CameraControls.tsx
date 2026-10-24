@@ -1,6 +1,7 @@
 import type { CameraSensorState } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { deviceUrl } from '../../http'
 import { deviceBusy, operationsState } from '../../operations'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
@@ -30,7 +31,7 @@ export function CameraControls({ device }: InterfaceProps) {
 	// The sensor geometry is fetched once per camera shown; it changes only with the driver.
 	useEffect(() => {
 		let current = true
-		void fetch(`/api/connections/${encodeURIComponent(device.connectionId)}/cameras/${encodeURIComponent(device.id)}/sensor`)
+		void fetch(deviceUrl(device.connectionId, 'camera', device.id, 'sensor'))
 			.then((response) => (response.ok ? (response.json() as Promise<CameraSensorState>) : undefined))
 			.then((state) => current && setSensor(state?.sensor))
 			.catch(() => undefined)

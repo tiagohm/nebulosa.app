@@ -1,6 +1,6 @@
 import type { MinorBody, MinorBodySearchResponse, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyEvents, SkyObjectCategory, SkyObjectRef, SkyObserver, SkyPosition, SkyPositionResponse, SkySearchResult, SkyStarData } from 'api'
 import { proxy } from 'valtio'
-import { responseError } from '../http'
+import { jsonInit, responseError } from '../http'
 import type { SkyObserverSettings } from '../profile/profile'
 import { skyClock, skyTime } from './clock'
 import { MAP_STAR_MAGNITUDE_LIMIT } from './display'
@@ -144,7 +144,7 @@ async function fetchJson<T>(io: SkyIo, input: string, init?: RequestInit): Promi
 
 // Posts a JSON body to the API and returns the JSON answer.
 function postJson<T>(io: SkyIo, input: string, body: unknown, signal?: AbortSignal): Promise<T> {
-	return fetchJson<T>(io, input, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal })
+	return fetchJson<T>(io, input, jsonInit('POST', body, signal))
 }
 
 // Whether map data computed for an instant can show another instant (both Unix milliseconds).

@@ -2,7 +2,7 @@ import type { CaptureFrameOpened, CaptureFrameSummary, CaptureLeaseReconcileResp
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { clientId } from '../events'
-import { responseError } from '../http'
+import { jsonInit, responseError } from '../http'
 import { DEFAULT_PLATE_SOLVE_REQUEST } from '../platesolving/platesolving'
 import { adaptView, FIT_VIEW, type ViewerView } from '../viewer/transform'
 import { type CaptureFramesState, captureFrameUrl, frameSourceKey } from './captureframes'
@@ -346,7 +346,7 @@ export async function openImage(state: ImagesState, path: string, io: ImagesIo =
 	addDocument(state, { key, name, source: { kind: 'file', path }, status: 'loading', unsaved: false })
 
 	try {
-		const response = await io.fetch('/api/images', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) })
+		const response = await io.fetch('/api/images', jsonInit('POST', { path }))
 		const document = documentOf(state, key)
 
 		if (!response.ok) {
@@ -409,7 +409,7 @@ export async function createDerivedImage(state: ImagesState, key: string, io: Im
 	view.deriveError = undefined
 
 	try {
-		const response = await io.fetch(`/api/images/${encodeURIComponent(source.info.id)}/derive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) })
+		const response = await io.fetch(`/api/images/${encodeURIComponent(source.info.id)}/derive`, jsonInit('POST', request))
 		if (!response.ok) throw new Error(await responseError(response))
 		const info = (await response.json()) as ImageInfo
 		const derivedKey = nanoid()
@@ -433,7 +433,7 @@ export async function saveImage(state: ImagesState, key: string, path: string, f
 
 	try {
 		const request: SaveRequest = { path, format, overwrite }
-		const response = await io.fetch(`/api/images/${encodeURIComponent(id)}/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) })
+		const response = await io.fetch(`/api/images/${encodeURIComponent(id)}/save`, jsonInit('POST', request))
 
 		if (response.status === 409) {
 			const body = (await response.json()) as { readonly error: string; readonly code: string }
@@ -472,7 +472,7 @@ async function requestRendering(state: ImagesState, key: string, id: string | un
 
 	try {
 		const request: RenderRequest = { settings }
-		const response = await io.fetch(`/api/images/${encodeURIComponent(id)}/render`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: controller.signal })
+		const response = await io.fetch(`/api/images/${encodeURIComponent(id)}/render`, jsonInit('POST', request, controller.signal))
 		if (!response.ok) throw new Error(await responseError(response))
 		const result = JSON.parse(response.headers.get(RENDER_HEADER) ?? 'null') as RenderResult
 		const blob = await response.blob()
@@ -657,7 +657,7 @@ function releaseLease(lease: string, io: ImagesIo) {
 // of the refusal.
 async function requestFrame(frameId: string, io: ImagesIo, client: string): Promise<CaptureFrameOpened | string> {
 	try {
-		const response = await io.fetch(`${captureFrameUrl(frameId)}/open`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ client }) })
+		const response = await io.fetch(`${captureFrameUrl(frameId)}/open`, jsonInit('POST', { client }))
 		if (!response.ok) return await responseError(response)
 		return (await response.json()) as CaptureFrameOpened
 	} catch (error) {
@@ -884,7 +884,7 @@ export async function reconcileCapturedFrames(state: ImagesState, frames: Pick<C
 
 	if (leases.length > 0) {
 		try {
-			const response = await io.fetch(`/api/capture-frames/clients/${encodeURIComponent(client)}/leases`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leases }) })
+			const response = await io.fetch(`/api/capture-frames/clients/${encodeURIComponent(client)}/leases`, jsonInit('PUT', { leases }))
 
 			if (response.ok) {
 				const { lost } = (await response.json()) as CaptureLeaseReconcileResponse

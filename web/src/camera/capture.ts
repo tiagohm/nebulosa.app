@@ -1,6 +1,7 @@
 import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession, CaptureSnapshot, CaptureSnoop, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import type { EquipmentSetup } from '../equipment/roles'
+import { deviceUrl, jsonInit, responseError } from '../http'
 import type { CameraAcquisitionSettings, CameraExposureSettings } from '../profile/profile'
 
 // Camera captures as this tab knows them. The server owns every capture, whichever tab started it, so this
@@ -39,24 +40,9 @@ export function cameraKey(connectionId: string, deviceId: string) {
 	return `${connectionId}:${deviceId}`
 }
 
-// Returns the URL of a camera's routes.
-function cameraUrl(connectionId: string, deviceId: string) {
-	return `/api/connections/${encodeURIComponent(connectionId)}/cameras/${encodeURIComponent(deviceId)}`
-}
-
 // Returns whether a session is still running.
 export function captureRunning(session: Pick<CaptureSession, 'phase'> | undefined): boolean {
 	return session !== undefined && !ENDED_PHASES.has(session.phase)
-}
-
-// Returns the error message of a failed response, or a generic one.
-async function responseError(response: Response, fallback: string) {
-	try {
-		const body = (await response.json()) as { readonly error?: string }
-		return body.error ?? fallback
-	} catch {
-		return fallback
-	}
 }
 
 // Applies a capture or camera event; any other event is ignored. A frame older than the one known for its
@@ -105,7 +91,7 @@ export async function refreshCapabilities(state: CaptureRuntime, connectionId: s
 	const key = cameraKey(connectionId, deviceId)
 
 	try {
-		const response = await request(cameraUrl(connectionId, deviceId))
+		const response = await request(deviceUrl(connectionId, 'camera', deviceId))
 		if (response.ok) state.capabilities[key] = (await response.json()) as CameraCapabilities
 		else if (response.status === 404) delete state.capabilities[key]
 	} catch {
@@ -129,7 +115,7 @@ async function command(state: CaptureRuntime, connectionId: string, deviceId: st
 	delete state.errors[key]
 
 	try {
-		const response = await request(`${cameraUrl(connectionId, deviceId)}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
+		const response = await request(deviceUrl(connectionId, 'camera', deviceId, path), jsonInit('POST', body))
 		if (!response.ok) state.errors[key] = await responseError(response, fallback)
 	} catch {
 		state.errors[key] = 'Unable to reach the server.'

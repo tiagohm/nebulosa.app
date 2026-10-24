@@ -1,6 +1,6 @@
-import type { ExternalToolCapability, ExternalToolCheck, ExternalToolConfig, ExternalToolState, ServerEvent } from 'api'
+import type { ExternalToolCapability, ExternalToolCheck, ExternalToolConfig, ExternalToolLoginRequest, ExternalToolState, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { responseError } from '../http'
+import { jsonInit, responseError } from '../http'
 
 // External programs and web services the server supports (ASTAP, solve-field, nova.astrometry.net), with their
 // saved settings and latest check, as the server reports them. The server owns the settings: this store mirrors
@@ -103,7 +103,7 @@ export function handleExternalToolEvent(state: ExternalToolsState, event: Server
 // Saves the settings of a program, edited from revision.
 export async function saveExternalTool(state: ExternalToolsState, id: string, config: ExternalToolConfig, revision: number, request: typeof fetch = fetch): Promise<ExternalToolSaveResult> {
 	try {
-		const response = await request(toolUrl(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config, revision }) })
+		const response = await request(toolUrl(id), jsonInit('PUT', { config, revision }))
 
 		if (response.ok) {
 			const tool = (await response.json()) as ExternalToolState
@@ -129,7 +129,7 @@ export async function saveExternalTool(state: ExternalToolsState, id: string, co
 // Checks settings of a program on the server without saving them; the server never runs the program.
 export async function testExternalTool(id: string, config: ExternalToolConfig, request: typeof fetch = fetch): Promise<ExternalToolTestResult> {
 	try {
-		const response = await request(`${toolUrl(id)}/test`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config }) })
+		const response = await request(`${toolUrl(id)}/test`, jsonInit('POST', { config }))
 		if (!response.ok) return { error: await responseError(response) }
 		return { check: (await response.json()) as ExternalToolCheck }
 	} catch {
@@ -143,7 +143,7 @@ export type ExternalToolLoginResult = { readonly tool: ExternalToolState } | { r
 // Signs in to a web service with the API key of an account; the server sends it once to the service and stores
 // only the session it returns.
 export function signInExternalTool(state: ExternalToolsState, id: string, apiKey: string, request: typeof fetch = fetch) {
-	return changeSession(state, `${toolUrl(id)}/login`, JSON.stringify({ apiKey }), request)
+	return changeSession(state, `${toolUrl(id)}/login`, { apiKey } satisfies ExternalToolLoginRequest, request)
 }
 
 // Signs out of a web service: the server removes its saved session.
@@ -152,9 +152,9 @@ export function signOutExternalTool(state: ExternalToolsState, id: string, reque
 }
 
 // Posts a sign-in or sign-out and stores the new state of the service.
-async function changeSession(state: ExternalToolsState, url: string, body: string | undefined, request: typeof fetch): Promise<ExternalToolLoginResult> {
+async function changeSession(state: ExternalToolsState, url: string, body: ExternalToolLoginRequest | undefined, request: typeof fetch): Promise<ExternalToolLoginResult> {
 	try {
-		const response = await request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
+		const response = await request(url, jsonInit('POST', body))
 		if (!response.ok) return { error: await responseError(response) }
 		const tool = (await response.json()) as ExternalToolState
 		upsert(state, tool)

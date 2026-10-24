@@ -1,6 +1,6 @@
 import type { MountNudgeDirection, MountNudgeSession, MountState, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { responseError } from '../http'
+import { deviceUrl, jsonInit, responseError } from '../http'
 import { followPress, type Press, pressRunning, reconcilePress, releasePress, startPress, stopPress } from '../press'
 
 // Mount Nudge runtime of the tab, over the press handling shared with the dome (press.ts): the real state
@@ -79,11 +79,6 @@ function sameTarget(a: NudgeTarget | undefined, b: NudgeTarget | undefined) {
 	return a?.connectionId === b?.connectionId && a?.id === b?.id
 }
 
-// Path of the API resource of a mount.
-function mountPath({ connectionId, id }: NudgeTarget) {
-	return `/api/connections/${encodeURIComponent(connectionId)}/mounts/${encodeURIComponent(id)}`
-}
-
 // Path of the API resource of a press.
 export function pressPath(token: string) {
 	return `/api/mounts/nudges/${encodeURIComponent(token)}`
@@ -141,7 +136,7 @@ export async function refreshNudgeMount(runtime: NudgeRuntime, request: typeof f
 	if (!target) return
 
 	try {
-		const response = await request(mountPath(target))
+		const response = await request(deviceUrl(target.connectionId, 'mount', target.id))
 		const state = response.ok ? ((await response.json()) as MountState) : undefined
 		if (current === stateGeneration && sameTarget(runtime.target, target)) runtime.state = state
 	} catch {
@@ -207,7 +202,7 @@ export async function pressNudge(runtime: NudgeRuntime, direction: MountNudgeDir
 	if (!target || runtime.press) return
 
 	const token = crypto.randomUUID()
-	await startPress(runtime, { token, target: { ...target }, direction, phase: 'starting' }, `${mountPath(target)}/nudge`, { direction }, pressPath, request)
+	await startPress(runtime, { token, target: { ...target }, direction, phase: 'starting' }, deviceUrl(target.connectionId, 'mount', target.id, 'nudge'), { direction }, pressPath, request)
 }
 
 // Releases the press of this tab, if any, and resolves once the server answered. The stop is sent even
@@ -245,7 +240,7 @@ export async function setNudgeSlewRate(runtime: NudgeRuntime, name: string, requ
 	runtime.error = undefined
 
 	try {
-		const response = await request(`${mountPath(target)}/slew-rate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) })
+		const response = await request(deviceUrl(target.connectionId, 'mount', target.id, 'slew-rate'), jsonInit('POST', { name }))
 		if (!response.ok && sameTarget(runtime.target, target)) runtime.error = await responseError(response)
 	} catch {
 		if (sameTarget(runtime.target, target)) runtime.error = 'The server cannot be reached'

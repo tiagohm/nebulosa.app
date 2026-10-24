@@ -1,6 +1,6 @@
 import type { MountSlewResponse, MountState, OperationRecord, ServerEvent, SkyObjectRef, SkyObserver } from 'api'
 import { proxy } from 'valtio'
-import { responseError } from '../http'
+import { deviceUrl, jsonInit, responseError } from '../http'
 import { type OperationsState, runningOn } from '../operations'
 import { multiplyMatrixVector, writeEquatorialToHorizontalMatrix, writeRaDecUnitVector } from './celestial/geometry'
 import type { ObserverLocation } from './celestial/types'
@@ -69,11 +69,6 @@ function sameMount(a: Pick<MountTarget, 'connectionId' | 'id'> | undefined, b: P
 	return a?.connectionId === b?.connectionId && a?.id === b?.id
 }
 
-// Path of the API resource of a mount.
-function mountPath({ connectionId, id }: Pick<MountTarget, 'connectionId' | 'id'>) {
-	return `/api/connections/${encodeURIComponent(connectionId)}/mounts/${encodeURIComponent(id)}`
-}
-
 // Follows another mount, or none. Everything known about the previous one is dropped, following stops,
 // and the new mount's state is fetched. The same mount only refreshes its name.
 export function watchMount(runtime: MountRuntime, target: MountTarget | undefined, request: typeof fetch = fetch) {
@@ -99,7 +94,7 @@ export async function refreshMount(runtime: MountRuntime, request: typeof fetch 
 	if (!target) return
 
 	try {
-		const response = await request(mountPath(target))
+		const response = await request(deviceUrl(target.connectionId, 'mount', target.id))
 		const state = response.ok ? ((await response.json()) as MountState) : undefined
 		if (current === generation && sameMount(runtime.target, target)) runtime.state = state
 	} catch {
@@ -184,7 +179,7 @@ export async function slewMount(runtime: MountRuntime, target: SkyObjectRef, tar
 	runtime.error = undefined
 
 	try {
-		const response = await request(`${mountPath(mount)}/slew`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target, observer }) })
+		const response = await request(deviceUrl(mount.connectionId, 'mount', mount.id, 'slew'), jsonInit('POST', { target, observer }))
 		if (!sameMount(runtime.target, mount)) return
 
 		if (response.ok) {
@@ -209,7 +204,7 @@ export async function stopMount(runtime: MountRuntime, request: typeof fetch = f
 	runtime.error = undefined
 
 	try {
-		const response = await request(`${mountPath(mount)}/stop`, { method: 'POST' })
+		const response = await request(deviceUrl(mount.connectionId, 'mount', mount.id, 'stop'), { method: 'POST' })
 		if (!response.ok && sameMount(runtime.target, mount)) runtime.error = await responseError(response)
 	} catch {
 		if (sameMount(runtime.target, mount)) runtime.error = 'The server cannot be reached'

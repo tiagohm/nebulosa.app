@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test'
 import type { DeviceStates, FocuserState, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { commandUrl, type ControlRuntime, deviceStateOf, handleControlEvent, newControlRuntime, refreshStates, sendCommand, startCommand, stopCommand, watchControl } from './control'
+import { deviceUrl } from '../http'
+import { type ControlRuntime, deviceStateOf, handleControlEvent, newControlRuntime, refreshStates, sendCommand, startCommand, stopCommand, watchControl } from './control'
 
 function focuser(patch: Partial<FocuserState> = {}): FocuserState {
 	return {
@@ -109,7 +110,7 @@ test('an immediate command is sent once and its refusal is recorded', async () =
 	expect(await first).toBeFalse()
 
 	expect(requests).toHaveLength(1)
-	expect(requests[0].url).toBe(commandUrl('c', 'focuser', 'f', 'reverse'))
+	expect(requests[0].url).toBe(deviceUrl('c', 'focuser', 'f', 'reverse'))
 	expect(JSON.parse(requests[0].init?.body as string)).toEqual({ enabled: true })
 	expect(state.pending).toEqual({})
 	expect(state.errors.f).toBe('The device is busy')

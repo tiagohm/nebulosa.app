@@ -1,7 +1,7 @@
 import type { ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
-import { responseError } from '../http'
+import { jsonInit, responseError } from '../http'
 import { isRecord, parseJson, readText, writeText } from '../storage'
 
 // Saved connections of the browser and the connections the server holds open. Saved connections are
@@ -187,7 +187,7 @@ export async function connect(state: ConnectionState, connection: Connection) {
 	delete state.errors[connection.id]
 
 	try {
-		const response = await fetch('/api/connections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(connectRequest(connection)) })
+		const response = await fetch('/api/connections', jsonInit('POST', connectRequest(connection)))
 
 		if (response.ok) addServer(state, (await response.json()) as ConnectionStatus)
 		else state.errors[connection.id] = await responseError(response)

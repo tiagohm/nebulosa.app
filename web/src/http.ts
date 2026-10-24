@@ -1,8 +1,37 @@
-// Helpers shared by the stores that call the API over HTTP.
+import type { ManagedDeviceType } from 'api'
+
+// Helpers shared by the stores that call the API over HTTP: the routes of the devices, JSON request bodies, and the
+// error messages of failed responses.
+
+// URL segment of the routes of each device type.
+export const DEVICE_PATHS: Readonly<Record<ManagedDeviceType, string>> = {
+	camera: 'cameras',
+	mount: 'mounts',
+	focuser: 'focusers',
+	wheel: 'wheels',
+	rotator: 'rotators',
+	guideOutput: 'guide-outputs',
+	dome: 'domes',
+	cover: 'covers',
+	flatPanel: 'flat-panels',
+	dewHeater: 'dew-heaters',
+}
+
+// Returns the URL of a device of an open connection, or of one of its routes when action names it, such as "move"
+// or "capture/stop".
+export function deviceUrl(connectionId: string, type: ManagedDeviceType, deviceId: string, action?: string) {
+	const url = `/api/connections/${encodeURIComponent(connectionId)}/${DEVICE_PATHS[type]}/${encodeURIComponent(deviceId)}`
+	return action ? `${url}/${action}` : url
+}
+
+// Returns the init of a request sending body as JSON with a method; an undefined body sends none. signal aborts it.
+export function jsonInit(method: 'POST' | 'PUT', body?: unknown, signal?: AbortSignal): RequestInit {
+	return { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal }
+}
 
 // Reads the error message of a failed API response, which the API sends as { error, code } (ApiError), falling
-// back to the response's status line.
-export async function responseError(response: Response): Promise<string> {
+// back to fallback when given, or to the response's status line.
+export async function responseError(response: Response, fallback?: string): Promise<string> {
 	try {
 		const body = (await response.json()) as { error?: unknown }
 		if (typeof body.error === 'string') return body.error
@@ -10,5 +39,5 @@ export async function responseError(response: Response): Promise<string> {
 		// Not a JSON error body.
 	}
 
-	return `${response.status} ${response.statusText}`.trim()
+	return fallback ?? `${response.status} ${response.statusText}`.trim()
 }

@@ -1,7 +1,7 @@
 import type { PlateSolutions, PlateSolveJob, PlateSolveRequest, PlateSolveResult, PlateSolverProvider, PlateSolveSnapshot, PlateSolveStage, ResolvedPlateSolveHints, ServerEvent } from 'api'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { proxy, ref } from 'valtio'
-import { responseError } from '../http'
+import { jsonInit, responseError } from '../http'
 
 // Plate solving jobs of the server as this tab knows them, used by the Images workspace (manual solves). The server
 // runs every job and keeps every result: this store mirrors the compact jobs of its snapshot and plateSolving:updated
@@ -144,7 +144,7 @@ export async function runPlateSolve(state: PlateSolvingState, imageId: string, s
 	delete state.submitErrors[imageId]
 
 	try {
-		const response = await request(`/api/images/${encodeURIComponent(imageId)}/plate-solving`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(solve) })
+		const response = await request(`/api/images/${encodeURIComponent(imageId)}/plate-solving`, jsonInit('POST', solve))
 
 		if (!response.ok) {
 			state.submitErrors[imageId] = await responseError(response)

@@ -59,6 +59,7 @@ Preserve these boundaries:
 ### The `core` Submodule
 
 - Do not edit files under `core/` from this repository unless the user explicitly asks; toolkit changes belong in the `nebulosa.ts` repository and follow `core/AGENTS.md`.
+- When the right fix belongs in the toolkit (a missing option, hook, or listener of a `core` service), prefer changing `core` over working around it in `api` or `web` (subclassing, prototype tricks, or reimplementing toolkit behavior). Before editing `core`, ask the user for permission, describing the change and why it is better than handling it here; edit only after they agree.
 - Moving the submodule pointer is a deliberate change: commit it on its own and say which upstream commit it points to.
 - After cloning or switching branches, run `git submodule update --init` before `bun install`.
 - `core/` is excluded from this repository's `bun lint`, `bun fmt`, `bun test`, and TypeScript projects.

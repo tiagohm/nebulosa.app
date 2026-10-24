@@ -2,6 +2,7 @@ import type { CaptureFrameOrigin, CaptureFrameSummary, ImageAcquisition, ImageIn
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { autoFocusFrameFocus, autoFocusRuntime } from '../camera/autofocus'
+import { tppaFrameRole, tppaRuntime } from '../camera/tppa'
 import { connectionState } from '../connection/connection'
 import { PanelSection, PlannedControls } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
@@ -147,12 +148,15 @@ interface CapturedFrameProps {
 const ORIGIN_LABELS: Readonly<Record<CaptureFrameOrigin, string>> = { capture: 'Camera Acquisition', autofocus: 'Auto Focus', tppa: 'TPPA' }
 
 // Camera, origin, session, and storage of the frame a camera tab shows, as the capture frame registry describes it,
-// and, for an Auto Focus frame, its measurement and the focuser position its session recorded.
+// and, for an Auto Focus frame, its measurement and the focuser position its session recorded, and for a TPPA frame,
+// the step of its session it was taken for.
 function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 	const connections = useSnapshot(connectionState)
 	const autoFocus = useSnapshot(autoFocusRuntime)
 	const unavailable = frameUnavailableReason(frame)
 	const focus = frame.origin === 'autofocus' ? autoFocusFrameFocus(autoFocus.details[frame.sessionId], frame) : undefined
+	const tppa = useSnapshot(tppaRuntime)
+	const role = frame.origin === 'tppa' ? tppaFrameRole(tppa.details[frame.sessionId], frame) : undefined
 
 	return (
 		<>
@@ -169,6 +173,16 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 						</Property>
 						<Property label="Measurement">{focus?.verification ? 'Verification' : `#${frame.generation}`}</Property>
 						<Property label="Focuser position">{focus ? `${focus.position} steps` : MISSING}</Property>
+					</>
+				)}
+				{frame.origin === 'tppa' && (
+					<>
+						<Property label="TPPA session">
+							<span title={frame.sessionId} className="block truncate">
+								{frame.sessionId}
+							</span>
+						</Property>
+						<Property label="Step">{role ? (role.point !== undefined ? `Point ${role.point}/3` : role.refinement ? 'Refinement' : 'Rejected candidate') : MISSING}</Property>
 					</>
 				)}
 				<Property label="Frame">#{frame.generation}</Property>

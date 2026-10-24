@@ -6,6 +6,7 @@ import { App } from './App'
 import { autoFocusRuntime, handleAutoFocusEvent, refreshAutoFocus } from './camera/autofocus'
 import { captureRuntime, handleCaptureEvent, refreshCaptures } from './camera/capture'
 import { handleNudgeEvent, nudgeRuntime, refreshNudges } from './camera/nudge'
+import { handleTppaEvent, refreshTppa, tppaRuntime } from './camera/tppa'
 import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
 import { controlRuntime, handleControlEvent, refreshStates } from './equipment-control/control'
 import { domeMotionRuntime, handleDomeMotionEvent, refreshDomeMotions } from './equipment-control/domeMotion'
@@ -62,6 +63,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleCaptureEvent(captureRuntime, event), refresh: () => refreshCaptures(captureRuntime) },
 	{ handle: (event) => handleNudgeEvent(nudgeRuntime, event), refresh: () => refreshNudges(nudgeRuntime) },
 	{ handle: (event) => handleAutoFocusEvent(autoFocusRuntime, event), refresh: () => refreshAutoFocus(autoFocusRuntime) },
+	{ handle: (event) => handleTppaEvent(tppaRuntime, event), refresh: () => refreshTppa(tppaRuntime) },
 	{ handle: (event) => handleExternalToolEvent(externalToolsState, event), refresh: () => refreshExternalTools(externalToolsState) },
 	{ handle: (event) => handleStarsEvent(starsState, event), refresh: () => refreshStars(starsState) },
 	{ handle: (event) => handlePlateSolvingEvent(plateSolvingState, event), refresh: () => refreshPlateSolving(plateSolvingState) },

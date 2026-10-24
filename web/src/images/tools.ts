@@ -7,6 +7,7 @@ import type { ImageDocument, ImageViewState } from './images'
 import { MountNudgeTool } from './MountNudgeTool'
 import { PlateSolverPanel } from './PlateSolverPanel'
 import { StarDetectionPanel } from './StarDetectionPanel'
+import { TppaTool } from './TppaTool'
 
 // Static registry of the contextual tools of the Images workspace, in two categories: image tools, which work on the
 // document shown, and camera operations, which command the camera of a camera tab and the equipment associated with
@@ -97,7 +98,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'mount-nudge': { id: 'mount-nudge', label: 'Mount Nudge', panelTitle: 'Mount Nudge', category: 'camera', panel: MountNudgeTool },
 	guiding: plannedCameraOperation('guiding', 'Guiding'),
 	darv: plannedCameraOperation('darv', 'DARV Alignment'),
-	tppa: plannedCameraOperation('tppa', 'TPPA Polar Alignment'),
+	tppa: { id: 'tppa', label: 'TPPA', panelTitle: 'TPPA', category: 'camera', panel: TppaTool },
 	'flat-wizard': plannedCameraOperation('flat-wizard', 'Flat Wizard'),
 }
 

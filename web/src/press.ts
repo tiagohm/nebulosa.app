@@ -37,7 +37,7 @@ export interface PressStartResponse<S extends LeasedSession> {
 }
 
 // Heartbeat timer of each press of this tab, by token.
-const heartbeats = new Map<string, ReturnType<typeof setInterval>>()
+const heartbeats = new Map<string, Timer>()
 
 // Returns whether a session is still running.
 export function pressRunning(session: Pick<LeasedSession, 'phase'> | undefined): boolean {

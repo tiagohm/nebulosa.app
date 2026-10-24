@@ -579,7 +579,7 @@ interface StatePublication {
 	// Last published state as JSON.
 	json?: string
 	// Pending trailing publication, if any.
-	timer?: ReturnType<typeof setTimeout>
+	timer?: Timer
 }
 
 // Returns the device of a manager with exactly this id on exactly this client. Managers also match

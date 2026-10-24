@@ -111,7 +111,7 @@ interface ActiveSession<S extends LeasedSession> {
 	// Operation holding the device; absent only while it is being created.
 	operation?: OperationHandle<void>
 	// Lease timer, rearmed by every heartbeat.
-	lease?: ReturnType<typeof setTimeout>
+	lease?: Timer
 	// Whether a command may have reached the device, so the end can say whether it was left moving.
 	commanded: boolean
 	// Resolves when the session is asked to end (release, lease, or cancellation).

@@ -251,14 +251,14 @@ export class Planetarium {
 	#mountMarker?: { readonly coordinate: { rightAscension: number; declination: number }; readonly data: MountMarkerData }
 	#resizeObserver?: ResizeObserver
 	// Timer of the clock updates while attached.
-	#clockTimer?: ReturnType<typeof setInterval>
+	#clockTimer?: Timer
 	// Point of date (radians) at the middle of the view before the latest clock update, recentered once the
 	// map is updated; absent when the view keeps the horizon still.
 	#anchor?: MountPoint
 	// Instant the map shows, Unix milliseconds (UTC).
 	#shownTime: number
 	// Timer of the refresh of the selection for a fixed instant, once it settles.
-	#settleTimer?: ReturnType<typeof setTimeout>
+	#settleTimer?: Timer
 	// Stops following the simulation clock; set while attached.
 	#unsubscribeClock?: VoidFunction
 	#destroyed = false

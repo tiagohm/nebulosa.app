@@ -127,7 +127,7 @@ export class Celestial {
 	#transform: ViewTransform = { x: 0, y: 0, k: 1 }
 	#hoverObject: CelestialObject | null = null
 	#selectedObject: CelestialObject | null = null
-	#autoUpdateTimer: ReturnType<typeof setInterval> | null = null
+	#autoUpdateTimer: Timer | null = null
 	#autoUpdateOptions: Required<AutoUpdateOptions> | null = null
 	#frameId = 0
 	#updateQueued = false

@@ -1,3 +1,4 @@
+import type { ServerEvent } from 'api'
 import { StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { subscribe as subscribeState } from 'valtio'
@@ -39,6 +40,34 @@ function syncCameraTabs() {
 
 syncCameraTabs()
 
+// How a store mirrors server state: handle applies every server event, in the order of SERVER_STORES, and refresh
+// fetches its snapshot again on every socket (re)open, since it may have changed while the socket was closed.
+interface ServerStore {
+	// Applies a server event; the store ignores the events of others.
+	readonly handle: (event: ServerEvent) => void
+	// Fetches the store's snapshot again; absent for a store fed by events only.
+	readonly refresh?: () => Promise<unknown>
+}
+
+// Stores mirroring server state. A refresh of the captured frames then reconciles the leases of the frames the camera
+// tabs of Images show and shows their selections again.
+const SERVER_STORES: readonly ServerStore[] = [
+	{ handle: (event) => handleConnectionEvent(connectionState, event), refresh: () => refreshServers(connectionState) },
+	{ handle: (event) => handleDeviceEvent(deviceState, event), refresh: () => refreshDevices(deviceState) },
+	{ handle: (event) => handleControlEvent(controlRuntime, event), refresh: () => refreshStates(controlRuntime) },
+	{ handle: (event) => handleDomeMotionEvent(domeMotionRuntime, event), refresh: () => refreshDomeMotions(domeMotionRuntime) },
+	{ handle: (event) => handleFocuserBacklashEvent(focuserBacklashRuntime, event), refresh: () => refreshFocuserBacklash(focuserBacklashRuntime) },
+	{ handle: (event) => handleOperationEvent(operationsState, event), refresh: () => refreshOperations(operationsState) },
+	{ handle: (event) => handleCaptureEvent(captureRuntime, event), refresh: () => refreshCaptures(captureRuntime) },
+	{ handle: (event) => handleNudgeEvent(nudgeRuntime, event), refresh: () => refreshNudges(nudgeRuntime) },
+	{ handle: (event) => handleAutoFocusEvent(autoFocusRuntime, event), refresh: () => refreshAutoFocus(autoFocusRuntime) },
+	{ handle: (event) => handleExternalToolEvent(externalToolsState, event), refresh: () => refreshExternalTools(externalToolsState) },
+	{ handle: (event) => handleStarsEvent(starsState, event), refresh: () => refreshStars(starsState) },
+	{ handle: (event) => handlePlateSolvingEvent(plateSolvingState, event), refresh: () => refreshPlateSolving(plateSolvingState) },
+	{ handle: (event) => handleCaptureFramesEvent(captureFramesState, event), refresh: () => refreshCaptureFrames(captureFramesState).then(() => reconcileCapturedFrames(imagesState, captureFramesState)) },
+	{ handle: (event) => handleCapturedFrame(imagesState, event) },
+]
+
 // Functions that stop this run's persistence and event subscriptions.
 const stops = [
 	subscribeState(deviceState, syncCameraTabs),
@@ -46,37 +75,10 @@ const stops = [
 	persistProfiles(profileState, stores),
 	watchHistory(routeState),
 	subscribe((event) => {
-		handleConnectionEvent(connectionState, event)
-		handleDeviceEvent(deviceState, event)
-		handleControlEvent(controlRuntime, event)
-		handleDomeMotionEvent(domeMotionRuntime, event)
-		handleFocuserBacklashEvent(focuserBacklashRuntime, event)
-		handleOperationEvent(operationsState, event)
-		handleCaptureEvent(captureRuntime, event)
-		handleNudgeEvent(nudgeRuntime, event)
-		handleAutoFocusEvent(autoFocusRuntime, event)
-		handleExternalToolEvent(externalToolsState, event)
-		handleStarsEvent(starsState, event)
-		handlePlateSolvingEvent(plateSolvingState, event)
-		handleCaptureFramesEvent(captureFramesState, event)
-		handleCapturedFrame(imagesState, event)
+		for (const store of SERVER_STORES) store.handle(event)
 	}),
-	// Every (re)open resynchronizes the open connections, the watched devices and their control states, the running
-	// operations, the captures, the nudge sessions, the Auto Focus sessions, the dome rotation sessions, the focuser backlash compensations, the external tool settings, the star detection and plate solving jobs, and the captured frames, which may have changed while the socket was closed; then the leases of the frames the camera tabs of Images show are reconciled and their selections shown again.
 	onOpen(() => {
-		void refreshExternalTools(externalToolsState)
-		void refreshServers(connectionState)
-		void refreshDevices(deviceState)
-		void refreshStates(controlRuntime)
-		void refreshDomeMotions(domeMotionRuntime)
-		void refreshFocuserBacklash(focuserBacklashRuntime)
-		void refreshOperations(operationsState)
-		void refreshCaptures(captureRuntime)
-		void refreshNudges(nudgeRuntime)
-		void refreshAutoFocus(autoFocusRuntime)
-		void refreshStars(starsState)
-		void refreshPlateSolving(plateSolvingState)
-		void refreshCaptureFrames(captureFramesState).then(() => reconcileCapturedFrames(imagesState, captureFramesState))
+		for (const store of SERVER_STORES) void store.refresh?.()
 	}),
 ]
 

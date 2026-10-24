@@ -11,7 +11,7 @@ This document maps what Nebulosa already has, where each feature belongs, and th
 | `web/`  | Presentation: workspaces, profiles, selection, view state; mirrors of server state fed by HTTP and events                                       | Operations, device arbitration, scientific pixels |
 | `app/`  | Wiring `api` and `web` into one `Bun.serve` and the build                                                                                       | Business logic                                    |
 
-Server state reaches every tab through `GET` snapshots plus the `/api/ws` event stream (`ServerEvent` in `api/src/connection.ts`). A tab refreshes its snapshots on every socket open (`onOpen` in `web/src/main.tsx`), so a reload never loses running work.
+Server state reaches every tab through `GET` snapshots plus the `/api/ws` event stream (`ServerEvent` in `api/src/connection.ts`). A tab refreshes its snapshots on every socket open (`onOpen` in `web/src/main.tsx`), so a reload never loses running work. Each web store that mirrors server state is listed once in `SERVER_STORES` (`web/src/main.tsx`) with its event handler and its refresh.
 
 The control states of the devices of the active profile's connection are mirrored once in the web, by `controlRuntime` (`web/src/equipment-control/control.ts`), from `GET /api/connections/:id/states` and the `<type>:updated` events. A view that follows one device, such as the Sky mount (`mountView`), Mount Nudge, the camera capabilities of Camera Acquisition and Auto Focus, or the sensor geometry of the Equipment Setup field of view (`CameraCapabilities.sensor`, `liveSensors`), reads that mirror (`watchedDeviceState`) and never fetches or tracks the device's state apart.
 

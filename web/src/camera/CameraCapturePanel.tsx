@@ -138,7 +138,7 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
 			</PanelSection>
 			{session && <CaptureState session={session} />}
-			<CameraSettings settings={exposure} capabilities={capabilities} disabled={locked} onChange={updateExposure} />
+			<CameraSettings device={device} settings={exposure} capabilities={capabilities} disabled={locked} onChange={updateExposure} />
 			<PanelSection title="Output">
 				<SegmentedControl options={OUTPUT_MODES} value={settings.output.mode} format={(mode) => OUTPUT_MODE_LABELS[mode]} disabled={locked} onChange={(mode) => updateOutput({ mode })} />
 				{settings.output.mode === 'preview-save' && (

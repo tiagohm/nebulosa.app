@@ -3,6 +3,7 @@ import { cn } from 'cn'
 import { type PointerEvent, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
+import { DeviceLink } from '../equipment-control/DeviceLink'
 import { roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
@@ -15,7 +16,8 @@ import { cameraKey, captureRunning, captureRuntime } from './capture'
 import { NUDGE_DIRECTION_LABELS, nudgeDirectionSupported, nudgeKey, type NudgePress, nudgeRunning, nudgeRuntime, pressNudge, releaseNudge, setNudgeSlewRate, stopNudges, watchNudgeMount } from './nudge'
 
 // Contextual panel sections of Mount Nudge, a camera operation of the Images camera tabs:
-// press-and-hold manual motion of a mount, named in the panel, in eight directions at a speed preset the mount
+// press-and-hold manual motion of a mount, named with the camera in the Equipment section (each linked to Equipment
+// Control), in eight directions at a speed preset the mount
 // reports, with a STOP in the middle, and the state of the motion and, read only, of the camera's acquisition. The
 // mount is the MOUNT of the active equipment setup, the one associated with every camera of its connection; a missing
 // one is reported, never replaced by another connected mount. The motion is the server's: a press only lasts while
@@ -85,6 +87,23 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 
 	return (
 		<>
+			<PanelSection title="Equipment">
+				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+					<dt className="text-ink-300">Camera</dt>
+					<dd className="m-0 min-w-0 truncate text-right">
+						<DeviceLink device={camera} fallback="—" />
+					</dd>
+					<dt className="text-ink-300">Mount</dt>
+					<dd className="m-0 min-w-0 truncate text-right">
+						<DeviceLink device={device} fallback={mount.status === 'notSelected' ? 'None selected' : 'Unavailable'} />
+					</dd>
+				</dl>
+				{mount.status === 'notSelected' && (
+					<Button variant="secondary" size="sm" className="self-start" onClick={() => (deviceState.open = true)}>
+						Equipment Setup
+					</Button>
+				)}
+			</PanelSection>
 			<PanelSection title="Manual Movement">
 				{slewRates.length > 0 ? (
 					<Select
@@ -121,8 +140,6 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 			</PanelSection>
 			<PanelSection title="Movement Status">
 				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<dt className="text-ink-300">Mount</dt>
-					<dd className="m-0 truncate text-right">{device?.name ?? (mount.status === 'notSelected' ? 'None selected' : 'Unavailable')}</dd>
 					<dt className="text-ink-300">Movement</dt>
 					<dd className={cn('m-0 text-right', runtime.error && !press && 'text-danger')}>{movementStatus(press, blocker, nudgeRunning(session) && session?.token !== press?.token, runtime.error !== undefined)}</dd>
 					<dt className="text-ink-300">Slew Rate</dt>
@@ -131,11 +148,6 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 					<dd className="m-0 text-right">{cameraStatus(cameraSession)}</dd>
 				</dl>
 				{blocker && !press && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}</p>}
-				{mount.status === 'notSelected' && (
-					<Button variant="secondary" size="sm" className="self-start" onClick={() => (deviceState.open = true)}>
-						Equipment Setup
-					</Button>
-				)}
 				{runtime.error && <p className="m-0 text-xs leading-4 text-danger">{runtime.error}</p>}
 			</PanelSection>
 		</>

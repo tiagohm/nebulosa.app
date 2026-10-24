@@ -3,6 +3,7 @@ import { cn } from 'cn'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, deviceStateOf, watchedDeviceState } from '../equipment-control/control'
+import { DeviceLink } from '../equipment-control/DeviceLink'
 import { Notice } from '../equipment-control/parts'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
@@ -20,7 +21,8 @@ import { Select } from '../ui/Select'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusBlocker, autoFocusRequest, autoFocusRunning, autoFocusRuntime, defaultStepSize, FITTING_MODE_LABELS, FITTING_MODES, startAutoFocus, stopAutoFocus, VERIFICATION_LABELS } from './autofocus'
 import { cameraKey } from './capture'
 
-// Contextual panel sections of Auto Focus, a camera operation of the Images camera tabs: the routine the server's
+// Contextual panel sections of Auto Focus, a camera operation of the Images camera tabs: the equipment it uses, each
+// device linked to Equipment Control, the routine the server's
 // runner follows (fitting, step size, positions per side, and the advanced settings collapsed), and the state of the
 // running or last session with its Run and Stop commands. Frames are taken with the camera's exposure and camera
 // settings, edited only in Camera Acquisition, and measured with the profile's star detection request, edited in
@@ -85,6 +87,26 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 
 	return (
 		<>
+			<PanelSection title="Equipment">
+				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+					<Row label="Camera">
+						<DeviceLink device={device} fallback="—" />
+					</Row>
+					<Row label="Focuser">
+						<DeviceLink device={focuserDevice} fallback="Not assigned" />
+					</Row>
+					{wheel.device && (
+						<Row label="Filter Wheel">
+							<DeviceLink device={wheel.device} fallback="—" />
+						</Row>
+					)}
+				</dl>
+				{!focuser && !running && (
+					<Button variant="secondary" size="sm" className="self-start" onClick={() => (deviceState.open = true)}>
+						Equipment Setup
+					</Button>
+				)}
+			</PanelSection>
 			<PanelSection title="Focus Routine">
 				{wheel.device && <p className="m-0 text-xs leading-4 text-ink-300">Filter: {filter ?? 'unknown'} — the Auto Focus measures through the current filter and never changes it.</p>}
 				<p className="m-0 text-xs leading-4 text-ink-300">Frames are LIGHT, taken with the exposure and camera settings of Camera Acquisition ({exposure.exposureTime} s).</p>
@@ -118,11 +140,6 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 					</Button>
 				)}
 				{blocker && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}</p>}
-				{!focuser && !running && (
-					<Button variant="secondary" size="sm" className="self-start" onClick={() => (deviceState.open = true)}>
-						Equipment Setup
-					</Button>
-				)}
 				{running && <p className="m-0 text-xs leading-4 text-ink-300">A stop leaves the focuser where it stands.</p>}
 				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
 			</PanelSection>
@@ -181,7 +198,7 @@ function SessionState({ session, position, moving }: SessionStateProps) {
 	)
 }
 
-// Label and value of a session row.
+// Label and value of a row.
 function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
 	return (
 		<div className="contents">

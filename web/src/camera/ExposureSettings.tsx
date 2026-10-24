@@ -1,5 +1,6 @@
-import type { CameraCapabilities } from 'api'
+import type { CameraCapabilities, DeviceSummary } from 'api'
 import { type ReactNode, useState } from 'react'
+import { DeviceLink } from '../equipment-control/DeviceLink'
 import type { CameraExposureSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
@@ -47,6 +48,8 @@ export function ExposureSection({ settings, capabilities, disabled, onChange, ch
 }
 
 interface CameraSettingsProps {
+	// Camera, when present on the watched connection; its name links to Equipment Control.
+	readonly device?: DeviceSummary
 	// Exposure and camera settings of the camera.
 	readonly settings: Readonly<CameraExposureSettings>
 	// Capabilities of the camera, when known.
@@ -58,13 +61,19 @@ interface CameraSettingsProps {
 }
 
 // Settings changed less often, collapsed by default: gain, offset, binning, readout mode, and subframe, each
-// only when the camera reports it, and the sensor temperature and cooler state.
-export function CameraSettings({ settings, capabilities, disabled, onChange }: CameraSettingsProps) {
+// only when the camera reports it, and the sensor temperature and cooler state, under the camera's name.
+export function CameraSettings({ device, settings, capabilities, disabled, onChange }: CameraSettingsProps) {
 	const [open, setOpen] = useState(false)
+	const name = device && (
+		<p className="m-0 min-w-0 truncate">
+			<DeviceLink device={device} fallback="" />
+		</p>
+	)
 
 	if (!capabilities) {
 		return (
 			<PanelSection title="Camera">
+				{name}
 				<p className="m-0 text-ink-300">Camera settings appear once the camera reports them.</p>
 			</PanelSection>
 		)
@@ -75,6 +84,7 @@ export function CameraSettings({ settings, capabilities, disabled, onChange }: C
 
 	return (
 		<PanelSection title="Camera">
+			{name}
 			{(temperature !== undefined || cooler) && (
 				<p className="m-0 tabular-nums">
 					{temperature !== undefined && `Sensor ${temperature.toFixed(1)} °C`}

@@ -4,6 +4,7 @@ import { toArcmin, toDeg } from 'nebulosa/src/math/units/angle'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
+import { DeviceLink } from '../equipment-control/DeviceLink'
 import { Notice } from '../equipment-control/parts'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
@@ -84,8 +85,12 @@ export function TppaSections({ device, availability, mount, settings: identity }
 		<>
 			<PanelSection title="Equipment">
 				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<Row label="Camera">{device?.name ?? '—'}</Row>
-					<Row label="Mount">{mount.device?.name ?? 'Not assigned'}</Row>
+					<Row label="Camera">
+						<DeviceLink device={device} fallback="—" />
+					</Row>
+					<Row label="Mount">
+						<DeviceLink device={mount.device} fallback="Not assigned" />
+					</Row>
 					<Row label="Exposure">{`${exposure.exposureTime} s`}</Row>
 				</dl>
 				{!running && mountAvailability.status !== 'ready' && <p className="m-0 text-xs leading-4 text-ink-300">{mountAvailability.message}</p>}

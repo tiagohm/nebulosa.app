@@ -1,17 +1,17 @@
-import type { MinorBody, SkyObjectCategory, SkyObjectRef } from 'api'
+import type { SkyObjectCategory, SkyObjectRef, SkyPosition } from 'api'
 import { DEG2RAD, TAU } from 'nebulosa/src/core/constants'
 import { proxy, subscribe } from 'valtio'
-import { controlRuntime } from '../equipment-control/control'
 import type { SkyObserverSettings } from '../profile/schema'
-import { Celestial, type CelestialObject, type CelestialOptions, type CelestialShape, type ConstellationLine, type CoordinateSystem, drawSelectionReticle, type MovingBody, type MovingBodyType, type RenderState } from './celestial/celestial'
+import { Celestial, type CelestialObject, type CelestialOptions, type ConstellationLine, type CoordinateSystem, type MovingBody, type MovingBodyType, type RenderState, type SelectionTarget } from './celestial/celestial'
 import { SKY_REALTIME_TICK_MS, type SkyClockMode, skyClock, skyTime } from './clock'
 import { applySkyDisplay, MAP_STAR_MAGNITUDE_LIMIT, type SkyDisplaySettings } from './display'
 import { formatAngularSize } from './format'
 import { type FramePoint, framePolygon, isFraming, type OpticalConfiguration, resolveFraming } from './framing'
-import { type MountPoint, mountRuntime, mountView, selectionPoint } from './mount'
+import { type MountPoint, mountRuntime } from './mount'
 import { hoverLabel, type MapNames, MOUNT_SHAPE_TYPE, type MountMarkerData, type MountRef, movingBodyId, refKey, refOfCelestialObject, selectionTargets, type SkySelectionRef } from './objects'
+import { isRememberable, type RememberedObject, RememberedObjects, type RememberedShapeData, REMEMBERED_SHAPE_TYPE, rememberedOf, rememberedShapeId } from './remembered'
 import { createRequestGuard } from './selection'
-import { apiObserver, browserSkyIo, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapDataCovers, REALTIME_REFRESH, refreshSkySelection, type SkyRefreshOptions, selectSkyObject, skyState } from './sky'
+import { apiObserver, browserSkyIo, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapDataCovers, REALTIME_REFRESH, refreshSkySelection, type SkyRefreshOptions, type SkySelection, selectSkyObject, skyState } from './sky'
 
 // The Sky workspace's star map, kept for the whole tab: the Celestial instance, its catalogs, the moving
 // bodies, and the selection highlight live here rather than in React, so leaving the workspace only
@@ -22,7 +22,9 @@ import { apiObserver, browserSkyIo, fetchSkyBodies, fetchSkyPosition, loadSkyMap
 // the instant of the Sky simulation clock (./clock); its catalogs are reloaded in place when the clock
 // stops more than a year away from the instant they were computed for. The mount's reported position is
 // drawn as a selectable marker while the clock shows the real time, and the view can be centered on it
-// or follow it until the user pans.
+// or follow it until the user pans. Selected objects the map data lacks (minor bodies, and catalog
+// objects fainter than it) are remembered for the tab (./remembered) and stay drawn and selectable, the
+// minor bodies moved at every update.
 
 // Interval of the map's updates in milliseconds while the clock plays.
 const PLAYING_INTERVAL_MS = 250
@@ -46,8 +48,11 @@ const SKY_ANCHOR_ZOOM = 8
 // Color of the selection reticle.
 const SELECTION_COLOR = '#7e57c2'
 
-// Id of the custom shape marking a selection that is not drawn on the map (a faint catalog object).
-const SELECTION_MARKER_ID = 'selection-marker'
+// Color of the symbol and name of a remembered catalog object, muted beside the map's own objects.
+const REMEMBERED_COLOR = '#b0bec5'
+
+// Radius of the ring of a remembered catalog object in pixels.
+const REMEMBERED_RING_RADIUS = 4
 
 // Id of the custom shape drawing the field of view.
 const FRAMING_SHAPE_ID = 'framing'
@@ -105,6 +110,20 @@ function drawMountMarker(ctx: CanvasRenderingContext2D, x: number, y: number, na
 	ctx.textAlign = 'left'
 	ctx.textBaseline = 'middle'
 	ctx.fillText(name, x + MOUNT_TICK_RANGE[1] + 4, y)
+}
+
+// Draws a remembered catalog object at a screen point (pixels): a small ring with its name beside it.
+function drawRememberedObject(ctx: CanvasRenderingContext2D, x: number, y: number, name: string) {
+	ctx.strokeStyle = REMEMBERED_COLOR
+	ctx.lineWidth = 1.5
+	ctx.beginPath()
+	ctx.arc(x, y, REMEMBERED_RING_RADIUS, 0, TAU)
+	ctx.stroke()
+	ctx.fillStyle = REMEMBERED_COLOR
+	ctx.font = '11px ui-sans-serif, system-ui, sans-serif'
+	ctx.textAlign = 'left'
+	ctx.textBaseline = 'middle'
+	ctx.fillText(name, x + REMEMBERED_RING_RADIUS + 4, y)
 }
 
 // Strokes the outline of a field of view (equatorial points in radians), breaking it where points cannot
@@ -188,6 +207,7 @@ function mapOptions(coordinateSystem: CoordinateSystem): CelestialOptions {
 // Group of an object picked on the map; undefined for the mount marker.
 function categoryOf(object: CelestialObject, objectRef: SkySelectionRef): SkyObjectCategory | undefined {
 	if (objectRef.kind === 'mount') return undefined
+	if (object.type === 'shape') return rememberedOf(object)?.category
 	if (object.type === 'star') return 'star'
 	if (object.type === 'deepSky') return 'deepSky'
 	if (objectRef.kind === 'constellation') return 'constellation'
@@ -223,7 +243,8 @@ export class Planetarium {
 	#bodiesPending?: number
 	// Instant the loaded catalogs were computed for, Unix milliseconds; absent before the first load.
 	#dataTime?: number
-	#marker = false
+	// Ids of the shapes of the remembered catalog objects on the map.
+	readonly #rememberedShapes = new Set<string>()
 	// Whether the field of view shape is on the map.
 	#framing = false
 	// Mount marker on the map, whose coordinate is moved in place as the mount moves; absent while not drawn.
@@ -255,6 +276,8 @@ export class Planetarium {
 			this.#bodies.set(body.id, body)
 			this.celestial.addMovingBody(body)
 		}
+
+		for (const object of remembered.values()) this.#drawRemembered(object)
 
 		this.#shownTime = this.time
 		this.celestial.setTime(this.#shownTime)
@@ -397,60 +420,106 @@ export class Planetarium {
 		applySkyDisplay(this.celestial, display, this.coordinateSystem === 'horizontal', MAP_STAR_MAGNITUDE_LIMIT)
 	}
 
-	// Highlights the selection: the drawn object when there is one, otherwise a marker at its position
-	// when it is above the horizon, and nothing without a selection. Keeps only the selected minor body
-	// on the map.
+	// Highlights the selection, and nothing without a selection. A minor body, or a catalog object the map
+	// data lacks (fainter than it), is remembered at the selection's position, so it is drawn, highlighted,
+	// and kept on the map for the tab, following the selection's position while selected.
 	syncSelection() {
 		const selection = skyState.selection
-		const keep = selection?.ref.kind === 'minorBody' ? movingBodyId(selection.ref) : undefined
-
-		for (const id of this.#bodies.keys()) {
-			if (id.startsWith('minor:') && id !== keep) {
-				this.#bodies.delete(id)
-				this.celestial.removeMovingBody(id)
-			}
-		}
-
-		const position = selection?.position
-		if (selection?.ref.kind === 'minorBody' && position) this.#showMinorBody(selection.ref, selection.minorBody, position.rightAscension, position.declination, position.magnitude)
-		const point = selectionPoint(selection, mountView(mountRuntime, controlRuntime), skyClock.mode === 'now')
-
-		let found: CelestialObject | null = null
 
 		if (!selection) {
 			this.celestial.selectObject(null)
-		} else if (this.#isSelected(selection.key)) {
-			// A clicked object (such as one of the two Serpens labels) keeps its highlight.
-			found = this.celestial.selectedObject
-		} else {
-			for (const target of selectionTargets(selection.ref, selection.category, this.#names)) {
-				found = this.celestial.selectObject(target)
-				if (found) break
-			}
+			return
 		}
 
-		if (!found && selection && point && !(position?.altitude !== undefined && position.altitude < 0)) {
-			const shape: CelestialShape = { id: SELECTION_MARKER_ID, coordinate: { ...point }, selectable: false, render: (_, ctx, state) => drawSelectionReticle(ctx, state.x, state.y, SELECTION_COLOR) }
-			this.#marker = true
-			this.celestial.addShape(shape)
-		} else if (this.#marker) {
-			this.#marker = false
-			this.celestial.removeShape(SELECTION_MARKER_ID)
+		const targets = selectionTargets(selection.ref, selection.category, this.#names)
+		// A clicked object (such as one of the two Serpens labels) keeps its highlight.
+		const found = this.#isSelected(selection.key) ? this.celestial.selectedObject : this.#selectFirst(targets)
+		const position = selection.position
+
+		if (position && (selection.ref.kind === 'minorBody' || (selection.ref.kind === 'catalog' && (!found || found.type === 'shape')))) {
+			this.#remember(selection, position)
+			if (!found) this.#selectFirst(targets)
 		}
 	}
 
-	// Draws a minor body chosen in the search at its position now; the selection highlights it.
-	async locateMinorBody(objectRef: SkyObjectRef, body?: MinorBody) {
+	// Draws a minor body chosen in the search at its position now, remembering it; the selection highlights
+	// it.
+	async locateMinorBody(objectRef: SkyObjectRef) {
 		const request = this.#locateGuard.begin()
 		const key = refKey(objectRef)
 
 		try {
 			const { position } = await fetchSkyPosition(objectRef, this.time, apiObserver(this.#observer), 'fast', request.signal)
-			if (!request.current() || skyState.selection?.key !== key) return
-			this.#showMinorBody(objectRef, body, position.rightAscension, position.declination, position.magnitude)
+			const selection = skyState.selection
+			if (!request.current() || selection?.key !== key) return
+			this.#remember(selection, selection.position ?? position)
 			this.syncSelection()
 		} catch {
 			// The Inspector shows why the position is unavailable.
+		}
+	}
+
+	// Highlights the first loaded object of a list of selection targets; returns it, or null when none is.
+	#selectFirst(targets: readonly SelectionTarget[]): CelestialObject | null {
+		for (const target of targets) {
+			const found = this.celestial.selectObject(target)
+			if (found) return found
+		}
+
+		return null
+	}
+
+	// Remembers the selected object at a position (of date, radians), or updates it, and draws it; the least
+	// recently selected objects beyond REMEMBERED_LIMIT are forgotten and removed from the map.
+	#remember(selection: SkySelection, position: SkyPosition) {
+		const objectRef = selection.ref
+		if (!isRememberable(objectRef)) return
+
+		const known = remembered.get(selection.key)
+		const minorBody = selection.minorBody ?? known?.minorBody
+		const object: RememberedObject = known ?? { ref: objectRef, key: selection.key, name: '', typeName: '', rightAscension: 0, declination: 0 }
+		object.name = minorBody?.name ?? selection.name
+		object.typeName = selection.catalog?.typeName ?? (objectRef.kind === 'minorBody' ? (minorBody?.kind === 'comet' ? 'Comet' : 'Minor Body') : selection.category === 'deepSky' ? 'Deep-Sky Object' : 'Star')
+		object.category = selection.category ?? object.category
+		object.minorBody = minorBody
+		object.rightAscension = position.rightAscension
+		object.declination = position.declination
+		object.magnitude = position.magnitude ?? selection.catalog?.magnitude
+
+		for (const forgotten of remembered.remember(object)) this.#forget(forgotten)
+		this.#drawRemembered(object)
+	}
+
+	// Draws a remembered object at its position, or moves it there: a minor body as a moving body, a catalog
+	// object as a selectable shape.
+	#drawRemembered(object: RememberedObject) {
+		if (object.ref.kind === 'minorBody') {
+			this.#showMinorBody(object)
+			return
+		}
+
+		const id = rememberedShapeId(object.key)
+
+		if (this.#rememberedShapes.has(id)) {
+			this.celestial.markShapeChanged(id)
+		} else {
+			const data: RememberedShapeData = { key: object.key, object }
+			this.#rememberedShapes.add(id)
+			this.celestial.addShape({ id, type: REMEMBERED_SHAPE_TYPE, coordinate: object, data, render: (_, ctx, state) => drawRememberedObject(ctx, state.x, state.y, object.name) })
+		}
+	}
+
+	// Removes a forgotten object from the map.
+	#forget(object: RememberedObject) {
+		const bodyId = movingBodyId(object.ref)
+
+		if (bodyId) {
+			this.#bodies.delete(bodyId)
+			this.celestial.removeMovingBody(bodyId)
+		} else {
+			const id = rememberedShapeId(object.key)
+			this.#rememberedShapes.delete(id)
+			this.celestial.removeShape(id)
 		}
 	}
 
@@ -470,7 +539,9 @@ export class Planetarium {
 			return
 		}
 
-		selectSkyObject(skyState, { ref: objectRef, source: 'map', name: hoverLabel(object, this.#names)?.name ?? '', category: categoryOf(object, objectRef) }, this.#observer)
+		// A remembered object keeps the identity and data it was selected with.
+		const known = objectRef.kind === 'mount' ? undefined : remembered.get(refKey(objectRef))
+		selectSkyObject(skyState, { ref: known?.ref ?? objectRef, source: 'map', name: hoverLabel(object, this.#names)?.name ?? '', category: known?.category ?? categoryOf(object, objectRef), minorBody: known?.minorBody }, this.#observer)
 	}
 
 	// Shows the clock's instant now and updates it on a timer that suits the clock: every
@@ -551,9 +622,9 @@ export class Planetarium {
 		})
 	}
 
-	// Recomputes the local positions of the major bodies, and of the selected minor body, for an instant.
-	// Updates of the same second and observer, such as those after loading data, reuse the positions
-	// requested for them.
+	// Recomputes the local positions of the major bodies, and of the remembered minor bodies other than the
+	// selection (which follows the Inspector's position of the same instant), for an instant. Updates of the
+	// same second and observer, such as those after loading data, reuse the positions requested for them.
 	async #updateMovingBodies(time: number) {
 		const key = `${Math.round(time / 1000)}|${observerKey(this.#observer)}`
 		if (key === this.#bodiesKey) return
@@ -579,35 +650,49 @@ export class Planetarium {
 			if (request.current()) this.#bodiesKey = ''
 		}
 
-		const selection = skyState.selection
-		if (selection?.ref.kind !== 'minorBody') return
+		const selected = skyState.selection?.key
+		const minorBodies = [...remembered.values()].filter((object) => object.ref.kind === 'minorBody' && object.key !== selected)
+		if (minorBodies.length === 0) return
 
 		const minorRequest = this.#minorGuard.begin()
 
-		try {
-			const { position } = await fetchSkyPosition(selection.ref, time, apiObserver(this.#observer), 'fast', minorRequest.signal)
-			if (minorRequest.current() && skyState.selection?.key === selection.key) this.#showMinorBody(selection.ref, selection.minorBody, position.rightAscension, position.declination, position.magnitude)
-		} catch {
-			// Without elements the minor body is drawn from the Inspector's position only.
-		}
+		await Promise.all(
+			minorBodies.map(async (object) => {
+				try {
+					const { position } = await fetchSkyPosition(object.ref, time, apiObserver(this.#observer), 'fast', minorRequest.signal)
+					if (!minorRequest.current() || remembered.get(object.key) !== object || skyState.selection?.key === object.key) return
+					object.rightAscension = position.rightAscension
+					object.declination = position.declination
+					object.magnitude = position.magnitude
+					this.#showMinorBody(object)
+				} catch {
+					// Without elements the minor body keeps its last position.
+				}
+			}),
+		)
 	}
 
-	// Adds or moves the map's moving body of a minor body.
-	#showMinorBody(objectRef: SkyObjectRef, body: MinorBody | undefined, rightAscension: number, declination: number, magnitude?: number) {
-		const id = movingBodyId(objectRef)!
+	// Adds or moves the map's moving body of a remembered minor body.
+	#showMinorBody(object: RememberedObject) {
+		const id = movingBodyId(object.ref)!
+		const type: MovingBodyType = object.minorBody?.kind === 'comet' ? 'comet' : 'asteroid'
 		let movingBody = this.#bodies.get(id)
 
-		if (!movingBody) {
-			movingBody = { id, type: body?.kind === 'comet' ? 'comet' : 'asteroid', name: body?.name ?? (objectRef.kind === 'minorBody' ? objectRef.designation : id), position: { rightAscension, declination } }
+		// A name or kind learned later (from SBDB) replaces the body.
+		if (!movingBody || movingBody.name !== object.name || movingBody.type !== type) {
+			movingBody = { id, type, name: object.name, position: { rightAscension: object.rightAscension, declination: object.declination } }
 			this.#bodies.set(id, movingBody)
 			this.celestial.addMovingBody(movingBody)
 		}
 
-		Object.assign(movingBody.position, { rightAscension, declination })
-		movingBody.magnitude = magnitude
+		Object.assign(movingBody.position, { rightAscension: object.rightAscension, declination: object.declination })
+		movingBody.magnitude = object.magnitude
 		this.celestial.markMovingBodyDirty(id)
 	}
 }
+
+// Objects the maps of the tab remember, kept when the map is replaced by one of the other kind.
+const remembered = new RememberedObjects()
 
 // Star map of the tab; absent until the Sky workspace is first shown.
 let current: Planetarium | undefined

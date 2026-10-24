@@ -383,8 +383,8 @@ export interface ViewTransform {
 // by its id.
 export interface SelectionTarget {
 	// Kind of object.
-	readonly type: 'star' | 'deepSky' | 'movingBody' | 'constellationLabel'
-	// Catalog id of the star or deep-sky object, id of the moving body, or name of the label.
+	readonly type: 'star' | 'deepSky' | 'movingBody' | 'constellationLabel' | 'shape'
+	// Catalog id of the star or deep-sky object, id of the moving body or custom shape, or name of the label.
 	readonly id: StarId
 }
 

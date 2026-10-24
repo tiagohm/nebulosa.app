@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { CelestialObject } from './celestial/celestial'
 import { hoverLabel, movingBodyId, refKey, refOfCelestialObject, selectionTargets } from './objects'
+import { type RememberedObject, REMEMBERED_SHAPE_TYPE, rememberedShapeId } from './remembered'
 import { createRequestGuard } from './selection'
 
 const star: CelestialObject = { type: 'star', index: 0, id: 32263, name: 'Sirius', mag: -1.44, rightAscension: 1.77, declination: -0.29 }
@@ -38,16 +39,28 @@ test('references of picked objects', () => {
 })
 
 test('selection targets of references', () => {
-	expect(selectionTargets({ kind: 'catalog', id: 32263 }, 'star', names)).toEqual([{ type: 'star', id: 32263 }])
+	expect(selectionTargets({ kind: 'catalog', id: 32263 }, 'star', names)).toEqual([
+		{ type: 'star', id: 32263 },
+		{ type: 'shape', id: 'remembered:catalog:32263' },
+	])
 	expect(selectionTargets({ kind: 'catalog', id: 1000255 }, undefined, names)).toEqual([
 		{ type: 'star', id: 1000255 },
 		{ type: 'deepSky', id: 1000255 },
+		{ type: 'shape', id: 'remembered:catalog:1000255' },
 	])
 	expect(selectionTargets({ kind: 'body', code: '499' }, 'solarSystem', names)).toEqual([{ type: 'movingBody', id: 'body:499' }])
 	expect(selectionTargets({ kind: 'constellation', code: 'SER' }, 'constellation', names)).toEqual([
 		{ type: 'constellationLabel', id: 'Serpens Caput' },
 		{ type: 'constellationLabel', id: 'Serpens Cauda' },
 	])
+})
+
+test('remembered catalog objects are picked and labeled from their shape', () => {
+	const remembered: RememberedObject = { ref: { kind: 'catalog', id: 900001 }, key: 'catalog:900001', name: 'HD 1234', typeName: 'Star', category: 'star', rightAscension: 1, declination: 0.2, magnitude: 9.1 }
+	const id = rememberedShapeId(remembered.key)
+	const shape: CelestialObject = { type: 'shape', id, shape: { id, type: REMEMBERED_SHAPE_TYPE, coordinate: remembered, data: { key: remembered.key, object: remembered }, render: () => {} } }
+	expect(refOfCelestialObject(shape, names)).toEqual({ kind: 'catalog', id: 900001 })
+	expect(hoverLabel(shape, names)).toEqual({ name: 'HD 1234', typeName: 'Star', magnitude: 9.1 })
 })
 
 test('hover labels of picked objects', () => {

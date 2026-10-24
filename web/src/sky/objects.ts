@@ -1,5 +1,6 @@
 import type { SkyObjectRef, SkySearchResult } from 'api'
 import type { CelestialObject, MovingBodyType, SelectionTarget } from './celestial/celestial'
+import { rememberedOf, rememberedShapeId } from './remembered'
 
 // Identity of sky objects in the web client: the stable key of an API object reference or of the mount
 // marker, the map ids of moving bodies, and conversions between objects picked on the Celestial map and
@@ -71,8 +72,9 @@ export function movingBodyId(ref: SkySelectionRef): string | undefined {
 	return ref.kind === 'body' || ref.kind === 'minorBody' ? refKey(ref) : undefined
 }
 
-// Returns the selection reference of an object picked on the map: an API reference, or the mount's for
-// the mount marker; undefined for other custom shapes and labels of unknown constellations.
+// Returns the selection reference of an object picked on the map: an API reference, the remembered
+// object's for its shape, or the mount's for the mount marker; undefined for other custom shapes and
+// labels of unknown constellations.
 export function refOfCelestialObject(object: CelestialObject, names: MapNames): SkySelectionRef | undefined {
 	switch (object.type) {
 		case 'star':
@@ -90,15 +92,16 @@ export function refOfCelestialObject(object: CelestialObject, names: MapNames): 
 			return code ? { kind: 'constellation', code } : undefined
 		}
 		case 'shape':
-			return mountMarkerOf(object)?.ref
+			return mountMarkerOf(object)?.ref ?? rememberedOf(object)?.ref
 		default:
 			return undefined
 	}
 }
 
 // Returns the map objects a reference may select, in the order to try: a catalog id may be a star or a
-// deep-sky object; solar-system objects are moving bodies; a constellation is any of its labels. The
-// mount marker is a custom shape, highlighted only when clicked, so it has none.
+// deep-sky object of the map data, or else the shape of the remembered object; solar-system objects are
+// moving bodies; a constellation is any of its labels. The mount marker is a custom shape, highlighted
+// only when clicked, so it has none.
 export function selectionTargets(ref: SkySelectionRef, category: SkySearchResult['category'] | undefined, names: MapNames): SelectionTarget[] {
 	if (ref.kind === 'mount') return []
 
@@ -107,12 +110,10 @@ export function selectionTargets(ref: SkySelectionRef, category: SkySearchResult
 	}
 
 	if (ref.kind !== 'catalog') return [{ type: 'movingBody', id: refKey(ref) }]
-	if (category === 'star') return [{ type: 'star', id: ref.id }]
-	if (category === 'deepSky') return [{ type: 'deepSky', id: ref.id }]
-	return [
-		{ type: 'star', id: ref.id },
-		{ type: 'deepSky', id: ref.id },
-	]
+	const remembered: SelectionTarget = { type: 'shape', id: rememberedShapeId(refKey(ref)) }
+	if (category === 'star') return [{ type: 'star', id: ref.id }, remembered]
+	if (category === 'deepSky') return [{ type: 'deepSky', id: ref.id }, remembered]
+	return [{ type: 'star', id: ref.id }, { type: 'deepSky', id: ref.id }, remembered]
 }
 
 // Short description of a hovered object, from the data the map already holds.
@@ -140,8 +141,9 @@ const MOVING_BODY_TYPE_NAMES: Readonly<Record<MovingBodyType, string>> = {
 	comet: 'Comet',
 }
 
-// Returns the hover label of a picked object; undefined for objects without one (custom shapes). A star
-// without a proper name is named by its catalog designation.
+// Returns the hover label of a picked object; undefined for objects without one (custom shapes other than
+// the mount marker and remembered objects). A star without a proper name is named by its catalog
+// designation.
 export function hoverLabel(object: CelestialObject, names: MapNames): HoverLabel | undefined {
 	switch (object.type) {
 		case 'star': {
@@ -156,7 +158,9 @@ export function hoverLabel(object: CelestialObject, names: MapNames): HoverLabel
 			return { name: object.label.name, typeName: 'Constellation' }
 		case 'shape': {
 			const mount = mountMarkerOf(object)
-			return mount && { name: mount.name || 'Mount', typeName: 'Mount position' }
+			if (mount) return { name: mount.name || 'Mount', typeName: 'Mount position' }
+			const remembered = rememberedOf(object)
+			return remembered && { name: remembered.name, typeName: remembered.typeName, magnitude: remembered.magnitude }
 		}
 		default:
 			return undefined

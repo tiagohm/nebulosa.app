@@ -943,6 +943,11 @@ export class Celestial {
 			return index >= 0 ? { type: 'deepSky', index, object: this.#deepSkyCatalog!.objects[index] } : null
 		}
 
+		if (target.type === 'shape') {
+			const shape = this.#shapes.get(String(target.id))
+			return shape ? { type: 'shape', id: shape.id, shape } : null
+		}
+
 		if (target.type === 'constellationLabel') {
 			const labels = this.#constellations.labels ?? []
 			const index = labels.findIndex((e) => e.name === target.id)

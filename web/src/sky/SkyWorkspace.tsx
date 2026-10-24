@@ -94,7 +94,7 @@ export function SkyWorkspace() {
 	function handleSearchSelect(result: SkySearchResult, minorBody?: MinorBody) {
 		selectSkyObject(skyState, { ref: result.ref, source: 'search', name: result.name, category: result.category, minorBody }, observer)
 		map.syncSelection()
-		if (result.ref.kind === 'minorBody') void map.locateMinorBody(result.ref, minorBody)
+		if (result.ref.kind === 'minorBody') void map.locateMinorBody(result.ref)
 	}
 
 	// Shows a view in the panel, opening the panel.

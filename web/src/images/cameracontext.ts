@@ -9,13 +9,13 @@ import type { CameraIdentity, Profile } from '../profile/schema'
 import type { ImageDocument } from './images'
 
 // Equipment a camera tab's operations command: the physical camera of the tab, and the focuser, mount, filter wheel,
-// and flat panel of the active profile's equipment setup associated with it. The setup assigns flat roles per
+// flat panel, and cover of the active profile's equipment setup associated with it. The setup assigns flat roles per
 // connection, with no optical train, so the association is a fixed rule: the focuser belongs to the Main Camera, and
 // only that camera's Auto Focus moves it; the mount is shared by every camera of the connection, since a nudge holds
-// only the mount; the wheel and the panel belong to any camera with a role, and never to one without, which takes
-// its flats with manual filters and light. A camera without a role has no focuser and snoops nothing into its
-// headers. The forms of the camera are those of the physical camera in the active profile. An operation keeps the
-// devices it started with; changing tab or profile never redirects it.
+// only the mount; the wheel, the panel, and the cover belong to any camera with a role, and never to one without,
+// which takes its flats with manual filters and light and leaves the cover as it is. A camera without a role has no
+// focuser and snoops nothing into its headers. The forms of the camera are those of the physical camera in the active
+// profile. An operation keeps the devices it started with; changing tab or profile never redirects it.
 
 // Equipment of the operations of a camera tab.
 export interface CameraOperationContext {
@@ -39,6 +39,9 @@ export interface CameraOperationContext {
 	// Flat panel Flat Wizard lights the frames with: the FLAT_PANEL of the setup when the camera has a role; absent
 	// otherwise, meaning the light is manual.
 	readonly flatPanel?: RoleDevice
+	// Dust cover Flat Wizard closes before its frames: the COVER of the setup when the camera has a role; absent otherwise,
+	// meaning the cover is left as it is.
+	readonly cover?: RoleDevice
 	// Devices snooped into the headers of the camera's frames: those of the setup when the camera has a role, none
 	// otherwise.
 	readonly snoop: CaptureSnoop
@@ -62,7 +65,7 @@ export function cameraOperationContext(document: Pick<ImageDocument, 'source'> |
 	const context: CameraOperationContext = { camera, device, ...(settings && { settings }), mount: resolve('MOUNT'), snoop: role ? captureSnoop(setup) : {} }
 
 	if (!role) return context
-	const flats = { wheel: resolve('FILTER_WHEEL'), flatPanel: resolve('FLAT_PANEL') }
+	const flats = { wheel: resolve('FILTER_WHEEL'), flatPanel: resolve('FLAT_PANEL'), cover: resolve('COVER') }
 	return role === 'MAIN_CAMERA' ? { ...context, role, focuser: resolve('FOCUSER'), ...flats } : { ...context, role, ...flats }
 }
 

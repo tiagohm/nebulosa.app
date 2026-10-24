@@ -23,6 +23,12 @@ export class CoverCommands implements Disposable {
 		this.#commander = new CoverCommander(devices.covers)
 	}
 
+	// Commander of the covers, shared with the services that move them inside their own operations (Flat Wizard), so
+	// every motion of one cover is observed by the same handler.
+	get commander(): CoverCommander {
+		return this.#commander
+	}
+
 	// Responds with the state of a cover, or 404.
 	state(connectionId: string, deviceId: string): Response {
 		return stateResponse(this, connectionId, 'cover', deviceId, 'Cover')

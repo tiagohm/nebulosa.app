@@ -11,6 +11,7 @@ import { generateSyntheticFlatImage } from 'nebulosa/src/imaging/synthetic/flat'
 import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures } from './captures'
 import { ConnectionManager } from './connection'
+import { CoverCommands } from './covers'
 import { FlatPanelCommands } from './flatpanels'
 import { type FlatWizardEvent, type FlatWizardFilter, type FlatWizardRequest, type FlatWizardSession, FlatWizardSessions, finalVerdict, filterName, publishFrame } from './flatwizard'
 import type { FlatFrameContext, FlatFrameMeasurement, FlatMeasurementOptions } from './flatwizard.analysis'
@@ -104,6 +105,8 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 	disposables.push(wheels)
 	const panels = new FlatPanelCommands(manager.devices, (connectionId) => manager.client(connectionId), operations)
 	disposables.push(panels)
+	const covers = new CoverCommands(manager.devices, (connectionId) => manager.client(connectionId), operations)
+	disposables.push(covers)
 	const measurement = fakeAnalyzer(rate, finals)
 	const events: FlatWizardEvent[] = []
 	const flatWizard = new FlatWizardSessions(
@@ -113,6 +116,7 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 		captures.capturer,
 		wheels.commander,
 		panels.commander,
+		covers.commander,
 		images,
 		frames,
 		measurement.analyzer,
@@ -123,12 +127,15 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 	const cameraId = devices.find((device) => device.type === 'camera')!.id
 	const wheelId = devices.find((device) => device.type === 'wheel')!.id
 	const panelId = devices.find((device) => device.type === 'flatPanel')!.id
-	for (const deviceId of [cameraId, wheelId, panelId]) manager.devices.switch(client, deviceId, true)
+	const coverId = devices.find((device) => device.type === 'cover')!.id
+	for (const deviceId of [cameraId, wheelId, panelId, coverId]) manager.devices.switch(client, deviceId, true)
 	const camera = manager.devices.camera(client, cameraId)!
 	const wheel = manager.devices.device(client, 'wheel', wheelId)!
 	const panel = manager.devices.device(client, 'flatPanel', panelId)!
-	await waitUntil(() => camera.connected && camera.frame.width.max > 0 && wheel.connected && wheel.count > 1 && panel.connected && panel.intensity.max > 0 && operations.available(camera) && operations.available(wheel) && operations.available(panel))
+	const cover = manager.devices.device(client, 'cover', coverId)!
+	await waitUntil(() => camera.connected && camera.frame.width.max > 0 && wheel.connected && wheel.count > 1 && panel.connected && panel.intensity.max > 0 && operations.available(camera) && operations.available(wheel) && operations.available(panel) && cover.connected && cover.canPark && operations.available(cover))
 	if (panel.enabled) expect(await panels.commander.disable(operations.coordinator, panel)).toMatchObject({ ok: true })
+	if (cover.parked) expect(await covers.commander.unpark(operations.coordinator, cover)).toMatchObject({ ok: true })
 
 	const directory = mkdtempSync(join(root, 'flats-'))
 	// Latest published summary.
@@ -136,11 +143,33 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 	// Whether the latest session ended.
 	const ended = () => summary()?.endedAt !== undefined
 	// Whether the camera, the wheel, and the panel are free for a new operation.
-	const released = () => operations.available(camera) && operations.available(wheel) && operations.available(panel)
+	const released = () => operations.available(camera) && operations.available(wheel) && operations.available(panel) && operations.available(cover)
 	// Complete record of a session.
 	const session = async (sessionId: string) => (await flatWizard.session(sessionId).json()) as FlatWizardSession
 
-	return { id, operations, captures, frames, flatWizard, measurement, events, camera, cameraId, wheel, wheelDevice: { connectionId: id, deviceId: wheelId }, panel, panelDevice: { connectionId: id, deviceId: panelId }, directory, summary, ended, released, session }
+	return {
+		id,
+		operations,
+		captures,
+		frames,
+		flatWizard,
+		measurement,
+		events,
+		camera,
+		cameraId,
+		wheel,
+		wheelDevice: { connectionId: id, deviceId: wheelId },
+		panel,
+		panelDevice: { connectionId: id, deviceId: panelId },
+		cover,
+		coverDevice: { connectionId: id, deviceId: coverId },
+		covers,
+		directory,
+		summary,
+		ended,
+		released,
+		session,
+	}
 }
 
 // Starts a session and returns its ids.
@@ -216,6 +245,43 @@ describe('Flat Wizard sessions', () => {
 		expect(panel.enabled).toBeFalse()
 		expect(readdirSync(directory)).toHaveLength(2)
 		expect(released()).toBeTrue()
+	}, 120000)
+
+	test('an assigned cover is closed before the first frame and opened once the session ended', async () => {
+		const { id, cameraId, flatWizard, wheelDevice, panel, panelDevice, cover, coverDevice, directory, summary, ended, released, events } = await setup()
+		await start(flatWizard, id, cameraId, request(directory, { filters: [filter({ count: 1 })], wheel: wheelDevice, panel: panelDevice, cover: coverDevice }))
+
+		await waitUntil(() => summary()?.state === 'exposing', 60000)
+		expect(cover.parked).toBeTrue()
+		await waitUntil(ended, 60000)
+
+		const states = events.map((event) => event.session.state).filter((state, i, all) => state !== all[i - 1])
+		expect(states.indexOf('closingCover')).toBeLessThan(states.indexOf('settingLight'))
+		expect(summary()).toMatchObject({ state: 'completed', coverName: cover.name })
+		expect(summary()!.cleanupWarning).toBeUndefined()
+		expect(cover.parked).toBeFalse()
+		expect(panel.enabled).toBeFalse()
+		expect(released()).toBeTrue()
+	}, 120000)
+
+	test('a cover closed before the session stays closed, and one it closed is opened after a stop', async () => {
+		const { id, cameraId, flatWizard, operations, cover, coverDevice, covers, directory, summary, ended } = await setup()
+
+		expect(await covers.commander.park(operations.coordinator, cover)).toMatchObject({ ok: true })
+		await start(flatWizard, id, cameraId, request(directory, { filters: [filter({ count: 1 })], cover: coverDevice }))
+		await waitUntil(() => summary()?.pending !== undefined)
+		expect(flatWizard.continue(summary()!.sessionId, { stepId: summary()!.pending!.stepId }).status).toBe(204)
+		await waitUntil(ended, 60000)
+		expect(summary()!.state).toBe('completed')
+		expect(cover.parked).toBeTrue()
+
+		expect(await covers.commander.unpark(operations.coordinator, cover)).toMatchObject({ ok: true })
+		const { sessionId } = await start(flatWizard, id, cameraId, request(directory, { cover: coverDevice }))
+		await waitUntil(() => summary()?.sessionId === sessionId && summary()?.pending !== undefined, 60000)
+		expect(cover.parked).toBeTrue()
+		expect((await flatWizard.stop(sessionId)).status).toBe(204)
+		expect(summary()).toMatchObject({ state: 'cancelled' })
+		expect(cover.parked).toBeFalse()
 	}, 120000)
 
 	test('a stop while waiting for the operator cancels the session and releases the devices', async () => {
@@ -300,7 +366,7 @@ describe('Flat Wizard sessions', () => {
 	}, 60000)
 
 	test('a busy device, a running session, and a repeated token never start a second session', async () => {
-		const { id, cameraId, flatWizard, operations, wheel, wheelDevice, directory, summary, events } = await setup()
+		const { id, cameraId, flatWizard, operations, wheel, wheelDevice, directory, summary, events, cover, coverDevice } = await setup()
 		const hold = operations.coordinator.start(
 			'hold',
 			[{ key: resourceKey(wheel), device: wheel }],
@@ -320,6 +386,9 @@ describe('Flat Wizard sessions', () => {
 		expect(flatWizard.start(id, cameraId, request(directory)).status).toBe(409)
 		expect(flatWizard.snapshot().sessions).toHaveLength(1)
 		expect(flatWizard.start('unknown', cameraId, request(directory)).status).toBe(404)
+		cover.canPark = false
+		expect(flatWizard.start(id, cameraId, request(directory, { cover: coverDevice })).status).toBe(422)
+		cover.canPark = true
 		expect(flatWizard.session('unknown').status).toBe(404)
 
 		await waitUntil(() => summary()?.pending !== undefined)

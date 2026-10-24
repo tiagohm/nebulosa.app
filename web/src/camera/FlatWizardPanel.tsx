@@ -23,8 +23,8 @@ import { cameraKey } from './capture'
 import { continueFlatWizard, flatWizardFilterName, FLAT_WIZARD_DIAGNOSTIC_LABELS, FLAT_WIZARD_FILTER_STATE_LABELS, FLAT_WIZARD_STATE_LABELS, FLAT_WIZARD_VERDICT_LABELS, flatWizardBlocker, flatWizardRequest, flatWizardRunning, flatWizardRuntime, startFlatWizard, stopFlatWizard } from './flatwizard'
 
 // Contextual panel sections of Flat Wizard, a camera operation of the Images camera tabs: the equipment it uses (the
-// tab's camera, and the filter wheel and flat panel of the setup when the camera has a role, else manual filters and
-// light), the settings of the next session (output directory, effective clipping level, settle time, and limits), the
+// tab's camera, and the filter wheel, flat panel, and cover of the setup when the camera has a role, else manual
+// filters and light and an untouched cover), the settings of the next session (output directory, effective clipping level, settle time, and limits), the
 // filter groups (filter slot, named as the wheel names it or "Filter <slot + 1>", frame count, exposure bounds, DN
 // target, panel brightness), the progress of the running session with its Continue and Stop commands, and the results of each group. Frames take the camera settings
 // of Camera Acquisition, but never its exposure time, which the wizard searches. Levels are the camera's original
@@ -42,6 +42,8 @@ export interface FlatWizardTarget {
 	readonly wheel?: RoleDevice
 	// Flat panel of the setup and its state; absent for a camera without a role.
 	readonly flatPanel?: RoleDevice
+	// Dust cover of the setup and its state; absent for a camera without a role.
+	readonly cover?: RoleDevice
 	// Camera whose forms are edited; absent when the profile has no saved connection, so the defaults are shown and
 	// nothing is kept.
 	readonly settings?: CameraIdentity
@@ -50,7 +52,7 @@ export interface FlatWizardTarget {
 }
 
 // Flat Wizard panel sections of a camera.
-export function FlatWizardSections({ device, availability, wheel, flatPanel, settings: identity, snoop }: FlatWizardTarget) {
+export function FlatWizardSections({ device, availability, wheel, flatPanel, cover, settings: identity, snoop }: FlatWizardTarget) {
 	const profiles = useSnapshot(profileState)
 	const runtime = useSnapshot(flatWizardRuntime)
 	const operations = useSnapshot(operationsState)
@@ -72,8 +74,11 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, set
 	const panelAssigned = flatPanel !== undefined && flatPanel.status !== 'notSelected'
 	const wheelAvailability = wheelAssigned ? roleAvailability('FILTER_WHEEL', wheel, operations) : undefined
 	const panelAvailability = panelAssigned ? roleAvailability('FLAT_PANEL', flatPanel, operations) : undefined
+	const coverAssigned = cover !== undefined && cover.status !== 'notSelected'
+	const coverState = coverAssigned ? watchedDeviceState(control, 'cover', cover.device) : undefined
+	const coverAvailability = coverAssigned ? roleAvailability('COVER', cover, operations, coverState && !coverState.canPark ? 'The cover cannot be opened and closed.' : undefined) : undefined
 	const wheelState = wheelAssigned ? watchedDeviceState(control, 'wheel', wheel.device) : undefined
-	const blocker = running ? undefined : flatWizardBlocker(availability, wheelAvailability, panelAvailability, settings, wheelState)
+	const blocker = running ? undefined : flatWizardBlocker(availability, wheelAvailability, panelAvailability, settings, wheelState, coverAvailability)
 	const panelState = panelAssigned ? watchedDeviceState(control, 'flatPanel', flatPanel.device) : undefined
 	const capabilities = watchedDeviceState(control, 'camera', device)
 
@@ -89,7 +94,11 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, set
 
 	function start() {
 		if (!device) return
-		const equipment = { ...(wheelAssigned && wheel.device && { wheel: { connectionId: wheel.device.connectionId, deviceId: wheel.device.id } }), ...(panelAssigned && flatPanel.device && { panel: { connectionId: flatPanel.device.connectionId, deviceId: flatPanel.device.id } }) }
+		const equipment = {
+			...(wheelAssigned && wheel.device && { wheel: { connectionId: wheel.device.connectionId, deviceId: wheel.device.id } }),
+			...(panelAssigned && flatPanel.device && { panel: { connectionId: flatPanel.device.connectionId, deviceId: flatPanel.device.id } }),
+			...(coverAssigned && cover.device && { cover: { connectionId: cover.device.connectionId, deviceId: cover.device.id } }),
+		}
 		void startFlatWizard(flatWizardRuntime, device.connectionId, device.id, flatWizardRequest(settings, exposure, equipment, snoop, capabilities))
 	}
 
@@ -102,15 +111,18 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, set
 					</Row>
 					<Row label="Filter Wheel">{wheelAssigned ? <DeviceLink device={wheel.device} fallback="—" /> : 'Manual'}</Row>
 					<Row label="Flat Panel">{panelAssigned ? <DeviceLink device={flatPanel.device} fallback="—" /> : 'Manual'}</Row>
+					<Row label="Cover">{coverAssigned ? <DeviceLink device={cover.device} fallback="—" /> : 'Not used'}</Row>
 				</dl>
 				{!running && wheelAvailability && wheelAvailability.status !== 'ready' && <Notice>{wheelAvailability.message}</Notice>}
 				{!running && panelAvailability && panelAvailability.status !== 'ready' && <Notice>{panelAvailability.message}</Notice>}
-				{!running && (!wheelAssigned || !panelAssigned) && wheel !== undefined && (
+				{!running && coverAvailability && coverAvailability.status !== 'ready' && <Notice>{coverAvailability.message}</Notice>}
+				{coverAssigned && <Notice>The cover closes before the first frame and opens again when the session ends, unless it was already closed.</Notice>}
+				{!running && (!wheelAssigned || !panelAssigned || !coverAssigned || coverAvailability?.status === 'unsupported') && wheel !== undefined && (
 					<Button variant="secondary" size="sm" className="self-start" onClick={() => (deviceState.open = true)}>
 						Equipment Setup
 					</Button>
 				)}
-				{wheel === undefined && <Notice>The camera has no role in the equipment setup, so you change the filters and the light yourself and confirm each step.</Notice>}
+				{wheel === undefined && <Notice>The camera has no role in the equipment setup, so you change the filters and the light yourself and confirm each step; the cover is left as it is.</Notice>}
 				<Notice>Frames are FLAT frames taken with the camera settings of Camera Acquisition; the wizard searches their exposure. Levels are the original digital numbers (DN) of each file, not the stretched view.</Notice>
 			</PanelSection>
 			<PanelSection title="Settings">

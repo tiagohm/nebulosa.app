@@ -2,9 +2,10 @@ import { constants } from 'fs'
 import { copyFile, link, mkdir, rm, unlink } from 'fs/promises'
 import { join } from 'path'
 import { TIMEZONE } from 'nebulosa/src/astronomy/time/temporal'
+import type { CoverCommander } from 'nebulosa/src/devices/commanders/cover'
 import type { FlatPanelCommander } from 'nebulosa/src/devices/commanders/flatpanel'
 import type { WheelCommander } from 'nebulosa/src/devices/commanders/wheel'
-import type { Camera, FlatPanel, Wheel } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Cover, FlatPanel, Wheel } from 'nebulosa/src/devices/indi/device'
 import { failedOperationResult, type OperationContext, type OperationFailureReason, type OperationHandle, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { abortableDelay, abortReason } from 'nebulosa/src/devices/orchestration/operation.wait'
 import { type ResourceRequest, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
@@ -17,7 +18,7 @@ import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureStart, DEFAULT_CAMERA_CAPTURE_START, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureSettings, type CaptureSnoop, DEFAULT_CAPTURES_DIR, frameName, snoopedDevices } from './captures'
-import { busy, type ClientResolver, type CommandRequest, connectedDevice } from './commands'
+import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { FlatFrameContext, FlatFrameMeasurement, FlatMeasurementOptions, FlatWizardAnalyzer } from './flatwizard.analysis'
 import { errorResponse } from './http'
@@ -27,8 +28,8 @@ import type { OperationDevice, OperationRegistry } from './operations'
 // Flat Wizard service: one server-owned session per camera that, filter after filter, finds the exposure putting
 // the brightest plane of a flat inside its target and then acquires the requested number of accepted FLAT frames
 // at that frozen exposure. The session is one `camera.flatWizard` operation of the process-wide registry holding the
-// camera, and the filter wheel and flat panel when they are used, from start to end, including while it waits for
-// the operator. Every exposure goes through the shared camera capturer into a staging directory inside the output
+// camera, and the filter wheel, flat panel, and dust cover when they are used, from start to end, including while it
+// waits for the operator. Every exposure goes through the shared camera capturer into a staging directory inside the output
 // directory, and is measured in the digital numbers of the file by the Flat Wizard analyzer (never on the normalized
 // viewer documents); each one is also decoded into the image store as the latest frame of its camera (origin
 // flatWizard). Trial frames of the exposure search and rejected final frames are deleted after measurement; an
@@ -37,7 +38,8 @@ import type { OperationDevice, OperationRegistry } from './operations'
 // first trial is followed by a second distinct one before the toolkit's affine or interpolated estimate is used.
 // A filter is selected by moving the assigned wheel, or by the operator, who confirms each manual step with its
 // step id; the light comes from the assigned panel at a fixed brightness, or from a manual source the operator
-// confirms. A light the session switched on is switched off once it ended. Stopping cancels the operation at once:
+// confirms. An assigned dust cover is closed before the first frame. A light the session switched on is switched off
+// once it ended, and then a cover it closed is opened again. Stopping cancels the operation at once:
 // the exposure in flight is lost, and files already published stay. Durations are seconds, instants Unix
 // milliseconds, levels DN. Records live in memory, the latest session per camera.
 
@@ -74,6 +76,9 @@ export interface FlatWizardRequest extends CommandRequest {
 	readonly wheel?: OperationDevice
 	// Flat panel lighting the frames; absent makes the light manual.
 	readonly panel?: OperationDevice
+	// Dust cover closed before the first frame and opened again once the session ended; absent leaves the telescope
+	// as it is.
+	readonly cover?: OperationDevice
 	// Wait after the panel light or brightness changed, before the next exposure, in seconds.
 	readonly settleTime: number
 	// Absolute directory of the server the frames are saved into; DEFAULT_CAPTURES_DIR when absent.
@@ -90,6 +95,7 @@ export interface FlatWizardRequest extends CommandRequest {
 
 // What a session is doing:
 // - preparing: acquiring the devices.
+// - closingCover: the cover closes before the first frame.
 // - waitingForFilter: waiting for the operator to put the filter in place (and, without a panel, the light).
 // - movingFilter: the wheel moves to the slot of the filter.
 // - waitingForIllumination: waiting for the operator to confirm the manual light is ready.
@@ -103,7 +109,7 @@ export interface FlatWizardRequest extends CommandRequest {
 // - completed: every filter has its accepted frames.
 // - cancelled: the session was stopped; published frames stay.
 // - failed: the session ended because of an error, given in reason and error.
-export type FlatWizardState = 'preparing' | 'waitingForFilter' | 'movingFilter' | 'waitingForIllumination' | 'settingLight' | 'settling' | 'exposing' | 'measuring' | 'saving' | 'assessingSequence' | 'stopping' | 'completed' | 'cancelled' | 'failed'
+export type FlatWizardState = 'preparing' | 'closingCover' | 'waitingForFilter' | 'movingFilter' | 'waitingForIllumination' | 'settingLight' | 'settling' | 'exposing' | 'measuring' | 'saving' | 'assessingSequence' | 'stopping' | 'completed' | 'cancelled' | 'failed'
 
 // Progress of one filter group: pending until reached, then calibrating while its exposure is searched, acquiring
 // while its final frames are taken, and completed, failed, or cancelled.
@@ -242,6 +248,10 @@ export interface FlatWizardSessionSummary {
 	readonly panel?: OperationDevice
 	// Name of the panel.
 	readonly panelName?: string
+	// Dust cover closed by the session.
+	readonly cover?: OperationDevice
+	// Name of the cover.
+	readonly coverName?: string
 	// Settings the session runs with, without the token.
 	readonly request: Omit<FlatWizardRequest, 'token'>
 	// What the session is doing.
@@ -326,6 +336,9 @@ interface Session {
 	gate?: { readonly stepId: string; readonly confirm: VoidFunction }
 	// Whether the session switched the panel light on and has not switched it off yet.
 	lightOn: boolean
+	// Whether the session commanded the cover closed and has not opened it again yet; set before the command, so a
+	// close interrupted halfway is opened too.
+	coverClosed: boolean
 	// Exposures taken so far, numbering the frames in the capture frame registry.
 	exposures: number
 	// Settles once the session ended and its cleanup ran.
@@ -337,6 +350,7 @@ interface SessionDevices {
 	readonly camera: Camera
 	readonly wheel?: Wheel
 	readonly panel?: FlatPanel
+	readonly cover?: Cover
 }
 
 // Flat Wizard sessions of the cameras of every open connection.
@@ -347,8 +361,8 @@ export class FlatWizardSessions {
 	readonly #byOperation = new Map<string, Session>()
 
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes every
-	// session, capturer takes the frames (the one of the capture service), wheels and panels drive the assigned
-	// devices (the commanders of their commands), images receives the previews, frames records them and the published
+	// session, capturer takes the frames (the one of the capture service), wheels, panels, and covers drive the
+	// assigned devices (the commanders of their commands), images receives the previews, frames records them and the published
 	// frames and closes their documents, analyzer measures the frames in DN, and listener receives every session change
 	// synchronously. capturesDir is the default output directory.
 	constructor(
@@ -358,6 +372,7 @@ export class FlatWizardSessions {
 		readonly capturer: CameraCapturer,
 		readonly wheels: WheelCommander,
 		readonly panels: FlatPanelCommander,
+		readonly covers: CoverCommander,
 		readonly images: ImageStore,
 		readonly frames: CaptureFrameRegistry,
 		readonly analyzer: Pick<FlatWizardAnalyzer, 'measure'>,
@@ -391,14 +406,17 @@ export class FlatWizardSessions {
 		if (wheel instanceof Response) return wheel
 		const panel = request.panel && connectedDevice(this, request.panel.connectionId, 'flatPanel', request.panel.deviceId, 'Flat panel')
 		if (panel instanceof Response) return panel
+		const cover = request.cover && connectedDevice(this, request.cover.connectionId, 'cover', request.cover.deviceId, 'Cover')
+		if (cover instanceof Response) return cover
+		if (cover && !cover.canPark) return unsupported('The cover cannot be opened and closed')
 
 		const key = resourceKey(camera)
 		const previous = this.#sessions.get(key)
 		if (previous && previous.summary.endedAt === undefined) return errorResponse('A Flat Wizard session is running on this camera', 409, 'busy')
-		if (!this.operations.available(camera) || (wheel && !this.operations.available(wheel)) || (panel && !this.operations.available(panel))) return busy()
+		if (!this.operations.available(camera) || [wheel, panel, cover].some((device) => device && !this.operations.available(device))) return busy()
 
-		const devices: SessionDevices = { camera, wheel, panel }
-		const held: OperationDevice[] = [{ connectionId, deviceId }, ...(request.wheel ? [request.wheel] : []), ...(request.panel ? [request.panel] : [])]
+		const devices: SessionDevices = { camera, wheel, panel, cover }
+		const held: OperationDevice[] = [{ connectionId, deviceId }, ...[request.wheel, request.panel, request.cover].filter((device) => device !== undefined)]
 		const session: Session = {
 			key,
 			summary: {
@@ -410,6 +428,8 @@ export class FlatWizardSessions {
 				wheelName: wheel?.name,
 				panel: request.panel,
 				panelName: panel?.name,
+				cover: request.cover,
+				coverName: cover?.name,
 				request: structuredClone(request),
 				state: 'preparing',
 				filter: 0,
@@ -419,6 +439,7 @@ export class FlatWizardSessions {
 			},
 			attempts: [],
 			lightOn: false,
+			coverClosed: false,
 			exposures: 0,
 			ended: Promise.withResolvers(),
 		}
@@ -466,7 +487,7 @@ export class FlatWizardSessions {
 	// Starts the operation of a session, holding its devices until every filter group ended.
 	#run(session: Session, devices: SessionDevices): OperationHandle<void> {
 		const resources = new Map<string, ResourceRequest>()
-		for (const device of [devices.camera, devices.wheel, devices.panel]) if (device) resources.set(resourceKey(device), { key: resourceKey(device), device })
+		for (const device of [devices.camera, devices.wheel, devices.panel, devices.cover]) if (device) resources.set(resourceKey(device), { key: resourceKey(device), device })
 
 		return this.operations.coordinator.start<void>('flatWizardSession', Array.from(resources.values()), async (context) => {
 			const { request, sessionId } = session.summary
@@ -481,6 +502,9 @@ export class FlatWizardSessions {
 			}
 
 			try {
+				const closed = await this.#closeCover(session, context, devices.cover)
+				if (!closed.ok) return closed
+
 				for (let index = 0; index < request.filters.length; index++) {
 					const result = await this.#filter(session, context, devices, index, directory, staging)
 					if (!result.ok) return result
@@ -491,6 +515,17 @@ export class FlatWizardSessions {
 				await rm(staging, { recursive: true, force: true })
 			}
 		})
+	}
+
+	// Closes the cover before the first frame, when one is used and not already closed; a cover already closed stays
+	// closed after the session, which only reopens what it closed.
+	async #closeCover(session: Session, context: OperationContext, cover: Cover | undefined): Promise<OperationResult<void>> {
+		if (!cover || (cover.parked && !cover.parking)) return successfulOperationResult(undefined)
+
+		this.#update(session, { state: 'closingCover' })
+		session.coverClosed = true
+		const closed = await this.covers.park(context, cover)
+		return closed.ok ? closed : failedWith(closed, `The cover ${cover.name} did not close`)
 	}
 
 	// Prepares a filter group, searches its exposure, acquires its final frames, and evaluates their stability.
@@ -790,15 +825,28 @@ export class FlatWizardSessions {
 		}
 	}
 
-	// Records the end of a session: switches off the light it switched on, then publishes its outcome.
-	async #ended(session: Session, { panel }: SessionDevices, result: OperationResult<void>) {
+	// Records the end of a session: switches off the light it switched on, opens the cover it closed, then publishes
+	// its outcome. A device the session could not restore is reported in cleanupWarning.
+	async #ended(session: Session, { panel, cover }: SessionDevices, result: OperationResult<void>) {
+		const warnings: string[] = []
+
 		if (session.lightOn && panel) {
 			// The operation released the panel, so the cleanup takes it again for itself; another operation that took
 			// it first, or a disconnection, leaves the light on.
 			const disabled = panel.connected && this.operations.available(panel) ? await this.panels.disable(this.operations.coordinator, panel) : undefined
 			if (disabled?.ok) session.lightOn = false
-			else this.#update(session, { cleanupWarning: `The light of ${panel.name} was left on: ${disabled && !disabled.ok ? (disabled.error ?? disabled.reason) : 'the panel was not available'}` })
+			else warnings.push(`The light of ${panel.name} was left on: ${disabled && !disabled.ok ? (disabled.error ?? disabled.reason) : 'the panel was not available'}`)
 		}
+
+		if (session.coverClosed && cover) {
+			// The light goes off first, so the cover never opens on a lit panel; like the light, the cover is taken again
+			// only if no other operation took it first and it is still connected.
+			const opened = cover.connected && this.operations.available(cover) ? await this.covers.unpark(this.operations.coordinator, cover) : undefined
+			if (opened?.ok) session.coverClosed = false
+			else warnings.push(`The cover ${cover.name} was left closed: ${opened && !opened.ok ? (opened.error ?? opened.reason) : 'the cover was not available'}`)
+		}
+
+		if (warnings.length > 0) this.#update(session, { cleanupWarning: warnings.join(' ') })
 
 		const filters = session.summary.filters.map((filter) => (filter.state === 'calibrating' || filter.state === 'acquiring' ? { ...filter, state: 'cancelled' as const, candidateExposure: undefined } : filter))
 		if (result.ok) this.#update(session, { state: 'completed', filters, pending: undefined, endedAt: Date.now() })

@@ -55,10 +55,11 @@ test('the request takes the camera settings without the exposure, the slot alway
 	expect(manual.filters[0].slot).toBe(2)
 	expect(manual.filters[0].brightness).toBeUndefined()
 	expect(manual).toMatchObject({ directory: '/flats', effectiveClip: 60000, snoop: { mount: 'm' } })
-	expect('wheel' in manual || 'panel' in manual).toBeFalse()
+	expect('wheel' in manual || 'panel' in manual || 'cover' in manual).toBeFalse()
 
-	const assigned = flatWizardRequest(settings, exposure, { wheel, panel }, {})
-	expect(assigned).toMatchObject({ wheel, panel, filters: [{ slot: 2, brightness: 80 }] })
+	const cover = { connectionId: 'c', deviceId: 'cv' }
+	const assigned = flatWizardRequest(settings, exposure, { wheel, panel, cover }, {})
+	expect(assigned).toMatchObject({ wheel, panel, cover, filters: [{ slot: 2, brightness: 80 }] })
 })
 
 test('an assigned device that cannot be used, or an incomplete form, blocks the start', () => {
@@ -66,6 +67,7 @@ test('an assigned device that cannot be used, or an incomplete form, blocks the 
 	expect(flatWizardBlocker(READY, undefined, undefined, DEFAULT_FLAT_WIZARD_SETTINGS)).toBeUndefined()
 	expect(flatWizardBlocker({ status: 'disconnected', message: 'The camera is disconnected.' }, undefined, undefined, DEFAULT_FLAT_WIZARD_SETTINGS)).toBe('The camera is disconnected.')
 	expect(flatWizardBlocker(READY, busy, undefined, DEFAULT_FLAT_WIZARD_SETTINGS)).toBe('The Filter Wheel is busy.')
+	expect(flatWizardBlocker(READY, undefined, undefined, DEFAULT_FLAT_WIZARD_SETTINGS, undefined, { status: 'unsupported', message: 'The cover cannot be opened and closed.' })).toBe('The cover cannot be opened and closed.')
 	const wheelState = { count: 3, names: ['L', 'R', ''] }
 	expect(flatWizardBlocker(READY, READY, undefined, { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, slot: 3 }] }, wheelState)).toBe('The wheel has no slot 4.')
 	expect(flatWizardBlocker(READY, READY, undefined, { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, slot: 1, targetRange: [5, 5] }] }, wheelState)).toBe('The target of R is empty.')

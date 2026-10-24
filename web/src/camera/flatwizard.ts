@@ -36,6 +36,7 @@ let generation = 0
 // Label of each session state.
 export const FLAT_WIZARD_STATE_LABELS: Readonly<Record<FlatWizardState, string>> = {
 	preparing: 'Preparing',
+	closingCover: 'Closing the cover',
 	waitingForFilter: 'Waiting for the filter',
 	movingFilter: 'Moving the filter wheel',
 	waitingForIllumination: 'Waiting for the light',
@@ -82,6 +83,8 @@ export interface FlatWizardEquipment {
 	readonly wheel?: OperationDevice
 	// Flat panel to light the frames, by exact ids; absent makes the light manual.
 	readonly panel?: OperationDevice
+	// Dust cover to close before the frames and open after them, by exact ids; absent leaves the cover as it is.
+	readonly cover?: OperationDevice
 }
 
 // Returns the name of the filter at a 0-based slot, as the server names it: the name the wheel reports (names in slot
@@ -93,7 +96,7 @@ export function flatWizardFilterName(names: readonly string[] | undefined, slot:
 // Builds the start request of the Flat Wizard form of a camera. The frames take the camera settings of Camera
 // Acquisition, fitted to the camera's capabilities as a capture is, but never its exposure time, which the wizard
 // searches. Brightness is sent only with a panel.
-export function flatWizardRequest(settings: Readonly<FlatWizardSettings>, exposure: Readonly<CameraExposureSettings>, { wheel, panel }: FlatWizardEquipment, snoop: CaptureSnoop, capabilities?: CameraCapabilities): Omit<FlatWizardRequest, 'token'> {
+export function flatWizardRequest(settings: Readonly<FlatWizardSettings>, exposure: Readonly<CameraExposureSettings>, { wheel, panel, cover }: FlatWizardEquipment, snoop: CaptureSnoop, capabilities?: CameraCapabilities): Omit<FlatWizardRequest, 'token'> {
 	const { exposureTime: _, ...capture } = fitExposure(exposure, capabilities)
 	const filters = settings.filters.map(({ brightness, ...filter }) => ({ ...filter, ...(panel && brightness !== undefined && { brightness }) }))
 
@@ -102,6 +105,7 @@ export function flatWizardRequest(settings: Readonly<FlatWizardSettings>, exposu
 		filters,
 		...(wheel && { wheel }),
 		...(panel && { panel }),
+		...(cover && { cover }),
 		settleTime: settings.settleTime,
 		...(settings.directory && { directory: settings.directory }),
 		...(settings.effectiveClip !== undefined && { effectiveClip: settings.effectiveClip }),
@@ -112,13 +116,14 @@ export function flatWizardRequest(settings: Readonly<FlatWizardSettings>, exposu
 }
 
 // Returns why no session can start now, or undefined when one can, from the availability of the camera and of the
-// assigned wheel and panel (absent when not assigned, so manual), the slots and names that wheel reports (absent while
-// unknown), and the form. An assigned device that cannot be used blocks the start instead of being replaced by a
-// manual step. The server checks again.
-export function flatWizardBlocker(camera: RoleAvailability, wheel: RoleAvailability | undefined, panel: RoleAvailability | undefined, settings: Readonly<FlatWizardSettings>, wheelState?: Pick<WheelState, 'count' | 'names'>): string | undefined {
+// assigned wheel, panel, and cover (absent when not assigned, so manual or left as it is), the slots and names that
+// wheel reports (absent while unknown), and the form. An assigned device that cannot be used blocks the start
+// instead of being replaced by a manual step. The server checks again.
+export function flatWizardBlocker(camera: RoleAvailability, wheel: RoleAvailability | undefined, panel: RoleAvailability | undefined, settings: Readonly<FlatWizardSettings>, wheelState?: Pick<WheelState, 'count' | 'names'>, cover?: RoleAvailability): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 	if (wheel && wheel.status !== 'ready') return wheel.message
 	if (panel && panel.status !== 'ready') return panel.message
+	if (cover && cover.status !== 'ready') return cover.message
 	if (settings.filters.length === 0) return 'Add a filter.'
 
 	for (const filter of settings.filters) {

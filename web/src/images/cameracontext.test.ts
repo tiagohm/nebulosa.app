@@ -59,6 +59,7 @@ describe('camera operation context', () => {
 		const guide = cameraOperationContext(tab('guide'), { connectionId: 'saved', equipment: { saved: { ...SETUP, FLAT_PANEL: { id: 'panel', name: 'panel' } } } }, panelRuntime)!
 		expect(guide.wheel).toMatchObject({ device: { id: 'wheel' }, status: 'connected' })
 		expect(guide.flatPanel).toMatchObject({ device: { id: 'panel' }, status: 'connected' })
+		expect(guide.cover).toEqual({ device: undefined, serverId: 'conn', status: 'notSelected' })
 
 		const main = cameraOperationContext(tab('main'), PROFILE, RUNTIME)!
 		expect(main.flatPanel).toEqual({ device: undefined, serverId: 'conn', status: 'notSelected' })
@@ -66,6 +67,7 @@ describe('camera operation context', () => {
 		const spare = cameraOperationContext(tab('spare'), PROFILE, RUNTIME)!
 		expect(spare.wheel).toBeUndefined()
 		expect(spare.flatPanel).toBeUndefined()
+		expect(spare.cover).toBeUndefined()
 	})
 
 	test('a missing mount assignment is reported, never replaced by another connected mount', () => {

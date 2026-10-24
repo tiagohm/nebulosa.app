@@ -4,6 +4,7 @@ import { eraC2s, eraS2c } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { precessionNutationMatrix, type Time, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { StellariumObjectType } from 'nebulosa/src/catalogs/stars/stellarium/nebulae'
 import { J2000 } from 'nebulosa/src/core/constants'
+import type { CatalogSourceStar } from 'nebulosa/src/devices/indi/simulator/types'
 import { type Mat3, matMulVec } from 'nebulosa/src/math/linear-algebra/mat3'
 import type { MutVec3 } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle, toArcmin } from 'nebulosa/src/math/units/angle'
@@ -13,9 +14,9 @@ import type { SkyCatalogNameRow, SkyCatalogObjectRow } from './schema'
 import type { SkyCatalogObject, SkyConstellations, SkyDeepSkyData, SkySearchResult, SkyStarData } from './types'
 
 // Queries of the sky catalog database: local search by designation and name, the catalog data of one
-// object, and the columnar star and deep-sky data the star map renders, with positions referred to the
-// true equator and equinox of the requested instant. Every function takes the database, so tests can pass
-// an in-memory one built with createSkyCatalogSchema.
+// object, the columnar star and deep-sky data the star map renders, with positions referred to the
+// true equator and equinox of the requested instant, and the J2000 stars the camera simulator renders.
+// Every function takes the database, so tests can pass an in-memory one built with createSkyCatalogSchema.
 
 // Most results a search returns.
 export const MAX_SEARCH_LIMIT = 50
@@ -372,6 +373,37 @@ export function renderStars(db: Database, time: number, magnitudeLimit: number =
 	}
 
 	return data
+}
+
+// Magnitude of a star given STAR_REFERENCE_FLUX in a simulated frame.
+const STAR_REFERENCE_MAGNITUDE = 4
+
+// Flux, in the normalized units of the camera simulator, of a star of STAR_REFERENCE_MAGNITUDE; the
+// simulator's random field spans 0.002 to 0.85, so a magnitude 8 star gets 0.01 and brighter ones saturate.
+const STAR_REFERENCE_FLUX = 0.4
+
+// Half-flux diameter of a simulated star in pixels, the middle of the simulator's random range.
+const STAR_HFD = 2.4
+
+// Returns the stars of the catalog within `radius` of a J2000 center, all angles in radians, as the camera
+// simulator renders them: the J2000 position without proper motion, a flux scaled from the magnitude by
+// Pogson's ratio around STAR_REFERENCE_MAGNITUDE, and the B-V color index. Every call returns new objects,
+// since the simulator writes the pixel position into each one.
+export function catalogStars(db: Database, rightAscension: number, declination: number, radius: number): CatalogSourceStar[] {
+	const sinDeclination = Math.sin(declination)
+	const cosDeclination = Math.cos(declination)
+	const cosRadius = Math.cos(radius)
+	const stars: CatalogSourceStar[] = []
+
+	for (const row of starRows(db)) {
+		const cosSeparation = sinDeclination * Math.sin(row.declination) + cosDeclination * Math.cos(row.declination) * Math.cos(row.rightAscension - rightAscension)
+		if (cosSeparation < cosRadius) continue
+
+		const flux = STAR_REFERENCE_FLUX * 10 ** (-0.4 * (row.magnitude - STAR_REFERENCE_MAGNITUDE))
+		stars.push({ rightAscension: row.rightAscension, declination: row.declination, flux, hfd: STAR_HFD, snr: 12 + 180 * Math.min(1, flux / STAR_REFERENCE_FLUX), colorIndex: row.bv ?? DEFAULT_BV })
+	}
+
+	return stars
 }
 
 // Returns the deep-sky objects to render, at the true equator of `time` (Unix milliseconds): those up to

@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
-import { catalogObject, renderConstellations, renderDeepSky, renderStars, searchCatalog } from './catalog'
+import { catalogObject, catalogStars, renderConstellations, renderDeepSky, renderStars, searchCatalog } from './catalog'
 import { fixtureCatalog } from './fixture'
 import { assertSkyCatalogSchema } from './schema'
 
@@ -8,6 +8,16 @@ const db = fixtureCatalog()
 
 // 2026-01-01T00:00:00Z, about 26 years after J2000.
 const TIME = Date.UTC(2026, 0, 1)
+
+test('catalog stars within a cone', () => {
+	// Around Pi-3 Orionis (Tabit), with Pi-2 Orionis about 2° away and Betelgeuse about 16° away.
+	const stars = catalogStars(db, 1.2669, 0.1221, 0.05)
+	expect(stars.map((e) => e.declination)).toEqual([0.1221, 0.1563])
+	expect(stars[0].flux).toBeGreaterThan(stars[1].flux)
+	expect(stars[1].flux).toBeCloseTo(0.4 * 10 ** (-0.4 * 0.35), 9)
+	expect(catalogStars(db, 1.2669, 0.1221, 0.01)).toHaveLength(1)
+	expect(catalogStars(db, 1.2669, 0.1221, 0.05)[0]).not.toBe(stars[0])
+})
 
 test('search by designation', () => {
 	expect(searchCatalog(db, 'M31').map((e) => e.name)).toEqual(['Andromeda Galaxy'])

@@ -1,8 +1,9 @@
+import type { CatalogSource } from 'nebulosa/src/devices/indi/simulator/types'
 import boundaries from '../../data/constellation.boundaries.json'
 import labels from '../../data/constellation.labels.json'
 import lines from '../../data/constellation.lines.json'
 import catalog from '../../data/sky.catalog.db' with { embed: 'true', type: 'sqlite' }
-import type { ConstellationSource } from './catalog'
+import { type ConstellationSource, catalogStars } from './catalog'
 import { SkyEphemeris } from './ephemeris'
 import { MinorBodies } from './minorbodies'
 import { createSkyLocator, createSkyRoutes, type SkyServices } from './routes'
@@ -25,3 +26,6 @@ export const skyRoutes = createSkyRoutes(services)
 
 // Locator of the objects of the sky API, used to resolve mount targets.
 export const skyLocator = createSkyLocator(services)
+
+// Stars of the sky catalog around a J2000 cone, the catalog source of the simulated camera.
+export const skyStarSource: CatalogSource = (rightAscension, declination, radius) => catalogStars(catalog, rightAscension, declination, radius)

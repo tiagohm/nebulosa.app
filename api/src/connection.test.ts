@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import type { Focuser, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
+import type { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
+import type { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { type ConnectionEvent, ConnectionManager } from './connection'
 import type { DeviceEvent, DeviceSummary } from './devices'
 import { routes, websocket } from './index'
@@ -86,6 +89,32 @@ describe('simulator devices', () => {
 		await Bun.sleep(50)
 		expect(manager.devices.list(client).find((d) => d.id === mount.id)?.connected).toBeFalse()
 		expect(manager.devices.switch(client, 'unknown', true)).toBeFalse()
+	})
+
+	test('the camera reads the snooped devices and renders the sky catalog', async () => {
+		const { manager } = newManager()
+		const { id } = await manager.connect({ type: 'SIMULATOR' })
+		const client = manager.client(id) as ClientSimulator
+		const devices = manager.devices.list(client)
+		const deviceId = (type: DeviceSummary['type']) => devices.find((d) => d.type === type)!.id
+
+		for (const type of ['camera', 'mount', 'focuser', 'wheel', 'rotator'] as const) manager.devices.switch(client, deviceId(type), true)
+		await Bun.sleep(50)
+
+		const camera = manager.devices.camera(client, deviceId('camera'))!
+		const mount = manager.devices.get(client, deviceId('mount'), 'mount') as Mount
+		const focuser = manager.devices.get(client, deviceId('focuser'), 'focuser') as Focuser
+		const wheel = manager.devices.get(client, deviceId('wheel'), 'wheel') as Wheel
+		const rotator = manager.devices.get(client, deviceId('rotator'), 'rotator') as Rotator
+		manager.devices.cameras.snoop(camera, mount, focuser, wheel, rotator)
+
+		const simulator = client.get(camera.name) as CameraSimulator
+		expect(simulator.activeMount?.name).toBe(mount.name)
+		expect(simulator.activeFocuser?.name).toBe(focuser.name)
+		expect(simulator.activeFilter?.name).toBe(wheel.name)
+		expect(simulator.activeRotator?.name).toBe(rotator.name)
+		expect(simulator.catalogSourceType).toBe('SKY')
+		expect(simulator.telescopeFocalLength).toBe(50)
 	})
 
 	test('keep their ids across reconnects', async () => {

@@ -12,6 +12,7 @@ import { RotatorSimulator } from 'nebulosa/src/devices/indi/simulator/rotator'
 import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
 import { type DeviceEvent, DeviceRegistry } from './devices'
 import { errorResponse } from './http'
+import { skyStarSource } from './sky'
 
 // Application-wide registry of open device connections (INDI, Alpaca, and the in-process simulator).
 // Each endpoint is opened at most once, concurrent requests for it share the same attempt, and every
@@ -114,8 +115,21 @@ async function openClient(id: string, request: ConnectRequest, handler: IndiClie
 			// Each simulator registers itself with the client, which disposes them all when it is disposed.
 			void [
 				new MountSimulator('Mount Simulator', client),
-				// The camera renders the defocus of the simulated focuser a capture snoops.
-				new CameraSimulator('Camera Simulator', client, { focuserManager: devices.focusers }),
+				// The camera reads the mount, focuser, filter wheel and rotator a capture snoops, and renders the stars of
+				// the sky catalog around the mount, so its frames can be plate solved. The catalog goes down to
+				// magnitude 8, about one star per square degree, so the optics are a 50 mm f/2 lens whose 7.6° × 6.1°
+				// field holds dozens of them.
+				new CameraSimulator('Camera Simulator', client, {
+					mountManager: devices.mounts,
+					focuserManager: devices.focusers,
+					wheelManager: devices.wheels,
+					rotatorManager: devices.rotators,
+					guideOutputManager: devices.guideOutputs,
+					catalogSources: { SKY: skyStarSource },
+					catalogSource: 'SKY',
+					focalLength: 50,
+					aperture: 25,
+				}),
 				new FocuserSimulator('Focuser Simulator', client),
 				new WheelSimulator('Filter Wheel Simulator', client),
 				new RotatorSimulator('Rotator Simulator', client),

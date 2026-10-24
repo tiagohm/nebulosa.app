@@ -1,5 +1,5 @@
 {
-	"ignorePatterns": ["core/**", ".dist/**", "bun.lock"],
+	"ignorePatterns": ["core/**", ".dist/**", "bun.lock", "timings.json"],
 	"semi": false,
 	"singleQuote": true,
 	"useTabs": true,

@@ -11,6 +11,8 @@ import { createDomeRoutes, DomeCommands } from './domes'
 import { createExternalToolsRoutes, DEFAULT_SETTINGS_FILE, ExternalToolsStore } from './externaltools'
 import { createFileRoutes } from './files'
 import { createFlatPanelRoutes, FlatPanelCommands } from './flatpanels'
+import { createFlatWizardRoutes, FlatWizardSessions } from './flatwizard'
+import { FlatWizardAnalyzer } from './flatwizard.analysis'
 import { DEFAULT_FOCUSERS_FILE, FocuserBacklashStore } from './focuserbacklash'
 import { createFocuserRoutes, FocuserCommands } from './focusers'
 import { createGuideOutputRoutes, GuideOutputCommands } from './guideoutputs'
@@ -144,6 +146,25 @@ export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesR
 export type { Binning, DeriveRequest, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageCapture, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from './images'
 export type { DarvCaptureSettings, DarvEvent, DarvMeasurement, DarvMeasurementRequest, DarvMeasurementState, DarvMeasurementTrails, DarvRequest, DarvSession, DarvSessionState, DarvSessionSummary, DarvSnapshot, DarvStartResponse } from './darv'
 export type { DarvMeasurementResult, DarvMeasurementStatus, DarvTrail } from './darv.analysis'
+export type {
+	FlatWizardAttempt,
+	FlatWizardCaptureSettings,
+	FlatWizardContinueRequest,
+	FlatWizardEvent,
+	FlatWizardFilter,
+	FlatWizardFilterRun,
+	FlatWizardFilterState,
+	FlatWizardPendingStep,
+	FlatWizardPlaneLevel,
+	FlatWizardRequest,
+	FlatWizardSequenceResult,
+	FlatWizardSession,
+	FlatWizardSessionSummary,
+	FlatWizardSnapshot,
+	FlatWizardStartResponse,
+	FlatWizardState,
+	FlatWizardVerdict,
+} from './flatwizard'
 export type { TppaAlignment, TppaAttempt, TppaCaptureSettings, TppaEvent, TppaGeometry, TppaOverlay, TppaPoint, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaStartResponse, TppaState } from './tppa'
 export type { ServerEvent } from './websocket'
 export { websocket }
@@ -210,6 +231,11 @@ const tppa = new TppaSessions(connections.devices, (id) => connections.client(id
 // taking their frames with the capturer of the captures, and analyzing them on a worker of their own.
 const darv = new DarvSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, new DarvAnalyzer(images), broadcast)
 
+// Flat Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the captures,
+// moving the wheels and driving the panels with the commanders of their commands, and measuring the frames in DN on a
+// worker of their own.
+const flatWizard = new FlatWizardSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, wheels.commander, flatPanels.commander, new FlatWizardAnalyzer(), broadcast)
+
 // Bun.serve routes under /api/.
 export const routes = {
 	'/api/health': {
@@ -231,6 +257,7 @@ export const routes = {
 	...createAutoFocusRoutes(autoFocus),
 	...createTppaRoutes(tppa),
 	...createDarvRoutes(darv),
+	...createFlatWizardRoutes(flatWizard),
 	...createFileRoutes(),
 	...createImageRoutes(images),
 	...createExternalToolsRoutes(externalTools),

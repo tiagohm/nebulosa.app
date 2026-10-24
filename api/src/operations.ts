@@ -39,6 +39,7 @@ export type OperationKind =
 	| 'focuser.autofocus'
 	| 'mount.tppa'
 	| 'mount.darv'
+	| 'camera.flatWizard'
 
 // Life stage of an operation.
 export type OperationState = 'running' | 'succeeded' | 'failed'

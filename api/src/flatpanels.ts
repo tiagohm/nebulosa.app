@@ -36,6 +36,12 @@ export class FlatPanelCommands {
 		this.#commander = new FlatPanelCommander(devices.flatPanels)
 	}
 
+	// Commander of the panels, shared with the services that drive them inside their own operations (Flat
+	// Wizard), so every command of one panel is confirmed by the same handler.
+	get commander(): FlatPanelCommander {
+		return this.#commander
+	}
+
 	// Responds with the state of a flat panel, or 404.
 	state(connectionId: string, deviceId: string): Response {
 		return stateResponse(this, connectionId, 'flatPanel', deviceId, 'Flat panel')

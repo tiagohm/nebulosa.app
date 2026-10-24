@@ -37,6 +37,12 @@ export class WheelCommands implements Disposable {
 		this.#commander = new WheelCommander(devices.wheels)
 	}
 
+	// Commander of the wheels, shared with the services that move them inside their own operations (Flat
+	// Wizard), so every move of one wheel is observed by the same handler.
+	get commander(): WheelCommander {
+		return this.#commander
+	}
+
 	// Responds with the state of a filter wheel, or 404.
 	state(connectionId: string, deviceId: string): Response {
 		return stateResponse(this, connectionId, 'wheel', deviceId, 'Filter wheel')

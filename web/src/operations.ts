@@ -40,6 +40,7 @@ export const OPERATION_LABELS: Readonly<Record<OperationKind, string>> = {
 	'focuser.autofocus': 'Auto Focus',
 	'mount.tppa': 'TPPA',
 	'mount.darv': 'DARV',
+	'camera.flatWizard': 'Flat Wizard',
 }
 
 // Most finished operations kept; older ones are dropped. Running operations are always kept.

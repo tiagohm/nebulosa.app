@@ -2,6 +2,7 @@ import type { CaptureFrameOrigin, CaptureFrameSummary, ImageAcquisition, ImageIn
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { autoFocusFrameFocus, autoFocusRuntime } from '../camera/autofocus'
+import { DARV_AXIS_LABELS, DARV_DIRECTION_LABELS, DARV_STATUS_LABELS, darvFrameMeasurement, darvRuntime } from '../camera/darv'
 import { tppaFrameRole, tppaRuntime } from '../camera/tppa'
 import { connectionState } from '../connection/connection'
 import { PanelSection, PlannedControls } from '../shell/ContextualPanel'
@@ -145,11 +146,11 @@ interface CapturedFrameProps {
 }
 
 // Labels of the operations that take frames.
-const ORIGIN_LABELS: Readonly<Record<CaptureFrameOrigin, string>> = { capture: 'Camera Acquisition', autofocus: 'Auto Focus', tppa: 'TPPA' }
+const ORIGIN_LABELS: Readonly<Record<CaptureFrameOrigin, string>> = { capture: 'Camera Acquisition', autofocus: 'Auto Focus', tppa: 'TPPA', darv: 'DARV' }
 
 // Camera, origin, session, and storage of the frame a camera tab shows, as the capture frame registry describes it,
-// and, for an Auto Focus frame, its measurement and the focuser position its session recorded, and for a TPPA frame,
-// the step of its session it was taken for.
+// and, for an Auto Focus frame, its measurement and the focuser position its session recorded, for a TPPA frame,
+// the step of its session it was taken for, and for a DARV frame, the settings and outcome of its measurement.
 function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 	const connections = useSnapshot(connectionState)
 	const autoFocus = useSnapshot(autoFocusRuntime)
@@ -157,6 +158,14 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 	const focus = frame.origin === 'autofocus' ? autoFocusFrameFocus(autoFocus.details[frame.sessionId], frame) : undefined
 	const tppa = useSnapshot(tppaRuntime)
 	const role = frame.origin === 'tppa' ? tppaFrameRole(tppa.details[frame.sessionId], frame) : undefined
+	const darv = useSnapshot(darvRuntime)
+	const drift =
+		frame.origin === 'darv'
+			? darvFrameMeasurement(
+					Object.values(darv.sessions).find((session) => session.sessionId === frame.sessionId),
+					frame,
+				)
+			: undefined
 
 	return (
 		<>
@@ -183,6 +192,17 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 							</span>
 						</Property>
 						<Property label="Step">{role ? (role.point !== undefined ? `Point ${role.point}/3` : role.refinement ? 'Refinement' : 'Rejected candidate') : MISSING}</Property>
+					</>
+				)}
+				{frame.origin === 'darv' && (
+					<>
+						<Property label="DARV session">
+							<span title={frame.sessionId} className="block truncate">
+								{frame.sessionId}
+							</span>
+						</Property>
+						<Property label="Measurement">{drift ? `${DARV_AXIS_LABELS[drift.request.axis]}, ${DARV_DIRECTION_LABELS[drift.request.direction]} first, ${drift.request.legDuration} s legs` : MISSING}</Property>
+						<Property label="Result">{drift?.result ? (drift.result.driftMagnitude !== undefined ? `${drift.result.driftMagnitude.toFixed(3)} px/s` : DARV_STATUS_LABELS[drift.result.status]) : MISSING}</Property>
 					</>
 				)}
 				<Property label="Frame">#{frame.generation}</Property>

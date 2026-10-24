@@ -27,6 +27,8 @@ import {
 	type SkyObserverSettings,
 	DEFAULT_TPPA_SETTINGS,
 	type TppaSettings,
+	DEFAULT_DARV_SETTINGS,
+	type DarvSettings,
 } from './schema'
 
 // Profiles of the browser and the profile active in this tab, and the actions that change them. Profiles are a
@@ -313,6 +315,16 @@ export function tppaSettings(settings: Pick<ProfileSettings, 'cameras'>, camera:
 // Replaces fields of the TPPA form of a camera in the active profile. The solver is replaced as a whole when given.
 export function setTppaSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<TppaSettings>) {
 	setCameraForm(state, camera, 'tppa', tppaSettings(activeProfile(state).settings, camera), patch)
+}
+
+// Returns the DARV form of a camera: the one edited last, or the defaults.
+export function darvSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<DarvSettings> {
+	return cameraSettings(settings, camera)?.darv ?? DEFAULT_DARV_SETTINGS
+}
+
+// Replaces fields of the DARV form of a camera in the active profile.
+export function setDarvSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<DarvSettings>) {
+	setCameraForm(state, camera, 'darv', darvSettings(activeProfile(state).settings, camera), patch)
 }
 
 // Returns the star detection request of a profile: the one edited last, or the defaults.

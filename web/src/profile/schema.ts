@@ -12,8 +12,8 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // which version 2 called focus-calibrator and polar-alignment; version 4 keeps the camera forms by
 // physical camera (cameras) instead of by camera role, and drops the post-capture analysis and plate
 // solving of the frames of a capture. The preferences of the Capture workspace (capture), removed since, are ignored
-// when read. Version 5 adds the TPPA form of each camera (tppa).
-export const PROFILES_VERSION = 5
+// when read. Version 5 adds the TPPA form of each camera (tppa), and version 6 its DARV form (darv).
+export const PROFILES_VERSION = 6
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -113,6 +113,8 @@ export interface CameraSettings {
 	autoFocus?: AutoFocusSettings
 	// TPPA form.
 	tppa?: TppaSettings
+	// DARV form.
+	darv?: DarvSettings
 }
 
 // Physical camera the forms of a profile belong to: the saved connection that provides it and its device id, stable
@@ -187,6 +189,31 @@ export const DEFAULT_TPPA_SETTINGS: TppaSettings = {
 	refinementDelay: 1,
 	solver: { provider: 'astap', strategy: 'assisted' },
 }
+
+// DARV form of one physical camera: how the next drift alignment measurement moves the mount. The frame is taken
+// with the camera settings of the camera, which this form never holds, and with an exposure derived from the leg
+// duration, which never replaces the exposure of Camera Acquisition. Durations are in seconds, as edited.
+export interface DarvSettings {
+	// Knob being adjusted, which tells the operator where to point: azimuth near the meridian, altitude near the
+	// eastern or western horizon.
+	axis: 'azimuth' | 'altitude'
+	// Direction of the outbound RA motion; the return goes the other way.
+	direction: 'WEST' | 'EAST'
+	// Name of the slew-rate preset of the motions, checked again against the presets the mount announces when a
+	// measurement starts; absent before one was chosen.
+	slewRate?: string
+	// Duration of each RA motion, in seconds, in [DARV_MINIMUM_LEG_DURATION, DARV_MAXIMUM_LEG_DURATION].
+	legDuration: number
+}
+
+// Shortest RA motion of the DARV form, in seconds; shorter trails are too short to tell the legs apart.
+export const DARV_MINIMUM_LEG_DURATION = 5
+
+// Longest RA motion of the DARV form, in seconds (10 minutes), beyond which the exposure saturates the sky.
+export const DARV_MAXIMUM_LEG_DURATION = 600
+
+// DARV form of a camera that has none yet: the classic one-minute legs, eastward first, adjusting the azimuth.
+export const DEFAULT_DARV_SETTINGS: DarvSettings = { axis: 'azimuth', direction: 'EAST', legDuration: 60 }
 
 // A complete working environment: the selected connection, the equipment assigned on each connection,
 // and preferences.

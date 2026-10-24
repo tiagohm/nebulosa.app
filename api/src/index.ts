@@ -4,6 +4,8 @@ import { CaptureFrameRegistry, createCaptureFrameRoutes, DEFAULT_CAPTURE_FRAMES_
 import { CameraCaptures, createCaptureRoutes } from './captures'
 import { connections, createConnectionRoutes } from './connection'
 import { CoverCommands, createCoverRoutes } from './covers'
+import { createDarvRoutes, DarvSessions } from './darv'
+import { DarvAnalyzer } from './darv.analysis'
 import { createDewHeaterRoutes, DewHeaterCommands } from './dewheaters'
 import { createDomeRoutes, DomeCommands } from './domes'
 import { createExternalToolsRoutes, DEFAULT_SETTINGS_FILE, ExternalToolsStore } from './externaltools'
@@ -140,6 +142,8 @@ export type { PlateSolveHint, PlateSolveHints, PlateSolveHintSource, PlateSolveS
 export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
 export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
 export type { Binning, DeriveRequest, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageCapture, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from './images'
+export type { DarvCaptureSettings, DarvEvent, DarvMeasurement, DarvMeasurementRequest, DarvMeasurementState, DarvMeasurementTrails, DarvRequest, DarvSession, DarvSessionState, DarvSessionSummary, DarvSnapshot, DarvStartResponse } from './darv'
+export type { DarvMeasurementResult, DarvMeasurementStatus, DarvTrail } from './darv.analysis'
 export type { TppaAlignment, TppaAttempt, TppaCaptureSettings, TppaEvent, TppaGeometry, TppaOverlay, TppaPoint, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaStartResponse, TppaState } from './tppa'
 export type { ServerEvent } from './websocket'
 export { websocket }
@@ -202,6 +206,10 @@ const autoFocus = new AutoFocusSessions(connections.devices, (id) => connections
 // taking their frames with the capturer of the captures, and solving them with the plate solving service.
 const tppa = new TppaSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, broadcast)
 
+// DARV sessions of the cameras of the open connections, moving the mounts with the commander of the mount commands,
+// taking their frames with the capturer of the captures, and analyzing them on a worker of their own.
+const darv = new DarvSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, new DarvAnalyzer(images), broadcast)
+
 // Bun.serve routes under /api/.
 export const routes = {
 	'/api/health': {
@@ -222,6 +230,7 @@ export const routes = {
 	...createCaptureRoutes(captures),
 	...createAutoFocusRoutes(autoFocus),
 	...createTppaRoutes(tppa),
+	...createDarvRoutes(darv),
 	...createFileRoutes(),
 	...createImageRoutes(images),
 	...createExternalToolsRoutes(externalTools),

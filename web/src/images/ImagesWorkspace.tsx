@@ -3,6 +3,7 @@ import { type KeyboardEvent, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusRuntime } from '../camera/autofocus'
 import { cameraKey, captureCount, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState } from '../camera/capture'
+import { DarvOverlay, useDarvOverlay } from '../camera/DarvOverlay'
 import { FocusCurve } from '../camera/FocusCurve'
 import { TppaOverlay, useTppaOverlay } from '../camera/TppaOverlay'
 import { FileExplorerModal } from '../files/FileExplorerModal'
@@ -77,6 +78,7 @@ export function ImagesWorkspace() {
 	const wcs = view?.plateSolving.overlay ? solution : undefined
 	const camera = useCameraOperationContext(document)
 	const guide = useTppaOverlay(document)
+	const trails = useDarvOverlay(document)
 	const toolSelector = (
 		<Select options={IMAGE_TOOLS} value={tool} disabled={!document} format={(t) => IMAGE_TOOL_DEFINITIONS[t].label} group={imageToolGroup} disabledReason={(t) => imageToolUnavailable(t, document)} onChange={(t) => document && selectImageTool(imagesState, document.key, t)} className="w-52 max-sm:w-40" />
 	)
@@ -125,12 +127,13 @@ export function ImagesWorkspace() {
 							)
 						}
 						overlays={
-							(markers || wcs || reticle || guide) && view
+							(markers || wcs || reticle || guide || trails) && view
 								? (size, overlay) => (
 										<>
 											{reticle && <Reticle {...size} />}
 											{wcs && <WcsOverlay solution={wcs} image={size} view={overlay} grid={view.plateSolving.grid} />}
 											{guide && <TppaOverlay geometry={guide} view={overlay} />}
+											{trails && <DarvOverlay trails={trails} view={overlay} />}
 											{markers && <StarOverlay result={markers} view={overlay} acceptedOnly={view.stars.acceptedOnly} selected={view.stars.selected?.jobId === markers.jobId ? view.stars.selected.index : undefined} />}
 										</>
 									)

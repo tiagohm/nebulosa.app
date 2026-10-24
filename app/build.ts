@@ -6,11 +6,12 @@ import bunTailwindPlugin from './tailwind.plugin'
 // Repository root, the common ancestor of every entry point and so the root of the embedded files.
 const ROOT = join(import.meta.dir, '..')
 
-// Image and star detection workers, bundled as extra entry points so the executable embeds them
+// Image, star detection, and DARV analysis workers, bundled as extra entry points so the executable embeds them
 // transpiled with their imports. Inside the executable a worker is only found by its path relative to the
 // embedded root, never through `new URL(..., import.meta.url)`, which points at the executable itself.
 const IMAGE_WORKER = join(ROOT, 'api/src/images.worker.ts')
 const STAR_WORKER = join(ROOT, 'api/src/stars.worker.ts')
+const DARV_WORKER = join(ROOT, 'api/src/darv.worker.ts')
 
 // Path of a worker relative to the embedded root, as the executable finds it, as a define value.
 function embeddedPath(path: string) {
@@ -18,7 +19,7 @@ function embeddedPath(path: string) {
 }
 
 await build({
-	entrypoints: [join(import.meta.dir, 'src/main.ts'), IMAGE_WORKER, STAR_WORKER],
+	entrypoints: [join(import.meta.dir, 'src/main.ts'), IMAGE_WORKER, STAR_WORKER, DARV_WORKER],
 	minify: true,
 	sourcemap: false,
 	target: 'bun',
@@ -27,6 +28,7 @@ await build({
 		'process.env.NODE_ENV': '"production"',
 		'process.env.NEBULOSA_IMAGE_WORKER': embeddedPath(IMAGE_WORKER),
 		'process.env.NEBULOSA_STAR_WORKER': embeddedPath(STAR_WORKER),
+		'process.env.NEBULOSA_DARV_WORKER': embeddedPath(DARV_WORKER),
 	},
 	plugins: [bunTailwindPlugin],
 	reactCompiler: true,

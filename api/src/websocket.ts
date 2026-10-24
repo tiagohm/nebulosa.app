@@ -3,6 +3,7 @@ import type { AutoFocusEvent } from './autofocus'
 import type { CaptureFrameEvent } from './captureframes'
 import type { CaptureEvent } from './captures'
 import type { ConnectionRegistryEvent } from './connection'
+import type { DarvEvent } from './darv'
 import type { DomeMotionEvent } from './domes'
 import type { ExternalToolEvent } from './externaltools'
 import type { FocuserBacklashEvent } from './focusers'
@@ -20,7 +21,7 @@ import type { TppaEvent } from './tppa'
 // of the operation registry, the events of the capture, Auto Focus, TPPA, mount nudge, and dome manual rotation services,
 // the captured frames of the frame registry, the changes of the external program settings and of the focuser backlash
 // compensations, and the star detection and plate solving jobs.
-export type ServerEvent = ConnectionRegistryEvent | OperationEvent | CaptureEvent | CaptureFrameEvent | AutoFocusEvent | TppaEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent | StarDetectionEvent | PlateSolvingEvent | FocuserBacklashEvent
+export type ServerEvent = ConnectionRegistryEvent | OperationEvent | CaptureEvent | CaptureFrameEvent | AutoFocusEvent | TppaEvent | DarvEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent | StarDetectionEvent | PlateSolvingEvent | FocuserBacklashEvent
 
 // What the upgrade attaches to a socket.
 export interface WebSocketData {

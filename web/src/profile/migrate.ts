@@ -19,6 +19,10 @@ import {
 	type SkyFramingSettings,
 	type SkyObserverSettings,
 	type SkySettings,
+	DARV_MAXIMUM_LEG_DURATION,
+	DARV_MINIMUM_LEG_DURATION,
+	type DarvSettings,
+	DEFAULT_DARV_SETTINGS,
 	DEFAULT_TPPA_SETTINGS,
 	TPPA_MAXIMUM_ROTATION,
 	TPPA_MINIMUM_ROTATION,
@@ -91,8 +95,9 @@ function normalizeCamera(value: unknown): CameraSettings | undefined {
 	const acquisition = normalizeAcquisition(value.acquisition)
 	const autoFocus = normalizeAutoFocus(value.autoFocus)
 	const tppa = normalizeTppa(value.tppa)
-	if (!exposure && !acquisition && !autoFocus && !tppa) return undefined
-	return { ...(exposure && { exposure }), ...(acquisition && { acquisition }), ...(autoFocus && { autoFocus }), ...(tppa && { tppa }) }
+	const darv = normalizeDarv(value.darv)
+	if (!exposure && !acquisition && !autoFocus && !tppa && !darv) return undefined
+	return { ...(exposure && { exposure }), ...(acquisition && { acquisition }), ...(autoFocus && { autoFocus }), ...(tppa && { tppa }), ...(darv && { darv }) }
 }
 
 // Restores the persisted forms of the cameras (version 4), by saved connection id and device id.
@@ -205,6 +210,22 @@ function normalizeTppa(value: unknown): TppaSettings | undefined {
 			strategy: solver.strategy === 'blind' ? 'blind' : 'assisted',
 			...(Number.isFinite(downsample) && { downsample }),
 		},
+	}
+}
+
+// Restores a persisted DARV form, filling every invalid field with its default; undefined for anything that is not a
+// record. A slew rate that is not a non-empty name is dropped.
+function normalizeDarv(value: unknown): DarvSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = DEFAULT_DARV_SETTINGS
+	const legDuration = typeof value.legDuration === 'number' && value.legDuration >= DARV_MINIMUM_LEG_DURATION && value.legDuration <= DARV_MAXIMUM_LEG_DURATION ? value.legDuration : defaults.legDuration
+
+	return {
+		axis: value.axis === 'altitude' ? 'altitude' : value.axis === 'azimuth' ? 'azimuth' : defaults.axis,
+		direction: value.direction === 'WEST' ? 'WEST' : value.direction === 'EAST' ? 'EAST' : defaults.direction,
+		...(typeof value.slewRate === 'string' && value.slewRate && { slewRate: value.slewRate }),
+		legDuration,
 	}
 }
 
@@ -401,7 +422,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 2:
 		case 3:
 		case 4:
-		case 5: {
+		case 5:
+		case 6: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

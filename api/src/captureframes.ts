@@ -20,7 +20,7 @@ import { errorCode, isRecord, writeAtomically } from './util'
 // decoded (previewed only, being saved, or saved), and its saved frames, the newest FRAMES_PER_SOURCE frames whose
 // file was written, which is the only history. A frame the preview decoded is never added to the saved frames
 // unless its file is written, so any number of previewed-only frames never evicts a saved one; the latest frame
-// counts among the saved frames only when it was saved itself. Auto Focus frames are never saved: their files are
+// counts among the saved frames only when it was saved itself. Auto Focus, TPPA, and DARV frames are never saved: their files are
 // auxiliary and deleted after each measurement, so they only ever become the latest frame. A previous latest frame that was not saved is kept
 // in memory among the transient frames of its camera (at most FRAMES_PER_SOURCE), only so its state can still be
 // asked for, and is never listed.
@@ -71,7 +71,8 @@ export type CaptureFrameAvailability = 'memory' | 'file' | 'saving' | 'unavailab
 // - capture: Camera Capture, previewed only or saved.
 // - autofocus: an Auto Focus session, sampled or verifying; never saved.
 // - tppa: a TPPA session, a pose or a refinement frame; never saved.
-export type CaptureFrameOrigin = 'capture' | 'autofocus' | 'tppa'
+// - darv: a DARV measurement, one frame per measurement; never saved.
+export type CaptureFrameOrigin = 'capture' | 'autofocus' | 'tppa' | 'darv'
 
 // Why a frame cannot be opened:
 // - expired: it was only previewed and its document was closed.

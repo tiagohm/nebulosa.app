@@ -38,6 +38,7 @@ export type OperationKind =
 	| 'camera.capture'
 	| 'focuser.autofocus'
 	| 'mount.tppa'
+	| 'mount.darv'
 
 // Life stage of an operation.
 export type OperationState = 'running' | 'succeeded' | 'failed'

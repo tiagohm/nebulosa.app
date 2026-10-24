@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import { AutoFocusTool } from './AutoFocusTool'
 import { CameraAcquisitionTool } from './CameraAcquisitionTool'
 import type { CameraOperationContext } from './cameracontext'
+import { DarvTool } from './DarvTool'
 import { ImageInspector } from './ImageInspector'
 import type { ImageDocument, ImageViewState } from './images'
 import { MountNudgeTool } from './MountNudgeTool'
@@ -97,7 +98,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'auto-focus': { id: 'auto-focus', label: 'Auto Focus', panelTitle: 'Auto Focus', category: 'camera', panel: AutoFocusTool },
 	'mount-nudge': { id: 'mount-nudge', label: 'Mount Nudge', panelTitle: 'Mount Nudge', category: 'camera', panel: MountNudgeTool },
 	guiding: plannedCameraOperation('guiding', 'Guiding'),
-	darv: plannedCameraOperation('darv', 'DARV Alignment'),
+	darv: { id: 'darv', label: 'DARV', panelTitle: 'DARV', category: 'camera', panel: DarvTool },
 	tppa: { id: 'tppa', label: 'TPPA', panelTitle: 'TPPA', category: 'camera', panel: TppaTool },
 	'flat-wizard': plannedCameraOperation('flat-wizard', 'Flat Wizard'),
 }

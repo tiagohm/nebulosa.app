@@ -25,6 +25,8 @@ describe('tool registry', () => {
 		expect(imageToolUnavailable('camera-acquisition', FILE)).toBe('Only on a camera tab.')
 		expect(imageToolUnavailable('auto-focus', CAMERA_TAB)).toBeUndefined()
 		expect(imageToolUnavailable('mount-nudge', CAMERA_TAB)).toBeUndefined()
+		expect(imageToolUnavailable('darv', CAMERA_TAB)).toBeUndefined()
+		expect(imageToolUnavailable('darv', FILE)).toBe('Only on a camera tab.')
 	})
 
 	test('camera operations are offered only on camera tabs', () => {

@@ -2,6 +2,20 @@
 
 This document maps what Nebulosa already has, where each feature belongs, and the contracts new features must follow. It is the reference for the next deliveries, in this order: Tools, Sky Framing, the remaining camera operations of Images, then Sequencer. Repository rules (boundaries, style, verification) live in [`AGENTS.md`](../AGENTS.md).
 
+Reading order for a new contributor: the Glossary and the Architecture Map, then Adding a Feature, then the Workspace Responsibility Matrix and UI and Layout Contracts for anything visible, then the contract of each feature the change touches.
+
+## Glossary
+
+- **Connection**: an open INDI, Alpaca, or simulator client on the server (`api/src/connection.ts`), identified by its connection id. Saved connections (host, port, type) are browser data; open ones are server state shared by every tab.
+- **Device**: one interface a connection reports (camera, mount, focuser, …), identified by connection id + device id (`DeviceSummary`). Several interfaces of one physical device share a hardware id.
+- **Profile**: the browser-side workspace of an operator (`web/src/profile/`): its saved connection, equipment setup, optical presets, and preferences. Profiles never reach the server.
+- **Equipment setup** and **role**: the assignment, in a profile, of devices of its connection to operational roles (`EquipmentRole` in `web/src/equipment/roles.ts`: `MAIN_CAMERA`, `GUIDE_CAMERA`, `MOUNT`, `FOCUSER`, `FILTER_WHEEL`, `ROTATOR`, `GUIDE_OUTPUT`, `DOME`, `COVER`, `FLAT_PANEL`), edited in the Equipment Setup modal. Roles only choose devices in the UI; every command still names the exact device.
+- **Operation**: a server-owned piece of device work holding devices under the `OperationRegistry` (`OperationKind` in `api/src/operations.ts`), observed through `operation:updated`.
+- **Session**: the record of a multi-step operation of one service (a capture, an Auto Focus run, a held mount nudge or dome rotation), with its own events.
+- **Image document**: decoded pixels in the server's `ImageStore`, addressed by an image id; files, camera frames, and derived images are all documents.
+- **Camera tab**: the permanent tab of Images for one connected camera, showing its frames and hosting its camera operations.
+- **Lease**: a hold a client keeps on a server resource (a capture frame's document, a held motion) that the server releases when the client goes away.
+
 ## Architecture Map
 
 | Layer   | Owns                                                                                                                                            | Never owns                                        |
@@ -19,6 +33,41 @@ Each `api` service exposes its routes through a `create<Name>Routes(service)` fa
 
 Every error response of `api` is `{ error, code }` (`ApiError` and `errorResponse` in `api/src/http.ts`): a message meant for people and a stable code a client branches on, never the message. Each service names its codes (`CommandErrorCode`, `StarDetectionErrorCode`, `PlateSolveErrorCode`, `CaptureFrameErrorCode`, and the codes its routes document), and a route may add documented fields, such as the current state after a `conflict`.
 
+The types the web shares with the server are exported by `api/src/index.ts` and imported with `import type { … } from 'api'`; a new payload or event type is exported there.
+
+## Routes and Events
+
+Route prefixes, each owned by the module named:
+
+| Prefix                                                       | Owner                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/health`, `/api/ws`                                     | `api/src/index.ts`                                                                                                                                                                                                                                                                 |
+| `/api/connections` (including `/:id/devices`, `/:id/states`) | `connection.ts`                                                                                                                                                                                                                                                                    |
+| `/api/connections/:id/<device type>/:deviceId[/<command>]`   | one commands module per device type: `mounts`, `guide-outputs`, `focusers`, `wheels`, `rotators`, `covers`, `flat-panels`, `dew-heaters`, `domes`, `cameras` (`mounts.ts` … `cameras.ts`); a camera's `/capture` and `/autofocus` start belong to `captures.ts` and `autofocus.ts` |
+| `/api/operations`                                            | `operations.ts`                                                                                                                                                                                                                                                                    |
+| `/api/mounts/nudges`, `/api/domes/motions`                   | the held motions of `leases.ts` (heartbeat and stop by token)                                                                                                                                                                                                                      |
+| `/api/captures`, `/api/autofocus`                            | snapshots and sessions of `captures.ts`, `autofocus.ts`                                                                                                                                                                                                                            |
+| `/api/capture-frames`                                        | `captureframes.ts`                                                                                                                                                                                                                                                                 |
+| `/api/images`                                                | `images.ts` (open, render, derive, save), plus `/:id/stars` and `/:id/plate-solving` of the analyses                                                                                                                                                                               |
+| `/api/stars`, `/api/plate-solving`                           | `stars.ts`, `platesolving.ts`                                                                                                                                                                                                                                                      |
+| `/api/settings/external-tools`                               | `externaltools.ts`                                                                                                                                                                                                                                                                 |
+| `/api/files`                                                 | `files.ts` (server filesystem browser of the file chooser)                                                                                                                                                                                                                         |
+| `/api/sky`                                                   | `api/src/sky/` (catalog, search, positions, bodies, minor bodies, constellations)                                                                                                                                                                                                  |
+
+Events of `/api/ws` (`ServerEvent`), by `type`: `connection:open`, `connection:close`, `device:added`, `device:updated`, `device:removed`, `<type>:updated` for the control state of each device type, `camera:capabilities`, `operation:updated`, `capture:updated`, `capture:frame`, `captureFrame:updated`, `captureSource:updated`, `autofocus:updated`, `mount:nudge`, `dome:motion`, `focuserBacklash:updated`, `externalTool:updated`, `stars:updated`, and `plateSolving:updated`. Events never carry pixels, server paths, or secrets; a client fetches the full record through the route of its owner.
+
+## Adding a Feature
+
+The path every new capability follows, so it lands in one place and is observable from every tab:
+
+1. **Toolkit first.** If the algorithm or protocol is missing, it belongs to `nebulosa.ts` (`core/`), not to this repository.
+2. **Server service.** A class in its own `api/src/<name>.ts` taking its collaborators in the constructor (devices, client lookup, `OperationRegistry`, `ImageStore`, `ExternalToolsStore`, `broadcast`), with a `create<Name>Routes(service)` factory beside it, composed in `api/src/index.ts`. Device work runs as an operation; image analyses use the shared `AnalysisScheduler`; settings that belong to the server instance are versioned files under `~/Nebulosa/`.
+3. **Contract.** Payload, state, and event types exported from `api/src/index.ts`; error codes named; the event added to `ServerEvent`.
+4. **Web mirror.** A `valtio` store fed by a `GET` snapshot and the event, registered once in `SERVER_STORES` (`web/src/main.tsx`), with pure, injectable-`fetch` tests. Device state is read from `controlRuntime`, never fetched apart.
+5. **One place in the UI.** An entry in the registry of its workspace (`IMAGE_TOOL_DEFINITIONS`, `TOOL_DEFINITIONS`, the Sky panel views, `CONTROLS`, or a new `WORKSPACE_IDS` entry), following UI and Layout Contracts. A registry entry may exist before its view only as planned.
+6. **Preferences.** Per-operator form values go into the profile (a new `PROFILES_VERSION` and `migrate` case when the shape changes); per-device forms are keyed by the physical device, never by a role.
+7. **This document.** The inventory row, the matrix rows, and the feature's contract section are updated in the same commit.
+
 ## Capability Inventory
 
 Status: **Implemented** (works end to end), **Integration Required** (exists in `core`, not exposed by `api`/`web`), **Partial**, **Planned** (nothing yet).
@@ -28,12 +77,15 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
 | Shell, routes, workspaces                                                    | Implemented          | `web/src/shell/` (`route.ts`, `workspaces.ts`, `WorkspaceLayout.tsx`)                                                                                                                                           |
 | Profiles (versioned, v4)                                                     | Implemented          | `web/src/profile/` (`schema.ts` with `PROFILES_VERSION`, `migrate.ts`, store and actions in `profile.ts`); active profile per tab in sessionStorage                                                             |
 | Connections (INDI, Alpaca, simulator)                                        | Implemented          | `api/src/connection.ts`, `web/src/connection/`                                                                                                                                                                  |
+| Equipment Setup (roles, telescope optics)                                    | Implemented          | `web/src/equipment/` (`roles.ts`, `equipment.ts`, `EquipmentModal.tsx`, `availability.ts`), opened from Management                                                                                              |
+| Server file browser                                                          | Implemented          | `api/src/files.ts`, `web/src/files/` (file chooser of Images and the Save As dialog)                                                                                                                            |
 | Device registry and identity                                                 | Implemented          | `api/src/devices.ts` (`DeviceSummary`: connection id + stable device id)                                                                                                                                        |
 | Device capabilities and control states                                       | Implemented          | `api/src/devices.ts` (`DeviceStateMap`, `<type>:updated` events, `GET /api/connections/:id/states`)                                                                                                             |
 | Operations and arbitration                                                   | Implemented          | `api/src/operations.ts` (`OperationRegistry`), `web/src/operations.ts`; toolkit `core/src/devices/orchestration/`                                                                                               |
 | Mount slew / stop                                                            | Implemented          | `api/src/mounts.ts`, `web/src/sky/mount.ts`                                                                                                                                                                     |
 | Mount goto/flip/sync, park, home, track, site, time                          | Implemented          | `api/src/mounts.ts`; manual move is the Images Mount Nudge; pulse guide in `api/src/guideoutputs.ts`                                                                                                            |
 | Focuser, wheel, rotator, cover, flat panel, dew heater, dome, camera cooling | Implemented          | `api/src/{focusers,wheels,rotators,covers,flatpanels,dewheaters,domes,cameras}.ts`, Equipment Control page                                                                                                      |
+| Focuser backlash compensation                                                | Implemented          | `api/src/focuserbacklash.ts` (store, `~/Nebulosa/focusers.json`), applied by `FocuserCommands`; `web/src/equipment-control/controls/FocuserBacklash.tsx`                                                        |
 | Equipment Control (manual device control)                                    | Implemented          | `web/src/equipment-control/`, route `/equipment` opened from Management                                                                                                                                         |
 | Camera capture and frames                                                    | Implemented          | `api/src/captures.ts` over `CameraCapturer`; Images Camera Acquisition tool `web/src/images/CameraAcquisitionTool.tsx` over `CameraAcquisitionSections` (`web/src/camera/CameraCapturePanel.tsx`), `capture.ts` |
 | Camera tabs in Images (Latest, saved frames carousel, held frame)            | Implemented          | `api/src/captureframes.ts`; `web/src/images/captureframes.ts`, `cameratabs.ts`, `images.ts`, `ImagesWorkspace.tsx`, `CaptureFramesCarousel.tsx`                                                                 |
@@ -47,7 +99,8 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
 | WCS                                                                          | Implemented          | TAN/TAN-SIP through `core/src/astrometry/wcs/fits.wcs.ts`; viewer geometry `web/src/platesolving/wcs.ts`                                                                                                        |
 | Shared image viewer                                                          | Implemented          | `web/src/viewer/` (overlays in image pixels, zoom/pan in `transform.ts`)                                                                                                                                        |
 | Overlays                                                                     | Partial              | Reticle, star markers (`web/src/stars/StarOverlay.tsx`), WCS (`web/src/platesolving/WcsOverlay.tsx`)                                                                                                            |
-| Planetarium, search, inspector, time, observer                               | Implemented          | `web/src/sky/`, `api/src/sky/`                                                                                                                                                                                  |
+| Planetarium, search, inspector, time, observer                               | Implemented          | `web/src/sky/` (canvas renderer in `celestial/`), `api/src/sky/` over the generated `api/data/sky.catalog.db` (`bin/src/sky.catalog.ts`)                                                                        |
+| Image processing (derived images beyond the display pipeline)                | Planned              | `image-processing` entry of `IMAGE_TOOL_DEFINITIONS`, no panel                                                                                                                                                  |
 | FOV and optical presets                                                      | Implemented          | `web/src/sky/framing.ts` (gnomonic outline, position angle)                                                                                                                                                     |
 | HiPS surveys                                                                 | Integration Required | `core/src/adapters/sky/hips2fits.ts`, `core/src/astronomy/sky/spatial/healpix.ts`                                                                                                                               |
 | Eclipses (solar, lunar, maps)                                                | Integration Required | `core/src/astronomy/events/eclipse/`                                                                                                                                                                            |
@@ -65,13 +118,18 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
 
 Each feature has exactly one place in the UI. Workspaces share services, not interfaces.
 
-| Workspace                           | Responsibility                                                  | Features                                                                                                                                                                                                                                               | Registry                                                                              |
-| ----------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| Images                              | Documents, image work, and the camera operations of camera tabs | Image Tools: Inspector, Plate Solver, Star Detection, Streak Detection, Processing; later Annotation, Crosshair, Calibrator, ROI, FOV, Grid. Camera Operations: Camera Acquisition, Auto Focus, Mount Nudge; planned: Guiding, DARV, TPPA, Flat Wizard | `IMAGE_TOOL_DEFINITIONS` (`web/src/images/tools.ts`)                                  |
-| Sky                                 | Exploration, planning, contextual mount control                 | Planetarium, search, inspector, observer, time, layers, FOV, slew; later Framing with HiPS                                                                                                                                                             | panel views in `SkyWorkspace.tsx`                                                     |
-| Tools                               | Standalone utilities, no camera or document needed              | Calculator, Solar Eclipse Map, Lunar Eclipse Map, Alpaca Server                                                                                                                                                                                        | `TOOL_DEFINITIONS` (`web/src/tools/tools.ts`), `/tools/<id>`                          |
-| Sequencer                           | Configuring and observing server-run automation                 | Planned                                                                                                                                                                                                                                                | a future entry in `WORKSPACE_IDS`                                                     |
-| Equipment Control (Management page) | Manual control of every device of the profile's connection      | Mount, guide output, focuser, filter wheel, rotator, cover, flat panel, dew heater, dome, camera cooling                                                                                                                                               | `CONTROLS` (`web/src/equipment-control/DeviceDetail.tsx`), `/equipment[/<device id>]` |
+| Workspace                           | Responsibility                                                  | Features                                                                                                                                                                                                                                                                     | Registry                                                                              |
+| ----------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Images                              | Documents, image work, and the camera operations of camera tabs | Image Tools: Image Inspector, Plate Solving, Star Detection; planned: Streak Detection, Image Processing; later Annotation, Crosshair, Calibrator, ROI, FOV, Grid. Camera Operations: Camera Acquisition, Auto Focus, Mount Nudge; planned: Guiding, DARV, TPPA, Flat Wizard | `IMAGE_TOOL_DEFINITIONS` (`web/src/images/tools.ts`)                                  |
+| Sky                                 | Exploration, planning, contextual mount control                 | Planetarium, search, time bar, mount follow; panel views Object Inspector (with slew), Observer, Display (layers), Framing (FOV); later survey images with HiPS                                                                                                              | `SkyPanelView` (`web/src/sky/sky.ts`), panels in `SkyWorkspace.tsx`                   |
+| Tools                               | Standalone utilities, no camera or document needed              | Calculator, Solar Eclipse Map, Lunar Eclipse Map, Alpaca Server                                                                                                                                                                                                              | `TOOL_DEFINITIONS` (`web/src/tools/tools.ts`), `/tools/<id>`                          |
+| Sequencer                           | Configuring and observing server-run automation                 | Planned                                                                                                                                                                                                                                                                      | a future entry in `WORKSPACE_IDS`                                                     |
+| Equipment Control (Management page) | Manual control of every device of the profile's connection      | Mount, guide output, focuser, filter wheel, rotator, cover, flat panel, dew heater, dome, camera cooling                                                                                                                                                                     | `CONTROLS` (`web/src/equipment-control/DeviceDetail.tsx`), `/equipment[/<device id>]` |
+| Settings (Management page)          | Settings of the server instance                                 | External Tools                                                                                                                                                                                                                                                               | `/settings/external-tools[/<tool id>]` (`web/src/settings/`)                          |
+
+Connections, Equipment Setup, and profiles are modals of the shell (`ConnectionModal`, `EquipmentModal`, `ProfileModal`), not routes. The URL path is the source of truth for navigation (`web/src/shell/route.ts`): `/images`, `/sky`, `/tools[/<tool>]`, `/equipment[/<device>]`, `/settings/external-tools[/<tool>]`; any other path opens Images.
+
+An Images tool declares its `outputs` (`ImageOperationOutput`): `display` (a new rendering of the document), `derived` (a new temporary document), or `analysis` (data and overlays that leave the pixels untouched); the first is its default, and it names the panel's main action (Apply to View, Create Derived Image, Run Analysis). Camera operations have no outputs: their frames reach the tab as the camera's latest frame.
 
 Rules:
 
@@ -83,11 +141,50 @@ Rules:
 - Camera Acquisition is the camera operation of a camera tab (`web/src/images/CameraAcquisitionTool.tsx`): the acquisition panel of the tab's camera (`CameraAcquisitionSections`), its availability judged on the camera itself (`deviceAvailability`). The toolbar of a camera tab shows the state of its camera's capture (phase, time left, frame count, file state of the latest frame, or why it failed) whatever tool is selected; switching tool, frame, or tab never stops a capture.
 - An Images tool is an image tool or a camera operation (`category` of `IMAGE_TOOL_DEFINITIONS`), listed under its heading in one selector. A camera operation is offered only on a camera tab, never on a file or derived document. Its equipment is the `CameraOperationContext` of the tab (`web/src/images/cameracontext.ts`): the physical camera of the tab; the `FOCUSER` of the active setup only when the camera is its `MAIN_CAMERA` (the setup has flat roles and no optical train, so no other camera has a focuser); the `MOUNT` of the active setup for every camera of the watched connection; and the setup's snooped devices only when the camera has a role. A missing assignment is reported by the operation's panel, never replaced by another connected device.
 
+## UI and Layout Contracts
+
+The rules a new screen or a layout proposal follows, so it fits the existing shell without new layout systems.
+
+Shell (`web/src/shell/ApplicationShell.tsx`), always mounted while navigating:
+
+- **Top bar** (`web/src/layout/TopBar.tsx`, 56 px): logo, the Management menu (Connections, Equipment Setup, Equipment Control, Settings → External Tools), then the connection indicator, the notification bell (a static placeholder until Notifications exist), and the profile menu.
+- **Navigation rail** (`NavigationRail.tsx`, 64 px): one button per entry of `WORKSPACES`; pages opened from Management are not listed.
+- **Workspace or page**: the component of the route; only it is swapped on navigation.
+- **Status bar** (`StatusBar.tsx`, 28 px): the selected connection, the `MAIN_CAMERA` and `MOUNT` role states, the running operations, and an Abort of the profile's mount while it moves. It is the only global status surface.
+- **Modals**: Connections, Equipment Setup, and Profiles, over native `<dialog>` (`web/src/ui/Modal.tsx`).
+
+Workspace frame (`WorkspaceLayout.tsx`), used by every workspace and every tool view:
+
+- From top to bottom: optional `tabs` spanning the workspace (the Images document and camera tabs), a 48 px header with the title, `context` controls, `actions`, and the panel toggle, then the content beside the contextual panel. The content fills the remaining space and scrolls itself.
+- The contextual panel (`ContextualPanel.tsx`) is the right-hand column of the current context: 320 px (352 px from `xl`), docked from Tailwind's `lg` breakpoint (`WIDE_SCREEN`, 64rem), its visibility a per-workspace preference of the profile; below `lg` it is a drawer over the content that starts closed, is never persisted, and closes with Escape or a click outside. It holds no operational state, so collapsing or replacing it never stops what its controls started.
+- One panel content at a time: Images shows the panel of the selected tool, Sky the selected panel view. Pages (Equipment Control, Settings) use a sidebar list and a detail area instead of a contextual panel.
+
+Visual language (`web/src/index.css`, Tailwind 4 `@theme`):
+
+- Dark theme only (`color-scheme: dark`), one font for all text: JetBrains Mono (`font-mono`).
+- Colour tokens, used as Tailwind utilities (`bg-base-100`, `text-ink-200`, `border-line-100`, …): surfaces `base-000` (darkest: rail, bars, panels, viewers) to `base-300` (hover); borders `line-100`, `line-200`; text `ink-100` (primary), `ink-200` (secondary), `ink-300` (muted); `accent`, `accent-hover`, `accent-subtle` (selected backgrounds), `on-accent`; `danger`, `success`. A new colour is added as a token, never as a literal in a component.
+- Radii `rounded-sm` (6 px), `rounded-md` (10 px), `rounded-lg` (16 px), `rounded-xl` (24 px). Panel headings are small uppercase `ink-200` text; dense panels use `text-xs`.
+- Transitions honour `motion-reduce:transition-none`; focus is shown with an `accent` outline on `focus-visible`.
+
+Components:
+
+- Shared primitives live in `web/src/ui/`: `Button`, `IconButton` (icon only, its label is the tooltip; `pressed` for toggles), `Checkbox`, `RadioGroup`, `SegmentedControl` (two to four short options), `Select` (themed listbox), `TextInput`, `NumberInput`, `Field` (shared control look and unit suffixes such as `mm` or `°`), `Slider` (label, typed value, and track), `List`, `Modal`, `NavigationMenu`, and `Icon` (the one icon set, 24×24 line paths, device types keyed by type). A new screen composes these; a new primitive is added there only when two features need it.
+- Feature components are colocated with their feature (for example `web/src/camera/ExposureSettings.tsx`); variants use `tv`, merging uses `cn`.
+- Every pixel image is shown by `ImageViewer` (`web/src/viewer/`) with overlays in image coordinates (see Overlay Contracts); the star map is the canvas renderer of `web/src/sky/celestial/`.
+
+Behaviour every screen keeps:
+
+- Status is always text, colour only reinforces it; absence is shown as absence, never as 0.
+- Values shown are those the server reports; inputs hold pending values until an explicit action (Apply, Save, Start, Solve Image, …).
+- Unavailable actions stay visible and disabled with the reason as their tooltip (`Not available yet.`, `Only on a camera tab.`, the busy or missing device); a panel that needs equipment says what to set up and offers Equipment Setup.
+- Lists, rails, tabs, and carousels move with the arrow keys, Home, and End (`moveIndex` in `web/src/ui/navigation.ts`) and select with Enter or Space. Native elements, `title`, and visually hidden text name controls; `aria-*` attributes are not used (`AGENTS.md`).
+- Layouts work from phone width up: secondary text hides with `max-sm:`, the panel becomes a drawer, and nothing scrolls the page horizontally.
+
 ## Shared Image Contracts
 
 There is **one** image store, `ImageStore` in `api/src/images.ts`, and the scientific image reference is its document id.
 
-- An image document is addressed as `/api/images/:id/...` by every operation, whatever workspace requested it. There is no second solver or detector path for Capture.
+- An image document is addressed as `/api/images/:id/...` by every operation, whatever workspace requested it. There is no second solver or detector path for camera frames.
 - Camera frames enter the store as documents of the origin `{ origin: 'capture', connectionId, deviceId, frameId, time, path? }` (`ImageStore.openCapture`), decoded from the bytes the driver sent. A frame is never identified by camera role.
 - In loop capture, each frame is its own document. An analysis stays bound to the id it was started on, and a newer frame never changes it. The capture frame registry (`api/src/captureframes.ts`) keeps the latest frame of each camera open and closes the previous one unless a lease of the Images workspace holds it (see Capture Frames Contract). An analysis retains its document (`ImageStore.retain`/`release`): closing it hides it from every route at once, but its pixels are released only when the last analysis lets it go.
 - Analysis results (solution, star list, streaks) are keyed by image id and the parameters applied, and are kept in memory with the document until its pixels are released. Re-running with the same parameters reuses the result.
@@ -129,17 +226,17 @@ There is **one** image store, `ImageStore` in `api/src/images.ts`, and the scien
 
 ## Device Resource Matrix
 
-Requirements are declared by each registry; availability is evaluated by `roleAvailability` (`web/src/equipment/availability.ts`): ready, busy, or the role state that prevents use.
+Requirements are declared by each registry; availability is evaluated by `roleAvailability` and `deviceAvailability` (`web/src/equipment/availability.ts`): ready, busy, or the role or device state that prevents use. Rows for DARV, TPPA, Flat Wizard, Guiding, and the sequencer are the intended contract of planned features.
 
 | Feature                   | Requires (besides the view's camera)              | Holds                                        | Conflicts with                                                      |
 | ------------------------- | ------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------- |
-| Camera Capture            | —                                                 | camera                                       | Auto Focus, Flat Wizard, TPPA, DARV, sequencer                      |
-| Mount Nudge               | Mount                                             | camera (loop), mount (moves)                 | slew, TPPA, DARV, guiding                                           |
+| Camera Acquisition        | —                                                 | camera                                       | Auto Focus, Flat Wizard, TPPA, DARV, sequencer                      |
+| Mount Nudge               | Mount                                             | mount, only while a direction is held        | slew, any mount operation, TPPA, DARV, guiding                      |
 | Guiding                   | a guiding provider (PHD2 manages its own devices) | provider session; mount pulses when built-in | DARV, Mount Nudge, slews without dither settle                      |
-| Auto Focus                | Focuser                                           | camera, focuser                              | Camera Capture, sequencer                                           |
+| Auto Focus                | Focuser                                           | camera, focuser                              | Camera Acquisition, sequencer                                       |
 | DARV                      | Mount                                             | camera, mount                                | guiding, Mount Nudge                                                |
 | TPPA                      | Mount; a plate solver                             | camera, mount                                | Mount Nudge, slew, guiding                                          |
-| Flat Wizard               | — (filter wheel and flat panel optional)          | camera; wheel/panel when used                | Camera Capture                                                      |
+| Flat Wizard               | — (filter wheel and flat panel optional)          | camera; wheel/panel when used                | Camera Acquisition                                                  |
 | Sky slew                  | Mount                                             | mount                                        | any mount operation                                                 |
 | Equipment Control motion  | the device shown                                  | the physical device (hardware id)            | any operation of the same physical device                           |
 | Equipment Control setting | the device shown                                  | the physical device, for the command only    | any operation of the same physical device; cooling during a capture |
@@ -215,25 +312,31 @@ Conflicts are resolved by the arbiter on the server, never only in the browser, 
 ## Capture–Sequencer Compatibility Report
 
 - There is no sequencer engine to integrate. It will be an `api` service composed of the same services Capture uses: capture via `CameraCapturer`, filter, focus, dither, and mount commands through the commanders, all under the `OperationRegistry`.
-- Acquisition exists once, in `CameraCapturer`. Camera Capture, Auto Focus, DARV, TPPA, and Flat Wizard must call the same `api` capture service, never their own exposure loops.
+- Acquisition exists once, in `CameraCapturer`. Camera Acquisition, Auto Focus, DARV, TPPA, and Flat Wizard must call the same `api` capture service, never their own exposure loops.
 - Every acquisition snoops the managed devices of the equipment setup (mount, focuser, filter wheel, rotator; `captureSnoop` in `web/src/camera/capture.ts`) into the frame headers; from an Images camera tab only when its camera has a role in the setup (`CameraOperationContext.snoop`). Requests name them by device id on the camera's connection (`CaptureSnoop`), and `api` resolves the ids to the driver names (`snoopedDevices`); snooped devices are read, never acquired.
 - A run resolves its connection and device ids when it starts and keeps them. Changing the active profile in a tab never redirects it.
 - The UI observes a run through snapshots and events, never by owning it.
 
 ## Persistence and State
 
-| State                                                | Owner                                                |
-| ---------------------------------------------------- | ---------------------------------------------------- |
-| Profiles, presets, panel and view preferences        | browser localStorage, versioned (`web/src/profile/`) |
-| Saved connections and the last highlighted one       | browser localStorage (`connection.ts`)               |
-| Active profile                                       | sessionStorage per tab                               |
-| Route, document view, zoom/pan                       | tab memory                                           |
-| Image pixels                                         | `api` image store                                    |
-| Star detection and plate solving jobs and results    | `api` analysis services, memory only                 |
-| Saved capture frames (metadata, no pixels)           | `api`, `~/Nebulosa/capture-frames.json`, versioned   |
-| Capture frame leases                                 | `api`, memory, per client id                         |
-| External tool settings and the nova session          | `api`, `~/Nebulosa/settings.json`, versioned         |
-| Connections, devices, operations, sessions, services | `api`                                                |
+| State                                                | Owner                                                                                    |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Profiles, presets, panel and view preferences        | browser localStorage `nebulosa:profiles`, versioned (`web/src/profile/`)                 |
+| Saved connections and the last highlighted one       | browser localStorage `nebulosa:connections`, `nebulosa:selectedConnectionId`             |
+| Active profile                                       | sessionStorage `nebulosa:activeProfileId` per tab; `nebulosa:lastProfileId` for new tabs |
+| Route                                                | URL path                                                                                 |
+| Document view, zoom/pan, camera tab presentation     | tab memory                                                                               |
+| Image pixels                                         | `api` image store, memory only                                                           |
+| Star detection and plate solving jobs and results    | `api` analysis services, memory only                                                     |
+| Captured frame files                                 | `api`, `~/Nebulosa/captures` by default (`DEFAULT_CAPTURES_DIR`)                         |
+| Saved capture frames (metadata, no pixels)           | `api`, `~/Nebulosa/capture-frames.json`, versioned                                       |
+| Capture frame leases                                 | `api`, memory, per client id                                                             |
+| External tool settings and the nova session          | `api`, `~/Nebulosa/settings.json`, versioned                                             |
+| Focuser backlash compensation                        | `api`, `~/Nebulosa/focusers.json`, versioned                                             |
+| Sky catalog                                          | `api/data/sky.catalog.db`, generated by `bun make:catalog`, embedded in the executable   |
+| Connections, devices, operations, sessions, services | `api`, memory only                                                                       |
+
+Browser storage goes through `web/src/storage.ts` (and `MemoryStorage` in tests); server files are written atomically and refuse to overwrite a file of a newer version.
 
 Profile format changes add a version (`PROFILES_VERSION` in `web/src/profile/schema.ts`) and a case in `migrate` (`web/src/profile/migrate.ts`); older documents are read, and newer ones are never overwritten.
 
@@ -241,9 +344,9 @@ Camera forms belong to the physical camera, never to a camera role: `ProfileSett
 
 ## Test Baseline
 
-Run before every delivery, as CI does (`.github/workflows/test.yml`):
+Run before every delivery. CI (`.github/workflows/test.yml`) installs with `--frozen-lockfile`, writes an empty catalog with `bun make:catalog --empty`, then runs the first three:
 
-- `bun fmt --check`, `bun lint` (type-aware and type-checking), `bun test --parallel`, `git diff --check`.
+- `bun fmt --check`, `bun lint` (type-aware and type-checking), `bun test --parallel`; locally also `git diff --check`.
 - `bun compile` and a smoke test when `app/`, bundling, or HTML entry points change.
 - `api` tests use the `SIMULATOR` connection for devices and fakes only for network services (`mounts.test.ts`, `operations.test.ts`).
 - `web` tests are pure store and logic tests with injectable `fetch` and `MemoryStorage`.

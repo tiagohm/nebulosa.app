@@ -6,3 +6,10 @@ declare module '*.ico' {
 	const url: string
 	export default url
 }
+
+// SVG file imported from a module; the default export is its URL.
+declare module '*.svg' {
+	// URL of the bundled SVG.
+	const url: string
+	export default url
+}

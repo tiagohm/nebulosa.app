@@ -149,6 +149,9 @@ const DEFAULT_INTERACTION_OPTIONS: Required<InteractionOptions> = {
 	minZoom: 0.35,
 	maxZoom: 1000,
 	pickRadius: 7,
+	touchPickRadius: 22,
+	tapSlop: 3,
+	touchTapSlop: 10,
 	pointerMoveThrottleMs: 32,
 	wheelZoomSpeed: 0.0004,
 }

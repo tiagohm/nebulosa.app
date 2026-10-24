@@ -38,6 +38,11 @@ const FIXED_SETTLE_MS = 400
 // fixed, and from the local models while playing (a fixed instant reached by pausing is then refined).
 const REFRESH: Readonly<Record<SkyClockMode, SkyRefreshOptions>> = { now: REALTIME_REFRESH, fixed: { tolerance: 0, mode: 'accurate' }, playing: { tolerance: 0, mode: 'fast' } }
 
+// Smallest zoom factor of the local sky (about a 15° field on a phone) from which the view stays on the
+// same point of the sky across clock updates, as a tracking telescope would, rather than on the same point
+// of the horizon; at higher zoom the sky would otherwise drift by hundreds of pixels per update.
+const SKY_ANCHOR_ZOOM = 8
+
 // Color of the selection reticle.
 const SELECTION_COLOR = '#7e57c2'
 
@@ -226,6 +231,11 @@ export class Planetarium {
 	#resizeObserver?: ResizeObserver
 	// Timer of the clock updates while attached.
 	#clockTimer?: ReturnType<typeof setInterval>
+	// Point of date (radians) at the middle of the view before the latest clock update, recentered once the
+	// map is updated; absent when the view keeps the horizon still.
+	#anchor?: MountPoint
+	// Instant the map shows, Unix milliseconds (UTC).
+	#shownTime: number
 	// Timer of the refresh of the selection for a fixed instant, once it settles.
 	#settleTimer?: ReturnType<typeof setTimeout>
 	// Stops following the simulation clock; set while attached.
@@ -246,8 +256,9 @@ export class Planetarium {
 			this.celestial.addMovingBody(body)
 		}
 
-		this.celestial.setTime(skyTime(skyClock, Date.now()))
-		this.#unsubscribe = [this.celestial.on('selectionChange', ({ object }) => this.#handleClick(object)), this.celestial.on('updateEnd', ({ time }) => this.#requestMovingBodies(time)), this.celestial.on('panStart', () => (mountRuntime.following = false))]
+		this.#shownTime = this.time
+		this.celestial.setTime(this.#shownTime)
+		this.#unsubscribe = [this.celestial.on('selectionChange', ({ object }) => this.#handleClick(object)), this.celestial.on('updateEnd', ({ time }) => this.#updateEnded(time)), this.celestial.on('panStart', () => (mountRuntime.following = false))]
 		this.load()
 	}
 
@@ -476,6 +487,9 @@ export class Planetarium {
 
 		const tick = () => {
 			const time = this.time
+			// Only an instant that changes updates the map, and so recenters it.
+			this.#anchor = time !== this.#shownTime ? this.#viewAnchor() : undefined
+			this.#shownTime = time
 			this.celestial.setTime(time)
 			if (mode !== 'fixed' && ticks++ % (mode === 'playing' ? PLAYING_SELECTION_TICKS : 1) === 0) this.#refreshSelection(mode, time)
 		}
@@ -485,6 +499,23 @@ export class Planetarium {
 		if (mode === 'fixed') this.#settleTimer = setTimeout(() => this.#refreshSelection(mode, this.time), FIXED_SETTLE_MS)
 		else this.#clockTimer = setInterval(tick, mode === 'playing' ? PLAYING_INTERVAL_MS : SKY_REALTIME_TICK_MS)
 		if (mode !== 'playing' && this.#dataTime !== undefined && !mapDataCovers(this.#dataTime, this.time)) this.load()
+	}
+
+	// Point of date (radians) at the middle of the view that a clock update keeps there: only on the local
+	// sky zoomed in to SKY_ANCHOR_ZOOM or more, and not while the mount is followed, which recenters itself.
+	#viewAnchor(): MountPoint | undefined {
+		if (this.coordinateSystem !== 'horizontal' || mountRuntime.following || this.celestial.viewState.transform.k < SKY_ANCHOR_ZOOM) return undefined
+		const center = this.celestial.screenToEquatorial(this.#host.clientWidth / 2, this.#host.clientHeight / 2)
+		return center ? { rightAscension: center.rightAscension, declination: center.declination } : undefined
+	}
+
+	// Follows an update of the map for an instant (Unix milliseconds): recenters the view on the point
+	// anchored before it, and asks for the body positions of the instant.
+	#updateEnded(time: number) {
+		const anchor = this.#anchor
+		this.#anchor = undefined
+		if (anchor) this.centerOn(anchor)
+		this.#requestMovingBodies(time)
 	}
 
 	// Stops the clock updates and the pending refresh of a fixed instant.

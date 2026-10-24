@@ -259,6 +259,8 @@ Conflicts are resolved by the arbiter on the server, never only in the browser, 
 ## Sky Map Contract
 
 - One tick drives the star map and the selection (`#followClock` of `web/src/sky/planetarium.ts`): every `SKY_REALTIME_TICK_MS` (15 s) while the clock follows the real time, every 250 ms while playing, and once for a fixed instant. Each tick reads the instant once, shows it on the map, and refreshes the selection's position and events for that same instant (`refreshSkySelection` with the tick's time): accurately on every real-time tick, from the local models every 2 s while playing, and accurately 400 ms after a fixed instant settles. The time bar's own redraws are display only.
+- Picking tolerates fingers: a touch or pen tap picks within `touchPickRadius` (22 px) and stays a tap within `touchTapSlop` (10 px of travel), a mouse click within `pickRadius` (7 px) and `tapSlop` (3 px) (`InteractionOptions` of `web/src/sky/celestial/`).
+- On the local sky zoomed in to `SKY_ANCHOR_ZOOM` or more, a tick that changes the instant keeps the view on the same point of the sky (recentered after the update) instead of the same point of the horizon, unless the mount is followed; at lower zoom the horizon stays still.
 - `POST /api/sky/position` returns the rise, transit, and set for an observer in both modes (they are computed locally and cached per hour), so the Visibility of the Object Inspector always shows the instant of its Position.
 
 ## Sky Framing Integration Contract

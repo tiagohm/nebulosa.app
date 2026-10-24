@@ -140,6 +140,8 @@ export class Celestial {
 	#gesture: GestureAnchor | undefined
 	// Whether the pointers moved the view since the first press, which suppresses the click.
 	#pointerMoved = false
+	// Whether the gesture's first pointer is a finger or a pen, which picks and taps with larger tolerances.
+	#coarsePointer = false
 	#lastPointerMove = 0
 	#lastPointerX = Number.NaN
 	#lastPointerY = Number.NaN
@@ -1502,6 +1504,7 @@ export class Celestial {
 
 		if (this.#activePointers.size === 0) {
 			this.#pointerMoved = false
+			this.#coarsePointer = event.pointerType === 'touch' || event.pointerType === 'pen'
 		}
 
 		this.#activePointers.set(event.pointerId, { x: point[0], y: point[1], startX: point[0], startY: point[1] })
@@ -1524,7 +1527,7 @@ export class Celestial {
 		if (pointer) {
 			pointer.x = x
 			pointer.y = y
-			if (Math.abs(x - pointer.startX) + Math.abs(y - pointer.startY) > 3) this.markPointerMoved()
+			if (Math.abs(x - pointer.startX) + Math.abs(y - pointer.startY) > (this.#coarsePointer ? this.#options.interactions.touchTapSlop : this.#options.interactions.tapSlop)) this.markPointerMoved()
 
 			if (this.#gesture) {
 				const { width, height, interactions } = this.#options
@@ -1570,7 +1573,8 @@ export class Celestial {
 		const y = point[1]
 
 		this.ensurePickingIndex()
-		const object = this.resolvePick(this.#picking.findNearest(x, y, this.#options.interactions.pickRadius))
+		const { pickRadius, touchPickRadius } = this.#options.interactions
+		const object = this.resolvePick(this.#picking.findNearest(x, y, this.#coarsePointer ? touchPickRadius : pickRadius))
 
 		if (this.#emitter.has('click')) {
 			const coordinate = this.screenToEquatorial(x, y)

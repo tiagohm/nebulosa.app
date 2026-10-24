@@ -297,8 +297,16 @@ export interface InteractionOptions {
 	minZoom?: number
 	// Largest zoom factor.
 	maxZoom?: number
-	// Picking radius in pixels.
+	// Picking radius in CSS pixels of a mouse click.
 	pickRadius?: number
+	// Picking radius in CSS pixels of a touch or pen tap, larger than a fingertip's uncertainty.
+	touchPickRadius?: number
+	// Largest pointer travel in CSS pixels (|dx| + |dy|) from the press for which a mouse release still
+	// clicks rather than drags.
+	tapSlop?: number
+	// Largest pointer travel in CSS pixels (|dx| + |dy|) from the press for which a touch or pen release
+	// still taps rather than drags; fingers jitter more than a mouse.
+	touchTapSlop?: number
 	// Minimum interval between hover picks in milliseconds.
 	pointerMoveThrottleMs?: number
 	// Zoom change per wheel pixel, in [0.00005, 0.01].

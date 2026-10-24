@@ -152,7 +152,6 @@ const operations = new OperationRegistry(connections.devices, broadcast)
 // Mount commands and nudge sessions over the devices of the open connections.
 const mounts = new MountCommands(connections.devices, (id) => connections.client(id), skyLocator, operations, broadcast)
 
-// Camera captures over the devices of the open connections, their frames entering the image store.
 // Pulse guiding of the guide outputs of the open connections.
 const guideOutputs = new GuideOutputCommands(connections.devices, (id) => connections.client(id), operations)
 
@@ -192,6 +191,7 @@ const captureFrames = new CaptureFrameRegistry(images, broadcast, {
 connections.listen((event) => captureFrames.deviceChanged(event))
 listenClients(captureFrames)
 
+// Camera captures over the devices of the open connections, their frames entering the image store.
 const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, captureFrames, broadcast)
 
 // Auto Focus sessions of the cameras of the open connections, taking their frames with the capturer of the captures and

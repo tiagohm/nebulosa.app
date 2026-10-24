@@ -1,6 +1,6 @@
 # Architecture
 
-This document maps what Nebulosa already has, where each feature belongs, and the contracts new features must follow. It is the reference for the next deliveries, in this order: Tools, Sky Framing, Capture, then Sequencer. Repository rules (boundaries, style, verification) live in [`AGENTS.md`](../AGENTS.md).
+This document maps what Nebulosa already has, where each feature belongs, and the contracts new features must follow. It is the reference for the next deliveries, in this order: Tools, Sky Framing, the remaining camera operations of Images, then Sequencer. Repository rules (boundaries, style, verification) live in [`AGENTS.md`](../AGENTS.md).
 
 ## Architecture Map
 
@@ -254,9 +254,6 @@ Run before every delivery, as CI does (`.github/workflows/test.yml`):
 | 3   | Tools     | Basemap decision, then the Solar and Lunar Eclipse Map views over `api` eclipse routes        | —          |
 | 4   | Framing   | `api` HiPS proxy (surveys, cutout, cache, attribution) and the position angle convention test | —          |
 | 5   | Framing   | Framing view in Sky using the presets and the cutout                                          | 4          |
-| 6   | Capture   | Capture service over `CameraCapturer` under the registry; frames as `capture` image documents | —          |
-| 7   | Images    | Camera Acquisition, Auto Focus, and Mount Nudge as camera operations of the camera tabs       | 6          |
-| 8   | Images    | Plate solving routes by image id, results keyed by id; overlays (star detection is done)      | —          |
-| 9   | Images    | An `unsupported` availability state of camera operations, over the control states (in `api`)  | —          |
-| 10  | Images    | DARV, TPPA, Flat Wizard, Guiding (PHD2) as camera operations                                  | 6, 8, 9    |
-| 11  | Sequencer | Sequencer service and workspace                                                               | 6, 10      |
+| 6   | Images    | An `unsupported` availability state of camera operations, over the control states (in `api`)  | —          |
+| 7   | Images    | DARV, TPPA, Flat Wizard, Guiding (PHD2) as camera operations                                  | 6          |
+| 8   | Sequencer | Sequencer service and workspace                                                               | 7          |

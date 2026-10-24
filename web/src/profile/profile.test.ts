@@ -3,7 +3,7 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS } from './schema'
+import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_TPPA_SETTINGS } from './schema'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import {
 	acquisitionSettings,
@@ -16,6 +16,8 @@ import {
 	profileCamera,
 	setAutoFocusSettings,
 	setExposureSettings,
+	setTppaSettings,
+	tppaSettings,
 	createOpticalPreset,
 	createProfile,
 	deleteOpticalPreset,
@@ -84,7 +86,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 4, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: 5, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -590,6 +592,24 @@ describe('camera forms', () => {
 				},
 			},
 		})
+	})
+
+	test('the TPPA form is kept per camera, persisted, and restored with defaults for invalid fields', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		expect(tppaSettings(activeProfile(state).settings, MAIN)).toEqual(DEFAULT_TPPA_SETTINGS)
+
+		setTppaSettings(state, MAIN, { direction: 'EAST', slewRate: 'SPEED_4', rotation: 10, solver: { provider: 'nova', strategy: 'blind', downsample: 2 } })
+		expect(tppaSettings(activeProfile(state).settings, GUIDE)).toEqual(DEFAULT_TPPA_SETTINGS)
+		await Bun.sleep(0)
+
+		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
+		expect(tppaSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_TPPA_SETTINGS, direction: 'EAST', slewRate: 'SPEED_4', rotation: 10, solver: { provider: 'nova', strategy: 'blind', downsample: 2 } })
+
+		const invalid = newStores()
+		const cameras = { c: { 'cam-main': { tppa: { direction: 'NORTH', slewRate: '', rotation: 40, settleDelay: -1, refinementDelay: 'x', solver: { provider: 'gaia', strategy: 'x', downsample: 0 } } } } }
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 4, profiles: [{ id: 'a', name: 'A', settings: { cameras } }] }))
+		expect(load(invalid).profiles[0].settings.cameras).toEqual({ c: { 'cam-main': { tppa: DEFAULT_TPPA_SETTINGS } } })
 	})
 
 	test('the star detection request is the profile one, persisted and restored with defaults for invalid fields', async () => {

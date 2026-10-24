@@ -19,6 +19,10 @@ import {
 	type SkyFramingSettings,
 	type SkyObserverSettings,
 	type SkySettings,
+	DEFAULT_TPPA_SETTINGS,
+	TPPA_MAXIMUM_ROTATION,
+	TPPA_MINIMUM_ROTATION,
+	type TppaSettings,
 } from './schema'
 
 // Reading of persisted profiles: every version of the format (see PROFILES_VERSION) is restored into the current one,
@@ -86,8 +90,9 @@ function normalizeCamera(value: unknown): CameraSettings | undefined {
 	const exposure = normalizeExposure(value.exposure)
 	const acquisition = normalizeAcquisition(value.acquisition)
 	const autoFocus = normalizeAutoFocus(value.autoFocus)
-	if (!exposure && !acquisition && !autoFocus) return undefined
-	return { ...(exposure && { exposure }), ...(acquisition && { acquisition }), ...(autoFocus && { autoFocus }) }
+	const tppa = normalizeTppa(value.tppa)
+	if (!exposure && !acquisition && !autoFocus && !tppa) return undefined
+	return { ...(exposure && { exposure }), ...(acquisition && { acquisition }), ...(autoFocus && { autoFocus }), ...(tppa && { tppa }) }
 }
 
 // Restores the persisted forms of the cameras (version 4), by saved connection id and device id.
@@ -173,6 +178,33 @@ function normalizeAutoFocus(value: unknown): AutoFocusSettings | undefined {
 		rmsdThreshold: numberAtLeast(value.rmsdThreshold, 0, defaults.rmsdThreshold),
 		settleDelay: numberAtLeast(value.settleDelay, 0, defaults.settleDelay),
 		measureTimeout: typeof value.measureTimeout === 'number' && Number.isFinite(value.measureTimeout) && value.measureTimeout > 0 ? value.measureTimeout : defaults.measureTimeout,
+	}
+}
+
+// Plate solvers of the TPPA form.
+const PLATE_SOLVERS: ReadonlySet<string> = new Set<TppaSettings['solver']['provider']>(['astap', 'astrometryLocal', 'nova'])
+
+// Restores a persisted TPPA form, filling every invalid field with its default; undefined for anything that is not a
+// record. A slew rate that is not a non-empty name and a downsampling that is not a positive integer are dropped.
+function normalizeTppa(value: unknown): TppaSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = DEFAULT_TPPA_SETTINGS
+	const solver = isRecord(value.solver) ? value.solver : {}
+	const rotation = typeof value.rotation === 'number' && value.rotation >= TPPA_MINIMUM_ROTATION && value.rotation <= TPPA_MAXIMUM_ROTATION ? value.rotation : defaults.rotation
+	const downsample = numberAtLeast(solver.downsample, 1, Number.NaN, true)
+
+	return {
+		direction: value.direction === 'EAST' ? 'EAST' : 'WEST',
+		...(typeof value.slewRate === 'string' && value.slewRate && { slewRate: value.slewRate }),
+		rotation,
+		settleDelay: numberAtLeast(value.settleDelay, 0, defaults.settleDelay),
+		refinementDelay: numberAtLeast(value.refinementDelay, 0, defaults.refinementDelay),
+		solver: {
+			provider: typeof solver.provider === 'string' && PLATE_SOLVERS.has(solver.provider) ? (solver.provider as TppaSettings['solver']['provider']) : defaults.solver.provider,
+			strategy: solver.strategy === 'blind' ? 'blind' : 'assisted',
+			...(Number.isFinite(downsample) && { downsample }),
+		},
 	}
 }
 
@@ -368,7 +400,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 1:
 		case 2:
 		case 3:
-		case 4: {
+		case 4:
+		case 5: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

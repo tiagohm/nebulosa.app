@@ -1,4 +1,4 @@
-import type { AutoFocusRequest, CaptureRequest, StarDetectionRequest } from 'api'
+import type { AutoFocusRequest, CaptureRequest, PlateSolveRequest, StarDetectionRequest } from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
@@ -12,8 +12,8 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // which version 2 called focus-calibrator and polar-alignment; version 4 keeps the camera forms by
 // physical camera (cameras) instead of by camera role, and drops the post-capture analysis and plate
 // solving of the frames of a capture. The preferences of the Capture workspace (capture), removed since, are ignored
-// when read.
-export const PROFILES_VERSION = 4
+// when read. Version 5 adds the TPPA form of each camera (tppa).
+export const PROFILES_VERSION = 5
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -111,6 +111,8 @@ export interface CameraSettings {
 	acquisition?: CameraAcquisitionSettings
 	// Auto Focus form.
 	autoFocus?: AutoFocusSettings
+	// TPPA form.
+	tppa?: TppaSettings
 }
 
 // Physical camera the forms of a profile belong to: the saved connection that provides it and its device id, stable
@@ -150,6 +152,40 @@ export const DEFAULT_AUTO_FOCUS_SETTINGS: AutoFocusSettings = {
 	rmsdThreshold: 0,
 	settleDelay: 0,
 	measureTimeout: 60,
+}
+
+// TPPA form of one physical camera: how the next three-point polar alignment moves the mount and solves its frames.
+// The frames are taken with the exposure and camera settings of the camera, which this form never holds. Angles are
+// in degrees and durations in seconds, as edited.
+export interface TppaSettings {
+	// Direction of the RA motions between the three poses.
+	direction: 'WEST' | 'EAST'
+	// Name of the slew-rate preset of the motions, checked again against the presets the mount announces when a
+	// session starts; absent before one was chosen.
+	slewRate?: string
+	// RA rotation aimed at between consecutive poses, in degrees, in [TPPA_MINIMUM_ROTATION, TPPA_MAXIMUM_ROTATION].
+	rotation: number
+	// Wait after the mount stopped and before each exposure, in seconds; >= 0.
+	settleDelay: number
+	// Wait before each refinement exposure, in seconds; >= 0.
+	refinementDelay: number
+	// Plate solver of the frames, its strategy, and its downsampling.
+	solver: Pick<PlateSolveRequest, 'provider' | 'strategy' | 'downsample'>
+}
+
+// Smallest RA rotation of the TPPA form, in degrees: the least rotation the server accepts between two poses.
+export const TPPA_MINIMUM_ROTATION = 6
+
+// Largest RA rotation of the TPPA form, in degrees: two steps stay within the 30° of total motion the server allows.
+export const TPPA_MAXIMUM_ROTATION = 15
+
+// TPPA form of a camera that has none yet: westward motions of 8° solved by ASTAP around the header pointing.
+export const DEFAULT_TPPA_SETTINGS: TppaSettings = {
+	direction: 'WEST',
+	rotation: 8,
+	settleDelay: 2,
+	refinementDelay: 1,
+	solver: { provider: 'astap', strategy: 'assisted' },
 }
 
 // A complete working environment: the selected connection, the equipment assigned on each connection,

@@ -51,8 +51,22 @@ export interface PlateSolveRequest {
 	readonly downsample?: number
 }
 
-// Who asked for a plate solve: a person, in Images.
-export type PlateSolveOrigin = { readonly kind: 'manual' }
+// Who asked for a plate solve: a person, in Images, or the solve of a TPPA frame.
+export type PlateSolveOrigin =
+	| { readonly kind: 'manual' }
+	| {
+			readonly kind: 'tppa'
+			// Id of the TPPA session.
+			readonly sessionId: string
+			// Id of the open connection that provides the camera.
+			readonly connectionId: string
+			// Exact id of the camera.
+			readonly deviceId: string
+			// Identity of the frame: the session id and the frame ordinal.
+			readonly frameId: string
+			// Pose being acquired (1, 2 or 3), absent for a refinement frame.
+			readonly point?: 1 | 2 | 3
+	  }
 
 // State of a job: waiting for its solver, running, or ended (completed, failed, or cancelled).
 export type PlateSolveJobState = AnalysisJobState
@@ -325,6 +339,40 @@ export class PlateSolvingService {
 
 		const queued = this.#scheduler.enqueue(imageId, preparation, job.key, job.fields)
 		return queued ? { status: 'accepted', job: queued } : { status: 'missing' }
+	}
+
+	// Solves an open image and resolves to the result once the job completed, for a consumer that needs the
+	// solution of one specific image, such as a TPPA frame: the job runs with the manual priority and is never
+	// replaced by a newer frame. A completed job without solution resolves with `outcome: noSolution`. Aborting
+	// signal cancels the job. Throws PlateSolvingError when the job does not complete. A preparation keeps the
+	// provider settings of a whole session, as submit does; the provider never falls back to another.
+	async solve(imageId: string, request: PlateSolveRequest | PlateSolvePreparation, signal?: AbortSignal, origin?: PlateSolveOrigin): Promise<PlateSolveResult> {
+		const outcome = await this.submit(imageId, request, origin)
+		if (outcome.status === 'missing') throw new PlateSolvingError('expired', 'The image is not open')
+		if (outcome.status === 'notConfigured') throw new PlateSolvingError('notConfigured', 'The plate solver is not configured')
+		if (outcome.status === 'queueFull') throw new PlateSolvingError('queueFull', 'Too many plate solves are waiting')
+
+		const { jobId } = outcome.job
+		const stored = this.#scheduler.stored(jobId)
+		if (outcome.status === 'cached' && stored) return stored.result
+
+		const settled = this.#scheduler.settled(jobId)
+		const entry = this.#scheduler.entry(jobId)
+		if (!settled || !entry) throw new PlateSolvingError('expired', 'The result is no longer kept')
+
+		const cancel = () => this.cancel(jobId)
+		// The signal may have aborted while the request was being submitted.
+		if (signal?.aborted) cancel()
+		else signal?.addEventListener('abort', cancel, { once: true })
+
+		try {
+			const result = await settled
+			if (result) return result
+			const { code = 'cancelled', error = 'The plate solve did not complete' } = entry.job
+			throw new PlateSolvingError(code, error)
+		} finally {
+			signal?.removeEventListener('abort', cancel)
+		}
 	}
 
 	// Cancels a job: a waiting one ends at once, a running one is interrupted (ASTAP and solve-field are killed; nova

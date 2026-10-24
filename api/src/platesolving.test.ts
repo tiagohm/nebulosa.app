@@ -368,6 +368,61 @@ describe('ASTAP', () => {
 	})
 })
 
+describe('awaited solve', () => {
+	// Resolves to the error a promise rejects with, or undefined when it resolves.
+	async function rejection(promise: Promise<unknown>) {
+		try {
+			await promise
+			return undefined
+		} catch (error) {
+			return error
+		}
+	}
+
+	const ORIGIN = { kind: 'tppa', sessionId: 's1', connectionId: 'c', deviceId: 'cam', frameId: 's1:1', point: 1 } as const
+
+	test('resolves the result of a job with its origin, then the kept one', async () => {
+		const { images, tools, service, events } = setup()
+		const { executable } = await fakeAstap({ ini: ['PLTSOLVD=T'], wcs: WCS })
+		await configure(tools, 'astap', executable)
+		const info = await images.open(writeImage())
+		const preparation = (await service.prepare(ASSISTED))!
+
+		const result = await service.solve(info.id, preparation, undefined, ORIGIN)
+
+		expect(result.solution).toMatchObject({ CTYPE1: 'RA---TAN' })
+		expect(events.at(-1)!.job.origin).toEqual(ORIGIN)
+		expect(await service.solve(info.id, preparation, undefined, ORIGIN)).toBe(result)
+	})
+
+	test('resolves a search without a solution', async () => {
+		const { images, tools, service } = setup()
+		const { executable } = await fakeAstap({ ini: ['PLTSOLVD=F'], exitCode: 1 })
+		await configure(tools, 'astap', executable)
+		const info = await images.open(writeImage())
+
+		expect(await service.solve(info.id, { provider: 'astap', strategy: 'blind' })).toMatchObject({ outcome: 'noSolution' })
+	})
+
+	test('throws the code of a failed or cancelled job', async () => {
+		const { images, tools, service } = setup()
+		const { executable } = await fakeAstap({ ini: ['ERROR=No star database found!'], exitCode: 32 })
+		await configure(tools, 'astap', executable)
+		const info = await images.open(writeImage())
+
+		expect(await rejection(service.solve(info.id, ASSISTED))).toMatchObject({ code: 'failed' })
+		expect(await rejection(service.solve('missing', ASSISTED))).toMatchObject({ code: 'expired' })
+		expect(await rejection(service.solve(info.id, { ...ASSISTED, strategy: 'blind' }, AbortSignal.abort()))).toMatchObject({ code: 'cancelled' })
+	}, 20000)
+
+	test('refuses a provider that is not configured', async () => {
+		const { images, service } = setup()
+		const info = await images.open(writeImage())
+
+		expect(await rejection(service.solve(info.id, ASSISTED))).toMatchObject({ code: 'notConfigured' })
+	})
+})
+
 describe('solve-field', () => {
 	test('solves with its backend configuration', async () => {
 		const { images, tools, service, events } = setup()

@@ -165,19 +165,13 @@ test('STOP ends this tab press and the nudge another tab runs on the mount', asy
 	expect(requests.map((r) => r.url)).toEqual(['/api/mounts/nudges/other-tab/stop'])
 })
 
-test('follows the mount state and judges directions by axis', () => {
-	const state = newState()
-	handleNudgeEvent(state, { type: 'mount:updated', state: mountState({ canMoveWE: false }) })
-	handleNudgeEvent(state, { type: 'mount:updated', state: mountState({ id: 'other', canMoveNS: false }) })
+test('judges directions by axis', () => {
+	const state = mountState({ canMoveWE: false })
 
-	expect(state.state?.canMoveWE).toBeFalse()
-	expect(nudgeDirectionSupported(state.state, 'N')).toBeTrue()
-	expect(nudgeDirectionSupported(state.state, 'E')).toBeFalse()
-	expect(nudgeDirectionSupported(state.state, 'NE')).toBeFalse()
+	expect(nudgeDirectionSupported(state, 'N')).toBeTrue()
+	expect(nudgeDirectionSupported(state, 'E')).toBeFalse()
+	expect(nudgeDirectionSupported(state, 'NE')).toBeFalse()
 	expect(nudgeDirectionSupported(undefined, 'N')).toBeFalse()
-
-	handleNudgeEvent(state, { type: 'connection:close', id: 'c' })
-	expect(state.state).toBeUndefined()
 })
 
 test('describes abnormal ends only', () => {

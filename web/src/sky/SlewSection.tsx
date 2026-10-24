@@ -1,13 +1,14 @@
 import type { OperationRecord, SkyObjectRef, SkyPosition } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { controlRuntime } from '../equipment-control/control'
 import { operationsState } from '../operations'
 import type { SkyObserverSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { formatDeclination, formatDegrees, formatRightAscension } from './format'
-import { mountRuntime, slewBlocker, slewMount, slewProgress, stopMount } from './mount'
+import { mountRuntime, mountView, slewBlocker, slewMount, slewProgress, stopMount } from './mount'
 import { apiObserver, fetchSkyPosition } from './sky'
 
 // Slew to Object of the Object Inspector: points the profile's mount at the selected object after an
@@ -41,7 +42,7 @@ type Preview = { readonly status: 'loading' } | { readonly status: 'ready'; read
 
 // Slew to Object section.
 export function SlewSection({ target, targetName, observer }: SlewSectionProps) {
-	const runtime = useSnapshot(mountRuntime)
+	const runtime = mountView(useSnapshot(mountRuntime), useSnapshot(controlRuntime))
 	const operations = useSnapshot(operationsState)
 	const [preview, setPreview] = useState<Preview>()
 	const mount = runtime.target

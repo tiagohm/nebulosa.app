@@ -1,8 +1,9 @@
 import { expect, test } from 'bun:test'
 import type { MountState, OperationRecord } from 'api'
 import { proxy } from 'valtio'
+import { newControlRuntime } from '../equipment-control/control'
 import { localSiderealTime } from './celestial/time'
-import { handleMountEvent, horizontalOf, type MountRuntime, mountPoint, selectionPoint, slewBlocker, slewMount, watchMount } from './mount'
+import { horizontalOf, type MountRuntime, mountPoint, mountView, selectionPoint, slewBlocker, slewMount, watchMount } from './mount'
 import { mountMarkerOf, refKey, refOfCelestialObject } from './objects'
 
 const TARGET = { connectionId: 'a', id: 'm1', name: 'Mount Simulator' }
@@ -57,33 +58,32 @@ function fakeFetch(respond: () => Response) {
 
 function runtime(): MountRuntime {
 	const value = proxy<MountRuntime>({ sending: false, following: false })
-	watchMount(value, TARGET, fakeFetch(() => Response.json(state())).request)
+	watchMount(value, TARGET)
 	return value
 }
 
-test('applies only the events of the followed mount on its connection', () => {
+test('reads the state the control runtime mirrors for the followed mount only', () => {
 	const value = runtime()
+	const control = newControlRuntime()
+	control.states.mount = { m1: state({ rightAscension: 3 }), m2: state({ id: 'm2', rightAscension: 2 }) }
 
-	handleMountEvent(value, { type: 'mount:updated', state: state({ connectionId: 'b', rightAscension: 2 }) })
-	handleMountEvent(value, { type: 'mount:updated', state: state({ id: 'm2', rightAscension: 2 }) })
-	expect(value.state?.rightAscension ?? 1).toBe(1)
+	expect(mountView(value, control).state).toBeUndefined()
+	control.watched = 'b'
+	expect(mountView(value, control).state).toBeUndefined()
+	control.watched = 'a'
+	expect(mountView(value, control).state?.rightAscension).toBe(3)
 
-	handleMountEvent(value, { type: 'mount:updated', state: state({ rightAscension: 3 }) })
-	expect(value.state?.rightAscension).toBe(3)
-
-	handleMountEvent(value, { type: 'connection:close', id: 'b' })
-	expect(value.state).toBeDefined()
-	handleMountEvent(value, { type: 'connection:close', id: 'a' })
-	expect(value.state).toBeUndefined()
+	watchMount(value, undefined)
+	expect(mountView(value, control).state).toBeUndefined()
 })
 
 test('switching the mount drops what was known and stops following', () => {
 	const value = runtime()
-	handleMountEvent(value, { type: 'mount:updated', state: state() })
 	value.following = true
+	value.error = 'refused'
 
-	watchMount(value, { ...TARGET, connectionId: 'b' }, fakeFetch(() => new Response(null, { status: 404 })).request)
-	expect(value.state).toBeUndefined()
+	watchMount(value, { ...TARGET, connectionId: 'b' })
+	expect(value.error).toBeUndefined()
 	expect(value.following).toBeFalse()
 })
 

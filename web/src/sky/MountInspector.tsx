@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
+import { controlRuntime } from '../equipment-control/control'
 import type { SkyObserverSettings } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { skyClock } from './clock'
 import { formatDeclination, formatDegrees, formatRightAscension } from './format'
-import { horizontalOf, mountPoint, mountRuntime } from './mount'
+import { horizontalOf, mountPoint, mountRuntime, mountView } from './mount'
 import type { MountRef } from './objects'
 
 // Object Inspector view of the mount marker: the mount's reported pointing (of date) and, for the
@@ -41,7 +42,7 @@ function motionOf(state: { readonly slewing: boolean; readonly parked: boolean; 
 
 // Mount view of the Object Inspector.
 export function MountInspector({ mountRef, observer, onShowFraming }: MountInspectorProps) {
-	const runtime = useSnapshot(mountRuntime)
+	const runtime = mountView(useSnapshot(mountRuntime), useSnapshot(controlRuntime))
 	const clock = useSnapshot(skyClock)
 	const same = runtime.target?.connectionId === mountRef.connectionId && runtime.target.id === mountRef.id
 	const state = same ? runtime.state : undefined

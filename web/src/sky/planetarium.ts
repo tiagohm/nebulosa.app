@@ -1,13 +1,14 @@
 import type { MinorBody, SkyObjectCategory, SkyObjectRef } from 'api'
 import { DEG2RAD, TAU } from 'nebulosa/src/core/constants'
 import { proxy, subscribe } from 'valtio'
+import { controlRuntime } from '../equipment-control/control'
 import type { SkyObserverSettings } from '../profile/profile'
 import { Celestial, type CelestialObject, type CelestialOptions, type CelestialShape, type ConstellationLine, type CoordinateSystem, drawSelectionReticle, type MovingBody, type MovingBodyType, type RenderState } from './celestial/celestial'
 import { skyClock, skyTime } from './clock'
 import { applySkyDisplay, MAP_STAR_MAGNITUDE_LIMIT, type SkyDisplaySettings } from './display'
 import { formatAngularSize } from './format'
 import { type FramePoint, framePolygon, isFraming, type OpticalConfiguration, resolveFraming } from './framing'
-import { type MountPoint, mountRuntime, selectionPoint } from './mount'
+import { type MountPoint, mountRuntime, mountView, selectionPoint } from './mount'
 import { hoverLabel, type MapNames, MOUNT_SHAPE_TYPE, type MountMarkerData, type MountRef, movingBodyId, refKey, refOfCelestialObject, selectionTargets, type SkySelectionRef } from './objects'
 import { createRequestGuard } from './selection'
 import { apiObserver, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapDataCovers, selectSkyObject, skyState } from './sky'
@@ -392,7 +393,7 @@ export class Planetarium {
 
 		const position = selection?.position
 		if (selection?.ref.kind === 'minorBody' && position) this.#showMinorBody(selection.ref, selection.minorBody, position.rightAscension, position.declination, position.magnitude)
-		const point = selectionPoint(selection, mountRuntime, skyClock.mode === 'now')
+		const point = selectionPoint(selection, mountView(mountRuntime, controlRuntime), skyClock.mode === 'now')
 
 		let found: CelestialObject | null = null
 

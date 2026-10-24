@@ -4,7 +4,7 @@ import { subscribe as subscribeState } from 'valtio'
 import { App } from './App'
 import { autoFocusRuntime, handleAutoFocusEvent, refreshAutoFocus } from './camera/autofocus'
 import { captureRuntime, handleCaptureEvent, refreshCameraCapabilities, refreshCaptures } from './camera/capture'
-import { handleNudgeEvent, nudgeRuntime, refreshNudgeMount, refreshNudges } from './camera/nudge'
+import { handleNudgeEvent, nudgeRuntime, refreshNudges } from './camera/nudge'
 import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
 import { controlRuntime, handleControlEvent, refreshStates } from './equipment-control/control'
 import { domeMotionRuntime, handleDomeMotionEvent, refreshDomeMotions } from './equipment-control/domeMotion'
@@ -18,7 +18,6 @@ import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from 
 import { loadProfiles, persistProfiles, profileState } from './profile/profile'
 import { externalToolsState, handleExternalToolEvent, refreshExternalTools } from './settings/externaltools'
 import { routeState, watchHistory } from './shell/route'
-import { handleMountEvent, mountRuntime, refreshMount } from './sky/mount'
 import { handleSensorEvent, refreshSensors, sensorRuntime } from './sky/sensors'
 import { handleStarsEvent, refreshStars, starsState } from './stars/stars'
 import { browserStores } from './storage'
@@ -53,7 +52,6 @@ const stops = [
 		handleControlEvent(controlRuntime, event)
 		handleDomeMotionEvent(domeMotionRuntime, event)
 		handleFocuserBacklashEvent(focuserBacklashRuntime, event)
-		handleMountEvent(mountRuntime, event)
 		handleOperationEvent(operationsState, event)
 		handleSensorEvent(sensorRuntime, event)
 		handleCaptureEvent(captureRuntime, event)
@@ -65,9 +63,8 @@ const stops = [
 		handleCaptureFramesEvent(captureFramesState, event)
 		handleCapturedFrame(imagesState, event)
 	}),
-	// Every (re)open resynchronizes the open connections, the watched devices and their control states, the followed mount, the
-	// running operations, the camera sensors, the captures and camera capabilities, and the nudged mount
-	// and its nudge sessions, the Auto Focus sessions, the dome rotation sessions, the focuser backlash compensations, the external tool settings, the star detection and plate solving jobs, and the captured frames, which may have changed while the socket was closed; then the leases of the frames the camera tabs of Images show are reconciled and their selections shown again.
+	// Every (re)open resynchronizes the open connections, the watched devices and their control states, the running
+	// operations, the camera sensors, the captures and camera capabilities, the nudge sessions, the Auto Focus sessions, the dome rotation sessions, the focuser backlash compensations, the external tool settings, the star detection and plate solving jobs, and the captured frames, which may have changed while the socket was closed; then the leases of the frames the camera tabs of Images show are reconciled and their selections shown again.
 	onOpen(() => {
 		void refreshExternalTools(externalToolsState)
 		void refreshServers(connectionState)
@@ -75,12 +72,10 @@ const stops = [
 		void refreshStates(controlRuntime)
 		void refreshDomeMotions(domeMotionRuntime)
 		void refreshFocuserBacklash(focuserBacklashRuntime)
-		void refreshMount(mountRuntime)
 		void refreshOperations(operationsState)
 		refreshSensors(sensorRuntime)
 		void refreshCaptures(captureRuntime)
 		refreshCameraCapabilities(captureRuntime)
-		void refreshNudgeMount(nudgeRuntime)
 		void refreshNudges(nudgeRuntime)
 		void refreshAutoFocus(autoFocusRuntime)
 		void refreshStars(starsState)

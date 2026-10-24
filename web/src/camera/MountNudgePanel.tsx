@@ -2,6 +2,7 @@ import type { CaptureSession, DeviceSummary, MountNudgeDirection, MountState } f
 import { cn } from 'cn'
 import { type PointerEvent, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
+import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
@@ -41,12 +42,14 @@ export interface MountNudgeTarget {
 // Mount Nudge panel sections of a mount.
 export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 	const runtime = useSnapshot(nudgeRuntime)
+	const control = useSnapshot(controlRuntime)
 	const operations = useSnapshot(operationsState)
 	const captures = useSnapshot(captureRuntime)
 	const device = mount.device
 	const connectionId = device?.connectionId
 	const id = device?.id
-	const { state, press } = runtime
+	const { press } = runtime
+	const state = watchedDeviceState(control, 'mount', runtime.target)
 	const session = connectionId && id ? runtime.sessions[nudgeKey(connectionId, id)] : undefined
 	const availability = roleAvailability('MOUNT', mount, operations)
 	// While a press is held, its own operation holds the mount; only other holders make it busy.

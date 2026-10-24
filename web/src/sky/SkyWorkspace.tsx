@@ -1,6 +1,7 @@
 import type { MinorBody, SkySearchResult } from 'api'
 import { type ReactNode, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
+import { controlRuntime } from '../equipment-control/control'
 import { activeProfile, profileState, setPanelOpen } from '../profile/profile'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
@@ -11,7 +12,7 @@ import { DisplayPanel } from './DisplayPanel'
 import { equipmentOptics } from './framing'
 import { FramingPanel } from './FramingPanel'
 import { HoverTooltip } from './HoverTooltip'
-import { mountPoint, mountRuntime, selectionPoint } from './mount'
+import { mountPoint, mountRuntime, mountView, selectionPoint } from './mount'
 import { ObjectInspector } from './ObjectInspector'
 import { ObserverPanel } from './ObserverPanel'
 import { observerKey, planetarium, planetariumState } from './planetarium'
@@ -51,7 +52,7 @@ export function SkyWorkspace() {
 	const key = observerKey(observer)
 	const map = useMemo(() => planetarium(coordinateSystem, activeProfile(profileState).settings.sky.observer), [coordinateSystem])
 	const selectionKey = sky.selection?.key
-	const mount = useSnapshot(mountRuntime)
+	const mount = mountView(useSnapshot(mountRuntime), useSnapshot(controlRuntime))
 	const live = clock.mode === 'now'
 	const selectionCenter = selectionPoint(sky.selection, mount, live)
 	const mountCenter = mountPoint(mount, live)

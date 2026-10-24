@@ -3,10 +3,9 @@ import { proxy } from 'valtio'
 import { deviceUrl, jsonInit, responseError } from '../http'
 import { followPress, type Press, pressRunning, reconcilePress, releasePress, startPress, stopPress } from '../press'
 
-// Mount Nudge runtime of the tab, over the press handling shared with the dome (press.ts): the real state
-// of the mount the active profile assigns to the MOUNT role, the nudge sessions the server reports on it,
-// and the one press this tab holds. The server owns every
-// session and stops it when its lease is no longer renewed, so this store never assumes a motion from
+// Mount Nudge runtime of the tab, over the press handling shared with the dome (press.ts): the mount the active
+// profile assigns to the MOUNT role, whose real state is the one the control runtime mirrors, the nudge sessions the
+// server reports on it, and the one press this tab holds. The server owns every session and stops it when its lease is no longer renewed, so this store never assumes a motion from
 // local state alone: a press starts only with a pointer down, is renewed by heartbeats while the server
 // says it moves, and is released on pointer up or whenever control is lost. A press is never restored
 // after a reload or a socket reopen; the running sessions are fetched again instead. Each press has a
@@ -33,8 +32,6 @@ export interface NudgePress extends Press {
 export interface NudgeRuntime {
 	// Mount followed; absent when the profile has no MOUNT on an open connection.
 	target?: NudgeTarget
-	// Latest state reported for the target; absent until known or after the mount is removed.
-	state?: MountState
 	// Latest session of each mount, by mount key (nudgeKey), running or ended, started by any tab.
 	sessions: Record<string, MountNudgeSession>
 	// Press held by this tab, if any.
@@ -50,9 +47,6 @@ export const nudgeRuntime = proxy<NudgeRuntime>({ sessions: {}, sending: false }
 
 // Message kept when a stop cannot reach the server.
 const UNREACHABLE = 'The server cannot be reached; the mount stops by itself once its lease expires'
-
-// Counter of state fetches; a response is applied only if no later fetch started.
-let stateGeneration = 0
 
 // Counter of session fetches; a response is applied only if no later fetch started.
 let sessionsGeneration = 0
@@ -116,32 +110,14 @@ export function nudgeEndProblem(session: MountNudgeSession): string | undefined 
 	}
 }
 
-// Follows another mount, or none. A press held on the previous mount is released, everything known about
-// the previous mount is dropped, and the new mount's state is fetched. The same mount changes nothing.
+// Follows another mount, or none. A press held on the previous mount is released and everything known about the
+// previous mount is dropped. The same mount changes nothing.
 export function watchNudgeMount(runtime: NudgeRuntime, target: NudgeTarget | undefined, request: typeof fetch = fetch) {
 	if (sameTarget(runtime.target, target)) return
 
 	void releaseNudge(runtime, request)
 	runtime.target = target && { connectionId: target.connectionId, id: target.id }
-	runtime.state = undefined
 	runtime.error = undefined
-	void refreshNudgeMount(runtime, request)
-}
-
-// Fetches the state of the followed mount. A response is dropped when the target changed or another
-// fetch started meanwhile.
-export async function refreshNudgeMount(runtime: NudgeRuntime, request: typeof fetch = fetch) {
-	const target = runtime.target
-	const current = ++stateGeneration
-	if (!target) return
-
-	try {
-		const response = await request(deviceUrl(target.connectionId, 'mount', target.id))
-		const state = response.ok ? ((await response.json()) as MountState) : undefined
-		if (current === stateGeneration && sameTarget(runtime.target, target)) runtime.state = state
-	} catch {
-		// The server is unreachable; the next socket open refreshes the state.
-	}
 }
 
 // Replaces the running sessions with the server's list, which may have changed while the socket was
@@ -165,33 +141,20 @@ export async function refreshNudges(runtime: NudgeRuntime, request: typeof fetch
 	}
 }
 
-// Applies a server event concerning the followed mount or any nudge session. A session event of another
-// press than this tab's only updates the session list; an event of this tab's press follows its stage,
-// and its end forgets the press, keeping why it ended when that was abnormal.
+// Applies a nudge session event; any other event is ignored. A session event of another press than this tab's only
+// updates the session list; an event of this tab's press follows its stage, and its end forgets the press, keeping why
+// it ended when that was abnormal.
 export function handleNudgeEvent(runtime: NudgeRuntime, event: ServerEvent) {
-	const target = runtime.target
+	if (event.type !== 'mount:nudge') return
 
-	switch (event.type) {
-		case 'mount:nudge': {
-			const { session } = event
-			const key = nudgeKey(session.connectionId, session.deviceId)
-			const known = runtime.sessions[key]
+	const { session } = event
+	const key = nudgeKey(session.connectionId, session.deviceId)
+	const known = runtime.sessions[key]
 
-			// An event of an older session of the mount never replaces a newer one.
-			if (!known || known.token === session.token || session.startedAt >= known.startedAt) runtime.sessions[key] = session
+	// An event of an older session of the mount never replaces a newer one.
+	if (!known || known.token === session.token || session.startedAt >= known.startedAt) runtime.sessions[key] = session
 
-			followPress(runtime, session, nudgeEndProblem)
-			return
-		}
-		case 'mount:updated':
-			if (target && sameTarget({ connectionId: event.state.connectionId, id: event.state.id }, target)) runtime.state = event.state
-			return
-		case 'device:removed':
-			if (target && sameTarget({ connectionId: event.connectionId, id: event.id }, target)) runtime.state = undefined
-			return
-		case 'connection:close':
-			if (target?.connectionId === event.id) runtime.state = undefined
-	}
+	followPress(runtime, session, nudgeEndProblem)
 }
 
 // Starts a press of the followed mount in a direction. Ignored while this tab already holds a press, so

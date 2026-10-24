@@ -102,6 +102,12 @@ export function deviceStateOf<T extends ManagedDeviceType>(states: Readonly<Cont
 	return (states[type] as Readonly<Record<string, DeviceStateMap[T]>>)[id]
 }
 
+// Returns the state of a device of a type on a connection, for the stores that follow one device: undefined without a
+// device, while its connection is not the watched one, or while it reported none.
+export function watchedDeviceState<T extends ManagedDeviceType>(state: Pick<ControlRuntime, 'watched' | 'states'>, type: T, device: { readonly connectionId: string; readonly id: string } | undefined): DeviceStateMap[T] | undefined {
+	return device && state.watched === device.connectionId ? deviceStateOf(state.states, type, device.id) : undefined
+}
+
 // Fetches the control states of the watched connection. A response is dropped when the watched
 // connection changed or another fetch started meanwhile.
 export async function refreshStates(state: ControlRuntime, request: typeof fetch = fetch) {

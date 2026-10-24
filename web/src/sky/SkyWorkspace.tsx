@@ -44,7 +44,7 @@ let appliedObserver: string | undefined
 export function SkyWorkspace() {
 	const profiles = useSnapshot(profileState)
 	const settings = activeProfile(profiles).settings.sky
-	const observer = settings.observer
+	const { observer, display, framing } = settings
 	const sky = useSnapshot(skyState)
 	const clock = useSnapshot(skyClock)
 	const { status, error } = useSnapshot(planetariumState)
@@ -69,24 +69,18 @@ export function SkyWorkspace() {
 
 	// Applies the display preferences of the active profile to the map, in place.
 	useEffect(() => {
-		map.applyDisplay(settings.display)
-	}, [map, settings.display])
+		map.applyDisplay(display)
+	}, [map, display])
 
 	// Draws the field of view of the selected preset, or of the Equipment Setup, around the selection,
 	// following its position.
-	const framing = settings.framing
 	const telescope = activeProfile(profiles).settings.telescope
 	const sensors = liveSensors(useSnapshot(sensorRuntime), control)
 	// The sensors of the camera states the snapshot keeps while they do not change, so the frame follows them only.
-	const mainSensor = sensors.MAIN_CAMERA
-	const guideSensor = sensors.GUIDE_CAMERA
+	const { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor } = sensors
 	const equipment = framing?.source === 'equipment'
-	const preset = framing?.presets.find((e) => e.id === framing.activePresetId)
-	const equipmentFrame = useMemo(
-		() => (equipment ? { name: 'Equipment Setup', optics: equipmentOptics(telescope, framing?.sensorSource ?? 'MAIN_CAMERA', { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor }, framing?.manualSensor, framing?.equipmentRotation ?? 0).optics } : undefined),
-		[equipment, telescope, framing?.sensorSource, framing?.manualSensor, framing?.equipmentRotation, mainSensor, guideSensor],
-	)
-	const frameSource = equipment ? equipmentFrame : preset
+	const equipmentFrame = equipment ? { name: 'Equipment Setup', optics: equipmentOptics(telescope, framing?.sensorSource ?? 'MAIN_CAMERA', { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor }, framing?.manualSensor, framing?.equipmentRotation ?? 0).optics } : undefined
+	const frameSource = equipment ? equipmentFrame : framing?.presets.find((e) => e.id === framing.activePresetId)
 
 	useEffect(() => {
 		map.syncFraming(frameSource, framing?.visible ?? false, selectionCenter)
@@ -141,7 +135,7 @@ export function SkyWorkspace() {
 		inspector: () => ({ title: 'Object Inspector', content: <ObjectInspector observer={observer} onSetObserver={() => openPanel('observer')} timeZone={observer?.timeZone} onShowFraming={() => openPanel('framing')} /> }),
 		observer: () => ({ title: 'Observer', content: <ObserverPanel key={key} observer={observer} onDone={() => (skyState.panel = 'inspector')} /> }),
 		display: () => ({ title: 'Display', content: <DisplayPanel sky={settings} local={coordinateSystem === 'horizontal'} /> }),
-		framing: () => ({ title: 'Framing', content: <FramingPanel framing={settings.framing} telescope={telescope} hasTarget={!!selectionCenter} /> }),
+		framing: () => ({ title: 'Framing', content: <FramingPanel framing={framing} telescope={telescope} hasTarget={!!selectionCenter} /> }),
 	}
 
 	return (

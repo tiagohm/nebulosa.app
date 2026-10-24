@@ -4,24 +4,34 @@ on:
     push:
         branches: [main]
         paths:
-            - 'api/**.ts'
-            - 'app/**.ts'
-            - 'web/**.ts'
+            - 'api/**'
+            - 'app/**'
+            - 'web/**'
+            - 'bin/**'
+            - 'core'
             - '.github/workflows/**'
             - 'package.json'
             - 'bun.lock'
             - 'tsconfig.json'
             - 'bunfig.toml'
+            - '.oxlintrc.json'
+            - '.oxfmtrc.json'
+            - '.editorconfig'
     pull_request:
         paths:
-            - 'api/**.ts'
-            - 'app/**.ts'
-            - 'web/**.ts'
+            - 'api/**'
+            - 'app/**'
+            - 'web/**'
+            - 'bin/**'
+            - 'core'
             - '.github/workflows/**'
             - 'package.json'
             - 'bun.lock'
             - 'tsconfig.json'
             - 'bunfig.toml'
+            - '.oxlintrc.json'
+            - '.oxfmtrc.json'
+            - '.editorconfig'
     workflow_dispatch:
 
 permissions:

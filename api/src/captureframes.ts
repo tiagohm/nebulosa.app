@@ -20,9 +20,10 @@ import { errorCode, isRecord, writeAtomically } from './util'
 // decoded (previewed only, being saved, or saved), and its saved frames, the newest FRAMES_PER_SOURCE frames whose
 // file was written, which is the only history. A frame the preview decoded is never added to the saved frames
 // unless its file is written, so any number of previewed-only frames never evicts a saved one; the latest frame
-// counts among the saved frames only when it was saved itself. Auto Focus, TPPA, and DARV frames are never saved: their files are
-// auxiliary and deleted after each measurement, so they only ever become the latest frame. A previous latest frame that was not saved is kept
-// in memory among the transient frames of its camera (at most FRAMES_PER_SOURCE), only so its state can still be
+// counts among the saved frames only when it was saved itself. Auto Focus, TPPA, and DARV frames are never saved: their
+// files are auxiliary and deleted after each measurement, so they only ever become the latest frame. A Flat Wizard frame is
+// previewed from its staging file and saved only once accepted, when published() names its final path. A previous latest
+// frame that was not saved is kept in memory among the transient frames of its camera (at most FRAMES_PER_SOURCE), only so its state can still be
 // asked for, and is never listed.
 //
 // The registry owns the closing of capture documents: the latest previewed frame of each camera stays open,
@@ -35,14 +36,14 @@ import { errorCode, isRecord, writeAtomically } from './util'
 // The metadata of the saved frames of at most MAX_SOURCES cameras is persisted in a versioned JSON file, written
 // at most every SAVE_DELAY after a change, so the frames of the last SAVE_DELAY may be lost in a crash. After a
 // restart no frame is in memory and no camera has a latest frame: a saved frame is available again when its file
-// exists. A version 1 file, which mixed previewed-only and saved frames, is read keeping its saved frames only. No
-// directory is ever scanned.
+// exists, with the origin it was recorded with (a frame of a version 1 or 2 file is a capture). A version 1 file, which
+// mixed previewed-only and saved frames, is read keeping its saved frames only. No directory is ever scanned.
 
 // File the registry is persisted in when none is given.
 export const DEFAULT_CAPTURE_FRAMES_FILE = join(homedir(), 'Nebulosa', 'capture-frames.json')
 
-// Version of the registry file format written by this version.
-const CAPTURE_FRAMES_VERSION = 2
+// Version of the registry file format written by this version. Version 3 records the origin of each saved frame.
+const CAPTURE_FRAMES_VERSION = 3
 
 // Saved frames remembered per camera, newest first; older ones are forgotten. Also the number of transient frames
 // kept in memory per camera.
@@ -72,7 +73,11 @@ export type CaptureFrameAvailability = 'memory' | 'file' | 'saving' | 'unavailab
 // - autofocus: an Auto Focus session, sampled or verifying; never saved.
 // - tppa: a TPPA session, a pose or a refinement frame; never saved.
 // - darv: a DARV measurement, one frame per measurement; never saved.
-export type CaptureFrameOrigin = 'capture' | 'autofocus' | 'tppa' | 'darv'
+// - flatWizard: a Flat Wizard session, a trial or a final frame; saved once its final frame was accepted and published.
+export type CaptureFrameOrigin = 'capture' | 'autofocus' | 'tppa' | 'darv' | 'flatWizard'
+
+// Origins a frame read from the file can have: the operations whose frames are saved.
+const SAVED_ORIGINS: ReadonlySet<string> = new Set<CaptureFrameOrigin>(['capture', 'flatWizard'])
 
 // Why a frame cannot be opened:
 // - expired: it was only previewed and its document was closed.
@@ -85,6 +90,8 @@ export type CaptureFrameUnavailableReason = 'expired' | 'fileMissing' | 'saveFai
 interface StoredFrame {
 	// Identity of the frame: the session id and the generation.
 	readonly frameId: string
+	// Operation that took the frame; a frame of a file before version 3 is a capture.
+	readonly origin: CaptureFrameOrigin
 	// Order of the frame among every frame of the registry; increases with every new frame.
 	readonly sequence: number
 	// Id of the connection that provided the camera.
@@ -113,16 +120,14 @@ interface StoredFrame {
 	cfa?: CaptureFrame['cfa']
 	// Acquisition data read from the header; absent for a saved frame never decoded.
 	acquisition?: ImageAcquisition
-	// Absolute path of the saved file; absent when only previewed. Never sent to clients.
-	readonly path?: string
+	// Absolute path of the saved file; absent when only previewed. Set once by a publication. Never sent to clients.
+	path?: string
 	// State of the write of the file; absent when only previewed.
 	file?: CaptureFileState
 }
 
 // Frame of the registry, with what only lives in memory.
 interface FrameEntry extends StoredFrame {
-	// Operation that took the frame; a frame read from the file is a capture, the only frames ever saved.
-	readonly origin: CaptureFrameOrigin
 	// Id of the open document holding the pixels; absent when none is open.
 	imageId?: string
 	// Description of that document.
@@ -341,11 +346,12 @@ function isFiniteNumber(value: unknown): value is number {
 // Reads a persisted frame, whose content is not trusted; undefined when its identity is unusable.
 function parseFrame(value: unknown, connectionId: string, deviceId: string): StoredFrame | undefined {
 	if (!isRecord(value)) return undefined
-	const { frameId, sequence, cameraName, sessionId, generation, time, frameType, width, height, channels, bitpix, cfa, acquisition, path, file } = value
+	const { frameId, origin, sequence, cameraName, sessionId, generation, time, frameType, width, height, channels, bitpix, cfa, acquisition, path, file } = value
 	if (typeof frameId !== 'string' || typeof sessionId !== 'string' || !Number.isInteger(sequence) || !Number.isInteger(generation) || !isFiniteNumber(time)) return undefined
 
 	return {
 		frameId,
+		origin: typeof origin === 'string' && SAVED_ORIGINS.has(origin) ? (origin as CaptureFrameOrigin) : 'capture',
 		sequence: sequence as number,
 		connectionId,
 		deviceId,
@@ -403,8 +409,8 @@ export function parseCaptureFrames(text: string): LoadedFrames {
 }
 
 // Returns the persisted part of a frame.
-function storedFrame({ frameId, sequence, connectionId, deviceId, cameraName, sessionId, generation, time, frameType, width, height, channels, bitpix, cfa, acquisition, path, file }: FrameEntry): StoredFrame {
-	return { frameId, sequence, connectionId, deviceId, cameraName, sessionId, generation, time, frameType, width, height, channels, bitpix, cfa, acquisition, path, file }
+function storedFrame({ frameId, origin, sequence, connectionId, deviceId, cameraName, sessionId, generation, time, frameType, width, height, channels, bitpix, cfa, acquisition, path, file }: FrameEntry): StoredFrame {
+	return { frameId, origin, sequence, connectionId, deviceId, cameraName, sessionId, generation, time, frameType, width, height, channels, bitpix, cfa, acquisition, path, file }
 }
 
 // Removes an item from a list, if present.
@@ -497,7 +503,7 @@ export class CaptureFrameRegistry implements Disposable {
 		for (const { connectionId, deviceId, cameraName, saved } of loaded.sources) {
 			// A write still in progress when the file was last written may have completed since: the file is checked
 			// before it is opened, and a partial one fails to decode.
-			const entries = saved.map((frame): FrameEntry => Object.assign(frame, { origin: 'capture' as const, revision: frame.sequence, restored: true }))
+			const entries = saved.map((frame): FrameEntry => Object.assign(frame, { revision: frame.sequence, restored: true }))
 			this.#sources.set(sourceKey(connectionId, deviceId), { connectionId, deviceId, cameraName, saved: entries, transient: [], revision: entries.at(-1)?.sequence ?? 0 })
 		}
 
@@ -596,6 +602,31 @@ export class CaptureFrameRegistry implements Disposable {
 		} else if (file === 'saved') {
 			const source = this.#source(connectionId, deviceId, cameraName)
 			const entry: FrameEntry = { frameId, origin: 'capture', sequence: ++this.#counter, connectionId, deviceId, cameraName, sessionId, generation, time, frameType, path, file, revision: 0, restored: false }
+			this.#save(source, entry)
+			this.#changed(source, entry)
+		}
+	}
+
+	// Records the publication of a frame whose file was written elsewhere first, such as a Flat Wizard frame staged
+	// for measurement and published under its final path once accepted: the frame now names that path, as saved, and
+	// joins the saved frames of its camera. A frame the registry does not know, because its preview failed or was
+	// forgotten, becomes a saved frame of its own, available from its file. This is the only change of a frame's
+	// path; written() only records the outcome of a write to the path the frame already names.
+	published(frame: Pick<CaptureFrame, 'sessionId' | 'generation' | 'connectionId' | 'deviceId' | 'time' | 'frameType'> & { readonly path: string; readonly cameraName: string }, origin: CaptureFrameOrigin) {
+		const { sessionId, generation, connectionId, deviceId, time, frameType, path, cameraName } = frame
+		const frameId = captureFrameId(sessionId, generation)
+		const found = this.#find(frameId)
+
+		if (found) {
+			found.frame.path = path
+			found.frame.file = 'saved'
+			found.frame.missing = undefined
+			remove(found.source.transient, found.frame)
+			this.#save(found.source, found.frame)
+			this.#changed(found.source, found.frame)
+		} else {
+			const source = this.#source(connectionId, deviceId, cameraName)
+			const entry: FrameEntry = { frameId, origin, sequence: ++this.#counter, connectionId, deviceId, cameraName, sessionId, generation, time, frameType, path, file: 'saved', revision: 0, restored: false }
 			this.#save(source, entry)
 			this.#changed(source, entry)
 		}

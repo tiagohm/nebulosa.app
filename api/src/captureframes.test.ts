@@ -449,7 +449,7 @@ describe('persistence', () => {
 
 		const text = readFileSync(file, 'utf-8')
 		expect(text).not.toContain(info.id)
-		expect(JSON.parse(text)).toMatchObject({ version: 2, sources: [{ connectionId: 'connection', deviceId: 'camera', saved: [{ frameId: 'session:2' }] }] })
+		expect(JSON.parse(text)).toMatchObject({ version: 3, sources: [{ connectionId: 'connection', deviceId: 'camera', saved: [{ frameId: 'session:2', origin: 'capture' }] }] })
 		expect(text).not.toContain('session:1')
 	})
 
@@ -482,7 +482,17 @@ describe('persistence', () => {
 		await preview(1, { sessionId: 'next' })
 		expect((await registry.recent('connection', 'camera')).latest!.sequence).toBeGreaterThan(6)
 		await registry.flush()
-		expect(JSON.parse(readFileSync(file, 'utf-8'))).toMatchObject({ version: 2, sources: [{ saved: [{ frameId: 's:2' }, { frameId: 's:4' }] }] })
+		expect(JSON.parse(readFileSync(file, 'utf-8'))).toMatchObject({
+			version: 3,
+			sources: [
+				{
+					saved: [
+						{ frameId: 's:2', origin: 'capture' },
+						{ frameId: 's:4', origin: 'capture' },
+					],
+				},
+			],
+		})
 	})
 
 	test('a file of a newer version is read and never overwritten', async () => {
@@ -501,5 +511,58 @@ describe('persistence', () => {
 		expect(parseCaptureFrames('not json')).toEqual({ sources: [], sequence: 0 })
 		const { sources } = parseCaptureFrames(JSON.stringify({ version: 2, sources: [{ connectionId: 'c', deviceId: 'd', saved: [{ frameId: 'x' }, { frameId: 's:1', sequence: 1, sessionId: 's', generation: 1, time: 0, path: 'a.fits', file: 'saved' }] }] }))
 		expect(sources[0].saved.map((frame) => frame.frameId)).toEqual(['s:1'])
+	})
+})
+
+describe('published frames', () => {
+	test('a published frame names its final path, is saved, and reopens after its document closed', async () => {
+		const { registry, preview, images } = setup()
+		const staged = join(root, 'published-staged.fits')
+		const published = join(root, 'published-final.fits')
+		const info = await preview(1, { sessionId: 'flats', origin: 'flatWizard' })
+		expect((await registry.recent('connection', 'camera')).frames).toEqual([])
+
+		writeFileSync(published, fits())
+		registry.published({ sessionId: 'flats', generation: 1, connectionId: 'connection', deviceId: 'camera', cameraName: 'Camera', time: 1, frameType: 'FLAT', path: published }, 'flatWizard')
+		const page = await registry.recent('connection', 'camera')
+		expect(page.frames.map((frame) => [frame.frameId, frame.origin, frame.fileName, frame.file])).toEqual([['flats:1', 'flatWizard', 'published-final.fits', 'saved']])
+		expect(JSON.stringify(page)).not.toContain(staged)
+
+		// A newer frame replaces the latest one and closes its document; the published file opens it again.
+		await preview(2)
+		expect(images.name(info.id)).toBeUndefined()
+		expect(await registry.frame('flats:1')).toMatchObject({ availability: 'file' })
+		const opened = await registry.open('flats:1', 'tab')
+		expect(opened).toMatchObject({ status: 'opened', frame: { frameId: 'flats:1', origin: 'flatWizard' } })
+	})
+
+	test('a frame the registry never previewed is published as a saved frame of its own', async () => {
+		const { registry } = setup()
+		const path = join(root, 'published-unknown.fits')
+		writeFileSync(path, fits())
+		registry.published({ sessionId: 'flats', generation: 3, connectionId: 'connection', deviceId: 'camera', cameraName: 'Camera', time: 3, frameType: 'FLAT', path }, 'flatWizard')
+
+		expect((await registry.recent('connection', 'camera')).frames).toMatchObject([{ frameId: 'flats:3', origin: 'flatWizard', availability: 'file' }])
+	})
+
+	test('the origin of a saved frame survives a restart, and a version 2 frame is a capture', async () => {
+		const { registry, preview, file } = setup()
+		const path = join(root, 'origin-flat.fits')
+		await preview(1, { sessionId: 'flats', origin: 'flatWizard' })
+		writeFileSync(path, fits())
+		registry.published({ sessionId: 'flats', generation: 1, connectionId: 'connection', deviceId: 'camera', cameraName: 'Camera', time: 1, frameType: 'FLAT', path }, 'flatWizard')
+		await preview(2, { path: join(root, 'origin-capture.fits') })
+		await registry.flush()
+
+		const restarted = setup({ file })
+		expect((await restarted.registry.recent('connection', 'camera')).frames.map((frame) => [frame.frameId, frame.origin])).toEqual([
+			['session:2', 'capture'],
+			['flats:1', 'flatWizard'],
+		])
+
+		const legacy = parseCaptureFrames(JSON.stringify({ version: 2, sources: [{ connectionId: 'c', deviceId: 'd', saved: [{ frameId: 's:1', sequence: 1, sessionId: 's', generation: 1, time: 0, path: 'a.fits', file: 'saved' }] }] }))
+		expect(legacy.sources[0].saved[0].origin).toBe('capture')
+		const unknown = parseCaptureFrames(JSON.stringify({ version: 3, sources: [{ connectionId: 'c', deviceId: 'd', saved: [{ frameId: 's:1', origin: 'darv', sequence: 1, sessionId: 's', generation: 1, time: 0, path: 'a.fits', file: 'saved' }] }] }))
+		expect(unknown.sources[0].saved[0].origin).toBe('capture')
 	})
 })

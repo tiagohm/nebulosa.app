@@ -11,14 +11,17 @@ import { type ResourceRequest, resourceKey } from 'nebulosa/src/devices/orchestr
 import { estimateFlatExposure } from 'nebulosa/src/imaging/analysis/flat/exposure'
 import { finalizeFlatSequence, type FlatSequenceSample } from 'nebulosa/src/imaging/analysis/flat/sequence'
 import type { FlatAnalysis, FlatDiagnosticCode, FlatExposureEstimate, FlatExposureObservation, FlatPlane, FlatSequencePlaneAnalysis } from 'nebulosa/src/imaging/analysis/flat/types'
+import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { clamp } from 'nebulosa/src/math/numerical/math'
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureStart, DEFAULT_CAMERA_CAPTURE_START, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
+import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureSettings, type CaptureSnoop, DEFAULT_CAPTURES_DIR, frameName, snoopedDevices } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { FlatFrameContext, FlatFrameMeasurement, FlatMeasurementOptions, FlatWizardAnalyzer } from './flatwizard.analysis'
 import { errorResponse } from './http'
+import type { ImageStore } from './images'
 import type { OperationDevice, OperationRegistry } from './operations'
 
 // Flat Wizard service: one server-owned session per camera that, filter after filter, finds the exposure putting
@@ -27,9 +30,10 @@ import type { OperationDevice, OperationRegistry } from './operations'
 // camera, and the filter wheel and flat panel when they are used, from start to end, including while it waits for
 // the operator. Every exposure goes through the shared camera capturer into a staging directory inside the output
 // directory, and is measured in the digital numbers of the file by the Flat Wizard analyzer (never on the normalized
-// viewer documents). Trial frames of the exposure search and rejected final frames are deleted after measurement;
-// an accepted final frame is published by hard-linking its original bytes to a new name that never overwrites an
-// existing file. The levels are observed DN: without a bias reference the pedestal is unknown, so an out-of-target
+// viewer documents); each one is also decoded into the image store as the latest frame of its camera (origin
+// flatWizard). Trial frames of the exposure search and rejected final frames are deleted after measurement; an
+// accepted final frame is published by hard-linking its original bytes to a new name that never overwrites an
+// existing file, and recorded under that name among the saved frames of the capture frame registry. The levels are observed DN: without a bias reference the pedestal is unknown, so an out-of-target
 // first trial is followed by a second distinct one before the toolkit's affine or interpolated estimate is used.
 // A filter is selected by moving the assigned wheel, or by the operator, who confirms each manual step with its
 // step id; the light comes from the assigned panel at a fixed brightness, or from a manual source the operator
@@ -135,6 +139,8 @@ export interface FlatWizardAttempt {
 	readonly filter: number
 	// Whether it was a trial of the exposure search or a candidate final frame.
 	readonly kind: 'trial' | 'final'
+	// Id of the frame in the capture frame registry; absent when it could not be decoded for the preview.
+	readonly frameId?: string
 	// Exposure, in seconds.
 	readonly exposure: number
 	// Instant the exposure started, Unix milliseconds (UTC).
@@ -248,6 +254,8 @@ export interface FlatWizardSessionSummary {
 	readonly lastAttempt?: FlatWizardAttempt
 	// Manual step the session waits for.
 	readonly pending?: FlatWizardPendingStep
+	// Why the latest frame could not be previewed; cleared by the next previewed frame.
+	readonly previewError?: string
 	// Problem leaving a device in a state the session did not intend, such as the panel light left on.
 	readonly cleanupWarning?: string
 	// Why the session failed.
@@ -318,6 +326,8 @@ interface Session {
 	gate?: { readonly stepId: string; readonly confirm: VoidFunction }
 	// Whether the session switched the panel light on and has not switched it off yet.
 	lightOn: boolean
+	// Exposures taken so far, numbering the frames in the capture frame registry.
+	exposures: number
 	// Settles once the session ended and its cleanup ran.
 	readonly ended: PromiseWithResolvers<void>
 }
@@ -338,8 +348,9 @@ export class FlatWizardSessions {
 
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes every
 	// session, capturer takes the frames (the one of the capture service), wheels and panels drive the assigned
-	// devices (the commanders of their commands), analyzer measures the frames in DN, and listener receives every
-	// session change synchronously. capturesDir is the default output directory.
+	// devices (the commanders of their commands), images receives the previews, frames records them and the published
+	// frames and closes their documents, analyzer measures the frames in DN, and listener receives every session change
+	// synchronously. capturesDir is the default output directory.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: ClientResolver,
@@ -347,6 +358,8 @@ export class FlatWizardSessions {
 		readonly capturer: CameraCapturer,
 		readonly wheels: WheelCommander,
 		readonly panels: FlatPanelCommander,
+		readonly images: ImageStore,
+		readonly frames: CaptureFrameRegistry,
 		readonly analyzer: Pick<FlatWizardAnalyzer, 'measure'>,
 		readonly listener: FlatWizardListener,
 		readonly capturesDir: string = DEFAULT_CAPTURES_DIR,
@@ -406,6 +419,7 @@ export class FlatWizardSessions {
 			},
 			attempts: [],
 			lightOn: false,
+			exposures: 0,
 			ended: Promise.withResolvers(),
 		}
 
@@ -591,7 +605,7 @@ export class FlatWizardSessions {
 			await rm(join(staging, name), { force: true })
 			if (!measured.ok) return measured
 
-			const { analysis, time } = measured.value
+			const { analysis, time, generation, frameId } = measured.value
 			if (plane === undefined) {
 				plane = brightestPlane(analysis)
 				if (plane !== undefined) this.#patch(session, index, { plane })
@@ -600,7 +614,7 @@ export class FlatWizardSessions {
 			const level = plane && planeMedian(analysis, plane)
 			const clipped = analysis.planes.some((entry) => entry.clipping.upper?.status === 'present')
 			const verdict: FlatWizardVerdict = clipped ? 'clipped' : level === undefined || !(level > 0) ? 'noSignal' : 'usable'
-			this.#record(session, { filter: index, kind: 'trial', exposure, time, planes: planeLevels(analysis), level, verdict, reasons: reasonsOf(analysis) })
+			this.#record(session, { index: generation, frameId, filter: index, kind: 'trial', exposure, time, planes: planeLevels(analysis), level, verdict, reasons: reasonsOf(analysis) })
 
 			let next: number | undefined
 			let estimate: FlatExposureEstimate | undefined
@@ -654,9 +668,9 @@ export class FlatWizardSessions {
 				return measured
 			}
 
-			const { analysis, sample, time } = measured.value
+			const { analysis, sample, time, generation, frameId } = measured.value
 			const verdict = finalVerdict(analysis)
-			const record = { filter: index, kind: 'final', exposure, time, planes: planeLevels(analysis), level: planeMedian(analysis, plane), reasons: reasonsOf(analysis) } as const
+			const record = { index: generation, frameId, filter: index, kind: 'final', exposure, time, planes: planeLevels(analysis), level: planeMedian(analysis, plane), reasons: reasonsOf(analysis) } as const
 			const run = session.summary.filters[index]
 
 			if (verdict !== 'accepted') {
@@ -679,8 +693,10 @@ export class FlatWizardSessions {
 				return failedOperationResult('commandFailed', `Unable to save ${file}: ${Error.isError(error) ? error.message : String(error)}`)
 			}
 
+			const { sessionId, camera: device } = session.summary
+			this.frames.published({ sessionId, generation, ...device, cameraName, time, frameType: 'FLAT', path: join(directory, file) }, 'flatWizard')
 			accepted.push({ file, sample: sample! })
-			this.#record(session, { ...record, verdict, file })
+			this.#record(session, { ...record, frameId: captureFrameId(sessionId, generation), verdict, file })
 			this.#patch(session, index, { accepted: run.accepted + 1, files: [...run.files, file] })
 		}
 
@@ -689,7 +705,19 @@ export class FlatWizardSessions {
 
 	// Exposes one frame into the staging directory and measures it in DN. sampled keeps the temporal sample of a
 	// final frame; plane, once known, is the plane whose target the frame is checked against.
-	async #take(session: Session, context: OperationContext, camera: Camera, panel: FlatPanel | undefined, index: number, exposure: number, name: string, staging: string, id: string | undefined, sampled: boolean, plane?: FlatPlane): Promise<OperationResult<FlatFrameMeasurement & { readonly time: number }>> {
+	async #take(
+		session: Session,
+		context: OperationContext,
+		camera: Camera,
+		panel: FlatPanel | undefined,
+		index: number,
+		exposure: number,
+		name: string,
+		staging: string,
+		id: string | undefined,
+		sampled: boolean,
+		plane?: FlatPlane,
+	): Promise<OperationResult<FlatFrameMeasurement & { readonly time: number; readonly generation: number; readonly frameId?: string }>> {
 		const { request } = session.summary
 		const filter = request.filters[index]
 		this.#update(session, { state: 'exposing' })
@@ -698,15 +726,38 @@ export class FlatWizardSessions {
 		if (!captured.ok) return captured
 
 		const time = captured.value.frames[0]?.exposureStartedAt ?? Date.now()
+		const generation = ++session.exposures
+		const frameId = await this.#preview(session, join(staging, name), name, generation, time)
 		const frame: FlatFrameContext = { id, exposure, timestamp: time, filter: filter.label, illumination: panel ? { source: panel.name, brightness: panel.intensity.value } : { source: 'manual' } }
 		this.#update(session, { state: 'measuring' })
 
 		try {
 			const measured = await this.analyzer.measure(join(staging, name), frame, measurementOptions(request, filter, plane), sampled, context.signal)
-			return successfulOperationResult({ ...measured, time })
+			return successfulOperationResult({ ...measured, time, generation, frameId })
 		} catch (error) {
 			if (context.signal.aborted) return failedOperationResult(abortReason(context.signal))
 			return failedOperationResult('commandFailed', Error.isError(error) ? error.message : String(error))
+		}
+	}
+
+	// Decodes a frame from its staging file into the image store and records it as the latest frame of its camera
+	// (origin flatWizard, frame id sessionId:generation), previewed only until published() names its final path. The
+	// registry owns the closing of the document from then on. Resolves the frame id, or undefined when the frame
+	// could not be decoded, which is reported as previewError and never fails the session.
+	async #preview(session: Session, path: string, name: string, generation: number, time: number): Promise<string | undefined> {
+		const { sessionId, camera: device, cameraName } = session.summary
+		const frameId = captureFrameId(sessionId, generation)
+
+		try {
+			const info = await this.images.openCapture(await Bun.file(path).bytes(), name, { ...device, frameId, time })
+			const bitpix = numericKeyword<number, undefined>(info.header, 'BITPIX', undefined)
+			const { width, height, channels, cfa, acquisition } = info
+			this.frames.previewed(info, { imageId: info.id, sessionId, ...device, generation, time, frameType: 'FLAT', width, height, channels, cfa, bitpix, acquisition }, cameraName, 'flatWizard')
+			if (session.summary.previewError !== undefined) this.#update(session, { previewError: undefined })
+			return frameId
+		} catch (error) {
+			this.#update(session, { previewError: `Unable to decode the frame: ${Error.isError(error) ? error.message : String(error)}` })
+			return undefined
 		}
 	}
 
@@ -761,11 +812,10 @@ export class FlatWizardSessions {
 	}
 
 	// Appends an exposure to the session and publishes it as the latest one.
-	#record(session: Session, attempt: Omit<FlatWizardAttempt, 'index'>) {
-		const recorded: FlatWizardAttempt = { index: (session.attempts.at(-1)?.index ?? 0) + 1, ...attempt }
-		session.attempts.push(recorded)
+	#record(session: Session, attempt: FlatWizardAttempt) {
+		session.attempts.push(attempt)
 		if (session.attempts.length > MAXIMUM_ATTEMPTS) session.attempts.shift()
-		this.#update(session, { lastAttempt: recorded })
+		this.#update(session, { lastAttempt: attempt })
 	}
 
 	// Returns the latest session with this id.

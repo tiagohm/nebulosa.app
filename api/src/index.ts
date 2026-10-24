@@ -232,9 +232,9 @@ const tppa = new TppaSessions(connections.devices, (id) => connections.client(id
 const darv = new DarvSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, new DarvAnalyzer(images), broadcast)
 
 // Flat Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the captures,
-// moving the wheels and driving the panels with the commanders of their commands, and measuring the frames in DN on a
-// worker of their own.
-const flatWizard = new FlatWizardSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, wheels.commander, flatPanels.commander, new FlatWizardAnalyzer(), broadcast)
+// moving the wheels and driving the panels with the commanders of their commands, previewing and recording the frames
+// in the capture frame registry, and measuring them in DN on a worker of their own.
+const flatWizard = new FlatWizardSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, wheels.commander, flatPanels.commander, images, captureFrames, new FlatWizardAnalyzer(), broadcast)
 
 // Bun.serve routes under /api/.
 export const routes = {

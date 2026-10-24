@@ -113,6 +113,8 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 		captures.capturer,
 		wheels.commander,
 		panels.commander,
+		images,
+		frames,
 		measurement.analyzer,
 		(event) => events.push(event),
 	)
@@ -138,7 +140,7 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 	// Complete record of a session.
 	const session = async (sessionId: string) => (await flatWizard.session(sessionId).json()) as FlatWizardSession
 
-	return { id, operations, captures, flatWizard, measurement, events, camera, cameraId, wheel, wheelDevice: { connectionId: id, deviceId: wheelId }, panel, panelDevice: { connectionId: id, deviceId: panelId }, directory, summary, ended, released, session }
+	return { id, operations, captures, frames, flatWizard, measurement, events, camera, cameraId, wheel, wheelDevice: { connectionId: id, deviceId: wheelId }, panel, panelDevice: { connectionId: id, deviceId: panelId }, directory, summary, ended, released, session }
 }
 
 // Starts a session and returns its ids.
@@ -150,7 +152,7 @@ async function start(flatWizard: FlatWizardSessions, connectionId: string, camer
 
 describe('Flat Wizard sessions', () => {
 	test('a manual run waits for the operator, searches the exposure with two observations, and publishes the original frames', async () => {
-		const { id, cameraId, flatWizard, measurement, directory, summary, ended, released, session } = await setup()
+		const { id, cameraId, flatWizard, frames, measurement, directory, summary, ended, released, session } = await setup()
 		const { sessionId } = await start(flatWizard, id, cameraId, request(directory))
 
 		await waitUntil(() => summary()?.pending !== undefined)
@@ -180,6 +182,13 @@ describe('Flat Wizard sessions', () => {
 		const finals = measurement.calls.filter((call) => call.sample)
 		expect(finals.map((call) => readFileSync(join(directory, run.files[finals.indexOf(call)])).equals(call.bytes))).toEqual([true, true, true])
 		expect(finals[0].context).toMatchObject({ exposure: 0.2, filter: 'L', illumination: { source: 'manual' } })
+
+		// Every exposure was previewed as a Flat Wizard frame; only the published ones are saved, under their final names.
+		expect(record.attempts.map((attempt) => attempt.frameId)).toEqual([1, 2, 3, 4, 5].map((generation) => `${sessionId}:${generation}`))
+		const page = await frames.recent(id, cameraId)
+		expect(page.latest).toMatchObject({ frameId: `${sessionId}:5`, origin: 'flatWizard', frameType: 'FLAT', file: 'saved' })
+		expect(page.frames.map((frame) => [frame.frameId, frame.origin, frame.fileName, frame.availability])).toEqual(run.files.toReversed().map((file, i) => [`${sessionId}:${5 - i}`, 'flatWizard', file, i === 0 ? 'memory' : 'file']))
+		expect(summary()!.previewError).toBeUndefined()
 		expect(released()).toBeTrue()
 	}, 120000)
 

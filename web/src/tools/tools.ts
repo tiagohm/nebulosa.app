@@ -3,7 +3,7 @@ import type { ToolId } from '../shell/route'
 import type { IconName } from '../ui/Icon'
 
 // Static registry of the Tools workspace: standalone utilities that need neither a camera view nor an
-// image document. Tools of Capture (operational modes) and Images (contextual tools) are not listed
+// image document. The contextual tools and camera operations of Images are not listed
 // here; they belong to the selectors of their workspaces. A tool opens at /tools/<id> in the Tools
 // workspace; a tool without a view is planned and cannot be opened. A tool backed by a server service,
 // such as the Alpaca Server, only shows and controls that service: closing its view never stops it.

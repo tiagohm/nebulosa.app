@@ -63,7 +63,8 @@ export const ROLES: readonly RoleDefinition[] = [
 	{ role: 'FLAT_PANEL', label: 'Flat Panel', deviceType: 'flatPanel', group: 'OBSERVATORY' },
 ]
 
-// Camera roles, in Capture tab order. Each one assigned in a setup is a camera view of Capture.
+// Camera roles, in precedence order: a camera is looked up in this order when its role is resolved, so the main
+// camera comes first.
 export const CAMERA_ROLES = ['MAIN_CAMERA', 'GUIDE_CAMERA'] as const satisfies readonly EquipmentRole[]
 
 // Role filled by a camera.

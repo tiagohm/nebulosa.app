@@ -10,8 +10,8 @@ import { Actions, type InterfaceProps, Notice, Readout } from '../parts'
 
 // Auxiliary controls of a camera: what it is and what it can capture, as its driver reports it, and its
 // cooling (cooler switch, target temperature, sensor temperature, and cooler power). The target typed here
-// is only a request; the sensor temperature shown is the one reported, never the target. Exposures stay in
-// the Capture workspace, and cooling changes are refused while an exposure runs.
+// is only a request; the sensor temperature shown is the one reported, never the target. Exposures are taken
+// by the Camera Acquisition of the camera's tab in Images, and cooling changes are refused while an exposure runs.
 
 // Target temperature when the panel opens and the camera reports none, in degrees Celsius.
 const DEFAULT_TARGET = -10
@@ -37,7 +37,7 @@ export function CameraControls({ device }: InterfaceProps) {
 				{camera.bin && <Readout label="Binning">{`up to ${camera.bin.x} × ${camera.bin.y}`}</Readout>}
 				{camera.frameFormats.length > 0 && <Readout label="Readout modes">{camera.frameFormats.map((format) => format.label).join(', ')}</Readout>}
 				<Readout label="State">{capturing ? 'Capturing' : 'Idle'}</Readout>
-				<Notice>Exposures are taken in the Capture workspace.</Notice>
+				<Notice>Exposures are taken with Camera Acquisition, on the camera's tab in Images.</Notice>
 			</PanelSection>
 			{(camera.temperature !== undefined || camera.cooler || camera.canSetTemperature) && (
 				<PanelSection title="Cooling">

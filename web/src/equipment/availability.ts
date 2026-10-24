@@ -8,7 +8,7 @@ import type { RoleDevice } from './useEquipment'
 // device is connected and no operation holds it: being selected is not enough, and a device held by an
 // operation of any tab or service is busy. Busy is judged on the exact connection and device ids, so
 // two profiles assigning the same physical device see the same operation. Whether a feature is
-// implemented at all is declared by its own registry (Capture modes, Images tools, standalone tools);
+// implemented at all is declared by its own registry (Images tools, standalone tools);
 // device capabilities are not reported by the server yet, so they are not checked.
 
 // Availability of a role's device: ready, busy with operations, or the role state that prevents use.

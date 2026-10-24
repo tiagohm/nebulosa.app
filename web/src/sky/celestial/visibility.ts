@@ -100,9 +100,10 @@ export function movingBodyMagnitude(object: MovingBody) {
 	return isFiniteNumber(object.magnitude) ? object.magnitude : 0
 }
 
-// Returns whether a moving body is drawn at a zoom factor; bodies without magnitude always are.
+// Returns whether a moving body is drawn at a zoom factor; bodies without magnitude, or always visible,
+// always are.
 export function isMovingBodyVisibleAtZoom(object: MovingBody, zoom: number) {
-	return !isFiniteNumber(object.magnitude) || object.magnitude <= deepSkyObjectMagnitudeLimit(zoom)
+	return object.alwaysVisible === true || !isFiniteNumber(object.magnitude) || object.magnitude <= deepSkyObjectMagnitudeLimit(zoom)
 }
 
 // Returns whether a moving body is drawn in a render state.

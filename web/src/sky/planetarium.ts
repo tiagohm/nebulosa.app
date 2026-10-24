@@ -680,7 +680,8 @@ export class Planetarium {
 
 		// A name or kind learned later (from SBDB) replaces the body.
 		if (!movingBody || movingBody.name !== object.name || movingBody.type !== type) {
-			movingBody = { id, type, name: object.name, position: { rightAscension: object.rightAscension, declination: object.declination } }
+			// Usually fainter than the map's magnitude limits, it is drawn at every zoom since it was looked for.
+			movingBody = { id, type, name: object.name, alwaysVisible: true, position: { rightAscension: object.rightAscension, declination: object.declination } }
 			this.#bodies.set(id, movingBody)
 			this.celestial.addMovingBody(movingBody)
 		}

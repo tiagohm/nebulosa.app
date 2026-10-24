@@ -124,6 +124,9 @@ export interface MovingBody {
 	readonly name?: string
 	// Visual magnitude; bodies without one are always drawn.
 	magnitude?: number
+	// Whether the body is drawn and pickable at every zoom whatever its magnitude, such as an object the
+	// user looked for; defaults to false, hiding bodies fainter than the zoom's magnitude limit.
+	readonly alwaysVisible?: boolean
 	// Whether the body is drawn; defaults to true.
 	visible?: boolean
 	// Whether the body can be hovered and selected; defaults to true.

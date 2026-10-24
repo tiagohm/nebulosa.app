@@ -37,6 +37,7 @@ async function setup() {
 	const covers = new CoverCommands(manager.devices, (connectionId) => manager.client(connectionId), operations)
 	disposables.push(covers)
 	const panels = new FlatPanelCommands(manager.devices, (connectionId) => manager.client(connectionId), operations)
+	disposables.push(panels)
 	const coverId = manager.devices.list(client).find((d) => d.type === 'cover')!.id
 	const panelId = manager.devices.list(client).find((d) => d.type === 'flatPanel')!.id
 	manager.devices.switch(client, coverId, true)
@@ -67,12 +68,13 @@ test('opens and closes a cover as operations confirmed by its reported state', a
 test('switches the light and sets the brightness, refused while the panel is held', async () => {
 	const { id, panels, operations, panel, panelId } = await setup()
 
+	// Each command is answered only once the panel reports the commanded state.
 	expect((await panels.setLight(id, panelId, { enabled: true })).status).toBe(204)
-	await waitUntil(() => panel.enabled)
+	expect(panel.enabled).toBeTrue()
 	expect((await panels.setIntensity(id, panelId, { value: 100 })).status).toBe(204)
-	await waitUntil(() => panel.intensity.value === 100)
+	expect(panel.intensity.value).toBe(100)
 	expect((await panels.setLight(id, panelId, { enabled: false })).status).toBe(204)
-	await waitUntil(() => !panel.enabled)
+	expect(panel.enabled).toBeFalse()
 	// Turning the light off leaves the brightness as the panel reports it.
 	expect(panel.intensity.value).toBe(100)
 

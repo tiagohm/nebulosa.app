@@ -4,10 +4,10 @@ import type { DeviceRegistry } from './devices'
 import type { OperationRegistry } from './operations'
 
 // Flat panel commands of every open connection, over the toolkit's FlatPanelCommander: switching the light
-// and setting its brightness, which the driver applies at once. Each command acquires the panel for its
-// instant, so it is refused while another operation, such as a future flat sequence or the motion of the
-// cover of the same flip-flat, holds the physical device. The light state is the one the panel reports,
-// never inferred from the brightness.
+// and setting its brightness, each answered only once the panel reports the commanded state. Each command
+// acquires the panel while it waits for that confirmation, so it is refused while another operation, such
+// as a flat sequence or the motion of the cover of the same flip-flat, holds the physical device. The light
+// state is the one the panel reports, never inferred from the brightness.
 
 // Body of POST /api/connections/:id/flat-panels/:deviceId/light.
 export interface FlatPanelLightRequest {
@@ -41,8 +41,8 @@ export class FlatPanelCommands {
 		return stateResponse(this, connectionId, 'flatPanel', deviceId, 'Flat panel')
 	}
 
-	// Switches the light. Responds 204 once sent (the new state arrives as a flatPanel:updated event); 404,
-	// 409 disconnected or busy.
+	// Switches the light. Responds 204 once the panel reports the commanded state (which also arrives as a
+	// flatPanel:updated event); 404, 409 disconnected or busy, or the failure of a refused or unconfirmed command.
 	async setLight(connectionId: string, deviceId: string, { enabled }: FlatPanelLightRequest): Promise<Response> {
 		const panel = connectedDevice(this, connectionId, 'flatPanel', deviceId, 'Flat panel')
 		if (panel instanceof Response) return panel
@@ -50,12 +50,18 @@ export class FlatPanelCommands {
 		return await settle(enabled ? this.#commander.enable(coordinator, panel) : this.#commander.disable(coordinator, panel), 'Switching the light')
 	}
 
-	// Sets the brightness. Responds 204 once sent (the new value arrives as a flatPanel:updated event); 404,
-	// 409 disconnected or busy.
+	// Sets the brightness. Responds 204 once the panel reports the value within half its step (which also
+	// arrives as a flatPanel:updated event); 404, 409 disconnected or busy, or the failure of a refused or
+	// unconfirmed command.
 	async setIntensity(connectionId: string, deviceId: string, { value }: FlatPanelIntensityRequest): Promise<Response> {
 		const panel = connectedDevice(this, connectionId, 'flatPanel', deviceId, 'Flat panel')
 		if (panel instanceof Response) return panel
 		return await settle(this.#commander.intensity(this.operations.coordinator, panel, value), 'Setting the brightness')
+	}
+
+	// Stops observing the panels; their operations belong to the operation registry.
+	[Symbol.dispose]() {
+		this.#commander.dispose()
 	}
 }
 

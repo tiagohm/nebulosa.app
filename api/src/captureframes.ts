@@ -3,7 +3,7 @@ import { stat } from 'fs/promises'
 import { homedir } from 'os'
 import { basename, join } from 'path'
 import type { CaptureFileState, CaptureFrame, CaptureSettings } from './captures'
-import type { ServerEvent } from './connection'
+import type { ConnectionRegistryEvent } from './connection'
 import { errorResponse } from './http'
 import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
 import { errorCode, isRecord, writeAtomically } from './util'
@@ -696,7 +696,7 @@ export class CaptureFrameRegistry implements Disposable {
 	}
 
 	// Republishes the cameras a connection or device event changes the state of.
-	deviceChanged(event: ServerEvent) {
+	deviceChanged(event: ConnectionRegistryEvent) {
 		if (event.type !== 'connection:close' && event.type !== 'device:removed' && event.type !== 'device:updated' && event.type !== 'device:added') return
 		const connectionId = event.type === 'connection:close' ? event.id : event.type === 'device:added' ? event.device.connectionId : event.connectionId
 		const deviceId = event.type === 'device:added' ? event.device.id : event.type === 'connection:close' ? undefined : event.id

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { type ConnectionEvent, ConnectionManager, type ServerEvent } from './connection'
+import { type ConnectionEvent, ConnectionManager } from './connection'
 import type { DeviceEvent, DeviceSummary } from './devices'
 import { routes, websocket } from './index'
+import type { ServerEvent } from './websocket'
 
 const disposables: Disposable[] = []
 

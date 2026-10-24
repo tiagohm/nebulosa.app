@@ -43,7 +43,7 @@ export type {
 	CaptureLeaseReconcileResponse,
 	CaptureSourceSummary,
 } from './captureframes'
-export type { ConnectionEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from './connection'
+export type { ConnectionEvent, ConnectionRegistryEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest } from './connection'
 export type { CommandAccepted, CommandError, CommandErrorCode, CommandRequest } from './commands'
 export type { ApiError } from './http'
 export type {
@@ -139,6 +139,7 @@ export type { PlateSolveHint, PlateSolveHints, PlateSolveHintSource, PlateSolveS
 export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
 export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
 export type { Binning, DeriveRequest, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageCapture, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from './images'
+export type { ServerEvent } from './websocket'
 export { websocket }
 
 connections.listen(broadcast)

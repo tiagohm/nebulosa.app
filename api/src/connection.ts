@@ -10,18 +10,8 @@ import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { RotatorSimulator } from 'nebulosa/src/devices/indi/simulator/rotator'
 import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
-import type { AutoFocusEvent } from './autofocus'
-import type { CaptureFrameEvent } from './captureframes'
-import type { CaptureEvent } from './captures'
 import { type DeviceEvent, DeviceRegistry } from './devices'
-import type { DomeMotionEvent } from './domes'
-import type { ExternalToolEvent } from './externaltools'
-import type { FocuserBacklashEvent } from './focusers'
 import { errorResponse } from './http'
-import type { MountNudgeEvent } from './mounts'
-import type { OperationEvent } from './operations'
-import type { PlateSolvingEvent } from './platesolving'
-import type { StarDetectionEvent } from './stars'
 
 // Application-wide registry of open device connections (INDI, Alpaca, and the in-process simulator).
 // Each endpoint is opened at most once, concurrent requests for it share the same attempt, and every
@@ -59,14 +49,11 @@ export type ConnectionStatus = ConnectRequest & {
 // Notification published when a connection opens or closes, whoever caused it.
 export type ConnectionEvent = { readonly type: 'connection:open'; readonly connection: ConnectionStatus } | { readonly type: 'connection:close'; readonly id: string }
 
-// Any event pushed to the browser tabs: connection and device events of the connection registry, the
-// operation events of the operation registry, the events of the capture, Auto Focus, mount nudge, and dome manual
-// rotation services, the captured frames of the frame registry, the changes of the external program settings, and the
-// star detection jobs.
-export type ServerEvent = ConnectionEvent | DeviceEvent | OperationEvent | CaptureEvent | CaptureFrameEvent | AutoFocusEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent | StarDetectionEvent | PlateSolvingEvent | FocuserBacklashEvent
+// Event the connection registry publishes: a connection opening or closing, or an event of the devices it provides.
+export type ConnectionRegistryEvent = ConnectionEvent | DeviceEvent
 
 // Receiver of connection and device events.
-export type ConnectionListener = (event: ServerEvent) => void
+export type ConnectionListener = (event: ConnectionRegistryEvent) => void
 
 // Open connection with the client that owns its resources.
 interface OpenConnection {
@@ -222,7 +209,7 @@ export class ConnectionManager implements Disposable {
 	}
 
 	// Delivers event synchronously to every registered listener, in registration order.
-	#emit(event: ServerEvent) {
+	#emit(event: ConnectionRegistryEvent) {
 		for (const listener of this.#listeners) listener(event)
 	}
 

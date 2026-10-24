@@ -1,5 +1,6 @@
 import type { CameraCapabilities, CaptureSnoop, FlatWizardCaptureSettings, FlatWizardFilterState, FlatWizardRequest, FlatWizardSession, FlatWizardSessionSummary, FlatWizardSnapshot, FlatWizardState, FlatWizardVerdict, OperationDevice, ServerEvent, WheelState } from 'api'
 import type { FlatDiagnosticCode } from 'nebulosa/src/imaging/analysis/flat/types'
+import type { CameraCaptureTime } from 'nebulosa/src/observation/capture/types'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit, responseError } from '../http'
@@ -70,6 +71,14 @@ export const FLAT_WIZARD_DIAGNOSTIC_LABELS: Readonly<Partial<Record<FlatDiagnost
 	sequenceVariation: 'The frames vary more than expected.',
 	sequenceOutlier: 'A frame stands apart from the others.',
 	sequenceMetadataUnknown: 'Missing metadata prevents proving the frames homogeneous.',
+}
+
+// Returns the progress of the frame being exposed from what the driver reports (times in microseconds, progress in
+// percent), as elapsed and remaining seconds and a completed fraction in [0, 1]; undefined before the driver reported
+// any, or when it reports a progress that is not finite.
+export function flatWizardFrameProgress(exposure: CameraCaptureTime | undefined): { readonly elapsed: number; readonly remaining: number; readonly fraction: number } | undefined {
+	if (!exposure || !Number.isFinite(exposure.progress)) return undefined
+	return { elapsed: Math.max(0, exposure.elapsedTime) / 1e6, remaining: Math.max(0, exposure.remainingTime) / 1e6, fraction: Math.min(1, Math.max(0, exposure.progress / 100)) }
 }
 
 // Returns whether a session is running: it has not ended.

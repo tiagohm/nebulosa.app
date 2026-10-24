@@ -284,6 +284,19 @@ describe('Flat Wizard sessions', () => {
 		expect(cover.parked).toBeFalse()
 	}, 120000)
 
+	test('the progress of the frame being exposed is published and cleared once it was read', async () => {
+		const { id, cameraId, flatWizard, wheelDevice, panelDevice, directory, summary, ended, events } = await setup(() => 20000)
+		await start(flatWizard, id, cameraId, request(directory, { filters: [filter({ count: 1, initialExposure: 1, maximumExposure: 5 })], wheel: wheelDevice, panel: panelDevice }))
+		await waitUntil(ended, 60000)
+
+		const reported = events.flatMap((event) => (event.session.exposure ? [{ state: event.session.state, ...event.session.exposure }] : []))
+		expect(reported.length).toBeGreaterThan(0)
+		expect(reported.every((progress) => progress.state === 'exposing' && progress.progress >= 0 && progress.progress <= 100)).toBeTrue()
+		expect(reported.some((progress) => progress.elapsedTime > 0)).toBeTrue()
+		expect(events.filter((event) => event.session.state === 'measuring').every((event) => event.session.exposure === undefined)).toBeTrue()
+		expect(summary()!.exposure).toBeUndefined()
+	}, 120000)
+
 	test('a stop while waiting for the operator cancels the session and releases the devices', async () => {
 		const { id, cameraId, flatWizard, directory, summary, released } = await setup()
 		const { sessionId } = await start(flatWizard, id, cameraId, request(directory))

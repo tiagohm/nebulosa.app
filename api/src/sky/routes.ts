@@ -144,7 +144,7 @@ export function createSkyRoutes(services: SkyServices) {
 
 				try {
 					const position = await ephemeris.position(target, { time, observer, mode, signal: req.signal })
-					const events = observer && mode !== 'fast' ? ephemeris.events(target, time, observer, refKey(ref)) : undefined
+					const events = observer ? ephemeris.events(target, time, observer, refKey(ref)) : undefined
 					return Response.json({ position, events } satisfies SkyPositionResponse)
 				} catch (error) {
 					if (error instanceof EphemerisUnavailableError) return errorResponse(error.message, 503, 'serviceUnavailable')

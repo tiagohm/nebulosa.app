@@ -127,15 +127,19 @@ test('positions are computed for the instant shown', async () => {
 	await refreshSkySelection(state, undefined, { tolerance: 0, mode: 'accurate' }, clocked)
 	expect(pending).toHaveLength(0)
 
-	// A fast position of another instant keeps the selection and its previous events.
+	// A fast position of another instant keeps the selection and replaces its events with the same instant's.
 	time = 9_000_000
 	void refreshSkySelection(state, undefined, { tolerance: 0, mode: 'fast' }, clocked)
 	expect(pending[0].body).toMatchObject({ time: 9_000_000, mode: 'fast' })
-	await release((url) => url === '/api/sky/position', { position: { ...position(2), time: 9_000_000 } })
+	await release((url) => url === '/api/sky/position', { position: { ...position(2), time: 9_000_000 }, events: { state: 'normal', rise: 2 } })
 
 	expect(state.selection?.name).toBe('Moon')
 	expect(state.selection?.position?.time).toBe(9_000_000)
-	expect(state.selection?.events?.rise).toBe(1)
+	expect(state.selection?.events?.rise).toBe(2)
+
+	// The instant of the map's update is asked, whatever the clock reads meanwhile.
+	void refreshSkySelection(state, undefined, { tolerance: 0, mode: 'accurate' }, clocked, 12_000_000)
+	expect(pending[0].body).toMatchObject({ time: 12_000_000, mode: 'accurate' })
 })
 
 test('map data is downloaded again only for an instant more than a year away', async () => {

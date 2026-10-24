@@ -41,6 +41,10 @@ export interface WallTime {
 // minutes, one hour, and one day per second.
 export const SKY_TIME_RATES = [1, 10, 60, 600, 3600, 86400] as const
 
+// Interval in milliseconds at which the star map and the selection's position and events are updated
+// together while the clock follows the real time (15 s, about 4′ of sidereal motion on the sky).
+export const SKY_REALTIME_TICK_MS = 15_000
+
 // Milliseconds in one day.
 const DAY_MS = 86_400_000
 

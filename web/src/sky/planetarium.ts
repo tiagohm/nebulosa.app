@@ -4,14 +4,14 @@ import { proxy, subscribe } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import type { SkyObserverSettings } from '../profile/schema'
 import { Celestial, type CelestialObject, type CelestialOptions, type CelestialShape, type ConstellationLine, type CoordinateSystem, drawSelectionReticle, type MovingBody, type MovingBodyType, type RenderState } from './celestial/celestial'
-import { skyClock, skyTime } from './clock'
+import { SKY_REALTIME_TICK_MS, type SkyClockMode, skyClock, skyTime } from './clock'
 import { applySkyDisplay, MAP_STAR_MAGNITUDE_LIMIT, type SkyDisplaySettings } from './display'
 import { formatAngularSize } from './format'
 import { type FramePoint, framePolygon, isFraming, type OpticalConfiguration, resolveFraming } from './framing'
 import { type MountPoint, mountRuntime, mountView, selectionPoint } from './mount'
 import { hoverLabel, type MapNames, MOUNT_SHAPE_TYPE, type MountMarkerData, type MountRef, movingBodyId, refKey, refOfCelestialObject, selectionTargets, type SkySelectionRef } from './objects'
 import { createRequestGuard } from './selection'
-import { apiObserver, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapDataCovers, selectSkyObject, skyState } from './sky'
+import { apiObserver, browserSkyIo, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapDataCovers, REALTIME_REFRESH, refreshSkySelection, type SkyRefreshOptions, selectSkyObject, skyState } from './sky'
 
 // The Sky workspace's star map, kept for the whole tab: the Celestial instance, its catalogs, the moving
 // bodies, and the selection highlight live here rather than in React, so leaving the workspace only
@@ -24,11 +24,19 @@ import { apiObserver, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapDataC
 // drawn as a selectable marker while the clock shows the real time, and the view can be centered on it
 // or follow it until the user pans.
 
-// Interval of the map's updates in milliseconds while the clock follows the real time.
-const REALTIME_INTERVAL_MS = 30_000
-
 // Interval of the map's updates in milliseconds while the clock plays.
 const PLAYING_INTERVAL_MS = 250
+
+// Map updates per refresh of the selection's position while the clock plays: one every 2 s.
+const PLAYING_SELECTION_TICKS = 8
+
+// Delay in milliseconds before the selection's position is refreshed for a fixed instant, so stepping the
+// clock repeatedly asks only for the instant reached.
+const FIXED_SETTLE_MS = 400
+
+// How the selection's position is refreshed, by clock mode: accurately when the instant is current or
+// fixed, and from the local models while playing (a fixed instant reached by pausing is then refined).
+const REFRESH: Readonly<Record<SkyClockMode, SkyRefreshOptions>> = { now: REALTIME_REFRESH, fixed: { tolerance: 0, mode: 'accurate' }, playing: { tolerance: 0, mode: 'fast' } }
 
 // Color of the selection reticle.
 const SELECTION_COLOR = '#7e57c2'
@@ -218,6 +226,8 @@ export class Planetarium {
 	#resizeObserver?: ResizeObserver
 	// Timer of the clock updates while attached.
 	#clockTimer?: ReturnType<typeof setInterval>
+	// Timer of the refresh of the selection for a fixed instant, once it settles.
+	#settleTimer?: ReturnType<typeof setTimeout>
 	// Stops following the simulation clock; set while attached.
 	#unsubscribeClock?: VoidFunction
 	#destroyed = false
@@ -270,8 +280,7 @@ export class Planetarium {
 		this.#resizeObserver = undefined
 		this.#unsubscribeClock?.()
 		this.#unsubscribeClock = undefined
-		clearInterval(this.#clockTimer)
-		this.#clockTimer = undefined
+		this.#stopClock()
 		this.#host.remove()
 	}
 
@@ -453,18 +462,43 @@ export class Planetarium {
 		selectSkyObject(skyState, { ref: objectRef, source: 'map', name: hoverLabel(object, this.#names)?.name ?? '', category: categoryOf(object, objectRef) }, this.#observer)
 	}
 
-	// Shows the clock's instant now and updates it on a timer that suits the clock: slow while following
-	// the real time, frequent while playing, and none for a fixed instant. Once the clock is not playing,
-	// reloads the catalogs when the instant is more than a year away from theirs.
+	// Shows the clock's instant now and updates it on a timer that suits the clock: every
+	// SKY_REALTIME_TICK_MS while following the real time, frequently while playing, and none for a fixed
+	// instant. Each update refreshes the selection's position and events for the same instant as the map:
+	// on every real-time update, every PLAYING_SELECTION_TICKS updates while playing, and once
+	// FIXED_SETTLE_MS after a fixed instant settles. Once the clock is not playing, reloads the catalogs
+	// when the instant is more than a year away from theirs.
 	#followClock() {
-		clearInterval(this.#clockTimer)
-		this.#clockTimer = undefined
+		this.#stopClock()
 
-		const tick = () => this.celestial.setTime(this.time)
+		const mode = skyClock.mode
+		let ticks = 0
+
+		const tick = () => {
+			const time = this.time
+			this.celestial.setTime(time)
+			if (mode !== 'fixed' && ticks++ % (mode === 'playing' ? PLAYING_SELECTION_TICKS : 1) === 0) this.#refreshSelection(mode, time)
+		}
+
 		tick()
 
-		if (skyClock.mode !== 'fixed') this.#clockTimer = setInterval(tick, skyClock.mode === 'playing' ? PLAYING_INTERVAL_MS : REALTIME_INTERVAL_MS)
-		if (skyClock.mode !== 'playing' && this.#dataTime !== undefined && !mapDataCovers(this.#dataTime, this.time)) this.load()
+		if (mode === 'fixed') this.#settleTimer = setTimeout(() => this.#refreshSelection(mode, this.time), FIXED_SETTLE_MS)
+		else this.#clockTimer = setInterval(tick, mode === 'playing' ? PLAYING_INTERVAL_MS : SKY_REALTIME_TICK_MS)
+		if (mode !== 'playing' && this.#dataTime !== undefined && !mapDataCovers(this.#dataTime, this.time)) this.load()
+	}
+
+	// Stops the clock updates and the pending refresh of a fixed instant.
+	#stopClock() {
+		clearInterval(this.#clockTimer)
+		clearTimeout(this.#settleTimer)
+		this.#clockTimer = undefined
+		this.#settleTimer = undefined
+	}
+
+	// Refreshes the selection's position and events for an instant (Unix milliseconds) of the map, as a
+	// clock mode asks.
+	#refreshSelection(mode: SkyClockMode, time: number) {
+		void refreshSkySelection(skyState, this.#observer, REFRESH[mode], browserSkyIo, time)
 	}
 
 	// Asks for the body positions of an instant (Unix milliseconds). While a request is running, only the

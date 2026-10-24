@@ -107,12 +107,14 @@ export const browserSkyIo: SkyIo = {
 export interface SkyRefreshOptions {
 	// Largest distance in milliseconds between a kept position's instant and the instant shown.
 	readonly tolerance: number
-	// Calculation path: `accurate` asks Horizons first; `fast` is local only and has no events.
+	// Calculation path: `accurate` asks Horizons first; `fast` is local only.
 	readonly mode: 'fast' | 'accurate'
 }
 
-// Age in milliseconds below which a position is fresh enough that a periodic refresh skips it.
-const FRESH_POSITION_MS = 20_000
+// Age in milliseconds below which a position is fresh enough that a refresh skips it, such as when the
+// selected object is selected again; shorter than the real-time tick of the map (SKY_REALTIME_TICK_MS), so
+// every tick refreshes.
+const FRESH_POSITION_MS = 5_000
 
 // Refresh while the clock follows the real time: positions younger than FRESH_POSITION_MS are kept.
 export const REALTIME_REFRESH: SkyRefreshOptions = { tolerance: FRESH_POSITION_MS, mode: 'accurate' }
@@ -215,13 +217,15 @@ export function clearSkySelection(state: SkyState) {
 	state.selection = undefined
 }
 
-// Recomputes the position of the selection for the instant shown, keeping its details. Skips a selection
-// still loading or whose latest request was within the tolerance of the instant, so remounting the
-// workspace, a fast clock, or a failing service never piles up requests.
-export async function refreshSkySelection(state: SkyState, observer: SkyObserverSettings | undefined, options: SkyRefreshOptions = REALTIME_REFRESH, io: SkyIo = browserSkyIo): Promise<void> {
+// Recomputes the position and events of the selection for an instant (Unix milliseconds; by default the
+// instant shown), keeping its details. The map passes the instant of its own update, so the map, the
+// position, and the events show the same instant. Skips a selection still loading or whose latest request
+// was within the tolerance of the instant, so remounting the workspace, a fast clock, or a failing service
+// never piles up requests.
+export async function refreshSkySelection(state: SkyState, observer: SkyObserverSettings | undefined, options: SkyRefreshOptions = REALTIME_REFRESH, io: SkyIo = browserSkyIo, time: number = io.time()): Promise<void> {
 	const selection = state.selection
-	if (!selection || selection.loading || (selection.requestedTime !== undefined && Math.abs(io.time() - selection.requestedTime) <= options.tolerance)) return
-	await loadSelection(state, observer, io, false, options.mode)
+	if (!selection || selection.loading || (selection.requestedTime !== undefined && Math.abs(time - selection.requestedTime) <= options.tolerance)) return
+	await loadSelection(state, observer, io, false, options.mode, time)
 }
 
 // Recomputes the position of the selection for a new observer, first dropping the position and events
@@ -235,10 +239,11 @@ export function changeSkyObserver(state: SkyState, observer: SkyObserverSettings
 	return loadSelection(state, observer, io, false, 'accurate')
 }
 
-// Loads the position of the selection for the instant shown and, when `details` is true or they are
-// missing, its catalog or minor body data. Responses are applied only while the request is the latest one
-// for the same object. A fast position has no events, so it keeps the previous ones (absolute instants).
-async function loadSelection(state: SkyState, observer: SkyObserverSettings | undefined, io: SkyIo, details: boolean, mode: 'fast' | 'accurate') {
+// Loads the position and events of the selection for an instant (Unix milliseconds; by default the instant
+// shown) and, when `details` is true or they are missing, its catalog or minor body data. Responses are
+// applied only while the request is the latest one for the same object; the position and events of one
+// response always replace both, so they never show different instants.
+async function loadSelection(state: SkyState, observer: SkyObserverSettings | undefined, io: SkyIo, details: boolean, mode: 'fast' | 'accurate', time: number = io.time()) {
 	const selection = state.selection
 	if (!selection) return
 
@@ -252,7 +257,6 @@ async function loadSelection(state: SkyState, observer: SkyObserverSettings | un
 	}
 
 	const applies = () => request.current() && state.selection?.key === key
-	const time = io.time()
 	selection.loading = true
 	selection.requestedTime = time
 
@@ -311,7 +315,7 @@ async function loadSelection(state: SkyState, observer: SkyObserverSettings | un
 			({ position, events }) => {
 				if (!applies()) return
 				state.selection!.position = position
-				if (mode === 'accurate' || events) state.selection!.events = events
+				state.selection!.events = events
 				state.selection!.positionError = undefined
 			},
 			(error: unknown) => {

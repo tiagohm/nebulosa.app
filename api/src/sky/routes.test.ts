@@ -38,6 +38,14 @@ test('position of a catalog object with events', async () => {
 	expect(events?.state).toBe('normal')
 })
 
+test('a fast position of a body has its events too', async () => {
+	const body = { target: { kind: 'body', code: '499' }, time: Date.UTC(2026, 9, 18, 12), observer: { latitude: -23.5, longitude: -46.6, elevation: 760 }, mode: 'fast' }
+	const response = await routes['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify(body) }) as never)
+	const { position, events } = (await response.json()) as SkyPositionResponse
+	expect(position.source).toBe('local')
+	expect(events).toBeDefined()
+})
+
 test('position errors', async () => {
 	const unknown = await routes['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify({ target: { kind: 'catalog', id: 5 }, time: 0 }) }) as never)
 	expect(unknown.status).toBe(404)

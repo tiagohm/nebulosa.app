@@ -7,7 +7,7 @@ import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import type { CoordinateSystem } from './celestial/celestial'
-import { type SkyClockMode, skyClock } from './clock'
+import { skyClock } from './clock'
 import { DisplayPanel } from './DisplayPanel'
 import { equipmentOptics } from './framing'
 import { FramingPanel } from './FramingPanel'
@@ -17,7 +17,7 @@ import { ObjectInspector } from './ObjectInspector'
 import { ObserverPanel } from './ObserverPanel'
 import { observerKey, planetarium, planetariumState } from './planetarium'
 import { liveSensors, sensorRuntime } from './sensors'
-import { changeSkyObserver, REALTIME_REFRESH, refreshSkySelection, type SkyPanelView, type SkyRefreshOptions, selectSkyObject, skyState } from './sky'
+import { changeSkyObserver, type SkyPanelView, selectSkyObject, skyState } from './sky'
 import { SkySearch } from './SkySearch'
 import { SkyView } from './SkyView'
 import { TimeController } from './TimeController'
@@ -30,13 +30,6 @@ import { TimeController } from './TimeController'
 // observer, display (layers), and framing (field of view of custom optical presets or of the Equipment
 // Setup, drawn around the selection) settings. With an observer the map is the observer's local sky; without one it is an
 // equatorial chart of the whole sky.
-
-// Interval in milliseconds at which the selection's position is checked against the clock, by mode.
-const REFRESH_INTERVAL_MS: Readonly<Record<SkyClockMode, number>> = { now: 60_000, fixed: 400, playing: 2_000 }
-
-// How the selection's position is refreshed, by clock mode: accurately when the instant is current or
-// fixed, and from the local models while playing (a fixed instant reached by pausing is then refined).
-const REFRESH: Readonly<Record<SkyClockMode, SkyRefreshOptions>> = { now: REALTIME_REFRESH, fixed: { tolerance: 0, mode: 'accurate' }, playing: { tolerance: 0, mode: 'fast' } }
 
 // Observer the selection's position was last computed for; undefined before the workspace is first shown.
 let appliedObserver: string | undefined
@@ -96,19 +89,6 @@ export function SkyWorkspace() {
 	useEffect(() => {
 		if (status === 'ready') map.syncSelection()
 	}, [map, status, selectionKey, selectionCenter?.rightAscension, selectionCenter?.declination])
-
-	// Keeps the selection's position at the clock's instant while the workspace is shown: periodically and
-	// accurately for the real time, once shortly after a fixed instant settles, and quickly from the local
-	// models while playing.
-	useEffect(() => {
-		const refresh = (options: SkyRefreshOptions) => () => void refreshSkySelection(skyState, activeProfile(profileState).settings.sky.observer, options)
-
-		// A fixed instant is first refreshed after a short delay, so stepping repeatedly asks only for the
-		// instant reached; later ticks are no-ops once that instant was requested.
-		if (clock.mode !== 'fixed') refresh(REFRESH[clock.mode])()
-		const timer = setInterval(refresh(REFRESH[clock.mode]), REFRESH_INTERVAL_MS[clock.mode])
-		return () => clearInterval(timer)
-	}, [clock.mode, clock.anchor, clock.startedAt, clock.rate])
 
 	// Selects a search result as a click would; a minor body is first drawn at its position now.
 	function handleSearchSelect(result: SkySearchResult, minorBody?: MinorBody) {

@@ -256,6 +256,11 @@ Conflicts are resolved by the arbiter on the server, never only in the browser, 
 - Values shown are those the devices report; forms and sliders only hold pending values until an explicit action.
 - Known driver differences: Alpaca mounts expose only Go Home (no find or set home, no set park, no flip); Alpaca domes cannot unpark or rotate manually; Alpaca focusers have no sync or reverse; Alpaca rotators have no home. Pier side and the INDI Alignment Subsystem are reported but have no commander, so they are read-only; power, weather, safety monitor, and GPS devices are not managed. The simulator has no composite cover with a heater; that path is tested with a fake client.
 
+## Sky Map Contract
+
+- One tick drives the star map and the selection (`#followClock` of `web/src/sky/planetarium.ts`): every `SKY_REALTIME_TICK_MS` (15 s) while the clock follows the real time, every 250 ms while playing, and once for a fixed instant. Each tick reads the instant once, shows it on the map, and refreshes the selection's position and events for that same instant (`refreshSkySelection` with the tick's time): accurately on every real-time tick, from the local models every 2 s while playing, and accurately 400 ms after a fixed instant settles. The time bar's own redraws are display only.
+- `POST /api/sky/position` returns the rise, transit, and set for an observer in both modes (they are computed locally and cached per hour), so the Visibility of the Object Inspector always shows the instant of its Position.
+
 ## Sky Framing Integration Contract
 
 - Framing is a view inside Sky. It reuses the selection, the framing center, and the `OpticalPreset` and `resolveFraming` results of `web/src/sky/framing.ts`: angular size, image scale, and position angle measured from north through east.

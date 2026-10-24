@@ -206,7 +206,7 @@ export interface SkyPositionRequest {
 	readonly time: number
 	// Observer; the geocenter when absent, which also omits azimuth, altitude, and events.
 	readonly observer?: SkyObserver
-	// `accurate` (default) asks Horizons first for solar-system objects; `fast` is local only and omits events.
+	// `accurate` (default) asks Horizons first for solar-system objects; `fast` is local only.
 	readonly mode?: EphemerisMode
 }
 
@@ -214,7 +214,7 @@ export interface SkyPositionRequest {
 export interface SkyPositionResponse {
 	// Position at the requested instant.
 	readonly position: SkyPosition
-	// Rise, transit, and set; absent without an observer, in fast mode, or without a local model.
+	// Rise, transit, and set; absent without an observer or without a local model. Computed locally in both modes.
 	readonly events?: SkyEvents
 }
 

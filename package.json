@@ -15,7 +15,8 @@
 		"compile": "bun run --cwd app compile",
 		"lint": "bun lint --disable-nested-config",
 		"fmt": "bun fmt --disable-nested-config",
-		"make:catalog": "bun run bin/src/sky.catalog.ts"
+		"make:catalog": "bun run bin/src/sky.catalog.ts",
+		"test:timings": "bun test --timings timings.json --update-timings"
 	},
 	"devDependencies": {
 		"@types/bun": "latest"

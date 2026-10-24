@@ -217,6 +217,12 @@ export class MountCommands implements Disposable {
 		this.#nudges = new LeasedMotions<MountNudgeSession>(operations, 'mount.nudge', 'mountNudge', { motion: 'nudge', device: 'mount' }, (session) => listener({ type: 'mount:nudge', session }), nudge)
 	}
 
+	// Commander of the mounts, shared with the services that compose mount motions (TPPA), so the manual
+	// motion they open is the one the nudge and stop endpoints of the same mount see.
+	get commander(): MountCommander {
+		return this.#commander
+	}
+
 	// Returns the nudge sessions still running, in start order.
 	nudges(): MountNudgeSession[] {
 		return this.#nudges.sessions()

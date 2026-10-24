@@ -144,7 +144,7 @@ interface CapturedFrameProps {
 }
 
 // Labels of the operations that take frames.
-const ORIGIN_LABELS: Readonly<Record<CaptureFrameOrigin, string>> = { capture: 'Camera Acquisition', autofocus: 'Auto Focus' }
+const ORIGIN_LABELS: Readonly<Record<CaptureFrameOrigin, string>> = { capture: 'Camera Acquisition', autofocus: 'Auto Focus', tppa: 'TPPA' }
 
 // Camera, origin, session, and storage of the frame a camera tab shows, as the capture frame registry describes it,
 // and, for an Auto Focus frame, its measurement and the focuser position its session recorded.

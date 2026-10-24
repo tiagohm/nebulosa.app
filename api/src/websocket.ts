@@ -10,16 +10,17 @@ import type { MountNudgeEvent } from './mounts'
 import type { OperationEvent } from './operations'
 import type { PlateSolvingEvent } from './platesolving'
 import type { StarDetectionEvent } from './stars'
+import type { TppaEvent } from './tppa'
 
 // WebSocket endpoint that pushes server events to every open browser tab. A tab names itself with the client id
 // it opens the socket with (/api/ws?client=<id>), the same for every socket it reopens, so services can keep
 // what the tab holds across reconnects.
 
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the operation events
-// of the operation registry, the events of the capture, Auto Focus, mount nudge, and dome manual rotation services,
+// of the operation registry, the events of the capture, Auto Focus, TPPA, mount nudge, and dome manual rotation services,
 // the captured frames of the frame registry, the changes of the external program settings and of the focuser backlash
 // compensations, and the star detection and plate solving jobs.
-export type ServerEvent = ConnectionRegistryEvent | OperationEvent | CaptureEvent | CaptureFrameEvent | AutoFocusEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent | StarDetectionEvent | PlateSolvingEvent | FocuserBacklashEvent
+export type ServerEvent = ConnectionRegistryEvent | OperationEvent | CaptureEvent | CaptureFrameEvent | AutoFocusEvent | TppaEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent | StarDetectionEvent | PlateSolvingEvent | FocuserBacklashEvent
 
 // What the upgrade attaches to a socket.
 export interface WebSocketData {

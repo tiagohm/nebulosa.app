@@ -70,7 +70,8 @@ export type CaptureFrameAvailability = 'memory' | 'file' | 'saving' | 'unavailab
 // Operation that took a frame:
 // - capture: Camera Capture, previewed only or saved.
 // - autofocus: an Auto Focus session, sampled or verifying; never saved.
-export type CaptureFrameOrigin = 'capture' | 'autofocus'
+// - tppa: a TPPA session, a pose or a refinement frame; never saved.
+export type CaptureFrameOrigin = 'capture' | 'autofocus' | 'tppa'
 
 // Why a frame cannot be opened:
 // - expired: it was only previewed and its document was closed.

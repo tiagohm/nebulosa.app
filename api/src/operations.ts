@@ -37,6 +37,7 @@ export type OperationKind =
 	| 'dome.move'
 	| 'camera.capture'
 	| 'focuser.autofocus'
+	| 'mount.tppa'
 
 // Life stage of an operation.
 export type OperationState = 'running' | 'succeeded' | 'failed'

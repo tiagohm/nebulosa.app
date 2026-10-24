@@ -130,7 +130,7 @@ export class DomeCommands implements Disposable {
 
 	// Responds with the state of a dome, or 404.
 	state(connectionId: string, deviceId: string): Response {
-		return stateResponse(this.devices, this.client, connectionId, 'dome', deviceId, 'Dome')
+		return stateResponse(this, connectionId, 'dome', deviceId, 'Dome')
 	}
 
 	// Returns the manual rotation sessions still running, in start order.
@@ -255,7 +255,7 @@ export class DomeCommands implements Disposable {
 	// Cancels the operation holding a dome, a manual rotation included, and stops its motion and its
 	// shutter. Responds 204 once it stands still, 404, and 409 when the stop could not be confirmed.
 	async stop(connectionId: string, deviceId: string): Promise<Response> {
-		const dome = findDevice(this.devices, this.client, connectionId, 'dome', deviceId)
+		const dome = findDevice(this, connectionId, 'dome', deviceId)
 		if (!dome) return notFound('Dome')
 		return await stopResponse(this.operations, dome, () => this.#commander.stopMotion(dome))
 	}
@@ -264,7 +264,7 @@ export class DomeCommands implements Disposable {
 	// with the session and the lease timing, 404, 409 disconnected, slaved, parked, busy, or already stopped,
 	// 422 when the dome cannot rotate manually, 502 when the command could not be sent.
 	async startMotion(connectionId: string, deviceId: string, { token, direction }: DomeMotionRequest): Promise<Response> {
-		const dome = findDevice(this.devices, this.client, connectionId, 'dome', deviceId)
+		const dome = findDevice(this, connectionId, 'dome', deviceId)
 		if (!dome) return notFound('Dome')
 		return await this.#motions.start(
 			dome,
@@ -286,7 +286,7 @@ export class DomeCommands implements Disposable {
 
 	// Returns the connected dome with this id on an open connection, or the response refusing it.
 	#connected(connectionId: string, deviceId: string): Dome | Response {
-		return connectedDevice(this.devices, this.client, connectionId, 'dome', deviceId, 'Dome')
+		return connectedDevice(this, connectionId, 'dome', deviceId, 'Dome')
 	}
 
 	// Runs a manual rotation: starts the direction through a nested manual motion, which inherits the dome,

@@ -148,13 +148,13 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 
 	// Responds with the state of a focuser, or 404.
 	state(connectionId: string, deviceId: string): Response {
-		return stateResponse(this.devices, this.client, connectionId, 'focuser', deviceId, 'Focuser')
+		return stateResponse(this, connectionId, 'focuser', deviceId, 'Focuser')
 	}
 
 	// Starts a move to an absolute position of the logical counter. Responds 202 with the operation id; 404,
 	// 409 disconnected or busy, 422 when the focuser has no absolute positioning.
 	moveTo(connectionId: string, deviceId: string, request: FocuserMoveToRequest): Response {
-		const focuser = connectedDevice(this.devices, this.client, connectionId, 'focuser', deviceId, 'Focuser')
+		const focuser = connectedDevice(this, connectionId, 'focuser', deviceId, 'Focuser')
 		if (focuser instanceof Response) return focuser
 		if (!focuser.canAbsoluteMove) return unsupported('The focuser cannot move to a position')
 		return startCommand(this.operations, 'focuser.move', connectionId, focuser, request, (report) => this.#position(this.operations.coordinator, focuser, () => request.position, undefined, report))
@@ -165,7 +165,7 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 	// when the focuser has no relative positioning. Answered like moveTo, with 422 when the focuser cannot move
 	// by steps. A repeated request with the same token never moves it twice.
 	move(connectionId: string, deviceId: string, request: FocuserMoveRequest): Response {
-		const focuser = connectedDevice(this.devices, this.client, connectionId, 'focuser', deviceId, 'Focuser')
+		const focuser = connectedDevice(this, connectionId, 'focuser', deviceId, 'Focuser')
 		if (focuser instanceof Response) return focuser
 		if (!focuser.canRelativeMove && !focuser.canAbsoluteMove) return unsupported('The focuser cannot move by steps')
 		const { coordinator } = this.operations
@@ -184,7 +184,7 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 	// Redefines the position counter without moving, which also makes the logical position the reported one.
 	// Responds 204 once sent; 404, 409 disconnected or busy, 422 when the focuser cannot sync.
 	async sync(connectionId: string, deviceId: string, { position }: FocuserSyncRequest): Promise<Response> {
-		const focuser = connectedDevice(this.devices, this.client, connectionId, 'focuser', deviceId, 'Focuser')
+		const focuser = connectedDevice(this, connectionId, 'focuser', deviceId, 'Focuser')
 		if (focuser instanceof Response) return focuser
 		if (!focuser.canSync) return unsupported('The focuser cannot sync its position')
 		const response = await settle(this.#commander.syncTo(this.operations.coordinator, focuser, position), 'The sync')
@@ -195,7 +195,7 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 	// Reverses or restores the motion direction, which invalidates the direction the compensator remembers.
 	// Responds 204 once applied; 404, 409, 422 when the focuser cannot reverse.
 	async reverse(connectionId: string, deviceId: string, { enabled }: FocuserReverseRequest): Promise<Response> {
-		const focuser = connectedDevice(this.devices, this.client, connectionId, 'focuser', deviceId, 'Focuser')
+		const focuser = connectedDevice(this, connectionId, 'focuser', deviceId, 'Focuser')
 		if (focuser instanceof Response) return focuser
 		if (!focuser.canReverse) return unsupported('The focuser cannot reverse its motion')
 		const response = await settle(this.#commander.reverse(this.operations.coordinator, focuser, enabled), 'Reversing the motion')
@@ -207,14 +207,14 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 	// stop could not be confirmed. No compensation applies: the remaining positions of a compensated move are
 	// never commanded.
 	async stop(connectionId: string, deviceId: string): Promise<Response> {
-		const focuser = findDevice(this.devices, this.client, connectionId, 'focuser', deviceId)
+		const focuser = findDevice(this, connectionId, 'focuser', deviceId)
 		if (!focuser) return notFound('Focuser')
 		return await stopResponse(this.operations, focuser, () => this.#commander.stopMotion(focuser))
 	}
 
 	// Responds with the backlash compensation of a focuser, connected or not, or 404.
 	async backlashState(connectionId: string, deviceId: string): Promise<Response> {
-		const focuser = findDevice(this.devices, this.client, connectionId, 'focuser', deviceId)
+		const focuser = findDevice(this, connectionId, 'focuser', deviceId)
 		if (!focuser) return notFound('Focuser')
 		return Response.json(await this.#backlashState(connectionId, focuser))
 	}
@@ -224,7 +224,7 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 	// with the current state when another revision was saved since, 409 when the settings file was written by
 	// a newer version, and 500 when the file cannot be written.
 	async saveBacklash(connectionId: string, deviceId: string, { config, revision }: FocuserBacklashSaveRequest): Promise<Response> {
-		const focuser = findDevice(this.devices, this.client, connectionId, 'focuser', deviceId)
+		const focuser = findDevice(this, connectionId, 'focuser', deviceId)
 		if (!focuser) return notFound('Focuser')
 
 		try {

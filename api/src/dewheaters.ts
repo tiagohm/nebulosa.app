@@ -30,13 +30,13 @@ export class DewHeaterCommands {
 
 	// Responds with the state of a dew heater, or 404.
 	state(connectionId: string, deviceId: string): Response {
-		return stateResponse(this.devices, this.client, connectionId, 'dewHeater', deviceId, 'Dew heater')
+		return stateResponse(this, connectionId, 'dewHeater', deviceId, 'Dew heater')
 	}
 
 	// Sets the duty cycle. Responds 204 once sent (the new value arrives as a dewHeater:updated event); 404,
 	// 409 disconnected or busy, 422 when the heater channel is gone.
 	async setDutyCycle(connectionId: string, deviceId: string, { value }: DewHeaterDutyCycleRequest): Promise<Response> {
-		const heater = connectedDevice(this.devices, this.client, connectionId, 'dewHeater', deviceId, 'Dew heater')
+		const heater = connectedDevice(this, connectionId, 'dewHeater', deviceId, 'Dew heater')
 		if (heater instanceof Response) return heater
 		if (!heater.hasDewHeater) return unsupported('The device has no dew heater')
 		return await settle(this.#commander.dutyCycle(this.operations.coordinator, heater, value), 'Setting the duty cycle')

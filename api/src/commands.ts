@@ -48,6 +48,17 @@ export interface CommandAccepted {
 // Resolves an open connection id to its client; undefined when the connection is not open.
 export type ClientResolver = (connectionId: string) => Client | undefined
 
+// What a device command service works over, as the services themselves expose it: the devices of every open
+// connection, the resolution of a connection id to its client, and the operations that arbitrate the devices.
+export interface DeviceContext {
+	// Devices of every open connection.
+	readonly devices: DeviceRegistry
+	// Resolves an open connection id to its client.
+	readonly client: ClientResolver
+	// Operations of the process.
+	readonly operations: OperationRegistry
+}
+
 // Status and code each operation failure reason is answered with.
 const FAILURES: Readonly<Record<OperationFailureReason, readonly [number, CommandErrorCode]>> = {
 	busy: [409, 'busy'],
@@ -98,7 +109,7 @@ export async function settle(result: Promise<OperationResult<unknown>>, action: 
 }
 
 // Resolves the device of a managed type with exactly this id on an open connection.
-export function findDevice<T extends ManagedDeviceType>(devices: DeviceRegistry, client: ClientResolver, connectionId: string, type: T, deviceId: string): ManagedDeviceMap[T] | undefined {
+export function findDevice<T extends ManagedDeviceType>({ devices, client }: DeviceContext, connectionId: string, type: T, deviceId: string): ManagedDeviceMap[T] | undefined {
 	const owner = client(connectionId)
 	return owner && devices.device(owner, type, deviceId)
 }
@@ -106,8 +117,8 @@ export function findDevice<T extends ManagedDeviceType>(devices: DeviceRegistry,
 // Resolves the connected device of a managed type with exactly this id on an open connection, or the
 // response refusing it: 404 when there is none, 409 when it is disconnected. what names the device in the
 // messages, such as "Focuser".
-export function connectedDevice<T extends ManagedDeviceType>(devices: DeviceRegistry, client: ClientResolver, connectionId: string, type: T, deviceId: string, what: string): ManagedDeviceMap[T] | Response {
-	const device = findDevice(devices, client, connectionId, type, deviceId)
+export function connectedDevice<T extends ManagedDeviceType>(context: DeviceContext, connectionId: string, type: T, deviceId: string, what: string): ManagedDeviceMap[T] | Response {
+	const device = findDevice(context, connectionId, type, deviceId)
 	if (!device) return notFound(what)
 	if (!device.connected) return disconnected(what)
 	return device
@@ -115,7 +126,7 @@ export function connectedDevice<T extends ManagedDeviceType>(devices: DeviceRegi
 
 // Responds with the control state of a device of a managed type, or 404 when the connection is not open
 // or has no such device.
-export function stateResponse(devices: DeviceRegistry, client: ClientResolver, connectionId: string, type: ManagedDeviceType, deviceId: string, what: string): Response {
+export function stateResponse({ devices, client }: DeviceContext, connectionId: string, type: ManagedDeviceType, deviceId: string, what: string): Response {
 	const owner = client(connectionId)
 	const state = owner && devices.state(owner, type, deviceId)
 	return state ? Response.json(state) : notFound(what)

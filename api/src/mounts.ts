@@ -438,7 +438,7 @@ export class MountCommands implements Disposable {
 
 	// Returns the connected mount with this id on an open connection, or the response refusing it.
 	#connected(connectionId: string, deviceId: string): Mount | Response {
-		const mount = findDevice(this.devices, this.client, connectionId, 'mount', deviceId)
+		const mount = findDevice(this, connectionId, 'mount', deviceId)
 		if (!mount) return notFound('Mount')
 		if (!mount.connected) return disconnected('Mount')
 		return mount

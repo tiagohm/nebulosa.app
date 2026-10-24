@@ -73,14 +73,14 @@ export class GuideOutputCommands implements Disposable {
 	// unknown output, and 409 when the stop could not be confirmed. The pulse operation itself ends when the
 	// output reports the pulse ended.
 	async stop(connectionId: string, deviceId: string): Promise<Response> {
-		const output = findDevice(this.devices, this.client, connectionId, 'guideOutput', deviceId)
+		const output = findDevice(this, connectionId, 'guideOutput', deviceId)
 		if (!output) return notFound('Guide output')
 		return await settle(this.#commander.stopPulses(output, DIRECTIONS), 'Stopping the pulses')
 	}
 
 	// Returns the connected guide output with this id on an open connection, or the response refusing it.
 	#connected(connectionId: string, deviceId: string): GuideOutput | Response {
-		const output = findDevice(this.devices, this.client, connectionId, 'guideOutput', deviceId)
+		const output = findDevice(this, connectionId, 'guideOutput', deviceId)
 		if (!output) return notFound('Guide output')
 		if (!output.connected) return disconnected('Guide output')
 		return output

@@ -25,13 +25,13 @@ export class CoverCommands implements Disposable {
 
 	// Responds with the state of a cover, or 404.
 	state(connectionId: string, deviceId: string): Response {
-		return stateResponse(this.devices, this.client, connectionId, 'cover', deviceId, 'Cover')
+		return stateResponse(this, connectionId, 'cover', deviceId, 'Cover')
 	}
 
 	// Starts opening a cover. Responds 202 with the operation id; 404, 409 disconnected or busy, 422 when the
 	// cover cannot be opened and closed.
 	open(connectionId: string, deviceId: string, request: CommandRequest): Response {
-		const cover = connectedDevice(this.devices, this.client, connectionId, 'cover', deviceId, 'Cover')
+		const cover = connectedDevice(this, connectionId, 'cover', deviceId, 'Cover')
 		if (cover instanceof Response) return cover
 		if (!cover.canPark) return unsupported('The cover cannot be opened or closed')
 		return startCommand(this.operations, 'cover.open', connectionId, cover, request, () => this.#commander.unpark(this.operations.coordinator, cover))
@@ -39,7 +39,7 @@ export class CoverCommands implements Disposable {
 
 	// Starts closing a cover; answered like open.
 	close(connectionId: string, deviceId: string, request: CommandRequest): Response {
-		const cover = connectedDevice(this.devices, this.client, connectionId, 'cover', deviceId, 'Cover')
+		const cover = connectedDevice(this, connectionId, 'cover', deviceId, 'Cover')
 		if (cover instanceof Response) return cover
 		if (!cover.canPark) return unsupported('The cover cannot be opened or closed')
 		return startCommand(this.operations, 'cover.close', connectionId, cover, request, () => this.#commander.park(this.operations.coordinator, cover))
@@ -48,7 +48,7 @@ export class CoverCommands implements Disposable {
 	// Cancels the motion of a cover and stops it where it is. Responds 204 once it stands still, 404, and 409
 	// when the stop could not be confirmed, such as for a moving cover without abort.
 	async stop(connectionId: string, deviceId: string): Promise<Response> {
-		const cover = findDevice(this.devices, this.client, connectionId, 'cover', deviceId)
+		const cover = findDevice(this, connectionId, 'cover', deviceId)
 		if (!cover) return notFound('Cover')
 		return await stopResponse(this.operations, cover, () => this.#commander.stopMotion(cover))
 	}

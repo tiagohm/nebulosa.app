@@ -38,13 +38,13 @@ export class FlatPanelCommands {
 
 	// Responds with the state of a flat panel, or 404.
 	state(connectionId: string, deviceId: string): Response {
-		return stateResponse(this.devices, this.client, connectionId, 'flatPanel', deviceId, 'Flat panel')
+		return stateResponse(this, connectionId, 'flatPanel', deviceId, 'Flat panel')
 	}
 
 	// Switches the light. Responds 204 once sent (the new state arrives as a flatPanel:updated event); 404,
 	// 409 disconnected or busy.
 	async setLight(connectionId: string, deviceId: string, { enabled }: FlatPanelLightRequest): Promise<Response> {
-		const panel = connectedDevice(this.devices, this.client, connectionId, 'flatPanel', deviceId, 'Flat panel')
+		const panel = connectedDevice(this, connectionId, 'flatPanel', deviceId, 'Flat panel')
 		if (panel instanceof Response) return panel
 		const { coordinator } = this.operations
 		return await settle(enabled ? this.#commander.enable(coordinator, panel) : this.#commander.disable(coordinator, panel), 'Switching the light')
@@ -53,7 +53,7 @@ export class FlatPanelCommands {
 	// Sets the brightness. Responds 204 once sent (the new value arrives as a flatPanel:updated event); 404,
 	// 409 disconnected or busy.
 	async setIntensity(connectionId: string, deviceId: string, { value }: FlatPanelIntensityRequest): Promise<Response> {
-		const panel = connectedDevice(this.devices, this.client, connectionId, 'flatPanel', deviceId, 'Flat panel')
+		const panel = connectedDevice(this, connectionId, 'flatPanel', deviceId, 'Flat panel')
 		if (panel instanceof Response) return panel
 		return await settle(this.#commander.intensity(this.operations.coordinator, panel, value), 'Setting the brightness')
 	}

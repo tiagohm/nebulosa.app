@@ -39,13 +39,13 @@ export class WheelCommands implements Disposable {
 
 	// Responds with the state of a filter wheel, or 404.
 	state(connectionId: string, deviceId: string): Response {
-		return stateResponse(this.devices, this.client, connectionId, 'wheel', deviceId, 'Filter wheel')
+		return stateResponse(this, connectionId, 'wheel', deviceId, 'Filter wheel')
 	}
 
 	// Starts a change to a slot. Responds 202 with the operation id; 404, 409 disconnected or busy, 422 for
 	// a slot the wheel does not have.
 	move(connectionId: string, deviceId: string, request: WheelMoveRequest): Response {
-		const wheel = connectedDevice(this.devices, this.client, connectionId, 'wheel', deviceId, 'Filter wheel')
+		const wheel = connectedDevice(this, connectionId, 'wheel', deviceId, 'Filter wheel')
 		if (wheel instanceof Response) return wheel
 		if (!(Number.isInteger(request.slot) && request.slot >= 0 && request.slot < wheel.count)) return errorResponse('The wheel has no such slot', 422, 'invalidParameter')
 		return startCommand(this.operations, 'wheel.move', connectionId, wheel, request, () => this.#commander.moveTo(this.operations.coordinator, wheel, request.slot))
@@ -54,7 +54,7 @@ export class WheelCommands implements Disposable {
 	// Renames the slots. Responds 204 once sent (the new names arrive as a wheel:updated event); 404, 409
 	// disconnected or busy, 422 when the wheel cannot rename its slots.
 	async setNames(connectionId: string, deviceId: string, { names }: WheelNamesRequest): Promise<Response> {
-		const wheel = connectedDevice(this.devices, this.client, connectionId, 'wheel', deviceId, 'Filter wheel')
+		const wheel = connectedDevice(this, connectionId, 'wheel', deviceId, 'Filter wheel')
 		if (wheel instanceof Response) return wheel
 		if (!wheel.canSetNames) return unsupported('The wheel cannot rename its slots')
 		return await settle(this.#commander.setNames(this.operations.coordinator, wheel, names), 'Renaming the slots')

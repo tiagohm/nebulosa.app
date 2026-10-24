@@ -271,9 +271,9 @@ export class AutoFocusSessions {
 		const preparation = await this.stars.prepare(request.detection)
 		if (!preparation) return unsupported('ASTAP is not configured; set it up in Settings → External Tools or measure with the built-in detector')
 
-		const camera = connectedDevice(this.devices, this.client, connectionId, 'camera', deviceId, 'Camera')
+		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
 		if (camera instanceof Response) return camera
-		const focuser = connectedDevice(this.devices, this.client, request.focuser.connectionId, 'focuser', request.focuser.deviceId, 'Focuser')
+		const focuser = connectedDevice(this, request.focuser.connectionId, 'focuser', request.focuser.deviceId, 'Focuser')
 		if (focuser instanceof Response) return focuser
 		if (!focuser.canAbsoluteMove) return unsupported(`${focuser.name} cannot move to absolute positions, which the Auto Focus needs`)
 		if (!this.operations.available(camera) || !this.operations.available(focuser)) return busy()

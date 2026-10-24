@@ -60,7 +60,7 @@ export class CameraCommands {
 	// Returns the connected camera with this id on an open connection, or the response refusing it: 404,
 	// 409 disconnected, and 409 with an explanation while a capture or any other operation holds it.
 	#available(connectionId: string, deviceId: string): Camera | Response {
-		const camera = connectedDevice(this.devices, this.client, connectionId, 'camera', deviceId, 'Camera')
+		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
 		if (camera instanceof Response) return camera
 		if (!this.operations.available(camera)) return errorResponse('The camera is busy; cooling changes wait until the exposure ends, so the frame stays calibratable', 409, 'busy')
 		return camera

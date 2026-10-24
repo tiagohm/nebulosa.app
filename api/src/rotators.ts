@@ -51,12 +51,12 @@ export class RotatorCommands implements Disposable {
 
 	// Responds with the state of a rotator, or 404.
 	state(connectionId: string, deviceId: string): Response {
-		return stateResponse(this.devices, this.client, connectionId, 'rotator', deviceId, 'Rotator')
+		return stateResponse(this, connectionId, 'rotator', deviceId, 'Rotator')
 	}
 
 	// Starts a move to a mechanical angle. Responds 202 with the operation id; 404, 409 disconnected or busy.
 	moveTo(connectionId: string, deviceId: string, request: RotatorMoveToRequest): Response {
-		const rotator = connectedDevice(this.devices, this.client, connectionId, 'rotator', deviceId, 'Rotator')
+		const rotator = connectedDevice(this, connectionId, 'rotator', deviceId, 'Rotator')
 		if (rotator instanceof Response) return rotator
 		return startCommand(this.operations, 'rotator.move', connectionId, rotator, request, () => this.#commander.moveTo(this.operations.coordinator, rotator, request.angle))
 	}
@@ -64,7 +64,7 @@ export class RotatorCommands implements Disposable {
 	// Starts a move by an angle from where the rotator stands when the command starts; answered like
 	// moveTo. A repeated request with the same token never rotates it twice.
 	moveBy(connectionId: string, deviceId: string, request: RotatorMoveByRequest): Response {
-		const rotator = connectedDevice(this.devices, this.client, connectionId, 'rotator', deviceId, 'Rotator')
+		const rotator = connectedDevice(this, connectionId, 'rotator', deviceId, 'Rotator')
 		if (rotator instanceof Response) return rotator
 		return startCommand(this.operations, 'rotator.move', connectionId, rotator, request, () => this.#commander.moveTo(this.operations.coordinator, rotator, rotator.angle.value + request.delta))
 	}
@@ -72,7 +72,7 @@ export class RotatorCommands implements Disposable {
 	// Starts a move to the home position. Responds 202 with the operation id; 404, 409, 422 when the rotator
 	// has no home.
 	home(connectionId: string, deviceId: string, request: CommandRequest): Response {
-		const rotator = connectedDevice(this.devices, this.client, connectionId, 'rotator', deviceId, 'Rotator')
+		const rotator = connectedDevice(this, connectionId, 'rotator', deviceId, 'Rotator')
 		if (rotator instanceof Response) return rotator
 		if (!rotator.canHome) return unsupported('The rotator has no home position')
 		return startCommand(this.operations, 'rotator.home', connectionId, rotator, request, () => this.#commander.home(this.operations.coordinator, rotator))
@@ -80,7 +80,7 @@ export class RotatorCommands implements Disposable {
 
 	// Redefines the angle without moving. Responds 204 once sent; 404, 409, 422 when the rotator cannot sync.
 	async sync(connectionId: string, deviceId: string, { angle }: RotatorSyncRequest): Promise<Response> {
-		const rotator = connectedDevice(this.devices, this.client, connectionId, 'rotator', deviceId, 'Rotator')
+		const rotator = connectedDevice(this, connectionId, 'rotator', deviceId, 'Rotator')
 		if (rotator instanceof Response) return rotator
 		if (!rotator.canSync) return unsupported('The rotator cannot sync its angle')
 		return await settle(this.#commander.syncTo(this.operations.coordinator, rotator, angle), 'The sync')
@@ -89,7 +89,7 @@ export class RotatorCommands implements Disposable {
 	// Reverses or restores the rotation direction. Responds 204 once applied; 404, 409, 422 when the rotator
 	// cannot reverse.
 	async reverse(connectionId: string, deviceId: string, { enabled }: RotatorReverseRequest): Promise<Response> {
-		const rotator = connectedDevice(this.devices, this.client, connectionId, 'rotator', deviceId, 'Rotator')
+		const rotator = connectedDevice(this, connectionId, 'rotator', deviceId, 'Rotator')
 		if (rotator instanceof Response) return rotator
 		if (!rotator.canReverse) return unsupported('The rotator cannot reverse its rotation')
 		return await settle(this.#commander.reverse(this.operations.coordinator, rotator, enabled), 'Reversing the rotation')
@@ -98,7 +98,7 @@ export class RotatorCommands implements Disposable {
 	// Cancels the move of a rotator and stops it. Responds 204 once it stands still, 404, and 409 when the
 	// stop could not be confirmed.
 	async stop(connectionId: string, deviceId: string): Promise<Response> {
-		const rotator = findDevice(this.devices, this.client, connectionId, 'rotator', deviceId)
+		const rotator = findDevice(this, connectionId, 'rotator', deviceId)
 		if (!rotator) return notFound('Rotator')
 		return await stopResponse(this.operations, rotator, () => this.#commander.stopMotion(rotator))
 	}

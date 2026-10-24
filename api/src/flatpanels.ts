@@ -22,7 +22,7 @@ export interface FlatPanelIntensityRequest {
 }
 
 // Flat panel commands over the panels of every open connection.
-export class FlatPanelCommands {
+export class FlatPanelCommands implements Disposable {
 	// Commander driving the panels.
 	readonly #commander: FlatPanelCommander
 

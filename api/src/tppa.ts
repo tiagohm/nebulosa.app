@@ -20,7 +20,7 @@ import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureTime, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
 import type { CenteringCaptureOptions } from 'nebulosa/src/observation/mount/centering'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
-import { type CaptureFrame, type CaptureSettings, exposureProgressListener, listenedCapturer } from './captures'
+import { type CaptureFrame, type CaptureSettings, exposureProgressListener } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
@@ -44,8 +44,8 @@ import type { PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, Pla
 // to the center of the third pose. A session belongs to the server: it survives tab reloads and workspace changes,
 // and is stopped only by its stop route, an Equipment Control stop of its camera or mount, or a disconnection. When it
 // starts, the tracking of a mount that is not tracking is started; when it ends, the slew-rate preset it replaced is
-// restored and the tracking it started is stopped if the mount is free; otherwise the session says it was not. The
-// progress of the frame being exposed is published as the driver reports it.
+// restored and, unless the request leaves it on, the tracking it started is stopped if the mount is free; otherwise the
+// session says it was not. The progress of the frame being exposed is published as the driver reports it.
 // Angles are radians, durations seconds, instants Unix milliseconds. Records live in memory, the latest per camera.
 
 // Settings of the frames of a session; the exposure in seconds. The frame type is always LIGHT.
@@ -69,6 +69,8 @@ export interface TppaRequest extends CommandRequest {
 	readonly settleDelay: number
 	// Wait before each refinement exposure, in seconds.
 	readonly refinementDelay: number
+	// Whether the tracking the session started is stopped when it ends; false leaves it on.
+	readonly stopTracking: boolean
 }
 
 // What a session is doing:
@@ -195,8 +197,8 @@ export interface TppaSessionSummary {
 	readonly slewRateRestored?: boolean
 	// Whether the session started the tracking of a mount that was not tracking; absent when it was already on.
 	readonly trackingStarted?: boolean
-	// Whether the tracking the session started was stopped again when it ended; absent before it ended or when it
-	// started none.
+	// Whether the tracking the session started was stopped again when it ended; absent before it ended, when it started
+	// none, or when the request asked to leave it on.
 	readonly trackingStopped?: boolean
 	// Progress of the frame being exposed, as the driver reports it (times in microseconds, progress in percent);
 	// absent outside an exposure and before the driver reported any.
@@ -451,10 +453,8 @@ export class TppaSessions {
 				const capture: CenteringCaptureOptions = { ...request.capture, exposureTimeUnit: 'second', frameType: 'LIGHT', compressed: false }
 				const services: ThreePointPolarAlignmentServices = {
 					mountCommander: this.commander,
-					cameraCapturer: listenedCapturer(
-						this.capturer,
-						exposureProgressListener((exposure) => this.#update(session, { exposure })),
-					),
+					cameraCapturer: this.capturer,
+					captureListener: exposureProgressListener((exposure) => this.#update(session, { exposure })),
 					solver: (frame, signal) => this.#solve(session, frame, preparation, signal),
 					auxiliaryPath: (stage, index) => join(directory, `tppa-${stage}-${index}.fit`),
 					clock: { ...SYSTEM_CAMERA_CAPTURE_CLOCK, delay: abortableDelay },
@@ -648,7 +648,7 @@ export class TppaSessions {
 	}
 
 	// Records the end of a session from the result of its operation, then restores the slew rate it replaced and stops
-	// the tracking it started.
+	// the tracking it started unless the request leaves it on.
 	async #ended(session: Session, result: OperationResult<void>) {
 		session.frame = undefined
 		const endedAt = Date.now()
@@ -669,7 +669,7 @@ export class TppaSessions {
 			else this.#update(session, { slewRateRestored: false, warnings: appendWarning(session.summary.warnings, `The slew rate of ${mount.name} was left at ${mount.slewRate ?? 'an unknown preset'} instead of ${previous}.`) })
 		}
 
-		if (session.summary.trackingStarted) {
+		if (session.summary.trackingStarted && session.summary.request.stopTracking) {
 			const stopped = !mount.tracking || (mount.connected && this.operations.available(mount) && (await this.commander.setTracking(this.operations.coordinator, mount, false)).ok)
 			if (stopped) this.#update(session, { trackingStopped: true })
 			else this.#update(session, { trackingStopped: false, warnings: appendWarning(session.summary.warnings, `The tracking of ${mount.name} that the session started was left on.`) })

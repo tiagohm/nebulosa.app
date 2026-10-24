@@ -646,7 +646,7 @@ describe('camera forms', () => {
 		await Bun.sleep(0)
 
 		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
-		expect(darvSettings(reloaded, MAIN)).toEqual({ axis: 'altitude', direction: 'WEST', slewRate: 'SPEED_1', legDuration: 90 })
+		expect(darvSettings(reloaded, MAIN)).toEqual({ axis: 'altitude', direction: 'WEST', slewRate: 'SPEED_1', legDuration: 90, stopTracking: true })
 
 		const invalid = newStores()
 		const cameras = { c: { 'cam-main': { darv: { axis: 'roll', direction: 'NORTH', slewRate: '', legDuration: 1 } } } }

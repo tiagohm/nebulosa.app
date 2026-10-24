@@ -14,6 +14,7 @@ import { activeProfile, darvSettings, exposureSettings, profileState, setDarvSet
 import { type CameraIdentity, DARV_MAXIMUM_LEG_DURATION, DARV_MINIMUM_LEG_DURATION, type DarvSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
+import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
@@ -87,7 +88,7 @@ export function DarvSections({ device, availability, mount, settings: identity }
 	const error = key ? runtime.errors[key] : undefined
 	const locked = measuring || pending
 	// While measuring, the form shows the values the measurement applied.
-	const shown: Readonly<DarvSettings> = measuring && latest ? latest.request : settings
+	const shown: Readonly<Omit<DarvSettings, 'stopTracking'>> = measuring && latest ? latest.request : settings
 	const slewRate = measuring && latest ? latest.request.slewRate : darvSlewRate(settings, mountState)
 	const mountAvailability = roleAvailability('MOUNT', mount, operations, darvMountSupport(mountState))
 	const blocker = measuring ? undefined : darvBlocker(availability, mountAvailability, mountState, slewRate)
@@ -136,6 +137,7 @@ export function DarvSections({ device, availability, mount, settings: identity }
 					<p className="m-0 text-xs leading-4 text-ink-300">Slew Rate: {measuring ? shown.slewRate : 'the mount reports no preset yet.'}</p>
 				)}
 				<NumberInput label="Leg Duration" value={shown.legDuration} min={DARV_MINIMUM_LEG_DURATION} max={DARV_MAXIMUM_LEG_DURATION} step={5} suffix="s" disabled={locked} onChange={(legDuration) => update({ legDuration })} />
+				<Checkbox label="Stop the tracking when finishing" checked={settings.stopTracking} disabled={pending} onChange={(stopTracking) => update({ stopTracking })} />
 				<Notice>
 					{DARV_AXIS_HINTS[shown.axis]} The mount moves in RA only, {DARV_DIRECTION_LABELS[shown.direction].toLowerCase()} first and back; the slowest preset that draws a long enough trail works best.
 				</Notice>
@@ -155,13 +157,14 @@ export function DarvSections({ device, availability, mount, settings: identity }
 							{sameMount ? 'Repeat Measurement' : 'Start Measurement'}
 						</Button>
 						{open && (
-							<Button variant="secondary" disabled={pending} onClick={() => void finishDarv(darvRuntime, session!)}>
+							<Button variant="secondary" disabled={pending} onClick={() => void finishDarv(darvRuntime, session!, settings.stopTracking)}>
 								Finish Session
 							</Button>
 						)}
 					</>
 				)}
 				{blocker && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}</p>}
+				{session && <TrackingState session={session} />}
 				{open && !measuring && latest?.state === 'ready' && <p className="m-0 text-xs leading-4 text-ink-300">Adjust the {DARV_AXIS_LABELS[latest.request.axis].toLowerCase()} knob to bring the two trails together, then repeat the measurement.</p>}
 				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
 			</PanelSection>
@@ -219,7 +222,21 @@ function History({ measurements }: { readonly measurements: readonly DarvMeasure
 	)
 }
 
-// Phase of the running or last measurement, its failure, the slew rate restoration, and the tracking it started.
+// Tracking a measurement of the session started: on until the finish, then stopped, left on, or not stoppable.
+function TrackingState({ session }: { readonly session: DarvSessionSummary }) {
+	if (!session.trackingStarted) return null
+	const message =
+		session.state !== 'finished'
+			? 'The tracking was started for the session and stays on until it is finished.'
+			: session.trackingStopped === true
+				? 'The tracking started for the session was stopped.'
+				: session.trackingStopped === false
+					? 'The tracking started for the session could not be stopped.'
+					: 'The tracking started for the session was left on.'
+	return <p className="m-0 text-xs leading-4 text-ink-300">{message}</p>
+}
+
+// Phase of the running or last measurement, its failure, and the slew rate restoration.
 function MeasurementState({ measurement }: { readonly measurement: DarvMeasurement }) {
 	const failed = measurement.state === 'failed'
 
@@ -228,8 +245,6 @@ function MeasurementState({ measurement }: { readonly measurement: DarvMeasureme
 			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>{DARV_STATE_LABELS[measurement.state]}</p>
 			{failed && measurement.error && <p className="m-0 text-xs leading-4 text-danger">{measurement.error}</p>}
 			{measurement.slewRateRestored === false && measurement.previousSlewRate && <p className="m-0 text-xs leading-4 text-ink-300">The slew rate could not be restored to {measurement.previousSlewRate}.</p>}
-			{measurement.trackingStarted && measurement.trackingStopped === undefined && <p className="m-0 text-xs leading-4 text-ink-300">The tracking was started for the measurement and is stopped again once it ends.</p>}
-			{measurement.trackingStopped === false && <p className="m-0 text-xs leading-4 text-ink-300">The tracking started for the measurement could not be stopped.</p>}
 		</>
 	)
 }

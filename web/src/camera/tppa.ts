@@ -101,6 +101,7 @@ export function tppaRequest(settings: Readonly<TppaSettings>, exposure: Readonly
 		rotation: settings.rotation * DEG2RAD,
 		settleDelay: settings.settleDelay,
 		refinementDelay: settings.refinementDelay,
+		stopTracking: settings.stopTracking,
 	}
 }
 

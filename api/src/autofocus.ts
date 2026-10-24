@@ -13,7 +13,7 @@ import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofo
 import { type AutoFocusCaptureOptions, type AutoFocusRunEvent, type AutoFocusRunResult, autoFocusCaptureRequest, runAutoFocus } from 'nebulosa/src/observation/focus/autofocus.runner'
 import { type FocusCurve, focusCurve } from './autofocus.curve'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
-import { type CaptureFrame, type CaptureSettings, type CaptureSnoop, exposureProgressListener, listenedCapturer, snoopedDevices } from './captures'
+import { type CaptureFrame, type CaptureSettings, type CaptureSnoop, exposureProgressListener, snoopedDevices } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
@@ -378,7 +378,8 @@ export class AutoFocusSessions {
 					},
 					{
 						focuserMover: mover,
-						cameraCapturer: listenedCapturer(this.capturer, this.#exposureProgress(session)),
+						cameraCapturer: this.capturer,
+						captureListener: this.#exposureProgress(session),
 						measurer: async ({ path }, signal) => (await measure(path, signal)).hfd,
 						auxiliaryPath: (n) => join(directory, `autofocus-${n}.fit`),
 						clock: { ...SYSTEM_CAMERA_CAPTURE_CLOCK, delay: abortableDelay },

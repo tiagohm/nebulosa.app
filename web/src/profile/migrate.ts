@@ -221,6 +221,8 @@ function normalizeTppa(value: unknown): TppaSettings | undefined {
 			strategy: solver.strategy === 'blind' ? 'blind' : 'assisted',
 			...(Number.isFinite(downsample) && { downsample }),
 		},
+		// Forms saved before the option existed stop the tracking, its default.
+		stopTracking: value.stopTracking !== false,
 	}
 }
 
@@ -237,6 +239,8 @@ function normalizeDarv(value: unknown): DarvSettings | undefined {
 		direction: value.direction === 'WEST' ? 'WEST' : value.direction === 'EAST' ? 'EAST' : defaults.direction,
 		...(typeof value.slewRate === 'string' && value.slewRate && { slewRate: value.slewRate }),
 		legDuration,
+		// Forms saved before the option existed stop the tracking, its default.
+		stopTracking: value.stopTracking !== false,
 	}
 }
 

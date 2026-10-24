@@ -15,6 +15,7 @@ import { activeProfile, exposureSettings, profileState, setTppaSettings, tppaSet
 import { type CameraIdentity, TPPA_MAXIMUM_ROTATION, TPPA_MINIMUM_ROTATION, type TppaSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
+import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
@@ -112,6 +113,7 @@ export function TppaSections({ device, availability, mount, settings: identity }
 				<NumberInput label="Rotation per Point" value={shown.rotation} min={TPPA_MINIMUM_ROTATION} max={TPPA_MAXIMUM_ROTATION} step={0.5} suffix="°" disabled={locked} onChange={(rotation) => update({ rotation })} />
 				<NumberInput label="Settle Time" value={shown.settleDelay} min={0} max={120} step={0.5} suffix="s" disabled={locked} onChange={(settleDelay) => update({ settleDelay })} />
 				<NumberInput label="Refinement Interval" value={shown.refinementDelay} min={0} max={600} step={0.5} suffix="s" disabled={locked} onChange={(refinementDelay) => update({ refinementDelay })} />
+				<Checkbox label="Stop the tracking when the session ends" checked={shown.stopTracking} disabled={locked} onChange={(stopTracking) => update({ stopTracking })} />
 				<Notice>
 					The mount rotates in RA only, towards the {TPPA_DIRECTION_LABELS[shown.direction].toLowerCase()}, about {2 * shown.rotation}° in all; make sure it is clear to move. Rotation is measured by plate solving, never assumed from the motion time.
 				</Notice>
@@ -159,7 +161,7 @@ export function TppaSections({ device, availability, mount, settings: identity }
 
 // The form values a running session applied, as the form shows them (the rotation in degrees).
 function appliedSettings({ request }: TppaSessionSummary): TppaSettings {
-	return { direction: request.direction, slewRate: request.slewRate, rotation: toDeg(request.rotation), settleDelay: request.settleDelay, refinementDelay: request.refinementDelay, solver: solverOf(request.solving) }
+	return { direction: request.direction, slewRate: request.slewRate, rotation: toDeg(request.rotation), settleDelay: request.settleDelay, refinementDelay: request.refinementDelay, stopTracking: request.stopTracking, solver: solverOf(request.solving) }
 }
 
 // The plate solver fields the TPPA form keeps from a request.
@@ -248,7 +250,11 @@ function SessionState({ session }: { readonly session: TppaSessionSummary }) {
 			{(session.state === 'capturing' || (session.state === 'refining' && session.exposure)) && <FrameProgress exposure={session.exposure} />}
 			{failed && session.error && <p className="m-0 text-xs leading-4 text-danger">{session.error}</p>}
 			{session.slewRateRestored === true && session.previousSlewRate && <p className="m-0 text-xs leading-4 text-ink-300">The slew rate was restored to {session.previousSlewRate}.</p>}
-			{session.trackingStarted && session.trackingStopped === undefined && <p className="m-0 text-xs leading-4 text-ink-300">The tracking was started for the session and is stopped again once it ends.</p>}
+			{session.trackingStarted && session.trackingStopped === undefined && (session.endedAt === undefined || !session.request.stopTracking) && (
+				<p className="m-0 text-xs leading-4 text-ink-300">
+					{session.endedAt !== undefined ? 'The tracking started for the session was left on.' : session.request.stopTracking ? 'The tracking was started for the session and is stopped again once it ends.' : 'The tracking was started for the session and is left on once it ends.'}
+				</p>
+			)}
 			{session.trackingStopped === true && <p className="m-0 text-xs leading-4 text-ink-300">The tracking started for the session was stopped.</p>}
 			{session.warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{session.warnings.at(-1)}</p>}
 		</>

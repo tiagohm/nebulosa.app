@@ -181,6 +181,8 @@ export interface TppaSettings {
 	refinementDelay: number
 	// Plate solver of the frames, its strategy, and its downsampling.
 	solver: Pick<PlateSolveRequest, 'provider' | 'strategy' | 'downsample'>
+	// Whether the tracking the session starts on a mount that was not tracking is stopped when the session ends.
+	stopTracking: boolean
 }
 
 // Smallest RA rotation of the TPPA form, in degrees: the least rotation the server accepts between two poses.
@@ -196,6 +198,7 @@ export const DEFAULT_TPPA_SETTINGS: TppaSettings = {
 	settleDelay: 2,
 	refinementDelay: 1,
 	solver: { provider: 'astap', strategy: 'assisted' },
+	stopTracking: true,
 }
 
 // DARV form of one physical camera: how the next drift alignment measurement moves the mount. The frame is taken
@@ -212,6 +215,8 @@ export interface DarvSettings {
 	slewRate?: string
 	// Duration of each RA motion, in seconds, in [DARV_MINIMUM_LEG_DURATION, DARV_MAXIMUM_LEG_DURATION].
 	legDuration: number
+	// Whether the finish stops the tracking a measurement started on a mount that was not tracking.
+	stopTracking: boolean
 }
 
 // Shortest RA motion of the DARV form, in seconds; shorter trails are too short to tell the legs apart.
@@ -221,7 +226,7 @@ export const DARV_MINIMUM_LEG_DURATION = 5
 export const DARV_MAXIMUM_LEG_DURATION = 600
 
 // DARV form of a camera that has none yet: the classic one-minute legs, eastward first, adjusting the azimuth.
-export const DEFAULT_DARV_SETTINGS: DarvSettings = { axis: 'azimuth', direction: 'EAST', legDuration: 60 }
+export const DEFAULT_DARV_SETTINGS: DarvSettings = { axis: 'azimuth', direction: 'EAST', legDuration: 60, stopTracking: true }
 
 // Flat Wizard form of one physical camera: the filter groups to acquire and the limits of the next session. The camera
 // settings come from Camera Acquisition (without its exposure time); the wheel and panel are those of the setup.

@@ -50,6 +50,7 @@ function request(mount: { connectionId: string; deviceId: string }, patch: Parti
 		rotation: deg(8),
 		settleDelay: 0,
 		refinementDelay: 0.2,
+		stopTracking: true,
 		...patch,
 	}
 }
@@ -260,6 +261,20 @@ describe('TPPA sessions', () => {
 		expect(mount.tracking).toBeFalse()
 		expect(released()).toBeTrue()
 	}, 120000)
+
+	test('a session that leaves the tracking on keeps the mount tracking when it ends', async () => {
+		const { id, cameraId, tppa, mountDevice, mount, commander, operations, summary, ended } = await setup()
+		expect(await commander.setTracking(operations.coordinator, mount, false)).toMatchObject({ ok: true })
+		const { sessionId } = await start(tppa, id, cameraId, request(mountDevice, { slewRate: 'SPEED_1', stopTracking: false }))
+
+		await waitUntil(() => summary()?.state === 'moving', 30000)
+		expect((await tppa.stop(sessionId)).status).toBe(204)
+		await waitUntil(() => ended() && summary()?.slewRateRestored !== undefined)
+
+		expect(summary()).toMatchObject({ state: 'cancelled', trackingStarted: true })
+		expect(summary()!.trackingStopped).toBeUndefined()
+		expect(mount.tracking).toBeTrue()
+	}, 60000)
 
 	test('a mount without the slew rate or a solver not configured is refused before anything starts', async () => {
 		const { id, cameraId, tppa, mountDevice, solving, events } = await setup()

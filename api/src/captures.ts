@@ -5,7 +5,7 @@ import { type Camera, type CameraTransferFormat, CLIENT, type Client } from 'neb
 import type { OperationFailureReason } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
-import { type CameraCaptureHandle, type CameraCaptureHooks, CameraCapturer, type CameraFramePathRequest, writeFrameExclusively } from 'nebulosa/src/observation/capture/capture'
+import { type CameraCaptureHandle, CameraCapturer, type CameraFramePathRequest, writeFrameExclusively } from 'nebulosa/src/observation/capture/capture'
 import type { CameraCaptureListener } from 'nebulosa/src/observation/capture/reporter'
 import { type CameraCaptureEvent, type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START } from 'nebulosa/src/observation/capture/types'
 import type { CaptureFrameRegistry } from './captureframes'
@@ -315,22 +315,6 @@ export function exposureProgressListener(report: (exposure: CameraCaptureTime | 
 		if (event.state === 'exposureStarted') report(undefined)
 		else if (event.state === 'exposing' || event.state === 'exposureFinished') report({ ...event.frameProgress })
 	}
-}
-
-// Returns a capturer that runs every capture on capturer with listener added to the hooks of the caller, for a toolkit
-// runner that takes a capturer but no capture listener; the captures, their sessions, and their leases stay the ones of
-// capturer.
-export function listenedCapturer(capturer: CameraCapturer, listener: CameraCaptureListener): CameraCapturer {
-	const listened = Object.create(capturer) as CameraCapturer
-	listened.start = (scope, camera, request, hooks?: CameraCaptureHooks) =>
-		capturer.start(scope, camera, request, {
-			...hooks,
-			listener: (event, path) => {
-				hooks?.listener?.(event, path)
-				listener(event, path)
-			},
-		})
-	return listened
 }
 
 // Returns a session with fields replaced.

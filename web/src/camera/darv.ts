@@ -1,4 +1,4 @@
-import type { CameraCapabilities, DarvCaptureSettings, DarvMeasurement, DarvMeasurementRequest, DarvMeasurementState, DarvMeasurementStatus, DarvRequest, DarvSession, DarvSessionSummary, DarvSnapshot, MountState, ServerEvent } from 'api'
+import type { CameraCapabilities, DarvCaptureSettings, DarvFinishRequest, DarvMeasurement, DarvMeasurementRequest, DarvMeasurementState, DarvMeasurementStatus, DarvRequest, DarvSession, DarvSessionSummary, DarvSnapshot, MountState, ServerEvent } from 'api'
 import type { DarvAnalysisFailureReason } from 'nebulosa/src/observation/alignment/polaralignment.darv.analysis'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
@@ -269,7 +269,7 @@ export function abortDarv(state: DarvRuntime, session: Pick<DarvSessionSummary, 
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/darv/${encodeURIComponent(session.sessionId)}/abort`, undefined, request)
 }
 
-// Finishes an idle session.
-export function finishDarv(state: DarvRuntime, session: Pick<DarvSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
-	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/darv/${encodeURIComponent(session.sessionId)}/finish`, undefined, request)
+// Finishes an idle session; stopTracking asks the server to stop the tracking its measurements started.
+export function finishDarv(state: DarvRuntime, session: Pick<DarvSessionSummary, 'sessionId' | 'camera'>, stopTracking: boolean, request: typeof fetch = fetch) {
+	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/darv/${encodeURIComponent(session.sessionId)}/finish`, { stopTracking } satisfies DarvFinishRequest, request)
 }

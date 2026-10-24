@@ -30,9 +30,10 @@ import type { OperationDevice, OperationRegistry } from './operations'
 // to it (the mount commander of the mount commands, the camera capturer of the capture service, one auxiliary FITS in
 // a temporary directory deleted with the measurement, never saved as a capture), decodes the frame into the image
 // store, and records it in the capture frame registry as the latest frame of its camera (origin darv), which owns
-// its closing. A measurement starts the tracking of a mount that is not tracking before the runner; once the devices
-// are released, the slew-rate preset the runner replaced is restored and the tracking it started is stopped if the
-// mount is free, and the frame is analyzed on a worker without a sky transform, so the drift is unsigned and in pixels per
+// its closing. A measurement starts the tracking of a mount that is not tracking before the runner, and the tracking
+// stays on between measurements until the finish, which stops it when the operator asks for it and the mount is free.
+// Once the devices are released, the slew-rate preset the runner replaced is restored if the mount is free, and the
+// frame is analyzed on a worker without a sky transform, so the drift is unsigned and in pixels per
 // second, never a polar error. A session belongs to the server: it survives tab reloads and workspace changes.
 // Durations are seconds, instants Unix milliseconds. Records live in memory, the latest session per camera.
 
@@ -57,6 +58,12 @@ export interface DarvMeasurementRequest extends CommandRequest {
 export interface DarvRequest extends DarvMeasurementRequest {
 	// Mount to move, by its exact connection and device ids; it is snooped into every frame.
 	readonly mount: OperationDevice
+}
+
+// Body of POST /api/darv/:sessionId/finish.
+export interface DarvFinishRequest {
+	// Whether the tracking a measurement of the session started is stopped; false leaves it on.
+	readonly stopTracking: boolean
 }
 
 // What a measurement is doing:
@@ -104,11 +111,6 @@ export interface DarvMeasurement {
 	readonly previousSlewRate?: string
 	// Whether the previous preset was restored; absent before the operation ended or with nothing to restore.
 	readonly slewRateRestored?: boolean
-	// Whether the measurement started the tracking of a mount that was not tracking; absent when it was already on.
-	readonly trackingStarted?: boolean
-	// Whether the tracking the measurement started was stopped again once it ended; absent before the operation ended
-	// or when it started none.
-	readonly trackingStopped?: boolean
 	// Why the measurement failed.
 	readonly reason?: OperationFailureReason
 	// Detail of the failure or of a problem meant for people.
@@ -135,6 +137,12 @@ export interface DarvSessionSummary {
 	readonly state: DarvSessionState
 	// Measurements, oldest first; the latest MAXIMUM_MEASUREMENTS.
 	readonly measurements: readonly DarvMeasurement[]
+	// Whether a measurement of the session started the tracking of a mount that was not tracking, which stays on until
+	// the session is finished; absent when the mount was already tracking.
+	readonly trackingStarted?: boolean
+	// Whether the finish stopped the tracking the session started; absent before the finish, when the session started
+	// none, or when the finish asked to leave it on.
+	readonly trackingStopped?: boolean
 	// Instant the session started, Unix milliseconds (UTC).
 	readonly startedAt: number
 	// Instant the session was finished, Unix milliseconds (UTC).
@@ -200,6 +208,8 @@ interface Session {
 	readonly trails: DarvMeasurementTrails[]
 	// Measurement running, from its start until its analysis ended.
 	running?: Measurement
+	// Whether the finish is stopping the tracking, during which no measurement starts.
+	finishing?: boolean
 }
 
 // DARV sessions of the cameras of every open connection.
@@ -255,14 +265,17 @@ export class DarvSessions {
 
 		const key = resourceKey(camera)
 		const previous = this.#sessions.get(key)
-		if (previous?.running) return errorResponse('A DARV measurement is running on this camera', 409, 'busy')
+		if (previous?.running || previous?.finishing) return errorResponse('A DARV measurement or finish is running on this camera', 409, 'busy')
 
 		const refused = this.#refusal(camera, mount, request.slewRate)
 		if (refused) return refused
 
 		const { mount: mountDevice, ...measurement } = request
+		// An open session replaced on the same mount hands over the tracking it started, so the finish of the new one
+		// still stops it.
+		const inherited = previous?.summary.trackingStarted === true && previous.summary.state !== 'finished' && previous.summary.mount.connectionId === mountDevice.connectionId && previous.summary.mount.deviceId === mountDevice.deviceId
 		const session: Session = {
-			summary: { sessionId: crypto.randomUUID(), camera: { connectionId, deviceId }, cameraName: camera.name, mount: mountDevice, mountName: mount.name, state: 'idle', measurements: [], startedAt: Date.now(), revision: 0 },
+			summary: { sessionId: crypto.randomUUID(), camera: { connectionId, deviceId }, cameraName: camera.name, mount: mountDevice, mountName: mount.name, state: 'idle', measurements: [], ...(inherited && { trackingStarted: true }), startedAt: Date.now(), revision: 0 },
 			trails: [],
 		}
 
@@ -280,7 +293,7 @@ export class DarvSessions {
 
 		const session = this.#find(sessionId)
 		if (!session || session.summary.state === 'finished') return errorResponse('No DARV session is open with this id', 404, 'notFound')
-		if (session.running) return errorResponse('A DARV measurement is running in this session', 409, 'busy')
+		if (session.running || session.finishing) return errorResponse('A DARV measurement or finish is running in this session', 409, 'busy')
 
 		const { camera: cameraDevice, mount: mountDevice } = session.summary
 		const camera = connectedDevice(this, cameraDevice.connectionId, 'camera', cameraDevice.deviceId, 'Camera')
@@ -308,14 +321,28 @@ export class DarvSessions {
 		return new Response(null, { status: 204 })
 	}
 
-	// Finishes an idle session. Responds 204, 404 when the session is unknown or already finished, and 409 when it is
-	// measuring.
-	finish(sessionId: string): Response {
+	// Finishes an idle session, stopping the tracking its measurements started when the request asks for it and the
+	// mount is free; trackingStopped reports whether it was. Responds 204, 404 when the session is unknown or already
+	// finished, and 409 when it is measuring.
+	async finish(sessionId: string, request: DarvFinishRequest): Promise<Response> {
 		const session = this.#find(sessionId)
 		if (!session || session.summary.state === 'finished') return errorResponse('No DARV session is open with this id', 404, 'notFound')
-		if (session.running) return errorResponse('A DARV measurement is running in this session', 409, 'busy')
+		if (session.running || session.finishing) return errorResponse('A DARV measurement or finish is running in this session', 409, 'busy')
 
-		this.#update(session, { state: 'finished', endedAt: Date.now() })
+		let trackingStopped: boolean | undefined
+
+		if (session.summary.trackingStarted && request.stopTracking) {
+			// The mount is free between measurements, so stopping takes it for itself; another operation that holds it, or
+			// a disconnection, leaves the tracking on.
+			const { connectionId, deviceId } = session.summary.mount
+			const client = this.client(connectionId)
+			const mount = client && this.devices.mount(client, deviceId)
+			session.finishing = true
+			trackingStopped = mount !== undefined && (!mount.tracking || (mount.connected && this.operations.available(mount) && (await this.commander.setTracking(this.operations.coordinator, mount, false)).ok))
+			session.finishing = false
+		}
+
+		this.#update(session, { state: 'finished', endedAt: Date.now(), ...(trackingStopped !== undefined && { trackingStopped }) })
 		return new Response(null, { status: 204 })
 	}
 
@@ -374,7 +401,7 @@ export class DarvSessions {
 				if (!mount.tracking) {
 					const started = await this.commander.setTracking(context, mount, true)
 					if (!started.ok) return started
-					this.#patch(session, generation, { trackingStarted: true })
+					this.#update(session, { trackingStarted: true })
 				}
 
 				const path = join(directory, `darv-${generation}.fit`)
@@ -450,22 +477,15 @@ export class DarvSessions {
 		if (session.summary.state === 'measuring') this.#update(session, { state: 'idle' })
 	}
 
-	// Restores the slew-rate preset a measurement replaced and stops the tracking it started, if the mount is free.
+	// Restores the slew-rate preset a measurement replaced, if the mount is free.
 	async #restore(session: Session, generation: number, mount: Mount) {
-		const measurement = this.#measurement(session, generation)
-		const previous = measurement?.previousSlewRate
+		const previous = this.#measurement(session, generation)?.previousSlewRate
+		if (previous === undefined || mount.slewRate === previous) return
 
-		// The operation released the mount, so each restoration takes it again for itself; another operation that took
-		// it first, or a disconnection, leaves the mount as the measurement left it.
-		if (previous !== undefined && mount.slewRate !== previous) {
-			const restored = mount.connected && this.operations.available(mount) ? await this.commander.setSlewRate(this.operations.coordinator, mount, previous) : undefined
-			this.#patch(session, generation, { slewRateRestored: restored?.ok === true })
-		}
-
-		if (measurement?.trackingStarted) {
-			const stopped = !mount.tracking || (mount.connected && this.operations.available(mount) && (await this.commander.setTracking(this.operations.coordinator, mount, false)).ok)
-			this.#patch(session, generation, { trackingStopped: stopped })
-		}
+		// The operation released the mount, so the restoration takes it again for itself; another operation that took
+		// it first, or a disconnection, leaves the preset changed.
+		const restored = mount.connected && this.operations.available(mount) ? await this.commander.setSlewRate(this.operations.coordinator, mount, previous) : undefined
+		this.#patch(session, generation, { slewRateRestored: restored?.ok === true })
 	}
 
 	// Forgets a measurement dropped from the history of its session.
@@ -530,8 +550,8 @@ export function createDarvRoutes(darv: DarvSessions) {
 			POST: (req) => darv.abort(req.params.sessionId),
 		},
 		'/api/darv/:sessionId/finish': {
-			// Finishes an idle DARV session.
-			POST: (req) => darv.finish(req.params.sessionId),
+			// Finishes an idle DARV session, stopping the tracking it started when asked.
+			POST: async (req) => darv.finish(req.params.sessionId, (await req.json()) as DarvFinishRequest),
 		},
 		'/api/connections/:id/cameras/:deviceId/darv': {
 			// Starts a DARV session with this camera and its first measurement; progress arrives as darv:updated events.

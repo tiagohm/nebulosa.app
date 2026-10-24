@@ -327,9 +327,10 @@ function normalizeTelescope(value: unknown): TelescopeOptics | undefined {
 }
 
 // Restores persisted Sky preferences, dropping an invalid observer and invalid display and framing
-// preferences.
+// preferences; the time bar is shown only when it was explicitly shown.
 function normalizeSky(value: unknown, sky: SkySettings) {
 	if (!isRecord(value)) return
+	if (value.timeBar === true) sky.timeBar = true
 	const observer = normalizeSkyObserver(value.observer)
 	if (observer) sky.observer = observer
 	const display = normalizeSkyDisplay(value.display)

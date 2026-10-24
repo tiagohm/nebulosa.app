@@ -48,6 +48,7 @@ import {
 	setPanelOpen,
 	setSensorSource,
 	setSkyLayerVisible,
+	setSkyTimeBarVisible,
 	setSkyMagnitudeLimit,
 	setSkyObserver,
 	setStarDetectionSettings,
@@ -408,6 +409,24 @@ describe('sky settings', () => {
 		setSkyLayerVisible(state, 'constellationBoundaries', true)
 		setSkyMagnitudeLimit(state, 0)
 		expect(state.profiles[0].settings.sky.display).toEqual({ layers: { constellationBoundaries: true }, magnitudeLimit: 1 })
+	})
+
+	test('keeps the time bar hidden unless it was shown', () => {
+		const stores = newStores()
+		const profiles = [
+			{ id: 'a', name: 'A', settings: { sky: { timeBar: true } } },
+			{ id: 'b', name: 'B', settings: { sky: { timeBar: 'yes' } } },
+		]
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
+		const state = load(stores)
+
+		expect(state.profiles[0].settings.sky.timeBar).toBeTrue()
+		expect(state.profiles[1].settings.sky).toEqual({})
+
+		setSkyTimeBarVisible(state, false)
+		expect(state.profiles[0].settings.sky).toEqual({})
+		setSkyTimeBarVisible(state, true)
+		expect(state.profiles[0].settings.sky.timeBar).toBeTrue()
 	})
 
 	test('manages optical presets without touching the equipment setup', () => {

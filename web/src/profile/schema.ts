@@ -63,6 +63,8 @@ export interface SkySettings {
 	display?: SkyDisplaySettings
 	// Field of view drawn around the selection; absent until the user creates a preset.
 	framing?: SkyFramingSettings
+	// Whether the time bar of the simulation clock is shown under the star map; absent hides it.
+	timeBar?: boolean
 }
 
 // Field of view preferences of the Sky workspace: custom optical presets, independent of the equipment

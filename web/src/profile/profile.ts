@@ -361,6 +361,15 @@ export function setSkyObserver(state: ProfileState, observer: SkyObserverSetting
 	return true
 }
 
+// Shows or hides the Sky time bar in the active profile; hidden is kept as the absent default.
+export function setSkyTimeBarVisible(state: ProfileState, visible: boolean) {
+	const sky = activeProfile(state).settings.sky
+	if ((sky.timeBar === true) === visible) return
+	if (visible) sky.timeBar = true
+	else delete sky.timeBar
+	touch(activeProfile(state))
+}
+
 // Shows or hides a star map layer in the active profile.
 export function setSkyLayerVisible(state: ProfileState, layer: SkyLayerId, visible: boolean) {
 	const profile = activeProfile(state)

@@ -2,7 +2,7 @@ import type { MinorBody, SkySearchResult } from 'api'
 import { type ReactNode, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
-import { activeProfile, profileState, setPanelOpen } from '../profile/profile'
+import { activeProfile, profileState, setPanelOpen, setSkyTimeBarVisible } from '../profile/profile'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
@@ -25,7 +25,8 @@ import { TimeController } from './TimeController'
 // Sky workspace: explores the sky on the tab's star map (./planetarium), independently of any connection
 // or equipment. It shows the map, a tooltip for the hovered object, the search, the Object Inspector of
 // the selection, which is the same whether it comes from a click or from the search (selecting never
-// moves the view), and the time bar of the simulation clock. The contextual panel also holds the
+// moves the view), and the time bar of the simulation clock, hidden unless toggled on from the toolbar (a
+// profile preference). The contextual panel also holds the
 // observer, display (layers), and framing (field of view of custom optical presets or of the Equipment
 // Setup, drawn around the selection) settings. With an observer the map is the observer's local sky; without one it is an
 // equatorial chart of the whole sky.
@@ -155,6 +156,7 @@ export function SkyWorkspace() {
 								if (mountRuntime.following && mountCenter) map.centerOn(mountCenter)
 							}}
 						/>
+						<IconButton icon="clock" label="Time Bar" pressed={settings.timeBar === true} onClick={() => setSkyTimeBarVisible(profileState, settings.timeBar !== true)} />
 						<IconButton icon="frame" label="Framing" pressed={sky.panel === 'framing'} onClick={() => togglePanel('framing')} />
 						<IconButton icon="layers" label="Display" pressed={sky.panel === 'display'} onClick={() => togglePanel('display')} />
 						<Button variant="secondary" onClick={() => togglePanel('observer')} className="max-w-56 truncate">
@@ -180,7 +182,7 @@ export function SkyWorkspace() {
 						</div>
 					)}
 				</div>
-				<TimeController timeZone={observer?.timeZone} />
+				{settings.timeBar === true && <TimeController timeZone={observer?.timeZone} />}
 			</div>
 		</WorkspaceLayout>
 	)

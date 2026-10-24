@@ -35,3 +35,10 @@ test('a device used for itself is named by its label', () => {
 	expect(deviceAvailability('camera', { device: MOUNT, status: 'connected' }, { operations: running('a', 'm1') })).toMatchObject({ status: 'busy', message: 'The camera is busy.' })
 	expect(deviceAvailability('camera', { device: MOUNT, status: 'connected' }, { operations: {} })).toEqual({ status: 'ready' })
 })
+
+test('an operation can declare a connected device unsupported, before it is busy', () => {
+	const unsupported = 'The Mount is not equatorial.'
+	expect(roleAvailability('MOUNT', { device: MOUNT, status: 'connected' }, { operations: running('a', 'm1') }, unsupported)).toEqual({ status: 'unsupported', message: unsupported })
+	expect(roleAvailability('MOUNT', { device: MOUNT, status: 'disconnected' }, { operations: {} }, unsupported).status).toBe('disconnected')
+	expect(availabilityFix({ status: 'unsupported', message: unsupported })).toBe('equipment')
+})

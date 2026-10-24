@@ -226,7 +226,7 @@ There is **one** image store, `ImageStore` in `api/src/images.ts`, and the scien
 
 ## Device Resource Matrix
 
-Requirements are declared by each registry; availability is evaluated by `roleAvailability` and `deviceAvailability` (`web/src/equipment/availability.ts`): ready, busy, or the role or device state that prevents use. Rows for DARV, TPPA, Flat Wizard, Guiding, and the sequencer are the intended contract of planned features.
+Requirements are declared by each registry; availability is evaluated by `roleAvailability` and `deviceAvailability` (`web/src/equipment/availability.ts`): ready, busy, unsupported, or the role or device state that prevents use. Unsupported is a connected device the operation can never run on, judged by the operation from the device state the server reports (mechanical design, capabilities) and passed as its reason; it comes before busy, and Equipment Setup is its fix. Rows for DARV, TPPA, Flat Wizard, Guiding, and the sequencer are the intended contract of planned features.
 
 | Feature                   | Requires (besides the view's camera)              | Holds                                        | Conflicts with                                                      |
 | ------------------------- | ------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------- |
@@ -363,6 +363,5 @@ Run before every delivery. CI (`.github/workflows/test.yml`) installs with `--fr
 | 3   | Tools     | Basemap decision, then the Solar and Lunar Eclipse Map views over `api` eclipse routes        | —          |
 | 4   | Framing   | `api` HiPS proxy (surveys, cutout, cache, attribution) and the position angle convention test | —          |
 | 5   | Framing   | Framing view in Sky using the presets and the cutout                                          | 4          |
-| 6   | Images    | An `unsupported` availability state of camera operations, over the control states (in `api`)  | —          |
-| 7   | Images    | DARV, TPPA, Flat Wizard, Guiding (PHD2) as camera operations                                  | 6          |
+| 7   | Images    | DARV, TPPA, Flat Wizard, Guiding (PHD2) as camera operations                                  | —          |
 | 8   | Sequencer | Sequencer service and workspace                                                               | 7          |

@@ -8,11 +8,13 @@ import type { RoleDevice } from './useEquipment'
 // device is connected and no operation holds it: being selected is not enough, and a device held by an
 // operation of any tab or service is busy. Busy is judged on the exact connection and device ids, so
 // two profiles assigning the same physical device see the same operation. Whether a feature is
-// implemented at all is declared by its own registry (Images tools, standalone tools);
-// device capabilities are not reported by the server yet, so they are not checked.
+// implemented at all is declared by its own registry (Images tools, standalone tools). Whether a connected
+// device can run a given operation (its mechanical design or capabilities, as the server reports them in the
+// device state) is judged by that operation, which passes the reason to the evaluation as unsupported.
 
-// Availability of a role's device: ready, busy with operations, or the role state that prevents use.
-export type RoleAvailability = { readonly status: 'ready' } | { readonly status: 'busy'; readonly operations: readonly OperationRecord[]; readonly message: string } | { readonly status: Exclude<RoleStatus, 'connected'>; readonly message: string }
+// Availability of a role's device: ready, busy with operations, unsupported by the operation (a connected device
+// that can never run it, such as an alt-az mount for a polar alignment), or the role state that prevents use.
+export type RoleAvailability = { readonly status: 'ready' } | { readonly status: 'busy'; readonly operations: readonly OperationRecord[]; readonly message: string } | { readonly status: 'unsupported'; readonly message: string } | { readonly status: Exclude<RoleStatus, 'connected'>; readonly message: string }
 
 // Existing flow that resolves an unavailable role: opening Connections or Equipment Setup.
 export type RoleFix = 'connections' | 'equipment'
@@ -38,15 +40,19 @@ function deviceProblem(label: string, status: RoleStatus): string | undefined {
 	}
 }
 
-// Evaluates the device a role resolves to (see useRoleDevice) against the running operations.
-export function roleAvailability(role: EquipmentRole, device: Pick<RoleDevice, 'device' | 'status'>, operations: Pick<OperationsState, 'operations'>): RoleAvailability {
-	return deviceAvailability(roleDefinition(role).label, device, operations)
+// Evaluates the device a role resolves to (see useRoleDevice) against the running operations. unsupported is the
+// reason the operation cannot run on that device, when it judged so from the device state.
+export function roleAvailability(role: EquipmentRole, device: Pick<RoleDevice, 'device' | 'status'>, operations: Pick<OperationsState, 'operations'>, unsupported?: string): RoleAvailability {
+	return deviceAvailability(roleDefinition(role).label, device, operations, unsupported)
 }
 
 // Evaluates a device and its state against the running operations, naming it by label in the messages, for a device
-// used for itself rather than through a role, such as the camera of an Images camera tab.
-export function deviceAvailability(label: string, { device, status }: Pick<RoleDevice, 'device' | 'status'>, operations: Pick<OperationsState, 'operations'>): RoleAvailability {
+// used for itself rather than through a role, such as the camera of an Images camera tab. A connected device the
+// operation does not support (unsupported, its reason) is unsupported before it is busy, since waiting for the
+// running operations would not make it usable.
+export function deviceAvailability(label: string, { device, status }: Pick<RoleDevice, 'device' | 'status'>, operations: Pick<OperationsState, 'operations'>, unsupported?: string): RoleAvailability {
 	if (status !== 'connected') return { status, message: deviceProblem(label, status)! }
+	if (unsupported !== undefined) return { status: 'unsupported', message: unsupported }
 
 	const running = device ? runningOn(operations, device.connectionId, device.id) : []
 	if (running.length > 0) return { status: 'busy', operations: running, message: `The ${label} is busy.` }
@@ -55,7 +61,8 @@ export function deviceAvailability(label: string, { device, status }: Pick<RoleD
 }
 
 // Returns the flow that resolves an availability, or undefined when there is nothing to fix there:
-// ready, busy (the operation must end), or a connection change in progress.
+// ready, busy (the operation must end), or a connection change in progress. An unsupported device is fixed by
+// assigning another one in Equipment Setup.
 export function availabilityFix(availability: RoleAvailability): RoleFix | undefined {
 	switch (availability.status) {
 		case 'ready':

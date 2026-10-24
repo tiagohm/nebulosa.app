@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession } from 'api'
 import { proxy } from 'valtio'
-import { DEFAULT_ACQUISITION_SETTINGS, DEFAULT_EXPOSURE_SETTINGS } from '../profile/profile'
+import { DEFAULT_ACQUISITION_SETTINGS, DEFAULT_EXPOSURE_SETTINGS } from '../profile/schema'
 import { cameraKey, captureCount, captureElapsed, captureRequest, fitExposure, type CaptureRuntime, captureRunning, captureSnoop, captureStatus, fileState, handleCaptureEvent, refreshCaptures, startCapture, stopCapture } from './capture'
 import { convertExposure, exposureUnitOf, fromSeconds, toSeconds } from './ExposureTimeInput'
 

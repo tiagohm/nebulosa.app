@@ -1,4 +1,5 @@
-import { profileState, type SkySettings, setSkyLayerVisible, setSkyMagnitudeLimit } from '../profile/profile'
+import { profileState, setSkyLayerVisible, setSkyMagnitudeLimit } from '../profile/profile'
+import type { SkySettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Checkbox } from '../ui/Checkbox'
 import { Slider } from '../ui/Slider'

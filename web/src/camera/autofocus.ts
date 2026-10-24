@@ -2,7 +2,7 @@ import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoF
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit, responseError } from '../http'
-import type { AutoFocusSettings, CameraExposureSettings } from '../profile/profile'
+import type { AutoFocusSettings, CameraExposureSettings } from '../profile/schema'
 import { DEFAULT_APERTURE_RADIUS } from '../stars/stars'
 import { cameraKey, fitExposure } from './capture'
 

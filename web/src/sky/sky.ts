@@ -1,7 +1,7 @@
 import type { MinorBody, MinorBodySearchResponse, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyEvents, SkyObjectCategory, SkyObjectRef, SkyObserver, SkyPosition, SkyPositionResponse, SkySearchResult, SkyStarData } from 'api'
 import { proxy } from 'valtio'
 import { jsonInit, responseError } from '../http'
-import type { SkyObserverSettings } from '../profile/profile'
+import type { SkyObserverSettings } from '../profile/schema'
 import { skyClock, skyTime } from './clock'
 import { MAP_STAR_MAGNITUDE_LIMIT } from './display'
 import { refKey, type SkySelectionRef } from './objects'

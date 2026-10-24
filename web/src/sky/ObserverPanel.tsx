@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { type SkyObserverSettings, normalizeSkyObserver, profileState, setSkyObserver } from '../profile/profile'
+import { normalizeSkyObserver } from '../profile/migrate'
+import { profileState, setSkyObserver } from '../profile/profile'
+import type { SkyObserverSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Select } from '../ui/Select'

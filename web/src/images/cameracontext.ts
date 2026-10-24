@@ -4,7 +4,8 @@ import { captureSnoop } from '../camera/capture'
 import { type DeviceView, roleDevice, roleStatus } from '../equipment/equipment'
 import { CAMERA_ROLES, type CameraRole, type EquipmentRole, type EquipmentSetup } from '../equipment/roles'
 import { type RoleDevice, useWatchedDevices } from '../equipment/useEquipment'
-import { activeProfile, activeSetup, type CameraIdentity, type Profile, profileCamera, profileState } from '../profile/profile'
+import { activeProfile, activeSetup, profileCamera, profileState } from '../profile/profile'
+import type { CameraIdentity, Profile } from '../profile/schema'
 import type { ImageDocument } from './images'
 
 // Equipment a camera tab's operations command: the physical camera of the tab, and the focuser and mount of the

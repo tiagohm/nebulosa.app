@@ -24,7 +24,7 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
 | Capability                                                                   | Status               | Where                                                                                                                                                                                                           |
 | ---------------------------------------------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Shell, routes, workspaces                                                    | Implemented          | `web/src/shell/` (`route.ts`, `workspaces.ts`, `WorkspaceLayout.tsx`)                                                                                                                                           |
-| Profiles (versioned, v4)                                                     | Implemented          | `web/src/profile/profile.ts` (`migrate`, `PROFILES_VERSION`); active profile per tab in sessionStorage                                                                                                          |
+| Profiles (versioned, v4)                                                     | Implemented          | `web/src/profile/` (`schema.ts` with `PROFILES_VERSION`, `migrate.ts`, store and actions in `profile.ts`); active profile per tab in sessionStorage                                                             |
 | Connections (INDI, Alpaca, simulator)                                        | Implemented          | `api/src/connection.ts`, `web/src/connection/`                                                                                                                                                                  |
 | Device registry and identity                                                 | Implemented          | `api/src/devices.ts` (`DeviceSummary`: connection id + stable device id)                                                                                                                                        |
 | Device capabilities and control states                                       | Implemented          | `api/src/devices.ts` (`DeviceStateMap`, `<type>:updated` events, `GET /api/connections/:id/states`)                                                                                                             |
@@ -220,20 +220,20 @@ Conflicts are resolved by the arbiter on the server, never only in the browser, 
 
 ## Persistence and State
 
-| State                                                | Owner                                              |
-| ---------------------------------------------------- | -------------------------------------------------- |
-| Profiles, presets, panel and view preferences        | browser localStorage, versioned (`profile.ts`)     |
-| Saved connections and the last highlighted one       | browser localStorage (`connection.ts`)             |
-| Active profile                                       | sessionStorage per tab                             |
-| Route, document view, zoom/pan                       | tab memory                                         |
-| Image pixels                                         | `api` image store                                  |
-| Star detection and plate solving jobs and results    | `api` analysis services, memory only               |
-| Saved capture frames (metadata, no pixels)           | `api`, `~/Nebulosa/capture-frames.json`, versioned |
-| Capture frame leases                                 | `api`, memory, per client id                       |
-| External tool settings and the nova session          | `api`, `~/Nebulosa/settings.json`, versioned       |
-| Connections, devices, operations, sessions, services | `api`                                              |
+| State                                                | Owner                                                |
+| ---------------------------------------------------- | ---------------------------------------------------- |
+| Profiles, presets, panel and view preferences        | browser localStorage, versioned (`web/src/profile/`) |
+| Saved connections and the last highlighted one       | browser localStorage (`connection.ts`)               |
+| Active profile                                       | sessionStorage per tab                               |
+| Route, document view, zoom/pan                       | tab memory                                           |
+| Image pixels                                         | `api` image store                                    |
+| Star detection and plate solving jobs and results    | `api` analysis services, memory only                 |
+| Saved capture frames (metadata, no pixels)           | `api`, `~/Nebulosa/capture-frames.json`, versioned   |
+| Capture frame leases                                 | `api`, memory, per client id                         |
+| External tool settings and the nova session          | `api`, `~/Nebulosa/settings.json`, versioned         |
+| Connections, devices, operations, sessions, services | `api`                                                |
 
-Profile format changes add a version and a case in `migrate`; older documents are read, and newer ones are never overwritten.
+Profile format changes add a version (`PROFILES_VERSION` in `web/src/profile/schema.ts`) and a case in `migrate` (`web/src/profile/migrate.ts`); older documents are read, and newer ones are never overwritten.
 
 Camera forms belong to the physical camera, never to a camera role: `ProfileSettings.cameras` keeps, per saved connection id and device id (`CameraIdentity`, `profileCamera`), the exposure and camera settings shared by Camera Acquisition and Auto Focus (`exposure`), the rest of the Camera Acquisition form (`acquisition`: mode, count, delay, frame type, output), and the Auto Focus form (`autoFocus`). An operation fits them to the camera when it starts and keeps that snapshot. Version 4 moved the forms that version 3 and earlier kept per camera role (`CaptureSettings.acquisition`, `autoFocus`) to the camera each equipment setup assigned that role, dropping the forms of roles without a camera and the post-capture analysis and plate solving settings; the Capture workspace preferences (`capture`), removed with that workspace, are ignored when read. A camera of a profile without a saved connection shows the defaults and keeps nothing.
 

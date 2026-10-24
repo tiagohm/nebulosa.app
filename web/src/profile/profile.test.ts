@@ -3,8 +3,54 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { acquisitionSettings, ACTIVE_PROFILE_KEY, activeProfile, activeSetup, assignDevice, autoFocusSettings, DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, exposureSettings, profileCamera, setAutoFocusSettings, setExposureSettings, createOpticalPreset, createProfile, DEFAULT_ACQUISITION_SETTINGS, deleteOpticalPreset, deleteProfile, duplicateOpticalPreset, duplicateProfile, forgetConnection, LAST_PROFILE_KEY, loadProfiles, newProfile, panelOpen, persistProfiles, type ProfileState, PROFILES_KEY, rememberDeviceNames, renameProfile, selectConnection, selectOpticalPreset, selectProfile, setAcquisitionSettings, setEquipmentRotation, setFramingSource, setFramingVisible, setLastImageDirectory, setManualSensor, setPanelOpen, setSensorSource, setSkyLayerVisible, setSkyMagnitudeLimit, setSkyObserver, setStarDetectionSettings, setTelescopeOptics, starDetectionSettings, updateOpticalPreset } from './profile'
+import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS } from './schema'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
+import {
+	acquisitionSettings,
+	ACTIVE_PROFILE_KEY,
+	activeProfile,
+	activeSetup,
+	assignDevice,
+	autoFocusSettings,
+	exposureSettings,
+	profileCamera,
+	setAutoFocusSettings,
+	setExposureSettings,
+	createOpticalPreset,
+	createProfile,
+	deleteOpticalPreset,
+	deleteProfile,
+	duplicateOpticalPreset,
+	duplicateProfile,
+	forgetConnection,
+	LAST_PROFILE_KEY,
+	loadProfiles,
+	newProfile,
+	panelOpen,
+	persistProfiles,
+	type ProfileState,
+	PROFILES_KEY,
+	rememberDeviceNames,
+	renameProfile,
+	selectConnection,
+	selectOpticalPreset,
+	selectProfile,
+	setAcquisitionSettings,
+	setEquipmentRotation,
+	setFramingSource,
+	setFramingVisible,
+	setLastImageDirectory,
+	setManualSensor,
+	setPanelOpen,
+	setSensorSource,
+	setSkyLayerVisible,
+	setSkyMagnitudeLimit,
+	setSkyObserver,
+	setStarDetectionSettings,
+	setTelescopeOptics,
+	starDetectionSettings,
+	updateOpticalPreset,
+} from './profile'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }

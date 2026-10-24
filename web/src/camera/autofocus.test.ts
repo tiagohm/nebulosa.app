@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, CameraCapabilities } from 'api'
 import { proxy } from 'valtio'
-import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_AUTO_FOCUS_SETTINGS } from '../profile/profile'
+import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_AUTO_FOCUS_SETTINGS } from '../profile/schema'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { autoFocusBlocker, autoFocusFrameFocus, autoFocusRequest, autoFocusRunning, type AutoFocusRuntime, defaultStepSize, handleAutoFocusEvent, refreshAutoFocus, NO_FOCUSER, startAutoFocus, stopAutoFocus } from './autofocus'
 import { cameraKey } from './capture'

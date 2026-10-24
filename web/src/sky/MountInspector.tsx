@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
-import type { SkyObserverSettings } from '../profile/profile'
+import type { SkyObserverSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { skyClock } from './clock'

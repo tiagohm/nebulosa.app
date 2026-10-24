@@ -1,6 +1,6 @@
 import type { CameraCapabilities } from 'api'
 import { type ReactNode, useState } from 'react'
-import type { CameraExposureSettings } from '../profile/profile'
+import type { CameraExposureSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'

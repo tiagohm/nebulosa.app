@@ -2,7 +2,7 @@ import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession, 
 import { proxy } from 'valtio'
 import type { EquipmentSetup } from '../equipment/roles'
 import { deviceUrl, jsonInit, responseError } from '../http'
-import type { CameraAcquisitionSettings, CameraExposureSettings } from '../profile/profile'
+import type { CameraAcquisitionSettings, CameraExposureSettings } from '../profile/schema'
 
 // Camera captures as this tab knows them. The server owns every capture, whichever tab started it, so this
 // store only mirrors it: sessions and previewed frames are fed by capture:updated and capture:frame events

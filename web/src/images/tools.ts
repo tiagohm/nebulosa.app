@@ -91,7 +91,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'star-detection': { id: 'star-detection', label: 'Star Detection', panelTitle: 'Star Detection', category: 'image', outputs: ['analysis'], panel: StarDetectionPanel },
 	'streak-detection': plannedImageTool('streak-detection', 'Streak Detection', ['analysis']),
 	'image-processing': plannedImageTool('image-processing', 'Image Processing', ['derived']),
-	'camera-acquisition': { id: 'camera-acquisition', label: 'Camera Acquisition', panelTitle: 'Camera Acquisition', category: 'camera', panel: CameraAcquisitionTool },
+	'camera-acquisition': { id: 'camera-acquisition', label: 'Acquisition', panelTitle: 'Acquisition', category: 'camera', panel: CameraAcquisitionTool },
 	'auto-focus': { id: 'auto-focus', label: 'Auto Focus', panelTitle: 'Auto Focus', category: 'camera', panel: AutoFocusTool },
 	'mount-nudge': { id: 'mount-nudge', label: 'Mount Nudge', panelTitle: 'Mount Nudge', category: 'camera', panel: MountNudgeTool },
 	guiding: { id: 'guiding', label: 'Guiding', panelTitle: 'Guiding', category: 'camera', panel: GuidingTool },

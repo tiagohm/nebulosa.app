@@ -28,6 +28,7 @@
 @layer base {
 	html {
 		color-scheme: dark;
+		font-size: 14.5px;
 	}
 
 	body {

@@ -1,5 +1,5 @@
 import { AU_KM } from 'nebulosa/src/core/constants'
-import { formatAngle, toArcmin, toDeg } from 'nebulosa/src/math/units/angle'
+import { formatDEC, formatRA, toArcmin, toDeg } from 'nebulosa/src/math/units/angle'
 
 // Display formats of the Sky workspace: equatorial and horizontal angles, angular sizes, distances,
 // magnitudes, and instants in the browser's time zone with the zone named, so a time is never ambiguous.
@@ -12,12 +12,12 @@ const KILOMETER_DISTANCE_LIMIT = 0.007
 
 // Formats a right ascension in radians as hours, minutes, and seconds: "06h 45m 08.93s".
 export function formatRightAscension(angle: number) {
-	return formatAngle(angle, { isHour: true, separators: ['h ', 'm ', 's'], fractionDigits: 2, noSign: true })
+	return formatRA(angle)
 }
 
 // Formats a declination or altitude in radians as signed degrees, arcminutes, and arcseconds: "-16° 42′ 58.02″".
 export function formatDeclination(angle: number) {
-	return formatAngle(angle, { separators: ['° ', '′ ', '″'], fractionDigits: 2, plusSign: '+' })
+	return formatDEC(angle)
 }
 
 // Formats an azimuth or a position angle in radians as degrees with two decimals: "265.36°".

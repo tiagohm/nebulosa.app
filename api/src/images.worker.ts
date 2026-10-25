@@ -1,21 +1,20 @@
 import { open } from 'fs/promises'
 import { basename } from 'path'
-import { readImageFromFits, readImageFromXisf, writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/imaging/model/image'
+import { writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/imaging/model/image'
 import type { CfaPattern, Image, ImageChannel } from 'nebulosa/src/imaging/model/types'
 import { clone } from 'nebulosa/src/imaging/processing/arithmetic'
 import { adf } from 'nebulosa/src/imaging/processing/computation'
 import { debayer } from 'nebulosa/src/imaging/processing/debayer'
-import { grayscale, invert } from 'nebulosa/src/imaging/processing/geometry'
+import { invert } from 'nebulosa/src/imaging/processing/geometry'
 import { scnr } from 'nebulosa/src/imaging/processing/scnr'
 import { stf } from 'nebulosa/src/imaging/processing/stf'
 import { brightness, contrast, gamma, saturation } from 'nebulosa/src/imaging/processing/tone'
 import { fileHandleSource } from 'nebulosa/src/io/file'
-import { Bitpix, type FitsHeader, readFits } from 'nebulosa/src/io/formats/fits/fits'
-import { uncompressedBitpixKeyword } from 'nebulosa/src/io/formats/fits/util'
-import { readXisf } from 'nebulosa/src/io/formats/xisf/xisf'
+import { Bitpix, type FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSource } from 'nebulosa/src/io/io'
 import type { Sink } from 'nebulosa/src/io/types'
-import { cfaPattern, DisplayError, precisionOf, type DisplaySettings, type ImageCapture, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageProvenance, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult, type Stretch } from './images'
+import { luminanceImage, readImageFrom } from './imagedecode'
+import { cfaPattern, DisplayError, type DisplaySettings, type ImageCapture, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageProvenance, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult, type Stretch } from './images'
 
 // Worker thread that owns the decoded pixels of every open image document and does all the heavy
 // work on them: decoding FITS and XISF files and camera frames, the display pipeline, JPEG encoding, deriving new
@@ -72,26 +71,6 @@ const queue = new Map<string, QueuedRender>()
 
 // Whether the queue is scheduled to be drained.
 let draining = false
-
-// Seekable source of a FITS or XISF image: an open file or bytes in memory.
-type ImageSource = ReturnType<typeof fileHandleSource> | ReturnType<typeof bufferSource>
-
-// Reads the image of a FITS or XISF source with the precision its BITPIX needs (precisionOf); a FITS image
-// is read with 64 bits when any of its HDUs needs them. Resolves to undefined when the source is neither,
-// and throws whatever the decoder throws for a malformed one.
-async function readImageFrom(source: ImageSource): Promise<{ readonly format: ImageFormat; readonly image: Image } | undefined> {
-	const fits = await readFits(source)
-	const fitsPrecision = fits && (fits.hdus.some((hdu) => precisionOf(uncompressedBitpixKeyword(hdu.header, 0)) === 64) ? 64 : 32)
-	const fitsImage = fits && (await readImageFromFits(fits, source, fitsPrecision))
-	if (fitsImage) return { format: 'fits', image: fitsImage }
-
-	source.seek(0)
-	const xisf = await readXisf(source)
-	const xisfImage = xisf?.images[0] && (await readImageFromXisf(xisf, source, precisionOf(xisf.images[0].bitpix)))
-	if (xisfImage) return { format: 'xisf', image: xisfImage }
-
-	return undefined
-}
 
 // Reads the image of a FITS or XISF file (see readImageFrom). Throws ImageOpenError.
 async function readImage(path: string): Promise<{ readonly format: ImageFormat; readonly image: Image }> {
@@ -304,18 +283,8 @@ function renderImage(entry: DocumentEntry, request: RenderRequest): { readonly j
 // its trusted pattern, reusing the debayered image of a rendering. The result owns a buffer of its own that
 // can be transferred, and names no Bayer pattern.
 function detectionImage(entry: DocumentEntry): Image {
-	const { image, cfa } = entry
-	let source = image
-
-	if (image.metadata.channels === 1 && cfa) {
-		if (entry.debayered?.pattern === cfa) source = entry.debayered.image
-		else source = debayer(image, cfa) ?? image
-	}
-
-	// grayscale returns a mono image itself, which must not be handed over.
-	const mono = source.metadata.channels === 1 ? clone(source) : grayscale(source)
-	const raw = mono.raw.byteOffset === 0 && mono.raw.byteLength === mono.raw.buffer.byteLength ? mono.raw : mono.raw.slice()
-	return { ...mono, raw, metadata: { ...mono.metadata, bayer: undefined } }
+	const { image, cfa, debayered } = entry
+	return luminanceImage(image, cfa, cfa !== undefined && debayered?.pattern === cfa ? debayered.image : undefined)
 }
 
 // Posts a response to the server thread, transferring the given buffers instead of copying them.

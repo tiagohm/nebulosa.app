@@ -16,6 +16,7 @@ import { FlatWizardAnalyzer } from './flatwizard.analysis'
 import { DEFAULT_FOCUSERS_FILE, FocuserBacklashStore } from './focuserbacklash'
 import { createFocuserRoutes, FocuserCommands } from './focusers'
 import { createGuideOutputRoutes, GuideOutputCommands } from './guideoutputs'
+import { createGuidingRoutes, GuidingSessions } from './guiding'
 import { createImageRoutes, images } from './images'
 import { createMountRoutes, MountCommands } from './mounts'
 import { createOperationRoutes, OperationRegistry } from './operations'
@@ -165,6 +166,30 @@ export type {
 	FlatWizardState,
 	FlatWizardVerdict,
 } from './flatwizard'
+export type {
+	GuidingCalibrationSummary,
+	GuidingCameraSettings,
+	GuidingCommand,
+	GuidingCommandAccepted,
+	GuidingCommandStatus,
+	GuidingDitherRequest,
+	GuidingEventRecord,
+	GuidingExposureRequest,
+	GuidingFrameOverlay,
+	GuidingPage,
+	GuidingPauseRequest,
+	GuidingResumeRequest,
+	GuidingRms,
+	GuidingServerEvent,
+	GuidingSessionSummary,
+	GuidingSnapshot,
+	GuidingStartGuidingRequest,
+	GuidingStartRequest,
+	GuidingStartResponse,
+	GuidingTargetRequest,
+	GuidingTelemetryAxis,
+	GuidingTelemetrySample,
+} from './guiding'
 export type { TppaAlignment, TppaAttempt, TppaCaptureSettings, TppaEvent, TppaGeometry, TppaOverlay, TppaPoint, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaStartResponse, TppaState } from './tppa'
 export type { ServerEvent } from './websocket'
 export { websocket }
@@ -236,6 +261,10 @@ const darv = new DarvSessions(connections.devices, (id) => connections.client(id
 // previewing and recording the frames in the capture frame registry, and measuring them in DN on a worker of their own.
 const flatWizard = new FlatWizardSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, wheels.commander, flatPanels.commander, covers.commander, images, captureFrames, new FlatWizardAnalyzer(), broadcast)
 
+// Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
+// guide output commands and previewing their frames in the image store and the capture frame registry.
+const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, broadcast)
+
 // Bun.serve routes under /api/.
 export const routes = {
 	'/api/health': {
@@ -258,6 +287,7 @@ export const routes = {
 	...createTppaRoutes(tppa),
 	...createDarvRoutes(darv),
 	...createFlatWizardRoutes(flatWizard),
+	...createGuidingRoutes(guiding),
 	...createFileRoutes(),
 	...createImageRoutes(images),
 	...createExternalToolsRoutes(externalTools),

@@ -1,0 +1,202 @@
+import { afterAll, afterEach, describe, expect, test } from 'bun:test'
+import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
+import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
+import { ConnectionManager } from './connection'
+import { type GuidingEventRecord, type GuidingPage, type GuidingServerEvent, GuidingSessions, type GuidingSessionSummary, type GuidingStartRequest } from './guiding'
+import { ImageStore } from './images'
+import { type OperationEvent, OperationRegistry } from './operations'
+
+const root = mkdtempSync(join(tmpdir(), 'nebulosa-guiding-test-'))
+const disposables: Disposable[] = []
+
+afterEach(() => {
+	for (const disposable of disposables.splice(0).toReversed()) disposable[Symbol.dispose]()
+})
+
+afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+async function waitUntil(condition: () => boolean, timeout = 30000) {
+	const start = Date.now()
+	while (!condition()) {
+		if (Date.now() - start > timeout) throw new Error('timeout')
+		await Bun.sleep(10)
+	}
+}
+
+let tokens = 0
+
+const SETTLE = { pixels: 1.5, time: 1, timeout: 10 }
+
+// The simulator connection with its camera and mount connected, and the guiding sessions over it, guiding through the
+// mount's ST4 port.
+async function setup() {
+	const manager = new ConnectionManager()
+	disposables.push(manager)
+	const { id } = await manager.connect({ type: 'SIMULATOR' })
+	const client = manager.client(id)!
+	const operationEvents: OperationEvent[] = []
+	const operations = new OperationRegistry(manager.devices, (event) => operationEvents.push(event))
+	disposables.push(operations)
+	const images = new ImageStore()
+	const frameEvents: CaptureFrameEvent[] = []
+	const frames = new CaptureFrameRegistry(images, (event) => frameEvents.push(event), { file: join(mkdtempSync(join(root, 'frames-')), 'capture-frames.json') })
+	disposables.push(frames)
+	const commander = new GuideOutputCommander(manager.devices.guideOutputs, operations.arbiter)
+	disposables.push(commander)
+	const events: GuidingServerEvent[] = []
+	const guiding = new GuidingSessions(
+		manager.devices,
+		(connectionId) => manager.client(connectionId),
+		operations,
+		commander,
+		images,
+		frames,
+		(event) => events.push(event),
+	)
+	disposables.push(guiding)
+
+	const devices = manager.devices.list(client)
+	const cameraId = devices.find((device) => device.type === 'camera')!.id
+	const mountId = devices.find((device) => device.type === 'mount')!.id
+	manager.devices.switch(client, cameraId, true)
+	manager.devices.switch(client, mountId, true)
+	const camera = manager.devices.camera(client, cameraId)!
+	const mount = manager.devices.device(client, 'mount', mountId)!
+	await waitUntil(() => camera.connected && camera.frame.width.max > 0 && mount.connected && mount.canPulseGuide && operations.available(camera) && operations.available(mount))
+	await waitUntil(() => manager.devices.list(client).some((device) => device.type === 'guideOutput' && device.name === mount.name))
+	const guideOutputId = manager.devices.list(client).find((device) => device.type === 'guideOutput' && device.name === mount.name)!.id
+
+	// Latest published record of the session.
+	const summary = (): GuidingSessionSummary | undefined => events.findLast((event) => event.type === 'guiding:updated')?.session
+	// Running operation records of a kind.
+	const running = (kind: string) => {
+		const states = new Map<string, OperationEvent['operation']>()
+		for (const { operation } of operationEvents) if (operation.kind === kind) states.set(operation.operationId, operation)
+		return [...states.values()].filter((operation) => operation.state === 'running')
+	}
+
+	return { manager, client, id, operations, operationEvents, images, frames, frameEvents, guiding, events, camera, cameraId, mount, mountId, guideOutputId, summary, running }
+}
+
+type Setup = Awaited<ReturnType<typeof setup>>
+
+// A request looping on small, short subframes and guiding through the mount.
+function request({ id, guideOutputId }: Setup, patch: Partial<GuidingStartRequest> = {}): GuidingStartRequest {
+	return {
+		token: `token-${tokens++}`,
+		guideOutput: { connectionId: id, deviceId: guideOutputId },
+		exposure: 200,
+		camera: { gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 256, height: 256, frameFormat: '' },
+		trackingMode: 'singleStar',
+		...patch,
+	}
+}
+
+// Starts a session and waits until it loops; returns its ids.
+async function start(context: Setup, patch: Partial<GuidingStartRequest> = {}) {
+	const response = context.guiding.start(context.id, context.cameraId, request(context, patch))
+	expect(response.status).toBe(202)
+	const accepted = (await response.json()) as { sessionId: string; operationId: string }
+	await waitUntil(() => context.summary()?.active === true)
+	return accepted
+}
+
+describe('start', () => {
+	test('refuses an unknown camera or guide output and a busy camera', async () => {
+		const context = await setup()
+		expect(context.guiding.start(context.id, 'nope', request(context)).status).toBe(404)
+		expect(context.guiding.start(context.id, context.cameraId, request(context, { guideOutput: { connectionId: context.id, deviceId: 'nope' } })).status).toBe(404)
+
+		await start(context)
+		expect(context.guiding.start(context.id, context.cameraId, request(context)).status).toBe(409)
+	})
+
+	test('loops under one camera.guiding operation and previews the frames as guiding frames of the camera', async () => {
+		const context = await setup()
+		const body = request(context)
+		const first = (await context.guiding.start(context.id, context.cameraId, body).json()) as { sessionId: string; operationId: string }
+		// A repeated token answers its first session.
+		expect(await context.guiding.start(context.id, context.cameraId, body).json()).toEqual(first)
+
+		await waitUntil(() => context.events.some((event) => event.type === 'guiding:frame'))
+		const frame = context.events.find((event) => event.type === 'guiding:frame')!
+		expect(frame).toMatchObject({ sessionId: first.sessionId, overlay: { state: 'looping' } })
+		expect(context.frameEvents.some((event) => event.type === 'captureFrame:updated' && event.frame.origin === 'guiding' && event.frame.sessionId === first.sessionId)).toBeTrue()
+		expect(context.summary()).toMatchObject({ sessionId: first.sessionId, operationId: first.operationId, active: true, state: 'looping', guideOutputHeld: false, exposure: 200 })
+		expect(context.running('camera.guiding').map((operation) => operation.operationId)).toEqual([first.operationId])
+		expect(context.operations.available(context.camera)).toBeFalse()
+		expect(context.operations.available(context.mount)).toBeTrue()
+
+		expect((await context.guiding.stop(first.sessionId)).status).toBe(204)
+		expect(context.summary()).toMatchObject({ active: false, lost: false })
+		expect(context.summary()?.endedAt).toBeDefined()
+		await waitUntil(() => context.running('camera.guiding').length === 0)
+		expect(context.operations.available(context.camera)).toBeTrue()
+		expect((await context.guiding.stop(first.sessionId)).status).toBe(404)
+	})
+})
+
+describe('guiding', () => {
+	test('guiding holds the mount in a guideOutput.guiding operation; stopping guiding frees it and keeps looping', async () => {
+		const context = await setup()
+		const { sessionId } = await start(context)
+
+		expect(await context.guiding.selectTarget(sessionId, { position: [128, 128] }).json()).toEqual({ lockPosition: [128, 128] })
+
+		const body = { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }
+		const accepted = await context.guiding.startGuiding(sessionId, body).json()
+		expect(await context.guiding.startGuiding(sessionId, body).json()).toEqual(accepted)
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+		expect(context.running('guideOutput.guiding')).toHaveLength(1)
+		expect(context.summary()?.runOperationId).toBe(context.running('guideOutput.guiding')[0].operationId)
+		expect(context.operations.available(context.mount)).toBeFalse()
+		// The target is in use while guiding.
+		expect(context.guiding.clearTarget(sessionId).status).toBe(422)
+
+		const stopped = await context.guiding.stopGuiding(sessionId, { token: `token-${tokens++}` }).json()
+		await waitUntil(() => context.summary()?.command?.commandId === stopped.commandId && context.summary()?.command?.state !== 'running')
+		expect(context.summary()).toMatchObject({ command: { command: 'stopGuiding', state: 'succeeded' }, guideOutputHeld: false, active: true })
+		await waitUntil(() => context.running('guideOutput.guiding').length === 0)
+		expect(context.operations.available(context.mount)).toBeTrue()
+		expect(context.guiding.clearTarget(sessionId).status).toBe(204)
+
+		// The control events are kept in order, and the page says when the requested position is still covered.
+		const page = (await context.guiding.events(sessionId, 0).json()) as GuidingPage<GuidingEventRecord>
+		expect(page.truncated).toBeFalse()
+		expect(page.items.map((record) => record.sequence)).toEqual(page.items.map((_, index) => index + 1))
+		expect(page.items.map((record) => record.event.type)).toContain('calibrationStarted')
+
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+		expect(context.operations.available(context.mount)).toBeTrue()
+		expect(context.operations.available(context.camera)).toBeTrue()
+	}, 60000)
+
+	test('commands of an ended or unknown session are refused', async () => {
+		const context = await setup()
+		const { sessionId } = await start(context)
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+
+		expect(context.guiding.startGuiding(sessionId, { token: 'x', recalibrate: false, settle: SETTLE }).status).toBe(404)
+		expect(context.guiding.setExposure(sessionId, { exposure: 1000 }).status).toBe(404)
+		expect(context.guiding.session('unknown').status).toBe(404)
+		expect(context.guiding.session(sessionId).status).toBe(200)
+	})
+
+	test('losing the mount while guiding ends the session as lost and finishes its operations', async () => {
+		const context = await setup()
+		const { sessionId, operationId } = await start(context)
+		await context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).json()
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+
+		context.manager.devices.switch(context.client, context.mountId, false)
+		await waitUntil(() => context.summary()?.endedAt !== undefined)
+		expect(context.summary()).toMatchObject({ active: false, lost: true, failure: { reason: 'disconnected' } })
+		await waitUntil(() => context.running('camera.guiding').length === 0 && context.running('guideOutput.guiding').length === 0)
+		const finished = context.operationEvents.findLast((event) => event.operation.operationId === operationId)!.operation
+		expect(finished).toMatchObject({ state: 'failed', reason: 'disconnected' })
+		await waitUntil(() => context.operations.available(context.camera))
+	}, 60000)
+})

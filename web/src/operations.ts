@@ -41,6 +41,8 @@ export const OPERATION_LABELS: Readonly<Record<OperationKind, string>> = {
 	'mount.tppa': 'TPPA',
 	'mount.darv': 'DARV',
 	'camera.flatWizard': 'Flat Wizard',
+	'camera.guiding': 'Guiding',
+	'guideOutput.guiding': 'Guiding corrections',
 }
 
 // Most finished operations kept; older ones are dropped. Running operations are always kept.

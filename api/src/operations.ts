@@ -40,6 +40,8 @@ export type OperationKind =
 	| 'mount.tppa'
 	| 'mount.darv'
 	| 'camera.flatWizard'
+	| 'camera.guiding'
+	| 'guideOutput.guiding'
 
 // Life stage of an operation.
 export type OperationState = 'running' | 'succeeded' | 'failed'

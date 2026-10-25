@@ -44,6 +44,11 @@ export class GuideOutputCommands implements Disposable {
 		this.#commander = new GuideOutputCommander(devices.guideOutputs, operations.arbiter)
 	}
 
+	// Commander of the guide outputs, shared with the guiding sessions, whose pulses it dispatches and observes.
+	get commander() {
+		return this.#commander
+	}
+
 	// Responds with the state of a guide output, or 404 when the connection is not open or has no such output.
 	state(connectionId: string, deviceId: string): Response {
 		const client = this.client(connectionId)

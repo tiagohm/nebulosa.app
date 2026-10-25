@@ -8,6 +8,7 @@ import type { DomeMotionEvent } from './domes'
 import type { ExternalToolEvent } from './externaltools'
 import type { FlatWizardEvent } from './flatwizard'
 import type { FocuserBacklashEvent } from './focusers'
+import type { GuidingServerEvent } from './guiding'
 import type { MountNudgeEvent } from './mounts'
 import type { OperationEvent } from './operations'
 import type { PlateSolvingEvent } from './platesolving'
@@ -20,9 +21,9 @@ import type { TppaEvent } from './tppa'
 
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the operation events
 // of the operation registry, the events of the capture, Auto Focus, TPPA, mount nudge, and dome manual rotation services,
-// the captured frames of the frame registry, the changes of the external program settings and of the focuser backlash
+// the captured frames of the frame registry, the guiding sessions, the changes of the external program settings and of the focuser backlash
 // compensations, and the star detection and plate solving jobs.
-export type ServerEvent = ConnectionRegistryEvent | OperationEvent | CaptureEvent | CaptureFrameEvent | AutoFocusEvent | TppaEvent | DarvEvent | FlatWizardEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent | StarDetectionEvent | PlateSolvingEvent | FocuserBacklashEvent
+export type ServerEvent = ConnectionRegistryEvent | OperationEvent | CaptureEvent | CaptureFrameEvent | AutoFocusEvent | TppaEvent | DarvEvent | FlatWizardEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent | StarDetectionEvent | PlateSolvingEvent | FocuserBacklashEvent | GuidingServerEvent
 
 // What the upgrade attaches to a socket.
 export interface WebSocketData {

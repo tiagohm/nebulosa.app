@@ -8,11 +8,11 @@ import { activeProfile, activeSetup, profileCamera, profileState } from '../prof
 import type { CameraIdentity, Profile } from '../profile/schema'
 import type { ImageDocument } from './images'
 
-// Equipment a camera tab's operations command: the physical camera of the tab, and the focuser, mount, filter wheel,
-// flat panel, and cover of the active profile's equipment setup associated with it. The setup assigns flat roles per
+// Equipment a camera tab's operations command: the physical camera of the tab, and the focuser, mount, guide output,
+// filter wheel, flat panel, and cover of the active profile's equipment setup associated with it. The setup assigns flat roles per
 // connection, with no optical train, so the association is a fixed rule: the focuser belongs to the Main Camera, and
 // only that camera's Auto Focus moves it; the mount is shared by every camera of the connection, since a nudge holds
-// only the mount; the wheel, the panel, and the cover belong to any camera with a role, and never to one without,
+// only the mount; the guide output belongs to the Guide Camera, and only that camera guides; the wheel, the panel, and the cover belong to any camera with a role, and never to one without,
 // which takes its flats with manual filters and light and leaves the cover as it is. A camera without a role has no
 // focuser and snoops nothing into its headers. The forms of the camera are those of the physical camera in the active
 // profile. An operation keeps the devices it started with; changing tab or profile never redirects it.
@@ -33,6 +33,9 @@ export interface CameraOperationContext {
 	readonly focuser?: RoleDevice
 	// Mount Mount Nudge moves: the MOUNT of the setup of the camera's connection.
 	readonly mount: RoleDevice
+	// Guide output guiding pulses: the GUIDE_OUTPUT of the setup when the camera is its Guide Camera; absent otherwise,
+	// meaning the camera cannot guide.
+	readonly guideOutput?: RoleDevice
 	// Filter wheel Flat Wizard moves: the FILTER_WHEEL of the setup when the camera has a role; absent otherwise,
 	// meaning every filter change is manual.
 	readonly wheel?: RoleDevice
@@ -66,7 +69,7 @@ export function cameraOperationContext(document: Pick<ImageDocument, 'source'> |
 
 	if (!role) return context
 	const flats = { wheel: resolve('FILTER_WHEEL'), flatPanel: resolve('FLAT_PANEL'), cover: resolve('COVER') }
-	return role === 'MAIN_CAMERA' ? { ...context, role, focuser: resolve('FOCUSER'), ...flats } : { ...context, role, ...flats }
+	return role === 'MAIN_CAMERA' ? { ...context, role, focuser: resolve('FOCUSER'), ...flats } : { ...context, role, guideOutput: resolve('GUIDE_OUTPUT'), ...flats }
 }
 
 // Resolves the equipment of the camera tab of a document for the active profile, following its setup and the watched

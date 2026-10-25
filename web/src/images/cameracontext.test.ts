@@ -8,9 +8,9 @@ function device(id: string, type: DeviceSummary['type']): DeviceSummary {
 	return { id, type, name: id, connected: true, connectionId: 'conn', hardwareId: id, interfaces: [], driver: { executable: '', version: '' } }
 }
 
-const RUNTIME = { watched: 'conn', devices: [device('main', 'camera'), device('guide', 'camera'), device('spare', 'camera'), device('focuser', 'focuser'), device('mount', 'mount'), device('wheel', 'wheel')], pending: {}, errors: {} }
+const RUNTIME = { watched: 'conn', devices: [device('main', 'camera'), device('guide', 'camera'), device('spare', 'camera'), device('focuser', 'focuser'), device('mount', 'mount'), device('wheel', 'wheel'), device('st4', 'guideOutput')], pending: {}, errors: {} }
 
-const SETUP: EquipmentSetup = { MAIN_CAMERA: { id: 'main', name: 'main' }, GUIDE_CAMERA: { id: 'guide', name: 'guide' }, FOCUSER: { id: 'focuser', name: 'focuser' }, MOUNT: { id: 'mount', name: 'mount' }, FILTER_WHEEL: { id: 'wheel', name: 'wheel' } }
+const SETUP: EquipmentSetup = { MAIN_CAMERA: { id: 'main', name: 'main' }, GUIDE_CAMERA: { id: 'guide', name: 'guide' }, FOCUSER: { id: 'focuser', name: 'focuser' }, MOUNT: { id: 'mount', name: 'mount' }, FILTER_WHEEL: { id: 'wheel', name: 'wheel' }, GUIDE_OUTPUT: { id: 'st4', name: 'st4' } }
 
 // Active profile working with the saved connection the watched server connection opened.
 const PROFILE = { connectionId: 'saved', equipment: { saved: SETUP } }
@@ -35,12 +35,14 @@ describe('camera operation context', () => {
 		expect(context.focuser).toMatchObject({ device: { id: 'focuser' }, serverId: 'conn', status: 'connected' })
 		expect(context.mount).toMatchObject({ device: { id: 'mount' }, status: 'connected' })
 		expect(context.snoop).toEqual({ mount: 'mount', focuser: 'focuser', wheel: 'wheel', rotator: undefined })
+		expect(context.guideOutput).toBeUndefined()
 	})
 
-	test('the Guide Camera shares the mount but has no focuser', () => {
+	test('the Guide Camera shares the mount and gets the guide output, but has no focuser', () => {
 		const context = cameraOperationContext(tab('guide'), PROFILE, RUNTIME)!
 		expect(context.role).toBe('GUIDE_CAMERA')
 		expect(context.focuser).toBeUndefined()
+		expect(context.guideOutput).toMatchObject({ device: { id: 'st4' }, serverId: 'conn', status: 'connected' })
 		expect(context.mount.status).toBe('connected')
 		expect(context.snoop.mount).toBe('mount')
 	})
@@ -51,6 +53,7 @@ describe('camera operation context', () => {
 		expect(context.role).toBeUndefined()
 		expect(context.focuser).toBeUndefined()
 		expect(context.snoop).toEqual({})
+		expect(context.guideOutput).toBeUndefined()
 		expect(context.mount).toMatchObject({ device: { id: 'mount' }, status: 'connected' })
 	})
 
@@ -70,9 +73,10 @@ describe('camera operation context', () => {
 		expect(spare.cover).toBeUndefined()
 	})
 
-	test('a missing mount assignment is reported, never replaced by another connected mount', () => {
-		const { MOUNT: _, ...setup } = SETUP
+	test('a missing mount or guide output assignment is reported, never replaced by another connected device', () => {
+		const { MOUNT: _, GUIDE_OUTPUT: __, ...setup } = SETUP
 		expect(cameraOperationContext(tab('main'), { connectionId: 'saved', equipment: { saved: setup } }, RUNTIME)!.mount).toEqual({ device: undefined, serverId: 'conn', status: 'notSelected' })
+		expect(cameraOperationContext(tab('guide'), { connectionId: 'saved', equipment: { saved: setup } }, RUNTIME)!.guideOutput).toEqual({ device: undefined, serverId: 'conn', status: 'notSelected' })
 	})
 
 	test('a camera of another connection than the watched one has no role and no reachable mount', () => {

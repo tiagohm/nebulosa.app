@@ -31,6 +31,8 @@ import {
 	type DarvSettings,
 	DEFAULT_FLAT_WIZARD_SETTINGS,
 	type FlatWizardSettings,
+	DEFAULT_GUIDING_SETTINGS,
+	type GuidingSettings,
 } from './schema'
 
 // Profiles of the browser and the profile active in this tab, and the actions that change them. Profiles are a
@@ -338,6 +340,16 @@ export function flatWizardSettings(settings: Pick<ProfileSettings, 'cameras'>, c
 // when given.
 export function setFlatWizardSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<FlatWizardSettings>) {
 	setCameraForm(state, camera, 'flatWizard', flatWizardSettings(activeProfile(state).settings, camera), patch)
+}
+
+// Returns the guiding form of a camera: the one edited last, or the defaults.
+export function guidingSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<GuidingSettings> {
+	return cameraSettings(settings, camera)?.guiding ?? DEFAULT_GUIDING_SETTINGS
+}
+
+// Replaces fields of the guiding form of a camera in the active profile. The settle is replaced as a whole when given.
+export function setGuidingSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<GuidingSettings>) {
+	setCameraForm(state, camera, 'guiding', guidingSettings(activeProfile(state).settings, camera), patch)
 }
 
 // Returns the star detection request of a profile: the one edited last, or the defaults.

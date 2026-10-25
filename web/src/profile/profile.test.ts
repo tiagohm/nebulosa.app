@@ -3,7 +3,7 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DARV_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, DEFAULT_TPPA_SETTINGS } from './schema'
+import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DARV_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, DEFAULT_GUIDING_SETTINGS, DEFAULT_TPPA_SETTINGS } from './schema'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import {
 	acquisitionSettings,
@@ -20,8 +20,10 @@ import {
 	tppaSettings,
 	darvSettings,
 	flatWizardSettings,
+	guidingSettings,
 	setDarvSettings,
 	setFlatWizardSettings,
+	setGuidingSettings,
 	createOpticalPreset,
 	createProfile,
 	deleteOpticalPreset,
@@ -91,7 +93,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 7, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: 8, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -689,9 +691,33 @@ describe('camera forms', () => {
 		const forms = { c: { 'cam-main': { darv: { ...DEFAULT_DARV_SETTINGS, legDuration: 90 } } } }
 		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 6, profiles: [{ id: 'a', name: 'A', settings: { cameras: forms } }] }))
 		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
+	})
+
+	test('the guiding form is kept per camera, persisted, restored with defaults for invalid fields, and a version 7 document keeps its forms', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		expect(guidingSettings(activeProfile(state).settings, GUIDE)).toEqual(DEFAULT_GUIDING_SETTINGS)
+
+		const settle = { pixels: 0.8, time: 5, timeout: 30 }
+		setGuidingSettings(state, GUIDE, { exposureTime: 1.5, trackingMode: 'multiStar', focalLength: 240, recalibrate: false, aggressivenessRA: 0.5, settle, ditherPixels: 3, ditherRaOnly: true })
+		expect(guidingSettings(activeProfile(state).settings, MAIN)).toEqual(DEFAULT_GUIDING_SETTINGS)
+		await Bun.sleep(0)
+
+		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
+		expect(guidingSettings(reloaded, GUIDE)).toEqual({ ...DEFAULT_GUIDING_SETTINGS, exposureTime: 1.5, trackingMode: 'multiStar', focalLength: 240, recalibrate: false, aggressivenessRA: 0.5, settle, ditherPixels: 3, ditherRaOnly: true })
+
+		const invalid = newStores()
+		const bad = { exposureTime: 0, trackingMode: 'x', focalLength: -1, recalibrate: 'no', calibrationPulse: 0, aggressivenessRA: 2, aggressivenessDEC: -1, maximumPulseRA: 1e9, maximumPulseDEC: Number.NaN, settle: { pixels: 0, time: -1, timeout: 0 }, ditherPixels: 0, ditherRaOnly: 'yes' }
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 8, profiles: [{ id: 'a', name: 'A', settings: { cameras: { c: { 'cam-guide': { guiding: bad } } } } }] }))
+		expect(load(invalid).profiles[0].settings.cameras).toEqual({ c: { 'cam-guide': { guiding: DEFAULT_GUIDING_SETTINGS } } })
+
+		const older = newStores()
+		const forms = { c: { 'cam-main': { flatWizard: { ...DEFAULT_FLAT_WIZARD_SETTINGS, settleTime: 4 } } } }
+		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 7, profiles: [{ id: 'a', name: 'A', settings: { cameras: forms } }] }))
+		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
 
 		const newer = newStores()
-		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 8, profiles: [{ id: 'a', name: 'A' }] }))
+		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 9, profiles: [{ id: 'a', name: 'A' }] }))
 		expect(load(newer).profiles.map((profile) => profile.id)).not.toContain('a')
 	})
 

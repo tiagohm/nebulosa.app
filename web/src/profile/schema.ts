@@ -1,4 +1,4 @@
-import type { AutoFocusRequest, CaptureRequest, FlatWizardFilter, PlateSolveRequest, StarDetectionRequest } from 'api'
+import type { AutoFocusRequest, CaptureRequest, FlatWizardFilter, GuidingStartRequest, PlateSolveRequest, StarDetectionRequest } from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
@@ -13,8 +13,8 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // physical camera (cameras) instead of by camera role, and drops the post-capture analysis and plate
 // solving of the frames of a capture. The preferences of the Capture workspace (capture), removed since, are ignored
 // when read. Version 5 adds the TPPA form of each camera (tppa), version 6 its DARV form (darv), and version 7 its Flat
-// Wizard form (flatWizard).
-export const PROFILES_VERSION = 7
+// Wizard form (flatWizard). Version 8 adds the guiding form of each camera (guiding).
+export const PROFILES_VERSION = 8
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -120,6 +120,8 @@ export interface CameraSettings {
 	darv?: DarvSettings
 	// Flat Wizard form.
 	flatWizard?: FlatWizardSettings
+	// Guiding form.
+	guiding?: GuidingSettings
 }
 
 // Physical camera the forms of a profile belong to: the saved connection that provides it and its device id, stable
@@ -267,6 +269,76 @@ export const DEFAULT_FLAT_WIZARD_FILTER: FlatWizardFilter = { slot: 0, count: 20
 
 // Flat Wizard form of a camera that has none yet: one luminance group, a 2 s settle, and the default limits.
 export const DEFAULT_FLAT_WIZARD_SETTINGS: FlatWizardSettings = { filters: [DEFAULT_FLAT_WIZARD_FILTER], settleTime: 2, maximumTrials: 8, maximumRejections: 5 }
+
+// Settle a guiding command waits for: the guide error must stay within a distance for a time, before a timeout.
+export interface GuidingSettleSettings {
+	// Accepted guide error, in guide-camera pixels; > 0.
+	pixels: number
+	// Time the error must stay within pixels, in seconds; >= 0.
+	time: number
+	// Longest settle, in seconds; > 0.
+	timeout: number
+}
+
+// Guiding form of one physical guide camera: the guide exposures, the controller, and the settle and dither of the
+// commands of the next session. The frames take the camera settings of the camera (without its exposure time), which
+// this form never holds; the guide output is the GUIDE_OUTPUT of the setup. Controller settings are fixed when a
+// session starts; only the exposure changes on a running one.
+export interface GuidingSettings {
+	// Guide exposure, in seconds, in [GUIDING_MINIMUM_EXPOSURE, GUIDING_MAXIMUM_EXPOSURE].
+	exposureTime: number
+	// Whether the tracker measures one star or many.
+	trackingMode: GuidingStartRequest['trackingMode']
+	// Focal length of the guide optics, in mm, for the pixel scale of arcsecond RMS; absent leaves it unknown.
+	focalLength?: number
+	// Whether Start Guiding calibrates again instead of reusing the calibration solved earlier in the session.
+	recalibrate: boolean
+	// Duration of each calibration pulse, in milliseconds, in [GUIDING_MINIMUM_PULSE, GUIDING_MAXIMUM_PULSE].
+	calibrationPulse: number
+	// Proportional gain of the RA corrections, in [0, 1].
+	aggressivenessRA: number
+	// Proportional gain of the DEC corrections, in [0, 1].
+	aggressivenessDEC: number
+	// Longest RA correction, in milliseconds, in [GUIDING_MINIMUM_PULSE, GUIDING_MAXIMUM_PULSE].
+	maximumPulseRA: number
+	// Longest DEC correction, in milliseconds, in [GUIDING_MINIMUM_PULSE, GUIDING_MAXIMUM_PULSE].
+	maximumPulseDEC: number
+	// Settle of Start Guiding, Resume, and Dither.
+	settle: GuidingSettleSettings
+	// Size of each dither, in guide-camera pixels; > 0.
+	ditherPixels: number
+	// Whether a dither moves the RA axis only.
+	ditherRaOnly: boolean
+}
+
+// Shortest guide exposure of the guiding form, in seconds (10 ms).
+export const GUIDING_MINIMUM_EXPOSURE = 0.01
+
+// Longest guide exposure of the guiding form, in seconds (1 minute).
+export const GUIDING_MAXIMUM_EXPOSURE = 60
+
+// Shortest calibration pulse or correction ceiling of the guiding form, in milliseconds.
+export const GUIDING_MINIMUM_PULSE = 1
+
+// Longest calibration pulse or correction ceiling of the guiding form, in milliseconds (10 s).
+export const GUIDING_MAXIMUM_PULSE = 10000
+
+// Guiding form of a camera that has none yet: 2 s exposures on one star, the toolkit's controller defaults (gains 0.7
+// and 0.65, ceilings 2000 and 2500 ms, 650 ms calibration pulses), recalibrating on every start, settling within 1.5 px
+// for 10 s in at most 60 s, and dithering by 5 px on both axes.
+export const DEFAULT_GUIDING_SETTINGS: GuidingSettings = {
+	exposureTime: 2,
+	trackingMode: 'singleStar',
+	recalibrate: true,
+	calibrationPulse: 650,
+	aggressivenessRA: 0.7,
+	aggressivenessDEC: 0.65,
+	maximumPulseRA: 2000,
+	maximumPulseDEC: 2500,
+	settle: { pixels: 1.5, time: 10, timeout: 60 },
+	ditherPixels: 5,
+	ditherRaOnly: false,
+}
 
 // A complete working environment: the selected connection, the equipment assigned on each connection,
 // and preferences.

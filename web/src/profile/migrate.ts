@@ -31,6 +31,12 @@ import {
 	FLAT_WIZARD_MAXIMUM_REJECTIONS,
 	FLAT_WIZARD_MAXIMUM_TRIALS,
 	type FlatWizardSettings,
+	DEFAULT_GUIDING_SETTINGS,
+	GUIDING_MAXIMUM_EXPOSURE,
+	GUIDING_MAXIMUM_PULSE,
+	GUIDING_MINIMUM_EXPOSURE,
+	GUIDING_MINIMUM_PULSE,
+	type GuidingSettings,
 	DEFAULT_TPPA_SETTINGS,
 	TPPA_MAXIMUM_ROTATION,
 	TPPA_MINIMUM_ROTATION,
@@ -105,8 +111,9 @@ function normalizeCamera(value: unknown): CameraSettings | undefined {
 	const tppa = normalizeTppa(value.tppa)
 	const darv = normalizeDarv(value.darv)
 	const flatWizard = normalizeFlatWizard(value.flatWizard)
-	if (!exposure && !acquisition && !autoFocus && !tppa && !darv && !flatWizard) return undefined
-	return { ...(exposure && { exposure }), ...(acquisition && { acquisition }), ...(autoFocus && { autoFocus }), ...(tppa && { tppa }), ...(darv && { darv }), ...(flatWizard && { flatWizard }) }
+	const guiding = normalizeGuiding(value.guiding)
+	if (!exposure && !acquisition && !autoFocus && !tppa && !darv && !flatWizard && !guiding) return undefined
+	return { ...(exposure && { exposure }), ...(acquisition && { acquisition }), ...(autoFocus && { autoFocus }), ...(tppa && { tppa }), ...(darv && { darv }), ...(flatWizard && { flatWizard }), ...(guiding && { guiding }) }
 }
 
 // Restores the persisted forms of the cameras (version 4), by saved connection id and device id.
@@ -290,6 +297,35 @@ function normalizeFlatWizard(value: unknown): FlatWizardSettings | undefined {
 		...(typeof value.effectiveClip === 'number' && Number.isFinite(value.effectiveClip) && value.effectiveClip > 0 && { effectiveClip: value.effectiveClip }),
 		maximumTrials: Number.isInteger(value.maximumTrials) ? boundedNumber(value.maximumTrials, 1, FLAT_WIZARD_MAXIMUM_TRIALS, defaults.maximumTrials) : defaults.maximumTrials,
 		maximumRejections: Number.isInteger(value.maximumRejections) ? boundedNumber(value.maximumRejections, 0, FLAT_WIZARD_MAXIMUM_REJECTIONS, defaults.maximumRejections) : defaults.maximumRejections,
+	}
+}
+
+// Restores a persisted guiding form, filling every invalid field with its default; undefined for anything that is not
+// a record. A focal length that is not a positive number is dropped, leaving the pixel scale unknown.
+function normalizeGuiding(value: unknown): GuidingSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = DEFAULT_GUIDING_SETTINGS
+	const settle = isRecord(value.settle) ? value.settle : {}
+	const pulse = (pulse: unknown, fallback: number) => boundedNumber(pulse, GUIDING_MINIMUM_PULSE, GUIDING_MAXIMUM_PULSE, fallback)
+
+	return {
+		exposureTime: boundedNumber(value.exposureTime, GUIDING_MINIMUM_EXPOSURE, GUIDING_MAXIMUM_EXPOSURE, defaults.exposureTime),
+		trackingMode: value.trackingMode === 'multiStar' ? 'multiStar' : 'singleStar',
+		...(typeof value.focalLength === 'number' && Number.isFinite(value.focalLength) && value.focalLength > 0 && { focalLength: value.focalLength }),
+		recalibrate: value.recalibrate !== false,
+		calibrationPulse: pulse(value.calibrationPulse, defaults.calibrationPulse),
+		aggressivenessRA: boundedNumber(value.aggressivenessRA, 0, 1, defaults.aggressivenessRA),
+		aggressivenessDEC: boundedNumber(value.aggressivenessDEC, 0, 1, defaults.aggressivenessDEC),
+		maximumPulseRA: pulse(value.maximumPulseRA, defaults.maximumPulseRA),
+		maximumPulseDEC: pulse(value.maximumPulseDEC, defaults.maximumPulseDEC),
+		settle: {
+			pixels: boundedNumber(settle.pixels, Number.MIN_VALUE, Number.MAX_VALUE, defaults.settle.pixels),
+			time: boundedNumber(settle.time, 0, Number.MAX_VALUE, defaults.settle.time),
+			timeout: boundedNumber(settle.timeout, Number.MIN_VALUE, Number.MAX_VALUE, defaults.settle.timeout),
+		},
+		ditherPixels: boundedNumber(value.ditherPixels, Number.MIN_VALUE, Number.MAX_VALUE, defaults.ditherPixels),
+		ditherRaOnly: value.ditherRaOnly === true,
 	}
 }
 
@@ -489,7 +525,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 4:
 		case 5:
 		case 6:
-		case 7: {
+		case 7:
+		case 8: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

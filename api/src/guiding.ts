@@ -21,6 +21,7 @@ import type { CaptureFrame, CaptureSettings, CaptureSnoop } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, failureResponse, notFound, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { ExternalToolsStore, ResolvedExternalTool } from './externaltools'
+import type { GuideRegions } from './guideregions'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import type { OperationDevice, OperationRegistry } from './operations'
@@ -34,9 +35,10 @@ import type { BuiltinStarDetectionSettings, StarDetectionSettings } from './star
 // events and its per-frame telemetry, and previews its frames.
 //
 // Each guide BLOB is decoded on a worker thread of the session (guiding.worker.ts), which also takes the grayscale copy,
-// detects its stars with the built-in detector and the settings of the request, and answers both with the FITS/XISF
-// bytes; a session that detects with ASTAP has the worker decode only and runs ASTAP on the frame file here, about half
-// a second per frame. The stars feed the tracker synchronously. The bytes of
+// detects its stars with the built-in detector and the settings of the request (while guiding, only in the regions
+// around the stars the guider uses; see guidingRegions), and answers both with the FITS/XISF bytes; a session that
+// detects with ASTAP has the worker decode only and runs ASTAP on the frame file here, about half a second per frame.
+// The stars feed the tracker synchronously. The bytes of
 // the newest frame are opened as a capture document of the image store and recorded in the capture frame registry as
 // the latest frame of the camera (origin guiding, never saved), with its overlay published once the document is open;
 // only the newest frame waits while another one is opened, so previewing never holds the guiding back. A session
@@ -297,6 +299,8 @@ export interface GuidingWorkerRequest {
 	readonly encoding: BlobEncoding
 	// Settings of the built-in detector the worker detects the stars with; absent decodes only, for ASTAP.
 	readonly detection?: Partial<Omit<BuiltinStarDetectionSettings, 'provider'>>
+	// Regions the built-in detector is limited to; absent detects the whole frame.
+	readonly regions?: GuideRegions
 }
 
 // Answer of the guide frame worker.
@@ -317,6 +321,15 @@ const MAX_TOKENS = 64
 // Guide steps the RMS is computed over.
 export const GUIDING_RMS_WINDOW = 50
 
+// Accepted stars of the previous frame, by decreasing SNR, whose regions the built-in detection is limited to while
+// guiding; with the measured position and the lock they are the reference stars of the next frame. PHD2 guides on up to
+// 9 secondary stars; 16 keep the field measurement averaged over many stars at a fraction of the frame.
+export const GUIDING_REGION_STARS = 16
+
+// Half side of the region around each used star, in pixels: twice the 12-pixel frame jump the guider accepts, so a
+// star that moved as far as the guider still trusts stays inside.
+export const GUIDING_REGION_RADIUS = 24
+
 // Native events carried only by the telemetry or the record, never as control events.
 const PER_FRAME_EVENTS: ReadonlySet<GuidingEvent['type']> = new Set(['guideStep', 'loopingFrame', 'starLost', 'calibrationStep', 'settling'])
 
@@ -336,12 +349,12 @@ class GuideFrameDecoder implements Disposable {
 
 	// Decodes one BLOB on the worker, and detects its stars with the built-in detection given. Rejects when the worker
 	// crashes or was disposed.
-	decode(data: Buffer, encoding: BlobEncoding, detection: GuidingWorkerRequest['detection']): Promise<GuidingWorkerResponse> {
+	decode(data: Buffer, encoding: BlobEncoding, detection: GuidingWorkerRequest['detection'], regions: GuideRegions | undefined): Promise<GuidingWorkerResponse> {
 		const jobId = ++this.#jobs
 		const pending = Promise.withResolvers<GuidingWorkerResponse>()
 		this.#pending.set(jobId, pending)
 		const bytes = new Uint8Array(data)
-		this.#ensure().postMessage({ jobId, bytes, encoding, detection } satisfies GuidingWorkerRequest, [bytes.buffer])
+		this.#ensure().postMessage({ jobId, bytes, encoding, detection, ...(regions && { regions }) } satisfies GuidingWorkerRequest, [bytes.buffer])
 		return pending.promise
 	}
 
@@ -408,6 +421,29 @@ interface Session {
 	readonly astap?: { readonly tool: Readonly<ResolvedExternalTool>; directory?: Promise<string> }
 	// Aborted at the end, so an ASTAP run in flight is killed.
 	readonly abort: AbortController
+	// Tracker of the guide stars, whose previous result places the regions of the built-in detection.
+	readonly tracker: StarTracker
+	// Whether the worker detects the stars with the built-in detector.
+	readonly builtin: boolean
+}
+
+// Returns the regions the built-in detection of a session's next frame is limited to, or undefined for the whole frame:
+// only while its run holds the guide output (calibrating, guiding, settling, paused) and the previous frame was measured,
+// around the measured position, the lock, and the GUIDING_REGION_STARS accepted stars of highest SNR. While looping or
+// selecting, and after a frame without measurement, the whole frame is detected, so any star can be chosen or found
+// again. A session whose stars ASTAP detects always runs on the whole file. The regions keep only detections from the
+// tracker's minimum SNR: the frame quality the guider gates on is the accepted fraction of the detections, and the noise
+// peaks of a crop, which the whole frame's brightest-first cap cuts, would otherwise bring every frame under it.
+export function guidingRegions(session: Pick<Session, 'builtin' | 'tracker' | 'summary'>): GuideRegions | undefined {
+	if (!session.builtin || !session.summary.guideOutputHeld) return undefined
+	const result = starTrackingOf(session.tracker.lastResult)
+	const measurement = result?.measurement
+	if (!result || !measurement) return undefined
+
+	const centers: (readonly [number, number])[] = [[measurement.x, measurement.y]]
+	if (session.summary.lockPosition) centers.push(session.summary.lockPosition)
+	for (const star of result.accepted.toSorted((a, b) => b.snr - a.snr).slice(0, GUIDING_REGION_STARS)) centers.push([star.x, star.y])
+	return { centers, radius: GUIDING_REGION_RADIUS, minSNR: session.tracker.config.filter.minStarSnr }
 }
 
 // Guiding sessions of the cameras of every open connection.
@@ -483,7 +519,7 @@ export class GuidingSessions implements Disposable {
 		const tracker = new StarTracker({ mode: request.trackingMode, detector: (image) => detections.get(image) ?? [] })
 		const client = new GuiderClient(this.devices.cameras, this.devices.guideOutputs, tracker, {
 			decodeImage: async (data, encoding) => {
-				const decoded = await decoder.decode(data, encoding, builtin)
+				const decoded = await decoder.decode(data, encoding, builtin, guidingRegions(session))
 				if (decoded.status === 'unsupported') return undefined
 				if (decoded.status === 'failed') throw new Error(decoded.error)
 				detections.set(decoded.image, session.astap ? await this.#astapStars(session, session.astap, decoded.image, decoded.bytes) : decoded.stars)
@@ -536,6 +572,8 @@ export class GuidingSessions implements Disposable {
 			...(detection && { detection }),
 			...(tool && { astap: { tool } }),
 			abort: new AbortController(),
+			tracker,
+			builtin: builtin !== undefined,
 		}
 
 		client.addHandler({ event: (_, event) => this.#event(session, event), frame: (_, frame) => this.#frame(session, frame) })

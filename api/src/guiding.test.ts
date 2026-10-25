@@ -3,10 +3,11 @@ import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
+import type { StarTracker } from 'nebulosa/src/observation/guiding/tracker.star'
 import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
 import { ConnectionManager } from './connection'
 import { ExternalToolsStore } from './externaltools'
-import { type GuidingEventRecord, type GuidingPage, type GuidingServerEvent, GuidingSessions, type GuidingSessionSummary, type GuidingStartRequest } from './guiding'
+import { GUIDING_REGION_RADIUS, GUIDING_REGION_STARS, type GuidingEventRecord, type GuidingPage, type GuidingServerEvent, GuidingSessions, type GuidingSessionSummary, type GuidingStartRequest, guidingRegions } from './guiding'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry } from './operations'
 
@@ -220,4 +221,37 @@ describe('guiding', () => {
 		expect(finished).toMatchObject({ state: 'failed', reason: 'disconnected' })
 		await waitUntil(() => context.operations.available(context.camera))
 	}, 60000)
+})
+
+describe('detection regions', () => {
+	// A tracker whose previous frame measured the star at (200, 150) among accepted stars of increasing SNR.
+	function tracker(measured: boolean) {
+		const accepted = Array.from({ length: 30 }, (_, index) => ({ x: 10 * index, y: 20 * index, snr: index, flux: 1, hfd: 2 }))
+		return {
+			lastResult: { candidateCount: 30, acceptedCount: 30, qualityScore: 1, rejectedReasons: {}, notes: [], detections: accepted, accepted, primaryInsideSearchRegion: true, matches: 30, ...(measured && { measurement: { x: 200, y: 150, confidence: 1 } }) },
+			config: { filter: { minStarSnr: 5 } },
+		} as unknown as StarTracker
+	}
+
+	const held = { guideOutputHeld: true, lockPosition: [201, 151] } as unknown as GuidingSessionSummary
+
+	test('are the measured star, the lock, and the brightest accepted stars while the guide output is held', () => {
+		const regions = guidingRegions({ builtin: true, tracker: tracker(true), summary: held })!
+		expect(regions.radius).toBe(GUIDING_REGION_RADIUS)
+		// Only detections the tracker could accept by SNR are kept.
+		expect(regions.minSNR).toBe(5)
+		expect(regions.centers).toHaveLength(2 + GUIDING_REGION_STARS)
+		expect(regions.centers.slice(0, 2)).toEqual([
+			[200, 150],
+			[201, 151],
+		])
+		// The accepted stars of highest SNR come first.
+		expect(regions.centers[2]).toEqual([290, 580])
+	})
+
+	test('cover the whole frame while looping, after a lost frame, or with ASTAP', () => {
+		expect(guidingRegions({ builtin: true, tracker: tracker(true), summary: { ...held, guideOutputHeld: false } })).toBeUndefined()
+		expect(guidingRegions({ builtin: true, tracker: tracker(false), summary: held })).toBeUndefined()
+		expect(guidingRegions({ builtin: false, tracker: tracker(true), summary: held })).toBeUndefined()
+	})
 })

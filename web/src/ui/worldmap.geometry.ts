@@ -231,7 +231,7 @@ export function interpolateWorldMapView(from: WorldMapView, to: WorldMapView, t:
 }
 
 // Returns a latitude and longitude, in degrees, as text with two decimals and the hemispheres, such as
-// 23.55° S 46.63° W.
+// 23.5567° S 46.6321° W.
 export function formatGeoPoint({ longitude, latitude }: GeoPoint): string {
-	return `${Math.abs(latitude).toFixed(2)}° ${latitude < 0 ? 'S' : 'N'}  ${Math.abs(longitude).toFixed(2)}° ${longitude < 0 ? 'W' : 'E'}`
+	return `${Math.abs(latitude).toFixed(4)}° ${latitude < 0 ? 'S' : 'N'}  ${Math.abs(longitude).toFixed(4)}° ${longitude < 0 ? 'W' : 'E'}`
 }

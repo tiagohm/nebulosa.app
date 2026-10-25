@@ -3,7 +3,9 @@ import { type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNo
 import worldMapUrl from '../../assets/world.map.svg'
 import type { Point, Size } from '../viewer/transform'
 import { IconButton } from './IconButton'
-import { constrainWorldMapView, formatGeoPoint, type GeoPoint, graticulePath, interpolateWorldMapView, panWorldMap, project, unproject, WORLD_MAP_HEIGHT, WORLD_MAP_HOME, WORLD_MAP_WIDTH, type WorldMapView, worldMapTransform, zoomWorldMapAt } from './worldmap.geometry'
+import { constrainWorldMapView, formatGeoPoint, type GeoPoint, graticulePath, interpolateWorldMapView, panWorldMap, project, unproject, WORLD_MAP_HOME, WORLD_MAP_WIDTH, type WorldMapView, worldMapTransform, zoomWorldMapAt } from './worldmap.geometry'
+import { permanentTiles, TileCache, tileKey } from './worldmap.tiles'
+import { startTileWorker, type TileWorkerMessage, type TileWorkerWant } from './worldmap.worker'
 
 // Interactive world map in the equirectangular projection of web/assets/world.map.svg: zoom and pan with the
 // wheel, a drag, a pinch, double clicks, the keyboard, and the zoom buttons; a click selects a geographic
@@ -11,15 +13,16 @@ import { constrainWorldMapView, formatGeoPoint, type GeoPoint, graticulePath, in
 // symbols) that follow zoom and pan. The map wraps around the antimeridian by default, drawing the map and its
 // children again on both sides, so a path continuing past ±180° is seen whole.
 //
-// Zoom and pan never re-render React: the view lives in a controller that writes it once per animation frame.
-// The basemap is an <img>, so its thousands of country paths are never part of the DOM, on a CSS-transformed
-// layer that stays composited, so the GPU moves and scales its last raster (briefly soft when zooming in), and
-// that is rasterized again, sharp, once a zoom settles; redrawing the vector basemap on every frame of a zoom
-// costs tens of milliseconds, and so does compositing it anew when a drag starts. The children are on an SVG
-// layer above it with the same zoom and pan as an SVG transform, and the --world-map-scale CSS property
-// (viewport pixels per map unit). They re-render only when their owner renders them again; strokes that keep
-// their width on screen use vectorEffect="non-scaling-stroke", and symbols that keep their size on screen use
-// WorldMapSymbol.
+// Zoom and pan never re-render React: the view lives in a controller that draws it once per animation frame.
+// The basemap is a tile pyramid on a canvas (worldmap.tiles.ts): a worker rasterizes the tiles of the thousands
+// of country paths (worldmap.worker.ts), and a frame only draws bitmaps already made, so no frame waits for the
+// vector map to be drawn; a tile not made yet is stood in for by a coarser one and fades in when it arrives. The
+// children are on an SVG layer above it with the same zoom and pan as an SVG transform, and the
+// --world-map-scale CSS property (viewport pixels per map unit). They re-render only when their owner renders
+// them again; strokes that keep their width on screen use vectorEffect="non-scaling-stroke", and symbols that
+// keep their size on screen use WorldMapSymbol.
+
+// Original image: https://en.wikipedia.org/wiki/File:World_location_map_(equirectangular_180).svg
 
 // Commands of a mounted map, for its owner.
 export interface WorldMapHandle {
@@ -74,23 +77,6 @@ const CLICK_TOLERANCE = 4
 // Duration of an animated view change, in milliseconds.
 const ANIMATION_DURATION = 250
 
-// Time without view changes after which the basemap is rasterized again at a changed zoom, in milliseconds.
-const SETTLE_DELAY = 150
-
-// Basemap at its place in map units, the same element on every render so React never reconciles it.
-const BASEMAP = <img src={worldMapUrl} alt="" draggable={false} className="absolute top-0 left-0 block size-full max-w-none" />
-
-// Copies of the basemap one map width west and east, for a wrapping map.
-const BASEMAP_COPIES = (
-	<>
-		<img src={worldMapUrl} alt="" draggable={false} className="absolute top-0 -left-full block size-full max-w-none" />
-		<img src={worldMapUrl} alt="" draggable={false} className="absolute top-0 left-full block size-full max-w-none" />
-	</>
-)
-
-// Size of the basemap layer, in CSS pixels before the zoom: one map unit per pixel.
-const BASEMAP_SIZE: CSSProperties = { width: WORLD_MAP_WIDTH, height: WORLD_MAP_HEIGHT }
-
 // Pressed pointers of a gesture and what they are doing.
 interface Gesture {
 	// Pressed pointers by pointer id, at their latest client position in pixels.
@@ -103,8 +89,8 @@ interface Gesture {
 	press?: { readonly id: number; readonly at: Point }
 }
 
-// Owner of a map's view: keeps it, constrains it to the viewport, animates it, and writes it to the basemap and
-// overlay layers once per animation frame, outside React.
+// Owner of a map's view: keeps it, constrains it to the viewport, animates it, and draws it on the basemap canvas
+// and the overlay layer once per animation frame, outside React; it also owns the tile worker and cache.
 class WorldMapController {
 	// Current view, always constrained to the viewport.
 	view: WorldMapView
@@ -112,20 +98,26 @@ class WorldMapController {
 	viewport: Size = { width: 0, height: 0 }
 	// Whether the map wraps across the antimeridian.
 	wrap = true
-	// Layer of the basemap and its copies, CSS-transformed from map units to viewport pixels.
-	basemap?: HTMLDivElement | null
+	// Canvas of the basemap, covering the box at device resolution.
+	canvas?: HTMLCanvasElement | null
 	// Group of the children and their copies, SVG-transformed from map units to viewport pixels.
 	group?: SVGGElement | null
 	// SVG element carrying the --world-map-scale property.
 	svg?: SVGSVGElement | null
+	// Message shown when the basemap cannot be drawn.
+	failure?: HTMLParagraphElement | null
 	// Pending animation frame of a render or an animation, or 0.
 	private frame = 0
-	// Timer that rasterizes the basemap again once the view settles.
-	private settle?: Timer
-	// Pending animation frame that composites the basemap again after it was painted at the current zoom, or 0.
-	private sharpen = 0
-	// Scale at which the basemap was last rasterized, in viewport pixels per map unit; 0 before the first one.
-	private rasterScale = 0
+	// Pending animation frame of a basemap redraw for arriving or fading tiles, or 0.
+	private paintFrame = 0
+	// Device pixels per CSS pixel of the canvas.
+	private dpr = 1
+	// Rasterized tiles of the basemap.
+	private readonly tiles = new TileCache()
+	// Worker rasterizing the tiles, while mounted.
+	private worker?: Worker
+	// Keys of the tiles last requested from the worker, in order, so an unchanged request is not sent again.
+	private requested = ''
 	// Pending gesture of the pointers.
 	readonly gesture: Gesture = { pointers: new Map() }
 
@@ -133,11 +125,39 @@ class WorldMapController {
 		this.view = view
 	}
 
-	// Sets the size of the viewport, in CSS pixels, keeping the center and zoom, and renders right away so a
-	// resize never shows a stale frame.
+	// Starts the tile worker, when the map mounts.
+	attach() {
+		const worker = startTileWorker(worldMapUrl)
+		this.worker = worker
+
+		worker.addEventListener('message', ({ data }: MessageEvent<TileWorkerMessage>) => {
+			if (data.type === 'tile') {
+				this.tiles.add(data.tile, data.bitmap)
+				this.requestPaint()
+			} else if (this.failure) {
+				this.failure.hidden = false
+				this.failure.title = data.message
+			}
+		})
+
+		this.requested = ''
+		this.paint()
+	}
+
+	// Sets the size of the viewport, in CSS pixels, keeping the center and zoom, sizes the canvas to the device
+	// pixels it covers, and renders right away so a resize never shows a stale frame.
 	resize(viewport: Size) {
 		this.viewport = viewport
 		this.view = constrainWorldMapView(this.view, viewport, this.wrap)
+		this.dpr = devicePixelRatio || 1
+		const width = Math.round(viewport.width * this.dpr)
+		const height = Math.round(viewport.height * this.dpr)
+
+		if (this.canvas && (this.canvas.width !== width || this.canvas.height !== height)) {
+			this.canvas.width = width
+			this.canvas.height = height
+		}
+
 		this.render()
 	}
 
@@ -148,37 +168,41 @@ class WorldMapController {
 		this.render()
 	}
 
-	// Writes the transform of the current view; nothing is drawn until the viewport has a size. The basemap is
-	// rasterized again once SETTLE_DELAY passes without another change.
+	// Writes the transform of the current view to the overlay layer and draws the basemap; nothing is drawn until the
+	// viewport has a size.
 	private render() {
 		const { scale, x, y } = worldMapTransform(this.view, this.viewport, this.wrap)
-		if (scale <= 0 || !this.basemap || !this.group || !this.svg) return
-		this.basemap.style.transform = `translate(${x}px, ${y}px) scale(${scale})`
+		if (scale <= 0 || !this.group || !this.svg) return
 		this.group.setAttribute('transform', `translate(${x} ${y}) scale(${scale})`)
 		this.svg.style.setProperty('--world-map-scale', `${scale}`)
-		this.composite()
-		clearTimeout(this.settle)
-		this.settle = setTimeout(() => this.rasterize(), SETTLE_DELAY)
+		this.paint()
 	}
 
-	// Rasterizes the basemap at the current zoom when it changed since the last raster: a composited layer keeps
-	// the scale it was first rasterized at, so the basemap is painted once without its layer, at the current
-	// zoom, and composited again on the next frame, while the view is still.
-	private rasterize() {
-		const { scale } = worldMapTransform(this.view, this.viewport, this.wrap)
-		if (!this.basemap || scale === this.rasterScale) return
-		this.rasterScale = scale
-		this.basemap.style.willChange = 'auto'
-		this.sharpen = requestAnimationFrame(() => {
-			this.sharpen = requestAnimationFrame(() => this.composite())
+	// Draws the basemap of the current view from the cached tiles, asks the worker for the missing ones (the view's,
+	// nearest the center first, then the permanent levels' not cached yet), and draws again while tiles fade in.
+	private paint() {
+		const transform = worldMapTransform(this.view, this.viewport, this.wrap)
+		const context = this.canvas?.getContext('2d')
+		if (transform.scale <= 0 || !context) return
+		const { missing, fading } = this.tiles.draw(context, transform, this.viewport, this.dpr, this.wrap, performance.now())
+		const wanted = [...missing, ...permanentTiles().filter((id) => !this.tiles.has(id))]
+		const requested = wanted.map(tileKey).join()
+
+		if (this.worker && requested !== this.requested) {
+			this.requested = requested
+			this.worker.postMessage({ type: 'want', tiles: wanted.map((id) => ({ key: tileKey(id), level: id.level, x: id.x, y: id.y })) } satisfies TileWorkerWant, [])
+		}
+
+		if (fading) this.requestPaint()
+	}
+
+	// Draws the basemap again on the next animation frame, unless a render is already due then.
+	private requestPaint() {
+		if (this.paintFrame || this.frame) return
+		this.paintFrame = requestAnimationFrame(() => {
+			this.paintFrame = 0
+			this.paint()
 		})
-	}
-
-	// Composites the basemap again, as its class sets, if a raster left it without its layer.
-	private composite() {
-		if (this.sharpen) cancelAnimationFrame(this.sharpen)
-		this.sharpen = 0
-		this.basemap?.style.removeProperty('will-change')
 	}
 
 	// Replaces the view and renders it on the next animation frame, stopping any animation.
@@ -218,11 +242,14 @@ class WorldMapController {
 		this.frame = 0
 	}
 
-	// Stops every pending frame and timer, when the map unmounts.
+	// Stops every pending frame, the worker, and releases the tiles, when the map unmounts.
 	dispose() {
 		this.cancel()
-		clearTimeout(this.settle)
-		if (this.sharpen) cancelAnimationFrame(this.sharpen)
+		if (this.paintFrame) cancelAnimationFrame(this.paintFrame)
+		this.paintFrame = 0
+		this.worker?.terminate()
+		this.worker = undefined
+		this.tiles.clear()
 	}
 
 	// Zooms by a factor around a viewport point, at once.
@@ -294,12 +321,13 @@ export function WorldMap({ selected, onSelect, onHover, wrap = true, graticule =
 
 	useLayoutEffect(() => controller.setWrap(wrap), [controller, wrap])
 
-	// Measures the box synchronously before the first paint, then follows its size. The wheel listener is native
-	// because React's is passive and cannot stop the page from scrolling.
+	// Starts the tile worker, measures the box synchronously before the first paint, then follows its size. The wheel
+	// listener is native because React's is passive and cannot stop the page from scrolling.
 	useLayoutEffect(() => {
 		const box = boxRef.current
 		if (!box) return
 
+		controller.attach()
 		controller.resize({ width: box.clientWidth, height: box.clientHeight })
 		const observer = new ResizeObserver(([entry]) => entry && controller.resize({ width: entry.contentRect.width, height: entry.contentRect.height }))
 		observer.observe(box)
@@ -426,10 +454,7 @@ export function WorldMap({ selected, onSelect, onHover, wrap = true, graticule =
 			onKeyDown={handleKeyDown}
 			className={cn('relative min-h-0 touch-none overflow-hidden bg-base-000 outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent active:cursor-grabbing', onSelect ? 'cursor-crosshair' : 'cursor-grab', className)}
 		>
-			<div ref={(basemap) => void (controller.basemap = basemap)} className="absolute top-0 left-0 origin-top-left will-change-transform" style={BASEMAP_SIZE}>
-				{BASEMAP}
-				{wrap && BASEMAP_COPIES}
-			</div>
+			<canvas ref={(canvas) => void (controller.canvas = canvas)} className="absolute inset-0 block size-full" />
 			<svg ref={(svg) => void (controller.svg = svg)} className="absolute inset-0 block size-full">
 				<g ref={(group) => void (controller.group = group)}>
 					<g id={contentId}>
@@ -452,11 +477,15 @@ export function WorldMap({ selected, onSelect, onHover, wrap = true, graticule =
 					<IconButton icon="fit" label="Whole map (0)" onClick={() => controller.animate(WORLD_MAP_HOME)} />
 				</div>
 			)}
+			<p ref={(failure) => void (controller.failure = failure)} hidden className="pointer-events-none absolute inset-x-0 top-1/2 m-0 -translate-y-1/2 text-center text-[13px] text-danger">
+				The world map could not be drawn.
+			</p>
 			{coordinates && (
 				<span ref={readoutRef} className="pointer-events-none absolute bottom-2 left-2 rounded-sm bg-base-100/90 px-2 py-0.5 text-[11px] leading-4 whitespace-pre text-ink-200 tabular-nums">
 					—
 				</span>
 			)}
+			<span className="pointer-events-none absolute bottom-1 right-1 text-[0.525rem] text-neutral-600 font-sans">Original image: https://w.wiki/eok8</span>
 		</div>
 	)
 }

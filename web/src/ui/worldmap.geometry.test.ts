@@ -103,8 +103,8 @@ test('graticule lines', () => {
 })
 
 test('formats a position', () => {
-	expect(formatGeoPoint({ longitude: -46.6333, latitude: -23.5505 })).toBe('23.55° S  46.63° W')
-	expect(formatGeoPoint({ longitude: 2.35, latitude: 48.86 })).toBe('48.86° N  2.35° E')
+	expect(formatGeoPoint({ longitude: -46.6333, latitude: -23.5505 })).toBe('23.5505° S  46.6333° W')
+	expect(formatGeoPoint({ longitude: 2.35, latitude: 48.86 })).toBe('48.8600° N  2.3500° E')
 })
 
 describe('view', () => {

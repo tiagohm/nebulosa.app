@@ -112,6 +112,7 @@ async function openClient(id: string, request: ConnectRequest, handler: IndiClie
 		case 'SIMULATOR': {
 			const client = new ClientSimulator(id, handler)
 			devices.attach(client, id)
+			const catalogSources = { SKY: skyStarSource } as const
 			// Each simulator registers itself with the client, which disposes them all when it is disposed.
 			void [
 				new MountSimulator('Mount Simulator', client),
@@ -125,9 +126,17 @@ async function openClient(id: string, request: ConnectRequest, handler: IndiClie
 					wheelManager: devices.wheels,
 					rotatorManager: devices.rotators,
 					guideOutputManager: devices.guideOutputs,
-					catalogSources: { SKY: skyStarSource },
+					catalogSources,
 					catalogSource: 'SKY',
 					focalLength: 50,
+					aperture: 25,
+				}),
+				new CameraSimulator('Guide Camera Simulator', client, {
+					mountManager: devices.mounts,
+					guideOutputManager: devices.guideOutputs,
+					catalogSources,
+					catalogSource: 'SKY',
+					focalLength: 40,
 					aperture: 25,
 				}),
 				new FocuserSimulator('Focuser Simulator', client),

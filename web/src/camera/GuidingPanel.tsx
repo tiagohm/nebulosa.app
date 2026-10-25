@@ -9,9 +9,11 @@ import { type RoleAvailability, roleAvailability } from '../equipment/availabili
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
-import { activeProfile, exposureSettings, guidingSettings, profileState, setGuidingSettings } from '../profile/profile'
+import { activeProfile, exposureSettings, guidingSettings, profileState, setGuidingSettings, starDetectionSettings } from '../profile/profile'
 import { type CameraIdentity, GUIDING_MAXIMUM_EXPOSURE, GUIDING_MAXIMUM_PULSE, GUIDING_MINIMUM_EXPOSURE, GUIDING_MINIMUM_PULSE, type GuidingSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
+import { useAstapConfigured } from '../stars/StarRequestControls'
+import { PROVIDER_LABELS } from '../stars/stars'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
@@ -45,10 +47,11 @@ import {
 // stop looping, select or clear the star, start and stop guiding, pause (corrections only, or the exposures too),
 // resume, dither, and clear the calibration. The camera is the panel's target and the guide output the GUIDE_OUTPUT of
 // the setup, which only the Guide Camera has; a missing or unsuitable one says why. The frames take the camera
-// settings of Camera Acquisition without its exposure time. The form is the camera's, kept in the profile; while a
-// session runs, only its exposure changes it, and the other settings are locked showing the form. The session is the
-// server's, shown here whichever tab started it, and keeps running when the panel unmounts; a click on its current
-// frame selects the star nearest it. Pixel values are guide-camera pixels, pulses milliseconds.
+// settings of Camera Acquisition without its exposure time, and their stars are detected with the detector of the
+// profile's Star Detection (built-in or ASTAP) and its settings, as Auto Focus does. The form is the camera's, kept in
+// the profile; while a session runs, only its exposure changes it, and the other settings are locked showing the form.
+// The session is the server's, shown here whichever tab started it, and keeps running when the panel unmounts; a click
+// on its current frame selects the star nearest it. Pixel values are guide-camera pixels, pulses milliseconds.
 
 // Camera a guiding panel guides with and the forms it edits.
 export interface GuidingTarget {
@@ -82,6 +85,8 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 	const profile = activeProfile(profiles)
 	const settings = guidingSettings(profile.settings, identity)
 	const exposure = exposureSettings(profile.settings, identity)
+	const detection = starDetectionSettings(profile.settings).detector
+	const astapConfigured = useAstapConfigured()
 	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
 	const running = guidingRunning(session)
@@ -91,7 +96,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 	const outputState = watchedDeviceState(control, 'guideOutput', guideOutput?.device)
 	const mountState = watchedDeviceState(control, 'mount', mount.device)
 	const outputAvailability = guideOutput && roleAvailability('GUIDE_OUTPUT', guideOutput, operations, outputState && !outputState.canPulseGuide ? 'The guide output cannot pulse guide.' : undefined)
-	const blocker = running ? undefined : guidingBlocker(availability, outputAvailability, settings)
+	const blocker = running ? undefined : guidingBlocker(availability, outputAvailability, settings, detection.provider === 'astap' && !astapConfigured)
 	const calibrationPulse = settings.focalLength !== undefined && capabilities?.sensor && outputState?.hasGuideRate && mountState ? guidingCalibrationPulse(settings.focalLength, capabilities.sensor.pixelSize, exposure.binX, outputState.guideRate.rightAscension, mountState.declination) : undefined
 
 	// Updates fields of the camera's guiding form.
@@ -107,7 +112,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 
 	function start() {
 		if (!device || !guideOutput?.device) return
-		void startGuidingSession(guidingRuntime, device.connectionId, device.id, guidingRequest(settings, exposure, { connectionId: guideOutput.device.connectionId, deviceId: guideOutput.device.id }, snoop, capabilities))
+		void startGuidingSession(guidingRuntime, device.connectionId, device.id, guidingRequest(settings, exposure, { connectionId: guideOutput.device.connectionId, deviceId: guideOutput.device.id }, snoop, detection, capabilities))
 	}
 
 	return (
@@ -127,6 +132,10 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 					</Button>
 				)}
 				<Notice>The guide frames are LIGHTs taken with the camera settings of Camera Acquisition, shown as the latest frame of the camera and never saved.</Notice>
+				<Notice>
+					Stars are detected with the Star Detection settings ({PROVIDER_LABELS[detection.provider]} detector), chosen when looping starts; the guider accepts those of 5 sigma or more.
+					{detection.provider === 'astap' && ' ASTAP runs as a separate program on every frame, about half a second on a full frame.'}
+				</Notice>
 			</PanelSection>
 			{session && <SessionState session={session} />}
 			<PanelSection title="Exposure and Tracking">

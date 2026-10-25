@@ -1,5 +1,5 @@
 // oxfmt-ignore
-import type { CameraCapabilities, CaptureSnoop, GuidingDitherRequest, GuidingEventRecord, GuidingFrameOverlay, GuidingPage, GuidingPauseRequest, GuidingResumeRequest, GuidingSessionSummary, GuidingSnapshot, GuidingStartGuidingRequest, GuidingStartRequest, GuidingTelemetrySample, OperationDevice, ServerEvent } from 'api'
+import type { CameraCapabilities, CaptureSnoop, StarDetectionSettings, GuidingDitherRequest, GuidingEventRecord, GuidingFrameOverlay, GuidingPage, GuidingPauseRequest, GuidingResumeRequest, GuidingSessionSummary, GuidingSnapshot, GuidingStartGuidingRequest, GuidingStartRequest, GuidingTelemetrySample, OperationDevice, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit, responseError } from '../http'
@@ -77,8 +77,10 @@ function sessionById(state: GuidingRuntime, sessionId: string): GuidingSessionSu
 
 // Builds the start request of the guiding form of a camera: the guide exposures in milliseconds, the camera settings
 // of the camera fitted to its capabilities as a capture is (never its exposure time), the controller and calibration
-// of the form, and the devices snooped into the frame headers. The focal length is sent only when known.
-export function guidingRequest(settings: Readonly<GuidingSettings>, exposure: Readonly<CameraExposureSettings>, guideOutput: OperationDevice, snoop: CaptureSnoop, capabilities?: CameraCapabilities): Omit<GuidingStartRequest, 'token'> {
+// of the form, the devices snooped into the frame headers, and the star detector of the profile's Star Detection with
+// its settings (its acceptance criteria are not sent: the tracker filters the stars). The focal length is sent only when
+// known.
+export function guidingRequest(settings: Readonly<GuidingSettings>, exposure: Readonly<CameraExposureSettings>, guideOutput: OperationDevice, snoop: CaptureSnoop, detection: Readonly<StarDetectionSettings>, capabilities?: CameraCapabilities): Omit<GuidingStartRequest, 'token'> {
 	const { exposureTime: _, ...camera } = fitExposure(exposure, capabilities)
 
 	return {
@@ -90,6 +92,7 @@ export function guidingRequest(settings: Readonly<GuidingSettings>, exposure: Re
 		calibration: { raPulse: settings.calibrationPulse, decPulse: settings.calibrationPulse },
 		guider: { aggressivenessRA: settings.aggressivenessRA, aggressivenessDEC: settings.aggressivenessDEC, maxPulseMsRA: settings.maximumPulseRA, maxPulseMsDEC: settings.maximumPulseDEC },
 		snoop,
+		detection: { ...detection },
 	}
 }
 
@@ -131,13 +134,15 @@ export function guidingDitherRequest(settings: Readonly<GuidingSettings>): Omit<
 }
 
 // Returns why no session can start now, or undefined when one can, from the availability of the camera and of the
-// guide output of the setup (absent when the camera is not the Guide Camera). A busy guide output does not block the
-// start, since looping never pulses; Start Guiding is refused while it stays busy. The server checks again.
-export function guidingBlocker(camera: RoleAvailability, guideOutput: RoleAvailability | undefined, settings: Readonly<GuidingSettings>): string | undefined {
+// guide output of the setup (absent when the camera is not the Guide Camera), and whether the star detector is ASTAP
+// while ASTAP is not configured. A busy guide output does not block the start, since looping never pulses; Start
+// Guiding is refused while it stays busy. The server checks again.
+export function guidingBlocker(camera: RoleAvailability, guideOutput: RoleAvailability | undefined, settings: Readonly<GuidingSettings>, astapMissing: boolean): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 	if (!guideOutput) return 'Only the Guide Camera of the Equipment Setup guides.'
 	if (guideOutput.status !== 'ready' && guideOutput.status !== 'busy') return guideOutput.message
 	if (!(settings.exposureTime > 0)) return 'Set a guide exposure.'
+	if (astapMissing) return 'ASTAP is not configured.'
 	return undefined
 }
 

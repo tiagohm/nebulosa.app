@@ -5,6 +5,7 @@ import { join } from 'path'
 import { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
 import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
 import { ConnectionManager } from './connection'
+import { ExternalToolsStore } from './externaltools'
 import { type GuidingEventRecord, type GuidingPage, type GuidingServerEvent, GuidingSessions, type GuidingSessionSummary, type GuidingStartRequest } from './guiding'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry } from './operations'
@@ -54,6 +55,8 @@ async function setup() {
 		commander,
 		images,
 		frames,
+		// A settings file of its own, where ASTAP is not configured.
+		new ExternalToolsStore(join(mkdtempSync(join(root, 'tools-')), 'tools.json')),
 		(event) => events.push(event),
 	)
 	disposables.push(guiding)
@@ -97,7 +100,7 @@ function request({ id, guideOutputId }: Setup, patch: Partial<GuidingStartReques
 
 // Starts a session and waits until it loops; returns its ids.
 async function start(context: Setup, patch: Partial<GuidingStartRequest> = {}) {
-	const response = context.guiding.start(context.id, context.cameraId, request(context, patch))
+	const response = await context.guiding.start(context.id, context.cameraId, request(context, patch))
 	expect(response.status).toBe(202)
 	const accepted = (await response.json()) as { sessionId: string; operationId: string }
 	await waitUntil(() => context.summary()?.active === true)
@@ -107,19 +110,35 @@ async function start(context: Setup, patch: Partial<GuidingStartRequest> = {}) {
 describe('start', () => {
 	test('refuses an unknown camera or guide output and a busy camera', async () => {
 		const context = await setup()
-		expect(context.guiding.start(context.id, 'nope', request(context)).status).toBe(404)
-		expect(context.guiding.start(context.id, context.cameraId, request(context, { guideOutput: { connectionId: context.id, deviceId: 'nope' } })).status).toBe(404)
+		expect((await context.guiding.start(context.id, 'nope', request(context))).status).toBe(404)
+		expect((await context.guiding.start(context.id, context.cameraId, request(context, { guideOutput: { connectionId: context.id, deviceId: 'nope' } }))).status).toBe(404)
 
 		await start(context)
-		expect(context.guiding.start(context.id, context.cameraId, request(context)).status).toBe(409)
+		expect((await context.guiding.start(context.id, context.cameraId, request(context))).status).toBe(409)
+	})
+
+	test('refuses ASTAP while it is not configured', async () => {
+		const context = await setup()
+		const response = await context.guiding.start(context.id, context.cameraId, request(context, { detection: { provider: 'astap', maxStars: 0, minSNR: 10 } }))
+		expect(response.status).toBe(422)
+		expect(context.operations.available(context.camera)).toBeTrue()
+	})
+
+	test('detects the stars with the built-in settings of the request', async () => {
+		const context = await setup()
+		const { sessionId } = await start(context, { detection: { provider: 'builtin', maxStars: 3, minSNR: 0, searchRegion: 0 } })
+		await waitUntil(() => context.events.some((event) => event.type === 'guiding:frame'))
+		const frame = context.events.find((event): event is Extract<GuidingServerEvent, { type: 'guiding:frame' }> => event.type === 'guiding:frame')!
+		expect(frame.overlay.stars.length).toBeLessThanOrEqual(3)
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
 	})
 
 	test('loops under one camera.guiding operation, snoops the devices of the request, and previews the frames as guiding frames of the camera', async () => {
 		const context = await setup()
 		const body = request(context, { snoop: { mount: context.mountId } })
-		const first = (await context.guiding.start(context.id, context.cameraId, body).json()) as { sessionId: string; operationId: string }
+		const first = (await (await context.guiding.start(context.id, context.cameraId, body)).json()) as { sessionId: string; operationId: string }
 		// A repeated token answers its first session.
-		expect(await context.guiding.start(context.id, context.cameraId, body).json()).toEqual(first)
+		expect(await (await context.guiding.start(context.id, context.cameraId, body)).json()).toEqual(first)
 
 		await waitUntil(() => context.events.some((event) => event.type === 'guiding:frame'))
 		const frame = context.events.find((event) => event.type === 'guiding:frame')!

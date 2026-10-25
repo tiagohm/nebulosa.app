@@ -1,3 +1,7 @@
+import { mkdtemp, rm } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { AstapError, astapDetectStars } from 'nebulosa/src/astrometry/solvers/astap'
 import type { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { BlobEncoding } from 'nebulosa/src/devices/indi/types'
@@ -11,14 +15,16 @@ import type { DitherAmount } from 'nebulosa/src/observation/guiding/ditherer'
 import type { GuiderState, GuidingEvent } from 'nebulosa/src/observation/guiding/events'
 import type { GuidingSettle } from 'nebulosa/src/observation/guiding/session'
 import { InteractiveGuidingSession, type GuidingPauseMode } from 'nebulosa/src/observation/guiding/session.interactive'
-import { type GuideStar, type GuidingMode, StarTracker, starTrackingOf } from 'nebulosa/src/observation/guiding/tracker.star'
+import { enrichGuideStars, type GuideStar, type GuidingMode, StarTracker, starTrackingOf } from 'nebulosa/src/observation/guiding/tracker.star'
 import type { CaptureFrameRegistry } from './captureframes'
 import type { CaptureFrame, CaptureSettings, CaptureSnoop } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, failureResponse, notFound, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
+import type { ExternalToolsStore, ResolvedExternalTool } from './externaltools'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import type { OperationDevice, OperationRegistry } from './operations'
+import type { BuiltinStarDetectionSettings, StarDetectionSettings } from './stars'
 
 // Guiding service: one native guiding session per guide camera, from its first looped exposure to its stop, built on the
 // toolkit's InteractiveGuidingSession over a GuiderClient of its own. The session's root operation holds the guide
@@ -28,7 +34,9 @@ import type { OperationDevice, OperationRegistry } from './operations'
 // events and its per-frame telemetry, and previews its frames.
 //
 // Each guide BLOB is decoded on a worker thread of the session (guiding.worker.ts), which also takes the grayscale copy,
-// detects its stars and answers both with the FITS/XISF bytes; the stars feed the tracker synchronously. The bytes of
+// detects its stars with the built-in detector and the settings of the request, and answers both with the FITS/XISF
+// bytes; a session that detects with ASTAP has the worker decode only and runs ASTAP on the frame file here, about half
+// a second per frame. The stars feed the tracker synchronously. The bytes of
 // the newest frame are opened as a capture document of the image store and recorded in the capture frame registry as
 // the latest frame of the camera (origin guiding, never saved), with its overlay published once the document is open;
 // only the newest frame waits while another one is opened, so previewing never holds the guiding back. A session
@@ -59,6 +67,9 @@ export interface GuidingStartRequest extends CommandRequest {
 	// Devices of the camera's connection snooped into the guide frame headers, set once when the session starts; absent
 	// snoops none. A simulated camera renders its star field from the pointing of the snooped mount.
 	readonly snoop?: CaptureSnoop
+	// Star detector of the guide frames and its settings, as the Star Detection of the profile edits them; absent uses
+	// the built-in detector with its defaults. The tracker filters the detected stars by its own thresholds.
+	readonly detection?: StarDetectionSettings
 }
 
 // Body of POST /api/guiding/:sessionId/start.
@@ -284,6 +295,8 @@ export interface GuidingWorkerRequest {
 	readonly jobId: number
 	readonly bytes: Uint8Array<ArrayBuffer>
 	readonly encoding: BlobEncoding
+	// Settings of the built-in detector the worker detects the stars with; absent decodes only, for ASTAP.
+	readonly detection?: Partial<Omit<BuiltinStarDetectionSettings, 'provider'>>
 }
 
 // Answer of the guide frame worker.
@@ -321,13 +334,14 @@ class GuideFrameDecoder implements Disposable {
 	#jobs = 0
 	readonly #pending = new Map<number, PromiseWithResolvers<GuidingWorkerResponse>>()
 
-	// Decodes and measures one BLOB on the worker. Rejects when the worker crashes or was disposed.
-	decode(data: Buffer, encoding: BlobEncoding): Promise<GuidingWorkerResponse> {
+	// Decodes one BLOB on the worker, and detects its stars with the built-in detection given. Rejects when the worker
+	// crashes or was disposed.
+	decode(data: Buffer, encoding: BlobEncoding, detection: GuidingWorkerRequest['detection']): Promise<GuidingWorkerResponse> {
 		const jobId = ++this.#jobs
 		const pending = Promise.withResolvers<GuidingWorkerResponse>()
 		this.#pending.set(jobId, pending)
 		const bytes = new Uint8Array(data)
-		this.#ensure().postMessage({ jobId, bytes, encoding } satisfies GuidingWorkerRequest, [bytes.buffer])
+		this.#ensure().postMessage({ jobId, bytes, encoding, detection } satisfies GuidingWorkerRequest, [bytes.buffer])
 		return pending.promise
 	}
 
@@ -387,6 +401,13 @@ interface Session {
 	// Whether the session is ending or ended.
 	ending: boolean
 	calibrations: number
+	// Star detector of the frames and its settings, as requested; absent uses the built-in detector's defaults.
+	readonly detection?: StarDetectionSettings
+	// ASTAP settings and the directory of its input file, when ASTAP detects the stars; the directory is created on the
+	// first frame and removed at the end.
+	readonly astap?: { readonly tool: Readonly<ResolvedExternalTool>; directory?: Promise<string> }
+	// Aborted at the end, so an ASTAP run in flight is killed.
+	readonly abort: AbortController
 }
 
 // Guiding sessions of the cameras of every open connection.
@@ -398,7 +419,8 @@ export class GuidingSessions implements Disposable {
 
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes every
 	// session, guideOutputs is the commander the pulses are dispatched through, images receives the previewed frames,
-	// frames records them as the latest frame of their camera, and listener receives every notification synchronously.
+	// frames records them as the latest frame of their camera, tools resolves ASTAP for the sessions that detect their stars
+	// with it, and listener receives every notification synchronously.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: ClientResolver,
@@ -406,6 +428,7 @@ export class GuidingSessions implements Disposable {
 		readonly guideOutputs: GuideOutputCommander,
 		readonly images: ImageStore,
 		readonly frames: CaptureFrameRegistry,
+		readonly tools: ExternalToolsStore,
 		readonly listener: GuidingListener,
 	) {}
 
@@ -435,8 +458,14 @@ export class GuidingSessions implements Disposable {
 	// Starts a session looping on a guide camera. Responds 202 with GuidingStartResponse once accepted (a repeated token
 	// answers its first session); its progress arrives as guiding and operation:updated events. Responds 404 for an
 	// unknown camera or guide output, 409 when either is disconnected or the camera is held by another operation, and
-	// 422 when the guide output cannot pulse guide.
-	start(connectionId: string, deviceId: string, request: GuidingStartRequest): Response {
+	// 422 when the guide output cannot pulse guide or the request detects the stars with ASTAP while it is not configured.
+	async start(connectionId: string, deviceId: string, request: GuidingStartRequest): Promise<Response> {
+		const detection = request.detection
+		const tool = detection?.provider === 'astap' ? await this.tools.resolve('astap') : undefined
+		if (detection?.provider === 'astap' && !tool) return unsupported('ASTAP is not configured, so it cannot detect the guide stars')
+		// The built-in detection the worker runs; ASTAP runs here, on the decoded file.
+		const builtin = detection?.provider === 'astap' ? undefined : detection === undefined ? {} : { maxStars: detection.maxStars, minSNR: detection.minSNR, searchRegion: detection.searchRegion, ...(detection.maximumRadius !== undefined && { maximumRadius: detection.maximumRadius }) }
+
 		const known = this.operations.started(request.token)
 		const repeated = known && this.#byOperation.get(known.operationId)
 		if (repeated) return Response.json({ sessionId: repeated.summary.sessionId, operationId: repeated.summary.operationId } satisfies GuidingStartResponse, { status: 202 })
@@ -454,10 +483,10 @@ export class GuidingSessions implements Disposable {
 		const tracker = new StarTracker({ mode: request.trackingMode, detector: (image) => detections.get(image) ?? [] })
 		const client = new GuiderClient(this.devices.cameras, this.devices.guideOutputs, tracker, {
 			decodeImage: async (data, encoding) => {
-				const decoded = await decoder.decode(data, encoding)
+				const decoded = await decoder.decode(data, encoding, builtin)
 				if (decoded.status === 'unsupported') return undefined
 				if (decoded.status === 'failed') throw new Error(decoded.error)
-				detections.set(decoded.image, decoded.stars)
+				detections.set(decoded.image, session.astap ? await this.#astapStars(session, session.astap, decoded.image, decoded.bytes) : decoded.stars)
 				files.set(decoded.image, decoded.bytes)
 				return decoded.image
 			},
@@ -504,6 +533,9 @@ export class GuidingSessions implements Disposable {
 			preview: { decoding: false },
 			ending: false,
 			calibrations: 0,
+			...(detection && { detection }),
+			...(tool && { astap: { tool } }),
+			abort: new AbortController(),
 		}
 
 		client.addHandler({ event: (_, event) => this.#event(session, event), frame: (_, frame) => this.#frame(session, frame) })
@@ -808,11 +840,35 @@ export class GuidingSessions implements Disposable {
 		session.client.stopCapture()
 		session.client.disconnect()
 		session.decoder[Symbol.dispose]()
+		session.abort.abort()
+		if (session.astap?.directory)
+			void session.astap.directory.then(
+				(directory) => rm(directory, { recursive: true, force: true }),
+				() => undefined,
+			)
 		session.preview.next = undefined
 		session.run?.ended.resolve(result)
 		session.run = undefined
 		this.#update(session, { active: false, guideOutputHeld: false, pulsesAdmitted: false, runOperationId: undefined, ...(failure && { failure }), endedAt: Date.now() })
 		session.ended.resolve(result)
+	}
+
+	// Detects the stars of a decoded guide frame with ASTAP, from its FITS file written to the session directory, and
+	// samples their peaks on the grayscale image for the saturation filter. Positions are 0-based pixels of the frame.
+	// A run killed by the end of the session answers no star; any other failure of ASTAP throws, and the frame is lost.
+	async #astapStars(session: Session, astap: NonNullable<Session['astap']>, image: Image, bytes: Uint8Array<ArrayBuffer>): Promise<readonly GuideStar[]> {
+		astap.directory ??= mkdtemp(join(tmpdir(), 'nebulosa-guiding-'))
+		const input = join(await astap.directory, 'frame.fits')
+		await Bun.write(input, bytes)
+
+		try {
+			const { executable, timeout } = astap.tool
+			const settings = session.detection
+			return enrichGuideStars(await astapDetectStars(input, { executable, timeout, ...(settings && { minSNR: settings.minSNR, maxStars: settings.maxStars }) }, session.abort.signal), image)
+		} catch (error) {
+			if (error instanceof AstapError && error.code === 'aborted') return []
+			throw error
+		}
 	}
 
 	// Returns the latest session with this id that still lives, or the response refusing it.

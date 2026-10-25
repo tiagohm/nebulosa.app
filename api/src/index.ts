@@ -263,7 +263,7 @@ const flatWizard = new FlatWizardSessions(connections.devices, (id) => connectio
 
 // Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
 // guide output commands and previewing their frames in the image store and the capture frame registry.
-const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, broadcast)
+const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, broadcast)
 
 // Bun.serve routes under /api/.
 export const routes = {

@@ -1,9 +1,9 @@
 // oxfmt-ignore
-import type { CameraCapabilities, GuidingDitherRequest, GuidingEventRecord, GuidingFrameOverlay, GuidingPage, GuidingPauseRequest, GuidingResumeRequest, GuidingSessionSummary, GuidingSnapshot, GuidingStartGuidingRequest, GuidingStartRequest, GuidingTelemetrySample, OperationDevice, ServerEvent } from 'api'
+import type { CameraCapabilities, CaptureSnoop, GuidingDitherRequest, GuidingEventRecord, GuidingFrameOverlay, GuidingPage, GuidingPauseRequest, GuidingResumeRequest, GuidingSessionSummary, GuidingSnapshot, GuidingStartGuidingRequest, GuidingStartRequest, GuidingTelemetrySample, OperationDevice, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit, responseError } from '../http'
-import type { CameraExposureSettings, GuidingSettings } from '../profile/schema'
+import { type CameraExposureSettings, GUIDING_MAXIMUM_PULSE, GUIDING_MINIMUM_PULSE, type GuidingSettings } from '../profile/schema'
 import { cameraKey, fitExposure } from './capture'
 
 // Guiding sessions as this tab knows them. The server owns every session, whichever tab started it, and every exposure,
@@ -76,9 +76,9 @@ function sessionById(state: GuidingRuntime, sessionId: string): GuidingSessionSu
 }
 
 // Builds the start request of the guiding form of a camera: the guide exposures in milliseconds, the camera settings
-// of the camera fitted to its capabilities as a capture is (never its exposure time), and the controller and
-// calibration of the form. The focal length is sent only when known.
-export function guidingRequest(settings: Readonly<GuidingSettings>, exposure: Readonly<CameraExposureSettings>, guideOutput: OperationDevice, capabilities?: CameraCapabilities): Omit<GuidingStartRequest, 'token'> {
+// of the camera fitted to its capabilities as a capture is (never its exposure time), the controller and calibration
+// of the form, and the devices snooped into the frame headers. The focal length is sent only when known.
+export function guidingRequest(settings: Readonly<GuidingSettings>, exposure: Readonly<CameraExposureSettings>, guideOutput: OperationDevice, snoop: CaptureSnoop, capabilities?: CameraCapabilities): Omit<GuidingStartRequest, 'token'> {
 	const { exposureTime: _, ...camera } = fitExposure(exposure, capabilities)
 
 	return {
@@ -89,7 +89,35 @@ export function guidingRequest(settings: Readonly<GuidingSettings>, exposure: Re
 		...(settings.focalLength !== undefined && { optics: { focalLength: settings.focalLength } }),
 		calibration: { raPulse: settings.calibrationPulse, decPulse: settings.calibrationPulse },
 		guider: { aggressivenessRA: settings.aggressivenessRA, aggressivenessDEC: settings.aggressivenessDEC, maxPulseMsRA: settings.maximumPulseRA, maxPulseMsDEC: settings.maximumPulseDEC },
+		snoop,
 	}
+}
+
+// Image travel a calibration leg aims at, in guide-camera pixels: the calibration distance of PHD2.
+export const GUIDING_CALIBRATION_DISTANCE = 25
+
+// Calibration steps a leg aims at for that travel, as PHD2 sizes its calibration step.
+export const GUIDING_CALIBRATION_STEPS = 12
+
+// Sidereal rate, in arcseconds of RA per second of time.
+const SIDEREAL_RATE = 15.0410686
+
+// Arcseconds per radian, the pixel scale constant: arcsec/px = 206264.8 × pixel size / focal length (same units).
+const ARCSEC_PER_RADIAN = 206264.80624709636
+
+// Returns the calibration pulse, in whole milliseconds within [GUIDING_MINIMUM_PULSE, GUIDING_MAXIMUM_PULSE], that moves
+// the guide star GUIDING_CALIBRATION_DISTANCE pixels in GUIDING_CALIBRATION_STEPS RA steps, as the PHD2 calibration step
+// calculator does: from the focal length of the guide optics in mm, the unbinned pixel size in µm, the binning, the RA
+// guide rate as a fraction of the sidereal rate, and the declination the mount points at in radians, since an RA
+// pulse moves the sky by the cosine of the declination. Undefined when an input is unknown or the motion vanishes
+// (a zero rate, or the pole). A pulse beyond the bounds is clamped, so the calibration may then fall short of the
+// distance.
+export function guidingCalibrationPulse(focalLength: number, pixelSize: number, binning: number, guideRate: number, declination: number): number | undefined {
+	const scale = (ARCSEC_PER_RADIAN * pixelSize * 1e-3 * binning) / focalLength
+	const speed = guideRate * SIDEREAL_RATE * Math.cos(declination)
+	if (!(scale > 0 && Number.isFinite(scale)) || !(speed > 1e-6)) return undefined
+	const pulse = Math.round(((GUIDING_CALIBRATION_DISTANCE * scale) / speed / GUIDING_CALIBRATION_STEPS) * 1000)
+	return Math.min(GUIDING_MAXIMUM_PULSE, Math.max(GUIDING_MINIMUM_PULSE, pulse))
 }
 
 // Builds the Start Guiding request of the guiding form.
@@ -141,14 +169,22 @@ function lastPosition<T>(kind: PageKind<T>, list: readonly T[]) {
 }
 
 // Appends items newer than the last one of a session's list, dropping the oldest beyond the bound. With reset, a
-// truncated page replaces the list, since the items between them were forgotten.
+// truncated page replaces the list, since the items between them were forgotten. The kept list is extended in place, so
+// one sample per frame never copies the whole history.
 function append<T>(state: GuidingRuntime, kind: PageKind<T>, sessionId: string, items: readonly T[], reset = false) {
 	const lists = kind.list(state)
-	const list = reset ? [] : (lists[sessionId] ?? [])
+
+	if (reset || !lists[sessionId]) {
+		lists[sessionId] = items.slice(-kind.kept)
+		return
+	}
+
+	const list = lists[sessionId]
 	const last = lastPosition(kind, list)
 	const fresh = items.filter((item) => kind.position(item) > last)
-	if (!reset && fresh.length === 0) return
-	lists[sessionId] = [...list, ...fresh].slice(-kind.kept)
+	if (fresh.length === 0) return
+	list.push(...fresh)
+	if (list.length > kind.kept) list.splice(0, list.length - kind.kept)
 }
 
 // Fetches the items of a session after the last one known and appends them; a session the server no longer keeps is

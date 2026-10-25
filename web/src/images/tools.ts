@@ -4,6 +4,7 @@ import { CameraAcquisitionTool } from './CameraAcquisitionTool'
 import type { CameraOperationContext } from './cameracontext'
 import { DarvTool } from './DarvTool'
 import { FlatWizardTool } from './FlatWizardTool'
+import { GuidingTool } from './GuidingTool'
 import { ImageInspector } from './ImageInspector'
 import type { ImageDocument, ImageViewState } from './images'
 import { MountNudgeTool } from './MountNudgeTool'
@@ -83,11 +84,6 @@ function plannedImageTool(id: ImageToolId, label: string, outputs: ImageToolOnIm
 	return { id, label, panelTitle: label, category: 'image', outputs }
 }
 
-// Returns the definition of a camera operation that has no panel yet.
-function plannedCameraOperation(id: ImageToolId, label: string): CameraOperationTool {
-	return { id, label, panelTitle: label, category: 'camera' }
-}
-
 // Definition of every Images contextual tool, by id.
 export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefinition>> = {
 	inspector: { id: 'inspector', label: 'Image Inspector', panelTitle: 'Image Inspector', category: 'image', outputs: ['display', 'derived'], panel: ImageInspector },
@@ -98,7 +94,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'camera-acquisition': { id: 'camera-acquisition', label: 'Camera Acquisition', panelTitle: 'Camera Acquisition', category: 'camera', panel: CameraAcquisitionTool },
 	'auto-focus': { id: 'auto-focus', label: 'Auto Focus', panelTitle: 'Auto Focus', category: 'camera', panel: AutoFocusTool },
 	'mount-nudge': { id: 'mount-nudge', label: 'Mount Nudge', panelTitle: 'Mount Nudge', category: 'camera', panel: MountNudgeTool },
-	guiding: plannedCameraOperation('guiding', 'Guiding'),
+	guiding: { id: 'guiding', label: 'Guiding', panelTitle: 'Guiding', category: 'camera', panel: GuidingTool },
 	darv: { id: 'darv', label: 'DARV', panelTitle: 'DARV', category: 'camera', panel: DarvTool },
 	tppa: { id: 'tppa', label: 'TPPA', panelTitle: 'TPPA', category: 'camera', panel: TppaTool },
 	'flat-wizard': { id: 'flat-wizard', label: 'Flat Wizard', panelTitle: 'Flat Wizard', category: 'camera', panel: FlatWizardTool },

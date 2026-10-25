@@ -5,6 +5,9 @@ import { AUTO_FOCUS_STATE_LABELS, autoFocusRuntime } from '../camera/autofocus'
 import { cameraKey, captureCount, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState } from '../camera/capture'
 import { DarvOverlay, useDarvOverlay } from '../camera/DarvOverlay'
 import { FocusCurve } from '../camera/FocusCurve'
+import { GUIDING_STATE_LABELS, guidingRuntime, selectGuidingTarget } from '../camera/guiding'
+import { GuidingGraph } from '../camera/GuidingGraph'
+import { GuidingOverlay, useGuidingOverlay } from '../camera/GuidingOverlay'
 import { TppaOverlay, useTppaOverlay } from '../camera/TppaOverlay'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../files/files'
@@ -38,7 +41,8 @@ import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolGroup, imageToolUnavailab
 // viewer, with the contextual tool each document selected (the Image Inspector at first) in the contextual panel. It
 // works without any connection or equipment; only the camera operations of a camera tab command its camera, and the
 // toolbar of a camera tab shows the state of its capture whatever tool is selected, and its bottom area the Focus
-// Curve of its Auto Focus on request. Documents, with their own zoom,
+// Curve of its Auto Focus or the graph of its guiding on request; while Guiding is the tool, a click on the session's
+// current guide frame selects the star nearest it. Documents, with their own zoom,
 // pan, display settings, and tool, stay open while the tab lives, across document and workspace switches; a camera
 // tab follows the latest frame of its camera until a saved frame is selected or a manual analysis holds the frame
 // shown, and Return to Latest follows it again.
@@ -79,6 +83,9 @@ export function ImagesWorkspace() {
 	const camera = useCameraOperationContext(document)
 	const guide = useTppaOverlay(document)
 	const trails = useDarvOverlay(document)
+	const guiding = useGuidingOverlay(document)
+	// A star is picked only on the session's current frame, and only while the guide output is not held.
+	const picking = tool === 'guiding' && guiding && !guiding.session.guideOutputHeld ? guiding.session : undefined
 	const toolSelector = (
 		<Select options={IMAGE_TOOLS} value={tool} disabled={!document} format={(t) => IMAGE_TOOL_DEFINITIONS[t].label} group={imageToolGroup} disabledReason={(t) => imageToolUnavailable(t, document)} onChange={(t) => document && selectImageTool(imagesState, document.key, t)} className="w-52 max-sm:w-40" />
 	)
@@ -127,25 +134,28 @@ export function ImagesWorkspace() {
 							)
 						}
 						overlays={
-							(markers || wcs || reticle || guide || trails) && view
+							(markers || wcs || reticle || guide || trails || guiding) && view
 								? (size, overlay) => (
 										<>
 											{reticle && <Reticle {...size} />}
 											{wcs && <WcsOverlay solution={wcs} image={size} view={overlay} grid={view.plateSolving.grid} />}
 											{guide && <TppaOverlay geometry={guide} view={overlay} />}
 											{trails && <DarvOverlay trails={trails} view={overlay} />}
+											{guiding && <GuidingOverlay overlay={guiding.overlay} view={overlay} />}
 											{markers && <StarOverlay result={markers} view={overlay} acceptedOnly={view.stars.acceptedOnly} selected={view.stars.selected?.jobId === markers.jobId ? view.stars.selected.index : undefined} />}
 										</>
 									)
 								: undefined
 						}
 						onImageClick={
-							markers && view && document && tool === 'star-detection'
-								? (point, overlay) => {
-										const index = pickStar(markers, point, STAR_PICK_RADIUS / overlay.scale, view.stars.acceptedOnly)
-										selectStar(imagesState, document.key, index === undefined ? undefined : { jobId: markers.jobId, index })
-									}
-								: undefined
+							picking
+								? (point) => void selectGuidingTarget(guidingRuntime, picking, [point.x - 0.5, point.y - 0.5])
+								: markers && view && document && tool === 'star-detection'
+									? (point, overlay) => {
+											const index = pickStar(markers, point, STAR_PICK_RADIUS / overlay.scale, view.stars.acceptedOnly)
+											selectStar(imagesState, document.key, index === undefined ? undefined : { jobId: markers.jobId, index })
+										}
+									: undefined
 						}
 						empty={
 							waiting ? (
@@ -308,14 +318,15 @@ function CaptureStatus({ connectionId, deviceId }: CaptureStatusProps) {
 	)
 }
 
-// View of the bottom area of a camera tab: the capture frames carousel, or the Focus Curve of its camera's Auto Focus.
-type BottomView = 'frames' | 'curve'
+// View of the bottom area of a camera tab: the capture frames carousel, the Focus Curve of its camera's Auto Focus, or
+// the graph of its camera's guiding.
+type BottomView = 'frames' | 'curve' | 'guiding'
 
 // Views of the bottom area, in display order.
-const BOTTOM_VIEWS: readonly BottomView[] = ['frames', 'curve']
+const BOTTOM_VIEWS: readonly BottomView[] = ['frames', 'curve', 'guiding']
 
 // Label of each view of the bottom area.
-const BOTTOM_VIEW_LABELS: Readonly<Record<BottomView, string>> = { frames: 'Captured Frames', curve: 'Focus Curve' }
+const BOTTOM_VIEW_LABELS: Readonly<Record<BottomView, string>> = { frames: 'Captured Frames', curve: 'Focus Curve', guiding: 'Guiding Graph' }
 
 interface CameraBottomProps {
 	// Camera tab.
@@ -326,19 +337,25 @@ interface CameraBottomProps {
 	readonly onView: (view: BottomView) => void
 }
 
-// Bottom area of a camera tab: the capture frames carousel, and, once its camera has an Auto Focus session, a switch to
-// the Focus Curve of that session. The curve belongs to the session, never to the frame selected, so it keeps
-// updating whatever frame or tool is shown; choosing a view never changes the selection.
-function CameraBottom({ document, view, onView }: CameraBottomProps) {
+// Bottom area of a camera tab: the capture frames carousel, and, once its camera has an Auto Focus or a guiding session,
+// a switch to the Focus Curve or the guiding graph of that session. They belong to the session, never to the frame
+// selected, so they keep updating whatever frame or tool is shown; choosing a view never changes the selection. A view
+// whose session is gone shows the carousel.
+function CameraBottom({ document, view: chosen, onView }: CameraBottomProps) {
 	const autoFocus = useSnapshot(autoFocusRuntime)
+	const guidingState = useSnapshot(guidingRuntime)
 	if (document.source.kind !== 'camera') return null
 
-	const session = autoFocus.sessions[cameraKey(document.source.connectionId, document.source.deviceId)]
-	if (!session) return <CaptureFramesCarousel document={document} />
+	const key = cameraKey(document.source.connectionId, document.source.deviceId)
+	const session = autoFocus.sessions[key]
+	const guiding = guidingState.sessions[key]
+	const available = BOTTOM_VIEWS.filter((option) => option === 'frames' || (option === 'curve' && session) || (option === 'guiding' && guiding))
+	if (available.length === 1) return <CaptureFramesCarousel document={document} />
+	const view = available.includes(chosen) ? chosen : 'frames'
 
 	const views = (
 		<span className="flex gap-3">
-			{BOTTOM_VIEWS.map((option) => (
+			{available.map((option) => (
 				<button
 					key={option}
 					type="button"
@@ -357,11 +374,9 @@ function CameraBottom({ document, view, onView }: CameraBottomProps) {
 		<div className="flex-none border-t border-line-100 bg-base-100">
 			<div className="flex items-center justify-between px-3 pt-1.5 font-mono text-[11px] tracking-wide text-ink-300 uppercase">
 				{views}
-				<span>{AUTO_FOCUS_STATE_LABELS[session.state]}</span>
+				<span>{view === 'guiding' && guiding ? (guiding.active ? GUIDING_STATE_LABELS[guiding.state] : 'Stopped') : session && AUTO_FOCUS_STATE_LABELS[session.state]}</span>
 			</div>
-			<div className="px-2 pb-2">
-				<FocusCurve summary={session} session={autoFocus.details[session.sessionId]} />
-			</div>
+			<div className="px-2 pb-2">{view === 'guiding' && guiding ? <GuidingGraph session={guiding} telemetry={guidingState.telemetry[guiding.sessionId]} events={guidingState.events[guiding.sessionId]} /> : session && <FocusCurve summary={session} session={autoFocus.details[session.sessionId]} />}</div>
 		</div>
 	)
 }

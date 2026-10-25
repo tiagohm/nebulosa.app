@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import type { GuidingEventRecord, GuidingSessionSummary, GuidingTelemetrySample } from 'api'
 import { proxy } from 'valtio'
-import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_GUIDING_SETTINGS } from '../profile/schema'
+import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_GUIDING_SETTINGS, GUIDING_MAXIMUM_PULSE as GUIDING_MAXIMUM_PULSE_CLAMP } from '../profile/schema'
 import { cameraKey } from './capture'
-import { GUIDING_TELEMETRY_KEPT, guidingBlocker, guidingDitherRequest, guidingRequest, guidingRunning, type GuidingRuntime, guidingStartRequest, handleGuidingEvent, refreshGuiding, setGuidingExposure, startGuiding, startGuidingSession, stopGuidingSession } from './guiding'
+import { GUIDING_TELEMETRY_KEPT, guidingBlocker, guidingCalibrationPulse, guidingDitherRequest, guidingRequest, guidingRunning, type GuidingRuntime, guidingStartRequest, handleGuidingEvent, refreshGuiding, setGuidingExposure, startGuiding, startGuidingSession, stopGuidingSession } from './guiding'
 
 function newState() {
 	return proxy<GuidingRuntime>({ sessions: {}, events: {}, telemetry: {}, frames: {}, pending: {}, errors: {} })
@@ -65,11 +65,27 @@ const NO_FETCH = fakeFetch(() => new Response(null, { status: 500 })).request
 describe('requests', () => {
 	test('the start takes the camera settings without their exposure, the guide exposure in ms, and the controller of the form', () => {
 		const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 30, gain: 120, binX: 2, binY: 2 }
-		const request = guidingRequest({ ...DEFAULT_GUIDING_SETTINGS, exposureTime: 1.5, trackingMode: 'multiStar', aggressivenessRA: 0.4 }, exposure, OUTPUT)
+		const request = guidingRequest({ ...DEFAULT_GUIDING_SETTINGS, exposureTime: 1.5, trackingMode: 'multiStar', aggressivenessRA: 0.4 }, exposure, OUTPUT, {})
 		expect('exposureTime' in request.camera).toBeFalse()
 		expect(request).toMatchObject({ guideOutput: OUTPUT, exposure: 1500, trackingMode: 'multiStar', camera: { gain: 120, binX: 2, binY: 2 }, calibration: { raPulse: 650, decPulse: 650 }, guider: { aggressivenessRA: 0.4, aggressivenessDEC: 0.65, maxPulseMsRA: 2000, maxPulseMsDEC: 2500 } })
 		expect('optics' in request).toBeFalse()
-		expect(guidingRequest({ ...DEFAULT_GUIDING_SETTINGS, focalLength: 240 }, exposure, OUTPUT).optics).toEqual({ focalLength: 240 })
+		expect(guidingRequest({ ...DEFAULT_GUIDING_SETTINGS, focalLength: 240 }, exposure, OUTPUT, {}).optics).toEqual({ focalLength: 240 })
+	})
+
+	test('the start snoops the devices it is given', () => {
+		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, OUTPUT, { mount: 'm' }).snoop).toEqual({ mount: 'm' })
+	})
+
+	test('the calibration pulse moves the star 25 px in 12 RA steps, as the PHD2 calculator', () => {
+		// 200 mm, 3.75 µm: 3.8675"/px; 0.5× sidereal at the equator: 7.5205"/s; 25 px / 12 steps.
+		expect(guidingCalibrationPulse(200, 3.75, 1, 0.5, 0)).toBe(1071)
+		// 40 mm, 5.2 µm: 26.814"/px; at Dec 20° the RA motion is cos 20° slower.
+		expect(guidingCalibrationPulse(40, 5.2, 1, 0.5, (20 * Math.PI) / 180)).toBe(7905)
+		expect(guidingCalibrationPulse(200, 3.75, 2, 0.5, 0)).toBe(2143)
+		expect(guidingCalibrationPulse(10, 5.2, 1, 0.5, 0)).toBe(GUIDING_MAXIMUM_PULSE_CLAMP)
+		expect(guidingCalibrationPulse(200, 3.75, 1, 0.5, Math.PI / 2)).toBeUndefined()
+		expect(guidingCalibrationPulse(0, 3.75, 1, 0.5, 0)).toBeUndefined()
+		expect(guidingCalibrationPulse(200, 3.75, 1, 0, 0)).toBeUndefined()
 	})
 
 	test('Start Guiding and dither carry the settle of the form, and the dither its size in guide pixels', () => {
@@ -180,7 +196,7 @@ describe('refresh', () => {
 describe('commands', () => {
 	test('a start posts a tokened request to the camera route; a failure is recorded per camera', async () => {
 		const state = newState()
-		const body = guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, OUTPUT)
+		const body = guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, OUTPUT, {})
 		const accepted = fakeFetch(() => Response.json({ sessionId: 's1', operationId: 'o1' }, { status: 202 }))
 		expect(await startGuidingSession(state, 'c', 'guide', body, accepted.request)).toEqual({ sessionId: 's1', operationId: 'o1' })
 		expect(accepted.requests[0].url).toBe('/api/connections/c/cameras/guide/guiding')

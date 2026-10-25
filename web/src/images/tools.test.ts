@@ -35,6 +35,6 @@ describe('tool registry', () => {
 
 	test('a tool without a panel cannot be selected', () => {
 		expect(imageToolUnavailable('streak-detection', FILE)).toBe('Not available yet.')
-		expect(imageToolUnavailable('guiding', CAMERA_TAB)).toBe('Not available yet.')
+		expect(imageToolUnavailable('guiding', CAMERA_TAB)).toBeUndefined()
 	})
 })

@@ -13,7 +13,7 @@ import type { GuidingSettle } from 'nebulosa/src/observation/guiding/session'
 import { InteractiveGuidingSession, type GuidingPauseMode } from 'nebulosa/src/observation/guiding/session.interactive'
 import { type GuideStar, type GuidingMode, StarTracker, starTrackingOf } from 'nebulosa/src/observation/guiding/tracker.star'
 import type { CaptureFrameRegistry } from './captureframes'
-import type { CaptureFrame, CaptureSettings } from './captures'
+import type { CaptureFrame, CaptureSettings, CaptureSnoop } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, failureResponse, notFound, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
@@ -56,6 +56,9 @@ export interface GuidingStartRequest extends CommandRequest {
 	readonly calibration?: Partial<GuidingCalibrationConfig>
 	// Overrides of the guide controller.
 	readonly guider?: GuiderClientGuiderOptions
+	// Devices of the camera's connection snooped into the guide frame headers, set once when the session starts; absent
+	// snoops none. A simulated camera renders its star field from the pointing of the snooped mount.
+	readonly snoop?: CaptureSnoop
 }
 
 // Body of POST /api/guiding/:sessionId/start.
@@ -506,6 +509,7 @@ export class GuidingSessions implements Disposable {
 		client.addHandler({ event: (_, event) => this.#event(session, event), frame: (_, frame) => this.#frame(session, frame) })
 
 		const record = this.operations.run('camera.guiding', [cameraDevice], request.token, async () => {
+			this.#snoop(connectionId, camera, request.snoop)
 			const configuration = { ...request.camera, frameType: 'LIGHT', transferFormat: 'FITS', compressed: false } as const
 			const looped = await interactive.startLoop(this.operations.coordinator, { exposure: request.exposure, camera: configuration })
 			this.#sync(session)
@@ -521,6 +525,18 @@ export class GuidingSessions implements Disposable {
 		this.#update(session, { operationId: record.operationId })
 
 		return Response.json({ sessionId: session.summary.sessionId, operationId: record.operationId } satisfies GuidingStartResponse, { status: 202 })
+	}
+
+	// Tells the driver of the guide camera which devices of its connection to stamp into the frame headers. The devices
+	// are resolved, never acquired; an id the connection does not have is cleared.
+	#snoop(connectionId: string, camera: Camera, snoop: CaptureSnoop | undefined) {
+		const client = this.client(connectionId)
+		const { mounts, focusers, wheels, rotators } = this.devices
+		const mount = snoop?.mount ? mounts.get(client, snoop.mount) : undefined
+		const focuser = snoop?.focuser ? focusers.get(client, snoop.focuser) : undefined
+		const wheel = snoop?.wheel ? wheels.get(client, snoop.wheel) : undefined
+		const rotator = snoop?.rotator ? rotators.get(client, snoop.rotator) : undefined
+		this.devices.cameras.snoop(camera, mount, focuser, wheel, rotator)
 	}
 
 	// Starts calibrating or guiding the selected (or best) star. Responds 202 with the command id.

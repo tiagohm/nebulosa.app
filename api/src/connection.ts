@@ -130,6 +130,7 @@ async function openClient(id: string, request: ConnectRequest, handler: IndiClie
 					catalogSource: 'SKY',
 					focalLength: 50,
 					aperture: 25,
+					noiseExposureTime: 3,
 				}),
 				new CameraSimulator('Guide Camera Simulator', client, {
 					mountManager: devices.mounts,
@@ -138,6 +139,7 @@ async function openClient(id: string, request: ConnectRequest, handler: IndiClie
 					catalogSource: 'SKY',
 					focalLength: 40,
 					aperture: 25,
+					noiseExposureTime: 2,
 				}),
 				new FocuserSimulator('Focuser Simulator', client),
 				new WheelSimulator('Filter Wheel Simulator', client),

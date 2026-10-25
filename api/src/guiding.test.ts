@@ -114,9 +114,9 @@ describe('start', () => {
 		expect(context.guiding.start(context.id, context.cameraId, request(context)).status).toBe(409)
 	})
 
-	test('loops under one camera.guiding operation and previews the frames as guiding frames of the camera', async () => {
+	test('loops under one camera.guiding operation, snoops the devices of the request, and previews the frames as guiding frames of the camera', async () => {
 		const context = await setup()
-		const body = request(context)
+		const body = request(context, { snoop: { mount: context.mountId } })
 		const first = (await context.guiding.start(context.id, context.cameraId, body).json()) as { sessionId: string; operationId: string }
 		// A repeated token answers its first session.
 		expect(await context.guiding.start(context.id, context.cameraId, body).json()).toEqual(first)
@@ -129,6 +129,8 @@ describe('start', () => {
 		expect(context.running('camera.guiding').map((operation) => operation.operationId)).toEqual([first.operationId])
 		expect(context.operations.available(context.camera)).toBeFalse()
 		expect(context.operations.available(context.mount)).toBeTrue()
+		// The mount is snooped, so a simulated camera renders the sky it points at.
+		expect(context.manager.devices.cameras.properties.get(context.camera)?.ACTIVE_DEVICES?.elements.ACTIVE_TELESCOPE.value).toBe(context.mount.name)
 
 		expect((await context.guiding.stop(first.sessionId)).status).toBe(204)
 		expect(context.summary()).toMatchObject({ active: false, lost: false })

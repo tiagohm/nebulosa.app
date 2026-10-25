@@ -532,6 +532,14 @@ export function setTelescopeOptics(state: ProfileState, optics: TelescopeOptics)
 	touch(profile)
 }
 
+// Replaces the guide telescope optics of the active profile's Equipment Setup, which guiding takes its pixel scale and
+// calibration step from; never sent to a device.
+export function setGuideTelescopeOptics(state: ProfileState, optics: TelescopeOptics) {
+	const profile = activeProfile(state)
+	profile.settings.guideTelescope = { focalLength: optics.focalLength, focalMultiplier: optics.focalMultiplier, aperture: optics.aperture }
+	touch(profile)
+}
+
 // Forgets a removed saved connection in every profile: profiles that selected it lose their selection,
 // and its equipment setup is dropped, because the removed entry can never be selected again.
 export function forgetConnection(state: ProfileState, connectionId: string) {

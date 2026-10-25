@@ -3,7 +3,7 @@ import { type ReactNode, useState } from 'react'
 import { tv } from 'tailwind-variants'
 import { useSnapshot } from 'valtio'
 import { connect, connectionState, serverOf } from '../connection/connection'
-import { activeProfile, activeSetup, assignDevice, profileState, setTelescopeOptics } from '../profile/profile'
+import { activeProfile, activeSetup, assignDevice, profileState, setGuideTelescopeOptics, setTelescopeOptics } from '../profile/profile'
 import { DEFAULT_TELESCOPE, type TelescopeOptics } from '../sky/framing'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
@@ -16,8 +16,8 @@ import { useWatchedDevices } from './useEquipment'
 
 // Modal that assigns the devices of the active profile's connection to the equipment roles and connects
 // or disconnects them one by one or all at once. Selecting a device never connects it, and closing the modal never
-// disconnects anything. It also holds the profile's telescope optics, which no device reports and the
-// Sky's Equipment Setup field of view uses.
+// disconnects anything. It also holds the profile's telescope and guide telescope optics, which no device reports: the
+// Sky's Equipment Setup field of view uses the first, and Guiding the second.
 
 // Select value of the None option.
 const NONE = ''
@@ -127,7 +127,12 @@ export function EquipmentModal() {
 									</ul>
 								</section>
 							))}
-							<TelescopeSection telescope={profile.settings.telescope} />
+							<TelescopeSection title="Telescope" telescope={profile.settings.telescope} onChange={(optics) => setTelescopeOptics(profileState, optics)}>
+								Used by the Sky&apos;s Equipment Setup field of view. Kept in the profile; never sent to a device.
+							</TelescopeSection>
+							<TelescopeSection title="Guide Telescope" telescope={profile.settings.guideTelescope} onChange={(optics) => setGuideTelescopeOptics(profileState, optics)}>
+								Gives Guiding the pixel scale of the RMS in arcseconds and the calibration step; with an off-axis guider, enter the main telescope. Kept in the profile; never sent to a device.
+							</TelescopeSection>
 						</div>
 					</>
 				)}
@@ -136,24 +141,35 @@ export function EquipmentModal() {
 	)
 }
 
+interface TelescopeSectionProps {
+	// Heading of the section.
+	readonly title: string
+	// Saved optics; absent shows the defaults until entered.
+	readonly telescope?: Readonly<TelescopeOptics>
+	// Saves the whole optics after a change of one field.
+	readonly onChange: (optics: TelescopeOptics) => void
+	// What the optics are used for.
+	readonly children: ReactNode
+}
+
 // Telescope optics of the active profile, entered by hand: planning data never sent to a device.
-function TelescopeSection({ telescope }: { readonly telescope?: Readonly<TelescopeOptics> }) {
+function TelescopeSection({ title, telescope, onChange, children }: TelescopeSectionProps) {
 	const current = telescope ?? DEFAULT_TELESCOPE
 
 	// Saves a change of the optics.
 	function change(next: Partial<TelescopeOptics>) {
-		setTelescopeOptics(profileState, { ...current, ...next })
+		onChange({ ...current, ...next })
 	}
 
 	return (
 		<section className="flex flex-col gap-2">
-			<h3 className="m-0 text-xs leading-4 font-medium tracking-[0.08em] text-ink-300 uppercase">Telescope</h3>
+			<h3 className="m-0 text-xs leading-4 font-medium tracking-[0.08em] text-ink-300 uppercase">{title}</h3>
 			<div className="grid grid-cols-3 gap-2 max-sm:grid-cols-1">
 				<NumberInput label="Focal length" suffix="mm" value={current.focalLength} min={0} step={1} onChange={(focalLength) => change({ focalLength })} />
 				<NumberInput label="Reducer / Barlow" suffix="×" value={current.focalMultiplier} min={0.1} max={10} step={0.01} onChange={(focalMultiplier) => change({ focalMultiplier })} />
 				<NumberInput label="Aperture" suffix="mm" value={current.aperture} min={0} step={1} onChange={(aperture) => change({ aperture })} />
 			</div>
-			<p className="m-0 text-xs leading-5 text-ink-300">Used by the Sky&apos;s Equipment Setup field of view. Kept in the profile; never sent to a device.</p>
+			<p className="m-0 text-xs leading-5 text-ink-300">{children}</p>
 		</section>
 	)
 }

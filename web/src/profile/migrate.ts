@@ -301,7 +301,7 @@ function normalizeFlatWizard(value: unknown): FlatWizardSettings | undefined {
 }
 
 // Restores a persisted guiding form, filling every invalid field with its default; undefined for anything that is not
-// a record. A focal length that is not a positive number is dropped, leaving the pixel scale unknown.
+// a record. The guide focal length of version 8 is moved to the guide telescope by migrateGuideFocalLength.
 function normalizeGuiding(value: unknown): GuidingSettings | undefined {
 	if (!isRecord(value)) return undefined
 
@@ -312,7 +312,6 @@ function normalizeGuiding(value: unknown): GuidingSettings | undefined {
 	return {
 		exposureTime: boundedNumber(value.exposureTime, GUIDING_MINIMUM_EXPOSURE, GUIDING_MAXIMUM_EXPOSURE, defaults.exposureTime),
 		trackingMode: value.trackingMode === 'multiStar' ? 'multiStar' : 'singleStar',
-		...(typeof value.focalLength === 'number' && Number.isFinite(value.focalLength) && value.focalLength > 0 && { focalLength: value.focalLength }),
 		recalibrate: value.recalibrate !== false,
 		calibrationPulse: pulse(value.calibrationPulse, defaults.calibrationPulse),
 		aggressivenessRA: boundedNumber(value.aggressivenessRA, 0, 1, defaults.aggressivenessRA),
@@ -459,6 +458,8 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	normalizeSky(value.sky, settings.sky)
 	const telescope = normalizeTelescope(value.telescope)
 	if (telescope) settings.telescope = telescope
+	const guideTelescope = normalizeTelescope(value.guideTelescope)
+	if (guideTelescope) settings.guideTelescope = guideTelescope
 
 	return settings
 }
@@ -491,6 +492,27 @@ function normalizeEquipment(value: unknown): Record<string, EquipmentSetup> {
 	return equipment
 }
 
+// Returns the guide focal length in mm that the version 8 guiding forms held, by saved connection id and device id:
+// the form of the Guide Camera of the active setup, else the first form with one; undefined when none is a positive
+// number.
+function migrateGuideFocalLength(cameras: unknown, profile: Readonly<Profile>): number | undefined {
+	if (!isRecord(cameras)) return undefined
+
+	const focalLengths: { readonly connectionId: string; readonly deviceId: string; readonly focalLength: number }[] = []
+
+	for (const [connectionId, devices] of Object.entries(cameras)) {
+		if (!isRecord(devices)) continue
+
+		for (const [deviceId, forms] of Object.entries(devices)) {
+			const focalLength = isRecord(forms) && isRecord(forms.guiding) ? forms.guiding.focalLength : undefined
+			if (typeof focalLength === 'number' && Number.isFinite(focalLength) && focalLength > 0) focalLengths.push({ connectionId, deviceId, focalLength })
+		}
+	}
+
+	const guideCamera = profile.connectionId ? profile.equipment[profile.connectionId]?.GUIDE_CAMERA?.id : undefined
+	return (focalLengths.find((each) => each.connectionId === profile.connectionId && each.deviceId === guideCamera) ?? focalLengths[0])?.focalLength
+}
+
 // Restores a persisted profile of a format version, filling missing fields with defaults. Returns undefined when it
 // has no id.
 function normalizeProfile(value: unknown, now: string, version: number): Profile | undefined {
@@ -509,6 +531,10 @@ function normalizeProfile(value: unknown, now: string, version: number): Profile
 
 	if (typeof value.connectionId === 'string' && value.connectionId) profile.connectionId = value.connectionId
 	if (version < 4) profile.settings.cameras = migrateRoleForms(isRecord(value.settings) ? value.settings.capture : undefined, profile.equipment)
+	if (version === 8 && !profile.settings.guideTelescope) {
+		const focalLength = migrateGuideFocalLength(isRecord(value.settings) ? value.settings.cameras : undefined, profile)
+		if (focalLength) profile.settings.guideTelescope = { focalLength, focalMultiplier: 1, aperture: 0 }
+	}
 
 	return profile
 }
@@ -526,7 +552,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 5:
 		case 6:
 		case 7:
-		case 8: {
+		case 8:
+		case 9: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

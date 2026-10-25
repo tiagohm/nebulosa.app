@@ -24,6 +24,7 @@ import {
 	clearGuidingTarget,
 	ditherGuiding,
 	GUIDING_STATE_LABELS,
+	guideFocalLength,
 	guidingBlocker,
 	guidingCalibrationPulse,
 	guidingDitherRequest,
@@ -48,7 +49,8 @@ import {
 // resume, dither, and clear the calibration. The camera is the panel's target and the guide output the GUIDE_OUTPUT of
 // the setup, which only the Guide Camera has; a missing or unsuitable one says why. The frames take the camera
 // settings of Camera Acquisition without its exposure time, and their stars are detected with the detector of the
-// profile's Star Detection (built-in or ASTAP) and its settings, as Auto Focus does. The form is the camera's, kept in
+// profile's Star Detection (built-in or ASTAP) and its settings, as Auto Focus does; the guide telescope of the Equipment
+// Setup gives the pixel scale and the calibration step. The form is the camera's, kept in
 // the profile; while a session runs, only its exposure changes it, and the other settings are locked showing the form.
 // The session is the server's, shown here whichever tab started it, and keeps running when the panel unmounts; a click
 // on its current frame selects the star nearest it. Pixel values are guide-camera pixels, pulses milliseconds.
@@ -97,7 +99,8 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 	const mountState = watchedDeviceState(control, 'mount', mount.device)
 	const outputAvailability = guideOutput && roleAvailability('GUIDE_OUTPUT', guideOutput, operations, outputState && !outputState.canPulseGuide ? 'The guide output cannot pulse guide.' : undefined)
 	const blocker = running ? undefined : guidingBlocker(availability, outputAvailability, settings, detection.provider === 'astap' && !astapConfigured)
-	const calibrationPulse = settings.focalLength !== undefined && capabilities?.sensor && outputState?.hasGuideRate && mountState ? guidingCalibrationPulse(settings.focalLength, capabilities.sensor.pixelSize, exposure.binX, outputState.guideRate.rightAscension, mountState.declination) : undefined
+	const focalLength = guideFocalLength(profile.settings.guideTelescope)
+	const calibrationPulse = focalLength !== undefined && capabilities?.sensor && outputState?.hasGuideRate && mountState ? guidingCalibrationPulse(focalLength, capabilities.sensor.pixelSize, exposure.binX, outputState.guideRate.rightAscension, mountState.declination) : undefined
 
 	// Updates fields of the camera's guiding form.
 	function update(patch: Partial<GuidingSettings>) {
@@ -112,7 +115,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 
 	function start() {
 		if (!device || !guideOutput?.device) return
-		void startGuidingSession(guidingRuntime, device.connectionId, device.id, guidingRequest(settings, exposure, { connectionId: guideOutput.device.connectionId, deviceId: guideOutput.device.id }, snoop, detection, capabilities))
+		void startGuidingSession(guidingRuntime, device.connectionId, device.id, guidingRequest(settings, exposure, { connectionId: guideOutput.device.connectionId, deviceId: guideOutput.device.id }, snoop, detection, focalLength, capabilities))
 	}
 
 	return (
@@ -123,10 +126,12 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 						<DeviceLink device={device} fallback="—" />
 					</Row>
 					<Row label="Guide Output">{guideOutput ? <DeviceLink device={guideOutput.device} fallback="Not assigned" /> : 'Guide Camera only'}</Row>
+					<Row label="Guide Focal Length">{focalLength !== undefined ? `${Number(focalLength.toFixed(1))} mm` : 'Not set'}</Row>
 					{session?.pixelScale !== undefined && <Row label="Pixel Scale">{`${session.pixelScale.toFixed(2)}"/px`}</Row>}
 				</dl>
 				{!running && outputAvailability && outputAvailability.status !== 'ready' && outputAvailability.status !== 'busy' && <Notice>{outputAvailability.message}</Notice>}
-				{!running && (!guideOutput || outputAvailability?.status === 'notSelected' || outputAvailability?.status === 'unsupported') && (
+				{!running && focalLength === undefined && <Notice>Enter the Guide Telescope in Equipment Setup for the pixel scale of the RMS in arcseconds and the calibration step.</Notice>}
+				{!running && (!guideOutput || focalLength === undefined || outputAvailability?.status === 'notSelected' || outputAvailability?.status === 'unsupported') && (
 					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
 						Equipment Setup
 					</Button>
@@ -141,8 +146,6 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 			<PanelSection title="Exposure and Tracking">
 				<NumberInput label="Exposure" value={settings.exposureTime} min={GUIDING_MINIMUM_EXPOSURE} max={GUIDING_MAXIMUM_EXPOSURE} step={0.5} suffix="s" disabled={pending} onChange={changeExposure} />
 				<SegmentedControl label="Tracking" options={['singleStar', 'multiStar'] as const} value={settings.trackingMode} format={(mode) => TRACKING_LABELS[mode]} disabled={running || pending} onChange={(trackingMode) => update({ trackingMode })} />
-				<NumberInput label="Guide Focal Length" value={settings.focalLength ?? 0} min={0} max={10000} step={10} suffix="mm" disabled={running || pending} onChange={(focalLength) => update({ focalLength: focalLength > 0 ? focalLength : undefined })} />
-				<Notice>The focal length gives the pixel scale of the RMS in arcseconds and the calibration step; 0 leaves it unknown.</Notice>
 			</PanelSection>
 			<PanelSection title="Calibration">
 				<Checkbox label="Calibrate again on every start" checked={settings.recalibrate} disabled={pending} onChange={(recalibrate) => update({ recalibrate })} />
@@ -151,7 +154,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 					<Button
 						variant="secondary"
 						disabled={running || pending || calibrationPulse === undefined}
-						title={calibrationPulse === undefined ? 'Needs the guide focal length, the pixel size of the camera, the guide rate of the output, and the declination of the mount.' : `${calibrationPulse} ms`}
+						title={calibrationPulse === undefined ? 'Needs the focal length of the Guide Telescope, the pixel size of the camera, the guide rate of the output, and the declination of the mount.' : `${calibrationPulse} ms`}
 						onClick={() => calibrationPulse !== undefined && update({ calibrationPulse })}
 					>
 						Calculate

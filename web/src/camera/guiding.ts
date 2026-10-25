@@ -4,6 +4,7 @@ import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit, responseError } from '../http'
 import { type CameraExposureSettings, GUIDING_MAXIMUM_PULSE, GUIDING_MINIMUM_PULSE, type GuidingSettings } from '../profile/schema'
+import type { TelescopeOptics } from '../sky/framing'
 import { cameraKey, fitExposure } from './capture'
 
 // Guiding sessions as this tab knows them. The server owns every session, whichever tab started it, and every exposure,
@@ -78,9 +79,9 @@ function sessionById(state: GuidingRuntime, sessionId: string): GuidingSessionSu
 // Builds the start request of the guiding form of a camera: the guide exposures in milliseconds, the camera settings
 // of the camera fitted to its capabilities as a capture is (never its exposure time), the controller and calibration
 // of the form, the devices snooped into the frame headers, and the star detector of the profile's Star Detection with
-// its settings (its acceptance criteria are not sent: the tracker filters the stars). The focal length is sent only when
-// known.
-export function guidingRequest(settings: Readonly<GuidingSettings>, exposure: Readonly<CameraExposureSettings>, guideOutput: OperationDevice, snoop: CaptureSnoop, detection: Readonly<StarDetectionSettings>, capabilities?: CameraCapabilities): Omit<GuidingStartRequest, 'token'> {
+// its settings (its acceptance criteria are not sent: the tracker filters the stars). The effective focal length of the
+// guide optics, in mm (see guideFocalLength), is sent only when known.
+export function guidingRequest(settings: Readonly<GuidingSettings>, exposure: Readonly<CameraExposureSettings>, guideOutput: OperationDevice, snoop: CaptureSnoop, detection: Readonly<StarDetectionSettings>, focalLength: number | undefined, capabilities?: CameraCapabilities): Omit<GuidingStartRequest, 'token'> {
 	const { exposureTime: _, ...camera } = fitExposure(exposure, capabilities)
 
 	return {
@@ -88,12 +89,19 @@ export function guidingRequest(settings: Readonly<GuidingSettings>, exposure: Re
 		exposure: Math.round(settings.exposureTime * 1000),
 		camera,
 		trackingMode: settings.trackingMode,
-		...(settings.focalLength !== undefined && { optics: { focalLength: settings.focalLength } }),
+		...(focalLength !== undefined && { optics: { focalLength } }),
 		calibration: { raPulse: settings.calibrationPulse, decPulse: settings.calibrationPulse },
 		guider: { aggressivenessRA: settings.aggressivenessRA, aggressivenessDEC: settings.aggressivenessDEC, maxPulseMsRA: settings.maximumPulseRA, maxPulseMsDEC: settings.maximumPulseDEC },
 		snoop,
 		detection: { ...detection },
 	}
+}
+
+// Returns the effective focal length of the guide telescope in mm, its focal length times its reducer or Barlow, or
+// undefined while it is absent or not a positive number, which leaves the pixel scale of guiding unknown.
+export function guideFocalLength(telescope: Readonly<TelescopeOptics> | undefined): number | undefined {
+	const focalLength = telescope ? telescope.focalLength * telescope.focalMultiplier : 0
+	return Number.isFinite(focalLength) && focalLength > 0 ? focalLength : undefined
 }
 
 // Image travel a calibration leg aims at, in guide-camera pixels: the calibration distance of PHD2.

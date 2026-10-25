@@ -56,6 +56,7 @@ import {
 	setSkyMagnitudeLimit,
 	setSkyObserver,
 	setStarDetectionSettings,
+	setGuideTelescopeOptics,
 	setTelescopeOptics,
 	starDetectionSettings,
 	updateOpticalPreset,
@@ -93,7 +94,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 8, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: 9, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -500,6 +501,44 @@ describe('sky settings', () => {
 		expect(state.profiles[1].settings.telescope).toBeUndefined()
 	})
 
+	test('the guide telescope belongs to the active profile, is persisted, and takes the guide focal length of version 8', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		setGuideTelescopeOptics(state, { focalLength: 240, focalMultiplier: 0.8, aperture: 60 })
+		const copy = duplicateProfile(state, state.profiles[0].id)!
+		selectProfile(state, copy.id)
+		setGuideTelescopeOptics(state, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
+		await Bun.sleep(0)
+
+		const reloaded = load({ local: stores.local, session: new MemoryStorage() })
+		expect(reloaded.profiles.map((profile) => profile.settings.guideTelescope)).toEqual([
+			{ focalLength: 240, focalMultiplier: 0.8, aperture: 60 },
+			{ focalLength: 400, focalMultiplier: 1, aperture: 80 },
+		])
+
+		// Version 8 kept the focal length in the guiding form of each camera: the Guide Camera of the active setup wins,
+		// else the first form with one.
+		const guiding = (focalLength: unknown) => ({ guiding: { ...DEFAULT_GUIDING_SETTINGS, focalLength } })
+		const cameras = { c: { 'cam-main': guiding(1000), 'cam-guide': guiding(200) }, d: { other: guiding(-1) } }
+		const older = newStores()
+		older.local.setItem(
+			PROFILES_KEY,
+			JSON.stringify({
+				version: 8,
+				profiles: [
+					{ id: 'a', name: 'A', connectionId: 'c', equipment: { c: { GUIDE_CAMERA: { id: 'cam-guide', name: 'Guide' } } }, settings: { cameras } },
+					{ id: 'b', name: 'B', settings: { cameras } },
+					{ id: 'c', name: 'C', settings: { cameras: { d: { other: guiding(-1) } } } },
+					{ id: 'd', name: 'D', settings: { cameras, guideTelescope: { focalLength: 50, focalMultiplier: 1, aperture: 0 } } },
+				],
+			}),
+		)
+		const migrated = load(older).profiles
+		expect(migrated.map((profile) => profile.settings.guideTelescope?.focalLength)).toEqual([200, 1000, undefined, 50])
+		expect(migrated[0].settings.guideTelescope).toEqual({ focalLength: 200, focalMultiplier: 1, aperture: 0 })
+		expect(guidingSettings(migrated[0].settings, GUIDE)).toEqual(DEFAULT_GUIDING_SETTINGS)
+	})
+
 	test('Equipment Setup framing choices and telescope belong to the active profile', () => {
 		const state = load(newStores())
 		setFramingSource(state, 'equipment')
@@ -699,16 +738,16 @@ describe('camera forms', () => {
 		expect(guidingSettings(activeProfile(state).settings, GUIDE)).toEqual(DEFAULT_GUIDING_SETTINGS)
 
 		const settle = { pixels: 0.8, time: 5, timeout: 30 }
-		setGuidingSettings(state, GUIDE, { exposureTime: 1.5, trackingMode: 'multiStar', focalLength: 240, recalibrate: false, aggressivenessRA: 0.5, settle, ditherPixels: 3, ditherRaOnly: true })
+		setGuidingSettings(state, GUIDE, { exposureTime: 1.5, trackingMode: 'multiStar', recalibrate: false, aggressivenessRA: 0.5, settle, ditherPixels: 3, ditherRaOnly: true })
 		expect(guidingSettings(activeProfile(state).settings, MAIN)).toEqual(DEFAULT_GUIDING_SETTINGS)
 		await Bun.sleep(0)
 
 		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
-		expect(guidingSettings(reloaded, GUIDE)).toEqual({ ...DEFAULT_GUIDING_SETTINGS, exposureTime: 1.5, trackingMode: 'multiStar', focalLength: 240, recalibrate: false, aggressivenessRA: 0.5, settle, ditherPixels: 3, ditherRaOnly: true })
+		expect(guidingSettings(reloaded, GUIDE)).toEqual({ ...DEFAULT_GUIDING_SETTINGS, exposureTime: 1.5, trackingMode: 'multiStar', recalibrate: false, aggressivenessRA: 0.5, settle, ditherPixels: 3, ditherRaOnly: true })
 
 		const invalid = newStores()
 		const bad = { exposureTime: 0, trackingMode: 'x', focalLength: -1, recalibrate: 'no', calibrationPulse: 0, aggressivenessRA: 2, aggressivenessDEC: -1, maximumPulseRA: 1e9, maximumPulseDEC: Number.NaN, settle: { pixels: 0, time: -1, timeout: 0 }, ditherPixels: 0, ditherRaOnly: 'yes' }
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 8, profiles: [{ id: 'a', name: 'A', settings: { cameras: { c: { 'cam-guide': { guiding: bad } } } } }] }))
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 9, profiles: [{ id: 'a', name: 'A', settings: { cameras: { c: { 'cam-guide': { guiding: bad } } } } }] }))
 		expect(load(invalid).profiles[0].settings.cameras).toEqual({ c: { 'cam-guide': { guiding: DEFAULT_GUIDING_SETTINGS } } })
 
 		const older = newStores()
@@ -717,7 +756,7 @@ describe('camera forms', () => {
 		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
 
 		const newer = newStores()
-		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 9, profiles: [{ id: 'a', name: 'A' }] }))
+		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 10, profiles: [{ id: 'a', name: 'A' }] }))
 		expect(load(newer).profiles.map((profile) => profile.id)).not.toContain('a')
 	})
 

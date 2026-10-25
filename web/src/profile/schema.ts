@@ -13,8 +13,9 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // physical camera (cameras) instead of by camera role, and drops the post-capture analysis and plate
 // solving of the frames of a capture. The preferences of the Capture workspace (capture), removed since, are ignored
 // when read. Version 5 adds the TPPA form of each camera (tppa), version 6 its DARV form (darv), and version 7 its Flat
-// Wizard form (flatWizard). Version 8 adds the guiding form of each camera (guiding).
-export const PROFILES_VERSION = 8
+// Wizard form (flatWizard). Version 8 adds the guiding form of each camera (guiding), and version 9 moves the guide
+// focal length of those forms to the guide telescope of the profile (guideTelescope).
+export const PROFILES_VERSION = 9
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -38,6 +39,9 @@ export interface ProfileSettings {
 	// Telescope or lens of the profile's Equipment Setup, which no device reports; absent until entered.
 	// It is planning data only and never sent to any device.
 	telescope?: TelescopeOptics
+	// Guide telescope or lens of the profile's Equipment Setup, whose effective focal length gives guiding its pixel scale
+	// and calibration step; absent until entered. With an off-axis guider it holds the optics of the main telescope.
+	guideTelescope?: TelescopeOptics
 }
 
 // Location the Sky workspace observes from. Degrees and meters, entered manually; never assumed.
@@ -282,15 +286,14 @@ export interface GuidingSettleSettings {
 
 // Guiding form of one physical guide camera: the guide exposures, the controller, and the settle and dither of the
 // commands of the next session. The frames take the camera settings of the camera (without its exposure time), which
-// this form never holds; the guide output is the GUIDE_OUTPUT of the setup. Controller settings are fixed when a
+// this form never holds; the guide output is the GUIDE_OUTPUT of the setup, and the optics the guideTelescope of the
+// profile. Controller settings are fixed when a
 // session starts; only the exposure changes on a running one.
 export interface GuidingSettings {
 	// Guide exposure, in seconds, in [GUIDING_MINIMUM_EXPOSURE, GUIDING_MAXIMUM_EXPOSURE].
 	exposureTime: number
 	// Whether the tracker measures one star or many.
 	trackingMode: GuidingStartRequest['trackingMode']
-	// Focal length of the guide optics, in mm, for the pixel scale of arcsecond RMS; absent leaves it unknown.
-	focalLength?: number
 	// Whether Start Guiding calibrates again instead of reusing the calibration solved earlier in the session.
 	recalibrate: boolean
 	// Duration of each calibration pulse, in milliseconds, in [GUIDING_MINIMUM_PULSE, GUIDING_MAXIMUM_PULSE].

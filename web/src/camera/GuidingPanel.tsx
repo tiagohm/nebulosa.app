@@ -195,7 +195,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				<NumberInput label="Dither" value={settings.ditherPixels} min={0.1} max={100} step={0.5} suffix="px" disabled={pending} onChange={(ditherPixels) => update({ ditherPixels })} />
 				<Select label="Dither Pattern" options={DITHER_MODES} value={settings.ditherMode} format={(mode) => DITHER_MODE_LABELS[mode]} disabled={running || pending} onChange={(ditherMode) => update({ ditherMode })} />
 				<Checkbox label="Dither in RA only" checked={settings.ditherRaOnly} disabled={pending} onChange={(ditherRaOnly) => update({ ditherRaOnly })} />
-				<Checkbox label="Fast recenter after a dither" checked={settings.fastRecenter} disabled={running || pending} onChange={(fastRecenter) => update({ fastRecenter })} />
+				<Checkbox label="Fast recenter after calibration or dither" checked={settings.fastRecenter} disabled={running || pending} onChange={(fastRecenter) => update({ fastRecenter })} />
 			</PanelSection>
 			<PanelSection title="Controls">
 				{session && running ? (

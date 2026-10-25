@@ -319,8 +319,8 @@ export interface GuidingSettings {
 	ditherRaOnly: boolean
 	// Pattern of the successive dithers.
 	ditherMode: GuidingDitherMode
-	// Whether the frames after a dither move the star straight to the new lock, as PHD2's fast recenter, instead of
-	// leaving it to the corrections.
+	// PHD2's fast recenter: whether the RA return of a calibration starts with long pulses instead of calibration steps,
+	// and the frames after a dither move the star straight to the new lock instead of leaving it to the corrections.
 	fastRecenter: boolean
 	// Whether flipping the calibration for a meridian flip also reverses the DEC output, for mounts that do not reverse
 	// it themselves.

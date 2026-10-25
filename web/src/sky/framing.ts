@@ -7,8 +7,9 @@ import type { CameraRole } from '../equipment/roles'
 // of the sensor on the sky. The sensor is flat, so its outline is the gnomonic (tangent-plane)
 // projection of a rectangle around the center; its edges are great-circle arcs and the outline stays
 // correct for wide fields. Presets are planning data kept in the profile: they never change the
-// equipment setup or any device. The Equipment Setup source combines the profile's telescope optics with
-// the sensor a camera of the setup reports, or with a sensor entered manually to simulate another camera.
+// equipment setup or any device. The Equipment Setup source combines the sensor a camera of the setup reports, or a
+// sensor entered manually to simulate another camera, with the profile's optics that camera looks through: the guide
+// telescope for the Guide Camera, the telescope otherwise.
 //
 // Orientation: the rotation is the position angle of the sensor's top edge (+Y), measured from celestial
 // north towards east, as plate solvers report it for an image that is not mirrored. Mirrored images are
@@ -108,6 +109,20 @@ export type SensorSource = CameraRole | 'manual'
 // Telescope optics of a profile that has not entered any.
 export const DEFAULT_TELESCOPE: TelescopeOptics = { focalLength: 0, focalMultiplier: 1, aperture: 0 }
 
+// Telescope and guide telescope optics of a profile's Equipment Setup; each absent until entered.
+export interface EquipmentTelescopes {
+	// Optics of the Main Camera and of a manual sensor.
+	readonly telescope?: TelescopeOptics
+	// Optics of the Guide Camera; with an off-axis guider they repeat the telescope's.
+	readonly guideTelescope?: TelescopeOptics
+}
+
+// Returns whether a sensor source looks through the guide telescope: only the Guide Camera does; the Main Camera and
+// a manual sensor look through the telescope.
+export function usesGuideTelescope(sensorSource: SensorSource): boolean {
+	return sensorSource === 'GUIDE_CAMERA'
+}
+
 // Optical configuration of the Equipment Setup source, with what the sensor source lacks.
 export interface EquipmentOptics {
 	// Configuration to resolve; a sensor that is unknown has zero dimensions, so resolveFraming lists it.
@@ -116,12 +131,13 @@ export interface EquipmentOptics {
 	readonly missingCamera?: CameraRole
 }
 
-// Builds the Equipment Setup configuration: the telescope optics (defaults when absent), the sensor of
+// Builds the Equipment Setup configuration: the optics sensorSource looks through (usesGuideTelescope; defaults when
+// absent), the sensor of
 // sensorSource, either the live sensor its camera reports (pixels, micrometers) or the manual sensor,
 // and the rotation in degrees. A camera without a reported sensor yields an empty sensor and names the
 // role in missingCamera; the manual sensor is never used in its place.
-export function equipmentOptics(telescope: TelescopeOptics | undefined, sensorSource: SensorSource, liveSensors: Readonly<Partial<Record<CameraRole, CameraSensor>>>, manualSensor: SensorGeometry | undefined, rotation: number): EquipmentOptics {
-	const { focalLength, focalMultiplier, aperture } = telescope ?? DEFAULT_TELESCOPE
+export function equipmentOptics({ telescope, guideTelescope }: EquipmentTelescopes, sensorSource: SensorSource, liveSensors: Readonly<Partial<Record<CameraRole, CameraSensor>>>, manualSensor: SensorGeometry | undefined, rotation: number): EquipmentOptics {
+	const { focalLength, focalMultiplier, aperture } = (usesGuideTelescope(sensorSource) ? guideTelescope : telescope) ?? DEFAULT_TELESCOPE
 	const base = { focalLength, focalMultiplier, aperture, rotation }
 
 	if (sensorSource === 'manual') return { optics: { ...base, sensor: manualSensor ?? DEFAULT_OPTICS.sensor } }

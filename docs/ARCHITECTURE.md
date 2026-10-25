@@ -275,7 +275,7 @@ Conflicts are resolved by the arbiter on the server, never only in the browser, 
 
 ## Sky Framing Integration Contract
 
-- Framing is a view inside Sky. It reuses the selection, the framing center, and the `OpticalPreset` and `resolveFraming` results of `web/src/sky/framing.ts`: angular size, image scale, and position angle measured from north through east.
+- Framing is a view inside Sky. It reuses the selection, the framing center, and the `OpticalPreset` and `resolveFraming` results of `web/src/sky/framing.ts`: angular size, image scale, and position angle measured from north through east. Its Equipment Setup source combines the sensor of a camera role or a manual one with the optics that camera looks through (`usesGuideTelescope`): the profile's guide telescope (`guideTelescope`) for the Guide Camera, its telescope otherwise; the panel edits those optics under their name.
 - Survey images come from `hips2fits` (`core/src/adapters/sky/hips2fits.ts`) through an `api` proxy route that caches cutouts and survey lists and returns the survey's attribution. Network failure leaves the planetarium framing usable.
 - The cutout is requested in TAN projection centered on the framing center, with the preset's FOV and rotation, so its pixels match the gnomonic outline drawn by `framePolygon`. The first Framing task is a test that pins the sign convention of the position angle against a cutout's WCS.
 - Pixels are not assumed to be linear in RA/Dec. Any overlay on the survey uses the cutout's WCS.

@@ -17,7 +17,7 @@ import { useWatchedDevices } from './useEquipment'
 // Modal that assigns the devices of the active profile's connection to the equipment roles and connects
 // or disconnects them one by one or all at once. Selecting a device never connects it, and closing the modal never
 // disconnects anything. It also holds the profile's telescope and guide telescope optics, which no device reports: the
-// Sky's Equipment Setup field of view uses the first, and Guiding the second.
+// Sky's Equipment Setup field of view of a camera uses the optics it looks through, and Guiding the second.
 
 // Select value of the None option.
 const NONE = ''
@@ -128,10 +128,10 @@ export function EquipmentModal() {
 								</section>
 							))}
 							<TelescopeSection title="Telescope" telescope={profile.settings.telescope} onChange={(optics) => setTelescopeOptics(profileState, optics)}>
-								Used by the Sky&apos;s Equipment Setup field of view. Kept in the profile; never sent to a device.
+								Used by the Sky&apos;s Equipment Setup field of view of the Main Camera and of a manual sensor. Kept in the profile; never sent to a device.
 							</TelescopeSection>
 							<TelescopeSection title="Guide Telescope" telescope={profile.settings.guideTelescope} onChange={(optics) => setGuideTelescopeOptics(profileState, optics)}>
-								Gives Guiding the pixel scale of the RMS in arcseconds and the calibration step; with an off-axis guider, enter the main telescope. Kept in the profile; never sent to a device.
+								Gives Guiding the pixel scale of the RMS in arcseconds and the calibration step, and the Sky the field of view of the Guide Camera; with an off-axis guider, enter the main telescope. Kept in the profile; never sent to a device.
 							</TelescopeSection>
 						</div>
 					</>

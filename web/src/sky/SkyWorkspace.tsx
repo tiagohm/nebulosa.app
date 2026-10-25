@@ -68,12 +68,12 @@ export function SkyWorkspace() {
 
 	// Draws the field of view of the selected preset, or of the Equipment Setup, around the selection,
 	// following its position.
-	const telescope = activeProfile(profiles).settings.telescope
+	const { telescope, guideTelescope } = activeProfile(profiles).settings
 	const sensors = liveSensors(useSnapshot(sensorRuntime), control)
 	// The sensors of the camera states the snapshot keeps while they do not change, so the frame follows them only.
 	const { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor } = sensors
 	const equipment = framing?.source === 'equipment'
-	const equipmentFrame = equipment ? { name: 'Equipment Setup', optics: equipmentOptics(telescope, framing?.sensorSource ?? 'MAIN_CAMERA', { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor }, framing?.manualSensor, framing?.equipmentRotation ?? 0).optics } : undefined
+	const equipmentFrame = equipment ? { name: 'Equipment Setup', optics: equipmentOptics({ telescope, guideTelescope }, framing?.sensorSource ?? 'MAIN_CAMERA', { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor }, framing?.manualSensor, framing?.equipmentRotation ?? 0).optics } : undefined
 	const frameSource = equipment ? equipmentFrame : framing?.presets.find((e) => e.id === framing.activePresetId)
 
 	useEffect(() => {
@@ -116,7 +116,7 @@ export function SkyWorkspace() {
 		inspector: () => ({ title: 'Object Inspector', content: <ObjectInspector observer={observer} onSetObserver={() => openPanel('observer')} timeZone={observer?.timeZone} onShowFraming={() => openPanel('framing')} /> }),
 		observer: () => ({ title: 'Observer', content: <ObserverPanel key={key} observer={observer} onDone={() => (skyState.panel = 'inspector')} /> }),
 		display: () => ({ title: 'Display', content: <DisplayPanel sky={settings} local={coordinateSystem === 'horizontal'} /> }),
-		framing: () => ({ title: 'Framing', content: <FramingPanel framing={framing} telescope={telescope} hasTarget={!!selectionCenter} /> }),
+		framing: () => ({ title: 'Framing', content: <FramingPanel framing={framing} telescope={telescope} guideTelescope={guideTelescope} hasTarget={!!selectionCenter} /> }),
 	}
 
 	return (

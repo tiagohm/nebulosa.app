@@ -3,7 +3,7 @@ import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import { roleDefinition } from '../equipment/roles'
-import { createOpticalPreset, deleteOpticalPreset, duplicateOpticalPreset, profileState, selectOpticalPreset, setEquipmentRotation, setFramingSource, setFramingVisible, setManualSensor, setSensorSource, setTelescopeOptics, updateOpticalPreset } from '../profile/profile'
+import { createOpticalPreset, deleteOpticalPreset, duplicateOpticalPreset, profileState, selectOpticalPreset, setEquipmentRotation, setFramingSource, setFramingVisible, setManualSensor, setGuideTelescopeOptics, setSensorSource, setTelescopeOptics, updateOpticalPreset } from '../profile/profile'
 import type { SkyFramingSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
@@ -12,7 +12,7 @@ import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { formatAngularSize } from './format'
-import { DEFAULT_TELESCOPE, equipmentOptics, isFraming, type OpticalConfiguration, type OpticalPreset, resolveFraming, type SensorGeometry, type SensorSource, type TelescopeOptics } from './framing'
+import { DEFAULT_TELESCOPE, equipmentOptics, isFraming, type OpticalConfiguration, type OpticalPreset, resolveFraming, type SensorGeometry, type SensorSource, type TelescopeOptics, usesGuideTelescope } from './framing'
 import { liveSensors, sensorRuntime } from './sensors'
 
 // Framing settings of the Sky workspace: where the field of view comes from (a custom optical preset of
@@ -20,13 +20,17 @@ import { liveSensors, sensorRuntime } from './sensors'
 // (read-only), its rotation, and whether it is drawn around the selected object. Presets, the telescope
 // optics, and a manual sensor are planning data kept in the profile; they never change a device, and no
 // equipment has to be connected. The Equipment Setup takes its sensor from the camera of a camera role
-// as the server reports it, or from a sensor entered manually to simulate another camera.
+// as the server reports it, or from a sensor entered manually to simulate another camera, and its optics from the
+// telescope that camera looks through: the guide telescope for the Guide Camera, the telescope otherwise.
 
 export interface FramingPanelProps {
 	// Framing preferences of the active profile; absent before the first change.
 	readonly framing?: Readonly<SkyFramingSettings>
 	// Telescope optics of the active profile's Equipment Setup; absent until entered.
 	readonly telescope?: Readonly<TelescopeOptics>
+	// Guide telescope optics of the active profile's Equipment Setup, which the Guide Camera looks through; absent until
+	// entered.
+	readonly guideTelescope?: Readonly<TelescopeOptics>
 	// Whether the selected object has a position the field of view can be drawn at.
 	readonly hasTarget: boolean
 }
@@ -79,7 +83,7 @@ function sensorSourceName(source: SensorSource) {
 }
 
 // Framing settings form.
-export function FramingPanel({ framing, telescope, hasTarget }: FramingPanelProps) {
+export function FramingPanel({ framing, telescope, guideTelescope, hasTarget }: FramingPanelProps) {
 	const source = framing?.source ?? 'custom'
 
 	return (
@@ -87,7 +91,7 @@ export function FramingPanel({ framing, telescope, hasTarget }: FramingPanelProp
 			<PanelSection title="Source">
 				<Select options={SOURCES} value={source} onChange={(next) => setFramingSource(profileState, next)} format={(value) => (value === 'custom' ? 'Custom preset' : 'Equipment Setup')} />
 			</PanelSection>
-			{source === 'custom' ? <CustomSource framing={framing} hasTarget={hasTarget} /> : <EquipmentSource framing={framing} telescope={telescope} hasTarget={hasTarget} />}
+			{source === 'custom' ? <CustomSource framing={framing} hasTarget={hasTarget} /> : <EquipmentSource framing={framing} telescope={telescope} guideTelescope={guideTelescope} hasTarget={hasTarget} />}
 		</>
 	)
 }
@@ -156,7 +160,7 @@ function PresetOptics({ preset, visible, hasTarget }: { readonly preset: Readonl
 
 	return (
 		<>
-			<OpticsInputs optics={optics} onChange={change} />
+			<OpticsInputs title="Optics" optics={optics} onChange={change} />
 			<PanelSection title="Camera">
 				<SensorInputs sensor={optics.sensor} onChange={(sensor) => change({ sensor })} />
 			</PanelSection>
@@ -166,18 +170,21 @@ function PresetOptics({ preset, visible, hasTarget }: { readonly preset: Readonl
 	)
 }
 
-// Equipment Setup source: the profile's telescope optics, the sensor of a camera role or a manual one,
-// the computed field, and its display.
-function EquipmentSource({ framing, telescope, hasTarget }: { readonly framing?: Readonly<SkyFramingSettings>; readonly telescope?: Readonly<TelescopeOptics>; readonly hasTarget: boolean }) {
+// Equipment Setup source: the optics the chosen sensor looks through (the guide telescope for the Guide Camera, the
+// telescope otherwise), edited in place, the sensor of a camera role or a manual one, the computed field, and its
+// display.
+function EquipmentSource({ framing, telescope, guideTelescope, hasTarget }: Pick<FramingPanelProps, 'framing' | 'telescope' | 'guideTelescope' | 'hasTarget'>) {
 	const sensorSource = framing?.sensorSource ?? 'MAIN_CAMERA'
 	const live = liveSensors(useSnapshot(sensorRuntime), useSnapshot(controlRuntime))
-	const { optics, missingCamera } = equipmentOptics(telescope, sensorSource, live, framing?.manualSensor, framing?.equipmentRotation ?? 0)
-	const current = telescope ?? DEFAULT_TELESCOPE
+	const { optics, missingCamera } = equipmentOptics({ telescope, guideTelescope }, sensorSource, live, framing?.manualSensor, framing?.equipmentRotation ?? 0)
+	const guide = usesGuideTelescope(sensorSource)
+	const current = (guide ? guideTelescope : telescope) ?? DEFAULT_TELESCOPE
+	const setOptics = guide ? setGuideTelescopeOptics : setTelescopeOptics
 	const reported = sensorSource === 'manual' ? undefined : live[sensorSource]
 
 	return (
 		<>
-			<OpticsInputs optics={optics} onChange={(next) => setTelescopeOptics(profileState, { ...current, ...next })} />
+			<OpticsInputs title={guide ? 'Guide Telescope' : 'Telescope'} optics={optics} onChange={(next) => setOptics(profileState, { ...current, ...next })} />
 			<PanelSection title="Camera">
 				<Select options={SENSOR_SOURCES} value={sensorSource} onChange={(next) => setSensorSource(profileState, next)} format={sensorSourceName} />
 				{sensorSource === 'manual' ? (
@@ -210,10 +217,10 @@ function EquipmentSource({ framing, telescope, hasTarget }: { readonly framing?:
 	)
 }
 
-// Focal length, reducer or Barlow, and aperture inputs.
-function OpticsInputs({ optics, onChange }: { readonly optics: Readonly<Pick<OpticalConfiguration, 'focalLength' | 'focalMultiplier' | 'aperture'>>; readonly onChange: (next: Partial<TelescopeOptics>) => void }) {
+// Focal length, reducer or Barlow, and aperture inputs, under the title of the optics they edit.
+function OpticsInputs({ title, optics, onChange }: { readonly title: string; readonly optics: Readonly<Pick<OpticalConfiguration, 'focalLength' | 'focalMultiplier' | 'aperture'>>; readonly onChange: (next: Partial<TelescopeOptics>) => void }) {
 	return (
-		<PanelSection title="Optics">
+		<PanelSection title={title}>
 			<NumberInput label="Focal length" suffix="mm" value={optics.focalLength} min={0} step={1} onChange={(focalLength) => onChange({ focalLength })} />
 			<NumberInput label="Reducer / Barlow" suffix="×" value={optics.focalMultiplier} min={0.1} max={10} step={0.01} onChange={(focalMultiplier) => onChange({ focalMultiplier })} />
 			<NumberInput label="Aperture" suffix="mm" value={optics.aperture} min={0} step={1} onChange={(aperture) => onChange({ aperture })} />

@@ -138,7 +138,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				)}
 				<Notice>The guide frames are LIGHTs taken with the camera settings of Camera Acquisition, shown as the latest frame of the camera and never saved.</Notice>
 				<Notice>
-					Stars are detected with the Star Detection settings ({PROVIDER_LABELS[detection.provider]} detector), chosen when looping starts; the guider accepts those of 5 sigma or more.
+					Stars are detected with the Star Detection settings (<span className="text-accent">{PROVIDER_LABELS[detection.provider]}</span> detector), chosen when looping starts; the guider accepts those of 5 sigma or more.
 					{detection.provider === 'astap' && ' ASTAP runs as a separate program on every frame, about half a second on a full frame.'}
 				</Notice>
 			</PanelSection>

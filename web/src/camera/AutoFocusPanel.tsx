@@ -111,7 +111,9 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 			<PanelSection title="Focus Routine">
 				{wheel.device && <p className="m-0 text-xs leading-4 text-ink-300">Filter: {filter ?? 'unknown'} — the Auto Focus measures through the current filter and never changes it.</p>}
 				<p className="m-0 text-xs leading-4 text-ink-300">Frames are LIGHT, taken with the exposure and camera settings of Camera Acquisition ({exposure.exposureTime} s).</p>
-				<p className="m-0 text-xs leading-4 text-ink-300">Each frame is measured by the median HFD of its accepted stars (Multi-Star) with the Star Detection settings ({PROVIDER_LABELS[detection.detector.provider]} detector) and shown as the latest frame of the camera; frames are kept in memory only.</p>
+				<p className="m-0 text-xs leading-4 text-ink-300">
+					Each frame is measured by the median HFD of its accepted stars (Multi-Star) with the Star Detection settings (<span className="text-accent">{PROVIDER_LABELS[detection.detector.provider]}</span> detector) and shown as the latest frame of the camera; frames are kept in memory only.
+				</p>
 				<Select label="Curve Fitting" options={FITTING_MODES} value={settings.fittingMode} format={(mode) => FITTING_MODE_LABELS[mode]} disabled={locked} onChange={(fittingMode) => update({ fittingMode })} />
 				<NumberInput label="Step Size" value={stepSize} min={1} max={focuserState ? Math.max(1, focuserState.position.max - focuserState.position.min) : undefined} suffix="steps" disabled={locked} onChange={(value) => update({ stepSize: value })} />
 				<NumberInput label="Positions per Side" value={settings.initialOffsetSteps} min={1} max={50} disabled={locked} onChange={(initialOffsetSteps) => update({ initialOffsetSteps })} />

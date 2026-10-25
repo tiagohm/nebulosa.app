@@ -334,6 +334,7 @@ function normalizeGuiding(value: unknown): GuidingSettings | undefined {
 		ditherPixels: boundedNumber(value.ditherPixels, Number.MIN_VALUE, Number.MAX_VALUE, defaults.ditherPixels),
 		ditherRaOnly: value.ditherRaOnly === true,
 		ditherMode: typeof value.ditherMode === 'string' && DITHER_MODES.has(value.ditherMode) ? (value.ditherMode as GuidingDitherMode) : defaults.ditherMode,
+		fastRecenter: value.fastRecenter !== false,
 		reverseDecOutputAfterMeridianFlip: value.reverseDecOutputAfterMeridianFlip === true,
 	}
 }

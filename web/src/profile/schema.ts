@@ -319,6 +319,9 @@ export interface GuidingSettings {
 	ditherRaOnly: boolean
 	// Pattern of the successive dithers.
 	ditherMode: GuidingDitherMode
+	// Whether the frames after a dither move the star straight to the new lock, as PHD2's fast recenter, instead of
+	// leaving it to the corrections.
+	fastRecenter: boolean
 	// Whether flipping the calibration for a meridian flip also reverses the DEC output, for mounts that do not reverse
 	// it themselves.
 	reverseDecOutputAfterMeridianFlip: boolean
@@ -347,8 +350,8 @@ export const GUIDING_MAXIMUM_PULSE = 10000
 
 // Guiding form of a camera that has none yet: 2 s exposures on one star, the toolkit's controller defaults (gains 0.7
 // and 0.65, ceilings 2000 and 2500 ms, 650 ms calibration pulses), recalibrating on every start, settling within 1.5 px
-// for 10 s in at most 60 s, and dithering by 5 px on both axes at random; the toolkit's 64 px search square, a lock
-// that follows the star, and a meridian flip that keeps the DEC output.
+// for 10 s in at most 60 s, and dithering by 5 px on both axes at random with a fast recenter; the toolkit's 64 px
+// search square, a lock that follows the star, and a meridian flip that keeps the DEC output.
 export const DEFAULT_GUIDING_SETTINGS: GuidingSettings = {
 	exposureTime: 2,
 	trackingMode: 'singleStar',
@@ -364,6 +367,7 @@ export const DEFAULT_GUIDING_SETTINGS: GuidingSettings = {
 	ditherPixels: 5,
 	ditherRaOnly: false,
 	ditherMode: 'random',
+	fastRecenter: true,
 	reverseDecOutputAfterMeridianFlip: false,
 }
 

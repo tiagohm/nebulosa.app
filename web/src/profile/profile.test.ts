@@ -738,7 +738,7 @@ describe('camera forms', () => {
 		expect(guidingSettings(activeProfile(state).settings, GUIDE)).toEqual(DEFAULT_GUIDING_SETTINGS)
 
 		const settle = { pixels: 0.8, time: 5, timeout: 30 }
-		setGuidingSettings(state, GUIDE, { exposureTime: 1.5, trackingMode: 'multiStar', searchRegion: 40, stickyLockPosition: true, recalibrate: false, aggressivenessRA: 0.5, settle, ditherPixels: 3, ditherRaOnly: true, ditherMode: 'spiral', reverseDecOutputAfterMeridianFlip: true })
+		setGuidingSettings(state, GUIDE, { exposureTime: 1.5, trackingMode: 'multiStar', searchRegion: 40, stickyLockPosition: true, recalibrate: false, aggressivenessRA: 0.5, settle, ditherPixels: 3, ditherRaOnly: true, ditherMode: 'spiral', fastRecenter: false, reverseDecOutputAfterMeridianFlip: true })
 		expect(guidingSettings(activeProfile(state).settings, MAIN)).toEqual(DEFAULT_GUIDING_SETTINGS)
 		await Bun.sleep(0)
 
@@ -755,6 +755,7 @@ describe('camera forms', () => {
 			ditherPixels: 3,
 			ditherRaOnly: true,
 			ditherMode: 'spiral',
+			fastRecenter: false,
 			reverseDecOutputAfterMeridianFlip: true,
 		})
 
@@ -775,6 +776,7 @@ describe('camera forms', () => {
 			searchRegion: 200,
 			stickyLockPosition: 'yes',
 			ditherMode: 'square',
+			fastRecenter: 0,
 			reverseDecOutputAfterMeridianFlip: 1,
 		}
 		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 9, profiles: [{ id: 'a', name: 'A', settings: { cameras: { c: { 'cam-guide': { guiding: bad } } } } }] }))

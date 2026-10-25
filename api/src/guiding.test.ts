@@ -136,7 +136,7 @@ describe('start', () => {
 
 	test('passes the client settings, follows the exposure countdown, and profiles the measured guide star', async () => {
 		const context = await setup()
-		const { sessionId } = await start(context, { exposure: 1000, client: { searchRegion: 40, ditherMode: 'spiral', stickyLockPosition: true, reverseDecOutputAfterMeridianFlip: true } })
+		const { sessionId } = await start(context, { exposure: 1000, client: { searchRegion: 40, ditherMode: 'spiral', stickyLockPosition: true, fastRecenter: false, reverseDecOutputAfterMeridianFlip: true } })
 		await waitUntil(() => context.events.some((event) => event.type === 'guiding:frame'))
 		const frame = context.events.find((event): event is Extract<GuidingServerEvent, { type: 'guiding:frame' }> => event.type === 'guiding:frame')!
 		expect(frame.overlay.searchRegion).toBe(40)

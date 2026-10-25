@@ -97,7 +97,7 @@ export function guidingRequest(settings: Readonly<GuidingSettings>, exposure: Re
 		...(focalLength !== undefined && { optics: { focalLength } }),
 		calibration: { raPulse: settings.calibrationPulse, decPulse: settings.calibrationPulse },
 		guider: { aggressivenessRA: settings.aggressivenessRA, aggressivenessDEC: settings.aggressivenessDEC, maxPulseMsRA: settings.maximumPulseRA, maxPulseMsDEC: settings.maximumPulseDEC },
-		client: { ditherMode: settings.ditherMode, searchRegion: settings.searchRegion, stickyLockPosition: settings.stickyLockPosition, reverseDecOutputAfterMeridianFlip: settings.reverseDecOutputAfterMeridianFlip },
+		client: { ditherMode: settings.ditherMode, searchRegion: settings.searchRegion, stickyLockPosition: settings.stickyLockPosition, fastRecenter: settings.fastRecenter, reverseDecOutputAfterMeridianFlip: settings.reverseDecOutputAfterMeridianFlip },
 		snoop,
 		detection: { ...detection },
 	}

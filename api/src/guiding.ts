@@ -57,7 +57,7 @@ export type GuidingCameraSettings = Pick<CaptureSettings, 'gain' | 'offset' | 'b
 // Settings of the guider client, fixed when the session starts: the dither pattern, the side of the star search square
 // in pixels (clamped by the toolkit to [16, 128], 64 when absent), whether the lock position stays exactly where it is
 // across guider re-initialization, and whether a meridian flip of the calibration also reverses the DEC output.
-export type GuidingClientSettings = Pick<GuiderClientOptions, 'ditherMode' | 'searchRegion' | 'stickyLockPosition' | 'reverseDecOutputAfterMeridianFlip'>
+export type GuidingClientSettings = Pick<GuiderClientOptions, 'ditherMode' | 'searchRegion' | 'stickyLockPosition' | 'fastRecenter' | 'reverseDecOutputAfterMeridianFlip'>
 
 // Body of POST /api/connections/:id/cameras/:deviceId/guiding.
 export interface GuidingStartRequest extends CommandRequest {

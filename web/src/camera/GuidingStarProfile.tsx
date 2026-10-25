@@ -53,7 +53,7 @@ export function StarProfileSection({ star, pixelScale, frameId }: StarProfileSec
 			</p>
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 				<Row label="Frame">{`#${star.frameId}`}</Row>
-				<Row label="Position">{`${star.x.toFixed(2)}, ${star.y.toFixed(2)} px`}</Row>
+				<Row label="Position (px)">{`${star.x.toFixed(1)}, ${star.y.toFixed(1)}`}</Row>
 				<Row label="Valid">
 					<span className={star.valid ? 'text-success' : 'text-danger'}>{star.valid ? 'Yes' : 'No'}</span>
 				</Row>

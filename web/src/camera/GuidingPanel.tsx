@@ -174,8 +174,8 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 						Calculate
 					</Button>
 				</div>
-				<Checkbox label="Reverse DEC output after a meridian flip" checked={settings.reverseDecOutputAfterMeridianFlip} disabled={running || pending} onChange={(reverseDecOutputAfterMeridianFlip) => update({ reverseDecOutputAfterMeridianFlip })} />
 				<Notice>Calculate sizes the step to move the star about 25 px in 12 RA steps at the declination the mount points at; calibrate away from the pole.</Notice>
+				<Checkbox label="Reverse DEC output after a meridian flip" checked={settings.reverseDecOutputAfterMeridianFlip} disabled={running || pending} onChange={(reverseDecOutputAfterMeridianFlip) => update({ reverseDecOutputAfterMeridianFlip })} />
 				<Notice>Reversing the DEC output applies when the calibration is flipped for a meridian flip, which guiding does not do yet; leave it off for mounts that reverse it themselves.</Notice>
 			</PanelSection>
 			<PanelSection title="Corrections">
@@ -285,13 +285,13 @@ function SessionState({ session }: { readonly session: GuidingSessionSummary }) 
 
 	return (
 		<PanelSection title="Session">
-			{session.active && session.exposureProgress && <FrameProgress exposure={session.exposureProgress} />}
+			{session.active && <FrameProgress exposure={session.exposureProgress} />}
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 				<Row label="State">
 					<span className={cn(session.state === 'lostLock' && 'text-danger', session.state === 'guiding' && 'text-success')}>{session.active ? GUIDING_STATE_LABELS[session.state] : session.lost ? 'Lost' : 'Stopped'}</span>
 				</Row>
 				{session.settling && <Row label="Settling">{session.dithering ? 'After a dither' : 'Yes'}</Row>}
-				{session.lockPosition && <Row label="Lock">{`${session.lockPosition[0].toFixed(1)}, ${session.lockPosition[1].toFixed(1)} px`}</Row>}
+				{session.lockPosition && <Row label="Lock (px)">{`${session.lockPosition[0].toFixed(1)}, ${session.lockPosition[1].toFixed(1)}`}</Row>}
 				{calibration && (
 					<>
 						<Row label="RA Rate">{`${formatRate(calibration.raRate)} at ${formatAngle(calibration.raAngle)}`}</Row>

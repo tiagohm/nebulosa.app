@@ -247,7 +247,7 @@ function SessionState({ session }: { readonly session: TppaSessionSummary }) {
 	return (
 		<>
 			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>{TPPA_STATE_LABELS[session.state]}</p>
-			{(session.state === 'capturing' || (session.state === 'refining' && session.exposure)) && <FrameProgress exposure={session.exposure} />}
+			{(session.state === 'capturing' || session.state === 'refining') && <FrameProgress exposure={session.exposure} />}
 			{failed && session.error && <p className="m-0 text-xs leading-4 text-danger">{session.error}</p>}
 			{session.slewRateRestored === true && session.previousSlewRate && <p className="m-0 text-xs leading-4 text-ink-300">The slew rate was restored to {session.previousSlewRate}.</p>}
 			{session.trackingStarted && session.trackingStopped === undefined && (session.endedAt === undefined || !session.request.stopTracking) && (

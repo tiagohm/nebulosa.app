@@ -11,12 +11,10 @@ export function FrameProgress({ exposure }: { readonly exposure?: CameraCaptureT
 	return (
 		<div className="flex flex-col gap-1">
 			<div className="h-1 overflow-hidden rounded-full bg-base-300">{progress === undefined ? <div className="h-full w-1/3 animate-pulse bg-accent/60" /> : <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${progress.fraction * 100}%` }} />}</div>
-			{progress && (
-				<p className="m-0 flex justify-between text-xs leading-4 text-ink-300 tabular-nums">
-					<span>{`${formatExposure(progress.elapsed)} elapsed`}</span>
-					<span>{`${formatExposure(progress.remaining)} left`}</span>
-				</p>
-			)}
+			<p className="m-0 flex justify-between text-xs leading-4 text-ink-300 tabular-nums">
+				<span>{`${formatExposure(progress?.elapsed ?? 0)} elapsed`}</span>
+				<span>{`${formatExposure(progress?.remaining ?? 0)} left`}</span>
+			</p>
 		</div>
 	)
 }

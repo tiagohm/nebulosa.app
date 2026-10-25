@@ -182,7 +182,7 @@ function SessionState({ session, position, moving }: SessionStateProps) {
 				{AUTO_FOCUS_STATE_LABELS[session.state]}
 				{session.target !== undefined && running && ` — ${session.target}`}
 			</p>
-			{(session.state === 'exposing' || (session.state === 'verifying' && session.exposure)) && <FrameProgress exposure={session.exposure} />}
+			{(session.state === 'exposing' || session.state === 'verifying') && <FrameProgress exposure={session.exposure} />}
 			{failed && session.error && <p className="m-0 text-xs leading-4 text-danger">{session.error}</p>}
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 				<Row label="Focuser">{position === undefined ? '—' : `${position}${moving ? ' (moving)' : ''}`}</Row>

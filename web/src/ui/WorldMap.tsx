@@ -13,12 +13,13 @@ import { constrainWorldMapView, formatGeoPoint, type GeoPoint, graticulePath, in
 //
 // Zoom and pan never re-render React: the view lives in a controller that writes it once per animation frame.
 // The basemap is an <img>, so its thousands of country paths are never part of the DOM, on a CSS-transformed
-// layer that is composited while the view moves (the GPU scales the last raster, briefly soft when zooming in)
-// and rasterized again, sharp, once it settles; redrawing the vector basemap on every frame of a zoom costs
-// tens of milliseconds. The children are on an SVG layer above it with the same zoom and pan as an SVG
-// transform, and the --world-map-scale CSS property (viewport pixels per map unit). They re-render only when
-// their owner renders them again; strokes that keep their width on screen use vectorEffect="non-scaling-stroke",
-// and symbols that keep their size on screen use WorldMapSymbol.
+// layer that stays composited, so the GPU moves and scales its last raster (briefly soft when zooming in), and
+// that is rasterized again, sharp, once a zoom settles; redrawing the vector basemap on every frame of a zoom
+// costs tens of milliseconds, and so does compositing it anew when a drag starts. The children are on an SVG
+// layer above it with the same zoom and pan as an SVG transform, and the --world-map-scale CSS property
+// (viewport pixels per map unit). They re-render only when their owner renders them again; strokes that keep
+// their width on screen use vectorEffect="non-scaling-stroke", and symbols that keep their size on screen use
+// WorldMapSymbol.
 
 // Commands of a mounted map, for its owner.
 export interface WorldMapHandle {
@@ -73,7 +74,7 @@ const CLICK_TOLERANCE = 4
 // Duration of an animated view change, in milliseconds.
 const ANIMATION_DURATION = 250
 
-// Time without view changes after which the basemap is rasterized again at the current zoom, in milliseconds.
+// Time without view changes after which the basemap is rasterized again at a changed zoom, in milliseconds.
 const SETTLE_DELAY = 150
 
 // Basemap at its place in map units, the same element on every render so React never reconciles it.
@@ -119,8 +120,12 @@ class WorldMapController {
 	svg?: SVGSVGElement | null
 	// Pending animation frame of a render or an animation, or 0.
 	private frame = 0
-	// Timer that ends the compositing of the basemap once the view settles.
+	// Timer that rasterizes the basemap again once the view settles.
 	private settle?: Timer
+	// Pending animation frame that composites the basemap again after it was painted at the current zoom, or 0.
+	private sharpen = 0
+	// Scale at which the basemap was last rasterized, in viewport pixels per map unit; 0 before the first one.
+	private rasterScale = 0
 	// Pending gesture of the pointers.
 	readonly gesture: Gesture = { pointers: new Map() }
 
@@ -133,30 +138,47 @@ class WorldMapController {
 	resize(viewport: Size) {
 		this.viewport = viewport
 		this.view = constrainWorldMapView(this.view, viewport, this.wrap)
-		this.render(false)
+		this.render()
 	}
 
 	// Sets whether the map wraps, which changes its smallest scale, and renders right away.
 	setWrap(wrap: boolean) {
 		this.wrap = wrap
 		this.view = constrainWorldMapView(this.view, this.viewport, wrap)
-		this.render(false)
+		this.render()
 	}
 
-	// Writes the transform of the current view; nothing is drawn until the viewport has a size. While moving, the
-	// basemap stays a composited layer until SETTLE_DELAY passes without another move.
-	private render(moving: boolean) {
+	// Writes the transform of the current view; nothing is drawn until the viewport has a size. The basemap is
+	// rasterized again once SETTLE_DELAY passes without another change.
+	private render() {
 		const { scale, x, y } = worldMapTransform(this.view, this.viewport, this.wrap)
 		if (scale <= 0 || !this.basemap || !this.group || !this.svg) return
 		this.basemap.style.transform = `translate(${x}px, ${y}px) scale(${scale})`
 		this.group.setAttribute('transform', `translate(${x} ${y}) scale(${scale})`)
 		this.svg.style.setProperty('--world-map-scale', `${scale}`)
+		this.composite()
+		clearTimeout(this.settle)
+		this.settle = setTimeout(() => this.rasterize(), SETTLE_DELAY)
+	}
 
-		if (moving) {
-			this.basemap.style.willChange = 'transform'
-			clearTimeout(this.settle)
-			this.settle = setTimeout(() => this.basemap?.style.removeProperty('will-change'), SETTLE_DELAY)
-		}
+	// Rasterizes the basemap at the current zoom when it changed since the last raster: a composited layer keeps
+	// the scale it was first rasterized at, so the basemap is painted once without its layer, at the current
+	// zoom, and composited again on the next frame, while the view is still.
+	private rasterize() {
+		const { scale } = worldMapTransform(this.view, this.viewport, this.wrap)
+		if (!this.basemap || scale === this.rasterScale) return
+		this.rasterScale = scale
+		this.basemap.style.willChange = 'auto'
+		this.sharpen = requestAnimationFrame(() => {
+			this.sharpen = requestAnimationFrame(() => this.composite())
+		})
+	}
+
+	// Composites the basemap again, as its class sets, if a raster left it without its layer.
+	private composite() {
+		if (this.sharpen) cancelAnimationFrame(this.sharpen)
+		this.sharpen = 0
+		this.basemap?.style.removeProperty('will-change')
 	}
 
 	// Replaces the view and renders it on the next animation frame, stopping any animation.
@@ -165,7 +187,7 @@ class WorldMapController {
 		this.cancel()
 		this.frame = requestAnimationFrame(() => {
 			this.frame = 0
-			this.render(true)
+			this.render()
 		})
 	}
 
@@ -183,7 +205,7 @@ class WorldMapController {
 			const t = Math.min(1, (now - start) / ANIMATION_DURATION)
 			const eased = 1 - (1 - t) ** 3
 			this.view = constrainWorldMapView(interpolateWorldMapView(from, to, eased, this.wrap), this.viewport, this.wrap)
-			this.render(true)
+			this.render()
 			this.frame = t < 1 ? requestAnimationFrame(step) : 0
 		}
 
@@ -200,6 +222,7 @@ class WorldMapController {
 	dispose() {
 		this.cancel()
 		clearTimeout(this.settle)
+		if (this.sharpen) cancelAnimationFrame(this.sharpen)
 	}
 
 	// Zooms by a factor around a viewport point, at once.
@@ -403,7 +426,7 @@ export function WorldMap({ selected, onSelect, onHover, wrap = true, graticule =
 			onKeyDown={handleKeyDown}
 			className={cn('relative min-h-0 touch-none overflow-hidden bg-base-000 outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent active:cursor-grabbing', onSelect ? 'cursor-crosshair' : 'cursor-grab', className)}
 		>
-			<div ref={(basemap) => void (controller.basemap = basemap)} className="absolute top-0 left-0 origin-top-left" style={BASEMAP_SIZE}>
+			<div ref={(basemap) => void (controller.basemap = basemap)} className="absolute top-0 left-0 origin-top-left will-change-transform" style={BASEMAP_SIZE}>
 				{BASEMAP}
 				{wrap && BASEMAP_COPIES}
 			</div>

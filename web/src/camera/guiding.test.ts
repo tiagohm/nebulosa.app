@@ -1,0 +1,208 @@
+import { describe, expect, test } from 'bun:test'
+import type { GuidingEventRecord, GuidingSessionSummary, GuidingTelemetrySample } from 'api'
+import { proxy } from 'valtio'
+import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_GUIDING_SETTINGS } from '../profile/schema'
+import { cameraKey } from './capture'
+import { GUIDING_TELEMETRY_KEPT, guidingBlocker, guidingDitherRequest, guidingRequest, guidingRunning, type GuidingRuntime, guidingStartRequest, handleGuidingEvent, refreshGuiding, setGuidingExposure, startGuiding, startGuidingSession, stopGuidingSession } from './guiding'
+
+function newState() {
+	return proxy<GuidingRuntime>({ sessions: {}, events: {}, telemetry: {}, frames: {}, pending: {}, errors: {} })
+}
+
+const READY = { status: 'ready' } as const
+
+const KEY = cameraKey('c', 'guide')
+
+const OUTPUT = { connectionId: 'c', deviceId: 'st4' }
+
+function summary(patch: Partial<GuidingSessionSummary> = {}): GuidingSessionSummary {
+	return {
+		sessionId: 's1',
+		operationId: 'o1',
+		camera: { connectionId: 'c', deviceId: 'guide' },
+		cameraName: 'Guide',
+		guideOutput: OUTPUT,
+		guideOutputName: 'ST4',
+		revision: 1,
+		active: true,
+		lost: false,
+		state: 'looping',
+		guideOutputHeld: false,
+		pulsesAdmitted: false,
+		settling: false,
+		dithering: false,
+		calibrated: false,
+		exposure: 2000,
+		eventSequence: 0,
+		telemetryCursor: 0,
+		startedAt: 1000,
+		...patch,
+	}
+}
+
+function record(sequence: number): GuidingEventRecord {
+	return { sequence, event: { type: 'stateChanged' } as unknown as GuidingEventRecord['event'] }
+}
+
+function sample(cursor: number): GuidingTelemetrySample {
+	const axis = { duration: 0, limited: false }
+	return { cursor, frameId: cursor, timestamp: cursor, lost: false, dx: 0, dy: 0, raDistance: 0, decDistance: 0, ra: axis, dec: axis, snr: 10, mass: 100, hfd: 2 }
+}
+
+// Fetch fake answering each URL with the response its handler builds, recording the requests.
+function fakeFetch(handler: (url: string, init?: RequestInit) => Response | Promise<Response>) {
+	const requests: { url: string; init?: RequestInit }[] = []
+	const request = ((url: string, init?: RequestInit) => {
+		requests.push({ url, init })
+		return Promise.resolve(handler(url, init))
+	}) as typeof fetch
+	return { request, requests }
+}
+
+// A fetch that fails every request it is not expected to send.
+const NO_FETCH = fakeFetch(() => new Response(null, { status: 500 })).request
+
+describe('requests', () => {
+	test('the start takes the camera settings without their exposure, the guide exposure in ms, and the controller of the form', () => {
+		const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 30, gain: 120, binX: 2, binY: 2 }
+		const request = guidingRequest({ ...DEFAULT_GUIDING_SETTINGS, exposureTime: 1.5, trackingMode: 'multiStar', aggressivenessRA: 0.4 }, exposure, OUTPUT)
+		expect('exposureTime' in request.camera).toBeFalse()
+		expect(request).toMatchObject({ guideOutput: OUTPUT, exposure: 1500, trackingMode: 'multiStar', camera: { gain: 120, binX: 2, binY: 2 }, calibration: { raPulse: 650, decPulse: 650 }, guider: { aggressivenessRA: 0.4, aggressivenessDEC: 0.65, maxPulseMsRA: 2000, maxPulseMsDEC: 2500 } })
+		expect('optics' in request).toBeFalse()
+		expect(guidingRequest({ ...DEFAULT_GUIDING_SETTINGS, focalLength: 240 }, exposure, OUTPUT).optics).toEqual({ focalLength: 240 })
+	})
+
+	test('Start Guiding and dither carry the settle of the form, and the dither its size in guide pixels', () => {
+		const settings = { ...DEFAULT_GUIDING_SETTINGS, recalibrate: false, ditherPixels: 3, ditherRaOnly: true }
+		expect(guidingStartRequest(settings)).toEqual({ recalibrate: false, settle: DEFAULT_GUIDING_SETTINGS.settle })
+		expect(guidingDitherRequest(settings)).toEqual({ amount: { unit: 'guidePixel', value: 3 }, raOnly: true, settle: DEFAULT_GUIDING_SETTINGS.settle })
+	})
+
+	test('only the Guide Camera with a connected guide output can start, even while the output is busy', () => {
+		const busy = { status: 'busy', operations: [], message: 'The mount is slewing.' } as const
+		expect(guidingBlocker(READY, READY, DEFAULT_GUIDING_SETTINGS)).toBeUndefined()
+		expect(guidingBlocker(READY, busy, DEFAULT_GUIDING_SETTINGS)).toBeUndefined()
+		expect(guidingBlocker(READY, undefined, DEFAULT_GUIDING_SETTINGS)).toContain('Guide Camera')
+		expect(guidingBlocker(READY, { status: 'disconnected', message: 'The guide output is disconnected.' }, DEFAULT_GUIDING_SETTINGS)).toBe('The guide output is disconnected.')
+		expect(guidingBlocker({ ...busy, message: 'The camera is capturing.' }, READY, DEFAULT_GUIDING_SETTINGS)).toBe('The camera is capturing.')
+	})
+})
+
+describe('events', () => {
+	test('summaries are ordered by revision and an older session never replaces a newer one', () => {
+		const state = newState()
+		handleGuidingEvent(state, { type: 'guiding:updated', session: summary({ revision: 2, state: 'guiding' }) }, NO_FETCH)
+		handleGuidingEvent(state, { type: 'guiding:updated', session: summary({ revision: 1 }) }, NO_FETCH)
+		expect(state.sessions[KEY].state).toBe('guiding')
+		expect(guidingRunning(state.sessions[KEY])).toBeTrue()
+
+		handleGuidingEvent(state, { type: 'guiding:updated', session: summary({ sessionId: 's0', startedAt: 500, revision: 9 }) }, NO_FETCH)
+		expect(state.sessions[KEY].sessionId).toBe('s1')
+		expect(guidingRunning(summary({ active: false }))).toBeFalse()
+	})
+
+	test('events and telemetry are appended in order, duplicates and unknown sessions are ignored, and a gap is fetched', async () => {
+		const state = newState()
+		handleGuidingEvent(state, { type: 'guiding:updated', session: summary() }, NO_FETCH)
+		handleGuidingEvent(state, { type: 'guiding:event', sessionId: 's1', record: record(1) }, NO_FETCH)
+		handleGuidingEvent(state, { type: 'guiding:event', sessionId: 's1', record: record(1) }, NO_FETCH)
+		handleGuidingEvent(state, { type: 'guiding:event', sessionId: 'other', record: record(1) }, NO_FETCH)
+		handleGuidingEvent(state, { type: 'guiding:telemetry', sessionId: 's1', sample: sample(1) }, NO_FETCH)
+		expect(state.events.s1.map((item) => item.sequence)).toEqual([1])
+		expect(state.events.other).toBeUndefined()
+		expect(state.telemetry.s1.map((item) => item.cursor)).toEqual([1])
+
+		const { request, requests } = fakeFetch(() => Response.json({ items: [record(2), record(3), record(4)], truncated: false }))
+		handleGuidingEvent(state, { type: 'guiding:event', sessionId: 's1', record: record(4) }, request)
+		await Bun.sleep(0)
+		expect(requests.map(({ url }) => url)).toEqual(['/api/guiding/s1/events?after=1'])
+		expect(state.events.s1.map((item) => item.sequence)).toEqual([1, 2, 3, 4])
+	})
+
+	test('the telemetry keeps the newest samples within its bound', () => {
+		const state = newState()
+		handleGuidingEvent(state, { type: 'guiding:updated', session: summary() }, NO_FETCH)
+		for (let cursor = 1; cursor <= GUIDING_TELEMETRY_KEPT + 5; cursor++) handleGuidingEvent(state, { type: 'guiding:telemetry', sessionId: 's1', sample: sample(cursor) }, NO_FETCH)
+		expect(state.telemetry.s1).toHaveLength(GUIDING_TELEMETRY_KEPT)
+		expect(state.telemetry.s1[0].cursor).toBe(6)
+	})
+
+	test('a newer session of the camera forgets the history of the previous one and fetches its own', async () => {
+		const state = newState()
+		handleGuidingEvent(state, { type: 'guiding:updated', session: summary() }, NO_FETCH)
+		handleGuidingEvent(state, { type: 'guiding:event', sessionId: 's1', record: record(1) }, NO_FETCH)
+		const overlay = { frameId: 3, state: 'looping', searchRegion: 15, stars: [] } as const
+		handleGuidingEvent(state, { type: 'guiding:frame', sessionId: 's1', frameId: 3, imageId: 'i3', overlay }, NO_FETCH)
+		handleGuidingEvent(state, { type: 'guiding:frame', sessionId: 's1', frameId: 2, imageId: 'i2', overlay: { ...overlay, frameId: 2 } }, NO_FETCH)
+		expect(state.frames.s1.imageId).toBe('i3')
+
+		const { request, requests } = fakeFetch((url) => Response.json({ items: url.includes('events') ? [record(1), record(2)] : [sample(1)], truncated: false }))
+		handleGuidingEvent(state, { type: 'guiding:updated', session: summary({ sessionId: 's2', startedAt: 2000, eventSequence: 2, telemetryCursor: 1 }) }, request)
+		await Bun.sleep(0)
+		expect(state.events.s1).toBeUndefined()
+		expect(state.frames.s1).toBeUndefined()
+		expect(requests.map(({ url }) => url).toSorted()).toEqual(['/api/guiding/s2/events?after=0', '/api/guiding/s2/telemetry?after=0'])
+		expect(state.events.s2.map((item) => item.sequence)).toEqual([1, 2])
+		expect(state.telemetry.s2.map((item) => item.cursor)).toEqual([1])
+	})
+})
+
+describe('refresh', () => {
+	test('replaces the sessions, forgets those no longer listed, and fetches what was missed, replacing a truncated history', async () => {
+		const state = newState()
+		handleGuidingEvent(state, { type: 'guiding:updated', session: summary() }, NO_FETCH)
+		handleGuidingEvent(state, { type: 'guiding:event', sessionId: 's1', record: record(1) }, NO_FETCH)
+		state.events.gone = [record(1)]
+
+		const { request, requests } = fakeFetch((url) => {
+			if (url === '/api/guiding') return Response.json({ sessions: [summary({ revision: 5, eventSequence: 900 })] })
+			if (url.includes('events')) return Response.json({ items: [record(400), record(401)], truncated: true })
+			return Response.json({ items: [], truncated: false })
+		})
+		await refreshGuiding(state, request)
+		expect(requests.map(({ url }) => url)).toEqual(['/api/guiding', '/api/guiding/s1/events?after=1', '/api/guiding/s1/telemetry?after=0'])
+		expect(state.sessions[KEY].revision).toBe(5)
+		expect(state.events.gone).toBeUndefined()
+		expect(state.events.s1.map((item) => item.sequence)).toEqual([400, 401])
+	})
+
+	test('a session the server no longer keeps is forgotten', async () => {
+		const state = newState()
+		handleGuidingEvent(state, { type: 'guiding:updated', session: summary() }, NO_FETCH)
+		handleGuidingEvent(state, { type: 'guiding:event', sessionId: 's1', record: record(1) }, NO_FETCH)
+		const { request } = fakeFetch(() => new Response(null, { status: 404 }))
+		handleGuidingEvent(state, { type: 'guiding:event', sessionId: 's1', record: record(3) }, request)
+		await Bun.sleep(0)
+		expect(state.events.s1).toBeUndefined()
+	})
+})
+
+describe('commands', () => {
+	test('a start posts a tokened request to the camera route; a failure is recorded per camera', async () => {
+		const state = newState()
+		const body = guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, OUTPUT)
+		const accepted = fakeFetch(() => Response.json({ sessionId: 's1', operationId: 'o1' }, { status: 202 }))
+		expect(await startGuidingSession(state, 'c', 'guide', body, accepted.request)).toEqual({ sessionId: 's1', operationId: 'o1' })
+		expect(accepted.requests[0].url).toBe('/api/connections/c/cameras/guide/guiding')
+		const sent = JSON.parse(accepted.requests[0].init!.body as string)
+		expect(typeof sent.token).toBe('string')
+		expect(sent.exposure).toBe(2000)
+
+		const refused = fakeFetch(() => Response.json({ error: 'The camera is busy.', code: 'busy' }, { status: 409 }))
+		expect(await startGuidingSession(state, 'c', 'guide', body, refused.request)).toBeUndefined()
+		expect(state.errors[KEY]).toBe('The camera is busy.')
+		expect(state.pending[KEY]).toBeUndefined()
+	})
+
+	test('session commands address the session routes, durable ones with a token and the exposure in ms', async () => {
+		const state = newState()
+		const { request, requests } = fakeFetch((url) => (url.endsWith('/start') ? Response.json({ commandId: 'k1' }, { status: 202 }) : new Response(null, { status: 204 })))
+		const session = summary()
+		expect(await startGuiding(state, session, guidingStartRequest(DEFAULT_GUIDING_SETTINGS), request)).toEqual({ commandId: 'k1' })
+		await setGuidingExposure(state, session, 0.5, request)
+		await stopGuidingSession(state, session, request)
+		expect(requests.map(({ url }) => url)).toEqual(['/api/guiding/s1/start', '/api/guiding/s1/exposure', '/api/guiding/s1/stop'])
+		expect(JSON.parse(requests[0].init!.body as string)).toMatchObject({ recalibrate: true, token: expect.any(String) })
+		expect(JSON.parse(requests[1].init!.body as string)).toEqual({ exposure: 500 })
+	})
+})

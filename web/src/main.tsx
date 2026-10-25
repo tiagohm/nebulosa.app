@@ -7,6 +7,7 @@ import { autoFocusRuntime, handleAutoFocusEvent, refreshAutoFocus } from './came
 import { captureRuntime, handleCaptureEvent, refreshCaptures } from './camera/capture'
 import { darvRuntime, handleDarvEvent, refreshDarv } from './camera/darv'
 import { flatWizardRuntime, handleFlatWizardEvent, refreshFlatWizard } from './camera/flatwizard'
+import { guidingRuntime, handleGuidingEvent, refreshGuiding } from './camera/guiding'
 import { handleNudgeEvent, nudgeRuntime, refreshNudges } from './camera/nudge'
 import { handleTppaEvent, refreshTppa, tppaRuntime } from './camera/tppa'
 import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
@@ -68,6 +69,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleTppaEvent(tppaRuntime, event), refresh: () => refreshTppa(tppaRuntime) },
 	{ handle: (event) => handleDarvEvent(darvRuntime, event), refresh: () => refreshDarv(darvRuntime) },
 	{ handle: (event) => handleFlatWizardEvent(flatWizardRuntime, event), refresh: () => refreshFlatWizard(flatWizardRuntime) },
+	{ handle: (event) => handleGuidingEvent(guidingRuntime, event), refresh: () => refreshGuiding(guidingRuntime) },
 	{ handle: (event) => handleExternalToolEvent(externalToolsState, event), refresh: () => refreshExternalTools(externalToolsState) },
 	{ handle: (event) => handleStarsEvent(starsState, event), refresh: () => refreshStars(starsState) },
 	{ handle: (event) => handlePlateSolvingEvent(plateSolvingState, event), refresh: () => refreshPlateSolving(plateSolvingState) },

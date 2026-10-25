@@ -134,6 +134,32 @@ describe('start', () => {
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
 	})
 
+	test('passes the client settings, follows the exposure countdown, and profiles the measured guide star', async () => {
+		const context = await setup()
+		const { sessionId } = await start(context, { exposure: 1000, client: { searchRegion: 40, ditherMode: 'spiral', stickyLockPosition: true, reverseDecOutputAfterMeridianFlip: true } })
+		await waitUntil(() => context.events.some((event) => event.type === 'guiding:frame'))
+		const frame = context.events.find((event): event is Extract<GuidingServerEvent, { type: 'guiding:frame' }> => event.type === 'guiding:frame')!
+		expect(frame.overlay.searchRegion).toBe(40)
+
+		const progress = context.events.flatMap((event) => (event.type === 'guiding:updated' && event.session.exposureProgress ? [event.session.exposureProgress] : []))
+		expect(progress.length).toBeGreaterThan(0)
+		for (const { elapsedTime, remainingTime, progress: percent } of progress) {
+			expect(elapsedTime + remainingTime).toBe(1e6)
+			expect(percent).toBeGreaterThanOrEqual(0)
+			expect(percent).toBeLessThanOrEqual(100)
+		}
+
+		const target = (await context.guiding.selectTarget(sessionId, {}).json()) as { lockPosition: [number, number] }
+		await waitUntil(() => context.summary()?.star !== undefined)
+		const star = context.summary()!.star!
+		expect(Math.hypot(star.x - target.lockPosition[0], star.y - target.lockPosition[1])).toBeLessThan(3)
+		expect(star.horizontal.values.length).toBeGreaterThan(0)
+		expect(star.vertical.values.length).toBeGreaterThan(0)
+
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+		expect(context.summary()?.exposureProgress).toBeUndefined()
+	}, 60000)
+
 	test('loops under one camera.guiding operation, snoops the devices of the request, and previews the frames as guiding frames of the camera', async () => {
 		const context = await setup()
 		const body = request(context, { snoop: { mount: context.mountId } })

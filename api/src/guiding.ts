@@ -4,13 +4,15 @@ import { join } from 'path'
 import { AstapError, astapDetectStars } from 'nebulosa/src/astrometry/solvers/astap'
 import type { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
+import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
 import type { BlobEncoding } from 'nebulosa/src/devices/indi/types'
 import { failedOperationResult, type OperationFailureReason, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
+import type { CameraCaptureTime } from 'nebulosa/src/observation/capture/types'
 import type { GuidingCalibrationConfig } from 'nebulosa/src/observation/guiding/calibrator'
-import { GuiderClient, type GuideFrameImage, type GuiderClientConnectOptions, type GuiderClientGuiderOptions } from 'nebulosa/src/observation/guiding/client'
+import { GuiderClient, type GuideFrameImage, type GuiderClientConnectOptions, type GuiderClientGuiderOptions, type GuiderClientOptions } from 'nebulosa/src/observation/guiding/client'
 import type { DitherAmount } from 'nebulosa/src/observation/guiding/ditherer'
 import type { GuiderState, GuidingEvent } from 'nebulosa/src/observation/guiding/events'
 import type { GuidingSettle } from 'nebulosa/src/observation/guiding/session'
@@ -22,6 +24,7 @@ import { busy, type ClientResolver, type CommandRequest, connectedDevice, failur
 import type { DeviceRegistry } from './devices'
 import type { ExternalToolsStore, ResolvedExternalTool } from './externaltools'
 import type { GuideRegions } from './guideregions'
+import { guideStarProfile, type GuidingStarProfile } from './guidingprofile'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import type { OperationDevice, OperationRegistry } from './operations'
@@ -38,7 +41,8 @@ import type { BuiltinStarDetectionSettings, StarDetectionSettings } from './star
 // detects its stars with the built-in detector and the settings of the request (while guiding, only in the regions
 // around the stars the guider uses; see guidingRegions), and answers both with the FITS/XISF bytes; a session that
 // detects with ASTAP has the worker decode only and runs ASTAP on the frame file here, about half a second per frame.
-// The stars feed the tracker synchronously. The bytes of
+// The stars feed the tracker synchronously, and the guide star of each frame is profiled on its grayscale copy
+// (guidingprofile.ts) into the record, with the progress of the exposure the camera counts down. The bytes of
 // the newest frame are opened as a capture document of the image store and recorded in the capture frame registry as
 // the latest frame of the camera (origin guiding, never saved), with its overlay published once the document is open;
 // only the newest frame waits while another one is opened, so previewing never holds the guiding back. A session
@@ -49,6 +53,11 @@ import type { BuiltinStarDetectionSettings, StarDetectionSettings } from './star
 
 // Sensor settings of the guide exposures, sent once when the session starts. The frame type is always LIGHT.
 export type GuidingCameraSettings = Pick<CaptureSettings, 'gain' | 'offset' | 'binX' | 'binY' | 'subframe' | 'x' | 'y' | 'width' | 'height' | 'frameFormat'>
+
+// Settings of the guider client, fixed when the session starts: the dither pattern, the side of the star search square
+// in pixels (clamped by the toolkit to [16, 128], 64 when absent), whether the lock position stays exactly where it is
+// across guider re-initialization, and whether a meridian flip of the calibration also reverses the DEC output.
+export type GuidingClientSettings = Pick<GuiderClientOptions, 'ditherMode' | 'searchRegion' | 'stickyLockPosition' | 'reverseDecOutputAfterMeridianFlip'>
 
 // Body of POST /api/connections/:id/cameras/:deviceId/guiding.
 export interface GuidingStartRequest extends CommandRequest {
@@ -66,6 +75,8 @@ export interface GuidingStartRequest extends CommandRequest {
 	readonly calibration?: Partial<GuidingCalibrationConfig>
 	// Overrides of the guide controller.
 	readonly guider?: GuiderClientGuiderOptions
+	// Settings of the guider client; absent keeps the toolkit defaults.
+	readonly client?: GuidingClientSettings
 	// Devices of the camera's connection snooped into the guide frame headers, set once when the session starts; absent
 	// snoops none. A simulated camera renders its star field from the pointing of the snooped mount.
 	readonly snoop?: CaptureSnoop
@@ -193,6 +204,11 @@ export interface GuidingSessionSummary {
 	readonly pixelScale?: number
 	readonly calibration?: GuidingCalibrationSummary
 	readonly rms?: GuidingRms
+	// Progress of the guide exposure the camera counts down, in microseconds (progress in percent); absent between
+	// exposures and while the driver reports none.
+	readonly exposureProgress?: CameraCaptureTime
+	// Profile of the guide star of the latest measured frame; absent before one.
+	readonly star?: GuidingStarProfile
 	// Latest guide frame, with its capture document once previewed.
 	readonly frame?: { readonly frameId: number; readonly time: number; readonly imageId?: string }
 	readonly command?: GuidingCommandStatus
@@ -425,6 +441,8 @@ interface Session {
 	readonly tracker: StarTracker
 	// Whether the worker detects the stars with the built-in detector.
 	readonly builtin: boolean
+	// Follows the exposure countdown of the guide camera until the end.
+	readonly progress: DeviceHandler<Camera>
 }
 
 // Returns the regions the built-in detection of a session's next frame is limited to, or undefined for the whole frame:
@@ -526,6 +544,7 @@ export class GuidingSessions implements Disposable {
 				files.set(decoded.image, decoded.bytes)
 				return decoded.image
 			},
+			...request.client,
 			calibrator: request.calibration,
 			guider: request.guider,
 		})
@@ -574,7 +593,15 @@ export class GuidingSessions implements Disposable {
 			abort: new AbortController(),
 			tracker,
 			builtin: builtin !== undefined,
+			progress: {
+				added: () => {},
+				removed: () => {},
+				updated: (device, property) => {
+					if (device === camera && (property === 'exposure' || property === 'exposuring')) this.#update(session, { exposureProgress: exposureProgressOf(camera, session.summary.exposure) })
+				},
+			},
 		}
+		this.devices.cameras.addHandler(session.progress)
 
 		client.addHandler({ event: (_, event) => this.#event(session, event), frame: (_, frame) => this.#frame(session, frame) })
 
@@ -787,7 +814,9 @@ export class GuidingSessions implements Disposable {
 		const bytes = session.files.get(frame.image)
 		session.files.delete(frame.image)
 		session.detections.delete(frame.image)
-		this.#update(session, { frame: { frameId: frame.frameId, time: frame.timestamp } })
+		const measurement = frame.tracking.measurement
+		const star = measurement && guideStarProfile(frame.image, frame.frameId, [measurement.x, measurement.y])
+		this.#update(session, { frame: { frameId: frame.frameId, time: frame.timestamp }, ...(star && { star }) })
 		if (bytes === undefined) return
 
 		session.preview.next = { frameId: frame.frameId, time: frame.timestamp, bytes, overlay: overlayOf(frame) }
@@ -877,6 +906,7 @@ export class GuidingSessions implements Disposable {
 		const failure = result.ok ? undefined : { reason: result.reason, ...(result.error !== undefined && { error: result.error }) }
 		session.client.stopCapture()
 		session.client.disconnect()
+		this.devices.cameras.removeHandler(session.progress)
 		session.decoder[Symbol.dispose]()
 		session.abort.abort()
 		if (session.astap?.directory)
@@ -887,7 +917,7 @@ export class GuidingSessions implements Disposable {
 		session.preview.next = undefined
 		session.run?.ended.resolve(result)
 		session.run = undefined
-		this.#update(session, { active: false, guideOutputHeld: false, pulsesAdmitted: false, runOperationId: undefined, ...(failure && { failure }), endedAt: Date.now() })
+		this.#update(session, { active: false, guideOutputHeld: false, pulsesAdmitted: false, runOperationId: undefined, exposureProgress: undefined, ...(failure && { failure }), endedAt: Date.now() })
 		session.ended.resolve(result)
 	}
 
@@ -960,6 +990,17 @@ function overlayOf(frame: GuideFrameImage): GuidingFrameOverlay {
 		primary: stellar?.primary === undefined ? undefined : [stellar.primary.x, stellar.primary.y],
 		stars: stellar?.detections.map((star) => ({ x: star.x, y: star.y, accepted: accepted.has(star) })) ?? [],
 	}
+}
+
+// Progress of the exposure a guide camera counts down, for a guide exposure of exposure milliseconds: the remaining
+// time the driver reports, the time elapsed since the start, in microseconds, and the completion in percent; undefined
+// while the camera is not exposing.
+function exposureProgressOf(camera: Camera, exposure: number): CameraCaptureTime | undefined {
+	if (!camera.exposuring) return undefined
+	const total = exposure * 1000
+	const remainingTime = Math.min(total, Math.max(0, camera.exposure.value * 1e6))
+	const elapsedTime = total - remainingTime
+	return { remainingTime, elapsedTime, progress: total > 0 ? (elapsedTime / total) * 100 : 0 }
 }
 
 // RMS of the measured RA and DEC errors, in pixels, or undefined without any.

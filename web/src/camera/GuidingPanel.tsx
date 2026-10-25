@@ -10,7 +10,7 @@ import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
 import { activeProfile, exposureSettings, guidingSettings, profileState, setGuidingSettings, starDetectionSettings } from '../profile/profile'
-import { type CameraIdentity, GUIDING_MAXIMUM_EXPOSURE, GUIDING_MAXIMUM_PULSE, GUIDING_MINIMUM_EXPOSURE, GUIDING_MINIMUM_PULSE, type GuidingSettings } from '../profile/schema'
+import { type CameraIdentity, GUIDING_MAXIMUM_EXPOSURE, GUIDING_MAXIMUM_PULSE, GUIDING_MAXIMUM_SEARCH_REGION, GUIDING_MINIMUM_EXPOSURE, GUIDING_MINIMUM_PULSE, GUIDING_MINIMUM_SEARCH_REGION, type GuidingDitherMode, type GuidingSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { useAstapConfigured } from '../stars/StarRequestControls'
 import { PROVIDER_LABELS } from '../stars/stars'
@@ -18,7 +18,9 @@ import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
+import { Select } from '../ui/Select'
 import { cameraKey } from './capture'
+import { FrameProgress } from './FrameProgress'
 import {
 	clearGuidingCalibration,
 	clearGuidingTarget,
@@ -41,10 +43,12 @@ import {
 	stopGuiding,
 	stopGuidingSession,
 } from './guiding'
+import { StarProfileSection } from './GuidingStarProfile'
 
 // Contextual panel sections of Guiding, a camera operation of the Images camera tabs: the equipment it uses, the state
-// of the session (the lock, the solved calibration, the RMS, the outcome of the latest command), the guide exposure and
-// tracking, the calibration and controller settings, the settle and dither, and the commands of each state: start and
+// of the session (the progress of the guide exposure, the lock, the solved calibration, the RMS, the outcome of the
+// latest command), the Star Profile of the guide star, the guide exposure, tracking and star search, the calibration
+// and controller settings, the settle and dither pattern, and the commands of each state: start and
 // stop looping, select or clear the star, start and stop guiding, pause (corrections only, or the exposures too),
 // resume, dither, and clear the calibration. The camera is the panel's target and the guide output the GUIDE_OUTPUT of
 // the setup, which only the Guide Camera has; a missing or unsuitable one says why. The frames take the camera
@@ -74,6 +78,12 @@ export interface GuidingTarget {
 
 // Label of each durable command, as its outcome is reported.
 const COMMAND_LABELS: Readonly<Record<GuidingCommand, string>> = { startGuiding: 'Start guiding', stopGuiding: 'Stop guiding', pause: 'Pause', resume: 'Resume', dither: 'Dither' }
+
+// Dither patterns in menu order.
+const DITHER_MODES: readonly GuidingDitherMode[] = ['random', 'spiral', 'golden', 'grid']
+
+// Labels of the dither patterns.
+const DITHER_MODE_LABELS: Readonly<Record<GuidingDitherMode, string>> = { random: 'Random', spiral: 'Spiral', golden: 'Golden Spiral', grid: 'Grid' }
 
 // Labels of the tracking modes.
 const TRACKING_LABELS: Readonly<Record<GuidingSettings['trackingMode'], string>> = { singleStar: 'Single Star', multiStar: 'Multi Star' }
@@ -143,9 +153,13 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				</Notice>
 			</PanelSection>
 			{session && <SessionState session={session} />}
+			{session?.star && <StarProfileSection star={session.star} pixelScale={session.pixelScale} frameId={session.frame?.frameId} />}
 			<PanelSection title="Exposure and Tracking">
 				<NumberInput label="Exposure" value={settings.exposureTime} min={GUIDING_MINIMUM_EXPOSURE} max={GUIDING_MAXIMUM_EXPOSURE} step={0.5} suffix="s" disabled={pending} onChange={changeExposure} />
 				<SegmentedControl label="Tracking" options={['singleStar', 'multiStar'] as const} value={settings.trackingMode} format={(mode) => TRACKING_LABELS[mode]} disabled={running || pending} onChange={(trackingMode) => update({ trackingMode })} />
+				<NumberInput label="Search Region" value={settings.searchRegion} min={GUIDING_MINIMUM_SEARCH_REGION} max={GUIDING_MAXIMUM_SEARCH_REGION} step={4} suffix="px" disabled={running || pending} onChange={(searchRegion) => update({ searchRegion: Math.round(searchRegion) })} />
+				<Checkbox label="Sticky lock position" checked={settings.stickyLockPosition} disabled={running || pending} onChange={(stickyLockPosition) => update({ stickyLockPosition })} />
+				<Notice>The guide star is searched in a square of this side around the lock. A sticky lock stays exactly where it is when the guider starts again, instead of moving to the star.</Notice>
 			</PanelSection>
 			<PanelSection title="Calibration">
 				<Checkbox label="Calibrate again on every start" checked={settings.recalibrate} disabled={pending} onChange={(recalibrate) => update({ recalibrate })} />
@@ -160,7 +174,9 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 						Calculate
 					</Button>
 				</div>
+				<Checkbox label="Reverse DEC output after a meridian flip" checked={settings.reverseDecOutputAfterMeridianFlip} disabled={running || pending} onChange={(reverseDecOutputAfterMeridianFlip) => update({ reverseDecOutputAfterMeridianFlip })} />
 				<Notice>Calculate sizes the step to move the star about 25 px in 12 RA steps at the declination the mount points at; calibrate away from the pole.</Notice>
+				<Notice>Reversing the DEC output applies when the calibration is flipped for a meridian flip, which guiding does not do yet; leave it off for mounts that reverse it themselves.</Notice>
 			</PanelSection>
 			<PanelSection title="Corrections">
 				<NumberInput label="RA Aggressiveness" value={settings.aggressivenessRA} min={0} max={1} step={0.05} disabled={running || pending} onChange={(aggressivenessRA) => update({ aggressivenessRA })} />
@@ -173,6 +189,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				<NumberInput label="Settle For" value={settings.settle.time} min={0} max={600} step={1} suffix="s" disabled={pending} onChange={(time) => update({ settle: { ...settings.settle, time } })} />
 				<NumberInput label="Settle Timeout" value={settings.settle.timeout} min={1} max={3600} step={5} suffix="s" disabled={pending} onChange={(timeout) => update({ settle: { ...settings.settle, timeout } })} />
 				<NumberInput label="Dither" value={settings.ditherPixels} min={0.1} max={100} step={0.5} suffix="px" disabled={pending} onChange={(ditherPixels) => update({ ditherPixels })} />
+				<Select label="Dither Pattern" options={DITHER_MODES} value={settings.ditherMode} format={(mode) => DITHER_MODE_LABELS[mode]} disabled={running || pending} onChange={(ditherMode) => update({ ditherMode })} />
 				<Checkbox label="Dither in RA only" checked={settings.ditherRaOnly} disabled={pending} onChange={(ditherRaOnly) => update({ ditherRaOnly })} />
 			</PanelSection>
 			<PanelSection title="Controls">
@@ -261,12 +278,14 @@ function SessionControls({ session, settings, pending }: SessionControlsProps) {
 	)
 }
 
-// State of a session: the guider state and its lock, the calibration, the RMS, the latest command, and why it ended.
+// State of a session: the progress of the guide exposure, the guider state and its lock, the calibration, the RMS,
+// the latest command, and why it ended.
 function SessionState({ session }: { readonly session: GuidingSessionSummary }) {
 	const { calibration, rms, command, pixelScale } = session
 
 	return (
 		<PanelSection title="Session">
+			{session.active && session.exposureProgress && <FrameProgress exposure={session.exposureProgress} />}
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 				<Row label="State">
 					<span className={cn(session.state === 'lostLock' && 'text-danger', session.state === 'guiding' && 'text-success')}>{session.active ? GUIDING_STATE_LABELS[session.state] : session.lost ? 'Lost' : 'Stopped'}</span>

@@ -34,8 +34,11 @@ import {
 	DEFAULT_GUIDING_SETTINGS,
 	GUIDING_MAXIMUM_EXPOSURE,
 	GUIDING_MAXIMUM_PULSE,
+	GUIDING_MAXIMUM_SEARCH_REGION,
 	GUIDING_MINIMUM_EXPOSURE,
 	GUIDING_MINIMUM_PULSE,
+	GUIDING_MINIMUM_SEARCH_REGION,
+	type GuidingDitherMode,
 	type GuidingSettings,
 	DEFAULT_TPPA_SETTINGS,
 	TPPA_MAXIMUM_ROTATION,
@@ -46,6 +49,9 @@ import {
 // Reading of persisted profiles: every version of the format (see PROFILES_VERSION) is restored into the current one,
 // field by field, keeping what is valid and falling back to the default of anything missing or invalid. A document
 // written by a newer version is never read.
+
+// Dither patterns of the guiding form.
+const DITHER_MODES: ReadonlySet<string> = new Set<GuidingDitherMode>(['random', 'spiral', 'golden', 'grid'])
 
 // Acquisition modes of the Camera Acquisition form.
 const EXPOSURE_MODES: ReadonlySet<string> = new Set<CameraAcquisitionSettings['exposureMode']>(['single', 'fixed', 'loop'])
@@ -312,6 +318,8 @@ function normalizeGuiding(value: unknown): GuidingSettings | undefined {
 	return {
 		exposureTime: boundedNumber(value.exposureTime, GUIDING_MINIMUM_EXPOSURE, GUIDING_MAXIMUM_EXPOSURE, defaults.exposureTime),
 		trackingMode: value.trackingMode === 'multiStar' ? 'multiStar' : 'singleStar',
+		searchRegion: Number.isInteger(value.searchRegion) ? boundedNumber(value.searchRegion, GUIDING_MINIMUM_SEARCH_REGION, GUIDING_MAXIMUM_SEARCH_REGION, defaults.searchRegion) : defaults.searchRegion,
+		stickyLockPosition: value.stickyLockPosition === true,
 		recalibrate: value.recalibrate !== false,
 		calibrationPulse: pulse(value.calibrationPulse, defaults.calibrationPulse),
 		aggressivenessRA: boundedNumber(value.aggressivenessRA, 0, 1, defaults.aggressivenessRA),
@@ -325,6 +333,8 @@ function normalizeGuiding(value: unknown): GuidingSettings | undefined {
 		},
 		ditherPixels: boundedNumber(value.ditherPixels, Number.MIN_VALUE, Number.MAX_VALUE, defaults.ditherPixels),
 		ditherRaOnly: value.ditherRaOnly === true,
+		ditherMode: typeof value.ditherMode === 'string' && DITHER_MODES.has(value.ditherMode) ? (value.ditherMode as GuidingDitherMode) : defaults.ditherMode,
+		reverseDecOutputAfterMeridianFlip: value.reverseDecOutputAfterMeridianFlip === true,
 	}
 }
 

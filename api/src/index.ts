@@ -169,6 +169,7 @@ export type {
 export type {
 	GuidingCalibrationSummary,
 	GuidingCameraSettings,
+	GuidingClientSettings,
 	GuidingCommand,
 	GuidingCommandAccepted,
 	GuidingCommandStatus,
@@ -191,6 +192,7 @@ export type {
 	GuidingTelemetrySample,
 } from './guiding'
 export type { TppaAlignment, TppaAttempt, TppaCaptureSettings, TppaEvent, TppaGeometry, TppaOverlay, TppaPoint, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaStartResponse, TppaState } from './tppa'
+export type { GuidingProfileCut, GuidingStarProfile } from './guidingprofile'
 export type { ServerEvent } from './websocket'
 export { websocket }
 

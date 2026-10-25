@@ -70,6 +70,7 @@ describe('requests', () => {
 		expect('exposureTime' in request.camera).toBeFalse()
 		expect(request).toMatchObject({ guideOutput: OUTPUT, exposure: 1500, trackingMode: 'multiStar', camera: { gain: 120, binX: 2, binY: 2 }, calibration: { raPulse: 650, decPulse: 650 }, guider: { aggressivenessRA: 0.4, aggressivenessDEC: 0.65, maxPulseMsRA: 2000, maxPulseMsDEC: 2500 } })
 		expect('optics' in request).toBeFalse()
+		expect(request.client).toEqual({ ditherMode: 'random', searchRegion: 64, stickyLockPosition: false, reverseDecOutputAfterMeridianFlip: false })
 		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, exposure, OUTPUT, {}, DEFAULT_BUILTIN_SETTINGS, 240).optics).toEqual({ focalLength: 240 })
 	})
 

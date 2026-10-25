@@ -1,4 +1,4 @@
-import type { AutoFocusRequest, CaptureRequest, FlatWizardFilter, GuidingStartRequest, PlateSolveRequest, StarDetectionRequest } from 'api'
+import type { AutoFocusRequest, CaptureRequest, FlatWizardFilter, GuidingClientSettings, GuidingStartRequest, PlateSolveRequest, StarDetectionRequest } from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
@@ -294,6 +294,11 @@ export interface GuidingSettings {
 	exposureTime: number
 	// Whether the tracker measures one star or many.
 	trackingMode: GuidingStartRequest['trackingMode']
+	// Side of the square the guide star is searched in around the lock, in guide-camera pixels, in
+	// [GUIDING_MINIMUM_SEARCH_REGION, GUIDING_MAXIMUM_SEARCH_REGION].
+	searchRegion: number
+	// Whether the lock position stays exactly where it is when the guider re-initializes, instead of following the star.
+	stickyLockPosition: boolean
 	// Whether Start Guiding calibrates again instead of reusing the calibration solved earlier in the session.
 	recalibrate: boolean
 	// Duration of each calibration pulse, in milliseconds, in [GUIDING_MINIMUM_PULSE, GUIDING_MAXIMUM_PULSE].
@@ -312,7 +317,21 @@ export interface GuidingSettings {
 	ditherPixels: number
 	// Whether a dither moves the RA axis only.
 	ditherRaOnly: boolean
+	// Pattern of the successive dithers.
+	ditherMode: GuidingDitherMode
+	// Whether flipping the calibration for a meridian flip also reverses the DEC output, for mounts that do not reverse
+	// it themselves.
+	reverseDecOutputAfterMeridianFlip: boolean
 }
+
+// Pattern of the successive dithers: random offsets, an outward spiral (both as PHD2), a golden-angle spiral, or a grid.
+export type GuidingDitherMode = NonNullable<GuidingClientSettings['ditherMode']>
+
+// Smallest side of the star search square, in guide-camera pixels, as the toolkit clamps it.
+export const GUIDING_MINIMUM_SEARCH_REGION = 16
+
+// Largest side of the star search square, in guide-camera pixels, as the toolkit clamps it.
+export const GUIDING_MAXIMUM_SEARCH_REGION = 128
 
 // Shortest guide exposure of the guiding form, in seconds (10 ms).
 export const GUIDING_MINIMUM_EXPOSURE = 0.01
@@ -328,10 +347,13 @@ export const GUIDING_MAXIMUM_PULSE = 10000
 
 // Guiding form of a camera that has none yet: 2 s exposures on one star, the toolkit's controller defaults (gains 0.7
 // and 0.65, ceilings 2000 and 2500 ms, 650 ms calibration pulses), recalibrating on every start, settling within 1.5 px
-// for 10 s in at most 60 s, and dithering by 5 px on both axes.
+// for 10 s in at most 60 s, and dithering by 5 px on both axes at random; the toolkit's 64 px search square, a lock
+// that follows the star, and a meridian flip that keeps the DEC output.
 export const DEFAULT_GUIDING_SETTINGS: GuidingSettings = {
 	exposureTime: 2,
 	trackingMode: 'singleStar',
+	searchRegion: 64,
+	stickyLockPosition: false,
 	recalibrate: true,
 	calibrationPulse: 650,
 	aggressivenessRA: 0.7,
@@ -341,6 +363,8 @@ export const DEFAULT_GUIDING_SETTINGS: GuidingSettings = {
 	settle: { pixels: 1.5, time: 10, timeout: 60 },
 	ditherPixels: 5,
 	ditherRaOnly: false,
+	ditherMode: 'random',
+	reverseDecOutputAfterMeridianFlip: false,
 }
 
 // A complete working environment: the selected connection, the equipment assigned on each connection,

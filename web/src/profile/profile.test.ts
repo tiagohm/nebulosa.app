@@ -738,15 +738,45 @@ describe('camera forms', () => {
 		expect(guidingSettings(activeProfile(state).settings, GUIDE)).toEqual(DEFAULT_GUIDING_SETTINGS)
 
 		const settle = { pixels: 0.8, time: 5, timeout: 30 }
-		setGuidingSettings(state, GUIDE, { exposureTime: 1.5, trackingMode: 'multiStar', recalibrate: false, aggressivenessRA: 0.5, settle, ditherPixels: 3, ditherRaOnly: true })
+		setGuidingSettings(state, GUIDE, { exposureTime: 1.5, trackingMode: 'multiStar', searchRegion: 40, stickyLockPosition: true, recalibrate: false, aggressivenessRA: 0.5, settle, ditherPixels: 3, ditherRaOnly: true, ditherMode: 'spiral', reverseDecOutputAfterMeridianFlip: true })
 		expect(guidingSettings(activeProfile(state).settings, MAIN)).toEqual(DEFAULT_GUIDING_SETTINGS)
 		await Bun.sleep(0)
 
 		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
-		expect(guidingSettings(reloaded, GUIDE)).toEqual({ ...DEFAULT_GUIDING_SETTINGS, exposureTime: 1.5, trackingMode: 'multiStar', recalibrate: false, aggressivenessRA: 0.5, settle, ditherPixels: 3, ditherRaOnly: true })
+		expect(guidingSettings(reloaded, GUIDE)).toEqual({
+			...DEFAULT_GUIDING_SETTINGS,
+			exposureTime: 1.5,
+			trackingMode: 'multiStar',
+			searchRegion: 40,
+			stickyLockPosition: true,
+			recalibrate: false,
+			aggressivenessRA: 0.5,
+			settle,
+			ditherPixels: 3,
+			ditherRaOnly: true,
+			ditherMode: 'spiral',
+			reverseDecOutputAfterMeridianFlip: true,
+		})
 
 		const invalid = newStores()
-		const bad = { exposureTime: 0, trackingMode: 'x', focalLength: -1, recalibrate: 'no', calibrationPulse: 0, aggressivenessRA: 2, aggressivenessDEC: -1, maximumPulseRA: 1e9, maximumPulseDEC: Number.NaN, settle: { pixels: 0, time: -1, timeout: 0 }, ditherPixels: 0, ditherRaOnly: 'yes' }
+		const bad = {
+			exposureTime: 0,
+			trackingMode: 'x',
+			focalLength: -1,
+			recalibrate: 'no',
+			calibrationPulse: 0,
+			aggressivenessRA: 2,
+			aggressivenessDEC: -1,
+			maximumPulseRA: 1e9,
+			maximumPulseDEC: Number.NaN,
+			settle: { pixels: 0, time: -1, timeout: 0 },
+			ditherPixels: 0,
+			ditherRaOnly: 'yes',
+			searchRegion: 200,
+			stickyLockPosition: 'yes',
+			ditherMode: 'square',
+			reverseDecOutputAfterMeridianFlip: 1,
+		}
 		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 9, profiles: [{ id: 'a', name: 'A', settings: { cameras: { c: { 'cam-guide': { guiding: bad } } } } }] }))
 		expect(load(invalid).profiles[0].settings.cameras).toEqual({ c: { 'cam-guide': { guiding: DEFAULT_GUIDING_SETTINGS } } })
 

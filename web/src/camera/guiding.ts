@@ -1,5 +1,5 @@
 // oxfmt-ignore
-import type { CameraCapabilities, CaptureSnoop, StarDetectionSettings, GuidingDitherRequest, GuidingEventRecord, GuidingFrameOverlay, GuidingPage, GuidingPauseRequest, GuidingResumeRequest, GuidingSessionSummary, GuidingSnapshot, GuidingStartGuidingRequest, GuidingStartRequest, GuidingTelemetrySample, OperationDevice, ServerEvent } from 'api'
+import type { CameraCapabilities, CaptureSnoop, StarDetectionSettings, GuidingCalibrationProgress, GuidingDitherRequest, GuidingEventRecord, GuidingFrameOverlay, GuidingPage, GuidingPauseRequest, GuidingResumeRequest, GuidingSessionSummary, GuidingSnapshot, GuidingStartGuidingRequest, GuidingStartRequest, GuidingTelemetrySample, OperationDevice, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
@@ -32,6 +32,9 @@ export interface GuidingFrame {
 	readonly imageId: string
 	// Lock, search square, measurement, and stars of the frame, in pixels of the full frame from its top-left.
 	readonly overlay: GuidingFrameOverlay
+	// Document and overlay of the frame before it, kept until the tab shows the newer one, so its markers never blink
+	// out while the tab still shows the older image.
+	readonly previous?: { readonly imageId: string; readonly overlay: GuidingFrameOverlay }
 }
 
 // Guiding state of the tab.
@@ -132,6 +135,54 @@ export function guidingCalibrationPulse(focalLength: number, pixelSize: number, 
 	if (!(scale > 0 && Number.isFinite(scale)) || !(speed > 1e-6)) return undefined
 	const pulse = Math.round(((GUIDING_CALIBRATION_DISTANCE * scale) / speed / GUIDING_CALIBRATION_STEPS) * 1000)
 	return Math.min(GUIDING_MAXIMUM_PULSE, Math.max(GUIDING_MINIMUM_PULSE, pulse))
+}
+
+// Inputs of the calibration step calculator that a guiding panel knows; each is absent while unknown.
+export interface GuidingCalibrationInputs {
+	// Effective focal length of the guide telescope, in mm.
+	readonly focalLength?: number
+	// Unbinned pixel size of the guide camera, in µm.
+	readonly pixelSize?: number
+	// RA guide rate of the guide output, as a fraction of the sidereal rate.
+	readonly guideRate?: number
+	// Declination the mount points at, in radians.
+	readonly declination?: number
+}
+
+// Returns why the calibration step cannot be calculated from the inputs, naming each missing one and where it comes
+// from, or undefined when guidingCalibrationPulse can compute it (binning in pixels).
+export function guidingCalibrationBlocker({ focalLength, pixelSize, guideRate, declination }: GuidingCalibrationInputs, binning: number): string | undefined {
+	const missing = [
+		focalLength === undefined && 'the focal length of the Guide Telescope, entered in Equipment Setup',
+		pixelSize === undefined && 'the pixel size of the guide camera, which it reports once connected',
+		guideRate === undefined && 'the RA guide rate of the guide output, which its mount or camera reports once connected',
+		declination === undefined && 'the declination of the Mount of the Equipment Setup, once connected',
+	].filter((reason) => reason !== false)
+
+	if (missing.length > 0) return `Calculate needs ${missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(', ')} and ${missing.at(-1)}`}.`
+	if (focalLength === undefined || pixelSize === undefined || guideRate === undefined || declination === undefined) return undefined
+	if (guidingCalibrationPulse(focalLength, pixelSize, binning, guideRate, declination) === undefined) return 'The RA motion of a pulse vanishes: the guide rate is zero or the mount points at the pole. Calibrate away from the pole.'
+	return undefined
+}
+
+// Labels of the phases of a calibration, as the session shows them.
+export const GUIDING_CALIBRATION_PHASE_LABELS: Readonly<Record<GuidingCalibrationProgress['phase'], string>> = {
+	idle: 'Starting',
+	precheck: 'Checking the star',
+	acquireLock: 'Locking on the star',
+	raForwardPulse: 'Moving in RA',
+	raForwardMeasure: 'Measuring the RA move',
+	raForwardComplete: 'RA leg done',
+	raClearPulse: 'Returning in RA',
+	raClearMeasure: 'Measuring the RA return',
+	decForwardPulse: 'Moving in DEC',
+	decForwardMeasure: 'Measuring the DEC move',
+	decBacklashClearing: 'Clearing the DEC backlash',
+	decForwardComplete: 'DEC leg done',
+	solving: 'Solving the calibration',
+	validating: 'Validating the calibration',
+	completed: 'Completed',
+	failed: 'Failed',
 }
 
 // Builds the Start Guiding request of the guiding form.
@@ -294,7 +345,7 @@ export function handleGuidingEvent(state: GuidingRuntime, event: ServerEvent, re
 		case 'guiding:frame': {
 			if (!sessionById(state, event.sessionId)) return
 			const known = state.frames[event.sessionId]
-			if (!known || event.frameId > known.frameId) state.frames[event.sessionId] = { frameId: event.frameId, imageId: event.imageId, overlay: event.overlay }
+			if (!known || event.frameId > known.frameId) state.frames[event.sessionId] = { frameId: event.frameId, imageId: event.imageId, overlay: event.overlay, ...(known && { previous: { imageId: known.imageId, overlay: known.overlay } }) }
 		}
 	}
 }

@@ -140,6 +140,9 @@ describe('start', () => {
 		await waitUntil(() => context.events.some((event) => event.type === 'guiding:frame'))
 		const frame = context.events.find((event): event is Extract<GuidingServerEvent, { type: 'guiding:frame' }> => event.type === 'guiding:frame')!
 		expect(frame.overlay.searchRegion).toBe(40)
+		// Every star carries its size, which the viewer draws its marker from at high zoom.
+		expect(frame.overlay.stars.length).toBeGreaterThan(0)
+		for (const star of frame.overlay.stars) expect(star.hfd).toBeGreaterThan(0)
 
 		const progress = context.events.flatMap((event) => (event.type === 'guiding:updated' && event.session.exposureProgress ? [event.session.exposureProgress] : []))
 		expect(progress.length).toBeGreaterThan(0)
@@ -199,6 +202,10 @@ describe('guiding', () => {
 		expect(await context.guiding.startGuiding(sessionId, body).json()).toEqual(accepted)
 		await waitUntil(() => context.summary()?.guideOutputHeld === true)
 		expect(context.running('guideOutput.guiding')).toHaveLength(1)
+		// While it calibrates, the record follows the legs with the limits of the calibration settings.
+		const progress = () => context.events.findLast((event) => event.type === 'guiding:updated' && event.session.calibrating !== undefined)
+		await waitUntil(() => progress() !== undefined)
+		expect(progress()).toMatchObject({ session: { calibrating: { maxRaSteps: 20, raTarget: 12, decTarget: 10, clearingTarget: 4, maxBadFrames: 3 } } })
 		expect(context.summary()?.runOperationId).toBe(context.running('guideOutput.guiding')[0].operationId)
 		expect(context.operations.available(context.mount)).toBeFalse()
 		// The target is in use while guiding.
@@ -207,6 +214,8 @@ describe('guiding', () => {
 		const stopped = await context.guiding.stopGuiding(sessionId, { token: `token-${tokens++}` }).json()
 		await waitUntil(() => context.summary()?.command?.commandId === stopped.commandId && context.summary()?.command?.state !== 'running')
 		expect(context.summary()).toMatchObject({ command: { command: 'stopGuiding', state: 'succeeded' }, guideOutputHeld: false, active: true })
+		// The progress belongs to the calibration that ran, and goes with it.
+		expect(context.summary()?.calibrating).toBeUndefined()
 		await waitUntil(() => context.running('guideOutput.guiding').length === 0)
 		expect(context.operations.available(context.mount)).toBeTrue()
 		expect(context.guiding.clearTarget(sessionId).status).toBe(204)

@@ -12,14 +12,16 @@ import { useStarResult } from '../stars/useStarResult'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { holdCameraFrame } from './cameratabs'
-import { type ImageStarsState, imagesState, setStarMarkers } from './images'
+import { type ImageStarsState, imagesState, imageUnavailableReason, setStarMarkers } from './images'
 import type { ImageToolPanelProps } from './tools'
 
 // Star Detection tool of the Images workspace: runs a detection of the active document on the server with
 // the built-in detector or ASTAP, and shows the outcome, the aggregate HFD, the star selected in the viewer,
 // and how the markers are drawn. Settings are the profile's star detection request, shared by every document and by
-// the frames of Auto Focus, and sent only by Run Detection; a result always belongs to the image it measured. ASTAP's executable and timeout are not set
-// here but in Settings → External Tools, which the detector section links to.
+// the frames of Auto Focus and Guiding, and sent only by Run Detection; a result always belongs to the image it measured.
+// The settings are editable before the document has an image (a camera tab waiting for its first frame), with Run
+// Detection disabled until it has one. ASTAP's executable and timeout are not set here but in Settings → External
+// Tools, which the detector section links to.
 
 // Text shown for a value the result does not have.
 const MISSING = '—'
@@ -42,33 +44,28 @@ export function StarDetectionPanel({ document, view, onOpen }: ImageToolPanelPro
 		)
 	}
 
-	if (!document.info || !view) {
-		return (
-			<PanelSection title="Star Detection">
-				<p className="m-0 text-ink-300">{document.status === 'loading' ? 'Opening…' : 'The image is unavailable.'}</p>
-			</PanelSection>
-		)
-	}
-
-	return <StarDetection documentKey={document.key} imageId={document.info.id} stars={view.stars} />
+	return <StarDetection documentKey={document.key} imageId={document.info?.id} stars={view?.stars} unavailable={imageUnavailableReason(document)} />
 }
 
 interface StarDetectionProps {
 	// Key of the document.
 	readonly documentKey: string
-	// Server id of its image.
-	readonly imageId: string
-	// Star markers of the document.
-	readonly stars: ImageStarsState
+	// Server id of its image; absent until it has one.
+	readonly imageId?: string
+	// Star markers of the document; absent without a view.
+	readonly stars?: ImageStarsState
+	// Why the document has no image yet.
+	readonly unavailable?: string
 }
 
-// Sections of the Star Detection panel of an opened image.
-function StarDetection({ documentKey, imageId, stars }: StarDetectionProps) {
+// Sections of the Star Detection panel of a document: the settings always, the analysis and the results once it has an
+// image.
+function StarDetection({ documentKey, imageId, stars, unavailable }: StarDetectionProps) {
 	const { job, result, resultError } = useStarResult(imageId)
 	const { submitErrors } = useSnapshot(starsState)
 	const profiles = useSnapshot(profileState)
 	const request = starDetectionSettings(activeProfile(profiles).settings)
-	const selected = result && stars.selected?.jobId === result.jobId ? result.stars[stars.selected.index] : undefined
+	const selected = result && stars?.selected?.jobId === result.jobId ? result.stars[stars.selected.index] : undefined
 	const edit = (next: StarDetectionRequest) => setStarDetectionSettings(profileState, next)
 
 	return (
@@ -82,14 +79,20 @@ function StarDetection({ documentKey, imageId, stars }: StarDetectionProps) {
 			<PanelSection title="Acceptance">
 				<AcceptanceControls request={request} onChange={edit} />
 			</PanelSection>
-			<Analysis documentKey={documentKey} imageId={imageId} request={request} job={job} submitError={submitErrors[imageId]} />
-			<Results job={job} result={result} resultError={resultError} />
-			<SelectedStar star={selected} />
-			<PanelSection title="Visualization">
-				<Checkbox label="Show stars" checked={stars.visible} onChange={(visible) => setStarMarkers(imagesState, documentKey, { visible })} />
-				<Checkbox label="Accepted stars only" checked={stars.acceptedOnly} disabled={!stars.visible} onChange={(acceptedOnly) => setStarMarkers(imagesState, documentKey, { acceptedOnly })} />
-				<Notice>Click a star in the image to inspect it. Showing or hiding the markers never runs a detection.</Notice>
-			</PanelSection>
+			<Analysis documentKey={documentKey} imageId={imageId} request={request} job={job} submitError={imageId === undefined ? undefined : submitErrors[imageId]} unavailable={unavailable} />
+			{imageId !== undefined && (
+				<>
+					<Results job={job} result={result} resultError={resultError} />
+					<SelectedStar star={selected} />
+				</>
+			)}
+			{stars && (
+				<PanelSection title="Visualization">
+					<Checkbox label="Show stars" checked={stars.visible} onChange={(visible) => setStarMarkers(imagesState, documentKey, { visible })} />
+					<Checkbox label="Accepted stars only" checked={stars.acceptedOnly} disabled={!stars.visible} onChange={(acceptedOnly) => setStarMarkers(imagesState, documentKey, { acceptedOnly })} />
+					<Notice>Click a star in the image to inspect it. Showing or hiding the markers never runs a detection.</Notice>
+				</PanelSection>
+			)}
 		</>
 	)
 }
@@ -97,8 +100,10 @@ function StarDetection({ documentKey, imageId, stars }: StarDetectionProps) {
 interface AnalysisProps {
 	// Key of the document.
 	readonly documentKey: string
-	// Server id of the image.
-	readonly imageId: string
+	// Server id of the image; absent until the document has one.
+	readonly imageId?: string
+	// Why the document has no image yet.
+	readonly unavailable?: string
 	// Star detection request of the profile.
 	readonly request: StarDetectionRequest
 	// Latest job of the image.
@@ -108,7 +113,7 @@ interface AnalysisProps {
 }
 
 // Run and Cancel, with the state of the latest job. Running holds the frame a camera tab shows first, so the frame analyzed stays shown.
-function Analysis({ documentKey, imageId, request, job, submitError }: AnalysisProps) {
+function Analysis({ documentKey, imageId, request, job, submitError, unavailable }: AnalysisProps) {
 	const active = isActive(job)
 	const now = useNow(active)
 	const astapReady = useAstapConfigured() || request.detector.provider !== 'astap'
@@ -118,8 +123,9 @@ function Analysis({ documentKey, imageId, request, job, submitError }: AnalysisP
 		<PanelSection title="Analysis">
 			<Actions>
 				<Button
-					disabled={active || !astapReady}
+					disabled={active || !astapReady || imageId === undefined}
 					onClick={() => {
+						if (imageId === undefined) return
 						holdCameraFrame(imagesState, documentKey)
 						void runDetection(starsState, imageId, request)
 					}}
@@ -131,6 +137,7 @@ function Analysis({ documentKey, imageId, request, job, submitError }: AnalysisP
 				</Button>
 			</Actions>
 			{!astapReady && <Notice error>ASTAP is not configured.</Notice>}
+			{unavailable && <Notice>{unavailable} The settings apply to the next detection.</Notice>}
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job ? (
 				<>
@@ -140,7 +147,7 @@ function Analysis({ documentKey, imageId, request, job, submitError }: AnalysisP
 					{changed && <Notice>The settings changed since this detection; run it again to apply them.</Notice>}
 				</>
 			) : (
-				<Notice>No detection of this image yet.</Notice>
+				imageId !== undefined && <Notice>No detection of this image yet.</Notice>
 			)}
 		</PanelSection>
 	)

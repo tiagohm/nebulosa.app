@@ -14,13 +14,14 @@ import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { Select } from '../ui/Select'
 import { holdCameraFrame } from './cameratabs'
-import { type ImagePlateSolvingState, imagesState, selectPlateSolution, setPlateSolveOverlay, setPlateSolveRequest } from './images'
+import { type ImagePlateSolvingState, imagesState, imageUnavailableReason, selectPlateSolution, setPlateSolveOverlay, setPlateSolveRequest } from './images'
 import type { ImageToolPanelProps } from './tools'
 
 // Plate Solver tool of the Images workspace: solves the active document on the server with ASTAP, Astrometry.net Local,
 // or Astrometry.net Online, and shows the solution (ICRS centre, scale, rotation, parity, field of view), the hints it
 // used with their origins, and its overlay. Settings are edited as the document's pending request and sent only by
-// Solve Image; zoom, pan, stretch, or the overlay never solve. A job stays bound to the image it solved, so switching
+// Solve Image; zoom, pan, stretch, or the overlay never solve. The settings are editable before the document has an
+// image (a camera tab waiting for its first frame), with Solve Image disabled until it has one. A job stays bound to the image it solved, so switching
 // documents never shows its solution on another one, and a job that ends never replaces the solution chosen. Solvers
 // are configured in Settings → External Tools, which the solver section links to; nothing here moves a mount.
 
@@ -48,36 +49,39 @@ export function PlateSolverPanel({ document, view, onOpen }: ImageToolPanelProps
 		)
 	}
 
-	if (!document.info || !view) {
+	if (!view) {
 		return (
 			<PanelSection title="Plate Solving">
-				<p className="m-0 text-ink-300">{document.status === 'loading' ? 'Opening…' : 'The image is unavailable.'}</p>
+				<p className="m-0 text-ink-300">{imageUnavailableReason(document) ?? 'The image is unavailable.'}</p>
 			</PanelSection>
 		)
 	}
 
-	return <PlateSolver documentKey={document.key} imageId={document.info.id} plateSolving={view.plateSolving} />
+	return <PlateSolver documentKey={document.key} imageId={document.info?.id} plateSolving={view.plateSolving} unavailable={imageUnavailableReason(document)} />
 }
 
 interface PlateSolverProps {
 	// Key of the document.
 	readonly documentKey: string
-	// Server id of its image.
-	readonly imageId: string
+	// Server id of its image; absent until it has one.
+	readonly imageId?: string
 	// Plate solving request, solution shown, and overlay of the document.
 	readonly plateSolving: ImagePlateSolvingState
+	// Why the document has no image yet.
+	readonly unavailable?: string
 }
 
-// Sections of the Plate Solver panel of an opened image.
-function PlateSolver({ documentKey, imageId, plateSolving }: PlateSolverProps) {
+// Sections of the Plate Solver panel of a document: the settings always, the execution and the solutions once it has
+// an image.
+function PlateSolver({ documentKey, imageId, plateSolving, unavailable }: PlateSolverProps) {
 	const state = useSnapshot(plateSolvingState)
 	const { job, result, solution, header, resultError } = usePlateSolution(imageId, plateSolving.selected)
 	const { request } = plateSolving
 	const edit = (next: PlateSolveRequest) => setPlateSolveRequest(imagesState, documentKey, next)
-	const offered = state.hints[imageId]
+	const offered = imageId === undefined ? undefined : state.hints[imageId]
 
 	useEffect(() => {
-		void loadHints(plateSolvingState, imageId)
+		if (imageId !== undefined) void loadHints(plateSolvingState, imageId)
 	}, [imageId])
 
 	return (
@@ -94,9 +98,13 @@ function PlateSolver({ documentKey, imageId, plateSolving }: PlateSolverProps) {
 			<PanelSection title="Advanced Settings">
 				<AdvancedControls request={request} onChange={edit} />
 			</PanelSection>
-			<Execution documentKey={documentKey} imageId={imageId} request={request} job={plateSolving.selected === 'header' ? undefined : job} submitError={state.submitErrors[imageId]} />
-			<Solution job={plateSolving.selected === 'header' ? undefined : job} result={result} solution={solution} fromHeader={plateSolving.selected === 'header'} resultError={resultError} />
-			<Solutions documentKey={documentKey} imageId={imageId} selected={plateSolving.selected} header={header} />
+			<Execution documentKey={documentKey} imageId={imageId} request={request} job={plateSolving.selected === 'header' ? undefined : job} submitError={imageId === undefined ? undefined : state.submitErrors[imageId]} unavailable={unavailable} />
+			{imageId !== undefined && (
+				<>
+					<Solution job={plateSolving.selected === 'header' ? undefined : job} result={result} solution={solution} fromHeader={plateSolving.selected === 'header'} resultError={resultError} />
+					<Solutions documentKey={documentKey} imageId={imageId} selected={plateSolving.selected} header={header} />
+				</>
+			)}
 			<PanelSection title="Visualization">
 				<Checkbox label="Show WCS overlay" checked={plateSolving.overlay} onChange={(overlay) => setPlateSolveOverlay(imagesState, documentKey, { overlay })} />
 				<Checkbox label="RA/Dec grid" checked={plateSolving.grid} disabled={!plateSolving.overlay} onChange={(grid) => setPlateSolveOverlay(imagesState, documentKey, { grid })} />
@@ -109,8 +117,10 @@ function PlateSolver({ documentKey, imageId, plateSolving }: PlateSolverProps) {
 interface ExecutionProps {
 	// Key of the document.
 	readonly documentKey: string
-	// Server id of the image.
-	readonly imageId: string
+	// Server id of the image; absent until the document has one.
+	readonly imageId?: string
+	// Why the document has no image yet.
+	readonly unavailable?: string
 	// Pending request of the document.
 	readonly request: PlateSolveRequest
 	// Job shown.
@@ -121,12 +131,13 @@ interface ExecutionProps {
 
 // Solve Image and Cancel, with the state of the job shown. Solving holds the frame a camera tab shows first, so the frame solved stays
 // shown.
-function Execution({ documentKey, imageId, request, job, submitError }: ExecutionProps) {
+function Execution({ documentKey, imageId, request, job, submitError, unavailable }: ExecutionProps) {
 	const active = isActive(job)
 	const now = useNow(active)
 	const configured = useSolverConfigured(request.provider)
 
 	async function solve() {
+		if (imageId === undefined) return
 		holdCameraFrame(imagesState, documentKey)
 		// A submission shows its own job: the choice of an earlier solution gives way to it.
 		selectPlateSolution(imagesState, documentKey, undefined)
@@ -136,7 +147,7 @@ function Execution({ documentKey, imageId, request, job, submitError }: Executio
 	return (
 		<PanelSection title="Execution">
 			<Actions>
-				<Button disabled={active || !configured} onClick={() => void solve()}>
+				<Button disabled={active || !configured || imageId === undefined} onClick={() => void solve()}>
 					Solve Image
 				</Button>
 				<Button variant="secondary" disabled={!active || !job} onClick={() => job && void cancelPlateSolve(job.jobId)}>
@@ -144,6 +155,7 @@ function Execution({ documentKey, imageId, request, job, submitError }: Executio
 				</Button>
 			</Actions>
 			{!configured && <Notice error>{PROVIDER_LABELS[request.provider]} is not configured.</Notice>}
+			{unavailable && <Notice>{unavailable} The settings apply to the next solve.</Notice>}
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job ? (
 				<>
@@ -156,7 +168,7 @@ function Execution({ documentKey, imageId, request, job, submitError }: Executio
 					{job.error && <Notice error>{job.error}</Notice>}
 				</>
 			) : (
-				<Notice>No plate solve of this image yet.</Notice>
+				imageId !== undefined && <Notice>No plate solve of this image yet.</Notice>
 			)}
 		</PanelSection>
 	)

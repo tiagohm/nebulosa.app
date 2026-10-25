@@ -260,6 +260,14 @@ export function activeDocument(state: { readonly documents: readonly ImageDocume
 	return state.documents.find((d) => d.key === state.activeKey)
 }
 
+// Returns why a document has no image to work on yet, for the tools that edit their settings meanwhile and run once it
+// has one: it is opening, its camera has not sent a frame, or its image could not be read; undefined once it has one.
+export function imageUnavailableReason(document: Pick<ImageDocument, 'status' | 'info' | 'camera'>): string | undefined {
+	if (document.info) return undefined
+	if (document.status === 'loading') return 'Opening the image…'
+	return document.camera ? 'Waiting for the first frame of the camera.' : 'The image is unavailable.'
+}
+
 // Returns the view state of the document shown, if any.
 export function activeView<T extends ImageViewState>(state: { readonly views: Readonly<Record<string, T>>; readonly activeKey?: string }): T | undefined {
 	return state.activeKey === undefined ? undefined : state.views[state.activeKey]

@@ -17,6 +17,7 @@ import {
 	editDisplay,
 	type ImagesIo,
 	type ImagesState,
+	imageUnavailableReason,
 	openImage,
 	ORIGINAL_DISPLAY_SETTINGS,
 	resetDisplay,
@@ -538,4 +539,11 @@ describe('plate solving', () => {
 		expect(state.views[b]?.plateSolving).toEqual({ request: { provider: 'astap', strategy: 'assisted' }, overlay: true, grid: false })
 		expect(calls.length).toBe(requests)
 	})
+})
+
+test('a document without an image says why, so its tools keep their settings editable meanwhile', () => {
+	expect(imageUnavailableReason({ status: 'loading' })).toBe('Opening the image…')
+	expect(imageUnavailableReason({ status: 'ready', camera: {} as never })).toBe('Waiting for the first frame of the camera.')
+	expect(imageUnavailableReason({ status: 'error' })).toBe('The image is unavailable.')
+	expect(imageUnavailableReason({ status: 'ready', info: {} as never })).toBeUndefined()
 })

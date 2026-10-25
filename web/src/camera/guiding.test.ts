@@ -4,7 +4,24 @@ import { proxy } from 'valtio'
 import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_GUIDING_SETTINGS, GUIDING_MAXIMUM_PULSE as GUIDING_MAXIMUM_PULSE_CLAMP } from '../profile/schema'
 import { DEFAULT_BUILTIN_SETTINGS } from '../stars/stars'
 import { cameraKey } from './capture'
-import { guideFocalLength, GUIDING_TELEMETRY_KEPT, guidingBlocker, guidingCalibrationPulse, guidingDitherRequest, guidingRequest, guidingRunning, type GuidingRuntime, guidingStartRequest, handleGuidingEvent, refreshGuiding, setGuidingExposure, startGuiding, startGuidingSession, stopGuidingSession } from './guiding'
+import {
+	guideFocalLength,
+	GUIDING_TELEMETRY_KEPT,
+	guidingBlocker,
+	guidingCalibrationBlocker,
+	guidingCalibrationPulse,
+	guidingDitherRequest,
+	guidingRequest,
+	guidingRunning,
+	type GuidingRuntime,
+	guidingStartRequest,
+	handleGuidingEvent,
+	refreshGuiding,
+	setGuidingExposure,
+	startGuiding,
+	startGuidingSession,
+	stopGuidingSession,
+} from './guiding'
 
 function newState() {
 	return proxy<GuidingRuntime>({ sessions: {}, events: {}, telemetry: {}, frames: {}, pending: {}, errors: {} })
@@ -91,6 +108,16 @@ describe('requests', () => {
 		expect(guideFocalLength(undefined)).toBeUndefined()
 	})
 
+	test('says which inputs the calibration step calculator lacks, and when the RA motion vanishes', () => {
+		const known = { focalLength: 200, pixelSize: 3.75, guideRate: 0.5, declination: 0 }
+		expect(guidingCalibrationBlocker(known, 1)).toBeUndefined()
+		expect(guidingCalibrationBlocker({ ...known, focalLength: undefined }, 1)).toBe('Calculate needs the focal length of the Guide Telescope, entered in Equipment Setup.')
+		expect(guidingCalibrationBlocker({ focalLength: 200, guideRate: 0.5 }, 1)).toBe('Calculate needs the pixel size of the guide camera, which it reports once connected and the declination of the Mount of the Equipment Setup, once connected.')
+		expect(guidingCalibrationBlocker({}, 1)).toStartWith('Calculate needs the focal length of the Guide Telescope, entered in Equipment Setup, the pixel size')
+		expect(guidingCalibrationBlocker({ ...known, declination: Math.PI / 2 }, 1)).toStartWith('The RA motion of a pulse vanishes')
+		expect(guidingCalibrationBlocker({ ...known, guideRate: 0 }, 1)).toStartWith('The RA motion of a pulse vanishes')
+	})
+
 	test('the calibration pulse moves the star 25 px in 12 RA steps, as the PHD2 calculator', () => {
 		// 200 mm, 3.75 µm: 3.8675"/px; 0.5× sidereal at the equator: 7.5205"/s; 25 px / 12 steps.
 		expect(guidingCalibrationPulse(200, 3.75, 1, 0.5, 0)).toBe(1071)
@@ -166,6 +193,9 @@ describe('events', () => {
 		handleGuidingEvent(state, { type: 'guiding:frame', sessionId: 's1', frameId: 3, imageId: 'i3', overlay }, NO_FETCH)
 		handleGuidingEvent(state, { type: 'guiding:frame', sessionId: 's1', frameId: 2, imageId: 'i2', overlay: { ...overlay, frameId: 2 } }, NO_FETCH)
 		expect(state.frames.s1.imageId).toBe('i3')
+		// The newer frame keeps the overlay of the one before it, which the tab still shows until it switches.
+		handleGuidingEvent(state, { type: 'guiding:frame', sessionId: 's1', frameId: 4, imageId: 'i4', overlay: { ...overlay, frameId: 4 } }, NO_FETCH)
+		expect(state.frames.s1).toMatchObject({ imageId: 'i4', previous: { imageId: 'i3', overlay: { frameId: 3 } } })
 
 		const { request, requests } = fakeFetch((url) => Response.json({ items: url.includes('events') ? [record(1), record(2)] : [sample(1)], truncated: false }))
 		handleGuidingEvent(state, { type: 'guiding:updated', session: summary({ sessionId: 's2', startedAt: 2000, eventSequence: 2, telemetryCursor: 1 }) }, request)

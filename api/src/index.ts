@@ -167,6 +167,7 @@ export type {
 	FlatWizardVerdict,
 } from './flatwizard'
 export type {
+	GuidingCalibrationProgress,
 	GuidingCalibrationSummary,
 	GuidingCameraSettings,
 	GuidingClientSettings,

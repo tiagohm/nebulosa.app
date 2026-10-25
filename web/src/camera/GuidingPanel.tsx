@@ -25,9 +25,11 @@ import {
 	clearGuidingCalibration,
 	clearGuidingTarget,
 	ditherGuiding,
+	GUIDING_CALIBRATION_PHASE_LABELS,
 	GUIDING_STATE_LABELS,
 	guideFocalLength,
 	guidingBlocker,
+	guidingCalibrationBlocker,
 	guidingCalibrationPulse,
 	guidingDitherRequest,
 	guidingRequest,
@@ -43,6 +45,7 @@ import {
 	stopGuiding,
 	stopGuidingSession,
 } from './guiding'
+import { CalibrationProgress } from './GuidingCalibrationProgress'
 import { StarProfileSection } from './GuidingStarProfile'
 
 // Contextual panel sections of Guiding, a camera operation of the Images camera tabs: the equipment it uses, the state
@@ -110,7 +113,12 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 	const outputAvailability = guideOutput && roleAvailability('GUIDE_OUTPUT', guideOutput, operations, outputState && !outputState.canPulseGuide ? 'The guide output cannot pulse guide.' : undefined)
 	const blocker = running ? undefined : guidingBlocker(availability, outputAvailability, settings, detection.provider === 'astap' && !astapConfigured)
 	const focalLength = guideFocalLength(profile.settings.guideTelescope)
-	const calibrationPulse = focalLength !== undefined && capabilities?.sensor && outputState?.hasGuideRate && mountState ? guidingCalibrationPulse(focalLength, capabilities.sensor.pixelSize, exposure.binX, outputState.guideRate.rightAscension, mountState.declination) : undefined
+	const calibrationInputs = { focalLength, pixelSize: capabilities?.sensor?.pixelSize, guideRate: outputState?.hasGuideRate ? outputState.guideRate.rightAscension : undefined, declination: mountState?.declination }
+	const calculateBlocker = guidingCalibrationBlocker(calibrationInputs, exposure.binX)
+	const calibrationPulse =
+		calculateBlocker === undefined && focalLength !== undefined && calibrationInputs.pixelSize !== undefined && calibrationInputs.guideRate !== undefined && calibrationInputs.declination !== undefined
+			? guidingCalibrationPulse(focalLength, calibrationInputs.pixelSize, exposure.binX, calibrationInputs.guideRate, calibrationInputs.declination)
+			: undefined
 
 	// Updates fields of the camera's guiding form.
 	function update(patch: Partial<GuidingSettings>) {
@@ -165,15 +173,11 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				<Checkbox label="Calibrate again on every start" checked={settings.recalibrate} disabled={pending} onChange={(recalibrate) => update({ recalibrate })} />
 				<div className="flex items-end gap-2">
 					<NumberInput label="Calibration Step" value={settings.calibrationPulse} min={GUIDING_MINIMUM_PULSE} max={GUIDING_MAXIMUM_PULSE} step={50} suffix="ms" disabled={running || pending} onChange={(calibrationPulse) => update({ calibrationPulse })} className="flex-1" />
-					<Button
-						variant="secondary"
-						disabled={running || pending || calibrationPulse === undefined}
-						title={calibrationPulse === undefined ? 'Needs the focal length of the Guide Telescope, the pixel size of the camera, the guide rate of the output, and the declination of the mount.' : `${calibrationPulse} ms`}
-						onClick={() => calibrationPulse !== undefined && update({ calibrationPulse })}
-					>
+					<Button variant="secondary" disabled={running || pending || calibrationPulse === undefined} title={calculateBlocker ?? (calibrationPulse === undefined ? undefined : `${calibrationPulse} ms`)} onClick={() => calibrationPulse !== undefined && update({ calibrationPulse })}>
 						Calculate
 					</Button>
 				</div>
+				{!running && calculateBlocker && <Notice>{calculateBlocker}</Notice>}
 				<Notice>Calculate sizes the step to move the star about 25 px in 12 RA steps at the declination the mount points at; calibrate away from the pole.</Notice>
 				<Checkbox label="Reverse DEC output after a meridian flip" checked={settings.reverseDecOutputAfterMeridianFlip} disabled={running || pending} onChange={(reverseDecOutputAfterMeridianFlip) => update({ reverseDecOutputAfterMeridianFlip })} />
 				<Notice>Reversing the DEC output applies when the calibration is flipped for a meridian flip, which guiding does not do yet; leave it off for mounts that reverse it themselves.</Notice>
@@ -278,8 +282,8 @@ function SessionControls({ session, settings, pending }: SessionControlsProps) {
 	)
 }
 
-// State of a session: the progress of the guide exposure, the guider state and its lock, the calibration, the RMS,
-// the latest command, and why it ended.
+// State of a session: the progress of the guide exposure, the guider state (with the step and the legs of a running
+// calibration) and its lock, the calibration, the RMS, the latest command, and why it ended.
 function SessionState({ session }: { readonly session: GuidingSessionSummary }) {
 	const { calibration, rms, command, pixelScale } = session
 
@@ -290,6 +294,7 @@ function SessionState({ session }: { readonly session: GuidingSessionSummary }) 
 				<Row label="State">
 					<span className={cn(session.state === 'lostLock' && 'text-danger', session.state === 'guiding' && 'text-success')}>{session.active ? GUIDING_STATE_LABELS[session.state] : session.lost ? 'Lost' : 'Stopped'}</span>
 				</Row>
+				{session.state === 'calibrating' && session.calibrating && <Row label="Step">{GUIDING_CALIBRATION_PHASE_LABELS[session.calibrating.phase]}</Row>}
 				{session.settling && <Row label="Settling">{session.dithering ? 'After a dither' : 'Yes'}</Row>}
 				{session.lockPosition && <Row label="Lock (px)">{`${session.lockPosition[0].toFixed(1)}, ${session.lockPosition[1].toFixed(1)}`}</Row>}
 				{calibration && (
@@ -301,7 +306,8 @@ function SessionState({ session }: { readonly session: GuidingSessionSummary }) 
 				)}
 				{rms && rms.samples > 0 && (
 					<>
-						<Row label="RMS RA / DEC">{`${formatError(rms.ra, pixelScale)} / ${formatError(rms.dec, pixelScale)}`}</Row>
+						<Row label="RMS RA">{formatError(rms.ra, pixelScale)}</Row>
+						<Row label="RMS DEC">{formatError(rms.dec, pixelScale)}</Row>
 						<Row label="RMS Total">{`${formatError(rms.total, pixelScale)} (${rms.samples})`}</Row>
 					</>
 				)}
@@ -311,6 +317,7 @@ function SessionState({ session }: { readonly session: GuidingSessionSummary }) 
 					</Row>
 				)}
 			</dl>
+			{session.state === 'calibrating' && session.calibrating && <CalibrationProgress progress={session.calibrating} />}
 			{command?.state === 'failed' && command.error && <Notice error>{command.error}</Notice>}
 			{calibration && calibration.warnings.length > 0 && <Notice>{calibration.warnings.join(' ')}</Notice>}
 			{session.failure && <Notice error>{session.failure.error ?? `The session ended: ${session.failure.reason}.`}</Notice>}
@@ -323,7 +330,7 @@ function Row({ label, children }: { readonly label: string; readonly children: R
 	return (
 		<div className="contents">
 			<dt className="text-ink-300">{label}</dt>
-			<dd className="m-0 min-w-0 truncate text-right tabular-nums">{children}</dd>
+			<dd className="m-0 min-w-0 text-right wrap-break-word tabular-nums">{children}</dd>
 		</div>
 	)
 }

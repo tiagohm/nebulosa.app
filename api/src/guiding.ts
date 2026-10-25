@@ -11,7 +11,7 @@ import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import type { CameraCaptureTime } from 'nebulosa/src/observation/capture/types'
-import type { GuidingCalibrationConfig } from 'nebulosa/src/observation/guiding/calibrator'
+import { DEFAULT_GUIDING_CALIBRATOR_CONFIG, type GuidingCalibrationConfig, type GuidingCalibrationDiagnostics, type GuidingCalibrationPhase } from 'nebulosa/src/observation/guiding/calibrator'
 import { GuiderClient, type GuideFrameImage, type GuiderClientConnectOptions, type GuiderClientGuiderOptions, type GuiderClientOptions } from 'nebulosa/src/observation/guiding/client'
 import type { DitherAmount } from 'nebulosa/src/observation/guiding/ditherer'
 import type { GuiderState, GuidingEvent } from 'nebulosa/src/observation/guiding/events'
@@ -158,6 +158,38 @@ export interface GuidingCalibrationSummary {
 	readonly warnings: readonly string[]
 }
 
+// Progress of a running calibration, from the diagnostics of its latest frame: the phase, and for each leg the steps
+// taken against their limit and the travel in guide pixels against what the leg needs. The RA leg ends once the star
+// moved raTarget pixels, the DEC leg once it moved decTarget pixels past the backlash, and the clearing once the star is
+// back within clearingTarget pixels of the start; a leg that reaches its step limit first fails the calibration.
+export interface GuidingCalibrationProgress {
+	readonly phase: GuidingCalibrationPhase
+	// RA forward steps taken, and their limit.
+	readonly raSteps: number
+	readonly maxRaSteps: number
+	// Net RA travel, and the travel the leg needs, in pixels.
+	readonly raDistance: number
+	readonly raTarget: number
+	// RA steps back toward the start, and their limit.
+	readonly clearingSteps: number
+	readonly maxClearingSteps: number
+	// Distance from the start while clearing, and the distance that completes it, in pixels.
+	readonly clearingDistance: number
+	readonly clearingTarget: number
+	// DEC forward steps taken, and their limit.
+	readonly decSteps: number
+	readonly maxDecSteps: number
+	// Net DEC travel, and the travel the leg needs, in pixels.
+	readonly decDistance: number
+	readonly decTarget: number
+	// Whether the DEC motion started past the backlash, and the backlash estimated so far, in milliseconds.
+	readonly decMoving: boolean
+	readonly backlash: number
+	// Consecutive frames without a usable measurement, and how many fail the calibration.
+	readonly badFrames: number
+	readonly maxBadFrames: number
+}
+
 // Root-mean-square guide error over the latest measured guide steps, in guide pixels.
 export interface GuidingRms {
 	readonly ra: number
@@ -203,6 +235,8 @@ export interface GuidingSessionSummary {
 	// Arcseconds per guide-image pixel; absent while the optics or the pixel size are unknown.
 	readonly pixelScale?: number
 	readonly calibration?: GuidingCalibrationSummary
+	// Progress of the calibration while one runs; absent otherwise.
+	readonly calibrating?: GuidingCalibrationProgress
 	readonly rms?: GuidingRms
 	// Progress of the guide exposure the camera counts down, in microseconds (progress in percent); absent between
 	// exposures and while the driver reports none.
@@ -270,8 +304,8 @@ export interface GuidingFrameOverlay {
 	readonly searchRegion: number
 	readonly measurement?: readonly [number, number]
 	readonly primary?: readonly [number, number]
-	// Detected stars, accepted or rejected by the tracker filters.
-	readonly stars: readonly { readonly x: number; readonly y: number; readonly accepted: boolean }[]
+	// Detected stars, accepted or rejected by the tracker filters, with their half-flux diameter in pixels.
+	readonly stars: readonly { readonly x: number; readonly y: number; readonly hfd: number; readonly accepted: boolean }[]
 }
 
 // Snapshot of GET /api/guiding: the latest session of every guide camera.
@@ -443,6 +477,8 @@ interface Session {
 	readonly builtin: boolean
 	// Follows the exposure countdown of the guide camera until the end.
 	readonly progress: DeviceHandler<Camera>
+	// Calibration settings of the request over the toolkit defaults, whose limits the calibration progress shows.
+	readonly calibrator: Readonly<GuidingCalibrationConfig>
 }
 
 // Returns the regions the built-in detection of a session's next frame is limited to, or undefined for the whole frame:
@@ -593,6 +629,7 @@ export class GuidingSessions implements Disposable {
 			abort: new AbortController(),
 			tracker,
 			builtin: builtin !== undefined,
+			calibrator: { ...DEFAULT_GUIDING_CALIBRATOR_CONFIG, ...request.calibration },
 			progress: {
 				added: () => {},
 				removed: () => {},
@@ -760,6 +797,7 @@ export class GuidingSessions implements Disposable {
 	#event(session: Session, event: GuidingEvent) {
 		if (event.type === 'guideStep' || event.type === 'starLost') this.#telemetry(session, event)
 		else if (event.type === 'calibrationCompleted') this.#calibrated(session, event.calibration)
+		else if (event.type === 'calibrationStep') this.#update(session, { calibrating: calibrationProgressOf(event.diagnostics, session.calibrator) })
 		else if (event.type === 'guidingStarted' || event.type === 'dithered') session.errors.length = 0
 
 		if (!PER_FRAME_EVENTS.has(event.type)) {
@@ -850,9 +888,11 @@ export class GuidingSessions implements Disposable {
 					bitpix: numericKeyword<number, undefined>(info.header, 'BITPIX', undefined),
 					acquisition: info.acquisition,
 				}
+				// The overlay is published before the frame becomes the latest of the camera, so a tab that switches to it
+				// already has what to draw over it.
+				this.listener({ type: 'guiding:frame', sessionId, frameId, imageId: info.id, overlay })
 				this.frames.previewed(info, record, cameraName, 'guiding')
 				if (session.summary.frame?.frameId === frameId) this.#update(session, { frame: { frameId, time, imageId: info.id } })
-				this.listener({ type: 'guiding:frame', sessionId, frameId, imageId: info.id, overlay })
 			} catch (error) {
 				console.error('guide frame preview failed:', error)
 			}
@@ -877,6 +917,8 @@ export class GuidingSessions implements Disposable {
 			calibrated: snapshot.calibrated,
 			lockPosition: snapshot.lockPosition,
 			pixelScale: pixelScale > 0 ? pixelScale : undefined,
+			// The progress belongs to the calibration running; it goes once the guider leaves the state.
+			...(snapshot.state !== 'calibrating' && { calibrating: undefined }),
 		})
 
 		const run = session.run
@@ -988,7 +1030,30 @@ function overlayOf(frame: GuideFrameImage): GuidingFrameOverlay {
 		searchRegion: frame.searchRegion,
 		measurement: measurement === undefined ? undefined : [measurement.x, measurement.y],
 		primary: stellar?.primary === undefined ? undefined : [stellar.primary.x, stellar.primary.y],
-		stars: stellar?.detections.map((star) => ({ x: star.x, y: star.y, accepted: accepted.has(star) })) ?? [],
+		stars: stellar?.detections.map((star) => ({ x: star.x, y: star.y, hfd: star.hfd, accepted: accepted.has(star) })) ?? [],
+	}
+}
+
+// Returns the progress of a calibration from the diagnostics of its latest frame and the limits of its settings.
+function calibrationProgressOf(diagnostics: GuidingCalibrationDiagnostics, config: Readonly<GuidingCalibrationConfig>): GuidingCalibrationProgress {
+	return {
+		phase: diagnostics.phase,
+		raSteps: diagnostics.raSteps,
+		maxRaSteps: config.maxRaSteps,
+		raDistance: diagnostics.raNetDistancePx,
+		raTarget: config.minNetRaTravelPx,
+		clearingSteps: diagnostics.clearingSteps,
+		maxClearingSteps: config.maxClearingSteps,
+		clearingDistance: diagnostics.clearingDistancePx,
+		clearingTarget: config.maxClearingOffsetPx,
+		decSteps: diagnostics.decSteps,
+		maxDecSteps: config.maxDecSteps,
+		decDistance: diagnostics.decNetDistancePx,
+		decTarget: config.minNetDecTravelPx,
+		decMoving: diagnostics.decMotionDetected,
+		backlash: diagnostics.backlash,
+		badFrames: diagnostics.badFrames,
+		maxBadFrames: config.maxBadFrames,
 	}
 }
 

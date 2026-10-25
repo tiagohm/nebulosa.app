@@ -259,7 +259,7 @@ Conflicts are resolved by the arbiter on the server, never only in the browser, 
 ## Equipment Control Contract
 
 - The page lists the devices of the active profile's connection only, grouped by hardware id, so the interfaces of one physical device (a flip-flat's cover and flat panel, a mount and its guide output) appear once. Opening it, switching devices, or reloading never connects, disconnects, or commands anything.
-- Every command goes through `api` under the shared contract of `api/src/commands.ts`: settings answer 204 once applied, motions answer 202 with an operation id and report their outcome only through `operation:updated`. Durable requests carry a client token, so a repeated request never moves a device twice. Errors carry a stable `code`.
+- Every command goes through `api` under the shared contract of `api/src/commands.ts`: settings answer 204 once applied, motions answer 202 with an operation id and report their outcome only through `operation:updated`. Durable requests carry a client token, so a repeated request never moves a device twice; the web generates tokens and ids with `nanoid`, never `crypto.randomUUID`, which browsers only provide in a secure context (HTTPS or localhost) and the app is usually opened over plain HTTP on the local network. Errors carry a stable `code`.
 - Stops never wait for a lease: `POST …/stop` cancels the operation of the physical device and sends the commander's `stopMotion`. A filter wheel has no abort. Guide pulse stops never cancel another operation of the mount.
 - Manual motion held by a lease (mount nudge, dome rotation) shares `api/src/leases.ts` and `web/src/press.ts`.
 - Values shown are those the devices report; forms and sliders only hold pending values until an explicit action.

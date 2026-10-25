@@ -1,4 +1,5 @@
 import type { CameraCapabilities, CaptureSnoop, FlatWizardCaptureSettings, FlatWizardFilterState, FlatWizardRequest, FlatWizardSession, FlatWizardSessionSummary, FlatWizardSnapshot, FlatWizardState, FlatWizardVerdict, OperationDevice, ServerEvent, WheelState } from 'api'
+import { nanoid } from 'nanoid'
 import type { FlatDiagnosticCode } from 'nebulosa/src/imaging/analysis/flat/types'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
@@ -216,7 +217,7 @@ async function command(state: FlatWizardRuntime, key: string, url: string, body:
 // Starts a Flat Wizard session with a camera; progress arrives as events.
 export function startFlatWizard(state: FlatWizardRuntime, connectionId: string, deviceId: string, body: Omit<FlatWizardRequest, 'token'>, request: typeof fetch = fetch) {
 	const url = deviceUrl(connectionId, 'camera', deviceId, 'flat-wizard')
-	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: crypto.randomUUID() } satisfies FlatWizardRequest, request)
+	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: nanoid() } satisfies FlatWizardRequest, request)
 }
 
 // Confirms the manual step a session waits for, by the step id the session published.

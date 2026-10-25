@@ -1,4 +1,5 @@
 import type { CameraCapabilities, DarvCaptureSettings, DarvFinishRequest, DarvMeasurement, DarvMeasurementRequest, DarvMeasurementState, DarvMeasurementStatus, DarvRequest, DarvSession, DarvSessionSummary, DarvSnapshot, MountState, ServerEvent } from 'api'
+import { nanoid } from 'nanoid'
 import type { DarvAnalysisFailureReason } from 'nebulosa/src/observation/alignment/polaralignment.darv.analysis'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
@@ -256,12 +257,12 @@ async function command(state: DarvRuntime, key: string, url: string, body: unkno
 // Starts a DARV session with a camera and a mount, and its first measurement; progress arrives as events.
 export function startDarv(state: DarvRuntime, connectionId: string, deviceId: string, mount: DarvRequest['mount'], body: Omit<DarvMeasurementRequest, 'token'>, request: typeof fetch = fetch) {
 	const url = deviceUrl(connectionId, 'camera', deviceId, 'darv')
-	return command(state, cameraKey(connectionId, deviceId), url, { ...body, mount, token: crypto.randomUUID() } satisfies DarvRequest, request)
+	return command(state, cameraKey(connectionId, deviceId), url, { ...body, mount, token: nanoid() } satisfies DarvRequest, request)
 }
 
 // Starts another measurement of an open session, after the operator adjusted the mount.
 export function repeatDarv(state: DarvRuntime, session: Pick<DarvSessionSummary, 'sessionId' | 'camera'>, body: Omit<DarvMeasurementRequest, 'token'>, request: typeof fetch = fetch) {
-	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/darv/${encodeURIComponent(session.sessionId)}/measurements`, { ...body, token: crypto.randomUUID() } satisfies DarvMeasurementRequest, request)
+	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/darv/${encodeURIComponent(session.sessionId)}/measurements`, { ...body, token: nanoid() } satisfies DarvMeasurementRequest, request)
 }
 
 // Aborts the measurement of a session; the server stops the mount, discards the exposure, and restores the slew rate.

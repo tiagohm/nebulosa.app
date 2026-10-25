@@ -1,4 +1,5 @@
 import type { MountNudgeDirection, MountNudgeSession, MountState, ServerEvent } from 'api'
+import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import { deviceUrl, jsonInit, responseError } from '../http'
 import { followPress, type Press, pressRunning, reconcilePress, releasePress, startPress, stopPress } from '../press'
@@ -164,7 +165,7 @@ export async function pressNudge(runtime: NudgeRuntime, direction: MountNudgeDir
 	const target = runtime.target
 	if (!target || runtime.press) return
 
-	const token = crypto.randomUUID()
+	const token = nanoid()
 	await startPress(runtime, { token, target: { ...target }, direction, phase: 'starting' }, deviceUrl(target.connectionId, 'mount', target.id, 'nudge'), { direction }, pressPath, request)
 }
 

@@ -1,5 +1,6 @@
 // oxfmt-ignore
 import type { CameraCapabilities, CaptureSnoop, StarDetectionSettings, GuidingDitherRequest, GuidingEventRecord, GuidingFrameOverlay, GuidingPage, GuidingPauseRequest, GuidingResumeRequest, GuidingSessionSummary, GuidingSnapshot, GuidingStartGuidingRequest, GuidingStartRequest, GuidingTelemetrySample, OperationDevice, ServerEvent } from 'api'
+import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit, responseError } from '../http'
@@ -357,7 +358,7 @@ function sessionCommand(state: GuidingRuntime, session: SessionRef, action: stri
 // Starts a guiding session with a guide camera, which loops its exposures until stopped; progress arrives as events.
 export function startGuidingSession(state: GuidingRuntime, connectionId: string, deviceId: string, body: Omit<GuidingStartRequest, 'token'>, request: typeof fetch = fetch) {
 	const url = deviceUrl(connectionId, 'camera', deviceId, 'guiding')
-	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: crypto.randomUUID() } satisfies GuidingStartRequest, request)
+	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: nanoid() } satisfies GuidingStartRequest, request)
 }
 
 // Selects the star nearest a pixel of the current guide frame (pixels of the full frame from its top-left), or the
@@ -374,27 +375,27 @@ export function clearGuidingTarget(state: GuidingRuntime, session: SessionRef, r
 // Starts guiding on the selected star, calibrating first when asked or when uncalibrated; the outcome arrives as the
 // command of the session.
 export function startGuiding(state: GuidingRuntime, session: SessionRef, body: Omit<GuidingStartGuidingRequest, 'token'>, request: typeof fetch = fetch) {
-	return sessionCommand(state, session, 'start', { ...body, token: crypto.randomUUID() } satisfies GuidingStartGuidingRequest, request)
+	return sessionCommand(state, session, 'start', { ...body, token: nanoid() } satisfies GuidingStartGuidingRequest, request)
 }
 
 // Stops guiding and releases the guide output; the session keeps looping.
 export function stopGuiding(state: GuidingRuntime, session: SessionRef, request: typeof fetch = fetch) {
-	return sessionCommand(state, session, 'stop-guiding', { token: crypto.randomUUID() }, request)
+	return sessionCommand(state, session, 'stop-guiding', { token: nanoid() }, request)
 }
 
 // Pauses the corrections, or the exposures too.
 export function pauseGuiding(state: GuidingRuntime, session: SessionRef, mode: GuidingPauseRequest['mode'], request: typeof fetch = fetch) {
-	return sessionCommand(state, session, 'pause', { mode, token: crypto.randomUUID() } satisfies GuidingPauseRequest, request)
+	return sessionCommand(state, session, 'pause', { mode, token: nanoid() } satisfies GuidingPauseRequest, request)
 }
 
 // Resumes a paused session and waits for its settle.
 export function resumeGuiding(state: GuidingRuntime, session: SessionRef, settle: GuidingStartGuidingRequest['settle'], request: typeof fetch = fetch) {
-	return sessionCommand(state, session, 'resume', { settle, token: crypto.randomUUID() } satisfies GuidingResumeRequest, request)
+	return sessionCommand(state, session, 'resume', { settle, token: nanoid() } satisfies GuidingResumeRequest, request)
 }
 
 // Dithers the lock position and waits for the settle.
 export function ditherGuiding(state: GuidingRuntime, session: SessionRef, body: Omit<GuidingDitherRequest, 'token'>, request: typeof fetch = fetch) {
-	return sessionCommand(state, session, 'dither', { ...body, token: crypto.randomUUID() } satisfies GuidingDitherRequest, request)
+	return sessionCommand(state, session, 'dither', { ...body, token: nanoid() } satisfies GuidingDitherRequest, request)
 }
 
 // Changes the guide exposure of the next frames, in seconds.

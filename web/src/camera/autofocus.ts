@@ -1,4 +1,5 @@
 import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusState, AutoFocusVerification, CameraCapabilities, CaptureSnoop, ServerEvent, StarDetectionRequest } from 'api'
+import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit, responseError } from '../http'
@@ -219,7 +220,7 @@ async function command(state: AutoFocusRuntime, key: string, url: string, body: 
 // Starts an Auto Focus with a camera; its progress arrives as events.
 export function startAutoFocus(state: AutoFocusRuntime, connectionId: string, deviceId: string, body: Omit<AutoFocusRequest, 'token'>, request: typeof fetch = fetch) {
 	const url = deviceUrl(connectionId, 'camera', deviceId, 'autofocus')
-	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: crypto.randomUUID() } satisfies AutoFocusRequest, request)
+	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: nanoid() } satisfies AutoFocusRequest, request)
 }
 
 // Stops the session of a camera where it stands; the focuser is not moved back.

@@ -1,4 +1,5 @@
 import type { CameraCapabilities, MountState, ServerEvent, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaState } from 'api'
+import { nanoid } from 'nanoid'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
@@ -212,7 +213,7 @@ async function command(state: TppaRuntime, key: string, url: string, body: unkno
 // Starts a TPPA with a camera; its progress arrives as events.
 export function startTppa(state: TppaRuntime, connectionId: string, deviceId: string, body: Omit<TppaRequest, 'token'>, request: typeof fetch = fetch) {
 	const url = deviceUrl(connectionId, 'camera', deviceId, 'tppa')
-	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: crypto.randomUUID() } satisfies TppaRequest, request)
+	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: nanoid() } satisfies TppaRequest, request)
 }
 
 // Stops the session of a camera; the server stops the mount and restores its slew rate when it can.

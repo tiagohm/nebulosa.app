@@ -1,4 +1,5 @@
 import type { CommandAccepted, DeviceStateMap, DeviceStates, ManagedDeviceType, ServerEvent } from 'api'
+import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import { deviceUrl, jsonInit, responseError } from '../http'
 
@@ -259,7 +260,7 @@ export async function stopCommand(state: ControlRuntime, { type, deviceId, actio
 // Starts a durable command, such as a motion, under a token generated once for this action, and records
 // the id of the operation running it; its progress and outcome arrive as operation events.
 export async function startCommand(state: ControlRuntime, command: DeviceCommand, request: typeof fetch = fetch): Promise<void> {
-	const token = crypto.randomUUID()
+	const token = nanoid()
 	const accepted = (await send(state, { ...command, body: { ...command.body, token } }, request)) as CommandAccepted | undefined
 	if (accepted?.operationId) state.operations[command.deviceId] = accepted.operationId
 }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
 	constrainWorldMapView,
+	DEGREE_PLANE_TRANSFORM,
 	formatGeoPoint,
 	geoPath,
 	graticulePath,
@@ -155,5 +156,24 @@ describe('view', () => {
 		expect(half.center.x).toBeCloseTo(0, 9)
 		expect(interpolateWorldMapView(from, to, 0.5, false).center.x).toBeCloseTo(WORLD_MAP_WIDTH / 2, 9)
 		expect(interpolateWorldMapView(WORLD_MAP_HOME, to, 1, true).center).toEqual(to.center)
+	})
+})
+
+describe('degree plane', () => {
+	test('maps the degree plane of the API onto the map units of project', () => {
+		const [sx, sy] = DEGREE_PLANE_TRANSFORM.match(/scale\((\S+) (\S+)\)/)!
+			.slice(1)
+			.map(Number)
+
+		for (const [longitude, latitude] of [
+			[-180, 90],
+			[0, 0],
+			[180, -90],
+			[-46.6, -23.5],
+		]) {
+			const point = project(longitude, latitude)
+			expect((longitude + 180) * sx).toBeCloseTo(point.x, 9)
+			expect((90 - latitude) * sy).toBeCloseTo(point.y, 9)
+		}
 	})
 })

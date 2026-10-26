@@ -1,6 +1,6 @@
 import type { MinorBody, MinorBodySearchResponse, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyEvents, SkyObjectCategory, SkyObjectRef, SkyObserver, SkyPosition, SkyPositionResponse, SkySearchResult, SkyStarData } from 'api'
 import { proxy } from 'valtio'
-import { jsonInit, responseError } from '../http'
+import { fetchJson, jsonInit } from '../http'
 import type { SkyObserverSettings } from '../profile/schema'
 import { skyClock, skyTime } from './clock'
 import { MAP_STAR_MAGNITUDE_LIMIT } from './display'
@@ -135,13 +135,6 @@ let mapData: { readonly time: number; readonly data: Promise<SkyMapData> } | und
 // Converts the profile's observer to the API's.
 export function apiObserver(observer: SkyObserverSettings | undefined): SkyObserver | undefined {
 	return observer && { latitude: observer.latitude, longitude: observer.longitude, elevation: observer.elevation }
-}
-
-// Fetches JSON from the API, rejecting with the API's error message on failure.
-async function fetchJson<T>(io: SkyIo, input: string, init?: RequestInit): Promise<T> {
-	const response = await io.fetch(input, init)
-	if (!response.ok) throw new Error(await responseError(response))
-	return (await response.json()) as T
 }
 
 // Posts a JSON body to the API and returns the JSON answer.

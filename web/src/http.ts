@@ -1,7 +1,7 @@
 import type { ManagedDeviceType } from 'api'
 
-// Helpers shared by the stores that call the API over HTTP: the routes of the devices, JSON request bodies, and the
-// error messages of failed responses.
+// Helpers shared by the stores that call the API over HTTP: the routes of the devices, JSON request bodies, JSON
+// responses, and the error messages of failed responses.
 
 // URL segment of the routes of each device type.
 export const DEVICE_PATHS: Readonly<Record<ManagedDeviceType, string>> = {
@@ -40,4 +40,23 @@ export async function responseError(response: Response, fallback?: string): Prom
 	}
 
 	return fallback ?? `${response.status} ${response.statusText}`.trim()
+}
+
+// Failed API response: the API's error message, with the response's status.
+export class ApiResponseError extends Error {
+	// Creates the error of a response answered with a status (such as 404).
+	constructor(
+		message: string,
+		readonly status: number,
+	) {
+		super(message)
+	}
+}
+
+// Fetches JSON from the API through io's fetch, rejecting with an ApiResponseError carrying the API's error message
+// and the status on failure.
+export async function fetchJson<T>(io: { readonly fetch: (input: string, init?: RequestInit) => Promise<Response> }, input: string, init?: RequestInit): Promise<T> {
+	const response = await io.fetch(input, init)
+	if (!response.ok) throw new ApiResponseError(await responseError(response), response.status)
+	return (await response.json()) as T
 }

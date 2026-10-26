@@ -6,6 +6,7 @@ import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
+import { BROWSER_TIME_ZONE, TIME_ZONES } from './clock'
 
 // Observer settings of the Sky workspace: the location of the active profile, entered by hand in
 // degrees and meters, and the time zone its times are shown in. No location is ever assumed; without one the sky has no horizon and positions are
@@ -17,12 +18,6 @@ export interface ObserverPanelProps {
 	// Returns to the Object Inspector.
 	readonly onDone: () => void
 }
-
-// Time zones offered: the browser's (empty) and every IANA zone the browser knows.
-const TIME_ZONES = ['', ...Intl.supportedValuesOf('timeZone')]
-
-// Time zone of the browser, named by the empty option.
-const BROWSER_TIME_ZONE = new Intl.DateTimeFormat().resolvedOptions().timeZone
 
 // Text of a number field: the stored value, or empty.
 function fieldText(value: number | undefined) {

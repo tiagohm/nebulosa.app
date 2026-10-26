@@ -125,3 +125,9 @@ export function zonedWallTimeToUtc(wall: WallTime, timeZone?: string): number {
 	const valid = [before, after].filter((time) => time + zoneOffset(time, timeZone) === local)
 	return valid.length > 0 ? Math.min(...valid) : before
 }
+
+// Time zones a time zone selector offers: the browser's (empty) and every IANA zone the browser knows.
+export const TIME_ZONES = ['', ...Intl.supportedValuesOf('timeZone')]
+
+// Time zone of the browser, named by the empty option of TIME_ZONES.
+export const BROWSER_TIME_ZONE = new Intl.DateTimeFormat().resolvedOptions().timeZone

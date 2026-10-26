@@ -27,6 +27,10 @@ const UNITS_PER_LONGITUDE = WORLD_MAP_WIDTH / 360
 // Map units per degree of latitude; equal to that of longitude up to the rounding of the SVG's size.
 const UNITS_PER_LATITUDE = WORLD_MAP_HEIGHT / 180
 
+// SVG transform from the degree plane to map units. On the degree plane x = longitude + 180 in [0, 360] and y = 90 −
+// latitude in [0, 180], in degrees: the API draws eclipse paths on it, so they need not know the size of the map.
+export const DEGREE_PLANE_TRANSFORM = `scale(${UNITS_PER_LONGITUDE} ${UNITS_PER_LATITUDE})`
+
 // Largest zoom, as a multiple of the smallest one, which shows the whole map.
 export const MAX_WORLD_MAP_ZOOM = 64
 

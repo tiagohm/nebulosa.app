@@ -12,6 +12,7 @@ import { GuideOutputManager } from 'nebulosa/src/devices/indi/manager/guideoutpu
 import { MountManager } from 'nebulosa/src/devices/indi/manager/mount'
 import { RotatorManager } from 'nebulosa/src/devices/indi/manager/rotator'
 import { WheelManager } from 'nebulosa/src/devices/indi/manager/wheel'
+import { IndiPropertyRegistry } from 'nebulosa/src/devices/indi/properties'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import type { DeviceLifecycle } from 'nebulosa/src/devices/orchestration/device.lifecycle'
 import { toMeter } from 'nebulosa/src/math/units/distance'
@@ -24,7 +25,8 @@ import { toMeter } from 'nebulosa/src/math/units/distance'
 // the last one published for the device; changes of continuously moving values (a mount's coordinate, a
 // focuser's position, a rotator's angle, a dome's azimuth) are coalesced to at most one event per second
 // per device, with a trailing publication so the last value is always delivered. Every event names its
-// connection and device id, never a role.
+// connection and device id, never a role. The raw property vectors of every device, managed or not, are
+// kept once in a property registry the managers share and read.
 
 // Device types the application manages.
 export type ManagedDeviceType = Extract<DeviceType, 'camera' | 'mount' | 'focuser' | 'wheel' | 'rotator' | 'guideOutput' | 'dome' | 'cover' | 'flatPanel' | 'dewHeater'>
@@ -736,28 +738,33 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 	readonly #listener: DeviceListener
 	// Publication state of each device's control state, by device id.
 	readonly #publications = new Map<string, StatePublication>()
+	// Raw property vectors of every device of every connection, managed or not: the one copy the managers
+	// read and the INDI property view is served from. First in the handler, so a manager handling one vector
+	// reads the others already merged.
+	readonly properties = new IndiPropertyRegistry()
 	// Manager of the cameras of every connection, shared with the camera services.
-	readonly cameras = new CameraManager()
+	readonly cameras = new CameraManager(this.properties)
 	// Manager of the mounts of every connection, shared with the mount commands.
-	readonly mounts = new MountManager()
+	readonly mounts = new MountManager(this.properties)
 	// Manager of the focusers of every connection.
-	readonly focusers = new FocuserManager()
+	readonly focusers = new FocuserManager(this.properties)
 	// Manager of the filter wheels of every connection.
-	readonly wheels = new WheelManager()
+	readonly wheels = new WheelManager(this.properties)
 	// Manager of the field rotators of every connection.
-	readonly rotators = new RotatorManager()
+	readonly rotators = new RotatorManager(this.properties)
 	// Manager of the guide outputs of every connection, each one standalone or an interface of a mount or camera.
 	readonly guideOutputs: GuideOutputManager
 	// Manager of the domes of every connection.
-	readonly domes = new DomeManager()
+	readonly domes = new DomeManager(this.properties)
 	// Manager of the dust covers of every connection.
-	readonly covers = new CoverManager()
+	readonly covers = new CoverManager(this.properties)
 	// Manager of the flat panels of every connection.
-	readonly flatPanels = new FlatPanelManager()
+	readonly flatPanels = new FlatPanelManager(this.properties)
 	// Manager of the dew heaters of every connection, each one an interface of a device such as a cover.
 	readonly dewHeaters: DewHeaterManager
-	// Handler that feeds the property stream of a client to every manager, in MANAGED_TYPES order.
-	readonly handler = new IndiClientHandlerSet()
+	// Handler that feeds the property stream of a client to the property registry, then to every manager in
+	// MANAGED_TYPES order.
+	readonly handler = new IndiClientHandlerSet([this.properties])
 
 	// Creates the managers; listener receives every device event synchronously.
 	constructor(listener: DeviceListener) {
@@ -767,9 +774,9 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 		const mount = this.mounts
 		const cover = this.covers
 		// A guide output is a standalone guider or a sub-interface of a mount or camera.
-		this.guideOutputs = new GuideOutputManager({ get: (client, id, type) => (type === 'camera' ? camera.get(client, id) : mount.get(client, id)) })
+		this.guideOutputs = new GuideOutputManager({ get: (client, id, type) => (type === 'camera' ? camera.get(client, id) : mount.get(client, id)) }, this.properties)
 		// A dew heater is the heater channel of a device that declares one, such as a cover.
-		this.dewHeaters = new DewHeaterManager({ get: (client, id) => cover.get(client, id) })
+		this.dewHeaters = new DewHeaterManager({ get: (client, id) => cover.get(client, id) }, this.properties)
 
 		this.#managers = {
 			camera: managed(camera, this.#lifecycle('camera')),
@@ -803,9 +810,10 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 		}
 	}
 
-	// Drops every device of a closed client, publishing device:removed for each.
+	// Drops every device and property vector of a closed client, publishing device:removed for each.
 	close(client: Client) {
 		for (const type of MANAGED_TYPES) this.#managers[type].close(client)
+		this.properties.close(client, false)
 	}
 
 	// Lists the devices of a client, in MANAGED_TYPES order.
@@ -886,6 +894,11 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 		}
 
 		return undefined
+	}
+
+	// Id of the open connection a client belongs to; undefined when it is not attached.
+	connection(client: Client): string | undefined {
+		return this.#connections.get(client)
 	}
 
 	// Id of the open connection that provides a device; undefined when its client is not attached.

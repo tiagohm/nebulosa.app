@@ -18,6 +18,7 @@ import { createFocuserRoutes, FocuserCommands } from './focusers'
 import { createGuideOutputRoutes, GuideOutputCommands } from './guideoutputs'
 import { createGuidingRoutes, GuidingSessions } from './guiding'
 import { createImageRoutes, images } from './images'
+import { createIndiRoutes, IndiPropertyService } from './indi'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
 import { createMountRoutes, MountCommands } from './mounts'
 import { createOperationRoutes, OperationRegistry } from './operations'
@@ -27,7 +28,7 @@ import { skyLocator, skyRoutes } from './sky'
 import { createSolarEclipseRoutes, SolarEclipseService } from './solareclipses'
 import { createStarDetectionRoutes, StarDetectionService } from './stars'
 import { createTppaRoutes, TppaSessions } from './tppa'
-import { broadcast, listenClients, type WebSocketData, websocket } from './websocket'
+import { broadcast, listenClients, listenSockets, type WebSocketData, websocket } from './websocket'
 import { createWheelRoutes, WheelCommands } from './wheels'
 
 // HTTP routes and the WebSocket handler of the backend, mounted by the app server.
@@ -151,6 +152,24 @@ export type { FocuserBacklashConfig, FocuserBacklashMode } from './focuserbackla
 export type { FocuserBacklashEvent, FocuserBacklashSaveRequest, FocuserBacklashState, FocuserDirection, FocuserMoveRequest, FocuserMoveToRequest, FocuserReverseRequest, FocuserSyncRequest } from './focusers'
 export type { GuidePulseRequest, GuideRateRequest } from './guideoutputs'
 export type {
+	IndiClientMessage,
+	IndiDeviceEvent,
+	IndiDeviceSummary,
+	IndiMessage,
+	IndiMessageEvent,
+	IndiPropertyDefinedEvent,
+	IndiPropertyRemovedEvent,
+	IndiPropertyUpdate,
+	IndiPropertyUpdatedEvent,
+	IndiServerEvent,
+	IndiSnapshotEvent,
+	IndiStreamEvent,
+	IndiStreamHeader,
+	IndiSubscriptionErrorCode,
+	IndiSubscriptionErrorEvent,
+} from './indi'
+export type { IndiBlobElement, IndiDriver, IndiLightElement, IndiNumberElement, IndiProperty, IndiPropertyChangeKind, IndiPropertyType, IndiSwitchElement, IndiTextElement } from 'nebulosa/src/devices/indi/properties'
+export type {
 	MountCoordinate,
 	MountGoToRequest,
 	MountNudgeDirection,
@@ -242,7 +261,7 @@ export type {
 } from './guiding'
 export type { TppaAlignment, TppaAttempt, TppaCaptureSettings, TppaEvent, TppaGeometry, TppaOverlay, TppaPoint, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaStartResponse, TppaState } from './tppa'
 export type { GuidingProfileCut, GuidingStarProfile } from './guidingprofile'
-export type { ServerEvent } from './websocket'
+export type { ClientMessage, ServerEvent } from './websocket'
 export { websocket }
 
 connections.listen(broadcast)
@@ -272,6 +291,11 @@ const domes = new DomeCommands(connections.devices, (id) => connections.client(i
 
 // Cooling of the cameras of the open connections, arbitrated against their captures.
 const cameras = new CameraCommands(connections.devices, (id) => connections.client(id), operations)
+
+// Directory and property streams of the INDI devices of the open connections; a stream reaches only the
+// sockets that subscribed to it.
+const indi = new IndiPropertyService(connections.devices, (id) => connections.client(id), broadcast)
+listenSockets(indi)
 
 // Settings of the external programs, such as ASTAP, read by the services that run them.
 const externalTools = new ExternalToolsStore(DEFAULT_SETTINGS_FILE, broadcast)
@@ -329,6 +353,7 @@ export const routes = {
 	},
 	...createOperationRoutes(operations),
 	...createConnectionRoutes(connections),
+	...createIndiRoutes(indi),
 	...createMountRoutes(mounts),
 	...createGuideOutputRoutes(guideOutputs),
 	...createFocuserRoutes(focusers),

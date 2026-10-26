@@ -78,7 +78,7 @@ export interface SolarEclipseState {
 export function initialSolarEclipseState(): SolarEclipseState {
 	return {
 		loading: false,
-		layers: { centralLine: true, umbralLimits: true, penumbralLimits: true, riseSet: false, points: true, labels: true },
+		layers: { centralLine: true, umbralLimits: true, penumbralLimits: true, riseSet: true, points: true, labels: true },
 		selectedEvent: 'MAX',
 		localLoading: false,
 		view: { orientation: 'zenith', handedness: 'eastRight', ghosts: true },

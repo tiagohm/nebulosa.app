@@ -76,7 +76,7 @@ function GlobalPointRow({ point, selected, timeZone }: GlobalPointRowProps) {
 					{extreme && <Datum label="Sun azimuth">{extreme.sunAzimuth.toFixed(1)}°</Datum>}
 					{extreme?.kind && <Datum label="Central phase">{extreme.kind === 'annular' ? 'Annular' : 'Total'}</Datum>}
 					{extreme?.centralDuration !== undefined && <Datum label="Central duration">{formatDuration(extreme.centralDuration)}</Datum>}
-					{extreme?.pathWidth !== undefined && <Datum label="Path width">{Math.round(extreme.pathWidth)} km</Datum>}
+					{extreme?.pathWidth !== undefined && <Datum label="Path width">{extreme.pathWidth.toFixed(1)} km</Datum>}
 					<Button variant="secondary" size="sm" className="self-start" onClick={() => choosePlace({ source: 'map', longitude: point.longitude, latitude: point.latitude })}>
 						Use as Location
 					</Button>
@@ -158,7 +158,7 @@ export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
 					{greatest && <Datum label="Greatest eclipse">{formatEclipseTime(greatest.time, timeZone)}</Datum>}
 					{greatest && <Datum label="Greatest eclipse at">{formatGeoPoint(greatest)}</Datum>}
 					{duration?.centralDuration !== undefined && <Datum label="Greatest duration">{formatDuration(duration.centralDuration)}</Datum>}
-					{greatest?.pathWidth !== undefined && <Datum label="Path width">{Math.round(greatest.pathWidth)} km</Datum>}
+					{greatest?.pathWidth !== undefined && <Datum label="Path width">{greatest.pathWidth.toFixed(1)} km</Datum>}
 					{local?.details.maximalMagnitude !== undefined && <Datum label="Magnitude here">{local.details.maximalMagnitude.toFixed(4)}</Datum>}
 					{local?.details.moonSunDiameterRatio !== undefined && <Datum label="Moon/Sun diameter">{local.details.moonSunDiameterRatio.toFixed(4)}</Datum>}
 					{local?.details.partialPhaseDuration !== undefined && <Datum label="Eclipse here (C1–C4)">{formatDuration(local.details.partialPhaseDuration)}</Datum>}

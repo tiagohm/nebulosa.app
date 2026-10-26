@@ -9,6 +9,9 @@ export interface LunarEclipseLocalViewProps {
 	readonly view: LocalViewGeometry
 }
 
+// Margin around the diagram, in pixels, so disks near its edges stay inside.
+const MARGIN = 32
+
 // Classes of each shape, by role.
 const SHAPE_CLASSES: Readonly<Record<LocalLunarEclipseSvgShape['role'], string>> = {
 	horizonBand: 'fill-danger/10',
@@ -38,8 +41,11 @@ function Shape({ shape }: { readonly shape: LocalLunarEclipseSvgShape }) {
 
 // Local View.
 export function LunarEclipseLocalView({ view }: LunarEclipseLocalViewProps) {
+	const width = view.width + 2 * MARGIN
+	const height = view.height + 2 * MARGIN
+
 	return (
-		<svg viewBox={`-32 -32 ${view.width + 64} ${view.height + 64}`} className="aspect-square w-full rounded-sm border border-line-100 bg-base-200">
+		<svg viewBox={`${-MARGIN} ${-MARGIN} ${width} ${height}`} className="aspect-square w-full rounded-sm border border-line-100 bg-base-200">
 			{view.shapes.map((shape, index) => (
 				<Shape key={index} shape={shape} />
 			))}

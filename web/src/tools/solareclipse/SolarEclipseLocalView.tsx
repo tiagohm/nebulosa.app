@@ -11,7 +11,7 @@ export interface SolarEclipseLocalViewProps {
 }
 
 // Margin around the diagram, in pixels, so ghost disks near its edges stay inside.
-const MARGIN = 24
+const MARGIN = 32
 
 // Classes of each shape, by role.
 const SHAPE_CLASSES: Readonly<Record<LocalSolarEclipseSvgShape['role'], string>> = {

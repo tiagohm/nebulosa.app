@@ -181,6 +181,8 @@ export const GUIDING_CALIBRATION_PHASE_LABELS: Readonly<Record<GuidingCalibratio
 	decForwardComplete: 'DEC leg done',
 	solving: 'Solving the calibration',
 	validating: 'Validating the calibration',
+	decReturnPulse: 'Returning in DEC',
+	decReturnMeasure: 'Measuring the DEC return',
 	completed: 'Completed',
 	failed: 'Failed',
 }

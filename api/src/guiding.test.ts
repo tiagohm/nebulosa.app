@@ -205,7 +205,7 @@ describe('guiding', () => {
 		// While it calibrates, the record follows the legs with the limits of the calibration settings.
 		const progress = () => context.events.findLast((event) => event.type === 'guiding:updated' && event.session.calibrating !== undefined)
 		await waitUntil(() => progress() !== undefined)
-		expect(progress()).toMatchObject({ session: { calibrating: { maxRaSteps: 20, raTarget: 12, decTarget: 10, clearingTarget: 4, maxBadFrames: 3 } } })
+		expect(progress()).toMatchObject({ session: { calibrating: { maxRaSteps: 20, raTarget: 12, decTarget: 10, clearingTarget: 4, decReturn: true, maxBadFrames: 3 } } })
 		expect(context.summary()?.runOperationId).toBe(context.running('guideOutput.guiding')[0].operationId)
 		expect(context.operations.available(context.mount)).toBeFalse()
 		// The target is in use while guiding.

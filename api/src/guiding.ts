@@ -161,7 +161,8 @@ export interface GuidingCalibrationSummary {
 // Progress of a running calibration, from the diagnostics of its latest frame: the phase, and for each leg the steps
 // taken against their limit and the travel in guide pixels against what the leg needs. The RA leg ends once the star
 // moved raTarget pixels, the DEC leg once it moved decTarget pixels past the backlash, and the clearing once the star is
-// back within clearingTarget pixels of the start; a leg that reaches its step limit first fails the calibration.
+// back within clearingTarget pixels of the start; a leg that reaches its step limit first fails the calibration. With
+// decReturn, the solved calibration then brings the star back south toward the start, which never fails it.
 export interface GuidingCalibrationProgress {
 	readonly phase: GuidingCalibrationPhase
 	// RA forward steps taken, and their limit.
@@ -182,6 +183,10 @@ export interface GuidingCalibrationProgress {
 	// Net DEC travel, and the travel the leg needs, in pixels.
 	readonly decDistance: number
 	readonly decTarget: number
+	// Whether the calibration returns along DEC once solved, and the DEC return pulses taken so far, nudges included;
+	// the distance from the start is clearingDistance.
+	readonly decReturn: boolean
+	readonly decReturnSteps: number
 	// Whether the DEC motion started past the backlash, and the backlash estimated so far, in milliseconds.
 	readonly decMoving: boolean
 	readonly backlash: number
@@ -1050,6 +1055,8 @@ function calibrationProgressOf(diagnostics: GuidingCalibrationDiagnostics, confi
 		maxDecSteps: config.maxDecSteps,
 		decDistance: diagnostics.decNetDistancePx,
 		decTarget: config.minNetDecTravelPx,
+		decReturn: config.decReturnEnabled,
+		decReturnSteps: diagnostics.decReturnSteps,
 		decMoving: diagnostics.decMotionDetected,
 		backlash: diagnostics.backlash,
 		badFrames: diagnostics.badFrames,

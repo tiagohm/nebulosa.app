@@ -28,6 +28,8 @@ export function OperationStatus({ group }: OperationStatusProps) {
 	const control = useSnapshot(controlRuntime)
 	const running = new Map<string, OperationRecord>()
 	for (const device of group.devices) for (const operation of runningOn(operations, device.connectionId, device.id)) running.set(operation.operationId, operation)
+	// The writes of INDI properties name the physical device when no interface manages it.
+	if (group.indi) for (const operation of runningOn(operations, group.indi.connectionId, group.hardwareId)) running.set(operation.operationId, operation)
 	const pending = group.devices.flatMap((device) => (control.pending[device.id] ? [control.pending[device.id]] : []))
 	const errors = group.devices.flatMap((device) => (control.errors[device.id] ? [control.errors[device.id]] : []))
 	const finished = group.devices.flatMap((device) => {

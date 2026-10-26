@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { DeviceSummary, ManagedDeviceType, MountState } from 'api'
 import { newControlRuntime } from './control'
 import { slotLabel } from './controls/FilterWheelControls'
-import { findGroup, groupActivity, groupDevices, groupTypes, searchGroups } from './groups'
+import { findGroup, groupActivity, groupConnected, groupDevices, groupTypes, INDI_DEVICE_LABEL, searchGroups } from './groups'
 
 function device(id: string, type: ManagedDeviceType, name: string, hardwareId = name, connectionId = 'c', connected = true): DeviceSummary {
 	return { id, type, name, connected, connectionId, hardwareId, interfaces: [type], driver: { executable: '', version: '' } }
@@ -14,7 +14,7 @@ test('interfaces of one physical device form one group, main function first', ()
 
 	expect(groups.map((group) => group.name)).toEqual(['Camera', 'Mount', 'Flip Flat'])
 	expect(groups[1].devices.map((d) => d.type)).toEqual(['mount', 'guideOutput'])
-	expect(groups[2].primary.id).toBe('cv')
+	expect(groups[2].primary?.id).toBe('cv')
 	expect(groupTypes(groups[2])).toBe('Cover · Flat Panel')
 	expect(findGroup(groups, 'fp')).toBe(groups[2])
 	expect(findGroup(groups, 'missing')).toBeUndefined()
@@ -54,4 +54,27 @@ test('filter slots are shown from 1 with the driver names, never invented ones',
 	expect(slotLabel({ names: ['L', ' '] }, 0)).toBe('1 · L')
 	expect(slotLabel({ names: ['L', ' '] }, 1)).toBe('Slot 2')
 	expect(slotLabel({ names: [] }, 4)).toBe('Slot 5')
+})
+
+test('the INDI directory adds the identity of managed devices and the devices no interface manages', () => {
+	const indi = (hardwareId: string, name: string, connected?: boolean) => ({ connectionId: 'c', hardwareId, name, connected })
+	const groups = groupDevices([device('m', 'mount', 'Mount'), device('go', 'guideOutput', 'Mount')], [indi('Mount', 'Mount', true), indi('relay', 'Relay Box', false), indi('aux', 'Auxiliary')])
+
+	expect(groups.map((group) => [group.id, group.name, group.primary?.id])).toEqual([
+		['m', 'Mount', 'm'],
+		['aux', 'Auxiliary', undefined],
+		['relay', 'Relay Box', undefined],
+	])
+	expect(groups[0].indi?.connected).toBeTrue()
+	expect(groupTypes(groups[1])).toBe(INDI_DEVICE_LABEL)
+	expect(findGroup(groups, 'relay')).toBe(groups[2])
+	expect(findGroup(groups, 'Mount')).toBe(groups[0])
+	expect(findGroup(groups, 'go')).toBe(groups[0])
+	expect(searchGroups(groups, 'indi').map((group) => group.id)).toEqual(['aux', 'relay'])
+
+	const runtime = newControlRuntime()
+	expect(groupConnected(groups[2])).toBeFalse()
+	expect(groupActivity(groups[2], runtime.states, false)).toEqual({ label: 'Disconnected', tone: 'off' })
+	expect(groupActivity(groups[1], runtime.states, false)).toEqual({ label: 'Available', tone: 'idle' })
+	expect(groupActivity(groups[1], runtime.states, true)).toEqual({ label: 'Busy', tone: 'active' })
 })

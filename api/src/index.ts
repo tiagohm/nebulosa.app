@@ -155,6 +155,7 @@ export type {
 	IndiClientMessage,
 	IndiDeviceEvent,
 	IndiDeviceSummary,
+	IndiErrorCode,
 	IndiMessage,
 	IndiMessageEvent,
 	IndiPropertyDefinedEvent,
@@ -167,8 +168,9 @@ export type {
 	IndiStreamHeader,
 	IndiSubscriptionErrorCode,
 	IndiSubscriptionErrorEvent,
+	IndiWriteRequest,
 } from './indi'
-export type { IndiBlobElement, IndiDriver, IndiLightElement, IndiNumberElement, IndiProperty, IndiPropertyChangeKind, IndiPropertyType, IndiSwitchElement, IndiTextElement } from 'nebulosa/src/devices/indi/properties'
+export type { IndiBlobElement, IndiBlobProperty, IndiDriver, IndiLightElement, IndiLightProperty, IndiNumberElement, IndiNumberProperty, IndiProperty, IndiPropertyChangeKind, IndiPropertyType, IndiSwitchElement, IndiSwitchProperty, IndiTextElement, IndiTextProperty } from 'nebulosa/src/devices/indi/properties'
 export type {
 	MountCoordinate,
 	MountGoToRequest,

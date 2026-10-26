@@ -30,9 +30,10 @@ function useActivity(runtime: DeviceView) {
 	const operations = useSnapshot(operationsState)
 
 	return (group: DeviceGroup) => {
-		const busy = group.devices.some((device) => deviceBusy(operations, device.connectionId, device.id))
+		// The writes of INDI properties name the physical device when no interface manages it.
+		const busy = group.devices.some((device) => deviceBusy(operations, device.connectionId, device.id)) || (group.indi !== undefined && deviceBusy(operations, group.indi.connectionId, group.hardwareId))
 		const error = group.devices.map((device) => runtime.errors[device.id]).find(Boolean)
-		return groupActivity(group, control.states, busy, runtime.pending[group.primary.id], error)
+		return groupActivity(group, control.states, busy, group.primary && runtime.pending[group.primary.id], error)
 	}
 }
 
@@ -64,10 +65,10 @@ const NONE = ''
 // Select of the devices, for narrow screens.
 export function DeviceSelect({ groups, runtime, selected, onSelect }: DeviceListProps) {
 	const activityOf = useActivity(runtime)
-	const options = [NONE, ...groups.map((group) => group.primary.id)]
+	const options = [NONE, ...groups.map((group) => group.id)]
 
 	function format(id: string) {
-		const group = groups.find((g) => g.primary.id === id)
+		const group = groups.find((g) => g.id === id)
 		return group ? `${group.name} · ${groupTypes(group)} · ${activityOf(group).label}` : 'Select a device'
 	}
 
@@ -75,10 +76,10 @@ export function DeviceSelect({ groups, runtime, selected, onSelect }: DeviceList
 		<div className="flex-none border-b border-line-100 p-3">
 			<Select
 				options={options}
-				value={selected?.primary.id ?? NONE}
+				value={selected?.id ?? NONE}
 				format={format}
 				onChange={(id) => {
-					const group = groups.find((g) => g.primary.id === id)
+					const group = groups.find((g) => g.id === id)
 					if (group) onSelect(group)
 				}}
 			/>

@@ -14,6 +14,7 @@ import { connectionState, handleConnectionEvent, loadConnections, persistConnect
 import { controlRuntime, handleControlEvent, refreshStates } from './equipment-control/control'
 import { domeMotionRuntime, handleDomeMotionEvent, refreshDomeMotions } from './equipment-control/domeMotion'
 import { focuserBacklashRuntime, handleFocuserBacklashEvent, refreshFocuserBacklash } from './equipment-control/focuserBacklash'
+import { handleIndiDirectoryEvent, indiDirectory, refreshIndiDirectory } from './equipment-control/indi/directory'
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
 import { onOpen, subscribe } from './events'
 import { handleCapturedFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseLeasesOnHide } from './images/cameratabs'
@@ -59,6 +60,7 @@ interface ServerStore {
 const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleConnectionEvent(connectionState, event), refresh: () => refreshServers(connectionState) },
 	{ handle: (event) => handleDeviceEvent(deviceState, event), refresh: () => refreshDevices(deviceState) },
+	{ handle: (event) => handleIndiDirectoryEvent(indiDirectory, event), refresh: () => refreshIndiDirectory(indiDirectory) },
 	{ handle: (event) => handleControlEvent(controlRuntime, event), refresh: () => refreshStates(controlRuntime) },
 	{ handle: (event) => handleDomeMotionEvent(domeMotionRuntime, event), refresh: () => refreshDomeMotions(domeMotionRuntime) },
 	{ handle: (event) => handleFocuserBacklashEvent(focuserBacklashRuntime, event), refresh: () => refreshFocuserBacklash(focuserBacklashRuntime) },

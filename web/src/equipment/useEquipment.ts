@@ -2,6 +2,7 @@ import type { DeviceSummary } from 'api'
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { connectionState, serverOf } from '../connection/connection'
+import { indiDirectory, watchIndiDirectory } from '../equipment-control/indi/directory'
 import { activeProfile, activeSetup, profileState, rememberDeviceNames } from '../profile/profile'
 import { deviceState, type DeviceView, type RoleStatus, roleDevice, roleStatus, watchServer } from './equipment'
 import type { EquipmentRole } from './roles'
@@ -20,14 +21,16 @@ export function useActiveServerId(): string | undefined {
 	)?.id
 }
 
-// Watches the active profile's server connection while mounted, switching whenever the profile, its
-// selected connection, or the server state changes. Leaving a connection never disconnects it.
+// Watches the devices and the INDI directory of the active profile's server connection while mounted, switching
+// whenever the profile, its selected connection, or the server state changes. Leaving a connection never
+// disconnects it.
 export function useWatchActiveServer() {
 	const serverId = useActiveServerId()
 	const { watched, devices } = useSnapshot(deviceState)
 
 	useEffect(() => {
 		watchServer(deviceState, serverId)
+		watchIndiDirectory(indiDirectory, serverId)
 	}, [serverId])
 
 	// Names of assignments stored without one are filled in once their devices are listed.

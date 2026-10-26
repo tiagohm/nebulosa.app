@@ -24,6 +24,13 @@ describe('parse', () => {
 		expect(routePath({ workspace: 'equipment', device: 'abc123' })).toBe('/equipment/abc123')
 	})
 
+	test('reads the INDI properties view of a device', () => {
+		expect(parseRoute('/equipment/abc123/indi')).toEqual({ workspace: 'equipment', device: 'abc123', view: 'indi' })
+		expect(parseRoute('/equipment/abc123/indi/extra')).toEqual({ workspace: 'equipment', device: 'abc123', view: 'indi' })
+		expect(parseRoute('/equipment/abc123/other')).toEqual({ workspace: 'equipment', device: 'abc123' })
+		expect(routePath({ workspace: 'equipment', device: 'abc123', view: 'indi' })).toBe('/equipment/abc123/indi')
+	})
+
 	test('reads the Settings page and its external program', () => {
 		expect(parseRoute('/settings')).toEqual({ workspace: 'settings' })
 		expect(parseRoute('/settings/external-tools')).toEqual({ workspace: 'settings' })
@@ -42,7 +49,7 @@ describe('parse', () => {
 	})
 
 	test('round-trips canonical paths', () => {
-		for (const path of ['/images', '/sky', '/tools', '/tools/calculator']) expect(routePath(parseRoute(path))).toBe(path)
+		for (const path of ['/images', '/sky', '/tools', '/tools/calculator', '/equipment/abc123', '/equipment/abc123/indi']) expect(routePath(parseRoute(path))).toBe(path)
 	})
 })
 

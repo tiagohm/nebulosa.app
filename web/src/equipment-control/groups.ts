@@ -1,10 +1,12 @@
-import type { DeviceSummary, ManagedDeviceType } from 'api'
+import type { DeviceSummary, IndiDeviceSummary, ManagedDeviceType } from 'api'
 import { type ControlStates, deviceStateOf } from './control'
 
 // Physical devices of the Equipment Control page. The server lists one entry per interface of a device
 // (a flip-flat is a cover and a flat panel, a mount is also a guide output), all sharing its hardware id,
 // so the page groups them back into one entry per physical device, shown once with a section per interface.
-// The activity of a device summarizes what its interfaces report, never what was requested.
+// The INDI directory adds each device's INDI identity, and the devices of an INDI server that no interface
+// manages (relay boxes, auxiliary drivers) as groups of their own, which only have INDI properties. The
+// activity of a device summarizes what its interfaces report, never what was requested.
 
 // Display name of each device type.
 export const DEVICE_TYPE_LABELS: Readonly<Record<ManagedDeviceType, string>> = {
@@ -23,16 +25,20 @@ export const DEVICE_TYPE_LABELS: Readonly<Record<ManagedDeviceType, string>> = {
 // Order of the interfaces of a group: the main function of a device first, sub-interfaces last.
 const INTERFACE_ORDER: readonly ManagedDeviceType[] = ['camera', 'mount', 'dome', 'focuser', 'wheel', 'rotator', 'cover', 'flatPanel', 'dewHeater', 'guideOutput']
 
-// One physical device and its interfaces.
+// One physical device, its interfaces, and its INDI identity.
 export interface DeviceGroup {
+	// Id naming the group in the URL: the id of its main interface, or its hardware id when it has none.
+	readonly id: string
 	// Physical identity shared by the interfaces.
 	readonly hardwareId: string
 	// Driver-reported name of the device.
 	readonly name: string
-	// Interfaces of the device, main function first.
+	// Interfaces of the device, main function first; empty for a device no interface manages.
 	readonly devices: readonly DeviceSummary[]
-	// Main interface, whose id names the group in the URL.
-	readonly primary: DeviceSummary
+	// Main interface; absent for a device no interface manages.
+	readonly primary?: DeviceSummary
+	// The device in the INDI directory, when its connection is an INDI connection.
+	readonly indi?: IndiDeviceSummary
 }
 
 // Tone of an activity: off when the device is not connected, active while something is happening,
@@ -47,14 +53,18 @@ export interface DeviceActivity {
 	readonly tone: ActivityTone
 }
 
-// Returns the rank of a device type in INTERFACE_ORDER.
-function rank(type: ManagedDeviceType) {
-	return INTERFACE_ORDER.indexOf(type)
+// Description of a device no interface manages, in place of its interface types.
+export const INDI_DEVICE_LABEL = 'INDI device'
+
+// Returns the rank of a device type in INTERFACE_ORDER; a device without interfaces ranks last.
+function rank(type: ManagedDeviceType | undefined) {
+	return type === undefined ? INTERFACE_ORDER.length : INTERFACE_ORDER.indexOf(type)
 }
 
-// Groups the devices of one connection by physical device. Groups are ordered by the type of their main
-// interface, then by name.
-export function groupDevices(devices: readonly DeviceSummary[]): DeviceGroup[] {
+// Groups the devices of one connection by physical device, with the devices of its INDI directory: a managed
+// device gets its INDI identity, and a device no interface manages becomes a group of its own. Groups are
+// ordered by the type of their main interface, devices without one last, then by name.
+export function groupDevices(devices: readonly DeviceSummary[], indiDevices: readonly IndiDeviceSummary[] = []): DeviceGroup[] {
 	const groups = new Map<string, DeviceSummary[]>()
 
 	for (const device of devices) {
@@ -63,27 +73,40 @@ export function groupDevices(devices: readonly DeviceSummary[]): DeviceGroup[] {
 		else groups.set(device.hardwareId, [device])
 	}
 
-	return Array.from(groups.entries(), ([hardwareId, members]) => {
+	const indi = new Map(indiDevices.map((device) => [device.hardwareId, device]))
+
+	const managed = Array.from(groups.entries(), ([hardwareId, members]): DeviceGroup => {
 		const sorted = members.toSorted((a, b) => rank(a.type) - rank(b.type))
-		return { hardwareId, name: sorted[0].name, devices: sorted, primary: sorted[0] }
-	}).sort((a, b) => rank(a.primary.type) - rank(b.primary.type) || a.name.localeCompare(b.name))
+		return { id: sorted[0].id, hardwareId, name: sorted[0].name, devices: sorted, primary: sorted[0], indi: indi.get(hardwareId) }
+	})
+
+	const unmanaged = indiDevices.filter((device) => !groups.has(device.hardwareId)).map((device): DeviceGroup => ({ id: device.hardwareId, hardwareId: device.hardwareId, name: device.name, devices: [], indi: device }))
+
+	return [...managed, ...unmanaged].sort((a, b) => rank(a.primary?.type) - rank(b.primary?.type) || a.name.localeCompare(b.name))
 }
 
-// Returns the group one of whose interfaces has this device id.
-export function findGroup(groups: readonly DeviceGroup[], deviceId: string | undefined): DeviceGroup | undefined {
-	return deviceId === undefined ? undefined : groups.find((group) => group.devices.some((device) => device.id === deviceId))
+// Returns the group named by an id: the id of one of its interfaces, or its hardware id.
+export function findGroup(groups: readonly DeviceGroup[], id: string | undefined): DeviceGroup | undefined {
+	return id === undefined ? undefined : groups.find((group) => group.hardwareId === id || group.devices.some((device) => device.id === id))
 }
 
 // Returns the groups whose name or one of whose interface types contains the query, ignoring case.
 export function searchGroups(groups: readonly DeviceGroup[], query: string): readonly DeviceGroup[] {
 	const text = query.trim().toLowerCase()
 	if (!text) return groups
-	return groups.filter((group) => group.name.toLowerCase().includes(text) || group.devices.some((device) => DEVICE_TYPE_LABELS[device.type].toLowerCase().includes(text)))
+	return groups.filter((group) => group.name.toLowerCase().includes(text) || groupTypes(group).toLowerCase().includes(text))
 }
 
-// Returns the interface types of a group as text, such as "Cover · Flat Panel".
+// Returns the interface types of a group as text, such as "Cover · Flat Panel", or INDI_DEVICE_LABEL for a
+// device no interface manages.
 export function groupTypes(group: DeviceGroup) {
-	return group.devices.map((device) => DEVICE_TYPE_LABELS[device.type]).join(' · ')
+	return group.primary ? group.devices.map((device) => DEVICE_TYPE_LABELS[device.type]).join(' · ') : INDI_DEVICE_LABEL
+}
+
+// Returns whether a group is connected to its hardware: what its main interface reports, or for a device no
+// interface manages, what its INDI CONNECTION vector reports (undefined without one).
+export function groupConnected(group: DeviceGroup): boolean | undefined {
+	return group.primary ? group.primary.connected : group.indi?.connected
 }
 
 // Returns what one interface reports doing, or undefined when it reports nothing in particular.
@@ -132,11 +155,13 @@ function interfaceActivity(states: Readonly<ControlStates>, device: DeviceSummar
 
 // Returns the activity of a physical device: its connection state when it is not connected or a connect
 // request is pending, the first motion or condition one of its interfaces reports, Busy while an
-// operation holds it, and Connected otherwise.
+// operation holds it, and Connected otherwise; Available for a device no interface manages that defines no
+// CONNECTION vector, so its connection is unknown.
 export function groupActivity(group: DeviceGroup, states: Readonly<ControlStates>, busy: boolean, pending?: 'connect' | 'disconnect', error?: string): DeviceActivity {
 	if (pending) return { label: pending === 'connect' ? 'Connecting' : 'Disconnecting', tone: 'active' }
 	if (error) return { label: 'Error', tone: 'warning' }
-	if (!group.primary.connected) return { label: 'Disconnected', tone: 'off' }
+	const connected = groupConnected(group)
+	if (connected === false) return { label: 'Disconnected', tone: 'off' }
 
 	for (const device of group.devices) {
 		const activity = interfaceActivity(states, device)
@@ -150,5 +175,5 @@ export function groupActivity(group: DeviceGroup, states: Readonly<ControlStates
 		if (activity) return activity
 	}
 
-	return { label: 'Connected', tone: 'idle' }
+	return connected ? { label: 'Connected', tone: 'idle' } : { label: 'Available', tone: 'idle' }
 }

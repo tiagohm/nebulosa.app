@@ -11,35 +11,23 @@ import {
 	type LocalLunarViewOrientationMode,
 } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
 import { computeLunarEclipseMapGeometry, type LunarEclipseContactKind, lunarEclipseEvents, lunarEclipseMapToSvgPaths } from 'nebulosa/src/astronomy/events/eclipse/lunar/map'
-import { PlateCarree } from 'nebulosa/src/astronomy/projections/projection'
 import { timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
-import { PIOVERTWO, RAD2DEG } from 'nebulosa/src/core/constants'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
+import { DEGREE_PLANE, type EclipseDirection, type EclipseLocation, eclipseNotFound, ID_SEARCH_MARGIN, locationParams, MAP_PRECISION, yieldEventLoop } from './eclipses'
 import { errorResponse } from './http'
 import { LruCache } from './sky/ephemeris'
 
 // Lunar eclipses for the Lunar Eclipse Map tool: stateless, read-only queries over the toolkit's lunar eclipse
-// engine (core/src/astronomy/events/eclipse/lunar), answered under /api/eclipses/lunar. An eclipse is named by
-// its id, the Unix milliseconds of its greatest eclipse, so no eclipse is stored on the server. Times are Unix
-// milliseconds (UTC), angles and geographic positions degrees (longitude east positive), durations seconds.
-// Visibility is the Moon's center at or above the geometric 0° horizon, without refraction, on the map and
-// locally alike.
+// engine (core/src/astronomy/events/eclipse/lunar), answered under /api/eclipses/lunar with the conventions of
+// eclipses.ts. An eclipse is named by its id, the Unix milliseconds of its greatest eclipse, so no eclipse is
+// stored on the server. Times are Unix milliseconds (UTC), angles and geographic positions degrees (longitude
+// east positive), durations seconds. Visibility is the Moon's center at or above the geometric 0° horizon,
+// without refraction, on the map and locally alike.
 
 export type { LocalLunarEclipseDetails, LocalLunarEclipseSvgShape, LocalLunarEclipseVisibilityKind, LocalLunarViewHandedness, LocalLunarViewOrientationMode, LunarEclipseContactKind, LunarEclipseType }
 
 // Codes of the errors of the lunar eclipse routes.
 export type LunarEclipseErrorCode = 'notFound'
-
-// Direction in which to look for an eclipse from an instant.
-export type LunarEclipseDirection = 'next' | 'previous'
-
-// Geographic position, in degrees.
-export interface LunarEclipseLocation {
-	// Longitude in degrees, east positive, [-180, 180].
-	readonly longitude: number
-	// Geodetic latitude in degrees, north positive, [-90, 90].
-	readonly latitude: number
-}
 
 // Instant of a contact of an eclipse; MAX is the greatest eclipse, not a contact of the lunar limb.
 export interface LunarEclipseContactTime {
@@ -69,7 +57,7 @@ export interface LunarEclipseSummary {
 // A contact on the map, with the place that has the Moon at the zenith.
 export interface LunarEclipseMapEvent extends LunarEclipseContactTime {
 	// Sublunar point at the contact, in degrees.
-	readonly sublunar: LunarEclipseLocation
+	readonly sublunar: EclipseLocation
 }
 
 // SVG path data of each existing contact, drawn on the degree plane: x = longitude + 180 in [0, 360] and y = 90 -
@@ -147,7 +135,7 @@ export interface LocalLunarEclipse {
 	// Id of the eclipse.
 	readonly eclipseId: string
 	// Place.
-	readonly location: LunarEclipseLocation
+	readonly location: EclipseLocation
 	// Visibility.
 	readonly visibility: LocalLunarEclipseVisibility
 	// Magnitudes, and durations in seconds; those the eclipse type lacks are absent.
@@ -157,16 +145,6 @@ export interface LocalLunarEclipse {
 	// Local View.
 	readonly view: LunarEclipseLocalView
 }
-
-// Plate carrée of the degree plane the map paths are drawn on: one unit per degree, longitude -180° at x = 0 and
-// latitude +90° at y = 0.
-const DEGREE_PLANE = new PlateCarree(0, { scale: RAD2DEG, falseEasting: 180, falseNorthing: 90, yAxisDirection: 'southUp', centralMeridian: 0, longitudeWrapMode: 'pi', maxLatitude: PIOVERTWO })
-
-// Decimals of the map paths, in degrees: a thousandth is far finer than the map at its largest zoom.
-const MAP_PRECISION = 3
-
-// Milliseconds before an id in which the eclipse it names is searched; eclipses are at least a lunar month apart.
-const ID_SEARCH_MARGIN = 86400000
 
 // Altitude samples of the visibility check of the visible-only search. Whether the Moon reaches the horizon is
 // decided by an exact search of the altitude maximum, not by the samples, so fewer samples than the toolkit's
@@ -189,7 +167,7 @@ function eclipseId(eclipse: LunarEclipse): string {
 
 // Returns the eclipse nearest an instant in a direction: the next one has an id later than time, the previous one an
 // id earlier than it, so stepping from an id never returns the same eclipse. time is in Unix milliseconds.
-export function findLunarEclipse(time: number, direction: LunarEclipseDirection): LunarEclipse {
+export function findLunarEclipse(time: number, direction: EclipseDirection): LunarEclipse {
 	// The greatest eclipse is up to a millisecond after its id, so the instant is moved by one millisecond away from it.
 	return direction === 'next' ? nearestLunarEclipse(timeUnix((time + 1) / 1000), true) : nearestLunarEclipse(timeUnix((time - 1) / 1000), false)
 }
@@ -227,12 +205,12 @@ export function lunarEclipseMap(eclipse: LunarEclipse): LunarEclipseMap {
 }
 
 // Returns the toolkit's circumstances of an eclipse for a place, with altitudeSamples samples of the Moon's altitude.
-function circumstances(eclipse: LunarEclipse, { longitude, latitude }: LunarEclipseLocation, altitudeSamples?: number) {
+function circumstances(eclipse: LunarEclipse, { longitude, latitude }: EclipseLocation, altitudeSamples?: number) {
 	return computeLocalLunarEclipseCircumstances(eclipse, deg(longitude), deg(latitude), sunMoonPosition, { altitudeSamples })
 }
 
 // Returns the circumstances of an eclipse from a place, with its Local View drawn as view asks.
-export function localLunarEclipse(eclipse: LunarEclipse, location: LunarEclipseLocation, view: LunarEclipseViewOptions, local: LocalLunarEclipseCircumstances = circumstances(eclipse, location)): LocalLunarEclipse {
+export function localLunarEclipse(eclipse: LunarEclipse, location: EclipseLocation, view: LunarEclipseViewOptions, local: LocalLunarEclipseCircumstances = circumstances(eclipse, location)): LocalLunarEclipse {
 	const events: LocalLunarEclipseContact[] = []
 
 	for (const contact of lunarEclipseEvents(eclipse)) {
@@ -255,13 +233,6 @@ export function localLunarEclipse(eclipse: LunarEclipse, location: LunarEclipseL
 	}
 }
 
-// Lets the event loop run between two pieces of long work.
-function yieldEventLoop() {
-	return new Promise<void>((resolve) => {
-		setImmediate(resolve)
-	})
-}
-
 // Lunar eclipse queries, keeping the latest maps and local circumstances so moving between contacts or redrawing
 // the Local View does not compute them again.
 export class LunarEclipseService {
@@ -269,14 +240,14 @@ export class LunarEclipseService {
 	readonly #locals = new LruCache<LocalLunarEclipseCircumstances>(CACHE_LIMIT)
 
 	// Returns the eclipse nearest time (Unix milliseconds) in a direction.
-	find(time: number, direction: LunarEclipseDirection): LunarEclipseSummary {
+	find(time: number, direction: EclipseDirection): LunarEclipseSummary {
 		return lunarEclipseSummary(findLunarEclipse(time, direction))
 	}
 
 	// Returns the eclipse nearest time (Unix milliseconds) in a direction whose Moon is above the horizon of a place
 	// at some instant, trying MAX_VISIBLE_SCAN eclipses at most; undefined when none of them is, or when the signal
 	// aborts. Each candidate costs tens of milliseconds, so the event loop runs between them.
-	async findVisible(time: number, direction: LunarEclipseDirection, location: LunarEclipseLocation, signal?: AbortSignal): Promise<LunarEclipseSummary | undefined> {
+	async findVisible(time: number, direction: EclipseDirection, location: EclipseLocation, signal?: AbortSignal): Promise<LunarEclipseSummary | undefined> {
 		let cursor = time
 
 		for (let i = 0; i < MAX_VISIBLE_SCAN; i++) {
@@ -304,7 +275,7 @@ export class LunarEclipseService {
 	}
 
 	// Returns the circumstances of the eclipse an id names from a place, or undefined when it names none.
-	local(id: string, location: LunarEclipseLocation, view: LunarEclipseViewOptions): LocalLunarEclipse | undefined {
+	local(id: string, location: EclipseLocation, view: LunarEclipseViewOptions): LocalLunarEclipse | undefined {
 		const eclipse = resolveLunarEclipse(id)
 		if (!eclipse) return undefined
 
@@ -318,11 +289,6 @@ export class LunarEclipseService {
 
 		return localLunarEclipse(eclipse, location, view, local)
 	}
-}
-
-// Reads the place of the `longitude` and `latitude` query parameters, in degrees.
-function locationParams(params: URLSearchParams): LunarEclipseLocation {
-	return { longitude: Number(params.get('longitude')), latitude: Number(params.get('latitude')) }
 }
 
 // Reads the presentation of the Local View from the `event`, `orientation`, `handedness`, and `ghosts` query
@@ -339,8 +305,8 @@ function viewParams(params: URLSearchParams): LunarEclipseViewOptions {
 }
 
 // Answers an id that names no eclipse.
-function eclipseNotFound() {
-	return errorResponse('Lunar eclipse not found', 404, 'notFound' satisfies LunarEclipseErrorCode)
+function lunarEclipseNotFound() {
+	return eclipseNotFound('Lunar eclipse not found')
 }
 
 // Creates the lunar eclipse routes.
@@ -354,7 +320,7 @@ export function createLunarEclipseRoutes(service: LunarEclipseService) {
 				const params = new URL(req.url).searchParams
 				const time = params.get('time')
 				const at = time ? +time : Date.now()
-				const direction = (params.get('direction') as LunarEclipseDirection | null) ?? 'next'
+				const direction = (params.get('direction') as EclipseDirection | null) ?? 'next'
 				if (!params.has('longitude') || !params.has('latitude')) return Response.json(service.find(at, direction))
 
 				const eclipse = await service.findVisible(at, direction, locationParams(params), req.signal)
@@ -365,7 +331,7 @@ export function createLunarEclipseRoutes(service: LunarEclipseService) {
 			// Global map of an eclipse; 404 when the id names none.
 			GET: (req) => {
 				const map = service.map(req.params.id)
-				return map ? Response.json(map) : eclipseNotFound()
+				return map ? Response.json(map) : lunarEclipseNotFound()
 			},
 		},
 		'/api/eclipses/lunar/:id/local': {
@@ -374,7 +340,7 @@ export function createLunarEclipseRoutes(service: LunarEclipseService) {
 			GET: (req) => {
 				const params = new URL(req.url).searchParams
 				const local = service.local(req.params.id, locationParams(params), viewParams(params))
-				return local ? Response.json(local) : eclipseNotFound()
+				return local ? Response.json(local) : lunarEclipseNotFound()
 			},
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>

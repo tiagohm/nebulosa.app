@@ -1,31 +1,16 @@
-import type { LocalLunarEclipse, LocalLunarViewHandedness, LocalLunarViewOrientationMode, LunarEclipseContactKind, LunarEclipseDirection, LunarEclipseMap, LunarEclipseSummary, LunarEclipseType } from 'api'
+import type { EclipseDirection, LocalLunarEclipse, LocalLunarViewHandedness, LocalLunarViewOrientationMode, LunarEclipseContactKind, LunarEclipseMap, LunarEclipseSummary, LunarEclipseType } from 'api'
 import { proxy } from 'valtio'
 import { ApiResponseError, fetchJson } from '../../http'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { createRequestGuard } from '../../sky/selection'
+import { aborted, browserEclipseIo, type EclipseIo, type EclipsePlace, errorMessage, observerPlace, utcDateStart } from '../eclipse/eclipse'
 
 // State of the Lunar Eclipse Map tool and its requests to /api/eclipses/lunar: the eclipse shown and its global
 // map, the contact highlighted, the place whose local circumstances are shown, and how they are presented. The
-// place starts as the Sky observer of the active profile, and choosing another one on the map or by hand never
-// changes the profile. The state lives as long as the tab, so leaving and reopening the tool keeps it; nothing is
-// stored on the server. Times are Unix milliseconds (UTC), geographic positions degrees, longitude east positive.
-
-// Where the place shown comes from.
-export type LunarEclipsePlaceSource = 'observer' | 'map' | 'manual'
-
-// Place whose local circumstances are shown.
-export interface LunarEclipsePlace {
-	// Where it comes from.
-	readonly source: LunarEclipsePlaceSource
-	// Longitude in degrees, east positive, [-180, 180].
-	readonly longitude: number
-	// Geodetic latitude in degrees, north positive, [-90, 90].
-	readonly latitude: number
-	// Name of the Sky observer, when it is the place.
-	readonly name?: string
-	// IANA time zone of the Sky observer, when it is the place and has one.
-	readonly timeZone?: string
-}
+// place follows eclipse.ts: it starts as the Sky observer of the active profile, and choosing another one on the
+// map or by hand never changes the profile. The state lives as long as the tab, so leaving and reopening the tool
+// keeps it; nothing is stored on the server. Times are Unix milliseconds (UTC), geographic positions degrees,
+// longitude east positive.
 
 // Presentation of the Local View.
 export interface LunarEclipseViewSettings {
@@ -52,7 +37,7 @@ export interface LunarEclipseState {
 	// Contact highlighted on the map and drawn in the Local View.
 	selectedEvent: LunarEclipseContactKind
 	// Place whose local circumstances are shown.
-	place?: LunarEclipsePlace
+	place?: EclipsePlace
 	// Local circumstances of the eclipse shown from the place, once loaded.
 	local?: LocalLunarEclipse
 	// Whether the local circumstances are being loaded.
@@ -66,20 +51,6 @@ export interface LunarEclipseState {
 	timeZone?: string
 	// Whether stepping between eclipses skips those whose Moon stays below the place's horizon.
 	visibleOnly: boolean
-}
-
-// Browser services the tool uses, replaced in tests.
-export interface LunarEclipseIo {
-	// Performs HTTP requests to the API.
-	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
-	// Real current time, Unix milliseconds (UTC); never the Sky simulation clock.
-	readonly time: () => number
-}
-
-// Browser implementation of LunarEclipseIo.
-export const browserLunarEclipseIo: LunarEclipseIo = {
-	fetch: (input, init) => fetch(input, init),
-	time: () => Date.now(),
 }
 
 // Initial state of the tool.
@@ -110,64 +81,10 @@ export const CONTACT_NAMES: Readonly<Record<LunarEclipseContactKind, string>> = 
 // Names of the eclipse types, for people.
 export const ECLIPSE_TYPE_NAMES: Readonly<Record<LunarEclipseType, string>> = { TOTAL: 'Total', PARTIAL: 'Partial', PENUMBRAL: 'Penumbral' }
 
-// Returns the place of the Sky observer.
-export function observerPlace(observer: SkyObserverSettings): LunarEclipsePlace {
-	return { source: 'observer', longitude: observer.longitude, latitude: observer.latitude, name: observer.name, timeZone: observer.timeZone }
-}
-
-// Returns the time zone the times are shown in: the one chosen; otherwise the Sky observer's for the observer
-// (empty, the browser's, when it has none); otherwise UTC, since a place on the map does not tell its civil
-// time zone.
-export function displayTimeZone(state: Pick<LunarEclipseState, 'timeZone' | 'place'>): string {
-	if (state.timeZone !== undefined) return state.timeZone
-	return state.place?.source === 'observer' ? (state.place.timeZone ?? '') : 'UTC'
-}
-
-// Formatters of contact times by locale and time zone.
-const timeFormatters = new Map<string, Intl.DateTimeFormat>()
-
-// Returns an instant (Unix milliseconds) as its date and time to the second in a time zone (empty for the
-// browser's), with the zone's name, such as "Sep 16, 1997, 18:47:11 UTC", so a time past midnight shows its day.
-export function formatEclipseTime(time: number, timeZone: string, locale?: string): string {
-	const key = `${locale ?? ''}|${timeZone}`
-	let formatter = timeFormatters.get(key)
-
-	if (!formatter) {
-		formatter = new Intl.DateTimeFormat(locale, { timeZone: timeZone || undefined, year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZoneName: 'short' })
-		timeFormatters.set(key, formatter)
-	}
-
-	return formatter.format(time)
-}
-
-// Returns the UTC calendar date of an instant (Unix milliseconds) as YYYY-MM-DD, the value of a date field.
-export function utcDate(time: number): string {
-	return new Date(time).toISOString().slice(0, 10)
-}
-
-// Returns a duration in seconds as hours, minutes, and seconds, such as "3h 16m 05s".
-export function formatDuration(seconds: number): string {
-	const total = Math.round(seconds)
-	const hours = Math.floor(total / 3600)
-	const minutes = Math.floor((total % 3600) / 60)
-	const rest = total % 60
-	return `${hours}h ${String(minutes).padStart(2, '0')}m ${String(rest).padStart(2, '0')}s`
-}
-
-// Returns the message of a failure, or a generic one.
-function errorMessage(error: unknown) {
-	return error instanceof Error ? error.message : 'Request failed'
-}
-
-// Whether a failure is the abort of a superseded request.
-function aborted(error: unknown) {
-	return error instanceof DOMException && error.name === 'AbortError'
-}
-
 // Searches the eclipse nearest an instant (Unix milliseconds) in a direction and shows it with its map. With a
 // place, only eclipses whose Moon rises above its horizon count; when none is found the eclipse shown stays and
 // notice says why. A newer search discards this one's late answers.
-async function searchEclipse(state: LunarEclipseState, time: number, direction: LunarEclipseDirection, place: LunarEclipsePlace | undefined, io: LunarEclipseIo) {
+async function searchEclipse(state: LunarEclipseState, time: number, direction: EclipseDirection, place: EclipsePlace | undefined, io: EclipseIo) {
 	const request = eclipseGuard.begin()
 	const query = place ? `&longitude=${place.longitude}&latitude=${place.latitude}` : ''
 
@@ -199,41 +116,40 @@ async function searchEclipse(state: LunarEclipseState, time: number, direction: 
 
 // Searches the eclipse nearest an instant (Unix milliseconds) in a direction and shows it with its map; with
 // visibleOnly, only eclipses whose Moon rises above the place's horizon count.
-export function findEclipse(state: LunarEclipseState, time: number, direction: LunarEclipseDirection, io: LunarEclipseIo = browserLunarEclipseIo) {
+export function findEclipse(state: LunarEclipseState, time: number, direction: EclipseDirection, io: EclipseIo = browserEclipseIo) {
 	return searchEclipse(state, time, direction, state.visibleOnly ? state.place : undefined, io)
 }
 
 // Loads again the eclipse shown and its map after a failure, or the next eclipse after now when none is shown.
-export function retryEclipse(state: LunarEclipseState, io: LunarEclipseIo = browserLunarEclipseIo) {
+export function retryEclipse(state: LunarEclipseState, io: EclipseIo = browserEclipseIo) {
 	return state.eclipse ? searchEclipse(state, state.eclipse.maximum - 1, 'next', undefined, io) : searchEclipse(state, io.time(), 'next', undefined, io)
 }
 
 // Shows the next eclipse after the one shown, or the first one after now when none is shown.
-export function nextEclipse(state: LunarEclipseState, io: LunarEclipseIo = browserLunarEclipseIo) {
+export function nextEclipse(state: LunarEclipseState, io: EclipseIo = browserEclipseIo) {
 	return findEclipse(state, state.eclipse?.maximum ?? io.time(), 'next', io)
 }
 
 // Shows the eclipse before the one shown, or the last one before now when none is shown.
-export function previousEclipse(state: LunarEclipseState, io: LunarEclipseIo = browserLunarEclipseIo) {
+export function previousEclipse(state: LunarEclipseState, io: EclipseIo = browserEclipseIo) {
 	return findEclipse(state, state.eclipse?.maximum ?? io.time(), 'previous', io)
 }
 
 // Shows the first eclipse on or after a UTC calendar date (YYYY-MM-DD).
-export function findEclipseFrom(state: LunarEclipseState, date: string, io: LunarEclipseIo = browserLunarEclipseIo) {
-	const [year, month, day] = date.split('-').map(Number)
-	return findEclipse(state, Date.UTC(year, month - 1, day) - 1, 'next', io)
+export function findEclipseFrom(state: LunarEclipseState, date: string, io: EclipseIo = browserEclipseIo) {
+	return findEclipse(state, utcDateStart(date) - 1, 'next', io)
 }
 
 // Opens the tool: on the first visit, takes the Sky observer as the place, when there is one, and shows the next
 // eclipse after now; later visits keep what was shown.
-export function openLunarEclipseMap(state: LunarEclipseState, observer: SkyObserverSettings | undefined, io: LunarEclipseIo = browserLunarEclipseIo) {
+export function openLunarEclipseMap(state: LunarEclipseState, observer: SkyObserverSettings | undefined, io: EclipseIo = browserEclipseIo) {
 	state.place ??= observer && observerPlace(observer)
 	if (!state.eclipse && !state.loading) void findEclipse(state, io.time(), 'next', io)
 }
 
 // Loads the local circumstances of the eclipse shown from the place, with the Local View of the selected contact;
 // does nothing without both. A newer request discards this one's late answer.
-export async function loadLocal(state: LunarEclipseState, io: LunarEclipseIo = browserLunarEclipseIo) {
+export async function loadLocal(state: LunarEclipseState, io: EclipseIo = browserEclipseIo) {
 	const { eclipse, place, view } = state
 
 	if (!eclipse || !place) {
@@ -260,21 +176,21 @@ export async function loadLocal(state: LunarEclipseState, io: LunarEclipseIo = b
 }
 
 // Shows a place's local circumstances; the profile's observer is never changed.
-export function selectPlace(state: LunarEclipseState, place: LunarEclipsePlace, io: LunarEclipseIo = browserLunarEclipseIo) {
+export function selectPlace(state: LunarEclipseState, place: EclipsePlace, io: EclipseIo = browserEclipseIo) {
 	state.place = place
 	state.local = undefined
 	return loadLocal(state, io)
 }
 
 // Highlights a contact on the map and draws it in the Local View; the global map is not loaded again.
-export function selectEvent(state: LunarEclipseState, kind: LunarEclipseContactKind, io: LunarEclipseIo = browserLunarEclipseIo) {
+export function selectEvent(state: LunarEclipseState, kind: LunarEclipseContactKind, io: EclipseIo = browserEclipseIo) {
 	if (state.selectedEvent === kind) return
 	state.selectedEvent = kind
 	return loadLocal(state, io)
 }
 
 // Changes the presentation of the Local View.
-export function setViewSettings(state: LunarEclipseState, settings: Partial<LunarEclipseViewSettings>, io: LunarEclipseIo = browserLunarEclipseIo) {
+export function setViewSettings(state: LunarEclipseState, settings: Partial<LunarEclipseViewSettings>, io: EclipseIo = browserEclipseIo) {
 	Object.assign(state.view, settings)
 	return loadLocal(state, io)
 }

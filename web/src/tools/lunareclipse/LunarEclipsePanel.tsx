@@ -1,106 +1,39 @@
 import type { LocalLunarViewHandedness, LocalLunarViewOrientationMode } from 'api'
 import { cn } from 'cn'
-import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { PanelSection } from '../../shell/ContextualPanel'
-import { BROWSER_TIME_ZONE, TIME_ZONES } from '../../sky/clock'
+import { BROWSER_TIME_ZONE } from '../../sky/clock'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
-import { TextInput } from '../../ui/TextInput'
-import { CONTACT_NAMES, displayTimeZone, ECLIPSE_TYPE_NAMES, formatDuration, formatEclipseTime, loadLocal, lunarEclipseState, observerPlace, phaseDurations, selectEvent, selectPlace, setViewSettings } from './lunareclipse'
+import { displayTimeZone, type EclipsePlace, formatDuration, formatEclipseTime } from '../eclipse/eclipse'
+import { Datum, DISPLAY_TIME_ZONES, LocationSection, Note } from '../eclipse/EclipsePanelParts'
+import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, loadLocal, lunarEclipseState, phaseDurations, selectEvent, selectPlace, setViewSettings } from './lunareclipse'
 import { LunarEclipseLocalView } from './LunarEclipseLocalView'
 
-// Local Circumstances panel of the Lunar Eclipse Map: the place (the Sky observer, a click on the map, or
-// coordinates typed in), the visibility of the eclipse from it, the contacts in the time zone shown, the
-// magnitudes and durations, and the Local View. The global contact times are shown even without a place or when
-// the Moon is below its horizon. Nothing here changes the profile.
+// Local Circumstances panel of the Lunar Eclipse Map: the place (the shared Location section), the visibility of
+// the eclipse from it, the contacts in the time zone shown, the magnitudes and durations, and the Local View. The
+// global contact times are shown even without a place or when the Moon is below its horizon. Nothing here changes
+// the profile.
 
 export interface LunarEclipsePanelProps {
 	// Sky observer of the active profile; absent when none is set.
 	readonly observer?: SkyObserverSettings
 }
 
-// Time zones offered for the times: UTC, the browser's (empty), and every other IANA zone.
-const DISPLAY_TIME_ZONES = ['UTC', ...TIME_ZONES.filter((zone) => zone !== 'UTC')]
+// Shows a place chosen in the Location section; going back to the Sky observer also goes back to its time zone.
+function choosePlace(place: EclipsePlace) {
+	if (place.source === 'observer') lunarEclipseState.timeZone = undefined
+	void selectPlace(lunarEclipseState, place)
+}
 
 // Orientations of the Local View, in display order.
 const ORIENTATIONS: readonly LocalLunarViewOrientationMode[] = ['zenith', 'north']
 
 // Handedness of the Local View, in display order.
 const HANDEDNESS: readonly LocalLunarViewHandedness[] = ['eastRight', 'eastLeft']
-
-// Names of the sources of a place.
-const PLACE_SOURCES = { observer: 'Sky observer', map: 'Map selection', manual: 'Coordinates entered' } as const
-
-// Label and value of one datum.
-function Datum({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="flex-none text-ink-300">{label}</span>
-			<span className="min-w-0 text-right font-mono text-[13px] wrap-break-word text-ink-100">{children}</span>
-		</div>
-	)
-}
-
-// Muted note under a section.
-function Note({ children, danger }: { readonly children: ReactNode; readonly danger?: boolean }) {
-	return <p className={danger ? 'm-0 text-xs leading-4 text-danger' : 'm-0 text-xs leading-4 text-ink-300'}>{children}</p>
-}
-
-// Text of a coordinate field: the value in degrees to a ten-thousandth (about 11 m), or empty.
-function fieldText(value: number | undefined) {
-	return value === undefined ? '' : `${+value.toFixed(4)}`
-}
-
-interface PlaceFormProps {
-	// Latitude shown when the form opens, in degrees.
-	readonly latitude?: number
-	// Longitude shown when the form opens, in degrees.
-	readonly longitude?: number
-}
-
-// Coordinates of a place typed in, applied together.
-function PlaceForm({ latitude, longitude }: PlaceFormProps) {
-	const [latitudeText, setLatitudeText] = useState(fieldText(latitude))
-	const [longitudeText, setLongitudeText] = useState(fieldText(longitude))
-	const [error, setError] = useState<string>()
-
-	function apply() {
-		const lat = latitudeText.trim() === '' ? Number.NaN : +latitudeText
-		const lon = longitudeText.trim() === '' ? Number.NaN : +longitudeText
-
-		if (!(lat >= -90 && lat <= 90) || !(lon >= -180 && lon <= 180)) {
-			setError('Latitude must be between −90° and 90°, and longitude between −180° and 180° (east positive).')
-			return
-		}
-
-		setError(undefined)
-		void selectPlace(lunarEclipseState, { source: 'manual', latitude: lat, longitude: lon })
-	}
-
-	return (
-		<form
-			className="flex flex-col gap-2"
-			onSubmit={(e) => {
-				e.preventDefault()
-				apply()
-			}}
-		>
-			<div className="grid grid-cols-2 gap-2">
-				<TextInput label="Latitude" suffix="°" inputMode="decimal" value={latitudeText} onChange={(e) => setLatitudeText(e.target.value)} />
-				<TextInput label="Longitude" suffix="°" inputMode="decimal" value={longitudeText} onChange={(e) => setLongitudeText(e.target.value)} />
-			</div>
-			<Note>Degrees, north and east positive.</Note>
-			{error && <Note danger>{error}</Note>}
-			<Button type="submit" variant="secondary" size="sm" className="self-start">
-				Apply Coordinates
-			</Button>
-		</form>
-	)
-}
 
 // Local Circumstances panel.
 export function LunarEclipsePanel({ observer }: LunarEclipsePanelProps) {
@@ -110,36 +43,10 @@ export function LunarEclipsePanel({ observer }: LunarEclipsePanelProps) {
 	const events = new Map(local?.events.map((event) => [event.kind, event]))
 	const selectedLocal = events.get(selectedEvent)
 	const durations = eclipse && phaseDurations(eclipse)
-	const placeKey = place ? `${place.source}:${place.latitude}:${place.longitude}` : 'none'
 
 	return (
 		<>
-			<PanelSection title="Location">
-				{place ? (
-					<>
-						<Datum label="Source">{place.source === 'observer' && place.name ? place.name : PLACE_SOURCES[place.source]}</Datum>
-						<Datum label="Latitude">{place.latitude.toFixed(4)}°</Datum>
-						<Datum label="Longitude">{place.longitude.toFixed(4)}°</Datum>
-					</>
-				) : (
-					<Note>Select a location on the map, or enter its coordinates.</Note>
-				)}
-				<PlaceForm key={placeKey} latitude={place?.latitude} longitude={place?.longitude} />
-				{observer && place?.source !== 'observer' && (
-					<Button
-						variant="ghost"
-						size="sm"
-						className="self-start"
-						onClick={() => {
-							lunarEclipseState.timeZone = undefined
-							void selectPlace(lunarEclipseState, observerPlace(observer))
-						}}
-					>
-						Use Sky Observer
-					</Button>
-				)}
-				<Note>Choosing a location here never changes the Sky observer of the profile.</Note>
-			</PanelSection>
+			<LocationSection place={place} observer={observer} onSelect={choosePlace} />
 			{place && (
 				<PanelSection title="Visibility">
 					{local && <p className="m-0 font-medium text-ink-100">{local.visibility.text}</p>}

@@ -1,14 +1,15 @@
 import { expect, test } from 'bun:test'
 import type { LunarEclipseSummary } from 'api'
 import { proxy } from 'valtio'
-import { displayTimeZone, findEclipse, findEclipseFrom, formatDuration, formatEclipseTime, initialLunarEclipseState, type LunarEclipseIo, type LunarEclipseState, nextEclipse, openLunarEclipseMap, phaseDurations, selectEvent, selectPlace, setViewSettings } from './lunareclipse'
+import type { EclipseIo } from '../eclipse/eclipse'
+import { findEclipse, findEclipseFrom, initialLunarEclipseState, type LunarEclipseState, nextEclipse, openLunarEclipseMap, phaseDurations, selectEvent, selectPlace, setViewSettings } from './lunareclipse'
 
 // Fake API whose responses are released by the test, in any order.
 function fakeApi() {
 	const pending: { url: string; resolve: (value: unknown, status?: number) => void }[] = []
 	const requested: string[] = []
 
-	const io: LunarEclipseIo = {
+	const io: EclipseIo = {
 		time: () => Date.UTC(2026, 0, 1),
 		fetch: (input, init) =>
 			new Promise<Response>((resolve, reject) => {
@@ -146,27 +147,7 @@ test('a failed map is reported as an error', async () => {
 	expect(state.loading).toBe(false)
 })
 
-test('shows times in the chosen zone, the observer zone, or UTC for a place on the map', () => {
-	expect(displayTimeZone({ place: { source: 'observer', longitude: 0, latitude: 0, timeZone: 'Asia/Tokyo' } })).toBe('Asia/Tokyo')
-	expect(displayTimeZone({ place: { source: 'observer', longitude: 0, latitude: 0 } })).toBe('')
-	expect(displayTimeZone({ place: { source: 'map', longitude: 0, latitude: 0 } })).toBe('UTC')
-	expect(displayTimeZone({ place: undefined })).toBe('UTC')
-	expect(displayTimeZone({ place: { source: 'map', longitude: 0, latitude: 0 }, timeZone: 'Europe/Lisbon' })).toBe('Europe/Lisbon')
-})
-
-test('formats contact times with their date and zone', () => {
-	const time = Date.UTC(1997, 8, 16, 18, 47, 11)
-	expect(formatEclipseTime(time, 'UTC', 'en-US')).toBe('Sep 16, 1997, 18:47:11 UTC')
-	// The same instant is the next day in Tokyo.
-	expect(formatEclipseTime(time, 'Asia/Tokyo', 'en-US')).toBe('Sep 17, 1997, 03:47:11 GMT+9')
-	// Daylight saving time in New York in March 2025, standard time in January.
-	expect(formatEclipseTime(Date.UTC(2025, 2, 14, 6, 58, 43), 'America/New_York', 'en-US')).toBe('Mar 14, 2025, 02:58:43 EDT')
-	expect(formatEclipseTime(Date.UTC(2025, 0, 14, 6, 58, 43), 'America/New_York', 'en-US')).toBe('Jan 14, 2025, 01:58:43 EST')
-})
-
 test('durations of the phases come from the contacts', () => {
 	expect(phaseDurations(A)).toEqual({ penumbral: 6 * 1800, partial: 4 * 1800, total: 2 * 1800 })
 	expect(phaseDurations(summary(0, 'PENUMBRAL'))).toEqual({ penumbral: 2 * 1800, partial: undefined, total: undefined })
-	expect(formatDuration(3 * 3600 + 16 * 60 + 5.4)).toBe('3h 16m 05s')
-	expect(formatDuration(59.6)).toBe('0h 01m 00s')
 })

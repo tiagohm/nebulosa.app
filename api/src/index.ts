@@ -52,6 +52,7 @@ export type {
 } from './captureframes'
 export type { ConnectionEvent, ConnectionRegistryEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest } from './connection'
 export type { CommandAccepted, CommandError, CommandErrorCode, CommandRequest } from './commands'
+export type { EclipseDirection, EclipseLocation } from './eclipses'
 export type { ApiError } from './http'
 export type {
 	LocalLunarEclipse,
@@ -65,10 +66,8 @@ export type {
 	LunarEclipseContactKind,
 	LunarEclipseContactPaths,
 	LunarEclipseContactTime,
-	LunarEclipseDirection,
 	LunarEclipseErrorCode,
 	LunarEclipseLocalView,
-	LunarEclipseLocation,
 	LunarEclipseMap,
 	LunarEclipseMapEvent,
 	LunarEclipseSummary,

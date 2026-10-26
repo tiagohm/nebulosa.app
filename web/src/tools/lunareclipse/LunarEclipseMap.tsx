@@ -10,7 +10,8 @@ import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
 import { WorldMap, WorldMapSymbol } from '../../ui/WorldMap'
 import { DEGREE_PLANE_TRANSFORM } from '../../ui/worldmap.geometry'
-import { CONTACT_NAMES, displayTimeZone, ECLIPSE_TYPE_NAMES, findEclipseFrom, formatEclipseTime, lunarEclipseState, nextEclipse, openLunarEclipseMap, previousEclipse, retryEclipse, selectEvent, selectPlace, utcDate } from './lunareclipse'
+import { displayTimeZone, formatEclipseTime, utcDate } from '../eclipse/eclipse'
+import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, findEclipseFrom, lunarEclipseState, nextEclipse, openLunarEclipseMap, previousEclipse, retryEclipse, selectEvent, selectPlace } from './lunareclipse'
 import { LunarEclipsePanel } from './LunarEclipsePanel'
 
 // Lunar Eclipse Map tool: steps through lunar eclipses (previous, next, from a date, optionally only those

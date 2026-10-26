@@ -3,11 +3,12 @@ import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
+import { DEFAULT_GUIDING_CALIBRATOR_CONFIG, type GuidingCalibrationDiagnostics } from 'nebulosa/src/observation/guiding/calibrator'
 import type { StarTracker } from 'nebulosa/src/observation/guiding/tracker.star'
 import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
 import { ConnectionManager } from './connection'
 import { ExternalToolsStore } from './externaltools'
-import { GUIDING_REGION_RADIUS, GUIDING_REGION_STARS, type GuidingEventRecord, type GuidingPage, type GuidingServerEvent, GuidingSessions, type GuidingSessionSummary, type GuidingStartRequest, guidingRegions } from './guiding'
+import { calibrationProgressOf, GUIDING_REGION_RADIUS, GUIDING_REGION_STARS, type GuidingEventRecord, type GuidingPage, type GuidingServerEvent, GuidingSessions, type GuidingSessionSummary, type GuidingStartRequest, guidingRegions } from './guiding'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry } from './operations'
 
@@ -107,6 +108,20 @@ async function start(context: Setup, patch: Partial<GuidingStartRequest> = {}) {
 	await waitUntil(() => context.summary()?.active === true)
 	return accepted
 }
+
+describe('calibration progress', () => {
+	test('the RA return keeps the distance it ended at while the DEC legs report the current one', () => {
+		const base = { startX: 100, startY: 100, raSteps: 6, decSteps: 0, clearingSteps: 3, decReturnSteps: 0, raNetDistancePx: 12, decNetDistancePx: 0, decMotionDetected: false, backlash: 0, badFrames: 0 }
+		const progress = (diagnostics: object) => calibrationProgressOf(diagnostics as GuidingCalibrationDiagnostics, DEFAULT_GUIDING_CALIBRATOR_CONFIG)
+
+		// While clearing, the distance is the current one.
+		expect(progress({ ...base, phase: 'raClearMeasure', clearingDistancePx: 6.5 })).toMatchObject({ clearingDistance: 6.5, decReturnDistance: 6.5 })
+		// Once the DEC leg began 3 px from the start, the RA return keeps that distance as the star moves north and back.
+		const dec = { ...base, decStartX: 103, decStartY: 100, decSteps: 4, decNetDistancePx: 10 }
+		expect(progress({ ...dec, phase: 'decForwardMeasure', clearingDistancePx: 10.4 })).toMatchObject({ clearingDistance: 3, decReturnDistance: 10.4 })
+		expect(progress({ ...dec, phase: 'decReturnMeasure', decReturnSteps: 2, clearingDistancePx: 4.2 })).toMatchObject({ clearingDistance: 3, decReturnSteps: 2, decReturnDistance: 4.2 })
+	})
+})
 
 describe('start', () => {
 	test('refuses an unknown camera or guide output and a busy camera', async () => {

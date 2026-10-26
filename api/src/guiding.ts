@@ -174,7 +174,8 @@ export interface GuidingCalibrationProgress {
 	// RA steps back toward the start, and their limit.
 	readonly clearingSteps: number
 	readonly maxClearingSteps: number
-	// Distance from the start while clearing, and the distance that completes it, in pixels.
+	// Distance from the start while clearing, where the clearing left the star once the DEC leg began, and the distance
+	// that completes it, in pixels.
 	readonly clearingDistance: number
 	readonly clearingTarget: number
 	// DEC forward steps taken, and their limit.
@@ -183,10 +184,11 @@ export interface GuidingCalibrationProgress {
 	// Net DEC travel, and the travel the leg needs, in pixels.
 	readonly decDistance: number
 	readonly decTarget: number
-	// Whether the calibration returns along DEC once solved, and the DEC return pulses taken so far, nudges included;
-	// the distance from the start is clearingDistance.
+	// Whether the calibration returns along DEC once solved, the DEC return pulses taken so far, nudges included, and the
+	// current distance from the start, in pixels.
 	readonly decReturn: boolean
 	readonly decReturnSteps: number
+	readonly decReturnDistance: number
 	// Whether the DEC motion started past the backlash, and the backlash estimated so far, in milliseconds.
 	readonly decMoving: boolean
 	readonly backlash: number
@@ -1040,7 +1042,11 @@ function overlayOf(frame: GuideFrameImage): GuidingFrameOverlay {
 }
 
 // Returns the progress of a calibration from the diagnostics of its latest frame and the limits of its settings.
-function calibrationProgressOf(diagnostics: GuidingCalibrationDiagnostics, config: Readonly<GuidingCalibrationConfig>): GuidingCalibrationProgress {
+export function calibrationProgressOf(diagnostics: GuidingCalibrationDiagnostics, config: Readonly<GuidingCalibrationConfig>): GuidingCalibrationProgress {
+	const { startX, startY, decStartX, decStartY } = diagnostics
+	// The diagnostics only carry the current distance from the start; the clearing ended where the DEC leg began.
+	const clearingDistance = startX !== undefined && startY !== undefined && decStartX !== undefined && decStartY !== undefined ? Math.hypot(decStartX - startX, decStartY - startY) : diagnostics.clearingDistancePx
+
 	return {
 		phase: diagnostics.phase,
 		raSteps: diagnostics.raSteps,
@@ -1049,7 +1055,7 @@ function calibrationProgressOf(diagnostics: GuidingCalibrationDiagnostics, confi
 		raTarget: config.minNetRaTravelPx,
 		clearingSteps: diagnostics.clearingSteps,
 		maxClearingSteps: config.maxClearingSteps,
-		clearingDistance: diagnostics.clearingDistancePx,
+		clearingDistance,
 		clearingTarget: config.maxClearingOffsetPx,
 		decSteps: diagnostics.decSteps,
 		maxDecSteps: config.maxDecSteps,
@@ -1057,6 +1063,7 @@ function calibrationProgressOf(diagnostics: GuidingCalibrationDiagnostics, confi
 		decTarget: config.minNetDecTravelPx,
 		decReturn: config.decReturnEnabled,
 		decReturnSteps: diagnostics.decReturnSteps,
+		decReturnDistance: diagnostics.clearingDistancePx,
 		decMoving: diagnostics.decMotionDetected,
 		backlash: diagnostics.backlash,
 		badFrames: diagnostics.badFrames,

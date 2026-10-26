@@ -1,13 +1,17 @@
-import type { Client } from 'nebulosa/src/devices/indi/device'
+import type { IndiClientHandler } from 'nebulosa/src/devices/indi/client'
+import type { Client, Device } from 'nebulosa/src/devices/indi/device'
 import type { IndiDevice, IndiDriver, IndiProperty, IndiPropertyChange, IndiPropertyChangeKind, IndiPropertyListener } from 'nebulosa/src/devices/indi/properties'
-import type { Message } from 'nebulosa/src/devices/indi/types'
-import { type ClientResolver, notFound, unsupported } from './commands'
+import type { Message, SetVector } from 'nebulosa/src/devices/indi/types'
+import { failedOperationResult, type OperationFailureReason, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import { busy, type ClientResolver, type CommandAccepted, type CommandErrorCode, type CommandRequest, notFound, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
+import { errorResponse } from './http'
+import type { OperationRegistry } from './operations'
 import type { EventSocket, ServerEvent, SocketListener } from './websocket'
 
 // The raw INDI property vectors of the devices of the open INDI connections, for the INDI Properties view of
 // Equipment Control. The vectors themselves are kept by the property registry of the devices, which the
-// device managers share; this service only publishes them:
+// device managers share; this service publishes them and writes them:
 // - a directory of the physical devices of each INDI connection (GET /api/connections/:id/indi/devices and
 //   the indi:device* events, broadcast to every tab), without any property value;
 // - the property stream of one physical device, sent only to the sockets that subscribed to it over /api/ws
@@ -21,9 +25,35 @@ import type { EventSocket, ServerEvent, SocketListener } from './websocket'
 // from the registry, which a write names as its base. A socket whose queue grows beyond MAX_BUFFERED_AMOUNT
 // skips the changes of its streams and gets a new snapshot of each once it drains. BLOB vectors carry the
 // format and size of their latest delivery only, never their bytes.
+//
+// A write (POST .../properties/:vector) sends new values for one text, number, or switch vector the driver
+// lets the client write, checked against the vector as the registry holds it now: the revision the tab
+// edited must still be the vector's (409 conflict otherwise, with the current vector), and switches are
+// sent as the complete selection the rule allows. It runs as an indi.propertyWrite operation under the
+// command contract of commands.ts: 202 with the operation id, a token so a repeated request never writes
+// twice, and the outcome only through operation:updated. While the device reports being connected, the
+// operation holds the physical device (its hardware id), so a write is refused as busy while any other
+// operation holds it, and cancelled when it disconnects; a device that is not connected has nothing to
+// conflict with, so its settings (a port, a baud rate, the CONNECTION switch itself) are written without
+// holding it. The operation ends with the first update of the vector after the change was sent that does not
+// report Busy: Ok or Idle succeed, Alert fails with the driver's message. A driver that never leaves Busy, or
+// never answers, fails it as timeout after the vector's own timeout plus WRITE_GRACE (DEFAULT_WRITE_TIMEOUT
+// when it declares none, at most MAX_WRITE_TIMEOUT), saying the device may still be working; deleting or
+// redefining the vector meanwhile fails it as an unknown result. Ok only means the driver accepted the
+// change: an update that was already on its way when the change was sent ends the operation too, and a
+// driver may report Ok while the hardware still moves.
 
 // Interval at which the value-only changes of the vectors of a streamed device are sent, in milliseconds.
 export const VALUE_INTERVAL = 250
+
+// Time a write waits for the driver when the vector declares no timeout, in seconds.
+export const DEFAULT_WRITE_TIMEOUT = 60
+
+// Longest time a write waits for the driver, whatever the vector declares, in seconds.
+export const MAX_WRITE_TIMEOUT = 600
+
+// Time a write waits beyond the vector's timeout for the driver's answer to arrive, in milliseconds.
+export const WRITE_GRACE = 5000
 
 // Bytes a socket may have queued before its streams skip changes and wait for it to drain.
 export const MAX_BUFFERED_AMOUNT = 1024 * 1024
@@ -170,6 +200,36 @@ export interface IndiPropertyServiceOptions {
 	readonly valueInterval?: number
 	// Bytes a socket may have queued before its streams skip changes (MAX_BUFFERED_AMOUNT by default).
 	readonly maxBufferedAmount?: number
+	// Time a write waits beyond the vector's timeout, in milliseconds (WRITE_GRACE by default).
+	readonly writeGrace?: number
+}
+
+// Body of POST /api/connections/:id/indi/devices/:hardwareId/properties/:vector.
+export interface IndiWriteRequest extends CommandRequest {
+	// Revision of the vector the values were edited from; a vector changed since is refused as a conflict.
+	readonly baseRevision: number
+	// New values by element name: text for a text vector, a number in the driver's units for a number vector,
+	// whether it is on for a switch vector. An element left out keeps its current value in a readable text or
+	// number vector and an AnyOfMany switch vector, is off in any other switch vector, and must be given in a
+	// write-only text or number vector.
+	readonly elements: Readonly<Record<string, string | number | boolean>>
+}
+
+// Stable code of a refused write: the command codes, plus conflict when the vector changed since the
+// revision the request names (the body then carries the current vector as vector).
+export type IndiErrorCode = CommandErrorCode | 'conflict'
+
+// A vector a write can change: a text, number, or switch vector.
+type IndiWritableProperty = Extract<IndiProperty, { readonly type: 'TEXT' | 'NUMBER' | 'SWITCH' }>
+
+// A write waiting for the driver to report the end of the change.
+interface Write {
+	// The device written.
+	readonly device: IndiDevice
+	// Name of the vector written.
+	readonly name: string
+	// Ends the write with an outcome.
+	readonly finish: (result: OperationResult<undefined>) => void
 }
 
 // Property stream of one physical device while it has subscribers.
@@ -208,22 +268,76 @@ export class IndiPropertyService implements SocketListener, Disposable {
 	readonly #valueInterval: number
 	// Bytes a socket may have queued before its streams skip changes.
 	readonly #maxBufferedAmount: number
+	// Time a write waits beyond the vector's timeout, in milliseconds.
+	readonly #writeGrace: number
+	// Writes waiting for the driver, by device.
+	readonly #writes = new Map<IndiDevice, Set<Write>>()
 	// Revision of the last stream event.
 	#revision = 0
 	// Stops listening to the registry.
 	readonly #unlisten: VoidFunction
+	// Handler of the clients that sees every set vector, even one that changes nothing, and ends the writes the
+	// driver answered. It observes the generic vector callback, the last one dispatched for a message, which
+	// the registry merges in before it because the registry comes first in the handler.
+	readonly #handler: IndiClientHandler = {
+		vector: (client, message, tag) => {
+			if (tag[0] === 's') this.#answered(client, message as SetVector)
+		},
+	}
 
 	// Creates the service over the devices of every connection; client resolves an open connection id to its
-	// client and broadcast publishes the directory events to every tab.
+	// client, operations runs and arbitrates the writes, and broadcast publishes the directory events to every tab.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: ClientResolver,
+		readonly operations: OperationRegistry,
 		readonly broadcast: (event: ServerEvent) => void,
 		options?: IndiPropertyServiceOptions,
 	) {
 		this.#valueInterval = options?.valueInterval ?? VALUE_INTERVAL
 		this.#maxBufferedAmount = options?.maxBufferedAmount ?? MAX_BUFFERED_AMOUNT
+		this.#writeGrace = options?.writeGrace ?? WRITE_GRACE
 		this.#unlisten = devices.properties.addListener(this.#listener)
+		devices.handler.add(this.#handler)
+	}
+
+	// Writes new values to a vector of a device of an INDI connection. Responds 202 with the operation id; 404
+	// when the connection, the device, or the vector does not exist, 409 busy while another operation holds the
+	// connected device, 409 conflict when the vector changed since baseRevision, 422 unsupported for a vector
+	// that cannot be written and invalidParameter for values it cannot take.
+	write(connectionId: string, hardwareId: string, name: string, request: IndiWriteRequest): Response {
+		const known = this.operations.started(request.token)
+		if (known) return Response.json({ operationId: known.operationId } satisfies CommandAccepted, { status: 202 })
+
+		const client = this.client(connectionId)
+		if (!client) return notFound('Connection')
+		if (client.type !== 'INDI') return unsupported('Only INDI connections write their INDI properties')
+
+		const device = this.devices.properties.device(client, hardwareId)
+		if (!device) return notFound('INDI device')
+
+		const property = device.properties[name]
+		if (!property) return notFound('Property')
+		if (property.type === 'LIGHT' || property.type === 'BLOB' || property.permission === 'ro') return unsupported(`The property ${name} cannot be written`)
+		if (request.baseRevision !== property.revision) return errorResponse(`The property ${name} changed on the device`, 409, 'conflict', { vector: property })
+
+		const elements = writtenElements(property, request.elements)
+		if (typeof elements === 'string') return errorResponse(elements, 422, 'invalidParameter')
+
+		// The managed interface of the physical device, when one exists, ties the hold to its lifecycle.
+		const managed: Device | undefined = this.devices.get(client, device.hardwareId)
+		const operationDevice = { connectionId, deviceId: managed?.id ?? device.hardwareId }
+
+		// Nothing can hold a device that is not connected, and its settings must be writable before it connects.
+		if (device.connected !== true) {
+			const { operationId } = this.operations.run('indi.propertyWrite', [operationDevice], request.token, () => this.#dispatch(client, device, property, elements))
+			return Response.json({ operationId } satisfies CommandAccepted, { status: 202 })
+		}
+
+		if (this.operations.arbiter.availability(device.hardwareId) !== 'available') return busy()
+
+		const { operationId } = this.operations.run('indi.propertyWrite', [operationDevice], request.token, () => this.operations.coordinator.start('indi.propertyWrite', [{ key: device.hardwareId, device: managed }], ({ signal }) => this.#dispatch(client, device, property, elements, signal)).result)
+		return Response.json({ operationId } satisfies CommandAccepted, { status: 202 })
 	}
 
 	// Responds with the physical devices of an INDI connection; 404 when it is not open, 422 when it is not
@@ -306,12 +420,14 @@ export class IndiPropertyService implements SocketListener, Disposable {
 		deviceAdded: (client, device) => this.#publishDevice(client, device, 'indi:deviceAdded'),
 		deviceUpdated: (client, device) => this.#publishDevice(client, device, 'indi:deviceUpdated'),
 		deviceRemoved: (client, device) => {
+			this.#endWrites(device, undefined, failedOperationResult('removed', 'The device was removed before the driver reported the end of the change'))
 			const stream = this.#devices.get(device)
 			if (stream !== undefined) this.#close(stream)
 			const connectionId = client.type === 'INDI' ? this.devices.connection(client) : undefined
 			if (connectionId) this.broadcast({ type: 'indi:deviceRemoved', connectionId, hardwareId: device.hardwareId })
 		},
 		propertyDefined: (_, device, property) => {
+			this.#endWrites(device, property.name, failedOperationResult('commandFailed', 'The driver redefined the property before reporting the end of the change'))
 			const stream = this.#devices.get(device)
 			if (stream === undefined) return
 			stream.pending.delete(property.name)
@@ -322,6 +438,7 @@ export class IndiPropertyService implements SocketListener, Disposable {
 			if (stream !== undefined) this.#updated(stream, property, change)
 		},
 		propertyRemoved: (_, device, property) => {
+			this.#endWrites(device, property.name, failedOperationResult('commandFailed', 'The driver deleted the property before reporting the end of the change'))
 			const stream = this.#devices.get(device)
 			if (stream === undefined) return
 			stream.pending.delete(property.name)
@@ -333,6 +450,68 @@ export class IndiPropertyService implements SocketListener, Disposable {
 			const stream = this.#devices.get(device)
 			if (stream !== undefined) this.#send(stream, { ...this.#header(stream), type: 'indi:message', message: received })
 		},
+	}
+
+	// Sends the new values of a vector and resolves once the driver reports the end of the change, it fails, the
+	// wait times out, or signal aborts (the operation was cancelled; the coordinator reports its reason).
+	#dispatch(client: Client, device: IndiDevice, property: IndiWritableProperty, elements: Record<string, string | number | boolean>, signal?: AbortSignal): Promise<OperationResult<undefined>> {
+		const { promise, resolve } = Promise.withResolvers<OperationResult<undefined>>()
+		const seconds = Math.min(Math.max(property.timeout ?? DEFAULT_WRITE_TIMEOUT, 0), MAX_WRITE_TIMEOUT)
+		let writes = this.#writes.get(device)
+
+		if (writes === undefined) {
+			writes = new Set()
+			this.#writes.set(device, writes)
+		}
+
+		const write: Write = {
+			device,
+			name: property.name,
+			finish: (result) => {
+				clearTimeout(timer)
+				signal?.removeEventListener('abort', abort)
+
+				const pending = this.#writes.get(device)
+				pending?.delete(write)
+				if (pending?.size === 0) this.#writes.delete(device)
+
+				resolve(result)
+			},
+		}
+
+		const abort = () => write.finish(failedOperationResult((signal?.reason as OperationFailureReason | undefined) ?? 'aborted'))
+		const timer = setTimeout(() => write.finish(failedOperationResult('timeout', `The driver did not report the end of the change of ${property.name} within ${seconds + this.#writeGrace / 1000} s; the device may still be working`)), seconds * 1000 + this.#writeGrace)
+
+		writes.add(write)
+		signal?.addEventListener('abort', abort, { once: true })
+
+		const vector = { device: device.name, name: property.name }
+		if (property.type === 'TEXT') client.sendText({ ...vector, elements: elements as Record<string, string> })
+		else if (property.type === 'NUMBER') client.sendNumber({ ...vector, elements: elements as Record<string, number> })
+		else client.sendSwitch({ ...vector, elements: elements as Record<string, boolean> })
+
+		return promise
+	}
+
+	// Ends the writes of a vector a set vector answered, once it reports anything but Busy. Called for every set
+	// vector of every client, so it returns at once while no write waits.
+	#answered(client: Client, message: SetVector) {
+		if (this.#writes.size === 0) return
+
+		const device = this.devices.properties.device(client, message.device)
+		const writes = device && this.#writes.get(device)
+		const property = device?.properties[message.name]
+
+		if (writes === undefined || property === undefined || property.state === 'Busy') return
+
+		const result = property.state === 'Alert' ? failedOperationResult('alert', property.message || `The driver refused the change of ${property.name}`) : successfulOperationResult(undefined)
+		for (const write of Array.from(writes)) if (write.name === property.name) write.finish(result)
+	}
+
+	// Ends the writes of a device, or of one of its vectors when name is given, with an outcome.
+	#endWrites(device: IndiDevice, name: string | undefined, result: OperationResult<undefined>) {
+		const writes = this.#writes.get(device)
+		if (writes !== undefined) for (const write of Array.from(writes)) if (name === undefined || write.name === name) write.finish(result)
 	}
 
 	// Broadcasts a device of an INDI connection to the directory.
@@ -461,9 +640,11 @@ export class IndiPropertyService implements SocketListener, Disposable {
 		stream.sockets.clear()
 	}
 
-	// Stops listening to the registry and drops every stream.
+	// Stops listening to the registry and the clients, ending the writes still waiting and dropping every stream.
 	[Symbol.dispose]() {
 		this.#unlisten()
+		this.devices.handler.delete(this.#handler)
+		for (const device of Array.from(this.#writes.keys())) this.#endWrites(device, undefined, failedOperationResult('aborted'))
 		for (const stream of Array.from(this.#streams.values())) this.#close(stream)
 	}
 }
@@ -486,12 +667,50 @@ function update(property: IndiProperty, names: Iterable<string>): IndiPropertyUp
 	return { name, revision, state, message, timestamp, timeout: property.type === 'LIGHT' ? undefined : property.timeout, elements }
 }
 
-// Routes of the INDI device directory; the property streams travel over /api/ws.
+// Builds the complete values a write sends to a vector, or the reason the request cannot be sent. Text and
+// number elements left out keep their current values in a read-write vector and must be given in a
+// write-only one; switch elements left out keep their state in an AnyOfMany vector and are off otherwise,
+// and the selection must satisfy the rule: exactly one switch on for OneOfMany, at most one for AtMostOne.
+function writtenElements(property: IndiWritableProperty, values: Readonly<Record<string, string | number | boolean>>): Record<string, string | number | boolean> | string {
+	for (const name in values) {
+		if (property.elements[name] === undefined) return `The property ${property.name} has no element ${name}`
+	}
+
+	const elements: Record<string, string | number | boolean> = {}
+
+	if (property.type === 'SWITCH') {
+		let on = 0
+
+		for (const name of property.elementNames) {
+			const value = values[name] ?? (property.rule === 'AnyOfMany' && property.permission === 'rw' ? property.elements[name].value : false)
+			elements[name] = value
+			if (value === true) on++
+		}
+
+		if (property.rule === 'OneOfMany' && on !== 1) return `The property ${property.name} needs exactly one switch on`
+		if (property.rule === 'AtMostOne' && on > 1) return `The property ${property.name} allows at most one switch on`
+		return elements
+	}
+
+	for (const name of property.elementNames) {
+		const value = values[name] ?? (property.permission === 'rw' ? property.elements[name].value : undefined)
+		if (value === undefined) return `The property ${property.name} is write-only and needs a value for ${name}`
+		elements[name] = value
+	}
+
+	return elements
+}
+
+// Routes of the INDI device directory and of the writes; the property streams travel over /api/ws.
 export function createIndiRoutes(indi: IndiPropertyService) {
 	return {
 		'/api/connections/:id/indi/devices': {
 			// The physical devices of an INDI connection, managed or not, without their properties.
 			GET: (req) => indi.list(req.params.id),
+		},
+		'/api/connections/:id/indi/devices/:hardwareId/properties/:vector': {
+			// Writes new values to a vector; the outcome arrives as operation:updated events.
+			POST: async (req) => indi.write(req.params.id, req.params.hardwareId, req.params.vector, (await req.json()) as IndiWriteRequest),
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>
 }

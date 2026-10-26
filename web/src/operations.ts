@@ -43,6 +43,7 @@ export const OPERATION_LABELS: Readonly<Record<OperationKind, string>> = {
 	'camera.flatWizard': 'Flat Wizard',
 	'camera.guiding': 'Guiding',
 	'guideOutput.guiding': 'Guiding corrections',
+	'indi.propertyWrite': 'INDI property change',
 }
 
 // Most finished operations kept; older ones are dropped. Running operations are always kept.

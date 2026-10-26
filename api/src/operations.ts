@@ -42,6 +42,7 @@ export type OperationKind =
 	| 'camera.flatWizard'
 	| 'camera.guiding'
 	| 'guideOutput.guiding'
+	| 'indi.propertyWrite'
 
 // Life stage of an operation.
 export type OperationState = 'running' | 'succeeded' | 'failed'

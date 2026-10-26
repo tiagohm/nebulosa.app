@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
+import type { OperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { ConnectionManager } from './connection'
 import { routes, websocket } from './index'
-import { IndiPropertyService, type IndiPropertyServiceOptions, type IndiServerEvent, type IndiSnapshotEvent, type IndiStreamEvent } from './indi'
+import { IndiPropertyService, type IndiPropertyServiceOptions, type IndiServerEvent, type IndiSnapshotEvent, type IndiStreamEvent, type IndiWriteRequest } from './indi'
+import { type OperationRecord, OperationRegistry } from './operations'
 import type { EventSocket, ServerEvent } from './websocket'
 
 const disposables: Disposable[] = []
@@ -15,7 +17,15 @@ const RELAY = [
 	'<defSwitchVector device="Relay" name="CONNECTION" label="Connection" group="Main Control" state="Ok" perm="rw" rule="OneOfMany" timeout="60"><defSwitch name="CONNECT" label="Connect">On</defSwitch><defSwitch name="DISCONNECT" label="Disconnect">Off</defSwitch></defSwitchVector>',
 	'<defTextVector device="Relay" name="DRIVER_INFO" group="General Info" state="Idle" perm="ro"><defText name="DRIVER_NAME">Relay</defText><defText name="DRIVER_EXEC">indi_relay</defText><defText name="DRIVER_VERSION">1.0</defText><defText name="DRIVER_INTERFACE">32768</defText></defTextVector>',
 	'<defNumberVector device="Relay" name="TEMPERATURE" group="Sensors" state="Idle" perm="rw" timeout="10"><defNumber name="TEMP" format="%6.2f" min="-50" max="50" step="0.1">10</defNumber><defNumber name="HUMIDITY" format="%3.0f" min="0" max="100" step="1">40</defNumber></defNumberVector>',
+	'<defNumberVector device="Relay" name="DELAY" group="Options" state="Idle" perm="rw" timeout="0"><defNumber name="SECONDS" format="%g" min="0" max="60" step="1">1</defNumber></defNumberVector>',
+	'<defSwitchVector device="Relay" name="CHANNELS" group="Options" state="Idle" perm="rw" rule="AnyOfMany" timeout="0"><defSwitch name="A">On</defSwitch><defSwitch name="B">Off</defSwitch></defSwitchVector>',
+	'<defSwitchVector device="Relay" name="ACTION" group="Options" state="Idle" perm="rw" rule="AtMostOne" timeout="0"><defSwitch name="PULSE">Off</defSwitch><defSwitch name="RESET">Off</defSwitch></defSwitchVector>',
+	'<defTextVector device="Relay" name="SECRET" group="Options" state="Idle" perm="wo" timeout="0"><defText name="USER"></defText><defText name="PASSWORD"></defText></defTextVector>',
+	'<defLightVector device="Relay" name="STATUS" group="Main Control" state="Ok"><defLight name="READY">Ok</defLight></defLightVector>',
 ].join('')
+
+// Vector names of RELAY, in definition order.
+const RELAY_VECTORS = ['CONNECTION', 'DRIVER_INFO', 'TEMPERATURE', 'DELAY', 'CHANNELS', 'ACTION', 'SECRET', 'STATUS']
 
 const OTHER = '<defNumberVector device="Other" name="LEVEL" group="Main" state="Idle" perm="rw"><defNumber name="VALUE" format="%g" min="0" max="10" step="1">1</defNumber></defNumberVector>'
 
@@ -31,15 +41,16 @@ async function until(condition: () => boolean, timeout = 2000) {
 	}
 }
 
-// Fake indiserver writing the XML a test pushes to every client socket.
+// Fake indiserver writing the XML a test pushes to every client socket and recording the commands it receives.
 function listenIndi() {
 	const sockets = new Set<Bun.Socket>()
+	const received: string[] = []
 	const server = Bun.listen({
 		hostname: '127.0.0.1',
 		port: 0,
 		socket: {
 			open: (socket) => void sockets.add(socket),
-			data: () => {},
+			data: (_, data) => void received.push(data.toString()),
 			close: (socket) => void sockets.delete(socket),
 		},
 	})
@@ -48,10 +59,22 @@ function listenIndi() {
 	return {
 		port: server.port,
 		sockets,
+		// Commands received for a vector, without the getProperties of the connection.
+		commands: (name: string) => received.join('').match(new RegExp(`<new\\w+Vector device="Relay" name="${name}">.*?</new\\w+Vector>`, 'g')) ?? [],
 		push: (xml: string) => {
 			for (const socket of sockets) socket.write(xml)
 		},
 	}
+}
+
+// Holds a physical device under an operation of its own until the test ends.
+function hold(operations: OperationRegistry, key: string) {
+	const handle = operations.coordinator.start('test.hold', [{ key }], ({ signal }) => {
+		const { promise, resolve } = Promise.withResolvers<OperationResult<undefined>>()
+		signal.addEventListener('abort', () => resolve({ ok: true, value: undefined }))
+		return promise
+	})
+	disposables.push({ [Symbol.dispose]: () => void handle.cancel() })
 }
 
 function fakeSocket() {
@@ -73,13 +96,22 @@ async function setup(options?: IndiPropertyServiceOptions) {
 	const manager = new ConnectionManager()
 	disposables.push(manager)
 	const broadcasts: ServerEvent[] = []
+	const records: OperationRecord[] = []
+	const operations = new OperationRegistry(manager.devices, (event) => records.push(event.operation))
+	disposables.push(operations)
 	const service = new IndiPropertyService(
 		manager.devices,
 		(id) => manager.client(id),
+		operations,
 		(event) => broadcasts.push(event),
-		options,
+		{ valueInterval: 40, writeGrace: 100, ...options },
 	)
 	disposables.push(service)
+	// The final record of an operation, once it finished.
+	const outcome = async (operationId: string) => {
+		await until(() => records.some((record) => record.operationId === operationId && record.state !== 'running'))
+		return records.findLast((record) => record.operationId === operationId)!
+	}
 
 	const { id } = await manager.connect({ type: 'INDI', host: '127.0.0.1', port: indi.port })
 	await until(() => indi.sockets.size === 1)
@@ -91,7 +123,7 @@ async function setup(options?: IndiPropertyServiceOptions) {
 	const relay = manager.devices.properties.device(client, 'Relay')!
 	const value = () => (relay.properties.TEMPERATURE?.elements.TEMP as { value: number } | undefined)?.value
 
-	return { indi, manager, service, broadcasts, id, client, relay, value }
+	return { indi, manager, operations, service, broadcasts, records, outcome, id, client, relay, value }
 }
 
 function stream(events: readonly IndiServerEvent[]) {
@@ -160,7 +192,7 @@ describe('stream', () => {
 
 		const snapshot = a.events[0] as IndiSnapshotEvent
 		expect(snapshot).toMatchObject({ type: 'indi:snapshot', connectionId: id, hardwareId: relay.hardwareId, epoch: expect.any(String), device: { name: 'Relay', connected: true }, messages: [] })
-		expect(snapshot.vectors.map((vector) => vector.name)).toEqual(['CONNECTION', 'DRIVER_INFO', 'TEMPERATURE'])
+		expect(snapshot.vectors.map((vector) => vector.name)).toEqual(RELAY_VECTORS)
 		expect(snapshot.vectors[2]).toMatchObject({ type: 'NUMBER', permission: 'rw', timeout: 10, elementNames: ['TEMP', 'HUMIDITY'], elements: { TEMP: { format: '%6.2f', min: -50, max: 50, step: 0.1, value: 10 } } })
 
 		indi.push('<setNumberVector device="Other" name="LEVEL"><oneNumber name="VALUE">5</oneNumber></setNumberVector>')
@@ -326,6 +358,176 @@ describe('stream', () => {
 	})
 })
 
+describe('write', () => {
+	type Write = Omit<IndiWriteRequest, 'token'> & { readonly token?: string }
+
+	async function write(service: IndiPropertyService, id: string, hardwareId: string, name: string, request: Write) {
+		const response = service.write(id, hardwareId, name, { token: Bun.randomUUIDv7(), ...request })
+		return { status: response.status, body: (await response.json()) as { operationId?: string; code?: string; vector?: { revision: number } } }
+	}
+
+	test('sends the complete vector and succeeds once the driver leaves Busy', async () => {
+		const { indi, service, outcome, id, relay } = await setup()
+		const { revision } = relay.properties.TEMPERATURE
+
+		const { status, body } = await write(service, id, relay.hardwareId, 'TEMPERATURE', { baseRevision: revision, elements: { TEMP: 15 } })
+
+		expect(status).toBe(202)
+		await until(() => indi.commands('TEMPERATURE').length === 1)
+		expect(indi.commands('TEMPERATURE')[0]).toBe('<newNumberVector device="Relay" name="TEMPERATURE"><oneNumber name="TEMP">15</oneNumber><oneNumber name="HUMIDITY">40</oneNumber></newNumberVector>')
+
+		indi.push(temperature(12, 'Busy'))
+		await Bun.sleep(50)
+		indi.push(temperature(15, 'Ok'))
+
+		expect(await outcome(body.operationId!)).toMatchObject({ kind: 'indi.propertyWrite', state: 'succeeded', devices: [{ connectionId: id, deviceId: relay.hardwareId }] })
+	})
+
+	test('fails with the driver message on Alert', async () => {
+		const { indi, service, outcome, id, relay } = await setup()
+
+		const { body } = await write(service, id, relay.hardwareId, 'TEMPERATURE', { baseRevision: relay.properties.TEMPERATURE.revision, elements: { TEMP: 99, HUMIDITY: 50 } })
+		await until(() => indi.commands('TEMPERATURE').length === 1)
+		indi.push('<setNumberVector device="Relay" name="TEMPERATURE" state="Alert" message="setpoint out of range"><oneNumber name="TEMP">10</oneNumber></setNumberVector>')
+
+		expect(await outcome(body.operationId!)).toMatchObject({ state: 'failed', reason: 'alert', error: 'setpoint out of range' })
+	})
+
+	test('a driver that answers with no change still ends the write', async () => {
+		const { indi, service, outcome, id, relay } = await setup()
+
+		const { body } = await write(service, id, relay.hardwareId, 'DELAY', { baseRevision: relay.properties.DELAY.revision, elements: { SECONDS: 1 } })
+		await until(() => indi.commands('DELAY').length === 1)
+		indi.push('<setNumberVector device="Relay" name="DELAY" state="Idle"><oneNumber name="SECONDS">1</oneNumber></setNumberVector>')
+
+		expect(await outcome(body.operationId!)).toMatchObject({ state: 'succeeded' })
+	})
+
+	test('times out when the driver never answers, saying the device may still work', async () => {
+		const { service, outcome, id, relay } = await setup()
+
+		const { body } = await write(service, id, relay.hardwareId, 'DELAY', { baseRevision: relay.properties.DELAY.revision, elements: { SECONDS: 5 } })
+
+		expect(await outcome(body.operationId!)).toMatchObject({ state: 'failed', reason: 'timeout', error: expect.stringContaining('may still be working') })
+	})
+
+	test('refuses a stale revision with the current vector', async () => {
+		const { indi, service, id, relay } = await setup()
+		const base = relay.properties.TEMPERATURE.revision
+		indi.push(temperature(11))
+		await until(() => relay.properties.TEMPERATURE.revision !== base)
+
+		const { status, body } = await write(service, id, relay.hardwareId, 'TEMPERATURE', { baseRevision: base, elements: { TEMP: 15 } })
+
+		expect(status).toBe(409)
+		expect(body).toMatchObject({ code: 'conflict', vector: { revision: relay.properties.TEMPERATURE.revision } })
+		expect(indi.commands('TEMPERATURE')).toBeEmpty()
+	})
+
+	test('refuses what the vector cannot take', async () => {
+		const { service, manager, id, relay } = await setup()
+		const simulator = await manager.connect({ type: 'SIMULATOR' })
+		const revision = (name: string) => relay.properties[name].revision
+
+		const refusals = await Promise.all([
+			write(service, 'unknown', relay.hardwareId, 'TEMPERATURE', { baseRevision: 0, elements: {} }),
+			write(service, simulator.id, relay.hardwareId, 'TEMPERATURE', { baseRevision: 0, elements: {} }),
+			write(service, id, 'unknown', 'TEMPERATURE', { baseRevision: 0, elements: {} }),
+			write(service, id, relay.hardwareId, 'UNKNOWN', { baseRevision: 0, elements: {} }),
+			write(service, id, relay.hardwareId, 'DRIVER_INFO', { baseRevision: revision('DRIVER_INFO'), elements: { DRIVER_NAME: 'x' } }),
+			write(service, id, relay.hardwareId, 'STATUS', { baseRevision: revision('STATUS'), elements: {} }),
+			write(service, id, relay.hardwareId, 'TEMPERATURE', { baseRevision: revision('TEMPERATURE'), elements: { PRESSURE: 1 } }),
+			write(service, id, relay.hardwareId, 'CONNECTION', { baseRevision: revision('CONNECTION'), elements: { CONNECT: true, DISCONNECT: true } }),
+			write(service, id, relay.hardwareId, 'CONNECTION', { baseRevision: revision('CONNECTION'), elements: {} }),
+			write(service, id, relay.hardwareId, 'ACTION', { baseRevision: revision('ACTION'), elements: { PULSE: true, RESET: true } }),
+			write(service, id, relay.hardwareId, 'SECRET', { baseRevision: revision('SECRET'), elements: { USER: 'observer' } }),
+		])
+
+		expect(refusals.map(({ status, body }) => [status, body.code])).toEqual([
+			[404, 'notFound'],
+			[422, 'unsupported'],
+			[404, 'notFound'],
+			[404, 'notFound'],
+			[422, 'unsupported'],
+			[422, 'unsupported'],
+			[422, 'invalidParameter'],
+			[422, 'invalidParameter'],
+			[422, 'invalidParameter'],
+			[422, 'invalidParameter'],
+			[422, 'invalidParameter'],
+		])
+	})
+
+	test('sends switches as the complete selection their rule allows', async () => {
+		const { indi, service, outcome, id, relay } = await setup()
+		const revision = (name: string) => relay.properties[name].revision
+
+		// Writes of one connected device hold it in turn, so each waits for the previous one to end (here, by timeout).
+		await outcome((await write(service, id, relay.hardwareId, 'ACTION', { baseRevision: revision('ACTION'), elements: { PULSE: true } })).body.operationId!)
+		await outcome((await write(service, id, relay.hardwareId, 'CHANNELS', { baseRevision: revision('CHANNELS'), elements: { B: true } })).body.operationId!)
+		await outcome((await write(service, id, relay.hardwareId, 'SECRET', { baseRevision: revision('SECRET'), elements: { USER: 'observer', PASSWORD: 'x<y' } })).body.operationId!)
+
+		expect(indi.commands('ACTION')).toEqual(['<newSwitchVector device="Relay" name="ACTION"><oneSwitch name="PULSE">On</oneSwitch><oneSwitch name="RESET">Off</oneSwitch></newSwitchVector>'])
+		expect(indi.commands('CHANNELS')).toEqual(['<newSwitchVector device="Relay" name="CHANNELS"><oneSwitch name="A">On</oneSwitch><oneSwitch name="B">On</oneSwitch></newSwitchVector>'])
+		expect(indi.commands('SECRET')).toEqual(['<newTextVector device="Relay" name="SECRET"><oneText name="USER">observer</oneText><oneText name="PASSWORD">x&lt;y</oneText></newTextVector>'])
+	})
+
+	test('a repeated token answers the first operation without writing again', async () => {
+		const { indi, service, id, relay } = await setup()
+		const request = { token: 'once', baseRevision: relay.properties.DELAY.revision, elements: { SECONDS: 3 } }
+
+		const first = await write(service, id, relay.hardwareId, 'DELAY', request)
+		const second = await write(service, id, relay.hardwareId, 'DELAY', request)
+		await until(() => indi.commands('DELAY').length === 1)
+		await Bun.sleep(50)
+
+		expect(second.body.operationId).toBe(first.body.operationId)
+		expect(indi.commands('DELAY')).toHaveLength(1)
+	})
+
+	test('a connected device held by another operation is refused as busy', async () => {
+		const { indi, service, operations, id, relay } = await setup()
+		hold(operations, relay.hardwareId)
+
+		const { status, body } = await write(service, id, relay.hardwareId, 'DELAY', { baseRevision: relay.properties.DELAY.revision, elements: { SECONDS: 2 } })
+		await Bun.sleep(50)
+
+		expect([status, body.code]).toEqual([409, 'busy'])
+		expect(indi.commands('DELAY')).toBeEmpty()
+	})
+
+	test('a device that is not connected is written without holding it', async () => {
+		const { indi, service, operations, outcome, id, relay } = await setup()
+		indi.push('<setSwitchVector device="Relay" name="CONNECTION" state="Idle"><oneSwitch name="CONNECT">Off</oneSwitch><oneSwitch name="DISCONNECT">On</oneSwitch></setSwitchVector>')
+		await until(() => relay.connected === false)
+		hold(operations, relay.hardwareId)
+
+		const { status, body } = await write(service, id, relay.hardwareId, 'CONNECTION', { baseRevision: relay.properties.CONNECTION.revision, elements: { CONNECT: true } })
+
+		expect(status).toBe(202)
+		await until(() => indi.commands('CONNECTION').length === 1)
+		expect(indi.commands('CONNECTION')[0]).toBe('<newSwitchVector device="Relay" name="CONNECTION"><oneSwitch name="CONNECT">On</oneSwitch><oneSwitch name="DISCONNECT">Off</oneSwitch></newSwitchVector>')
+
+		indi.push('<setSwitchVector device="Relay" name="CONNECTION" state="Ok"><oneSwitch name="CONNECT">On</oneSwitch><oneSwitch name="DISCONNECT">Off</oneSwitch></setSwitchVector>')
+		expect(await outcome(body.operationId!)).toMatchObject({ state: 'succeeded' })
+	})
+
+	test('ends a write whose device or vector goes away', async () => {
+		const { indi, service, manager, outcome, id, relay } = await setup({ writeGrace: 5000 })
+
+		const deleted = await write(service, id, relay.hardwareId, 'DELAY', { baseRevision: relay.properties.DELAY.revision, elements: { SECONDS: 4 } })
+		await until(() => indi.commands('DELAY').length === 1)
+		indi.push('<delProperty device="Relay" name="DELAY"/>')
+		expect(await outcome(deleted.body.operationId!)).toMatchObject({ state: 'failed', reason: 'commandFailed' })
+
+		const removed = await write(service, id, relay.hardwareId, 'TEMPERATURE', { baseRevision: relay.properties.TEMPERATURE.revision, elements: { TEMP: 1 } })
+		await until(() => indi.commands('TEMPERATURE').length === 1)
+		manager.disconnect(id)
+		expect(await outcome(removed.body.operationId!)).toMatchObject({ state: 'failed' })
+		expect(['removed', 'disconnected']).toContain((await outcome(removed.body.operationId!)).reason!)
+	})
+})
+
 describe('websocket', () => {
 	test('subscribes over /api/ws and leaves the other sockets out', async () => {
 		const indi = listenIndi()
@@ -370,5 +572,13 @@ describe('websocket', () => {
 		expect(viewer.events).toHaveLength(count)
 		expect(other.events.some((event) => event.type === 'indi:snapshot' || event.type === 'indi:propertyUpdated')).toBeFalse()
 		expect(other.events.some((event) => event.type === 'indi:deviceAdded')).toBeTrue()
+
+		// The write route answers the command contract over HTTP.
+		const snapshot = viewer.events.find((event): event is IndiSnapshotEvent => event.type === 'indi:snapshot')!
+		const delay = snapshot.vectors.find((vector) => vector.name === 'DELAY')!
+		const written = await fetch(`${server.url}api/connections/${id}/indi/devices/${hardwareId}/properties/DELAY`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: Bun.randomUUIDv7(), baseRevision: delay.revision, elements: { SECONDS: 2 } }) })
+		expect(written.status).toBe(202)
+		expect(await written.json()).toEqual({ operationId: expect.any(String) })
+		await until(() => indi.commands('DELAY').length === 1)
 	})
 })

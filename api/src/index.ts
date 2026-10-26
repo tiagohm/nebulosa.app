@@ -294,7 +294,7 @@ const cameras = new CameraCommands(connections.devices, (id) => connections.clie
 
 // Directory and property streams of the INDI devices of the open connections; a stream reaches only the
 // sockets that subscribed to it.
-const indi = new IndiPropertyService(connections.devices, (id) => connections.client(id), broadcast)
+const indi = new IndiPropertyService(connections.devices, (id) => connections.client(id), operations, broadcast)
 listenSockets(indi)
 
 // Settings of the external programs, such as ASTAP, read by the services that run them.

@@ -141,6 +141,13 @@ test('draws the central line by kind and the limits on the degree plane', async 
 	expect(Math.abs(total.greatestDuration!.centralDuration! - 268)).toBeLessThan(5)
 	expect(total.points.C1!.time!).toBeLessThan(TOTAL.maximum)
 	expect(total.points.C2!.time!).toBeGreaterThan(TOTAL.maximum)
+
+	// Every named point of a total eclipse exists; the ends of the eclipse and of the central line are on the
+	// sunrise/sunset curve, and the Sun is high at the greatest eclipse.
+	expect(Object.keys(total.points).sort()).toEqual(['C1', 'C2', 'MAX', 'N1', 'N2', 'P1', 'P2', 'P3', 'P4', 'S1', 'S2', 'U1', 'U2', 'U3', 'U4'])
+	for (const kind of ['P1', 'P4', 'C1', 'C2'] as const) expect(Math.abs(total.points[kind]!.sunAltitude!)).toBeLessThan(0.01)
+	expect(total.points.MAX!.sunAltitude!).toBeCloseTo(total.greatestEclipse!.sunAltitude, 1)
+	expect(Object.keys(partial.points).sort()).toEqual(['MAX', 'N1', 'P1', 'P4', 'S1'])
 	expect(Math.abs(annular.greatestDuration!.centralDuration! - 317)).toBeLessThan(5)
 	expect(Math.abs(hybrid.greatestDuration!.centralDuration! - 76)).toBeLessThan(5)
 })

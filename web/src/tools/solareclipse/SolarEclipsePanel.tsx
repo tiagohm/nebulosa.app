@@ -11,13 +11,15 @@ import { Select } from '../../ui/Select'
 import { formatGeoPoint } from '../../ui/worldmap.geometry'
 import { displayTimeZone, type EclipsePlace, formatDuration, formatEclipseTime } from '../eclipse/eclipse'
 import { Datum, DISPLAY_TIME_ZONES, LocationSection, Note } from '../eclipse/EclipsePanelParts'
-import { contactName, ECLIPSE_TYPE_NAMES, loadLocal, selectEvent, selectPlace, setViewSettings, solarEclipseState } from './solareclipse'
+import { GlobalPointIcon } from './GlobalPointMarker'
+import { contactName, ECLIPSE_TYPE_NAMES, GLOBAL_POINTS, type GlobalPoint, globalPoints, loadLocal, selectEvent, selectPlace, selectPoint, setViewSettings, solarEclipseState } from './solareclipse'
 import { SolarEclipseLocalView } from './SolarEclipseLocalView'
 
 // Local Circumstances panel of the Solar Eclipse Map: the place (the shared Location section), the visibility of
 // the eclipse from it, its contacts in the time zone shown, the global and local details, and the Local View of
-// the selected contact. Contacts and durations a place lacks are left out, never shown as zero, and the magnitude
-// is a fraction of the solar diameter, not of its area. Nothing here changes the profile.
+// the selected contact, and the global points with the details of the one chosen. Contacts and durations a place
+// lacks are left out, never shown as zero, and the magnitude is a fraction of the solar diameter, not of its area.
+// Nothing here changes the profile.
 
 export interface SolarEclipsePanelProps {
 	// Sky observer of the active profile; absent when none is set.
@@ -41,10 +43,53 @@ function angle(value: number | undefined) {
 	return value === undefined ? '—' : `${value.toFixed(1)}°`
 }
 
+interface GlobalPointRowProps {
+	// Point listed.
+	readonly point: GlobalPoint
+	// Whether it is the highlighted point, whose details are shown.
+	readonly selected: boolean
+	// Time zone of the times.
+	readonly timeZone: string
+}
+
+// A global point: its marker, name, and time, and once chosen, what it is, where and when, the Sun there, and for
+// the greatest eclipse and duration the central phase; it can then become the place of the local circumstances.
+function GlobalPointRow({ point, selected, timeZone }: GlobalPointRowProps) {
+	const info = GLOBAL_POINTS[point.kind]
+	const { extreme } = point
+
+	return (
+		<div className={cn('flex flex-col rounded-sm border text-xs', selected ? 'border-accent bg-accent-subtle' : 'border-line-100')}>
+			<button type="button" onClick={() => selectPoint(solarEclipseState, point.kind)} className="flex cursor-pointer flex-col gap-0.5 rounded-sm border-0 bg-transparent px-2 py-1.5 text-left font-mono text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+				<span className="flex items-center gap-2">
+					<GlobalPointIcon kind={point.kind} />
+					<span className="font-semibold text-ink-100">{point.kind}</span>
+					<span className="truncate text-ink-300">{info.name}</span>
+				</span>
+				{point.time !== undefined && <span className="text-ink-100">{formatEclipseTime(point.time, timeZone)}</span>}
+			</button>
+			{selected && (
+				<div className="flex flex-col gap-1.5 border-t border-line-100 px-2 py-2">
+					<Note>{info.description}</Note>
+					<Datum label="Position">{formatGeoPoint(point)}</Datum>
+					{point.sunAltitude !== undefined && <Datum label="Sun altitude">{point.sunAltitude.toFixed(1)}°</Datum>}
+					{extreme && <Datum label="Sun azimuth">{extreme.sunAzimuth.toFixed(1)}°</Datum>}
+					{extreme?.kind && <Datum label="Central phase">{extreme.kind === 'annular' ? 'Annular' : 'Total'}</Datum>}
+					{extreme?.centralDuration !== undefined && <Datum label="Central duration">{formatDuration(extreme.centralDuration)}</Datum>}
+					{extreme?.pathWidth !== undefined && <Datum label="Path width">{Math.round(extreme.pathWidth)} km</Datum>}
+					<Button variant="secondary" size="sm" className="self-start" onClick={() => choosePlace({ source: 'map', longitude: point.longitude, latitude: point.latitude })}>
+						Use as Location
+					</Button>
+				</div>
+			)}
+		</div>
+	)
+}
+
 // Local Circumstances panel.
 export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
 	const state = useSnapshot(solarEclipseState)
-	const { eclipse, map, place, local, localLoading, localError, selectedEvent, view } = state
+	const { eclipse, map, place, local, localLoading, localError, selectedEvent, selectedPoint, view } = state
 	const timeZone = displayTimeZone(state)
 	const visibility = local?.visibility
 	const central = visibility?.centralPhaseKind === 'annular' ? 'annular' : 'total'
@@ -120,6 +165,14 @@ export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
 					{local?.details.centralPhaseDuration !== undefined && <Datum label={`${central === 'annular' ? 'Annularity' : 'Totality'} here (C2–C3)`}>{formatDuration(local.details.centralPhaseDuration)}</Datum>}
 					{local?.details.shadowPathWidthKm !== undefined && <Datum label="Shadow chord here">{Math.round(local.details.shadowPathWidthKm)} km</Datum>}
 					<Note>Magnitude is the fraction of the Sun's diameter covered by the Moon, not of its area.</Note>
+				</PanelSection>
+			)}
+			{map && (
+				<PanelSection title="Global Points">
+					<Note>Points of the eclipse as a whole, the same for everyone. Choose one to find it on the map.</Note>
+					{globalPoints(map).map((point) => (
+						<GlobalPointRow key={point.kind} point={point} selected={point.kind === selectedPoint} timeZone={timeZone} />
+					))}
 				</PanelSection>
 			)}
 			{local && local.events.length > 0 && (

@@ -1,7 +1,7 @@
 import { nearestSolarEclipse, type SolarEclipse, type SolarEclipseType } from 'nebulosa/src/astronomy/bodies/sun'
 import { type EclipseGeoPoint, geoPolylinesToSvgPathData, sunMoonPosition } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
 import { computeGreatestDurationCircumstances, computeGreatestEclipseCircumstances, type SolarEclipseExtremeCircumstances } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
-import { computePolynomialBesselianElements, computeSolarEclipseMapGeometry, type HybridEclipseKind, type PolynomialBesselianElements, type SolarEclipseContactPoints, solarEclipseMapToSvgPaths, splitCentralLineByKind } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
+import { computePolynomialBesselianElements, computeSolarEclipseMapGeometry, type HybridEclipseKind, type PolynomialBesselianElements, type SolarEclipseContactPoints, solarAltitudeAtPoint, solarEclipseMapToSvgPaths, splitCentralLineByKind } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import { timeAtJulianDay, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { toDeg } from 'nebulosa/src/math/units/angle'
 import { DEGREE_PLANE, type EclipseDirection, type EclipseLocation, ID_SEARCH_MARGIN, MAP_PRECISION } from './eclipses'
@@ -43,6 +43,9 @@ export interface SolarEclipseSummary {
 export interface SolarEclipseMapPoint extends EclipseLocation {
 	// Instant at which the point has its circumstance, in Unix milliseconds (UTC), when known.
 	readonly time?: number
+	// Geometric altitude of the Sun there at that instant, in degrees, when the instant is known: about 0 at the
+	// points on the sunrise/sunset curve (P1, P4, C1, C2, N1, N2, S1, S2).
+	readonly sunAltitude?: number
 }
 
 // Circumstances at the greatest eclipse or the greatest duration of the central phase.
@@ -122,10 +125,10 @@ function julianDayMillis(pbe: PolynomialBesselianElements, jd: number) {
 	return timeToUnixMillis(timeAtJulianDay(pbe.time0, jd))
 }
 
-// Returns a named point in degrees, with its instant when it has one.
+// Returns a named point in degrees, with its instant and the Sun's altitude when it has an instant.
 function mapPoint(pbe: PolynomialBesselianElements, point: EclipseGeoPoint): SolarEclipseMapPoint {
 	const location = { longitude: toDeg(point.x), latitude: toDeg(point.y) }
-	return point.jd === undefined ? location : { ...location, time: julianDayMillis(pbe, point.jd) }
+	return point.jd === undefined ? location : { ...location, time: julianDayMillis(pbe, point.jd), sunAltitude: toDeg(solarAltitudeAtPoint(pbe, point)) }
 }
 
 // Returns the toolkit's extreme circumstances in degrees and Unix milliseconds.

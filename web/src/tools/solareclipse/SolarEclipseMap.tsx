@@ -1,5 +1,6 @@
-import type { SolarEclipseMap as SolarEclipseMapData, SolarEclipsePointKind } from 'api'
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import type { SolarEclipseMap as SolarEclipseMapData } from 'api'
+import { cn } from 'cn'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { activeProfile, profileState } from '../../profile/profile'
 import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
@@ -7,17 +8,20 @@ import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { IconButton } from '../../ui/IconButton'
 import { TextInput } from '../../ui/TextInput'
-import { WorldMap, WorldMapSymbol } from '../../ui/WorldMap'
+import { WorldMap, type WorldMapHandle, WorldMapSymbol } from '../../ui/WorldMap'
 import { DEGREE_PLANE_TRANSFORM } from '../../ui/worldmap.geometry'
 import { displayTimeZone, formatEclipseTime, utcDate } from '../eclipse/eclipse'
-import { ECLIPSE_TYPE_NAMES, findEclipseFrom, GLOBAL_POINT_NAMES, limitName, nextEclipse, openSolarEclipseMap, previousEclipse, retryEclipse, type SolarEclipseLayers, selectPlace, setLayer, solarEclipseState } from './solareclipse'
+import { GlobalPointIcon, GlobalPointMarker } from './GlobalPointMarker'
+import { ECLIPSE_TYPE_NAMES, findEclipseFrom, GLOBAL_POINTS, type GlobalPointKind, globalPoints, labelRows, limitName, nextEclipse, openSolarEclipseMap, previousEclipse, retryEclipse, type SolarEclipseLayers, selectPlace, setLayer, solarEclipseState } from './solareclipse'
 import { SolarEclipsePanel } from './SolarEclipsePanel'
 
 // Solar Eclipse Map tool: steps through solar eclipses (previous, next, from a date, optionally only those
 // visible from the place), draws on the world map the central line (solid where total, dashed where annular), the
-// limits of the central and partial eclipse, the sunrise/sunset curves, and the greatest eclipse, greatest
-// duration, and the ends of the central path and of the eclipse on the Earth, and shows the local circumstances
-// of the place clicked on the map in the contextual panel. Map paths come from the API on the degree plane and
+// limits of the central and partial eclipse, the sunrise/sunset curves, and every global point (contacts P1 to
+// P4 and U1 to U4, central line ends C1 and C2, partial limit ends N1, N2, S1, and S2, greatest eclipse and
+// duration) with its name, and shows the local circumstances of the place clicked on the map in the contextual
+// panel. A global point is chosen in the panel, since a click on the map chooses the place; the map then rings
+// it and centers on it. Map paths come from the API on the degree plane and
 // are scaled to map units here; zooming, panning, and showing or hiding layers never ask the API for anything.
 
 interface EclipseOverlayProps {
@@ -25,15 +29,20 @@ interface EclipseOverlayProps {
 	readonly map: SolarEclipseMapData
 	// Layers shown.
 	readonly layers: SolarEclipseLayers
+	// Global point highlighted.
+	readonly selectedPoint?: GlobalPointKind
 }
 
-// Global points marked by a small hollow circle: the ends of the eclipse and of its central path on the Earth.
-const END_POINTS: readonly SolarEclipsePointKind[] = ['P1', 'P4', 'C1', 'C2']
+// Height of a row of point labels, in screen pixels.
+const LABEL_ROW_HEIGHT = 12
 
 // Map layers of an eclipse, in painting order: the partial limits, the sunrise/sunset curves, the central limits,
-// the central line, and the points.
-function EclipseOverlay({ map, layers }: EclipseOverlayProps) {
-	const { paths, points, greatestEclipse, greatestDuration } = map
+// the central line, and the global points with their labels, the highlighted one ringed. Labels of points that
+// nearly coincide are stacked so they do not overlap.
+function EclipseOverlay({ map, layers, selectedPoint }: EclipseOverlayProps) {
+	const { paths } = map
+	const points = globalPoints(map)
+	const rows = labelRows(points)
 
 	return (
 		<>
@@ -45,33 +54,18 @@ function EclipseOverlay({ map, layers }: EclipseOverlayProps) {
 				{layers.centralLine && paths.annular && <path d={paths.annular} className="fill-none stroke-accent [stroke-dasharray:6_4]" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />}
 			</g>
 			{layers.points &&
-				END_POINTS.map((kind) => {
-					const point = points[kind]
-					return (
-						point && (
-							<WorldMapSymbol key={kind} longitude={point.longitude} latitude={point.latitude}>
-								<circle r={3.5} className="fill-base-000 stroke-ink-200" strokeWidth={1.5}>
-									<title>{GLOBAL_POINT_NAMES[kind]}</title>
-								</circle>
-							</WorldMapSymbol>
-						)
-					)
-				})}
-			{layers.points && greatestDuration && (
-				<WorldMapSymbol longitude={greatestDuration.longitude} latitude={greatestDuration.latitude}>
-					<rect x={-4} y={-4} width={8} height={8} className="fill-accent stroke-base-000" strokeWidth={1.5}>
-						<title>Greatest duration</title>
-					</rect>
-				</WorldMapSymbol>
-			)}
-			{layers.points && greatestEclipse && (
-				<WorldMapSymbol longitude={greatestEclipse.longitude} latitude={greatestEclipse.latitude}>
-					<circle r={5} className="fill-base-000 stroke-ink-100" strokeWidth={1.5}>
-						<title>{GLOBAL_POINT_NAMES.MAX}</title>
-					</circle>
-					<circle r={2} className="fill-ink-100" />
-				</WorldMapSymbol>
-			)}
+				points.map((point, i) => (
+					<WorldMapSymbol key={point.kind} longitude={point.longitude} latitude={point.latitude}>
+						{point.kind === selectedPoint && <circle r={9} className="fill-none stroke-accent" strokeWidth={2} />}
+						<GlobalPointMarker kind={point.kind} />
+						<title>{`${point.kind} · ${GLOBAL_POINTS[point.kind].name}`}</title>
+						{layers.labels && (
+							<text x={8} y={4 + rows[i] * LABEL_ROW_HEIGHT} strokeWidth={3} strokeLinejoin="round" className={cn('stroke-base-000 font-mono text-[10px] font-semibold [paint-order:stroke]', point.kind === selectedPoint ? 'fill-accent' : 'fill-ink-100')}>
+								{point.kind}
+							</text>
+						)}
+					</WorldMapSymbol>
+				))}
 		</>
 	)
 }
@@ -111,8 +105,9 @@ export function SolarEclipseMap() {
 	const profiles = useSnapshot(profileState)
 	const observer = activeProfile(profiles).settings.sky.observer
 	const state = useSnapshot(solarEclipseState)
-	const { eclipse, map, loading, error, notice, layers, place, visibleOnly } = state
+	const { eclipse, map, loading, error, notice, layers, place, visibleOnly, selectedPoint } = state
 	const [date, setDate] = useState('')
+	const mapRef = useRef<WorldMapHandle>(null)
 	const timeZone = displayTimeZone(state)
 
 	// Takes the Sky observer as the place and shows the next eclipse on the first visit of the tab.
@@ -120,8 +115,15 @@ export function SolarEclipseMap() {
 		openSolarEclipseMap(solarEclipseState, activeProfile(profileState).settings.sky.observer)
 	}, [])
 
-	// The map layers are drawn again only when the eclipse or the layers change, never on zoom or pan.
-	const overlay = useMemo(() => map && <EclipseOverlay map={map} layers={layers} />, [map, layers])
+	// Centers the map on a global point when it is highlighted.
+	useEffect(() => {
+		const point = map && selectedPoint && globalPoints(map).find((p) => p.kind === selectedPoint)
+		if (point) mapRef.current?.centerOn(point)
+	}, [map, selectedPoint])
+
+	// The map layers are drawn again only when the eclipse, the layers, or the highlighted point change, never on
+	// zoom or pan.
+	const overlay = useMemo(() => map && <EclipseOverlay map={map} layers={layers} selectedPoint={selectedPoint} />, [map, layers, selectedPoint])
 	const title = eclipse ? `${ECLIPSE_TYPE_NAMES[eclipse.type]} solar eclipse · ${utcDate(eclipse.maximum)}` : 'Solar eclipse'
 	const central = map && (map.paths.total || map.paths.annular)
 	const limits = map && (map.paths.umbraNorth || map.paths.umbraSouth)
@@ -154,7 +156,7 @@ export function SolarEclipseMap() {
 					<Checkbox label="Visible here only" checked={visibleOnly} disabled={!place} onChange={(checked) => (solarEclipseState.visibleOnly = checked)} />
 				</div>
 				<div className="relative isolate min-h-0 flex-1">
-					<WorldMap className="size-full" selected={place} onSelect={(point) => void selectPlace(solarEclipseState, { source: 'map', longitude: point.longitude, latitude: point.latitude })}>
+					<WorldMap ref={mapRef} className="size-full" selected={place} onSelect={(point) => void selectPlace(solarEclipseState, { source: 'map', longitude: point.longitude, latitude: point.latitude })}>
 						{overlay}
 					</WorldMap>
 					{map && eclipse && (
@@ -171,7 +173,8 @@ export function SolarEclipseMap() {
 							{limits && <LegendItem layer="umbralLimits" label={limitName(eclipse.type)} swatch={<LineSwatch accent />} checked={layers.umbralLimits} />}
 							<LegendItem layer="penumbralLimits" label="Limits of the partial eclipse" swatch={<LineSwatch />} checked={layers.penumbralLimits} />
 							{map.paths.riseSet && <LegendItem layer="riseSet" label="Eclipse at sunrise or sunset" swatch={<LineSwatch dashed />} checked={layers.riseSet} />}
-							<LegendItem layer="points" label={map.greatestDuration ? 'Greatest eclipse, duration (square), ends' : 'Greatest eclipse and ends'} swatch={<span className="size-3 rounded-full border-[1.5px] border-ink-100 bg-base-000" />} checked={layers.points} />
+							<LegendItem layer="points" label="Global points (see the panel)" swatch={<GlobalPointIcon kind="MAX" />} checked={layers.points} />
+							<LegendItem layer="labels" label="Names of the points" swatch={<span className="font-mono text-[10px] font-semibold text-ink-100">P1</span>} checked={layers.labels} />
 						</div>
 					)}
 					{loading && <p className="pointer-events-none absolute top-3 left-3 m-0 text-xs text-ink-300">Computing the eclipse…</p>}

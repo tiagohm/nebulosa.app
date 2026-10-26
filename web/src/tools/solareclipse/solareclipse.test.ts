@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { SolarEclipseSummary } from 'api'
 import { proxy } from 'valtio'
 import type { EclipseIo } from '../eclipse/eclipse'
-import { contactName, findEclipse, findEclipseFrom, initialSolarEclipseState, limitName, nextEclipse, openSolarEclipseMap, selectEvent, selectPlace, setLayer, setViewSettings, type SolarEclipseState } from './solareclipse'
+import { contactName, findEclipse, findEclipseFrom, globalPoints, initialSolarEclipseState, labelRows, limitName, nextEclipse, openSolarEclipseMap, selectEvent, selectPlace, selectPoint, setLayer, setViewSettings, type SolarEclipseState } from './solareclipse'
 
 // Fake API whose responses are released by the test, in any order.
 function fakeApi() {
@@ -109,7 +109,7 @@ test('a click on the map asks only for the local circumstances, and a contact or
 	expect(requested.at(-1)).toBe(`/api/eclipses/solar/${A.id}/local?longitude=10&latitude=20&event=C2&orientation=north&handedness=eastRight&ghosts=false`)
 	expect(requested.length).toBe(3)
 	expect(requested.every((url) => url.includes('/local?'))).toBe(true)
-	expect(state.layers).toEqual({ centralLine: false, umbralLimits: true, penumbralLimits: true, riseSet: true, points: true })
+	expect(state.layers).toEqual({ centralLine: false, umbralLimits: true, penumbralLimits: true, riseSet: true, points: true, labels: true })
 
 	await release((url) => url.includes('ghosts=false'), localOf(A, 10))
 	await release((url) => url.includes('event=MAX'), localOf(A, 99)).catch(() => undefined)
@@ -154,4 +154,37 @@ test('names local contacts by the central phase of the place, and limits by the 
 	expect(limitName('total')).toBe('Limits of totality')
 	expect(limitName('annular')).toBe('Limits of annularity')
 	expect(limitName('hybrid')).toBe('Limits of the central path')
+})
+
+test('lists every global point in time order, the greatest duration among them', () => {
+	const map = {
+		...mapOf(A),
+		points: { P4: { longitude: 0, latitude: 0, time: 40 }, MAX: { longitude: 10, latitude: 10, time: 20, sunAltitude: 70 }, P1: { longitude: 0, latitude: 0, time: 0 }, N1: { longitude: 50, latitude: 50 } },
+		greatestEclipse: { longitude: 10, latitude: 10, time: 20, sunAltitude: 70, sunAzimuth: 150 },
+		greatestDuration: { longitude: 12, latitude: 11, time: 21, sunAltitude: 69, sunAzimuth: 160, centralDuration: 268, pathWidth: 197, kind: 'total' as const },
+	}
+
+	const points = globalPoints(map)
+	expect(points.map((point) => point.kind)).toEqual(['P1', 'MAX', 'GD', 'P4', 'N1'])
+	expect(points[1].extreme).toEqual(map.greatestEclipse)
+	expect(points[2]).toMatchObject({ longitude: 12, latitude: 11, extreme: { centralDuration: 268 } })
+})
+
+test('stacks the labels of points that nearly coincide, across the antimeridian too', () => {
+	const point = (longitude: number, latitude: number) => ({ kind: 'P1' as const, longitude, latitude })
+	expect(labelRows([point(10, 10), point(11, 10.5), point(40, 10), point(10.5, 9), point(179.5, 0), point(-179.5, 1)])).toEqual([0, 1, 0, 2, 0, 1])
+})
+
+test('choosing the highlighted point again clears it, and a new eclipse clears it too', async () => {
+	const state = newState()
+	selectPoint(state, 'MAX')
+	expect(state.selectedPoint).toBe('MAX')
+	selectPoint(state, 'MAX')
+	expect(state.selectedPoint).toBeUndefined()
+
+	selectPoint(state, 'N1')
+	const { io, release } = fakeApi()
+	void findEclipse(state, 0, 'next', io)
+	await release((url) => url.startsWith('/api/eclipses/solar?'), B)
+	expect(state.selectedPoint).toBeUndefined()
 })

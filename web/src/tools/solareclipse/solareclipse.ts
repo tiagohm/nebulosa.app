@@ -1,4 +1,4 @@
-import type { EclipseDirection, LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipse, LocalViewHandedness, LocalViewOrientationMode, SolarEclipseMap, SolarEclipsePointKind, SolarEclipseSummary, SolarEclipseType } from 'api'
+import type { EclipseDirection, LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipse, LocalViewHandedness, LocalViewOrientationMode, SolarEclipseExtreme, SolarEclipseMap, SolarEclipseMapPoint, SolarEclipsePointKind, SolarEclipseSummary, SolarEclipseType } from 'api'
 import { proxy } from 'valtio'
 import { ApiResponseError, fetchJson } from '../../http'
 import type { SkyObserverSettings } from '../../profile/schema'
@@ -33,8 +33,10 @@ export interface SolarEclipseLayers {
 	penumbralLimits: boolean
 	// Where the eclipse begins, is greatest, or ends at sunrise or sunset.
 	riseSet: boolean
-	// Greatest eclipse, greatest duration, and the ends of the central line and of the eclipse on the Earth.
+	// Named global points: contacts, ends of the central line and of the partial limits, greatest eclipse and duration.
 	points: boolean
+	// Names of the global points, beside their markers.
+	labels: boolean
 }
 
 // State of the tool in the tab.
@@ -51,6 +53,8 @@ export interface SolarEclipseState {
 	notice?: string
 	// Map layers shown.
 	layers: SolarEclipseLayers
+	// Global point highlighted on the map and detailed in the panel.
+	selectedPoint?: GlobalPointKind
 	// Contact drawn in the Local View.
 	selectedEvent: LocalEclipseContactKind
 	// Place whose local circumstances are shown.
@@ -74,7 +78,7 @@ export interface SolarEclipseState {
 export function initialSolarEclipseState(): SolarEclipseState {
 	return {
 		loading: false,
-		layers: { centralLine: true, umbralLimits: true, penumbralLimits: true, riseSet: false, points: true },
+		layers: { centralLine: true, umbralLimits: true, penumbralLimits: true, riseSet: false, points: true, labels: true },
 		selectedEvent: 'MAX',
 		localLoading: false,
 		view: { orientation: 'zenith', handedness: 'eastRight', ghosts: true },
@@ -94,14 +98,88 @@ const localGuard = createRequestGuard()
 // Names of the eclipse types, for people.
 export const ECLIPSE_TYPE_NAMES: Readonly<Record<SolarEclipseType, string>> = { total: 'Total', annular: 'Annular', hybrid: 'Hybrid', partial: 'Partial' }
 
-// Names of the global points drawn on the map, for people. C1 and C2 are the ends of the central line on the
-// Earth and P1 and P4 those of the eclipse, never the contacts of a place.
-export const GLOBAL_POINT_NAMES: Readonly<Partial<Record<SolarEclipsePointKind, string>>> = {
-	P1: 'Eclipse begins on Earth',
-	C1: 'Central path begins',
-	MAX: 'Greatest eclipse',
-	C2: 'Central path ends',
-	P4: 'Eclipse ends on Earth',
+// A global point: a named point of the map, or GD, the greatest duration of the central phase.
+export type GlobalPointKind = SolarEclipsePointKind | 'GD'
+
+// Family of a global point, which sets its marker: a contact of the penumbra or of the umbra with the Earth's
+// limb, an end of the central line, an end of a partial limit, or an extreme of the eclipse.
+export type GlobalPointFamily = 'penumbralContact' | 'umbralContact' | 'centralLineEnd' | 'limitEnd' | 'extreme'
+
+// Description of a global point, for people.
+export interface GlobalPointInfo {
+	// Short name.
+	readonly name: string
+	// What the point is.
+	readonly description: string
+	// Family.
+	readonly family: GlobalPointFamily
+}
+
+// Descriptions of the global points. They are global: C1 and C2 here are the ends of the central line on the
+// Earth, never the contacts of a place, and the umbra stands for the antumbra of an annular eclipse.
+export const GLOBAL_POINTS: Readonly<Record<GlobalPointKind, GlobalPointInfo>> = {
+	P1: { name: 'Eclipse begins on Earth', description: 'First external contact of the penumbra with the Earth: the partial eclipse begins, at sunrise.', family: 'penumbralContact' },
+	P2: { name: 'Penumbra wholly on Earth', description: 'First internal contact of the penumbra: from now on the whole penumbra lies on the Earth.', family: 'penumbralContact' },
+	P3: { name: 'Penumbra starts leaving Earth', description: 'Last internal contact of the penumbra: from now on part of the penumbra misses the Earth.', family: 'penumbralContact' },
+	P4: { name: 'Eclipse ends on Earth', description: 'Last external contact of the penumbra with the Earth: the partial eclipse ends, at sunset.', family: 'penumbralContact' },
+	U1: { name: 'Central shadow reaches Earth', description: 'First external contact of the umbra (the antumbra of an annular eclipse) with the Earth: the central eclipse begins, at sunrise.', family: 'umbralContact' },
+	U2: { name: 'Central shadow wholly on Earth', description: 'First internal contact of the umbra: from now on the whole umbra lies on the Earth.', family: 'umbralContact' },
+	U3: { name: 'Central shadow starts leaving Earth', description: 'Last internal contact of the umbra: from now on part of the umbra misses the Earth.', family: 'umbralContact' },
+	U4: { name: 'Central shadow leaves Earth', description: 'Last external contact of the umbra with the Earth: the central eclipse ends, at sunset.', family: 'umbralContact' },
+	C1: { name: 'Central line begins', description: 'Where the shadow axis first meets the Earth: the central line begins, with the Sun on the horizon at sunrise.', family: 'centralLineEnd' },
+	C2: { name: 'Central line ends', description: 'Where the shadow axis leaves the Earth: the central line ends, with the Sun on the horizon at sunset.', family: 'centralLineEnd' },
+	N1: { name: 'Northern limit begins', description: 'Earlier end of the northern limit of the partial eclipse, on the sunrise/sunset curve: there the Moon just grazes the Sun on the horizon. With a single limit, N1 and S1 are its two ends, in time order.', family: 'limitEnd' },
+	N2: { name: 'Northern limit ends', description: 'Later end of the northern limit of the partial eclipse, on the sunrise/sunset curve: there the Moon just grazes the Sun on the horizon.', family: 'limitEnd' },
+	S1: { name: 'Southern limit begins', description: 'Earlier end of the southern limit of the partial eclipse, on the sunrise/sunset curve: there the Moon just grazes the Sun on the horizon. With a single limit, S1 is its later end.', family: 'limitEnd' },
+	S2: { name: 'Southern limit ends', description: 'Later end of the southern limit of the partial eclipse, on the sunrise/sunset curve: there the Moon just grazes the Sun on the horizon.', family: 'limitEnd' },
+	MAX: { name: 'Greatest eclipse', description: 'Where the shadow axis passes closest to the Earth’s center, at the instant of greatest eclipse; for a partial eclipse, the place on the Earth’s limb nearest the axis.', family: 'extreme' },
+	GD: { name: 'Greatest duration', description: 'The point of the central line where the total or annular phase lasts longest, generally not the greatest eclipse.', family: 'extreme' },
+}
+
+// A global point of an eclipse, with what is known of it.
+export interface GlobalPoint extends SolarEclipseMapPoint {
+	// Which point.
+	readonly kind: GlobalPointKind
+	// Circumstances of the greatest eclipse or duration, for MAX and GD.
+	readonly extreme?: SolarEclipseExtreme
+}
+
+// Returns the global points of a map in time order, the greatest duration among them; points without a time last.
+export function globalPoints(map: SolarEclipseMap): GlobalPoint[] {
+	const points: GlobalPoint[] = []
+
+	for (const [kind, point] of Object.entries(map.points) as [SolarEclipsePointKind, SolarEclipseMapPoint | undefined][]) {
+		if (point) points.push(kind === 'MAX' && map.greatestEclipse ? { ...point, kind, extreme: map.greatestEclipse } : { ...point, kind })
+	}
+
+	const duration = map.greatestDuration
+	if (duration) points.push({ kind: 'GD', longitude: duration.longitude, latitude: duration.latitude, time: duration.time, sunAltitude: duration.sunAltitude, extreme: duration })
+
+	return points.sort((a, b) => (a.time ?? Infinity) - (b.time ?? Infinity))
+}
+
+// Distance in degrees, along each axis, below which two global points share a stack of labels, so the labels of
+// points that nearly coincide on the whole map, such as C1, U1, and U2, do not overlap.
+const LABEL_STACK_DISTANCE = 3
+
+// Returns the row of each point's label in its stack, 0 for the first point of a stack; points are taken in order,
+// and a point joins the stack of the first earlier point within LABEL_STACK_DISTANCE of it.
+export function labelRows(points: readonly GlobalPoint[]): number[] {
+	const rows: number[] = []
+	const anchors: { readonly point: GlobalPoint; size: number }[] = []
+
+	for (const point of points) {
+		const anchor = anchors.find(({ point: other }) => Math.abs(other.latitude - point.latitude) < LABEL_STACK_DISTANCE && Math.abs(((other.longitude - point.longitude + 540) % 360) - 180) < LABEL_STACK_DISTANCE)
+
+		if (anchor) {
+			rows.push(anchor.size++)
+		} else {
+			anchors.push({ point, size: 1 })
+			rows.push(0)
+		}
+	}
+
+	return rows
 }
 
 // Returns the name of a local contact for people; C2 and C3 name the central phase of the place, total or annular.
@@ -144,6 +222,7 @@ async function searchEclipse(state: SolarEclipseState, time: number, direction: 
 
 		state.eclipse = eclipse
 		state.map = undefined
+		state.selectedPoint = undefined
 		state.local = undefined
 		void loadLocal(state, io)
 
@@ -243,4 +322,10 @@ export function setViewSettings(state: SolarEclipseState, settings: Partial<Sola
 // Shows or hides a map layer; nothing is asked of the API.
 export function setLayer(state: SolarEclipseState, layer: keyof SolarEclipseLayers, shown: boolean) {
 	state.layers[layer] = shown
+}
+
+// Highlights a global point on the map and details it in the panel; choosing the highlighted one again clears it.
+// Nothing is asked of the API.
+export function selectPoint(state: SolarEclipseState, kind: GlobalPointKind | undefined) {
+	state.selectedPoint = state.selectedPoint === kind ? undefined : kind
 }

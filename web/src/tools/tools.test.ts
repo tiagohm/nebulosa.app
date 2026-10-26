@@ -11,6 +11,7 @@ describe('registry', () => {
 	test('a tool without a view is planned', () => {
 		expect(toolStatus(TOOL_DEFINITIONS.calculator)).toBe('planned')
 		expect(toolStatus(TOOL_DEFINITIONS['lunar-eclipse-map'])).toBe('available')
+		expect(toolStatus(TOOL_DEFINITIONS['solar-eclipse-map'])).toBe('available')
 		expect(toolStatus({ view: () => null })).toBe('available')
 	})
 })

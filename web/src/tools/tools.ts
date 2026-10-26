@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import type { ToolId } from '../shell/route'
 import type { IconName } from '../ui/Icon'
 import { LunarEclipseMap } from './lunareclipse/LunarEclipseMap'
+import { SolarEclipseMap } from './solareclipse/SolarEclipseMap'
 
 // Static registry of the Tools workspace: standalone utilities that need neither a camera view nor an
 // image document. The contextual tools and camera operations of Images are not listed
@@ -29,7 +30,7 @@ export interface ToolDefinition {
 // Every standalone tool, by id.
 export const TOOL_DEFINITIONS: Readonly<Record<ToolId, ToolDefinition>> = {
 	calculator: { id: 'calculator', label: 'Calculator', description: 'Field of view, image scale, sampling, and other observing calculations.', icon: 'calculator' },
-	'solar-eclipse-map': { id: 'solar-eclipse-map', label: 'Solar Eclipse Map', description: 'Path and local circumstances of solar eclipses.', icon: 'sun' },
+	'solar-eclipse-map': { id: 'solar-eclipse-map', label: 'Solar Eclipse Map', description: 'Path and local circumstances of solar eclipses.', icon: 'sun', view: SolarEclipseMap },
 	'lunar-eclipse-map': { id: 'lunar-eclipse-map', label: 'Lunar Eclipse Map', description: 'Visibility and local circumstances of lunar eclipses.', icon: 'moon', view: LunarEclipseMap },
 	'alpaca-server': { id: 'alpaca-server', label: 'Alpaca Server', description: 'Publishes selected devices to ASCOM Alpaca clients on the network.', icon: 'server' },
 }

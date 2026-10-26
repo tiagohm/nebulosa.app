@@ -226,7 +226,8 @@ export interface CameraCapabilities extends DeviceStateBase {
 	readonly transferFormats: readonly CameraTransferFormat[]
 	// Sensor temperature in degrees Celsius; absent when the camera has no thermometer.
 	readonly temperature?: number
-	// Cooler state: whether it is on (absent when it cannot be switched) and its power in percent.
+	// Cooler state: whether it is on (absent when it cannot be switched) and its power in percent; absent
+	// when the camera has no cooler, that is, neither a cooler switch nor a settable target temperature.
 	readonly cooler?: { readonly enabled?: boolean; readonly power: number }
 	// Whether a cooling target temperature can be set.
 	readonly canSetTemperature: boolean
@@ -539,7 +540,6 @@ const CAMERA_CAPABILITY_FIELDS: ReadonlySet<string> = new Set([
 	'transferFormats',
 	'hasThermometer',
 	'temperature',
-	'hasCooler',
 	'hasCoolerControl',
 	'cooler',
 	'coolerPower',
@@ -627,7 +627,8 @@ export function cameraCapabilities(camera: Camera, connectionId: string): Camera
 		frameFormat: camera.frameFormat,
 		transferFormats: camera.transferFormats,
 		temperature: camera.hasThermometer ? camera.temperature : undefined,
-		cooler: camera.hasCooler || camera.hasCoolerControl ? { enabled: camera.hasCoolerControl ? camera.cooler : undefined, power: camera.coolerPower } : undefined,
+		// hasCooler only says CCD_TEMPERATURE is defined, which a camera with a bare thermometer also does.
+		cooler: camera.hasCoolerControl || camera.canSetTemperature ? { enabled: camera.hasCoolerControl ? camera.cooler : undefined, power: camera.coolerPower } : undefined,
 		canSetTemperature: camera.canSetTemperature,
 	}
 }

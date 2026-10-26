@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
+import { DEFAULT_CAMERA } from 'nebulosa/src/devices/indi/device'
 import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { CoverSimulator } from 'nebulosa/src/devices/indi/simulator/cover'
@@ -6,7 +7,7 @@ import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
 import { deg } from 'nebulosa/src/math/units/angle'
-import { type DeviceEvent, DeviceRegistry, type MountState } from './devices'
+import { cameraCapabilities, type DeviceEvent, DeviceRegistry, type MountState } from './devices'
 
 const disposables: Disposable[] = []
 
@@ -155,3 +156,13 @@ test('accessory states are published on change, deduplicated, and listed by conn
 	expect(moves.some((state) => state.moving)).toBeTrue()
 	expect(moves.at(-1)).toMatchObject({ moving: false, position: { value: device.position.value } })
 }, 30000)
+
+test('a camera with only a thermometer reports no cooler', () => {
+	// As the ZWO ASI120MM Mini defines it: a read-only CCD_TEMPERATURE, without CCD_COOLER or CCD_COOLER_POWER.
+	const thermometer = { ...structuredClone(DEFAULT_CAMERA), hasCooler: true, hasThermometer: true, temperature: 16.2 }
+	expect(cameraCapabilities(thermometer, 'a')).toMatchObject({ temperature: 16.2, canSetTemperature: false, cooler: undefined })
+
+	const cooled = { ...thermometer, canSetTemperature: true, hasCoolerControl: true, cooler: true, coolerPower: 40 }
+	expect(cameraCapabilities(cooled, 'a').cooler).toEqual({ enabled: true, power: 40 })
+	expect(cameraCapabilities({ ...cooled, hasCoolerControl: false }, 'a').cooler).toEqual({ enabled: undefined, power: 40 })
+})

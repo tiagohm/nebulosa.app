@@ -36,8 +36,8 @@ test('lists the watched connection, replaying the events received while it loads
 	expect(state.devices).toEqual([])
 })
 
-test('a connection that is not INDI lists no device', async () => {
+test('a refused listing lists no device', async () => {
 	const state = proxy<IndiDirectoryState>({ watched: 's', devices: [device('stale', 's')], loading: false })
-	await refreshIndiDirectory(state, (() => Promise.resolve(Response.json({ error: 'no', code: 'unsupported' }, { status: 422 }))) as unknown as typeof fetch)
+	await refreshIndiDirectory(state, (() => Promise.resolve(Response.json({ error: 'no', code: 'notFound' }, { status: 404 }))) as unknown as typeof fetch)
 	expect(state.devices).toEqual([])
 })

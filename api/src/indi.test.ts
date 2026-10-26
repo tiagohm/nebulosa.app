@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
+import { AlpacaServer } from 'nebulosa/src/devices/alpaca/server'
+import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
+import { FocuserManager } from 'nebulosa/src/devices/indi/manager/focuser'
+import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
+import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import type { OperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { ConnectionManager } from './connection'
 import { routes, websocket } from './index'
-import { IndiPropertyService, type IndiPropertyServiceOptions, type IndiServerEvent, type IndiSnapshotEvent, type IndiStreamEvent, type IndiWriteRequest } from './indi'
+import { type IndiDeviceSummary, IndiPropertyService, type IndiPropertyServiceOptions, type IndiServerEvent, type IndiSnapshotEvent, type IndiStreamEvent, type IndiWriteRequest } from './indi'
 import { type OperationRecord, OperationRegistry } from './operations'
 import type { EventSocket, ServerEvent } from './websocket'
 
@@ -145,14 +150,12 @@ describe('directory', () => {
 		expect(broadcasts.some((event) => JSON.stringify(event).includes('TEMPERATURE'))).toBeFalse()
 	})
 
-	test('refuses an unknown connection and a connection that is not INDI', async () => {
-		const { service, manager } = await setup()
-		const simulator = await manager.connect({ type: 'SIMULATOR' })
+	test('refuses a connection that is not open', async () => {
+		const { service } = await setup()
+		const refused = service.list('unknown')
 
-		expect(service.list('unknown').status).toBe(404)
-		const refused = service.list(simulator.id)
-		expect(refused.status).toBe(422)
-		expect(await refused.json()).toMatchObject({ code: 'unsupported' })
+		expect(refused.status).toBe(404)
+		expect(await refused.json()).toMatchObject({ code: 'notFound' })
 	})
 
 	test('publishes the removal of a device', async () => {
@@ -296,19 +299,16 @@ describe('stream', () => {
 		}
 	})
 
-	test('refuses an unknown connection, device, or a connection that is not INDI', async () => {
-		const { service, manager, id } = await setup()
-		const simulator = await manager.connect({ type: 'SIMULATOR' })
+	test('refuses an unknown connection or device', async () => {
+		const { service, id } = await setup()
 		const a = fakeSocket()
 
 		service.subscribe(a.socket, { type: 'indi:subscribe', connectionId: 'unknown', hardwareId: 'x' })
 		service.subscribe(a.socket, { type: 'indi:subscribe', connectionId: id, hardwareId: 'x' })
-		service.subscribe(a.socket, { type: 'indi:subscribe', connectionId: simulator.id, hardwareId: 'x' })
 
 		expect(a.events).toMatchObject([
 			{ type: 'indi:subscriptionError', connectionId: 'unknown', code: 'notFound' },
 			{ type: 'indi:subscriptionError', connectionId: id, code: 'notFound' },
-			{ type: 'indi:subscriptionError', connectionId: simulator.id, code: 'unsupported' },
 		])
 	})
 
@@ -425,13 +425,11 @@ describe('write', () => {
 	})
 
 	test('refuses what the vector cannot take', async () => {
-		const { service, manager, id, relay } = await setup()
-		const simulator = await manager.connect({ type: 'SIMULATOR' })
+		const { service, id, relay } = await setup()
 		const revision = (name: string) => relay.properties[name].revision
 
 		const refusals = await Promise.all([
 			write(service, 'unknown', relay.hardwareId, 'TEMPERATURE', { baseRevision: 0, elements: {} }),
-			write(service, simulator.id, relay.hardwareId, 'TEMPERATURE', { baseRevision: 0, elements: {} }),
 			write(service, id, 'unknown', 'TEMPERATURE', { baseRevision: 0, elements: {} }),
 			write(service, id, relay.hardwareId, 'UNKNOWN', { baseRevision: 0, elements: {} }),
 			write(service, id, relay.hardwareId, 'DRIVER_INFO', { baseRevision: revision('DRIVER_INFO'), elements: { DRIVER_NAME: 'x' } }),
@@ -445,7 +443,6 @@ describe('write', () => {
 
 		expect(refusals.map(({ status, body }) => [status, body.code])).toEqual([
 			[404, 'notFound'],
-			[422, 'unsupported'],
 			[404, 'notFound'],
 			[404, 'notFound'],
 			[422, 'unsupported'],
@@ -526,6 +523,58 @@ describe('write', () => {
 		expect(await outcome(removed.body.operationId!)).toMatchObject({ state: 'failed' })
 		expect(['removed', 'disconnected']).toContain((await outcome(removed.body.operationId!)).reason!)
 	})
+})
+
+describe('other connections', () => {
+	test('lists, streams, and writes the vectors of the simulated devices', async () => {
+		const { manager, service, outcome } = await setup()
+		const simulator = await manager.connect({ type: 'SIMULATOR' })
+		const client = manager.client(simulator.id)!
+
+		const devices = (await service.list(simulator.id).json()) as IndiDeviceSummary[]
+		const device = devices.find((candidate) => candidate.connected === false)!
+		expect(devices.length).toBeGreaterThan(1)
+		expect(device).toMatchObject({ connectionId: simulator.id, driver: { executable: expect.any(String) } })
+
+		const a = fakeSocket()
+		service.subscribe(a.socket, { type: 'indi:subscribe', connectionId: simulator.id, hardwareId: device.hardwareId })
+		expect((a.events[0] as IndiSnapshotEvent).vectors.map((vector) => vector.name)).toContain('CONNECTION')
+
+		const connection = manager.devices.properties.property(client, device.name, 'CONNECTION')!
+		const response = service.write(simulator.id, device.hardwareId, 'CONNECTION', { token: Bun.randomUUIDv7(), baseRevision: connection.revision, elements: { CONNECT: true } })
+		expect(response.status).toBe(202)
+		const { operationId } = (await response.json()) as { operationId: string }
+
+		expect(await outcome(operationId)).toMatchObject({ state: 'succeeded' })
+		await until(() => manager.devices.properties.device(client, device.name)?.connected === true)
+		await until(() => a.events.some((event) => event.type === 'indi:propertyUpdated' && event.vector.name === 'CONNECTION'))
+	})
+
+	test('lists and streams the vectors of the devices of an Alpaca server', async () => {
+		// An Alpaca server of the toolkit serving a simulated focuser.
+		const focusers = new FocuserManager()
+		const source = new ClientSimulator('alpaca-source', new IndiClientHandlerSet([focusers]))
+		const simulated = new FocuserSimulator('Alpaca Focuser', source)
+		const focuser = focusers.get(source, simulated.name)!
+		focusers.connect(focuser)
+		await until(() => focuser.connected)
+		const server = new AlpacaServer({ focuser: focusers, deviceNumberProvider: () => 0 })
+		server.start('127.0.0.1', 0)
+		disposables.push({ [Symbol.dispose]: () => server.stop() }, source)
+
+		const { manager, service } = await setup()
+		const alpaca = await manager.connect({ type: 'ALPACA', host: '127.0.0.1', port: server.port })
+		const client = manager.client(alpaca.id)!
+		await until(() => manager.devices.properties.devices(client).some((device) => device.properties.ABS_FOCUS_POSITION !== undefined), 10000)
+
+		const devices = (await service.list(alpaca.id).json()) as IndiDeviceSummary[]
+		const device = devices.find((candidate) => manager.devices.properties.property(client, candidate.name, 'ABS_FOCUS_POSITION'))!
+		expect(device.connectionId).toBe(alpaca.id)
+
+		const a = fakeSocket()
+		service.subscribe(a.socket, { type: 'indi:subscribe', connectionId: alpaca.id, hardwareId: device.hardwareId })
+		expect((a.events[0] as IndiSnapshotEvent).vectors.map((vector) => vector.name)).toContain('ABS_FOCUS_POSITION')
+	}, 20000)
 })
 
 describe('websocket', () => {

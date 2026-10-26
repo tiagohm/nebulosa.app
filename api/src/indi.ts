@@ -9,11 +9,14 @@ import { errorResponse } from './http'
 import type { OperationRegistry } from './operations'
 import type { EventSocket, ServerEvent, SocketListener } from './websocket'
 
-// The raw INDI property vectors of the devices of the open INDI connections, for the INDI Properties view of
-// Equipment Control. The vectors themselves are kept by the property registry of the devices, which the
-// device managers share; this service publishes them and writes them:
-// - a directory of the physical devices of each INDI connection (GET /api/connections/:id/indi/devices and
-//   the indi:device* events, broadcast to every tab), without any property value;
+// The raw INDI property vectors of the devices of every open connection, for the INDI Properties view of
+// Equipment Control. Every client speaks them: an indiserver natively, the simulator and the Alpaca client by
+// defining and updating the vectors of their devices and taking new values through the same commands (the
+// Alpaca client translates the vectors it maps into Alpaca calls and ignores the others). The vectors themselves
+// are kept by the property registry of the devices, which the device managers share; this service publishes
+// them and writes them:
+// - a directory of the physical devices of each connection (GET /api/connections/:id/indi/devices and the
+//   indi:device* events, broadcast to every tab), without any property value;
 // - the property stream of one physical device, sent only to the sockets that subscribed to it over /api/ws
 //   (indi:subscribe), never broadcast. A subscription first receives a full snapshot on its own socket, so
 //   the snapshot and the later changes travel one ordered stream; it ends when the socket unsubscribes or
@@ -61,7 +64,7 @@ export const MAX_BUFFERED_AMOUNT = 1024 * 1024
 // Driver messages of a device kept for the snapshot of a new subscription, newest last.
 export const MAX_MESSAGES = 20
 
-// A physical device of an INDI connection, as the directory lists it.
+// A physical device of a connection, as the directory lists it.
 export interface IndiDeviceSummary {
 	// Id of the open connection that provides the device.
 	readonly connectionId: string
@@ -163,10 +166,8 @@ export interface IndiMessageEvent extends IndiStreamHeader {
 // Events of the property stream of one device, sent only to the sockets that subscribed to it.
 export type IndiStreamEvent = IndiSnapshotEvent | IndiPropertyDefinedEvent | IndiPropertyUpdatedEvent | IndiPropertyRemovedEvent | IndiMessageEvent
 
-// Stable code of a refused subscription:
-// - notFound: the connection is not open or has no such INDI device;
-// - unsupported: the connection is not an INDI connection.
-export type IndiSubscriptionErrorCode = 'notFound' | 'unsupported'
+// Stable code of a refused subscription: notFound, the connection is not open or has no such device.
+export type IndiSubscriptionErrorCode = 'notFound'
 
 // A subscription was refused; sent only to the socket that asked.
 export interface IndiSubscriptionErrorEvent {
@@ -250,7 +251,7 @@ interface Stream {
 	timer?: Timer
 }
 
-// Publishes the directory and the property streams of the devices of the open INDI connections.
+// Publishes the directory and the property streams of the devices of every open connection.
 export class IndiPropertyService implements SocketListener, Disposable {
 	// Streams with subscribers, by key.
 	readonly #streams = new Map<string, Stream>()
@@ -260,7 +261,7 @@ export class IndiPropertyService implements SocketListener, Disposable {
 	readonly #subscriptions = new Map<EventSocket, Set<Stream>>()
 	// Streams whose changes a socket skips until it drains.
 	readonly #stale = new Map<EventSocket, Set<Stream>>()
-	// Latest driver messages of each device of an INDI connection.
+	// Latest driver messages of each device.
 	readonly #messages = new WeakMap<IndiDevice, IndiMessage[]>()
 	// Epoch of each client.
 	readonly #epochs = new WeakMap<Client, string>()
@@ -301,7 +302,7 @@ export class IndiPropertyService implements SocketListener, Disposable {
 		devices.handler.add(this.#handler)
 	}
 
-	// Writes new values to a vector of a device of an INDI connection. Responds 202 with the operation id; 404
+	// Writes new values to a vector of a device of an open connection. Responds 202 with the operation id; 404
 	// when the connection, the device, or the vector does not exist, 409 busy while another operation holds the
 	// connected device, 409 conflict when the vector changed since baseRevision, 422 unsupported for a vector
 	// that cannot be written and invalidParameter for values it cannot take.
@@ -311,7 +312,6 @@ export class IndiPropertyService implements SocketListener, Disposable {
 
 		const client = this.client(connectionId)
 		if (!client) return notFound('Connection')
-		if (client.type !== 'INDI') return unsupported('Only INDI connections write their INDI properties')
 
 		const device = this.devices.properties.device(client, hardwareId)
 		if (!device) return notFound('INDI device')
@@ -340,12 +340,10 @@ export class IndiPropertyService implements SocketListener, Disposable {
 		return Response.json({ operationId } satisfies CommandAccepted, { status: 202 })
 	}
 
-	// Responds with the physical devices of an INDI connection; 404 when it is not open, 422 when it is not
-	// an INDI connection.
+	// Responds with the physical devices of a connection, or 404 when it is not open.
 	list(connectionId: string): Response {
 		const client = this.client(connectionId)
 		if (!client) return notFound('Connection')
-		if (client.type !== 'INDI') return unsupported('Only INDI connections list their INDI devices')
 		return Response.json(this.devices.properties.devices(client).map((device) => summary(connectionId, device)))
 	}
 
@@ -358,12 +356,11 @@ export class IndiPropertyService implements SocketListener, Disposable {
 	// Subscribes a socket to the property stream of a device and sends it a snapshot, or the error refusing it.
 	subscribe(socket: EventSocket, { connectionId, hardwareId }: IndiClientMessage) {
 		const client = this.client(connectionId)
-		const device = client?.type === 'INDI' ? this.devices.properties.device(client, hardwareId) : undefined
+		const device = client && this.devices.properties.device(client, hardwareId)
 
 		if (!client || !device) {
-			const code = client && client.type !== 'INDI' ? 'unsupported' : 'notFound'
-			const error = code === 'unsupported' ? 'Only INDI connections publish their properties' : client ? 'The connection has no such INDI device' : 'Connection not found'
-			socket.send(JSON.stringify({ type: 'indi:subscriptionError', connectionId, hardwareId, error, code } satisfies IndiSubscriptionErrorEvent))
+			const error = client ? 'The connection has no such device' : 'Connection not found'
+			socket.send(JSON.stringify({ type: 'indi:subscriptionError', connectionId, hardwareId, error, code: 'notFound' } satisfies IndiSubscriptionErrorEvent))
 			return
 		}
 
@@ -423,7 +420,7 @@ export class IndiPropertyService implements SocketListener, Disposable {
 			this.#endWrites(device, undefined, failedOperationResult('removed', 'The device was removed before the driver reported the end of the change'))
 			const stream = this.#devices.get(device)
 			if (stream !== undefined) this.#close(stream)
-			const connectionId = client.type === 'INDI' ? this.devices.connection(client) : undefined
+			const connectionId = this.devices.connection(client)
 			if (connectionId) this.broadcast({ type: 'indi:deviceRemoved', connectionId, hardwareId: device.hardwareId })
 		},
 		propertyDefined: (_, device, property) => {
@@ -444,8 +441,7 @@ export class IndiPropertyService implements SocketListener, Disposable {
 			stream.pending.delete(property.name)
 			this.#send(stream, { ...this.#header(stream), type: 'indi:propertyRemoved', name: property.name })
 		},
-		message: (client, device, message) => {
-			if (client.type !== 'INDI') return
+		message: (_, device, message) => {
 			const received = this.#keep(device, message)
 			const stream = this.#devices.get(device)
 			if (stream !== undefined) this.#send(stream, { ...this.#header(stream), type: 'indi:message', message: received })
@@ -514,9 +510,9 @@ export class IndiPropertyService implements SocketListener, Disposable {
 		if (writes !== undefined) for (const write of Array.from(writes)) if (name === undefined || write.name === name) write.finish(result)
 	}
 
-	// Broadcasts a device of an INDI connection to the directory.
+	// Broadcasts a device of a connection to the directory.
 	#publishDevice(client: Client, device: IndiDevice, type: 'indi:deviceAdded' | 'indi:deviceUpdated') {
-		const connectionId = client.type === 'INDI' ? this.devices.connection(client) : undefined
+		const connectionId = this.devices.connection(client)
 		if (connectionId) this.broadcast({ type, device: summary(connectionId, device) })
 	}
 
@@ -705,7 +701,7 @@ function writtenElements(property: IndiWritableProperty, values: Readonly<Record
 export function createIndiRoutes(indi: IndiPropertyService) {
 	return {
 		'/api/connections/:id/indi/devices': {
-			// The physical devices of an INDI connection, managed or not, without their properties.
+			// The physical devices of a connection, managed or not, without their properties.
 			GET: (req) => indi.list(req.params.id),
 		},
 		'/api/connections/:id/indi/devices/:hardwareId/properties/:vector': {

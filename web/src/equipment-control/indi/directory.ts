@@ -1,10 +1,10 @@
 import type { IndiDeviceEvent, IndiDeviceSummary, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 
-// Mirror of the INDI device directory of the watched connection: every physical device the INDI server
+// Mirror of the INDI device directory of the watched connection: every physical device the connection
 // reports, managed by Nebulosa or not, without any property value. Fed by GET
 // /api/connections/:id/indi/devices and the indi:device* events, it follows the same connection as the device
-// runtime, so a device of another connection is never listed. A connection that is not INDI lists none.
+// runtime, so a device of another connection is never listed. A refused listing lists none.
 
 // INDI directory state.
 export interface IndiDirectoryState {

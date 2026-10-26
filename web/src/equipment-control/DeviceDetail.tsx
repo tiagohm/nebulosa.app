@@ -26,8 +26,8 @@ import { type InterfaceProps, Notice } from './parts'
 
 // Detail of one physical device: its name, interfaces, and connection, with an explicit connect or
 // disconnect command, then one of its views: the controls of each interface it offers, or the INDI properties
-// of a device of an INDI connection (the only view of a device no interface manages), chosen with a selector
-// that is part of the URL; then its activity and its diagnostics. Controls are shown only for a connected
+// its connection reports for it (the only view of a device no interface manages), chosen with a selector that
+// is part of the URL; then its activity and its diagnostics. Controls are shown only for a connected
 // device whose state the server reported, and only for what it reports it can do. Switching views never
 // connects, disconnects, or stops anything.
 

@@ -37,7 +37,7 @@ export interface DeviceGroup {
 	readonly devices: readonly DeviceSummary[]
 	// Main interface; absent for a device no interface manages.
 	readonly primary?: DeviceSummary
-	// The device in the INDI directory, when its connection is an INDI connection.
+	// The device in the INDI directory of its connection, once listed.
 	readonly indi?: IndiDeviceSummary
 }
 

@@ -24,6 +24,7 @@ import { createOperationRoutes, OperationRegistry } from './operations'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { createRotatorRoutes, RotatorCommands } from './rotators'
 import { skyLocator, skyRoutes } from './sky'
+import { createSolarEclipseRoutes, SolarEclipseService } from './solareclipses'
 import { createStarDetectionRoutes, StarDetectionService } from './stars'
 import { createTppaRoutes, TppaSessions } from './tppa'
 import { broadcast, listenClients, type WebSocketData, websocket } from './websocket'
@@ -74,6 +75,31 @@ export type {
 	LunarEclipseType,
 	LunarEclipseViewOptions,
 } from './lunareclipses'
+export type {
+	HybridEclipseKind,
+	LocalCentralPhaseKind,
+	LocalEclipseContactKind,
+	LocalSolarEclipse,
+	LocalSolarEclipseContact,
+	LocalSolarEclipseDetails,
+	LocalSolarEclipseSvgShape,
+	LocalSolarEclipseVisibility,
+	LocalSunMotion,
+	LocalViewHandedness,
+	LocalViewOrientationMode,
+	LocalVisibilityKind,
+	SolarEclipseErrorCode,
+	SolarEclipseExtreme,
+	SolarEclipseLocalView,
+	SolarEclipseMap,
+	SolarEclipseMapPoint,
+	SolarEclipsePathKind,
+	SolarEclipsePaths,
+	SolarEclipsePointKind,
+	SolarEclipseSummary,
+	SolarEclipseType,
+	SolarEclipseViewOptions,
+} from './solareclipses'
 export type {
 	CameraCapabilities,
 	CameraRange,
@@ -293,6 +319,9 @@ const guiding = new GuidingSessions(connections.devices, (id) => connections.cli
 // Lunar eclipse queries of the Lunar Eclipse Map tool.
 const lunarEclipses = new LunarEclipseService()
 
+// Solar eclipse queries of the Solar Eclipse Map tool; their maps are computed on a worker.
+const solarEclipses = new SolarEclipseService()
+
 // Bun.serve routes under /api/.
 export const routes = {
 	'/api/health': {
@@ -324,6 +353,7 @@ export const routes = {
 	...createCaptureFrameRoutes(captureFrames),
 	...skyRoutes,
 	...createLunarEclipseRoutes(lunarEclipses),
+	...createSolarEclipseRoutes(solarEclipses),
 	'/api/ws': {
 		// Upgrades to the event WebSocket, attaching the client id the tab names itself with; Bun sends the handshake
 		// response itself.

@@ -11,6 +11,7 @@ import { FocuserManager } from 'nebulosa/src/devices/indi/manager/focuser'
 import { GuideOutputManager } from 'nebulosa/src/devices/indi/manager/guideoutput'
 import { MountManager } from 'nebulosa/src/devices/indi/manager/mount'
 import { RotatorManager } from 'nebulosa/src/devices/indi/manager/rotator'
+import { ThermometerManager } from 'nebulosa/src/devices/indi/manager/thermometer'
 import { WheelManager } from 'nebulosa/src/devices/indi/manager/wheel'
 import { IndiPropertyRegistry } from 'nebulosa/src/devices/indi/properties'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
@@ -763,8 +764,12 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 	readonly flatPanels = new FlatPanelManager(this.properties)
 	// Manager of the dew heaters of every connection, each one an interface of a device such as a cover.
 	readonly dewHeaters: DewHeaterManager
+	// Reader of the sensor temperature (degrees Celsius) of the cameras and focusers of every connection. It
+	// only writes the temperature of the parent device, published with the parent's control state; its
+	// thermometer proxies are not a managed type.
+	readonly thermometers: ThermometerManager
 	// Handler that feeds the property stream of a client to the property registry, then to every manager in
-	// MANAGED_TYPES order.
+	// MANAGED_TYPES order, then to the thermometer manager.
 	readonly handler = new IndiClientHandlerSet([this.properties])
 
 	// Creates the managers; listener receives every device event synchronously.
@@ -778,6 +783,9 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 		this.guideOutputs = new GuideOutputManager({ get: (client, id, type) => (type === 'camera' ? camera.get(client, id) : mount.get(client, id)) }, this.properties)
 		// A dew heater is the heater channel of a device that declares one, such as a cover.
 		this.dewHeaters = new DewHeaterManager({ get: (client, id) => cover.get(client, id) }, this.properties)
+		// A thermometer is the temperature vector of a camera (CCD_TEMPERATURE) or a focuser (FOCUS_TEMPERATURE).
+		const focuser = this.focusers
+		this.thermometers = new ThermometerManager({ get: (client, id, type) => (type === 'camera' ? camera.get(client, id) : focuser.get(client, id)) }, this.properties)
 
 		this.#managers = {
 			camera: managed(camera, this.#lifecycle('camera')),
@@ -793,6 +801,16 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 		}
 
 		for (const type of MANAGED_TYPES) this.handler.add(this.#managers[type].handler)
+
+		// After the camera and focuser managers, which create the parents the proxies wrap.
+		this.thermometers.addHandler({
+			added: () => {},
+			updated: (device, property) => {
+				if (device.type === 'camera' || device.type === 'focuser') this.#stateUpdated(device.type, device as never, property)
+			},
+			removed: () => {},
+		})
+		this.handler.add(this.thermometers)
 	}
 
 	// Associates a client with the connection that opens it. Must run before the client delivers
@@ -814,6 +832,7 @@ export class DeviceRegistry implements DeviceProvider<Device> {
 	// Drops every device and property vector of a closed client, publishing device:removed for each.
 	close(client: Client) {
 		for (const type of MANAGED_TYPES) this.#managers[type].close(client)
+		this.thermometers.close(client, false)
 		this.properties.close(client, false)
 	}
 

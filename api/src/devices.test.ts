@@ -166,3 +166,21 @@ test('a camera with only a thermometer reports no cooler', () => {
 	expect(cameraCapabilities(cooled, 'a').cooler).toEqual({ enabled: true, power: 40 })
 	expect(cameraCapabilities({ ...cooled, hasCoolerControl: false }, 'a').cooler).toEqual({ enabled: undefined, power: 40 })
 })
+
+test('camera and focuser sensor temperatures are published with their state', async () => {
+	const { registry, events, clients } = setup('a')
+	const camera = registry.list(clients[0]).find((d) => d.type === 'camera')!
+	registry.switch(clients[0], camera.id, true)
+	await waitUntil(() => events.some((event) => event.type === 'camera:capabilities' && event.capabilities.temperature !== undefined))
+	expect(registry.cameraCapabilities(clients[0], camera.id)?.temperature).toBeNumber()
+
+	const accessories = setupAccessories()
+	const focuser = accessories.registry.list(accessories.client).find((d) => d.type === 'focuser')!
+	accessories.registry.switch(accessories.client, focuser.id, true)
+	await waitUntil(() => accessories.events.some((event) => event.type === 'focuser:updated' && event.state.temperature !== undefined))
+	expect(accessories.registry.state(accessories.client, 'focuser', focuser.id)?.temperature).toBeNumber()
+
+	// Closing the client drops the thermometers with their parents.
+	accessories.registry.close(accessories.client)
+	expect(accessories.registry.thermometers.length).toBe(0)
+})

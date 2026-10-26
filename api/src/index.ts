@@ -18,6 +18,7 @@ import { createFocuserRoutes, FocuserCommands } from './focusers'
 import { createGuideOutputRoutes, GuideOutputCommands } from './guideoutputs'
 import { createGuidingRoutes, GuidingSessions } from './guiding'
 import { createImageRoutes, images } from './images'
+import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
 import { createMountRoutes, MountCommands } from './mounts'
 import { createOperationRoutes, OperationRegistry } from './operations'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
@@ -52,6 +53,28 @@ export type {
 export type { ConnectionEvent, ConnectionRegistryEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest } from './connection'
 export type { CommandAccepted, CommandError, CommandErrorCode, CommandRequest } from './commands'
 export type { ApiError } from './http'
+export type {
+	LocalLunarEclipse,
+	LocalLunarEclipseContact,
+	LocalLunarEclipseDetails,
+	LocalLunarEclipseSvgShape,
+	LocalLunarEclipseVisibility,
+	LocalLunarEclipseVisibilityKind,
+	LocalLunarViewHandedness,
+	LocalLunarViewOrientationMode,
+	LunarEclipseContactKind,
+	LunarEclipseContactPaths,
+	LunarEclipseContactTime,
+	LunarEclipseDirection,
+	LunarEclipseErrorCode,
+	LunarEclipseLocalView,
+	LunarEclipseLocation,
+	LunarEclipseMap,
+	LunarEclipseMapEvent,
+	LunarEclipseSummary,
+	LunarEclipseType,
+	LunarEclipseViewOptions,
+} from './lunareclipses'
 export type {
 	CameraCapabilities,
 	CameraRange,
@@ -268,6 +291,9 @@ const flatWizard = new FlatWizardSessions(connections.devices, (id) => connectio
 // guide output commands and previewing their frames in the image store and the capture frame registry.
 const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, broadcast)
 
+// Lunar eclipse queries of the Lunar Eclipse Map tool.
+const lunarEclipses = new LunarEclipseService()
+
 // Bun.serve routes under /api/.
 export const routes = {
 	'/api/health': {
@@ -298,6 +324,7 @@ export const routes = {
 	...createPlateSolvingRoutes(plateSolving),
 	...createCaptureFrameRoutes(captureFrames),
 	...skyRoutes,
+	...createLunarEclipseRoutes(lunarEclipses),
 	'/api/ws': {
 		// Upgrades to the event WebSocket, attaching the client id the tab names itself with; Bun sends the handshake
 		// response itself.

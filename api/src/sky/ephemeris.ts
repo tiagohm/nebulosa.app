@@ -265,7 +265,7 @@ class HorizonsCircuitBreaker {
 }
 
 // Least-recently-used map with a fixed number of entries.
-class LruCache<T> {
+export class LruCache<T> {
 	readonly #entries = new Map<string, T>()
 
 	// Creates the cache holding at most `limit` entries.

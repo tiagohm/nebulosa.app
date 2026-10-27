@@ -91,12 +91,7 @@ export function ImagesWorkspace() {
 	const toolSelector = (
 		<Select options={IMAGE_TOOLS} value={tool} disabled={!document} format={(t) => IMAGE_TOOL_DEFINITIONS[t].label} group={imageToolGroup} disabledReason={(t) => imageToolUnavailable(t, document)} onChange={(t) => document && selectImageTool(imagesState, document.key, t)} className="w-52 max-sm:w-40" />
 	)
-	const openButton = (
-		<Button variant="secondary" onClick={() => setChoosing(true)}>
-			<Icon name="folder" className="size-4" />
-			Open File
-		</Button>
-	)
+	const openButton = <IconButton icon="folder" onClick={() => setChoosing(true)} label="Open file" />
 	const waiting = document?.camera && !document.info
 	const reticle = !!document?.camera && reticles[document.key] === true
 

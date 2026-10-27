@@ -139,9 +139,10 @@ function DetectionSettings({ settings, cfa, onChange }: SettingsProps & { readon
 			<NumberInput label="Max width (FWHM)" value={settings.maxWidth} min={cfa ? 2 : STREAK_LIMITS.maxWidth.min} max={STREAK_LIMITS.maxWidth.max} step={0.5} suffix="px" onChange={(maxWidth) => onChange({ maxWidth })} />
 			<NumberInput label="Min SNR" value={settings.minSNR} min={STREAK_LIMITS.minSNR.min} max={1000} step={0.5} onChange={(minSNR) => onChange({ minSNR })} />
 			<NumberInput label="Min linearity" value={settings.minLinearity} min={STREAK_LIMITS.minLinearity.min} max={STREAK_LIMITS.minLinearity.max} step={0.05} onChange={(minLinearity) => onChange({ minLinearity })} />
+			<NumberInput label="Min coverage" value={settings.minCoverage} min={STREAK_LIMITS.minCoverage.min} max={STREAK_LIMITS.minCoverage.max} step={0.05} onChange={(minCoverage) => onChange({ minCoverage })} />
 			<NumberInput label="Max streaks" value={settings.maxStreaks} min={STREAK_LIMITS.maxStreaks.min} max={STREAK_LIMITS.maxStreaks.max} onChange={(maxStreaks) => onChange({ maxStreaks })} />
 			<Checkbox label="Keep streaks cut by the image border" checked={settings.allowBorderClipping} onChange={(allowBorderClipping) => onChange({ allowBorderClipping })} />
-			<Notice>Lengths and widths are in image pixels. A CFA mosaic is measured on one color plane, so its widths are at least 2 px.</Notice>
+			<Notice>Lengths and widths are in image pixels. A CFA mosaic is measured on one color plane, so its widths are at least 2 px. The coverage is the fraction of a streak with signal: a dashed trail covers only part of its length, so keeping one needs a lower min coverage.</Notice>
 			<Button variant="secondary" className="self-start" onClick={() => onChange(DEFAULT_STREAK_SETTINGS)}>
 				Reset to Defaults
 			</Button>

@@ -53,6 +53,7 @@ export const STREAK_LIMITS: Readonly<Record<StreakNumericSetting, StreakSettingL
 	maxWidth: { min: 1, max: 256 },
 	minSNR: { min: 0, max: 1e6 },
 	minLinearity: { min: 0, max: 1 },
+	minCoverage: { min: 0, max: 1 },
 	minCoherence: { min: 0, max: 1 },
 	maxStreaks: { min: 1, max: 4096, integer: true },
 	backgroundCellSize: { min: 8, max: 32768, integer: true },

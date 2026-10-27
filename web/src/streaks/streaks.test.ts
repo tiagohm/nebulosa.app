@@ -97,8 +97,8 @@ describe('jobs', () => {
 
 describe('settings', () => {
 	test('are kept within the ranges of the toolkit', () => {
-		const clamped = clampStreakSettings({ ...DEFAULT_STREAK_SETTINGS, minLength: 0, maxWidth: 1000, minLinearity: 2, minCoherence: -0.1, maxStreaks: 10.4, backgroundCellSize: 2, minSNR: Number.NaN })
-		expect(clamped).toEqual({ ...DEFAULT_STREAK_SETTINGS, minLength: 1, maxWidth: 256, minLinearity: 1, minCoherence: 0, maxStreaks: 10, backgroundCellSize: 8 })
+		const clamped = clampStreakSettings({ ...DEFAULT_STREAK_SETTINGS, minLength: 0, maxWidth: 1000, minLinearity: 2, minCoverage: 1.5, minCoherence: -0.1, maxStreaks: 10.4, backgroundCellSize: 2, minSNR: Number.NaN })
+		expect(clamped).toEqual({ ...DEFAULT_STREAK_SETTINGS, minLength: 1, maxWidth: 256, minLinearity: 1, minCoverage: 1, minCoherence: 0, maxStreaks: 10, backgroundCellSize: 8 })
 	})
 
 	test('keep the orientation tolerance within the voting budget of the angle step', () => {

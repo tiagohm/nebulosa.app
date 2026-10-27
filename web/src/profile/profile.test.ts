@@ -827,7 +827,7 @@ describe('camera forms', () => {
 		expect(streakDetectionSettings(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual(settings)
 
 		const invalid = newStores()
-		const stored = { minLength: -1, minCoherence: 1.5, maxStreaks: 2.5, plane: 'luminance', allowBorderClipping: 'yes', angleStep: Math.PI / 180, orientationTolerance: Math.PI / 2 }
+		const stored = { minLength: -1, minCoverage: -0.5, minCoherence: 1.5, maxStreaks: 2.5, plane: 'luminance', allowBorderClipping: 'yes', angleStep: Math.PI / 180, orientationTolerance: Math.PI / 2 }
 		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 12, profiles: [{ id: 'a', name: 'A', settings: { streakDetection: stored } }] }))
 		// The tolerance is cut to the 16 angle steps the Hough voting budget allows.
 		const restored = streakDetectionSettings(load(invalid).profiles[0].settings)

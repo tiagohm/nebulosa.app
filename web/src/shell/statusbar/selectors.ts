@@ -1,4 +1,4 @@
-import type { CameraCapabilities, CaptureSession, DeviceSummary, GuidingSessionSummary, MountState, OperationKind, OperationProgress, OperationRecord } from 'api'
+import type { CameraCapabilities, CaptureSession, CoverState, DeviceSummary, DomeState, FlatPanelState, FocuserState, GuidingSessionSummary, MountState, OperationKind, OperationProgress, OperationRecord, RotatorState, WheelState } from 'api'
 import { toDeg } from 'nebulosa/src/math/units/angle'
 import { cameraKey, captureRunning } from '../../camera/capture'
 import { GUIDING_STATE_LABELS, guidingRunning } from '../../camera/guiding'
@@ -41,7 +41,7 @@ const MAX_NAMED_OPERATIONS = 2
 
 // Returns running operations as one short line, such as "Mount slew · Camera capture · +1".
 export function operationsSummary(running: readonly Pick<OperationRecord, 'kind'>[]) {
-	const named = running.slice(0, MAX_NAMED_OPERATIONS).map((operation) => OPERATION_LABELS[operation.kind])
+	const named = running.slice(0, MAX_NAMED_OPERATIONS).map((operation) => OPERATION_LABELS[operation.kind][1])
 	const more = running.length - named.length
 	return more > 0 ? `${named.join(' · ')} · +${more}` : named.join(' · ')
 }
@@ -165,30 +165,6 @@ export function connectionLabel(name: string | undefined, status: SelectedConnec
 	return `${name} · ${status === 'connected' ? 'Connected' : status === 'connecting' ? 'Connecting' : 'Disconnected'}`
 }
 
-// Returns the value of a camera role: its sensor temperature in degrees Celsius, rounded to 0.1 °C, while connected
-// and its driver reports a finite one; "Connected" while connected without one; otherwise the role status.
-export function cameraValue(status: RoleStatus, state: Pick<CameraCapabilities, 'temperature'> | undefined): StatusValue {
-	if (status !== 'connected') return roleValue(status)
-	const temperature = state?.temperature
-	return temperature !== undefined && Number.isFinite(temperature) ? { text: `${(Math.round(temperature * 10) / 10).toFixed(1)}°C`, tone: 'ok' } : { text: 'Connected', tone: 'ok' }
-}
-
-// Returns the value of a mount role. A mount that is not connected shows its role status, and one whose state was
-// not reported yet "Unknown". Otherwise one state is shown, by precedence: the motions (parking, homing, a goto or
-// flip, a manual axis motion), then parked, then tracking, then idle.
-export function mountValue(status: RoleStatus, state: Pick<MountState, 'connected' | 'parking' | 'homing' | 'slewing' | 'moving' | 'parked' | 'tracking'> | undefined): StatusValue {
-	if (status !== 'connected') return roleValue(status)
-	if (!state) return { text: 'Unknown', tone: 'muted' }
-	if (!state.connected) return roleValue('disconnected')
-	if (state.parking) return { text: 'Parking', tone: 'active' }
-	if (state.homing) return { text: 'Homing', tone: 'active' }
-	if (state.slewing) return { text: 'Slewing', tone: 'active' }
-	if (state.moving) return { text: 'Moving', tone: 'active' }
-	if (state.parked) return { text: 'Parked', tone: 'idle' }
-	if (state.tracking) return { text: 'Tracking', tone: 'ok' }
-	return { text: 'Idle', tone: 'idle' }
-}
-
 // Returns the running capture session of a camera, or undefined without a camera or while its latest session ended.
 export function activeCapture(sessions: Readonly<Record<string, CaptureSession>>, camera: ScopedDevice | undefined): CaptureSession | undefined {
 	const session = camera && sessions[cameraKey(camera.connectionId, camera.id)]
@@ -242,101 +218,191 @@ export function otherOperations(operations: readonly OperationRecord[], sessionI
 	return operations.filter((operation) => !sessionIds.has(operation.operationId))
 }
 
-// Width class of the status bar: wide from Tailwind's lg breakpoint (64rem), medium from sm (40rem), narrow below.
-export type StatusTier = 'wide' | 'medium' | 'narrow'
+// Roles with a device chip in the status bar, in display order: imaging, then telescope, then observatory.
+export const CHIP_ROLES = ['MAIN_CAMERA', 'FILTER_WHEEL', 'FOCUSER', 'ROTATOR', 'MOUNT', 'GUIDE_CAMERA', 'DOME', 'COVER', 'FLAT_PANEL'] as const satisfies readonly EquipmentRole[]
 
-// Chips of the status bar that may be left to the details panel when the bar is narrow.
-export type StatusItemId = 'camera' | 'mount' | 'guiding' | 'capture'
+// Role with a device chip in the status bar.
+export type ChipRole = (typeof CHIP_ROLES)[number]
 
-// Most chips the bar shows at each width; the others are left to the details panel and counted in its button.
-const TIER_ITEM_LIMITS: Readonly<Record<StatusTier, number>> = { wide: Number.POSITIVE_INFINITY, medium: 2, narrow: 1 }
-
-// Which chips the status bar has and what they show.
-export interface StatusItemsInput {
-	// Whether the MAIN_CAMERA role is assigned.
-	readonly camera: boolean
-	// Whether the MOUNT role is assigned.
-	readonly mount: boolean
-	// Whether the profile's mount is moving.
-	readonly mountMoving: boolean
-	// Whether the GUIDE_CAMERA role's device is present.
-	readonly guiding: boolean
-	// Whether that guide camera has a running session.
-	readonly guidingActive: boolean
-	// Whether the main camera has a running capture.
-	readonly capture: boolean
-	// Running operations not shown through a session.
-	readonly otherOperations: number
+// Reading of a device chip: a short value after its icon, and whether the device moves, shown as animated dots after
+// the value instead of a motion text.
+export interface ChipValue {
+	// Short value, such as "50000" or "Open"; empty for the icon alone.
+	readonly text: string
+	// Severity of the value.
+	readonly tone: StatusTone
+	// Whether the device is moving: slewing, homing, parking, a manual motion, a filter change, or a cover or shutter
+	// opening or closing.
+	readonly moving: boolean
+	// Full reading, shown as the chip's title and in the details panel, such as "Slewing" or "Position 50000 steps".
+	readonly title: string
 }
 
-// Chips the status bar shows and how many items it leaves to the details panel.
-export interface CompactItems {
-	// Chips shown in the bar.
-	readonly visible: ReadonlySet<StatusItemId>
-	// Chips left out plus, unless the bar is wide and names them, the other running operations.
-	readonly hidden: number
+// Returns a sensor temperature in degrees Celsius rounded to 0.1 °C, such as "-10.2°C", or undefined when the driver
+// reports none or a non-finite one. Rounding to -0 reads 0.0.
+function temperatureText(temperature: number | undefined) {
+	return temperature !== undefined && Number.isFinite(temperature) ? `${(Math.round(temperature * 10) / 10).toFixed(1)}°C` : undefined
 }
 
-// Returns the chips the status bar shows at a width, by priority: a moving mount, then a running capture and a
-// running guiding session, then the main camera, then an idle mount, then an idle guide camera. The server link,
-// the device failures, and the Abort are never left out; the other running operations are named only on a wide
-// bar and otherwise counted with the chips left out.
-export function compactItems(input: StatusItemsInput, tier: StatusTier): CompactItems {
-	const priority: StatusItemId[] = []
-	if (input.mount && input.mountMoving) priority.push('mount')
-	if (input.capture) priority.push('capture')
-	if (input.guiding && input.guidingActive) priority.push('guiding')
-	if (input.camera) priority.push('camera')
-	if (input.mount && !input.mountMoving) priority.push('mount')
-	if (input.guiding && !input.guidingActive) priority.push('guiding')
-
-	const visible = new Set(priority.slice(0, TIER_ITEM_LIMITS[tier]))
-	return { visible, hidden: priority.length - visible.size + (tier === 'wide' ? 0 : input.otherOperations) }
+// Returns the reading of a main or guide camera: its sensor temperature, when the driver reports a finite one, or the
+// icon alone.
+export function cameraChip(state: Pick<CameraCapabilities, 'temperature'> | undefined): ChipValue {
+	const temperature = temperatureText(state?.temperature)
+	return temperature ? { text: temperature, tone: 'ok', moving: false, title: `Sensor ${temperature}` } : { text: '', tone: 'ok', moving: false, title: 'Connected' }
 }
 
-// Returns the value of a role's device for the details panel: the role status while it is not connected, and
-// otherwise what the device reports — a camera's temperature, the mount state, the filter at the wheel's slot
-// (named by the driver, or its 1-based slot number), the focuser position in steps with its temperature, the
-// rotator's mechanical angle in degrees (not a sky position angle), or the dome's motion, park, or azimuth in
-// degrees. A device whose state was not reported yet shows "Connected".
-export function roleDetailValue(role: EquipmentRole, status: RoleStatus, device: ScopedDevice | undefined, control: Pick<ControlRuntime, 'watched' | 'states'>): StatusValue {
-	if (status !== 'connected') return roleValue(status)
+// Returns the reading of a mount. A motion (parking, homing, a goto or flip, a manual axis motion, in that precedence)
+// shows only the motion dots; otherwise parked, then tracking, then idle.
+export function mountChip(state: Pick<MountState, 'parking' | 'homing' | 'slewing' | 'moving' | 'parked' | 'tracking'> | undefined): ChipValue {
+	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
+	const motion = state.parking ? 'Parking' : state.homing ? 'Homing' : state.slewing ? 'Slewing' : state.moving ? 'Moving' : undefined
+	if (motion) return { text: '', tone: 'active', moving: true, title: motion }
+	if (state.parked) return { text: 'Parked', tone: 'idle', moving: false, title: 'Parked' }
+	if (state.tracking) return { text: 'Tracking', tone: 'ok', moving: false, title: 'Tracking' }
+	return { text: 'Idle', tone: 'idle', moving: false, title: 'Idle' }
+}
+
+// Returns the reading of a focuser: its position in steps, with the motion dots while it moves; its temperature is
+// in the title.
+export function focuserChip(state: Pick<FocuserState, 'moving' | 'position' | 'temperature'> | undefined): ChipValue {
+	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
+	const temperature = temperatureText(state.temperature)
+	return { text: String(state.position.value), tone: 'ok', moving: state.moving, title: `${state.moving ? 'Moving · ' : ''}Position ${state.position.value} steps${temperature ? ` · ${temperature}` : ''}` }
+}
+
+// Returns the reading of a filter wheel: the name of the filter at its 0-based slot, or the 1-based slot number when
+// the driver names none; only the motion dots while it changes filter.
+export function wheelChip(state: Pick<WheelState, 'moving' | 'position' | 'names'> | undefined): ChipValue {
+	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
+	if (state.moving) return { text: '', tone: 'active', moving: true, title: 'Changing filter' }
+	const slot = `#${state.position + 1}`
+	const name = state.names[state.position]
+	return name ? { text: name, tone: 'ok', moving: false, title: `${slot} · ${name}` } : { text: slot, tone: 'ok', moving: false, title: slot }
+}
+
+// Returns the reading of a rotator: its mechanical angle in degrees (not a sky position angle), with the motion dots
+// while it moves.
+export function rotatorChip(state: Pick<RotatorState, 'moving' | 'angle'> | undefined): ChipValue {
+	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
+	const angle = `${state.angle.value.toFixed(1)}°`
+	return { text: angle, tone: 'ok', moving: state.moving, title: `${state.moving ? 'Moving · ' : ''}Mechanical angle ${angle}` }
+}
+
+// Returns the reading of a dust cover: closed (parked) or open, or only the motion dots while it moves.
+export function coverChip(state: Pick<CoverState, 'parked' | 'parking'> | undefined): ChipValue {
+	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
+	if (state.parking) return { text: '', tone: 'active', moving: true, title: 'Moving' }
+	return state.parked ? { text: 'Closed', tone: 'idle', moving: false, title: 'Closed' } : { text: 'Open', tone: 'ok', moving: false, title: 'Open' }
+}
+
+// Returns the reading of a flat panel: its light on or off; the brightness, in the driver's units, is in the title.
+export function flatPanelChip(state: Pick<FlatPanelState, 'enabled' | 'intensity'> | undefined): ChipValue {
+	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
+	return state.enabled ? { text: 'On', tone: 'ok', moving: false, title: `On · brightness ${state.intensity.value}` } : { text: 'Off', tone: 'idle', moving: false, title: 'Off' }
+}
+
+// Text of each settled shutter state of a dome; a moving shutter shows the motion dots, an unknown one nothing.
+const SHUTTER_TEXT: Readonly<Partial<Record<DomeState['shutterState'], string>>> = { OPEN: 'Open', CLOSED: 'Closed', ERROR: 'Error' }
+
+// Returns the reading of a dome: its shutter open or closed, when it has one, with the motion dots while it rotates,
+// parks, homes, or its shutter opens or closes; the rotation state and the azimuth in degrees are in the title.
+export function domeChip(state: Pick<DomeState, 'slewing' | 'moving' | 'homing' | 'parking' | 'parked' | 'hasShutter' | 'shutterState' | 'azimuth'> | undefined): ChipValue {
+	if (!state) return { text: '--', tone: 'muted', moving: false, title: 'State not reported' }
+	const shutterMoving = state.hasShutter && (state.shutterState === 'OPENING' || state.shutterState === 'CLOSING')
+	const rotation = state.parking ? 'Parking' : state.homing ? 'Homing' : state.slewing || state.moving ? 'Moving' : state.parked ? 'Parked' : `Azimuth ${toDeg(state.azimuth.value).toFixed(1)}°`
+	const text = state.hasShutter ? (SHUTTER_TEXT[state.shutterState] ?? '') : ''
+	const shutter = state.hasShutter ? ` · shutter ${state.shutterState.toLowerCase()}` : ''
+	const tone: StatusTone = state.hasShutter && state.shutterState === 'ERROR' ? 'error' : state.shutterState === 'CLOSED' ? 'idle' : 'ok'
+	return { text, tone, moving: shutterMoving || state.parking || state.homing || state.slewing || state.moving, title: `${rotation}${shutter}` }
+}
+
+// Returns the reading of a guide camera: its running session (see guidingValue), or the icon alone while it does not guide.
+export function guideChip(session: GuidingSessionSummary | undefined): ChipValue {
+	if (!session) return { text: '--', tone: 'idle', moving: false, title: 'Not guiding' }
+	const value = guidingValue(session)
+	const label = GUIDING_STATE_LABELS[session.state]
+	return { text: value.text, tone: value.tone, moving: false, title: value.text === label ? label : `${label} · ${value.text}` }
+}
+
+// Returns the reading of the device of a role, from the control state of the watched connection, or undefined, so the
+// bar shows no chip, while no device is assigned or present or its driver does not report it connected. The guide
+// camera's reading is its guiding session, passed separately.
+export function roleChip(role: ChipRole, device: Pick<DeviceSummary, 'id' | 'connectionId' | 'connected'> | undefined, control: Pick<ControlRuntime, 'watched' | 'states'>, guiding?: GuidingSessionSummary): ChipValue | undefined {
+	if (!device?.connected) return undefined
 
 	switch (role) {
 		case 'MAIN_CAMERA':
+			return cameraChip(watchedDeviceState(control, 'camera', device))
 		case 'GUIDE_CAMERA':
-			return cameraValue(status, watchedDeviceState(control, 'camera', device))
+			return guideChip(guiding)
 		case 'MOUNT':
-			return mountValue(status, watchedDeviceState(control, 'mount', device))
-		case 'FILTER_WHEEL': {
-			const state = watchedDeviceState(control, 'wheel', device)
-			if (!state) break
-			if (state.moving) return { text: 'Moving', tone: 'active' }
-			return { text: state.names[state.position] || `Slot ${state.position + 1}`, tone: 'ok' }
-		}
-		case 'FOCUSER': {
-			const state = watchedDeviceState(control, 'focuser', device)
-			if (!state) break
-			const temperature = state.temperature !== undefined && Number.isFinite(state.temperature) ? ` · ${(Math.round(state.temperature * 10) / 10).toFixed(1)}°C` : ''
-			return { text: `${state.moving ? 'Moving · ' : ''}${state.position.value} steps${temperature}`, tone: state.moving ? 'active' : 'ok' }
-		}
-		case 'ROTATOR': {
-			const state = watchedDeviceState(control, 'rotator', device)
-			if (!state) break
-			return { text: `${state.moving ? 'Moving · ' : ''}${state.angle.value.toFixed(1)}° mechanical`, tone: state.moving ? 'active' : 'ok' }
-		}
-		case 'DOME': {
-			const state = watchedDeviceState(control, 'dome', device)
-			if (!state) break
-			if (state.parking) return { text: 'Parking', tone: 'active' }
-			if (state.homing) return { text: 'Homing', tone: 'active' }
-			if (state.slewing || state.moving) return { text: 'Moving', tone: 'active' }
-			if (state.parked) return { text: 'Parked', tone: 'idle' }
-			return { text: `Azimuth ${toDeg(state.azimuth.value).toFixed(1)}°`, tone: 'ok' }
-		}
+			return mountChip(watchedDeviceState(control, 'mount', device))
+		case 'FOCUSER':
+			return focuserChip(watchedDeviceState(control, 'focuser', device))
+		case 'FILTER_WHEEL':
+			return wheelChip(watchedDeviceState(control, 'wheel', device))
+		case 'ROTATOR':
+			return rotatorChip(watchedDeviceState(control, 'rotator', device))
+		case 'DOME':
+			return domeChip(watchedDeviceState(control, 'dome', device))
+		case 'COVER':
+			return coverChip(watchedDeviceState(control, 'cover', device))
+		case 'FLAT_PANEL':
+			return flatPanelChip(watchedDeviceState(control, 'flatPanel', device))
+	}
+}
+
+// Narrowest room, in CSS pixels, worth naming the other running operations in; with less they are counted instead.
+const MINIMUM_SUMMARY_WIDTH = 80
+
+// Chip of the status bar as the fitting sees it.
+export interface BarItem {
+	// Id of the chip: a role, or "capture".
+	readonly id: string
+	// Whether its device is moving.
+	readonly moving: boolean
+	// Whether it shows a running session.
+	readonly active: boolean
+	// Width of the chip as rendered, in CSS pixels.
+	readonly width: number
+}
+
+// Chips the status bar shows and what it leaves to the details panel.
+export interface FittedItems {
+	// Ids of the chips shown in the bar.
+	readonly visible: ReadonlySet<string>
+	// Whether the other running operations are named in the bar, in the room left after every chip.
+	readonly nameOthers: boolean
+	// Chips left out plus the other running operations unless they are named.
+	readonly hidden: number
+}
+
+// Returns the chips that fit in the room of the bar, by priority: moving devices, then running sessions, then the
+// others, each group in display order; a chip that does not fit is skipped, so a narrower one after it may still fit.
+// The room and the widths are in CSS pixels, and each chip after the first costs the gap between items too. The other
+// running operations are named only when every chip fits and at least MINIMUM_SUMMARY_WIDTH is left; otherwise they
+// are counted with the chips left out.
+export function fitItems(items: readonly BarItem[], room: number, gap: number, otherOperations: number): FittedItems {
+	const priority = [...items.filter((item) => item.moving), ...items.filter((item) => !item.moving && item.active), ...items.filter((item) => !item.moving && !item.active)]
+	const visible = new Set<string>()
+	let left = room
+
+	for (const item of priority) {
+		const cost = item.width + gap
+		if (cost > left) continue
+		visible.add(item.id)
+		left -= cost
 	}
 
-	return roleValue(status)
+	const nameOthers = otherOperations > 0 && visible.size === items.length && left - gap >= MINIMUM_SUMMARY_WIDTH
+	return { visible, nameOthers, hidden: items.length - visible.size + (nameOthers ? 0 : otherOperations) }
+}
+
+// Returns the value of a role's device for the details panel: the role status while it is not connected, otherwise
+// the full reading of its chip (see roleChip), in the active tone while it moves.
+export function roleDetailValue(role: EquipmentRole, status: RoleStatus, device: Pick<DeviceSummary, 'id' | 'connectionId' | 'connected'> | undefined, control: Pick<ControlRuntime, 'watched' | 'states'>, guiding?: GuidingSessionSummary): StatusValue {
+	const chip = status === 'connected' && role !== 'GUIDE_OUTPUT' ? roleChip(role, device, control, guiding) : undefined
+	return chip ? { text: chip.title, tone: chip.moving ? 'active' : chip.tone } : roleValue(status)
 }
 
 // Returns the time an operation has run, from its start in Unix milliseconds to now in Unix milliseconds, as

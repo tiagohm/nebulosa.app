@@ -17,7 +17,7 @@ export interface OperationStatusProps {
 
 // Outcome of a finished operation as one line.
 function outcomeOf(operation: OperationRecord) {
-	const label = OPERATION_LABELS[operation.kind]
+	const label = OPERATION_LABELS[operation.kind][1]
 	if (operation.state === 'succeeded') return `${label} completed.`
 	return `${label} failed: ${operation.reason ? FAILURE_REASONS[operation.reason] : 'unknown reason'}${operation.error ? ` (${operation.error})` : ''}.`
 }
@@ -43,7 +43,7 @@ export function OperationStatus({ group }: OperationStatusProps) {
 		<PanelSection title="Activity">
 			{Array.from(running.values(), (operation) => (
 				<p key={operation.operationId} className="m-0 text-accent">
-					{operation.progress ? `${OPERATION_LABELS[operation.kind]} — Step ${operation.progress.step} of ${operation.progress.steps}: ${operation.progress.message}…` : `${OPERATION_LABELS[operation.kind]} running…`}
+					{operation.progress ? `${OPERATION_LABELS[operation.kind][1]} — Step ${operation.progress.step} of ${operation.progress.steps}: ${operation.progress.message}…` : `${OPERATION_LABELS[operation.kind][1]} running…`}
 				</p>
 			))}
 			{pending.map((label) => (

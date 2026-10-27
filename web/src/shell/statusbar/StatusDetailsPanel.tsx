@@ -1,4 +1,4 @@
-import type { NotificationTarget, OperationRecord } from 'api'
+import type { GuidingSessionSummary, NotificationTarget, OperationRecord } from 'api'
 import { cn } from 'cn'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -16,6 +16,7 @@ import { notificationsState } from '../../notifications/notifications'
 import { openNotificationTarget, targetAvailable } from '../../notifications/target'
 import { OPERATION_LABELS, operationsState } from '../../operations'
 import { activeProfile, activeSetup, profileState } from '../../profile/profile'
+import { Icon, type IconName } from '../../ui/Icon'
 import { useNow } from '../../useNow'
 import { routeState } from '../route'
 import { activeCapture, activeGuiding, connectionLabel, formatElapsed, guidingValue, otherOperations, progressText, roleDetailValue, scopedDeviceErrors, scopedRunningOperations, type ScopedDevice, serverLinkLabel, sessionOperationIds } from './selectors'
@@ -99,17 +100,17 @@ export function StatusDetails({ hidden }: StatusDetailsProps) {
 	}, [open])
 
 	return (
-		<span ref={rootRef} className="flex flex-none">
+		<span ref={rootRef} data-fixed className="flex flex-none">
+			{placement && <StatusDetailsPanel placement={placement} onClose={() => setPlacement(undefined)} />}
 			<button
 				ref={buttonRef}
 				type="button"
 				title={hidden > 0 ? `${hidden} more in the status details` : 'Status details'}
 				onClick={() => (open ? setPlacement(undefined) : show())}
-				className={cn('cursor-pointer rounded-sm px-1 text-ink-200 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent', open && 'bg-base-300 text-ink-100')}
+				className={cn('flex min-w-7 cursor-pointer items-center justify-center rounded-sm px-1 text-ink-200 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent', open && 'bg-base-300 text-ink-100')}
 			>
-				{hidden > 0 ? `+${hidden}` : 'Details'}
+				{hidden > 0 ? `+${hidden}` : <Icon name="info" className="size-3.5" />}
 			</button>
-			{placement && <StatusDetailsPanel placement={placement} onClose={() => setPlacement(undefined)} />}
 		</span>
 	)
 }
@@ -156,7 +157,7 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 				<Row label="Equipment">{connectionLabel(connection?.name, status)}</Row>
 			</Section>
 			<Section title="Equipment">
-				<EquipmentRows devices={devices} onNavigate={onClose} />
+				<EquipmentRows devices={devices} onNavigate={onClose} guiding={session} />
 			</Section>
 			{(capture !== undefined || session !== undefined) && (
 				<Section title="Sessions">
@@ -194,10 +195,12 @@ interface EquipmentRowsProps {
 	readonly devices: ReturnType<typeof useWatchedDevices>
 	// Called after a device was opened.
 	readonly onNavigate: () => void
+	// Running guiding session of the guide camera, read by its row.
+	readonly guiding?: GuidingSessionSummary
 }
 
 // Every role of the active profile with its device, status, and what the device reports.
-function EquipmentRows({ devices, onNavigate }: EquipmentRowsProps) {
+function EquipmentRows({ devices, onNavigate, guiding }: EquipmentRowsProps) {
 	const profiles = useSnapshot(profileState)
 	const control = useSnapshot(controlRuntime)
 	const setup = activeSetup(activeProfile(profiles))
@@ -205,7 +208,7 @@ function EquipmentRows({ devices, onNavigate }: EquipmentRowsProps) {
 	return ROLES.map(({ role, label }) => {
 		const device = roleDevice(setup, role, devices)
 		const status = roleStatus(setup, role, devices)
-		const value = roleDetailValue(role, status, device, control)
+		const value = roleDetailValue(role, status, device, control, guiding)
 
 		return (
 			<Row key={role} label={label}>
@@ -234,9 +237,10 @@ interface OperationRowProps {
 function OperationRow({ operation, devices, now }: OperationRowProps) {
 	const names = operation.devices.map((ref) => devices.find((d) => d.id === ref.deviceId && d.connectionId === ref.connectionId)?.name ?? 'Unknown device').join(', ')
 	const progress = progressText(operation.progress)
+	const [icon, label] = OPERATION_LABELS[operation.kind]
 
 	return (
-		<Row label={OPERATION_LABELS[operation.kind]}>
+		<Row icon={icon} label={label}>
 			{names} · <span className="tabular-nums">{formatElapsed(operation.startedAt, now)}</span>
 			{progress && <span className="text-accent"> · {progress}</span>}
 		</Row>
@@ -261,16 +265,19 @@ function Section({ title, children }: SectionProps) {
 }
 
 interface RowProps {
+	// Icon of the row.
+	readonly icon?: IconName
 	// Name of the row.
 	readonly label: string
 	// Value of the row.
 	readonly children: ReactNode
 }
 
-// Name and value on one line, the value wrapping when long.
-function Row({ label, children }: RowProps) {
+// Icon, name and value on one line, the value wrapping when long.
+function Row({ icon, label, children }: RowProps) {
 	return (
-		<div className="flex gap-2">
+		<div className="flex gap-2 items-center">
+			{icon && <Icon name={icon} />}
 			<span className="w-28 flex-none truncate text-ink-300" title={label}>
 				{label}
 			</span>

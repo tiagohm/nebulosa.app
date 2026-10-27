@@ -1,5 +1,6 @@
 import type { OperationKind, OperationRecord, ServerEvent } from 'api'
 import { proxy } from 'valtio'
+import type { IconName } from './ui/Icon'
 
 // Device operations of the server as this tab knows them. The server owns every operation, whichever tab
 // or service started it, so this store only mirrors it: it is fed by operation:updated events and, on
@@ -14,37 +15,37 @@ export interface OperationsState {
 }
 
 // Display name of each operation kind.
-export const OPERATION_LABELS: Readonly<Record<OperationKind, string>> = {
-	'mount.slew': 'Mount slew',
-	'mount.goto': 'Mount goto',
-	'mount.flip': 'Mount flip',
-	'mount.park': 'Mount park',
-	'mount.unpark': 'Mount unpark',
-	'mount.home': 'Mount go home',
-	'mount.findHome': 'Mount find home',
-	'mount.nudge': 'Mount nudge',
-	'mount.remoteMove': 'Remote mount motion',
-	'guideOutput.pulse': 'Guide pulse',
-	'focuser.move': 'Focuser move',
-	'wheel.move': 'Filter change',
-	'rotator.move': 'Rotator move',
-	'rotator.home': 'Rotator go home',
-	'cover.open': 'Cover open',
-	'cover.close': 'Cover close',
-	'dome.slew': 'Dome slew',
-	'dome.home': 'Dome find home',
-	'dome.park': 'Dome park',
-	'dome.unpark': 'Dome unpark',
-	'dome.shutter': 'Dome shutter',
-	'dome.move': 'Dome rotation',
-	'camera.capture': 'Camera capture',
-	'focuser.autofocus': 'Auto Focus',
-	'mount.tppa': 'TPPA',
-	'mount.darv': 'DARV',
-	'camera.flatWizard': 'Flat Wizard',
-	'camera.guiding': 'Guiding',
-	'guideOutput.guiding': 'Guiding corrections',
-	'indi.propertyWrite': 'INDI property change',
+export const OPERATION_LABELS: Readonly<Record<OperationKind, readonly [IconName, string]>> = {
+	'mount.slew': ['mount', 'Slew'],
+	'mount.goto': ['mount', 'Goto'],
+	'mount.flip': ['mount', 'Flip'],
+	'mount.park': ['mount', 'Park'],
+	'mount.unpark': ['mount', 'Unpark'],
+	'mount.home': ['mount', 'Go home'],
+	'mount.findHome': ['mount', 'Find home'],
+	'mount.nudge': ['mount', 'Nudge'],
+	'mount.remoteMove': ['mount', 'Remote mount motion'],
+	'guideOutput.pulse': ['guideOutput', 'Pulse'],
+	'focuser.move': ['focuser', 'Move'],
+	'wheel.move': ['wheel', 'Change'],
+	'rotator.move': ['rotator', 'Move'],
+	'rotator.home': ['rotator', 'Go home'],
+	'cover.open': ['cover', 'Open'],
+	'cover.close': ['cover', 'Close'],
+	'dome.slew': ['dome', 'Slew'],
+	'dome.home': ['dome', 'Find home'],
+	'dome.park': ['dome', 'Park'],
+	'dome.unpark': ['dome', 'Unpark'],
+	'dome.shutter': ['dome', 'Shutter'],
+	'dome.move': ['dome', 'Rotation'],
+	'camera.capture': ['camera', 'Capture'],
+	'focuser.autofocus': ['focuser', 'Auto Focus'],
+	'mount.tppa': ['mount', 'TPPA'],
+	'mount.darv': ['mount', 'DARV'],
+	'camera.flatWizard': ['camera', 'Flat Wizard'],
+	'camera.guiding': ['camera', 'Guiding'],
+	'guideOutput.guiding': ['guideOutput', 'Corrections'],
+	'indi.propertyWrite': ['success', 'INDI property change'],
 }
 
 // Most finished operations kept; older ones are dropped. Running operations are always kept.

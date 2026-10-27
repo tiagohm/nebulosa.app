@@ -43,10 +43,10 @@ const PIER_SIDE_LABELS: Readonly<Record<MountState['pierSide'], string>> = { EAS
 
 // Motion state of a mount as one line.
 function motionOf(mount: MountState) {
-	if (mount.slewing) return 'Slewing'
-	if (mount.parking) return 'Parking'
 	if (mount.homing) return 'Homing'
+	if (mount.parking) return 'Parking'
 	if (mount.moving) return 'Moving'
+	if (mount.slewing) return 'Slewing'
 	if (mount.parked) return 'Parked'
 	return mount.tracking ? 'Tracking' : 'Stopped'
 }

@@ -25,10 +25,10 @@ function degrees(angle: number) {
 
 // Motion state of a dome as one line.
 function motionOf(dome: DomeState) {
-	if (dome.slewing) return 'Slewing'
-	if (dome.moving) return dome.direction === 'COUNTER_CLOCKWISE' ? 'Rotating counterclockwise' : 'Rotating clockwise'
 	if (dome.homing) return 'Homing'
 	if (dome.parking) return 'Parking'
+	if (dome.moving) return dome.direction === 'COUNTER_CLOCKWISE' ? 'Rotating counterclockwise' : 'Rotating clockwise'
+	if (dome.slewing) return 'Slewing'
 	if (dome.parked) return 'Parked'
 	return dome.atHome ? 'At home' : 'Idle'
 }

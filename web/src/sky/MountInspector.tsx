@@ -34,8 +34,8 @@ function Datum({ label, children }: { readonly label: string; readonly children:
 
 // Motion state of a mount, as one line.
 function motionOf(state: { readonly slewing: boolean; readonly parked: boolean; readonly parking: boolean; readonly tracking: boolean }) {
-	if (state.slewing) return 'Slewing'
 	if (state.parking) return 'Parking'
+	if (state.slewing) return 'Slewing'
 	if (state.parked) return 'Parked'
 	return state.tracking ? 'Tracking' : 'Stopped'
 }

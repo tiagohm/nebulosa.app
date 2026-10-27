@@ -115,10 +115,10 @@ function interfaceActivity(states: Readonly<ControlStates>, device: DeviceSummar
 		case 'mount': {
 			const mount = deviceStateOf(states, 'mount', device.id)
 			if (!mount) return undefined
-			if (mount.slewing) return { label: 'Slewing', tone: 'active' }
-			if (mount.parking) return { label: 'Parking', tone: 'active' }
 			if (mount.homing) return { label: 'Homing', tone: 'active' }
+			if (mount.parking) return { label: 'Parking', tone: 'active' }
 			if (mount.moving) return { label: 'Moving', tone: 'active' }
+			if (mount.slewing) return { label: 'Slewing', tone: 'active' }
 			if (mount.parked) return { label: 'Parked', tone: 'idle' }
 			return mount.tracking ? { label: 'Tracking', tone: 'idle' } : undefined
 		}
@@ -131,9 +131,9 @@ function interfaceActivity(states: Readonly<ControlStates>, device: DeviceSummar
 		case 'dome': {
 			const dome = deviceStateOf(states, 'dome', device.id)
 			if (!dome) return undefined
-			if (dome.slewing || dome.moving) return { label: 'Moving', tone: 'active' }
-			if (dome.parking) return { label: 'Parking', tone: 'active' }
 			if (dome.homing) return { label: 'Homing', tone: 'active' }
+			if (dome.parking) return { label: 'Parking', tone: 'active' }
+			if (dome.slewing || dome.moving) return { label: 'Moving', tone: 'active' }
 			if (dome.shutterState === 'OPENING' || dome.shutterState === 'CLOSING') return { label: 'Shutter moving', tone: 'active' }
 			if (dome.shutterState === 'ERROR') return { label: 'Shutter error', tone: 'warning' }
 			return dome.parked ? { label: 'Parked', tone: 'idle' } : undefined

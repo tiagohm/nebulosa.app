@@ -17,7 +17,7 @@ import { TppaTool } from './TppaTool'
 // Static registry of the contextual tools of the Images workspace, in two categories: image tools, which work on the
 // document shown, and camera operations, which command the camera of a camera tab and the equipment associated with
 // it. A tool replaces the contextual panel of one document, and each document remembers the tool it shows, so two
-// documents can show different tools. The Image Inspector is the default. Camera operations are offered only on
+// documents can show different tools. The Image Inspector is the default. Camera operations are listed only on
 // camera tabs, never on a file or derived document. A tool without a panel is listed but cannot be selected. Selecting
 // a tool never starts or stops an operation. This registry is the only place Images tools are declared.
 
@@ -102,11 +102,15 @@ export function imageToolGroup(id: ImageToolId): string {
 	return IMAGE_TOOL_CATEGORY_LABELS[IMAGE_TOOL_DEFINITIONS[id].category]
 }
 
-// Returns why a tool cannot be selected for a document, or undefined when it can: a camera operation needs a camera
-// tab, and a tool without a panel is not implemented yet. The devices a camera operation needs are checked by its
-// panel, which says what to set up, so a tab can still show an operation whose equipment is missing.
-export function imageToolUnavailable(id: ImageToolId, document?: Pick<ImageDocument, 'source'>): string | undefined {
-	const definition = IMAGE_TOOL_DEFINITIONS[id]
-	if (definition.category === 'camera' && document?.source.kind !== 'camera') return 'Only on a camera tab.'
-	return definition.panel ? undefined : 'Not available yet.'
+// Returns the tools listed in the selector for a document, in selector order: every image tool, plus the camera
+// operations only on a camera tab, so a file, a derived document, or no document never lists them.
+export function imageToolsFor(document?: Pick<ImageDocument, 'source'>): readonly ImageToolId[] {
+	return document?.source.kind === 'camera' ? IMAGE_TOOLS : IMAGE_TOOLS.filter((id) => IMAGE_TOOL_DEFINITIONS[id].category === 'image')
+}
+
+// Returns why a listed tool cannot be selected, or undefined when it can: a tool without a panel is not implemented
+// yet. The devices a camera operation needs are checked by its panel, which says what to set up, so a tab can still
+// show an operation whose equipment is missing.
+export function imageToolUnavailable(id: ImageToolId): string | undefined {
+	return IMAGE_TOOL_DEFINITIONS[id].panel ? undefined : 'Not available yet.'
 }

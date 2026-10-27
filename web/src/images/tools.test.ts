@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolGroup, imageToolUnavailable } from './tools'
+import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolGroup, imageToolsFor, imageToolUnavailable } from './tools'
 
 const CAMERA_TAB = { source: { kind: 'camera', connectionId: 'conn', deviceId: 'cam' } } as const
 const FILE = { source: { kind: 'file', path: '/images/m42.fits' } } as const
+const DERIVED = { source: { kind: 'derived', sourceName: 'M42' } } as const
 
 describe('tool registry', () => {
 	test('lists the image tools before the camera operations, each under its category heading', () => {
@@ -13,28 +14,20 @@ describe('tool registry', () => {
 		for (const id of IMAGE_TOOLS) expect(IMAGE_TOOL_DEFINITIONS[id].id).toBe(id)
 	})
 
-	test('image tools with a panel can be selected on any document', () => {
-		for (const document of [CAMERA_TAB, FILE, undefined]) {
-			expect(imageToolUnavailable('inspector', document)).toBeUndefined()
-			expect(imageToolUnavailable('star-detection', document)).toBeUndefined()
+	test('every tool with a panel can be selected', () => {
+		for (const id of IMAGE_TOOLS) expect(imageToolUnavailable(id)).toBeUndefined()
+	})
+
+	test('a camera tab lists every tool', () => {
+		expect(imageToolsFor(CAMERA_TAB)).toEqual(IMAGE_TOOLS)
+	})
+
+	test('camera operations are listed only on camera tabs', () => {
+		for (const document of [FILE, DERIVED, undefined]) {
+			const tools = imageToolsFor(document)
+			expect(tools).toContain('inspector')
+			expect(tools).toContain('streak-detection')
+			for (const id of tools) expect(IMAGE_TOOL_DEFINITIONS[id].category).toBe('image')
 		}
-	})
-
-	test('Camera Acquisition, Auto Focus, and Mount Nudge can be selected on a camera tab', () => {
-		expect(imageToolUnavailable('camera-acquisition', CAMERA_TAB)).toBeUndefined()
-		expect(imageToolUnavailable('camera-acquisition', FILE)).toBe('Only on a camera tab.')
-		expect(imageToolUnavailable('auto-focus', CAMERA_TAB)).toBeUndefined()
-		expect(imageToolUnavailable('mount-nudge', CAMERA_TAB)).toBeUndefined()
-		expect(imageToolUnavailable('darv', CAMERA_TAB)).toBeUndefined()
-		expect(imageToolUnavailable('darv', FILE)).toBe('Only on a camera tab.')
-	})
-
-	test('camera operations are offered only on camera tabs', () => {
-		for (const document of [FILE, { source: { kind: 'derived', sourceName: 'M42' } } as const, undefined]) expect(imageToolUnavailable('auto-focus', document)).toBe('Only on a camera tab.')
-	})
-
-	test('image tools are offered on every document', () => {
-		for (const document of [FILE, CAMERA_TAB, { source: { kind: 'derived', sourceName: 'M42' } } as const]) expect(imageToolUnavailable('streak-detection', document)).toBeUndefined()
-		expect(imageToolUnavailable('guiding', CAMERA_TAB)).toBeUndefined()
 	})
 })

@@ -183,7 +183,9 @@ export function DraftBar<D extends object>({ entry, onChange, context, example, 
 			? `Imported from the ${entry.origin.label}, which now follows another camera or none: import again to refresh.`
 			: differs(entry.draft, example)
 				? 'Values entered here.'
-				: 'Example values, not your equipment: replace them or import your own.'
+				: fromOptics
+					? 'Example values, not your equipment: replace them or import your own.'
+					: 'Example values: replace them with yours.'
 
 	return (
 		<Card title="Values">

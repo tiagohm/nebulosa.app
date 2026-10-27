@@ -6,10 +6,18 @@ import type { Profile } from '../../profile/schema'
 import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { liveSensors, sensorRuntime } from '../../sky/sensors'
 import { Select } from '../../ui/Select'
+import { AIRMASS_EXAMPLE, type AirmassDraft, DEW_EXAMPLE, type DewDraft } from './atmosphere'
+import { AirmassCalculator, DewCalculator } from './AtmosphereCalculator'
 import { CALCULATOR_IDS, CATEGORY_LABELS, type CalculatorId, calculatorDefinition } from './catalog'
+import { EXPOSURE_PLAN_EXAMPLE, type ExposurePlanDraft, STAR_TRAIL_EXAMPLE, type StarTrailDraft } from './exposure'
+import { ExposurePlannerCalculator, StarTrailingCalculator } from './ExposureCalculator'
 import { IMAGING_SETUP_EXAMPLE, type ImagingSetupDraft, MOSAIC_EXAMPLE, type MosaicDraft } from './optics'
 import { ImagingSetupCalculator, MosaicCalculator } from './OpticsCalculator'
+import { DIFFRACTION_EXAMPLE, type DiffractionDraft, SAMPLING_EXAMPLE, type SamplingDraft } from './sampling'
+import { DiffractionCalculator, SamplingCalculator } from './SamplingCalculator'
 import type { DraftEntry, SourceContext } from './sources'
+import { APERTURE_COMPARISON_EXAMPLE, type ApertureComparisonDraft, EYEPIECE_EXAMPLE, type EyepieceDraft } from './visual'
+import { ApertureComparisonCalculator, EyepieceCalculator } from './VisualCalculator'
 
 // Calculator tool: task-oriented observing and imaging calculations over the pure formulas of the toolkit, computed in
 // the browser as the fields are typed. One grouped menu chooses the calculator; each keeps its own draft while the tool
@@ -22,12 +30,28 @@ import type { DraftEntry, SourceContext } from './sources'
 interface CalculatorDrafts {
 	readonly 'imaging-setup': DraftEntry<ImagingSetupDraft>
 	readonly mosaic: DraftEntry<MosaicDraft>
+	readonly sampling: DraftEntry<SamplingDraft>
+	readonly diffraction: DraftEntry<DiffractionDraft>
+	readonly 'exposure-planner': DraftEntry<ExposurePlanDraft>
+	readonly 'star-trailing': DraftEntry<StarTrailDraft>
+	readonly eyepiece: DraftEntry<EyepieceDraft>
+	readonly 'aperture-comparison': DraftEntry<ApertureComparisonDraft>
+	readonly airmass: DraftEntry<AirmassDraft>
+	readonly dew: DraftEntry<DewDraft>
 }
 
 // Drafts the tool opens with: the example of every calculator.
 const INITIAL_DRAFTS: CalculatorDrafts = {
 	'imaging-setup': { draft: IMAGING_SETUP_EXAMPLE },
 	mosaic: { draft: MOSAIC_EXAMPLE },
+	sampling: { draft: SAMPLING_EXAMPLE },
+	diffraction: { draft: DIFFRACTION_EXAMPLE },
+	'exposure-planner': { draft: EXPOSURE_PLAN_EXAMPLE },
+	'star-trailing': { draft: STAR_TRAIL_EXAMPLE },
+	eyepiece: { draft: EYEPIECE_EXAMPLE },
+	'aperture-comparison': { draft: APERTURE_COMPARISON_EXAMPLE },
+	airmass: { draft: AIRMASS_EXAMPLE },
+	dew: { draft: DEW_EXAMPLE },
 }
 
 // Calculator tool.
@@ -65,6 +89,14 @@ function CalculatorBody({ profile }: { readonly profile: Readonly<Pick<Profile, 
 				</div>
 				{selected === 'imaging-setup' && <ImagingSetupCalculator {...bind('imaging-setup')} />}
 				{selected === 'mosaic' && <MosaicCalculator {...bind('mosaic')} />}
+				{selected === 'sampling' && <SamplingCalculator {...bind('sampling')} />}
+				{selected === 'diffraction' && <DiffractionCalculator {...bind('diffraction')} />}
+				{selected === 'exposure-planner' && <ExposurePlannerCalculator {...bind('exposure-planner')} />}
+				{selected === 'star-trailing' && <StarTrailingCalculator {...bind('star-trailing')} />}
+				{selected === 'eyepiece' && <EyepieceCalculator {...bind('eyepiece')} />}
+				{selected === 'aperture-comparison' && <ApertureComparisonCalculator {...bind('aperture-comparison')} />}
+				{selected === 'airmass' && <AirmassCalculator {...bind('airmass')} />}
+				{selected === 'dew' && <DewCalculator {...bind('dew')} />}
 			</div>
 		</div>
 	)

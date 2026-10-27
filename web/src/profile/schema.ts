@@ -1,4 +1,4 @@
-import type { AutoFocusRequest, CaptureRequest, FlatWizardFilter, GuidingClientSettings, GuidingStartRequest, PlateSolveRequest, StarDetectionRequest } from 'api'
+import type { AutoFocusRequest, CaptureRequest, FlatWizardFilter, GuidingClientSettings, GuidingStartRequest, MountRemoteProtocol, MountRemoteStartRequest, PlateSolveRequest, StarDetectionRequest } from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
@@ -14,8 +14,9 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // solving of the frames of a capture. The preferences of the Capture workspace (capture), removed since, are ignored
 // when read. Version 5 adds the TPPA form of each camera (tppa), version 6 its DARV form (darv), and version 7 its Flat
 // Wizard form (flatWizard). Version 8 adds the guiding form of each camera (guiding), and version 9 moves the guide
-// focal length of those forms to the guide telescope of the profile (guideTelescope).
-export const PROFILES_VERSION = 9
+// focal length of those forms to the guide telescope of the profile (guideTelescope). Version 10 adds the listener
+// bindings of Mount Remote Control of each mount (mountRemoteControl).
+export const PROFILES_VERSION = 10
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -42,6 +43,23 @@ export interface ProfileSettings {
 	// Guide telescope or lens of the profile's Equipment Setup, whose effective focal length gives guiding its pixel scale
 	// and calibration step; absent until entered. With an off-axis guider it holds the optics of the main telescope.
 	guideTelescope?: TelescopeOptics
+	// Host and port each Mount Remote Control listener was last started with, by saved connection id, then mount id, then
+	// protocol; absent until edited, and then DEFAULT_MOUNT_REMOTE_BINDINGS holds. A preference only: it never starts,
+	// stops, or rebinds a listener.
+	mountRemoteControl?: Record<string, Record<string, Partial<Record<MountRemoteProtocol, MountRemoteBinding>>>>
+}
+
+// Protocols of the Mount Remote Control listeners, in the order the tool shows them.
+export const MOUNT_REMOTE_PROTOCOLS: readonly MountRemoteProtocol[] = ['lx200', 'stellarium']
+
+// Host and port of a Mount Remote Control listener, as started.
+export type MountRemoteBinding = MountRemoteStartRequest
+
+// Binding of each protocol before one is entered: every interface, so a planetarium on another machine of the network
+// can connect, on the ports Stellarium and most LX200 programs use first (10001 for Stellarium, 10002 for LX200).
+export const DEFAULT_MOUNT_REMOTE_BINDINGS: Readonly<Record<MountRemoteProtocol, MountRemoteBinding>> = {
+	lx200: { host: '0.0.0.0', port: 10002 },
+	stellarium: { host: '0.0.0.0', port: 10001 },
 }
 
 // Location the Sky workspace observes from. Degrees and meters, entered manually; never assumed.

@@ -10,6 +10,7 @@ import type { FlatWizardEvent } from './flatwizard'
 import type { FocuserBacklashEvent } from './focusers'
 import type { GuidingServerEvent } from './guiding'
 import type { IndiClientMessage, IndiServerEvent } from './indi'
+import type { MountRemoteControlEvent } from './mountremotecontrol'
 import type { MountNudgeEvent } from './mounts'
 import type { OperationEvent } from './operations'
 import type { PlateSolvingEvent } from './platesolving'
@@ -24,10 +25,27 @@ import type { TppaEvent } from './tppa'
 // the socket itself, never by its client id, so what a socket asked for ends with it.
 
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the operation events
-// of the operation registry, the events of the capture, Auto Focus, TPPA, mount nudge, and dome manual rotation services,
+// of the operation registry, the events of the capture, Auto Focus, TPPA, mount nudge, mount remote control, and dome manual rotation services,
 // the captured frames of the frame registry, the guiding sessions, the changes of the external program settings and of the focuser backlash
 // compensations, the star detection and plate solving jobs, and the INDI device directory and property streams.
-export type ServerEvent = ConnectionRegistryEvent | OperationEvent | CaptureEvent | CaptureFrameEvent | AutoFocusEvent | TppaEvent | DarvEvent | FlatWizardEvent | MountNudgeEvent | DomeMotionEvent | ExternalToolEvent | StarDetectionEvent | PlateSolvingEvent | FocuserBacklashEvent | GuidingServerEvent | IndiServerEvent
+export type ServerEvent =
+	| ConnectionRegistryEvent
+	| OperationEvent
+	| CaptureEvent
+	| CaptureFrameEvent
+	| AutoFocusEvent
+	| TppaEvent
+	| DarvEvent
+	| FlatWizardEvent
+	| MountNudgeEvent
+	| MountRemoteControlEvent
+	| DomeMotionEvent
+	| ExternalToolEvent
+	| StarDetectionEvent
+	| PlateSolvingEvent
+	| FocuserBacklashEvent
+	| GuidingServerEvent
+	| IndiServerEvent
 
 // Any control message a tab sends over its socket.
 export type ClientMessage = IndiClientMessage

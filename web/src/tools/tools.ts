@@ -3,6 +3,7 @@ import type { ToolId } from '../shell/route'
 import type { IconName } from '../ui/Icon'
 import { Calculator } from './calculator/Calculator'
 import { LunarEclipseMap } from './lunareclipse/LunarEclipseMap'
+import { MountRemoteControl } from './mountremotecontrol/MountRemoteControl'
 import { SolarEclipseMap } from './solareclipse/SolarEclipseMap'
 
 // Static registry of the Tools workspace: standalone utilities that need neither a camera view nor an
@@ -33,6 +34,7 @@ export const TOOL_DEFINITIONS: Readonly<Record<ToolId, ToolDefinition>> = {
 	calculator: { id: 'calculator', label: 'Calculator', description: 'Field of view, image scale, sampling, and other observing calculations.', icon: 'calculator', view: Calculator },
 	'solar-eclipse-map': { id: 'solar-eclipse-map', label: 'Solar Eclipse Map', description: 'Path and local circumstances of solar eclipses.', icon: 'sun', view: SolarEclipseMap },
 	'lunar-eclipse-map': { id: 'lunar-eclipse-map', label: 'Lunar Eclipse Map', description: 'Visibility and local circumstances of lunar eclipses.', icon: 'moon', view: LunarEclipseMap },
+	'mount-remote-control': { id: 'mount-remote-control', label: 'Mount Remote Control', description: 'Lets planetarium programs drive the mount over the LX200 and Stellarium protocols.', icon: 'mount', view: MountRemoteControl },
 	'alpaca-server': { id: 'alpaca-server', label: 'Alpaca Server', description: 'Publishes selected devices to ASCOM Alpaca clients on the network.', icon: 'server' },
 }
 

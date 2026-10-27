@@ -20,6 +20,7 @@ import { createGuidingRoutes, GuidingSessions } from './guiding'
 import { createImageRoutes, images } from './images'
 import { createIndiRoutes, IndiPropertyService } from './indi'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
+import { createMountRemoteControlRoutes, MountRemoteControlService } from './mountremotecontrol'
 import { createMountRoutes, MountCommands } from './mounts'
 import { createOperationRoutes, OperationRegistry } from './operations'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
@@ -189,6 +190,7 @@ export type {
 	MountTrackingRequest,
 	MountTrackModeRequest,
 } from './mounts'
+export type { MountRemoteClient, MountRemoteControlEvent, MountRemoteErrorCode, MountRemoteKey, MountRemoteProtocol, MountRemoteServer, MountRemoteSnapshot, MountRemoteStartRequest } from './mountremotecontrol'
 export type { OperationDevice, OperationEvent, OperationKind, OperationProgress, OperationRecord, OperationState } from './operations'
 export type { RotatorMoveByRequest, RotatorMoveToRequest, RotatorReverseRequest, RotatorSyncRequest } from './rotators'
 export type { WheelMoveRequest, WheelNamesRequest } from './wheels'
@@ -274,6 +276,11 @@ const operations = new OperationRegistry(connections.devices, broadcast)
 // Mount commands and nudge sessions over the devices of the open connections.
 const mounts = new MountCommands(connections.devices, (id) => connections.client(id), skyLocator, operations, broadcast)
 
+// LX200 and Stellarium listeners exposing the mounts of the open connections to planetarium programs, commanding them
+// through the shared commander of the mount commands; a listener stops with its mount or connection.
+const mountRemoteControl = new MountRemoteControlService(connections.devices, (id) => connections.client(id), mounts, operations, broadcast)
+connections.listen((event) => mountRemoteControl.deviceChanged(event))
+
 // Pulse guiding of the guide outputs of the open connections.
 const guideOutputs = new GuideOutputCommands(connections.devices, (id) => connections.client(id), operations)
 
@@ -357,6 +364,7 @@ export const routes = {
 	...createConnectionRoutes(connections),
 	...createIndiRoutes(indi),
 	...createMountRoutes(mounts),
+	...createMountRemoteControlRoutes(mountRemoteControl),
 	...createGuideOutputRoutes(guideOutputs),
 	...createFocuserRoutes(focusers),
 	...createWheelRoutes(wheels),

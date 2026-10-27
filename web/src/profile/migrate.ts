@@ -14,6 +14,8 @@ import {
 	DEFAULT_AUTO_FOCUS_SETTINGS,
 	DEFAULT_EXPOSURE_SETTINGS,
 	defaultSettings,
+	MOUNT_REMOTE_PROTOCOLS,
+	type MountRemoteBinding,
 	type Profile,
 	type ProfileSettings,
 	type SkyFramingSettings,
@@ -471,8 +473,41 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	if (telescope) settings.telescope = telescope
 	const guideTelescope = normalizeTelescope(value.guideTelescope)
 	if (guideTelescope) settings.guideTelescope = guideTelescope
+	const mountRemoteControl = normalizeMountRemoteControl(value.mountRemoteControl)
+	if (mountRemoteControl) settings.mountRemoteControl = mountRemoteControl
 
 	return settings
+}
+
+// Restores a Mount Remote Control binding: a non-empty host and an integer port in 1..65535. Returns undefined for
+// anything else.
+function normalizeMountRemoteBinding(value: unknown): MountRemoteBinding | undefined {
+	if (!isRecord(value) || typeof value.host !== 'string' || !value.host.trim()) return undefined
+	const { port } = value
+	if (typeof port !== 'number' || !Number.isInteger(port) || !(port >= 1 && port <= 65535)) return undefined
+	return { host: value.host.trim(), port }
+}
+
+// Restores the Mount Remote Control bindings (version 10), by saved connection id, mount id, and protocol, dropping
+// invalid entries. Returns undefined when none is left.
+function normalizeMountRemoteControl(value: unknown): ProfileSettings['mountRemoteControl'] {
+	if (!isRecord(value)) return undefined
+	const result: NonNullable<ProfileSettings['mountRemoteControl']> = {}
+
+	for (const [connectionId, mounts] of Object.entries(value)) {
+		if (!isRecord(mounts)) continue
+
+		for (const [deviceId, protocols] of Object.entries(mounts)) {
+			if (!isRecord(protocols)) continue
+
+			for (const protocol of MOUNT_REMOTE_PROTOCOLS) {
+				const binding = normalizeMountRemoteBinding(protocols[protocol])
+				if (binding) ((result[connectionId] ??= {})[deviceId] ??= {})[protocol] = binding
+			}
+		}
+	}
+
+	return Object.keys(result).length > 0 ? result : undefined
 }
 
 // Restores a persisted assignment: a bare device id (version 1), whose name is unknown, or an id and
@@ -564,7 +599,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 6:
 		case 7:
 		case 8:
-		case 9: {
+		case 9:
+		case 10: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

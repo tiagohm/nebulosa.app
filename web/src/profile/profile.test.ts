@@ -3,9 +3,11 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DARV_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, DEFAULT_GUIDING_SETTINGS, DEFAULT_TPPA_SETTINGS } from './schema'
+import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DARV_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, DEFAULT_GUIDING_SETTINGS, DEFAULT_MOUNT_REMOTE_BINDINGS, DEFAULT_TPPA_SETTINGS } from './schema'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import {
+	mountRemoteBinding,
+	setMountRemoteBinding,
 	acquisitionSettings,
 	ACTIVE_PROFILE_KEY,
 	activeProfile,
@@ -94,7 +96,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 9, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: 10, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -788,7 +790,7 @@ describe('camera forms', () => {
 		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
 
 		const newer = newStores()
-		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 10, profiles: [{ id: 'a', name: 'A' }] }))
+		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 11, profiles: [{ id: 'a', name: 'A' }] }))
 		expect(load(newer).profiles.map((profile) => profile.id)).not.toContain('a')
 	})
 
@@ -832,5 +834,39 @@ describe('camera forms', () => {
 		const stores = newStores()
 		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {}, acquisition: { MAIN_CAMERA: { exposureTime: 30 } } } } }] }))
 		expect(load(stores).profiles[0].settings.cameras).toEqual({})
+	})
+})
+
+describe('mount remote control bindings', () => {
+	test('start from the defaults and are remembered per saved connection, mount, and protocol', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		const mount = { connectionId: 'c', deviceId: 'mount-1' }
+		const settings = () => activeProfile(state).settings
+
+		expect(mountRemoteBinding(settings(), mount, 'lx200')).toEqual({ host: '0.0.0.0', port: 10002 })
+		expect(mountRemoteBinding(settings(), mount, 'stellarium')).toEqual({ host: '0.0.0.0', port: 10001 })
+		expect(mountRemoteBinding(settings(), undefined, 'lx200')).toEqual(DEFAULT_MOUNT_REMOTE_BINDINGS.lx200)
+
+		setMountRemoteBinding(state, mount, 'lx200', { host: '127.0.0.1', port: 4030 })
+		setMountRemoteBinding(state, undefined, 'stellarium', { host: '127.0.0.1', port: 1 })
+
+		expect(mountRemoteBinding(settings(), mount, 'lx200')).toEqual({ host: '127.0.0.1', port: 4030 })
+		expect(mountRemoteBinding(settings(), mount, 'stellarium')).toEqual(DEFAULT_MOUNT_REMOTE_BINDINGS.stellarium)
+		expect(mountRemoteBinding(settings(), { connectionId: 'c', deviceId: 'mount-2' }, 'lx200')).toEqual(DEFAULT_MOUNT_REMOTE_BINDINGS.lx200)
+
+		await Bun.sleep(0)
+		expect(load(stores).profiles[0].settings.mountRemoteControl).toEqual({ c: { 'mount-1': { lx200: { host: '127.0.0.1', port: 4030 } } } })
+	})
+
+	test('drop invalid persisted bindings and read version 9 documents without them', () => {
+		const invalid = newStores()
+		const bindings = { c: { m: { lx200: { host: ' localhost ', port: 4030 }, stellarium: { host: '', port: 10001 } }, n: { lx200: { host: 'h', port: 70000 } } }, d: 'x' }
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 10, profiles: [{ id: 'a', name: 'A', settings: { mountRemoteControl: bindings } }] }))
+		expect(load(invalid).profiles[0].settings.mountRemoteControl).toEqual({ c: { m: { lx200: { host: 'localhost', port: 4030 } } } })
+
+		const older = newStores()
+		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 9, profiles: [{ id: 'a', name: 'A' }] }))
+		expect(load(older).profiles[0].settings.mountRemoteControl).toBeUndefined()
 	})
 })

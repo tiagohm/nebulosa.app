@@ -1,4 +1,4 @@
-import type { StarDetectionRequest } from 'api'
+import type { MountRemoteProtocol, StarDetectionRequest } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
 import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
@@ -33,6 +33,8 @@ import {
 	type FlatWizardSettings,
 	DEFAULT_GUIDING_SETTINGS,
 	type GuidingSettings,
+	DEFAULT_MOUNT_REMOTE_BINDINGS,
+	type MountRemoteBinding,
 } from './schema'
 
 // Profiles of the browser and the profile active in this tab, and the actions that change them. Profiles are a
@@ -551,4 +553,20 @@ export function forgetConnection(state: ProfileState, connectionId: string) {
 		delete profile.equipment[connectionId]
 		touch(profile)
 	}
+}
+
+// Returns the Mount Remote Control binding of a protocol of a mount: the one entered last, or the default. mount is the
+// saved connection id and the mount id (profileCamera builds it for any device); absent gives the default.
+export function mountRemoteBinding(settings: Pick<ProfileSettings, 'mountRemoteControl'>, mount: CameraIdentity | undefined, protocol: MountRemoteProtocol): Readonly<MountRemoteBinding> {
+	return (mount && settings.mountRemoteControl?.[mount.connectionId]?.[mount.deviceId]?.[protocol]) ?? DEFAULT_MOUNT_REMOTE_BINDINGS[protocol]
+}
+
+// Remembers the Mount Remote Control binding of a protocol of a mount in the active profile. It never starts, stops, or
+// rebinds a listener. Does nothing without a mount.
+export function setMountRemoteBinding(state: ProfileState, mount: CameraIdentity | undefined, protocol: MountRemoteProtocol, binding: MountRemoteBinding) {
+	if (!mount) return
+	const profile = activeProfile(state)
+	const mounts = ((profile.settings.mountRemoteControl ??= {})[mount.connectionId] ??= {})
+	;(mounts[mount.deviceId] ??= {})[protocol] = { host: binding.host, port: binding.port }
+	touch(profile)
 }

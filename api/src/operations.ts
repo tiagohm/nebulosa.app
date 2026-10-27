@@ -22,6 +22,7 @@ export type OperationKind =
 	| 'mount.home'
 	| 'mount.findHome'
 	| 'mount.nudge'
+	| 'mount.remoteMove'
 	| 'guideOutput.pulse'
 	| 'focuser.move'
 	| 'wheel.move'

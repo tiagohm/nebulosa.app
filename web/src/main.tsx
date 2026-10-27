@@ -27,6 +27,7 @@ import { externalToolsState, handleExternalToolEvent, refreshExternalTools } fro
 import { routeState, watchHistory } from './shell/route'
 import { handleStarsEvent, refreshStars, starsState } from './stars/stars'
 import { browserStores } from './storage'
+import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
 
 // Entry point of the browser bundle: restores the persisted stores and the URL route before the first
 // render, starts persisting them, and keeps the server state current through the event socket. Under HMR the module
@@ -67,6 +68,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleOperationEvent(operationsState, event), refresh: () => refreshOperations(operationsState) },
 	{ handle: (event) => handleCaptureEvent(captureRuntime, event), refresh: () => refreshCaptures(captureRuntime) },
 	{ handle: (event) => handleNudgeEvent(nudgeRuntime, event), refresh: () => refreshNudges(nudgeRuntime) },
+	{ handle: (event) => handleMountRemoteControlEvent(mountRemoteControlState, event), refresh: () => refreshMountRemoteControl(mountRemoteControlState) },
 	{ handle: (event) => handleAutoFocusEvent(autoFocusRuntime, event), refresh: () => refreshAutoFocus(autoFocusRuntime) },
 	{ handle: (event) => handleTppaEvent(tppaRuntime, event), refresh: () => refreshTppa(tppaRuntime) },
 	{ handle: (event) => handleDarvEvent(darvRuntime, event), refresh: () => refreshDarv(darvRuntime) },

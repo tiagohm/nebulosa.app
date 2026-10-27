@@ -22,7 +22,9 @@ import type { SkyObjectRef } from './sky/types'
 // in any frame the toolkit resolves (a goto or flip is refused below the observer's horizon, like a slew),
 // parked, unparked, sent home or made to search for it, have its tracking, tracking rate, home and park
 // positions, site, and clock set. Motions run as operations through the shared command contract of
-// commands.ts and are answered 202 with their operation id; settings are answered once applied.
+// commands.ts and are answered 202 with their operation id; settings are answered once applied. Mount Remote
+// Control (mountremotecontrol.ts) starts gotos and syncs without a request through goToNow and syncNow, which
+// refuse them exactly as the goto and sync routes do.
 //
 // A slew to an object resolves the object at the server's real current time, never at a simulated
 // instant, refuses targets below the observer's horizon, and runs
@@ -173,6 +175,10 @@ const NUDGE_AXES: Readonly<Record<MountNudgeDirection, readonly MountMoveDirecti
 	SW: ['SOUTH', 'WEST'],
 }
 
+// Outcome of a command started without a request: the operation running it, or why it was refused with the
+// status and code the matching route would have answered.
+export type MountAdmission = { readonly ok: true; readonly operationId?: string } | { readonly ok: false; readonly error: string; readonly status: number; readonly code: CommandErrorCode }
+
 // Returns the toolkit form of a coordinate target.
 function targetCoordinate({ frame, x, y }: MountCoordinate): MountTargetCoordinate {
 	return { type: frame, [frame]: { x, y } }
@@ -180,7 +186,7 @@ function targetCoordinate({ frame, x, y }: MountCoordinate): MountTargetCoordina
 
 // Geometric altitude, in radians, of a coordinate target for an observer now. The target is resolved to
 // the equinox of date as the mount itself resolves it; NaN when a component cannot be parsed.
-function targetAltitude(mount: Mount, target: MountTargetCoordinate, observer: SkyObserver) {
+function targetAltitude(mount: Mount, target: MountTargetCoordinate<string | number>, observer: SkyObserver) {
 	const time = timeNow(true)
 	const [rightAscension, declination] = mountTargetEquatorial(mount, target, time)
 	return equatorialToHorizontal(rightAscension, declination, deg(observer.latitude), localSiderealTime(time, deg(observer.longitude)))[1]
@@ -193,6 +199,21 @@ function nudgeRefusal(mount: Mount, direction: MountNudgeDirection): readonly [s
 	for (const axis of NUDGE_AXES[direction]) if (!(axis === 'NORTH' || axis === 'SOUTH' ? mount.canMoveNS : mount.canMoveWE)) return [`The mount cannot move ${axis.toLowerCase()}`, 422, 'unsupported']
 	if (mount.parked || mount.parking) return ['The mount is parked', 409, 'unsupported']
 	return undefined
+}
+
+// Returns why a connected mount cannot go to or flip to a target seen by an observer, with the status to respond
+// with, or undefined when it can. Shared by the goto and flip routes and by remote control, so they refuse alike.
+function slewRefusal(kind: 'mount.goto' | 'mount.flip', mount: Mount, target: MountTargetCoordinate<string | number>, observer: SkyObserver): readonly [string, number, CommandErrorCode] | undefined {
+	if (kind === 'mount.goto' ? !mount.canGoTo : !mount.canFlip) return [kind === 'mount.goto' ? 'The mount cannot go to a target' : 'The mount cannot flip', 422, 'unsupported']
+	if (mount.parked || mount.parking) return ['The mount is parked', 409, 'unsupported']
+	// Inverted so that an unparsable coordinate, whose altitude is NaN, is refused as well.
+	if (!(targetAltitude(mount, target, observer) >= 0)) return ['The target is below the horizon or is not a valid coordinate', 422, 'invalidParameter']
+	return undefined
+}
+
+// Returns a refusal as an admission.
+function refused([error, status, code]: readonly [string, number, CommandErrorCode]): MountAdmission {
+	return { ok: false, error, status, code }
 }
 
 // Mount commands over the devices of every open connection.
@@ -450,16 +471,44 @@ export class MountCommands implements Disposable {
 		return mount
 	}
 
+	// Starts a goto of a mount of a connection to a target seen by an observer, without a request token, refusing it
+	// as the goto route does: disconnected, unable to go to a target, parked, below the horizon, or busy. The check
+	// and the start happen in one call, so when it is admitted the operation already holds the mount; its outcome is
+	// published as operation:updated events (kind mount.goto).
+	goToNow(connectionId: string, mount: Mount, target: MountTargetCoordinate<string | number>, observer: SkyObserver): MountAdmission {
+		if (!mount.connected) return refused(['The mount is disconnected', 409, 'disconnected'])
+		const refusal = slewRefusal('mount.goto', mount, target, observer)
+		if (refusal) return refused(refusal)
+		if (!this.operations.available(mount)) return refused(['The mount is busy', 409, 'busy'])
+
+		const { operationId } = this.operations.track('mount.goto', [{ connectionId, deviceId: mount.id }], this.#commander.goTo(this.operations.coordinator, mount, target))
+		return { ok: true, operationId }
+	}
+
+	// Syncs a mount on a target without a request, refusing it as the sync route does: disconnected, unable to
+	// sync, an invalid coordinate, or busy. The sync is applied when admitted; a failure after admission, which
+	// only a vanishing device can cause, is logged.
+	syncNow(mount: Mount, target: MountTargetCoordinate<string | number>): MountAdmission {
+		if (!mount.connected) return refused(['The mount is disconnected', 409, 'disconnected'])
+		if (!mount.canSync) return refused(['The mount cannot sync', 422, 'unsupported'])
+		if (!mountTargetEquatorial(mount, target).every(Number.isFinite)) return refused(['The target is not a valid coordinate', 422, 'invalidParameter'])
+		if (!this.operations.available(mount)) return refused(['The mount is busy', 409, 'busy'])
+
+		void this.#commander.sync(this.operations.coordinator, mount, target).then((result) => {
+			if (!result.ok) console.warn('mount: the sync failed', result.reason, result.error)
+		})
+
+		return { ok: true }
+	}
+
 	// Starts a goto or a flip to a coordinate, refusing a target below the observer's horizon.
 	#slewTo(kind: 'mount.goto' | 'mount.flip', connectionId: string, deviceId: string, request: MountGoToRequest): Response {
 		const mount = this.#connected(connectionId, deviceId)
 		if (mount instanceof Response) return mount
-		if (kind === 'mount.goto' ? !mount.canGoTo : !mount.canFlip) return unsupported(kind === 'mount.goto' ? 'The mount cannot go to a target' : 'The mount cannot flip')
-		if (mount.parked || mount.parking) return errorResponse('The mount is parked', 409, 'unsupported')
 
 		const coordinate = targetCoordinate(request.target)
-		// Inverted so that an unparsable coordinate, whose altitude is NaN, is refused as well.
-		if (!(targetAltitude(mount, coordinate, request.observer) >= 0)) return errorResponse('The target is below the horizon or is not a valid coordinate', 422, 'invalidParameter')
+		const refusal = slewRefusal(kind, mount, coordinate, request.observer)
+		if (refusal) return errorResponse(...refusal)
 
 		const { coordinator } = this.operations
 		return startCommand(this.operations, kind, connectionId, mount, request, () => (kind === 'mount.goto' ? this.#commander.goTo(coordinator, mount, coordinate) : this.#commander.flip(coordinator, mount, coordinate)))

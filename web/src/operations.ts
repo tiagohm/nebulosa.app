@@ -23,6 +23,7 @@ export const OPERATION_LABELS: Readonly<Record<OperationKind, string>> = {
 	'mount.home': 'Mount go home',
 	'mount.findHome': 'Mount find home',
 	'mount.nudge': 'Mount nudge',
+	'mount.remoteMove': 'Remote mount motion',
 	'guideOutput.pulse': 'Guide pulse',
 	'focuser.move': 'Focuser move',
 	'wheel.move': 'Filter change',

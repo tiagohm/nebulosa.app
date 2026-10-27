@@ -43,6 +43,13 @@ export const DEFAULT_CAPTURES_DIR = join(homedir(), 'Nebulosa', 'captures')
 // Filename template of saved frames when a request names none.
 export const DEFAULT_FILENAME_TEMPLATE = '{date}_{time}_{camera}_{type}_{seq}'
 
+// Time allowed for the payload of a frame to arrive, in milliseconds: after the requested exposure for the
+// exposure completion and BLOB rendezvous, and after a stop for the exposure to report it is no longer Busy.
+// INDI delivers in order, so a stop's answer arrives only after the BLOB in transit, which for a 93.5 MB
+// unbinned ASI294MM Pro frame (124.8 MB in base64) took about 130 s over a 1.2 MB/s network link. Ten
+// minutes covers such a frame down to about 0.2 MB/s; a frame that is really lost fails only after it.
+const FRAME_TRANSFER_TIMEOUT = 600000
+
 // What a capture does with its frames: preview and write each one to a file of the server, or only preview it.
 export type CaptureOutputMode = 'preview-save' | 'preview-only'
 
@@ -351,6 +358,8 @@ export class CameraCaptures implements Disposable {
 			capturesDir,
 			// The mount, focuser, filter wheel and rotator a request names are snooped into the frame headers.
 			devices: { mount: devices.mounts, focuser: devices.focusers, wheel: devices.wheels, rotator: devices.rotators },
+			frameGraceTime: FRAME_TRANSFER_TIMEOUT,
+			quiesceTimeout: FRAME_TRANSFER_TIMEOUT,
 			publish: (frame, _, camera) => this.#published(frame, camera),
 			write: (path, data) => this.#write(path, data),
 		})

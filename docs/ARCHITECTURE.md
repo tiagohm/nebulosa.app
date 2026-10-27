@@ -243,6 +243,7 @@ There is **one** image store, `ImageStore` in `api/src/images.ts`, and the scien
 - Interruptions are distinct commands, offered only when supported: cancel a pending request, abort an exposure, stop guiding, stop mount motion, stop a persistent service. There is no generic "Cancel".
 - Long-lived services (guiding session, Alpaca server, sequencer run) are server objects with explicit start and stop and their own state events. They are not operations of a React screen.
 - Existing protocols (PHD2 events, `CameraCapturer` reports) keep their own state machines. The registry tracks what they hold; it does not replace their states.
+- The shared `CameraCapturer` of `api/src/captures.ts` (Camera Capture, Auto Focus, TPPA, DARV, Flat Wizard) allows `FRAME_TRANSFER_TIMEOUT` (10 min) for a frame's payload to arrive after its exposure, and for a stopped exposure to stop being Busy. INDI delivers in order, so a stop is answered only after the BLOB in transit, and an unbinned frame of a large sensor over a slow link takes minutes (an ASI294MM Pro frame of 124.8 MB in base64 took about 130 s at 1.2 MB/s). The camera stays held until then, and a frame that is really lost fails only after that time.
 
 ## Device Resource Matrix
 

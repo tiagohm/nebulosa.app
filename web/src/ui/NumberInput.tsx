@@ -1,6 +1,7 @@
 import { cn } from 'cn'
 import { useState } from 'react'
 import { Field, InputSuffix, inputClassName, suffixPadding } from './Field'
+import { snapToStep } from './numberinput.step'
 
 export interface NumberInputProps {
 	readonly label?: string
@@ -23,10 +24,7 @@ export function NumberInput({ label, value, onChange, min, max, step = 1, classN
 	const [draft, setDraft] = useState<string>()
 
 	function commit(next: number) {
-		let v = Math.round(next / step) * step
-		if (min !== undefined) v = Math.max(min, v)
-		if (max !== undefined) v = Math.min(max, v)
-		onChange(v)
+		onChange(snapToStep(next, step, min, max))
 	}
 
 	return (

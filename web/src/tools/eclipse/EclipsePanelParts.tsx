@@ -78,7 +78,7 @@ function PlaceForm({ latitude, longitude, onApply }: PlaceFormProps) {
 			</div>
 			<Note>Degrees, north and east positive.</Note>
 			{error && <Note danger>{error}</Note>}
-			<Button type="submit" variant="secondary" size="sm" className="self-start">
+			<Button type="submit" variant="secondary" className="self-start">
 				Apply Coordinates
 			</Button>
 		</form>
@@ -111,7 +111,7 @@ export function LocationSection({ place, observer, onSelect }: LocationSectionPr
 			)}
 			<PlaceForm key={placeKey} latitude={place?.latitude} longitude={place?.longitude} onApply={onSelect} />
 			{observer && place?.source !== 'observer' && (
-				<Button variant="ghost" size="sm" className="self-start" onClick={() => onSelect(observerPlace(observer))}>
+				<Button variant="ghost" className="self-start" onClick={() => onSelect(observerPlace(observer))}>
 					Use Sky Observer
 				</Button>
 			)}

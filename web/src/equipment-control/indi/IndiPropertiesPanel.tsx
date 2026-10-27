@@ -57,10 +57,10 @@ export function IndiPropertiesPanel({ connectionId, hardwareId }: IndiProperties
 				<span className="text-xs text-ink-300">
 					{shown.length} {shown.length === 1 ? 'group' : 'groups'} · {count} {count === 1 ? 'property' : 'properties'}
 				</span>
-				<Button size="sm" variant="secondary" onClick={() => setExpanded(new Set(groups.map((group) => group.name)))}>
+				<Button variant="secondary" onClick={() => setExpanded(new Set(groups.map((group) => group.name)))}>
 					Expand all
 				</Button>
-				<Button size="sm" variant="secondary" onClick={() => setExpanded(new Set())}>
+				<Button variant="secondary" onClick={() => setExpanded(new Set())}>
 					Collapse all
 				</Button>
 			</div>

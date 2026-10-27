@@ -56,7 +56,7 @@ export function LunarEclipsePanel({ observer }: LunarEclipsePanelProps) {
 					{localError && (
 						<>
 							<Note danger>{localError}</Note>
-							<Button variant="secondary" size="sm" className="self-start" onClick={() => void loadLocal(lunarEclipseState)}>
+							<Button variant="secondary" className="self-start" onClick={() => void loadLocal(lunarEclipseState)}>
 								Retry
 							</Button>
 						</>

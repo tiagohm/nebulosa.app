@@ -61,10 +61,10 @@ export function ValueVectorEditor({ vector }: ValueVectorEditorProps) {
 			{draft && changedOnDevice(draft, reported) && <Notice>The device changed an edited value since you started editing.</Notice>}
 			{error && <Notice error>{error}</Notice>}
 			<Actions>
-				<Button size="sm" disabled={!result || !!error || writing} onClick={() => void apply()}>
+				<Button disabled={!result || !!error || writing} onClick={() => void apply()}>
 					Apply
 				</Button>
-				<Button size="sm" variant="secondary" disabled={!draft} onClick={() => setDraft(undefined)}>
+				<Button variant="secondary" disabled={!draft} onClick={() => setDraft(undefined)}>
 					Reset
 				</Button>
 			</Actions>

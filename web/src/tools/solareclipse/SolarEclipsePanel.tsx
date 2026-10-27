@@ -77,7 +77,7 @@ function GlobalPointRow({ point, selected, timeZone }: GlobalPointRowProps) {
 					{extreme?.kind && <Datum label="Central phase">{extreme.kind === 'annular' ? 'Annular' : 'Total'}</Datum>}
 					{extreme?.centralDuration !== undefined && <Datum label="Central duration">{formatDuration(extreme.centralDuration)}</Datum>}
 					{extreme?.pathWidth !== undefined && <Datum label="Path width">{extreme.pathWidth.toFixed(1)} km</Datum>}
-					<Button variant="secondary" size="sm" className="self-start" onClick={() => choosePlace({ source: 'map', longitude: point.longitude, latitude: point.latitude })}>
+					<Button variant="secondary" className="self-start" onClick={() => choosePlace({ source: 'map', longitude: point.longitude, latitude: point.latitude })}>
 						Use as Location
 					</Button>
 				</div>
@@ -111,7 +111,7 @@ export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
 					{localError && (
 						<>
 							<Note danger>{localError}</Note>
-							<Button variant="secondary" size="sm" className="self-start" onClick={() => void loadLocal(solarEclipseState)}>
+							<Button variant="secondary" className="self-start" onClick={() => void loadLocal(solarEclipseState)}>
 								Retry
 							</Button>
 						</>

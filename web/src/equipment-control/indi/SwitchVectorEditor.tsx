@@ -56,12 +56,12 @@ function ActionSwitches({ vector, writing }: RuleEditorProps) {
 	return (
 		<Actions>
 			{vector.elementNames.map((name) => (
-				<Button key={name} size="sm" variant={vector.elements[name].value ? 'primary' : 'secondary'} title={`${name}: ${vector.elements[name].value ? 'on' : 'off'}`} disabled={writing} onClick={() => void write(vector, { [name]: true })}>
+				<Button key={name} variant={vector.elements[name].value ? 'primary' : 'secondary'} title={`${name}: ${vector.elements[name].value ? 'on' : 'off'}`} disabled={writing} onClick={() => void write(vector, { [name]: true })}>
 					{labelOf(vector.elements[name])}
 				</Button>
 			))}
 			{any && (
-				<Button size="sm" variant="ghost" title="Turn every switch off" disabled={writing} onClick={() => void write(vector, {})}>
+				<Button variant="ghost" title="Turn every switch off" disabled={writing} onClick={() => void write(vector, {})}>
 					Clear
 				</Button>
 			)}
@@ -79,7 +79,7 @@ function SelectSwitches({ vector, writing }: RuleEditorProps) {
 	return (
 		<div className="flex flex-wrap items-end gap-2">
 			<Select className="min-w-48 flex-1" options={vector.elementNames} value={value} format={(name) => (labelOf(vector.elements[name]) === name ? name : `${labelOf(vector.elements[name])} (${name})`)} onChange={setSelected} />
-			<Button size="sm" disabled={selected === undefined || selected === reported || writing} onClick={() => void write(vector, { [value]: true }).then(applied)}>
+			<Button disabled={selected === undefined || selected === reported || writing} onClick={() => void write(vector, { [value]: true }).then(applied)}>
 				Apply
 			</Button>
 		</div>
@@ -100,10 +100,10 @@ function CheckboxSwitches({ vector, writing }: RuleEditorProps) {
 				))}
 			</div>
 			<Actions>
-				<Button size="sm" disabled={!draft || writing} onClick={() => void write(vector, Object.fromEntries(vector.elementNames.map((name) => [name, checked(name)]))).then(applied)}>
+				<Button disabled={!draft || writing} onClick={() => void write(vector, Object.fromEntries(vector.elementNames.map((name) => [name, checked(name)]))).then(applied)}>
 					Apply
 				</Button>
-				<Button size="sm" variant="secondary" disabled={!draft} onClick={() => setDraft(undefined)}>
+				<Button variant="secondary" disabled={!draft} onClick={() => setDraft(undefined)}>
 					Reset
 				</Button>
 			</Actions>

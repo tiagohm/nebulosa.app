@@ -121,6 +121,7 @@ Follow the OXC configuration (`.oxfmtrc.json`, `.oxlintrc.json`) and `.editorcon
 - Keep shared client state in `valtio` proxies; keep transient UI state in React state.
 - Reference static assets relative to the importing HTML or module so Bun can hash and bundle them.
 - Never use aria-* attributes.
+- Avoid using size="sm" on buttons, unless it is highly recommended for the layout.
 
 ## Documentation Comments
 

@@ -152,7 +152,7 @@ function ClientList({ server }: { readonly server?: MountRemoteServer }) {
 						return (
 							<li key={client.id} className="flex items-center justify-between gap-3 text-[13px] leading-5">
 								<span className="min-w-0 truncate font-mono text-ink-100">{formatEndpoint(client.ip, client.port)}</span>
-								<Button variant="secondary" size="sm" disabled={disconnecting} onClick={() => void disconnectRemoteClient(mountRemoteControlState, server, client.id)}>
+								<Button variant="secondary" disabled={disconnecting} onClick={() => void disconnectRemoteClient(mountRemoteControlState, server, client.id)}>
 									{disconnecting ? 'Disconnecting…' : 'Disconnect'}
 								</Button>
 							</li>

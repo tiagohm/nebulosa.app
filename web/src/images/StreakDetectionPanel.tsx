@@ -167,6 +167,7 @@ function AdvancedSettings({ settings, planes, onChange }: SettingsProps & { read
 				<NumberInput label="Background cell" value={settings.backgroundCellSize} min={STREAK_LIMITS.backgroundCellSize.min} max={1024} suffix="px" onChange={(backgroundCellSize) => onChange({ backgroundCellSize })} />
 				<NumberInput label="Signal threshold" value={settings.thresholdSigma} min={STREAK_LIMITS.thresholdSigma.min} max={STREAK_LIMITS.thresholdSigma.max} step={0.1} suffix="σ" onChange={(thresholdSigma) => onChange({ thresholdSigma })} />
 				<NumberInput label="Gradient threshold" value={settings.gradientSigma} min={STREAK_LIMITS.gradientSigma.min} max={STREAK_LIMITS.gradientSigma.max} step={0.1} suffix="σ" onChange={(gradientSigma) => onChange({ gradientSigma })} />
+				<NumberInput label="Min coherence" value={settings.minCoherence} min={STREAK_LIMITS.minCoherence.min} max={STREAK_LIMITS.minCoherence.max} step={0.05} onChange={(minCoherence) => onChange({ minCoherence })} />
 				<NumberInput label="Angle step" value={degrees(settings.angleStep)} min={degrees(STREAK_LIMITS.angleStep.min)} max={10} step={0.1} suffix="°" onChange={(angleStep) => onChange({ angleStep: deg(angleStep) })} />
 				<NumberInput label="Orientation tolerance" value={degrees(settings.orientationTolerance)} min={0} max={tolerance} step={0.1} suffix="°" onChange={(orientationTolerance) => onChange({ orientationTolerance: deg(orientationTolerance) })} />
 				<NumberInput label="Distance step" value={settings.distanceStep} min={STREAK_LIMITS.distanceStep.min} max={16} step={0.25} suffix="px" onChange={(distanceStep) => onChange({ distanceStep })} />
@@ -174,7 +175,10 @@ function AdvancedSettings({ settings, planes, onChange }: SettingsProps & { read
 				<NumberInput label="Merge angle" value={degrees(settings.mergeAngleTolerance)} min={0} max={degrees(STREAK_LIMITS.mergeAngleTolerance.max)} step={0.1} suffix="°" onChange={(mergeAngleTolerance) => onChange({ mergeAngleTolerance: deg(mergeAngleTolerance) })} />
 				<NumberInput label="Merge gap" value={settings.mergeGap} min={0} max={10000} suffix="px" onChange={(mergeGap) => onChange({ mergeGap })} />
 				<NumberInput label="Merge distance" value={settings.mergeDistance} min={0} max={1000} step={0.5} suffix="px" onChange={(mergeDistance) => onChange({ mergeDistance })} />
-				<Notice>The background cell and the distance step are in pixels of the analysis plane, which are 2 image pixels apart on a CFA mosaic. The orientation tolerance is at most {tolerance}° with this angle step.</Notice>
+				<Notice>
+					The background cell and the distance step are in pixels of the analysis plane, which are 2 image pixels apart on a CFA mosaic. Bright pixels whose gradients are less coherent than the min coherence (stars, hot pixels) are ignored, so a trail among many stars is still found; 0 keeps them, which a
+					dotted trail of very short dashes needs. The orientation tolerance is at most {tolerance}° with this angle step.
+				</Notice>
 			</div>
 		</details>
 	)

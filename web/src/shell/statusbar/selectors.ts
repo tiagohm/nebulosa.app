@@ -1,4 +1,8 @@
-import type { DeviceSummary, MountState, OperationKind, OperationRecord } from 'api'
+import type { CameraCapabilities, CaptureSession, DeviceSummary, GuidingSessionSummary, MountState, OperationKind, OperationRecord } from 'api'
+import { cameraKey, captureRunning } from '../../camera/capture'
+import { GUIDING_STATE_LABELS, guidingRunning } from '../../camera/guiding'
+import type { SelectedConnectionStatus } from '../../connection/useSelectedConnection'
+import { ROLE_STATUS_LABELS, type RoleStatus } from '../../equipment/equipment'
 import type { ServerLink } from '../../notifications/notifications'
 import { OPERATION_LABELS } from '../../operations'
 
@@ -117,4 +121,120 @@ export function scopedDeviceErrors({ serverId, devices, control }: DeviceErrorsI
 	}
 
 	return errors
+}
+
+// Severity of a status value, mapped to a text color by the status bar; the text always states the value too.
+export type StatusTone = 'muted' | 'idle' | 'active' | 'ok' | 'error'
+
+// Value of a status bar item: its text and severity.
+export interface StatusValue {
+	// Text of the value, such as "Tracking" or "-10.2°C".
+	readonly text: string
+	// Severity of the value.
+	readonly tone: StatusTone
+}
+
+// Severity of each role status.
+const ROLE_STATUS_TONES: Readonly<Record<RoleStatus, StatusTone>> = {
+	notSelected: 'muted',
+	unavailable: 'muted',
+	disconnected: 'idle',
+	connecting: 'active',
+	connected: 'ok',
+	disconnecting: 'active',
+	error: 'error',
+}
+
+// Returns the status of a role as a value: its label and the severity of its status.
+export function roleValue(status: RoleStatus): StatusValue {
+	return { text: ROLE_STATUS_LABELS[status], tone: ROLE_STATUS_TONES[status] }
+}
+
+// Returns the state of the event socket as text: online once open, reconnecting after it closed, and connecting
+// before it first opened.
+export function serverLinkLabel(link: ServerLink | undefined) {
+	return link === 'online' ? 'Server online' : link === 'offline' ? 'Reconnecting' : 'Connecting'
+}
+
+// Returns the state of the active profile's selected connection as text, such as "Observatory · Connected".
+export function connectionLabel(name: string | undefined, status: SelectedConnectionStatus) {
+	if (name === undefined) return 'No connection'
+	return `${name} · ${status === 'connected' ? 'Connected' : status === 'connecting' ? 'Connecting' : 'Disconnected'}`
+}
+
+// Returns the value of a camera role: its sensor temperature in degrees Celsius, rounded to 0.1 °C, while connected
+// and its driver reports a finite one; "Connected" while connected without one; otherwise the role status.
+export function cameraValue(status: RoleStatus, state: Pick<CameraCapabilities, 'temperature'> | undefined): StatusValue {
+	if (status !== 'connected') return roleValue(status)
+	const temperature = state?.temperature
+	return temperature !== undefined && Number.isFinite(temperature) ? { text: `${(Math.round(temperature * 10) / 10).toFixed(1)}°C`, tone: 'ok' } : { text: 'Connected', tone: 'ok' }
+}
+
+// Returns the value of a mount role. A mount that is not connected shows its role status, and one whose state was
+// not reported yet "Unknown". Otherwise one state is shown, by precedence: the motions (parking, homing, a goto or
+// flip, a manual axis motion), then parked, then tracking, then idle.
+export function mountValue(status: RoleStatus, state: Pick<MountState, 'connected' | 'parking' | 'homing' | 'slewing' | 'moving' | 'parked' | 'tracking'> | undefined): StatusValue {
+	if (status !== 'connected') return roleValue(status)
+	if (!state) return { text: 'Unknown', tone: 'muted' }
+	if (!state.connected) return roleValue('disconnected')
+	if (state.parking) return { text: 'Parking', tone: 'active' }
+	if (state.homing) return { text: 'Homing', tone: 'active' }
+	if (state.slewing) return { text: 'Slewing', tone: 'active' }
+	if (state.moving) return { text: 'Moving', tone: 'active' }
+	if (state.parked) return { text: 'Parked', tone: 'idle' }
+	if (state.tracking) return { text: 'Tracking', tone: 'ok' }
+	return { text: 'Idle', tone: 'idle' }
+}
+
+// Returns the running capture session of a camera, or undefined without a camera or while its latest session ended.
+export function activeCapture(sessions: Readonly<Record<string, CaptureSession>>, camera: ScopedDevice | undefined): CaptureSession | undefined {
+	const session = camera && sessions[cameraKey(camera.connectionId, camera.id)]
+	return captureRunning(session) ? session : undefined
+}
+
+// Returns the value of a running capture: "Stopping" once a stop was requested, otherwise the frames taken out of
+// those requested, such as "12/50", or the frames taken so far for a loop, which has no total.
+export function captureValue(session: Pick<CaptureSession, 'stopping' | 'captured' | 'count'>): StatusValue {
+	if (session.stopping) return { text: 'Stopping', tone: 'active' }
+	return { text: session.count === undefined ? String(session.captured) : `${session.captured}/${session.count}`, tone: 'active' }
+}
+
+// Returns the running guiding session of a guide camera, or undefined without a camera or while its latest session
+// ended.
+export function activeGuiding(sessions: Readonly<Record<string, GuidingSessionSummary>>, camera: ScopedDevice | undefined): GuidingSessionSummary | undefined {
+	const session = camera && sessions[cameraKey(camera.connectionId, camera.id)]
+	return guidingRunning(session) ? session : undefined
+}
+
+// Returns the value of a running guiding session. While guiding it shows a dither or a settle in progress, or the
+// total RMS of the latest guide steps: in arcseconds (RMS in guide pixels times the pixel scale in arcseconds per
+// pixel) when the scale is known, otherwise in guide pixels; with no measured step yet it shows "Guiding". In any
+// other state it shows the guider state alone, never an RMS left from an earlier guiding period.
+export function guidingValue(session: Pick<GuidingSessionSummary, 'state' | 'settling' | 'dithering' | 'rms' | 'pixelScale'>): StatusValue {
+	const { state, rms, pixelScale } = session
+
+	if (state === 'guiding') {
+		if (session.dithering) return { text: 'Dithering', tone: 'active' }
+		if (session.settling) return { text: 'Settling', tone: 'active' }
+		if (!rms || !(rms.samples > 0) || !Number.isFinite(rms.total)) return { text: GUIDING_STATE_LABELS.guiding, tone: 'ok' }
+		const text = pixelScale !== undefined && Number.isFinite(pixelScale) && pixelScale > 0 ? `RMS ${(rms.total * pixelScale).toFixed(2)}″` : `RMS ${rms.total.toFixed(2)} px`
+		return { text, tone: 'ok' }
+	}
+
+	return { text: GUIDING_STATE_LABELS[state], tone: state === 'lostLock' ? 'error' : 'active' }
+}
+
+// Returns the ids of the operations a capture and a guiding session hold: the capture's camera.capture, and the
+// guiding session's camera.guiding and, while it guides, guideOutput.guiding. They are shown through their session.
+export function sessionOperationIds(capture: Pick<CaptureSession, 'operationId'> | undefined, guiding: Pick<GuidingSessionSummary, 'operationId' | 'runOperationId'> | undefined): Set<string> {
+	const ids = new Set<string>()
+	if (capture?.operationId) ids.add(capture.operationId)
+	if (guiding?.operationId) ids.add(guiding.operationId)
+	if (guiding?.runOperationId) ids.add(guiding.runOperationId)
+	return ids
+}
+
+// Returns the operations not shown through a session, by exact operation id, in their order.
+export function otherOperations(operations: readonly OperationRecord[], sessionIds: ReadonlySet<string>): OperationRecord[] {
+	return operations.filter((operation) => !sessionIds.has(operation.operationId))
 }

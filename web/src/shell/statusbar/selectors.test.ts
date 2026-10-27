@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import type { OperationKind, OperationRecord } from 'api'
-import { type MountMotionState, mountAbortTarget, mountMoving, operationsSummary, scopedDeviceErrors, scopedRunningOperations, type ScopedDevice } from './selectors'
+import type { CaptureSession, GuidingSessionSummary, OperationKind, OperationRecord } from 'api'
+import { activeCapture, activeGuiding, cameraValue, captureValue, connectionLabel, guidingValue, type MountMotionState, mountAbortTarget, mountMoving, mountValue, operationsSummary, otherOperations, scopedDeviceErrors, scopedRunningOperations, type ScopedDevice, serverLinkLabel, sessionOperationIds } from './selectors'
 
 function operation(operationId: string, kind: OperationKind, connectionId: string, deviceId: string, startedAt = 0, state: OperationRecord['state'] = 'running'): OperationRecord {
 	return { operationId, kind, devices: [{ connectionId, deviceId }], state, startedAt }
@@ -109,5 +109,104 @@ describe('scoped device errors', () => {
 
 	test('ignores errors of devices that are not listed on the connection', () => {
 		expect(scopedDeviceErrors({ serverId: 'A', devices: { watched: 'A', devices, errors: { x9: 'Gone' } }, control: { watched: 'A', errors: {} } })).toEqual([])
+	})
+})
+
+describe('equipment values', () => {
+	test('a connected camera shows its finite temperature and nothing invented otherwise', () => {
+		expect(cameraValue('connected', { temperature: -10.24 })).toEqual({ text: '-10.2°C', tone: 'ok' })
+		expect(cameraValue('connected', { temperature: -0.04 })).toEqual({ text: '0.0°C', tone: 'ok' })
+		expect(cameraValue('connected', { temperature: undefined })).toEqual({ text: 'Connected', tone: 'ok' })
+		expect(cameraValue('connected', { temperature: Number.NaN })).toEqual({ text: 'Connected', tone: 'ok' })
+		expect(cameraValue('connected', undefined)).toEqual({ text: 'Connected', tone: 'ok' })
+		expect(cameraValue('disconnected', { temperature: 5 })).toEqual({ text: 'Disconnected', tone: 'idle' })
+		expect(cameraValue('unavailable', undefined)).toEqual({ text: 'Unavailable', tone: 'muted' })
+	})
+
+	const mount = { connected: true, parking: false, homing: false, slewing: false, moving: false, parked: false, tracking: false }
+
+	test('a mount shows one state by precedence', () => {
+		expect(mountValue('connected', mount).text).toBe('Idle')
+		expect(mountValue('connected', { ...mount, tracking: true }).text).toBe('Tracking')
+		expect(mountValue('connected', { ...mount, parked: true, tracking: true }).text).toBe('Parked')
+		expect(mountValue('connected', { ...mount, slewing: true, tracking: true }).text).toBe('Slewing')
+		expect(mountValue('connected', { ...mount, moving: true, parked: true }).text).toBe('Moving')
+		expect(mountValue('connected', { ...mount, homing: true, slewing: true }).text).toBe('Homing')
+		expect(mountValue('connected', { ...mount, parking: true, homing: true }).text).toBe('Parking')
+	})
+
+	test('a mount that is not connected or not reported never shows a motion', () => {
+		expect(mountValue('connected', { ...mount, connected: false, slewing: true }).text).toBe('Disconnected')
+		expect(mountValue('connected', undefined).text).toBe('Unknown')
+		expect(mountValue('error', { ...mount, slewing: true }).text).toBe('Error')
+		expect(mountValue('notSelected', undefined).text).toBe('Not Selected')
+	})
+
+	test('the links read as text', () => {
+		expect(serverLinkLabel('online')).toBe('Server online')
+		expect(serverLinkLabel('offline')).toBe('Reconnecting')
+		expect(serverLinkLabel(undefined)).toBe('Connecting')
+		expect(connectionLabel(undefined, 'disconnected')).toBe('No connection')
+		expect(connectionLabel('Observatory', 'connecting')).toBe('Observatory · Connecting')
+		expect(connectionLabel('Observatory', 'connected')).toBe('Observatory · Connected')
+	})
+})
+
+describe('capture', () => {
+	const camera: ScopedDevice = { id: 'c1', connectionId: 'A', name: 'Camera A' }
+
+	function session(patch: Partial<CaptureSession>) {
+		return { operationId: 'op', connectionId: 'A', deviceId: 'c1', phase: 'exposing', stopping: false, captured: 12, count: 50, ...patch } as CaptureSession
+	}
+
+	test('only the running session of that exact camera is active', () => {
+		expect(activeCapture({ 'A:c1': session({}) }, camera)).toBeDefined()
+		expect(activeCapture({ 'A:c1': session({ phase: 'completed' }) }, camera)).toBeUndefined()
+		expect(activeCapture({ 'B:c1': session({ connectionId: 'B' }) }, camera)).toBeUndefined()
+		expect(activeCapture({ 'A:c1': session({}) }, undefined)).toBeUndefined()
+	})
+
+	test('shows the frames taken, without a total for a loop, or the stop in progress', () => {
+		expect(captureValue(session({})).text).toBe('12/50')
+		expect(captureValue(session({ count: undefined })).text).toBe('12')
+		expect(captureValue(session({ stopping: true })).text).toBe('Stopping')
+	})
+})
+
+describe('guiding', () => {
+	function session(patch: Partial<GuidingSessionSummary>) {
+		return { operationId: 'g1', state: 'guiding', active: true, settling: false, dithering: false, rms: { ra: 0.3, dec: 0.4, total: 0.5, samples: 20 }, pixelScale: 1.5, ...patch } as GuidingSessionSummary
+	}
+
+	test('shows the RMS in arcseconds only with a valid pixel scale', () => {
+		expect(guidingValue(session({})).text).toBe('RMS 0.75″')
+		expect(guidingValue(session({ pixelScale: undefined })).text).toBe('RMS 0.50 px')
+		expect(guidingValue(session({ pixelScale: 0 })).text).toBe('RMS 0.50 px')
+	})
+
+	test('shows no RMS before a measured step', () => {
+		expect(guidingValue(session({ rms: { ra: 0, dec: 0, total: 0, samples: 0 } })).text).toBe('Guiding')
+		expect(guidingValue(session({ rms: undefined })).text).toBe('Guiding')
+	})
+
+	test('a dither, a settle, or another state takes precedence over the RMS', () => {
+		expect(guidingValue(session({ dithering: true })).text).toBe('Dithering')
+		expect(guidingValue(session({ settling: true })).text).toBe('Settling')
+		expect(guidingValue(session({ state: 'lostLock' }))).toEqual({ text: 'Star lost', tone: 'error' })
+		expect(guidingValue(session({ state: 'paused' })).text).toBe('Paused')
+		expect(guidingValue(session({ state: 'calibrating' })).text).toBe('Calibrating')
+	})
+
+	test('only a running session is active', () => {
+		const camera: ScopedDevice = { id: 'g', connectionId: 'A', name: 'Guide' }
+		expect(activeGuiding({ 'A:g': session({}) }, camera)).toBeDefined()
+		expect(activeGuiding({ 'A:g': session({ active: false }) }, camera)).toBeUndefined()
+	})
+
+	test('a guiding session counts once and keeps unrelated operations', () => {
+		const running = [operation('g1', 'camera.guiding', 'A', 'g'), operation('g2', 'guideOutput.guiding', 'A', 'm1'), operation('x', 'guideOutput.guiding', 'A', 'o2'), operation('c', 'camera.capture', 'A', 'c1')]
+		const ids = sessionOperationIds({ operationId: 'c' }, { operationId: 'g1', runOperationId: 'g2' })
+		expect(otherOperations(running, ids).map((o) => o.operationId)).toEqual(['x'])
+		expect(otherOperations(running, sessionOperationIds(undefined, undefined))).toHaveLength(4)
 	})
 })

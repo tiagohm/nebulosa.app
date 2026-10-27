@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { NotificationRecord, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import type { ConnectionInput } from '../connection/connection'
-import { dismissToast, handleNotificationEvent, inScope, MAX_TOASTS, type NotificationsState, refreshNotifications, unreadCount, visibleNotifications } from './notifications'
+import { dismissToast, handleNotificationEvent, inScope, MAX_TOASTS, notificationAge, type NotificationsState, refreshNotifications, unreadCount, visibleNotifications } from './notifications'
 
 const pi: ConnectionInput = { name: 'Pi', type: 'INDI', host: 'PI.local', port: 7624 }
 
@@ -126,4 +126,11 @@ test('counts the unread notifications of the profile scope only', () => {
 	expect(unreadCount(records, { readIds: ['a'], dismissedIds: ['b'] }, pi)).toBe(0)
 	// Another profile reads nothing of the first.
 	expect(unreadCount(records, { readIds: [], dismissedIds: [] }, pi)).toBe(2)
+})
+
+test('formats the age of a notification', () => {
+	expect(notificationAge(0, 59_000)).toBe('now')
+	expect(notificationAge(0, 5 * 60_000)).toBe('5 min ago')
+	expect(notificationAge(0, 3 * 3_600_000)).toBe('3 h ago')
+	expect(notificationAge(0, 50 * 3_600_000)).toBe('2 d ago')
 })

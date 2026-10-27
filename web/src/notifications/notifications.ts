@@ -103,3 +103,13 @@ export function visibleNotifications(records: readonly NotificationRecord[], pre
 export function unreadCount(records: readonly NotificationRecord[], preferences: Readonly<NotificationPreferences> | undefined, connection: ConnectionInput | undefined) {
 	return visibleNotifications(records, preferences, connection).filter((record) => isUnread(record, preferences)).length
 }
+
+// Age of a notification at now, as shown in the lists: "now", minutes, hours, or days, both in Unix milliseconds (UTC).
+export function notificationAge(createdAt: number, now: number) {
+	const minutes = Math.floor((now - createdAt) / 60000)
+	if (minutes < 1) return 'now'
+	if (minutes < 60) return `${minutes} min ago`
+	const hours = Math.floor(minutes / 60)
+	if (hours < 24) return `${hours} h ago`
+	return `${Math.floor(hours / 24)} d ago`
+}

@@ -3,6 +3,7 @@ import { ConnectionModal } from '../connection/ConnectionModal'
 import { EquipmentControlPage } from '../equipment-control/EquipmentControlPage'
 import { EquipmentModal } from '../equipment/EquipmentModal'
 import { TopBar } from '../layout/TopBar'
+import { NotificationToasts } from '../notifications/NotificationToasts'
 import { ProfileModal } from '../profile/ProfileModal'
 import { SettingsPage } from '../settings/SettingsPage'
 import { NavigationRail } from './NavigationRail'
@@ -11,7 +12,7 @@ import { StatusBar } from './StatusBar'
 import { workspaceDefinition } from './workspaces'
 
 // Persistent frame of the application: top bar, navigation rail, the active workspace, the Equipment
-// Control page, or the Settings page, status bar, and the management modals. The frame stays mounted while navigating; only the
+// Control page, or the Settings page, status bar, the management modals, and the notification toasts. The frame stays mounted while navigating; only the
 // active workspace's component is swapped, and unmounting it releases presentation resources only.
 
 // Application shell.
@@ -30,6 +31,7 @@ export function ApplicationShell() {
 			<ConnectionModal />
 			<EquipmentModal />
 			<ProfileModal />
+			<NotificationToasts />
 		</div>
 	)
 }

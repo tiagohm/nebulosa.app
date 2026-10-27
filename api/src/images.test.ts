@@ -73,9 +73,10 @@ function writeFloatFits(name: string) {
 	return { path, samples }
 }
 
-// Derives a document and returns the response.
-function derive(id: string, value: DisplaySettings) {
-	return call('/api/images/:id/derive', 'POST', { id }, { settings: value })
+// Adopts an unchanged full copy of a document as a derived document, as an empty pipeline would, and returns its info.
+async function adoptCopy(source: ImageInfo) {
+	const image = (await images.processingImage(source.id))!
+	return images.adopt(image, { kind: 'processing', source: source.id, sourceName: source.name, steps: [], createdAt: new Date().toISOString() })
 }
 
 // Saves a document and returns the response.
@@ -211,44 +212,11 @@ describe('image documents', () => {
 })
 
 describe('derived images', () => {
-	test('derive creates an independent floating-point document and leaves the source untouched', async () => {
-		const source = await openFits(writeFits('derive-cfa.fits', 16, 8, 1, ["BAYERPAT= 'RGGB    '", "CSTRETCH= 'Medium  '"]))
-		const before = new Uint8Array(await (await render(source.id, NEUTRAL)).arrayBuffer())
-		const settings = { ...NEUTRAL, debayer: { enabled: true, pattern: 'auto' } } as const satisfies DisplaySettings
-
-		const response = await derive(source.id, settings)
-		const info = (await response.json()) as ImageInfo
-
-		expect(response.status).toBe(201)
-		expect(info).toMatchObject({ origin: 'derived', name: 'derive-cfa — Processed', width: 16, height: 8, channels: 3, provenance: { kind: 'display', source: source.id, sourceName: 'derive-cfa.fits', settings } })
-		expect(info.id).not.toBe(source.id)
-		expect(info.cfa).toBeUndefined()
-		expect(info.header).toMatchObject({ BITPIX: -32, NAXIS: 3, NAXIS3: 3, OBJECT: 'M31' })
-		expect(info.header.BAYERPAT).toBeUndefined()
-		expect(info.header.CSTRETCH).toBeUndefined()
-		expect(String(info.header.HISTORY)).toContain('Derived by Nebulosa from derive-cfa.fits')
-
-		expect(new Uint8Array(await (await render(source.id, NEUTRAL)).arrayBuffer())).toEqual(before)
-		expect((await render(info.id, settings)).status).toBe(200)
-
-		images.close(source.id)
-		expect((await render(info.id, NEUTRAL)).status).toBe(200)
-		images.close(info.id)
-	})
-
-	test('settings that cannot be applied are 422 and an unknown source is 404', async () => {
-		const source = await openFits(writeFits('derive-mono.fits', 16, 8))
-
-		expect((await derive(source.id, { ...NEUTRAL, debayer: { enabled: true, pattern: 'auto' } })).status).toBe(422)
-		images.close(source.id)
-		expect((await derive(source.id, NEUTRAL)).status).toBe(404)
-	})
-
 	for (const format of ['fits', 'xisf'] as const) {
 		test(`saving as ${format.toUpperCase()} restores the scale of the source`, async () => {
 			const { path, samples } = writeFloatFits(`derive-float-${format}.fits`)
 			const source = await openFits(path)
-			const derived = (await (await derive(source.id, { ...NEUTRAL, stretch: { mode: 'linear' } })).json()) as ImageInfo
+			const derived = await adoptCopy(source)
 			const target = join(root, `saved.${format}`)
 
 			const response = await save(derived.id, { path: target, format })
@@ -267,7 +235,7 @@ describe('derived images', () => {
 	test('saving never replaces an open file nor an existing one without overwrite', async () => {
 		const path = writeFits('derive-guard.fits', 16, 8)
 		const source = await openFits(path)
-		const derived = (await (await derive(source.id, NEUTRAL)).json()) as ImageInfo
+		const derived = await adoptCopy(source)
 		const existing = join(root, 'existing.xisf')
 		writeFileSync(existing, 'old')
 
@@ -290,7 +258,7 @@ describe('derived images', () => {
 
 	test('download returns the encoded file as a named attachment', async () => {
 		const source = await openFits(writeFits('derive-download.fits', 16, 8))
-		const derived = (await (await derive(source.id, NEUTRAL)).json()) as ImageInfo
+		const derived = await adoptCopy(source)
 
 		const fits = await call('/api/images/:id/file', 'GET', { id: derived.id }, undefined, '?format=fits')
 		const xisf = await call('/api/images/:id/file', 'GET', { id: derived.id }, undefined, '?format=xisf')

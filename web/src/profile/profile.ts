@@ -1,4 +1,4 @@
-import type { MountRemoteProtocol, StarDetectionRequest } from 'api'
+import type { DisplaySettings, MountRemoteProtocol, StarDetectionRequest } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
 import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
@@ -352,6 +352,25 @@ export function guidingSettings(settings: Pick<ProfileSettings, 'cameras'>, came
 // Replaces fields of the guiding form of a camera in the active profile. The settle is replaced as a whole when given.
 export function setGuidingSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<GuidingSettings>) {
 	setCameraForm(state, camera, 'guiding', guidingSettings(activeProfile(state).settings, camera), patch)
+}
+
+// Returns the display settings applied last in Images to the frames of a camera, or to every other image without a
+// camera; undefined before the first one is applied.
+export function imageDisplaySettings(settings: Pick<ProfileSettings, 'cameras' | 'imageDisplay'>, camera?: CameraIdentity): Readonly<DisplaySettings> | undefined {
+	return camera ? cameraSettings(settings, camera)?.display : settings.imageDisplay
+}
+
+// Remembers in the active profile the display settings just applied in Images, as a plain copy: those of the frames of
+// a camera, or those of every other image without a camera.
+export function setImageDisplaySettings(state: ProfileState, camera: CameraIdentity | undefined, settings: DisplaySettings) {
+	if (camera) {
+		setCameraForm(state, camera, 'display', settings, {})
+		return
+	}
+
+	const profile = activeProfile(state)
+	profile.settings.imageDisplay = JSON.parse(JSON.stringify(settings)) as DisplaySettings
+	touch(profile)
 }
 
 // Returns the star detection request of a profile: the one edited last, or the defaults.

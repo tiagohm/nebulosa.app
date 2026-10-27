@@ -19,9 +19,8 @@ import type { ImageProcessingStep } from './imageprocessing'
 // A document can be retained by an analysis while it uses the pixels, such as a star detection: closing it then
 // hides it from every route at once, but its pixels are released only when the last analysis lets it go.
 //
-// A document can also be derived from another by applying display settings in floating point, or adopted from
-// the result of an image processing pipeline (imageprocessing.ts) computed on a copy of another document: the
-// result is a new, independent document that lives only in memory until it is saved to a file of the
+// A document can also be adopted from the result of an image processing pipeline (imageprocessing.ts) computed on a
+// copy of another document: the result is a new, independent document that lives only in memory until it is saved to a file of the
 // server or downloaded. Saving never replaces the file of an open document, nor an existing file
 // without overwrite, and writes through a temporary file so a failure leaves no partial file.
 
@@ -38,13 +37,6 @@ interface ProvenanceSource {
 	readonly createdAt: string
 }
 
-// A derived image computed with the display settings of the Image Inspector.
-export interface DisplayProvenance extends ProvenanceSource {
-	readonly kind: 'display'
-	// Settings applied to the source image, in pipeline order.
-	readonly settings: DisplaySettings
-}
-
 // A derived image computed by an image processing pipeline.
 export interface ProcessingProvenance extends ProvenanceSource {
 	readonly kind: 'processing'
@@ -53,7 +45,7 @@ export interface ProcessingProvenance extends ProvenanceSource {
 }
 
 // Where a derived image comes from: the document and what was applied to it.
-export type ImageProvenance = DisplayProvenance | ProcessingProvenance
+export type ImageProvenance = ProcessingProvenance
 
 // Camera frame an image document was decoded from, as the capture service received it.
 export interface ImageCapture {
@@ -266,12 +258,6 @@ export interface Rendering {
 	readonly result: RenderResult
 }
 
-// Body of a derive request.
-export interface DeriveRequest {
-	// Settings to apply to the source image.
-	readonly settings: DisplaySettings
-}
-
 // Body of a save request.
 export interface SaveRequest {
 	// Absolute path of the file to write on the server.
@@ -288,7 +274,7 @@ export interface SaveResult {
 	readonly path: string
 }
 
-// Message sent to the image worker. Open, open capture, render, derive, encode, detection image, processing image,
+// Message sent to the image worker. Open, open capture, render, encode, detection image, processing image,
 // and adopt carry an id that their response echoes; open capture and adopt transfer their bytes to the worker; a
 // close has no response, and a
 // cancel drops the render with that id if it has not started yet (the render then answers superseded).
@@ -296,7 +282,6 @@ export type ImageWorkerRequest =
 	| { readonly type: 'open'; readonly id: number; readonly path: string }
 	| { readonly type: 'openCapture'; readonly id: number; readonly bytes: Uint8Array<ArrayBuffer>; readonly name: string; readonly capture: ImageCapture }
 	| { readonly type: 'render'; readonly id: number; readonly document: string; readonly request: RenderRequest }
-	| { readonly type: 'derive'; readonly id: number; readonly document: string; readonly request: DeriveRequest }
 	| { readonly type: 'encode'; readonly id: number; readonly document: string; readonly format: ImageFormat; readonly omit?: readonly string[] }
 	| { readonly type: 'detectionImage'; readonly id: number; readonly document: string }
 	| { readonly type: 'processingImage'; readonly id: number; readonly document: string }
@@ -304,7 +289,7 @@ export type ImageWorkerRequest =
 	| { readonly type: 'cancel'; readonly id: number }
 	| { readonly type: 'close'; readonly document: string }
 
-// Message the image worker answers a request with, by request id: the opened or derived document, the
+// Message the image worker answers a request with, by request id: the opened document, the
 // rendering, the encoded file, the grayscale copy a star detection measures (see ImageStore.detectionImage), the
 // full copy an image processing pipeline works on (see ImageStore.processingImage), the adopted document, a
 // document that is not open (missing), a render dropped before it
@@ -312,7 +297,6 @@ export type ImageWorkerRequest =
 // opened (with the status of its ImageOpenError), or any other failure.
 export type ImageWorkerResponse =
 	| { readonly id: number; readonly status: 'opened'; readonly info: ImageInfo }
-	| { readonly id: number; readonly status: 'derived'; readonly info: ImageInfo }
 	| { readonly id: number; readonly status: 'encoded'; readonly bytes: Uint8Array<ArrayBuffer> }
 	| { readonly id: number; readonly status: 'detectionImage'; readonly image: Image }
 	| { readonly id: number; readonly status: 'processingImage'; readonly image: Image }
@@ -358,9 +342,6 @@ function responseError(response: ImageWorkerResponse): Error {
 	if (response.status === 'failed') return new Error(response.error)
 	return new Error(`Unexpected image worker response: ${response.status}`)
 }
-
-// Outcome of a derive: the new document, or why there is none (see ImageWorkerResponse).
-export type DeriveOutcome = { readonly status: 'derived'; readonly info: ImageInfo } | { readonly status: 'missing' } | { readonly status: 'invalid'; readonly error: string }
 
 // Outcome of a save: the written file, or why nothing was written: the document is not open (missing),
 // the target is the file of an open document (original), or it exists and overwriting was not allowed.
@@ -486,22 +467,6 @@ export class ImageStore {
 		}
 	}
 
-	// Derives a new document from a document by applying settings to its image, keeping floating-point
-	// samples. Resolves to missing for an unknown id and to invalid when the settings cannot be applied.
-	async derive(id: string, request: DeriveRequest): Promise<DeriveOutcome> {
-		if (!this.#documents.has(id)) return { status: 'missing' }
-		const response = await this.#request({ type: 'derive', id: this.#id++, document: id, request })
-
-		if (response.status === 'derived') {
-			this.#documents.set(response.info.id, documentRecord(response.info))
-			return { status: 'derived', info: response.info }
-		}
-
-		if (response.status === 'missing') return { status: 'missing' }
-		if (response.status === 'invalid') return { status: 'invalid', error: response.error }
-		throw responseError(response)
-	}
-
 	// Encodes a document as a FITS or XISF file in the scale of its source. Resolves to undefined for an
 	// unknown id.
 	encode(id: string, format: ImageFormat): Promise<Uint8Array<ArrayBuffer> | undefined> {
@@ -552,7 +517,7 @@ export class ImageStore {
 	}
 
 	// Adopts the result of an image processing pipeline as a new derived document, with the floating-point header
-	// and the history of its provenance (see derive). The buffer of the image is transferred to the worker, so the
+	// and the history of its provenance. The buffer of the image is transferred to the worker, so the
 	// caller must not use it afterwards.
 	async adopt(image: Image, provenance: ProcessingProvenance): Promise<ImageInfo> {
 		const response = await this.#request({ type: 'adopt', id: this.#id++, image, provenance }, [image.raw.buffer])
@@ -737,16 +702,6 @@ export function createImageRoutes(images: ImageStore) {
 				if (outcome.status === 'superseded') return errorResponse('Rendering superseded', 409, 'superseded')
 				if (outcome.status === 'invalid') return errorResponse(outcome.error, 422, 'invalidSettings')
 				return new Response(outcome.jpeg, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', [RENDER_HEADER]: JSON.stringify(outcome.result) } })
-			},
-		},
-		'/api/images/:id/derive': {
-			// Creates an unsaved document from an image document and a DeriveRequest: responds 201 with the ImageInfo of
-			// the new document, 404 when the source is not open, and 422 when the settings cannot be applied.
-			POST: async (req) => {
-				const outcome = await images.derive(req.params.id, (await req.json()) as DeriveRequest)
-				if (outcome.status === 'missing') return errorResponse('Image not found', 404, 'notFound')
-				if (outcome.status === 'invalid') return errorResponse(outcome.error, 422, 'invalidSettings')
-				return Response.json(outcome.info, { status: 201 })
 			},
 		},
 		'/api/images/:id/save': {

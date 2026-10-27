@@ -1,10 +1,13 @@
-import type { DeriveRequest, DisplaySettings, ImageFormat, ImageInfo, ImageProvenance, PlateSolveRequest, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from 'api'
+import type { DisplaySettings, ImageFormat, ImageInfo, PlateSolveRequest, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
+import { deviceState } from '../equipment/equipment'
 import { jsonInit, responseError } from '../http'
 import { DEFAULT_PLATE_SOLVE_REQUEST } from '../platesolving/platesolving'
+import { activeProfile, imageDisplaySettings, profileCamera, profileState, setImageDisplaySettings } from '../profile/profile'
 import { FIT_VIEW, type ViewerView } from '../viewer/transform'
 import type { CameraTabState } from './cameratabs'
+import { ORIGINAL_DISPLAY_SETTINGS } from './display'
 import type { ImageProcessingDraft } from './imageprocessing'
 import { DEFAULT_ADDED_OPERATION } from './imageprocessing.catalog'
 import type { ImageToolId } from './tools'
@@ -16,10 +19,12 @@ import type { ImageToolId } from './tools'
 // or tool, and a future derived image (such as a processing result) can open as a new document with its
 // own view while the original stays as it is.
 //
-// Display settings are edited as pending settings that never render by themselves; applying them sends
-// a snapshot to the server, and only a successful rendering makes that snapshot the applied settings, so
-// edits made while it is processing stay pending and a failure keeps the previous rendering and applied
-// settings. Show Original renders the unprocessed image (no debayering, auto stretch, neutral
+// Display settings change only by applying a patch of them (the display controls of the viewer toolbar): the patch
+// is merged into the settings being applied, or the applied ones, and that snapshot is sent to the server; only a
+// successful rendering makes it the applied settings, which are then saved in the profile (per camera for a camera
+// tab, globally for any other document) so the next image of the same kind starts with them. A failure keeps the
+// previous rendering and applied settings. A new document starts with the settings its profile saved, fitted to its
+// image, or with its defaults. Show Original renders the unprocessed image (no debayering, auto stretch, neutral
 // adjustments) once and keeps it beside the applied rendering. Only the latest rendering request of a
 // document counts; starting a new one aborts the previous, and an object URL is revoked as soon as a
 // newer rendering replaces it or the document closes. Requests belong to the store, not to components,
@@ -29,9 +34,9 @@ import type { ImageToolId } from './tools'
 // The star detection of a document keeps how its markers are shown; its request is the profile's, shared by every
 // document and sent only by Run Detection. Neither zoom, pan, display settings, nor the markers ever run a detection.
 //
-// A derived image, computed by the server from a document's pending settings or by an image processing pipeline
-// (imageprocessing.ts), opens as a new document that is unsaved until a save to a server file succeeds; the page asks before unloading while one
-// exists, and closing one is confirmed by the workspace.
+// A derived image, computed by an image processing pipeline (imageprocessing.ts), opens as a new document that is
+// unsaved until a save to a server file succeeds; the page asks before unloading while one exists, and closing one is
+// confirmed by the workspace.
 //
 // Camera tabs (cameratabs.ts) are documents too, whose image is the frame they show; this module only removes them
 // and renders their frames, with the primitives it exports for them.
@@ -74,10 +79,8 @@ export interface ImageDocument {
 	camera?: CameraTabState
 }
 
-// Display settings of a document: those being edited and those of the current rendering.
+// Display settings of a document: those of the current rendering, and the original rendering.
 export interface ImageDisplayState {
-	// Settings shown by the controls; editing them never renders.
-	pending: DisplaySettings
 	// Exact settings the current rendering was made with; absent before the first rendering succeeds.
 	applied?: DisplaySettings
 	// Whether the viewer shows the original rendering instead of the applied one.
@@ -121,10 +124,6 @@ export interface ImageViewState {
 	renderPending: boolean
 	// Why the latest rendering failed.
 	error?: string
-	// Whether a derived image is being created from the document.
-	deriving: boolean
-	// Why creating the latest derived image failed.
-	deriveError?: string
 	// Star detection request and markers.
 	stars: ImageStarsState
 	// Plate solving request, solution shown, and overlay.
@@ -132,10 +131,6 @@ export interface ImageViewState {
 	// Image processing pipeline being edited and the latest job it submitted.
 	processing: ImageProcessingDraft
 }
-
-// State of a document's display settings: rendering, the latest rendering failed, the pending settings
-// differ from the applied ones, or they are applied.
-export type DisplayStatus = 'processing' | 'error' | 'not-applied' | 'applied'
 
 // Contextual tool of a document.
 export interface ImageToolContext {
@@ -163,6 +158,11 @@ export interface ImagesIo {
 	readonly createObjectURL: (blob: Blob) => string
 	// Releases an object URL.
 	readonly revokeObjectURL: (url: string) => void
+	// Returns the display settings the profile saved for the documents of a source: those of its camera for a camera
+	// tab, the global ones for any other document; undefined when none were saved.
+	readonly loadDisplay: (source: ImageSource) => DisplaySettings | undefined
+	// Saves in the profile the display settings just applied to a document of a source, as loadDisplay reads them.
+	readonly saveDisplay: (source: ImageSource, settings: DisplaySettings) => void
 }
 
 // Response header with the RenderResult of a rendering (RENDER_HEADER of the API).
@@ -171,16 +171,28 @@ const RENDER_HEADER = 'X-Image-Render'
 // Image documents of the tab.
 export const imagesState = proxy<ImagesState>({ documents: [], views: {}, tools: {} })
 
-// Browser implementation of ImagesIo.
+// Returns where the active profile keeps the display settings of a source: the camera of a camera tab of its watched
+// connection (like the forms of its camera operations), or undefined for the global settings of any other document;
+// null for a camera of another connection, whose settings are neither read nor saved.
+function displayScope(source: ImageSource) {
+	if (source.kind !== 'camera') return undefined
+	return deviceState.watched === source.connectionId ? (profileCamera(activeProfile(profileState), source.deviceId) ?? null) : null
+}
+
+// Browser implementation of ImagesIo, keeping display settings in the active profile.
 export const browserIo: ImagesIo = {
 	fetch: (input, init) => fetch(input, init),
 	createObjectURL: (blob) => URL.createObjectURL(blob),
 	revokeObjectURL: (url) => URL.revokeObjectURL(url),
+	loadDisplay: (source) => {
+		const scope = displayScope(source)
+		return scope === null ? undefined : imageDisplaySettings(activeProfile(profileState).settings, scope)
+	},
+	saveDisplay: (source, settings) => {
+		const scope = displayScope(source)
+		if (scope !== null) setImageDisplaySettings(profileState, scope, settings)
+	},
 }
-
-// Settings of the unprocessed image shown by Show Original: no debayering, a linked auto stretch, and
-// neutral adjustments.
-export const ORIGINAL_DISPLAY_SETTINGS: DisplaySettings = { debayer: { enabled: false }, stretch: { mode: 'auto', linked: true }, brightness: 1, contrast: 1, gamma: 1, saturation: 1, scnr: { enabled: false }, invert: false }
 
 // Pending rendering request of each document, by document key.
 const renders = new Map<string, AbortController>()
@@ -189,19 +201,25 @@ const renders = new Map<string, AbortController>()
 // a camera tab shows meanwhile aborts that rendering and is rendered with them instead, so they become applied.
 const applies = new Map<string, DisplaySettings>()
 
-// Returns the initial display settings of an opened image: the unprocessed settings, debayered with the
+// Returns the display settings of an image nothing was saved for: the unprocessed settings, debayered with the
 // image's own pattern when it is a CFA mosaic with a trusted one.
-// A derived image already stretched (by a display stretch, or by an arcsinh stretch step of a pipeline) is shown
-// linear, so it is not stretched twice; one derived without a stretch gets the auto stretch like a file.
 export function defaultDisplaySettings(info: ImageInfo): DisplaySettings {
-	const stretch: DisplaySettings['stretch'] = info.origin === 'derived' && isStretched(info.provenance) ? { mode: 'linear' } : ORIGINAL_DISPLAY_SETTINGS.stretch
-	return { ...ORIGINAL_DISPLAY_SETTINGS, stretch, ...(info.cfa && { debayer: { enabled: true, pattern: 'auto' } }) }
+	return { ...ORIGINAL_DISPLAY_SETTINGS, ...(info.cfa && { debayer: { enabled: true, pattern: 'auto' } }) }
 }
 
-// Returns whether a derived image was stretched by what derived it.
-function isStretched(provenance: ImageProvenance): boolean {
-	if (provenance.kind === 'display') return provenance.settings.stretch.mode !== 'linear'
-	return provenance.steps.some((step) => step.operation.type === 'arcsinhStretch')
+// Returns whether debayering applies to an image: a mono image whose header names a CFA pattern (BAYERPAT), trusted
+// or not; an untrusted one can only be debayered with an explicit pattern.
+export function isMosaic(info: Pick<ImageInfo, 'channels' | 'bayer'>): boolean {
+	return info.channels === 1 && !!info.bayer
+}
+
+// Returns the display settings a new document of an image starts with: those its profile saved, with debayering
+// turned off for a mono image it does not apply to (no CFA pattern in its header) or cannot be resolved for (the
+// image's own pattern without a trusted one), or the image's defaults when nothing was saved.
+export function initialDisplaySettings(info: ImageInfo, saved: DisplaySettings | undefined): DisplaySettings {
+	if (!saved) return defaultDisplaySettings(info)
+	const unresolved = saved.debayer.enabled && info.channels === 1 && (!info.bayer || (saved.debayer.pattern === 'auto' && !info.cfa))
+	return copySettings(unresolved ? { ...saved, debayer: { enabled: false } } : saved)
 }
 
 // Returns the server file of a document: the file it was opened from, or the one a derived image was
@@ -229,27 +247,6 @@ export function downloadUrl(info: Pick<ImageInfo, 'id'>, format: ImageFormat): s
 // Returns a plain deep copy of settings, detached from any proxy.
 export function copySettings(settings: DisplaySettings): DisplaySettings {
 	return JSON.parse(JSON.stringify(settings)) as DisplaySettings
-}
-
-// Returns whether two JSON-like values are deeply equal, regardless of key order.
-function sameValue(a: unknown, b: unknown): boolean {
-	if (a === b) return true
-	if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
-	const keys = Object.keys(a)
-	if (keys.length !== Object.keys(b).length) return false
-	return keys.every((key) => sameValue((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
-}
-
-// Returns whether two display settings are equal.
-export function sameDisplaySettings(a: DisplaySettings, b: DisplaySettings | undefined): boolean {
-	return b !== undefined && sameValue(a, b)
-}
-
-// Returns the display status of a document's view state.
-export function displayStatus(view: Pick<ImageViewState, 'display' | 'renderPending' | 'error'>): DisplayStatus {
-	if (view.renderPending) return 'processing'
-	if (view.error) return 'error'
-	return sameDisplaySettings(view.display.pending, view.display.applied) ? 'applied' : 'not-applied'
 }
 
 // Returns a single stretch summarizing the stretch a rendering applied: the stretch itself, or the mean
@@ -299,13 +296,13 @@ function release(id: string, io: ImagesIo) {
 }
 
 // Opens a server file as a new active document, fitted to the viewer and shown with the Image
-// Inspector, and renders it once with its default display settings (defaultDisplaySettings), which
-// become its pending and applied settings. A document closed before the server answers is released on
-// the server.
+// Inspector, and renders it once with the display settings it starts with (initialDisplaySettings), which
+// become its applied settings. A document closed before the server answers is released on the server.
 export async function openImage(state: ImagesState, path: string, io: ImagesIo = browserIo) {
 	const key = nanoid()
 	const name = path.split(/[\\/]/).at(-1) || path
-	addDocument(state, { key, name, source: { kind: 'file', path }, status: 'loading', unsaved: false })
+	const source: ImageSource = { kind: 'file', path }
+	addDocument(state, { key, name, source, status: 'loading', unsaved: false })
 
 	try {
 		const response = await io.fetch('/api/images', jsonInit('POST', { path }))
@@ -325,72 +322,42 @@ export async function openImage(state: ImagesState, path: string, io: ImagesIo =
 
 		document.info = ref(info)
 		document.status = 'ready'
-		const view = state.views[key]
-		if (view) view.display.pending = copySettings(defaultDisplaySettings(info))
+		await renderDisplay(state, key, initialDisplaySettings(info, io.loadDisplay(source)), io)
 	} catch (error) {
 		const document = documentOf(state, key)
 		if (document) Object.assign(document, { status: 'error', error: message(error) })
-		return
 	}
-
-	await applyDisplay(state, key, io)
 }
 
-// Returns the view state of a document just opened: fitted to the viewer, with its default display settings when
-// the server already described it.
-export function newView(info: ImageInfo | undefined): ImageViewState {
+// Returns the view state of a document just opened: fitted to the viewer, with nothing rendered yet.
+export function newView(): ImageViewState {
 	return {
 		view: FIT_VIEW,
-		display: { pending: copySettings(info ? defaultDisplaySettings(info) : ORIGINAL_DISPLAY_SETTINGS), showOriginal: false },
+		display: { showOriginal: false },
 		renderPending: false,
-		deriving: false,
 		stars: { visible: true, acceptedOnly: false },
 		plateSolving: { request: { ...DEFAULT_PLATE_SOLVE_REQUEST }, overlay: true, grid: false },
 		processing: { steps: [], expanded: [], adding: DEFAULT_ADDED_OPERATION },
 	}
 }
 
-// Adds a document, fitted to the viewer and shown with the Image Inspector, with its default display settings when
-// the server already described it. It becomes the active one unless activate is false and another one is shown.
+// Adds a document, fitted to the viewer and shown with the Image Inspector. It becomes the active one unless activate is false and another one is shown.
 function addDocument(state: ImagesState, document: ImageDocument, activate = true) {
 	state.documents.push(document)
-	state.views[document.key] = newView(document.info)
+	state.views[document.key] = newView()
 	state.tools[document.key] = { tool: 'inspector' }
 	if (activate || state.activeKey === undefined) state.activeKey = document.key
 }
 
 // Opens a derived image the server already created from a document named sourceName as a new unsaved document, rendered
-// with its default settings. It becomes the active one unless activate is false, so a result arriving while the
-// operator looks at another document does not take the view from it.
+// with the display settings it starts with (initialDisplaySettings, the global ones, like a file). It becomes the
+// active one unless activate is false, so a result arriving while the operator looks at another document does not
+// take the view from it.
 export async function openDerivedImage(state: ImagesState, info: ImageInfo, sourceName: string, activate: boolean, io: ImagesIo = browserIo) {
 	const key = nanoid()
-	addDocument(state, { key, name: info.name, source: { kind: 'derived', sourceName }, status: 'ready', info: ref(info), unsaved: true }, activate)
-	await applyDisplay(state, key, io)
-}
-
-// Creates a derived image from a document with a snapshot of its pending display settings, computed by
-// the server in floating point, and opens it as a new active, unsaved document rendered with its
-// default settings. The source document is unchanged. A failure is kept in the source's view state.
-export async function createDerivedImage(state: ImagesState, key: string, io: ImagesIo = browserIo) {
-	const source = documentOf(state, key)
-	const view = state.views[key]
-	if (!source?.info || !view || view.deriving) return
-
-	const request: DeriveRequest = { settings: copySettings(view.display.pending) }
-	view.deriving = true
-	view.deriveError = undefined
-
-	try {
-		const response = await io.fetch(`/api/images/${encodeURIComponent(source.info.id)}/derive`, jsonInit('POST', request))
-		if (!response.ok) throw new Error(await responseError(response))
-		await openDerivedImage(state, (await response.json()) as ImageInfo, source.name, true, io)
-	} catch (error) {
-		const current = state.views[key]
-		if (current) current.deriveError = message(error)
-	} finally {
-		const current = state.views[key]
-		if (current) current.deriving = false
-	}
+	const source: ImageSource = { kind: 'derived', sourceName }
+	addDocument(state, { key, name: info.name, source, status: 'ready', info: ref(info), unsaved: true }, activate)
+	await renderDisplay(state, key, initialDisplaySettings(info, io.loadDisplay(source)), io)
 }
 
 // Saves a document to a file of the server in a format. An existing file is only replaced with
@@ -461,48 +428,48 @@ export async function requestRendering(state: ImagesState, key: string, id: stri
 	}
 }
 
-// Applies the pending display settings of a document: renders a snapshot of them and, once the
-// rendering succeeds, shows it and makes the snapshot the applied settings. Leaves Show Original. Edits
-// made meanwhile stay pending; a failure keeps the current rendering and applied settings.
-export async function applyDisplay(state: ImagesState, key: string, io: ImagesIo = browserIo) {
+// Renders a document with a snapshot of settings and, once the rendering succeeds, shows it and makes the snapshot
+// the applied settings. Leaves Show Original. Resolves to whether they became the applied settings; a failure keeps
+// the current rendering and applied settings.
+async function renderDisplay(state: ImagesState, key: string, settings: DisplaySettings, io: ImagesIo): Promise<boolean> {
 	const view = state.views[key]
-	if (!view) return
+	if (!view) return false
 
-	const settings = copySettings(view.display.pending)
 	view.display.showOriginal = false
 	applies.set(key, settings)
 	const rendering = await requestRendering(state, key, documentOf(state, key)?.info?.id, settings, io)
 	if (applies.get(key) === settings) applies.delete(key)
 	const current = state.views[key]
-	if (!rendering || !current) return
+	if (!rendering || !current) return false
 
 	const previous = current.rendering?.url
 	current.rendering = rendering
 	current.display.applied = settings
 	if (previous) io.revokeObjectURL(previous)
+	return true
 }
 
-// Replaces the pending display settings of a document, without rendering. Ignored for an unknown key.
-export function editDisplay(state: ImagesState, key: string, settings: DisplaySettings) {
-	const view = state.views[key]
-	if (view) view.display.pending = copySettings(settings)
+// Returns the display settings of a document the next patch builds on: those being applied, or the applied ones;
+// undefined before its first rendering.
+export function currentDisplaySettings(state: ImagesState, key: string): DisplaySettings | undefined {
+	return applies.get(key) ?? state.views[key]?.display.applied
 }
 
-// Discards the pending edits of a document, restoring the applied settings, without rendering.
-export function revertDisplay(state: ImagesState, key: string) {
-	const display = state.views[key]?.display
-	if (display?.applied) display.pending = copySettings(display.applied)
-}
+// Applies a patch of display settings to a document: merges it into the settings being applied, or the applied ones,
+// renders the result, and once it is shown saves it in the profile as the settings of the document's source. A patch
+// applied while another rendering is in progress builds on that one, which it aborts. Ignored before the document's
+// first rendering; a failure keeps the current rendering and applied settings and saves nothing.
+export async function applyDisplay(state: ImagesState, key: string, patch: Partial<DisplaySettings>, io: ImagesIo = browserIo) {
+	const current = currentDisplaySettings(state, key)
+	if (!current) return
 
-// Restores the default display settings of a document as pending settings, without rendering.
-export function resetDisplay(state: ImagesState, key: string) {
-	const info = documentOf(state, key)?.info
-	const view = state.views[key]
-	if (info && view) view.display.pending = copySettings(defaultDisplaySettings(info))
+	const settings = copySettings({ ...current, ...patch })
+	const source = documentOf(state, key)?.source
+	if ((await renderDisplay(state, key, settings, io)) && source) io.saveDisplay(source, settings)
 }
 
 // Switches a document between its applied rendering and its original one, rendering the original on
-// first use. The pending and applied settings are untouched. Ignored while a rendering is in progress,
+// first use. The applied settings are untouched. Ignored while a rendering is in progress,
 // which the original would otherwise abort.
 export async function toggleOriginal(state: ImagesState, key: string, io: ImagesIo = browserIo) {
 	const view = state.views[key]

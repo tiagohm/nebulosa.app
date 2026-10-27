@@ -3,7 +3,7 @@ import type { ImageProcessingJob, ImageProcessingStep } from 'api'
 import { proxy } from 'valtio'
 import { addStep, duplicateStep, enabledSteps, handleImageProcessingEvent, type ImageProcessingState, moveStep, refreshImageProcessing, removeStep, runProcessing, setStepEnabled, toggleExpanded, updateStep } from './imageprocessing'
 import { createOperation, pipelineIssue } from './imageprocessing.catalog'
-import { defaultDisplaySettings, type ImagesIo, type ImagesState, newView, openImage, ORIGINAL_DISPLAY_SETTINGS } from './images'
+import { type ImagesIo, type ImagesState, newView, openImage } from './images'
 
 interface Call {
 	readonly url: string
@@ -45,6 +45,8 @@ function fakeIo() {
 		fetch: (input: string, init?: RequestInit) => Promise.resolve(respond(input, init)),
 		createObjectURL: () => 'blob:1',
 		revokeObjectURL: () => undefined,
+		loadDisplay: () => undefined,
+		saveDisplay: () => undefined,
 	}
 
 	return { io, calls, control }
@@ -63,7 +65,7 @@ async function opened(images: ImagesState, io: ImagesIo) {
 
 describe('draft', () => {
 	test('adds, duplicates, toggles, edits, moves, and removes steps', () => {
-		const draft = newView(undefined).processing
+		const draft = newView().processing
 		addStep(draft, 'gaussianBlur')
 		addStep(draft, 'sharpen')
 		const [blur, sharpen] = draft.steps
@@ -92,7 +94,7 @@ describe('draft', () => {
 	})
 
 	test('the snapshot holds the enabled steps in order and never follows later edits', () => {
-		const draft = newView(undefined).processing
+		const draft = newView().processing
 		addStep(draft, 'gaussianBlur')
 		addStep(draft, 'horizontalFlip')
 		addStep(draft, 'sharpen')
@@ -198,15 +200,5 @@ describe('jobs', () => {
 
 		expect(images.views[key].processing).toMatchObject({ submitError: 'Background neutralization needs an RGB image', submitErrorStepId: draft.steps[0].id })
 		expect(images.views[key].processing.jobId).toBeUndefined()
-	})
-})
-
-describe('display', () => {
-	test('an output stretched by a step is shown linear, one without a stretch with the auto stretch', () => {
-		const stretched = { ...OUTPUT, provenance: { ...OUTPUT.provenance, steps: [{ id: 'a', operation: createOperation('arcsinhStretch') }] } } as never
-		const plain = { ...OUTPUT, provenance: { ...OUTPUT.provenance, steps: [{ id: 'a', operation: createOperation('sharpen') }] } } as never
-
-		expect(defaultDisplaySettings(stretched).stretch).toEqual({ mode: 'linear' })
-		expect(defaultDisplaySettings(plain)).toEqual(ORIGINAL_DISPLAY_SETTINGS)
 	})
 })

@@ -1,4 +1,4 @@
-import type { AutoFocusRequest, CaptureRequest, FlatWizardFilter, GuidingClientSettings, GuidingStartRequest, MountRemoteProtocol, MountRemoteStartRequest, PlateSolveRequest, StarDetectionRequest } from 'api'
+import type { AutoFocusRequest, CaptureRequest, DisplaySettings, FlatWizardFilter, GuidingClientSettings, GuidingStartRequest, MountRemoteProtocol, MountRemoteStartRequest, PlateSolveRequest, StarDetectionRequest } from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
@@ -15,8 +15,9 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // when read. Version 5 adds the TPPA form of each camera (tppa), version 6 its DARV form (darv), and version 7 its Flat
 // Wizard form (flatWizard). Version 8 adds the guiding form of each camera (guiding), and version 9 moves the guide
 // focal length of those forms to the guide telescope of the profile (guideTelescope). Version 10 adds the listener
-// bindings of Mount Remote Control of each mount (mountRemoteControl).
-export const PROFILES_VERSION = 10
+// bindings of Mount Remote Control of each mount (mountRemoteControl), and version 11 the display settings last applied
+// in Images, to the frames of each camera (display) and to every other image (imageDisplay).
+export const PROFILES_VERSION = 11
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -35,6 +36,9 @@ export interface ProfileSettings {
 	// Star detection request edited in Images → Star Detection, shared by every document and by the frames of Auto
 	// Focus; absent until edited, and then DEFAULT_STAR_REQUEST holds.
 	starDetection?: StarDetectionRequest
+	// Display settings applied last in Images to a file or derived image, which every image opened next starts with;
+	// absent until the first one is applied. Camera frames use those of their camera (CameraSettings display).
+	imageDisplay?: DisplaySettings
 	// Preferences of the Sky workspace.
 	sky: SkySettings
 	// Telescope or lens of the profile's Equipment Setup, which no device reports; absent until entered.
@@ -144,6 +148,8 @@ export interface CameraSettings {
 	flatWizard?: FlatWizardSettings
 	// Guiding form.
 	guiding?: GuidingSettings
+	// Display settings applied last to the frames of the camera in its Images tab, which its tab starts with.
+	display?: DisplaySettings
 }
 
 // Physical camera the forms of a profile belong to: the saved connection that provides it and its device id, stable

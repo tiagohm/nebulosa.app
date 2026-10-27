@@ -3,8 +3,9 @@ import type { CaptureFrameSummary, CaptureSourceSummary, DisplaySettings, Server
 import { proxy } from 'valtio'
 import { cameraTabKey, connectionCameraTab, handleCapturedFrame, holdCameraFrame, reconcileCameraTabs, reconcileCapturedFrames, selectCameraFrame } from './cameratabs'
 import { type CaptureFramesState, frameLabel, frameUnavailableReason, handleCaptureFramesEvent, loadRecentFrames, refreshCaptureFrames } from './captureframes'
+import { ORIGINAL_DISPLAY_SETTINGS } from './display'
 import { addStep } from './imageprocessing'
-import { applyDisplay, closeImage, editDisplay, type ImagesIo, type ImagesState, isClosable, ORIGINAL_DISPLAY_SETTINGS, setImageView } from './images'
+import { applyDisplay, closeImage, type ImageSource, type ImagesIo, type ImagesState, isClosable, setImageView } from './images'
 
 interface Call {
 	readonly url: string
@@ -42,8 +43,10 @@ function fakeIo() {
 	const gated = new Map<string, () => void>()
 	const failing = new Set<string>()
 	const sizes = new Map<string, readonly [number, number]>()
-	const control = { lost: [] as string[] }
+	const control: { lost: string[]; saved?: DisplaySettings } = { lost: [] }
 	const revoked: string[] = []
+	const loads: ImageSource[] = []
+	const saves: { readonly source: ImageSource; readonly settings: DisplaySettings }[] = []
 	let count = 0
 
 	async function gate(id: string) {
@@ -81,6 +84,11 @@ function fakeIo() {
 		},
 		createObjectURL: () => `blob:${++count}`,
 		revokeObjectURL: (url) => revoked.push(url),
+		loadDisplay: (source) => {
+			loads.push(source)
+			return control.saved
+		},
+		saveDisplay: (source, settings) => void saves.push({ source, settings }),
 	}
 
 	// Lets a gated open or rendering answer.
@@ -88,7 +96,7 @@ function fakeIo() {
 		gated.get(id)?.()
 	}
 
-	return { io, calls, refused, gated, failing, sizes, control, revoked, release }
+	return { io, calls, refused, gated, failing, sizes, control, revoked, release, loads, saves }
 }
 
 function newState() {
@@ -338,27 +346,35 @@ describe('selection', () => {
 })
 
 describe('shared view state', () => {
-	test('every frame renders with the applied settings, never the pending ones', async () => {
-		const { io, calls } = fakeIo()
+	test('the first frame starts with the settings its camera saved in the profile', async () => {
+		const { io, calls, control, loads, saves } = fakeIo()
+		control.saved = { ...ORIGINAL_DISPLAY_SETTINGS, gamma: 2 }
 		const state = await cameraTab(io, 's:1')
-		const applied: DisplaySettings = { ...ORIGINAL_DISPLAY_SETTINGS, gamma: 2 }
-		editDisplay(state, KEY, applied)
-		await applyDisplay(state, KEY, io)
-		editDisplay(state, KEY, { ...ORIGINAL_DISPLAY_SETTINGS, gamma: 3 })
+
+		expect(loads).toEqual([{ kind: 'camera', connectionId: 'conn', deviceId: 'cam' }])
+		expect(renders(calls)[0]).toMatchObject({ url: '/api/images/img-1/render', body: { settings: { gamma: 2 } } })
+		expect(state.views[KEY].display.applied).toMatchObject({ gamma: 2 })
+		expect(saves).toEqual([])
+	})
+
+	test('every frame renders with the applied settings', async () => {
+		const { io, calls, saves } = fakeIo()
+		const state = await cameraTab(io, 's:1')
+		await applyDisplay(state, KEY, { gamma: 2 }, io)
 
 		handleCapturedFrame(state, event(frame(2)), io, 'page')
 		await Bun.sleep(10)
 
 		expect(renders(calls).at(-1)).toMatchObject({ url: '/api/images/img-2/render', body: { settings: { gamma: 2 } } })
-		expect(state.views[KEY].display).toMatchObject({ applied: { gamma: 2 }, pending: { gamma: 3 } })
+		expect(state.views[KEY].display.applied).toMatchObject({ gamma: 2 })
+		expect(saves).toEqual([{ source: { kind: 'camera', connectionId: 'conn', deviceId: 'cam' }, settings: { ...ORIGINAL_DISPLAY_SETTINGS, gamma: 2 } }])
 	})
 
-	test('settings being applied when a new frame arrives become the applied ones', async () => {
-		const { io, calls, gated, release } = fakeIo()
+	test('settings being applied when a new frame arrives become the applied ones and are saved', async () => {
+		const { io, calls, gated, release, saves } = fakeIo()
 		const state = await cameraTab(io, 's:1')
-		editDisplay(state, KEY, { ...ORIGINAL_DISPLAY_SETTINGS, gamma: 2 })
 		gated.set('img-1', () => undefined)
-		const applying = applyDisplay(state, KEY, io)
+		const applying = applyDisplay(state, KEY, { gamma: 2 }, io)
 		await Bun.sleep(0)
 
 		handleCapturedFrame(state, event(frame(2)), io, 'page')
@@ -368,6 +384,7 @@ describe('shared view state', () => {
 
 		expect(renders(calls).at(-1)).toMatchObject({ url: '/api/images/img-2/render', body: { settings: { gamma: 2 } } })
 		expect(state.views[KEY].display.applied).toMatchObject({ gamma: 2 })
+		expect(saves.map((s) => s.settings)).toEqual([{ ...ORIGINAL_DISPLAY_SETTINGS, gamma: 2 }])
 	})
 
 	test('Show Original renders the original of the next frame too', async () => {

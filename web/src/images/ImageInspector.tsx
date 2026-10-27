@@ -12,7 +12,6 @@ import { PROVIDER_LABELS, starsState } from '../stars/stars'
 import { Button } from '../ui/Button'
 import type { CameraFrameSelection } from './cameratabs'
 import { connectionLabel, frameUnavailableReason } from './captureframes'
-import { DisplayAdjustments } from './DisplayAdjustments'
 import { operationLabel, operationSummary } from './imageprocessing.catalog'
 import { documentPath, downloadUrl, type ImageDocument } from './images'
 import type { ImageToolPanelProps } from './tools'
@@ -20,9 +19,9 @@ import type { ImageToolPanelProps } from './tools'
 // Image Inspector, the default contextual tool of the Images workspace: properties, the provenance and
 // save actions of a derived image, the camera, origin, session, and storage of the frame a camera tab shows (with the
 // focuser position of an Auto Focus frame when its session recorded it), the quality the measurements already made
-// on the image give (never measured here), acquisition data, display adjustments with the parameters of the current
-// rendering, and the header of the active document, with the statistics section still to come.
-// The display adjustments edit the document's pending display settings and create derived images.
+// on the image give (never measured here), acquisition data, the parameters of the current rendering, and the header
+// of the active document, with the statistics section still to come. The display settings are changed from the viewer
+// toolbar (DisplayToolbar).
 
 // Text shown for a datum the image does not have.
 const MISSING = '—'
@@ -95,7 +94,6 @@ export function ImageInspector({ document, view, onOpen, onSaveAs }: ImageToolPa
 			{info && <Quality imageId={info.id} />}
 			{info?.origin === 'derived' && <Derivation document={document} provenance={info.provenance} infoId={info.id} onSaveAs={onSaveAs} />}
 			{info && <Acquisition info={info} />}
-			{info && view && <DisplayAdjustments documentKey={document.key} info={info} view={view} />}
 			{view?.rendering && <AppliedDisplay result={view.rendering.result} />}
 			<PanelSection title="Histogram and Statistics">
 				<PlannedControls items={['Histogram', 'Mean, median, and deviation']} />
@@ -295,27 +293,24 @@ interface DerivationProps {
 	readonly onSaveAs: () => void
 }
 
-// Provenance and persistence of a derived image: its source, when it was derived, the processing steps applied when a
-// pipeline derived it, whether it is saved, and the Save As and download actions.
+// Provenance and persistence of a derived image: its source, when it was derived, the processing steps of the pipeline
+// that derived it, whether it is saved, and the Save As and download actions.
 function Derivation({ document, provenance, infoId, onSaveAs }: DerivationProps) {
 	return (
 		<PanelSection title="Derived Image">
 			<Property label="Source">{provenance.sourceName}</Property>
 			<Property label="Created (UTC)">{formatDate(provenance.createdAt)}</Property>
-			<Property label="Derived by">{provenance.kind === 'display' ? 'Display settings' : 'Image Processing'}</Property>
-			{provenance.kind === 'processing' && (
-				<ol className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs">
-					{provenance.steps.map(({ id, operation }, i) => (
-						<li key={id} className="flex min-w-0 gap-2">
-							<span className="flex-none text-ink-300 tabular-nums">{i + 1}.</span>
-							<span className="min-w-0 truncate text-ink-100" title={operationSummary(operation)}>
-								{operationLabel(operation.type)}
-								<span className="text-ink-300"> · {operationSummary(operation)}</span>
-							</span>
-						</li>
-					))}
-				</ol>
-			)}
+			<ol className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs">
+				{provenance.steps.map(({ id, operation }, i) => (
+					<li key={id} className="flex min-w-0 gap-2">
+						<span className="flex-none text-ink-300 tabular-nums">{i + 1}.</span>
+						<span className="min-w-0 truncate text-ink-100" title={operationSummary(operation)}>
+							{operationLabel(operation.type)}
+							<span className="text-ink-300"> · {operationSummary(operation)}</span>
+						</span>
+					</li>
+				))}
+			</ol>
 			<Property label="State">{document.unsaved ? <span className="text-accent">Unsaved</span> : 'Saved'}</Property>
 			<div className="mt-1 flex flex-wrap items-center gap-2">
 				<Button onClick={onSaveAs}>Save As…</Button>
@@ -342,8 +337,8 @@ function AppliedDisplay({ result }: AppliedDisplayProps) {
 			<Property label="Debayer">{result.cfa ?? 'Off'}</Property>
 			<Property label="Channels">{result.channels === 3 ? 'RGB' : 'Mono'}</Property>
 			{result.stretch.map((stretch, i) => (
-				<Property key={i} label={`Stretch${result.stretch.length === 3 ? ` ${CHANNEL_NAMES[i]}` : ''} (S / M / H)`}>
-					{stretch.shadow.toFixed(4)} / {stretch.midtone.toFixed(4)} / {stretch.highlight.toFixed(4)}
+				<Property key={i} label={`Stretch${result.stretch.length === 3 ? ` ${CHANNEL_NAMES[i]}` : ''}`}>
+					{stretch.shadow.toFixed(4)} - {stretch.highlight.toFixed(4)} | {stretch.midtone.toFixed(4)}
 				</Property>
 			))}
 		</PanelSection>

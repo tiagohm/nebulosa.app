@@ -48,7 +48,7 @@ export interface ImageToolPanelProps {
 
 // What running an image tool's operation produces: a new rendering of the document (display), a new temporary
 // document (derived), or data and overlays about the document that leave its pixels untouched
-// (analysis). The output also names the tool's main action: Apply to View, Create Derived Image, or
+// (analysis). The output also names the tool's main action: Apply to View, Run Pipeline, or
 // Run Analysis.
 export type ImageOperationOutput = 'display' | 'derived' | 'analysis'
 
@@ -87,7 +87,7 @@ function plannedImageTool(id: ImageToolId, label: string, outputs: ImageToolOnIm
 
 // Definition of every Images contextual tool, by id.
 export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefinition>> = {
-	inspector: { id: 'inspector', label: 'Image Inspector', panelTitle: 'Image Inspector', category: 'image', outputs: ['display', 'derived'], panel: ImageInspector },
+	inspector: { id: 'inspector', label: 'Image Inspector', panelTitle: 'Image Inspector', category: 'image', outputs: ['display'], panel: ImageInspector },
 	'plate-solver': { id: 'plate-solver', label: 'Plate Solving', panelTitle: 'Plate Solving', category: 'image', outputs: ['analysis'], panel: PlateSolverPanel },
 	'star-detection': { id: 'star-detection', label: 'Star Detection', panelTitle: 'Star Detection', category: 'image', outputs: ['analysis'], panel: StarDetectionPanel },
 	'streak-detection': plannedImageTool('streak-detection', 'Streak Detection', ['analysis']),

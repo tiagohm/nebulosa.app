@@ -1,5 +1,6 @@
-import type { FlatWizardFilter, StarDetectionRequest } from 'api'
+import type { DisplaySettings, FlatWizardFilter, StarDetectionRequest } from 'api'
 import { CAMERA_ROLES, type DeviceAssignment, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
+import { CFA_PATTERNS, DISPLAY_RANGES, type DisplayRange, ORIGINAL_DISPLAY_SETTINGS, SCNR_CHANNELS, SCNR_METHODS } from '../images/display'
 import { WORKSPACE_IDS } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
 import type { OpticalPreset, SensorGeometry, TelescopeOptics } from '../sky/framing'
@@ -120,8 +121,43 @@ function normalizeCamera(value: unknown): CameraSettings | undefined {
 	const darv = normalizeDarv(value.darv)
 	const flatWizard = normalizeFlatWizard(value.flatWizard)
 	const guiding = normalizeGuiding(value.guiding)
-	if (!exposure && !acquisition && !autoFocus && !tppa && !darv && !flatWizard && !guiding) return undefined
-	return { ...(exposure && { exposure }), ...(acquisition && { acquisition }), ...(autoFocus && { autoFocus }), ...(tppa && { tppa }), ...(darv && { darv }), ...(flatWizard && { flatWizard }), ...(guiding && { guiding }) }
+	const display = normalizeDisplaySettings(value.display)
+	if (!exposure && !acquisition && !autoFocus && !tppa && !darv && !flatWizard && !guiding && !display) return undefined
+	return { ...(exposure && { exposure }), ...(acquisition && { acquisition }), ...(autoFocus && { autoFocus }), ...(tppa && { tppa }), ...(darv && { darv }), ...(flatWizard && { flatWizard }), ...(guiding && { guiding }), ...(display && { display }) }
+}
+
+// Returns a number within a display range, or the fallback for anything else.
+function displayNumber(value: unknown, range: DisplayRange, fallback: number) {
+	return typeof value === 'number' && value >= range.min && value <= range.max ? value : fallback
+}
+
+// Returns whether value is one of the options.
+function oneOf<T extends string>(value: unknown, options: readonly T[]): value is T {
+	return typeof value === 'string' && (options as readonly string[]).includes(value)
+}
+
+// Restores persisted display settings of Images (version 11), filling every invalid field with its value in
+// ORIGINAL_DISPLAY_SETTINGS; undefined for anything that is not a record.
+function normalizeDisplaySettings(value: unknown): DisplaySettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = ORIGINAL_DISPLAY_SETTINGS
+	const debayer = isRecord(value.debayer) ? value.debayer : {}
+	const stretch = isRecord(value.stretch) ? value.stretch : {}
+	const levels = isRecord(stretch.stretch) ? stretch.stretch : {}
+	const scnr = isRecord(value.scnr) ? value.scnr : {}
+	const manual = { shadow: displayNumber(levels.shadow, DISPLAY_RANGES.stretch, 0), midtone: displayNumber(levels.midtone, DISPLAY_RANGES.stretch, 0.5), highlight: displayNumber(levels.highlight, DISPLAY_RANGES.stretch, 1) }
+
+	return {
+		debayer: debayer.enabled === true && (debayer.pattern === 'auto' || oneOf(debayer.pattern, CFA_PATTERNS)) ? { enabled: true, pattern: debayer.pattern } : defaults.debayer,
+		stretch: stretch.mode === 'linear' ? { mode: 'linear' } : stretch.mode === 'manual' && manual.shadow <= manual.highlight ? { mode: 'manual', stretch: manual } : { mode: 'auto', linked: stretch.linked !== false },
+		brightness: displayNumber(value.brightness, DISPLAY_RANGES.brightness, defaults.brightness),
+		contrast: displayNumber(value.contrast, DISPLAY_RANGES.contrast, defaults.contrast),
+		gamma: displayNumber(value.gamma, DISPLAY_RANGES.gamma, defaults.gamma),
+		saturation: displayNumber(value.saturation, DISPLAY_RANGES.saturation, defaults.saturation),
+		scnr: scnr.enabled === true && oneOf(scnr.channel, SCNR_CHANNELS) && oneOf(scnr.method, SCNR_METHODS) ? { enabled: true, channel: scnr.channel, method: scnr.method, amount: displayNumber(scnr.amount, DISPLAY_RANGES.scnrAmount, 0.5) } : defaults.scnr,
+		invert: value.invert === true,
+	}
 }
 
 // Restores the persisted forms of the cameras (version 4), by saved connection id and device id.
@@ -468,6 +504,8 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	settings.cameras = normalizeCameras(value.cameras)
 	const starDetection = normalizeStarRequest(value.starDetection)
 	if (starDetection) settings.starDetection = starDetection
+	const imageDisplay = normalizeDisplaySettings(value.imageDisplay)
+	if (imageDisplay) settings.imageDisplay = imageDisplay
 	normalizeSky(value.sky, settings.sky)
 	const telescope = normalizeTelescope(value.telescope)
 	if (telescope) settings.telescope = telescope
@@ -600,7 +638,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 7:
 		case 8:
 		case 9:
-		case 10: {
+		case 10:
+		case 11: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

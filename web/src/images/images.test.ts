@@ -1,27 +1,24 @@
 import { describe, expect, test } from 'bun:test'
 import type { DisplaySettings } from 'api'
 import { proxy, snapshot } from 'valtio'
+import { ORIGINAL_DISPLAY_SETTINGS } from './display'
 import {
 	activeDocument,
 	activeTool,
 	activeView,
 	applyDisplay,
 	closeImage,
-	createDerivedImage,
 	documentPath,
 	formatOfFileName,
 	hasUnsavedImages,
 	saveImage,
 	defaultDisplaySettings,
-	displayStatus,
-	editDisplay,
+	type ImageSource,
 	type ImagesIo,
 	type ImagesState,
 	imageUnavailableReason,
+	openDerivedImage,
 	openImage,
-	ORIGINAL_DISPLAY_SETTINGS,
-	resetDisplay,
-	revertDisplay,
 	selectImage,
 	selectImageTool,
 	selectPlateSolution,
@@ -44,18 +41,21 @@ interface Call {
 
 const INFO = { id: 'srv-1', name: 'm31.fits', path: '/data/m31.fits', format: 'fits', width: 4, height: 2, channels: 1, header: {} }
 const CFA_INFO = { ...INFO, bayer: 'RGGB', cfa: 'RGGB' }
+const UNTRUSTED_CFA_INFO = { ...INFO, bayer: 'XYZW' }
 const RESULT = { stretch: [{ midtone: 0.2, shadow: 0.1, highlight: 1 }], channels: 1 }
-const DERIVED_INFO = { origin: 'derived', id: 'srv-2', name: 'm31 — Processed', width: 4, height: 2, channels: 3, header: {}, provenance: { kind: 'display', source: 'srv-1', sourceName: 'm31.fits', settings: {}, createdAt: '2026-10-17T00:00:00.000Z' } }
+const DERIVED_INFO = { origin: 'derived', id: 'srv-2', name: 'm31 — Processed', width: 4, height: 2, channels: 3, header: {}, provenance: { kind: 'processing', source: 'srv-1', sourceName: 'm31.fits', steps: [], createdAt: '2026-10-17T00:00:00.000Z' } }
 
-// Fake API: opens any path as INFO (CFA_INFO for paths containing "cfa", or fails for paths containing
-// "bad"), and renders after release() is called for that rendering when gated. Renders fail while
-// failing is set.
+// Fake API: opens any path as INFO (CFA_INFO for paths containing "cfa", UNTRUSTED_CFA_INFO for "mosaic", or fails
+// for paths containing "bad"), and renders after release() is called for that rendering when gated. Renders fail
+// while failing is set. The profile gives saved for every source and records what is saved.
 function fakeIo(gated = false) {
 	const calls: Call[] = []
 	const created: string[] = []
 	const revoked: string[] = []
 	const gates: (() => void)[] = []
-	const control = { failing: false, deriveFailing: false }
+	const loads: ImageSource[] = []
+	const saves: { readonly source: ImageSource; readonly settings: DisplaySettings }[] = []
+	const control: { failing: boolean; saved?: DisplaySettings } = { failing: false }
 	let count = 0
 
 	const io: ImagesIo = {
@@ -66,16 +66,10 @@ function fakeIo(gated = false) {
 
 			if (input === '/api/images') {
 				const { path } = body as { path: string }
-				return path.includes('bad') ? Response.json({ error: 'Not a FITS or XISF image' }, { status: 415 }) : Response.json(path.includes('cfa') ? CFA_INFO : INFO, { status: 201 })
+				return path.includes('bad') ? Response.json({ error: 'Not a FITS or XISF image' }, { status: 415 }) : Response.json(path.includes('cfa') ? CFA_INFO : path.includes('mosaic') ? UNTRUSTED_CFA_INFO : INFO, { status: 201 })
 			}
 
 			if (method === 'DELETE') return new Response(null, { status: 204 })
-
-			if (input.endsWith('/derive')) {
-				if (control.deriveFailing) return Response.json({ error: 'The image has no known CFA pattern' }, { status: 422 })
-				const { settings } = body as { settings: DisplaySettings }
-				return Response.json({ ...DERIVED_INFO, provenance: { ...DERIVED_INFO.provenance, settings } }, { status: 201 })
-			}
 
 			if (input.endsWith('/save')) {
 				const { path, overwrite } = body as { path: string; overwrite: boolean }
@@ -100,9 +94,14 @@ function fakeIo(gated = false) {
 			return url
 		},
 		revokeObjectURL: (url) => void revoked.push(url),
+		loadDisplay: (source) => {
+			loads.push(source)
+			return control.saved
+		},
+		saveDisplay: (source, settings) => void saves.push({ source, settings }),
 	}
 
-	return { io, calls, created, revoked, gates, control }
+	return { io, calls, created, revoked, gates, control, loads, saves }
 }
 
 function newState() {
@@ -125,8 +124,7 @@ describe('open', () => {
 
 		expect(document).toMatchObject({ name: 'm31.fits', source: { kind: 'file', path: '/data/m31.fits' }, status: 'ready' })
 		expect(activeView(snapshot(state))).toMatchObject({ view: { kind: 'fit' }, renderPending: false, rendering: { url: 'blob:1', result: RESULT } })
-		expect(activeView(state)?.display).toEqual({ pending: ORIGINAL_DISPLAY_SETTINGS, applied: ORIGINAL_DISPLAY_SETTINGS, showOriginal: false })
-		expect(displayStatus(activeView(state)!)).toBe('applied')
+		expect(activeView(state)?.display).toEqual({ applied: ORIGINAL_DISPLAY_SETTINGS, showOriginal: false })
 		expect(document.info?.id).toBe('srv-1')
 		expect(calls.map((c) => [c.method, c.url, c.body])).toEqual([
 			['POST', '/api/images', { path: '/data/m31.fits' }],
@@ -141,6 +139,32 @@ describe('open', () => {
 
 		expect(defaultDisplaySettings(INFO as never)).toEqual(ORIGINAL_DISPLAY_SETTINGS)
 		expect(renders(calls)[0].body).toEqual({ settings: { ...ORIGINAL_DISPLAY_SETTINGS, debayer: { enabled: true, pattern: 'auto' } } })
+	})
+
+	test('a file starts with the global settings saved in the profile, without saving them again', async () => {
+		const state = newState()
+		const { io, calls, control, loads, saves } = fakeIo()
+		control.saved = BRIGHTER
+		await openImage(state, '/data/m31.fits', io)
+
+		expect(loads).toEqual([{ kind: 'file', path: '/data/m31.fits' }])
+		expect(renders(calls)[0].body).toEqual({ settings: BRIGHTER })
+		expect(activeView(state)?.display.applied).toEqual(BRIGHTER)
+		expect(saves).toEqual([])
+	})
+
+	test('saved debayering is dropped where it does not apply or cannot be resolved', async () => {
+		const state = newState()
+		const { io, calls, control } = fakeIo()
+		control.saved = { ...BRIGHTER, debayer: { enabled: true, pattern: 'auto' } }
+
+		await openImage(state, '/data/m31.fits', io)
+		await openImage(state, '/data/mosaic.fits', io)
+		await openImage(state, '/data/cfa.fits', io)
+		control.saved = { ...BRIGHTER, debayer: { enabled: true, pattern: 'GRBG' } }
+		await openImage(state, '/data/mosaic.fits', io)
+
+		expect(renders(calls).map((c) => (c.body as { settings: DisplaySettings }).settings.debayer)).toEqual([{ enabled: false }, { enabled: false }, { enabled: true, pattern: 'auto' }, { enabled: true, pattern: 'GRBG' }])
 	})
 
 	test('a rejected file becomes an error document', async () => {
@@ -162,109 +186,53 @@ describe('open', () => {
 })
 
 describe('display settings', () => {
-	test('editing never renders and marks the settings not applied', async () => {
+	test('a patch renders once, is applied on success, and is saved for the source', async () => {
 		const state = newState()
-		const { io, calls } = fakeIo()
+		const { io, calls, revoked, saves } = fakeIo()
 		await openImage(state, '/a.fits', io)
 		const key = state.documents[0].key
 
-		editDisplay(state, key, BRIGHTER)
-
-		expect(renders(calls)).toHaveLength(1)
-		expect(displayStatus(state.views[key])).toBe('not-applied')
-		expect(state.views[key]?.display.applied).toEqual(ORIGINAL_DISPLAY_SETTINGS)
-	})
-
-	test('apply renders the pending settings once and applies them on success', async () => {
-		const state = newState()
-		const { io, calls, revoked } = fakeIo()
-		await openImage(state, '/a.fits', io)
-		const key = state.documents[0].key
-
-		editDisplay(state, key, BRIGHTER)
-		await applyDisplay(state, key, io)
+		await applyDisplay(state, key, { brightness: 1.5 }, io)
 
 		expect(renders(calls).map((c) => c.body)).toEqual([{ settings: ORIGINAL_DISPLAY_SETTINGS }, { settings: BRIGHTER }])
 		expect(state.views[key]).toMatchObject({ rendering: { url: 'blob:2' }, display: { applied: BRIGHTER } })
-		expect(displayStatus(state.views[key])).toBe('applied')
 		expect(revoked).toEqual(['blob:1'])
+		expect(saves).toEqual([{ source: { kind: 'file', path: '/a.fits' }, settings: BRIGHTER }])
 	})
 
-	test('edits made while processing stay pending and the snapshot is applied', async () => {
+	test('a patch applied while rendering builds on the settings being applied, whose rendering it aborts', async () => {
 		const state = newState()
-		const { io, gates } = fakeIo(true)
+		const { io, calls, gates, saves } = fakeIo(true)
 		const opening = openImage(state, '/a.fits', io)
 		await Bun.sleep(0)
 		gates[0]()
 		await opening
 		const key = state.documents[0].key
 
-		editDisplay(state, key, BRIGHTER)
-		const applying = applyDisplay(state, key, io)
-		expect(displayStatus(state.views[key])).toBe('processing')
-
-		editDisplay(state, key, { ...BRIGHTER, invert: true })
-		await Bun.sleep(0)
-		gates[1]()
-		await applying
-
-		expect(state.views[key]?.display.applied).toEqual(BRIGHTER)
-		expect(displayStatus(state.views[key])).toBe('not-applied')
-	})
-
-	test('a failure keeps the previous rendering and applied settings', async () => {
-		const state = newState()
-		const { io, control } = fakeIo()
-		await openImage(state, '/a.fits', io)
-		const key = state.documents[0].key
-
-		editDisplay(state, key, BRIGHTER)
-		control.failing = true
-		await applyDisplay(state, key, io)
-
-		expect(state.views[key]).toMatchObject({ rendering: { url: 'blob:1' }, display: { applied: ORIGINAL_DISPLAY_SETTINGS, pending: BRIGHTER }, error: 'Rendering failed' })
-		expect(displayStatus(state.views[key])).toBe('error')
-	})
-
-	test('a newer apply aborts the previous one and only the latest is applied', async () => {
-		const state = newState()
-		const { io, calls, gates } = fakeIo(true)
-		const opening = openImage(state, '/a.fits', io)
-		await Bun.sleep(0)
-		gates[0]()
-		await opening
-		const key = state.documents[0].key
-
-		editDisplay(state, key, BRIGHTER)
-		const first = applyDisplay(state, key, io)
-		editDisplay(state, key, ORIGINAL_DISPLAY_SETTINGS)
-		const second = applyDisplay(state, key, io)
+		const first = applyDisplay(state, key, { brightness: 1.5 }, io)
+		const second = applyDisplay(state, key, { invert: true }, io)
 		expect(renders(calls)[1].signal?.aborted).toBe(true)
 		await Bun.sleep(0)
 		gates[2]()
 		await Promise.all([first, second])
 
-		expect(state.views[key]?.display.applied).toEqual(ORIGINAL_DISPLAY_SETTINGS)
+		expect(renders(calls)[2].body).toEqual({ settings: { ...BRIGHTER, invert: true } })
+		expect(state.views[key]?.display.applied).toEqual({ ...BRIGHTER, invert: true })
 		expect(state.views[key]?.renderPending).toBe(false)
+		expect(saves.map((s) => s.settings)).toEqual([{ ...BRIGHTER, invert: true }])
 	})
 
-	test('revert restores the applied settings and reset the defaults, without rendering', async () => {
+	test('a failure keeps the previous rendering and applied settings and saves nothing', async () => {
 		const state = newState()
-		const { io, calls } = fakeIo()
-		await openImage(state, '/data/cfa.fits', io)
+		const { io, control, saves } = fakeIo()
+		await openImage(state, '/a.fits', io)
 		const key = state.documents[0].key
-		const defaults = defaultDisplaySettings(CFA_INFO as never)
 
-		editDisplay(state, key, BRIGHTER)
-		revertDisplay(state, key)
-		expect(state.views[key]?.display.pending).toEqual(defaults)
+		control.failing = true
+		await applyDisplay(state, key, { brightness: 1.5 }, io)
 
-		editDisplay(state, key, BRIGHTER)
-		await applyDisplay(state, key, io)
-		resetDisplay(state, key)
-
-		expect(state.views[key]?.display).toMatchObject({ pending: defaults, applied: BRIGHTER })
-		expect(renders(calls)).toHaveLength(2)
+		expect(state.views[key]).toMatchObject({ rendering: { url: 'blob:1' }, display: { applied: ORIGINAL_DISPLAY_SETTINGS }, error: 'Rendering failed' })
+		expect(saves).toEqual([])
 	})
 
 	test('each document keeps its own settings', async () => {
@@ -274,11 +242,10 @@ describe('display settings', () => {
 		await openImage(state, '/b.fits', io)
 		const [a, b] = state.documents.map((d) => d.key)
 
-		editDisplay(state, b, BRIGHTER)
-		await applyDisplay(state, b, io)
+		await applyDisplay(state, b, { brightness: 1.5 }, io)
 
-		expect(state.views[a]?.display).toMatchObject({ pending: ORIGINAL_DISPLAY_SETTINGS, applied: ORIGINAL_DISPLAY_SETTINGS })
-		expect(state.views[b]?.display).toMatchObject({ pending: BRIGHTER, applied: BRIGHTER })
+		expect(state.views[a]?.display.applied).toEqual(ORIGINAL_DISPLAY_SETTINGS)
+		expect(state.views[b]?.display.applied).toEqual(BRIGHTER)
 	})
 
 	test('a manual stretch starts from the mean of the applied stretches', () => {
@@ -303,8 +270,7 @@ describe('show original', () => {
 		const { io, calls } = fakeIo()
 		await openImage(state, '/data/cfa.fits', io)
 		const key = state.documents[0].key
-		editDisplay(state, key, BRIGHTER)
-		const display = { pending: state.views[key].display.pending, applied: state.views[key].display.applied }
+		const applied = state.views[key].display.applied
 
 		await toggleOriginal(state, key, io)
 		expect(renders(calls).at(-1)?.body).toEqual({ settings: ORIGINAL_DISPLAY_SETTINGS })
@@ -315,7 +281,7 @@ describe('show original', () => {
 		await toggleOriginal(state, key, io)
 
 		expect(renders(calls)).toHaveLength(2)
-		expect(state.views[key]?.display).toMatchObject({ ...display, showOriginal: true })
+		expect(state.views[key]?.display).toMatchObject({ applied, showOriginal: true })
 	})
 
 	test('apply leaves the original view', async () => {
@@ -325,7 +291,7 @@ describe('show original', () => {
 		const key = state.documents[0].key
 
 		await toggleOriginal(state, key, io)
-		await applyDisplay(state, key, io)
+		await applyDisplay(state, key, { invert: true }, io)
 
 		expect(state.views[key]?.display.showOriginal).toBe(false)
 		expect(shownRendering(state.views[key])?.url).toBe('blob:3')
@@ -344,44 +310,28 @@ describe('show original', () => {
 })
 
 describe('derived images', () => {
-	test('creating one opens a new active unsaved document from the pending settings', async () => {
+	test('opening one adds a new active unsaved document rendered with the global settings', async () => {
 		const state = newState()
-		const { io, calls } = fakeIo()
+		const { io, control, loads } = fakeIo()
 		await openImage(state, '/data/m31.fits', io)
-		const key = state.documents[0].key
-		editDisplay(state, key, BRIGHTER)
+		control.saved = BRIGHTER
 
-		await createDerivedImage(state, key, io)
+		await openDerivedImage(state, DERIVED_INFO as never, 'm31.fits', true, io)
 		const derived = activeDocument(state)!
 
 		expect(state.documents).toHaveLength(2)
 		expect(derived).toMatchObject({ name: 'm31 — Processed', source: { kind: 'derived', sourceName: 'm31.fits' }, status: 'ready', unsaved: true })
-		expect(derived.info).toMatchObject({ origin: 'derived', provenance: { settings: BRIGHTER } })
-		expect(calls.find((c) => c.url.endsWith('/derive'))).toMatchObject({ url: '/api/images/srv-1/derive', body: { settings: BRIGHTER } })
-		expect(state.views[derived.key]?.display.applied).toEqual({ ...ORIGINAL_DISPLAY_SETTINGS, stretch: { mode: 'linear' } })
-		expect(state.views[key]).toMatchObject({ deriving: false, display: { pending: BRIGHTER, applied: ORIGINAL_DISPLAY_SETTINGS } })
+		expect(loads.at(-1)).toEqual({ kind: 'derived', sourceName: 'm31.fits' })
+		expect(state.views[derived.key]?.display.applied).toEqual(BRIGHTER)
 		expect(hasUnsavedImages(state)).toBeTrue()
 		expect(documentPath(derived)).toBeUndefined()
-	})
-
-	test('a failure is kept on the source and opens nothing', async () => {
-		const state = newState()
-		const { io, control } = fakeIo()
-		await openImage(state, '/data/m31.fits', io)
-		const key = state.documents[0].key
-		control.deriveFailing = true
-
-		await createDerivedImage(state, key, io)
-
-		expect(state.documents).toHaveLength(1)
-		expect(state.views[key]).toMatchObject({ deriving: false, deriveError: 'The image has no known CFA pattern' })
 	})
 
 	test('saving marks the document saved, named after its file, only once the server confirms', async () => {
 		const state = newState()
 		const { io, calls } = fakeIo()
 		await openImage(state, '/data/m31.fits', io)
-		await createDerivedImage(state, state.documents[0].key, io)
+		await openDerivedImage(state, DERIVED_INFO as never, 'm31.fits', true, io)
 		const key = state.activeKey!
 
 		expect(await saveImage(state, key, '/out/existing.xisf', 'xisf', false, io)).toEqual({ status: 'exists' })
@@ -401,7 +351,7 @@ describe('derived images', () => {
 		const state = newState()
 		const { io, calls, revoked } = fakeIo()
 		await openImage(state, '/data/m31.fits', io)
-		await createDerivedImage(state, state.documents[0].key, io)
+		await openDerivedImage(state, DERIVED_INFO as never, 'm31.fits', true, io)
 
 		closeImage(state, state.activeKey!, io)
 
@@ -409,11 +359,6 @@ describe('derived images', () => {
 		expect(calls.at(-1)).toMatchObject({ method: 'DELETE', url: '/api/images/srv-2' })
 		expect(revoked).toEqual(['blob:2'])
 		expect(hasUnsavedImages(state)).toBeFalse()
-	})
-
-	test('a derived image without a stretch is shown with the auto stretch', () => {
-		const derived = { ...DERIVED_INFO, provenance: { ...DERIVED_INFO.provenance, settings: { ...ORIGINAL_DISPLAY_SETTINGS, stretch: { mode: 'linear' } } } }
-		expect(defaultDisplaySettings(derived as never)).toEqual(ORIGINAL_DISPLAY_SETTINGS)
 	})
 
 	test('the file name extension picks the format', () => {

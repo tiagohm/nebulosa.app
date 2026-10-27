@@ -4,13 +4,15 @@ import { clientId } from '../events'
 import { jsonInit, responseError } from '../http'
 import { adaptView } from '../viewer/transform'
 import { type CaptureFramesState, captureFrameUrl, frameSourceKey } from './captureframes'
-import { applyingSettings, browserIo, copySettings, defaultDisplaySettings, documentOf, type ImageDocument, type ImagesIo, type ImagesState, type ImageToolContext, type ImageViewState, message, newView, ORIGINAL_DISPLAY_SETTINGS, releaseLease, removeDocument, requestRendering, settleApplying } from './images'
+import { ORIGINAL_DISPLAY_SETTINGS } from './display'
+import { applyingSettings, browserIo, copySettings, documentOf, type ImageDocument, type ImagesIo, type ImagesState, type ImageToolContext, type ImageViewState, initialDisplaySettings, message, newView, releaseLease, removeDocument, requestRendering, settleApplying } from './images'
 
 // Camera tabs of the Images workspace. Every connected camera of the watched connection has a camera tab, created and
 // removed with the camera and never closed by the operator. A camera tab shows one frame of the server's capture frame
 // registry at a time, chosen by its selection: the latest frame of the camera, which it follows as new frames arrive, a
 // saved frame, or a frame held for a manual analysis. Every frame it shows uses the same view state: zoom and pan
-// (adapted when the image size changes), the applied display settings (never the pending ones), and Show Original.
+// (adapted when the image size changes), the applied display settings (those its camera saved in the profile before
+// any, never the settings being edited in a popup of the viewer toolbar), and Show Original.
 // Showing a frame is a transaction: the frame is opened under a lease and rendered while the previous frame stays
 // shown, and only then are the frame, its document, and its rendering committed together, so pixels, metadata, and
 // overlays never mix two frames; a frame asked for later supersedes one still being opened, whose lease is released,
@@ -127,7 +129,7 @@ export function reconcileCameraTabs(state: ImagesState, cameras: readonly Camera
 		const restored = parked.get(key)
 		parked.delete(key)
 		state.documents.push({ key, name, source: { kind: 'camera', connectionId: camera.connectionId, deviceId: camera.id }, status: 'ready', unsaved: false, camera: { selection: { kind: 'latest' } } })
-		state.views[key] = restored?.view ?? newView(undefined)
+		state.views[key] = restored?.view ?? newView()
 		state.tools[key] = restored?.tool ?? { tool: 'inspector' }
 		added.push(key)
 	}
@@ -164,11 +166,11 @@ export async function selectCameraFrame(state: ImagesState, key: string, selecti
 }
 
 // Shows a frame in a camera tab as one transaction: opens it under a new lease and renders it with the applied
-// display settings of the tab (the defaults of the frame before any), plus the original rendering during Show
-// Original, while the previous frame stays shown; then, unless another frame was asked for meanwhile or the tab was
-// removed, commits the frame, its document, and its renderings together, adapts zoom and pan to its size, clears the
-// selected star and solution of the previous frame, and releases the previous lease. Pending display settings are
-// never applied. A refusal or failed rendering keeps the frame shown and is the tab's error; a superseded frame
+// display settings of the tab (before any, those its camera saved in the profile, or the defaults of the frame), plus
+// the original rendering during Show Original, while the previous frame stays shown; then, unless another frame was
+// asked for meanwhile or the tab was removed, commits the frame, its document, and its renderings together, adapts
+// zoom and pan to its size, clears the selected star and solution of the previous frame, and releases the previous
+// lease. Settings being edited in a popup of the viewer toolbar are never applied. A refusal or failed rendering keeps the frame shown and is the tab's error; a superseded frame
 // releases its lease and renderings.
 export async function showCameraFrame(state: ImagesState, key: string, frameId: string, io: ImagesIo = browserIo, client: string = clientId) {
 	const asked = cameraTabOf(state, key)
@@ -202,7 +204,7 @@ export async function showCameraFrame(state: ImagesState, key: string, frameId: 
 	// Settings being applied are those of the tab once this frame shows; the rendering of the previous frame they were
 	// applied to is aborted by this one.
 	const applying = applyingSettings(key)
-	const settings = copySettings(applying ?? view.display.applied ?? defaultDisplaySettings(opened.info))
+	const settings = copySettings(applying ?? view.display.applied ?? initialDisplaySettings(opened.info, io.loadDisplay(asked.source)))
 	const rendering = await requestRendering(state, key, opened.info.id, settings, io)
 	const original = rendering && view.display.showOriginal ? await requestRendering(state, key, opened.info.id, ORIGINAL_DISPLAY_SETTINGS, io) : undefined
 	const document = current()
@@ -238,11 +240,12 @@ export async function showCameraFrame(state: ImagesState, key: string, frameId: 
 	committed.display.original = original
 
 	if (applying) {
+		// The rendering of the settings being applied was aborted by this frame, so they are saved here instead.
 		committed.display.applied = settings
 		settleApplying(key, applying)
-	} else if (!committed.display.applied) {
-		committed.display.applied = settings
-		committed.display.pending = copySettings(settings)
+		io.saveDisplay(document.source, settings)
+	} else {
+		committed.display.applied ??= settings
 	}
 
 	committed.stars.selected = undefined

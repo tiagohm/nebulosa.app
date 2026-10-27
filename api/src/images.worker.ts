@@ -17,8 +17,8 @@ import { luminanceImage, readImageFrom } from './imagedecode'
 import { cfaPattern, DisplayError, type DisplaySettings, type ImageCapture, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageProvenance, type ImageWorkerRequest, type ImageWorkerResponse, type ProcessingProvenance, type RenderRequest, type RenderResult, type Stretch } from './images'
 
 // Worker thread that owns the decoded pixels of every open image document and does all the heavy
-// work on them: decoding FITS and XISF files and camera frames, the display pipeline, JPEG encoding, deriving new
-// documents from the pipeline in floating point, encoding documents as files, preparing the grayscale
+// work on them: decoding FITS and XISF files and camera frames, the display pipeline, JPEG encoding, encoding
+// documents as files, preparing the grayscale
 // copies star detections measure on their own worker (stars.worker.ts), and the full copies image processing
 // pipelines work on (imageprocessing.worker.ts), whose results come back to be adopted as documents. Keeping the
 // pixels here means they are never copied between threads, and the server event loop stays free while
@@ -189,11 +189,10 @@ const STALE_DERIVED_KEYWORDS = ['BZERO', 'BSCALE', 'DATAMIN', 'DATAMAX', 'CSTRET
 // CFA keywords that no longer apply once an image is debayered.
 const CFA_KEYWORDS = ['BAYERPAT', 'XBAYROFF', 'YBAYROFF'] as const
 
-// Returns the HISTORY lines of a derived image: its source and time, then the display settings applied, or each
-// processing step applied, in order, as its operation in JSON.
+// Returns the HISTORY lines of a derived image: its source and time, then each processing step applied, in order,
+// as its operation in JSON.
 function provenanceHistory(provenance: ImageProvenance): string[] {
 	const derived = `Derived by Nebulosa from ${provenance.sourceName} at ${provenance.createdAt}`
-	if (provenance.kind === 'display') return [derived, `Display pipeline: ${JSON.stringify(provenance.settings)}`]
 	const count = provenance.steps.length
 	return [derived, ...provenance.steps.map(({ operation }, i) => `Processing ${i + 1}/${count}: ${JSON.stringify(operation)}`)]
 }
@@ -228,15 +227,6 @@ function addDerivedDocument(image: Image, provenance: ImageProvenance, cfa: CfaP
 	const info: ImageInfo = { origin: 'derived', provenance, id: crypto.randomUUID(), name, width, height, channels, header, acquisition: imageAcquisition(header), ...(image.metadata.bayer && { bayer: image.metadata.bayer }), ...(cfa && { cfa }) }
 	documents.set(info.id, { name, image: derived, cfa, autoStretches: new Map() })
 	return info
-}
-
-// Derives a new document from a document by applying settings to its image. Throws DisplayError for settings
-// that cannot be applied.
-function deriveDocument(source: string, entry: DocumentEntry, settings: DisplaySettings): ImageInfo {
-	const { image, result } = displayImage(entry, settings)
-	const provenance: ImageProvenance = { kind: 'display', source, sourceName: entry.name, settings, createdAt: new Date().toISOString() }
-	// A mosaic left as is keeps its pattern; a debayered one has none.
-	return addDerivedDocument(image, provenance, result.cfa ? undefined : entry.cfa)
 }
 
 // Adopts the result of an image processing pipeline as a new derived document. Its metadata names the CFA
@@ -414,7 +404,7 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 		return
 	}
 
-	if (request.type === 'derive' || request.type === 'encode' || request.type === 'detectionImage' || request.type === 'processingImage') {
+	if (request.type === 'encode' || request.type === 'detectionImage' || request.type === 'processingImage') {
 		const entry = documents.get(request.document)
 
 		if (!entry) {
@@ -423,9 +413,7 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 		}
 
 		try {
-			if (request.type === 'derive') {
-				reply({ id: request.id, status: 'derived', info: deriveDocument(request.document, entry, request.request.settings) })
-			} else if (request.type === 'detectionImage') {
+			if (request.type === 'detectionImage') {
 				const image = detectionImage(entry)
 				reply({ id: request.id, status: 'detectionImage', image }, [image.raw.buffer])
 			} else if (request.type === 'processingImage') {
@@ -436,8 +424,7 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 				reply({ id: request.id, status: 'encoded', bytes }, [bytes.buffer])
 			}
 		} catch (error) {
-			if (error instanceof DisplayError) reply({ id: request.id, status: 'invalid', error: error.message })
-			else reply({ id: request.id, status: 'failed', error: Error.isError(error) ? error.message : String(error) })
+			reply({ id: request.id, status: 'failed', error: Error.isError(error) ? error.message : String(error) })
 		}
 
 		return

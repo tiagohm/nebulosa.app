@@ -216,28 +216,7 @@ export type { PlateSolutions, PlateSolveErrorCode, PlateSolveJob, PlateSolveJobS
 export type { PlateSolveHint, PlateSolveHints, PlateSolveHintSource, PlateSolveStrategy, ResolvedPlateSolveHints } from './platesolving.hints'
 export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
 export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
-export type {
-	Binning,
-	DeriveRequest,
-	DisplayDebayer,
-	DisplayProvenance,
-	DisplayScnr,
-	DisplaySettings,
-	DisplayStretch,
-	ImageAcquisition,
-	ImageCapture,
-	ImageFormat,
-	ImageInfo,
-	ImageOrigin,
-	ImageProperties,
-	ImageProvenance,
-	ProcessingProvenance,
-	RenderRequest,
-	RenderResult,
-	SaveRequest,
-	SaveResult,
-	Stretch,
-} from './images'
+export type { Binning, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageCapture, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, ProcessingProvenance, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from './images'
 export type {
 	ArcsinhStretchOperation,
 	BackgroundExtractionOperation,

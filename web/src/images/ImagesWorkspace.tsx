@@ -31,8 +31,9 @@ import { useCameraOperationContext } from './cameracontext'
 import { selectCameraFrame } from './cameratabs'
 import { captureFramesState, frameSourceKey } from './captureframes'
 import { CaptureFramesCarousel } from './CaptureFramesCarousel'
+import { DisplayToolbar } from './DisplayToolbar'
 import { ImageInspector } from './ImageInspector'
-import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, isClosable, openImage, selectImage, selectImageTool, selectStar, setImageView, shownRendering, toggleOriginal } from './images'
+import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, isClosable, isMosaic, openImage, selectImage, selectImageTool, selectStar, setImageView, shownRendering, toggleOriginal } from './images'
 import { SaveImageModal } from './SaveImageModal'
 import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolGroup, imageToolUnavailable } from './tools'
 
@@ -46,7 +47,8 @@ import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolGroup, imageToolUnavailab
 // pan, display settings, and tool, stay open while the tab lives, across document and workspace switches; a camera
 // tab follows the latest frame of its camera until a saved frame is selected or a manual analysis holds the frame
 // shown, and Return to Latest follows it again.
-// The viewer toolbar switches a document between its adjusted rendering and its original one. The star
+// The viewer toolbar switches a document between its adjusted rendering and its original one, and holds its display
+// controls (DisplayToolbar), whose popups close when another document is shown. The star
 // markers of the latest detection of the document's image are drawn over it while shown, and a click
 // selects a star while the Star Detection tool is open. Closing
 // an unsaved derived image asks first (cancel, discard, or Save As and then close), and Save As writes a
@@ -128,7 +130,9 @@ export function ImagesWorkspace() {
 							document &&
 							view && (
 								<>
-									<OriginalToggle documentKey={document.key} view={view} mosaic={!!document.info && document.info.channels === 1 && !!document.info.bayer} />
+									<OriginalToggle documentKey={document.key} view={view} mosaic={!!document.info && isMosaic(document.info)} />
+									<span className="mx-1 h-5 w-px bg-line-100" />
+									<DisplayToolbar key={document.key} documentKey={document.key} info={document.info} view={view} />
 									{document.camera && <CameraControls document={document} framesShown={framesShown} onToggleFrames={() => setFramesShown(!framesShown)} reticle={reticle} onToggleReticle={() => setReticles({ ...reticles, [document.key]: !reticle })} />}
 								</>
 							)

@@ -4,6 +4,8 @@ import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
 import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DARV_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, DEFAULT_GUIDING_SETTINGS, DEFAULT_MOUNT_REMOTE_BINDINGS, DEFAULT_TPPA_SETTINGS } from './schema'
+import type { DisplaySettings } from 'api'
+import { ORIGINAL_DISPLAY_SETTINGS } from '../images/display'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import {
 	mountRemoteBinding,
@@ -62,6 +64,8 @@ import {
 	setTelescopeOptics,
 	starDetectionSettings,
 	updateOpticalPreset,
+	imageDisplaySettings,
+	setImageDisplaySettings,
 } from './profile'
 
 function dev(id: string) {
@@ -96,7 +100,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 10, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: 11, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -790,7 +794,7 @@ describe('camera forms', () => {
 		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
 
 		const newer = newStores()
-		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 11, profiles: [{ id: 'a', name: 'A' }] }))
+		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 12, profiles: [{ id: 'a', name: 'A' }] }))
 		expect(load(newer).profiles.map((profile) => profile.id)).not.toContain('a')
 	})
 
@@ -807,6 +811,28 @@ describe('camera forms', () => {
 		const invalid = newStores()
 		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 4, profiles: [{ id: 'a', name: 'A', settings: { starDetection: { detector: { provider: 'builtin', maximumRadius: 2 } } } }] }))
 		expect(starDetectionSettings(load(invalid).profiles[0].settings)).toEqual(DEFAULT_STAR_REQUEST)
+	})
+
+	test('display settings applied in Images are kept per camera and globally, restored with defaults for invalid fields', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		const global = { ...ORIGINAL_DISPLAY_SETTINGS, stretch: { mode: 'manual', stretch: { shadow: 0.1, midtone: 0.3, highlight: 0.9 } }, invert: true } as const satisfies DisplaySettings
+		const camera = { ...ORIGINAL_DISPLAY_SETTINGS, debayer: { enabled: true, pattern: 'GRBG' }, gamma: 2 } as const satisfies DisplaySettings
+		expect(imageDisplaySettings(activeProfile(state).settings)).toBeUndefined()
+
+		setImageDisplaySettings(state, undefined, global)
+		setImageDisplaySettings(state, MAIN, camera)
+		await Bun.sleep(0)
+		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
+
+		expect(imageDisplaySettings(reloaded)).toEqual(global)
+		expect(imageDisplaySettings(reloaded, MAIN)).toEqual(camera)
+		expect(imageDisplaySettings(reloaded, { connectionId: 'c', deviceId: 'other' })).toBeUndefined()
+
+		const invalid = newStores()
+		const stored = { debayer: { enabled: true, pattern: 'XYZW' }, stretch: { mode: 'manual', stretch: { shadow: 0.9, midtone: 0.5, highlight: 0.1 } }, brightness: 9, gamma: 2, scnr: { enabled: true, channel: 'GREEN', method: 'bogus', amount: 1 }, invert: 'yes' }
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 11, profiles: [{ id: 'a', name: 'A', settings: { imageDisplay: stored } }] }))
+		expect(imageDisplaySettings(load(invalid).profiles[0].settings)).toEqual({ ...ORIGINAL_DISPLAY_SETTINGS, gamma: 2 })
 	})
 
 	test('version 3 forms of a camera role move to the camera that role is assigned in each setup', () => {

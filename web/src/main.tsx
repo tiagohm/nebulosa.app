@@ -16,12 +16,12 @@ import { domeMotionRuntime, handleDomeMotionEvent, refreshDomeMotions } from './
 import { focuserBacklashRuntime, handleFocuserBacklashEvent, refreshFocuserBacklash } from './equipment-control/focuserBacklash'
 import { handleIndiDirectoryEvent, indiDirectory, refreshIndiDirectory } from './equipment-control/indi/directory'
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
-import { onOpen, subscribe } from './events'
+import { onClose, onOpen, subscribe } from './events'
 import { handleCapturedFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseLeasesOnHide } from './images/cameratabs'
 import { captureFramesState, handleCaptureFramesEvent, refreshCaptureFrames } from './images/captureframes'
 import { handleImageProcessingEvent, imageProcessingState, refreshImageProcessing } from './images/imageprocessing'
 import { confirmUnsavedOnUnload, imagesState } from './images/images'
-import { handleNotificationEvent, notificationsState, refreshNotifications } from './notifications/notifications'
+import { handleNotificationEvent, notificationsState, refreshNotifications, setServerLink } from './notifications/notifications'
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
 import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from './platesolving/platesolving'
 import { loadProfiles, persistProfiles, profileState, pruneNotificationPreferences } from './profile/profile'
@@ -103,8 +103,10 @@ const stops = [
 		for (const store of SERVER_STORES) store.handle(event)
 	}),
 	onOpen(() => {
+		setServerLink(notificationsState, 'online')
 		for (const store of SERVER_STORES) void store.refresh?.()
 	}),
+	onClose(() => setServerLink(notificationsState, 'offline')),
 ]
 
 import.meta.hot.accept()

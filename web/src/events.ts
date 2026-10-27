@@ -3,7 +3,8 @@ import { nanoid } from 'nanoid'
 
 // Client side of the server event WebSocket: keeps one socket open for the tab and fans parsed events
 // out to listeners, reconnecting when the server goes away (e.g. on a dev server restart). Open listeners
-// run every time the socket opens, so state missed while it was closed can be fetched again. The socket names the
+// run every time the socket opens, so state missed while it was closed can be fetched again, and close listeners every
+// time an open socket closes, so the tab can tell it lost the server. The socket names the
 // page with a client id, the same for every reopen while the page lives, so the server keeps what the page holds
 // (such as the captured frames its Images tabs show) while its socket is closed, such as when a phone locks. A
 // few views also send control messages over the socket, such as the subscription to the INDI properties of a
@@ -22,10 +23,15 @@ const RECONNECT_DELAY = 2000
 // Receiver of socket opens.
 export type OpenListener = () => void
 
+// Receiver of the closes of an open socket.
+export type CloseListener = () => void
+
 // Listeners registered by this tab.
 const listeners = new Set<ServerEventListener>()
 // Listeners called on every socket open.
 const openListeners = new Set<OpenListener>()
+// Listeners called when an open socket closes; a socket that never opened closes silently.
+const closeListeners = new Set<CloseListener>()
 // Whether the socket was opened once; afterwards it reopens itself.
 let started = false
 // Socket of the tab while it is open.
@@ -50,7 +56,11 @@ function open() {
 	})
 
 	socket.addEventListener('close', () => {
-		if (current === socket) current = undefined
+		if (current === socket) {
+			current = undefined
+			for (const listener of closeListeners) listener()
+		}
+
 		setTimeout(open, RECONNECT_DELAY)
 	})
 }
@@ -84,4 +94,12 @@ export function send(message: ClientMessage): boolean {
 	if (current?.readyState !== WebSocket.OPEN) return false
 	current.send(JSON.stringify(message))
 	return true
+}
+
+// Registers a listener called whenever an open socket closes, opening the socket on first use. A failed attempt to
+// reopen it is not reported again. Returns a function that removes the listener.
+export function onClose(listener: CloseListener): () => void {
+	closeListeners.add(listener)
+	start()
+	return () => closeListeners.delete(listener)
 }

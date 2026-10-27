@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { NotificationRecord, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import type { ConnectionInput } from '../connection/connection'
-import { dismissToast, handleNotificationEvent, inScope, MAX_TOASTS, notificationAge, type NotificationsState, refreshNotifications, unreadCount, visibleNotifications } from './notifications'
+import { dismissToast, handleNotificationEvent, inScope, MAX_TOASTS, notificationAge, type NotificationsState, refreshNotifications, setServerLink, unreadCount, visibleNotifications } from './notifications'
 
 const pi: ConnectionInput = { name: 'Pi', type: 'INDI', host: 'PI.local', port: 7624 }
 
@@ -133,4 +133,16 @@ test('formats the age of a notification', () => {
 	expect(notificationAge(0, 5 * 60_000)).toBe('5 min ago')
 	expect(notificationAge(0, 3 * 3_600_000)).toBe('3 h ago')
 	expect(notificationAge(0, 50 * 3_600_000)).toBe('2 d ago')
+})
+
+test('follows the event socket without touching the history', async () => {
+	const state = newState()
+	await refreshNotifications(state, respond(notification('a', 1)))
+	expect(state.server).toBeUndefined()
+
+	setServerLink(state, 'online')
+	setServerLink(state, 'offline')
+	expect(state.server).toBe('offline')
+	expect(state.records).toHaveLength(1)
+	expect(state.toasts).toEqual([])
 })

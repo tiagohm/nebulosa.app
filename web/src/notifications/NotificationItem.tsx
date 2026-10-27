@@ -50,7 +50,7 @@ export function NotificationItem({ record, unread, available, now, onChoose, onD
 				data-notification-item
 				onClick={onChoose}
 				onKeyDown={onKeyDown}
-				className="flex min-w-0 flex-1 cursor-pointer gap-2.5 rounded-sm border-0 bg-transparent px-2 py-2.5 text-left text-ink-100 transition-colors duration-150 hover:bg-base-300 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
+				className="flex min-w-0 flex-1 cursor-pointer gap-2.5 rounded-sm border-0 bg-transparent px-2 py-2.5 my-1 text-left text-ink-100 transition-colors duration-150 hover:bg-base-300 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
 			>
 				<Icon name={record.level} className={cn('mt-px size-[18px]', LEVEL_ICON_CLASS[record.level])} />
 				<span className="flex min-w-0 flex-1 flex-col gap-0.5">

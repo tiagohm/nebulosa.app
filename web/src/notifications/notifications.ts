@@ -8,7 +8,8 @@ import type { NotificationPreferences } from '../profile/schema'
 // retained history, keeping the events that arrived while that request was in flight. Which records are read or
 // dismissed belongs to the active profile (ProfileSettings.notifications), never to this store or to the server.
 // Only notifications that arrive live after the first synchronization become toasts, so a reload or a reconnect
-// never replays them.
+// never replays them. The store also follows the event socket itself, so the tab can tell when it lost the server,
+// which no server notification can report.
 
 // Notifications known to the tab and the toasts it shows.
 export interface NotificationsState {
@@ -18,7 +19,12 @@ export interface NotificationsState {
 	synchronized: boolean
 	// Notifications shown as toasts, oldest first; at most MAX_TOASTS.
 	toasts: NotificationRecord[]
+	// Whether the event socket is open (online) or closed after it was open (offline); absent before it first opened.
+	server?: ServerLink
 }
+
+// State of the event socket of the tab.
+export type ServerLink = 'online' | 'offline'
 
 // Most toasts shown at once; the oldest is dropped first.
 export const MAX_TOASTS = 3
@@ -75,6 +81,11 @@ export async function refreshNotifications(state: NotificationsState, request: t
 		// The server is unreachable; the next socket open refreshes the history.
 		return undefined
 	}
+}
+
+// Records that the event socket opened (online) or that an open one closed (offline).
+export function setServerLink(state: NotificationsState, link: ServerLink) {
+	state.server = link
 }
 
 // Removes a toast; its notification stays in the history, read or not.

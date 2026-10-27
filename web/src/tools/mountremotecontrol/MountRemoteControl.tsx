@@ -67,7 +67,8 @@ export function MountRemoteControl() {
 						))}
 					</div>
 					<p className="m-0 text-xs leading-4 text-ink-300">
-						Clients are not authenticated: anyone who can reach a listener can move the mount. A goto from a client runs as a mount operation and goes on if the client disconnects; its manual motion stops when it disconnects. Site, time, and slew rate commands from clients are refused or ignored.
+						Clients are not authenticated: anyone who can reach a listener can move the mount. A goto from a client runs as a mount operation and goes on if the client disconnects; its manual motion stops when it disconnects. An LX200 client may set the mount's site (latitude and longitude, such as a
+						phone's GPS position); time and slew rate commands are refused or ignored.
 					</p>
 				</div>
 			</div>

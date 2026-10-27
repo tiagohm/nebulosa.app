@@ -230,7 +230,7 @@ test('reads the J2000 position of the mount and starts a goto that outlives its 
 	expect((await mounts.stop(id, mountId)).status).toBe(204)
 })
 
-test('refuses a goto and a sync while another operation holds the mount, and refuses site and clock setters', async () => {
+test('refuses a goto, a sync, and a site change while another operation holds the mount, and refuses clock setters', async () => {
 	const { id, mountId, mount, mounts, operations, service } = await setup()
 	const port = freePort()
 	service.start(id, mountId, 'lx200', { host: '127.0.0.1', port })
@@ -332,4 +332,19 @@ test('stops the listeners of a mount that disconnects, and of a connection that 
 	service.start(id, mountId, 'lx200', { host: '127.0.0.1', port: freePort() })
 	manager.disconnect(id)
 	expect(service.snapshot().servers).toHaveLength(0)
+})
+
+test('writes the site a client sends to the mount, latitude and longitude together', async () => {
+	const { id, mountId, mount, service } = await setup()
+	const port = freePort()
+	service.start(id, mountId, 'lx200', { host: '127.0.0.1', port })
+	const elevation = mount.geographicCoordinate.elevation
+
+	const client = await connect(port)
+	expect(await client.ask(':St-23*30#:Sg046*38#', (text) => text.length === 2)).toBe('11')
+
+	await waitUntil(() => Math.abs(mount.geographicCoordinate.latitude - deg(-23.5)) < deg(1e-6))
+	expect(mount.geographicCoordinate.longitude).toBeCloseTo(deg(-(46 + 38 / 60)), 8)
+	expect(mount.geographicCoordinate.elevation).toBe(elevation)
+	expect(await client.ask(':Gt#:Gg#', (text) => text.split('#').length === 3)).toBe('-23*30#+046*38#')
 })

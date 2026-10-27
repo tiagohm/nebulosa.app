@@ -1,4 +1,5 @@
 import { equatorialToJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { timeNow } from 'nebulosa/src/astronomy/time/time'
 import type { ManualMoveHandle } from 'nebulosa/src/devices/commanders/mount'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
@@ -28,7 +29,9 @@ import type { OperationRegistry } from './operations'
 // Stellarium has no reply and a refusal is only logged; once admitted it no longer depends on its client. The manual
 // motion of an LX200 client belongs to it alone: its commands run in order, another client's motion is refused, and
 // it stops when the client releases every axis, disconnects, the listener stops, or REMOTE_MOTION_WATCHDOG elapses.
-// :Q# is the emergency stop of the mount. Site, clock, and slew-rate commands never change the mount.
+// :Q# is the emergency stop of the mount. An LX200 client may set the site of the mount (latitude and longitude, such
+// as the GPS position Stellarium Mobile sends), written at once through the commander and refused while the mount is
+// busy; clock and slew-rate commands never change the mount.
 
 // Protocol of a remote control listener.
 export type MountRemoteProtocol = 'lx200' | 'stellarium'
@@ -117,6 +120,11 @@ export const STELLARIUM_POSITION_INTERVAL = 1000
 // Default timing of the service.
 export const DEFAULT_MOUNT_REMOTE_CONTROL_OPTIONS: MountRemoteControlOptions = { motionWatchdog: REMOTE_MOTION_WATCHDOG, positionInterval: STELLARIUM_POSITION_INTERVAL }
 
+// Milliseconds a site change waits for the other coordinate before it is written: LX200 sets the latitude and the
+// longitude with two commands, sent together, and writing each alone would send the mount a site that mixes the new
+// value with the old other one.
+const SITE_WRITE_DELAY = 250
+
 // Product name reported to LX200 clients.
 const LX200_PRODUCT_NAME = 'Nebulosa'
 
@@ -157,6 +165,10 @@ interface RemoteEntry extends MountRemoteKey {
 	revision: number
 	// Position sender of a Stellarium listener.
 	timer?: ReturnType<typeof setInterval>
+	// Site set by LX200 clients and not written to the mount yet, radians and meters.
+	site?: GeographicCoordinate
+	// Writes the pending site once both coordinates had time to arrive.
+	siteTimer?: ReturnType<typeof setTimeout>
 	// Last finite J2000 position read from the mount, radians; protocols need a value even while the mount reports none.
 	position: [Angle, Angle]
 	// Whether it was stopped; callbacks of its sockets arriving later are ignored.
@@ -289,6 +301,8 @@ export class MountRemoteControlService implements Disposable {
 		entry.stopped = true
 		this.#entries.delete(entryKey(entry.connectionId, entry.deviceId, entry.protocol))
 		clearInterval(entry.timer)
+		// A site already answered as accepted is still written.
+		if (entry.site) void this.#writeSite(entry)
 
 		const motions: Promise<unknown>[] = []
 
@@ -307,12 +321,13 @@ export class MountRemoteControlService implements Disposable {
 		await Promise.all(motions)
 	}
 
-	// Creates the LX200 server of a listener: positions and site from the mount, every setter of the site and the clock
-	// refused, gotos and syncs admitted or refused at once, slew rates ignored, and :Q# as the emergency stop.
+	// Creates the LX200 server of a listener: positions and site from the mount, site setters admitted or refused at
+	// once and written to the mount, clock setters refused, gotos and syncs admitted or refused at once, slew rates
+	// ignored, and :Q# as the emergency stop.
 	#lx200(mount: Mount, entry: () => RemoteEntry) {
 		return new Lx200ProtocolServer({
 			name: LX200_PRODUCT_NAME,
-			readOnlySite: true,
+			readOnlyTime: true,
 			handler: {
 				clientOpen: (_, client) => this.#clientOpened(entry(), client),
 				clientClose: (_, client) => this.#clientClosed(entry(), client),
@@ -320,6 +335,8 @@ export class MountRemoteControlService implements Disposable {
 				declination: () => this.#position(entry())[1],
 				longitude: () => mount.geographicCoordinate.longitude,
 				latitude: () => mount.geographicCoordinate.latitude,
+				setLatitude: (_, latitude) => this.#setSite(entry(), { latitude }),
+				setLongitude: (_, longitude) => this.#setSite(entry(), { longitude }),
 				dateTime: () => [mount.time.utc, mount.time.offset] as const,
 				tracking: () => mount.tracking,
 				parked: () => mount.parked,
@@ -351,6 +368,37 @@ export class MountRemoteControlService implements Disposable {
 				goto: (_, rightAscension, declination) => void this.#goTo(entry(), rightAscension, declination),
 			},
 		})
+	}
+
+	// Admits a change of the site of the mount sent by a client, latitude and longitude in radians (east positive), and
+	// writes it after SITE_WRITE_DELAY merged with the other coordinate when that one arrives meanwhile. Refused while
+	// the mount is disconnected or held by an operation, unless a change admitted before is still waiting. The elevation
+	// is kept, since LX200 has none. Returns whether it was admitted.
+	#setSite(entry: RemoteEntry, change: Partial<Pick<GeographicCoordinate, 'latitude' | 'longitude'>>) {
+		const { mount } = entry
+
+		if (entry.stopped || !mount.connected || (!entry.site && !this.operations.available(mount))) {
+			console.warn('mount remote control: lx200 site refused: the mount is disconnected or busy')
+			return false
+		}
+
+		const { latitude, longitude, elevation } = entry.site ?? mount.geographicCoordinate
+		entry.site = { latitude, longitude, elevation, ...change }
+		clearTimeout(entry.siteTimer)
+		entry.siteTimer = setTimeout(() => void this.#writeSite(entry), SITE_WRITE_DELAY)
+		return true
+	}
+
+	// Writes the pending site of a listener to its mount, logging a failure.
+	async #writeSite(entry: RemoteEntry) {
+		const site = entry.site
+		clearTimeout(entry.siteTimer)
+		entry.site = undefined
+		entry.siteTimer = undefined
+		if (!site) return
+
+		const result = await this.mounts.commander.setGeographicCoordinate(this.operations.coordinator, entry.mount, site)
+		if (!result.ok) console.warn('mount remote control: the site was not written', result.reason, result.error)
 	}
 
 	// Starts a goto to a J2000 target above the horizon of the site the mount reports. Returns whether it started.

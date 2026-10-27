@@ -1,7 +1,7 @@
 import type { DarvMeasurement, DarvSessionSummary, DeviceSummary } from 'api'
 import { cn } from 'cn'
 import { darvExposureTime } from 'nebulosa/src/observation/alignment/darv'
-import { type ReactNode, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
@@ -18,6 +18,7 @@ import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
+import { useNow } from '../useNow'
 import { cameraKey } from './capture'
 import {
 	abortDarv,
@@ -256,12 +257,7 @@ const PROGRESS_TICK = 250
 // left while the shutter is open; while the measurement prepares or its frame is analyzed, whose length is unknown,
 // the bar pulses instead.
 function MeasurementProgress({ measurement }: { readonly measurement: DarvMeasurement }) {
-	const [now, setNow] = useState(Date.now)
-
-	useEffect(() => {
-		const timer = setInterval(() => setNow(Date.now()), PROGRESS_TICK)
-		return () => clearInterval(timer)
-	}, [])
+	const now = useNow(true, PROGRESS_TICK)
 
 	const { step, elapsed, fraction } = darvProgress(measurement, now)
 

@@ -1,7 +1,7 @@
 import type { CameraCapabilities, CaptureFrame, CaptureOutputMode, CaptureRequest, CaptureSession, CaptureSnoop, DeviceSummary } from 'api'
 import { cn } from 'cn'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import type { RoleAvailability } from '../equipment/availability'
@@ -15,6 +15,7 @@ import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
+import { useNow } from '../useNow'
 import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, startCapture, stopCapture } from './capture'
 import { CameraSettings, ExposureSection, formatSeconds } from './ExposureSettings'
 
@@ -231,14 +232,8 @@ interface CaptureStateProps {
 // it is titled as the last acquisition, so its counts are not read as the form's.
 function CaptureState({ session }: CaptureStateProps) {
 	const running = captureRunning(session)
-	const [now, setNow] = useState(Date.now)
-
 	// Only the elapsed time is refreshed here; the capture itself runs on the server.
-	useEffect(() => {
-		if (!running) return
-		const timer = setInterval(() => setNow(Date.now()), 1000)
-		return () => clearInterval(timer)
-	}, [running])
+	const now = useNow(running)
 
 	const progress = session.phase === 'exposing' ? session.exposure?.progress : session.phase === 'waiting' ? session.delay?.progress : undefined
 	const failed = session.phase === 'failed' || session.phase === 'aborted'

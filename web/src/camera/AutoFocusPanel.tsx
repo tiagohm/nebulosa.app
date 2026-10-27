@@ -1,6 +1,6 @@
 import type { AutoFocusSessionSummary, CaptureSnoop, DeviceSummary } from 'api'
 import { cn } from 'cn'
-import { type ReactNode, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, deviceStateOf, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
@@ -18,6 +18,7 @@ import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
+import { useNow } from '../useNow'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusBlocker, autoFocusRequest, autoFocusRunning, autoFocusRuntime, defaultStepSize, FITTING_MODE_LABELS, FITTING_MODES, startAutoFocus, stopAutoFocus, VERIFICATION_LABELS } from './autofocus'
 import { cameraKey } from './capture'
 import { FrameProgress } from './FrameProgress'
@@ -164,14 +165,8 @@ interface SessionStateProps {
 // best focus the curve estimated apart from the position reached and the HFD verified there.
 function SessionState({ session, position, moving }: SessionStateProps) {
 	const running = autoFocusRunning(session)
-	const [now, setNow] = useState(Date.now)
-
 	// Only the elapsed time is refreshed here; the session itself runs on the server.
-	useEffect(() => {
-		if (!running) return
-		const timer = setInterval(() => setNow(Date.now()), 1000)
-		return () => clearInterval(timer)
-	}, [running])
+	const now = useNow(running)
 
 	const last = session.lastMeasurement
 	const failed = session.state === 'failed'

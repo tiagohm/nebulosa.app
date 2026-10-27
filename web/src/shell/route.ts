@@ -4,9 +4,8 @@ import { proxy } from 'valtio'
 // source of truth, so each tab navigates independently and a reload reopens the same context.
 // Paths are /images, /sky, /tools, /tools/<tool>, the Equipment Control page
 // /equipment, /equipment/<device id>, and /equipment/<device id>/indi for the INDI properties of the device,
-// and the Settings page /settings/external-tools and
-// /settings/external-tools/<tool id>, which are not workspaces of the navigation rail; anything else opens
-// the default route.
+// and the Settings page /settings/<section>, with /settings/external-tools/<tool id> for an external program,
+// which are not workspaces of the navigation rail; anything else opens the default route.
 
 // Main workspaces, in navigation order.
 export const WORKSPACE_IDS = ['images', 'sky', 'tools'] as const
@@ -42,12 +41,20 @@ export interface EquipmentRoute {
 	readonly view?: EquipmentView
 }
 
-// Location in the Settings page, whose only section is External Tools: the external program shown, if any.
+// Sections of the Settings page, in selector order; also the second path segment of a Settings route.
+export const SETTINGS_SECTION_IDS = ['external-tools'] as const
+
+// Identifier of a section of the Settings page.
+export type SettingsSectionId = (typeof SETTINGS_SECTION_IDS)[number]
+
+// Location in the Settings page: the section shown and, in External Tools, the external program shown, if any.
 // The page is opened from the gear button of the top bar, not from the navigation rail.
 export interface SettingsRoute {
 	// Settings page.
 	readonly workspace: 'settings'
-	// Id of the external program shown, as the server registers it; absent when none is selected.
+	// Section shown; absent for the first one.
+	readonly section?: SettingsSectionId
+	// Id of the external program shown in External Tools, as the server registers it; absent when none is selected.
 	readonly tool?: string
 }
 
@@ -77,12 +84,25 @@ export function isToolId(value: unknown): value is ToolId {
 	return (TOOL_IDS as readonly unknown[]).includes(value)
 }
 
+// Whether value names a section of the Settings page.
+function isSettingsSectionId(value: string): value is SettingsSectionId {
+	return (SETTINGS_SECTION_IDS as readonly string[]).includes(value)
+}
+
+// Returns the section a Settings route shows: its own, or the first one.
+export function settingsSection(route: SettingsRoute): SettingsSectionId {
+	return route.section ?? SETTINGS_SECTION_IDS[0]
+}
+
 // Returns the route of a URL path. An unknown workspace gives DEFAULT_ROUTE; an unknown tool opens the Tools
-// catalog; any Settings path opens External Tools; extra segments are ignored.
+// catalog; an unknown Settings section opens the first one; extra segments are ignored.
 export function parseRoute(pathname: string): Route {
 	const [workspace = '', first = '', second = ''] = pathname.split('/').filter(Boolean)
 	if (workspace === 'equipment') return first ? (second === 'indi' ? { workspace, device: first, view: second } : { workspace, device: first }) : { workspace }
-	if (workspace === 'settings') return first === 'external-tools' && second ? { workspace, tool: second } : { workspace }
+	if (workspace === 'settings') {
+		const section = isSettingsSectionId(first) ? first : SETTINGS_SECTION_IDS[0]
+		return first === 'external-tools' && second ? { workspace, section, tool: second } : { workspace, section }
+	}
 	if (!isWorkspaceId(workspace)) return DEFAULT_ROUTE
 
 	if (workspace === 'tools') return isToolId(first) ? { workspace, tool: first } : { workspace }
@@ -94,7 +114,10 @@ export function parseRoute(pathname: string): Route {
 export function routePath(route: Route): string {
 	if (route.workspace === 'tools' && route.tool) return `/tools/${route.tool}`
 	if (route.workspace === 'equipment') return route.device ? `/equipment/${encodeURIComponent(route.device)}${route.view ? `/${route.view}` : ''}` : '/equipment'
-	if (route.workspace === 'settings') return route.tool ? `/settings/external-tools/${encodeURIComponent(route.tool)}` : '/settings/external-tools'
+	if (route.workspace === 'settings') {
+		const section = settingsSection(route)
+		return section === 'external-tools' && route.tool ? `/settings/${section}/${encodeURIComponent(route.tool)}` : `/settings/${section}`
+	}
 	return `/${route.workspace}`
 }
 

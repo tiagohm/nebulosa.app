@@ -43,7 +43,7 @@ export interface EquipmentRoute {
 }
 
 // Location in the Settings page, whose only section is External Tools: the external program shown, if any.
-// The page is opened from the Management menu, not from the navigation rail.
+// The page is opened from the gear button of the top bar, not from the navigation rail.
 export interface SettingsRoute {
 	// Settings page.
 	readonly workspace: 'settings'

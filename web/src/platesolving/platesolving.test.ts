@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { PlateSolveJob, PlateSolveResult } from 'api'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { proxy } from 'valtio'
-import { completedJobs, handlePlateSolvingEvent, latestJob, loadPlateSolveResult, loadSolutions, type PlateSolvingState, refreshPlateSolving, runPlateSolve, selectedJob, selectedSolution } from './platesolving'
+import { completedJobs, handlePlateSolvingEvent, latestJob, loadPlateSolveResult, loadSolutions, mountSyncBlocker, mountSyncSupport, mountSyncTarget, type PlateSolvingState, refreshPlateSolving, runPlateSolve, selectedJob, selectedSolution } from './platesolving'
 
 function state(): PlateSolvingState {
 	return proxy<PlateSolvingState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {}, headers: {}, hints: {} })
@@ -109,5 +109,24 @@ describe('solutions', () => {
 
 		expect(s.headers.i1).toBeNull()
 		expect(selectedSolution(s, 'i1', 'header')).toBeUndefined()
+	})
+})
+
+describe('mount sync', () => {
+	test('sends the centre as J2000 decimal hours and degrees', () => {
+		expect(mountSyncTarget({ rightAscension: Math.PI / 2, declination: -Math.PI / 4 })).toEqual({ frame: 'J2000', x: '6.000000', y: '-45.000000' })
+		expect(mountSyncTarget({ rightAscension: -Math.PI / 2, declination: 0 }).x).toBe('18.000000')
+	})
+
+	test('is refused by a mount that cannot sync, is not ready, is parked, or is busy with a command', () => {
+		const ready = { status: 'ready' } as const
+		expect(mountSyncSupport({ canSync: false })).toBe('The mount cannot sync.')
+		expect(mountSyncSupport({ canSync: true })).toBeUndefined()
+		expect(mountSyncSupport(undefined)).toBeUndefined()
+		expect(mountSyncBlocker({ status: 'notSelected', message: 'No Mount selected.' }, undefined, false)).toBe('No Mount selected.')
+		expect(mountSyncBlocker(ready, undefined, false)).toBe('The mount state is not known yet.')
+		expect(mountSyncBlocker(ready, { parked: true, parking: false }, false)).toBe('The mount is parked.')
+		expect(mountSyncBlocker(ready, { parked: false, parking: false }, true)).toBe('A command of the mount is in flight.')
+		expect(mountSyncBlocker(ready, { parked: false, parking: false }, false)).toBeUndefined()
 	})
 })

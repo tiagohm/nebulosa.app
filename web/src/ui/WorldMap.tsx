@@ -306,7 +306,7 @@ export function WorldMap({ selected, onSelect, onHover, wrap = true, graticule =
 	callbacks.current = { onSelect, onHover }
 	// Id of the group the wrapping copies reference, without the characters useId adds that an IRI cannot hold.
 	const contentId = `world-map-${useId().replaceAll(/[^\w-]/g, '')}`
-	const graticuleData = useMemo(() => (graticule ? graticulePath(graticule) : undefined), [graticule])
+	const graticuleData = useMemo(() => (graticule ? graticulePath(graticule, wrap) : undefined), [graticule, wrap])
 
 	useImperativeHandle(
 		ref,

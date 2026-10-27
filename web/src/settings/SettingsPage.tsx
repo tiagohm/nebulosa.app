@@ -10,7 +10,7 @@ import { ExternalToolDetail } from './ExternalToolDetail'
 import { externalToolsState, refreshExternalTools } from './externaltools'
 import { ExternalToolsSelect, ExternalToolsSidebar } from './ExternalToolsSidebar'
 
-// Settings page (Management → Settings), whose only section is External Tools: the external programs the
+// Settings page (the gear button of the top bar), whose only section is External Tools: the external programs the
 // server supports, such as ASTAP, and the settings of the one shown. The program shown is part of the
 // URL; without one, the first program is shown. Switching programs with unsaved changes asks before
 // discarding them. Opening the page or selecting a program never runs or saves anything.

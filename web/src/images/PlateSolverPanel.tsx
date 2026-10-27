@@ -3,9 +3,13 @@ import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { Actions, Notice } from '../equipment-control/parts'
+import { controlRuntime, sendCommand, watchedDeviceState } from '../equipment-control/control'
+import { Actions, ConfirmButton, Notice } from '../equipment-control/parts'
+import { roleAvailability } from '../equipment/availability'
+import { useRoleDevice } from '../equipment/useEquipment'
+import { operationsState } from '../operations'
 import { AdvancedControls, HintControls, SolverControls, StrategyControls, useSolverConfigured } from '../platesolving/PlateSolveControls'
-import { cancelPlateSolve, completedJobs, isActive, loadHints, plateSolvingState, PROVIDER_LABELS, runPlateSolve, STAGE_LABELS } from '../platesolving/platesolving'
+import { cancelPlateSolve, completedJobs, isActive, loadHints, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolvingState, PROVIDER_LABELS, runPlateSolve, STAGE_LABELS } from '../platesolving/platesolving'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { PanelSection } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
@@ -23,7 +27,8 @@ import type { ImageToolPanelProps } from './tools'
 // Solve Image; zoom, pan, stretch, or the overlay never solve. The settings are editable before the document has an
 // image (a camera tab waiting for its first frame), with Solve Image disabled until it has one. A job stays bound to the image it solved, so switching
 // documents never shows its solution on another one, and a job that ends never replaces the solution chosen. Solvers
-// are configured in Settings → External Tools, which the solver section links to; nothing here moves a mount.
+// are configured in Settings → External Tools, which the solver section links to. Sync Mount, after a confirmation,
+// syncs the MOUNT of the active equipment setup on the centre of the solution shown; nothing here moves a mount.
 
 // Text shown for a value the result does not have.
 const MISSING = '—'
@@ -102,6 +107,7 @@ function PlateSolver({ documentKey, imageId, plateSolving, unavailable }: PlateS
 			{imageId !== undefined && (
 				<>
 					<Solution job={plateSolving.selected === 'header' ? undefined : job} result={result} solution={solution} fromHeader={plateSolving.selected === 'header'} resultError={resultError} />
+					{solution && <MountSync solution={solution} />}
 					<Solutions documentKey={documentKey} imageId={imageId} selected={plateSolving.selected} header={header} />
 				</>
 			)}
@@ -234,6 +240,52 @@ function SolverDetails({ result }: { readonly result: PlateSolveResult }) {
 				))}
 			</div>
 		</details>
+	)
+}
+
+interface MountSyncProps {
+	// Solution whose centre the mount is synced on.
+	readonly solution: PlateSolution
+}
+
+// Sync Mount: syncs the setup's mount on the centre of the solution shown, once confirmed, and says why it cannot or
+// why the mount refused. The mount takes the coordinate where it points now, without moving.
+function MountSync({ solution }: MountSyncProps) {
+	const mount = useRoleDevice('MOUNT')
+	const control = useSnapshot(controlRuntime)
+	const operations = useSnapshot(operationsState)
+	// Mount and coordinate of the latest sync this panel sent that the mount accepted, as "id x y".
+	const [synced, setSynced] = useState<string>()
+	const id = mount.device?.id
+	const state = watchedDeviceState(control, 'mount', mount.device)
+	const blocker = mountSyncBlocker(roleAvailability('MOUNT', mount, operations, mountSyncSupport(state)), state, id !== undefined && control.pending[id] !== undefined)
+	const error = id === undefined ? undefined : control.errors[id]
+	const target = mountSyncTarget(solution)
+	const key = `${id} ${target.x} ${target.y}`
+
+	async function sync() {
+		if (id === undefined) return
+		setSynced(undefined)
+		if (await sendCommand(controlRuntime, { type: 'mount', deviceId: id, action: 'sync', label: 'Sync', body: { target } })) setSynced(key)
+	}
+
+	return (
+		<PanelSection title="Mount">
+			<Actions>
+				<ConfirmButton
+					title="Sync the mount?"
+					message={`${mount.device?.name ?? 'The mount'} takes RA ${formatRightAscension(solution.rightAscension)} and Dec ${formatDeclination(solution.declination)} (J2000) as the place it points at now, without moving. Sync only when the image was taken at the current pointing.`}
+					confirmLabel="Sync"
+					disabled={blocker !== undefined}
+					onConfirm={() => void sync()}
+				>
+					Sync Mount
+				</ConfirmButton>
+			</Actions>
+			{blocker && <Notice>{blocker}</Notice>}
+			{error && <Notice error>{error}</Notice>}
+			{synced === key && !error && <Notice>The mount was synced on this solution.</Notice>}
+		</PanelSection>
 	)
 }
 

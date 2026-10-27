@@ -157,11 +157,12 @@ export function horizonRegionPath(subpoint: GeoPoint, side: HorizonSide, step: n
 }
 
 // Returns the SVG path data, in map units, of meridians and parallels every spacing degrees, the equator and
-// the prime meridian included. spacing is in (0, 90].
-export function graticulePath(spacing: number): string {
+// the prime meridian included. spacing is in (0, 90]. The antimeridian is drawn only when the map wraps (wrap), once at
+// its western edge, where it is the seam between a copy and the next; otherwise it is the border of the map.
+export function graticulePath(spacing: number, wrap: boolean = false): string {
 	let path = ''
 
-	for (let longitude = -180 + spacing; longitude < 180; longitude += spacing) {
+	for (let longitude = wrap ? -180 : -180 + spacing; longitude < 180; longitude += spacing) {
 		const x = round(project(longitude, 0).x)
 		path += `M${x} 0V${round(WORLD_MAP_HEIGHT)}`
 	}

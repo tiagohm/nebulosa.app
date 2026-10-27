@@ -101,6 +101,9 @@ test('graticule lines', () => {
 	const path = graticulePath(30)
 	expect(path.match(/V/g)).toHaveLength(11)
 	expect(path.match(/H/g)).toHaveLength(5)
+	const wrapped = graticulePath(30, true)
+	expect(wrapped.match(/V/g)).toHaveLength(12)
+	expect(wrapped.startsWith('M0 0V')).toBeTrue()
 })
 
 test('formats a position', () => {

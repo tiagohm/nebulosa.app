@@ -1,13 +1,16 @@
-import type { PlateSolutions, PlateSolveJob, PlateSolveRequest, PlateSolveResult, PlateSolverProvider, PlateSolveSnapshot, PlateSolveStage, ResolvedPlateSolveHints, ServerEvent } from 'api'
+import type { MountCoordinate, MountState, PlateSolutions, PlateSolveJob, PlateSolveRequest, PlateSolveResult, PlateSolverProvider, PlateSolveSnapshot, PlateSolveStage, ResolvedPlateSolveHints, ServerEvent } from 'api'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
+import { normalizeAngle, toDeg, toHour } from 'nebulosa/src/math/units/angle'
 import { proxy, ref } from 'valtio'
+import type { RoleAvailability } from '../equipment/availability'
 import { jsonInit, responseError } from '../http'
 
 // Plate solving jobs of the server as this tab knows them, used by the Images workspace (manual solves). The server
 // runs every job and keeps every result: this store mirrors the compact jobs of its snapshot and plateSolving:updated
 // events, remembers the latest job of each image id, and fetches the full result of a completed job (the WCS) only
 // when a view needs it. A result is always matched to the image id it solved, so a late result never lands on another
-// image. The solution a header already had is fetched apart, per image, and never replaced by a job.
+// image. The solution a header already had is fetched apart, per image, and never replaced by a job. It also gives the
+// coordinate a mount is synced on for a solution and why a sync cannot be sent.
 
 // Mirror of the server's plate solving jobs.
 export interface PlateSolvingState {
@@ -86,6 +89,29 @@ export function selectedSolution(state: Pick<PlateSolvingState, 'jobs' | 'latest
 	if (selected === 'header') return state.headers[imageId] ?? undefined
 	const job = selectedJob(state, imageId, selected)
 	return job?.state === 'completed' ? state.results[job.jobId]?.solution : undefined
+}
+
+// Returns the coordinate a mount is synced on for a solution: its ICRS centre sent as J2000, which differs from the
+// ICRS by tens of milliarcseconds, as decimal hours of right ascension and decimal degrees of declination.
+export function mountSyncTarget(solution: Pick<PlateSolution, 'rightAscension' | 'declination'>): MountCoordinate {
+	return { frame: 'J2000', x: toHour(normalizeAngle(solution.rightAscension)).toFixed(6), y: toDeg(solution.declination).toFixed(6) }
+}
+
+// Returns why a mount cannot sync at all, judged from its reported state (undefined while unknown), for
+// roleAvailability; undefined when it can.
+export function mountSyncSupport(state: Pick<MountState, 'canSync'> | undefined): string | undefined {
+	return state && !state.canSync ? 'The mount cannot sync.' : undefined
+}
+
+// Returns why the mount cannot be synced on a solution now, or undefined when it can, from the availability of the
+// setup's mount (unsupported per mountSyncSupport), its reported state (undefined while unknown), and whether a
+// command of it is in flight. The server checks again.
+export function mountSyncBlocker(mount: RoleAvailability, state: Pick<MountState, 'parked' | 'parking'> | undefined, pending: boolean): string | undefined {
+	if (mount.status !== 'ready') return mount.message
+	if (!state) return 'The mount state is not known yet.'
+	if (state.parked || state.parking) return 'The mount is parked.'
+	if (pending) return 'A command of the mount is in flight.'
+	return undefined
 }
 
 // Records a job. A job seen for the first time becomes the latest of its image unless a newer one is known; a job

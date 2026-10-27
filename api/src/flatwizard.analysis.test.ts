@@ -122,8 +122,8 @@ test('rejects a file that is not a FITS image and stays usable', async () => {
 	writeFileSync(path, 'not a fits file')
 	const signal = new AbortController().signal
 
-	await expect(analyzer.measure(path, {}, {}, false, signal)).rejects.toThrow('flat measurement failed')
-	await expect(analyzer.measure(join(root, 'missing.fits'), {}, {}, false, signal)).rejects.toThrow('flat measurement failed')
+	expect(analyzer.measure(path, {}, {}, false, signal)).rejects.toThrow('flat measurement failed')
+	expect(analyzer.measure(join(root, 'missing.fits'), {}, {}, false, signal)).rejects.toThrow('flat measurement failed')
 	expect(
 		(
 			await analyzer.measure(
@@ -152,8 +152,8 @@ test('terminates a worker that times out and starts a fresh one', async () => {
 	})
 	const path = writeFits('slow.fits', 512, 512, () => 20000)
 
-	await expect(timed.measure(path, {}, {}, false, new AbortController().signal)).rejects.toThrow('did not finish')
-	await expect(timed.measure(path, {}, {}, false, new AbortController().signal)).rejects.toThrow('did not finish')
+	expect(timed.measure(path, {}, {}, false, new AbortController().signal)).rejects.toThrow('did not finish')
+	expect(timed.measure(path, {}, {}, false, new AbortController().signal)).rejects.toThrow('did not finish')
 	await Bun.sleep(10)
 	expect(workers.map((worker) => worker.terminated)).toEqual([true, true])
 	timed.dispose()
@@ -181,7 +181,7 @@ test('rejects an aborted measurement and terminates its worker', async () => {
 	)
 	setTimeout(() => controller.abort(new Error('stopped')), 5)
 
-	await expect(measured).rejects.toThrow('stopped')
+	expect(measured).rejects.toThrow('stopped')
 	await Bun.sleep(20)
 	expect(terminated).toEqual([true])
 	aborting.dispose()

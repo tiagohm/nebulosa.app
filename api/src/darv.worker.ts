@@ -1,4 +1,4 @@
-import { analyzeDarvImage } from 'nebulosa/src/observation/alignment/polaralignment.darv.analysis'
+import { analyzeDarvImage } from 'nebulosa/src/observation/alignment/darv.analysis'
 import type { DarvWorkerRequest, DarvWorkerResponse } from './darv.analysis'
 
 // Worker thread of the DARV image analysis. It receives the grayscale copy of one frame at a time,

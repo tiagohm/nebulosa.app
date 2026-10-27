@@ -1,6 +1,6 @@
 import type { DarvMeasurement, DarvSessionSummary, DeviceSummary } from 'api'
 import { cn } from 'cn'
-import { darvExposureTime } from 'nebulosa/src/observation/alignment/polaralignment.darv'
+import { darvExposureTime } from 'nebulosa/src/observation/alignment/darv'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'

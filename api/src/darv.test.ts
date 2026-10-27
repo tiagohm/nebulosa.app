@@ -9,8 +9,8 @@ import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import { deg, hour } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
-import type { DarvImageAnalysisResult, DarvTrailMeasurement } from 'nebulosa/src/observation/alignment/polaralignment.darv.analysis'
-import type { DarvRunTiming } from 'nebulosa/src/observation/alignment/polaralignment.darv.runner'
+import type { DarvImageAnalysisResult, DarvTrailMeasurement } from 'nebulosa/src/observation/alignment/darv.analysis'
+import type { DarvRunTiming } from 'nebulosa/src/observation/alignment/darv.runner'
 import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures, type CaptureRequest } from './captures'
 import { ConnectionManager } from './connection'
@@ -360,9 +360,9 @@ describe('DARV analysis', () => {
 		expect(result.diagnostics).toContain('noStreaks')
 		expect(result.diagnostics).not.toContain('invalidTiming')
 
-		await expect(analyzer.analyze('released', timing, 'WEST', new AbortController().signal)).rejects.toThrow('released')
+		expect(analyzer.analyze('released', timing, 'WEST', new AbortController().signal)).rejects.toThrow('released')
 		const aborted = new AbortController()
 		aborted.abort(new Error('aborted'))
-		await expect(analyzer.analyze('frame', timing, 'WEST', aborted.signal)).rejects.toThrow('aborted')
+		expect(analyzer.analyze('frame', timing, 'WEST', aborted.signal)).rejects.toThrow('aborted')
 	})
 })

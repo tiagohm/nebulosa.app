@@ -1,6 +1,6 @@
 import type { CameraCapabilities, DarvCaptureSettings, DarvFinishRequest, DarvMeasurement, DarvMeasurementRequest, DarvMeasurementState, DarvMeasurementStatus, DarvRequest, DarvSession, DarvSessionSummary, DarvSnapshot, MountState, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
-import type { DarvAnalysisFailureReason } from 'nebulosa/src/observation/alignment/polaralignment.darv.analysis'
+import type { DarvAnalysisFailureReason } from 'nebulosa/src/observation/alignment/darv.analysis'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit, responseError } from '../http'

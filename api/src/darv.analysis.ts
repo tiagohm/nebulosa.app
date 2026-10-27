@@ -1,6 +1,6 @@
-import type { DarvAnalysisFailureReason, DarvAnalysisInput, DarvImageAnalysisResult, DarvTrailMeasurement } from 'nebulosa/src/observation/alignment/polaralignment.darv.analysis'
-import type { DarvRunTiming } from 'nebulosa/src/observation/alignment/polaralignment.darv.runner'
-import type { PolarAlignmentDirection } from 'nebulosa/src/observation/alignment/polaralignment.geometry'
+import type { DarvAnalysisFailureReason, DarvAnalysisInput, DarvImageAnalysisResult, DarvTrailMeasurement } from 'nebulosa/src/observation/alignment/darv.analysis'
+import type { DarvRunTiming } from 'nebulosa/src/observation/alignment/darv.runner'
+import type { PolarAlignmentDirection } from 'nebulosa/src/observation/alignment/polaralignment'
 import type { ImageStore } from './images'
 
 // Analysis of DARV frames: the toolkit's analyzeDarvImage on a worker of its own (`darv.worker.ts`), fed the

@@ -5,7 +5,7 @@ import { FocuserManager } from 'nebulosa/src/devices/indi/manager/focuser'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import type { OperationResult } from 'nebulosa/src/devices/orchestration/operation'
-import { ConnectionManager } from './connection'
+import { ConnectionManager, connections } from './connection'
 import { routes, websocket } from './index'
 import { type IndiDeviceSummary, IndiPropertyService, type IndiPropertyServiceOptions, type IndiServerEvent, type IndiSnapshotEvent, type IndiStreamEvent, type IndiWriteRequest } from './indi'
 import { type OperationRecord, OperationRegistry } from './operations'
@@ -599,7 +599,7 @@ describe('websocket', () => {
 
 		const response = await fetch(`${server.url}api/connections`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'INDI', host: '127.0.0.1', port: indi.port }) })
 		const { id } = (await response.json()) as { id: string }
-		disposables.push({ [Symbol.dispose]: () => void fetch(`${server.url}api/connections/${id}`, { method: 'DELETE' }) })
+		disposables.push({ [Symbol.dispose]: () => connections.disconnect(id) })
 		await until(() => indi.sockets.size === 1)
 		indi.push(RELAY)
 

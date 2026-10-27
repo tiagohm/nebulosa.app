@@ -47,8 +47,12 @@ export type ConnectionStatus = ConnectRequest & {
 	readonly id: string
 }
 
+// Why a connection closed: requested by a tab or by the disposal of the registry, or lost because the client
+// itself reported the close (the server dropped the socket, the network failed).
+export type ConnectionCloseCause = 'requested' | 'lost'
+
 // Notification published when a connection opens or closes, whoever caused it.
-export type ConnectionEvent = { readonly type: 'connection:open'; readonly connection: ConnectionStatus } | { readonly type: 'connection:close'; readonly id: string }
+export type ConnectionEvent = { readonly type: 'connection:open'; readonly connection: ConnectionStatus } | { readonly type: 'connection:close'; readonly id: string; readonly cause: ConnectionCloseCause }
 
 // Event the connection registry publishes: a connection opening or closing, or an event of the devices it provides.
 export type ConnectionRegistryEvent = ConnectionEvent | DeviceEvent
@@ -194,7 +198,7 @@ export class ConnectionManager implements Disposable {
 	}
 
 	// Closes the connection with the given id for every tab. Returns false when it is not open.
-	// Publishes connection:close.
+	// Publishes connection:close with the requested cause.
 	disconnect(id: string): boolean {
 		const open = this.#open.get(id)
 		if (!open) return false
@@ -203,7 +207,7 @@ export class ConnectionManager implements Disposable {
 		this.#open.delete(id)
 		open.client[Symbol.dispose]()
 		this.devices.close(open.client)
-		this.#emit({ type: 'connection:close', id })
+		this.#emit({ type: 'connection:close', id, cause: 'requested' })
 
 		return true
 	}
@@ -224,13 +228,13 @@ export class ConnectionManager implements Disposable {
 		return () => this.#listeners.delete(listener)
 	}
 
-	// Handles a close reported by the client itself (e.g. the server dropped the socket). Ignored when the
-	// connection was already removed or replaced, so each close is published once.
+	// Handles a close reported by the client itself (e.g. the server dropped the socket), published with the lost
+	// cause. Ignored when the connection was already removed or replaced, so each close is published once.
 	#closed(id: string, client: Client) {
 		if (this.#open.get(id)?.client !== client) return
 		this.#open.delete(id)
 		this.devices.close(client)
-		this.#emit({ type: 'connection:close', id })
+		this.#emit({ type: 'connection:close', id, cause: 'lost' })
 	}
 
 	// Delivers event synchronously to every registered listener, in registration order.

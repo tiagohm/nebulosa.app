@@ -75,7 +75,7 @@ test('events of other connections are ignored and a removed device is forgotten'
 test('a closing connection drops its states and switching connection starts over', () => {
 	const state = newState()
 	handleControlEvent(state, event(focuser()))
-	handleControlEvent(state, { type: 'connection:close', id: 'c' })
+	handleControlEvent(state, { type: 'connection:close', id: 'c', cause: 'requested' })
 	expect(state.states.focuser).toEqual({})
 
 	const { requests, request } = fakeFetch(() => Response.json(states()))

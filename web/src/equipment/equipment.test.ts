@@ -31,7 +31,7 @@ describe('role status', () => {
 
 	test('a closed connection keeps the assignment as unavailable', () => {
 		const state = newState([device('a', true)])
-		handleDeviceEvent(state, { type: 'connection:close', id: 's1' })
+		handleDeviceEvent(state, { type: 'connection:close', id: 's1', cause: 'requested' })
 
 		expect(roleStatus({ MAIN_CAMERA: { id: 'a', name: 'a' } }, 'MAIN_CAMERA', state)).toBe('unavailable')
 	})
@@ -76,7 +76,7 @@ describe('watching', () => {
 		handleDeviceEvent(state, { type: 'device:added', device: device('x', false, 's2') })
 		handleDeviceEvent(state, { type: 'device:updated', connectionId: 's2', id: 'a', connected: true })
 		handleDeviceEvent(state, { type: 'device:removed', connectionId: 's2', id: 'a' })
-		handleDeviceEvent(state, { type: 'connection:close', id: 's2' })
+		handleDeviceEvent(state, { type: 'connection:close', id: 's2', cause: 'requested' })
 
 		expect(state.devices).toEqual([device('a')])
 	})
@@ -187,7 +187,7 @@ describe('events during a fetch', () => {
 		state.errors.b = 'boom'
 		await switchDevice(state, 'a', true)
 
-		handleDeviceEvent(state, { type: 'connection:close', id: 's1' })
+		handleDeviceEvent(state, { type: 'connection:close', id: 's1', cause: 'requested' })
 
 		expect(state.devices).toBeEmpty()
 		expect(state.pending).toEqual({})

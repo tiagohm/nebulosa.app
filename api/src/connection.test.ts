@@ -56,7 +56,7 @@ describe('simulator connection', () => {
 
 		expect(manager.disconnect(id)).toBeTrue()
 		expect(manager.disconnect(id)).toBeFalse()
-		expect(events.at(-1)).toEqual({ type: 'connection:close', id })
+		expect(events.at(-1)).toEqual({ type: 'connection:close', id, cause: 'requested' })
 		expect(events).toHaveLength(2)
 	})
 })
@@ -156,7 +156,7 @@ describe('indi connection', () => {
 		await Bun.sleep(50)
 		expect(events).toEqual([
 			{ type: 'connection:open', connection: a },
-			{ type: 'connection:close', id: a.id },
+			{ type: 'connection:close', id: a.id, cause: 'requested' },
 		])
 	})
 
@@ -169,7 +169,7 @@ describe('indi connection', () => {
 		for (const socket of sockets) socket.end()
 		await Bun.sleep(100)
 
-		expect(events.at(-1)).toEqual({ type: 'connection:close', id })
+		expect(events.at(-1)).toEqual({ type: 'connection:close', id, cause: 'lost' })
 		expect(events).toHaveLength(2)
 		expect(manager.disconnect(id)).toBeFalse()
 	})
@@ -228,7 +228,7 @@ describe('routes', () => {
 		await Bun.sleep(50)
 		expect(messages.filter((m) => m.type.startsWith('connection:'))).toEqual([
 			{ type: 'connection:open', connection: { type: 'SIMULATOR', id: status.id } },
-			{ type: 'connection:close', id: status.id },
+			{ type: 'connection:close', id: status.id, cause: 'requested' },
 		])
 		expect(messages.filter((m) => m.type === 'device:removed').length).toBeGreaterThanOrEqual(devices.length)
 		expect(await (await fetch(`${server.url}api/connections`)).json()).toEqual([])

@@ -14,7 +14,7 @@ function newState() {
 test('follows operation events and ignores other events', () => {
 	const state = newState()
 
-	handleOperationEvent(state, { type: 'connection:close', id: 'a' })
+	handleOperationEvent(state, { type: 'connection:close', id: 'a', cause: 'requested' })
 	handleOperationEvent(state, { type: 'operation:updated', operation: operation('x') })
 	expect(state.operations.x?.state).toBe('running')
 

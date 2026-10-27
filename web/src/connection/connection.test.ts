@@ -214,10 +214,10 @@ describe('connection events', () => {
 
 		handleConnectionEvent(state, { type: 'connection:open', connection: { type: 'SIMULATOR', id: 'server-1' } })
 		handleConnectionEvent(state, { type: 'connection:open', connection: { type: 'SIMULATOR', id: 'server-1' } })
-		handleConnectionEvent(state, { type: 'connection:close', id: 'server-2' })
+		handleConnectionEvent(state, { type: 'connection:close', id: 'server-2', cause: 'requested' })
 		expect(state.servers).toEqual([{ type: 'SIMULATOR', id: 'server-1' }])
 
-		handleConnectionEvent(state, { type: 'connection:close', id: 'server-1' })
+		handleConnectionEvent(state, { type: 'connection:close', id: 'server-1', cause: 'requested' })
 		expect(state.servers).toBeEmpty()
 	})
 })

@@ -55,7 +55,7 @@ export type {
 	CaptureLeaseReconcileResponse,
 	CaptureSourceSummary,
 } from './captureframes'
-export type { ConnectionEvent, ConnectionRegistryEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest } from './connection'
+export type { ConnectionCloseCause, ConnectionEvent, ConnectionRegistryEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest } from './connection'
 export type { CommandAccepted, CommandError, CommandErrorCode, CommandRequest } from './commands'
 export type { EclipseDirection, EclipseLocation } from './eclipses'
 export type { ApiError } from './http'

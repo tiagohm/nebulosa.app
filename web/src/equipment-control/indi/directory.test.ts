@@ -32,7 +32,7 @@ test('lists the watched connection, replaying the events received while it loads
 	handleIndiDirectoryEvent(state, { type: 'indi:deviceRemoved', connectionId: 'c', hardwareId: 'mount' }, request)
 	expect(state.devices).toEqual([device('relay', 'c', true)])
 
-	handleIndiDirectoryEvent(state, { type: 'connection:close', id: 'c' }, request)
+	handleIndiDirectoryEvent(state, { type: 'connection:close', id: 'c', cause: 'requested' }, request)
 	expect(state.devices).toEqual([])
 })
 

@@ -59,7 +59,7 @@ test('mirrors sessions and frames by exact camera, ignoring late frames', () => 
 	expect(state.frames[key]).toMatchObject({ imageId: 'i2', file: 'saved' })
 	expect(state.sessions[cameraKey('other', 'cam')]).toBeUndefined()
 
-	handleCaptureEvent(state, { type: 'connection:close', id: 'c' })
+	handleCaptureEvent(state, { type: 'connection:close', id: 'c', cause: 'requested' })
 	// A session belongs to the server and stays known until the server replaces it.
 	expect(state.sessions[key]).toBeDefined()
 })

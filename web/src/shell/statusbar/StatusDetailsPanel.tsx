@@ -16,6 +16,7 @@ import { notificationsState } from '../../notifications/notifications'
 import { openNotificationTarget, targetAvailable } from '../../notifications/target'
 import { OPERATION_LABELS, operationsState } from '../../operations'
 import { activeProfile, activeSetup, profileState } from '../../profile/profile'
+import { useNow } from '../../useNow'
 import { routeState } from '../route'
 import { activeCapture, activeGuiding, connectionLabel, formatElapsed, guidingValue, otherOperations, progressText, roleDetailValue, scopedDeviceErrors, scopedRunningOperations, type ScopedDevice, serverLinkLabel, sessionOperationIds } from './selectors'
 import { TONE_CLASSES } from './StatusItems'
@@ -40,9 +41,6 @@ const PANEL_GAP = 4
 
 // Height of the top bar the panel never covers, in CSS pixels.
 const TOP_BAR_HEIGHT = 56
-
-// Interval of the elapsed times while the panel is open, in milliseconds.
-const ELAPSED_INTERVAL = 1000
 
 // Position and width of the panel in the viewport, in CSS pixels.
 interface PanelPlacement {
@@ -293,17 +291,4 @@ function OpenButton({ onClick }: OpenButtonProps) {
 			Open in Images
 		</button>
 	)
-}
-
-// Returns the current time in Unix milliseconds, updated every ELAPSED_INTERVAL while mounted; the timer is the
-// panel's own and stops when it closes.
-function useNow() {
-	const [now, setNow] = useState(Date.now)
-
-	useEffect(() => {
-		const timer = setInterval(() => setNow(Date.now()), ELAPSED_INTERVAL)
-		return () => clearInterval(timer)
-	}, [])
-
-	return now
 }

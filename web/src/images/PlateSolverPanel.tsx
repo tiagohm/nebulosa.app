@@ -17,6 +17,7 @@ import { formatDeclination, formatRightAscension } from '../sky/format'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { Select } from '../ui/Select'
+import { useNow } from '../useNow'
 import { holdCameraFrame } from './cameratabs'
 import { type ImagePlateSolvingState, imagesState, imageUnavailableReason, selectPlateSolution, setPlateSolveOverlay, setPlateSolveRequest } from './images'
 import type { ImageToolPanelProps } from './tools'
@@ -337,20 +338,6 @@ function Property({ label, children }: PropertyProps) {
 			<span className="min-w-0 text-right text-ink-100 tabular-nums">{children}</span>
 		</div>
 	)
-}
-
-// Returns the current time in Unix milliseconds, refreshed every second while running.
-function useNow(running: boolean): number {
-	const [now, setNow] = useState(() => Date.now())
-
-	useEffect(() => {
-		if (!running) return
-		setNow(Date.now())
-		const timer = setInterval(() => setNow(Date.now()), 1000)
-		return () => clearInterval(timer)
-	}, [running])
-
-	return now
 }
 
 // Returns how long a job ran, or has been running, in milliseconds; 0 while it waits.

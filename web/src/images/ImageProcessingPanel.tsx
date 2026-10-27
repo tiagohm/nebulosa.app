@@ -8,6 +8,7 @@ import { EmptyState } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { Select } from '../ui/Select'
+import { useNow } from '../useNow'
 import { addStep, cancelProcessing, duplicateStep, enabledSteps, type ImageProcessingDraft, imageProcessingState, isActive, moveStep, removeStep, runProcessing, setStepEnabled, toggleExpanded, updateStep } from './imageprocessing'
 import { OPERATION_TYPES, OPERATIONS, operationLabel, pipelineIssue } from './imageprocessing.catalog'
 import { type ImageDocument, imagesState, imageUnavailableReason } from './images'
@@ -406,20 +407,6 @@ function Property({ label, children }: PropertyProps) {
 			<span className="min-w-0 truncate text-right text-ink-100 tabular-nums">{children}</span>
 		</div>
 	)
-}
-
-// Returns the current time in Unix milliseconds, refreshed every second while running.
-function useNow(running: boolean): number {
-	const [now, setNow] = useState(() => Date.now())
-
-	useEffect(() => {
-		if (!running) return
-		setNow(Date.now())
-		const timer = setInterval(() => setNow(Date.now()), 1000)
-		return () => clearInterval(timer)
-	}, [running])
-
-	return now
 }
 
 // Returns a duration in milliseconds as seconds with one decimal.

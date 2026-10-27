@@ -19,6 +19,7 @@ import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equi
 import { onOpen, subscribe } from './events'
 import { handleCapturedFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseLeasesOnHide } from './images/cameratabs'
 import { captureFramesState, handleCaptureFramesEvent, refreshCaptureFrames } from './images/captureframes'
+import { handleImageProcessingEvent, imageProcessingState, refreshImageProcessing } from './images/imageprocessing'
 import { confirmUnsavedOnUnload, imagesState } from './images/images'
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
 import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from './platesolving/platesolving'
@@ -77,6 +78,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleExternalToolEvent(externalToolsState, event), refresh: () => refreshExternalTools(externalToolsState) },
 	{ handle: (event) => handleStarsEvent(starsState, event), refresh: () => refreshStars(starsState) },
 	{ handle: (event) => handlePlateSolvingEvent(plateSolvingState, event), refresh: () => refreshPlateSolving(plateSolvingState) },
+	{ handle: (event) => handleImageProcessingEvent(imageProcessingState, imagesState, event), refresh: () => refreshImageProcessing(imageProcessingState, imagesState) },
 	{ handle: (event) => handleCaptureFramesEvent(captureFramesState, event), refresh: () => refreshCaptureFrames(captureFramesState).then(() => reconcileCapturedFrames(imagesState, captureFramesState)) },
 	{ handle: (event) => handleCapturedFrame(imagesState, event) },
 ]

@@ -13,6 +13,7 @@ import { Button } from '../ui/Button'
 import type { CameraFrameSelection } from './cameratabs'
 import { connectionLabel, frameUnavailableReason } from './captureframes'
 import { DisplayAdjustments } from './DisplayAdjustments'
+import { operationLabel, operationSummary } from './imageprocessing.catalog'
 import { documentPath, downloadUrl, type ImageDocument } from './images'
 import type { ImageToolPanelProps } from './tools'
 
@@ -294,13 +295,27 @@ interface DerivationProps {
 	readonly onSaveAs: () => void
 }
 
-// Provenance and persistence of a derived image: its source, when it was derived, whether it is saved,
-// and the Save As and download actions.
+// Provenance and persistence of a derived image: its source, when it was derived, the processing steps applied when a
+// pipeline derived it, whether it is saved, and the Save As and download actions.
 function Derivation({ document, provenance, infoId, onSaveAs }: DerivationProps) {
 	return (
 		<PanelSection title="Derived Image">
 			<Property label="Source">{provenance.sourceName}</Property>
 			<Property label="Created (UTC)">{formatDate(provenance.createdAt)}</Property>
+			<Property label="Derived by">{provenance.kind === 'display' ? 'Display settings' : 'Image Processing'}</Property>
+			{provenance.kind === 'processing' && (
+				<ol className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs">
+					{provenance.steps.map(({ id, operation }, i) => (
+						<li key={id} className="flex min-w-0 gap-2">
+							<span className="flex-none text-ink-300 tabular-nums">{i + 1}.</span>
+							<span className="min-w-0 truncate text-ink-100" title={operationSummary(operation)}>
+								{operationLabel(operation.type)}
+								<span className="text-ink-300"> · {operationSummary(operation)}</span>
+							</span>
+						</li>
+					))}
+				</ol>
+			)}
 			<Property label="State">{document.unsaved ? <span className="text-accent">Unsaved</span> : 'Saved'}</Property>
 			<div className="mt-1 flex flex-wrap items-center gap-2">
 				<Button onClick={onSaveAs}>Save As…</Button>

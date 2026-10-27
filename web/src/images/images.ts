@@ -1,10 +1,12 @@
-import type { DeriveRequest, DisplaySettings, ImageFormat, ImageInfo, PlateSolveRequest, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from 'api'
+import type { DeriveRequest, DisplaySettings, ImageFormat, ImageInfo, ImageProvenance, PlateSolveRequest, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { jsonInit, responseError } from '../http'
 import { DEFAULT_PLATE_SOLVE_REQUEST } from '../platesolving/platesolving'
 import { FIT_VIEW, type ViewerView } from '../viewer/transform'
 import type { CameraTabState } from './cameratabs'
+import type { ImageProcessingDraft } from './imageprocessing'
+import { DEFAULT_ADDED_OPERATION } from './imageprocessing.catalog'
 import type { ImageToolId } from './tools'
 
 // Image documents open in the tab's Images workspace. Each open image is split in three objects under the
@@ -27,8 +29,8 @@ import type { ImageToolId } from './tools'
 // The star detection of a document keeps how its markers are shown; its request is the profile's, shared by every
 // document and sent only by Run Detection. Neither zoom, pan, display settings, nor the markers ever run a detection.
 //
-// A derived image, computed by the server from a document's pending settings, opens as a new document
-// that is unsaved until a save to a server file succeeds; the page asks before unloading while one
+// A derived image, computed by the server from a document's pending settings or by an image processing pipeline
+// (imageprocessing.ts), opens as a new document that is unsaved until a save to a server file succeeds; the page asks before unloading while one
 // exists, and closing one is confirmed by the workspace.
 //
 // Camera tabs (cameratabs.ts) are documents too, whose image is the frame they show; this module only removes them
@@ -127,6 +129,8 @@ export interface ImageViewState {
 	stars: ImageStarsState
 	// Plate solving request, solution shown, and overlay.
 	plateSolving: ImagePlateSolvingState
+	// Image processing pipeline being edited and the latest job it submitted.
+	processing: ImageProcessingDraft
 }
 
 // State of a document's display settings: rendering, the latest rendering failed, the pending settings
@@ -187,11 +191,17 @@ const applies = new Map<string, DisplaySettings>()
 
 // Returns the initial display settings of an opened image: the unprocessed settings, debayered with the
 // image's own pattern when it is a CFA mosaic with a trusted one.
-// A derived image already stretched is shown linear, so it is not stretched twice; one derived without a
-// stretch gets the auto stretch like a file.
+// A derived image already stretched (by a display stretch, or by an arcsinh stretch step of a pipeline) is shown
+// linear, so it is not stretched twice; one derived without a stretch gets the auto stretch like a file.
 export function defaultDisplaySettings(info: ImageInfo): DisplaySettings {
-	const stretch: DisplaySettings['stretch'] = info.origin === 'derived' && info.provenance.kind === 'display' && info.provenance.settings.stretch.mode !== 'linear' ? { mode: 'linear' } : ORIGINAL_DISPLAY_SETTINGS.stretch
+	const stretch: DisplaySettings['stretch'] = info.origin === 'derived' && isStretched(info.provenance) ? { mode: 'linear' } : ORIGINAL_DISPLAY_SETTINGS.stretch
 	return { ...ORIGINAL_DISPLAY_SETTINGS, stretch, ...(info.cfa && { debayer: { enabled: true, pattern: 'auto' } }) }
+}
+
+// Returns whether a derived image was stretched by what derived it.
+function isStretched(provenance: ImageProvenance): boolean {
+	if (provenance.kind === 'display') return provenance.settings.stretch.mode !== 'linear'
+	return provenance.steps.some((step) => step.operation.type === 'arcsinhStretch')
 }
 
 // Returns the server file of a document: the file it was opened from, or the one a derived image was
@@ -336,16 +346,26 @@ export function newView(info: ImageInfo | undefined): ImageViewState {
 		deriving: false,
 		stars: { visible: true, acceptedOnly: false },
 		plateSolving: { request: { ...DEFAULT_PLATE_SOLVE_REQUEST }, overlay: true, grid: false },
+		processing: { steps: [], expanded: [], adding: DEFAULT_ADDED_OPERATION },
 	}
 }
 
-// Adds a document as the active one, fitted to the viewer and shown with the Image Inspector, with its
-// default display settings when the server already described it.
-function addDocument(state: ImagesState, document: ImageDocument) {
+// Adds a document, fitted to the viewer and shown with the Image Inspector, with its default display settings when
+// the server already described it. It becomes the active one unless activate is false and another one is shown.
+function addDocument(state: ImagesState, document: ImageDocument, activate = true) {
 	state.documents.push(document)
 	state.views[document.key] = newView(document.info)
 	state.tools[document.key] = { tool: 'inspector' }
-	state.activeKey = document.key
+	if (activate || state.activeKey === undefined) state.activeKey = document.key
+}
+
+// Opens a derived image the server already created from a document named sourceName as a new unsaved document, rendered
+// with its default settings. It becomes the active one unless activate is false, so a result arriving while the
+// operator looks at another document does not take the view from it.
+export async function openDerivedImage(state: ImagesState, info: ImageInfo, sourceName: string, activate: boolean, io: ImagesIo = browserIo) {
+	const key = nanoid()
+	addDocument(state, { key, name: info.name, source: { kind: 'derived', sourceName }, status: 'ready', info: ref(info), unsaved: true }, activate)
+	await applyDisplay(state, key, io)
 }
 
 // Creates a derived image from a document with a snapshot of its pending display settings, computed by
@@ -363,10 +383,7 @@ export async function createDerivedImage(state: ImagesState, key: string, io: Im
 	try {
 		const response = await io.fetch(`/api/images/${encodeURIComponent(source.info.id)}/derive`, jsonInit('POST', request))
 		if (!response.ok) throw new Error(await responseError(response))
-		const info = (await response.json()) as ImageInfo
-		const derivedKey = nanoid()
-		addDocument(state, { key: derivedKey, name: info.name, source: { kind: 'derived', sourceName: source.name }, status: 'ready', info: ref(info), unsaved: true })
-		await applyDisplay(state, derivedKey, io)
+		await openDerivedImage(state, (await response.json()) as ImageInfo, source.name, true, io)
 	} catch (error) {
 		const current = state.views[key]
 		if (current) current.deriveError = message(error)

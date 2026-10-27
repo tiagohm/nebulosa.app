@@ -6,6 +6,7 @@ import { DarvTool } from './DarvTool'
 import { FlatWizardTool } from './FlatWizardTool'
 import { GuidingTool } from './GuidingTool'
 import { ImageInspector } from './ImageInspector'
+import { ImageProcessingPanel } from './ImageProcessingPanel'
 import type { ImageDocument, ImageViewState } from './images'
 import { MountNudgeTool } from './MountNudgeTool'
 import { PlateSolverPanel } from './PlateSolverPanel'
@@ -90,7 +91,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'plate-solver': { id: 'plate-solver', label: 'Plate Solving', panelTitle: 'Plate Solving', category: 'image', outputs: ['analysis'], panel: PlateSolverPanel },
 	'star-detection': { id: 'star-detection', label: 'Star Detection', panelTitle: 'Star Detection', category: 'image', outputs: ['analysis'], panel: StarDetectionPanel },
 	'streak-detection': plannedImageTool('streak-detection', 'Streak Detection', ['analysis']),
-	'image-processing': plannedImageTool('image-processing', 'Image Processing', ['derived']),
+	'image-processing': { id: 'image-processing', label: 'Image Processing', panelTitle: 'Image Processing', category: 'image', outputs: ['derived'], panel: ImageProcessingPanel },
 	'camera-acquisition': { id: 'camera-acquisition', label: 'Acquisition', panelTitle: 'Acquisition', category: 'camera', panel: CameraAcquisitionTool },
 	'auto-focus': { id: 'auto-focus', label: 'Auto Focus', panelTitle: 'Auto Focus', category: 'camera', panel: AutoFocusTool },
 	'mount-nudge': { id: 'mount-nudge', label: 'Mount Nudge', panelTitle: 'Mount Nudge', category: 'camera', panel: MountNudgeTool },

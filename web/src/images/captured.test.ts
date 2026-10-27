@@ -3,6 +3,7 @@ import type { CaptureFrameSummary, CaptureSourceSummary, DisplaySettings, Server
 import { proxy } from 'valtio'
 import { cameraTabKey, connectionCameraTab, handleCapturedFrame, holdCameraFrame, reconcileCameraTabs, reconcileCapturedFrames, selectCameraFrame } from './cameratabs'
 import { type CaptureFramesState, frameLabel, frameUnavailableReason, handleCaptureFramesEvent, loadRecentFrames, refreshCaptureFrames } from './captureframes'
+import { addStep } from './imageprocessing'
 import { applyDisplay, closeImage, editDisplay, type ImagesIo, type ImagesState, isClosable, ORIGINAL_DISPLAY_SETTINGS, setImageView } from './images'
 
 interface Call {
@@ -186,6 +187,7 @@ describe('camera tabs', () => {
 		const { io, calls } = fakeIo()
 		const state = await cameraTab(io, 's:1')
 		setImageView(state, KEY, { kind: 'manual', scale: 2, center: { x: 1, y: 1 } })
+		addStep(state.views[KEY].processing, 'cosmeticCorrection')
 
 		reconcileCameraTabs(state, [], framesOf('s:1'), io, 'page')
 		expect(state.documents).toEqual([])
@@ -194,6 +196,7 @@ describe('camera tabs', () => {
 		reconcileCameraTabs(state, [CAMERA], framesOf('s:1'), io, 'page')
 		await Bun.sleep(10)
 		expect(state.views[KEY].view).toEqual({ kind: 'manual', scale: 2, center: { x: 1, y: 1 } })
+		expect(state.views[KEY].processing.steps.map((step) => step.operation.type)).toEqual(['cosmeticCorrection'])
 		expect(tab(state).camera?.shown?.frame.frameId).toBe('s:1')
 	})
 })

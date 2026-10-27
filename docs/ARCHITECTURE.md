@@ -478,6 +478,8 @@ The display settings applied last in Images (version 11) are kept per physical c
 
 The streak detector settings of Images (version 12) are kept in `ProfileSettings.streakDetection`, every field restored within the toolkit's range and the orientation tolerance within the voting budget of the angle step; the context jobs of a detection are never stored.
 
+The notifications a profile read or dismissed (version 13) are kept in `ProfileSettings.notifications` as lists of notification ids (`markNotificationsRead`, `dismissNotification`), since the server keeps one history for every browser and never stores read states. Each refresh of the history drops from every profile the ids the server no longer retains (`pruneNotificationPreferences`), so each list holds at most the 500 retained ids; read states are never synchronized between browsers.
+
 ## Test Baseline
 
 Run before every delivery. CI (`.github/workflows/test.yml`) installs with `--frozen-lockfile`, writes an empty catalog with `bun make:catalog --empty`, then runs the first three:

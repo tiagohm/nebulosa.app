@@ -17,8 +17,8 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // focal length of those forms to the guide telescope of the profile (guideTelescope). Version 10 adds the listener
 // bindings of Mount Remote Control of each mount (mountRemoteControl), and version 11 the display settings last applied
 // in Images, to the frames of each camera (display) and to every other image (imageDisplay). Version 12 adds the streak
-// detector settings of Images (streakDetection).
-export const PROFILES_VERSION = 12
+// detector settings of Images (streakDetection), and version 13 the notifications the profile read or dismissed (notifications).
+export const PROFILES_VERSION = 13
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -55,7 +55,22 @@ export interface ProfileSettings {
 	// protocol; absent until edited, and then DEFAULT_MOUNT_REMOTE_BINDINGS holds. A preference only: it never starts,
 	// stops, or rebinds a listener.
 	mountRemoteControl?: Record<string, Record<string, Partial<Record<MountRemoteProtocol, MountRemoteBinding>>>>
+	// Notifications of the server history the profile read or dismissed; absent until the first one is read. The server
+	// keeps one history for every browser, so these states are the profile's own and are never sent back.
+	notifications?: NotificationPreferences
 }
+
+// Notifications of the server history a profile read or dismissed, by notification id. Ids the history no longer
+// retains are dropped, so each list holds at most MAX_NOTIFICATION_IDS ids.
+export interface NotificationPreferences {
+	// Notifications read; a dismissed notification is read too.
+	readIds: readonly string[]
+	// Notifications hidden from the lists of the profile.
+	dismissedIds: readonly string[]
+}
+
+// Most ids kept in each list of NotificationPreferences, the size of the server history.
+export const MAX_NOTIFICATION_IDS = 500
 
 // Protocols of the Mount Remote Control listeners, in the order the tool shows them.
 export const MOUNT_REMOTE_PROTOCOLS: readonly MountRemoteProtocol[] = ['lx200', 'stellarium']

@@ -69,6 +69,9 @@ import {
 	updateOpticalPreset,
 	imageDisplaySettings,
 	setImageDisplaySettings,
+	dismissNotification,
+	markNotificationsRead,
+	pruneNotificationPreferences,
 } from './profile'
 
 function dev(id: string) {
@@ -103,7 +106,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 12, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: 13, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -797,7 +800,7 @@ describe('camera forms', () => {
 		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
 
 		const newer = newStores()
-		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 13, profiles: [{ id: 'a', name: 'A' }] }))
+		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 14, profiles: [{ id: 'a', name: 'A' }] }))
 		expect(load(newer).profiles.map((profile) => profile.id)).not.toContain('a')
 	})
 
@@ -833,6 +836,36 @@ describe('camera forms', () => {
 		const restored = streakDetectionSettings(load(invalid).profiles[0].settings)
 		expect(restored).toEqual({ ...DEFAULT_STREAK_SETTINGS, angleStep: Math.PI / 180, orientationTolerance: restored.orientationTolerance })
 		expect(restored.orientationTolerance).toBeCloseTo((16 * Math.PI) / 180, 6)
+	})
+
+	test('the notifications read and dismissed are the profile ones, persisted, migrated, and pruned', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		const other = createProfile(state, 'Other')!
+
+		markNotificationsRead(state, ['a', 'b', 'a'])
+		dismissNotification(state, 'c')
+		expect(activeProfile(state).settings.notifications).toEqual({ readIds: ['a', 'b', 'c'], dismissedIds: ['c'] })
+		expect(other.settings.notifications).toBeUndefined()
+		await Bun.sleep(0)
+		expect(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings.notifications).toEqual({ readIds: ['a', 'b', 'c'], dismissedIds: ['c'] })
+
+		const updatedAt = activeProfile(state).updatedAt
+		pruneNotificationPreferences(state, ['b', 'c'])
+		expect(activeProfile(state).settings.notifications).toEqual({ readIds: ['b', 'c'], dismissedIds: ['c'] })
+		expect(activeProfile(state).updatedAt).toBe(updatedAt)
+
+		// A version 12 document keeps its preferences and gains none; invalid ids are dropped.
+		const older = newStores()
+		const streakDetection = { ...DEFAULT_STREAK_SETTINGS, minLength: 30 }
+		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 12, profiles: [{ id: 'a', name: 'A', settings: { streakDetection } }] }))
+		const migrated = load(older).profiles[0].settings
+		expect(migrated.streakDetection).toEqual(streakDetection)
+		expect(migrated.notifications).toBeUndefined()
+
+		const invalid = newStores()
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 13, profiles: [{ id: 'a', name: 'A', settings: { notifications: { readIds: ['x', 1, '', 'x', 'y'], dismissedIds: 'z' } } }] }))
+		expect(load(invalid).profiles[0].settings.notifications).toEqual({ readIds: ['x', 'y'], dismissedIds: [] })
 	})
 
 	test('display settings applied in Images are kept per camera and globally, restored with defaults for invalid fields', async () => {

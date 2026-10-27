@@ -21,9 +21,10 @@ import { handleCapturedFrame, reconcileCameraTabs, reconcileCapturedFrames, rele
 import { captureFramesState, handleCaptureFramesEvent, refreshCaptureFrames } from './images/captureframes'
 import { handleImageProcessingEvent, imageProcessingState, refreshImageProcessing } from './images/imageprocessing'
 import { confirmUnsavedOnUnload, imagesState } from './images/images'
+import { handleNotificationEvent, notificationsState, refreshNotifications } from './notifications/notifications'
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
 import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from './platesolving/platesolving'
-import { loadProfiles, persistProfiles, profileState } from './profile/profile'
+import { loadProfiles, persistProfiles, profileState, pruneNotificationPreferences } from './profile/profile'
 import { externalToolsState, handleExternalToolEvent, refreshExternalTools } from './settings/externaltools'
 import { routeState, watchHistory } from './shell/route'
 import { handleStarsEvent, refreshStars, starsState } from './stars/stars'
@@ -59,7 +60,8 @@ interface ServerStore {
 }
 
 // Stores mirroring server state. A refresh of the captured frames then reconciles the leases of the frames the camera
-// tabs of Images show and shows their selections again.
+// tabs of Images show and shows their selections again; a refresh of the notifications then drops from the profiles the
+// read and dismissed states of notifications the server no longer retains.
 const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleConnectionEvent(connectionState, event), refresh: () => refreshServers(connectionState) },
 	{ handle: (event) => handleDeviceEvent(deviceState, event), refresh: () => refreshDevices(deviceState) },
@@ -68,6 +70,10 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleDomeMotionEvent(domeMotionRuntime, event), refresh: () => refreshDomeMotions(domeMotionRuntime) },
 	{ handle: (event) => handleFocuserBacklashEvent(focuserBacklashRuntime, event), refresh: () => refreshFocuserBacklash(focuserBacklashRuntime) },
 	{ handle: (event) => handleOperationEvent(operationsState, event), refresh: () => refreshOperations(operationsState) },
+	{
+		handle: (event) => handleNotificationEvent(notificationsState, event),
+		refresh: () => refreshNotifications(notificationsState).then((ids) => ids && pruneNotificationPreferences(profileState, ids)),
+	},
 	{ handle: (event) => handleCaptureEvent(captureRuntime, event), refresh: () => refreshCaptures(captureRuntime) },
 	{ handle: (event) => handleNudgeEvent(nudgeRuntime, event), refresh: () => refreshNudges(nudgeRuntime) },
 	{ handle: (event) => handleMountRemoteControlEvent(mountRemoteControlState, event), refresh: () => refreshMountRemoteControl(mountRemoteControlState) },

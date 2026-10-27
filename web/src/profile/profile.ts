@@ -36,6 +36,7 @@ import {
 	type GuidingSettings,
 	DEFAULT_MOUNT_REMOTE_BINDINGS,
 	type MountRemoteBinding,
+	MAX_NOTIFICATION_IDS,
 } from './schema'
 
 // Profiles of the browser and the profile active in this tab, and the actions that change them. Profiles are a
@@ -602,4 +603,37 @@ export function setMountRemoteBinding(state: ProfileState, mount: CameraIdentity
 	const mounts = ((profile.settings.mountRemoteControl ??= {})[mount.connectionId] ??= {})
 	;(mounts[mount.deviceId] ??= {})[protocol] = { host: binding.host, port: binding.port }
 	touch(profile)
+}
+
+// Marks notifications as read in the active profile. Reading never changes the server history.
+export function markNotificationsRead(state: ProfileState, ids: readonly string[]) {
+	const profile = activeProfile(state)
+	const preferences = (profile.settings.notifications ??= { readIds: [], dismissedIds: [] })
+	const unread = Array.from(new Set(ids)).filter((id) => !preferences.readIds.includes(id))
+	if (unread.length === 0) return
+	preferences.readIds = [...preferences.readIds, ...unread].slice(-MAX_NOTIFICATION_IDS)
+	touch(profile)
+}
+
+// Hides a notification from the lists of the active profile, marking it as read. The server history keeps it.
+export function dismissNotification(state: ProfileState, id: string) {
+	markNotificationsRead(state, [id])
+	const profile = activeProfile(state)
+	const preferences = profile.settings.notifications
+	if (!preferences || preferences.dismissedIds.includes(id)) return
+	preferences.dismissedIds = [...preferences.dismissedIds, id].slice(-MAX_NOTIFICATION_IDS)
+	touch(profile)
+}
+
+// Drops from every profile the read and dismissed ids of notifications the server history no longer retains.
+// retained must be the whole history, never a part of it. Profiles are not marked as changed.
+export function pruneNotificationPreferences(state: ProfileState, retained: readonly string[]) {
+	const ids = new Set(retained)
+
+	for (const profile of state.profiles) {
+		const preferences = profile.settings.notifications
+		if (!preferences) continue
+		if (preferences.readIds.some((id) => !ids.has(id))) preferences.readIds = preferences.readIds.filter((id) => ids.has(id))
+		if (preferences.dismissedIds.some((id) => !ids.has(id))) preferences.dismissedIds = preferences.dismissedIds.filter((id) => ids.has(id))
+	}
 }

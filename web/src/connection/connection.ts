@@ -119,16 +119,17 @@ function connectRequest(connection: ConnectionInput): ConnectRequest {
 	return connection.type === 'SIMULATOR' ? { type: 'SIMULATOR' } : { type: connection.type, host: connection.host, port: connection.port }
 }
 
-// Returns the open server connection of a saved connection's endpoint. Hostnames compare
-// case-insensitively, as on the server.
-export function serverOf(servers: readonly ConnectionStatus[], connection: ConnectionInput | undefined): ConnectionStatus | undefined {
-	if (!connection) return undefined
+// Whether a server endpoint is the endpoint of a saved connection. Hostnames compare case-insensitively, as on the
+// server.
+export function sameEndpoint(endpoint: ConnectRequest, connection: ConnectionInput) {
+	if (endpoint.type !== connection.type) return false
+	if (endpoint.type === 'SIMULATOR') return true
+	return endpoint.host.toLowerCase() === connection.host.toLowerCase() && endpoint.port === connection.port
+}
 
-	return servers.find((s) => {
-		if (s.type !== connection.type) return false
-		if (s.type === 'SIMULATOR') return true
-		return s.host.toLowerCase() === connection.host.toLowerCase() && s.port === connection.port
-	})
+// Returns the open server connection of a saved connection's endpoint.
+export function serverOf(servers: readonly ConnectionStatus[], connection: ConnectionInput | undefined): ConnectionStatus | undefined {
+	return connection && servers.find((s) => sameEndpoint(s, connection))
 }
 
 // Adds a connection, or replaces the one with the given id, and selects it.

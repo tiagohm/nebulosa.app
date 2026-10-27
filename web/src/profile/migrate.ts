@@ -18,6 +18,8 @@ import {
 	defaultSettings,
 	MOUNT_REMOTE_PROTOCOLS,
 	type MountRemoteBinding,
+	MAX_NOTIFICATION_IDS,
+	type NotificationPreferences,
 	type Profile,
 	type ProfileSettings,
 	type SkyFramingSettings,
@@ -535,8 +537,24 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	if (guideTelescope) settings.guideTelescope = guideTelescope
 	const mountRemoteControl = normalizeMountRemoteControl(value.mountRemoteControl)
 	if (mountRemoteControl) settings.mountRemoteControl = mountRemoteControl
+	const notifications = normalizeNotificationPreferences(value.notifications)
+	if (notifications) settings.notifications = notifications
 
 	return settings
+}
+
+// Restores a list of notification ids: distinct strings, the latest MAX_NOTIFICATION_IDS.
+function normalizeNotificationIds(value: unknown): string[] {
+	if (!Array.isArray(value)) return []
+	return Array.from(new Set(value.filter((id): id is string => typeof id === 'string' && id.length > 0))).slice(-MAX_NOTIFICATION_IDS)
+}
+
+// Restores the notifications a profile read or dismissed. Returns undefined when none is valid.
+function normalizeNotificationPreferences(value: unknown): NotificationPreferences | undefined {
+	if (!isRecord(value)) return undefined
+	const readIds = normalizeNotificationIds(value.readIds)
+	const dismissedIds = normalizeNotificationIds(value.dismissedIds)
+	return readIds.length > 0 || dismissedIds.length > 0 ? { readIds, dismissedIds } : undefined
 }
 
 // Restores a Mount Remote Control binding: a non-empty host and an integer port in 1..65535. Returns undefined for
@@ -662,7 +680,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 9:
 		case 10:
 		case 11:
-		case 12: {
+		case 12:
+		case 13: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

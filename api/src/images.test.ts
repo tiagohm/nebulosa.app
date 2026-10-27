@@ -220,7 +220,7 @@ describe('derived images', () => {
 		const info = (await response.json()) as ImageInfo
 
 		expect(response.status).toBe(201)
-		expect(info).toMatchObject({ origin: 'derived', name: 'derive-cfa — Processed', width: 16, height: 8, channels: 3, provenance: { source: source.id, sourceName: 'derive-cfa.fits', settings } })
+		expect(info).toMatchObject({ origin: 'derived', name: 'derive-cfa — Processed', width: 16, height: 8, channels: 3, provenance: { kind: 'display', source: source.id, sourceName: 'derive-cfa.fits', settings } })
 		expect(info.id).not.toBe(source.id)
 		expect(info.cfa).toBeUndefined()
 		expect(info.header).toMatchObject({ BITPIX: -32, NAXIS: 3, NAXIS3: 3, OBJECT: 'M31' })
@@ -450,5 +450,35 @@ describe('detection image', () => {
 		expect(Array.from(image.raw)).not.toEqual(Array.from(mosaic.raw))
 		images.close(info.id)
 		images.close(untrusted.id)
+	})
+})
+
+describe('processing image', () => {
+	test('is an owned full copy naming the trusted CFA pattern at the image origin', async () => {
+		const info = await openFits(writeFits('processing-cfa.fits', 16, 8, 1, ["BAYERPAT= 'RGGB    '", 'XBAYROFF=                    1']))
+		const first = (await images.processingImage(info.id))!
+		const second = (await images.processingImage(info.id))!
+
+		expect(info.cfa).toBe('GRBG')
+		expect(first.metadata).toMatchObject({ width: 16, height: 8, channels: 1, bayer: 'GRBG' })
+		expect(first.header.BAYERPAT).toBe('GRBG')
+		expect(first.header.XBAYROFF).toBeUndefined()
+		first.raw.fill(0)
+		expect(second.raw.some((value) => value !== 0)).toBeTrue()
+		images.close(info.id)
+	})
+
+	test('is adopted as a derived document whose name and history come from its provenance', async () => {
+		const source = await openFits(writeFits('processing-adopt.fits', 16, 8, 3))
+		const image = (await images.processingImage(source.id))!
+		const steps = [{ id: 'flip', operation: { type: 'horizontalFlip' } }] as const
+
+		const info = await images.adopt(image, { kind: 'processing', source: source.id, sourceName: 'processing-adopt.fits', steps, createdAt: '2026-10-27T00:00:00.000Z' })
+
+		expect(info).toMatchObject({ origin: 'derived', name: 'processing-adopt — Processed', channels: 3, header: { BITPIX: -32, NAXIS3: 3 } })
+		expect(String(info.header.HISTORY)).toContain('Processing 1/1: {"type":"horizontalFlip"}')
+		expect(images.name(info.id)).toBe('processing-adopt — Processed')
+		images.close(source.id)
+		images.close(info.id)
 	})
 })

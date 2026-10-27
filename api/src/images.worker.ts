@@ -14,12 +14,13 @@ import { Bitpix, type FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSource } from 'nebulosa/src/io/io'
 import type { Sink } from 'nebulosa/src/io/types'
 import { luminanceImage, readImageFrom } from './imagedecode'
-import { cfaPattern, DisplayError, type DisplaySettings, type ImageCapture, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageProvenance, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult, type Stretch } from './images'
+import { cfaPattern, DisplayError, type DisplaySettings, type ImageCapture, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageProvenance, type ImageWorkerRequest, type ImageWorkerResponse, type ProcessingProvenance, type RenderRequest, type RenderResult, type Stretch } from './images'
 
 // Worker thread that owns the decoded pixels of every open image document and does all the heavy
 // work on them: decoding FITS and XISF files and camera frames, the display pipeline, JPEG encoding, deriving new
-// documents from the pipeline in floating point, encoding documents as files, and preparing the grayscale
-// copies star detections measure on their own worker (stars.worker.ts). Keeping the
+// documents from the pipeline in floating point, encoding documents as files, preparing the grayscale
+// copies star detections measure on their own worker (stars.worker.ts), and the full copies image processing
+// pipelines work on (imageprocessing.worker.ts), whose results come back to be adopted as documents. Keeping the
 // pixels here means they are never copied between threads, and the server event loop stays free while
 // a large image is decoded or rendered. Renderings run one at a time, always on a copy of the decoded
 // image, which is never modified; opens overlap them only while reading. A rendering waits in a
@@ -188,17 +189,25 @@ const STALE_DERIVED_KEYWORDS = ['BZERO', 'BSCALE', 'DATAMIN', 'DATAMAX', 'CSTRET
 // CFA keywords that no longer apply once an image is debayered.
 const CFA_KEYWORDS = ['BAYERPAT', 'XBAYROFF', 'YBAYROFF'] as const
 
+// Returns the HISTORY lines of a derived image: its source and time, then the display settings applied, or each
+// processing step applied, in order, as its operation in JSON.
+function provenanceHistory(provenance: ImageProvenance): string[] {
+	const derived = `Derived by Nebulosa from ${provenance.sourceName} at ${provenance.createdAt}`
+	if (provenance.kind === 'display') return [derived, `Display pipeline: ${JSON.stringify(provenance.settings)}`]
+	const count = provenance.steps.length
+	return [derived, ...provenance.steps.map(({ operation }, i) => `Processing ${i + 1}/${count}: ${JSON.stringify(operation)}`)]
+}
+
 // Returns the header of a derived image: the source keywords with the geometry and floating-point
 // BITPIX of the result, without the keywords that no longer hold, and with HISTORY recording the
-// source, the time, and the settings applied.
+// source, the time, and what was applied.
 function derivedHeader(image: Image, provenance: ImageProvenance): FitsHeader {
 	const { width, height, channels } = image.metadata
 	const header: FitsHeader = { ...image.header, BITPIX: image.raw instanceof Float64Array ? Bitpix.DOUBLE : Bitpix.FLOAT, NAXIS: channels === 3 ? 3 : 2, NAXIS1: width, NAXIS2: height, NAXIS3: channels === 3 ? 3 : undefined }
 	for (const key of STALE_DERIVED_KEYWORDS) delete header[key]
 	if (channels === 3) for (const key of CFA_KEYWORDS) delete header[key]
 	if (header.NAXIS3 === undefined) delete header.NAXIS3
-	const history = [`Derived by Nebulosa from ${provenance.sourceName} at ${provenance.createdAt}`, `Display pipeline: ${JSON.stringify(provenance.settings)}`]
-	header.HISTORY = [header.HISTORY, ...history].filter((line) => typeof line === 'string' && line !== '').join('\n')
+	header.HISTORY = [header.HISTORY, ...provenanceHistory(provenance)].filter((line) => typeof line === 'string' && line !== '').join('\n')
 	return header
 }
 
@@ -207,22 +216,50 @@ function derivedName(sourceName: string): string {
 	return `${sourceName.replace(/\.[^.]+$/, '')} — Processed`
 }
 
-// Derives a new document from a document by applying settings to its image: the result keeps the
-// floating-point samples of the pipeline (and, in its metadata, the min-max rescale of the source
-// read) instead of being encoded. Throws DisplayError for settings that cannot be applied.
-function deriveDocument(source: string, entry: DocumentEntry, settings: DisplaySettings): ImageInfo {
-	const { image, result } = displayImage(entry, settings)
-	const provenance: ImageProvenance = { source, sourceName: entry.name, settings, createdAt: new Date().toISOString() }
+// Keeps an image computed from another document as a new derived document and returns its info: the
+// floating-point samples (and, in its metadata, the min-max rescale of the source read) instead of being
+// encoded, with the derived header of its provenance. cfa is the trusted CFA pattern of a mosaic left as is.
+function addDerivedDocument(image: Image, provenance: ImageProvenance, cfa: CfaPattern | undefined): ImageInfo {
 	const header = derivedHeader(image, provenance)
 	const { width, height, channels } = image.metadata
 	const pixelSizeInBytes = image.raw.BYTES_PER_ELEMENT
 	const derived: Image = { ...image, header, metadata: { ...image.metadata, bitpix: header.BITPIX as Bitpix, pixelSizeInBytes, strideInBytes: width * channels * pixelSizeInBytes } }
-	// A mosaic left as is keeps its pattern; a debayered one has none.
-	const cfa = result.cfa ? undefined : entry.cfa
-	const name = derivedName(entry.name)
+	const name = derivedName(provenance.sourceName)
 	const info: ImageInfo = { origin: 'derived', provenance, id: crypto.randomUUID(), name, width, height, channels, header, acquisition: imageAcquisition(header), ...(image.metadata.bayer && { bayer: image.metadata.bayer }), ...(cfa && { cfa }) }
 	documents.set(info.id, { name, image: derived, cfa, autoStretches: new Map() })
 	return info
+}
+
+// Derives a new document from a document by applying settings to its image. Throws DisplayError for settings
+// that cannot be applied.
+function deriveDocument(source: string, entry: DocumentEntry, settings: DisplaySettings): ImageInfo {
+	const { image, result } = displayImage(entry, settings)
+	const provenance: ImageProvenance = { kind: 'display', source, sourceName: entry.name, settings, createdAt: new Date().toISOString() }
+	// A mosaic left as is keeps its pattern; a debayered one has none.
+	return addDerivedDocument(image, provenance, result.cfa ? undefined : entry.cfa)
+}
+
+// Adopts the result of an image processing pipeline as a new derived document. Its metadata names the CFA
+// pattern at the image origin of a mosaic still mono, which processingImage made trusted and the steps kept
+// in phase (flips); a debayered or grayscale result names none.
+function adoptDocument(image: Image, provenance: ProcessingProvenance): ImageInfo {
+	return addDerivedDocument(image, provenance, image.metadata.channels === 1 ? image.metadata.bayer : undefined)
+}
+
+// Returns the full copy of a document an image processing pipeline works on (see ImageStore.processingImage):
+// a clone of its image, which owns a buffer of its own that can be transferred, naming its trusted CFA pattern,
+// if any, at the image origin both in its metadata and in BAYERPAT without offsets.
+function processingImage({ image, cfa }: DocumentEntry): Image {
+	const copy = clone(image)
+	const header: FitsHeader = { ...copy.header }
+
+	if (cfa) {
+		header.BAYERPAT = cfa
+		delete header.XBAYROFF
+		delete header.YBAYROFF
+	}
+
+	return { ...copy, header, metadata: { ...copy.metadata, bayer: cfa } }
 }
 
 // Sink collecting everything written to it, for encoding a file in memory.
@@ -367,7 +404,17 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 		return
 	}
 
-	if (request.type === 'derive' || request.type === 'encode' || request.type === 'detectionImage') {
+	if (request.type === 'adopt') {
+		try {
+			reply({ id: request.id, status: 'adopted', info: adoptDocument(request.image, request.provenance) })
+		} catch (error) {
+			reply({ id: request.id, status: 'failed', error: Error.isError(error) ? error.message : String(error) })
+		}
+
+		return
+	}
+
+	if (request.type === 'derive' || request.type === 'encode' || request.type === 'detectionImage' || request.type === 'processingImage') {
 		const entry = documents.get(request.document)
 
 		if (!entry) {
@@ -381,6 +428,9 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 			} else if (request.type === 'detectionImage') {
 				const image = detectionImage(entry)
 				reply({ id: request.id, status: 'detectionImage', image }, [image.raw.buffer])
+			} else if (request.type === 'processingImage') {
+				const image = processingImage(entry)
+				reply({ id: request.id, status: 'processingImage', image }, [image.raw.buffer])
 			} else {
 				const bytes = await encodeDocument(entry, request.format, request.omit)
 				reply({ id: request.id, status: 'encoded', bytes }, [bytes.buffer])

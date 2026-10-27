@@ -5,6 +5,7 @@ import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/processing/scnr'
 import type { FitsHeader, FitsHeaderKey } from 'nebulosa/src/io/formats/fits/fits'
 import { cfaPatternKeyword, exposureTimeKeyword, numericKeyword, observationDateKeyword, textKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { errorResponse } from './http'
+import type { ImageProcessingStep } from './imageprocessing'
 
 // Image documents opened by clients: FITS and XISF files read from the server's filesystem, or camera
 // frames handed over by the capture service, kept decoded in memory under an id until they are closed, so later renderings (and future
@@ -18,7 +19,8 @@ import { errorResponse } from './http'
 // A document can be retained by an analysis while it uses the pixels, such as a star detection: closing it then
 // hides it from every route at once, but its pixels are released only when the last analysis lets it go.
 //
-// A document can also be derived from another by applying display settings in floating point: the
+// A document can also be derived from another by applying display settings in floating point, or adopted from
+// the result of an image processing pipeline (imageprocessing.ts) computed on a copy of another document: the
 // result is a new, independent document that lives only in memory until it is saved to a file of the
 // server or downloaded. Saving never replaces the file of an open document, nor an existing file
 // without overwrite, and writes through a temporary file so a failure leaves no partial file.
@@ -26,17 +28,32 @@ import { errorResponse } from './http'
 // Formats an image document can be read from.
 export type ImageFormat = 'fits' | 'xisf'
 
-// Where a derived image comes from: the document and the display settings it was computed with.
-export interface ImageProvenance {
+// Source document and time of a derived image, whatever derived it.
+interface ProvenanceSource {
 	// Id of the source document.
 	readonly source: string
 	// Name of the source document.
 	readonly sourceName: string
-	// Settings applied to the source image, in pipeline order.
-	readonly settings: DisplaySettings
 	// When the image was derived, as an ISO 8601 UTC date-time.
 	readonly createdAt: string
 }
+
+// A derived image computed with the display settings of the Image Inspector.
+export interface DisplayProvenance extends ProvenanceSource {
+	readonly kind: 'display'
+	// Settings applied to the source image, in pipeline order.
+	readonly settings: DisplaySettings
+}
+
+// A derived image computed by an image processing pipeline.
+export interface ProcessingProvenance extends ProvenanceSource {
+	readonly kind: 'processing'
+	// Steps applied to the source image, in order: the enabled steps of the run.
+	readonly steps: readonly ImageProcessingStep[]
+}
+
+// Where a derived image comes from: the document and what was applied to it.
+export type ImageProvenance = DisplayProvenance | ProcessingProvenance
 
 // Camera frame an image document was decoded from, as the capture service received it.
 export interface ImageCapture {
@@ -271,8 +288,9 @@ export interface SaveResult {
 	readonly path: string
 }
 
-// Message sent to the image worker. Open, open capture, render, derive, encode, and detection image carry an
-// id that their response echoes; open capture transfers its bytes to the worker; a close has no response, and a
+// Message sent to the image worker. Open, open capture, render, derive, encode, detection image, processing image,
+// and adopt carry an id that their response echoes; open capture and adopt transfer their bytes to the worker; a
+// close has no response, and a
 // cancel drops the render with that id if it has not started yet (the render then answers superseded).
 export type ImageWorkerRequest =
 	| { readonly type: 'open'; readonly id: number; readonly path: string }
@@ -281,11 +299,15 @@ export type ImageWorkerRequest =
 	| { readonly type: 'derive'; readonly id: number; readonly document: string; readonly request: DeriveRequest }
 	| { readonly type: 'encode'; readonly id: number; readonly document: string; readonly format: ImageFormat; readonly omit?: readonly string[] }
 	| { readonly type: 'detectionImage'; readonly id: number; readonly document: string }
+	| { readonly type: 'processingImage'; readonly id: number; readonly document: string }
+	| { readonly type: 'adopt'; readonly id: number; readonly image: Image; readonly provenance: ProcessingProvenance }
 	| { readonly type: 'cancel'; readonly id: number }
 	| { readonly type: 'close'; readonly document: string }
 
 // Message the image worker answers a request with, by request id: the opened or derived document, the
-// rendering, the encoded file, the grayscale copy a star detection measures (see ImageStore.detectionImage), a document that is not open (missing), a render dropped before it
+// rendering, the encoded file, the grayscale copy a star detection measures (see ImageStore.detectionImage), the
+// full copy an image processing pipeline works on (see ImageStore.processingImage), the adopted document, a
+// document that is not open (missing), a render dropped before it
 // started (superseded), settings that cannot be applied to the image (invalid), a file that cannot be
 // opened (with the status of its ImageOpenError), or any other failure.
 export type ImageWorkerResponse =
@@ -293,6 +315,8 @@ export type ImageWorkerResponse =
 	| { readonly id: number; readonly status: 'derived'; readonly info: ImageInfo }
 	| { readonly id: number; readonly status: 'encoded'; readonly bytes: Uint8Array<ArrayBuffer> }
 	| { readonly id: number; readonly status: 'detectionImage'; readonly image: Image }
+	| { readonly id: number; readonly status: 'processingImage'; readonly image: Image }
+	| { readonly id: number; readonly status: 'adopted'; readonly info: ImageInfo }
 	| ({ readonly id: number; readonly status: 'rendered' } & Rendering)
 	| { readonly id: number; readonly status: 'missing' }
 	| { readonly id: number; readonly status: 'superseded' }
@@ -359,14 +383,23 @@ interface DocumentRecord {
 	// Absolute path of the file of a file document, or the file a captured frame is saved to; absent for a
 	// derived document and a frame that is only previewed.
 	readonly path?: string
+	// Number of channels: 1 for grayscale or a raw CFA mosaic, 3 for RGB.
+	readonly channels: number
+	// Trusted CFA pattern at the image origin (ImageInfo cfa).
+	readonly cfa?: CfaPattern
 	// FITS-compatible header of the image.
 	readonly header: FitsHeader
 	// Acquisition data normalized from the header.
 	readonly acquisition: ImageAcquisition
 }
 
-// Metadata of an open or retained document, for an analysis that derives hints from it.
+// Metadata of an open or retained document, for an analysis that derives hints from it or a pipeline that checks
+// what it can apply to it.
 export interface DocumentMetadata extends DocumentSize {
+	// Number of channels: 1 for grayscale or a raw CFA mosaic, 3 for RGB.
+	readonly channels: number
+	// Trusted CFA pattern at the image origin (ImageInfo cfa).
+	readonly cfa?: CfaPattern
 	// FITS-compatible header of the image.
 	readonly header: FitsHeader
 	// Acquisition data normalized from the header.
@@ -394,8 +427,8 @@ interface Retention {
 }
 
 // Returns the record of a document from its description, without a path.
-function documentRecord({ name, width, height, header, acquisition }: ImageInfo): DocumentRecord {
-	return { name, width, height, header, acquisition }
+function documentRecord({ name, width, height, channels, cfa, header, acquisition }: ImageInfo): DocumentRecord {
+	return { name, width, height, channels, ...(cfa && { cfa }), header, acquisition }
 }
 
 // Open image documents of every client. The pixels live in the image worker; this side tracks the
@@ -484,10 +517,11 @@ export class ImageStore {
 		return this.#encode(id, 'fits', omit)
 	}
 
-	// Returns the size, header, and acquisition data of an open or retained document, or undefined when it is neither.
+	// Returns the size, channels, CFA pattern, header, and acquisition data of an open or retained document, or
+	// undefined when it is neither.
 	metadata(id: string): DocumentMetadata | undefined {
 		const record = this.#documents.get(id) ?? this.#retained.get(id)?.record
-		return record && { width: record.width, height: record.height, header: record.header, acquisition: record.acquisition }
+		return record && { width: record.width, height: record.height, channels: record.channels, ...(record.cfa && { cfa: record.cfa }), header: record.header, acquisition: record.acquisition }
 	}
 
 	// Returns a new grayscale copy of an open or retained document for a star detection, owned by the caller,
@@ -501,6 +535,30 @@ export class ImageStore {
 		if (response.status === 'detectionImage') return response.image
 		if (response.status === 'missing') return undefined
 		throw responseError(response)
+	}
+
+	// Returns a new full copy of an open or retained document for an image processing pipeline, owned by the caller,
+	// whose buffer may be transferred: the samples, precision, and min-max rescale of the read of the document,
+	// unchanged. A mono CFA mosaic with a trusted pattern names it at the image origin, in its metadata and in
+	// BAYERPAT without offsets, so the operations that follow the pattern (flips, cosmetic correction, debayer) use
+	// that one; any other image names none in its metadata. Resolves to undefined when the document is neither open
+	// nor retained.
+	async processingImage(id: string): Promise<Image | undefined> {
+		if (!this.#documents.has(id) && !this.#retained.has(id)) return undefined
+		const response = await this.#request({ type: 'processingImage', id: this.#id++, document: id })
+		if (response.status === 'processingImage') return response.image
+		if (response.status === 'missing') return undefined
+		throw responseError(response)
+	}
+
+	// Adopts the result of an image processing pipeline as a new derived document, with the floating-point header
+	// and the history of its provenance (see derive). The buffer of the image is transferred to the worker, so the
+	// caller must not use it afterwards.
+	async adopt(image: Image, provenance: ProcessingProvenance): Promise<ImageInfo> {
+		const response = await this.#request({ type: 'adopt', id: this.#id++, image, provenance }, [image.raw.buffer])
+		if (response.status !== 'adopted') throw responseError(response)
+		this.#documents.set(response.info.id, documentRecord(response.info))
+		return response.info
 	}
 
 	// Asks the worker to encode a document, without the header keywords named in omit.

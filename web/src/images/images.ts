@@ -190,7 +190,7 @@ const applies = new Map<string, DisplaySettings>()
 // A derived image already stretched is shown linear, so it is not stretched twice; one derived without a
 // stretch gets the auto stretch like a file.
 export function defaultDisplaySettings(info: ImageInfo): DisplaySettings {
-	const stretch: DisplaySettings['stretch'] = info.origin === 'derived' && info.provenance.settings.stretch.mode !== 'linear' ? { mode: 'linear' } : ORIGINAL_DISPLAY_SETTINGS.stretch
+	const stretch: DisplaySettings['stretch'] = info.origin === 'derived' && info.provenance.kind === 'display' && info.provenance.settings.stretch.mode !== 'linear' ? { mode: 'linear' } : ORIGINAL_DISPLAY_SETTINGS.stretch
 	return { ...ORIGINAL_DISPLAY_SETTINGS, stretch, ...(info.cfa && { debayer: { enabled: true, pattern: 'auto' } }) }
 }
 

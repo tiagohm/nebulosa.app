@@ -6,11 +6,12 @@ import bunTailwindPlugin from './tailwind.plugin'
 // Repository root, the common ancestor of every entry point and so the root of the embedded files.
 const ROOT = join(import.meta.dir, '..')
 
-// Image, star detection, DARV analysis, Flat Wizard measurement, guide frame, and solar eclipse map workers, bundled as extra entry points so
+// Image, image processing, star detection, DARV analysis, Flat Wizard measurement, guide frame, and solar eclipse map workers, bundled as extra entry points so
 // the executable embeds them transpiled with their imports. Inside the executable a worker is only found by its
 // path relative to the embedded root, never through `new URL(..., import.meta.url)`, which points at the
 // executable itself.
 const IMAGE_WORKER = join(ROOT, 'api/src/images.worker.ts')
+const IMAGE_PROCESSING_WORKER = join(ROOT, 'api/src/imageprocessing.worker.ts')
 const STAR_WORKER = join(ROOT, 'api/src/stars.worker.ts')
 const DARV_WORKER = join(ROOT, 'api/src/darv.worker.ts')
 const FLATWIZARD_WORKER = join(ROOT, 'api/src/flatwizard.worker.ts')
@@ -23,7 +24,7 @@ function embeddedPath(path: string) {
 }
 
 await build({
-	entrypoints: [join(import.meta.dir, 'src/main.ts'), IMAGE_WORKER, STAR_WORKER, DARV_WORKER, FLATWIZARD_WORKER, GUIDING_WORKER, SOLARECLIPSE_WORKER],
+	entrypoints: [join(import.meta.dir, 'src/main.ts'), IMAGE_WORKER, IMAGE_PROCESSING_WORKER, STAR_WORKER, DARV_WORKER, FLATWIZARD_WORKER, GUIDING_WORKER, SOLARECLIPSE_WORKER],
 	minify: true,
 	sourcemap: false,
 	target: 'bun',
@@ -31,6 +32,7 @@ await build({
 	define: {
 		'process.env.NODE_ENV': '"production"',
 		'process.env.NEBULOSA_IMAGE_WORKER': embeddedPath(IMAGE_WORKER),
+		'process.env.NEBULOSA_IMAGE_PROCESSING_WORKER': embeddedPath(IMAGE_PROCESSING_WORKER),
 		'process.env.NEBULOSA_STAR_WORKER': embeddedPath(STAR_WORKER),
 		'process.env.NEBULOSA_DARV_WORKER': embeddedPath(DARV_WORKER),
 		'process.env.NEBULOSA_FLATWIZARD_WORKER': embeddedPath(FLATWIZARD_WORKER),

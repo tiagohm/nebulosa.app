@@ -45,7 +45,7 @@ interface Call {
 const INFO = { id: 'srv-1', name: 'm31.fits', path: '/data/m31.fits', format: 'fits', width: 4, height: 2, channels: 1, header: {} }
 const CFA_INFO = { ...INFO, bayer: 'RGGB', cfa: 'RGGB' }
 const RESULT = { stretch: [{ midtone: 0.2, shadow: 0.1, highlight: 1 }], channels: 1 }
-const DERIVED_INFO = { origin: 'derived', id: 'srv-2', name: 'm31 — Processed', width: 4, height: 2, channels: 3, header: {}, provenance: { source: 'srv-1', sourceName: 'm31.fits', settings: {}, createdAt: '2026-10-17T00:00:00.000Z' } }
+const DERIVED_INFO = { origin: 'derived', id: 'srv-2', name: 'm31 — Processed', width: 4, height: 2, channels: 3, header: {}, provenance: { kind: 'display', source: 'srv-1', sourceName: 'm31.fits', settings: {}, createdAt: '2026-10-17T00:00:00.000Z' } }
 
 // Fake API: opens any path as INFO (CFA_INFO for paths containing "cfa", or fails for paths containing
 // "bad"), and renders after release() is called for that rendering when gated. Renders fail while

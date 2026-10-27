@@ -17,6 +17,7 @@ import { DEFAULT_FOCUSERS_FILE, FocuserBacklashStore } from './focuserbacklash'
 import { createFocuserRoutes, FocuserCommands } from './focusers'
 import { createGuideOutputRoutes, GuideOutputCommands } from './guideoutputs'
 import { createGuidingRoutes, GuidingSessions } from './guiding'
+import { createImageProcessingRoutes, ImageProcessingService } from './imageprocessing'
 import { createImageRoutes, images } from './images'
 import { createIndiRoutes, IndiPropertyService } from './indi'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
@@ -215,7 +216,47 @@ export type { PlateSolutions, PlateSolveErrorCode, PlateSolveJob, PlateSolveJobS
 export type { PlateSolveHint, PlateSolveHints, PlateSolveHintSource, PlateSolveStrategy, ResolvedPlateSolveHints } from './platesolving.hints'
 export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
 export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
-export type { Binning, DeriveRequest, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageCapture, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from './images'
+export type {
+	Binning,
+	DeriveRequest,
+	DisplayDebayer,
+	DisplayProvenance,
+	DisplayScnr,
+	DisplaySettings,
+	DisplayStretch,
+	ImageAcquisition,
+	ImageCapture,
+	ImageFormat,
+	ImageInfo,
+	ImageOrigin,
+	ImageProperties,
+	ImageProvenance,
+	ProcessingProvenance,
+	RenderRequest,
+	RenderResult,
+	SaveRequest,
+	SaveResult,
+	Stretch,
+} from './images'
+export type {
+	ArcsinhStretchOperation,
+	BackgroundExtractionOperation,
+	BackgroundNeutralizationOperation,
+	CosmeticCorrectionOperation,
+	DebayerOperation,
+	GaussianBlurOperation,
+	GrayscaleOperation,
+	ImageProcessingErrorCode,
+	ImageProcessingEvent,
+	ImageProcessingJob,
+	ImageProcessingOperation,
+	ImageProcessingOperationType,
+	ImageProcessingRequest,
+	ImageProcessingSnapshot,
+	ImageProcessingStep,
+	MultiscaleOperation,
+	PlainOperation,
+} from './imageprocessing'
 export type { DarvCaptureSettings, DarvEvent, DarvFinishRequest, DarvMeasurement, DarvMeasurementRequest, DarvMeasurementState, DarvMeasurementTrails, DarvRequest, DarvSession, DarvSessionState, DarvSessionSummary, DarvSnapshot, DarvStartResponse } from './darv'
 export type { DarvMeasurementResult, DarvMeasurementStatus, DarvTrail } from './darv.analysis'
 export type {
@@ -313,6 +354,9 @@ const externalTools = new ExternalToolsStore(DEFAULT_SETTINGS_FILE, broadcast)
 const stars = new StarDetectionService(images, externalTools, broadcast)
 const plateSolving = new PlateSolvingService(images, externalTools, broadcast)
 
+// Image processing pipelines of the image documents, each adopting its result as a new derived document.
+const imageProcessing = new ImageProcessingService(images, broadcast)
+
 // Index of the captured frames of every camera, holding their documents for the Images workspace; the leases of a tab
 // follow its event sockets, and cameras are republished when their connection state changes.
 const captureFrames = new CaptureFrameRegistry(images, broadcast, {
@@ -382,6 +426,7 @@ export const routes = {
 	...createGuidingRoutes(guiding),
 	...createFileRoutes(),
 	...createImageRoutes(images),
+	...createImageProcessingRoutes(imageProcessing),
 	...createExternalToolsRoutes(externalTools),
 	...createStarDetectionRoutes(stars),
 	...createPlateSolvingRoutes(plateSolving),

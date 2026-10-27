@@ -23,6 +23,8 @@ import { createIndiRoutes, IndiPropertyService } from './indi'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
 import { createMountRemoteControlRoutes, MountRemoteControlService } from './mountremotecontrol'
 import { createMountRoutes, MountCommands } from './mounts'
+import { createNotificationRoutes, DEFAULT_NOTIFICATIONS_FILE, NotificationService } from './notifications'
+import { NotificationClassifier } from './notifications.rules'
 import { createOperationRoutes, OperationRegistry } from './operations'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { createRotatorRoutes, RotatorCommands } from './rotators'
@@ -31,7 +33,7 @@ import { createSolarEclipseRoutes, SolarEclipseService } from './solareclipses'
 import { createStarDetectionRoutes, StarDetectionService } from './stars'
 import { createStreakDetectionRoutes, StreakDetectionService } from './streaks'
 import { createTppaRoutes, TppaSessions } from './tppa'
-import { broadcast, listenClients, listenSockets, type WebSocketData, websocket } from './websocket'
+import { broadcast, listenClients, listenSockets, type ServerEvent, type WebSocketData, websocket } from './websocket'
 import { createWheelRoutes, WheelCommands } from './wheels'
 
 // HTTP routes and the WebSocket handler of the backend, mounted by the app server.
@@ -287,13 +289,29 @@ export type {
 } from './guiding'
 export type { TppaAlignment, TppaAttempt, TppaCaptureSettings, TppaEvent, TppaGeometry, TppaOverlay, TppaPoint, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaStartResponse, TppaState } from './tppa'
 export type { GuidingProfileCut, GuidingStarProfile } from './guidingprofile'
+export type { NotificationCreatedEvent, NotificationRecord, NotificationSnapshot } from './notifications'
+export type { NotificationCameraTool, NotificationLevel, NotificationSource, NotificationTarget } from './notifications.rules'
 export type { ClientMessage, ServerEvent } from './websocket'
 export { websocket }
 
-connections.listen(broadcast)
+// History of the notifications, created from the events of the connections, the operations, and the sessions; its
+// own notification:created events are broadcast directly, so they are never classified again.
+const notifications = new NotificationService(broadcast, {
+	file: DEFAULT_NOTIFICATIONS_FILE,
+	classifier: new NotificationClassifier((connectionId, deviceId) => connections.devices.get(connections.client(connectionId), deviceId)?.name),
+})
+
+// Broadcasts an event of the connections, the operations, or the sessions, then hands it to the notification history, so
+// a tab sees a change before the notification about it.
+function publish(event: ServerEvent) {
+	broadcast(event)
+	notifications.consume(event)
+}
+
+connections.listen(publish)
 
 // Device operations of the process, published to every tab.
-const operations = new OperationRegistry(connections.devices, broadcast)
+const operations = new OperationRegistry(connections.devices, publish)
 
 // Mount commands and nudge sessions over the devices of the open connections.
 const mounts = new MountCommands(connections.devices, (id) => connections.client(id), skyLocator, operations, broadcast)
@@ -354,28 +372,28 @@ connections.listen((event) => captureFrames.deviceChanged(event))
 listenClients(captureFrames)
 
 // Camera captures over the devices of the open connections, their frames entering the image store.
-const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, captureFrames, broadcast)
+const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, captureFrames, publish)
 
 // Auto Focus sessions of the cameras of the open connections, taking their frames with the capturer of the captures and
 // moving the focusers with their backlash compensation.
-const autoFocus = new AutoFocusSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, focusers.mover, images, captureFrames, stars, broadcast)
+const autoFocus = new AutoFocusSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, focusers.mover, images, captureFrames, stars, publish)
 
 // TPPA sessions of the cameras of the open connections, rotating the mounts with the commander of the mount commands,
 // taking their frames with the capturer of the captures, and solving them with the plate solving service.
-const tppa = new TppaSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, broadcast)
+const tppa = new TppaSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, publish)
 
 // DARV sessions of the cameras of the open connections, moving the mounts with the commander of the mount commands,
 // taking their frames with the capturer of the captures, and analyzing them on a worker of their own.
-const darv = new DarvSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, new DarvAnalyzer(images), broadcast)
+const darv = new DarvSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, new DarvAnalyzer(images), publish)
 
 // Flat Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the captures,
 // moving the wheels, driving the panels, and closing and opening the covers with the commanders of their commands,
 // previewing and recording the frames in the capture frame registry, and measuring them in DN on a worker of their own.
-const flatWizard = new FlatWizardSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, wheels.commander, flatPanels.commander, covers.commander, images, captureFrames, new FlatWizardAnalyzer(), broadcast)
+const flatWizard = new FlatWizardSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, wheels.commander, flatPanels.commander, covers.commander, images, captureFrames, new FlatWizardAnalyzer(), publish)
 
 // Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
 // guide output commands and previewing their frames in the image store and the capture frame registry.
-const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, broadcast)
+const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, publish)
 
 // Lunar eclipse queries of the Lunar Eclipse Map tool.
 const lunarEclipses = new LunarEclipseService()
@@ -389,6 +407,7 @@ export const routes = {
 		GET: () => Response.json({ status: 'ok' }),
 	},
 	...createOperationRoutes(operations),
+	...createNotificationRoutes(notifications),
 	...createConnectionRoutes(connections),
 	...createIndiRoutes(indi),
 	...createMountRoutes(mounts),

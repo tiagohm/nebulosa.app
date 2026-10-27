@@ -13,6 +13,7 @@ import type { ImageProcessingEvent } from './imageprocessing'
 import type { IndiClientMessage, IndiServerEvent } from './indi'
 import type { MountRemoteControlEvent } from './mountremotecontrol'
 import type { MountNudgeEvent } from './mounts'
+import type { NotificationCreatedEvent } from './notifications'
 import type { OperationEvent } from './operations'
 import type { PlateSolvingEvent } from './platesolving'
 import type { StarDetectionEvent } from './stars'
@@ -29,7 +30,8 @@ import type { TppaEvent } from './tppa'
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the operation events
 // of the operation registry, the events of the capture, Auto Focus, TPPA, mount nudge, mount remote control, and dome manual rotation services,
 // the captured frames of the frame registry, the guiding sessions, the changes of the external program settings and of the focuser backlash
-// compensations, the star detection, streak detection, plate solving, and image processing jobs, and the INDI device directory and property streams.
+// compensations, the star detection, streak detection, plate solving, and image processing jobs, the created notifications, and the INDI device directory
+// and property streams.
 export type ServerEvent =
 	| ConnectionRegistryEvent
 	| OperationEvent
@@ -49,6 +51,7 @@ export type ServerEvent =
 	| ImageProcessingEvent
 	| FocuserBacklashEvent
 	| GuidingServerEvent
+	| NotificationCreatedEvent
 	| IndiServerEvent
 
 // Any control message a tab sends over its socket.

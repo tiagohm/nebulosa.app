@@ -1,24 +1,30 @@
-import type { DeviceSummary } from 'api'
+import type { ConnectionStatus, DeviceSummary } from 'api'
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { connectionState, serverOf } from '../connection/connection'
+import { type Connection, connectionState, serverOf } from '../connection/connection'
 import { indiDirectory, watchIndiDirectory } from '../equipment-control/indi/directory'
 import { activeProfile, activeSetup, profileState, rememberDeviceNames } from '../profile/profile'
+import type { Profile } from '../profile/schema'
 import { deviceState, type DeviceView, type RoleStatus, roleDevice, roleStatus, watchServer } from './equipment'
 import type { EquipmentRole } from './roles'
 
 // React bindings of the equipment runtime: keeping the watched server connection in step with the active
 // profile, and resolving the device a role is assigned to for the panels that use it.
 
-// Returns the id of the open server connection of the active profile's selected connection.
-export function useActiveServerId(): string | undefined {
-	const { connections, servers } = useSnapshot(connectionState)
-	const profiles = useSnapshot(profileState)
+// Returns the id of the open server connection of the active profile's selected connection, from the stores or
+// their snapshots; undefined when the profile selects no connection or the server does not hold it open. The
+// profiles must be loaded.
+export function activeServerIdOf(connections: { readonly connections: readonly Connection[]; readonly servers: readonly ConnectionStatus[] }, profiles: { readonly profiles: readonly Pick<Profile, 'id' | 'connectionId'>[]; readonly activeId: string }): string | undefined {
 	const connectionId = activeProfile(profiles).connectionId
 	return serverOf(
-		servers,
-		connections.find((c) => c.id === connectionId),
+		connections.servers,
+		connections.connections.find((c) => c.id === connectionId),
 	)?.id
+}
+
+// Returns the id of the open server connection of the active profile's selected connection.
+export function useActiveServerId(): string | undefined {
+	return activeServerIdOf(useSnapshot(connectionState), useSnapshot(profileState))
 }
 
 // Watches the devices and the INDI directory of the active profile's server connection while mounted, switching

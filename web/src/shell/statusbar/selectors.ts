@@ -1,8 +1,11 @@
-import type { CameraCapabilities, CaptureSession, DeviceSummary, GuidingSessionSummary, MountState, OperationKind, OperationRecord } from 'api'
+import type { CameraCapabilities, CaptureSession, DeviceSummary, GuidingSessionSummary, MountState, OperationKind, OperationProgress, OperationRecord } from 'api'
+import { toDeg } from 'nebulosa/src/math/units/angle'
 import { cameraKey, captureRunning } from '../../camera/capture'
 import { GUIDING_STATE_LABELS, guidingRunning } from '../../camera/guiding'
 import type { SelectedConnectionStatus } from '../../connection/useSelectedConnection'
+import { type ControlRuntime, watchedDeviceState } from '../../equipment-control/control'
 import { ROLE_STATUS_LABELS, type RoleStatus } from '../../equipment/equipment'
+import type { EquipmentRole } from '../../equipment/roles'
 import type { ServerLink } from '../../notifications/notifications'
 import { OPERATION_LABELS } from '../../operations'
 
@@ -237,4 +240,117 @@ export function sessionOperationIds(capture: Pick<CaptureSession, 'operationId'>
 // Returns the operations not shown through a session, by exact operation id, in their order.
 export function otherOperations(operations: readonly OperationRecord[], sessionIds: ReadonlySet<string>): OperationRecord[] {
 	return operations.filter((operation) => !sessionIds.has(operation.operationId))
+}
+
+// Width class of the status bar: wide from Tailwind's lg breakpoint (64rem), medium from sm (40rem), narrow below.
+export type StatusTier = 'wide' | 'medium' | 'narrow'
+
+// Chips of the status bar that may be left to the details panel when the bar is narrow.
+export type StatusItemId = 'camera' | 'mount' | 'guiding' | 'capture'
+
+// Most chips the bar shows at each width; the others are left to the details panel and counted in its button.
+const TIER_ITEM_LIMITS: Readonly<Record<StatusTier, number>> = { wide: Number.POSITIVE_INFINITY, medium: 2, narrow: 1 }
+
+// Which chips the status bar has and what they show.
+export interface StatusItemsInput {
+	// Whether the MAIN_CAMERA role is assigned.
+	readonly camera: boolean
+	// Whether the MOUNT role is assigned.
+	readonly mount: boolean
+	// Whether the profile's mount is moving.
+	readonly mountMoving: boolean
+	// Whether the GUIDE_CAMERA role's device is present.
+	readonly guiding: boolean
+	// Whether that guide camera has a running session.
+	readonly guidingActive: boolean
+	// Whether the main camera has a running capture.
+	readonly capture: boolean
+	// Running operations not shown through a session.
+	readonly otherOperations: number
+}
+
+// Chips the status bar shows and how many items it leaves to the details panel.
+export interface CompactItems {
+	// Chips shown in the bar.
+	readonly visible: ReadonlySet<StatusItemId>
+	// Chips left out plus, unless the bar is wide and names them, the other running operations.
+	readonly hidden: number
+}
+
+// Returns the chips the status bar shows at a width, by priority: a moving mount, then a running capture and a
+// running guiding session, then the main camera, then an idle mount, then an idle guide camera. The server link,
+// the device failures, and the Abort are never left out; the other running operations are named only on a wide
+// bar and otherwise counted with the chips left out.
+export function compactItems(input: StatusItemsInput, tier: StatusTier): CompactItems {
+	const priority: StatusItemId[] = []
+	if (input.mount && input.mountMoving) priority.push('mount')
+	if (input.capture) priority.push('capture')
+	if (input.guiding && input.guidingActive) priority.push('guiding')
+	if (input.camera) priority.push('camera')
+	if (input.mount && !input.mountMoving) priority.push('mount')
+	if (input.guiding && !input.guidingActive) priority.push('guiding')
+
+	const visible = new Set(priority.slice(0, TIER_ITEM_LIMITS[tier]))
+	return { visible, hidden: priority.length - visible.size + (tier === 'wide' ? 0 : input.otherOperations) }
+}
+
+// Returns the value of a role's device for the details panel: the role status while it is not connected, and
+// otherwise what the device reports — a camera's temperature, the mount state, the filter at the wheel's slot
+// (named by the driver, or its 1-based slot number), the focuser position in steps with its temperature, the
+// rotator's mechanical angle in degrees (not a sky position angle), or the dome's motion, park, or azimuth in
+// degrees. A device whose state was not reported yet shows "Connected".
+export function roleDetailValue(role: EquipmentRole, status: RoleStatus, device: ScopedDevice | undefined, control: Pick<ControlRuntime, 'watched' | 'states'>): StatusValue {
+	if (status !== 'connected') return roleValue(status)
+
+	switch (role) {
+		case 'MAIN_CAMERA':
+		case 'GUIDE_CAMERA':
+			return cameraValue(status, watchedDeviceState(control, 'camera', device))
+		case 'MOUNT':
+			return mountValue(status, watchedDeviceState(control, 'mount', device))
+		case 'FILTER_WHEEL': {
+			const state = watchedDeviceState(control, 'wheel', device)
+			if (!state) break
+			if (state.moving) return { text: 'Moving', tone: 'active' }
+			return { text: state.names[state.position] || `Slot ${state.position + 1}`, tone: 'ok' }
+		}
+		case 'FOCUSER': {
+			const state = watchedDeviceState(control, 'focuser', device)
+			if (!state) break
+			const temperature = state.temperature !== undefined && Number.isFinite(state.temperature) ? ` · ${(Math.round(state.temperature * 10) / 10).toFixed(1)}°C` : ''
+			return { text: `${state.moving ? 'Moving · ' : ''}${state.position.value} steps${temperature}`, tone: state.moving ? 'active' : 'ok' }
+		}
+		case 'ROTATOR': {
+			const state = watchedDeviceState(control, 'rotator', device)
+			if (!state) break
+			return { text: `${state.moving ? 'Moving · ' : ''}${state.angle.value.toFixed(1)}° mechanical`, tone: state.moving ? 'active' : 'ok' }
+		}
+		case 'DOME': {
+			const state = watchedDeviceState(control, 'dome', device)
+			if (!state) break
+			if (state.parking) return { text: 'Parking', tone: 'active' }
+			if (state.homing) return { text: 'Homing', tone: 'active' }
+			if (state.slewing || state.moving) return { text: 'Moving', tone: 'active' }
+			if (state.parked) return { text: 'Parked', tone: 'idle' }
+			return { text: `Azimuth ${toDeg(state.azimuth.value).toFixed(1)}°`, tone: 'ok' }
+		}
+	}
+
+	return roleValue(status)
+}
+
+// Returns the time an operation has run, from its start in Unix milliseconds to now in Unix milliseconds, as
+// "m:ss" or, from one hour, "h:mm:ss"; a start after now (clocks of the server and the browser differ) reads 0:00.
+export function formatElapsed(startedAt: number, now: number) {
+	const total = Math.max(0, Math.floor((now - startedAt) / 1000))
+	const hours = Math.floor(total / 3600)
+	const minutes = Math.floor(total / 60) % 60
+	const seconds = String(total % 60).padStart(2, '0')
+	return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${seconds}` : `${minutes}:${seconds}`
+}
+
+// Returns the progress an operation reports, such as "2/5 · Moving to 1100", or undefined while it reports none.
+export function progressText(progress: OperationProgress | undefined) {
+	if (!progress || !(progress.steps >= 1)) return undefined
+	return progress.message ? `${progress.step}/${progress.steps} · ${progress.message}` : `${progress.step}/${progress.steps}`
 }

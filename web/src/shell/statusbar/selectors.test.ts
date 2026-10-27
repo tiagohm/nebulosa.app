@@ -1,6 +1,29 @@
 import { describe, expect, test } from 'bun:test'
 import type { CaptureSession, GuidingSessionSummary, OperationKind, OperationRecord } from 'api'
-import { activeCapture, activeGuiding, cameraValue, captureValue, connectionLabel, guidingValue, type MountMotionState, mountAbortTarget, mountMoving, mountValue, operationsSummary, otherOperations, scopedDeviceErrors, scopedRunningOperations, type ScopedDevice, serverLinkLabel, sessionOperationIds } from './selectors'
+import { newControlRuntime } from '../../equipment-control/control'
+import {
+	activeCapture,
+	activeGuiding,
+	cameraValue,
+	captureValue,
+	compactItems,
+	connectionLabel,
+	formatElapsed,
+	guidingValue,
+	type MountMotionState,
+	mountAbortTarget,
+	mountMoving,
+	mountValue,
+	operationsSummary,
+	otherOperations,
+	progressText,
+	roleDetailValue,
+	scopedDeviceErrors,
+	scopedRunningOperations,
+	type ScopedDevice,
+	serverLinkLabel,
+	sessionOperationIds,
+} from './selectors'
 
 function operation(operationId: string, kind: OperationKind, connectionId: string, deviceId: string, startedAt = 0, state: OperationRecord['state'] = 'running'): OperationRecord {
 	return { operationId, kind, devices: [{ connectionId, deviceId }], state, startedAt }
@@ -209,4 +232,66 @@ describe('guiding', () => {
 		expect(otherOperations(running, ids).map((o) => o.operationId)).toEqual(['x'])
 		expect(otherOperations(running, sessionOperationIds(undefined, undefined))).toHaveLength(4)
 	})
+})
+
+describe('compact items', () => {
+	const all = { camera: true, mount: true, mountMoving: false, guiding: true, guidingActive: false, capture: false, otherOperations: 2 }
+
+	test('a wide bar shows every chip and names the other operations', () => {
+		const { visible, hidden } = compactItems(all, 'wide')
+		expect([...visible].sort()).toEqual(['camera', 'guiding', 'mount'])
+		expect(hidden).toBe(0)
+	})
+
+	test('a narrower bar shows the chips by priority and counts what it leaves out', () => {
+		expect(compactItems(all, 'medium')).toEqual({ visible: new Set(['camera', 'mount']), hidden: 3 })
+		expect(compactItems(all, 'narrow')).toEqual({ visible: new Set(['camera']), hidden: 4 })
+		expect(compactItems({ ...all, mountMoving: true }, 'narrow').visible).toEqual(new Set(['mount']))
+		expect(compactItems({ ...all, capture: true, guidingActive: true }, 'medium').visible).toEqual(new Set(['capture', 'guiding']))
+	})
+
+	test('unassigned roles count nothing', () => {
+		expect(compactItems({ camera: false, mount: false, mountMoving: false, guiding: false, guidingActive: false, capture: false, otherOperations: 0 }, 'narrow')).toEqual({ visible: new Set(), hidden: 0 })
+	})
+})
+
+describe('role details', () => {
+	const device: ScopedDevice = { id: 'd', connectionId: 'A', name: 'Device' }
+
+	function control(type: 'wheel' | 'focuser' | 'rotator' | 'dome', state: object, watched = 'A') {
+		const runtime = newControlRuntime()
+		runtime.watched = watched
+		;(runtime.states[type] as Record<string, unknown>).d = { id: 'd', connectionId: 'A', connected: true, moving: false, ...state }
+		return runtime
+	}
+
+	test('a wheel shows the named filter of its 0-based slot, or the 1-based slot number', () => {
+		expect(roleDetailValue('FILTER_WHEEL', 'connected', device, control('wheel', { position: 1, names: ['L', 'Ha'] })).text).toBe('Ha')
+		expect(roleDetailValue('FILTER_WHEEL', 'connected', device, control('wheel', { position: 2, names: ['L', 'Ha'] })).text).toBe('Slot 3')
+	})
+
+	test('a focuser and a rotator show their position with units', () => {
+		expect(roleDetailValue('FOCUSER', 'connected', device, control('focuser', { position: { value: 1200 }, temperature: 12.34 })).text).toBe('1200 steps · 12.3°C')
+		expect(roleDetailValue('ROTATOR', 'connected', device, control('rotator', { angle: { value: 90.25 } })).text).toBe('90.3° mechanical')
+	})
+
+	test('a dome shows its motion before its azimuth in degrees', () => {
+		const dome = { parking: false, homing: false, slewing: false, parked: false, azimuth: { value: Math.PI / 2 } }
+		expect(roleDetailValue('DOME', 'connected', device, control('dome', dome)).text).toBe('Azimuth 90.0°')
+		expect(roleDetailValue('DOME', 'connected', device, control('dome', { ...dome, slewing: true })).text).toBe('Moving')
+	})
+
+	test('nothing is read from another connection or while not connected', () => {
+		expect(roleDetailValue('FILTER_WHEEL', 'connected', device, control('wheel', { position: 1, names: ['L', 'Ha'] }, 'B')).text).toBe('Connected')
+		expect(roleDetailValue('FILTER_WHEEL', 'disconnected', device, control('wheel', { position: 1, names: ['L', 'Ha'] })).text).toBe('Disconnected')
+	})
+})
+
+test('elapsed time and progress are shown only as reported', () => {
+	expect(formatElapsed(0, 65_000)).toBe('1:05')
+	expect(formatElapsed(0, 3_725_000)).toBe('1:02:05')
+	expect(formatElapsed(10_000, 0)).toBe('0:00')
+	expect(progressText(undefined)).toBeUndefined()
+	expect(progressText({ step: 2, steps: 5, message: 'Moving to 1100' })).toBe('2/5 · Moving to 1100')
+	expect(progressText({ step: 1, steps: 3, message: '' })).toBe('1/3')
 })

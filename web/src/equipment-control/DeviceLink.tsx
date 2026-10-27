@@ -13,10 +13,12 @@ interface DeviceLinkProps {
 	readonly fallback: ReactNode
 	// Extra classes of the link.
 	readonly className?: string
+	// Called after the device was opened, such as to close the panel holding the link.
+	readonly onNavigate?: () => void
 }
 
 // Name of a device that opens it in Equipment Control, or the fallback text without a device.
-export function DeviceLink({ device, fallback, className }: DeviceLinkProps) {
+export function DeviceLink({ device, fallback, className, onNavigate }: DeviceLinkProps) {
 	if (!device) return <>{fallback}</>
 
 	return (
@@ -24,7 +26,10 @@ export function DeviceLink({ device, fallback, className }: DeviceLinkProps) {
 			type="button"
 			title={`Open ${device.name} in Equipment Control`}
 			className={cn('max-w-full cursor-pointer truncate border-0 bg-transparent p-0 text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent', className)}
-			onClick={() => navigate(routeState, { workspace: 'equipment', device: device.id })}
+			onClick={() => {
+				navigate(routeState, { workspace: 'equipment', device: device.id })
+				onNavigate?.()
+			}}
 		>
 			{device.name}
 		</button>

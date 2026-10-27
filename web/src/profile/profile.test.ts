@@ -7,6 +7,7 @@ import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISI
 import type { DisplaySettings } from 'api'
 import { ORIGINAL_DISPLAY_SETTINGS } from '../images/display'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
+import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
 import {
 	mountRemoteBinding,
 	setMountRemoteBinding,
@@ -60,9 +61,11 @@ import {
 	setSkyMagnitudeLimit,
 	setSkyObserver,
 	setStarDetectionSettings,
+	setStreakDetectionSettings,
 	setGuideTelescopeOptics,
 	setTelescopeOptics,
 	starDetectionSettings,
+	streakDetectionSettings,
 	updateOpticalPreset,
 	imageDisplaySettings,
 	setImageDisplaySettings,
@@ -100,7 +103,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 11, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: 12, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -794,7 +797,7 @@ describe('camera forms', () => {
 		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
 
 		const newer = newStores()
-		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 12, profiles: [{ id: 'a', name: 'A' }] }))
+		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 13, profiles: [{ id: 'a', name: 'A' }] }))
 		expect(load(newer).profiles.map((profile) => profile.id)).not.toContain('a')
 	})
 
@@ -811,6 +814,25 @@ describe('camera forms', () => {
 		const invalid = newStores()
 		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 4, profiles: [{ id: 'a', name: 'A', settings: { starDetection: { detector: { provider: 'builtin', maximumRadius: 2 } } } }] }))
 		expect(starDetectionSettings(load(invalid).profiles[0].settings)).toEqual(DEFAULT_STAR_REQUEST)
+	})
+
+	test('the streak detector settings are the profile ones, persisted and restored with defaults for invalid fields', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		expect(streakDetectionSettings(activeProfile(state).settings)).toEqual(DEFAULT_STREAK_SETTINGS)
+
+		const settings = { ...DEFAULT_STREAK_SETTINGS, minLength: 30, plane: 'red', allowBorderClipping: false } as const
+		setStreakDetectionSettings(state, settings)
+		await Bun.sleep(0)
+		expect(streakDetectionSettings(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual(settings)
+
+		const invalid = newStores()
+		const stored = { minLength: -1, maxStreaks: 2.5, plane: 'luminance', allowBorderClipping: 'yes', angleStep: Math.PI / 180, orientationTolerance: Math.PI / 2 }
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 12, profiles: [{ id: 'a', name: 'A', settings: { streakDetection: stored } }] }))
+		// The tolerance is cut to the 16 angle steps the Hough voting budget allows.
+		const restored = streakDetectionSettings(load(invalid).profiles[0].settings)
+		expect(restored).toEqual({ ...DEFAULT_STREAK_SETTINGS, angleStep: Math.PI / 180, orientationTolerance: restored.orientationTolerance })
+		expect(restored.orientationTolerance).toBeCloseTo((16 * Math.PI) / 180, 6)
 	})
 
 	test('display settings applied in Images are kept per camera and globally, restored with defaults for invalid fields', async () => {

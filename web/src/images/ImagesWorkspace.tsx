@@ -18,6 +18,9 @@ import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { StarOverlay } from '../stars/StarOverlay'
 import { pickStar } from '../stars/stars'
 import { useStarResult } from '../stars/useStarResult'
+import { StreakOverlay } from '../streaks/StreakOverlay'
+import { pickStreak } from '../streaks/streaks'
+import { useStreakResult } from '../streaks/useStreakResult'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { IconButton } from '../ui/IconButton'
@@ -33,7 +36,7 @@ import { captureFramesState, frameSourceKey } from './captureframes'
 import { CaptureFramesCarousel } from './CaptureFramesCarousel'
 import { DisplayToolbar } from './DisplayToolbar'
 import { ImageInspector } from './ImageInspector'
-import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, isClosable, isMosaic, openImage, selectImage, selectImageTool, selectStar, setImageView, shownRendering, toggleOriginal } from './images'
+import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, isClosable, isMosaic, openImage, selectImage, selectImageTool, selectStar, selectStreak, setImageView, shownRendering, toggleOriginal } from './images'
 import { SaveImageModal } from './SaveImageModal'
 import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolGroup, imageToolUnavailable } from './tools'
 
@@ -56,6 +59,9 @@ import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolGroup, imageToolUnavailab
 
 // Distance from the pointer a click looks for a star within, in screen pixels.
 const STAR_PICK_RADIUS = 8
+
+// Distance from the pointer a click looks for a streak line within, in screen pixels.
+const STREAK_PICK_RADIUS = 8
 
 // Images workspace.
 export function ImagesWorkspace() {
@@ -80,6 +86,9 @@ export function ImagesWorkspace() {
 	const Panel = definition.panel ?? ImageInspector
 	const { result: stars } = useStarResult(document?.info?.id)
 	const markers = view?.stars.visible && stars ? stars : undefined
+	const { result: streaks } = useStreakResult(document?.info?.id)
+	const lines = view?.streaks.visible && streaks ? streaks : undefined
+	const selectedStreak = lines && view?.streaks.selected?.jobId === lines.jobId ? view.streaks.selected.index : undefined
 	const { solution } = usePlateSolution(document?.info?.id, view?.plateSolving.selected)
 	const wcs = view?.plateSolving.overlay ? solution : undefined
 	const camera = useCameraOperationContext(document)
@@ -133,7 +142,7 @@ export function ImagesWorkspace() {
 							)
 						}
 						overlays={
-							(markers || wcs || reticle || guide || trails || guiding) && view
+							(markers || lines || wcs || reticle || guide || trails || guiding) && view
 								? (size, overlay) => (
 										<>
 											{reticle && <Reticle {...size} />}
@@ -141,6 +150,7 @@ export function ImagesWorkspace() {
 											{guide && <TppaOverlay geometry={guide} view={overlay} />}
 											{trails && <DarvOverlay trails={trails} view={overlay} />}
 											{guiding && <GuidingOverlay overlay={guiding.overlay} view={overlay} />}
+											{lines && <StreakOverlay result={lines} view={overlay} labels={view.streaks.labels} selected={selectedStreak} />}
 											{markers && <StarOverlay result={markers} view={overlay} acceptedOnly={view.stars.acceptedOnly} selected={view.stars.selected?.jobId === markers.jobId ? view.stars.selected.index : undefined} />}
 										</>
 									)
@@ -154,7 +164,12 @@ export function ImagesWorkspace() {
 											const index = pickStar(markers, point, STAR_PICK_RADIUS / overlay.scale, view.stars.acceptedOnly)
 											selectStar(imagesState, document.key, index === undefined ? undefined : { jobId: markers.jobId, index })
 										}
-									: undefined
+									: lines && document && tool === 'streak-detection'
+										? (point, overlay) => {
+												const index = pickStreak(lines, point, STREAK_PICK_RADIUS / overlay.scale, selectedStreak)
+												selectStreak(imagesState, document.key, index === undefined ? undefined : { jobId: lines.jobId, index })
+											}
+										: undefined
 						}
 						empty={
 							waiting ? (

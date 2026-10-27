@@ -1,4 +1,4 @@
-import type { DisplaySettings, MountRemoteProtocol, StarDetectionRequest } from 'api'
+import type { DisplaySettings, MountRemoteProtocol, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
 import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
@@ -7,6 +7,7 @@ import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, type SkyLayerId } from '
 import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { parseJson, readText, type Stores, writeText } from '../storage'
+import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
 import { migrate, normalizeDegrees, normalizeSkyObserver } from './migrate'
 import {
 	type AutoFocusSettings,
@@ -383,6 +384,19 @@ export function starDetectionSettings(settings: Pick<ProfileSettings, 'starDetec
 export function setStarDetectionSettings(state: ProfileState, request: StarDetectionRequest) {
 	const profile = activeProfile(state)
 	profile.settings.starDetection = JSON.parse(JSON.stringify(request)) as StarDetectionRequest
+	touch(profile)
+}
+
+// Returns the streak detector settings of a profile: the ones edited last, or the defaults.
+export function streakDetectionSettings(settings: Pick<ProfileSettings, 'streakDetection'>): Readonly<StreakDetectorSettings> {
+	return settings.streakDetection ?? DEFAULT_STREAK_SETTINGS
+}
+
+// Replaces the streak detector settings of the active profile with a plain copy, which the next streak detection of any
+// document uses.
+export function setStreakDetectionSettings(state: ProfileState, settings: StreakDetectorSettings) {
+	const profile = activeProfile(state)
+	profile.settings.streakDetection = { ...settings }
 	touch(profile)
 }
 

@@ -23,10 +23,12 @@ import {
 	selectImageTool,
 	selectPlateSolution,
 	selectStar,
+	selectStreak,
 	setImageView,
 	setPlateSolveOverlay,
 	setPlateSolveRequest,
 	setStarMarkers,
+	setStreakView,
 	shownRendering,
 	summaryStretch,
 	toggleOriginal,
@@ -455,6 +457,31 @@ describe('star detection', () => {
 		expect(state.views[b]?.stars).toEqual({ visible: true, acceptedOnly: false })
 
 		// Editing and showing never reach the server.
+		expect(calls.length).toBe(requests)
+	})
+})
+
+describe('streak detection', () => {
+	test('a new document starts with shown lines and labels, every context source, and nothing selected', async () => {
+		const state = newState()
+		await openImage(state, '/a.fits', fakeIo().io)
+		const key = state.documents[0].key
+
+		expect(state.views[key]?.streaks).toEqual({ visible: true, labels: true, useSolution: true, useStars: true })
+	})
+
+	test('edits the lines and the context of one document only, never reaching the server', async () => {
+		const state = newState()
+		const { io, calls } = fakeIo()
+		await openImage(state, '/a.fits', io)
+		await openImage(state, '/b.fits', io)
+		const [a, b] = state.documents.map((d) => d.key)
+		const requests = calls.length
+
+		setStreakView(state, a, { labels: false, useStars: false })
+		selectStreak(state, a, { jobId: 'job-1', index: 2 })
+		expect(state.views[a]?.streaks).toEqual({ visible: true, labels: false, useSolution: true, useStars: false, selected: { jobId: 'job-1', index: 2 } })
+		expect(state.views[b]?.streaks).toEqual({ visible: true, labels: true, useSolution: true, useStars: true })
 		expect(calls.length).toBe(requests)
 	})
 })

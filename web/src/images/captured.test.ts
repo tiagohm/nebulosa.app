@@ -257,6 +257,7 @@ describe('following the latest frame', () => {
 		const state = await cameraTab(io, 's:1')
 		const rendering = state.views[KEY].rendering
 		state.views[KEY].stars.selected = { jobId: 'job', index: 0 }
+		state.views[KEY].streaks.selected = { jobId: 'streak-job', index: 1 }
 		gated.set('img-2', () => undefined)
 
 		handleCapturedFrame(state, event(frame(2)), io, 'page')
@@ -264,11 +265,13 @@ describe('following the latest frame', () => {
 		expect(tab(state)).toMatchObject({ info: { id: 'img-1' }, camera: { requested: 's:2', shown: { frame: { frameId: 's:1' } } } })
 		expect(state.views[KEY].rendering).toEqual(rendering)
 		expect(state.views[KEY].stars.selected).toEqual({ jobId: 'job', index: 0 })
+		expect(state.views[KEY].streaks.selected).toEqual({ jobId: 'streak-job', index: 1 })
 
 		release('img-2')
 		await Bun.sleep(10)
 		expect(tab(state)).toMatchObject({ info: { id: 'img-2' }, camera: { requested: undefined, shown: { frame: { frameId: 's:2' } } } })
 		expect(state.views[KEY].stars.selected).toBeUndefined()
+		expect(state.views[KEY].streaks.selected).toBeUndefined()
 	})
 
 	test('a frame that cannot be opened or rendered keeps the frame shown', async () => {

@@ -33,8 +33,8 @@ describe('tool registry', () => {
 		for (const document of [FILE, { source: { kind: 'derived', sourceName: 'M42' } } as const, undefined]) expect(imageToolUnavailable('auto-focus', document)).toBe('Only on a camera tab.')
 	})
 
-	test('a tool without a panel cannot be selected', () => {
-		expect(imageToolUnavailable('streak-detection', FILE)).toBe('Not available yet.')
+	test('image tools are offered on every document', () => {
+		for (const document of [FILE, CAMERA_TAB, { source: { kind: 'derived', sourceName: 'M42' } } as const]) expect(imageToolUnavailable('streak-detection', document)).toBeUndefined()
 		expect(imageToolUnavailable('guiding', CAMERA_TAB)).toBeUndefined()
 	})
 })

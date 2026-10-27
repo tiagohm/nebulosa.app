@@ -28,6 +28,7 @@ import { externalToolsState, handleExternalToolEvent, refreshExternalTools } fro
 import { routeState, watchHistory } from './shell/route'
 import { handleStarsEvent, refreshStars, starsState } from './stars/stars'
 import { browserStores } from './storage'
+import { handleStreaksEvent, refreshStreaks, streaksState } from './streaks/streaks'
 import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
 
 // Entry point of the browser bundle: restores the persisted stores and the URL route before the first
@@ -77,6 +78,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleGuidingEvent(guidingRuntime, event), refresh: () => refreshGuiding(guidingRuntime) },
 	{ handle: (event) => handleExternalToolEvent(externalToolsState, event), refresh: () => refreshExternalTools(externalToolsState) },
 	{ handle: (event) => handleStarsEvent(starsState, event), refresh: () => refreshStars(starsState) },
+	{ handle: (event) => handleStreaksEvent(streaksState, event), refresh: () => refreshStreaks(streaksState) },
 	{ handle: (event) => handlePlateSolvingEvent(plateSolvingState, event), refresh: () => refreshPlateSolving(plateSolvingState) },
 	{ handle: (event) => handleImageProcessingEvent(imageProcessingState, imagesState, event), refresh: () => refreshImageProcessing(imageProcessingState, imagesState) },
 	{ handle: (event) => handleCaptureFramesEvent(captureFramesState, event), refresh: () => refreshCaptureFrames(captureFramesState).then(() => reconcileCapturedFrames(imagesState, captureFramesState)) },

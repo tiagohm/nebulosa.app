@@ -1,4 +1,4 @@
-import type { DisplaySettings, FlatWizardFilter, StarDetectionRequest } from 'api'
+import type { DisplaySettings, FlatWizardFilter, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import { CAMERA_ROLES, type DeviceAssignment, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
 import { CFA_PATTERNS, DISPLAY_RANGES, type DisplayRange, ORIGINAL_DISPLAY_SETTINGS, SCNR_CHANNELS, SCNR_METHODS } from '../images/display'
 import { WORKSPACE_IDS } from '../shell/route'
@@ -6,6 +6,7 @@ import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyD
 import type { OpticalPreset, SensorGeometry, TelescopeOptics } from '../sky/framing'
 import { DEFAULT_APERTURE_RADIUS, DEFAULT_ASTAP_SETTINGS, DEFAULT_BUILTIN_SETTINGS, DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { isRecord } from '../storage'
+import { clampStreakSettings, DEFAULT_STREAK_SETTINGS, STREAK_LIMITS, STREAK_PLANES, type StreakNumericSetting } from '../streaks/streaks'
 import {
 	type AutoFocusSettings,
 	type CameraAcquisitionSettings,
@@ -197,6 +198,25 @@ function migrateRoleForms(capture: unknown, equipment: Readonly<Record<string, E
 	}
 
 	return cameras
+}
+
+// Restores persisted streak detector settings (version 12), filling every field that is not of its type or out of the
+// toolkit's range with its default, and keeping the orientation tolerance within the voting budget of the angle step;
+// undefined for anything that is not a record.
+function normalizeStreakSettings(value: unknown): StreakDetectorSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const settings = { ...DEFAULT_STREAK_SETTINGS }
+
+	for (const key of Object.keys(STREAK_LIMITS) as StreakNumericSetting[]) {
+		const { min, max, integer } = STREAK_LIMITS[key]
+		const number = boundedNumber(value[key], min, max, settings[key])
+		settings[key] = integer && !Number.isInteger(number) ? DEFAULT_STREAK_SETTINGS[key] : number
+	}
+
+	if (oneOf(value.plane, STREAK_PLANES)) settings.plane = value.plane
+	if (typeof value.allowBorderClipping === 'boolean') settings.allowBorderClipping = value.allowBorderClipping
+	return clampStreakSettings(settings)
 }
 
 // Restores a persisted star detection request, filling every invalid field with its default; undefined for anything
@@ -504,6 +524,8 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	settings.cameras = normalizeCameras(value.cameras)
 	const starDetection = normalizeStarRequest(value.starDetection)
 	if (starDetection) settings.starDetection = starDetection
+	const streakDetection = normalizeStreakSettings(value.streakDetection)
+	if (streakDetection) settings.streakDetection = streakDetection
 	const imageDisplay = normalizeDisplaySettings(value.imageDisplay)
 	if (imageDisplay) settings.imageDisplay = imageDisplay
 	normalizeSky(value.sky, settings.sky)
@@ -639,7 +661,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 8:
 		case 9:
 		case 10:
-		case 11: {
+		case 11:
+		case 12: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

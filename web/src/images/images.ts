@@ -99,6 +99,21 @@ export interface ImageStarsState {
 	selected?: { readonly jobId: string; readonly index: number }
 }
 
+// Streak detection of a document as the tab shows it: how its lines are shown and which context the next detection
+// sends. The settings are the profile's; nothing here runs a detection.
+export interface ImageStreaksState {
+	// Whether the lines of the latest result are drawn.
+	visible: boolean
+	// Whether each line is labeled with its number.
+	labels: boolean
+	// Whether the next detection classifies with the plate solution shown, when it is a completed job of the image.
+	useSolution: boolean
+	// Whether the next detection classifies with the stars of the latest completed star detection of the image.
+	useStars: boolean
+	// Selected streak: its index in the result of a job, which only counts while that result is shown.
+	selected?: { readonly jobId: string; readonly index: number }
+}
+
 // Plate solving of a document as the tab shows it: the request being edited, the solution shown, and its overlay.
 export interface ImagePlateSolvingState {
 	// Request the next Solve Image sends; editing it never solves.
@@ -126,6 +141,8 @@ export interface ImageViewState {
 	error?: string
 	// Star detection request and markers.
 	stars: ImageStarsState
+	// Streak lines and the context of the next streak detection.
+	streaks: ImageStreaksState
 	// Plate solving request, solution shown, and overlay.
 	plateSolving: ImagePlateSolvingState
 	// Image processing pipeline being edited and the latest job it submitted.
@@ -336,6 +353,7 @@ export function newView(): ImageViewState {
 		display: { showOriginal: false },
 		renderPending: false,
 		stars: { visible: true, acceptedOnly: false },
+		streaks: { visible: true, labels: true, useSolution: true, useStars: true },
 		plateSolving: { request: { ...DEFAULT_PLATE_SOLVE_REQUEST }, overlay: true, grid: false },
 		processing: { steps: [], expanded: [], adding: DEFAULT_ADDED_OPERATION },
 	}
@@ -510,6 +528,19 @@ export function setStarMarkers(state: ImagesState, key: string, patch: Partial<P
 export function selectStar(state: ImagesState, key: string, selected?: ImageStarsState['selected']) {
 	const stars = state.views[key]?.stars
 	if (stars) stars.selected = selected
+}
+
+// Changes how the streak lines of a document are shown, or the context its next detection sends; never runs one.
+// Ignored for an unknown key.
+export function setStreakView(state: ImagesState, key: string, patch: Partial<Omit<ImageStreaksState, 'selected'>>) {
+	const streaks = state.views[key]?.streaks
+	if (streaks) Object.assign(streaks, patch)
+}
+
+// Selects a streak of a result of a document, or clears the selection. Ignored for an unknown key.
+export function selectStreak(state: ImagesState, key: string, selected?: ImageStreaksState['selected']) {
+	const streaks = state.views[key]?.streaks
+	if (streaks) streaks.selected = selected
 }
 
 // Replaces the plate solving request of a document, which only the next Solve Image sends. Ignored for an unknown key.

@@ -16,6 +16,7 @@ import type { MountNudgeEvent } from './mounts'
 import type { OperationEvent } from './operations'
 import type { PlateSolvingEvent } from './platesolving'
 import type { StarDetectionEvent } from './stars'
+import type { StreakDetectionEvent } from './streaks'
 import type { TppaEvent } from './tppa'
 
 // WebSocket endpoint that pushes server events to every open browser tab. A tab names itself with the client id
@@ -28,7 +29,7 @@ import type { TppaEvent } from './tppa'
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the operation events
 // of the operation registry, the events of the capture, Auto Focus, TPPA, mount nudge, mount remote control, and dome manual rotation services,
 // the captured frames of the frame registry, the guiding sessions, the changes of the external program settings and of the focuser backlash
-// compensations, the star detection, plate solving, and image processing jobs, and the INDI device directory and property streams.
+// compensations, the star detection, streak detection, plate solving, and image processing jobs, and the INDI device directory and property streams.
 export type ServerEvent =
 	| ConnectionRegistryEvent
 	| OperationEvent
@@ -43,6 +44,7 @@ export type ServerEvent =
 	| DomeMotionEvent
 	| ExternalToolEvent
 	| StarDetectionEvent
+	| StreakDetectionEvent
 	| PlateSolvingEvent
 	| ImageProcessingEvent
 	| FocuserBacklashEvent

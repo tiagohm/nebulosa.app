@@ -1,4 +1,4 @@
-import type { AutoFocusRequest, CaptureRequest, DisplaySettings, FlatWizardFilter, GuidingClientSettings, GuidingStartRequest, MountRemoteProtocol, MountRemoteStartRequest, PlateSolveRequest, StarDetectionRequest } from 'api'
+import type { AutoFocusRequest, CaptureRequest, DisplaySettings, FlatWizardFilter, GuidingClientSettings, GuidingStartRequest, MountRemoteProtocol, MountRemoteStartRequest, PlateSolveRequest, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
@@ -16,8 +16,9 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // Wizard form (flatWizard). Version 8 adds the guiding form of each camera (guiding), and version 9 moves the guide
 // focal length of those forms to the guide telescope of the profile (guideTelescope). Version 10 adds the listener
 // bindings of Mount Remote Control of each mount (mountRemoteControl), and version 11 the display settings last applied
-// in Images, to the frames of each camera (display) and to every other image (imageDisplay).
-export const PROFILES_VERSION = 11
+// in Images, to the frames of each camera (display) and to every other image (imageDisplay). Version 12 adds the streak
+// detector settings of Images (streakDetection).
+export const PROFILES_VERSION = 12
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -36,6 +37,9 @@ export interface ProfileSettings {
 	// Star detection request edited in Images → Star Detection, shared by every document and by the frames of Auto
 	// Focus; absent until edited, and then DEFAULT_STAR_REQUEST holds.
 	starDetection?: StarDetectionRequest
+	// Streak detector settings edited in Images → Streak Detection, shared by every document; absent until edited, and
+	// then DEFAULT_STREAK_SETTINGS holds. The context jobs of a detection are chosen per document, never stored here.
+	streakDetection?: StreakDetectorSettings
 	// Display settings applied last in Images to a file or derived image, which every image opened next starts with;
 	// absent until the first one is applied. Camera frames use those of their camera (CameraSettings display).
 	imageDisplay?: DisplaySettings

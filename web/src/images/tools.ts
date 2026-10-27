@@ -11,6 +11,7 @@ import type { ImageDocument, ImageViewState } from './images'
 import { MountNudgeTool } from './MountNudgeTool'
 import { PlateSolverPanel } from './PlateSolverPanel'
 import { StarDetectionPanel } from './StarDetectionPanel'
+import { StreakDetectionPanel } from './StreakDetectionPanel'
 import { TppaTool } from './TppaTool'
 
 // Static registry of the contextual tools of the Images workspace, in two categories: image tools, which work on the
@@ -80,17 +81,12 @@ export interface CameraOperationTool extends ImageToolBase {
 // Definition of an Images contextual tool.
 export type ImageToolDefinition = ImageToolOnImage | CameraOperationTool
 
-// Returns the definition of an image tool that has no panel yet.
-function plannedImageTool(id: ImageToolId, label: string, outputs: ImageToolOnImage['outputs']): ImageToolOnImage {
-	return { id, label, panelTitle: label, category: 'image', outputs }
-}
-
 // Definition of every Images contextual tool, by id.
 export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefinition>> = {
 	inspector: { id: 'inspector', label: 'Image Inspector', panelTitle: 'Image Inspector', category: 'image', outputs: ['display'], panel: ImageInspector },
 	'plate-solver': { id: 'plate-solver', label: 'Plate Solving', panelTitle: 'Plate Solving', category: 'image', outputs: ['analysis'], panel: PlateSolverPanel },
 	'star-detection': { id: 'star-detection', label: 'Star Detection', panelTitle: 'Star Detection', category: 'image', outputs: ['analysis'], panel: StarDetectionPanel },
-	'streak-detection': plannedImageTool('streak-detection', 'Streak Detection', ['analysis']),
+	'streak-detection': { id: 'streak-detection', label: 'Streak Detection', panelTitle: 'Streak Detection', category: 'image', outputs: ['analysis'], panel: StreakDetectionPanel },
 	'image-processing': { id: 'image-processing', label: 'Image Processing', panelTitle: 'Image Processing', category: 'image', outputs: ['derived'], panel: ImageProcessingPanel },
 	'camera-acquisition': { id: 'camera-acquisition', label: 'Acquisition', panelTitle: 'Acquisition', category: 'camera', panel: CameraAcquisitionTool },
 	'auto-focus': { id: 'auto-focus', label: 'Auto Focus', panelTitle: 'Auto Focus', category: 'camera', panel: AutoFocusTool },

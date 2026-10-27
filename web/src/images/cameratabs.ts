@@ -249,6 +249,7 @@ export async function showCameraFrame(state: ImagesState, key: string, frameId: 
 	}
 
 	committed.stars.selected = undefined
+	committed.streaks.selected = undefined
 	committed.plateSolving.selected = undefined
 	if (previous) releaseLease(previous, io)
 }

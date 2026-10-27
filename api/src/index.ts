@@ -29,6 +29,7 @@ import { createRotatorRoutes, RotatorCommands } from './rotators'
 import { skyLocator, skyRoutes } from './sky'
 import { createSolarEclipseRoutes, SolarEclipseService } from './solareclipses'
 import { createStarDetectionRoutes, StarDetectionService } from './stars'
+import { createStreakDetectionRoutes, StreakDetectionService } from './streaks'
 import { createTppaRoutes, TppaSessions } from './tppa'
 import { broadcast, listenClients, listenSockets, type WebSocketData, websocket } from './websocket'
 import { createWheelRoutes, WheelCommands } from './wheels'
@@ -212,6 +213,7 @@ export type {
 	StarDetectorProvider,
 	StarMeasurement,
 } from './stars'
+export type { StreakContextSources, StreakDetectionErrorCode, StreakDetectionEvent, StreakDetectionJob, StreakDetectionJobState, StreakDetectionRequest, StreakDetectionResult, StreakDetectionSnapshot, StreakDetectionSummary, StreakDetectorSettings } from './streaks'
 export type { PlateSolutions, PlateSolveErrorCode, PlateSolveJob, PlateSolveJobState, PlateSolveOrigin, PlateSolveOutcome, PlateSolveRemote, PlateSolveRequest, PlateSolveResult, PlateSolverProvider, PlateSolverSettings, PlateSolveSnapshot, PlateSolveStage, PlateSolveSummary, PlateSolvingEvent } from './platesolving'
 export type { PlateSolveHint, PlateSolveHints, PlateSolveHintSource, PlateSolveStrategy, ResolvedPlateSolveHints } from './platesolving.hints'
 export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
@@ -333,6 +335,9 @@ const externalTools = new ExternalToolsStore(DEFAULT_SETTINGS_FILE, broadcast)
 const stars = new StarDetectionService(images, externalTools, broadcast)
 const plateSolving = new PlateSolvingService(images, externalTools, broadcast)
 
+// Streak detection of the image documents, classified with the solutions and stars already found for each image.
+const streaks = new StreakDetectionService(images, plateSolving, stars, broadcast)
+
 // Image processing pipelines of the image documents, each adopting its result as a new derived document.
 const imageProcessing = new ImageProcessingService(images, broadcast)
 
@@ -409,6 +414,7 @@ export const routes = {
 	...createExternalToolsRoutes(externalTools),
 	...createStarDetectionRoutes(stars),
 	...createPlateSolvingRoutes(plateSolving),
+	...createStreakDetectionRoutes(streaks),
 	...createCaptureFrameRoutes(captureFrames),
 	...skyRoutes,
 	...createLunarEclipseRoutes(lunarEclipses),

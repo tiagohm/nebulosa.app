@@ -38,7 +38,7 @@ export function IndiPropertyVector({ vector }: IndiPropertyVectorProps) {
 	return (
 		<section className="flex flex-col gap-2 border-t border-line-100 py-3 first:border-t-0">
 			<header className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-				<h4 className="m-0 min-w-0 text-[13px] font-medium break-words text-ink-100">{labelOf(vector)}</h4>
+				<h4 className="m-0 min-w-0 text-[13px] font-medium wrap-break-word text-ink-100">{labelOf(vector)}</h4>
 				<span className="min-w-0 font-mono text-[11px] break-all text-ink-300">{vector.name}</span>
 				<span className="ml-auto flex items-baseline gap-2 text-xs">
 					<span className="text-ink-300 max-sm:hidden">{details}</span>

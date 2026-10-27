@@ -345,12 +345,12 @@ function Classification({ classification }: { readonly classification?: StreakCl
 
 	return (
 		<>
+			<span className="text-xs text-ink-300 uppercase">Classification:</span>
+			<Notice>The evidence score is an uncalibrated weight of the evidence available in this image, not a probability; Unknown means the evidence does not single out a class.</Notice>
 			<Property label="Class">{CLASS_LABELS[classification.class]}</Property>
 			<Property label="Evidence score">{classification.confidence.toFixed(2)}</Property>
-			<Notice>The evidence score is an uncalibrated weight of the evidence available in this image, not a probability; Unknown means the evidence does not single out a class.</Notice>
 			{classification.alternatives.length > 0 && (
 				<>
-					<span className="text-xs text-ink-300">Alternatives</span>
 					{classification.alternatives.map((alternative) => (
 						<Property key={alternative.class} label={CLASS_LABELS[alternative.class]}>
 							{alternative.score.toFixed(2)}
@@ -360,7 +360,6 @@ function Classification({ classification }: { readonly classification?: StreakCl
 			)}
 			{classification.evidence.length > 0 && (
 				<>
-					<span className="text-xs text-ink-300">Evidence</span>
 					{classification.evidence.map((evidence, index) => (
 						<Property key={index} label={evidence.description ?? evidence.kind}>
 							{evidence.score.toFixed(2)}
@@ -379,12 +378,12 @@ interface PropertyProps {
 	readonly children: ReactNode
 }
 
-// Name and value of a property.
+// Name and value of a property. A long name wraps; the value keeps its width, so the values stay aligned on the right.
 function Property({ label, children }: PropertyProps) {
 	return (
 		<div className="flex items-baseline justify-between gap-3">
-			<span className="flex-none text-xs text-ink-300">{label}</span>
-			<span className="min-w-0 text-right text-ink-100 tabular-nums">{children}</span>
+			<span className="min-w-0 text-xs wrap-break-word text-ink-300">{label}</span>
+			<span className="flex-none text-right text-ink-100 tabular-nums">{children}</span>
 		</div>
 	)
 }

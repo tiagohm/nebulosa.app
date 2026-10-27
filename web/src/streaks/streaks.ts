@@ -32,7 +32,12 @@ export interface StreaksState {
 export type StreakPlane = StreakDetectorSettings['plane']
 
 // Settings of a first run: the toolkit's defaults.
-export const DEFAULT_STREAK_SETTINGS: StreakDetectorSettings = DEFAULT_STREAK_DETECTION_OPTIONS
+export const DEFAULT_STREAK_SETTINGS: StreakDetectorSettings = {
+	...DEFAULT_STREAK_DETECTION_OPTIONS,
+	maxWidth: 12,
+	minLinearity: 0.9,
+	minCoverage: 0.9,
+}
 
 // Bounds of a numeric setting: the range the toolkit accepts, and whether it is an integer.
 export interface StreakSettingLimit {

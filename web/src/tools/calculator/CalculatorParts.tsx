@@ -101,7 +101,7 @@ export function Primary({ label, children }: { readonly label: string; readonly 
 	return (
 		<div className="flex flex-col gap-0.5">
 			<span className="text-xs text-ink-300">{label}</span>
-			<span className="font-mono text-2xl leading-8 break-words text-ink-100">{children}</span>
+			<span className="font-mono text-2xl leading-8 wrap-break-word text-ink-100">{children}</span>
 		</div>
 	)
 }

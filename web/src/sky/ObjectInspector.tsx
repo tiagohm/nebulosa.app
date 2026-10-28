@@ -8,8 +8,8 @@ import { CollapsibleSection } from './CollapsibleSection'
 import { formatAngularSize, formatDeclination, formatDegrees, formatLocalTime, formatMagnitude, formatRightAscension, formatStellarDistance } from './format'
 import { Datum, Note, PositionSection } from './InspectorParts'
 import { MountInspector } from './MountInspector'
+import { ObjectActions } from './ObjectActions'
 import { type SkySelection, skyState } from './sky'
-import { SlewSection } from './SlewSection'
 import { SunInspector } from './sun/SunInspector'
 
 // Object Inspector of the Sky workspace: the selected object's identity, catalog data, coordinates, and,
@@ -18,7 +18,7 @@ import { SunInspector } from './sun/SunInspector'
 // says what it is: catalog J2000 or apparent of date, topocentric or geocentric, the instant, and the
 // provider (Horizons or a local model, with the reason). Missing data is shown as missing, never as a
 // placeholder value, and catalog data stays shown when a position fails. With a mount on the profile's
-// connection, the object can be slewed to. The mount marker and the Sun have their own views.
+// connection, the object can be slewed to from its Object section. The mount marker and the Sun have their own views.
 
 // Orbital elements and physical parameters of minor bodies shown, in order.
 const MINOR_BODY_PARAMETERS = ['a', 'e', 'i', 'q', 'per', 'H', 'G', 'M1', 'diameter'] as const
@@ -52,6 +52,7 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 	const hasObserver = !!observer
 	const { catalog, minorBody, constellation, position, events } = selection as SkySelection
 	const designations = catalog ? catalog.designations : constellation ? [constellation.abbreviation, constellation.genitive] : []
+	const magnitude = catalog ? catalog.magnitude : position?.magnitude
 
 	return (
 		<>
@@ -59,14 +60,10 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 				<p className="m-0 text-base leading-6 font-semibold text-ink-100">{selection.name}</p>
 				<p className="m-0 text-ink-300">{typeOf(selection)}</p>
 				{designations.length > 0 && <p className="m-0 text-xs leading-5 text-ink-200">{designations.join(' · ')}</p>}
+				{magnitude !== undefined && <Datum label="Magnitude">{formatMagnitude(magnitude)}</Datum>}
 				{selection.detailsError && <Note danger>Details unavailable: {selection.detailsError}</Note>}
-				<div>
-					<Button variant="secondary" onClick={onShowFraming}>
-						Show Framing
-					</Button>
-				</div>
+				<ObjectActions target={selection.ref} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />
 			</PanelSection>
-			<SlewSection target={selection.ref} targetName={selection.name} observer={observer} />
 			<PositionSection selection={selection} timeZone={timeZone} />
 			{position && <ObserverSection position={position} events={events} hasObserver={hasObserver} onSetObserver={onSetObserver} isSolarSystem={selection.ref.kind === 'body' || selection.ref.kind === 'minorBody'} timeZone={timeZone} />}
 			{catalog && <CatalogSection catalog={catalog} />}
@@ -90,8 +87,7 @@ function CatalogSection({ catalog }: { readonly catalog: SkyCatalogObject }) {
 	const pm = catalog.pmRA !== 0 || catalog.pmDEC !== 0
 
 	return (
-		<CollapsibleSection id="catalog" title="Catalog" summary={catalog.magnitude !== undefined ? `Magnitude ${formatMagnitude(catalog.magnitude)}` : catalog.classification}>
-			{catalog.magnitude !== undefined && <Datum label="Magnitude">{formatMagnitude(catalog.magnitude)}</Datum>}
+		<CollapsibleSection id="catalog" title="Catalog" summary={catalog.classification}>
 			{catalog.bv !== undefined && <Datum label="B−V">{catalog.bv.toFixed(2)}</Datum>}
 			{catalog.classification && <Datum label={star ? 'Spectral type' : 'Morphology'}>{catalog.classification}</Datum>}
 			{catalog.majorAxis !== undefined && (

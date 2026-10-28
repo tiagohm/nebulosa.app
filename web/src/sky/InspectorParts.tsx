@@ -1,7 +1,7 @@
 import type { SkyPosition } from 'api'
 import type { ReactNode } from 'react'
 import { CollapsibleSection } from './CollapsibleSection'
-import { formatDeclination, formatDegrees, formatLocalTime, formatMagnitude, formatRightAscension, formatSolarSystemDistance } from './format'
+import { formatDeclination, formatDegrees, formatLocalTime, formatRightAscension, formatSolarSystemDistance } from './format'
 import type { SkySelection } from './sky'
 
 // Parts shared by the Object Inspector and the Sun Inspector: a labeled datum, a muted note, and the collapsible
@@ -44,7 +44,6 @@ function PositionData({ selection, timeZone, children }: { readonly selection: S
 						</>
 					)}
 					{position.distance !== undefined && <Datum label="Distance">{formatSolarSystemDistance(position.distance)}</Datum>}
-					{position.magnitude !== undefined && selection.ref.kind !== 'catalog' && <Datum label="Magnitude">{formatMagnitude(position.magnitude)}</Datum>}
 					{position.illuminated !== undefined && selection.ref.kind !== 'catalog' && <Datum label="Illuminated">{(position.illuminated * 100).toFixed(1)}%</Datum>}
 					{position.elongation !== undefined && !(selection.ref.kind === 'body' && selection.ref.code === '10') && selection.ref.kind !== 'catalog' && <Datum label="Solar elongation">{formatDegrees(position.elongation)}</Datum>}
 					{children}

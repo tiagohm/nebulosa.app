@@ -6,23 +6,25 @@ import { operationsState } from '../operations'
 import type { SkyObserverSettings } from '../profile/schema'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
-import { CollapsibleSection } from './CollapsibleSection'
 import { formatDeclination, formatDegrees, formatRightAscension } from './format'
 import { mountRuntime, mountView, slewBlocker, slewMount, slewProgress, stopMount } from './mount'
 import { apiObserver, fetchSkyPosition } from './sky'
 
-// Slew to Object of the Object Inspector: points the profile's mount at the selected object after an
-// explicit confirmation, then shows the real outcome of the operation as the server reports it. The
-// target is resolved by the server at the real current time, whatever instant the Sky shows; the dialog
-// previews where the object is now for the observer. Accepting the request is never shown as arrival.
+// Actions of the selected object in the Object section of the Object Inspector: Show Framing, and Slew to Object
+// while the profile's mount is connected. A slew points the mount at the object after an explicit confirmation,
+// then shows the real outcome of the operation as the server reports it. The target is resolved by the server at
+// the real current time, whatever instant the Sky shows; the dialog previews where the object is now for the
+// observer. Accepting the request is never shown as arrival.
 
-export interface SlewSectionProps {
+export interface ObjectActionsProps {
 	// Object to slew to.
 	readonly target: SkyObjectRef
 	// Display name of the object.
 	readonly targetName: string
 	// Observer of the active profile; slewing needs it to check the horizon.
 	readonly observer?: SkyObserverSettings
+	// Opens the framing settings, which draw the field of view around the selection.
+	readonly onShowFraming: () => void
 }
 
 // Description of each reason a mount operation fails.
@@ -40,8 +42,8 @@ const FAILURE_REASONS: Readonly<Record<NonNullable<OperationRecord['reason']>, s
 // Preview of the object's place now, or why it is unknown.
 type Preview = { readonly status: 'loading' } | { readonly status: 'ready'; readonly position: SkyPosition } | { readonly status: 'error'; readonly error: string }
 
-// Slew to Object section.
-export function SlewSection({ target, targetName, observer }: SlewSectionProps) {
+// Actions of the selected object.
+export function ObjectActions({ target, targetName, observer, onShowFraming }: ObjectActionsProps) {
 	const runtime = mountView(useSnapshot(mountRuntime), useSnapshot(controlRuntime))
 	const operations = useSnapshot(operationsState)
 	const [preview, setPreview] = useState<Preview>()
@@ -49,8 +51,7 @@ export function SlewSection({ target, targetName, observer }: SlewSectionProps) 
 	const blocker = observer ? slewBlocker(runtime, operations) : 'Set the observer location to check the horizon'
 	const progress = slewProgress(runtime, operations)
 	const moving = runtime.state?.slewing === true || progress?.state === 'running'
-
-	if (!mount) return null
+	const connected = !!mount && runtime.state?.connected === true
 
 	// Opens the confirmation with the object's place at the real current time.
 	function confirm() {
@@ -70,23 +71,28 @@ export function SlewSection({ target, targetName, observer }: SlewSectionProps) 
 	}
 
 	return (
-		<CollapsibleSection id="mount" title="Mount" summary={moving ? 'Slewing' : mount.name || undefined}>
+		<>
 			<div className="flex flex-wrap gap-2">
-				<Button variant="secondary" disabled={!!blocker} title={blocker} onClick={confirm}>
-					Slew to Object
+				<Button variant="secondary" onClick={onShowFraming}>
+					Show Framing
 				</Button>
-				{moving && (
+				{connected && (
+					<Button variant="secondary" disabled={!!blocker} title={blocker} onClick={confirm}>
+						Slew to Object
+					</Button>
+				)}
+				{connected && moving && (
 					<Button variant="secondary" disabled={!runtime.state?.canAbort} onClick={() => void stopMount(mountRuntime)}>
 						Stop
 					</Button>
 				)}
 			</div>
-			{blocker && !moving && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}.</p>}
-			{runtime.slew && <SlewStatus targetName={runtime.slew.targetName} operation={progress} />}
-			{runtime.error && <p className="m-0 text-xs leading-4 text-danger">{runtime.error}</p>}
+			{connected && blocker && !moving && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}.</p>}
+			{mount && runtime.slew && <SlewStatus targetName={runtime.slew.targetName} operation={progress} />}
+			{mount && runtime.error && <p className="m-0 text-xs leading-4 text-danger">{runtime.error}</p>}
 			<Modal open={!!preview} onClose={() => setPreview(undefined)} title="Slew to object?" className="max-w-md">
 				<p className="m-0 text-[13px]">
-					Slew <strong className="text-ink-100">{mount.name || 'the mount'}</strong> to <strong className="text-ink-100">{targetName}</strong>.
+					Slew <strong className="text-ink-100">{mount?.name || 'the mount'}</strong> to <strong className="text-ink-100">{targetName}</strong>.
 				</p>
 				<p className="mt-2 mb-0 text-xs leading-5 text-ink-300">The server resolves the object at the current real time, not at the time simulated in the Sky, and refuses targets below the horizon.</p>
 				<div className="mt-3 text-[13px]">
@@ -115,7 +121,7 @@ export function SlewSection({ target, targetName, observer }: SlewSectionProps) 
 					</Button>
 				</div>
 			</Modal>
-		</CollapsibleSection>
+		</>
 	)
 }
 

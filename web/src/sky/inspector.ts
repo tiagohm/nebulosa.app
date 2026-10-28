@@ -6,14 +6,14 @@ import { proxy } from 'valtio'
 // the tab; nothing is persisted.
 
 // Collapsible sections of the Object Inspector, the Sun's included.
-export type InspectorSectionId = 'mount' | 'position' | 'visibility' | 'catalog' | 'smallBody' | 'activeRegions' | 'twilight' | 'eclipse' | 'seasons' | 'physical'
+export type InspectorSectionId = 'position' | 'visibility' | 'catalog' | 'smallBody' | 'activeRegions' | 'twilight' | 'eclipse' | 'seasons' | 'physical'
 
 // Whether each section is expanded.
 export type InspectorSections = Record<InspectorSectionId, boolean>
 
 // Initial state: only Position and Visibility are expanded.
 export function initialInspectorSections(): InspectorSections {
-	return { mount: false, position: true, visibility: true, catalog: false, smallBody: false, activeRegions: false, twilight: false, eclipse: false, seasons: false, physical: false }
+	return { position: true, visibility: true, catalog: false, smallBody: false, activeRegions: false, twilight: false, eclipse: false, seasons: false, physical: false }
 }
 
 // Expanded sections of the tab.

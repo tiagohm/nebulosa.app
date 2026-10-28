@@ -8,10 +8,10 @@ import { formatDuration } from '../../tools/eclipse/eclipse'
 import { Button } from '../../ui/Button'
 import { BROWSER_TIME_ZONE } from '../clock'
 import { CollapsibleSection } from '../CollapsibleSection'
-import { formatAngularSize, formatDeclination, formatDegrees, formatLocalTime } from '../format'
+import { formatAngularSize, formatDeclination, formatDegrees, formatLocalTime, formatMagnitude } from '../format'
 import { Datum, Note, PositionSection } from '../InspectorParts'
+import { ObjectActions } from '../ObjectActions'
 import type { SkySelection } from '../sky'
-import { SlewSection } from '../SlewSection'
 import { ActiveRegionsSection } from './ActiveRegionsSection'
 import { SeasonsSection } from './SeasonsSection'
 import { SolarImage } from './SolarImage'
@@ -134,14 +134,10 @@ export function SunInspector({ selection, observer, onSetObserver, timeZone, onS
 			<PanelSection title="Object">
 				<p className="m-0 text-base leading-6 font-semibold text-ink-100">{selection.name}</p>
 				<p className="m-0 text-ink-300">Star</p>
+				{position?.magnitude !== undefined && <Datum label="Magnitude">{formatMagnitude(position.magnitude)}</Datum>}
 				<SolarImage />
-				<div>
-					<Button variant="secondary" onClick={onShowFraming}>
-						Show Framing
-					</Button>
-				</div>
+				<ObjectActions target={SUN} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />
 			</PanelSection>
-			<SlewSection target={SUN} targetName={selection.name} observer={observer} />
 			<ActiveRegionsSection />
 			<PositionSection selection={selection} timeZone={timeZone}>
 				{position?.distance !== undefined && <Datum label="Angular diameter">{formatAngularSize(sunAngularDiameter(position.distance))}</Datum>}

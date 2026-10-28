@@ -36,8 +36,8 @@ export function SolarImage() {
 	return (
 		<div className="flex flex-col gap-2">
 			{shown ? (
-				<button type="button" onClick={enlarge} title="Show a larger image" className="block cursor-zoom-in rounded-sm border-0 bg-black p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
-					<img src={shown.url} alt={`The Sun, ${SUN_IMAGE_CHANNEL_NAMES[shown.channel]}`} className={cn('mx-auto block h-60 max-w-full object-contain', image.loading && 'opacity-60')} />
+				<button type="button" onClick={enlarge} title="Show a larger image" className="block cursor-zoom-in rounded-sm border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+					<img src={shown.url} alt={`The Sun, ${SUN_IMAGE_CHANNEL_NAMES[shown.channel]}`} className={cn('contrast-[0.84375] mx-auto block h-60 max-w-full object-contain', image.loading && 'opacity-60')} />
 				</button>
 			) : (
 				<div className="flex h-60 items-center justify-center rounded-sm bg-base-000 px-4 text-center text-xs text-ink-300">{image.error ? 'The SDO image is unavailable.' : 'Loading the SDO image…'}</div>
@@ -48,7 +48,7 @@ export function SolarImage() {
 			<Modal open={open} onClose={() => setOpen(false)} title={shown ? SUN_IMAGE_CHANNEL_NAMES[shown.channel] : 'The Sun'} fit className="max-w-[min(100%,72rem)]">
 				<div className="flex min-h-0 flex-col gap-3">
 					{enlarged.value ? (
-						<img src={enlarged.value.url} alt={`The Sun, ${SUN_IMAGE_CHANNEL_NAMES[enlarged.value.channel]}`} className="mx-auto block min-h-0 max-w-full flex-1 rounded-sm bg-black object-contain" />
+						<img src={enlarged.value.url} alt={`The Sun, ${SUN_IMAGE_CHANNEL_NAMES[enlarged.value.channel]}`} className="contrast-[0.7] mx-auto block min-h-0 max-w-full flex-1 rounded-sm bg-transparent object-contain" />
 					) : (
 						<p className="m-0 text-ink-300">{enlarged.error ? `The larger image is unavailable: ${enlarged.error}` : 'Loading the larger image…'}</p>
 					)}

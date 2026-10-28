@@ -1,14 +1,13 @@
-import type { AnnotationCenter, AnnotationImageContext, AnnotationJob, AnnotationKind, AnnotationLayer, AnnotationObject, AnnotationRequest, AnnotationResult, AnnotationSite, AnnotationSiteSource, ImageInfo, MinorBody } from 'api'
+import type { AnnotationBodyLayer, AnnotationCenter, AnnotationImageContext, AnnotationJob, AnnotationKind, AnnotationLayer, AnnotationObject, AnnotationRequest, AnnotationResult, AnnotationSite, AnnotationSiteSource, ImageInfo, MinorBody } from 'api'
 import { toArcsec } from 'nebulosa/src/math/units/angle'
 import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { isAnnotationShown } from '../annotations/AnnotationOverlay'
-import { annotationKey, annotationPlateSolveJobId, annotationRequest, annotationsState, cancelAnnotation, isActive, parseUtcInput, resolveMinorBody, runAnnotation, sameAnnotationRequest, utcInputValue } from '../annotations/annotations'
+import { annotationKey, annotationPlateSolveJobId, annotationRequest, annotationsState, cancelAnnotation, isActive, resolveMinorBody, runAnnotation, sameAnnotationRequest } from '../annotations/annotations'
 import { useAnnotationContext, useAnnotationResult } from '../annotations/useAnnotationResult'
 import { Actions, Notice } from '../equipment-control/parts'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { activeProfile, profileState } from '../profile/profile'
-import type { SkyObserverSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { navigate, routeState } from '../shell/route'
 import { EmptyState } from '../shell/WorkspaceLayout'
@@ -23,16 +22,17 @@ import { SegmentedControl } from '../ui/SegmentedControl'
 import { TextInput } from '../ui/TextInput'
 import { useNow } from '../useNow'
 import { holdCameraFrame } from './cameratabs'
-import { type AnnotationDensity, type ImageAnnotationState, imagesState, imageUnavailableReason, selectAnnotation, setAnnotationView } from './images'
+import { type AnnotationDensity, type AnnotationLayers, type ImageAnnotationState, imagesState, imageUnavailableReason, selectAnnotation, setAnnotationView } from './images'
 import type { ImageToolPanelProps } from './tools'
 
-// Annotation tool of the Images workspace: identifies the catalog stars, deep-sky objects, constellations, and
-// solar-system bodies in the field of the active document from its WCS, on the server, and shows the outcome, the
-// groups and appearance of the overlay, the objects in the field, and the object selected in the list or the viewer,
-// which opens in the Sky workspace. The WCS is the plate solution shown when it is a completed job of the image, else
-// the WCS of its header; nothing is solved implicitly. Run Analysis is the only action that queries the catalog, and
-// Find Minor Bodies the only one that asks the SkyBoT service for the known asteroids and comets: showing, hiding, or
-// restyling the overlay never does. A result always belongs to the image it annotated.
+// Annotation tool of the Images workspace: identifies the catalog stars, deep-sky objects, and constellations, and the
+// Sun, Moon, planets, satellites, asteroids, and comets in the field of the active document from its WCS, on the
+// server, and shows the observation date and site of the image, the outcome, the groups and appearance of the overlay,
+// the objects in the field, and the object selected in the list or the viewer, which opens in the Sky workspace. The
+// WCS is the plate solution shown when it is a completed job of the image, else the WCS of its header; nothing is
+// solved implicitly, and the date and site always come from the image. Run Analysis is the only action that queries the
+// catalog, and Find Solar System Bodies the only one that asks the SkyBoT service for the solar-system objects:
+// showing, hiding, or restyling the overlay never does. A result always belongs to the image it annotated.
 
 // Text shown for a value the result does not have.
 const MISSING = '—'
@@ -44,19 +44,26 @@ const MAX_LISTED = 300
 const STATE_LABELS: Readonly<Record<AnnotationJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }
 
 // Display names of the groups.
-const LAYER_LABELS: Readonly<Record<AnnotationLayer, string>> = { star: 'Stars', deepSky: 'Deep-sky objects', solarSystem: 'Solar system', minorBody: 'Asteroids and comets' }
+const LAYER_LABELS: Readonly<Record<AnnotationLayer, string>> = { star: 'Stars', deepSky: 'Deep-sky objects', solarSystem: 'Sun, Moon, and planets', satellite: 'Satellites', minorBody: 'Asteroids and comets' }
+
+// Groups of bodies a solar-system search lists, in the order they are offered, and the layer toggle that shows each.
+const BODY_LAYERS: readonly (readonly [AnnotationBodyLayer, keyof AnnotationLayers])[] = [
+	['solarSystem', 'solarSystem'],
+	['satellite', 'satellites'],
+	['minorBody', 'minorBodies'],
+]
 
 // Display names of the label densities.
 const DENSITY_LABELS: Readonly<Record<AnnotationDensity, string>> = { minimal: 'Minimal', balanced: 'Balanced', detailed: 'Detailed' }
 
 // Display names of where the observation instant came from.
-const TIME_ORIGIN_LABELS = { request: 'Set by hand', dateObs: 'DATE-OBS', dateEnd: 'DATE-END and exposure' } as const
+const TIME_ORIGIN_LABELS = { dateObs: 'DATE-OBS', dateEnd: 'DATE-END and exposure', now: 'Current time' } as const
 
 // Display names of where a position is seen from.
-const CENTER_LABELS: Readonly<Record<AnnotationCenter, string>> = { topocentric: 'Topocentric', geocentricCorrected: 'Geocentric, corrected for the parallax of the site', geocentric: 'Geocentric' }
+const CENTER_LABELS: Readonly<Record<AnnotationCenter, string>> = { geocentricCorrected: 'Geocentric, corrected for the parallax of the site', geocentric: 'Geocentric' }
 
 // Display names of where a site came from.
-const SITE_SOURCE_LABELS: Readonly<Record<AnnotationSiteSource, string>> = { observer: 'Profile observer', obsgeoXyz: 'OBSGEO-X/Y/Z', obsgeoBlh: 'OBSGEO-B/L/H', siteKeywords: 'SITELAT/SITELONG/SITEELEV' }
+const SITE_SOURCE_LABELS: Readonly<Record<AnnotationSiteSource, string>> = { obsgeoXyz: 'OBSGEO-X/Y/Z', obsgeoBlh: 'OBSGEO-B/L/H', siteKeywords: 'SITELAT/SITELONG/SITEELEV' }
 
 // Annotation panel of the active document.
 export function AnnotationPanel({ document, view, onOpen }: ImageToolPanelProps) {
@@ -94,18 +101,16 @@ interface AnnotationProps {
 function Annotation({ documentKey, info, annotation, selectedSolution, unavailable }: AnnotationProps) {
 	const imageId = info?.id
 	const { job, result, resultError } = useAnnotationResult(imageId)
-	const minor = useAnnotationResult(imageId, 'minorBodies')
+	const solar = useAnnotationResult(imageId, 'solarSystemBodies')
 	const { submitErrors } = useSnapshot(annotationsState)
 	const solution = usePlateSolution(imageId, selectedSolution)
 	const plateSolveJobId = annotationPlateSolveJobId(solution)
 	const wcsAvailable = plateSolveJobId !== undefined || solution.header !== undefined
 	const context = useAnnotationContext(imageId)
-	const profiles = useSnapshot(profileState)
-	const observer = activeProfile(profiles).settings.sky.observer
-	const request = annotationRequest({ magnitudeLimit: annotation.magnitudeLimit, plateSolveJobId, time: annotation.time, observer: annotation.useObserver ? observer : undefined })
-	// A minor-body search uses the date and the site of the image header, never the time or observer set by hand.
-	const minorRequest = annotationRequest({ kind: 'minorBodies', magnitudeLimit: annotation.magnitudeLimit, plateSolveJobId })
-	const results = [result, minor.result].filter((e) => e !== undefined)
+	// Both kinds take the observation date and site from the image itself.
+	const request = annotationRequest({ magnitudeLimit: annotation.magnitudeLimit, plateSolveJobId })
+	const solarRequest = annotationRequest({ kind: 'solarSystemBodies', magnitudeLimit: annotation.magnitudeLimit, plateSolveJobId, bodies: annotation.bodies })
+	const results = [result, solar.result].filter((e) => e !== undefined)
 	const owner = results.find((e) => e.jobId === annotation.selected?.jobId)
 	const selected = owner?.objects.find((e) => e.id === annotation.selected!.id)
 	const edit = (patch: Parameters<typeof setAnnotationView>[2]) => setAnnotationView(imagesState, documentKey, patch)
@@ -113,14 +118,28 @@ function Annotation({ documentKey, info, annotation, selectedSolution, unavailab
 
 	return (
 		<>
-			<Analysis documentKey={documentKey} imageId={imageId} request={request} job={job} wcsAvailable={wcsAvailable} submitError={submitError('local')} unavailable={unavailable} />
-			<Observation annotation={annotation} observer={observer} onChange={edit} />
-			{imageId !== undefined && <MinorBodies documentKey={documentKey} imageId={imageId} request={minorRequest} context={context} job={minor.job} result={minor.result} resultError={minor.resultError} wcsAvailable={wcsAvailable} submitError={submitError('minorBodies')} unavailable={unavailable} />}
+			<Analysis documentKey={documentKey} imageId={imageId} request={request} context={context} job={job} wcsAvailable={wcsAvailable} submitError={submitError('local')} unavailable={unavailable} />
+			{imageId !== undefined && (
+				<SolarSystemBodies
+					documentKey={documentKey}
+					imageId={imageId}
+					request={solarRequest}
+					context={context}
+					job={solar.job}
+					result={solar.result}
+					resultError={solar.resultError}
+					wcsAvailable={wcsAvailable}
+					submitError={submitError('solarSystemBodies')}
+					unavailable={unavailable}
+					onBodiesChange={(bodies) => edit({ bodies })}
+				/>
+			)}
 			<PanelSection title="Layers">
 				<Checkbox label="Deep-sky objects" checked={annotation.layers.deepSky} onChange={(deepSky) => edit({ layers: { deepSky } })} />
 				<Checkbox label="Stars" checked={annotation.layers.stars} onChange={(stars) => edit({ layers: { stars } })} />
-				<Checkbox label="Solar system" checked={annotation.layers.solarSystem} onChange={(solarSystem) => edit({ layers: { solarSystem } })} />
-				<Checkbox label="Asteroids and comets" checked={annotation.layers.minorBodies} onChange={(minorBodies) => edit({ layers: { minorBodies } })} />
+				{BODY_LAYERS.map(([layer, toggle]) => (
+					<Checkbox key={layer} label={LAYER_LABELS[layer]} checked={annotation.layers[toggle]} onChange={(shown) => edit({ layers: { [toggle]: shown } })} />
+				))}
 				<Checkbox label="Constellation lines" checked={annotation.layers.constellations} onChange={(constellations) => edit({ layers: { constellations } })} />
 				<Checkbox label="Constellation names" checked={annotation.layers.constellationLabels} onChange={(constellationLabels) => edit({ layers: { constellationLabels } })} />
 				<Notice>Showing or hiding a layer never runs an analysis.</Notice>
@@ -163,6 +182,8 @@ interface AnalysisProps {
 	readonly unavailable?: string
 	// Request Run Analysis sends.
 	readonly request: AnnotationRequest
+	// Observation date and site the image header gives, once fetched.
+	readonly context?: AnnotationImageContext
 	// Latest job of the image.
 	readonly job?: AnnotationJob
 	// Whether the image has a WCS to annotate with: the plate solution shown or its header's.
@@ -171,17 +192,22 @@ interface AnalysisProps {
 	readonly submitError?: string
 }
 
-// Run and Cancel, the WCS and observation context, and the state of the latest job. Running holds the frame a camera
-// tab shows first, so the frame annotated stays shown.
-function Analysis({ documentKey, imageId, request, job, wcsAvailable, submitError, unavailable }: AnalysisProps) {
+// The WCS, the observation date and site of the image that both kinds use, Run and Cancel, and the state of the latest
+// job. Without a date in the header, the analysis moves the stars to the current time. Running holds the frame a
+// camera tab shows first, so the frame annotated stays shown.
+function Analysis({ documentKey, imageId, request, context, job, wcsAvailable, submitError, unavailable }: AnalysisProps) {
 	const active = isActive(job)
 	const now = useNow(active)
 	const changed = job && !sameAnnotationRequest(job.request, request)
-	const observation = job?.observation
+	const observation = context?.observation
 
 	return (
 		<PanelSection title="Source & Status">
 			<Property label="WCS">{request.plateSolveJobId !== undefined ? 'Plate solution shown' : wcsAvailable ? 'Image header' : 'None'}</Property>
+			<Property label="Observation (UTC)">{observation ? formatUtc(observation.time) : context ? TIME_ORIGIN_LABELS.now : MISSING}</Property>
+			{observation && <Property label="Time from">{`${TIME_ORIGIN_LABELS[observation.origin]}${observation.approximate ? ' (approximate)' : ''}`}</Property>}
+			<Property label="Seen from">{context?.site ? formatSite(context.site) : context ? 'Center of the Earth' : MISSING}</Property>
+			{context?.site && <Property label="Site from">{SITE_SOURCE_LABELS[context.site.source]}</Property>}
 			<Actions>
 				<Button
 					disabled={active || imageId === undefined || unavailable !== undefined || !wcsAvailable}
@@ -199,17 +225,14 @@ function Analysis({ documentKey, imageId, request, job, wcsAvailable, submitErro
 			</Actions>
 			{unavailable && <Notice>{unavailable}</Notice>}
 			{!unavailable && imageId !== undefined && !wcsAvailable && <Notice>This image has no WCS. Solve it with Plate Solving first; nothing is solved implicitly.</Notice>}
+			{context && !observation && <Notice>The header has no observation date (DATE-OBS, or DATE-END and the exposure), so the analysis moves the stars to the current time and the solar-system bodies cannot be found.</Notice>}
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job ? (
 				<>
 					<Property label="Status">{STATE_LABELS[job.state]}</Property>
 					<Property label="Elapsed">{formatSeconds(elapsedOf(job, now))}</Property>
-					<Property label="Observation">{observation ? new Date(observation.time).toISOString().replace('.000Z', 'Z') : 'Unknown'}</Property>
-					{observation && <Property label="Time from">{`${TIME_ORIGIN_LABELS[observation.origin]}${observation.approximate ? ' (approximate)' : ''}`}</Property>}
-					{observation && <Property label="Seen from">{observation.site ? formatSite(observation.site) : 'Center of the Earth'}</Property>}
-					{observation && <Property label="Positions">{CENTER_LABELS[observation.center]}</Property>}
 					{job.error && <Notice error>{job.error}</Notice>}
-					{changed && <Notice>The WCS, the magnitude limit, the time, or the observer changed since this analysis; run it again to apply them.</Notice>}
+					{changed && <Notice>The WCS or the magnitude limit changed since this analysis; run it again to apply them.</Notice>}
 				</>
 			) : (
 				imageId !== undefined && <Notice>No analysis of this image yet.</Notice>
@@ -218,69 +241,18 @@ function Analysis({ documentKey, imageId, request, job, wcsAvailable, submitErro
 	)
 }
 
-interface ObservationProps {
-	// Annotation state of the document.
-	readonly annotation: ImageAnnotationState
-	// Observer of the active profile, if any.
-	readonly observer?: SkyObserverSettings
-	// Changes the annotation state.
-	readonly onChange: (patch: Parameters<typeof setAnnotationView>[2]) => void
-}
-
-// Observation instant and observer of the next run, for the solar-system bodies and the proper motion of the stars. The
-// instant is entered in UTC; blank uses the image header, never the current time.
-function Observation({ annotation, observer, onChange }: ObservationProps) {
-	// Text being typed, kept while it is not a complete date-time.
-	const [text, setText] = useState<string>()
-	const value = text ?? (annotation.time === undefined ? '' : utcInputValue(annotation.time))
-	const place = observer && (observer.name ?? `${observer.latitude.toFixed(3)}°, ${observer.longitude.toFixed(3)}°`)
-
-	return (
-		<PanelSection title="Observation">
-			<TextInput
-				label="Time (UTC)"
-				type="datetime-local"
-				step={1}
-				value={value}
-				onChange={(event) => {
-					const next = event.currentTarget.value
-					const time = parseUtcInput(next)
-					setText(next)
-					if (!next) onChange({ time: undefined })
-					else if (time !== undefined) onChange({ time })
-				}}
-				onBlur={() => setText(undefined)}
-			/>
-			<Button
-				variant="secondary"
-				className="self-start"
-				disabled={annotation.time === undefined}
-				onClick={() => {
-					setText(undefined)
-					onChange({ time: undefined })
-				}}
-			>
-				Use Image Time
-			</Button>
-			<Notice>Blank uses DATE-OBS of the image header, or DATE-END and the exposure, at the middle of the exposure. Without a time, no solar-system body is shown and the stars stay at J2000.</Notice>
-			<Checkbox label="See the bodies from the profile's observer" checked={annotation.useObserver && observer !== undefined} disabled={!observer} onChange={(useObserver) => onChange({ useObserver })} />
-			{place ? annotation.useObserver && <Notice>{`The observer of the profile (${place}) may not be where this image was taken.`}</Notice> : <Notice>The profile has no observer, so the bodies are seen from the center of the Earth, which puts the Moon up to a degree off. Set one in the Sky workspace.</Notice>}
-		</PanelSection>
-	)
-}
-
-interface MinorBodiesProps {
+interface SolarSystemBodiesProps {
 	// Key of the document.
 	readonly documentKey: string
 	// Server id of the image.
 	readonly imageId: string
 	// Why no search can run yet.
 	readonly unavailable?: string
-	// Request Find Minor Bodies sends.
+	// Request Find Solar System Bodies sends, with the groups it lists.
 	readonly request: AnnotationRequest
 	// Observation date and site the image header gives, once fetched.
 	readonly context?: AnnotationImageContext
-	// Latest minor-body search of the image.
+	// Latest solar-system search of the image.
 	readonly job?: AnnotationJob
 	// Its result, once fetched.
 	readonly result?: AnnotationResult
@@ -290,54 +262,58 @@ interface MinorBodiesProps {
 	readonly wcsAvailable: boolean
 	// Why the latest submission failed.
 	readonly submitError?: string
+	// Changes the groups the next search lists.
+	readonly onBodiesChange: (bodies: Partial<Record<AnnotationBodyLayer, boolean>>) => void
 }
 
-// Explicit search of the known asteroids and comets of the field with the IMCCE SkyBoT service, at the observation date
-// of the image header, seen from the site of the header (geocentric positions corrected for its parallax) or else from
-// the center of the Earth; both are shown before the search runs. An image without an observation date cannot be
-// searched. It never runs on its own, and its failure leaves the local annotation as it is.
-function MinorBodies({ documentKey, imageId, request, context, job, result, resultError, wcsAvailable, submitError, unavailable }: MinorBodiesProps) {
+// Explicit search of the Sun, Moon, planets, satellites, asteroids, and comets of the field, the groups chosen, with
+// the IMCCE SkyBoT service at the observation date of the image header, seen from the site of the header (geocentric
+// positions corrected for its parallax) or else from the center of the Earth. An image without an observation date
+// cannot be searched. It never runs on its own, and its failure leaves the local annotation as it is.
+function SolarSystemBodies({ documentKey, imageId, request, context, job, result, resultError, wcsAvailable, submitError, unavailable, onBodiesChange }: SolarSystemBodiesProps) {
 	const active = isActive(job)
 	const now = useNow(active)
 	const changed = job && !sameAnnotationRequest(job.request, request)
 	const observation = context?.observation
-	const dateless = context !== undefined && !observation
+	const bodies = request.bodies!
+	const chosen = bodies.solarSystem || bodies.satellite || bodies.minorBody
 
 	return (
-		<PanelSection title="Minor Bodies">
-			<Property label="Observation (UTC)">{observation ? formatUtc(observation.time) : context ? 'None in the header' : MISSING}</Property>
-			{observation && <Property label="Time from">{`${TIME_ORIGIN_LABELS[observation.origin]}${observation.approximate ? ' (approximate)' : ''}`}</Property>}
-			<Property label="Seen from">{context?.site ? formatSite(context.site) : context ? 'Center of the Earth' : MISSING}</Property>
-			{context?.site && <Property label="Site from">{SITE_SOURCE_LABELS[context.site.source]}</Property>}
+		<PanelSection title="Solar System Bodies">
+			{BODY_LAYERS.map(([layer]) => (
+				<Checkbox key={layer} label={LAYER_LABELS[layer]} checked={bodies[layer]} onChange={(listed) => onBodiesChange({ [layer]: listed })} />
+			))}
 			{observation && <Property label="Positions">{CENTER_LABELS[observation.center]}</Property>}
 			<Actions>
 				<Button
-					disabled={active || unavailable !== undefined || !wcsAvailable || !observation}
+					disabled={active || unavailable !== undefined || !wcsAvailable || !observation || !chosen}
 					onClick={() => {
 						holdCameraFrame(imagesState, documentKey)
 						void runAnnotation(annotationsState, imageId, request)
 					}}
 				>
-					Find Minor Bodies
+					Find Solar System Bodies
 				</Button>
 				<Button variant="secondary" disabled={!active || !job} onClick={() => job && void cancelAnnotation(job.jobId)}>
 					Cancel
 				</Button>
 			</Actions>
-			{dateless && <Notice>This image has no observation date (DATE-OBS, or DATE-END and the exposure), so its minor bodies cannot be found.</Notice>}
-			{context && !context.site && <Notice>The header locates no site (OBSGEO or SITELAT/SITELONG), so the bodies are seen from the center of the Earth: a near-Earth object may be far from its predicted position.</Notice>}
-			<Notice>
-				Asks the IMCCE SkyBoT service over the internet for the known asteroids and comets at the date of the image, never at the time set by hand; it may take several seconds. SkyBoT answers for the center of the Earth only, so the positions are corrected here for the parallax of the site. They are
-				predictions, not detections in the image.
-			</Notice>
+			{!chosen && <Notice>Choose at least one group of bodies to find.</Notice>}
+			{context?.observation && !context.site && <Notice>The header locates no site (OBSGEO or SITELAT/SITELONG), so the bodies are seen from the center of the Earth: the Moon may be up to a degree and a near-Earth object far from its predicted position.</Notice>}
+			<Notice>Asks the IMCCE SkyBoT service over the internet for the bodies at the date of the image; it may take several seconds. SkyBoT answers for the center of the Earth only, so the positions are corrected here for the parallax of the site. They are predictions, not detections in the image.</Notice>
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job && (
 				<>
 					<Property label="Status">{STATE_LABELS[job.state]}</Property>
 					<Property label="Elapsed">{formatSeconds(elapsedOf(job, now))}</Property>
-					{job.summary && <Property label={LAYER_LABELS.minorBody}>{job.summary.counts.minorBody}</Property>}
+					{job.summary &&
+						BODY_LAYERS.map(([layer]) => (
+							<Property key={layer} label={LAYER_LABELS[layer]}>
+								{job.summary!.counts[layer]}
+							</Property>
+						))}
 					{job.error && <Notice error>{job.error}</Notice>}
-					{changed && <Notice>The WCS changed since this search; run it again to apply it.</Notice>}
+					{changed && <Notice>The WCS or the groups changed since this search; run it again to apply them.</Notice>}
 					{result?.warnings.map((warning) => (
 						<Notice key={warning}>{warning}</Notice>
 					))}
@@ -361,7 +337,7 @@ function formatSite({ latitude, longitude, elevation }: AnnotationSite): string 
 interface ObjectsProps {
 	// Latest local annotation job of the image.
 	readonly job?: AnnotationJob
-	// Objects of the shown results: the local annotation and the minor-body search.
+	// Objects of the shown results: the local annotation and the solar-system search.
 	readonly objects: readonly AnnotationObject[]
 	// Conditions worth knowing about the local annotation, meant for people.
 	readonly warnings?: readonly string[]
@@ -376,9 +352,10 @@ interface ObjectsProps {
 }
 
 // Groups the local annotation counts.
-const LOCAL_LAYERS: readonly AnnotationLayer[] = ['deepSky', 'star', 'solarSystem']
+const LOCAL_LAYERS: readonly AnnotationLayer[] = ['deepSky', 'star']
 
-// Counts of the latest local annotation and the list of the objects shown, minor bodies included, filtered by name.
+// Counts of the latest local annotation and the list of the objects shown, solar-system bodies included, filtered by
+// name.
 function Objects({ job, objects, warnings, resultError, annotation, selected, onSelect }: ObjectsProps) {
 	const [filter, setFilter] = useState('')
 	const summary = job?.summary
@@ -417,16 +394,17 @@ function Objects({ job, objects, warnings, resultError, annotation, selected, on
 
 // Details of the object selected in the list or the viewer, and its link to the Sky workspace. A minor body SkyBoT
 // listed has no SPK-ID, so it is looked up in SBDB first and opens only when SBDB knows exactly one body by its
-// designation.
+// designation; a satellite other than the Moon is not known to the Sky workspace.
 function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 	const profiles = useSnapshot(profileState)
 	// Why the SBDB lookup of the selected minor body failed, by object id, and the object being looked up.
 	const [lookup, setLookup] = useState<{ readonly id: string; readonly error?: string }>()
 	const observer = activeProfile(profiles).settings.sky.observer
 
-	// Selects an object in the Sky workspace and opens it.
+	// Selects an object in the Sky workspace and opens it; a satellite other than the Moon has no ref and never opens.
 	function openInSky(ref: SkySelectionRef, name: string, minorBody?: MinorBody) {
-		selectSkyObject(skyState, { ref, source: 'search', name, category: object!.layer, ...(minorBody && { minorBody }) }, observer)
+		const { layer } = object!
+		selectSkyObject(skyState, { ref, source: 'search', name, category: layer === 'satellite' ? 'solarSystem' : layer, ...(minorBody && { minorBody }) }, observer)
 		navigate(routeState, { workspace: 'sky' })
 	}
 
@@ -457,12 +435,14 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 							Open in Sky
 						</Button>
 					) : (
-						<Button variant="secondary" className="self-start" disabled={lookup?.id === object.id && lookup.error === undefined} onClick={() => void openMinorBody(object)}>
-							Find in SBDB and Open in Sky
-						</Button>
+						object.layer === 'minorBody' && (
+							<Button variant="secondary" className="self-start" disabled={lookup?.id === object.id && lookup.error === undefined} onClick={() => void openMinorBody(object)}>
+								Find in SBDB and Open in Sky
+							</Button>
+						)
 					)}
 					{lookup?.id === object.id && lookup.error && <Notice error>{lookup.error}</Notice>}
-					<Notice>The Sky workspace keeps its own time: it shows the object now, not at the time of this image.</Notice>
+					{object.ref || object.layer === 'minorBody' ? <Notice>The Sky workspace keeps its own time: it shows the object now, not at the time of this image.</Notice> : <Notice>This satellite cannot be opened in the Sky workspace.</Notice>}
 				</>
 			) : (
 				<Notice>Click a marker in the image or an object in the list to inspect it.</Notice>

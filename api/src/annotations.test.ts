@@ -9,12 +9,11 @@ import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
-import { annotationCacheKey, type AnnotationEvent, type AnnotationImageContext, type AnnotationJob, type AnnotationRequest, AnnotationService, type AnnotationServiceOptions, type AnnotationSky, createAnnotationRoutes, type MinorBodySearch, minorBodySearchUnavailable, observationContext } from './annotations'
+import { annotationCacheKey, type AnnotationEvent, type AnnotationImageContext, type AnnotationJob, type AnnotationRequest, AnnotationService, type AnnotationServiceOptions, type AnnotationSky, createAnnotationRoutes, type SolarSystemSearch, solarSystemSearchUnavailable, observationContext } from './annotations'
 import { ExternalToolsStore } from './externaltools'
 import { ImageStore } from './images'
 import { PlateSolvingService, type PlateSolveResult } from './platesolving'
 import { fieldConstellations, fieldObjects } from './sky/catalog'
-import type { SkyPosition } from './sky/ephemeris'
 import { fixtureCatalog } from './sky/fixture'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-annotations-test-'))
@@ -82,22 +81,14 @@ function writeImage(extra: readonly string[] = []) {
 	return path
 }
 
-// Position of a stub body: astrometric J2000 at `j2000`, apparent position far away, so a WCS fed the apparent one
-// would miss it.
-function position(time: number, j2000: readonly [number, number]): SkyPosition {
-	return { time, source: 'local', center: 'geocentric', rightAscension: j2000[0] + 1, declination: j2000[1], rightAscensionJ2000: j2000[0], declinationJ2000: j2000[1], constellation: 'ORI' }
-}
-
-// Sky over the fixture catalog, with Jupiter at M 42 moving 0.001 rad per hour in right ascension and every other body
-// far away; records the body requests.
-function sky(calls: { code: string; time: number; observer?: unknown }[] = []): AnnotationSky {
+// Sky over the fixture catalog, recording the epochs of the catalog queries.
+function sky(times: (number | undefined)[] = []): AnnotationSky {
 	return {
-		objects: (query) => fieldObjects(catalog, query),
-		constellations: (ra, dec, radius) => fieldConstellations(CONSTELLATIONS, ra, dec, radius),
-		body: (code, time, observer) => {
-			calls.push({ code, time, observer })
-			return Promise.resolve(position(time, code === '599' ? [M42.ra + ((time - Date.UTC(2026, 9, 27, 3)) / 3600000) * 0.001, M42.dec] : [0, -1]))
+		objects: (query) => {
+			times.push(query.time)
+			return fieldObjects(catalog, query)
 		},
+		constellations: (ra, dec, radius) => fieldConstellations(CONSTELLATIONS, ra, dec, radius),
 	}
 }
 
@@ -118,7 +109,7 @@ function skybotObject(name: string, offset: number, patch: Partial<SkybotObject>
 }
 
 // Search answering objects and recording its calls; a search that never answers waits for its signal.
-function skybot(objects: readonly SkybotObject[] | 'hang' | Error, calls: { args: Parameters<MinorBodySearch> }[] = []): MinorBodySearch {
+function skybot(objects: readonly SkybotObject[] | 'hang' | Error, calls: { args: Parameters<SolarSystemSearch> }[] = []): SolarSystemSearch {
 	return (...args) => {
 		calls.push({ args })
 		if (objects === 'hang')
@@ -130,7 +121,7 @@ function skybot(objects: readonly SkybotObject[] | 'hang' | Error, calls: { args
 	}
 }
 
-const MINOR: AnnotationRequest = { kind: 'minorBodies', magnitudeLimit: 12 }
+const MINOR: AnnotationRequest = { kind: 'solarSystemBodies', magnitudeLimit: 12 }
 
 const REQUEST: AnnotationRequest = { kind: 'local', magnitudeLimit: 12 }
 
@@ -176,37 +167,30 @@ describe('observation context', () => {
 	const header = (cards: Record<string, string | number>) => cards as FitsHeader
 
 	test('the middle of the exposure from DATE-OBS', () => {
-		expect(observationContext(header({ 'DATE-OBS': '2026-10-27T03:00:00' }), 30, REQUEST)).toEqual({ time: Date.UTC(2026, 9, 27, 3, 0, 15), origin: 'dateObs', approximate: false, exposure: 30, start: Date.UTC(2026, 9, 27, 3), end: Date.UTC(2026, 9, 27, 3, 0, 30), center: 'geocentric' })
-		expect(observationContext(header({ 'DATE-OBS': '2026-10-27T03:00:00.250' }), undefined, REQUEST)).toEqual({ time: Date.UTC(2026, 9, 27, 3, 0, 0, 250), origin: 'dateObs', approximate: false, center: 'geocentric' })
+		expect(observationContext(header({ 'DATE-OBS': '2026-10-27T03:00:00' }), 30)).toEqual({ time: Date.UTC(2026, 9, 27, 3, 0, 15), origin: 'dateObs', approximate: false, exposure: 30, start: Date.UTC(2026, 9, 27, 3), end: Date.UTC(2026, 9, 27, 3, 0, 30), center: 'geocentric' })
+		expect(observationContext(header({ 'DATE-OBS': '2026-10-27T03:00:00.250' }), undefined)).toEqual({ time: Date.UTC(2026, 9, 27, 3, 0, 0, 250), origin: 'dateObs', approximate: false, center: 'geocentric' })
 	})
 
 	test('the start from DATE-END only with the exposure', () => {
 		const dateEnd = header({ 'DATE-END': '2026-10-27T03:01:00' })
-		expect(observationContext(dateEnd, 60, REQUEST)).toMatchObject({ time: Date.UTC(2026, 9, 27, 3, 0, 30), origin: 'dateEnd', start: Date.UTC(2026, 9, 27, 3) })
-		expect(observationContext(dateEnd, undefined, REQUEST)).toBeUndefined()
+		expect(observationContext(dateEnd, 60)).toMatchObject({ time: Date.UTC(2026, 9, 27, 3, 0, 30), origin: 'dateEnd', start: Date.UTC(2026, 9, 27, 3) })
+		expect(observationContext(dateEnd, undefined)).toBeUndefined()
 	})
 
 	test('a date without a time is approximate', () => {
-		expect(observationContext(header({ 'DATE-OBS': '2026-10-27' }), undefined, REQUEST)).toMatchObject({ time: Date.UTC(2026, 9, 27), approximate: true })
+		expect(observationContext(header({ 'DATE-OBS': '2026-10-27' }), undefined)).toMatchObject({ time: Date.UTC(2026, 9, 27), approximate: true })
 	})
 
-	test('the instant of the request, centered on the exposure', () => {
-		const time = Date.UTC(2020, 0, 1)
-		expect(observationContext(header({ 'DATE-OBS': '2026-10-27T03:00:00' }), 10, { ...REQUEST, time, observer: { latitude: 1, longitude: 2, elevation: 3 } })).toEqual({
-			time,
-			origin: 'request',
-			approximate: false,
-			exposure: 10,
-			start: time - 5000,
-			end: time + 5000,
-			center: 'topocentric',
-			site: { latitude: 1, longitude: 2, elevation: 3, source: 'observer' },
-		})
+	test('the site of the header', () => {
+		expect(observationContext(header({ 'DATE-OBS': '2026-10-27T03:00:00', SITELAT: 1, SITELONG: 2, SITEELEV: 3 }), undefined)).toMatchObject({ center: 'geocentricCorrected', site: { source: 'siteKeywords' } })
 	})
 
-	test('none without a date', () => {
-		expect(observationContext(header({ 'DATE-OBS': 'yesterday' }), 30, REQUEST)).toBeUndefined()
-		expect(observationContext(header({}), 30, REQUEST)).toBeUndefined()
+	test('the current time without a date, when given', () => {
+		const now = Date.UTC(2026, 9, 28, 12)
+		expect(observationContext(header({ 'DATE-OBS': 'yesterday' }), 30)).toBeUndefined()
+		expect(observationContext(header({}), 30)).toBeUndefined()
+		expect(observationContext(header({}), 30, now)).toEqual({ time: now, origin: 'now', approximate: false, center: 'geocentric' })
+		expect(observationContext(header({ 'DATE-OBS': '2026-10-27T03:00:00' }), undefined, now)).toMatchObject({ origin: 'dateObs' })
 	})
 })
 
@@ -222,11 +206,9 @@ describe('service', () => {
 		expect(result.field.radius).toBeCloseTo((Math.SQRT2 * 0.5 * Math.PI) / 180, 4)
 		expect(result.objects.map((e) => e.id)).toEqual(['catalog:1001879'])
 		expect(result.objects[0]).toMatchObject({ ref: { kind: 'catalog', id: 1001879 }, layer: 'deepSky', name: 'Great Orion Nebula', typeName: 'HII Region', magnitude: 4 })
-		expect(result.counts).toEqual({ star: 0, deepSky: 1, solarSystem: 0, minorBody: 0 })
+		expect(result.counts).toEqual({ star: 0, deepSky: 1, solarSystem: 0, satellite: 0, minorBody: 0 })
 		expect(result.constellations.lines).toHaveLength(1)
 		expect(result.constellations.labels.map((e) => e.code)).toEqual(['ORI'])
-		expect(result.observation).toBeUndefined()
-		expect(result.warnings[0]).toContain('observation time is unknown')
 		expect(result).toMatchObject({ width: SIZE, height: SIZE, truncated: false })
 	})
 
@@ -246,33 +228,29 @@ describe('service', () => {
 		expect((await annotate(service, events, info.id)).objects.map((e) => e.id)).toEqual(['catalog:1001879'])
 	})
 
-	test('adds the solar-system bodies at the middle of the exposure with their J2000 positions', async () => {
-		const calls: { code: string; time: number; observer?: unknown }[] = []
-		const { images, service, events } = setup(sky(calls))
-		const info = await images.open(writeImage([...wcs(), text('DATE-OBS', '2026-10-27T03:00:00'), card('EXPTIME', 3600)]))
-		const observer = { latitude: -23, longitude: -46, elevation: 700 }
-		const result = await annotate(service, events, info.id, { ...REQUEST, observer })
-		const jupiter = result.objects.find((e) => e.id === 'body:599')!
-
-		expect(result.observation).toMatchObject({ time: Date.UTC(2026, 9, 27, 3, 30), origin: 'dateObs', center: 'topocentric' })
-		expect(jupiter).toMatchObject({ ref: { kind: 'body', code: '599' }, layer: 'solarSystem', name: 'Jupiter', typeName: 'Planet', declination: M42.dec })
-		expect(jupiter.rightAscension).toBeCloseTo(M42.ra + 0.0005, 9)
-		expect(jupiter.motion!.start[0]).toBeCloseTo(M42.ra, 9)
-		expect(jupiter.motion!.end[0]).toBeCloseTo(M42.ra + 0.001, 9)
-		expect(result.objects.map((e) => e.layer)).toEqual(['solarSystem', 'deepSky'])
-		expect(result.counts.solarSystem).toBe(1)
-		expect(calls.every((e) => e.observer === observer)).toBeTrue()
-		expect(calls.filter((e) => e.code === '10').map((e) => e.time)).toEqual([Date.UTC(2026, 9, 27, 3, 30)])
-	})
-
-	test('the bodies seen from the center of the Earth without an observer', async () => {
-		const { images, service, events } = setup()
-		const info = await images.open(writeImage([...wcs(), text('DATE-OBS', '2026-10-27T03:30:00')]))
+	test('moves the stars to the middle of the exposure, seen from the site of the header', async () => {
+		const times: (number | undefined)[] = []
+		const { images, service, events } = setup(sky(times))
+		const info = await images.open(writeImage([...wcs(), text('DATE-OBS', '2026-10-27T03:00:00'), card('EXPTIME', 3600), card('SITELAT', -23.55), card('SITELONG', -46.63)]))
 		const result = await annotate(service, events, info.id)
 
-		expect(result.observation?.center).toBe('geocentric')
-		expect(result.objects.find((e) => e.id === 'body:599')?.motion).toBeUndefined()
-		expect(result.warnings.some((e) => e.includes('center of the Earth'))).toBeTrue()
+		expect(times).toEqual([Date.UTC(2026, 9, 27, 3, 30)])
+		expect(result.observation).toMatchObject({ time: Date.UTC(2026, 9, 27, 3, 30), origin: 'dateObs', center: 'geocentricCorrected', site: { source: 'siteKeywords' } })
+		expect(result.objects.map((e) => e.layer)).toEqual(['deepSky'])
+		expect(result.warnings).toBeEmpty()
+	})
+
+	test('moves the stars to the current time without a date', async () => {
+		const times: (number | undefined)[] = []
+		const { images, service, events } = setup(sky(times))
+		const info = await images.open(writeImage(wcs()))
+		const before = Date.now()
+		const result = await annotate(service, events, info.id)
+
+		expect(result.observation).toMatchObject({ origin: 'now', center: 'geocentric' })
+		expect(result.observation.time).toBeGreaterThanOrEqual(before)
+		expect(times).toEqual([result.observation.time])
+		expect(result.warnings[0]).toContain('current time')
 	})
 
 	test('refuses an image without a usable WCS', async () => {
@@ -310,7 +288,9 @@ describe('service', () => {
 		await ended(events, job.jobId)
 		expect(service.submit(info.id, REQUEST)).toMatchObject({ status: 'cached', job: { jobId: job.jobId } })
 		expect(service.submit(info.id, { ...REQUEST, magnitudeLimit: 10 }).status).toBe('accepted')
-		expect(annotationCacheKey(info.id, REQUEST)).not.toBe(annotationCacheKey(info.id, { ...REQUEST, observer: { latitude: 0, longitude: 0, elevation: 0 } }))
+		expect(annotationCacheKey(info.id, REQUEST)).toBe(annotationCacheKey(info.id, { ...REQUEST, bodies: { solarSystem: false, satellite: true, minorBody: true } }))
+		expect(annotationCacheKey(info.id, MINOR)).toBe(annotationCacheKey(info.id, { ...MINOR, magnitudeLimit: 5, bodies: { solarSystem: true, satellite: true, minorBody: true } }))
+		expect(annotationCacheKey(info.id, MINOR)).not.toBe(annotationCacheKey(info.id, { ...MINOR, bodies: { solarSystem: true, satellite: false, minorBody: true } }))
 	})
 
 	test('cancels a waiting job', async () => {
@@ -336,12 +316,12 @@ describe('service', () => {
 	})
 })
 
-describe('minor bodies', () => {
+describe('solar-system bodies', () => {
 	// An image of M 42 with a known start and a one-hour exposure.
 	const exposed = () => writeImage([...wcs(), text('DATE-OBS', '2026-10-27T03:00:00'), card('EXPTIME', 3600)])
 
 	test('searches the cone at the middle of the exposure and keeps the bodies on the image, brightest first', async () => {
-		const calls: { args: Parameters<MinorBodySearch> }[] = []
+		const calls: { args: Parameters<SolarSystemSearch> }[] = []
 		const { images, service, events } = setup(sky(), { skybot: skybot([skybotObject('far', 0.1), skybotObject('2003 QW37', 0.001, { number: 172438, magnitude: 20 }), skybotObject('2017 YJ66', -0.001)], calls) })
 		const info = await images.open(writeImage([...wcs(), text('DATE-OBS', '2026-10-27T03:00:00'), card('EXPTIME', 3600)]))
 		const result = await annotate(service, events, info.id, MINOR)
@@ -351,14 +331,14 @@ describe('minor bodies', () => {
 		expect(ra).toBeCloseTo(M42.ra, 6)
 		expect(dec).toBeCloseTo(M42.dec, 6)
 		expect(radius).toBeGreaterThan(result.field.radius)
-		expect(options).toEqual({ observer: '500', objects: { asteroids: true, planets: false, comets: true } })
+		expect(options).toEqual({ observer: '500', objects: { asteroids: true, planets: true, comets: true } })
 		expect(signal).toBeInstanceOf(AbortSignal)
 		expect(result.objects.map((e) => e.id)).toEqual(['skybot:2017 YJ66', 'skybot:172438'])
 		expect(result.objects[1]).toMatchObject({ layer: 'minorBody', name: '(172438) 2003 QW37', designations: ['2003 QW37'], typeName: 'MB>Inner', magnitude: 20, positionError: 1e-6, center: 'geocentric', rightAscension: M42.ra + 0.001 })
 		expect(result.objects[1].ref).toBeUndefined()
 		expect(result.objects[1].motion!.start[0]).toBeCloseTo(M42.ra + 0.001 - 0.0005, 9)
 		expect(result.objects[1].motion!.end[0]).toBeCloseTo(M42.ra + 0.001 + 0.0005, 9)
-		expect(result.counts).toEqual({ star: 0, deepSky: 0, solarSystem: 0, minorBody: 2 })
+		expect(result.counts).toEqual({ star: 0, deepSky: 0, solarSystem: 0, satellite: 0, minorBody: 2 })
 		expect(result.observation).toMatchObject({ center: 'geocentric' })
 		expect(result.observation?.site).toBeUndefined()
 		expect(result.constellations).toEqual({ lines: [], labels: [] })
@@ -374,9 +354,9 @@ describe('minor bodies', () => {
 		const expected = geocentricToTopocentric(M42.ra + 0.001, M42.dec, 0.01, at(Date.UTC(2026, 9, 27, 3, 30)), location)
 
 		expect(result.observation).toMatchObject({ center: 'geocentricCorrected', site: { source: 'siteKeywords' } })
-		expect(result.observation!.site!.latitude).toBeCloseTo(-23.55, 9)
-		expect(result.observation!.site!.longitude).toBeCloseTo(-46.63, 9)
-		expect(result.observation!.site!.elevation).toBeCloseTo(760, 6)
+		expect(result.observation.site!.latitude).toBeCloseTo(-23.55, 9)
+		expect(result.observation.site!.longitude).toBeCloseTo(-46.63, 9)
+		expect(result.observation.site!.elevation).toBeCloseTo(760, 6)
 		expect(near.center).toBe('geocentricCorrected')
 		expect(near.rightAscension).toBeCloseTo(expected[0], 12)
 		expect(near.declination).toBeCloseTo(expected[1], 12)
@@ -402,7 +382,7 @@ describe('minor bodies', () => {
 	})
 
 	test('sees the bodies from the center of the Earth without a site', async () => {
-		const calls: { args: Parameters<MinorBodySearch> }[] = []
+		const calls: { args: Parameters<SolarSystemSearch> }[] = []
 		const { images, service, events } = setup(sky(), { skybot: skybot([], calls) })
 		const info = await images.open(exposed())
 		const result = await annotate(service, events, info.id, MINOR)
@@ -412,14 +392,52 @@ describe('minor bodies', () => {
 		expect(result.warnings.some((e) => e.includes('center of the Earth'))).toBeTrue()
 	})
 
-	test('refuses a search without a time, outside the epochs of SkyBoT, or wider than its cone', async () => {
+	test('refuses a search without a date, outside the epochs of SkyBoT, wider than its cone, or of no group', async () => {
 		const { images, service } = setup(sky(), { skybot: skybot([]) })
 		const timeless = await images.open(writeImage(wcs()))
+		const future = await images.open(writeImage([...wcs(), text('DATE-OBS', '2100-01-01T00:00:00')]))
 		const exposedImage = await images.open(exposed())
+		const field = { rightAscension: 0, declination: 0, radius: 0.01, scale: 1e-5 }
+		const observation = { time: Date.UTC(2026, 0, 1), origin: 'dateObs', approximate: false, center: 'geocentric' } as const
 
-		expect(service.submit(timeless.id, MINOR)).toMatchObject({ status: 'contextUnavailable', error: expect.stringContaining('time is unknown') })
-		expect(service.submit(exposedImage.id, { ...MINOR, time: Date.UTC(2100, 0, 1) })).toMatchObject({ status: 'contextUnavailable', error: expect.stringContaining('1889') })
-		expect(minorBodySearchUnavailable({ rightAscension: 0, declination: 0, radius: 0.2, scale: 1e-5 }, { time: Date.UTC(2026, 0, 1), origin: 'request', approximate: false, center: 'geocentric' })).toContain('10°')
+		expect(service.submit(timeless.id, MINOR)).toMatchObject({ status: 'contextUnavailable', error: expect.stringContaining('no observation date') })
+		expect(service.submit(future.id, MINOR)).toMatchObject({ status: 'contextUnavailable', error: expect.stringContaining('1889') })
+		expect(service.submit(exposedImage.id, { ...MINOR, bodies: { solarSystem: false, satellite: false, minorBody: false } })).toMatchObject({ status: 'contextUnavailable', error: expect.stringContaining('at least one group') })
+		expect(solarSystemSearchUnavailable({ ...field, radius: 0.2 }, observation)).toContain('10°')
+		expect(solarSystemSearchUnavailable(field, observation)).toBeUndefined()
+	})
+
+	test('sorts the Sun, the Moon, the planets, and their satellites into their groups, keeping those asked for', async () => {
+		const calls: { args: Parameters<SolarSystemSearch> }[] = []
+		const found = [
+			skybotObject('Jupiter', 0.0005, { number: 5, class: 'Planet', magnitude: -2 }),
+			skybotObject('Io', 0.0006, { number: 501, class: 'Satellite', magnitude: 5.5 }),
+			skybotObject('Moon', -0.0005, { number: 10, class: 'Satellite', magnitude: -10 }),
+			skybotObject('Sun', 0.0002, { number: 11, class: 'Star', magnitude: -26.7 }),
+			skybotObject('Astraea', -0.0002, { number: 5, magnitude: 10 }),
+		]
+		const { images, service, events } = setup(sky(), { skybot: skybot(found, calls) })
+		const info = await images.open(exposed())
+		const all = await annotate(service, events, info.id, MINOR)
+
+		expect(all.objects.map((e) => [e.id, e.layer, e.name])).toEqual([
+			['body:10', 'solarSystem', 'Sun'],
+			['body:301', 'solarSystem', 'Moon'],
+			['body:599', 'solarSystem', 'Jupiter'],
+			['satellite:501', 'satellite', 'Io'],
+			['skybot:5', 'minorBody', '(5) Astraea'],
+		])
+		expect(all.objects[2]).toMatchObject({ ref: { kind: 'body', code: '599' }, typeName: 'Planet', designations: [] })
+		expect(all.objects[3]).toMatchObject({ typeName: 'Natural Satellite', designations: [] })
+		expect(all.objects[3].ref).toBeUndefined()
+		expect(all.counts).toEqual({ star: 0, deepSky: 0, solarSystem: 3, satellite: 1, minorBody: 1 })
+
+		const majors = await annotate(service, events, info.id, { ...MINOR, bodies: { solarSystem: true, satellite: false, minorBody: false } })
+		expect(calls[1].args[4]?.objects).toEqual({ asteroids: false, planets: true, comets: false })
+		expect(majors.objects.map((e) => e.layer)).toEqual(['solarSystem', 'solarSystem', 'solarSystem'])
+
+		await annotate(service, events, info.id, { ...MINOR, bodies: { solarSystem: false, satellite: false, minorBody: true } })
+		expect(calls[2].args[4]?.objects).toEqual({ asteroids: true, planets: false, comets: true })
 	})
 
 	test('a failure or a timeout of SkyBoT fails the search alone', async () => {

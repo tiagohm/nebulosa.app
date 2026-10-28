@@ -18,8 +18,8 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // bindings of Mount Remote Control of each mount (mountRemoteControl), and version 11 the display settings last applied
 // in Images, to the frames of each camera (display) and to every other image (imageDisplay). Version 12 adds the streak
 // detector settings of Images (streakDetection), version 13 the notifications the profile read or dismissed (notifications),
-// and version 14 the observatory code of the minor-body searches of Images → Annotation (annotation), removed since: the
-// searches use the site of the image header, and a stored code is ignored when read.
+// and version 14 the observatory code of the solar-system searches of Images → Annotation (annotation), removed since:
+// the searches use the site of the image header, and a stored code is ignored when read.
 export const PROFILES_VERSION = 14
 
 // Name of the profile created when none is stored.

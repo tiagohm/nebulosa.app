@@ -375,8 +375,8 @@ export function pickAnnotation(objects: readonly ProjectedAnnotation[], point: P
 	return (best ?? inside)?.object.id
 }
 
-// Returns the projections of the results drawn together over one image, such as its local annotation and its minor-body
-// search: their objects in order, and the constellations of the first one that has any.
+// Returns the projections of the results drawn together over one image, such as its local annotation and its
+// solar-system search: their objects in order, and the constellations of the first one that has any.
 export function mergeProjections(...projections: readonly (AnnotationProjection | undefined)[]): AnnotationProjection | undefined {
 	const shown = projections.filter((e) => e !== undefined)
 	if (shown.length <= 1) return shown[0]

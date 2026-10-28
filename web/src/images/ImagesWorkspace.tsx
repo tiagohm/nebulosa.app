@@ -99,11 +99,11 @@ export function ImagesWorkspace() {
 	const plateSolution = usePlateSolution(document?.info?.id, view?.plateSolving.selected)
 	const { solution } = plateSolution
 	const { result: annotated } = useAnnotationResult(document?.info?.id)
-	const { result: searched } = useAnnotationResult(document?.info?.id, 'minorBodies')
+	const { result: searched } = useAnnotationResult(document?.info?.id, 'solarSystemBodies')
 	const localProjection = useMemo(() => annotated && projectAnnotations(annotated), [annotated])
 	const minorProjection = useMemo(() => searched && projectAnnotations(searched), [searched])
-	// The annotation and the minor-body search are drawn only with the WCS they were computed with, so another solution
-	// shown hides them.
+	// The annotation and the solar-system search are drawn only with the WCS they were computed with, so another
+	// solution shown hides them.
 	const annotationJobId = annotationPlateSolveJobId(plateSolution)
 	const annotationResults = [annotated, searched].filter((result) => result !== undefined && annotationMatchesWcs(result, annotationJobId))
 	const localShown = annotated !== undefined && annotationResults.includes(annotated)

@@ -1,12 +1,13 @@
-import type { AnnotationImageContext, AnnotationJob, AnnotationKind, AnnotationObject, AnnotationRequest, AnnotationResult, AnnotationSnapshot, MinorBody, MinorBodySearchResponse, ServerEvent } from 'api'
+import type { AnnotationBodies, AnnotationImageContext, AnnotationJob, AnnotationKind, AnnotationObject, AnnotationRequest, AnnotationResult, AnnotationSnapshot, MinorBody, MinorBodySearchResponse, ServerEvent } from 'api'
 import { proxy, ref } from 'valtio'
 import { jsonInit, responseError } from '../http'
 
-// Annotation jobs of the server as this tab knows them, for the Annotation tool of the Images workspace. The server runs
-// every job and keeps every result: this store mirrors the compact jobs of its snapshot and annotations:updated events,
-// remembers the latest job of each kind (the local annotation, the minor-body search) of each image id, and fetches the full result of a completed job (the objects, the
-// constellation figures, and the WCS they were selected with) only when a view needs it. A result is always matched to
-// the image id it annotated, so a late result never lands on another image.
+// Annotation jobs of the server as this tab knows them, for the Annotation tool of the Images workspace. The server
+// runs every job and keeps every result: this store mirrors the compact jobs of its snapshot and annotations:updated
+// events, remembers the latest job of each kind (the local annotation, the solar-system search) of each image id, and
+// fetches the full result of a completed job (the objects, the constellation figures, and the WCS they were selected
+// with) only when a view needs it. A result is always matched to the image id it annotated, so a late result never
+// lands on another image.
 
 // Mirror of the server's annotation jobs.
 export interface AnnotationsState {
@@ -55,10 +56,17 @@ export function annotationKey(imageId: string, kind: AnnotationKind): string {
 	return `${imageId}:${kind}`
 }
 
-// Whether two requests annotate the same way: the same kind, WCS, magnitude limit, instant, and observer.
+// Groups a solar-system search lists when its request names none, as the server does.
+const ALL_BODIES: AnnotationBodies = { solarSystem: true, satellite: true, minorBody: true }
+
+// Whether two requests annotate the same way, as the server matches them: the same kind and WCS, and the same
+// magnitude limit of a local run or groups of a solar-system search.
 export function sameAnnotationRequest(a: AnnotationRequest, b: AnnotationRequest): boolean {
-	const observer = a.observer === b.observer || (a.observer !== undefined && b.observer !== undefined && a.observer.latitude === b.observer.latitude && a.observer.longitude === b.observer.longitude && a.observer.elevation === b.observer.elevation)
-	return a.kind === b.kind && a.plateSolveJobId === b.plateSolveJobId && a.magnitudeLimit === b.magnitudeLimit && a.time === b.time && observer
+	if (a.kind !== b.kind || a.plateSolveJobId !== b.plateSolveJobId) return false
+	if (a.kind === 'local') return a.magnitudeLimit === b.magnitudeLimit
+	const x = a.bodies ?? ALL_BODIES
+	const y = b.bodies ?? ALL_BODIES
+	return x.solarSystem === y.solarSystem && x.satellite === y.satellite && x.minorBody === y.minorBody
 }
 
 // Returns the latest job of a kind of an image.
@@ -198,52 +206,26 @@ export function annotationMatchesWcs(result: Pick<AnnotationResult, 'request'>, 
 	return result.request.plateSolveJobId === plateSolveJobId
 }
 
-// Observer of the solar-system bodies of an annotation: geographic position, degrees and meters.
-export interface AnnotationObserverSettings {
-	// Geodetic latitude in degrees, north positive.
-	readonly latitude: number
-	// Geodetic longitude in degrees, east positive.
-	readonly longitude: number
-	// Height above the ellipsoid in meters.
-	readonly elevation: number
-}
-
-// What the next run of a document annotates with.
+// What the next run of a document annotates with; the server takes the observation date and site from the image.
 export interface AnnotationRequestInput {
-	// What is annotated; the local catalog and ephemeris by default.
+	// What is annotated; the local catalog by default.
 	readonly kind?: AnnotationKind
 	// Faintest magnitude kept.
 	readonly magnitudeLimit: number
 	// Plate solving job whose solution is used; absent uses the header's WCS.
 	readonly plateSolveJobId?: string
-	// Observation instant set by hand, Unix milliseconds (UTC); absent uses the header's.
-	readonly time?: number
-	// Observer of the solar-system bodies of a local run; absent sees them from the Earth's center.
-	readonly observer?: AnnotationObserverSettings
+	// Groups a solar-system search lists; a local run sends none.
+	readonly bodies?: AnnotationBodies
 }
 
-// Returns the request of a run: only the position of the observer of a local run is sent, never its name or time zone;
-// a minor-body search sends none, since the server sees the bodies from the site of the image header.
-export function annotationRequest({ kind = 'local', magnitudeLimit, plateSolveJobId, time, observer }: AnnotationRequestInput): AnnotationRequest {
+// Returns the request of a run: the groups of the bodies only for a solar-system search.
+export function annotationRequest({ kind = 'local', magnitudeLimit, plateSolveJobId, bodies }: AnnotationRequestInput): AnnotationRequest {
 	return {
 		kind,
 		magnitudeLimit,
 		...(plateSolveJobId !== undefined && { plateSolveJobId }),
-		...(time !== undefined && { time }),
-		...(kind === 'local' && observer && { observer: { latitude: observer.latitude, longitude: observer.longitude, elevation: observer.elevation } }),
+		...(kind === 'solarSystemBodies' && bodies && { bodies: { solarSystem: bodies.solarSystem, satellite: bodies.satellite, minorBody: bodies.minorBody } }),
 	}
-}
-
-// Formats an instant (Unix milliseconds) as the UTC value of a datetime-local input, to the second.
-export function utcInputValue(time: number): string {
-	return new Date(time).toISOString().slice(0, 19)
-}
-
-// Parses the value of a datetime-local input as UTC, Unix milliseconds; undefined when blank or not a date-time.
-export function parseUtcInput(value: string): number | undefined {
-	if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(value)) return undefined
-	const time = Date.parse(`${value}Z`)
-	return Number.isFinite(time) ? time : undefined
 }
 
 // Designation SBDB is searched with for a minor body SkyBoT listed: its number, or its name or provisional designation.
@@ -265,7 +247,7 @@ export async function resolveMinorBody(object: Pick<AnnotationObject, 'id'>, req
 	}
 }
 
-// Fetches once the observation date and site an image header gives, which a minor-body search of it uses. An image's
+// Fetches once the observation date and site an image header gives, which its annotations use. An image's
 // header never changes, so the context is never fetched again; a failed fetch is retried by the next call.
 export async function loadAnnotationContext(state: AnnotationsState, imageId: string, request: typeof fetch = fetch) {
 	if (fetchedContexts.has(imageId)) return

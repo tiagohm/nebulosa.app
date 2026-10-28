@@ -38,7 +38,7 @@ export function useAnnotationResult(imageId: string | undefined, kind: Annotatio
 	return { job, result: latestAnnotationResult(annotations, imageId, kind), resultError: completed && annotations.resultErrors[completed] }
 }
 
-// Returns the observation date and site the header of an image gives, which a minor-body search of it uses, fetching
+// Returns the observation date and site the header of an image gives, which a solar-system search of it uses, fetching
 // them once; nothing without an image or before they arrive.
 export function useAnnotationContext(imageId: string | undefined): AnnotationImageContext | undefined {
 	const annotations = useSnapshot(annotationsState)

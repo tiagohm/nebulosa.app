@@ -15,43 +15,56 @@ import { type AnalysisCompletion, type AnalysisEntry, type AnalysisJob, type Ana
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import type { PlateSolvingService } from './platesolving'
-import { SOLAR_SYSTEM_BODIES } from './sky/bodies'
+import { SOLAR_SYSTEM_BODIES, type SolarSystemBody } from './sky/bodies'
 import type { FieldConstellations, FieldObject, FieldObjects, FieldQuery } from './sky/catalog'
-import type { SkyObserver, SkyPosition } from './sky/ephemeris'
-import type { SkyObjectRef, SolarSystemBodyCode } from './sky/types'
+import type { SkyObjectRef } from './sky/types'
 
 // Annotation service of the Images workspace: identifies what an image shows from its WCS, never from its pixels. A job
 // unprojects the border of an image document of the image store, addressed by its id, through one WCS frozen when the
 // job is submitted (the header's own, or the solution of a completed plate solving job of the same image named by the
 // request) into a cone of the sky, queries the embedded sky catalog for the stars, deep-sky objects, and constellation
 // figures in it, and keeps those whose position (or, for a deep-sky object, any part of its major axis) projects onto
-// the image. When the observation instant is known, the stars are moved there by their proper motion, and the Sun, the
-// Moon, the planets, and Pluto are added from the local ephemeris, seen from the requested observer or else from the
-// Earth's center. Positions are astrometric, on the ICRS (J2000) equator of a plate solution, never apparent of date.
-// Nothing is solved implicitly, no network is queried, and the current time is never used for an image.
+// the image, with the stars moved by their proper motion to the observation instant. Positions are astrometric, on the
+// ICRS (J2000) equator of a plate solution, never apparent of date. Nothing is solved implicitly and no network is
+// queried; the solar-system bodies are left to the solar-system job.
 //
-// A minor-body job (kind minorBodies) is a separate, explicit request: it asks the IMCCE SkyBoT cone search (the
-// toolkit's coneSearch) for the known asteroids and comets of the same cone at the observation instant, from the Earth's
-// center, under a time budget and its own concurrency, so a slow or failed search never delays nor changes the local
-// annotation. SkyBoT takes an observatory code only, so when the header locates the image (OBSGEO-* or SITELAT/SITELONG/
-// SITEELEV) its geocentric positions are moved by the parallax of that site (geocentricToTopocentric), and each position
-// says whether it is geocentric or so corrected. Its positions are SkyBoT's astrometric J2000 predictions, never
-// detections in the pixels.
+// A solar-system job (kind solarSystemBodies) is a separate, explicit request: it asks the IMCCE SkyBoT cone search
+// (the toolkit's coneSearch) for the known solar-system objects of the same cone at the observation instant, from the
+// Earth's center, under a time budget and its own concurrency, so a slow or failed search never delays nor changes the
+// local annotation. It lists the groups the request asks for: the Sun, the Moon, and the planets (solarSystem, which
+// open in the Sky workspace as its own bodies), the other natural satellites (satellite), and the asteroids and comets
+// (minorBody). SkyBoT takes an observatory code only, so when the header locates the image (OBSGEO-* or SITELAT/
+// SITELONG/SITEELEV) its geocentric positions are moved by the parallax of that site (geocentricToTopocentric), and
+// each position says whether it is geocentric or so corrected. Its positions are SkyBoT's astrometric J2000
+// predictions, never detections in the pixels.
 //
-// The observation instant is the request's own, or else the middle of the exposure from the raw DATE-OBS of the header
-// (or DATE-END, when the exposure is known) and its exposure duration (EXPTIME or EXPOSURE); FITS dates are UTC.
+// Both kinds take the observation context from the image alone: the middle of the exposure from the raw DATE-OBS of the
+// header (or DATE-END, when the exposure is known) and its exposure duration (EXPTIME or EXPOSURE), FITS dates being
+// UTC, and the site of the header or else the Earth's center. Without a date, a local job moves the stars to the
+// current time, and a solar-system job cannot run.
 //
 // Jobs run in memory under the shared analysis scheduling (analysis.ts): one annotation at a time, at most MAX_QUEUED
-// jobs waiting. A job retains its image until it ends. An equivalent request (same image, WCS, magnitude limit, instant,
-// and observer) still waiting or running, or completed with its result kept, is answered instead of running again.
-// Results are kept only in memory, keyed by job and grouped by image, until their image is released or the bounded
-// store evicts them; a result carries the WCS it was computed with, so the client projects it with the same one. Every
-// change of a job is published as a compact annotations:updated event without the objects, which are fetched on demand.
+// jobs waiting. A job retains its image until it ends. An equivalent request (same image, kind, and WCS, and the same
+// magnitude limit of a local job or groups of a solar-system job) still waiting or running, or completed with its
+// result kept, is answered instead of running again. Results are kept only in memory, keyed by job and grouped by
+// image, until their image is released or the bounded store evicts them; a result carries the WCS it was computed with,
+// so the client projects it with the same one. Every change of a job is published as a compact annotations:updated
+// event without the objects, which are fetched on demand.
 
-// What a job annotates: the local catalog and ephemeris, or the minor bodies SkyBoT knows.
-export type AnnotationKind = 'local' | 'minorBodies'
+// What a job annotates: the local catalog, or the solar-system objects SkyBoT knows.
+export type AnnotationKind = 'local' | 'solarSystemBodies'
 
-// What a job annotates and from which context.
+// Group of an annotated object: a catalog star or deep-sky object, the Sun, the Moon, or a planet (solarSystem),
+// another natural satellite (satellite), or an asteroid or comet (minorBody).
+export type AnnotationLayer = 'star' | 'deepSky' | 'solarSystem' | 'satellite' | 'minorBody'
+
+// Group of the solar-system objects a solar-system job lists.
+export type AnnotationBodyLayer = Extract<AnnotationLayer, 'solarSystem' | 'satellite' | 'minorBody'>
+
+// Groups a solar-system job lists, each true to list it.
+export type AnnotationBodies = Readonly<Record<AnnotationBodyLayer, boolean>>
+
+// What a job annotates and with which WCS; the observation context always comes from the image.
 export interface AnnotationRequest {
 	// What is annotated.
 	readonly kind: AnnotationKind
@@ -59,17 +72,11 @@ export interface AnnotationRequest {
 	// header.
 	readonly plateSolveJobId?: string
 	// Faintest magnitude of the stars and deep-sky objects kept; deep-sky objects of a classic visual catalog are kept
-	// without a magnitude.
+	// without a magnitude. A solar-system job ignores it.
 	readonly magnitudeLimit: number
-	// Instant of the observation, Unix milliseconds (UTC), taken as the middle of the exposure; absent uses the header.
-	readonly time?: number
-	// Observer of the solar-system bodies of a local job; absent sees them from the Earth's center. A minor-body job
-	// ignores it: it sees the bodies from the site of the image header, or else from the Earth's center.
-	readonly observer?: SkyObserver
+	// Groups a solar-system job lists; every group when absent. A local job ignores it.
+	readonly bodies?: AnnotationBodies
 }
-
-// Group of an annotated object.
-export type AnnotationLayer = 'star' | 'deepSky' | 'solarSystem' | 'minorBody'
 
 // Position at the start and the end of the exposure of an object that moves during it, in radians (ICRS).
 export interface AnnotationMotion {
@@ -81,9 +88,11 @@ export interface AnnotationMotion {
 
 // An object in the field of an image.
 export interface AnnotationObject {
-	// Stable key of the object across jobs and providers, such as "catalog:1001879", "body:599", or "skybot:2003 QW37".
+	// Stable key of the object across jobs and providers, such as "catalog:1001879", "body:599", "satellite:501", or
+	// "skybot:2003 QW37".
 	readonly id: string
-	// Identity of the object in the sky API; absent for a minor body, whose SPK-ID SkyBoT does not give.
+	// Identity of the object in the sky API: a catalog object, or the Sun, the Moon, or a planet; absent for another
+	// satellite and for a minor body, whose SPK-ID SkyBoT does not give.
 	readonly ref?: SkyObjectRef
 	// Group of the object.
 	readonly layer: AnnotationLayer
@@ -96,7 +105,7 @@ export interface AnnotationObject {
 	// Visual magnitude; absent when unknown.
 	readonly magnitude?: number
 	// Astrometric right ascension (ICRS, J2000 equator) in radians, at the observation instant for a star with proper
-	// motion and a solar-system body.
+	// motion and a solar-system object.
 	readonly rightAscension: number
 	// Astrometric declination in radians.
 	readonly declination: number
@@ -106,23 +115,23 @@ export interface AnnotationObject {
 	readonly minorAxis?: number
 	// Position angle of the major axis from north through east in radians; absent when unknown.
 	readonly orientation?: number
-	// Positions at the start and end of the exposure of a solar-system body or a minor body, when the exposure is known.
+	// Positions at the start and end of the exposure of a solar-system object, when the exposure is known.
 	readonly motion?: AnnotationMotion
-	// Uncertainty of the predicted position of a minor body, radians; absent when unknown.
+	// Uncertainty of the predicted position of a solar-system object, radians; absent when unknown.
 	readonly positionError?: number
-	// Where the position of a solar-system body or a minor body is seen from; absent for the catalog objects, whose
-	// positions are the same from anywhere on the Earth.
+	// Where the position of a solar-system object is seen from; absent for the catalog objects, whose positions are the
+	// same from anywhere on the Earth.
 	readonly center?: AnnotationCenter
 }
 
 // Where the WCS of a job came from.
 export type AnnotationWcs = { readonly source: 'header' } | { readonly source: 'plateSolve'; readonly plateSolveJobId: string }
 
-// Where the observation instant of a job came from: the request, the DATE-OBS of the header, or its DATE-END and the
-// exposure duration.
-export type AnnotationTimeOrigin = 'request' | 'dateObs' | 'dateEnd'
+// Where the observation instant of a job came from: the DATE-OBS of the header, its DATE-END and the exposure
+// duration, or, for a local job of an image without a date, the current time.
+export type AnnotationTimeOrigin = 'dateObs' | 'dateEnd' | 'now'
 
-// Observation context of a job, resolved when it was submitted.
+// Observation context of a job, resolved from its image when it was submitted.
 export interface AnnotationObservation {
 	// Instant the positions are computed for, the middle of the exposure when its duration is known, Unix milliseconds
 	// (UTC).
@@ -137,22 +146,20 @@ export interface AnnotationObservation {
 	readonly start?: number
 	// End of the exposure, Unix milliseconds (UTC), when its duration is known.
 	readonly end?: number
-	// Where the bodies of the job are seen from.
+	// Where the solar-system objects are seen from.
 	readonly center: AnnotationCenter
-	// Site the bodies are seen from, when there is one: the requested observer of a local job, or the site of the image
-	// header of a minor-body job.
+	// Site of the image header the solar-system objects are seen from, when it locates one.
 	readonly site?: AnnotationSite
 }
 
-// Where a position is seen from: computed for the site (topocentric), computed for the Earth's center and then moved by
-// the parallax of the site (geocentricCorrected), or for the Earth's center (geocentric).
-export type AnnotationCenter = 'topocentric' | 'geocentricCorrected' | 'geocentric'
+// Where a position is seen from: computed for the Earth's center and then moved by the parallax of the site
+// (geocentricCorrected), or for the Earth's center (geocentric).
+export type AnnotationCenter = 'geocentricCorrected' | 'geocentric'
 
-// Where a site came from: the observer of the request, or the keywords of the image header (OBSGEO-X/Y/Z, OBSGEO-B/L/H,
-// or SITELAT/SITELONG/SITEELEV).
-export type AnnotationSiteSource = 'observer' | 'obsgeoXyz' | 'obsgeoBlh' | 'siteKeywords'
+// Keywords of the image header a site came from: OBSGEO-X/Y/Z, OBSGEO-B/L/H, or SITELAT/SITELONG/SITEELEV.
+export type AnnotationSiteSource = 'obsgeoXyz' | 'obsgeoBlh' | 'siteKeywords'
 
-// Geographic site the bodies are seen from.
+// Geographic site the solar-system objects are seen from.
 export interface AnnotationSite {
 	// Geodetic latitude in degrees, north positive.
 	readonly latitude: number
@@ -164,10 +171,11 @@ export interface AnnotationSite {
 	readonly source: AnnotationSiteSource
 }
 
-// Observation context of an image as its header gives it, for a client to show before a run: the instant of a
-// minor-body search and the site it is corrected to.
+// Observation context of an image as its header gives it, for a client to show before a run: the instant of both
+// kinds and the site a solar-system search is corrected to.
 export interface AnnotationImageContext {
-	// Observation context from the header; absent when it has no observation date.
+	// Observation context from the header; absent when it has no observation date, so a local job uses the current
+	// time and a solar-system job cannot run.
 	readonly observation?: AnnotationObservation
 	// Site of the header; absent when it locates no site.
 	readonly site?: AnnotationSite
@@ -191,8 +199,8 @@ export type AnnotationJobState = AnalysisJobState
 // Why a job did not complete, or a submission was refused:
 // - queueFull: too many jobs were waiting when it was submitted.
 // - contextUnavailable: the plate solving job named by the request is unknown, not kept, of another image, or without
-//   a solution, or the image has no usable WCS; for a minor-body job, the observation instant is unknown or outside
-//   the epochs SkyBoT serves, or the image is wider than the cone it searches.
+//   a solution, or the image has no usable WCS; for a solar-system job, the observation instant is unknown or outside
+//   the epochs SkyBoT serves, the image is wider than the cone it searches, or no group is asked for.
 // - annotationFailed: the objects could not be computed.
 // - timeout: SkyBoT did not answer within the time budget.
 // - providerFailed: SkyBoT could not be reached or answered with an error or a malformed response.
@@ -219,8 +227,8 @@ export interface AnnotationJob extends AnalysisJob {
 	readonly request: AnnotationRequest
 	// Where its WCS came from.
 	readonly wcs: AnnotationWcs
-	// Observation context; absent when the instant is unknown.
-	readonly observation?: AnnotationObservation
+	// Observation context.
+	readonly observation: AnnotationObservation
 	// Why it did not complete, when it failed or was cancelled.
 	readonly code?: AnnotationErrorCode
 	// Detail of the failure meant for people.
@@ -241,15 +249,16 @@ export interface AnnotationResult extends AnnotationSummary {
 	readonly wcs: AnnotationWcs
 	// The WCS the objects were selected with, which the client projects them with.
 	readonly solution: PlateSolution
-	// Observation context; absent when the instant is unknown.
-	readonly observation?: AnnotationObservation
+	// Observation context.
+	readonly observation: AnnotationObservation
 	// Cone of the sky queried.
 	readonly field: AnnotationField
 	// Width of the image, in pixels.
 	readonly width: number
 	// Height of the image, in pixels.
 	readonly height: number
-	// Objects on the image: solar-system bodies, then deep-sky objects, then stars, each brightest first.
+	// Objects on the image: of a local job, the deep-sky objects and then the stars, each brightest first; of a
+	// solar-system job, the solar-system objects, brightest first.
 	readonly objects: readonly AnnotationObject[]
 	// Constellation figures reaching the field and labels inside it, unclipped.
 	readonly constellations: FieldConstellations
@@ -275,15 +284,12 @@ export interface AnnotationEvent {
 // Receiver of annotation events.
 export type AnnotationListener = (event: AnnotationEvent) => void
 
-// Sky data an annotation reads: the embedded catalog and the local ephemeris (wired in sky/index.ts).
+// Sky data a local annotation reads: the embedded catalog (wired in sky/index.ts).
 export interface AnnotationSky {
 	// Stars and deep-sky objects of the catalog in a cone.
 	readonly objects: (query: FieldQuery) => FieldObjects
 	// Constellation figures and labels of a cone around a J2000 center, all angles in radians.
 	readonly constellations: (rightAscension: number, declination: number, radius: number) => FieldConstellations
-	// Local position of a major solar-system body at an instant (Unix milliseconds, UTC), seen from an observer or the
-	// Earth's center.
-	readonly body: (code: SolarSystemBodyCode, time: number, observer?: SkyObserver) => Promise<SkyPosition>
 }
 
 // Request whose context was resolved, ready to be scheduled.
@@ -296,9 +302,9 @@ export interface AnnotationPreparation {
 	readonly solution: PlateSolution
 	// Cone of the sky the image covers.
 	readonly field: AnnotationField
-	// Observation context; absent when the instant is unknown.
-	readonly observation?: AnnotationObservation
-	// Site of the image header a minor-body job corrects its positions to; absent without one or for a local job.
+	// Observation context.
+	readonly observation: AnnotationObservation
+	// Site of the image header a solar-system job corrects its positions to; absent when the header locates none.
 	readonly location?: GeographicPosition
 }
 
@@ -323,14 +329,14 @@ export class AnnotationError extends Error {
 	}
 }
 
-// Cone search of the known minor bodies (the toolkit's coneSearch); tests pass a stub.
-export type MinorBodySearch = typeof coneSearch
+// Cone search of the known solar-system objects (the toolkit's coneSearch); tests pass a stub.
+export type SolarSystemSearch = typeof coneSearch
 
 // Options of the service.
 export interface AnnotationServiceOptions {
-	// Cone search of the minor bodies; SkyBoT by default.
-	readonly skybot?: MinorBodySearch
-	// Time a minor-body search may take, in milliseconds, before it fails as timeout.
+	// Cone search of the solar-system objects; SkyBoT by default.
+	readonly skybot?: SolarSystemSearch
+	// Time a solar-system search may take, in milliseconds, before it fails as timeout.
 	readonly skybotTimeout?: number
 }
 
@@ -346,8 +352,17 @@ const LIMITS: Readonly<Record<AnnotationProvider, number>> = { local: 1, skybot:
 // Time a SkyBoT search may take by default, in milliseconds: a small field answers in about 1 to 12 s.
 const DEFAULT_SKYBOT_TIMEOUT = 20000
 
-// Most minor bodies a job keeps, the brightest ones.
-const MAX_MINOR_BODIES = 1000
+// Most solar-system objects a solar-system job keeps, the brightest ones.
+const MAX_SOLAR_SYSTEM_BODIES = 1000
+
+// Groups a solar-system job lists when its request names none.
+const ALL_BODIES: AnnotationBodies = { solarSystem: true, satellite: true, minorBody: true }
+
+// SkyBoT classes of the Sun and the planets, whose objects are the major bodies of the sky API.
+const MAJOR_BODY_CLASSES = new Set(['Star', 'Planet'])
+
+// SkyBoT class of the natural satellites, the Moon included.
+const SATELLITE_CLASS = 'Satellite'
 
 // Julian day of the Unix epoch (1970-01-01 0h UTC).
 const UNIX_EPOCH_JD = 2440587.5
@@ -372,29 +387,56 @@ const FIELD_MARGIN = Math.PI / 10800
 // Milliseconds per second.
 const SECOND_MS = 1000
 
-// Returns the key of an equivalent annotation: the same image, kind, WCS, magnitude limit, instant, and observer. The WCS of the header and the acquisition data never change for an image, so they are implied by its id.
-export function annotationCacheKey(imageId: string, { kind, plateSolveJobId, magnitudeLimit, time, observer }: AnnotationRequest): string {
-	// A minor-body job sees the bodies from the site of the header, which never changes for an image.
-	const site = kind === 'local' && observer ? [observer.latitude, observer.longitude, observer.elevation] : null
-	return JSON.stringify([imageId, kind, plateSolveJobId ?? null, magnitudeLimit, time ?? null, site])
+// Returns the key of an equivalent annotation: the same image, kind, and WCS, and the same magnitude limit for a local
+// job or the same groups for a solar-system job, which ignores the limit. The WCS of the header and the observation
+// context never change for an image, so they are implied by its id; a local job of an image without a date is answered
+// from an earlier one, whose instant differs by far less than the proper motion of a star shows.
+export function annotationCacheKey(imageId: string, { kind, plateSolveJobId, magnitudeLimit, bodies = ALL_BODIES }: AnnotationRequest): string {
+	const selection = kind === 'solarSystemBodies' ? [bodies.solarSystem, bodies.satellite, bodies.minorBody] : magnitudeLimit
+	return JSON.stringify([imageId, kind, plateSolveJobId ?? null, selection])
 }
 
-// Returns why SkyBoT cannot search a field at an observation, or undefined when it can: the instant is unknown or
-// outside the epochs it serves, or the cone is wider than it searches.
-export function minorBodySearchUnavailable(field: AnnotationField, observation: AnnotationObservation | undefined): string | undefined {
-	if (!observation) return 'The observation time is unknown; set it to find minor bodies'
+// Returns why SkyBoT cannot search a field at an observation for some groups, or undefined when it can: the instant is
+// unknown or outside the epochs it serves, the cone is wider than it searches, or no group is asked for.
+export function solarSystemSearchUnavailable(field: AnnotationField, observation: AnnotationObservation | undefined, bodies: AnnotationBodies = ALL_BODIES): string | undefined {
+	if (!observation) return 'The image header has no observation date, so its solar-system bodies cannot be found'
 	const julianDay = observation.time / DAY_MS + UNIX_EPOCH_JD
 	if (!(julianDay >= SKYBOT_MIN_EPOCH && julianDay <= SKYBOT_MAX_EPOCH)) return 'SkyBoT serves epochs from 1889 to 2060 only'
 	if (field.radius + FIELD_MARGIN > SKYBOT_MAX_RADIUS) return 'The image is wider than the 10° radius SkyBoT searches'
+	if (!bodies.solarSystem && !bodies.satellite && !bodies.minorBody) return 'Choose at least one group of bodies to find'
 	return undefined
 }
 
-// Converts a minor body SkyBoT listed from the Earth's center to an annotated object, with its positions at the start
-// and end of the exposure from its sky motion when both are known. With a site, every position is moved by the parallax
-// of the site at its own instant (geocentricCorrected), which needs the geocentric distance SkyBoT gives; without either
-// the positions stay geocentric.
-function minorBodyAnnotation(body: SkybotObject, observation: AnnotationObservation, location?: GeographicPosition): AnnotationObject {
-	const name = body.number === undefined ? body.name : `(${body.number}) ${body.name}`
+// An object SkyBoT listed, sorted into its group.
+interface SkybotEntry {
+	// The object as SkyBoT listed it.
+	readonly body: SkybotObject
+	// Its group.
+	readonly layer: AnnotationBodyLayer
+	// Its body in the sky API, for the Sun, the Moon, or a planet.
+	readonly major?: SolarSystemBody
+}
+
+// Sorts an object SkyBoT listed into its group: the class Star or Planet, or the satellite named Moon, is a major body
+// of the sky API; another satellite is a satellite; anything else (an asteroid, a dwarf planet, or a comet) is a minor
+// body.
+function skybotEntry(body: SkybotObject): SkybotEntry {
+	if (MAJOR_BODY_CLASSES.has(body.class) || (body.class === SATELLITE_CLASS && body.name === 'Moon')) {
+		return { body, layer: 'solarSystem', major: SOLAR_SYSTEM_BODIES.find((e) => e.name === body.name) }
+	}
+
+	return { body, layer: body.class === SATELLITE_CLASS ? 'satellite' : 'minorBody' }
+}
+
+// Converts an object SkyBoT listed from the Earth's center, sorted into its group, to an annotated object, with its
+// positions at the start and end of the exposure from its sky motion when both are known. With a site, every position
+// is moved by the parallax of the site at its own instant (geocentricCorrected), which needs the geocentric distance
+// SkyBoT gives; without either the positions stay geocentric. The Sun, the Moon, and the planets take the identity of
+// their body in the sky API, a satellite its number, and a minor body its number or designation.
+function skybotAnnotation({ body, layer, major }: SkybotEntry, observation: AnnotationObservation, location?: GeographicPosition): AnnotationObject {
+	const numbered = layer === 'minorBody' && body.number !== undefined
+	const name = numbered ? `(${body.number}) ${body.name}` : body.name
+	const id = major ? `body:${major.code}` : layer === 'satellite' ? `satellite:${body.number ?? body.name}` : `skybot:${body.number ?? body.name}`
 	const distance = location && body.distance
 	// Position seen from the site at an instant (Unix milliseconds, UTC), or the geocentric one without a site.
 	const seen = (rightAscension: number, declination: number, time: number): readonly [number, number] => (distance ? geocentricToTopocentric(rightAscension, declination, distance, timeUnix(time / SECOND_MS, true), location) : [rightAscension, declination])
@@ -402,8 +444,8 @@ function minorBodyAnnotation(body: SkybotObject, observation: AnnotationObservat
 	let motion: AnnotationMotion | undefined
 
 	if (observation.start !== undefined && observation.end !== undefined && body.motionRightAscension !== undefined && body.motionDeclination !== undefined) {
-		// Offsets in radians over a time in milliseconds; the right ascension rate is along the parallel, so it is divided
-		// by the cosine of the declination.
+		// Offsets in radians over a time in milliseconds; the right ascension rate is along the parallel, so it is
+		// divided by the cosine of the declination.
 		const at = (time: number) => {
 			const days = (time - observation.time) / DAY_MS
 			return seen(body.rightAscension + (body.motionRightAscension! * days) / Math.cos(body.declination), body.declination + body.motionDeclination! * days, time)
@@ -413,11 +455,12 @@ function minorBodyAnnotation(body: SkybotObject, observation: AnnotationObservat
 	}
 
 	return {
-		id: `skybot:${body.number ?? body.name}`,
-		layer: 'minorBody',
+		id,
+		...(major && { ref: { kind: 'body', code: major.code } }),
+		layer,
 		name,
-		designations: body.number === undefined ? [] : [body.name],
-		typeName: body.class,
+		designations: numbered ? [body.name] : [],
+		typeName: major?.typeName ?? (layer === 'satellite' ? 'Natural Satellite' : body.class),
 		rightAscension,
 		declination,
 		center: distance ? 'geocentricCorrected' : 'geocentric',
@@ -492,39 +535,33 @@ export function headerSite(header: FitsHeader): { readonly location: GeographicP
 	return { location, site: { latitude: toDeg(location.latitude), longitude: toDeg(location.longitude), elevation: toMeter(location.elevation), source: SITE_SOURCES[locationSource] } }
 }
 
-// Resolves the observation context of a request for an image with a header and an exposure duration in seconds: the
-// request's instant, else the DATE-OBS of the header, else its DATE-END when the exposure is known; the instant is the
-// middle of the exposure when its duration is known. The bodies of a local job are seen from the requested observer
-// (topocentric), and those of a minor-body job from the site of the header (geocentricCorrected); else from the
-// Earth's center (geocentric). Undefined when none gives the instant.
-export function observationContext(header: FitsHeader, exposure: number | undefined, request: AnnotationRequest): AnnotationObservation | undefined {
+// Resolves the observation context of an image with a header and an exposure duration in seconds: the DATE-OBS of the
+// header, else its DATE-END when the exposure is known, else `now` (Unix milliseconds, UTC) when given; the instant is
+// the middle of the exposure when its duration is known and the header dates it. The solar-system objects are seen
+// from the site of the header (geocentricCorrected), or else from the Earth's center (geocentric). Undefined when
+// nothing gives the instant.
+export function observationContext(header: FitsHeader, exposure: number | undefined, now?: number): AnnotationObservation | undefined {
 	const duration = exposure !== undefined && exposure > 0 ? exposure * SECOND_MS : undefined
-	const minorBodies = request.kind === 'minorBodies'
-	const site: AnnotationSite | undefined = minorBodies ? headerSite(header)?.site : request.observer && { ...request.observer, source: 'observer' }
-	const center: AnnotationCenter = site ? (minorBodies ? 'geocentricCorrected' : 'topocentric') : 'geocentric'
-	const seen = { center, ...(site && { site }) }
+	const site = headerSite(header)?.site
+	const seen = { center: site ? 'geocentricCorrected' : 'geocentric', ...(site && { site }) } as const
+	const dateObs = dateKeyword(header, 'DATE-OBS')
+	const dateEnd = duration === undefined ? undefined : dateKeyword(header, 'DATE-END')
 	let start: number
 	let origin: AnnotationTimeOrigin
 	let approximate = false
 
-	if (request.time !== undefined) {
-		start = duration === undefined ? request.time : request.time - duration / 2
-		origin = 'request'
+	if (dateObs) {
+		start = dateObs.time
+		approximate = dateObs.approximate
+		origin = 'dateObs'
+	} else if (dateEnd && duration !== undefined) {
+		start = dateEnd.time - duration
+		approximate = dateEnd.approximate
+		origin = 'dateEnd'
+	} else if (now !== undefined) {
+		return { time: now, origin: 'now', approximate: false, ...seen }
 	} else {
-		const dateObs = dateKeyword(header, 'DATE-OBS')
-		const dateEnd = duration === undefined ? undefined : dateKeyword(header, 'DATE-END')
-
-		if (dateObs) {
-			start = dateObs.time
-			approximate = dateObs.approximate
-			origin = 'dateObs'
-		} else if (dateEnd && duration !== undefined) {
-			start = dateEnd.time - duration
-			approximate = dateEnd.approximate
-			origin = 'dateEnd'
-		} else {
-			return undefined
-		}
+		return undefined
 	}
 
 	if (duration === undefined) return { time: start, origin, approximate, ...seen }
@@ -556,13 +593,13 @@ type JobEntry = AnalysisEntry<AnnotationJob, AnnotationPreparation>
 export class AnnotationService {
 	// Queue, limits, reservations, and kept results.
 	readonly #scheduler: AnalysisScheduler<AnnotationJob, AnnotationResult, AnnotationPreparation, AnnotationProvider>
-	// Cone search of the minor bodies.
-	readonly #skybot: MinorBodySearch
-	// Time a minor-body search may take, in milliseconds.
+	// Cone search of the solar-system objects.
+	readonly #skybot: SolarSystemSearch
+	// Time a solar-system search may take, in milliseconds.
 	readonly #skybotTimeout: number
 
 	// Creates the service over the image store, the plate solving results it reads the WCS from, the sky data it
-	// annotates with, and the minor-body search, publishing every job change to listener. The results of an image are
+	// annotates with, and the solar-system search, publishing every job change to listener. The results of an image are
 	// dropped when the store releases it.
 	constructor(
 		readonly images: ImageStore,
@@ -575,7 +612,7 @@ export class AnnotationService {
 		this.#skybotTimeout = skybotTimeout
 		this.#scheduler = new AnalysisScheduler<AnnotationJob, AnnotationResult, AnnotationPreparation, AnnotationProvider>(images, {
 			limits: LIMITS,
-			provider: (preparation) => (preparation.request.kind === 'minorBodies' ? 'skybot' : 'local'),
+			provider: (preparation) => (preparation.request.kind === 'solarSystemBodies' ? 'skybot' : 'local'),
 			execute: (entry) => this.#execute(entry),
 			failed: (entry, error) => {
 				if (entry.controller.signal.aborted) return { state: 'cancelled', code: 'cancelled', error: 'The annotation was cancelled' }
@@ -602,7 +639,7 @@ export class AnnotationService {
 		if (cached) return { status: 'cached', job: cached.job }
 		if (this.#scheduler.full()) return { status: 'queueFull' }
 
-		const job = this.#scheduler.enqueue(imageId, preparation, key, { request, wcs: preparation.wcs, ...(preparation.observation && { observation: preparation.observation }) })
+		const job = this.#scheduler.enqueue(imageId, preparation, key, { request, wcs: preparation.wcs, observation: preparation.observation })
 		return job ? { status: 'accepted', job } : { status: 'missing' }
 	}
 
@@ -633,12 +670,12 @@ export class AnnotationService {
 		return this.#scheduler.results(imageId)
 	}
 
-	// Returns the observation context of an open or retained image as its header gives it, the instant and site a
-	// minor-body search of it uses; undefined when the image is unknown.
+	// Returns the observation context of an open or retained image as its header gives it, the instant and site its
+	// annotations use; undefined when the image is unknown.
 	context(imageId: string): AnnotationImageContext | undefined {
 		const metadata = this.images.metadata(imageId)
 		if (!metadata) return undefined
-		const observation = observationContext(metadata.header, metadata.acquisition.exposure, { kind: 'minorBodies', magnitudeLimit: 0 })
+		const observation = observationContext(metadata.header, metadata.acquisition.exposure)
 		const site = headerSite(metadata.header)?.site
 		return { ...(observation && { observation }), ...(site && { site }) }
 	}
@@ -672,112 +709,90 @@ export class AnnotationService {
 		const field = annotationField(solution, metadata.width, metadata.height)
 		if (!field) return 'The WCS cannot map the image to the sky'
 
-		const observation = observationContext(metadata.header, metadata.acquisition.exposure, request)
-		const unavailable = request.kind === 'minorBodies' ? minorBodySearchUnavailable(field, observation) : undefined
+		// A local job of an image without a date moves the stars to the current time; a solar-system search needs the
+		// date.
+		const solarSystem = request.kind === 'solarSystemBodies'
+		const observation = observationContext(metadata.header, metadata.acquisition.exposure, solarSystem ? undefined : Date.now())
+		const unavailable = solarSystem ? solarSystemSearchUnavailable(field, observation, request.bodies) : undefined
 		if (unavailable) return unavailable
-		const location = request.kind === 'minorBodies' ? headerSite(metadata.header)?.location : undefined
-		return { request, wcs, solution, field, ...(observation && { observation }), ...(location && { location }) }
+		const location = headerSite(metadata.header)?.location
+		return { request, wcs, solution, field, observation: observation!, ...(location && { location }) }
 	}
 
 	// Computes the objects of a job and builds its result.
 	#execute(entry: JobEntry): Promise<AnnotationCompletion> {
-		return entry.preparation.request.kind === 'minorBodies' ? this.#minorBodies(entry) : this.#local(entry)
+		return entry.preparation.request.kind === 'solarSystemBodies' ? this.#solarSystemBodies(entry) : this.#local(entry)
 	}
 
-	// Searches the minor bodies of a job with SkyBoT, within the time budget, and keeps those on the image, brightest
-	// first. Rejects with AnnotationError on a timeout or a failure of the service.
-	async #minorBodies(entry: JobEntry): Promise<AnnotationCompletion> {
-		const { request, solution, field } = entry.preparation
-		const observation = entry.preparation.observation!
+	// Searches the solar-system objects of the groups of a job with SkyBoT, within the time budget, and keeps those on
+	// the image, brightest first. Rejects with AnnotationError on a timeout or a failure of the service.
+	async #solarSystemBodies(entry: JobEntry): Promise<AnnotationCompletion> {
+		const { request, solution, field, observation, location } = entry.preparation
+		const { bodies = ALL_BODIES } = request
 		const { width, height } = entry.size
 		const timeout = AbortSignal.timeout(this.#skybotTimeout)
+		// SkyBoT lists the Sun, the planets, and every satellite together; the groups asked for are kept afterwards.
+		const objects = { asteroids: bodies.minorBody, comets: bodies.minorBody, planets: bodies.solarSystem || bodies.satellite }
 		let found: readonly SkybotObject[]
 
 		try {
-			found = await this.#skybot(observation.time, field.rightAscension, field.declination, field.radius + FIELD_MARGIN, { observer: GEOCENTER, objects: { asteroids: true, planets: false, comets: true } }, AbortSignal.any([entry.controller.signal, timeout]))
+			found = await this.#skybot(observation.time, field.rightAscension, field.declination, field.radius + FIELD_MARGIN, { observer: GEOCENTER, objects }, AbortSignal.any([entry.controller.signal, timeout]))
 		} catch (error) {
 			if (entry.controller.signal.aborted) throw new AnnotationError('cancelled', 'The annotation was cancelled')
 			if (timeout.aborted) throw new AnnotationError('timeout', `SkyBoT did not answer within ${this.#skybotTimeout / 1000} s`)
 			throw new AnnotationError('providerFailed', `SkyBoT could not be used: ${Error.isError(error) ? error.message : String(error)}`)
 		}
 
-		const onField = found.filter((e) => onImage(solution, width, height, e.rightAscension, e.declination)).sort((a, b) => (a.magnitude ?? Infinity) - (b.magnitude ?? Infinity))
-		const truncated = onField.length > MAX_MINOR_BODIES
-		const objects = onField.slice(0, MAX_MINOR_BODIES).map((e) => minorBodyAnnotation(e, observation, entry.preparation.location))
+		const onField = found
+			.filter((e) => onImage(solution, width, height, e.rightAscension, e.declination))
+			.map(skybotEntry)
+			.filter((e) => bodies[e.layer])
+			.sort((a, b) => (a.body.magnitude ?? Infinity) - (b.body.magnitude ?? Infinity))
+		const truncated = onField.length > MAX_SOLAR_SYSTEM_BODIES
+		const annotated = onField.slice(0, MAX_SOLAR_SYSTEM_BODIES).map((e) => skybotAnnotation(e, observation, location))
 		const warnings = ['Positions are predictions of SkyBoT, not detections in the image.']
 
-		if (!entry.preparation.location) warnings.push('The image header gives no site, so the minor bodies are seen from the center of the Earth; a near-Earth object may be far from its predicted position.')
-		else if (objects.some((e) => e.center === 'geocentric')) warnings.push('SkyBoT gave no distance for some minor bodies, so their positions are not corrected for the site.')
+		if (!location) warnings.push('The image header gives no site, so the bodies are seen from the center of the Earth; the Moon may be up to a degree and a near-Earth object far from its predicted position.')
+		else if (annotated.some((e) => e.center === 'geocentric')) warnings.push('SkyBoT gave no distance for some bodies, so their positions are not corrected for the site.')
 		if (observation.approximate) warnings.push('The header gives the observation time to more than a second only.')
-		if (truncated) warnings.push(`The field has more than ${MAX_MINOR_BODIES} minor bodies: only the brightest ones are shown.`)
+		if (truncated) warnings.push(`The field has more than ${MAX_SOLAR_SYSTEM_BODIES} solar-system objects: only the brightest ones are shown.`)
 
-		const counts: AnnotationCounts = { star: 0, deepSky: 0, solarSystem: 0, minorBody: objects.length }
+		const counts: AnnotationCounts = { star: 0, deepSky: 0, solarSystem: 0, satellite: 0, minorBody: 0, ...countLayers(annotated) }
 		const summary: AnnotationSummary = { counts, truncated, elapsed: performance.now() - entry.started! }
 		const queueTime = entry.job.startedAt! - entry.job.queuedAt
-		const result: AnnotationResult = { ...summary, jobId: entry.job.jobId, imageId: entry.job.imageId, request, wcs: entry.preparation.wcs, solution, observation, field, width, height, objects, constellations: { lines: [], labels: [] }, queueTime, warnings }
+		const result: AnnotationResult = { ...summary, jobId: entry.job.jobId, imageId: entry.job.imageId, request, wcs: entry.preparation.wcs, solution, observation, field, width, height, objects: annotated, constellations: { lines: [], labels: [] }, queueTime, warnings }
 		return { patch: { summary }, result }
 	}
 
-	// Annotates a job with the local catalog and ephemeris.
-	async #local(entry: JobEntry): Promise<AnnotationCompletion> {
+	// Annotates a job with the local catalog.
+	#local(entry: JobEntry): Promise<AnnotationCompletion> {
 		const { request, solution, field, observation } = entry.preparation
 		const { width, height } = entry.size
-		const { signal } = entry.controller
 		const warnings: string[] = []
 
-		const catalog = this.sky.objects({ rightAscension: field.rightAscension, declination: field.declination, radius: field.radius + FIELD_MARGIN, time: observation?.time, magnitudeLimit: request.magnitudeLimit, maxStars: MAX_STARS, maxDeepSky: MAX_DEEP_SKY })
+		const catalog = this.sky.objects({ rightAscension: field.rightAscension, declination: field.declination, radius: field.radius + FIELD_MARGIN, time: observation.time, magnitudeLimit: request.magnitudeLimit, maxStars: MAX_STARS, maxDeepSky: MAX_DEEP_SKY })
 		// A deep-sky object is kept when its major axis may reach the image, so its half extent widens the image.
 		const deepSky = catalog.deepSky.filter((e) => onImage(solution, width, height, e.rightAscension, e.declination, (e.majorAxis ?? 0) / 2 / field.scale)).map(catalogAnnotation)
 		const stars = catalog.stars.filter((e) => onImage(solution, width, height, e.rightAscension, e.declination)).map(catalogAnnotation)
-		const bodies = observation ? await this.#bodies(observation, request.observer, solution, width, height, signal) : []
 
-		if (!observation) warnings.push('The observation time is unknown: the stars are at their J2000 positions and no solar-system body is shown.')
+		if (observation.origin === 'now') warnings.push('The image header has no observation date, so the stars are moved by their proper motion to the current time.')
 		else if (observation.approximate) warnings.push('The header gives the observation time to more than a second only.')
-		if (bodies.length > 0 && !request.observer) warnings.push('The solar-system bodies are seen from the center of the Earth; the Moon may be off by up to a degree.')
 		if (catalog.truncated) warnings.push('The field has more catalog objects than are kept: only the brightest ones are shown.')
 
 		const constellations = this.sky.constellations(field.rightAscension, field.declination, field.radius + FIELD_MARGIN)
-		const counts: AnnotationCounts = { star: stars.length, deepSky: deepSky.length, solarSystem: bodies.length, minorBody: 0 }
+		const counts: AnnotationCounts = { star: stars.length, deepSky: deepSky.length, solarSystem: 0, satellite: 0, minorBody: 0 }
 		const summary: AnnotationSummary = { counts, truncated: catalog.truncated, elapsed: performance.now() - entry.started! }
 		const queueTime = entry.job.startedAt! - entry.job.queuedAt
-		const result: AnnotationResult = { ...summary, jobId: entry.job.jobId, imageId: entry.job.imageId, request, wcs: entry.preparation.wcs, solution, ...(observation && { observation }), field, width, height, objects: [...bodies, ...deepSky, ...stars], constellations, queueTime, warnings }
-		return { patch: { summary }, result }
+		const result: AnnotationResult = { ...summary, jobId: entry.job.jobId, imageId: entry.job.imageId, request, wcs: entry.preparation.wcs, solution, observation, field, width, height, objects: [...deepSky, ...stars], constellations, queueTime, warnings }
+		return Promise.resolve({ patch: { summary }, result })
 	}
+}
 
-	// Positions of the major solar-system bodies on the image at the observation instant, with their positions at the
-	// start and end of the exposure when its duration is known. Rejects with AnnotationError when cancelled.
-	async #bodies(observation: AnnotationObservation, observer: SkyObserver | undefined, solution: FitsHeader, width: number, height: number, signal: AbortSignal): Promise<AnnotationObject[]> {
-		const bodies: AnnotationObject[] = []
-
-		for (const body of SOLAR_SYSTEM_BODIES) {
-			const position = await this.sky.body(body.code, observation.time, observer)
-			if (signal.aborted) throw new AnnotationError('cancelled', 'The annotation was cancelled')
-			if (!onImage(solution, width, height, position.rightAscensionJ2000, position.declinationJ2000)) continue
-
-			let motion: AnnotationMotion | undefined
-
-			if (observation.start !== undefined && observation.end !== undefined) {
-				const [start, end] = await Promise.all([this.sky.body(body.code, observation.start, observer), this.sky.body(body.code, observation.end, observer)])
-				motion = { start: [start.rightAscensionJ2000, start.declinationJ2000], end: [end.rightAscensionJ2000, end.declinationJ2000] }
-			}
-
-			bodies.push({
-				id: `body:${body.code}`,
-				ref: { kind: 'body', code: body.code },
-				layer: 'solarSystem',
-				name: body.name,
-				designations: [],
-				typeName: body.typeName,
-				rightAscension: position.rightAscensionJ2000,
-				declination: position.declinationJ2000,
-				center: position.center,
-				...(position.magnitude !== undefined && { magnitude: position.magnitude }),
-				...(motion && { motion }),
-			})
-		}
-
-		return bodies
-	}
+// Returns how many objects of each group a list holds; groups without one are left out.
+function countLayers(objects: readonly AnnotationObject[]): Partial<Record<AnnotationLayer, number>> {
+	const counts: Partial<Record<AnnotationLayer, number>> = {}
+	for (const { layer } of objects) counts[layer] = (counts[layer] ?? 0) + 1
+	return counts
 }
 
 // What a completed job produced.
@@ -787,7 +802,8 @@ type AnnotationCompletion = AnalysisCompletion<AnnotationJob, AnnotationResult>
 export function createAnnotationRoutes(service: AnnotationService) {
 	return {
 		'/api/images/:id/annotations/context': {
-			// Observation context of an open image as its header gives it, and its site; 404 when the image is not open.
+			// Observation context of an open image as its header gives it, and its site; 404 when the image is not
+			// open.
 			GET: (req) => {
 				const context = service.context(req.params.id)
 				return context ? Response.json(context) : errorResponse('Image not found', 404, 'notFound')
@@ -796,9 +812,9 @@ export function createAnnotationRoutes(service: AnnotationService) {
 		'/api/images/:id/annotations': {
 			// Completed jobs of an image whose results are kept, oldest first.
 			GET: (req) => Response.json(service.results(req.params.id)),
-			// Submits an annotation (AnnotationRequest) of an open image. Responds 202 with the queued job or the equivalent
-			// job still waiting or running, 200 with the completed job of an equivalent earlier annotation, 404 when the
-			// image is not open, 422 when its WCS cannot be used, and 503 when too many jobs are waiting.
+			// Submits an annotation (AnnotationRequest) of an open image. Responds 202 with the queued job or the
+			// equivalent job still waiting or running, 200 with the completed job of an equivalent earlier annotation,
+			// 404 when the image is not open, 422 when its WCS cannot be used, and 503 when too many jobs are waiting.
 			POST: async (req) => {
 				const outcome = service.submit(req.params.id, (await req.json()) as AnnotationRequest)
 				if (outcome.status === 'missing') return errorResponse('Image not found', 404, 'notFound')
@@ -826,7 +842,8 @@ export function createAnnotationRoutes(service: AnnotationService) {
 			},
 		},
 		'/api/annotations/:jobId/cancel': {
-			// Cancels a waiting or running job; the end arrives as an annotations:updated event. 404 when it is neither.
+			// Cancels a waiting or running job; the end arrives as an annotations:updated event. 404 when it is
+			// neither.
 			POST: (req) => new Response(null, { status: service.cancel(req.params.jobId) ? 204 : 404 }),
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>

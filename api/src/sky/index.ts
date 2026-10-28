@@ -26,12 +26,10 @@ const constellations: ConstellationSource = { lines, labels, boundaries }
 // Services shared by the sky routes and the sky locator.
 const services: SkyServices = { catalog, constellations, ephemeris: new SkyEphemeris(), minorBodies: new MinorBodies() }
 
-// Sky data of the image annotation: the J2000 objects and figures of a field, and the local positions of the major
-// bodies from the same ephemeris as the sky routes.
+// Sky data of the image annotation: the J2000 objects and figures of a field.
 export const annotationSky: AnnotationSky = {
 	objects: (query) => fieldObjects(catalog, query),
 	constellations: (rightAscension, declination, radius) => fieldConstellations(constellations, rightAscension, declination, radius),
-	body: (code, time, observer) => services.ephemeris.position({ type: 'body', code }, { time, observer, mode: 'fast' }),
 }
 
 // Routes of the sky API, with those of the Sun and Moon Inspectors.

@@ -4,8 +4,8 @@ import type { OverlayView } from '../viewer/transform'
 import { type AnnotationProjection, type LabelCandidate, layoutLabels, type ProjectedAnnotation } from './geometry'
 
 // Annotation of an image over the shared image viewer: the constellation figures and names, the outline or marker of
-// each deep-sky object, a marker for each star, solar-system body, and minor body with the predicted motion of a body
-// during the exposure and the uncertainty of a minor body's position, and the labels the layout places, with the
+// each deep-sky object, a marker for each star, Sun, Moon, planet, satellite, asteroid, and comet with the predicted
+// motion of a body during the exposure and the uncertainty of its position, and the labels the layout places, with the
 // selected object highlighted. It is a pure function of projections computed once per result and of the document's
 // annotation state, and draws in image pixel coordinates, so the viewer's zoom and pan move it while strokes, markers,
 // and labels keep their size on screen; only the objects in view are drawn, and only the labels are laid out again when
@@ -20,6 +20,9 @@ const CONSTELLATION_LABEL_SIZE = 13
 // Radius of a star or body marker, in screen pixels.
 const MARKER_RADIUS = 5
 
+// Radius of the marker of a natural satellite, smaller than that of its planet, in screen pixels.
+const SATELLITE_RADIUS = 3.5
+
 // Smallest outline drawn, in screen pixels along the major axis; a smaller object gets a marker.
 const MIN_OUTLINE = 10
 
@@ -30,10 +33,10 @@ const MAX_CLEARANCE = 24
 export const LABEL_BUDGETS = { minimal: 15, balanced: 40, detailed: 150 } as const
 
 // Color of each group.
-const COLORS: Readonly<Record<AnnotationLayer, string>> = { star: 'var(--color-ink-200)', deepSky: 'var(--color-accent)', solarSystem: 'var(--color-success)', minorBody: 'var(--color-danger)' }
+const COLORS: Readonly<Record<AnnotationLayer, string>> = { star: 'var(--color-ink-200)', deepSky: 'var(--color-accent)', solarSystem: 'var(--color-success)', satellite: 'var(--color-success)', minorBody: 'var(--color-danger)' }
 
 // Order in which the labels of each group are placed.
-const LAYER_PRIORITY: Readonly<Record<AnnotationLayer, number>> = { solarSystem: 0, deepSky: 1, minorBody: 2, star: 3 }
+const LAYER_PRIORITY: Readonly<Record<AnnotationLayer, number>> = { solarSystem: 0, deepSky: 1, satellite: 2, minorBody: 3, star: 4 }
 
 // Magnitude a label of an object without one is placed with, after the fainter ones of its group.
 const UNKNOWN_MAGNITUDE = 99
@@ -50,7 +53,7 @@ export interface AnnotationOverlayProps {
 }
 
 // Group shown by each layer toggle.
-const LAYER_TOGGLES: Readonly<Record<AnnotationLayer, keyof ImageAnnotationState['layers']>> = { star: 'stars', deepSky: 'deepSky', solarSystem: 'solarSystem', minorBody: 'minorBodies' }
+const LAYER_TOGGLES: Readonly<Record<AnnotationLayer, keyof ImageAnnotationState['layers']>> = { star: 'stars', deepSky: 'deepSky', solarSystem: 'solarSystem', satellite: 'satellites', minorBody: 'minorBodies' }
 
 // Returns whether an object is drawn and listed for an annotation state: its group is shown and, for a catalog star or
 // deep-sky object, it is no fainter than the magnitude limit, which never hides a body.
@@ -111,8 +114,8 @@ export function AnnotationOverlay({ projection, view, state, selected }: Annotat
 							<path d={outline} strokeWidth={width} strokeDasharray={approximate ? '6 4' : undefined} vectorEffect="non-scaling-stroke" />
 						) : object.layer === 'minorBody' ? (
 							<path d={`M${anchor.x - MARKER_RADIUS * unit} ${anchor.y}L${anchor.x + MARKER_RADIUS * unit} ${anchor.y}M${anchor.x} ${anchor.y - MARKER_RADIUS * unit}L${anchor.x} ${anchor.y + MARKER_RADIUS * unit}`} strokeWidth={width} vectorEffect="non-scaling-stroke" />
-						) : object.layer === 'solarSystem' ? (
-							<path d={`M${anchor.x} ${anchor.y - MARKER_RADIUS * unit}L${anchor.x + MARKER_RADIUS * unit} ${anchor.y}L${anchor.x} ${anchor.y + MARKER_RADIUS * unit}L${anchor.x - MARKER_RADIUS * unit} ${anchor.y}Z`} strokeWidth={width} vectorEffect="non-scaling-stroke" />
+						) : object.layer === 'solarSystem' || object.layer === 'satellite' ? (
+							<path d={diamond(anchor.x, anchor.y, (object.layer === 'satellite' ? SATELLITE_RADIUS : MARKER_RADIUS) * unit)} strokeWidth={width} vectorEffect="non-scaling-stroke" />
 						) : (
 							<circle cx={anchor.x} cy={anchor.y} r={MARKER_RADIUS * unit} strokeWidth={width} vectorEffect="non-scaling-stroke" />
 						)}
@@ -139,4 +142,9 @@ export function AnnotationOverlay({ projection, view, state, selected }: Annotat
 			))}
 		</g>
 	)
+}
+
+// Returns the SVG path of a diamond centered on a point, its half diagonal r, all in image pixels.
+function diamond(x: number, y: number, r: number): string {
+	return `M${x} ${y - r}L${x + r} ${y}L${x} ${y + r}L${x - r} ${y}Z`
 }

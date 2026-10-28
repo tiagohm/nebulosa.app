@@ -13,12 +13,10 @@ import {
 	loadAnnotationContext,
 	loadAnnotationResult,
 	minorBodyQuery,
-	parseUtcInput,
 	refreshAnnotations,
 	resolveMinorBody,
 	runAnnotation,
 	sameAnnotationRequest,
-	utcInputValue,
 } from './annotations'
 
 const REQUEST: AnnotationRequest = { kind: 'local', magnitudeLimit: 12 }
@@ -28,7 +26,7 @@ function state(): AnnotationsState {
 }
 
 function job(patch: Partial<AnnotationJob> = {}): AnnotationJob {
-	return { jobId: 'job-1', imageId: 'image-1', request: REQUEST, wcs: { source: 'header' }, state: 'queued', queuedAt: 1000, ...patch }
+	return { jobId: 'job-1', imageId: 'image-1', request: REQUEST, wcs: { source: 'header' }, observation: { time: 1000, origin: 'dateObs', approximate: false, center: 'geocentric' }, state: 'queued', queuedAt: 1000, ...patch }
 }
 
 // Fake fetch answering each URL with a status and a JSON body.
@@ -90,8 +88,12 @@ describe('requests and WCS', () => {
 		expect(sameAnnotationRequest(REQUEST, { ...REQUEST })).toBeTrue()
 		expect(sameAnnotationRequest(REQUEST, { ...REQUEST, plateSolveJobId: 'p' })).toBeFalse()
 		expect(sameAnnotationRequest(REQUEST, { ...REQUEST, magnitudeLimit: 10 })).toBeFalse()
-		expect(sameAnnotationRequest({ ...REQUEST, observer: { latitude: 1, longitude: 2, elevation: 3 } }, { ...REQUEST, observer: { latitude: 1, longitude: 2, elevation: 3 } })).toBeTrue()
-		expect(sameAnnotationRequest({ ...REQUEST, observer: { latitude: 1, longitude: 2, elevation: 3 } }, REQUEST)).toBeFalse()
+		expect(sameAnnotationRequest(REQUEST, { ...REQUEST, kind: 'solarSystemBodies' })).toBeFalse()
+
+		const minor: AnnotationRequest = { kind: 'solarSystemBodies', magnitudeLimit: 12 }
+		expect(sameAnnotationRequest(minor, { ...minor, magnitudeLimit: 10 })).toBeTrue()
+		expect(sameAnnotationRequest(minor, { ...minor, bodies: { solarSystem: true, satellite: true, minorBody: true } })).toBeTrue()
+		expect(sameAnnotationRequest(minor, { ...minor, bodies: { solarSystem: true, satellite: false, minorBody: true } })).toBeFalse()
 	})
 
 	test('a result is drawn only with the WCS it was computed with', () => {
@@ -109,40 +111,30 @@ describe('requests and WCS', () => {
 })
 
 describe('next run', () => {
-	test('the request sends the time and only the position of the observer', () => {
+	test('a local run sends no groups of bodies', () => {
+		const bodies = { solarSystem: true, satellite: false, minorBody: true }
 		expect(annotationRequest({ magnitudeLimit: 10 })).toEqual({ kind: 'local', magnitudeLimit: 10 })
-		const observer = { name: 'Backyard', latitude: -23.5, longitude: -46.6, elevation: 760, timeZone: 'America/Sao_Paulo' }
-		expect(annotationRequest({ magnitudeLimit: 10, plateSolveJobId: 'p', time: 1000, observer })).toEqual({ kind: 'local', magnitudeLimit: 10, plateSolveJobId: 'p', time: 1000, observer: { latitude: -23.5, longitude: -46.6, elevation: 760 } })
-	})
-
-	test('UTC date-times of the time input', () => {
-		const time = Date.UTC(2026, 0, 15, 2, 0, 30)
-		expect(utcInputValue(time)).toBe('2026-01-15T02:00:30')
-		expect(parseUtcInput('2026-01-15T02:00:30')).toBe(time)
-		expect(parseUtcInput('2026-01-15T02:00')).toBe(Date.UTC(2026, 0, 15, 2))
-		expect(parseUtcInput('')).toBeUndefined()
-		expect(parseUtcInput('2026-01-15')).toBeUndefined()
-		expect(parseUtcInput('2026-13-45T99:00')).toBeUndefined()
+		expect(annotationRequest({ magnitudeLimit: 10, plateSolveJobId: 'p', bodies })).toEqual({ kind: 'local', magnitudeLimit: 10, plateSolveJobId: 'p' })
 	})
 })
 
-describe('minor bodies', () => {
+describe('solar-system bodies', () => {
 	test('the latest job of each kind of an image is kept apart', async () => {
 		const annotations = state()
 		handleAnnotationsEvent(annotations, { type: 'annotations:updated', job: job() })
-		handleAnnotationsEvent(annotations, { type: 'annotations:updated', job: job({ jobId: 'minor', request: { ...REQUEST, kind: 'minorBodies' }, queuedAt: 2000 }) })
+		handleAnnotationsEvent(annotations, { type: 'annotations:updated', job: job({ jobId: 'minor', request: { ...REQUEST, kind: 'solarSystemBodies' }, queuedAt: 2000 }) })
 
 		expect(latestAnnotationJob(annotations, 'image-1')?.jobId).toBe('job-1')
-		expect(latestAnnotationJob(annotations, 'image-1', 'minorBodies')?.jobId).toBe('minor')
+		expect(latestAnnotationJob(annotations, 'image-1', 'solarSystemBodies')?.jobId).toBe('minor')
 
-		await runAnnotation(annotations, 'image-1', { ...REQUEST, kind: 'minorBodies' }, fetcher({ '/api/images/image-1/annotations': [422, { error: 'No time', code: 'contextUnavailable' }] }).request)
-		expect(annotations.submitErrors[annotationKey('image-1', 'minorBodies')]).toBe('No time')
+		await runAnnotation(annotations, 'image-1', { ...REQUEST, kind: 'solarSystemBodies' }, fetcher({ '/api/images/image-1/annotations': [422, { error: 'No time', code: 'contextUnavailable' }] }).request)
+		expect(annotations.submitErrors[annotationKey('image-1', 'solarSystemBodies')]).toBe('No time')
 		expect(annotations.submitErrors[annotationKey('image-1', 'local')]).toBeUndefined()
 	})
 
-	test('a search sends no observer: the server uses the site of the image header', () => {
-		const observer = { latitude: 1, longitude: 2, elevation: 3 }
-		expect(annotationRequest({ kind: 'minorBodies', magnitudeLimit: 12, plateSolveJobId: 'p', observer })).toEqual({ kind: 'minorBodies', magnitudeLimit: 12, plateSolveJobId: 'p' })
+	test('a search sends the groups of bodies it lists', () => {
+		const bodies = { solarSystem: true, satellite: false, minorBody: true }
+		expect(annotationRequest({ kind: 'solarSystemBodies', magnitudeLimit: 12, plateSolveJobId: 'p', bodies })).toEqual({ kind: 'solarSystemBodies', magnitudeLimit: 12, plateSolveJobId: 'p', bodies })
 	})
 
 	test('the context of an image is fetched once', async () => {

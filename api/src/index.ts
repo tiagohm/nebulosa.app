@@ -219,6 +219,8 @@ export type {
 	StarMeasurement,
 } from './stars'
 export type {
+	AnnotationBodies,
+	AnnotationBodyLayer,
 	AnnotationCenter,
 	AnnotationCounts,
 	AnnotationErrorCode,
@@ -387,7 +389,7 @@ const plateSolving = new PlateSolvingService(images, externalTools, broadcast)
 // Streak detection of the image documents, classified with the solutions and stars already found for each image.
 const streaks = new StreakDetectionService(images, plateSolving, stars, broadcast)
 
-// Annotation of the image documents with the sky catalog and the local ephemeris, through the WCS of each image.
+// Annotation of the image documents with the sky catalog and SkyBoT, through the WCS of each image.
 const annotations = new AnnotationService(images, plateSolving, annotationSky, broadcast)
 
 // Image processing pipelines of the image documents, each adopting its result as a new derived document.

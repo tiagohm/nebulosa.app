@@ -1,4 +1,4 @@
-import type { DisplaySettings, ImageFormat, ImageInfo, PlateSolveRequest, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from 'api'
+import type { AnnotationBodies, DisplaySettings, ImageFormat, ImageInfo, PlateSolveRequest, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { deviceState } from '../equipment/equipment'
@@ -123,9 +123,11 @@ export interface AnnotationLayers {
 	stars: boolean
 	// Deep-sky objects.
 	deepSky: boolean
-	// Sun, Moon, planets, and Pluto.
+	// Sun, Moon, and planets of a solar-system search.
 	solarSystem: boolean
-	// Asteroids and comets of a minor-body search.
+	// Other natural satellites of a solar-system search.
+	satellites: boolean
+	// Asteroids and comets of a solar-system search.
 	minorBodies: boolean
 	// Constellation figures.
 	constellations: boolean
@@ -133,8 +135,9 @@ export interface AnnotationLayers {
 	constellationLabels: boolean
 }
 
-// Annotation of a document as the tab shows it: which groups are drawn, how, the magnitude limit of the next run, and
-// the selected object. Showing or hiding anything never runs an annotation.
+// Annotation of a document as the tab shows it: which groups are drawn, how, the magnitude limit of the next run, the
+// groups of bodies of the next solar-system search, and the selected object. Showing or hiding anything never runs an
+// annotation.
 export interface ImageAnnotationState {
 	// Groups drawn.
 	layers: AnnotationLayers
@@ -142,16 +145,14 @@ export interface ImageAnnotationState {
 	labels: boolean
 	// Whether the extent of a deep-sky object of known size is drawn as its outline.
 	outlines: boolean
-	// Whether the predicted motion of a solar-system body during the exposure is drawn.
+	// Whether the predicted motion of a solar-system object during the exposure is drawn.
 	motion: boolean
 	// How many labels are placed.
 	density: AnnotationDensity
 	// Faintest magnitude of the next run, and of the objects drawn when fainter than the result's own.
 	magnitudeLimit: number
-	// Whether the next run sees the solar-system bodies from the profile's observer instead of the Earth's center.
-	useObserver: boolean
-	// Observation instant of the next run set by hand, Unix milliseconds (UTC); absent uses the image header's.
-	time?: number
+	// Groups the next solar-system search lists.
+	bodies: AnnotationBodies
 	// Selected object: its id in the result of a job, which only counts while that result is shown.
 	selected?: { readonly jobId: string; readonly id: string }
 }
@@ -402,7 +403,15 @@ export function newView(): ImageViewState {
 		stars: { visible: true, acceptedOnly: false },
 		streaks: { visible: true, labels: true, useSolution: true, useStars: true },
 		plateSolving: { request: { ...DEFAULT_PLATE_SOLVE_REQUEST }, overlay: true, grid: false },
-		annotation: { layers: { stars: true, deepSky: true, solarSystem: true, minorBodies: true, constellations: true, constellationLabels: false }, labels: true, outlines: true, motion: true, density: 'balanced', magnitudeLimit: DEFAULT_ANNOTATION_MAGNITUDE_LIMIT, useObserver: false },
+		annotation: {
+			layers: { stars: true, deepSky: true, solarSystem: true, satellites: true, minorBodies: true, constellations: true, constellationLabels: false },
+			labels: true,
+			outlines: true,
+			motion: true,
+			density: 'balanced',
+			magnitudeLimit: DEFAULT_ANNOTATION_MAGNITUDE_LIMIT,
+			bodies: { solarSystem: true, satellite: true, minorBody: true },
+		},
 		processing: { steps: [], expanded: [], adding: DEFAULT_ADDED_OPERATION },
 	}
 }
@@ -610,14 +619,15 @@ export function setPlateSolveOverlay(state: ImagesState, key: string, patch: Par
 	if (plateSolving) Object.assign(plateSolving, patch)
 }
 
-// Changes how the annotation of a document is drawn, or the magnitude limit of its next run; never runs one. Ignored for
-// an unknown key.
-export function setAnnotationView(state: ImagesState, key: string, patch: Partial<Omit<ImageAnnotationState, 'selected' | 'layers'>> & { readonly layers?: Partial<AnnotationLayers> }) {
+// Changes how the annotation of a document is drawn, or the magnitude limit or the groups of bodies of its next runs;
+// never runs one. Ignored for an unknown key.
+export function setAnnotationView(state: ImagesState, key: string, patch: Partial<Omit<ImageAnnotationState, 'selected' | 'layers' | 'bodies'>> & { readonly layers?: Partial<AnnotationLayers>; readonly bodies?: Partial<AnnotationBodies> }) {
 	const annotation = state.views[key]?.annotation
 	if (!annotation) return
-	const { layers, ...rest } = patch
+	const { layers, bodies, ...rest } = patch
 	Object.assign(annotation, rest)
 	if (layers) Object.assign(annotation.layers, layers)
+	if (bodies) annotation.bodies = { ...annotation.bodies, ...bodies }
 }
 
 // Selects an object of a result of a document, or clears the selection. Ignored for an unknown key.

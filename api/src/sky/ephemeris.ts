@@ -401,7 +401,7 @@ function horizonsCommand(target: EphemerisTarget) {
 }
 
 // Converts an observer to the toolkit's geographic position (radians and AU).
-function geographic(observer: SkyObserver): GeographicPosition {
+export function geographic(observer: SkyObserver): GeographicPosition {
 	return { latitude: observer.latitude * DEG2RAD, longitude: observer.longitude * DEG2RAD, elevation: meter(observer.elevation) }
 }
 

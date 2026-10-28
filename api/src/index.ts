@@ -222,6 +222,8 @@ export type { PlateSolutions, PlateSolveErrorCode, PlateSolveJob, PlateSolveJobS
 export type { PlateSolveHint, PlateSolveHints, PlateSolveHintSource, PlateSolveStrategy, ResolvedPlateSolveHints } from './platesolving.hints'
 export type { EphemerisFallbackReason, EphemerisMode, EphemerisSource, SkyEvents, SkyObserver, SkyPosition } from './sky/ephemeris'
 export type { SolarActiveRegion, SunActiveRegionsErrorCode, SunActiveRegionsResponse } from './sky/activeregions'
+export type { MoonAlmanacRequest, MoonAlmanacResponse, MoonApsisEvent, MoonAppearance, MoonPhaseEvent, MoonPhaseName, MoonPrincipalPhase, MoonSurfacePoint } from './sky/moon'
+export type { LunarFeatureCategory, LunarFeatureRow, MoonFeatureCatalog, MoonFeatureCatalogSource } from './sky/moon.features'
 export type { SunImageChannel, SunImageErrorCode, SunImageSize } from './sky/sdo'
 export type { SolarAstronomicalNight, SolarDailyState, SolarSeasonEvent, SolarSeasonKind, SolarTwilightCrossings, SunAlmanacRequest, SunAlmanacResponse, SunLocalDay, SunPhysicalData } from './sky/sun'
 export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'

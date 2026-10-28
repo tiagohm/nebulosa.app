@@ -406,14 +406,14 @@ export function geographic(observer: SkyObserver): GeographicPosition {
 }
 
 // Toolkit time of a Unix instant, carrying the observer's location when there is one.
-function makeTime(time: number, observer?: SkyObserver): Time {
+export function makeTime(time: number, observer?: SkyObserver): Time {
 	const result = timeUnix(time / 1000, true)
 	if (observer) result.location = geographic(observer)
 	return result
 }
 
 // Barycentric state of the observer: the Earth's center plus the site offset when there is a site.
-function observerBarycentric(time: Time): PositionAndVelocity {
+export function observerBarycentric(time: Time): PositionAndVelocity {
 	const earth = vsop.earth(time)
 	if (!time.location) return earth
 	const site = frameToFrame(itrs(time.location), ITRS, ICRS, time)
@@ -437,7 +437,7 @@ const PLANET_MODELS: Readonly<Partial<Record<SolarSystemBodyCode, PositionAndVel
 }
 
 // Barycentric ICRS model of a major body.
-function bodyModel(code: SolarSystemBodyCode): PositionAndVelocityOverTime {
+export function bodyModel(code: SolarSystemBodyCode): PositionAndVelocityOverTime {
 	if (code === '10') return (t) => vsop.sun(t)
 	if (code === '301') return (t) => addStates(vsop.earth(t), elpmpp02.moon(t))
 	if (code === '999') {

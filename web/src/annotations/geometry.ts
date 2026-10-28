@@ -48,6 +48,8 @@ export interface ProjectedAnnotation {
 	readonly extent: number
 	// Positions at the start and end of the exposure, in viewer coordinates, for a moving object.
 	readonly motion?: readonly [Point, Point]
+	// Radius of the position uncertainty of a minor body, in image pixels at the image center; 0 when unknown.
+	readonly uncertainty: number
 }
 
 // A constellation label projected on its image.
@@ -195,7 +197,8 @@ export function projectAnnotations(result: Pick<AnnotationResult, 'solution' | '
 		const start = object.motion && pointAt(solution, object.motion.start[0], object.motion.start[1])
 		const end = object.motion && pointAt(solution, object.motion.end[0], object.motion.end[1])
 		const extent = object.majorAxis === undefined || !(result.field.scale > 0) ? 0 : object.majorAxis / result.field.scale
-		objects.push({ index, object, anchor, extent, ...(outline && { outline: outline.outline, approximate: outline.approximate }), ...(start && end && { motion: [start, end] as const }) })
+		const uncertainty = object.positionError === undefined || !(result.field.scale > 0) ? 0 : object.positionError / result.field.scale
+		objects.push({ index, object, anchor, extent, uncertainty, ...(outline && { outline: outline.outline, approximate: outline.approximate }), ...(start && end && { motion: [start, end] as const }) })
 	}
 
 	const constellations: string[] = []
@@ -351,9 +354,9 @@ export function layoutLabels(candidates: readonly LabelCandidate[], view: Overla
 	return placed
 }
 
-// Returns the index in its result of the object a click at a viewer point picks: the closest marker within radius
-// (image pixels), or, failing that, the smallest extended object whose extent holds the point; undefined when none.
-export function pickAnnotation(objects: readonly ProjectedAnnotation[], point: Point, radius: number): number | undefined {
+// Returns the id of the object a click at a viewer point picks: the closest marker within radius (image pixels), or,
+// failing that, the smallest extended object whose extent holds the point; undefined when none.
+export function pickAnnotation(objects: readonly ProjectedAnnotation[], point: Point, radius: number): string | undefined {
 	let best: ProjectedAnnotation | undefined
 	let bestDistance = radius
 	let inside: ProjectedAnnotation | undefined
@@ -369,5 +372,14 @@ export function pickAnnotation(objects: readonly ProjectedAnnotation[], point: P
 		if (distance <= projected.extent / 2 && (!inside || projected.extent < inside.extent)) inside = projected
 	}
 
-	return (best ?? inside)?.index
+	return (best ?? inside)?.object.id
+}
+
+// Returns the projections of the results drawn together over one image, such as its local annotation and its minor-body
+// search: their objects in order, and the constellations of the first one that has any.
+export function mergeProjections(...projections: readonly (AnnotationProjection | undefined)[]): AnnotationProjection | undefined {
+	const shown = projections.filter((e) => e !== undefined)
+	if (shown.length <= 1) return shown[0]
+	const withConstellations = shown.find((e) => e.constellations.length > 0 || e.labels.length > 0) ?? shown[0]
+	return { objects: shown.flatMap((e) => e.objects), constellations: withConstellations.constellations, labels: withConstellations.labels }
 }

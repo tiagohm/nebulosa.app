@@ -1,17 +1,18 @@
-import type { AnnotationJob, AnnotationLayer, AnnotationObject, AnnotationRequest, AnnotationResult, ImageInfo } from 'api'
+import type { AnnotationJob, AnnotationKind, AnnotationLayer, AnnotationObject, AnnotationRequest, AnnotationResult, ImageInfo, MinorBody } from 'api'
 import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { isAnnotationShown } from '../annotations/AnnotationOverlay'
-import { annotationPlateSolveJobId, annotationRequest, annotationsState, cancelAnnotation, isActive, parseUtcInput, runAnnotation, sameAnnotationRequest, utcInputValue } from '../annotations/annotations'
+import { annotationKey, annotationPlateSolveJobId, annotationRequest, annotationsState, cancelAnnotation, isActive, parseUtcInput, resolveMinorBody, runAnnotation, sameAnnotationRequest, utcInputValue } from '../annotations/annotations'
 import { useAnnotationResult } from '../annotations/useAnnotationResult'
 import { Actions, Notice } from '../equipment-control/parts'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
-import { activeProfile, profileState } from '../profile/profile'
+import { activeProfile, profileState, setAnnotationObservatory } from '../profile/profile'
 import type { SkyObserverSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { navigate, routeState } from '../shell/route'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { formatAngularSize, formatDeclination, formatDegrees, formatMagnitude, formatRightAscension } from '../sky/format'
+import type { SkySelectionRef } from '../sky/objects'
 import { selectSkyObject, skyState } from '../sky/sky'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
@@ -28,8 +29,9 @@ import type { ImageToolPanelProps } from './tools'
 // solar-system bodies in the field of the active document from its WCS, on the server, and shows the outcome, the
 // groups and appearance of the overlay, the objects in the field, and the object selected in the list or the viewer,
 // which opens in the Sky workspace. The WCS is the plate solution shown when it is a completed job of the image, else
-// the WCS of its header; nothing is solved implicitly. Run Analysis is the only action that queries the catalog:
-// showing, hiding, or restyling the overlay never does. A result always belongs to the image it annotated.
+// the WCS of its header; nothing is solved implicitly. Run Analysis is the only action that queries the catalog, and
+// Find Minor Bodies the only one that asks the SkyBoT service for the known asteroids and comets: showing, hiding, or
+// restyling the overlay never does. A result always belongs to the image it annotated.
 
 // Text shown for a value the result does not have.
 const MISSING = '—'
@@ -41,7 +43,7 @@ const MAX_LISTED = 300
 const STATE_LABELS: Readonly<Record<AnnotationJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }
 
 // Display names of the groups.
-const LAYER_LABELS: Readonly<Record<AnnotationLayer, string>> = { star: 'Stars', deepSky: 'Deep-sky objects', solarSystem: 'Solar system' }
+const LAYER_LABELS: Readonly<Record<AnnotationLayer, string>> = { star: 'Stars', deepSky: 'Deep-sky objects', solarSystem: 'Solar system', minorBody: 'Asteroids and comets' }
 
 // Display names of the label densities.
 const DENSITY_LABELS: Readonly<Record<AnnotationDensity, string>> = { minimal: 'Minimal', balanced: 'Balanced', detailed: 'Detailed' }
@@ -85,24 +87,32 @@ interface AnnotationProps {
 function Annotation({ documentKey, info, annotation, selectedSolution, unavailable }: AnnotationProps) {
 	const imageId = info?.id
 	const { job, result, resultError } = useAnnotationResult(imageId)
+	const minor = useAnnotationResult(imageId, 'minorBodies')
 	const { submitErrors } = useSnapshot(annotationsState)
 	const solution = usePlateSolution(imageId, selectedSolution)
 	const plateSolveJobId = annotationPlateSolveJobId(solution)
 	const wcsAvailable = plateSolveJobId !== undefined || solution.header !== undefined
 	const profiles = useSnapshot(profileState)
-	const observer = activeProfile(profiles).settings.sky.observer
+	const settings = activeProfile(profiles).settings
+	const observer = settings.sky.observer
 	const request = annotationRequest({ magnitudeLimit: annotation.magnitudeLimit, plateSolveJobId, time: annotation.time, observer: annotation.useObserver ? observer : undefined })
-	const selected = result && annotation.selected?.jobId === result.jobId ? result.objects.find((e) => e.id === annotation.selected!.id) : undefined
+	const minorRequest = annotationRequest({ kind: 'minorBodies', magnitudeLimit: annotation.magnitudeLimit, plateSolveJobId, time: annotation.time, observatoryCode: settings.annotation?.observatoryCode })
+	const results = [result, minor.result].filter((e) => e !== undefined)
+	const owner = results.find((e) => e.jobId === annotation.selected?.jobId)
+	const selected = owner?.objects.find((e) => e.id === annotation.selected!.id)
 	const edit = (patch: Parameters<typeof setAnnotationView>[2]) => setAnnotationView(imagesState, documentKey, patch)
+	const submitError = (kind: AnnotationKind) => (imageId === undefined ? undefined : submitErrors[annotationKey(imageId, kind)])
 
 	return (
 		<>
-			<Analysis documentKey={documentKey} imageId={imageId} request={request} job={job} wcsAvailable={wcsAvailable} submitError={imageId === undefined ? undefined : submitErrors[imageId]} unavailable={unavailable} />
+			<Analysis documentKey={documentKey} imageId={imageId} request={request} job={job} wcsAvailable={wcsAvailable} submitError={submitError('local')} unavailable={unavailable} />
 			<Observation annotation={annotation} observer={observer} onChange={edit} />
+			{imageId !== undefined && <MinorBodies documentKey={documentKey} imageId={imageId} request={minorRequest} job={minor.job} result={minor.result} resultError={minor.resultError} wcsAvailable={wcsAvailable} submitError={submitError('minorBodies')} unavailable={unavailable} />}
 			<PanelSection title="Layers">
 				<Checkbox label="Deep-sky objects" checked={annotation.layers.deepSky} onChange={(deepSky) => edit({ layers: { deepSky } })} />
 				<Checkbox label="Stars" checked={annotation.layers.stars} onChange={(stars) => edit({ layers: { stars } })} />
 				<Checkbox label="Solar system" checked={annotation.layers.solarSystem} onChange={(solarSystem) => edit({ layers: { solarSystem } })} />
+				<Checkbox label="Asteroids and comets" checked={annotation.layers.minorBodies} onChange={(minorBodies) => edit({ layers: { minorBodies } })} />
 				<Checkbox label="Constellation lines" checked={annotation.layers.constellations} onChange={(constellations) => edit({ layers: { constellations } })} />
 				<Checkbox label="Constellation names" checked={annotation.layers.constellationLabels} onChange={(constellationLabels) => edit({ layers: { constellationLabels } })} />
 				<Notice>Showing or hiding a layer never runs an analysis.</Notice>
@@ -113,11 +123,22 @@ function Annotation({ documentKey, info, annotation, selectedSolution, unavailab
 				<Checkbox label="Outlines of extended objects" checked={annotation.outlines} onChange={(outlines) => edit({ outlines })} />
 				<Checkbox label="Motion during the exposure" checked={annotation.motion} onChange={(motion) => edit({ motion })} />
 				<NumberInput label="Magnitude limit" value={annotation.magnitudeLimit} min={-2} max={30} step={0.5} onChange={(magnitudeLimit) => edit({ magnitudeLimit })} />
-				<Notice>A lower limit hides fainter objects at once; a higher one applies to the next analysis. Deep-sky objects of the classic catalogs without a magnitude are always kept.</Notice>
+				<Notice>A lower limit hides fainter stars and deep-sky objects at once; a higher one applies to the next analysis. Deep-sky objects of the classic catalogs without a magnitude are always kept, and the limit never hides a solar-system or minor body.</Notice>
 			</PanelSection>
 			{imageId !== undefined && (
 				<>
-					<Objects job={job} result={result} resultError={resultError} annotation={annotation} selected={selected?.id} onSelect={(id) => result && selectAnnotation(imagesState, documentKey, { jobId: result.jobId, id })} />
+					<Objects
+						job={job}
+						objects={results.flatMap((e) => e.objects)}
+						warnings={result?.warnings}
+						resultError={resultError}
+						annotation={annotation}
+						selected={selected?.id}
+						onSelect={(id) => {
+							const found = results.find((e) => e.objects.some((object) => object.id === id))
+							if (found) selectAnnotation(imagesState, documentKey, { jobId: found.jobId, id })
+						}}
+					/>
 					<SelectedObject object={selected} />
 				</>
 			)}
@@ -239,12 +260,96 @@ function Observation({ annotation, observer, onChange }: ObservationProps) {
 	)
 }
 
-interface ObjectsProps {
-	// Latest job of the image.
+interface MinorBodiesProps {
+	// Key of the document.
+	readonly documentKey: string
+	// Server id of the image.
+	readonly imageId: string
+	// Why no search can run yet.
+	readonly unavailable?: string
+	// Request Find Minor Bodies sends.
+	readonly request: AnnotationRequest
+	// Latest minor-body search of the image.
 	readonly job?: AnnotationJob
 	// Its result, once fetched.
 	readonly result?: AnnotationResult
 	// Why its result could not be fetched.
+	readonly resultError?: string
+	// Whether the image has a WCS to search with.
+	readonly wcsAvailable: boolean
+	// Why the latest submission failed.
+	readonly submitError?: string
+}
+
+// Explicit search of the known asteroids and comets of the field with the IMCCE SkyBoT service, at the observation time,
+// from the profile's observatory code or the center of the Earth. It never runs on its own, and its failure leaves the
+// local annotation as it is.
+function MinorBodies({ documentKey, imageId, request, job, result, resultError, wcsAvailable, submitError, unavailable }: MinorBodiesProps) {
+	const profiles = useSnapshot(profileState)
+	const code = activeProfile(profiles).settings.annotation?.observatoryCode ?? ''
+	// Code being typed, saved when the field loses the focus, and whether the last one saved was refused.
+	const [text, setText] = useState<string>()
+	const [invalid, setInvalid] = useState(false)
+	const active = isActive(job)
+	const now = useNow(active)
+	const changed = job && !sameAnnotationRequest(job.request, request)
+
+	return (
+		<PanelSection title="Minor Bodies">
+			<TextInput
+				label="Observatory code (MPC)"
+				value={text ?? code}
+				placeholder="Center of the Earth"
+				maxLength={3}
+				onChange={(event) => setText(event.currentTarget.value)}
+				onBlur={() => {
+					if (text !== undefined) setInvalid(!setAnnotationObservatory(profileState, text))
+					setText(undefined)
+				}}
+			/>
+			{invalid && <Notice error>An observatory code is three letters or digits, such as I41.</Notice>}
+			<Actions>
+				<Button
+					disabled={active || unavailable !== undefined || !wcsAvailable}
+					onClick={() => {
+						holdCameraFrame(imagesState, documentKey)
+						void runAnnotation(annotationsState, imageId, request)
+					}}
+				>
+					Find Minor Bodies
+				</Button>
+				<Button variant="secondary" disabled={!active || !job} onClick={() => job && void cancelAnnotation(job.jobId)}>
+					Cancel
+				</Button>
+			</Actions>
+			<Notice>Asks the IMCCE SkyBoT service over the internet for the known asteroids and comets at the observation time; it may take several seconds. Its positions are predictions, not detections in the image.</Notice>
+			{submitError && <Notice error>{submitError}</Notice>}
+			{job && (
+				<>
+					<Property label="Status">{STATE_LABELS[job.state]}</Property>
+					<Property label="Elapsed">{formatSeconds(elapsedOf(job, now))}</Property>
+					{job.observation && <Property label="Seen from">{job.observation.observatoryCode ?? 'Center of the Earth'}</Property>}
+					{job.summary && <Property label={LAYER_LABELS.minorBody}>{job.summary.counts.minorBody}</Property>}
+					{job.error && <Notice error>{job.error}</Notice>}
+					{changed && <Notice>The WCS, the time, or the observatory changed since this search; run it again to apply them.</Notice>}
+					{result?.warnings.map((warning) => (
+						<Notice key={warning}>{warning}</Notice>
+					))}
+					{resultError && <Notice error>{resultError}</Notice>}
+				</>
+			)}
+		</PanelSection>
+	)
+}
+
+interface ObjectsProps {
+	// Latest local annotation job of the image.
+	readonly job?: AnnotationJob
+	// Objects of the shown results: the local annotation and the minor-body search.
+	readonly objects: readonly AnnotationObject[]
+	// Conditions worth knowing about the local annotation, meant for people.
+	readonly warnings?: readonly string[]
+	// Why the result of the local annotation could not be fetched.
 	readonly resultError?: string
 	// Annotation state of the document, whose groups and magnitude limit filter the list.
 	readonly annotation: ImageAnnotationState
@@ -254,38 +359,38 @@ interface ObjectsProps {
 	readonly onSelect: (id: string) => void
 }
 
-// Counts of the latest completed job and the list of the objects shown, filtered by name.
-function Objects({ job, result, resultError, annotation, selected, onSelect }: ObjectsProps) {
+// Groups the local annotation counts.
+const LOCAL_LAYERS: readonly AnnotationLayer[] = ['deepSky', 'star', 'solarSystem']
+
+// Counts of the latest local annotation and the list of the objects shown, minor bodies included, filtered by name.
+function Objects({ job, objects, warnings, resultError, annotation, selected, onSelect }: ObjectsProps) {
 	const [filter, setFilter] = useState('')
 	const summary = job?.summary
 	const text = filter.trim().toLowerCase()
-	const shown = result?.objects.filter((object) => isAnnotationShown(annotation, object) && (!text || object.name.toLowerCase().includes(text) || object.designations.some((e) => e.toLowerCase().includes(text))))
+	const shown = objects.filter((object) => isAnnotationShown(annotation, object) && (!text || object.name.toLowerCase().includes(text) || object.designations.some((e) => e.toLowerCase().includes(text))))
 
 	return (
 		<PanelSection title="Objects in Field">
-			{summary ? (
+			{summary || objects.length > 0 ? (
 				<>
-					{(Object.keys(LAYER_LABELS) as AnnotationLayer[]).map((layer) => (
-						<Property key={layer} label={LAYER_LABELS[layer]}>
-							{summary.counts[layer]}
-						</Property>
-					))}
-					<Property label="Duration">{formatSeconds(summary.elapsed)}</Property>
-					{result?.warnings.map((warning) => (
+					{summary &&
+						LOCAL_LAYERS.map((layer) => (
+							<Property key={layer} label={LAYER_LABELS[layer]}>
+								{summary.counts[layer]}
+							</Property>
+						))}
+					{summary && <Property label="Duration">{formatSeconds(summary.elapsed)}</Property>}
+					{warnings?.map((warning) => (
 						<Notice key={warning}>{warning}</Notice>
 					))}
 					{resultError && <Notice error>{resultError}</Notice>}
-					{result && shown && (
-						<>
-							<TextInput label="Filter" value={filter} placeholder="Name or designation" onChange={(event) => setFilter(event.currentTarget.value)} />
-							<List emptyText={result.objects.length > 0 ? 'No object matches.' : 'No catalog object in this field.'} className="max-h-80 overflow-y-auto">
-								{shown.slice(0, MAX_LISTED).map((object) => (
-									<ListItem key={object.id} title={object.name} description={object.typeName} meta={object.magnitude === undefined ? undefined : formatMagnitude(object.magnitude)} selected={object.id === selected} onClick={() => onSelect(object.id)} />
-								))}
-							</List>
-							{shown.length > MAX_LISTED && <Notice>{`${shown.length - MAX_LISTED} more objects are drawn but not listed; filter by name to find them.`}</Notice>}
-						</>
-					)}
+					<TextInput label="Filter" value={filter} placeholder="Name or designation" onChange={(event) => setFilter(event.currentTarget.value)} />
+					<List emptyText={objects.length > 0 ? 'No object matches.' : 'No catalog object in this field.'} className="max-h-80 overflow-y-auto">
+						{shown.slice(0, MAX_LISTED).map((object) => (
+							<ListItem key={object.id} title={object.name} description={object.typeName} meta={object.magnitude === undefined ? undefined : formatMagnitude(object.magnitude)} selected={object.id === selected} onClick={() => onSelect(object.id)} />
+						))}
+					</List>
+					{shown.length > MAX_LISTED && <Notice>{`${shown.length - MAX_LISTED} more objects are drawn but not listed; filter by name to find them.`}</Notice>}
 				</>
 			) : (
 				<Notice>{job && isActive(job) ? 'Annotating…' : 'No results.'}</Notice>
@@ -294,9 +399,28 @@ function Objects({ job, result, resultError, annotation, selected, onSelect }: O
 	)
 }
 
-// Details of the object selected in the list or the viewer, and its link to the Sky workspace.
+// Details of the object selected in the list or the viewer, and its link to the Sky workspace. A minor body SkyBoT
+// listed has no SPK-ID, so it is looked up in SBDB first and opens only when SBDB knows exactly one body by its
+// designation.
 function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 	const profiles = useSnapshot(profileState)
+	// Why the SBDB lookup of the selected minor body failed, by object id, and the object being looked up.
+	const [lookup, setLookup] = useState<{ readonly id: string; readonly error?: string }>()
+	const observer = activeProfile(profiles).settings.sky.observer
+
+	// Selects an object in the Sky workspace and opens it.
+	function openInSky(ref: SkySelectionRef, name: string, minorBody?: MinorBody) {
+		selectSkyObject(skyState, { ref, source: 'search', name, category: object!.layer, ...(minorBody && { minorBody }) }, observer)
+		navigate(routeState, { workspace: 'sky' })
+	}
+
+	// Looks the selected minor body up in SBDB and opens it when found.
+	async function openMinorBody(target: AnnotationObject) {
+		setLookup({ id: target.id })
+		const body = await resolveMinorBody(target)
+		if (typeof body === 'string') setLookup({ id: target.id, error: body })
+		else openInSky({ kind: 'minorBody', spkId: body.spkId, designation: body.designation }, body.name, body)
+	}
 
 	return (
 		<PanelSection title="Selected Object">
@@ -310,16 +434,17 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 					<Property label="Declination (J2000)">{formatDeclination(object.declination)}</Property>
 					{object.majorAxis !== undefined && <Property label="Size">{object.minorAxis === undefined ? formatAngularSize(object.majorAxis) : `${formatAngularSize(object.majorAxis)} × ${formatAngularSize(object.minorAxis)}`}</Property>}
 					{object.orientation !== undefined && <Property label="Position angle">{formatDegrees(object.orientation)}</Property>}
-					<Button
-						variant="secondary"
-						className="self-start"
-						onClick={() => {
-							selectSkyObject(skyState, { ref: object.ref, source: 'search', name: object.name, category: object.layer }, activeProfile(profiles).settings.sky.observer)
-							navigate(routeState, { workspace: 'sky' })
-						}}
-					>
-						Open in Sky
-					</Button>
+					{object.positionError !== undefined && <Property label="Position uncertainty">{formatAngularSize(object.positionError)}</Property>}
+					{object.ref ? (
+						<Button variant="secondary" className="self-start" onClick={() => openInSky(object.ref!, object.name)}>
+							Open in Sky
+						</Button>
+					) : (
+						<Button variant="secondary" className="self-start" disabled={lookup?.id === object.id && lookup.error === undefined} onClick={() => void openMinorBody(object)}>
+							Find in SBDB and Open in Sky
+						</Button>
+					)}
+					{lookup?.id === object.id && lookup.error && <Notice error>{lookup.error}</Notice>}
 					<Notice>The Sky workspace keeps its own time: it shows the object now, not at the time of this image.</Notice>
 				</>
 			) : (

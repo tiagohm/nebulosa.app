@@ -4,7 +4,7 @@ import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { deg } from 'nebulosa/src/math/units/angle'
 import { pointAt, skyDirections } from '../platesolving/wcs'
 import type { OverlayView } from '../viewer/transform'
-import { greatCircle, type LabelCandidate, layoutLabels, offsetPosition, pickAnnotation, projectAnnotations, skyEllipse, skyPolyline } from './geometry'
+import { greatCircle, type LabelCandidate, layoutLabels, mergeProjections, offsetPosition, pickAnnotation, projectAnnotations, skyEllipse, skyPolyline } from './geometry'
 
 // A TAN solution of a 200×100 image centred at its CRPIX, s degrees per pixel, rotated by angle (degrees) and mirrored
 // when flipped, as in platesolving/wcs.test.ts.
@@ -163,8 +163,34 @@ describe('picking', () => {
 
 	test('the closest marker within the radius, then the extent holding the point', () => {
 		const second = projection.objects[1].anchor
-		expect(pickAnnotation(projection.objects, { x: second.x + 1, y: second.y }, 8)).toBe(1)
-		expect(pickAnnotation(projection.objects, { x: 100, y: 50 + 20 }, 8)).toBe(0)
+		expect(pickAnnotation(projection.objects, { x: second.x + 1, y: second.y }, 8)).toBe('catalog:2')
+		expect(pickAnnotation(projection.objects, { x: 100, y: 50 + 20 }, 8)).toBe('catalog:1')
 		expect(pickAnnotation(projection.objects, { x: 100, y: 50 + 40 }, 8)).toBeUndefined()
+	})
+})
+
+describe('merging', () => {
+	test('the objects of every result and the constellations of the local one', () => {
+		const header = solution(150, 20)
+		const local = projectAnnotations(
+			result(
+				header,
+				[object()],
+				[
+					[
+						[RA - deg(1), DEC],
+						[RA + deg(1), DEC],
+					],
+				],
+			),
+		)
+		const minor = projectAnnotations({ ...result(header, [object({ id: 'skybot:1', layer: 'minorBody', positionError: deg(0.002) })]), constellations: { lines: [], labels: [] } })
+		const merged = mergeProjections(minor, local)!
+
+		expect(merged.objects.map((e) => e.object.id)).toEqual(['skybot:1', 'catalog:1'])
+		expect(merged.constellations).toBe(local.constellations)
+		expect(merged.objects[0].uncertainty).toBeCloseTo(2, 9)
+		expect(mergeProjections(undefined, local)).toBe(local)
+		expect(mergeProjections()).toBeUndefined()
 	})
 })

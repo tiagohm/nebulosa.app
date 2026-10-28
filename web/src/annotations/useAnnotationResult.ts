@@ -1,10 +1,10 @@
-import type { AnnotationJob, AnnotationResult } from 'api'
+import type { AnnotationJob, AnnotationKind, AnnotationResult } from 'api'
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { annotationsState, latestAnnotationJob, latestAnnotationResult, loadAnnotationResult, loadImageAnnotations } from './annotations'
 
-// Hook of the latest annotation of an image, shared by the Images workspace and its Annotation tool: it returns the
-// latest job of the image id and its result, and fetches the result once the job completed, so only the images on
+// Hook of the latest annotation of a kind of an image, shared by the Images workspace and its Annotation tool: it returns
+// the latest job of that kind of the image id and its result, and fetches the result once the job completed, so only the images on
 // screen ever download their objects. An image without a known job has its kept jobs fetched once.
 
 // Latest annotation of an image.
@@ -17,10 +17,11 @@ export interface AnnotationResultView {
 	readonly resultError?: string
 }
 
-// Returns the latest annotation of an image, fetching its result when needed; nothing without an image.
-export function useAnnotationResult(imageId: string | undefined): AnnotationResultView {
+// Returns the latest annotation of a kind (the local one by default) of an image, fetching its result when needed;
+// nothing without an image.
+export function useAnnotationResult(imageId: string | undefined, kind: AnnotationKind = 'local'): AnnotationResultView {
 	const annotations = useSnapshot(annotationsState)
-	const job = imageId === undefined ? undefined : latestAnnotationJob(annotations, imageId)
+	const job = imageId === undefined ? undefined : latestAnnotationJob(annotations, imageId, kind)
 	const completed = job?.state === 'completed' ? job.jobId : undefined
 
 	useEffect(() => {
@@ -33,5 +34,5 @@ export function useAnnotationResult(imageId: string | undefined): AnnotationResu
 
 	if (!imageId || !job) return {}
 	// A result is a valtio ref, so the snapshot hands out the stored object itself, never a deep copy.
-	return { job, result: latestAnnotationResult(annotations, imageId), resultError: completed && annotations.resultErrors[completed] }
+	return { job, result: latestAnnotationResult(annotations, imageId, kind), resultError: completed && annotations.resultErrors[completed] }
 }

@@ -10,6 +10,7 @@ import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
 import {
 	mountRemoteBinding,
+	setAnnotationObservatory,
 	setMountRemoteBinding,
 	acquisitionSettings,
 	ACTIVE_PROFILE_KEY,
@@ -106,7 +107,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 13, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: 14, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -800,7 +801,7 @@ describe('camera forms', () => {
 		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
 
 		const newer = newStores()
-		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 14, profiles: [{ id: 'a', name: 'A' }] }))
+		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 15, profiles: [{ id: 'a', name: 'A' }] }))
 		expect(load(newer).profiles.map((profile) => profile.id)).not.toContain('a')
 	})
 
@@ -866,6 +867,34 @@ describe('camera forms', () => {
 		const invalid = newStores()
 		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 13, profiles: [{ id: 'a', name: 'A', settings: { notifications: { readIds: ['x', 1, '', 'x', 'y'], dismissedIds: 'z' } } }] }))
 		expect(load(invalid).profiles[0].settings.notifications).toEqual({ readIds: ['x', 'y'], dismissedIds: [] })
+	})
+
+	test('the observatory of the minor-body searches is the profile one, persisted, validated, and migrated', async () => {
+		const stores = newStores()
+		const state = load(stores)
+
+		expect(setAnnotationObservatory(state, ' i41 ')).toBeTrue()
+		expect(activeProfile(state).settings.annotation).toEqual({ observatoryCode: 'I41' })
+		expect(setAnnotationObservatory(state, 'Observatory')).toBeFalse()
+		expect(activeProfile(state).settings.annotation).toEqual({ observatoryCode: 'I41' })
+		await Bun.sleep(0)
+		expect(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings.annotation).toEqual({ observatoryCode: 'I41' })
+		expect(setAnnotationObservatory(state, '')).toBeTrue()
+		expect(activeProfile(state).settings.annotation).toBeUndefined()
+
+		// A version 13 document gains none, and an invalid code is dropped.
+		const older = newStores()
+		older.local.setItem(
+			PROFILES_KEY,
+			JSON.stringify({
+				version: 13,
+				profiles: [
+					{ id: 'a', name: 'A', settings: {} },
+					{ id: 'b', name: 'B', settings: { annotation: { observatoryCode: 'too long' } } },
+				],
+			}),
+		)
+		expect(load(older).profiles.map((e) => e.settings.annotation)).toEqual([undefined, undefined])
 	})
 
 	test('display settings applied in Images are kept per camera and globally, restored with defaults for invalid fields', async () => {

@@ -125,6 +125,8 @@ export interface AnnotationLayers {
 	deepSky: boolean
 	// Sun, Moon, planets, and Pluto.
 	solarSystem: boolean
+	// Asteroids and comets of a minor-body search.
+	minorBodies: boolean
 	// Constellation figures.
 	constellations: boolean
 	// Constellation names.
@@ -400,7 +402,7 @@ export function newView(): ImageViewState {
 		stars: { visible: true, acceptedOnly: false },
 		streaks: { visible: true, labels: true, useSolution: true, useStars: true },
 		plateSolving: { request: { ...DEFAULT_PLATE_SOLVE_REQUEST }, overlay: true, grid: false },
-		annotation: { layers: { stars: true, deepSky: true, solarSystem: true, constellations: true, constellationLabels: false }, labels: true, outlines: true, motion: true, density: 'balanced', magnitudeLimit: DEFAULT_ANNOTATION_MAGNITUDE_LIMIT, useObserver: false },
+		annotation: { layers: { stars: true, deepSky: true, solarSystem: true, minorBodies: true, constellations: true, constellationLabels: false }, labels: true, outlines: true, motion: true, density: 'balanced', magnitudeLimit: DEFAULT_ANNOTATION_MAGNITUDE_LIMIT, useObserver: false },
 		processing: { steps: [], expanded: [], adding: DEFAULT_ADDED_OPERATION },
 	}
 }

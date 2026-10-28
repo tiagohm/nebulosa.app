@@ -4,12 +4,12 @@ import type { OverlayView } from '../viewer/transform'
 import { type AnnotationProjection, type LabelCandidate, layoutLabels, type ProjectedAnnotation } from './geometry'
 
 // Annotation of an image over the shared image viewer: the constellation figures and names, the outline or marker of
-// each deep-sky object, a marker for each star and solar-system body with the predicted motion of a body during the
-// exposure, and the labels the layout places, with the selected object highlighted. It is a pure function of a
-// projection computed once per result and of the document's annotation state, and draws in image pixel coordinates, so
-// the viewer's zoom and pan move it while strokes, markers, and labels keep their size on screen; only the objects in
-// view are drawn, and only the labels are laid out again when the view changes. The caller shows it only over the image
-// the result annotated, with the WCS it was computed with.
+// each deep-sky object, a marker for each star, solar-system body, and minor body with the predicted motion of a body
+// during the exposure and the uncertainty of a minor body's position, and the labels the layout places, with the
+// selected object highlighted. It is a pure function of projections computed once per result and of the document's
+// annotation state, and draws in image pixel coordinates, so the viewer's zoom and pan move it while strokes, markers,
+// and labels keep their size on screen; only the objects in view are drawn, and only the labels are laid out again when
+// the view changes. The caller shows it only over the image the results annotated, with the WCS they were computed with.
 
 // Size of the labels, in screen pixels.
 const LABEL_SIZE = 11
@@ -30,10 +30,10 @@ const MAX_CLEARANCE = 24
 export const LABEL_BUDGETS = { minimal: 15, balanced: 40, detailed: 150 } as const
 
 // Color of each group.
-const COLORS: Readonly<Record<AnnotationLayer, string>> = { star: 'var(--color-ink-200)', deepSky: 'var(--color-accent)', solarSystem: 'var(--color-success)' }
+const COLORS: Readonly<Record<AnnotationLayer, string>> = { star: 'var(--color-ink-200)', deepSky: 'var(--color-accent)', solarSystem: 'var(--color-success)', minorBody: 'var(--color-danger)' }
 
 // Order in which the labels of each group are placed.
-const LAYER_PRIORITY: Readonly<Record<AnnotationLayer, number>> = { solarSystem: 0, deepSky: 1, star: 2 }
+const LAYER_PRIORITY: Readonly<Record<AnnotationLayer, number>> = { solarSystem: 0, deepSky: 1, minorBody: 2, star: 3 }
 
 // Magnitude a label of an object without one is placed with, after the fainter ones of its group.
 const UNKNOWN_MAGNITUDE = 99
@@ -49,11 +49,14 @@ export interface AnnotationOverlayProps {
 	readonly selected?: string
 }
 
-// Returns whether an object is drawn and listed for an annotation state: its group is shown and it is no fainter than
-// the magnitude limit.
+// Group shown by each layer toggle.
+const LAYER_TOGGLES: Readonly<Record<AnnotationLayer, keyof ImageAnnotationState['layers']>> = { star: 'stars', deepSky: 'deepSky', solarSystem: 'solarSystem', minorBody: 'minorBodies' }
+
+// Returns whether an object is drawn and listed for an annotation state: its group is shown and, for a catalog star or
+// deep-sky object, it is no fainter than the magnitude limit, which never hides a body.
 export function isAnnotationShown(state: Pick<ImageAnnotationState, 'layers' | 'magnitudeLimit'>, object: Pick<AnnotationObject, 'layer' | 'magnitude'>): boolean {
-	const layer = object.layer === 'star' ? state.layers.stars : object.layer === 'deepSky' ? state.layers.deepSky : state.layers.solarSystem
-	return layer && (object.magnitude === undefined || object.magnitude <= state.magnitudeLimit)
+	if (!state.layers[LAYER_TOGGLES[object.layer]]) return false
+	return (object.layer !== 'star' && object.layer !== 'deepSky') || object.magnitude === undefined || object.magnitude <= state.magnitudeLimit
 }
 
 // Returns the objects of a projection drawn for an annotation state.
@@ -95,7 +98,7 @@ export function AnnotationOverlay({ projection, view, state, selected }: Annotat
 					</text>
 				))}
 			{shown.map((projected) => {
-				const { object, anchor, outline, approximate, motion } = projected
+				const { object, anchor, outline, approximate, motion, uncertainty } = projected
 				const isSelected = object.id === selected
 				const color = isSelected ? 'var(--color-ink-100)' : COLORS[object.layer]
 				const width = isSelected ? 2.5 : 1.5
@@ -103,8 +106,11 @@ export function AnnotationOverlay({ projection, view, state, selected }: Annotat
 				return (
 					<g key={object.id} stroke={color}>
 						{state.motion && motion && <line x1={motion[0].x} y1={motion[0].y} x2={motion[1].x} y2={motion[1].y} strokeWidth={width} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
+						{uncertainty * view.scale > MARKER_RADIUS && <circle cx={anchor.x} cy={anchor.y} r={uncertainty} strokeWidth={1} strokeOpacity={0.6} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />}
 						{outlined(projected) ? (
 							<path d={outline} strokeWidth={width} strokeDasharray={approximate ? '6 4' : undefined} vectorEffect="non-scaling-stroke" />
+						) : object.layer === 'minorBody' ? (
+							<path d={`M${anchor.x - MARKER_RADIUS * unit} ${anchor.y}L${anchor.x + MARKER_RADIUS * unit} ${anchor.y}M${anchor.x} ${anchor.y - MARKER_RADIUS * unit}L${anchor.x} ${anchor.y + MARKER_RADIUS * unit}`} strokeWidth={width} vectorEffect="non-scaling-stroke" />
 						) : object.layer === 'solarSystem' ? (
 							<path d={`M${anchor.x} ${anchor.y - MARKER_RADIUS * unit}L${anchor.x + MARKER_RADIUS * unit} ${anchor.y}L${anchor.x} ${anchor.y + MARKER_RADIUS * unit}L${anchor.x - MARKER_RADIUS * unit} ${anchor.y}Z`} strokeWidth={width} vectorEffect="non-scaling-stroke" />
 						) : (

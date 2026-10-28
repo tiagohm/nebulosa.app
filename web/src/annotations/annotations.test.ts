@@ -1,7 +1,24 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnnotationJob, AnnotationRequest, AnnotationResult } from 'api'
 import { proxy } from 'valtio'
-import { annotationMatchesWcs, annotationPlateSolveJobId, annotationRequest, type AnnotationsState, handleAnnotationsEvent, latestAnnotationJob, latestAnnotationResult, loadAnnotationResult, parseUtcInput, refreshAnnotations, runAnnotation, sameAnnotationRequest, utcInputValue } from './annotations'
+import {
+	annotationKey,
+	annotationMatchesWcs,
+	annotationPlateSolveJobId,
+	annotationRequest,
+	type AnnotationsState,
+	handleAnnotationsEvent,
+	latestAnnotationJob,
+	latestAnnotationResult,
+	loadAnnotationResult,
+	minorBodyQuery,
+	parseUtcInput,
+	refreshAnnotations,
+	resolveMinorBody,
+	runAnnotation,
+	sameAnnotationRequest,
+	utcInputValue,
+} from './annotations'
 
 const REQUEST: AnnotationRequest = { kind: 'local', magnitudeLimit: 12 }
 
@@ -47,7 +64,7 @@ describe('jobs', () => {
 		expect(latestAnnotationJob(annotations, 'image-1')?.jobId).toBe('job-1')
 
 		await runAnnotation(annotations, 'image-2', REQUEST, fetcher({ '/api/images/image-2/annotations': [422, { error: 'No WCS', code: 'contextUnavailable' }] }).request)
-		expect(annotations.submitErrors['image-2']).toBe('No WCS')
+		expect(annotations.submitErrors[annotationKey('image-2', 'local')]).toBe('No WCS')
 	})
 
 	test('the snapshot and the result of the latest completed job', async () => {
@@ -106,4 +123,48 @@ describe('next run', () => {
 		expect(parseUtcInput('2026-01-15')).toBeUndefined()
 		expect(parseUtcInput('2026-13-45T99:00')).toBeUndefined()
 	})
+})
+
+describe('minor bodies', () => {
+	test('the latest job of each kind of an image is kept apart', async () => {
+		const annotations = state()
+		handleAnnotationsEvent(annotations, { type: 'annotations:updated', job: job() })
+		handleAnnotationsEvent(annotations, { type: 'annotations:updated', job: job({ jobId: 'minor', request: { ...REQUEST, kind: 'minorBodies' }, queuedAt: 2000 }) })
+
+		expect(latestAnnotationJob(annotations, 'image-1')?.jobId).toBe('job-1')
+		expect(latestAnnotationJob(annotations, 'image-1', 'minorBodies')?.jobId).toBe('minor')
+
+		await runAnnotation(annotations, 'image-1', { ...REQUEST, kind: 'minorBodies' }, fetcher({ '/api/images/image-1/annotations': [422, { error: 'No time', code: 'contextUnavailable' }] }).request)
+		expect(annotations.submitErrors[annotationKey('image-1', 'minorBodies')]).toBe('No time')
+		expect(annotations.submitErrors[annotationKey('image-1', 'local')]).toBeUndefined()
+	})
+
+	test('a search sends only the trimmed observatory code', () => {
+		const observer = { latitude: 1, longitude: 2, elevation: 3 }
+		expect(annotationRequest({ kind: 'minorBodies', magnitudeLimit: 12, time: 5, observer, observatoryCode: ' I41 ' })).toEqual({ kind: 'minorBodies', magnitudeLimit: 12, time: 5, observatoryCode: 'I41' })
+		expect(annotationRequest({ kind: 'minorBodies', magnitudeLimit: 12, observatoryCode: '  ' })).toEqual({ kind: 'minorBodies', magnitudeLimit: 12 })
+		expect(annotationRequest({ magnitudeLimit: 12, observatoryCode: 'I41' })).toEqual({ kind: 'local', magnitudeLimit: 12 })
+	})
+
+	test('a body is resolved in SBDB by its number or designation only when it is the only match', async () => {
+		const body = { spkId: '20172438', designation: '172438', name: '172438 (2003 QW37)' }
+		const found = fetcher({ '/api/sky/minorbodies/search?q=172438': [200, { kind: 'found', body }] })
+		expect(await resolveMinorBody({ id: 'skybot:172438' }, found.request)).toEqual(body as never)
+		expect(minorBodyQuery({ id: 'skybot:2017 YJ66' })).toBe('2017 YJ66')
+
+		const ambiguous = fetcher({ '/api/sky/minorbodies/search?q=2017%20YJ66': [200, { kind: 'ambiguous', matches: [] }] })
+		expect(await resolveMinorBody({ id: 'skybot:2017 YJ66' }, ambiguous.request)).toContain('several')
+		const missing = fetcher({ '/api/sky/minorbodies/search?q=X': [200, { kind: 'notFound', message: 'No match' }] })
+		expect(await resolveMinorBody({ id: 'skybot:X' }, missing.request)).toBe('No match')
+		const down = fetcher({ '/api/sky/minorbodies/search?q=X': [503, { error: 'SBDB is unavailable', code: 'serviceUnavailable' }] })
+		expect(await resolveMinorBody({ id: 'skybot:X' }, down.request)).toBe('SBDB is unavailable')
+	})
+})
+
+test('the answer to a submission arriving after the end of its job does not bring it back', async () => {
+	const annotations = state()
+	handleAnnotationsEvent(annotations, { type: 'annotations:updated', job: job({ state: 'completed' }) })
+	await runAnnotation(annotations, 'image-1', REQUEST, fetcher({ '/api/images/image-1/annotations': [202, job()] }).request)
+	expect(annotations.jobs['job-1'].state).toBe('completed')
+	expect(latestAnnotationJob(annotations, 'image-1')?.jobId).toBe('job-1')
 })

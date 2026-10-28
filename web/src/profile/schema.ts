@@ -17,8 +17,9 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // focal length of those forms to the guide telescope of the profile (guideTelescope). Version 10 adds the listener
 // bindings of Mount Remote Control of each mount (mountRemoteControl), and version 11 the display settings last applied
 // in Images, to the frames of each camera (display) and to every other image (imageDisplay). Version 12 adds the streak
-// detector settings of Images (streakDetection), and version 13 the notifications the profile read or dismissed (notifications).
-export const PROFILES_VERSION = 13
+// detector settings of Images (streakDetection), version 13 the notifications the profile read or dismissed (notifications),
+// and version 14 the observatory of the minor-body searches of Images → Annotation (annotation).
+export const PROFILES_VERSION = 14
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -58,6 +59,15 @@ export interface ProfileSettings {
 	// Notifications of the server history the profile read or dismissed; absent until the first one is read. The server
 	// keeps one history for every browser, so these states are the profile's own and are never sent back.
 	notifications?: NotificationPreferences
+	// Preferences of Images → Annotation; absent until edited.
+	annotation?: AnnotationSettings
+}
+
+// Preferences of Images → Annotation shared by every document.
+export interface AnnotationSettings {
+	// IAU/MPC code of the observatory the minor-body searches see the bodies from, three upper-case letters or digits such
+	// as "I41"; absent sees them from the Earth's center.
+	observatoryCode?: string
 }
 
 // Notifications of the server history a profile read or dismissed, by notification id. Ids the history no longer

@@ -1,10 +1,10 @@
-import type { AnnotationJob, AnnotationRequest, AnnotationResult, AnnotationSnapshot, ServerEvent } from 'api'
+import type { AnnotationJob, AnnotationKind, AnnotationObject, AnnotationRequest, AnnotationResult, AnnotationSnapshot, MinorBody, MinorBodySearchResponse, ServerEvent } from 'api'
 import { proxy, ref } from 'valtio'
 import { jsonInit, responseError } from '../http'
 
 // Annotation jobs of the server as this tab knows them, for the Annotation tool of the Images workspace. The server runs
 // every job and keeps every result: this store mirrors the compact jobs of its snapshot and annotations:updated events,
-// remembers the latest job of each image id, and fetches the full result of a completed job (the objects, the
+// remembers the latest job of each kind (the local annotation, the minor-body search) of each image id, and fetches the full result of a completed job (the objects, the
 // constellation figures, and the WCS they were selected with) only when a view needs it. A result is always matched to
 // the image id it annotated, so a late result never lands on another image.
 
@@ -12,13 +12,13 @@ import { jsonInit, responseError } from '../http'
 export interface AnnotationsState {
 	// Known jobs, by job id.
 	jobs: Record<string, AnnotationJob>
-	// Latest job of each image, by image id.
+	// Latest job of each kind of each image, by annotationKey.
 	latest: Record<string, string>
 	// Fetched results of completed jobs, by job id; kept out of the proxy.
 	results: Record<string, AnnotationResult>
 	// Why the result of a completed job could not be fetched, by job id.
 	resultErrors: Record<string, string>
-	// Why the latest submission of an image failed, by image id.
+	// Why the latest submission of each kind of an image failed, by annotationKey.
 	submitErrors: Record<string, string>
 }
 
@@ -27,6 +27,9 @@ const MAX_JOBS = 256
 
 // Fetched results kept at most beyond those of the latest job of an image.
 const MAX_RESULTS = 8
+
+// Order of the states of a job: waiting, running, then ended.
+const STATE_ORDER: Readonly<Record<AnnotationJob['state'], number>> = { queued: 0, running: 1, completed: 2, failed: 2, cancelled: 2 }
 
 // Mirror of the server's annotation jobs, shared by every component of the tab.
 export const annotationsState = proxy<AnnotationsState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {} })
@@ -42,32 +45,39 @@ export function isActive(job: Pick<AnnotationJob, 'state'> | undefined): boolean
 	return job?.state === 'queued' || job?.state === 'running'
 }
 
-// Whether two requests annotate the same way: the same WCS, magnitude limit, instant, and observer.
-export function sameAnnotationRequest(a: AnnotationRequest, b: AnnotationRequest): boolean {
-	const observer = a.observer === b.observer || (a.observer !== undefined && b.observer !== undefined && a.observer.latitude === b.observer.latitude && a.observer.longitude === b.observer.longitude && a.observer.elevation === b.observer.elevation)
-	return a.kind === b.kind && a.plateSolveJobId === b.plateSolveJobId && a.magnitudeLimit === b.magnitudeLimit && a.time === b.time && observer
+// Returns the key of the latest job of a kind of an image.
+export function annotationKey(imageId: string, kind: AnnotationKind): string {
+	return `${imageId}:${kind}`
 }
 
-// Returns the latest job of an image.
-export function latestAnnotationJob(state: Pick<AnnotationsState, 'jobs' | 'latest'>, imageId: string): AnnotationJob | undefined {
-	const jobId = state.latest[imageId]
+// Whether two requests annotate the same way: the same kind, WCS, magnitude limit, instant, observer, and observatory.
+export function sameAnnotationRequest(a: AnnotationRequest, b: AnnotationRequest): boolean {
+	const observer = a.observer === b.observer || (a.observer !== undefined && b.observer !== undefined && a.observer.latitude === b.observer.latitude && a.observer.longitude === b.observer.longitude && a.observer.elevation === b.observer.elevation)
+	return a.kind === b.kind && a.plateSolveJobId === b.plateSolveJobId && a.magnitudeLimit === b.magnitudeLimit && a.time === b.time && a.observatoryCode === b.observatoryCode && observer
+}
+
+// Returns the latest job of a kind of an image.
+export function latestAnnotationJob(state: Pick<AnnotationsState, 'jobs' | 'latest'>, imageId: string, kind: AnnotationKind = 'local'): AnnotationJob | undefined {
+	const jobId = state.latest[annotationKey(imageId, kind)]
 	return jobId === undefined ? undefined : state.jobs[jobId]
 }
 
-// Returns the fetched result of the latest job of an image, when it completed.
-export function latestAnnotationResult(state: Pick<AnnotationsState, 'jobs' | 'latest' | 'results'>, imageId: string): AnnotationResult | undefined {
-	const job = latestAnnotationJob(state, imageId)
+// Returns the fetched result of the latest job of a kind of an image, when it completed.
+export function latestAnnotationResult(state: Pick<AnnotationsState, 'jobs' | 'latest' | 'results'>, imageId: string, kind: AnnotationKind = 'local'): AnnotationResult | undefined {
+	const job = latestAnnotationJob(state, imageId, kind)
 	return job?.state === 'completed' ? state.results[job.jobId] : undefined
 }
 
-// Records a job. A job seen for the first time becomes the latest of its image unless a newer one is known; a job
+// Records a job. A job seen for the first time becomes the latest of its kind of its image unless a newer one is known; a job
 // already known never takes it back, so an update or a snapshot cannot undo a submission. submitted makes the job the
 // latest whatever its age, as the answer to a submission of this tab, which may be an equivalent earlier job.
 function track(state: AnnotationsState, job: AnnotationJob, submitted = false) {
 	const known = job.jobId in state.jobs
-	state.jobs[job.jobId] = job
-	const latest = latestAnnotationJob(state, job.imageId)
-	if (submitted || !latest || (!known && latest.queuedAt <= job.queuedAt)) state.latest[job.imageId] = job.jobId
+	// The answer to a submission may arrive after the events of the job it queued, which a fast job has already ended;
+	// a state never goes back.
+	if (!known || STATE_ORDER[job.state] >= STATE_ORDER[state.jobs[job.jobId].state]) state.jobs[job.jobId] = job
+	const latest = latestAnnotationJob(state, job.imageId, job.request.kind)
+	if (submitted || !latest || (!known && latest.queuedAt <= job.queuedAt)) state.latest[annotationKey(job.imageId, job.request.kind)] = job.jobId
 	prune(state)
 }
 
@@ -92,7 +102,7 @@ function prune(state: AnnotationsState) {
 	for (const id of extra.slice(0, Math.max(0, extra.length - MAX_RESULTS))) delete state.results[id]
 
 	// An image no longer known keeps no latest entry of a forgotten job.
-	for (const [imageId, jobId] of Object.entries(state.latest)) if (!state.jobs[jobId]) delete state.latest[imageId]
+	for (const [key, jobId] of Object.entries(state.latest)) if (!state.jobs[jobId]) delete state.latest[key]
 }
 
 // Applies a server event to the store; other events are ignored.
@@ -126,22 +136,23 @@ export async function refreshAnnotations(state: AnnotationsState, request: typeo
 	}
 }
 
-// Submits an annotation of an image. The job, or the equivalent job the server answers, becomes the latest of the
-// image; a refusal is kept in submitErrors.
+// Submits an annotation of an image. The job, or the equivalent job the server answers, becomes the latest of its kind
+// of the image; a refusal is kept in submitErrors.
 export async function runAnnotation(state: AnnotationsState, imageId: string, annotation: AnnotationRequest, request: typeof fetch = fetch) {
-	delete state.submitErrors[imageId]
+	const key = annotationKey(imageId, annotation.kind)
+	delete state.submitErrors[key]
 
 	try {
 		const response = await request(`/api/images/${encodeURIComponent(imageId)}/annotations`, jsonInit('POST', annotation))
 
 		if (!response.ok) {
-			state.submitErrors[imageId] = await responseError(response)
+			state.submitErrors[key] = await responseError(response)
 			return
 		}
 
 		track(state, (await response.json()) as AnnotationJob, true)
 	} catch {
-		state.submitErrors[imageId] = 'Unable to reach the server'
+		state.submitErrors[key] = 'Unable to reach the server'
 	}
 }
 
@@ -194,24 +205,32 @@ export interface AnnotationObserverSettings {
 
 // What the next run of a document annotates with.
 export interface AnnotationRequestInput {
+	// What is annotated; the local catalog and ephemeris by default.
+	readonly kind?: AnnotationKind
 	// Faintest magnitude kept.
 	readonly magnitudeLimit: number
 	// Plate solving job whose solution is used; absent uses the header's WCS.
 	readonly plateSolveJobId?: string
 	// Observation instant set by hand, Unix milliseconds (UTC); absent uses the header's.
 	readonly time?: number
-	// Observer of the solar-system bodies; absent sees them from the Earth's center.
+	// Observer of the solar-system bodies of a local run; absent sees them from the Earth's center.
 	readonly observer?: AnnotationObserverSettings
+	// IAU/MPC code of the observatory of a minor-body search; absent or blank sees the bodies from the Earth's center.
+	readonly observatoryCode?: string
 }
 
-// Returns the request of a run: only the position of an observer is sent, never its name or time zone.
-export function annotationRequest({ magnitudeLimit, plateSolveJobId, time, observer }: AnnotationRequestInput): AnnotationRequest {
+// Returns the request of a run: only the position of the observer of a local run is sent, never its name or time zone,
+// and only the trimmed observatory code of a minor-body search.
+export function annotationRequest({ kind = 'local', magnitudeLimit, plateSolveJobId, time, observer, observatoryCode }: AnnotationRequestInput): AnnotationRequest {
+	const code = observatoryCode?.trim()
+
 	return {
-		kind: 'local',
+		kind,
 		magnitudeLimit,
 		...(plateSolveJobId !== undefined && { plateSolveJobId }),
 		...(time !== undefined && { time }),
-		...(observer && { observer: { latitude: observer.latitude, longitude: observer.longitude, elevation: observer.elevation } }),
+		...(kind === 'local' && observer && { observer: { latitude: observer.latitude, longitude: observer.longitude, elevation: observer.elevation } }),
+		...(kind === 'minorBodies' && code && { observatoryCode: code }),
 	}
 }
 
@@ -225,4 +244,23 @@ export function parseUtcInput(value: string): number | undefined {
 	if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(value)) return undefined
 	const time = Date.parse(`${value}Z`)
 	return Number.isFinite(time) ? time : undefined
+}
+
+// Designation SBDB is searched with for a minor body SkyBoT listed: its number, or its name or provisional designation.
+export function minorBodyQuery(object: Pick<AnnotationObject, 'id'>): string {
+	return object.id.replace(/^skybot:/, '')
+}
+
+// Looks a minor body SkyBoT listed up in SBDB through the sky API, so it can open in the Sky workspace with its SPK-ID:
+// the body when SBDB knows exactly one, or why it cannot be resolved. A match is never guessed from a position.
+export async function resolveMinorBody(object: Pick<AnnotationObject, 'id'>, request: typeof fetch = fetch): Promise<MinorBody | string> {
+	try {
+		const response = await request(`/api/sky/minorbodies/search?q=${encodeURIComponent(minorBodyQuery(object))}`)
+		if (!response.ok) return await responseError(response)
+		const found = (await response.json()) as MinorBodySearchResponse
+		if (found.kind === 'found') return found.body
+		return found.kind === 'ambiguous' ? 'SBDB knows several bodies by this designation.' : found.message
+	} catch {
+		return 'Unable to reach the server'
+	}
 }

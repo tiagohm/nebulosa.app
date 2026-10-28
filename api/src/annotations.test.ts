@@ -2,9 +2,10 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import type { SkybotObject } from 'nebulosa/src/adapters/orbits/skybot'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { toDeg } from 'nebulosa/src/math/units/angle'
-import { annotationCacheKey, type AnnotationEvent, type AnnotationJob, type AnnotationRequest, AnnotationService, type AnnotationSky, createAnnotationRoutes, observationContext } from './annotations'
+import { annotationCacheKey, type AnnotationEvent, type AnnotationJob, type AnnotationRequest, AnnotationService, type AnnotationServiceOptions, type AnnotationSky, createAnnotationRoutes, type MinorBodySearch, minorBodySearchUnavailable, observationContext } from './annotations'
 import { ExternalToolsStore } from './externaltools'
 import { ImageStore } from './images'
 import { PlateSolvingService, type PlateSolveResult } from './platesolving'
@@ -97,14 +98,35 @@ function sky(calls: { code: string; time: number; observer?: unknown }[] = []): 
 }
 
 // Creates a service over its own image store and a real plate solving service, recording its events.
-function setup(annotationSky: AnnotationSky = sky()) {
+function setup(annotationSky: AnnotationSky = sky(), options?: AnnotationServiceOptions) {
 	const images = new ImageStore()
 	const tools = new ExternalToolsStore(join(root, `settings-${files++}`, 'settings.json'))
 	const plateSolving = new PlateSolvingService(images, tools, () => {})
 	const events: AnnotationEvent[] = []
-	const service = new AnnotationService(images, plateSolving, annotationSky, (event) => events.push(event))
+	const service = new AnnotationService(images, plateSolving, annotationSky, (event) => events.push(event), options)
 	return { images, service, events }
 }
+
+// A minor body of a SkyBoT answer at an offset from M 42 in radians, moving 0.024 rad per day (0.001 rad per hour) in
+// right ascension along its parallel.
+function skybotObject(name: string, offset: number, patch: Partial<SkybotObject> = {}): SkybotObject {
+	return { name, class: 'MB>Inner', rightAscension: M42.ra + offset, declination: M42.dec, magnitude: 18, positionError: 1e-6, motionRightAscension: 0.024 * Math.cos(M42.dec), motionDeclination: 0, ...patch }
+}
+
+// Search answering objects and recording its calls; a search that never answers waits for its signal.
+function skybot(objects: readonly SkybotObject[] | 'hang' | Error, calls: { args: Parameters<MinorBodySearch> }[] = []): MinorBodySearch {
+	return (...args) => {
+		calls.push({ args })
+		if (objects === 'hang')
+			return new Promise((_, reject) => {
+				args[5]!.addEventListener('abort', () => reject(new Error('aborted')))
+			})
+		if (objects instanceof Error) return Promise.reject(objects)
+		return Promise.resolve(objects)
+	}
+}
+
+const MINOR: AnnotationRequest = { kind: 'minorBodies', magnitudeLimit: 12 }
 
 const REQUEST: AnnotationRequest = { kind: 'local', magnitudeLimit: 12 }
 
@@ -187,7 +209,7 @@ describe('service', () => {
 		expect(result.field.radius).toBeCloseTo((Math.SQRT2 * 0.5 * Math.PI) / 180, 4)
 		expect(result.objects.map((e) => e.id)).toEqual(['catalog:1001879'])
 		expect(result.objects[0]).toMatchObject({ ref: { kind: 'catalog', id: 1001879 }, layer: 'deepSky', name: 'Great Orion Nebula', typeName: 'HII Region', magnitude: 4 })
-		expect(result.counts).toEqual({ star: 0, deepSky: 1, solarSystem: 0 })
+		expect(result.counts).toEqual({ star: 0, deepSky: 1, solarSystem: 0, minorBody: 0 })
 		expect(result.constellations.lines).toHaveLength(1)
 		expect(result.constellations.labels.map((e) => e.code)).toEqual(['ORI'])
 		expect(result.observation).toBeUndefined()
@@ -298,6 +320,81 @@ describe('service', () => {
 		images.close(info.id)
 		expect(service.result(jobId)).toBeUndefined()
 		expect(service.results(info.id)).toBeEmpty()
+	})
+})
+
+describe('minor bodies', () => {
+	// An image of M 42 with a known start and a one-hour exposure.
+	const exposed = () => writeImage([...wcs(), text('DATE-OBS', '2026-10-27T03:00:00'), card('EXPTIME', 3600)])
+
+	test('searches the cone at the middle of the exposure and keeps the bodies on the image, brightest first', async () => {
+		const calls: { args: Parameters<MinorBodySearch> }[] = []
+		const { images, service, events } = setup(sky(), { skybot: skybot([skybotObject('far', 0.1), skybotObject('2003 QW37', 0.001, { number: 172438, magnitude: 20 }), skybotObject('2017 YJ66', -0.001)], calls) })
+		const info = await images.open(writeImage([...wcs(), text('DATE-OBS', '2026-10-27T03:00:00'), card('EXPTIME', 3600)]))
+		const result = await annotate(service, events, info.id, { ...MINOR, observatoryCode: 'I41' })
+		const [time, ra, dec, radius, options, signal] = calls[0].args
+
+		expect(time).toBe(Date.UTC(2026, 9, 27, 3, 30))
+		expect(ra).toBeCloseTo(M42.ra, 6)
+		expect(dec).toBeCloseTo(M42.dec, 6)
+		expect(radius).toBeGreaterThan(result.field.radius)
+		expect(options).toEqual({ observer: 'I41', objects: { asteroids: true, planets: false, comets: true } })
+		expect(signal).toBeInstanceOf(AbortSignal)
+		expect(result.objects.map((e) => e.id)).toEqual(['skybot:2017 YJ66', 'skybot:172438'])
+		expect(result.objects[1]).toMatchObject({ layer: 'minorBody', name: '(172438) 2003 QW37', designations: ['2003 QW37'], typeName: 'MB>Inner', magnitude: 20, positionError: 1e-6 })
+		expect(result.objects[1].ref).toBeUndefined()
+		expect(result.objects[1].motion!.start[0]).toBeCloseTo(M42.ra + 0.001 - 0.0005, 9)
+		expect(result.objects[1].motion!.end[0]).toBeCloseTo(M42.ra + 0.001 + 0.0005, 9)
+		expect(result.counts).toEqual({ star: 0, deepSky: 0, solarSystem: 0, minorBody: 2 })
+		expect(result.observation).toMatchObject({ center: 'topocentric', observatoryCode: 'I41' })
+		expect(result.constellations).toEqual({ lines: [], labels: [] })
+	})
+
+	test('sees the bodies from the center of the Earth without an observatory', async () => {
+		const calls: { args: Parameters<MinorBodySearch> }[] = []
+		const { images, service, events } = setup(sky(), { skybot: skybot([], calls) })
+		const info = await images.open(exposed())
+		const result = await annotate(service, events, info.id, MINOR)
+
+		expect(calls[0].args[4]?.observer).toBe('500')
+		expect(result.observation?.center).toBe('geocentric')
+		expect(result.warnings.some((e) => e.includes('center of the Earth'))).toBeTrue()
+	})
+
+	test('refuses a search without a time, outside the epochs of SkyBoT, or wider than its cone', async () => {
+		const { images, service } = setup(sky(), { skybot: skybot([]) })
+		const timeless = await images.open(writeImage(wcs()))
+		const exposedImage = await images.open(exposed())
+
+		expect(service.submit(timeless.id, MINOR)).toMatchObject({ status: 'contextUnavailable', error: expect.stringContaining('time is unknown') })
+		expect(service.submit(exposedImage.id, { ...MINOR, time: Date.UTC(2100, 0, 1) })).toMatchObject({ status: 'contextUnavailable', error: expect.stringContaining('1889') })
+		expect(minorBodySearchUnavailable({ rightAscension: 0, declination: 0, radius: 0.2, scale: 1e-5 }, { time: Date.UTC(2026, 0, 1), origin: 'request', approximate: false, center: 'geocentric' })).toContain('10°')
+	})
+
+	test('a failure or a timeout of SkyBoT fails the search alone', async () => {
+		const failing = setup(sky(), { skybot: skybot(new Error('HTTP 500')) })
+		const info = await failing.images.open(exposed())
+		const local = await annotate(failing.service, failing.events, info.id)
+		const failed = submit(failing.service, info.id, MINOR)
+
+		expect(await ended(failing.events, failed.jobId)).toMatchObject({ state: 'failed', code: 'providerFailed', error: expect.stringContaining('HTTP 500') })
+		expect(failing.service.result(local.jobId)).toBe(local)
+
+		const slow = setup(sky(), { skybot: skybot('hang'), skybotTimeout: 50 })
+		const image = await slow.images.open(exposed())
+		const timedOut = submit(slow.service, image.id, MINOR)
+		expect(await ended(slow.events, timedOut.jobId)).toMatchObject({ state: 'failed', code: 'timeout' })
+	})
+
+	test('a running search does not hold the local annotation back, and cancelling it aborts the request', async () => {
+		const { images, service, events } = setup(sky(), { skybot: skybot('hang') })
+		const info = await images.open(exposed())
+		const search = submit(service, info.id, MINOR)
+		await Bun.sleep(10)
+
+		expect((await annotate(service, events, info.id)).counts.deepSky).toBe(1)
+		expect(service.cancel(search.jobId)).toBeTrue()
+		expect(await ended(events, search.jobId)).toMatchObject({ state: 'cancelled', code: 'cancelled' })
 	})
 })
 

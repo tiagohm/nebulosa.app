@@ -3,7 +3,7 @@ import { type KeyboardEvent, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { AnnotationOverlay, shownAnnotations } from '../annotations/AnnotationOverlay'
 import { annotationMatchesWcs, annotationPlateSolveJobId } from '../annotations/annotations'
-import { pickAnnotation, projectAnnotations } from '../annotations/geometry'
+import { mergeProjections, pickAnnotation, projectAnnotations } from '../annotations/geometry'
 import { useAnnotationResult } from '../annotations/useAnnotationResult'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusRuntime } from '../camera/autofocus'
 import { cameraKey, captureCount, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState } from '../camera/capture'
@@ -99,10 +99,17 @@ export function ImagesWorkspace() {
 	const plateSolution = usePlateSolution(document?.info?.id, view?.plateSolving.selected)
 	const { solution } = plateSolution
 	const { result: annotated } = useAnnotationResult(document?.info?.id)
-	const projection = useMemo(() => annotated && projectAnnotations(annotated), [annotated])
-	// The annotation is drawn only with the WCS it was computed with, so another solution shown hides it.
-	const annotation = projection && annotated && annotationMatchesWcs(annotated, annotationPlateSolveJobId(plateSolution)) ? projection : undefined
-	const selectedAnnotation = annotated && view?.annotation.selected?.jobId === annotated.jobId ? view.annotation.selected.id : undefined
+	const { result: searched } = useAnnotationResult(document?.info?.id, 'minorBodies')
+	const localProjection = useMemo(() => annotated && projectAnnotations(annotated), [annotated])
+	const minorProjection = useMemo(() => searched && projectAnnotations(searched), [searched])
+	// The annotation and the minor-body search are drawn only with the WCS they were computed with, so another solution
+	// shown hides them.
+	const annotationJobId = annotationPlateSolveJobId(plateSolution)
+	const annotationResults = [annotated, searched].filter((result) => result !== undefined && annotationMatchesWcs(result, annotationJobId))
+	const localShown = annotated !== undefined && annotationResults.includes(annotated)
+	const minorShown = searched !== undefined && annotationResults.includes(searched)
+	const annotation = useMemo(() => mergeProjections(localShown ? localProjection : undefined, minorShown ? minorProjection : undefined), [localShown, localProjection, minorShown, minorProjection])
+	const selectedAnnotation = annotationResults.some((result) => result?.jobId === view?.annotation.selected?.jobId) ? view?.annotation.selected?.id : undefined
 	const wcs = view?.plateSolving.overlay ? solution : undefined
 	const camera = useCameraOperationContext(document)
 	const guide = useTppaOverlay(document)
@@ -181,10 +188,11 @@ export function ImagesWorkspace() {
 												const index = pickStreak(lines, point, STREAK_PICK_RADIUS / overlay.scale, selectedStreak)
 												selectStreak(imagesState, document.key, index === undefined ? undefined : { jobId: lines.jobId, index })
 											}
-										: annotation && annotated && view && document && tool === 'annotation'
+										: annotation && view && document && tool === 'annotation'
 											? (point, overlay) => {
-													const index = pickAnnotation(shownAnnotations(annotation, view.annotation), point, ANNOTATION_PICK_RADIUS / overlay.scale)
-													selectAnnotation(imagesState, document.key, index === undefined ? undefined : { jobId: annotated.jobId, id: annotated.objects[index].id })
+													const id = pickAnnotation(shownAnnotations(annotation, view.annotation), point, ANNOTATION_PICK_RADIUS / overlay.scale)
+													const owner = id === undefined ? undefined : annotationResults.find((result) => result?.objects.some((object) => object.id === id))
+													selectAnnotation(imagesState, document.key, owner && id !== undefined ? { jobId: owner.jobId, id } : undefined)
 												}
 											: undefined
 						}

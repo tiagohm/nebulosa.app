@@ -189,6 +189,9 @@ describe('merging', () => {
 
 		expect(merged.objects.map((e) => e.object.id)).toEqual(['skybot:1', 'catalog:1'])
 		expect(merged.constellations).toBe(local.constellations)
+		// The constellation figures are clipped to the image the projections share.
+		expect([merged.width, merged.height]).toEqual([local.width, local.height])
+		expect(local.width).toBeGreaterThan(0)
 		expect(merged.objects[0].uncertainty).toBeCloseTo(2, 9)
 		expect(mergeProjections(undefined, local)).toBe(local)
 		expect(mergeProjections()).toBeUndefined()

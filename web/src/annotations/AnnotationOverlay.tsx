@@ -1,15 +1,17 @@
 import type { AnnotationLayer, AnnotationObject } from 'api'
+import { useId } from 'react'
 import type { ImageAnnotationState } from '../images/images'
 import type { OverlayView } from '../viewer/transform'
 import { type AnnotationProjection, type LabelCandidate, layoutLabels, type ProjectedAnnotation } from './geometry'
 
-// Annotation of an image over the shared image viewer: the constellation figures and names, the outline or marker of
-// each deep-sky object, a marker for each star, Sun, Moon, planet, satellite, asteroid, and comet with the predicted
-// motion of a body during the exposure and the uncertainty of its position, and the labels the layout places, with the
-// selected object highlighted. It is a pure function of projections computed once per result and of the document's
-// annotation state, and draws in image pixel coordinates, so the viewer's zoom and pan move it while strokes, markers,
-// and labels keep their size on screen; only the objects in view are drawn, and only the labels are laid out again when
-// the view changes. The caller shows it only over the image the results annotated, with the WCS they were computed with.
+// Annotation of an image over the shared image viewer: the constellation figures (clipped to the image) and names, the
+// outline or marker of each deep-sky object, a marker for each star, Sun, Moon, planet, satellite, asteroid, and comet
+// with the predicted motion of a body during the exposure and the uncertainty of its position, and the labels the
+// layout places, with the selected object highlighted. It is a pure function of projections computed once per result
+// and of the document's annotation state, and draws in image pixel coordinates, so the viewer's zoom and pan move it
+// while strokes, markers, and labels keep their size on screen; only the objects in view are drawn, and only the labels
+// are laid out again when the view changes. The caller shows it only over the image the results annotated, with the WCS
+// they were computed with.
 
 // Size of the labels, in screen pixels.
 const LABEL_SIZE = 11
@@ -69,6 +71,8 @@ export function shownAnnotations(projection: AnnotationProjection, state: ImageA
 
 // Annotation of a result.
 export function AnnotationOverlay({ projection, view, state, selected }: AnnotationOverlayProps) {
+	// The constellation figures reach far beyond the field, so they are clipped to the image.
+	const clipId = useId()
 	const unit = 1 / view.scale
 	const { visible } = view
 	const shown = shownAnnotations(projection, state).filter(({ anchor, extent }) => {
@@ -87,8 +91,11 @@ export function AnnotationOverlay({ projection, view, state, selected }: Annotat
 
 	return (
 		<g fill="none">
+			<clipPath id={clipId}>
+				<rect width={projection.width} height={projection.height} />
+			</clipPath>
 			{state.layers.constellations && (
-				<g stroke="var(--color-ink-300)" strokeOpacity={0.6} strokeWidth={1}>
+				<g stroke="var(--color-ink-300)" strokeOpacity={0.6} strokeWidth={1} clipPath={`url(#${clipId})`}>
 					{projection.constellations.map((path, index) => (
 						<path key={index} d={path} vectorEffect="non-scaling-stroke" />
 					))}

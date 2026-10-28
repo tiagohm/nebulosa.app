@@ -68,6 +68,10 @@ export interface AnnotationProjection {
 	readonly constellations: readonly string[]
 	// Constellation labels on the image.
 	readonly labels: readonly ProjectedConstellationLabel[]
+	// Width of the image, in pixels; the image spans 0 to width in viewer coordinates.
+	readonly width: number
+	// Height of the image, in pixels; the image spans 0 to height in viewer coordinates.
+	readonly height: number
 }
 
 // Returns the position at an angular distance and bearing from a sky position, all angles in radians, the bearing from
@@ -217,7 +221,7 @@ export function projectAnnotations(result: Pick<AnnotationResult, 'solution' | '
 		if (point && point.x >= 0 && point.x <= width && point.y >= 0 && point.y <= height) labels.push({ name: label.name, point })
 	}
 
-	return { objects, constellations, labels }
+	return { objects, constellations, labels, width, height }
 }
 
 // A label to place next to a marker.
@@ -381,5 +385,5 @@ export function mergeProjections(...projections: readonly (AnnotationProjection 
 	const shown = projections.filter((e) => e !== undefined)
 	if (shown.length <= 1) return shown[0]
 	const withConstellations = shown.find((e) => e.constellations.length > 0 || e.labels.length > 0) ?? shown[0]
-	return { objects: shown.flatMap((e) => e.objects), constellations: withConstellations.constellations, labels: withConstellations.labels }
+	return { objects: shown.flatMap((e) => e.objects), constellations: withConstellations.constellations, labels: withConstellations.labels, width: shown[0].width, height: shown[0].height }
 }

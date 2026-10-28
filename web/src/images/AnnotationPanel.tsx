@@ -31,7 +31,7 @@ import type { ImageToolPanelProps } from './tools'
 // the objects in the field, and the object selected in the list or the viewer, which opens in the Sky workspace. The
 // WCS is the plate solution shown when it is a completed job of the image, else the WCS of its header; nothing is
 // solved implicitly, and the date and site always come from the image. Run Analysis is the only action that queries the
-// catalog, and Find Solar System Bodies the only one that asks the SkyBoT service for the solar-system objects:
+// catalog, and Find the only one that asks the SkyBoT service for the solar-system objects:
 // showing, hiding, or restyling the overlay never does. A result always belongs to the image it annotated.
 
 // Text shown for a value the result does not have.
@@ -248,7 +248,7 @@ interface SolarSystemBodiesProps {
 	readonly imageId: string
 	// Why no search can run yet.
 	readonly unavailable?: string
-	// Request Find Solar System Bodies sends, with the groups it lists.
+	// Request Find sends, with the groups it lists.
 	readonly request: AnnotationRequest
 	// Observation date and site the image header gives, once fetched.
 	readonly context?: AnnotationImageContext
@@ -292,7 +292,7 @@ function SolarSystemBodies({ documentKey, imageId, request, context, job, result
 						void runAnnotation(annotationsState, imageId, request)
 					}}
 				>
-					Find Solar System Bodies
+					Find
 				</Button>
 				<Button variant="secondary" disabled={!active || !job} onClick={() => job && void cancelAnnotation(job.jobId)}>
 					Cancel

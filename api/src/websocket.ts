@@ -1,4 +1,5 @@
 import type { ServerWebSocket, WebSocketHandler } from 'bun'
+import type { AnnotationEvent } from './annotations'
 import type { AutoFocusEvent } from './autofocus'
 import type { CaptureFrameEvent } from './captureframes'
 import type { CaptureEvent } from './captures'
@@ -30,7 +31,7 @@ import type { TppaEvent } from './tppa'
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the operation events
 // of the operation registry, the events of the capture, Auto Focus, TPPA, mount nudge, mount remote control, and dome manual rotation services,
 // the captured frames of the frame registry, the guiding sessions, the changes of the external program settings and of the focuser backlash
-// compensations, the star detection, streak detection, plate solving, and image processing jobs, the created notifications, and the INDI device directory
+// compensations, the star detection, streak detection, plate solving, annotation, and image processing jobs, the created notifications, and the INDI device directory
 // and property streams.
 export type ServerEvent =
 	| ConnectionRegistryEvent
@@ -48,6 +49,7 @@ export type ServerEvent =
 	| StarDetectionEvent
 	| StreakDetectionEvent
 	| PlateSolvingEvent
+	| AnnotationEvent
 	| ImageProcessingEvent
 	| FocuserBacklashEvent
 	| GuidingServerEvent

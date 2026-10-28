@@ -1,3 +1,4 @@
+import { AnnotationService, createAnnotationRoutes } from './annotations'
 import { AutoFocusSessions, createAutoFocusRoutes } from './autofocus'
 import { CameraCommands, createCameraRoutes } from './cameras'
 import { CaptureFrameRegistry, createCaptureFrameRoutes, DEFAULT_CAPTURE_FRAMES_FILE } from './captureframes'
@@ -28,7 +29,7 @@ import { NotificationClassifier } from './notifications.rules'
 import { createOperationRoutes, OperationRegistry } from './operations'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { createRotatorRoutes, RotatorCommands } from './rotators'
-import { skyLocator, skyRoutes } from './sky'
+import { annotationSky, skyLocator, skyRoutes } from './sky'
 import { createSolarEclipseRoutes, SolarEclipseService } from './solareclipses'
 import { createStarDetectionRoutes, StarDetectionService } from './stars'
 import { createStreakDetectionRoutes, StreakDetectionService } from './streaks'
@@ -217,6 +218,25 @@ export type {
 	StarDetectorProvider,
 	StarMeasurement,
 } from './stars'
+export type {
+	AnnotationCounts,
+	AnnotationErrorCode,
+	AnnotationEvent,
+	AnnotationField,
+	AnnotationJob,
+	AnnotationJobState,
+	AnnotationKind,
+	AnnotationLayer,
+	AnnotationMotion,
+	AnnotationObject,
+	AnnotationObservation,
+	AnnotationRequest,
+	AnnotationResult,
+	AnnotationSnapshot,
+	AnnotationSummary,
+	AnnotationTimeOrigin,
+	AnnotationWcs,
+} from './annotations'
 export type { StreakContextSources, StreakDetectionErrorCode, StreakDetectionEvent, StreakDetectionJob, StreakDetectionJobState, StreakDetectionRequest, StreakDetectionResult, StreakDetectionSnapshot, StreakDetectionSummary, StreakDetectorSettings } from './streaks'
 export type { PlateSolutions, PlateSolveErrorCode, PlateSolveJob, PlateSolveJobState, PlateSolveOrigin, PlateSolveOutcome, PlateSolveRemote, PlateSolveRequest, PlateSolveResult, PlateSolverProvider, PlateSolverSettings, PlateSolveSnapshot, PlateSolveStage, PlateSolveSummary, PlateSolvingEvent } from './platesolving'
 export type { PlateSolveHint, PlateSolveHints, PlateSolveHintSource, PlateSolveStrategy, ResolvedPlateSolveHints } from './platesolving.hints'
@@ -363,6 +383,9 @@ const plateSolving = new PlateSolvingService(images, externalTools, broadcast)
 // Streak detection of the image documents, classified with the solutions and stars already found for each image.
 const streaks = new StreakDetectionService(images, plateSolving, stars, broadcast)
 
+// Annotation of the image documents with the sky catalog and the local ephemeris, through the WCS of each image.
+const annotations = new AnnotationService(images, plateSolving, annotationSky, broadcast)
+
 // Image processing pipelines of the image documents, each adopting its result as a new derived document.
 const imageProcessing = new ImageProcessingService(images, broadcast)
 
@@ -441,6 +464,7 @@ export const routes = {
 	...createStarDetectionRoutes(stars),
 	...createPlateSolvingRoutes(plateSolving),
 	...createStreakDetectionRoutes(streaks),
+	...createAnnotationRoutes(annotations),
 	...createCaptureFrameRoutes(captureFrames),
 	...skyRoutes,
 	...createLunarEclipseRoutes(lunarEclipses),

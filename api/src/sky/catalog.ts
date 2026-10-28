@@ -6,7 +6,7 @@ import { StellariumObjectType } from 'nebulosa/src/catalogs/stars/stellarium/neb
 import { J2000 } from 'nebulosa/src/core/constants'
 import type { CatalogSourceStar } from 'nebulosa/src/devices/indi/simulator/types'
 import { type Mat3, matMulVec } from 'nebulosa/src/math/linear-algebra/mat3'
-import type { MutVec3 } from 'nebulosa/src/math/linear-algebra/vec3'
+import { type MutVec3, type Vec3, vecAngle, vecCross, vecDot, vecLength, vecMinus, vecMulScalar } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle, toArcmin } from 'nebulosa/src/math/units/angle'
 import { constellationOfLabel } from './constellations'
 import { CATALOG, constellationAbbreviation, displayPriority, formatDesignation, parseDesignationQuery } from './designations'
@@ -15,7 +15,8 @@ import type { SkyCatalogObject, SkyConstellations, SkyDeepSkyData, SkySearchResu
 
 // Queries of the sky catalog database: local search by designation and name, the catalog data of one
 // object, the columnar star and deep-sky data the star map renders, with positions referred to the
-// true equator and equinox of the requested instant, and the J2000 stars the camera simulator renders.
+// true equator and equinox of the requested instant, the J2000 stars the camera simulator renders, and the J2000 objects
+// and constellation figures of a field the image annotation projects.
 // Every function takes the database, so tests can pass an in-memory one built with createSkyCatalogSchema.
 
 // Most results a search returns.
@@ -446,6 +447,183 @@ export function renderDeepSky(db: Database, time: number, magnitudeLimit: number
 	return data
 }
 
+// A star or deep-sky object of the catalog in a field, as the image annotation projects it.
+export interface FieldObject {
+	// Catalog id.
+	readonly id: number
+	// Whether it is a star or a deep-sky object.
+	readonly category: 'star' | 'deepSky'
+	// Stellarium object type.
+	readonly type: number
+	// Name of the object type.
+	readonly typeName: string
+	// Display name: the proper name or the preferred designation.
+	readonly name: string
+	// Every other designation, most relevant first.
+	readonly designations: readonly string[]
+	// Astrometric right ascension (ICRS, J2000 equator) in radians, at the epoch of the query for a star.
+	readonly rightAscension: number
+	// Astrometric declination in radians, at the epoch of the query for a star.
+	readonly declination: number
+	// Visual magnitude; absent when unknown.
+	readonly magnitude?: number
+	// Angular size along the major axis in radians; absent when unknown.
+	readonly majorAxis?: number
+	// Angular size along the minor axis in radians; absent when unknown.
+	readonly minorAxis?: number
+	// Position angle of the major axis from north through east in radians; absent when unknown.
+	readonly orientation?: number
+}
+
+// Field of a catalog query: a cone around a J2000 center and the candidates it keeps.
+export interface FieldQuery {
+	// Right ascension of the center (ICRS) in radians.
+	readonly rightAscension: number
+	// Declination of the center in radians.
+	readonly declination: number
+	// Radius of the cone in radians; a deep-sky object is kept when any part of its major axis reaches it.
+	readonly radius: number
+	// Instant the star positions are moved to by their proper motion, Unix milliseconds (UTC); J2000 when absent.
+	readonly time?: number
+	// Faintest magnitude kept; deep-sky objects of a classic visual catalog are kept without a magnitude.
+	readonly magnitudeLimit: number
+	// Most stars kept, the brightest ones.
+	readonly maxStars: number
+	// Most deep-sky objects kept, the brightest ones, those without a magnitude last.
+	readonly maxDeepSky: number
+}
+
+// Objects of the catalog in a field.
+export interface FieldObjects {
+	// Stars, brightest first.
+	readonly stars: readonly FieldObject[]
+	// Deep-sky objects, brightest first, those without a magnitude last.
+	readonly deepSky: readonly FieldObject[]
+	// Whether maxStars or maxDeepSky left objects of the field out.
+	readonly truncated: boolean
+}
+
+// J2000 data of a deep-sky object, read once per database.
+interface DeepSkyRow {
+	// Catalog id.
+	readonly id: number
+	// Stellarium object type.
+	readonly type: number
+	// Right ascension at J2000 in radians.
+	readonly rightAscension: number
+	// Declination at J2000 in radians.
+	readonly declination: number
+	// Visual magnitude, or null.
+	readonly magnitude: number | null
+	// Major axis in radians, or null.
+	readonly majorAxis: number | null
+	// Minor axis in radians, or null.
+	readonly minorAxis: number | null
+	// Position angle from north through east in radians, or null.
+	readonly orientation: number | null
+	// Whether it belongs to one of RENDERED_UNKNOWN_MAGNITUDE_CATALOGS, so it is kept without a magnitude.
+	readonly classic: boolean
+}
+
+// Deep-sky rows by database, read once like STAR_ROWS.
+const DEEP_SKY_ROWS = new WeakMap<Database, readonly DeepSkyRow[]>()
+
+// Returns the deep-sky rows of a database, brightest first, those without a magnitude last.
+function deepSkyRows(db: Database): readonly DeepSkyRow[] {
+	const cached = DEEP_SKY_ROWS.get(db)
+	if (cached) return cached
+
+	const classic = new Set(
+		db
+			.query<{ objectId: number }, number[]>(`SELECT DISTINCT objectId FROM names WHERE type IN (${placeholders(RENDERED_UNKNOWN_MAGNITUDE_CATALOGS.length)})`)
+			.all(...RENDERED_UNKNOWN_MAGNITUDE_CATALOGS)
+			.map((e) => e.objectId),
+	)
+	const rows = db.query<Omit<DeepSkyRow, 'classic'> & { classic: boolean }, [number]>('SELECT id, type, rightAscension, declination, magnitude, majorAxis, minorAxis, orientation, 0 AS classic FROM objects WHERE type <> ? ORDER BY magnitude IS NULL, magnitude').all(StellariumObjectType.STAR)
+
+	for (const row of rows) row.classic = classic.has(row.id)
+
+	DEEP_SKY_ROWS.set(db, rows)
+	return rows
+}
+
+// Returns the stars and deep-sky objects of the catalog in a field, with their names. Stars are moved from J2000 by
+// their proper motion to the query's instant (linearly, as renderStars does) but stay on the J2000 equator, the frame of
+// a plate solution; deep-sky objects keep their catalog position. The cone is scanned in memory over the rows read once
+// per database, which takes a few milliseconds for the whole catalog.
+export function fieldObjects(db: Database, query: FieldQuery): FieldObjects {
+	const epoch = query.time === undefined ? undefined : timeUnix(query.time / 1000, true)
+	const years = epoch ? (epoch.day - J2000 + epoch.fraction) / DAYS_PER_JULIAN_YEAR : 0
+	const sinDeclination = Math.sin(query.declination)
+	const cosDeclination = Math.cos(query.declination)
+	// Cosine of the angular distance between the center and a position in radians.
+	const cosSeparation = (rightAscension: number, declination: number) => sinDeclination * Math.sin(declination) + cosDeclination * Math.cos(declination) * Math.cos(rightAscension - query.rightAscension)
+	const cosRadius = Math.cos(query.radius)
+	const stars: { readonly row: StarRow; readonly rightAscension: number; readonly declination: number }[] = []
+	const deepSky: DeepSkyRow[] = []
+	let truncated = false
+
+	for (const row of starRows(db)) {
+		if (row.magnitude > query.magnitudeLimit) break
+
+		const rightAscension = normalizeAngle(row.rightAscension + row.pmRA * years)
+		const declination = row.declination + row.pmDEC * years
+		if (cosSeparation(rightAscension, declination) < cosRadius) continue
+		if (stars.length >= query.maxStars) {
+			truncated = true
+			break
+		}
+
+		stars.push({ row, rightAscension, declination })
+	}
+
+	for (const row of deepSkyRows(db)) {
+		if (row.magnitude === null ? !row.classic : row.magnitude > query.magnitudeLimit) continue
+		if (cosSeparation(row.rightAscension, row.declination) < Math.cos(Math.min(Math.PI, query.radius + (row.majorAxis ?? 0) / 2))) continue
+		if (deepSky.length >= query.maxDeepSky) {
+			truncated = true
+			break
+		}
+
+		deepSky.push(row)
+	}
+
+	const names = namesOf(db, [...stars.map((e) => e.row.id), ...deepSky.map((e) => e.id)])
+	const constellations = new Map(
+		db
+			.query<{ id: number; constellation: number }, number[]>(`SELECT id, constellation FROM objects WHERE id IN (${placeholders(stars.length + deepSky.length)})`)
+			.all(...stars.map((e) => e.row.id), ...deepSky.map((e) => e.id))
+			.map((e) => [e.id, e.constellation]),
+	)
+	// Name and designations of an object.
+	const named = (id: number) => objectNames(names.get(id) ?? [], constellations.get(id) ?? 0)
+
+	return {
+		stars: stars.map(({ row, rightAscension, declination }) => {
+			const { name, designations } = named(row.id)
+			return { id: row.id, category: 'star', type: StellariumObjectType.STAR, typeName: objectTypeName(StellariumObjectType.STAR), name, designations, rightAscension, declination, magnitude: row.magnitude }
+		}),
+		deepSky: deepSky.map((row) => {
+			const { name, designations } = named(row.id)
+			return {
+				id: row.id,
+				category: 'deepSky',
+				type: row.type,
+				typeName: objectTypeName(row.type),
+				name,
+				designations,
+				rightAscension: row.rightAscension,
+				declination: row.declination,
+				magnitude: row.magnitude ?? undefined,
+				majorAxis: row.majorAxis ?? undefined,
+				minorAxis: row.minorAxis ?? undefined,
+				orientation: row.orientation ?? undefined,
+			}
+		}),
+		truncated,
+	}
+}
+
 // J2000 constellation figures, boundaries, and labels, as stored in api/data.
 export interface ConstellationSource {
 	// Stick-figure polylines of [right ascension, declination] vertices in radians.
@@ -469,5 +647,46 @@ export function renderConstellations(source: ConstellationSource, time: number):
 			const [ra, dec] = equator.convert(rightAscension, declination)
 			return { name, code: constellationOfLabel(name) ?? '', rightAscension: roundAngle(ra), declination: roundAngle(dec) }
 		}),
+	}
+}
+
+// Constellation figures and labels of a field, on the J2000 equator.
+export interface FieldConstellations {
+	// Stick-figure polylines with a segment reaching the field, whole, as [right ascension in [0, 2π), declination]
+	// vertices in radians.
+	readonly lines: readonly (readonly (readonly [number, number])[])[]
+	// Labels at the constellation centers inside the field, with the upper-case IAU code of their constellation (empty
+	// when unknown).
+	readonly labels: readonly { readonly name: string; readonly code: string; readonly rightAscension: number; readonly declination: number }[]
+}
+
+// Angular distance in radians from the unit vector c to the shorter great-circle arc between the unit vectors a and b.
+function arcDistance(c: Vec3, a: Vec3, b: Vec3) {
+	const ends = Math.min(vecAngle(c, a), vecAngle(c, b))
+	const normal = vecCross(a, b)
+	const length = vecLength(normal)
+	// Coincident or antipodal ends define no great circle.
+	if (length < 1e-12) return ends
+
+	// The point of the great circle closest to c lies inside the arc when it is between a and b along the normal.
+	const offset = vecDot(c, normal) / length
+	const closest = vecMinus(c, vecMulScalar(normal, offset / length))
+	if (vecDot(vecCross(a, closest), normal) >= 0 && vecDot(vecCross(closest, b), normal) >= 0) return Math.asin(Math.min(1, Math.abs(offset)))
+	return ends
+}
+
+// Returns the constellation figures with a segment within `radius` of a J2000 center, and the labels inside that cone,
+// all angles in radians. Figures are kept whole: the image annotation projects and clips them.
+export function fieldConstellations(source: ConstellationSource, rightAscension: number, declination: number, radius: number): FieldConstellations {
+	const center = eraS2c(rightAscension, declination)
+	const vertex = ([ra, dec]: readonly number[]) => [normalizeAngle(ra), dec] as const
+	const lines = source.lines.filter((line) => {
+		for (let i = 1; i < line.length; i++) if (arcDistance(center, eraS2c(line[i - 1][0], line[i - 1][1]), eraS2c(line[i][0], line[i][1])) <= radius) return true
+		return false
+	})
+
+	return {
+		lines: lines.map((line) => line.map(vertex)),
+		labels: source.labels.filter((e) => vecAngle(center, eraS2c(e.rightAscension, e.declination)) <= radius).map(({ name, rightAscension, declination }) => ({ name, code: constellationOfLabel(name) ?? '', rightAscension: normalizeAngle(rightAscension), declination })),
 	}
 }

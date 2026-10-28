@@ -3,8 +3,9 @@ import boundaries from '../../data/constellation.boundaries.json'
 import labels from '../../data/constellation.labels.json'
 import lines from '../../data/constellation.lines.json'
 import catalog from '../../data/sky.catalog.db' with { embed: 'true', type: 'sqlite' }
+import type { AnnotationSky } from '../annotations'
 import { createActiveRegionRoutes, SolarActiveRegions } from './activeregions'
-import { type ConstellationSource, catalogStars } from './catalog'
+import { type ConstellationSource, catalogStars, fieldConstellations, fieldObjects } from './catalog'
 import { SkyEphemeris } from './ephemeris'
 import { MinorBodies } from './minorbodies'
 import { createMoonAlmanacRoutes, MoonAlmanac } from './moon'
@@ -24,6 +25,14 @@ const constellations: ConstellationSource = { lines, labels, boundaries }
 
 // Services shared by the sky routes and the sky locator.
 const services: SkyServices = { catalog, constellations, ephemeris: new SkyEphemeris(), minorBodies: new MinorBodies() }
+
+// Sky data of the image annotation: the J2000 objects and figures of a field, and the local positions of the major
+// bodies from the same ephemeris as the sky routes.
+export const annotationSky: AnnotationSky = {
+	objects: (query) => fieldObjects(catalog, query),
+	constellations: (rightAscension, declination, radius) => fieldConstellations(constellations, rightAscension, declination, radius),
+	body: (code, time, observer) => services.ephemeris.position({ type: 'body', code }, { time, observer, mode: 'fast' }),
+}
 
 // Routes of the sky API, with those of the Sun and Moon Inspectors.
 export const skyRoutes = { ...createSkyRoutes(services), ...createSunAlmanacRoutes(new SunAlmanac()), ...createMoonAlmanacRoutes(new MoonAlmanac()), ...createSolarImageRoutes(new SolarImages()), ...createActiveRegionRoutes(new SolarActiveRegions()) }

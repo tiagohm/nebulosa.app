@@ -5,6 +5,7 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./sky/designations": "./src/sky/designations.ts",
+		"./sky/moon.features": "./src/sky/moon.features.ts",
 		"./sky/schema": "./src/sky/schema.ts"
 	},
 	"dependencies": {

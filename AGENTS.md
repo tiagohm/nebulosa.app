@@ -44,7 +44,7 @@ The graph is an index, not source authority. Read the exact implementation befor
 - `api/`: the Bun backend. `src/index.ts` is the package entry point and exports the HTTP `routes`.
 - `web/`: the React frontend. `index.html` is the HTML entry point and is exported as `web/index.html`; sources live in `src/` and static files in `assets/`.
 - `app/`: composes `api` and `web` into one `Bun.serve` server (`src/main.ts`), and builds the executable (`build.ts`, `tailwind.plugin.ts`).
-- `bin/`: development scripts that generate data files, such as `src/sky.catalog.ts`, which writes the sky catalog database `api/data/sky.catalog.db` embedded by `api`.
+- `bin/`: development scripts that generate data files, such as `src/sky.catalog.ts`, which writes the sky catalog database `api/data/sky.catalog.db` embedded by `api`, and `src/moon.assets.ts`, which writes the Moon color maps and surface feature catalog `web/assets/moon/` bundled by `web`.
 
 Preserve these boundaries:
 
@@ -70,6 +70,7 @@ Run every command from the repository root.
 
 - Install: `bun install` (commit `bun.lock`; CI installs with `--frozen-lockfile`)
 - Sky catalog: `bun make:catalog` (add `--force` to regenerate) after installing and whenever its schema changes. It downloads the source files and queries SIMBAD; the generated `api/data/sky.catalog.db` is not committed, and `bun dev`, `bun start`, `bun compile`, and `bun test` need it. `bun make:catalog --empty` writes the schema without downloading or querying anything, which is enough for tests.
+- Moon assets: `bun make:moon` (add `--force` to regenerate) after installing. It downloads the NASA color maps and the USGS feature archive once into `bin/data/moon`; the generated `web/assets/moon/` is not committed, and `bun dev`, `bun start`, and `bun compile` need it. `bun make:moon --empty` writes placeholders without downloading anything, which is enough for tests.
 - Development server with hot reload and frontend HMR: `bun dev`
 - Production-mode server without compiling: `bun start`
 - Standalone executable: `bun compile`, written to `.dist/nebulosa.exe` on Windows and `.dist/nebulosa` elsewhere

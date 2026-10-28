@@ -16,6 +16,7 @@
 		"lint": "bun lint --disable-nested-config",
 		"fmt": "bun fmt --disable-nested-config",
 		"make:catalog": "bun run bin/src/sky.catalog.ts",
+		"make:moon": "bun run bin/src/moon.assets.ts",
 		"test:timings": "bun test --timings timings.json --update-timings"
 	},
 	"devDependencies": {

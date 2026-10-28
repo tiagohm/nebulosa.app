@@ -37,5 +37,8 @@ jobs:
             - name: Generate Sky Catalog
               run: bun make:catalog
 
+            - name: Generate Moon Assets
+              run: bun make:moon
+
             - name: Compile
               run: bun compile

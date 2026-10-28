@@ -2,7 +2,7 @@ import type { ImageInfo, StreakDetectionJob, StreakDetectionRequest, StreakDetec
 import type { StreakClassification } from 'nebulosa/src/imaging/analysis/streak/classification.types'
 import type { Streak } from 'nebulosa/src/imaging/analysis/streak/types'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
-import { type ReactNode, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { Actions, Notice } from '../equipment-control/parts'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
@@ -384,7 +384,7 @@ function Property({ label, children }: PropertyProps) {
 	return (
 		<div className="flex items-baseline justify-between gap-3">
 			<span className="min-w-0 text-xs wrap-break-word text-ink-300">{label}</span>
-			<span className="flex-none text-right text-ink-100 tabular-nums">{children}</span>
+			<span className="flex-[min-content] text-right text-ink-100 tabular-nums">{children}</span>
 		</div>
 	)
 }

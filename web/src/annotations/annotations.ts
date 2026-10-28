@@ -1,4 +1,4 @@
-import type { AnnotationJob, AnnotationKind, AnnotationObject, AnnotationRequest, AnnotationResult, AnnotationSnapshot, MinorBody, MinorBodySearchResponse, ServerEvent } from 'api'
+import type { AnnotationImageContext, AnnotationJob, AnnotationKind, AnnotationObject, AnnotationRequest, AnnotationResult, AnnotationSnapshot, MinorBody, MinorBodySearchResponse, ServerEvent } from 'api'
 import { proxy, ref } from 'valtio'
 import { jsonInit, responseError } from '../http'
 
@@ -20,6 +20,8 @@ export interface AnnotationsState {
 	resultErrors: Record<string, string>
 	// Why the latest submission of each kind of an image failed, by annotationKey.
 	submitErrors: Record<string, string>
+	// Observation date and site of each image as its header gives them, by image id; kept out of the proxy.
+	contexts: Record<string, AnnotationImageContext>
 }
 
 // Jobs kept at most; the oldest ended ones beyond it that are not the latest of an image are forgotten.
@@ -32,10 +34,13 @@ const MAX_RESULTS = 8
 const STATE_ORDER: Readonly<Record<AnnotationJob['state'], number>> = { queued: 0, running: 1, completed: 2, failed: 2, cancelled: 2 }
 
 // Mirror of the server's annotation jobs, shared by every component of the tab.
-export const annotationsState = proxy<AnnotationsState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {} })
+export const annotationsState = proxy<AnnotationsState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {}, contexts: {} })
 
 // Jobs whose result is being fetched.
 const fetching = new Set<string>()
+
+// Images whose context was fetched, or is being fetched, by this tab.
+const fetchedContexts = new Set<string>()
 
 // Images whose kept jobs were fetched, or are being fetched, by this tab.
 const fetchedImages = new Set<string>()
@@ -50,10 +55,10 @@ export function annotationKey(imageId: string, kind: AnnotationKind): string {
 	return `${imageId}:${kind}`
 }
 
-// Whether two requests annotate the same way: the same kind, WCS, magnitude limit, instant, observer, and observatory.
+// Whether two requests annotate the same way: the same kind, WCS, magnitude limit, instant, and observer.
 export function sameAnnotationRequest(a: AnnotationRequest, b: AnnotationRequest): boolean {
 	const observer = a.observer === b.observer || (a.observer !== undefined && b.observer !== undefined && a.observer.latitude === b.observer.latitude && a.observer.longitude === b.observer.longitude && a.observer.elevation === b.observer.elevation)
-	return a.kind === b.kind && a.plateSolveJobId === b.plateSolveJobId && a.magnitudeLimit === b.magnitudeLimit && a.time === b.time && a.observatoryCode === b.observatoryCode && observer
+	return a.kind === b.kind && a.plateSolveJobId === b.plateSolveJobId && a.magnitudeLimit === b.magnitudeLimit && a.time === b.time && observer
 }
 
 // Returns the latest job of a kind of an image.
@@ -215,22 +220,17 @@ export interface AnnotationRequestInput {
 	readonly time?: number
 	// Observer of the solar-system bodies of a local run; absent sees them from the Earth's center.
 	readonly observer?: AnnotationObserverSettings
-	// IAU/MPC code of the observatory of a minor-body search; absent or blank sees the bodies from the Earth's center.
-	readonly observatoryCode?: string
 }
 
-// Returns the request of a run: only the position of the observer of a local run is sent, never its name or time zone,
-// and only the trimmed observatory code of a minor-body search.
-export function annotationRequest({ kind = 'local', magnitudeLimit, plateSolveJobId, time, observer, observatoryCode }: AnnotationRequestInput): AnnotationRequest {
-	const code = observatoryCode?.trim()
-
+// Returns the request of a run: only the position of the observer of a local run is sent, never its name or time zone;
+// a minor-body search sends none, since the server sees the bodies from the site of the image header.
+export function annotationRequest({ kind = 'local', magnitudeLimit, plateSolveJobId, time, observer }: AnnotationRequestInput): AnnotationRequest {
 	return {
 		kind,
 		magnitudeLimit,
 		...(plateSolveJobId !== undefined && { plateSolveJobId }),
 		...(time !== undefined && { time }),
 		...(kind === 'local' && observer && { observer: { latitude: observer.latitude, longitude: observer.longitude, elevation: observer.elevation } }),
-		...(kind === 'minorBodies' && code && { observatoryCode: code }),
 	}
 }
 
@@ -262,5 +262,20 @@ export async function resolveMinorBody(object: Pick<AnnotationObject, 'id'>, req
 		return found.kind === 'ambiguous' ? 'SBDB knows several bodies by this designation.' : found.message
 	} catch {
 		return 'Unable to reach the server'
+	}
+}
+
+// Fetches once the observation date and site an image header gives, which a minor-body search of it uses. An image's
+// header never changes, so the context is never fetched again; a failed fetch is retried by the next call.
+export async function loadAnnotationContext(state: AnnotationsState, imageId: string, request: typeof fetch = fetch) {
+	if (fetchedContexts.has(imageId)) return
+	fetchedContexts.add(imageId)
+
+	try {
+		const response = await request(`/api/images/${encodeURIComponent(imageId)}/annotations/context`)
+		if (response.ok) state.contexts[imageId] = ref((await response.json()) as AnnotationImageContext)
+		else fetchedContexts.delete(imageId)
+	} catch {
+		fetchedContexts.delete(imageId)
 	}
 }

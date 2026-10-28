@@ -1,10 +1,16 @@
 import { coneSearch, GEOCENTER, SKYBOT_MAX_EPOCH, SKYBOT_MAX_RADIUS, SKYBOT_MIN_EPOCH, type SkybotObject } from 'nebulosa/src/adapters/orbits/skybot'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { tanProject, tanUnproject } from 'nebulosa/src/astrometry/wcs/fits.wcs'
+import { geocentricToTopocentric } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { eraS2c } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
+import type { GeographicPosition } from 'nebulosa/src/astronomy/observer/location'
+import { type FitsLocationSource, readFitsTime } from 'nebulosa/src/astronomy/time/fits'
+import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { hasKeyword, parseFitsDateTimeFields, textKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { vecAngle } from 'nebulosa/src/math/linear-algebra/vec3'
+import { toDeg } from 'nebulosa/src/math/units/angle'
+import { toMeter } from 'nebulosa/src/math/units/distance'
 import { type AnalysisCompletion, type AnalysisEntry, type AnalysisJob, type AnalysisJobState, AnalysisScheduler } from './analysis'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
@@ -25,10 +31,12 @@ import type { SkyObjectRef, SolarSystemBodyCode } from './sky/types'
 // Nothing is solved implicitly, no network is queried, and the current time is never used for an image.
 //
 // A minor-body job (kind minorBodies) is a separate, explicit request: it asks the IMCCE SkyBoT cone search (the
-// toolkit's coneSearch) for the known asteroids and comets of the same cone at the observation instant, seen from an
-// MPC observatory code or else from the Earth's center, under a time budget and its own concurrency, so a slow or
-// failed search never delays nor changes the local annotation. Its positions are SkyBoT's astrometric J2000
-// predictions, never detections in the pixels.
+// toolkit's coneSearch) for the known asteroids and comets of the same cone at the observation instant, from the Earth's
+// center, under a time budget and its own concurrency, so a slow or failed search never delays nor changes the local
+// annotation. SkyBoT takes an observatory code only, so when the header locates the image (OBSGEO-* or SITELAT/SITELONG/
+// SITEELEV) its geocentric positions are moved by the parallax of that site (geocentricToTopocentric), and each position
+// says whether it is geocentric or so corrected. Its positions are SkyBoT's astrometric J2000 predictions, never
+// detections in the pixels.
 //
 // The observation instant is the request's own, or else the middle of the exposure from the raw DATE-OBS of the header
 // (or DATE-END, when the exposure is known) and its exposure duration (EXPTIME or EXPOSURE); FITS dates are UTC.
@@ -55,10 +63,9 @@ export interface AnnotationRequest {
 	readonly magnitudeLimit: number
 	// Instant of the observation, Unix milliseconds (UTC), taken as the middle of the exposure; absent uses the header.
 	readonly time?: number
-	// Observer of the solar-system bodies of a local job; absent sees them from the Earth's center.
+	// Observer of the solar-system bodies of a local job; absent sees them from the Earth's center. A minor-body job
+	// ignores it: it sees the bodies from the site of the image header, or else from the Earth's center.
 	readonly observer?: SkyObserver
-	// IAU/MPC code of the observatory a minor-body job sees the bodies from; absent sees them from the Earth's center.
-	readonly observatoryCode?: string
 }
 
 // Group of an annotated object.
@@ -103,6 +110,9 @@ export interface AnnotationObject {
 	readonly motion?: AnnotationMotion
 	// Uncertainty of the predicted position of a minor body, radians; absent when unknown.
 	readonly positionError?: number
+	// Where the position of a solar-system body or a minor body is seen from; absent for the catalog objects, whose
+	// positions are the same from anywhere on the Earth.
+	readonly center?: AnnotationCenter
 }
 
 // Where the WCS of a job came from.
@@ -127,10 +137,40 @@ export interface AnnotationObservation {
 	readonly start?: number
 	// End of the exposure, Unix milliseconds (UTC), when its duration is known.
 	readonly end?: number
-	// Whether the bodies are seen from the requested observer (or observatory) or from the Earth's center.
-	readonly center: 'topocentric' | 'geocentric'
-	// IAU/MPC code of the observatory of a minor-body job, when the request named one.
-	readonly observatoryCode?: string
+	// Where the bodies of the job are seen from.
+	readonly center: AnnotationCenter
+	// Site the bodies are seen from, when there is one: the requested observer of a local job, or the site of the image
+	// header of a minor-body job.
+	readonly site?: AnnotationSite
+}
+
+// Where a position is seen from: computed for the site (topocentric), computed for the Earth's center and then moved by
+// the parallax of the site (geocentricCorrected), or for the Earth's center (geocentric).
+export type AnnotationCenter = 'topocentric' | 'geocentricCorrected' | 'geocentric'
+
+// Where a site came from: the observer of the request, or the keywords of the image header (OBSGEO-X/Y/Z, OBSGEO-B/L/H,
+// or SITELAT/SITELONG/SITEELEV).
+export type AnnotationSiteSource = 'observer' | 'obsgeoXyz' | 'obsgeoBlh' | 'siteKeywords'
+
+// Geographic site the bodies are seen from.
+export interface AnnotationSite {
+	// Geodetic latitude in degrees, north positive.
+	readonly latitude: number
+	// Geodetic longitude in degrees, east positive.
+	readonly longitude: number
+	// Height above the ellipsoid in meters.
+	readonly elevation: number
+	// Where the site came from.
+	readonly source: AnnotationSiteSource
+}
+
+// Observation context of an image as its header gives it, for a client to show before a run: the instant of a
+// minor-body search and the site it is corrected to.
+export interface AnnotationImageContext {
+	// Observation context from the header; absent when it has no observation date.
+	readonly observation?: AnnotationObservation
+	// Site of the header; absent when it locates no site.
+	readonly site?: AnnotationSite
 }
 
 // Cone of the sky that encloses an image.
@@ -258,6 +298,8 @@ export interface AnnotationPreparation {
 	readonly field: AnnotationField
 	// Observation context; absent when the instant is unknown.
 	readonly observation?: AnnotationObservation
+	// Site of the image header a minor-body job corrects its positions to; absent without one or for a local job.
+	readonly location?: GeographicPosition
 }
 
 // Outcome of a submission: a new job, the job of an equivalent request still waiting or running (active), the
@@ -330,10 +372,11 @@ const FIELD_MARGIN = Math.PI / 10800
 // Milliseconds per second.
 const SECOND_MS = 1000
 
-// Returns the key of an equivalent annotation: the same image, kind, WCS, magnitude limit, instant, observer, and
-// observatory. The WCS of the header and the acquisition data never change for an image, so they are implied by its id.
-export function annotationCacheKey(imageId: string, { kind, plateSolveJobId, magnitudeLimit, time, observer, observatoryCode }: AnnotationRequest): string {
-	return JSON.stringify([imageId, kind, plateSolveJobId ?? null, magnitudeLimit, time ?? null, observer ? [observer.latitude, observer.longitude, observer.elevation] : null, observatoryCode ?? null])
+// Returns the key of an equivalent annotation: the same image, kind, WCS, magnitude limit, instant, and observer. The WCS of the header and the acquisition data never change for an image, so they are implied by its id.
+export function annotationCacheKey(imageId: string, { kind, plateSolveJobId, magnitudeLimit, time, observer }: AnnotationRequest): string {
+	// A minor-body job sees the bodies from the site of the header, which never changes for an image.
+	const site = kind === 'local' && observer ? [observer.latitude, observer.longitude, observer.elevation] : null
+	return JSON.stringify([imageId, kind, plateSolveJobId ?? null, magnitudeLimit, time ?? null, site])
 }
 
 // Returns why SkyBoT cannot search a field at an observation, or undefined when it can: the instant is unknown or
@@ -346,10 +389,16 @@ export function minorBodySearchUnavailable(field: AnnotationField, observation: 
 	return undefined
 }
 
-// Converts a minor body SkyBoT listed to an annotated object, with its positions at the start and end of the exposure
-// from its sky motion when both are known.
-function minorBodyAnnotation(body: SkybotObject, observation: AnnotationObservation): AnnotationObject {
+// Converts a minor body SkyBoT listed from the Earth's center to an annotated object, with its positions at the start
+// and end of the exposure from its sky motion when both are known. With a site, every position is moved by the parallax
+// of the site at its own instant (geocentricCorrected), which needs the geocentric distance SkyBoT gives; without either
+// the positions stay geocentric.
+function minorBodyAnnotation(body: SkybotObject, observation: AnnotationObservation, location?: GeographicPosition): AnnotationObject {
 	const name = body.number === undefined ? body.name : `(${body.number}) ${body.name}`
+	const distance = location && body.distance
+	// Position seen from the site at an instant (Unix milliseconds, UTC), or the geocentric one without a site.
+	const seen = (rightAscension: number, declination: number, time: number): readonly [number, number] => (distance ? geocentricToTopocentric(rightAscension, declination, distance, timeUnix(time / SECOND_MS, true), location) : [rightAscension, declination])
+	const [rightAscension, declination] = seen(body.rightAscension, body.declination, observation.time)
 	let motion: AnnotationMotion | undefined
 
 	if (observation.start !== undefined && observation.end !== undefined && body.motionRightAscension !== undefined && body.motionDeclination !== undefined) {
@@ -357,7 +406,7 @@ function minorBodyAnnotation(body: SkybotObject, observation: AnnotationObservat
 		// by the cosine of the declination.
 		const at = (time: number) => {
 			const days = (time - observation.time) / DAY_MS
-			return [body.rightAscension + (body.motionRightAscension! * days) / Math.cos(body.declination), body.declination + body.motionDeclination! * days] as const
+			return seen(body.rightAscension + (body.motionRightAscension! * days) / Math.cos(body.declination), body.declination + body.motionDeclination! * days, time)
 		}
 
 		motion = { start: at(observation.start), end: at(observation.end) }
@@ -369,8 +418,9 @@ function minorBodyAnnotation(body: SkybotObject, observation: AnnotationObservat
 		name,
 		designations: body.number === undefined ? [] : [body.name],
 		typeName: body.class,
-		rightAscension: body.rightAscension,
-		declination: body.declination,
+		rightAscension,
+		declination,
+		center: distance ? 'geocentricCorrected' : 'geocentric',
 		...(body.magnitude !== undefined && { magnitude: body.magnitude }),
 		...(body.positionError !== undefined && { positionError: body.positionError }),
 		...(motion && { motion }),
@@ -430,14 +480,29 @@ function dateKeyword(header: FitsHeader, key: 'DATE-OBS' | 'DATE-END') {
 	return { time, approximate: fields.resolution > 1 }
 }
 
+// Kind of site of each keyword set of the toolkit's FITS reader.
+const SITE_SOURCES: Readonly<Record<FitsLocationSource, AnnotationSiteSource>> = { geocentric: 'obsgeoXyz', geodetic: 'obsgeoBlh', site: 'siteKeywords' }
+
+// Returns the site of an image header, from OBSGEO-X/Y/Z, OBSGEO-B/L/H, or SITELAT/SITELONG/SITEELEV as the toolkit
+// reads them (readFitsTime): its position for the parallax and its description in degrees and meters; undefined when
+// the header locates no site.
+export function headerSite(header: FitsHeader): { readonly location: GeographicPosition; readonly site: AnnotationSite } | undefined {
+	const { location, locationSource } = readFitsTime(header)
+	if (!location || !locationSource) return undefined
+	return { location, site: { latitude: toDeg(location.latitude), longitude: toDeg(location.longitude), elevation: toMeter(location.elevation), source: SITE_SOURCES[locationSource] } }
+}
+
 // Resolves the observation context of a request for an image with a header and an exposure duration in seconds: the
 // request's instant, else the DATE-OBS of the header, else its DATE-END when the exposure is known; the instant is the
-// middle of the exposure when its duration is known. Undefined when none gives the instant.
+// middle of the exposure when its duration is known. The bodies of a local job are seen from the requested observer
+// (topocentric), and those of a minor-body job from the site of the header (geocentricCorrected); else from the
+// Earth's center (geocentric). Undefined when none gives the instant.
 export function observationContext(header: FitsHeader, exposure: number | undefined, request: AnnotationRequest): AnnotationObservation | undefined {
 	const duration = exposure !== undefined && exposure > 0 ? exposure * SECOND_MS : undefined
 	const minorBodies = request.kind === 'minorBodies'
-	const center = (minorBodies ? request.observatoryCode : request.observer) ? 'topocentric' : 'geocentric'
-	const observatory = minorBodies && request.observatoryCode !== undefined ? { observatoryCode: request.observatoryCode } : undefined
+	const site: AnnotationSite | undefined = minorBodies ? headerSite(header)?.site : request.observer && { ...request.observer, source: 'observer' }
+	const center: AnnotationCenter = site ? (minorBodies ? 'geocentricCorrected' : 'topocentric') : 'geocentric'
+	const seen = { center, ...(site && { site }) }
 	let start: number
 	let origin: AnnotationTimeOrigin
 	let approximate = false
@@ -462,8 +527,8 @@ export function observationContext(header: FitsHeader, exposure: number | undefi
 		}
 	}
 
-	if (duration === undefined) return { time: start, origin, approximate, center, ...observatory }
-	return { time: start + duration / 2, origin, approximate, exposure: exposure!, start, end: start + duration, center, ...observatory }
+	if (duration === undefined) return { time: start, origin, approximate, ...seen }
+	return { time: start + duration / 2, origin, approximate, exposure: exposure!, start, end: start + duration, ...seen }
 }
 
 // Converts a catalog object of the field to an annotated object.
@@ -568,6 +633,16 @@ export class AnnotationService {
 		return this.#scheduler.results(imageId)
 	}
 
+	// Returns the observation context of an open or retained image as its header gives it, the instant and site a
+	// minor-body search of it uses; undefined when the image is unknown.
+	context(imageId: string): AnnotationImageContext | undefined {
+		const metadata = this.images.metadata(imageId)
+		if (!metadata) return undefined
+		const observation = observationContext(metadata.header, metadata.acquisition.exposure, { kind: 'minorBodies', magnitudeLimit: 0 })
+		const site = headerSite(metadata.header)?.site
+		return { ...(observation && { observation }), ...(site && { site }) }
+	}
+
 	// Returns the jobs waiting or running and the latest ended ones, oldest first.
 	snapshot(): AnnotationSnapshot {
 		return { jobs: this.#scheduler.snapshot() }
@@ -600,7 +675,8 @@ export class AnnotationService {
 		const observation = observationContext(metadata.header, metadata.acquisition.exposure, request)
 		const unavailable = request.kind === 'minorBodies' ? minorBodySearchUnavailable(field, observation) : undefined
 		if (unavailable) return unavailable
-		return { request, wcs, solution, field, ...(observation && { observation }) }
+		const location = request.kind === 'minorBodies' ? headerSite(metadata.header)?.location : undefined
+		return { request, wcs, solution, field, ...(observation && { observation }), ...(location && { location }) }
 	}
 
 	// Computes the objects of a job and builds its result.
@@ -618,7 +694,7 @@ export class AnnotationService {
 		let found: readonly SkybotObject[]
 
 		try {
-			found = await this.#skybot(observation.time, field.rightAscension, field.declination, field.radius + FIELD_MARGIN, { observer: request.observatoryCode ?? GEOCENTER, objects: { asteroids: true, planets: false, comets: true } }, AbortSignal.any([entry.controller.signal, timeout]))
+			found = await this.#skybot(observation.time, field.rightAscension, field.declination, field.radius + FIELD_MARGIN, { observer: GEOCENTER, objects: { asteroids: true, planets: false, comets: true } }, AbortSignal.any([entry.controller.signal, timeout]))
 		} catch (error) {
 			if (entry.controller.signal.aborted) throw new AnnotationError('cancelled', 'The annotation was cancelled')
 			if (timeout.aborted) throw new AnnotationError('timeout', `SkyBoT did not answer within ${this.#skybotTimeout / 1000} s`)
@@ -627,10 +703,11 @@ export class AnnotationService {
 
 		const onField = found.filter((e) => onImage(solution, width, height, e.rightAscension, e.declination)).sort((a, b) => (a.magnitude ?? Infinity) - (b.magnitude ?? Infinity))
 		const truncated = onField.length > MAX_MINOR_BODIES
-		const objects = onField.slice(0, MAX_MINOR_BODIES).map((e) => minorBodyAnnotation(e, observation))
+		const objects = onField.slice(0, MAX_MINOR_BODIES).map((e) => minorBodyAnnotation(e, observation, entry.preparation.location))
 		const warnings = ['Positions are predictions of SkyBoT, not detections in the image.']
 
-		if (!request.observatoryCode) warnings.push('The minor bodies are seen from the center of the Earth; a near-Earth object may be far from its predicted position.')
+		if (!entry.preparation.location) warnings.push('The image header gives no site, so the minor bodies are seen from the center of the Earth; a near-Earth object may be far from its predicted position.')
+		else if (objects.some((e) => e.center === 'geocentric')) warnings.push('SkyBoT gave no distance for some minor bodies, so their positions are not corrected for the site.')
 		if (observation.approximate) warnings.push('The header gives the observation time to more than a second only.')
 		if (truncated) warnings.push(`The field has more than ${MAX_MINOR_BODIES} minor bodies: only the brightest ones are shown.`)
 
@@ -693,6 +770,7 @@ export class AnnotationService {
 				typeName: body.typeName,
 				rightAscension: position.rightAscensionJ2000,
 				declination: position.declinationJ2000,
+				center: position.center,
 				...(position.magnitude !== undefined && { magnitude: position.magnitude }),
 				...(motion && { motion }),
 			})
@@ -708,6 +786,13 @@ type AnnotationCompletion = AnalysisCompletion<AnnotationJob, AnnotationResult>
 // Creates the annotation routes over a service.
 export function createAnnotationRoutes(service: AnnotationService) {
 	return {
+		'/api/images/:id/annotations/context': {
+			// Observation context of an open image as its header gives it, and its site; 404 when the image is not open.
+			GET: (req) => {
+				const context = service.context(req.params.id)
+				return context ? Response.json(context) : errorResponse('Image not found', 404, 'notFound')
+			},
+		},
 		'/api/images/:id/annotations': {
 			// Completed jobs of an image whose results are kept, oldest first.
 			GET: (req) => Response.json(service.results(req.params.id)),

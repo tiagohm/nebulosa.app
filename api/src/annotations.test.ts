@@ -3,9 +3,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import type { SkybotObject } from 'nebulosa/src/adapters/orbits/skybot'
+import { geocentricToTopocentric } from 'nebulosa/src/astronomy/coordinates/astrometry'
+import { Ellipsoid, geodeticLocation } from 'nebulosa/src/astronomy/observer/location'
+import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
-import { toDeg } from 'nebulosa/src/math/units/angle'
-import { annotationCacheKey, type AnnotationEvent, type AnnotationJob, type AnnotationRequest, AnnotationService, type AnnotationServiceOptions, type AnnotationSky, createAnnotationRoutes, type MinorBodySearch, minorBodySearchUnavailable, observationContext } from './annotations'
+import { deg, toDeg } from 'nebulosa/src/math/units/angle'
+import { meter } from 'nebulosa/src/math/units/distance'
+import { annotationCacheKey, type AnnotationEvent, type AnnotationImageContext, type AnnotationJob, type AnnotationRequest, AnnotationService, type AnnotationServiceOptions, type AnnotationSky, createAnnotationRoutes, type MinorBodySearch, minorBodySearchUnavailable, observationContext } from './annotations'
 import { ExternalToolsStore } from './externaltools'
 import { ImageStore } from './images'
 import { PlateSolvingService, type PlateSolveResult } from './platesolving'
@@ -188,7 +192,16 @@ describe('observation context', () => {
 
 	test('the instant of the request, centered on the exposure', () => {
 		const time = Date.UTC(2020, 0, 1)
-		expect(observationContext(header({ 'DATE-OBS': '2026-10-27T03:00:00' }), 10, { ...REQUEST, time, observer: { latitude: 1, longitude: 2, elevation: 3 } })).toEqual({ time, origin: 'request', approximate: false, exposure: 10, start: time - 5000, end: time + 5000, center: 'topocentric' })
+		expect(observationContext(header({ 'DATE-OBS': '2026-10-27T03:00:00' }), 10, { ...REQUEST, time, observer: { latitude: 1, longitude: 2, elevation: 3 } })).toEqual({
+			time,
+			origin: 'request',
+			approximate: false,
+			exposure: 10,
+			start: time - 5000,
+			end: time + 5000,
+			center: 'topocentric',
+			site: { latitude: 1, longitude: 2, elevation: 3, source: 'observer' },
+		})
 	})
 
 	test('none without a date', () => {
@@ -331,26 +344,64 @@ describe('minor bodies', () => {
 		const calls: { args: Parameters<MinorBodySearch> }[] = []
 		const { images, service, events } = setup(sky(), { skybot: skybot([skybotObject('far', 0.1), skybotObject('2003 QW37', 0.001, { number: 172438, magnitude: 20 }), skybotObject('2017 YJ66', -0.001)], calls) })
 		const info = await images.open(writeImage([...wcs(), text('DATE-OBS', '2026-10-27T03:00:00'), card('EXPTIME', 3600)]))
-		const result = await annotate(service, events, info.id, { ...MINOR, observatoryCode: 'I41' })
+		const result = await annotate(service, events, info.id, MINOR)
 		const [time, ra, dec, radius, options, signal] = calls[0].args
 
 		expect(time).toBe(Date.UTC(2026, 9, 27, 3, 30))
 		expect(ra).toBeCloseTo(M42.ra, 6)
 		expect(dec).toBeCloseTo(M42.dec, 6)
 		expect(radius).toBeGreaterThan(result.field.radius)
-		expect(options).toEqual({ observer: 'I41', objects: { asteroids: true, planets: false, comets: true } })
+		expect(options).toEqual({ observer: '500', objects: { asteroids: true, planets: false, comets: true } })
 		expect(signal).toBeInstanceOf(AbortSignal)
 		expect(result.objects.map((e) => e.id)).toEqual(['skybot:2017 YJ66', 'skybot:172438'])
-		expect(result.objects[1]).toMatchObject({ layer: 'minorBody', name: '(172438) 2003 QW37', designations: ['2003 QW37'], typeName: 'MB>Inner', magnitude: 20, positionError: 1e-6 })
+		expect(result.objects[1]).toMatchObject({ layer: 'minorBody', name: '(172438) 2003 QW37', designations: ['2003 QW37'], typeName: 'MB>Inner', magnitude: 20, positionError: 1e-6, center: 'geocentric', rightAscension: M42.ra + 0.001 })
 		expect(result.objects[1].ref).toBeUndefined()
 		expect(result.objects[1].motion!.start[0]).toBeCloseTo(M42.ra + 0.001 - 0.0005, 9)
 		expect(result.objects[1].motion!.end[0]).toBeCloseTo(M42.ra + 0.001 + 0.0005, 9)
 		expect(result.counts).toEqual({ star: 0, deepSky: 0, solarSystem: 0, minorBody: 2 })
-		expect(result.observation).toMatchObject({ center: 'topocentric', observatoryCode: 'I41' })
+		expect(result.observation).toMatchObject({ center: 'geocentric' })
+		expect(result.observation?.site).toBeUndefined()
 		expect(result.constellations).toEqual({ lines: [], labels: [] })
 	})
 
-	test('sees the bodies from the center of the Earth without an observatory', async () => {
+	test('moves the geocentric positions by the parallax of the site of the header', async () => {
+		const { images, service, events } = setup(sky(), { skybot: skybot([skybotObject('near', 0.001, { distance: 0.01 }), skybotObject('unknown distance', -0.001)]) })
+		const info = await images.open(writeImage([...wcs(), text('DATE-OBS', '2026-10-27T03:00:00'), card('EXPTIME', 3600), card('SITELAT', -23.55), card('SITELONG', -46.63), card('SITEELEV', 760)]))
+		const result = await annotate(service, events, info.id, MINOR)
+		const location = geodeticLocation(deg(-46.63), deg(-23.55), meter(760), Ellipsoid.WGS84)
+		const at = (time: number) => timeUnix(time / 1000, true)
+		const [near, unknown] = result.objects
+		const expected = geocentricToTopocentric(M42.ra + 0.001, M42.dec, 0.01, at(Date.UTC(2026, 9, 27, 3, 30)), location)
+
+		expect(result.observation).toMatchObject({ center: 'geocentricCorrected', site: { source: 'siteKeywords' } })
+		expect(result.observation!.site!.latitude).toBeCloseTo(-23.55, 9)
+		expect(result.observation!.site!.longitude).toBeCloseTo(-46.63, 9)
+		expect(result.observation!.site!.elevation).toBeCloseTo(760, 6)
+		expect(near.center).toBe('geocentricCorrected')
+		expect(near.rightAscension).toBeCloseTo(expected[0], 12)
+		expect(near.declination).toBeCloseTo(expected[1], 12)
+		// 0.01 AU away, the parallax of a site on the Earth is about a third of a degree.
+		expect(Math.hypot((near.rightAscension - (M42.ra + 0.001)) * Math.cos(M42.dec), near.declination - M42.dec)).toBeGreaterThan(0.001)
+		expect(near.motion!.start).toEqual(geocentricToTopocentric(M42.ra + 0.001 - 0.0005, M42.dec, 0.01, at(Date.UTC(2026, 9, 27, 3)), location))
+		expect(unknown).toMatchObject({ center: 'geocentric', rightAscension: M42.ra - 0.001 })
+		expect(result.warnings.some((e) => e.includes('no distance'))).toBeTrue()
+	})
+
+	test('the context of an image: its observation date and site', async () => {
+		const { images, service } = setup(sky(), { skybot: skybot([]) })
+		const dated = await images.open(writeImage([text('DATE-OBS', '2026-10-27T03:00:00'), card('EXPTIME', 60), card('SITELAT', 10), card('SITELONG', 20), card('SITEELEV', 30)]))
+		const undated = await images.open(writeImage([card('SITELAT', 10), card('SITELONG', 20)]))
+		const routes = createAnnotationRoutes(service)
+
+		expect(service.context(dated.id)).toMatchObject({ observation: { time: Date.UTC(2026, 9, 27, 3, 0, 30), origin: 'dateObs', center: 'geocentricCorrected' }, site: { source: 'siteKeywords' } })
+		expect(service.context(undated.id)!.observation).toBeUndefined()
+		expect(service.context(undated.id)!.site).toBeDefined()
+		const response = await call(routes, '/api/images/:id/annotations/context', 'GET', { id: dated.id })
+		expect(((await response.json()) as AnnotationImageContext).site!.latitude).toBeCloseTo(10, 9)
+		expect((await call(routes, '/api/images/:id/annotations/context', 'GET', { id: 'unknown' })).status).toBe(404)
+	})
+
+	test('sees the bodies from the center of the Earth without a site', async () => {
 		const calls: { args: Parameters<MinorBodySearch> }[] = []
 		const { images, service, events } = setup(sky(), { skybot: skybot([], calls) })
 		const info = await images.open(exposed())

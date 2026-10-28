@@ -8,7 +8,6 @@ import { DEFAULT_APERTURE_RADIUS, DEFAULT_ASTAP_SETTINGS, DEFAULT_BUILTIN_SETTIN
 import { isRecord } from '../storage'
 import { clampStreakSettings, DEFAULT_STREAK_SETTINGS, STREAK_LIMITS, STREAK_PLANES, type StreakNumericSetting } from '../streaks/streaks'
 import {
-	type AnnotationSettings,
 	type AutoFocusSettings,
 	type CameraAcquisitionSettings,
 	type CameraExposureSettings,
@@ -540,8 +539,6 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	if (mountRemoteControl) settings.mountRemoteControl = mountRemoteControl
 	const notifications = normalizeNotificationPreferences(value.notifications)
 	if (notifications) settings.notifications = notifications
-	const annotation = normalizeAnnotationSettings(value.annotation)
-	if (annotation) settings.annotation = annotation
 
 	return settings
 }
@@ -550,21 +547,6 @@ function normalizeSettings(value: unknown): ProfileSettings {
 function normalizeNotificationIds(value: unknown): string[] {
 	if (!Array.isArray(value)) return []
 	return Array.from(new Set(value.filter((id): id is string => typeof id === 'string' && id.length > 0))).slice(-MAX_NOTIFICATION_IDS)
-}
-
-// Returns an IAU/MPC observatory code in upper case: three letters or digits, such as "I41" or "500"; undefined for
-// anything else.
-export function normalizeObservatoryCode(value: unknown): string | undefined {
-	if (typeof value !== 'string') return undefined
-	const code = value.trim().toUpperCase()
-	return /^[A-Z0-9]{3}$/.test(code) ? code : undefined
-}
-
-// Restores the preferences of Images → Annotation (version 14). Returns undefined when none is valid.
-function normalizeAnnotationSettings(value: unknown): AnnotationSettings | undefined {
-	if (!isRecord(value)) return undefined
-	const observatoryCode = normalizeObservatoryCode(value.observatoryCode)
-	return observatoryCode ? { observatoryCode } : undefined
 }
 
 // Restores the notifications a profile read or dismissed. Returns undefined when none is valid.

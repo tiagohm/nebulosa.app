@@ -219,10 +219,12 @@ export type {
 	StarMeasurement,
 } from './stars'
 export type {
+	AnnotationCenter,
 	AnnotationCounts,
 	AnnotationErrorCode,
 	AnnotationEvent,
 	AnnotationField,
+	AnnotationImageContext,
 	AnnotationJob,
 	AnnotationJobState,
 	AnnotationKind,
@@ -232,6 +234,8 @@ export type {
 	AnnotationObservation,
 	AnnotationRequest,
 	AnnotationResult,
+	AnnotationSite,
+	AnnotationSiteSource,
 	AnnotationSnapshot,
 	AnnotationSummary,
 	AnnotationTimeOrigin,

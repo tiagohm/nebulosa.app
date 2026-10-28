@@ -1,12 +1,13 @@
-import type { AnnotationJob, AnnotationKind, AnnotationLayer, AnnotationObject, AnnotationRequest, AnnotationResult, ImageInfo, MinorBody } from 'api'
+import type { AnnotationCenter, AnnotationImageContext, AnnotationJob, AnnotationKind, AnnotationLayer, AnnotationObject, AnnotationRequest, AnnotationResult, AnnotationSite, AnnotationSiteSource, ImageInfo, MinorBody } from 'api'
+import { toArcsec } from 'nebulosa/src/math/units/angle'
 import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { isAnnotationShown } from '../annotations/AnnotationOverlay'
 import { annotationKey, annotationPlateSolveJobId, annotationRequest, annotationsState, cancelAnnotation, isActive, parseUtcInput, resolveMinorBody, runAnnotation, sameAnnotationRequest, utcInputValue } from '../annotations/annotations'
-import { useAnnotationResult } from '../annotations/useAnnotationResult'
+import { useAnnotationContext, useAnnotationResult } from '../annotations/useAnnotationResult'
 import { Actions, Notice } from '../equipment-control/parts'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
-import { activeProfile, profileState, setAnnotationObservatory } from '../profile/profile'
+import { activeProfile, profileState } from '../profile/profile'
 import type { SkyObserverSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { navigate, routeState } from '../shell/route'
@@ -51,6 +52,12 @@ const DENSITY_LABELS: Readonly<Record<AnnotationDensity, string>> = { minimal: '
 // Display names of where the observation instant came from.
 const TIME_ORIGIN_LABELS = { request: 'Set by hand', dateObs: 'DATE-OBS', dateEnd: 'DATE-END and exposure' } as const
 
+// Display names of where a position is seen from.
+const CENTER_LABELS: Readonly<Record<AnnotationCenter, string>> = { topocentric: 'Topocentric', geocentricCorrected: 'Geocentric, corrected for the parallax of the site', geocentric: 'Geocentric' }
+
+// Display names of where a site came from.
+const SITE_SOURCE_LABELS: Readonly<Record<AnnotationSiteSource, string>> = { observer: 'Profile observer', obsgeoXyz: 'OBSGEO-X/Y/Z', obsgeoBlh: 'OBSGEO-B/L/H', siteKeywords: 'SITELAT/SITELONG/SITEELEV' }
+
 // Annotation panel of the active document.
 export function AnnotationPanel({ document, view, onOpen }: ImageToolPanelProps) {
 	if (!document) {
@@ -92,11 +99,12 @@ function Annotation({ documentKey, info, annotation, selectedSolution, unavailab
 	const solution = usePlateSolution(imageId, selectedSolution)
 	const plateSolveJobId = annotationPlateSolveJobId(solution)
 	const wcsAvailable = plateSolveJobId !== undefined || solution.header !== undefined
+	const context = useAnnotationContext(imageId)
 	const profiles = useSnapshot(profileState)
-	const settings = activeProfile(profiles).settings
-	const observer = settings.sky.observer
+	const observer = activeProfile(profiles).settings.sky.observer
 	const request = annotationRequest({ magnitudeLimit: annotation.magnitudeLimit, plateSolveJobId, time: annotation.time, observer: annotation.useObserver ? observer : undefined })
-	const minorRequest = annotationRequest({ kind: 'minorBodies', magnitudeLimit: annotation.magnitudeLimit, plateSolveJobId, time: annotation.time, observatoryCode: settings.annotation?.observatoryCode })
+	// A minor-body search uses the date and the site of the image header, never the time or observer set by hand.
+	const minorRequest = annotationRequest({ kind: 'minorBodies', magnitudeLimit: annotation.magnitudeLimit, plateSolveJobId })
 	const results = [result, minor.result].filter((e) => e !== undefined)
 	const owner = results.find((e) => e.jobId === annotation.selected?.jobId)
 	const selected = owner?.objects.find((e) => e.id === annotation.selected!.id)
@@ -107,7 +115,7 @@ function Annotation({ documentKey, info, annotation, selectedSolution, unavailab
 		<>
 			<Analysis documentKey={documentKey} imageId={imageId} request={request} job={job} wcsAvailable={wcsAvailable} submitError={submitError('local')} unavailable={unavailable} />
 			<Observation annotation={annotation} observer={observer} onChange={edit} />
-			{imageId !== undefined && <MinorBodies documentKey={documentKey} imageId={imageId} request={minorRequest} job={minor.job} result={minor.result} resultError={minor.resultError} wcsAvailable={wcsAvailable} submitError={submitError('minorBodies')} unavailable={unavailable} />}
+			{imageId !== undefined && <MinorBodies documentKey={documentKey} imageId={imageId} request={minorRequest} context={context} job={minor.job} result={minor.result} resultError={minor.resultError} wcsAvailable={wcsAvailable} submitError={submitError('minorBodies')} unavailable={unavailable} />}
 			<PanelSection title="Layers">
 				<Checkbox label="Deep-sky objects" checked={annotation.layers.deepSky} onChange={(deepSky) => edit({ layers: { deepSky } })} />
 				<Checkbox label="Stars" checked={annotation.layers.stars} onChange={(stars) => edit({ layers: { stars } })} />
@@ -198,7 +206,8 @@ function Analysis({ documentKey, imageId, request, job, wcsAvailable, submitErro
 					<Property label="Elapsed">{formatSeconds(elapsedOf(job, now))}</Property>
 					<Property label="Observation">{observation ? new Date(observation.time).toISOString().replace('.000Z', 'Z') : 'Unknown'}</Property>
 					{observation && <Property label="Time from">{`${TIME_ORIGIN_LABELS[observation.origin]}${observation.approximate ? ' (approximate)' : ''}`}</Property>}
-					{observation && <Property label="Seen from">{observation.center === 'topocentric' ? 'Observer' : 'Center of the Earth'}</Property>}
+					{observation && <Property label="Seen from">{observation.site ? formatSite(observation.site) : 'Center of the Earth'}</Property>}
+					{observation && <Property label="Positions">{CENTER_LABELS[observation.center]}</Property>}
 					{job.error && <Notice error>{job.error}</Notice>}
 					{changed && <Notice>The WCS, the magnitude limit, the time, or the observer changed since this analysis; run it again to apply them.</Notice>}
 				</>
@@ -269,6 +278,8 @@ interface MinorBodiesProps {
 	readonly unavailable?: string
 	// Request Find Minor Bodies sends.
 	readonly request: AnnotationRequest
+	// Observation date and site the image header gives, once fetched.
+	readonly context?: AnnotationImageContext
 	// Latest minor-body search of the image.
 	readonly job?: AnnotationJob
 	// Its result, once fetched.
@@ -281,36 +292,27 @@ interface MinorBodiesProps {
 	readonly submitError?: string
 }
 
-// Explicit search of the known asteroids and comets of the field with the IMCCE SkyBoT service, at the observation time,
-// from the profile's observatory code or the center of the Earth. It never runs on its own, and its failure leaves the
-// local annotation as it is.
-function MinorBodies({ documentKey, imageId, request, job, result, resultError, wcsAvailable, submitError, unavailable }: MinorBodiesProps) {
-	const profiles = useSnapshot(profileState)
-	const code = activeProfile(profiles).settings.annotation?.observatoryCode ?? ''
-	// Code being typed, saved when the field loses the focus, and whether the last one saved was refused.
-	const [text, setText] = useState<string>()
-	const [invalid, setInvalid] = useState(false)
+// Explicit search of the known asteroids and comets of the field with the IMCCE SkyBoT service, at the observation date
+// of the image header, seen from the site of the header (geocentric positions corrected for its parallax) or else from
+// the center of the Earth; both are shown before the search runs. An image without an observation date cannot be
+// searched. It never runs on its own, and its failure leaves the local annotation as it is.
+function MinorBodies({ documentKey, imageId, request, context, job, result, resultError, wcsAvailable, submitError, unavailable }: MinorBodiesProps) {
 	const active = isActive(job)
 	const now = useNow(active)
 	const changed = job && !sameAnnotationRequest(job.request, request)
+	const observation = context?.observation
+	const dateless = context !== undefined && !observation
 
 	return (
 		<PanelSection title="Minor Bodies">
-			<TextInput
-				label="Observatory code (MPC)"
-				value={text ?? code}
-				placeholder="Center of the Earth"
-				maxLength={3}
-				onChange={(event) => setText(event.currentTarget.value)}
-				onBlur={() => {
-					if (text !== undefined) setInvalid(!setAnnotationObservatory(profileState, text))
-					setText(undefined)
-				}}
-			/>
-			{invalid && <Notice error>An observatory code is three letters or digits, such as I41.</Notice>}
+			<Property label="Observation (UTC)">{observation ? formatUtc(observation.time) : context ? 'None in the header' : MISSING}</Property>
+			{observation && <Property label="Time from">{`${TIME_ORIGIN_LABELS[observation.origin]}${observation.approximate ? ' (approximate)' : ''}`}</Property>}
+			<Property label="Seen from">{context?.site ? formatSite(context.site) : context ? 'Center of the Earth' : MISSING}</Property>
+			{context?.site && <Property label="Site from">{SITE_SOURCE_LABELS[context.site.source]}</Property>}
+			{observation && <Property label="Positions">{CENTER_LABELS[observation.center]}</Property>}
 			<Actions>
 				<Button
-					disabled={active || unavailable !== undefined || !wcsAvailable}
+					disabled={active || unavailable !== undefined || !wcsAvailable || !observation}
 					onClick={() => {
 						holdCameraFrame(imagesState, documentKey)
 						void runAnnotation(annotationsState, imageId, request)
@@ -322,16 +324,20 @@ function MinorBodies({ documentKey, imageId, request, job, result, resultError, 
 					Cancel
 				</Button>
 			</Actions>
-			<Notice>Asks the IMCCE SkyBoT service over the internet for the known asteroids and comets at the observation time; it may take several seconds. Its positions are predictions, not detections in the image.</Notice>
+			{dateless && <Notice>This image has no observation date (DATE-OBS, or DATE-END and the exposure), so its minor bodies cannot be found.</Notice>}
+			{context && !context.site && <Notice>The header locates no site (OBSGEO or SITELAT/SITELONG), so the bodies are seen from the center of the Earth: a near-Earth object may be far from its predicted position.</Notice>}
+			<Notice>
+				Asks the IMCCE SkyBoT service over the internet for the known asteroids and comets at the date of the image, never at the time set by hand; it may take several seconds. SkyBoT answers for the center of the Earth only, so the positions are corrected here for the parallax of the site. They are
+				predictions, not detections in the image.
+			</Notice>
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job && (
 				<>
 					<Property label="Status">{STATE_LABELS[job.state]}</Property>
 					<Property label="Elapsed">{formatSeconds(elapsedOf(job, now))}</Property>
-					{job.observation && <Property label="Seen from">{job.observation.observatoryCode ?? 'Center of the Earth'}</Property>}
 					{job.summary && <Property label={LAYER_LABELS.minorBody}>{job.summary.counts.minorBody}</Property>}
 					{job.error && <Notice error>{job.error}</Notice>}
-					{changed && <Notice>The WCS, the time, or the observatory changed since this search; run it again to apply them.</Notice>}
+					{changed && <Notice>The WCS changed since this search; run it again to apply it.</Notice>}
 					{result?.warnings.map((warning) => (
 						<Notice key={warning}>{warning}</Notice>
 					))}
@@ -340,6 +346,16 @@ function MinorBodies({ documentKey, imageId, request, job, result, resultError, 
 			)}
 		</PanelSection>
 	)
+}
+
+// Formats an instant (Unix milliseconds) in UTC to the second: "2026-01-15 00:00:00 UTC".
+function formatUtc(time: number): string {
+	return `${new Date(time).toISOString().slice(0, 19).replace('T', ' ')} UTC`
+}
+
+// Formats a site: "23.5500° S, 46.6300° W, 760 m".
+function formatSite({ latitude, longitude, elevation }: AnnotationSite): string {
+	return `${Math.abs(latitude).toFixed(4)}° ${latitude < 0 ? 'S' : 'N'}, ${Math.abs(longitude).toFixed(4)}° ${longitude < 0 ? 'W' : 'E'}, ${elevation.toFixed(0)} m`
 }
 
 interface ObjectsProps {
@@ -434,7 +450,8 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 					<Property label="Declination (J2000)">{formatDeclination(object.declination)}</Property>
 					{object.majorAxis !== undefined && <Property label="Size">{object.minorAxis === undefined ? formatAngularSize(object.majorAxis) : `${formatAngularSize(object.majorAxis)} × ${formatAngularSize(object.minorAxis)}`}</Property>}
 					{object.orientation !== undefined && <Property label="Position angle">{formatDegrees(object.orientation)}</Property>}
-					{object.positionError !== undefined && <Property label="Position uncertainty">{formatAngularSize(object.positionError)}</Property>}
+					{object.positionError !== undefined && <Property label="Position uncertainty">{formatUncertainty(object.positionError)}</Property>}
+					{object.center && <Property label="Position">{CENTER_LABELS[object.center]}</Property>}
 					{object.ref ? (
 						<Button variant="secondary" className="self-start" onClick={() => openInSky(object.ref!, object.name)}>
 							Open in Sky
@@ -466,7 +483,7 @@ function Property({ label, children }: PropertyProps) {
 	return (
 		<div className="flex items-baseline justify-between gap-3">
 			<span className="min-w-0 text-xs wrap-break-word text-ink-300">{label}</span>
-			<span className="flex-none text-right text-ink-100 tabular-nums">{children}</span>
+			<span className="flex-[min-content] text-right text-ink-100 tabular-nums">{children}</span>
 		</div>
 	)
 }
@@ -482,4 +499,9 @@ function elapsedOf(job: AnnotationJob, now: number): number {
 function formatSeconds(milliseconds: number): string {
 	const seconds = milliseconds / 1000
 	return `${seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)} s`
+}
+
+// Formats a position uncertainty in radians as arcseconds with two significant digits: "0.026″", "45″".
+function formatUncertainty(angle: number): string {
+	return `${Number(toArcsec(angle).toPrecision(2))}″`
 }

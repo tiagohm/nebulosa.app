@@ -10,6 +10,7 @@ import {
 	handleAnnotationsEvent,
 	latestAnnotationJob,
 	latestAnnotationResult,
+	loadAnnotationContext,
 	loadAnnotationResult,
 	minorBodyQuery,
 	parseUtcInput,
@@ -23,7 +24,7 @@ import {
 const REQUEST: AnnotationRequest = { kind: 'local', magnitudeLimit: 12 }
 
 function state(): AnnotationsState {
-	return proxy<AnnotationsState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {} })
+	return proxy<AnnotationsState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {}, contexts: {} })
 }
 
 function job(patch: Partial<AnnotationJob> = {}): AnnotationJob {
@@ -139,11 +140,20 @@ describe('minor bodies', () => {
 		expect(annotations.submitErrors[annotationKey('image-1', 'local')]).toBeUndefined()
 	})
 
-	test('a search sends only the trimmed observatory code', () => {
+	test('a search sends no observer: the server uses the site of the image header', () => {
 		const observer = { latitude: 1, longitude: 2, elevation: 3 }
-		expect(annotationRequest({ kind: 'minorBodies', magnitudeLimit: 12, time: 5, observer, observatoryCode: ' I41 ' })).toEqual({ kind: 'minorBodies', magnitudeLimit: 12, time: 5, observatoryCode: 'I41' })
-		expect(annotationRequest({ kind: 'minorBodies', magnitudeLimit: 12, observatoryCode: '  ' })).toEqual({ kind: 'minorBodies', magnitudeLimit: 12 })
-		expect(annotationRequest({ magnitudeLimit: 12, observatoryCode: 'I41' })).toEqual({ kind: 'local', magnitudeLimit: 12 })
+		expect(annotationRequest({ kind: 'minorBodies', magnitudeLimit: 12, plateSolveJobId: 'p', observer })).toEqual({ kind: 'minorBodies', magnitudeLimit: 12, plateSolveJobId: 'p' })
+	})
+
+	test('the context of an image is fetched once', async () => {
+		const annotations = state()
+		const context = { observation: { time: 1000, origin: 'dateObs', approximate: false, center: 'geocentricCorrected', site: { latitude: 1, longitude: 2, elevation: 3, source: 'siteKeywords' } }, site: { latitude: 1, longitude: 2, elevation: 3, source: 'siteKeywords' } }
+		const { request, calls } = fetcher({ '/api/images/image-9/annotations/context': [200, context] })
+		await loadAnnotationContext(annotations, 'image-9', request)
+		await loadAnnotationContext(annotations, 'image-9', request)
+
+		expect(calls).toHaveLength(1)
+		expect(annotations.contexts['image-9']).toEqual(context as never)
 	})
 
 	test('a body is resolved in SBDB by its number or designation only when it is the only match', async () => {

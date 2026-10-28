@@ -10,7 +10,6 @@ import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
 import {
 	mountRemoteBinding,
-	setAnnotationObservatory,
 	setMountRemoteBinding,
 	acquisitionSettings,
 	ACTIVE_PROFILE_KEY,
@@ -869,32 +868,12 @@ describe('camera forms', () => {
 		expect(load(invalid).profiles[0].settings.notifications).toEqual({ readIds: ['x', 'y'], dismissedIds: [] })
 	})
 
-	test('the observatory of the minor-body searches is the profile one, persisted, validated, and migrated', async () => {
+	test('a version 14 document keeps its preferences and ignores the observatory code it stored', () => {
 		const stores = newStores()
-		const state = load(stores)
-
-		expect(setAnnotationObservatory(state, ' i41 ')).toBeTrue()
-		expect(activeProfile(state).settings.annotation).toEqual({ observatoryCode: 'I41' })
-		expect(setAnnotationObservatory(state, 'Observatory')).toBeFalse()
-		expect(activeProfile(state).settings.annotation).toEqual({ observatoryCode: 'I41' })
-		await Bun.sleep(0)
-		expect(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings.annotation).toEqual({ observatoryCode: 'I41' })
-		expect(setAnnotationObservatory(state, '')).toBeTrue()
-		expect(activeProfile(state).settings.annotation).toBeUndefined()
-
-		// A version 13 document gains none, and an invalid code is dropped.
-		const older = newStores()
-		older.local.setItem(
-			PROFILES_KEY,
-			JSON.stringify({
-				version: 13,
-				profiles: [
-					{ id: 'a', name: 'A', settings: {} },
-					{ id: 'b', name: 'B', settings: { annotation: { observatoryCode: 'too long' } } },
-				],
-			}),
-		)
-		expect(load(older).profiles.map((e) => e.settings.annotation)).toEqual([undefined, undefined])
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 14, profiles: [{ id: 'a', name: 'A', settings: { annotation: { observatoryCode: 'I41' }, sky: { timeBar: true } } }] }))
+		const settings = load(stores).profiles[0].settings
+		expect(settings.sky.timeBar).toBeTrue()
+		expect('annotation' in settings).toBeFalse()
 	})
 
 	test('display settings applied in Images are kept per camera and globally, restored with defaults for invalid fields', async () => {

@@ -8,7 +8,7 @@ import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type Sen
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { parseJson, readText, type Stores, writeText } from '../storage'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
-import { migrate, normalizeDegrees, normalizeObservatoryCode, normalizeSkyObserver } from './migrate'
+import { migrate, normalizeDegrees, normalizeSkyObserver } from './migrate'
 import {
 	type AutoFocusSettings,
 	type CameraAcquisitionSettings,
@@ -399,27 +399,6 @@ export function setStreakDetectionSettings(state: ProfileState, settings: Streak
 	const profile = activeProfile(state)
 	profile.settings.streakDetection = { ...settings }
 	touch(profile)
-}
-
-// Sets the observatory code the minor-body searches of Images → Annotation see the bodies from, or clears it with
-// undefined or a blank code. Returns false, changing nothing, for a code that is not three letters or digits.
-export function setAnnotationObservatory(state: ProfileState, code: string | undefined): boolean {
-	const profile = activeProfile(state)
-	const text = code?.trim()
-
-	if (!text) {
-		if (!profile.settings.annotation?.observatoryCode) return true
-		delete profile.settings.annotation
-		touch(profile)
-		return true
-	}
-
-	const normalized = normalizeObservatoryCode(text)
-	if (!normalized) return false
-	if (profile.settings.annotation?.observatoryCode === normalized) return true
-	profile.settings.annotation = { observatoryCode: normalized }
-	touch(profile)
-	return true
 }
 
 // Sets the Sky observer of the active profile, or clears it with undefined. Returns false, changing

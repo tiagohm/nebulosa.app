@@ -2,6 +2,7 @@ import type { ServerEvent } from 'api'
 import { StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { subscribe as subscribeState } from 'valtio'
+import { annotationsState, handleAnnotationsEvent, refreshAnnotations } from './annotations/annotations'
 import { App } from './App'
 import { autoFocusRuntime, handleAutoFocusEvent, refreshAutoFocus } from './camera/autofocus'
 import { captureRuntime, handleCaptureEvent, refreshCaptures } from './camera/capture'
@@ -86,6 +87,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleStarsEvent(starsState, event), refresh: () => refreshStars(starsState) },
 	{ handle: (event) => handleStreaksEvent(streaksState, event), refresh: () => refreshStreaks(streaksState) },
 	{ handle: (event) => handlePlateSolvingEvent(plateSolvingState, event), refresh: () => refreshPlateSolving(plateSolvingState) },
+	{ handle: (event) => handleAnnotationsEvent(annotationsState, event), refresh: () => refreshAnnotations(annotationsState) },
 	{ handle: (event) => handleImageProcessingEvent(imageProcessingState, imagesState, event), refresh: () => refreshImageProcessing(imageProcessingState, imagesState) },
 	{ handle: (event) => handleCaptureFramesEvent(captureFramesState, event), refresh: () => refreshCaptureFrames(captureFramesState).then(() => reconcileCapturedFrames(imagesState, captureFramesState)) },
 	{ handle: (event) => handleCapturedFrame(imagesState, event) },

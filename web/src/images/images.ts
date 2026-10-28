@@ -114,6 +114,42 @@ export interface ImageStreaksState {
 	selected?: { readonly jobId: string; readonly index: number }
 }
 
+// How many labels the annotation of a document places: a few of the most important objects, a balanced number, or many.
+export type AnnotationDensity = 'minimal' | 'balanced' | 'detailed'
+
+// Groups of the annotation of a document that can be shown or hidden.
+export interface AnnotationLayers {
+	// Catalog stars.
+	stars: boolean
+	// Deep-sky objects.
+	deepSky: boolean
+	// Sun, Moon, planets, and Pluto.
+	solarSystem: boolean
+	// Constellation figures.
+	constellations: boolean
+	// Constellation names.
+	constellationLabels: boolean
+}
+
+// Annotation of a document as the tab shows it: which groups are drawn, how, the magnitude limit of the next run, and
+// the selected object. Showing or hiding anything never runs an annotation.
+export interface ImageAnnotationState {
+	// Groups drawn.
+	layers: AnnotationLayers
+	// Whether the objects are labeled.
+	labels: boolean
+	// Whether the extent of a deep-sky object of known size is drawn as its outline.
+	outlines: boolean
+	// Whether the predicted motion of a solar-system body during the exposure is drawn.
+	motion: boolean
+	// How many labels are placed.
+	density: AnnotationDensity
+	// Faintest magnitude of the next run, and of the objects drawn when fainter than the result's own.
+	magnitudeLimit: number
+	// Selected object: its id in the result of a job, which only counts while that result is shown.
+	selected?: { readonly jobId: string; readonly id: string }
+}
+
 // Plate solving of a document as the tab shows it: the request being edited, the solution shown, and its overlay.
 export interface ImagePlateSolvingState {
 	// Request the next Solve Image sends; editing it never solves.
@@ -145,6 +181,8 @@ export interface ImageViewState {
 	streaks: ImageStreaksState
 	// Plate solving request, solution shown, and overlay.
 	plateSolving: ImagePlateSolvingState
+	// Annotation layers, appearance, and selection.
+	annotation: ImageAnnotationState
 	// Image processing pipeline being edited and the latest job it submitted.
 	processing: ImageProcessingDraft
 }
@@ -346,6 +384,9 @@ export async function openImage(state: ImagesState, path: string, io: ImagesIo =
 	}
 }
 
+// Faintest magnitude an annotation keeps by default: the stars of the catalog and the brighter deep-sky objects.
+export const DEFAULT_ANNOTATION_MAGNITUDE_LIMIT = 12
+
 // Returns the view state of a document just opened: fitted to the viewer, with nothing rendered yet.
 export function newView(): ImageViewState {
 	return {
@@ -355,6 +396,7 @@ export function newView(): ImageViewState {
 		stars: { visible: true, acceptedOnly: false },
 		streaks: { visible: true, labels: true, useSolution: true, useStars: true },
 		plateSolving: { request: { ...DEFAULT_PLATE_SOLVE_REQUEST }, overlay: true, grid: false },
+		annotation: { layers: { stars: true, deepSky: true, solarSystem: true, constellations: true, constellationLabels: false }, labels: true, outlines: true, motion: true, density: 'balanced', magnitudeLimit: DEFAULT_ANNOTATION_MAGNITUDE_LIMIT },
 		processing: { steps: [], expanded: [], adding: DEFAULT_ADDED_OPERATION },
 	}
 }
@@ -560,6 +602,22 @@ export function selectPlateSolution(state: ImagesState, key: string, selected: s
 export function setPlateSolveOverlay(state: ImagesState, key: string, patch: Partial<Pick<ImagePlateSolvingState, 'overlay' | 'grid'>>) {
 	const plateSolving = state.views[key]?.plateSolving
 	if (plateSolving) Object.assign(plateSolving, patch)
+}
+
+// Changes how the annotation of a document is drawn, or the magnitude limit of its next run; never runs one. Ignored for
+// an unknown key.
+export function setAnnotationView(state: ImagesState, key: string, patch: Partial<Omit<ImageAnnotationState, 'selected' | 'layers'>> & { readonly layers?: Partial<AnnotationLayers> }) {
+	const annotation = state.views[key]?.annotation
+	if (!annotation) return
+	const { layers, ...rest } = patch
+	Object.assign(annotation, rest)
+	if (layers) Object.assign(annotation.layers, layers)
+}
+
+// Selects an object of a result of a document, or clears the selection. Ignored for an unknown key.
+export function selectAnnotation(state: ImagesState, key: string, selected?: ImageAnnotationState['selected']) {
+	const annotation = state.views[key]?.annotation
+	if (annotation) annotation.selected = selected
 }
 
 // Shows a tool in the contextual panel of a document. Ignored for an unknown key.

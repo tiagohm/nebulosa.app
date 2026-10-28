@@ -1,6 +1,10 @@
 import { cn } from 'cn'
-import { type KeyboardEvent, useRef, useState } from 'react'
+import { type KeyboardEvent, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { AnnotationOverlay, shownAnnotations } from '../annotations/AnnotationOverlay'
+import { annotationMatchesWcs, annotationPlateSolveJobId } from '../annotations/annotations'
+import { pickAnnotation, projectAnnotations } from '../annotations/geometry'
+import { useAnnotationResult } from '../annotations/useAnnotationResult'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusRuntime } from '../camera/autofocus'
 import { cameraKey, captureCount, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState } from '../camera/capture'
 import { DarvOverlay, useDarvOverlay } from '../camera/DarvOverlay'
@@ -36,7 +40,7 @@ import { captureFramesState, frameSourceKey } from './captureframes'
 import { CaptureFramesCarousel } from './CaptureFramesCarousel'
 import { DisplayToolbar } from './DisplayToolbar'
 import { ImageInspector } from './ImageInspector'
-import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, isClosable, isMosaic, openImage, selectImage, selectImageTool, selectStar, selectStreak, setImageView, shownRendering, toggleOriginal } from './images'
+import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, isClosable, isMosaic, openImage, selectAnnotation, selectImage, selectImageTool, selectStar, selectStreak, setImageView, shownRendering, toggleOriginal } from './images'
 import { SaveImageModal } from './SaveImageModal'
 import { IMAGE_TOOL_DEFINITIONS, imageToolGroup, imageToolsFor, imageToolUnavailable } from './tools'
 
@@ -62,6 +66,9 @@ const STAR_PICK_RADIUS = 8
 
 // Distance from the pointer a click looks for a streak line within, in screen pixels.
 const STREAK_PICK_RADIUS = 8
+
+// Distance from the pointer a click looks for an annotation marker within, in screen pixels.
+const ANNOTATION_PICK_RADIUS = 8
 
 // Images workspace.
 export function ImagesWorkspace() {
@@ -89,7 +96,13 @@ export function ImagesWorkspace() {
 	const { result: streaks } = useStreakResult(document?.info?.id)
 	const lines = view?.streaks.visible && streaks ? streaks : undefined
 	const selectedStreak = lines && view?.streaks.selected?.jobId === lines.jobId ? view.streaks.selected.index : undefined
-	const { solution } = usePlateSolution(document?.info?.id, view?.plateSolving.selected)
+	const plateSolution = usePlateSolution(document?.info?.id, view?.plateSolving.selected)
+	const { solution } = plateSolution
+	const { result: annotated } = useAnnotationResult(document?.info?.id)
+	const projection = useMemo(() => annotated && projectAnnotations(annotated), [annotated])
+	// The annotation is drawn only with the WCS it was computed with, so another solution shown hides it.
+	const annotation = projection && annotated && annotationMatchesWcs(annotated, annotationPlateSolveJobId(plateSolution)) ? projection : undefined
+	const selectedAnnotation = annotated && view?.annotation.selected?.jobId === annotated.jobId ? view.annotation.selected.id : undefined
 	const wcs = view?.plateSolving.overlay ? solution : undefined
 	const camera = useCameraOperationContext(document)
 	const guide = useTppaOverlay(document)
@@ -140,11 +153,12 @@ export function ImagesWorkspace() {
 							)
 						}
 						overlays={
-							(markers || lines || wcs || reticle || guide || trails || guiding) && view
+							(markers || lines || wcs || annotation || reticle || guide || trails || guiding) && view
 								? (size, overlay) => (
 										<>
 											{reticle && <Reticle {...size} />}
 											{wcs && <WcsOverlay solution={wcs} image={size} view={overlay} grid={view.plateSolving.grid} />}
+											{annotation && <AnnotationOverlay projection={annotation} view={overlay} state={view.annotation} selected={selectedAnnotation} />}
 											{guide && <TppaOverlay geometry={guide} view={overlay} />}
 											{trails && <DarvOverlay trails={trails} view={overlay} />}
 											{guiding && <GuidingOverlay overlay={guiding.overlay} view={overlay} />}
@@ -167,7 +181,12 @@ export function ImagesWorkspace() {
 												const index = pickStreak(lines, point, STREAK_PICK_RADIUS / overlay.scale, selectedStreak)
 												selectStreak(imagesState, document.key, index === undefined ? undefined : { jobId: lines.jobId, index })
 											}
-										: undefined
+										: annotation && annotated && view && document && tool === 'annotation'
+											? (point, overlay) => {
+													const index = pickAnnotation(shownAnnotations(annotation, view.annotation), point, ANNOTATION_PICK_RADIUS / overlay.scale)
+													selectAnnotation(imagesState, document.key, index === undefined ? undefined : { jobId: annotated.jobId, id: annotated.objects[index].id })
+												}
+											: undefined
 						}
 						empty={
 							waiting ? (

@@ -5,6 +5,7 @@ import type { SkyObserverSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { skyClock } from './clock'
+import { CollapsibleSection } from './CollapsibleSection'
 import { formatDeclination, formatDegrees, formatRightAscension } from './format'
 import { horizontalOf, mountPoint, mountRuntime, mountView } from './mount'
 import type { MountRef } from './objects'
@@ -60,7 +61,7 @@ export function MountInspector({ mountRef, observer, onShowFraming }: MountInspe
 					</Button>
 				</div>
 			</PanelSection>
-			<PanelSection title="Position">
+			<CollapsibleSection id="position" title="Position" summary={state ? motionOf(state) : undefined}>
 				{point && state ? (
 					<>
 						<Datum label="State">{motionOf(state)}</Datum>
@@ -77,7 +78,7 @@ export function MountInspector({ mountRef, observer, onShowFraming }: MountInspe
 				) : (
 					<p className="m-0 text-ink-300">{!same ? 'This mount is no longer the profile’s mount.' : clock.mode !== 'now' ? 'The mount position is shown in real time only.' : 'The mount is disconnected; its position is unknown.'}</p>
 				)}
-			</PanelSection>
+			</CollapsibleSection>
 		</>
 	)
 }

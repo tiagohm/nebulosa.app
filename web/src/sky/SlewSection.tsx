@@ -4,9 +4,9 @@ import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import { operationsState } from '../operations'
 import type { SkyObserverSettings } from '../profile/schema'
-import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
+import { CollapsibleSection } from './CollapsibleSection'
 import { formatDeclination, formatDegrees, formatRightAscension } from './format'
 import { mountRuntime, mountView, slewBlocker, slewMount, slewProgress, stopMount } from './mount'
 import { apiObserver, fetchSkyPosition } from './sky'
@@ -70,7 +70,7 @@ export function SlewSection({ target, targetName, observer }: SlewSectionProps) 
 	}
 
 	return (
-		<PanelSection title="Mount">
+		<CollapsibleSection id="mount" title="Mount" summary={moving ? 'Slewing' : mount.name || undefined}>
 			<div className="flex flex-wrap gap-2">
 				<Button variant="secondary" disabled={!!blocker} title={blocker} onClick={confirm}>
 					Slew to Object
@@ -115,7 +115,7 @@ export function SlewSection({ target, targetName, observer }: SlewSectionProps) 
 					</Button>
 				</div>
 			</Modal>
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 

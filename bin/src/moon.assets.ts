@@ -11,7 +11,7 @@ import { readZip } from './moon/zip'
 // Generates the Moon assets bundled by the web client for the Moon Inspector and its Lunar Surface
 // Explorer, into web/assets/moon (not committed): the NASA SVS CGI Moon Kit LROC color map at 2048×1024
 // (the official JPEG, copied unchanged) and at 4096×2048 (the official 16-bit sRGB TIFF, reduced to 8 bits
-// and encoded as JPEG), the catalog of the IAU-adopted lunar surface features from the USGS Gazetteer of
+// and encoded as JPEG), the gzipped JSON catalog of the IAU-adopted lunar surface features from the USGS Gazetteer of
 // Planetary Nomenclature, and a provenance manifest. Both maps are equirectangular, centered on 0°
 // longitude with east to the right and north up. Source files are downloaded once into bin/data/moon and
 // reused; the audit of the catalog (every record left out and why) is written there too. Each output is
@@ -39,7 +39,7 @@ const SOURCE_FILES = {
 const OUTPUT = {
 	texture2k: 'moon.2k.jpg',
 	texture4k: 'moon.4k.jpg',
-	features: 'moon.features.json',
+	features: 'moon.features.json.gz',
 	provenance: 'moon.provenance.json',
 } as const
 
@@ -65,10 +65,21 @@ function outputFile(name: string) {
 	return join(OUTPUT_DIR, name)
 }
 
-// Writes a file through a temporary one, so a failed run never leaves a truncated asset.
+// Writes a file through a temporary one, so a failed run never leaves a truncated asset. A file whose content is
+// unchanged is left alone, since a running development server keeps the bundled assets open and Windows refuses to
+// replace an open file.
 async function writeAtomically(path: string, data: Uint8Array | string) {
-	await Bun.write(`${path}.tmp`, data)
-	await fs.rename(`${path}.tmp`, path)
+	const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data
+	const current = Bun.file(path)
+	if ((await current.exists()) && Buffer.from(await current.arrayBuffer()).equals(bytes)) return
+	await Bun.write(`${path}.tmp`, bytes)
+
+	try {
+		await fs.rename(`${path}.tmp`, path)
+	} catch (error) {
+		await fs.rm(`${path}.tmp`, { force: true })
+		throw new Error(`Cannot replace ${path}; stop the development server, which keeps it open, and run again`, { cause: error })
+	}
 }
 
 // Returns the SHA-256 of data, hexadecimal.
@@ -101,7 +112,7 @@ if (empty) {
 	const catalog: MoonFeatureCatalog = { schema: MOON_FEATURE_CATALOG_SCHEMA, generatedAt: new Date().toISOString(), features: [] }
 	await writeAtomically(outputFile(OUTPUT.texture2k), placeholder)
 	await writeAtomically(outputFile(OUTPUT.texture4k), placeholder)
-	await writeAtomically(outputFile(OUTPUT.features), JSON.stringify(catalog))
+	await writeAtomically(outputFile(OUTPUT.features), Bun.gzipSync(JSON.stringify(catalog)))
 	await writeAtomically(outputFile(OUTPUT.provenance), `${JSON.stringify({ empty: true, generatedAt: catalog.generatedAt, command: 'bun make:moon --empty' }, null, '\t')}\n`)
 	console.info(`written empty Moon assets to ${OUTPUT_DIR}`)
 	exit(0)
@@ -159,9 +170,10 @@ const catalog: MoonFeatureCatalog = {
 	features: rows,
 }
 const features = JSON.stringify(catalog)
-await writeAtomically(outputFile(OUTPUT.features), features)
+const compressed = Bun.gzipSync(features, { level: 9 })
+await writeAtomically(outputFile(OUTPUT.features), compressed)
 await writeAtomically(join(SOURCE_DIR, 'moon.features.audit.json'), `${JSON.stringify(audit, null, '\t')}\n`)
-console.info(`written ${OUTPUT.features}: ${rows.length} of ${audit.records} features, ${audit.rejected.length} left out, ${features.length} bytes`)
+console.info(`written ${OUTPUT.features}: ${rows.length} of ${audit.records} features, ${audit.rejected.length} left out, ${features.length} bytes gzipped to ${compressed.byteLength}`)
 
 const provenance = {
 	generatedAt,
@@ -170,7 +182,7 @@ const provenance = {
 	outputs: {
 		[OUTPUT.texture2k]: { from: 'lroc_color_2k.jpg', width: header.width, height: header.height, bytes: sources['lroc_color_2k.jpg'].byteLength },
 		[OUTPUT.texture4k]: { from: 'lroc_color_16bit_srgb_4k.tif', width: tiff.width, height: tiff.height, bytes: texture4k.byteLength, jpegQuality: JPEG_QUALITY },
-		[OUTPUT.features]: { from: 'MOON_nomenclature_center_pts.dbf', schema: MOON_FEATURE_CATALOG_SCHEMA, features: rows.length, bytes: features.length },
+		[OUTPUT.features]: { from: 'MOON_nomenclature_center_pts.dbf', schema: MOON_FEATURE_CATALOG_SCHEMA, features: rows.length, bytes: compressed.byteLength, jsonBytes: features.length },
 	},
 	credits: { textures: TEXTURE_CREDIT, features: FEATURE_CREDIT },
 }

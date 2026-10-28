@@ -20,3 +20,10 @@ declare module '*.jpg' {
 	const url: string
 	export default url
 }
+
+// Gzipped data file imported from a module with `with { type: 'file' }`; the default export is its URL.
+declare module '*.gz' {
+	// URL of the bundled file.
+	const url: string
+	export default url
+}

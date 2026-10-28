@@ -1,7 +1,8 @@
-import type { LocalLunarEclipse, LunarEclipseSummary, MoonAlmanacResponse, MoonPhaseName, SkyObserver } from 'api'
-import { proxy } from 'valtio'
+import type { LocalLunarEclipse, LunarEclipseSummary, LunarFeatureCategory, MoonAlmanacResponse, MoonFeatureCatalog, MoonPhaseName, SkyObserver } from 'api'
+import { proxy, ref } from 'valtio'
 import { fetchJson, jsonInit } from '../../http'
 import { createRequestGuard } from '../selection'
+import { catalogFeatures, type LunarFeature } from './moon.features'
 import { effectiveUp, type MoonViewUp } from './moon.geometry'
 
 // State of the Moon Inspector and its requests: the lunar almanac of the instant the Sky shows (the Moon's appearance,
@@ -11,8 +12,9 @@ import { effectiveUp, type MoonViewUp } from './moon.geometry'
 // replaces a newer one. The almanac is asked again for every new instant the Sky shows (the Sky refreshes the
 // selection at its own bounded cadence) and keeps the last answer for the same observer while the next one loads,
 // saying it is loading; an answer for another observer is cleared at once. The eclipse is asked again only when the
-// instant leaves the interval its search covers. The state lives as long as the tab: nothing is persisted. Times are
-// Unix milliseconds (UTC).
+// instant leaves the interval its search covers. The Lunar Surface Explorer's feature catalog is loaded once, on its
+// first opening, and what the explorer shows (filter, names, search, selection) is kept with the rest. The state lives
+// as long as the tab: nothing is persisted. Times are Unix milliseconds (UTC).
 
 // Names of the phases, for people.
 export const MOON_PHASE_NAMES: Readonly<Record<MoonPhaseName, string>> = {
@@ -63,7 +65,32 @@ export interface MoonState {
 	eclipse: MoonResource<MoonNextEclipse> & { key?: string; from?: number }
 	// Which direction is up in the drawings; the zenith needs an observer.
 	up: MoonViewUp
+	// Lunar surface features of the explorer, loaded when it first opens; kept out of the proxy.
+	features: MoonResource<readonly LunarFeature[]> & { source?: MoonFeatureCatalog['source'] }
+	// What the explorer shows.
+	explorer: MoonExplorerState
 }
+
+// What the Lunar Surface Explorer shows; zoom and pan are the view's own and never stored.
+export interface MoonExplorerState {
+	// Category of the features drawn, or all of them.
+	category: LunarFeatureFilter
+	// Whether the names of the features are drawn.
+	labels: boolean
+	// Text searched for.
+	query: string
+	// Gazetteer id of the feature selected.
+	selected?: number
+}
+
+// Filter of the explorer: every category, or one.
+export type LunarFeatureFilter = 'all' | LunarFeatureCategory
+
+// Every category of the explorer's filters, in the order offered.
+export const LUNAR_FEATURE_CATEGORIES: readonly LunarFeatureCategory[] = ['crater', 'mare', 'mons', 'rima', 'other']
+
+// Names of the categories, for people.
+export const LUNAR_FEATURE_CATEGORY_NAMES: Readonly<Record<LunarFeatureCategory, string>> = { crater: 'Craters', mare: 'Maria and plains', mons: 'Mountains', rima: 'Rilles and valleys', other: 'Other' }
 
 // Browser services the store uses, replaced in tests.
 export interface MoonIo {
@@ -76,14 +103,14 @@ export const browserMoonIo: MoonIo = { fetch: (input, init) => fetch(input, init
 
 // Initial state: nothing loaded, zenith up.
 export function initialMoonState(): MoonState {
-	return { almanac: { loading: false }, eclipse: { loading: false }, up: 'zenith' }
+	return { almanac: { loading: false }, eclipse: { loading: false }, up: 'zenith', features: { loading: false }, explorer: { category: 'all', labels: true, query: '' } }
 }
 
 // Moon Inspector state of the tab.
 export const moonState = proxy<MoonState>(initialMoonState())
 
 // Requests of each resource; a newer one supersedes the previous.
-const guards = { almanac: createRequestGuard(), eclipse: createRequestGuard() }
+const guards = { almanac: createRequestGuard(), eclipse: createRequestGuard(), features: createRequestGuard() }
 
 // Returns the message of a failure, or a generic one.
 function failure(error: unknown) {
@@ -166,4 +193,38 @@ export async function refreshMoonEclipse(state: MoonState, time: number, observe
 // Chooses which direction is up in the drawings.
 export function setMoonViewUp(state: MoonState, up: MoonViewUp) {
 	state.up = up
+}
+
+// Loads the lunar surface feature catalog from its bundled URL (a gzipped JSON file) once; a failure is asked again
+// on the next call. The features are kept out of the proxy, since they are many and never change.
+export async function loadMoonFeatures(state: MoonState, url: string, io: MoonIo = browserMoonIo) {
+	const resource = state.features
+	if (resource.value || resource.loading) return
+
+	const request = guards.features.begin()
+	resource.loading = true
+	resource.error = undefined
+
+	try {
+		const response = await io.fetch(url, { signal: request.signal })
+		if (!response.ok) throw new Error(`The feature catalog could not be loaded (${response.status})`)
+		const bytes = new Uint8Array(await response.arrayBuffer())
+		// The server may already have decoded it; a gzip stream starts with 1f 8b.
+		const text = bytes[0] === 0x1f && bytes[1] === 0x8b ? await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text() : new TextDecoder().decode(bytes)
+		const catalog = JSON.parse(text) as MoonFeatureCatalog
+		const features = catalogFeatures(catalog)
+		if (!request.current()) return
+		resource.value = ref(features)
+		resource.source = catalog.source
+		resource.loading = false
+	} catch (error) {
+		if (!request.current() || aborted(error)) return
+		resource.error = failure(error)
+		resource.loading = false
+	}
+}
+
+// Selects a feature by its Gazetteer id, or none.
+export function selectFeature(state: MoonState, id: number | undefined) {
+	state.explorer.selected = id
 }

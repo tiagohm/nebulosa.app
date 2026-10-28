@@ -4,8 +4,9 @@ import { proxy } from 'valtio'
 // source of truth, so each tab navigates independently and a reload reopens the same context.
 // Paths are /images, /sky, /tools, /tools/<tool>, the Equipment Control page
 // /equipment, /equipment/<device id>, and /equipment/<device id>/indi for the INDI properties of the device,
-// and the Settings page /settings/<section>, with /settings/external-tools/<tool id> for an external program,
-// which are not workspaces of the navigation rail; anything else opens the default route.
+// the Settings page /settings/<section>, with /settings/external-tools/<tool id> for an external program,
+// and the About page /about, opened from the bottom of the navigation rail, which are not workspaces of the
+// navigation rail; anything else opens the default route.
 
 // Main workspaces, in navigation order.
 export const WORKSPACE_IDS = ['images', 'sky', 'tools'] as const
@@ -58,9 +59,16 @@ export interface SettingsRoute {
 	readonly tool?: string
 }
 
+// Location of the About page: the identity of the running distribution. The page is opened from the button at the
+// bottom of the navigation rail and is not a workspace.
+export interface AboutRoute {
+	// About page.
+	readonly workspace: 'about'
+}
+
 // Location within the application: a workspace and, for Tools, the tool shown, the Equipment Control page and its
-// device, or the Settings page and its external program.
-export type Route = ToolsRoute | EquipmentRoute | SettingsRoute | { readonly workspace: Exclude<WorkspaceId, 'tools'> }
+// device, the Settings page and its external program, or the About page.
+export type Route = ToolsRoute | EquipmentRoute | SettingsRoute | AboutRoute | { readonly workspace: Exclude<WorkspaceId, 'tools'> }
 
 // Route opened for an empty or unknown path: Images, where the camera tabs are.
 export const DEFAULT_ROUTE: Route = { workspace: 'images' }
@@ -103,6 +111,7 @@ export function parseRoute(pathname: string): Route {
 		const section = isSettingsSectionId(first) ? first : SETTINGS_SECTION_IDS[0]
 		return first === 'external-tools' && second ? { workspace, section, tool: second } : { workspace, section }
 	}
+	if (workspace === 'about') return { workspace }
 	if (!isWorkspaceId(workspace)) return DEFAULT_ROUTE
 
 	if (workspace === 'tools') return isToolId(first) ? { workspace, tool: first } : { workspace }

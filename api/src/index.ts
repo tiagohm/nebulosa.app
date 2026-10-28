@@ -38,6 +38,8 @@ import { createWheelRoutes, WheelCommands } from './wheels'
 
 // HTTP routes and the WebSocket handler of the backend, mounted by the app server.
 
+export type { AboutInfo } from './about'
+export { createAboutRoutes } from './about'
 export type { AutoFocusCaptureSettings, AutoFocusEvent, AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusStartResponse, AutoFocusState, AutoFocusVerification, FocusMeasurement } from './autofocus'
 export type { FocusCurve, FocusCurveHyperbola, FocusCurveParabola, FocusCurveSeries, FocusCurveSeriesKind, FocusCurveTrendLines } from './autofocus.curve'
 export type { CameraCoolerRequest, CameraTemperatureRequest } from './cameras'

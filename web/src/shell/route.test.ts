@@ -41,6 +41,12 @@ describe('parse', () => {
 		expect(routePath({ workspace: 'settings', tool: 'astap' })).toBe('/settings/external-tools/astap')
 	})
 
+	test('reads the About page', () => {
+		expect(parseRoute('/about')).toEqual({ workspace: 'about' })
+		expect(parseRoute('/about/extra')).toEqual({ workspace: 'about' })
+		expect(routePath({ workspace: 'about' })).toBe('/about')
+	})
+
 	test('opens Images for empty and unknown paths, the removed Capture workspace included', () => {
 		expect(DEFAULT_ROUTE).toEqual({ workspace: 'images' })
 		expect(parseRoute('/')).toEqual(DEFAULT_ROUTE)
@@ -50,7 +56,7 @@ describe('parse', () => {
 	})
 
 	test('round-trips canonical paths', () => {
-		for (const path of ['/images', '/sky', '/tools', '/tools/calculator', '/equipment/abc123', '/equipment/abc123/indi']) expect(routePath(parseRoute(path))).toBe(path)
+		for (const path of ['/images', '/sky', '/tools', '/tools/calculator', '/equipment/abc123', '/equipment/abc123/indi', '/about']) expect(routePath(parseRoute(path))).toBe(path)
 	})
 })
 
@@ -64,6 +70,17 @@ describe('navigate', () => {
 
 		expect(history.paths).toEqual(['/sky'])
 		expect(state.route).toEqual({ workspace: 'sky' })
+	})
+
+	test('opens the About page once', () => {
+		const state = newState()
+		const history = fakeHistory()
+
+		navigate(state, { workspace: 'about' }, history)
+		navigate(state, { workspace: 'about' }, history)
+
+		expect(history.paths).toEqual(['/about'])
+		expect(state.route).toEqual({ workspace: 'about' })
 	})
 
 	test('redirect replaces the path without a history entry', () => {

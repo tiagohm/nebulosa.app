@@ -24,6 +24,24 @@ function embeddedPath(path: string) {
 	return JSON.stringify(`./${relative(ROOT, path).replaceAll('\\', '/')}`)
 }
 
+// Commit checked out in the Git work tree at dir, or undefined when it cannot be read (no Git, a source archive,
+// an uninitialized submodule), so missing provenance never fails the build.
+function gitHead(dir: string) {
+	try {
+		const result = Bun.spawnSync(['git', 'rev-parse', 'HEAD'], { cwd: dir, stdout: 'pipe', stderr: 'ignore' })
+		const commit = result.stdout.toString().trim()
+		return result.exitCode === 0 && commit ? commit : undefined
+	} catch {
+		return undefined
+	}
+}
+
+// Define value of an optional string. An absent value is defined as undefined rather than left out, so the
+// executable never reads a variable of the same name from its environment instead.
+function defineString(value?: string) {
+	return value === undefined ? 'undefined' : JSON.stringify(value)
+}
+
 await build({
 	entrypoints: [join(import.meta.dir, 'src/main.ts'), IMAGE_WORKER, IMAGE_PROCESSING_WORKER, STAR_WORKER, STREAK_WORKER, DARV_WORKER, FLATWIZARD_WORKER, GUIDING_WORKER, SOLARECLIPSE_WORKER],
 	minify: true,
@@ -40,6 +58,10 @@ await build({
 		'process.env.NEBULOSA_FLATWIZARD_WORKER': embeddedPath(FLATWIZARD_WORKER),
 		'process.env.NEBULOSA_GUIDING_WORKER': embeddedPath(GUIDING_WORKER),
 		'process.env.NEBULOSA_SOLARECLIPSE_WORKER': embeddedPath(SOLARECLIPSE_WORKER),
+		// Provenance shown by the About page, recorded once when compiling.
+		'process.env.NEBULOSA_BUILD_COMMIT': defineString(gitHead(ROOT)),
+		'process.env.NEBULOSA_CORE_COMMIT': defineString(gitHead(join(ROOT, 'core'))),
+		'process.env.NEBULOSA_BUILT_AT': JSON.stringify(new Date().toISOString()),
 	},
 	plugins: [bunTailwindPlugin],
 	reactCompiler: true,

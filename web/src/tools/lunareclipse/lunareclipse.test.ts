@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { LunarEclipseSummary } from 'api'
 import { proxy } from 'valtio'
 import type { EclipseIo } from '../eclipse/eclipse'
-import { findEclipse, findEclipseFrom, initialLunarEclipseState, type LunarEclipseState, nextEclipse, openLunarEclipseMap, phaseDurations, selectEvent, selectPlace, setViewSettings } from './lunareclipse'
+import { findEclipse, findEclipseFrom, initialLunarEclipseState, type LunarEclipseState, nextEclipse, openLunarEclipseMap, phaseDurations, selectEvent, selectPlace, setViewSettings, showLunarEclipse } from './lunareclipse'
 
 // Fake API whose responses are released by the test, in any order.
 function fakeApi() {
@@ -96,6 +96,50 @@ test('steps from the eclipse shown and keeps a contact it has, falling back to M
 	void nextEclipse(state, io)
 	await release((url) => url === `/api/eclipses/lunar?time=${A.maximum}&direction=next`, B)
 	expect(state.selectedEvent).toBe('MAX')
+})
+
+test('a linked eclipse replaces the one shown, with its local circumstances, keeping a contact it has', async () => {
+	const state = newState()
+	Object.assign(state, { eclipse: A, map: mapOf(A), selectedEvent: 'U2', place: { source: 'manual', longitude: 10, latitude: 20 } })
+	const { io, requested, release } = fakeApi()
+
+	void showLunarEclipse(state, B.id, io)
+	expect(requested).toEqual([`/api/eclipses/lunar/${B.id}/map`])
+	expect(state.eclipse).toBeUndefined()
+	expect(state.map).toBeUndefined()
+	expect(state.loading).toBe(true)
+
+	await release((url) => url.endsWith('/map'), mapOf(B))
+	expect(state.eclipse).toEqual(B)
+	expect(state.map?.eclipse).toEqual(B)
+	expect(state.loading).toBe(false)
+	expect(state.selectedEvent).toBe('MAX')
+	expect(requested.at(-1)).toStartWith(`/api/eclipses/lunar/${B.id}/local?longitude=10&latitude=20&event=MAX`)
+})
+
+test('the linked eclipse already shown is not loaded again', () => {
+	const state = newState()
+	state.eclipse = A
+	state.map = mapOf(A)
+	const { io, requested } = fakeApi()
+
+	void showLunarEclipse(state, A.id, io)
+	expect(requested).toEqual([])
+})
+
+test('a linked eclipse supersedes a search in progress, and an unknown id is an error', async () => {
+	const state = newState()
+	const { io, release } = fakeApi()
+
+	void findEclipse(state, 0, 'next', io)
+	void showLunarEclipse(state, '42', io)
+	await release((url) => url.startsWith('/api/eclipses/lunar?'), A).catch(() => undefined)
+	await release((url) => url === '/api/eclipses/lunar/42/map', { error: 'Lunar eclipse not found', code: 'notFound' }, 404)
+
+	expect(state.eclipse).toBeUndefined()
+	expect(state.map).toBeUndefined()
+	expect(state.error).toBe('Lunar eclipse not found')
+	expect(state.loading).toBe(false)
 })
 
 test('a click on the map asks only for the local circumstances, and a contact only redraws them', async () => {

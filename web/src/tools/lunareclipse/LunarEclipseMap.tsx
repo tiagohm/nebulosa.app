@@ -2,6 +2,7 @@ import type { LunarEclipseContactKind, LunarEclipseMap as LunarEclipseMapData } 
 import { useEffect, useMemo, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { activeProfile, profileState } from '../../profile/profile'
+import { redirect, routeState } from '../../shell/route'
 import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
@@ -12,14 +13,15 @@ import { WorldMap, WorldMapSymbol } from '../../ui/WorldMap'
 import { DEGREE_PLANE_TRANSFORM } from '../../ui/worldmap.geometry'
 import { displayTimeZone, formatEclipseTime, utcDate } from '../eclipse/eclipse'
 import { EclipseHeading, EclipseMapLegend } from '../eclipse/EclipseMapParts'
-import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, findEclipseFrom, lunarEclipseState, nextEclipse, openLunarEclipseMap, previousEclipse, retryEclipse, selectEvent, selectPlace } from './lunareclipse'
+import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, findEclipseFrom, lunarEclipseState, nextEclipse, openLunarEclipseMap, previousEclipse, retryEclipse, selectEvent, selectPlace, showLunarEclipse } from './lunareclipse'
 import { LunarEclipsePanel } from './LunarEclipsePanel'
 
 // Lunar Eclipse Map tool: steps through lunar eclipses (previous, next, from a date, optionally only those
 // visible from the place), draws on the world map where the Moon is above the horizon at the selected contact
 // with the moonrise/moonset line of every contact and the sublunar points, and shows the local circumstances of
-// the place clicked on the map in the contextual panel. Map paths come from the API on the degree plane and are
-// scaled to map units here; zooming and panning never ask the API for anything.
+// the place clicked on the map in the contextual panel. A URL that names an eclipse opens that one. Map paths come
+// from the API on the degree plane and are scaled to map units here; zooming and panning never ask the API for
+// anything.
 
 interface EclipseOverlayProps {
 	// Global map of the eclipse.
@@ -70,19 +72,32 @@ export function LunarEclipseMap() {
 	const { eclipse, map, loading, error, notice, selectedEvent, place, visibleOnly } = state
 	const [date, setDate] = useState('')
 	const timeZone = displayTimeZone(state)
+	const { route } = useSnapshot(routeState)
+	const linked = route.workspace === 'tools' ? route.eclipse : undefined
 
-	// Takes the Sky observer as the place and shows the next eclipse on the first visit of the tab.
+	// Takes the Sky observer as the place and shows the eclipse the URL names, or the next eclipse on the first
+	// visit of the tab; a reload, back, or forward shows the eclipse of the URL again.
 	useEffect(() => {
+		if (linked) void showLunarEclipse(lunarEclipseState, linked)
 		openLunarEclipseMap(lunarEclipseState, activeProfile(profileState).settings.sky.observer)
-	}, [])
+	}, [linked])
 
 	// The map layers are drawn again only when the eclipse or the contact change, never on zoom or pan.
 	const overlay = useMemo(() => map && <EclipseOverlay map={map} selectedEvent={selectedEvent} />, [map, selectedEvent])
 	const selectedContact = eclipse?.contacts.find((contact) => contact.kind === selectedEvent)
 	const title = eclipse ? `${ECLIPSE_TYPE_NAMES[eclipse.type]} lunar eclipse · ${utcDate(eclipse.maximum)}` : 'Lunar eclipse'
 
+	// Keeps a URL that names an eclipse naming the one shown once a search steps to another eclipse.
+	function follow(search: Promise<void>) {
+		void search.then(() => {
+			const current = routeState.route
+			const id = lunarEclipseState.eclipse?.id
+			if (current.workspace === 'tools' && current.tool === 'lunar-eclipse-map' && current.eclipse && id && current.eclipse !== id) redirect(routeState, { ...current, eclipse: id })
+		})
+	}
+
 	function find() {
-		if (date) void findEclipseFrom(lunarEclipseState, date)
+		if (date) follow(findEclipseFrom(lunarEclipseState, date))
 	}
 
 	return (
@@ -90,9 +105,9 @@ export function LunarEclipseMap() {
 			<div className="flex h-full flex-col bg-base-000">
 				<div className="flex flex-none flex-wrap items-center gap-2 border-b border-line-100 bg-base-100 px-2 py-1.5">
 					<div className="flex min-w-0 items-center gap-1">
-						<IconButton icon="stepBack" label="Previous eclipse" disabled={loading && !eclipse} onClick={() => void previousEclipse(lunarEclipseState)} />
+						<IconButton icon="stepBack" label="Previous eclipse" disabled={loading && !eclipse} onClick={() => follow(previousEclipse(lunarEclipseState))} />
 						<EclipseHeading type={eclipse && `${ECLIPSE_TYPE_NAMES[eclipse.type]} lunar eclipse`} date={eclipse && utcDate(eclipse.maximum)} fallback="Lunar eclipse" />
-						<IconButton icon="stepForward" label="Next eclipse" disabled={loading && !eclipse} onClick={() => void nextEclipse(lunarEclipseState)} />
+						<IconButton icon="stepForward" label="Next eclipse" disabled={loading && !eclipse} onClick={() => follow(nextEclipse(lunarEclipseState))} />
 					</div>
 					<form
 						className="flex items-center gap-1"
@@ -137,7 +152,7 @@ export function LunarEclipseMap() {
 								title="The lunar eclipse could not be computed"
 								description={error}
 								action={
-									<Button variant="secondary" onClick={() => void retryEclipse(lunarEclipseState)}>
+									<Button variant="secondary" onClick={() => (linked && !eclipse ? void showLunarEclipse(lunarEclipseState, linked) : follow(retryEclipse(lunarEclipseState)))}>
 										Retry
 									</Button>
 								}

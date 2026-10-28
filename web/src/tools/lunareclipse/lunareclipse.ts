@@ -140,6 +140,39 @@ export function findEclipseFrom(state: LunarEclipseState, date: string, io: Ecli
 	return findEclipse(state, utcDateStart(date) - 1, 'next', io)
 }
 
+// Shows the eclipse an id names with its map, as a link to it asks; does nothing when it is already shown. The
+// eclipse shown before is cleared at once, so an id that names no eclipse shows the error, never another eclipse. A
+// newer search or id discards this one's late answers.
+export async function showLunarEclipse(state: LunarEclipseState, id: string, io: EclipseIo = browserEclipseIo) {
+	if (state.eclipse?.id === id && state.map && !state.loading) return
+
+	const request = eclipseGuard.begin()
+
+	state.loading = true
+	state.error = undefined
+	state.notice = undefined
+
+	if (state.eclipse?.id !== id) {
+		state.eclipse = undefined
+		state.map = undefined
+		state.local = undefined
+	}
+
+	try {
+		const map = await fetchJson<LunarEclipseMap>(io, `/api/eclipses/lunar/${encodeURIComponent(id)}/map`, { signal: request.signal })
+		if (!request.current()) return
+		state.eclipse = map.eclipse
+		state.map = map
+		state.loading = false
+		if (!map.eclipse.contacts.some((contact) => contact.kind === state.selectedEvent)) state.selectedEvent = 'MAX'
+		void loadLocal(state, io)
+	} catch (error) {
+		if (!request.current() || aborted(error)) return
+		state.error = errorMessage(error)
+		state.loading = false
+	}
+}
+
 // Opens the tool: on the first visit, takes the Sky observer as the place, when there is one, and shows the next
 // eclipse after now; later visits keep what was shown.
 export function openLunarEclipseMap(state: LunarEclipseState, observer: SkyObserverSettings | undefined, io: EclipseIo = browserEclipseIo) {

@@ -181,3 +181,48 @@ export function annotationPlateSolveJobId(solution: { readonly job?: { readonly 
 export function annotationMatchesWcs(result: Pick<AnnotationResult, 'request'>, plateSolveJobId: string | undefined): boolean {
 	return result.request.plateSolveJobId === plateSolveJobId
 }
+
+// Observer of the solar-system bodies of an annotation: geographic position, degrees and meters.
+export interface AnnotationObserverSettings {
+	// Geodetic latitude in degrees, north positive.
+	readonly latitude: number
+	// Geodetic longitude in degrees, east positive.
+	readonly longitude: number
+	// Height above the ellipsoid in meters.
+	readonly elevation: number
+}
+
+// What the next run of a document annotates with.
+export interface AnnotationRequestInput {
+	// Faintest magnitude kept.
+	readonly magnitudeLimit: number
+	// Plate solving job whose solution is used; absent uses the header's WCS.
+	readonly plateSolveJobId?: string
+	// Observation instant set by hand, Unix milliseconds (UTC); absent uses the header's.
+	readonly time?: number
+	// Observer of the solar-system bodies; absent sees them from the Earth's center.
+	readonly observer?: AnnotationObserverSettings
+}
+
+// Returns the request of a run: only the position of an observer is sent, never its name or time zone.
+export function annotationRequest({ magnitudeLimit, plateSolveJobId, time, observer }: AnnotationRequestInput): AnnotationRequest {
+	return {
+		kind: 'local',
+		magnitudeLimit,
+		...(plateSolveJobId !== undefined && { plateSolveJobId }),
+		...(time !== undefined && { time }),
+		...(observer && { observer: { latitude: observer.latitude, longitude: observer.longitude, elevation: observer.elevation } }),
+	}
+}
+
+// Formats an instant (Unix milliseconds) as the UTC value of a datetime-local input, to the second.
+export function utcInputValue(time: number): string {
+	return new Date(time).toISOString().slice(0, 19)
+}
+
+// Parses the value of a datetime-local input as UTC, Unix milliseconds; undefined when blank or not a date-time.
+export function parseUtcInput(value: string): number | undefined {
+	if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(value)) return undefined
+	const time = Date.parse(`${value}Z`)
+	return Number.isFinite(time) ? time : undefined
+}

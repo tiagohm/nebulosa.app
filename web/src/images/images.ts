@@ -146,6 +146,10 @@ export interface ImageAnnotationState {
 	density: AnnotationDensity
 	// Faintest magnitude of the next run, and of the objects drawn when fainter than the result's own.
 	magnitudeLimit: number
+	// Whether the next run sees the solar-system bodies from the profile's observer instead of the Earth's center.
+	useObserver: boolean
+	// Observation instant of the next run set by hand, Unix milliseconds (UTC); absent uses the image header's.
+	time?: number
 	// Selected object: its id in the result of a job, which only counts while that result is shown.
 	selected?: { readonly jobId: string; readonly id: string }
 }
@@ -396,7 +400,7 @@ export function newView(): ImageViewState {
 		stars: { visible: true, acceptedOnly: false },
 		streaks: { visible: true, labels: true, useSolution: true, useStars: true },
 		plateSolving: { request: { ...DEFAULT_PLATE_SOLVE_REQUEST }, overlay: true, grid: false },
-		annotation: { layers: { stars: true, deepSky: true, solarSystem: true, constellations: true, constellationLabels: false }, labels: true, outlines: true, motion: true, density: 'balanced', magnitudeLimit: DEFAULT_ANNOTATION_MAGNITUDE_LIMIT },
+		annotation: { layers: { stars: true, deepSky: true, solarSystem: true, constellations: true, constellationLabels: false }, labels: true, outlines: true, motion: true, density: 'balanced', magnitudeLimit: DEFAULT_ANNOTATION_MAGNITUDE_LIMIT, useObserver: false },
 		processing: { steps: [], expanded: [], adding: DEFAULT_ADDED_OPERATION },
 	}
 }

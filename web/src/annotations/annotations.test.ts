@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnnotationJob, AnnotationRequest, AnnotationResult } from 'api'
 import { proxy } from 'valtio'
-import { annotationMatchesWcs, annotationPlateSolveJobId, type AnnotationsState, handleAnnotationsEvent, latestAnnotationJob, latestAnnotationResult, loadAnnotationResult, refreshAnnotations, runAnnotation, sameAnnotationRequest } from './annotations'
+import { annotationMatchesWcs, annotationPlateSolveJobId, annotationRequest, type AnnotationsState, handleAnnotationsEvent, latestAnnotationJob, latestAnnotationResult, loadAnnotationResult, parseUtcInput, refreshAnnotations, runAnnotation, sameAnnotationRequest, utcInputValue } from './annotations'
 
 const REQUEST: AnnotationRequest = { kind: 'local', magnitudeLimit: 12 }
 
@@ -87,5 +87,23 @@ describe('requests and WCS', () => {
 		expect(annotationMatchesWcs(header, 'p')).toBeFalse()
 		expect(annotationMatchesWcs(solved, 'p')).toBeTrue()
 		expect(annotationMatchesWcs(solved, 'q')).toBeFalse()
+	})
+})
+
+describe('next run', () => {
+	test('the request sends the time and only the position of the observer', () => {
+		expect(annotationRequest({ magnitudeLimit: 10 })).toEqual({ kind: 'local', magnitudeLimit: 10 })
+		const observer = { name: 'Backyard', latitude: -23.5, longitude: -46.6, elevation: 760, timeZone: 'America/Sao_Paulo' }
+		expect(annotationRequest({ magnitudeLimit: 10, plateSolveJobId: 'p', time: 1000, observer })).toEqual({ kind: 'local', magnitudeLimit: 10, plateSolveJobId: 'p', time: 1000, observer: { latitude: -23.5, longitude: -46.6, elevation: 760 } })
+	})
+
+	test('UTC date-times of the time input', () => {
+		const time = Date.UTC(2026, 0, 15, 2, 0, 30)
+		expect(utcInputValue(time)).toBe('2026-01-15T02:00:30')
+		expect(parseUtcInput('2026-01-15T02:00:30')).toBe(time)
+		expect(parseUtcInput('2026-01-15T02:00')).toBe(Date.UTC(2026, 0, 15, 2))
+		expect(parseUtcInput('')).toBeUndefined()
+		expect(parseUtcInput('2026-01-15')).toBeUndefined()
+		expect(parseUtcInput('2026-13-45T99:00')).toBeUndefined()
 	})
 })

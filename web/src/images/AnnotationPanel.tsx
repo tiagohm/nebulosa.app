@@ -2,11 +2,12 @@ import type { AnnotationJob, AnnotationLayer, AnnotationObject, AnnotationReques
 import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { isAnnotationShown } from '../annotations/AnnotationOverlay'
-import { annotationPlateSolveJobId, annotationsState, cancelAnnotation, isActive, runAnnotation, sameAnnotationRequest } from '../annotations/annotations'
+import { annotationPlateSolveJobId, annotationRequest, annotationsState, cancelAnnotation, isActive, parseUtcInput, runAnnotation, sameAnnotationRequest, utcInputValue } from '../annotations/annotations'
 import { useAnnotationResult } from '../annotations/useAnnotationResult'
 import { Actions, Notice } from '../equipment-control/parts'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { activeProfile, profileState } from '../profile/profile'
+import type { SkyObserverSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { navigate, routeState } from '../shell/route'
 import { EmptyState } from '../shell/WorkspaceLayout'
@@ -88,13 +89,16 @@ function Annotation({ documentKey, info, annotation, selectedSolution, unavailab
 	const solution = usePlateSolution(imageId, selectedSolution)
 	const plateSolveJobId = annotationPlateSolveJobId(solution)
 	const wcsAvailable = plateSolveJobId !== undefined || solution.header !== undefined
-	const request: AnnotationRequest = { kind: 'local', magnitudeLimit: annotation.magnitudeLimit, ...(plateSolveJobId !== undefined && { plateSolveJobId }) }
+	const profiles = useSnapshot(profileState)
+	const observer = activeProfile(profiles).settings.sky.observer
+	const request = annotationRequest({ magnitudeLimit: annotation.magnitudeLimit, plateSolveJobId, time: annotation.time, observer: annotation.useObserver ? observer : undefined })
 	const selected = result && annotation.selected?.jobId === result.jobId ? result.objects.find((e) => e.id === annotation.selected!.id) : undefined
 	const edit = (patch: Parameters<typeof setAnnotationView>[2]) => setAnnotationView(imagesState, documentKey, patch)
 
 	return (
 		<>
 			<Analysis documentKey={documentKey} imageId={imageId} request={request} job={job} wcsAvailable={wcsAvailable} submitError={imageId === undefined ? undefined : submitErrors[imageId]} unavailable={unavailable} />
+			<Observation annotation={annotation} observer={observer} onChange={edit} />
 			<PanelSection title="Layers">
 				<Checkbox label="Deep-sky objects" checked={annotation.layers.deepSky} onChange={(deepSky) => edit({ layers: { deepSky } })} />
 				<Checkbox label="Stars" checked={annotation.layers.stars} onChange={(stars) => edit({ layers: { stars } })} />
@@ -175,11 +179,62 @@ function Analysis({ documentKey, imageId, request, job, wcsAvailable, submitErro
 					{observation && <Property label="Time from">{`${TIME_ORIGIN_LABELS[observation.origin]}${observation.approximate ? ' (approximate)' : ''}`}</Property>}
 					{observation && <Property label="Seen from">{observation.center === 'topocentric' ? 'Observer' : 'Center of the Earth'}</Property>}
 					{job.error && <Notice error>{job.error}</Notice>}
-					{changed && <Notice>The WCS or the magnitude limit changed since this analysis; run it again to apply them.</Notice>}
+					{changed && <Notice>The WCS, the magnitude limit, the time, or the observer changed since this analysis; run it again to apply them.</Notice>}
 				</>
 			) : (
 				imageId !== undefined && <Notice>No analysis of this image yet.</Notice>
 			)}
+		</PanelSection>
+	)
+}
+
+interface ObservationProps {
+	// Annotation state of the document.
+	readonly annotation: ImageAnnotationState
+	// Observer of the active profile, if any.
+	readonly observer?: SkyObserverSettings
+	// Changes the annotation state.
+	readonly onChange: (patch: Parameters<typeof setAnnotationView>[2]) => void
+}
+
+// Observation instant and observer of the next run, for the solar-system bodies and the proper motion of the stars. The
+// instant is entered in UTC; blank uses the image header, never the current time.
+function Observation({ annotation, observer, onChange }: ObservationProps) {
+	// Text being typed, kept while it is not a complete date-time.
+	const [text, setText] = useState<string>()
+	const value = text ?? (annotation.time === undefined ? '' : utcInputValue(annotation.time))
+	const place = observer && (observer.name ?? `${observer.latitude.toFixed(3)}°, ${observer.longitude.toFixed(3)}°`)
+
+	return (
+		<PanelSection title="Observation">
+			<TextInput
+				label="Time (UTC)"
+				type="datetime-local"
+				step={1}
+				value={value}
+				onChange={(event) => {
+					const next = event.currentTarget.value
+					const time = parseUtcInput(next)
+					setText(next)
+					if (!next) onChange({ time: undefined })
+					else if (time !== undefined) onChange({ time })
+				}}
+				onBlur={() => setText(undefined)}
+			/>
+			<Button
+				variant="secondary"
+				className="self-start"
+				disabled={annotation.time === undefined}
+				onClick={() => {
+					setText(undefined)
+					onChange({ time: undefined })
+				}}
+			>
+				Use Image Time
+			</Button>
+			<Notice>Blank uses DATE-OBS of the image header, or DATE-END and the exposure, at the middle of the exposure. Without a time, no solar-system body is shown and the stars stay at J2000.</Notice>
+			<Checkbox label="See the bodies from the profile's observer" checked={annotation.useObserver && observer !== undefined} disabled={!observer} onChange={(useObserver) => onChange({ useObserver })} />
+			{place ? annotation.useObserver && <Notice>{`The observer of the profile (${place}) may not be where this image was taken.`}</Notice> : <Notice>The profile has no observer, so the bodies are seen from the center of the Earth, which puts the Moon up to a degree off. Set one in the Sky workspace.</Notice>}
 		</PanelSection>
 	)
 }

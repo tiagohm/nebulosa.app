@@ -11,6 +11,7 @@ import { TextInput } from '../../ui/TextInput'
 import { WorldMap, WorldMapSymbol } from '../../ui/WorldMap'
 import { DEGREE_PLANE_TRANSFORM } from '../../ui/worldmap.geometry'
 import { displayTimeZone, formatEclipseTime, utcDate } from '../eclipse/eclipse'
+import { EclipseHeading, EclipseMapLegend } from '../eclipse/EclipseMapParts'
 import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, findEclipseFrom, lunarEclipseState, nextEclipse, openLunarEclipseMap, previousEclipse, retryEclipse, selectEvent, selectPlace } from './lunareclipse'
 import { LunarEclipsePanel } from './LunarEclipsePanel'
 
@@ -90,7 +91,7 @@ export function LunarEclipseMap() {
 				<div className="flex flex-none flex-wrap items-center gap-2 border-b border-line-100 bg-base-100 px-2 py-1.5">
 					<div className="flex min-w-0 items-center gap-1">
 						<IconButton icon="stepBack" label="Previous eclipse" disabled={loading && !eclipse} onClick={() => void previousEclipse(lunarEclipseState)} />
-						<span className="min-w-0 truncate text-[13px] font-medium text-ink-100">{title}</span>
+						<EclipseHeading type={eclipse && `${ECLIPSE_TYPE_NAMES[eclipse.type]} lunar eclipse`} date={eclipse && utcDate(eclipse.maximum)} fallback="Lunar eclipse" />
 						<IconButton icon="stepForward" label="Next eclipse" disabled={loading && !eclipse} onClick={() => void nextEclipse(lunarEclipseState)} />
 					</div>
 					<form
@@ -113,7 +114,7 @@ export function LunarEclipseMap() {
 						{overlay}
 					</WorldMap>
 					{map && selectedContact && (
-						<div className="pointer-events-none absolute bottom-9 left-3 flex max-w-[calc(100%-1.5rem)] flex-col gap-1 rounded-sm border border-line-100 bg-base-100/70 px-2.5 py-2 text-xs leading-4 text-ink-200">
+						<EclipseMapLegend passThrough>
 							<span className="flex items-center gap-2">
 								<span className="size-3 flex-none rounded-xs border border-accent bg-accent/15" />
 								Moon above the horizon at {selectedEvent} · {formatEclipseTime(selectedContact.time, timeZone)}
@@ -126,7 +127,7 @@ export function LunarEclipseMap() {
 								<span className="size-3 flex-none rounded-full border-[1.5px] border-ink-100 bg-base-000" />
 								Moon at the zenith at greatest eclipse
 							</span>
-						</div>
+						</EclipseMapLegend>
 					)}
 					{loading && <p className="pointer-events-none absolute top-3 left-3 m-0 text-xs text-ink-300">Computing the eclipse…</p>}
 					{notice && <p className="pointer-events-none absolute top-3 left-3 m-0 rounded-sm bg-base-100/90 px-2 py-1 text-xs text-ink-200">{notice}</p>}

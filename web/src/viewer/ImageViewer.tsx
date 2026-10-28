@@ -214,7 +214,7 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 
 	return (
 		<div className="flex h-full min-h-0 flex-col bg-base-000">
-			<div className="flex h-10 flex-none items-center gap-1 border-b border-line-100 bg-base-100 px-2">
+			<div className="flex min-h-10 flex-none flex-wrap items-center gap-1 border-b border-line-100 bg-base-100 px-2 py-1">
 				<IconButton icon="zoomOut" label="Zoom out (-)" disabled={!image} onClick={() => zoom(1 / ZOOM_STEP)} />
 				<IconButton icon="zoomIn" label="Zoom in (+)" disabled={!image} onClick={() => zoom(ZOOM_STEP)} />
 				<IconButton icon="fit" label="Fit to view (0)" disabled={!image} pressed={!!image && fitted} onClick={fitView} />

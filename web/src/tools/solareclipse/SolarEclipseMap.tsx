@@ -12,6 +12,7 @@ import { TextInput } from '../../ui/TextInput'
 import { WorldMap, type WorldMapHandle, WorldMapSymbol } from '../../ui/WorldMap'
 import { DEGREE_PLANE_TRANSFORM } from '../../ui/worldmap.geometry'
 import { displayTimeZone, formatEclipseTime, utcDate } from '../eclipse/eclipse'
+import { EclipseHeading, EclipseMapLegend } from '../eclipse/EclipseMapParts'
 import { GlobalPointIcon, GlobalPointMarker } from './GlobalPointMarker'
 import { ECLIPSE_TYPE_NAMES, findEclipseFrom, GLOBAL_POINTS, type GlobalPointKind, globalPoints, labelRows, limitName, nextEclipse, openSolarEclipseMap, previousEclipse, retryEclipse, type SolarEclipseLayers, selectPlace, setLayer, showEclipse, solarEclipseState } from './solareclipse'
 import { SolarEclipsePanel } from './SolarEclipsePanel'
@@ -152,7 +153,7 @@ export function SolarEclipseMap() {
 				<div className="flex flex-none flex-wrap items-center gap-2 border-b border-line-100 bg-base-100 px-2 py-1.5">
 					<div className="flex min-w-0 items-center gap-1">
 						<IconButton icon="stepBack" label="Previous eclipse" disabled={loading && !eclipse} onClick={() => follow(previousEclipse(solarEclipseState))} />
-						<span className="min-w-0 truncate text-[13px] font-medium text-ink-100">{title}</span>
+						<EclipseHeading type={eclipse && `${ECLIPSE_TYPE_NAMES[eclipse.type]} solar eclipse`} date={eclipse && utcDate(eclipse.maximum)} fallback="Solar eclipse" />
 						<IconButton icon="stepForward" label="Next eclipse" disabled={loading && !eclipse} onClick={() => follow(nextEclipse(solarEclipseState))} />
 					</div>
 					<form
@@ -174,7 +175,7 @@ export function SolarEclipseMap() {
 						{overlay}
 					</WorldMap>
 					{map && eclipse && (
-						<div className="absolute bottom-9 left-3 flex max-w-[calc(100%-1.5rem)] flex-col gap-1 rounded-sm border border-line-100 bg-base-100/80 px-2.5 py-2 text-xs leading-4 text-ink-200">
+						<EclipseMapLegend>
 							{map.greatestEclipse && <span className="text-ink-100">Greatest eclipse · {formatEclipseTime(map.greatestEclipse.time, timeZone)}</span>}
 							{central && (
 								<LegendItem
@@ -189,7 +190,7 @@ export function SolarEclipseMap() {
 							{map.paths.riseSet && <LegendItem layer="riseSet" label="Eclipse at sunrise or sunset" swatch={<LineSwatch dashed />} checked={layers.riseSet} />}
 							<LegendItem layer="points" label="Global points (see the panel)" swatch={<GlobalPointIcon kind="MAX" />} checked={layers.points} />
 							<LegendItem layer="labels" label="Names of the points" swatch={<span className="font-mono text-[10px] font-semibold text-ink-100">P1</span>} checked={layers.labels} />
-						</div>
+						</EclipseMapLegend>
 					)}
 					{loading && <p className="pointer-events-none absolute top-3 left-3 m-0 text-xs text-ink-300">Computing the eclipse…</p>}
 					{notice && <p className="pointer-events-none absolute top-3 left-3 m-0 rounded-sm bg-base-100/90 px-2 py-1 text-xs text-ink-200">{notice}</p>}

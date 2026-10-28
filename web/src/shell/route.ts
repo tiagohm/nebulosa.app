@@ -2,7 +2,7 @@ import { proxy } from 'valtio'
 
 // Navigation state of the tab: the active workspace, and for Tools the standalone tool shown. The URL path is the
 // source of truth, so each tab navigates independently and a reload reopens the same context.
-// Paths are /images, /sky, /tools, /tools/<tool>, the Equipment Control page
+// Paths are /images, /sky, /tools, /tools/<tool>, /tools/solar-eclipse-map/<eclipse id>, the Equipment Control page
 // /equipment, /equipment/<device id>, and /equipment/<device id>/indi for the INDI properties of the device,
 // the Settings page /settings/<section>, with /settings/external-tools/<tool id> for an external program,
 // and the About page /about, opened from the bottom of the navigation rail, which are not workspaces of the
@@ -26,6 +26,9 @@ export interface ToolsRoute {
 	readonly workspace: 'tools'
 	// Tool shown; absent for the catalog.
 	readonly tool?: ToolId
+	// Id of the eclipse the Solar Eclipse Map shows (the Unix milliseconds of its greatest eclipse); absent for its
+	// own choice and for every other tool.
+	readonly eclipse?: string
 }
 
 // View of a device in the Equipment Control page besides its controls: its INDI properties.
@@ -103,7 +106,8 @@ export function settingsSection(route: SettingsRoute): SettingsSectionId {
 }
 
 // Returns the route of a URL path. An unknown workspace gives DEFAULT_ROUTE; an unknown tool opens the Tools
-// catalog; an unknown Settings section opens the first one; extra segments are ignored.
+// catalog; an unknown Settings section opens the first one; extra segments are ignored, but for the eclipse id of the
+// Solar Eclipse Map.
 export function parseRoute(pathname: string): Route {
 	const [workspace = '', first = '', second = ''] = pathname.split('/').filter(Boolean)
 	if (workspace === 'equipment') return first ? (second === 'indi' ? { workspace, device: first, view: second } : { workspace, device: first }) : { workspace }
@@ -114,14 +118,17 @@ export function parseRoute(pathname: string): Route {
 	if (workspace === 'about') return { workspace }
 	if (!isWorkspaceId(workspace)) return DEFAULT_ROUTE
 
-	if (workspace === 'tools') return isToolId(first) ? { workspace, tool: first } : { workspace }
+	if (workspace === 'tools') {
+		if (!isToolId(first)) return { workspace }
+		return first === 'solar-eclipse-map' && second ? { workspace, tool: first, eclipse: decodeURIComponent(second) } : { workspace, tool: first }
+	}
 
 	return { workspace }
 }
 
 // Returns the canonical URL path of a route.
 export function routePath(route: Route): string {
-	if (route.workspace === 'tools' && route.tool) return `/tools/${route.tool}`
+	if (route.workspace === 'tools' && route.tool) return route.tool === 'solar-eclipse-map' && route.eclipse ? `/tools/${route.tool}/${encodeURIComponent(route.eclipse)}` : `/tools/${route.tool}`
 	if (route.workspace === 'equipment') return route.device ? `/equipment/${encodeURIComponent(route.device)}${route.view ? `/${route.view}` : ''}` : '/equipment'
 	if (route.workspace === 'settings') {
 		const section = settingsSection(route)

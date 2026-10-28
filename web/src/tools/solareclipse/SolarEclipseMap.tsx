@@ -3,6 +3,7 @@ import { cn } from 'cn'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { activeProfile, profileState } from '../../profile/profile'
+import { redirect, routeState } from '../../shell/route'
 import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
@@ -12,7 +13,7 @@ import { WorldMap, type WorldMapHandle, WorldMapSymbol } from '../../ui/WorldMap
 import { DEGREE_PLANE_TRANSFORM } from '../../ui/worldmap.geometry'
 import { displayTimeZone, formatEclipseTime, utcDate } from '../eclipse/eclipse'
 import { GlobalPointIcon, GlobalPointMarker } from './GlobalPointMarker'
-import { ECLIPSE_TYPE_NAMES, findEclipseFrom, GLOBAL_POINTS, type GlobalPointKind, globalPoints, labelRows, limitName, nextEclipse, openSolarEclipseMap, previousEclipse, retryEclipse, type SolarEclipseLayers, selectPlace, setLayer, solarEclipseState } from './solareclipse'
+import { ECLIPSE_TYPE_NAMES, findEclipseFrom, GLOBAL_POINTS, type GlobalPointKind, globalPoints, labelRows, limitName, nextEclipse, openSolarEclipseMap, previousEclipse, retryEclipse, type SolarEclipseLayers, selectPlace, setLayer, showEclipse, solarEclipseState } from './solareclipse'
 import { SolarEclipsePanel } from './SolarEclipsePanel'
 
 // Solar Eclipse Map tool: steps through solar eclipses (previous, next, from a date, optionally only those
@@ -21,7 +22,7 @@ import { SolarEclipsePanel } from './SolarEclipsePanel'
 // P4 and U1 to U4, central line ends C1 and C2, partial limit ends N1, N2, S1, and S2, greatest eclipse and
 // duration) with its name, and shows the local circumstances of the place clicked on the map in the contextual
 // panel. A global point is chosen in the panel, since a click on the map chooses the place; the map then rings
-// it and centers on it. Map paths come from the API on the degree plane and
+// it and centers on it. A URL that names an eclipse opens that one. Map paths come from the API on the degree plane and
 // are scaled to map units here; zooming, panning, and showing or hiding layers never ask the API for anything.
 
 interface EclipseOverlayProps {
@@ -109,11 +110,15 @@ export function SolarEclipseMap() {
 	const [date, setDate] = useState('')
 	const mapRef = useRef<WorldMapHandle>(null)
 	const timeZone = displayTimeZone(state)
+	const { route } = useSnapshot(routeState)
+	const linked = route.workspace === 'tools' ? route.eclipse : undefined
 
-	// Takes the Sky observer as the place and shows the next eclipse on the first visit of the tab.
+	// Takes the Sky observer as the place and shows the eclipse the URL names, or the next eclipse on the first
+	// visit of the tab; a reload, back, or forward shows the eclipse of the URL again.
 	useEffect(() => {
+		if (linked) void showEclipse(solarEclipseState, linked)
 		openSolarEclipseMap(solarEclipseState, activeProfile(profileState).settings.sky.observer)
-	}, [])
+	}, [linked])
 
 	// Centers the map on a global point when it is highlighted.
 	useEffect(() => {
@@ -128,8 +133,17 @@ export function SolarEclipseMap() {
 	const central = map && (map.paths.total || map.paths.annular)
 	const limits = map && (map.paths.umbraNorth || map.paths.umbraSouth)
 
+	// Keeps a URL that names an eclipse naming the one shown once a search steps to another eclipse.
+	function follow(search: Promise<void>) {
+		void search.then(() => {
+			const current = routeState.route
+			const id = solarEclipseState.eclipse?.id
+			if (current.workspace === 'tools' && current.tool === 'solar-eclipse-map' && current.eclipse && id && current.eclipse !== id) redirect(routeState, { ...current, eclipse: id })
+		})
+	}
+
 	function find() {
-		if (date) void findEclipseFrom(solarEclipseState, date)
+		if (date) follow(findEclipseFrom(solarEclipseState, date))
 	}
 
 	return (
@@ -137,9 +151,9 @@ export function SolarEclipseMap() {
 			<div className="flex h-full flex-col bg-base-000">
 				<div className="flex flex-none flex-wrap items-center gap-2 border-b border-line-100 bg-base-100 px-2 py-1.5">
 					<div className="flex min-w-0 items-center gap-1">
-						<IconButton icon="stepBack" label="Previous eclipse" disabled={loading && !eclipse} onClick={() => void previousEclipse(solarEclipseState)} />
+						<IconButton icon="stepBack" label="Previous eclipse" disabled={loading && !eclipse} onClick={() => follow(previousEclipse(solarEclipseState))} />
 						<span className="min-w-0 truncate text-[13px] font-medium text-ink-100">{title}</span>
-						<IconButton icon="stepForward" label="Next eclipse" disabled={loading && !eclipse} onClick={() => void nextEclipse(solarEclipseState)} />
+						<IconButton icon="stepForward" label="Next eclipse" disabled={loading && !eclipse} onClick={() => follow(nextEclipse(solarEclipseState))} />
 					</div>
 					<form
 						className="flex items-center gap-1"
@@ -185,7 +199,7 @@ export function SolarEclipseMap() {
 								title="The solar eclipse could not be computed"
 								description={error}
 								action={
-									<Button variant="secondary" onClick={() => void retryEclipse(solarEclipseState)}>
+									<Button variant="secondary" onClick={() => (linked && !eclipse ? void showEclipse(solarEclipseState, linked) : follow(retryEclipse(solarEclipseState)))}>
 										Retry
 									</Button>
 								}

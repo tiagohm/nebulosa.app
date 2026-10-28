@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { SolarEclipseSummary } from 'api'
 import { proxy } from 'valtio'
 import type { EclipseIo } from '../eclipse/eclipse'
-import { contactName, findEclipse, findEclipseFrom, globalPoints, initialSolarEclipseState, labelRows, limitName, nextEclipse, openSolarEclipseMap, selectEvent, selectPlace, selectPoint, setLayer, setViewSettings, type SolarEclipseState } from './solareclipse'
+import { contactName, findEclipse, findEclipseFrom, globalPoints, initialSolarEclipseState, labelRows, limitName, nextEclipse, openSolarEclipseMap, selectEvent, selectPlace, selectPoint, setLayer, setViewSettings, showEclipse, type SolarEclipseState } from './solareclipse'
 
 // Fake API whose responses are released by the test, in any order.
 function fakeApi() {
@@ -91,6 +91,51 @@ test('a late answer of a superseded search is discarded', async () => {
 
 	expect(state.eclipse).toEqual(B)
 	expect(state.map?.eclipse).toEqual(B)
+})
+
+test('a linked eclipse replaces the one shown, with its local circumstances', async () => {
+	const state = newState()
+	state.eclipse = A
+	state.map = mapOf(A)
+	state.place = { source: 'manual', longitude: 10, latitude: 20 }
+	const { io, requested, release } = fakeApi()
+
+	void showEclipse(state, B.id, io)
+	expect(requested).toEqual([`/api/eclipses/solar/${B.id}/map`])
+	expect(state.eclipse).toBeUndefined()
+	expect(state.map).toBeUndefined()
+	expect(state.loading).toBe(true)
+
+	await release((url) => url.endsWith('/map'), mapOf(B))
+	expect(state.eclipse).toEqual(B)
+	expect(state.map?.eclipse).toEqual(B)
+	expect(state.loading).toBe(false)
+	expect(requested.at(-1)).toStartWith(`/api/eclipses/solar/${B.id}/local?longitude=10&latitude=20`)
+})
+
+test('the linked eclipse already shown is not loaded again', () => {
+	const state = newState()
+	state.eclipse = A
+	state.map = mapOf(A)
+	const { io, requested } = fakeApi()
+
+	void showEclipse(state, A.id, io)
+	expect(requested).toEqual([])
+})
+
+test('a linked eclipse supersedes a search in progress, and an unknown id is an error', async () => {
+	const state = newState()
+	const { io, release } = fakeApi()
+
+	void findEclipse(state, 0, 'next', io)
+	void showEclipse(state, '42', io)
+	await release((url) => url.startsWith('/api/eclipses/solar?'), A).catch(() => undefined)
+	await release((url) => url === '/api/eclipses/solar/42/map', { error: 'Solar eclipse not found', code: 'notFound' }, 404)
+
+	expect(state.eclipse).toBeUndefined()
+	expect(state.map).toBeUndefined()
+	expect(state.error).toBe('Solar eclipse not found')
+	expect(state.loading).toBe(false)
 })
 
 test('a click on the map asks only for the local circumstances, and a contact or layer never for the map', async () => {

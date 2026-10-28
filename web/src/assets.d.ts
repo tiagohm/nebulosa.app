@@ -13,3 +13,10 @@ declare module '*.svg' {
 	const url: string
 	export default url
 }
+
+// JPEG image imported from a module; the default export is its URL.
+declare module '*.jpg' {
+	// URL of the bundled image.
+	const url: string
+	export default url
+}

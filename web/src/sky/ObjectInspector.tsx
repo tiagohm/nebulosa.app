@@ -6,7 +6,8 @@ import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { CollapsibleSection } from './CollapsibleSection'
 import { formatAngularSize, formatDeclination, formatDegrees, formatLocalTime, formatMagnitude, formatRightAscension, formatStellarDistance } from './format'
-import { Datum, Note, PositionSection } from './InspectorParts'
+import { Datum, Note, ObserverSection, PositionSection } from './InspectorParts'
+import { MoonInspector } from './moon/MoonInspector'
 import { MountInspector } from './MountInspector'
 import { ObjectActions } from './ObjectActions'
 import { type SkySelection, skyState } from './sky'
@@ -18,7 +19,7 @@ import { SunInspector } from './sun/SunInspector'
 // says what it is: catalog J2000 or apparent of date, topocentric or geocentric, the instant, and the
 // provider (Horizons or a local model, with the reason). Missing data is shown as missing, never as a
 // placeholder value, and catalog data stays shown when a position fails. With a mount on the profile's
-// connection, the object can be slewed to from its Object section. The mount marker and the Sun have their own views.
+// connection, the object can be slewed to from its Object section. The mount marker, the Sun, and the Moon have their own views.
 
 // Orbital elements and physical parameters of minor bodies shown, in order.
 const MINOR_BODY_PARAMETERS = ['a', 'e', 'i', 'q', 'per', 'H', 'G', 'M1', 'diameter'] as const
@@ -48,6 +49,7 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 
 	if (selection.ref.kind === 'mount') return <MountInspector mountRef={selection.ref} observer={observer} onShowFraming={onShowFraming} />
 	if (selection.ref.kind === 'body' && selection.ref.code === '10') return <SunInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} onShowFraming={onShowFraming} />
+	if (selection.ref.kind === 'body' && selection.ref.code === '301') return <MoonInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} onShowFraming={onShowFraming} />
 
 	const hasObserver = !!observer
 	const { catalog, minorBody, constellation, position, events } = selection as SkySelection
@@ -142,39 +144,4 @@ function parameterTitle(title: string) {
 function parameterValue(value: string) {
 	const number = Number(value)
 	return value.trim() !== '' && Number.isFinite(number) ? `${Number(number.toPrecision(7))}` : value
-}
-
-// Horizontal coordinates and events for the observer, or an invitation to set one.
-function ObserverSection({ position, events, hasObserver, onSetObserver, isSolarSystem, timeZone }: { readonly position: SkyPosition; readonly events?: SkyEvents; readonly hasObserver: boolean; readonly onSetObserver: () => void; readonly isSolarSystem: boolean; readonly timeZone?: string }) {
-	if (!hasObserver || position.altitude === undefined || position.azimuth === undefined) {
-		return (
-			<CollapsibleSection id="visibility" title="Visibility">
-				<p className="m-0 text-ink-300">Altitude, azimuth, rise, and set need the observer&apos;s location.</p>
-				<div>
-					<Button variant="secondary" onClick={onSetObserver}>
-						Set Location
-					</Button>
-				</div>
-			</CollapsibleSection>
-		)
-	}
-
-	return (
-		<CollapsibleSection id="visibility" title="Visibility" summary={`Altitude ${formatDeclination(position.altitude)}`}>
-			<Datum label="Altitude">{formatDeclination(position.altitude)}</Datum>
-			{position.altitude < 0 && <Note>Below the horizon at this instant, so the map does not show it.</Note>}
-			<Datum label="Azimuth">{formatDegrees(position.azimuth)}</Datum>
-			{events?.state === 'circumpolar' && <Datum label="Rise and set">Circumpolar</Datum>}
-			{events?.state === 'belowHorizon' && <Datum label="Rise and set">Below the horizon all day</Datum>}
-			{events?.rise !== undefined && <Datum label="Rise">{formatLocalTime(events.rise, position.time, undefined, timeZone)}</Datum>}
-			{events?.transit !== undefined && (
-				<Datum label="Transit">
-					{formatLocalTime(events.transit, position.time, undefined, timeZone)}
-					{events.transitAltitude !== undefined && ` · ${formatDeclination(events.transitAltitude)}`}
-				</Datum>
-			)}
-			{events?.set !== undefined && <Datum label="Set">{formatLocalTime(events.set, position.time, undefined, timeZone)}</Datum>}
-			<Note>Refracted altitude. Rise, transit, and set are the ones nearest the instant, within 12 hours{isSolarSystem ? ', from the local model' : ''}.</Note>
-		</CollapsibleSection>
-	)
 }

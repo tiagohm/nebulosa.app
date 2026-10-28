@@ -1,11 +1,12 @@
-import type { SkyPosition } from 'api'
+import type { SkyEvents, SkyPosition } from 'api'
 import type { ReactNode } from 'react'
+import { Button } from '../ui/Button'
 import { CollapsibleSection } from './CollapsibleSection'
 import { formatDeclination, formatDegrees, formatLocalTime, formatRightAscension, formatSolarSystemDistance } from './format'
 import type { SkySelection } from './sky'
 
-// Parts shared by the Object Inspector and the Sun Inspector: a labeled datum, a muted note, and the collapsible
-// Position section with its provider and instant.
+// Parts shared by the Object Inspector and the Sun and Moon Inspectors: a labeled datum, a muted note, the collapsible
+// Position section with its provider and instant, and the Visibility section of the observer's rise, transit, and set.
 
 // Description of each fallback reason.
 const FALLBACK_REASONS = { timeout: 'Horizons did not answer in time', network: 'Horizons cannot be reached', breakerOpen: 'Horizons failed repeatedly and is paused' } as const
@@ -74,4 +75,39 @@ function positionNote(position: SkyPosition, constellation: boolean, timeZone?: 
 	const source = position.source === 'horizons' ? 'JPL Horizons' : position.fallbackReason ? `local model (${FALLBACK_REASONS[position.fallbackReason]})` : 'local model'
 	const place = `Apparent ${position.center} place at ${formatLocalTime(position.time, Date.now(), undefined, timeZone)}, from ${source}.`
 	return constellation ? `${place} The position is the constellation label, a fixed J2000 point near its center.` : place
+}
+
+// Horizontal coordinates and events for the observer, or an invitation to set one.
+export function ObserverSection({ position, events, hasObserver, onSetObserver, isSolarSystem, timeZone }: { readonly position: SkyPosition; readonly events?: SkyEvents; readonly hasObserver: boolean; readonly onSetObserver: () => void; readonly isSolarSystem: boolean; readonly timeZone?: string }) {
+	if (!hasObserver || position.altitude === undefined || position.azimuth === undefined) {
+		return (
+			<CollapsibleSection id="visibility" title="Visibility">
+				<p className="m-0 text-ink-300">Altitude, azimuth, rise, and set need the observer&apos;s location.</p>
+				<div>
+					<Button variant="secondary" onClick={onSetObserver}>
+						Set Location
+					</Button>
+				</div>
+			</CollapsibleSection>
+		)
+	}
+
+	return (
+		<CollapsibleSection id="visibility" title="Visibility" summary={`Altitude ${formatDeclination(position.altitude)}`}>
+			<Datum label="Altitude">{formatDeclination(position.altitude)}</Datum>
+			{position.altitude < 0 && <Note>Below the horizon at this instant, so the map does not show it.</Note>}
+			<Datum label="Azimuth">{formatDegrees(position.azimuth)}</Datum>
+			{events?.state === 'circumpolar' && <Datum label="Rise and set">Circumpolar</Datum>}
+			{events?.state === 'belowHorizon' && <Datum label="Rise and set">Below the horizon all day</Datum>}
+			{events?.rise !== undefined && <Datum label="Rise">{formatLocalTime(events.rise, position.time, undefined, timeZone)}</Datum>}
+			{events?.transit !== undefined && (
+				<Datum label="Transit">
+					{formatLocalTime(events.transit, position.time, undefined, timeZone)}
+					{events.transitAltitude !== undefined && ` · ${formatDeclination(events.transitAltitude)}`}
+				</Datum>
+			)}
+			{events?.set !== undefined && <Datum label="Set">{formatLocalTime(events.set, position.time, undefined, timeZone)}</Datum>}
+			<Note>Refracted altitude. Rise, transit, and set are the ones nearest the instant, within 12 hours{isSolarSystem ? ', from the local model' : ''}.</Note>
+		</CollapsibleSection>
+	)
 }

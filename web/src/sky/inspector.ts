@@ -5,15 +5,15 @@ import { proxy } from 'valtio'
 // others collapsed, so the panel opens on where the object is and whether it can be seen. The state lives as long as
 // the tab; nothing is persisted.
 
-// Collapsible sections of the Object Inspector, the Sun's included.
-export type InspectorSectionId = 'position' | 'visibility' | 'catalog' | 'smallBody' | 'activeRegions' | 'twilight' | 'eclipse' | 'seasons' | 'physical'
+// Collapsible sections of the Object Inspector, the Sun's and the Moon's included.
+export type InspectorSectionId = 'position' | 'visibility' | 'catalog' | 'smallBody' | 'activeRegions' | 'twilight' | 'eclipse' | 'seasons' | 'physical' | 'lunarPhases' | 'lunarApsides'
 
 // Whether each section is expanded.
 export type InspectorSections = Record<InspectorSectionId, boolean>
 
 // Initial state: only Position and Visibility are expanded.
 export function initialInspectorSections(): InspectorSections {
-	return { position: true, visibility: true, catalog: false, smallBody: false, activeRegions: false, twilight: false, eclipse: false, seasons: false, physical: false }
+	return { position: true, visibility: true, catalog: false, smallBody: false, activeRegions: false, twilight: false, eclipse: false, seasons: false, physical: false, lunarPhases: false, lunarApsides: false }
 }
 
 // Expanded sections of the tab.

@@ -1,7 +1,7 @@
 import type { SkyEvents, SkyPosition } from 'api'
 import type { ReactNode } from 'react'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
-import { CollapsibleSection } from './CollapsibleSection'
 import { formatDeclination, formatDegrees, formatLocalTime, formatRightAscension, formatSolarSystemDistance } from './format'
 import type { SkySelection } from './sky'
 
@@ -61,7 +61,7 @@ function PositionData({ selection, timeZone, children }: { readonly selection: S
 // Apparent coordinates of the selection, with their provider and instant; `children` adds rows before the note.
 export function PositionSection({ selection, timeZone, children }: { readonly selection: SkySelection; readonly timeZone?: string; readonly children?: ReactNode }) {
 	return (
-		<CollapsibleSection id="position" title="Position" summary={selection.position && (selection.position.constellationName ?? selection.position.constellation)}>
+		<CollapsibleSection id="sky.position" title="Position" summary={selection.position && (selection.position.constellationName ?? selection.position.constellation)}>
 			<PositionData selection={selection} timeZone={timeZone}>
 				{children}
 			</PositionData>
@@ -81,7 +81,7 @@ function positionNote(position: SkyPosition, constellation: boolean, timeZone?: 
 export function ObserverSection({ position, events, hasObserver, onSetObserver, isSolarSystem, timeZone }: { readonly position: SkyPosition; readonly events?: SkyEvents; readonly hasObserver: boolean; readonly onSetObserver: () => void; readonly isSolarSystem: boolean; readonly timeZone?: string }) {
 	if (!hasObserver || position.altitude === undefined || position.azimuth === undefined) {
 		return (
-			<CollapsibleSection id="visibility" title="Visibility">
+			<CollapsibleSection id="sky.visibility" title="Visibility">
 				<p className="m-0 text-ink-300">Altitude, azimuth, rise, and set need the observer&apos;s location.</p>
 				<div>
 					<Button variant="secondary" onClick={onSetObserver}>
@@ -93,7 +93,7 @@ export function ObserverSection({ position, events, hasObserver, onSetObserver, 
 	}
 
 	return (
-		<CollapsibleSection id="visibility" title="Visibility" summary={`Altitude ${formatDeclination(position.altitude)}`}>
+		<CollapsibleSection id="sky.visibility" title="Visibility" summary={`Altitude ${formatDeclination(position.altitude)}`}>
 			<Datum label="Altitude">{formatDeclination(position.altitude)}</Datum>
 			{position.altitude < 0 && <Note>Below the horizon at this instant, so the map does not show it.</Note>}
 			<Datum label="Azimuth">{formatDegrees(position.azimuth)}</Datum>

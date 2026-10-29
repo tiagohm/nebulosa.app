@@ -11,9 +11,10 @@ import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
 import { AdvancedControls, SolverControls, StrategyControls, useSolverConfigured } from '../platesolving/PlateSolveControls'
+import { PROVIDER_LABELS } from '../platesolving/platesolving'
 import { activeProfile, exposureSettings, profileState, setTppaSettings, tppaSettings } from '../profile/profile'
 import { type CameraIdentity, TPPA_MAXIMUM_ROTATION, TPPA_MINIMUM_ROTATION, type TppaSettings } from '../profile/schema'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
@@ -85,7 +86,7 @@ export function TppaSections({ device, availability, mount, settings: identity }
 
 	return (
 		<>
-			<PanelSection title="Equipment">
+			<CollapsibleSection id="images.tppa.equipment" title="Equipment">
 				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 					<Row label="Camera">
 						<DeviceLink device={device} fallback="—" />
@@ -102,8 +103,8 @@ export function TppaSections({ device, availability, mount, settings: identity }
 					</Button>
 				)}
 				<p className="m-0 text-xs leading-4 text-ink-300">Frames are LIGHT, taken with the exposure and camera settings of Camera Acquisition, and shown as the latest frame of the camera; they are kept in memory only.</p>
-			</PanelSection>
-			<PanelSection title="Alignment Settings">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.tppa.alignment-settings" title="Alignment Settings">
 				<SegmentedControl label="RA Direction" options={TPPA_DIRECTIONS} value={shown.direction} format={(direction) => TPPA_DIRECTION_LABELS[direction]} disabled={locked} onChange={(direction) => update({ direction })} />
 				{slewRates.length > 0 ? (
 					<Select label="Slew Rate" options={slewRates.map((rate) => rate.name)} value={slewRate ?? slewRates[0].name} format={(name) => slewRates.find((rate) => rate.name === name)?.label.trim() || name} disabled={locked} onChange={(name) => update({ slewRate: name })} />
@@ -117,18 +118,15 @@ export function TppaSections({ device, availability, mount, settings: identity }
 				<Notice>
 					The mount rotates in RA only, towards the {TPPA_DIRECTION_LABELS[shown.direction].toLowerCase()}, about {2 * shown.rotation}° in all; make sure it is clear to move. Rotation is measured by plate solving, never assumed from the motion time.
 				</Notice>
-				<details>
-					<summary className="cursor-pointer text-ink-200 select-none">Plate solver</summary>
-					<div className="mt-2 flex flex-col gap-2">
-						<SolverControls request={solver} disabled={locked} onChange={(next) => update({ solver: solverOf(next) })} />
-						<StrategyControls request={solver} disabled={locked} onChange={(next) => update({ solver: solverOf(next) })} />
-						<AdvancedControls request={solver} disabled={locked} onChange={(next) => update({ solver: solverOf(next) })} />
-					</div>
-				</details>
-			</PanelSection>
+			</CollapsibleSection>
+			<CollapsibleSection id="images.tppa.plate-solver" title="Plate Solver" summary={PROVIDER_LABELS[solver.provider]} defaultOpen={false}>
+				<SolverControls request={solver} disabled={locked} onChange={(next) => update({ solver: solverOf(next) })} />
+				<StrategyControls request={solver} disabled={locked} onChange={(next) => update({ solver: solverOf(next) })} />
+				<AdvancedControls request={solver} disabled={locked} onChange={(next) => update({ solver: solverOf(next) })} />
+			</CollapsibleSection>
 			{session && <Measurements session={session} details={details} />}
 			{session?.alignment && <PolarError alignment={session.alignment} details={details} />}
-			<PanelSection title="Controls">
+			<CollapsibleSection id="images.tppa.controls" title="Controls">
 				{session && <SessionState session={session} />}
 				{running ? (
 					<>
@@ -154,7 +152,7 @@ export function TppaSections({ device, availability, mount, settings: identity }
 				{blocker && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}</p>}
 				{session?.state === 'refining' && <p className="m-0 text-xs leading-4 text-ink-300">Turn the azimuth and altitude knobs to bring the star onto the target; the mount is not moved.</p>}
 				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
-			</PanelSection>
+			</CollapsibleSection>
 		</>
 	)
 }
@@ -184,7 +182,7 @@ function Measurements({ session, details }: MeasurementsProps) {
 	const { geometry } = session
 
 	return (
-		<PanelSection title="Measurements">
+		<CollapsibleSection id="images.tppa.measurements" title="Measurements">
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 				{([1, 2, 3] as const).map((n) => {
 					const pose = points.find((p) => p.point === n)
@@ -204,7 +202,7 @@ function Measurements({ session, details }: MeasurementsProps) {
 					Last candidate: {formatDegrees(rejected.rotation)}, {rejected.reason === 'insufficientRotation' ? 'moving further' : rejected.reason}.
 				</p>
 			)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -222,7 +220,7 @@ function PolarError({ alignment, details }: PolarErrorProps) {
 	const warnings = overlay?.geometry?.diagnostics.warnings ?? []
 
 	return (
-		<PanelSection title="Polar Alignment">
+		<CollapsibleSection id="images.tppa.polar-alignment" title="Polar Alignment">
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 				<Row label="Total Error">
 					<span className={cn(toArcmin(alignment.totalError) <= 1 && 'text-success')}>{formatArcmin(alignment.totalError, false)}</span>
@@ -234,7 +232,7 @@ function PolarError({ alignment, details }: PolarErrorProps) {
 			</dl>
 			{overlay?.failure && <p className="m-0 text-xs leading-4 text-ink-300">The correction guide could not be drawn ({overlay.failure}).</p>}
 			{warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">Guide: {warnings.join(', ')}.</p>}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 

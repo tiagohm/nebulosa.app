@@ -1,5 +1,5 @@
 import type { SunPhysicalData } from 'api'
-import { CollapsibleSection } from '../CollapsibleSection'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatLocalTime } from '../format'
 import { Datum, Note } from '../InspectorParts'
 
@@ -15,7 +15,7 @@ export function formatEquationOfTime(seconds: number) {
 // Solar Physical Data section of the Sun Inspector; `time` is the instant of the data, Unix milliseconds.
 export function SolarPhysicalSection({ physical, time, timeZone }: { readonly physical?: SunPhysicalData; readonly time?: number; readonly timeZone?: string }) {
 	return (
-		<CollapsibleSection id="physical" title="Solar Physical Data" summary={physical && `EoT ${formatEquationOfTime(physical.equationOfTimeSeconds)} · CR ${physical.carringtonRotation}`}>
+		<CollapsibleSection id="sky.physical" title="Solar Physical Data" summary={physical && `EoT ${formatEquationOfTime(physical.equationOfTimeSeconds)} · CR ${physical.carringtonRotation}`} defaultOpen={false}>
 			{physical && time !== undefined ? (
 				<>
 					<Datum label="Equation of time">{formatEquationOfTime(physical.equationOfTimeSeconds)}</Datum>

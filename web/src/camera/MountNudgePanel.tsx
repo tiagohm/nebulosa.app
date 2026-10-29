@@ -8,7 +8,7 @@ import { roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { operationsState, runningOn } from '../operations'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { Select } from '../ui/Select'
@@ -87,7 +87,7 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 
 	return (
 		<>
-			<PanelSection title="Equipment">
+			<CollapsibleSection id="images.mount-nudge.equipment" title="Equipment">
 				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 					<dt className="text-ink-300">Camera</dt>
 					<dd className="m-0 min-w-0 truncate text-right">
@@ -103,8 +103,8 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 						Equipment Setup
 					</Button>
 				)}
-			</PanelSection>
-			<PanelSection title="Manual Movement">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.mount-nudge.manual-movement" title="Manual Movement">
 				{slewRates.length > 0 ? (
 					<Select
 						label="Slew Rate"
@@ -137,8 +137,8 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 					)}
 				</div>
 				<p className="m-0 text-xs leading-4 text-ink-300">Hold a direction to move; release to stop. Directions follow the mount axes, not the image.</p>
-			</PanelSection>
-			<PanelSection title="Movement Status">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.mount-nudge.movement-status" title="Movement Status">
 				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 					<dt className="text-ink-300">Movement</dt>
 					<dd className={cn('m-0 text-right', runtime.error && !press && 'text-danger')}>{movementStatus(press, blocker, nudgeRunning(session) && session?.token !== press?.token, runtime.error !== undefined)}</dd>
@@ -149,7 +149,7 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 				</dl>
 				{blocker && !press && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}</p>}
 				{runtime.error && <p className="m-0 text-xs leading-4 text-danger">{runtime.error}</p>}
-			</PanelSection>
+			</CollapsibleSection>
 		</>
 	)
 }

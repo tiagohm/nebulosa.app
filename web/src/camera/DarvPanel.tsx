@@ -12,7 +12,7 @@ import type { RoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
 import { activeProfile, darvSettings, exposureSettings, profileState, setDarvSettings } from '../profile/profile'
 import { type CameraIdentity, DARV_MAXIMUM_LEG_DURATION, DARV_MINIMUM_LEG_DURATION, type DarvSettings } from '../profile/schema'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
@@ -111,7 +111,7 @@ export function DarvSections({ device, availability, mount, settings: identity }
 
 	return (
 		<>
-			<PanelSection title="Equipment">
+			<CollapsibleSection id="images.darv.equipment" title="Equipment">
 				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 					<Row label="Camera">
 						<DeviceLink device={device} fallback="—" />
@@ -128,8 +128,8 @@ export function DarvSections({ device, availability, mount, settings: identity }
 					</Button>
 				)}
 				<p className="m-0 text-xs leading-4 text-ink-300">The frame is a LIGHT taken with the camera settings of Camera Acquisition; its exposure covers both legs and a few seconds of margin, and is shown as the latest frame of the camera, kept in memory only.</p>
-			</PanelSection>
-			<PanelSection title="Measurement Settings">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.darv.measurement-settings" title="Measurement Settings">
 				<SegmentedControl label="Axis" options={DARV_AXES} value={shown.axis} format={(axis) => DARV_AXIS_LABELS[axis]} disabled={locked} onChange={(axis) => update({ axis })} />
 				<SegmentedControl label="First Motion" options={DARV_DIRECTIONS} value={shown.direction} format={(direction) => DARV_DIRECTION_LABELS[direction]} disabled={locked} onChange={(direction) => update({ direction })} />
 				{slewRates.length > 0 ? (
@@ -142,10 +142,10 @@ export function DarvSections({ device, availability, mount, settings: identity }
 				<Notice>
 					{DARV_AXIS_HINTS[shown.axis]} The mount moves in RA only, {DARV_DIRECTION_LABELS[shown.direction].toLowerCase()} first and back; the slowest preset that draws a long enough trail works best.
 				</Notice>
-			</PanelSection>
+			</CollapsibleSection>
 			{latest && <Result session={session!} measurement={latest} />}
 			{session && session.measurements.length > 1 && <History measurements={session.measurements} />}
-			<PanelSection title="Controls">
+			<CollapsibleSection id="images.darv.controls" title="Controls">
 				{latest && <MeasurementState measurement={latest} />}
 				{measuring && latest && <MeasurementProgress measurement={latest} />}
 				{measuring ? (
@@ -168,7 +168,7 @@ export function DarvSections({ device, availability, mount, settings: identity }
 				{session && <TrackingState session={session} />}
 				{open && !measuring && latest?.state === 'ready' && <p className="m-0 text-xs leading-4 text-ink-300">Adjust the {DARV_AXIS_LABELS[latest.request.axis].toLowerCase()} knob to bring the two trails together, then repeat the measurement.</p>}
 				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
-			</PanelSection>
+			</CollapsibleSection>
 		</>
 	)
 }
@@ -188,7 +188,7 @@ function Result({ session, measurement }: ResultProps) {
 	const notes = result?.diagnostics.flatMap((reason) => DARV_DIAGNOSTIC_LABELS[reason] ?? []) ?? []
 
 	return (
-		<PanelSection title={`Measurement #${measurement.generation}`}>
+		<CollapsibleSection id="images.darv.measurement" title={`Measurement #${measurement.generation}`}>
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 				<Row label="State">{DARV_STATE_LABELS[measurement.state]}</Row>
 				{result && <Row label="Result">{DARV_STATUS_LABELS[result.status]}</Row>}
@@ -204,14 +204,14 @@ function Result({ session, measurement }: ResultProps) {
 			{result?.status === 'limited' && <p className="m-0 text-xs leading-4 text-ink-300">The trails could not be measured fully; judge the separation on the frame.</p>}
 			{notes.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{notes.join(' ')}</p>}
 			<p className="m-0 text-xs leading-4 text-ink-300">The drift is how fast the return trail separates from the outbound one, across the RA motion; it is not a polar error.</p>
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
 // Measurements of the session, latest first, with their settings and drift.
 function History({ measurements }: { readonly measurements: readonly DarvMeasurement[] }) {
 	return (
-		<PanelSection title="History">
+		<CollapsibleSection id="images.darv.history" title="History" summary={`${measurements.length} measurements`} defaultOpen={false}>
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 				{measurements.toReversed().map((measurement) => (
 					<Row key={measurement.generation} label={`#${measurement.generation} ${DARV_AXIS_LABELS[measurement.request.axis]}, ${measurement.request.legDuration} s`}>
@@ -219,7 +219,7 @@ function History({ measurements }: { readonly measurements: readonly DarvMeasure
 					</Row>
 				))}
 			</dl>
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 

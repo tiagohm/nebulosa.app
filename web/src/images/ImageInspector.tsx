@@ -5,7 +5,8 @@ import { autoFocusFrameFocus, autoFocusRuntime } from '../camera/autofocus'
 import { DARV_AXIS_LABELS, DARV_DIRECTION_LABELS, DARV_STATUS_LABELS, darvFrameMeasurement, darvRuntime } from '../camera/darv'
 import { tppaFrameRole, tppaRuntime } from '../camera/tppa'
 import { connectionState } from '../connection/connection'
-import { PanelSection, PlannedControls } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
+import { PlannedControls } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { type ImageQualityStatus, imageQuality } from '../stars/quality'
 import { PROVIDER_LABELS, starsState } from '../stars/stars'
@@ -65,7 +66,7 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 
 	return (
 		<>
-			<PanelSection title="Properties">
+			<CollapsibleSection id="images.inspector.properties" title="Properties">
 				<Property label="Name">{document.name}</Property>
 				{!document.camera && (
 					<Property label="Folder">
@@ -89,15 +90,15 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 				) : (
 					<p className="m-0 text-ink-300">{document.status === 'loading' ? 'Opening…' : 'Unavailable'}</p>
 				)}
-			</PanelSection>
+			</CollapsibleSection>
 			{document.camera?.shown && <CapturedFrame frame={document.camera.shown.frame} selection={document.camera.selection.kind} />}
 			{info && <Quality imageId={info.id} />}
 			{info?.origin === 'derived' && <Derivation document={document} provenance={info.provenance} />}
 			{info && <Acquisition info={info} />}
 			{view?.rendering && <AppliedDisplay result={view.rendering.result} />}
-			<PanelSection title="Histogram and Statistics">
+			<CollapsibleSection id="images.inspector.histogram-and-statistics" title="Histogram and Statistics" defaultOpen={false}>
 				<PlannedControls items={['Histogram', 'Mean, median, and deviation']} />
-			</PanelSection>
+			</CollapsibleSection>
 			{info && <Header info={info} />}
 		</>
 	)
@@ -168,7 +169,7 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 
 	return (
 		<>
-			<PanelSection title="Capture">
+			<CollapsibleSection id="images.inspector.capture" title="Capture">
 				<Property label="Camera">{frame.cameraName}</Property>
 				<Property label="Connection">{connectionLabel(frame.connectionId, connections.servers, connections.connections)}</Property>
 				<Property label="Origin">{ORIGIN_LABELS[frame.origin]}</Property>
@@ -213,8 +214,8 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 					</span>
 				</Property>
 				<Property label="Shown as">{SELECTION_LABELS[selection]}</Property>
-			</PanelSection>
-			<PanelSection title="Storage">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.inspector.storage" title="Storage">
 				<Property label="State">{frame.file ? FILE_STATE_LABELS[frame.file] : 'Temporary (preview only)'}</Property>
 				{frame.fileName && (
 					<Property label="File">
@@ -224,7 +225,7 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 					</Property>
 				)}
 				<Property label="Availability">{unavailable ? <span className="text-danger">{unavailable}</span> : frame.availability === 'memory' ? 'In memory' : 'Saved file'}</Property>
-			</PanelSection>
+			</CollapsibleSection>
 		</>
 	)
 }
@@ -248,7 +249,7 @@ function Quality({ imageId }: QualityProps) {
 	const measured = quality.status === 'measured'
 
 	return (
-		<PanelSection title="Quality">
+		<CollapsibleSection id="images.inspector.quality" title="Quality">
 			<Property label="State">{quality.status === 'failed' ? <span className="text-danger">{QUALITY_LABELS.failed}</span> : QUALITY_LABELS[quality.status]}</Property>
 			{measured && <Property label="HFD (px)">{quality.hfdPx === undefined ? MISSING : quality.hfdPx.toFixed(2)}</Property>}
 			{measured && <Property label="Stars (accepted / detected)">{`${quality.acceptedStars ?? 0} / ${quality.detectedStars ?? 0}`}</Property>}
@@ -256,7 +257,7 @@ function Quality({ imageId }: QualityProps) {
 			{quality.origin && <Property label="Measured by">{MEASURED_BY_LABELS[quality.origin]}</Property>}
 			{quality.error && <p className="m-0 text-xs leading-4 text-danger">{quality.error}</p>}
 			{quality.status === 'not-measured' && <p className="m-0 text-xs leading-4 text-ink-300">Run Star Detection to measure the HFD of this image.</p>}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -268,7 +269,7 @@ interface InfoProps {
 // Acquisition data read from the image header.
 function Acquisition({ info }: InfoProps) {
 	return (
-		<PanelSection title="Acquisition">
+		<CollapsibleSection id="images.inspector.acquisition" title="Acquisition">
 			{ACQUISITION_FIELDS.map(([label, format]) => {
 				const value = format(info.acquisition)
 
@@ -278,7 +279,7 @@ function Acquisition({ info }: InfoProps) {
 					</Property>
 				)
 			})}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -293,7 +294,7 @@ interface DerivationProps {
 // that derived it, and whether it is saved (from the Save control of the viewer toolbar).
 function Derivation({ document, provenance }: DerivationProps) {
 	return (
-		<PanelSection title="Derived Image">
+		<CollapsibleSection id="images.inspector.derived-image" title="Derived Image">
 			<Property label="Source">{provenance.sourceName}</Property>
 			<Property label="Created (UTC)">{formatDate(provenance.createdAt)}</Property>
 			<ol className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs">
@@ -308,7 +309,7 @@ function Derivation({ document, provenance }: DerivationProps) {
 				))}
 			</ol>
 			<Property label="State">{document.unsaved ? <span className="text-accent">Unsaved</span> : 'Saved'}</Property>
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -320,7 +321,7 @@ interface AppliedDisplayProps {
 // Parameters the server applied to the current rendering, such as the values an auto stretch computed.
 function AppliedDisplay({ result }: AppliedDisplayProps) {
 	return (
-		<PanelSection title="Applied Display">
+		<CollapsibleSection id="images.inspector.applied-display" title="Applied Display" defaultOpen={false}>
 			<Property label="Debayer">{result.cfa ?? 'Off'}</Property>
 			<Property label="Channels">{result.channels === 3 ? 'RGB' : 'Mono'}</Property>
 			{result.stretch.map((stretch, i) => (
@@ -328,7 +329,7 @@ function AppliedDisplay({ result }: AppliedDisplayProps) {
 					{stretch.shadow.toFixed(4)} - {stretch.highlight.toFixed(4)} | {stretch.midtone.toFixed(4)}
 				</Property>
 			))}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -337,18 +338,15 @@ function Header({ info }: InfoProps) {
 	const cards = Object.entries(info.header)
 
 	return (
-		<PanelSection title="Header">
-			<details>
-				<summary className="cursor-pointer text-ink-200 select-none">{cards.length} keywords</summary>
-				<dl className="m-0 mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
-					{cards.map(([keyword, value]) => (
-						<div key={keyword} className="contents">
-							<dt className="text-ink-300">{keyword}</dt>
-							<dd className="m-0 break-all text-ink-100">{String(value ?? '')}</dd>
-						</div>
-					))}
-				</dl>
-			</details>
-		</PanelSection>
+		<CollapsibleSection id="images.inspector.header" title="Header" summary={`${cards.length} keywords`} defaultOpen={false}>
+			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+				{cards.map(([keyword, value]) => (
+					<div key={keyword} className="contents">
+						<dt className="text-ink-300">{keyword}</dt>
+						<dd className="m-0 break-all text-ink-100">{String(value ?? '')}</dd>
+					</div>
+				))}
+			</dl>
+		</CollapsibleSection>
 	)
 }

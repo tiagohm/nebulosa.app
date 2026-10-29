@@ -1,9 +1,9 @@
 import { useSnapshot } from 'valtio'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { navigate, routeState } from '../../shell/route'
 import { formatEclipseTime, utcDate } from '../../tools/eclipse/eclipse'
 import { ECLIPSE_TYPE_NAMES } from '../../tools/solareclipse/solareclipse'
 import { Button } from '../../ui/Button'
-import { CollapsibleSection } from '../CollapsibleSection'
 import { Datum, Note } from '../InspectorParts'
 import { sunState } from './sun'
 
@@ -18,7 +18,7 @@ export function SunEclipseSection({ hasObserver, timeZone }: { readonly hasObser
 	const summary = eclipse ? `${ECLIPSE_TYPE_NAMES[eclipse.type]} · ${utcDate(eclipse.maximum)}` : loading ? 'Searching…' : undefined
 
 	return (
-		<CollapsibleSection id="eclipse" title="Next Solar Eclipse" summary={summary}>
+		<CollapsibleSection id="sky.eclipse" title="Next Solar Eclipse" summary={summary} defaultOpen={false}>
 			{eclipse ? (
 				<>
 					<Datum label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</Datum>

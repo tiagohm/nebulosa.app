@@ -1,7 +1,7 @@
 import type { GuidingStarProfile } from 'api'
 import type { ReactNode } from 'react'
 import { Notice } from '../equipment-control/parts'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 
 // Star Profile section of the Guiding panel: the horizontal and vertical cuts through the guide star of the latest
 // measured frame, plotted above its half maximum, and every measurement of its profile (position, quality, SNR, flux,
@@ -44,7 +44,7 @@ export function StarProfileSection({ star, pixelScale, frameId }: StarProfileSec
 	const stale = frameId !== undefined && frameId !== star.frameId
 
 	return (
-		<PanelSection title="Star Profile">
+		<CollapsibleSection id="images.guiding.star-profile" title="Star Profile">
 			<ProfilePlot star={star} />
 			<p className="m-0 flex flex-wrap gap-x-3 text-xs leading-4 text-ink-300">
 				<span className="whitespace-nowrap text-accent">— Horizontal</span>
@@ -73,7 +73,7 @@ export function StarProfileSection({ star, pixelScale, frameId }: StarProfileSec
 			</dl>
 			{star.flags.length > 0 && <Notice>{star.flags.map((flag) => FLAG_LABELS[flag]).join(', ')}.</Notice>}
 			{stale && <Notice>The latest frame was not measured; this is the star of frame #{star.frameId}.</Notice>}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 

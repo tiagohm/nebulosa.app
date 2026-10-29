@@ -1,6 +1,6 @@
 import type { SolarSeasonEvent, SolarSeasonKind } from 'api'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatEclipseTime } from '../../tools/eclipse/eclipse'
-import { CollapsibleSection } from '../CollapsibleSection'
 import { Note } from '../InspectorParts'
 
 // Seasons section of the Sun Inspector: the next four equinoxes and solstices after the instant the Sky shows, named by
@@ -22,7 +22,7 @@ export function SeasonsSection({ seasons, latitude, timeZone }: { readonly seaso
 	const summary = seasons?.[0] && `Next: ${SEASON_NAMES[seasons[0].kind]}`
 
 	return (
-		<CollapsibleSection id="seasons" title="Seasons" summary={summary}>
+		<CollapsibleSection id="sky.seasons" title="Seasons" summary={summary} defaultOpen={false}>
 			{seasons ? (
 				<>
 					<ul className="m-0 flex list-none flex-col gap-2 p-0">

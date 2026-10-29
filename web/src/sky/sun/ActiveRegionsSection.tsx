@@ -2,8 +2,8 @@ import type { SolarActiveRegion, SunActiveRegionsResponse } from 'api'
 import { cn } from 'cn'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatEclipseTime } from '../../tools/eclipse/eclipse'
-import { CollapsibleSection } from '../CollapsibleSection'
 import { Datum, Note } from '../InspectorParts'
 import { sunState } from './sun'
 
@@ -63,7 +63,7 @@ export function ActiveRegionsSection() {
 	const [selected, setSelected] = useState<string>()
 
 	return (
-		<CollapsibleSection id="activeRegions" title="Active Regions" summary={reportSummary(report, loading, error)}>
+		<CollapsibleSection id="sky.activeRegions" title="Active Regions" summary={reportSummary(report, loading, error)} defaultOpen={false}>
 			{report ? (
 				<>
 					{report.regions.length === 0 ? (

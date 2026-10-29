@@ -2,9 +2,9 @@ import type { MinorBody, SkyCatalogObject, SkyEvents, SkyPosition } from 'api'
 import { toMas } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
 import type { SkyObserverSettings } from '../profile/schema'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
-import { CollapsibleSection } from './CollapsibleSection'
 import { formatAngularSize, formatDeclination, formatDegrees, formatLocalTime, formatMagnitude, formatRightAscension, formatStellarDistance } from './format'
 import { Datum, Note, ObserverSection, PositionSection } from './InspectorParts'
 import { MoonInspector } from './moon/MoonInspector'
@@ -89,7 +89,7 @@ function CatalogSection({ catalog }: { readonly catalog: SkyCatalogObject }) {
 	const pm = catalog.pmRA !== 0 || catalog.pmDEC !== 0
 
 	return (
-		<CollapsibleSection id="catalog" title="Catalog" summary={catalog.classification}>
+		<CollapsibleSection id="sky.catalog" title="Catalog" summary={catalog.classification} defaultOpen={false}>
 			{catalog.bv !== undefined && <Datum label="B−V">{catalog.bv.toFixed(2)}</Datum>}
 			{catalog.classification && <Datum label={star ? 'Spectral type' : 'Morphology'}>{catalog.classification}</Datum>}
 			{catalog.majorAxis !== undefined && (
@@ -117,7 +117,7 @@ function MinorBodySection({ body }: { readonly body: MinorBody }) {
 	const parameters = MINOR_BODY_PARAMETERS.map((name) => body.parameters.find((e) => e.name === name)).filter((e) => !!e)
 
 	return (
-		<CollapsibleSection id="smallBody" title="Small Body" summary={`SPK-ID ${body.spkId}`}>
+		<CollapsibleSection id="sky.smallBody" title="Small Body" summary={`SPK-ID ${body.spkId}`} defaultOpen={false}>
 			<Datum label="SPK-ID">{body.spkId}</Datum>
 			{body.neo && <Datum label="Near-Earth object">{body.pha ? 'Yes, potentially hazardous' : 'Yes'}</Datum>}
 			{parameters.map((e) => (

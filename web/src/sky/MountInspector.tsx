@@ -2,10 +2,10 @@ import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import type { SkyObserverSettings } from '../profile/schema'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { skyClock } from './clock'
-import { CollapsibleSection } from './CollapsibleSection'
 import { formatDeclination, formatDegrees, formatRightAscension } from './format'
 import { horizontalOf, mountPoint, mountRuntime, mountView } from './mount'
 import type { MountRef } from './objects'
@@ -61,7 +61,7 @@ export function MountInspector({ mountRef, observer, onShowFraming }: MountInspe
 					</Button>
 				</div>
 			</PanelSection>
-			<CollapsibleSection id="position" title="Position" summary={state ? motionOf(state) : undefined}>
+			<CollapsibleSection id="sky.position" title="Position" summary={state ? motionOf(state) : undefined}>
 				{point && state ? (
 					<>
 						<Datum label="State">{motionOf(state)}</Datum>

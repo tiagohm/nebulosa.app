@@ -3,7 +3,7 @@ import { cn } from 'cn'
 import { Fragment, type PointerEvent, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { Actions, Notice } from '../equipment-control/parts'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
@@ -107,7 +107,7 @@ function ImageSection({ document, job }: ImageSectionProps) {
 	const earlierFrame = isActive(job) && job && info && job.imageId !== info.id
 
 	return (
-		<PanelSection title="Image">
+		<CollapsibleSection id="images.image-processing.image" title="Image">
 			<Property label="Name">{document.name}</Property>
 			{info ? (
 				<>
@@ -121,7 +121,7 @@ function ImageSection({ document, job }: ImageSectionProps) {
 			)}
 			{document.source.kind === 'camera' && <Notice>Run processes the frame shown when it starts; newer frames never change a run.</Notice>}
 			{earlierFrame && <Notice>The running pipeline processes an earlier frame of this camera.</Notice>}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -214,7 +214,7 @@ function Pipeline({ documentKey, draft, stepError, runningStepId }: PipelineProp
 	let others = 0
 
 	return (
-		<PanelSection title="Pipeline">
+		<CollapsibleSection id="images.image-processing.pipeline" title="Pipeline">
 			{draft.steps.length === 0 ? (
 				<Notice>Add operations to build the pipeline. Run applies the enabled steps in order to a copy of the image.</Notice>
 			) : (
@@ -299,7 +299,7 @@ function Pipeline({ documentKey, draft, stepError, runningStepId }: PipelineProp
 					Add
 				</Button>
 			</div>
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -334,7 +334,7 @@ function RunSection({ document, draft, job, active, enabledCount, blocker, claim
 	const stepping = job?.state === 'running' && job.currentStepIndex !== undefined ? job.steps[job.currentStepIndex] : undefined
 
 	return (
-		<PanelSection title="Run">
+		<CollapsibleSection id="images.image-processing.run" title="Run">
 			<Property label="Steps">
 				{enabledCount} of {draft.steps.length} enabled
 			</Property>
@@ -382,7 +382,7 @@ function RunSection({ document, draft, job, active, enabledCount, blocker, claim
 					)}
 				</>
 			)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 

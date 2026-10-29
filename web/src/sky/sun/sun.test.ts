@@ -1,7 +1,6 @@
 import { expect, test } from 'bun:test'
 import type { SolarEclipseSummary, SunAlmanacResponse } from 'api'
 import { proxy } from 'valtio'
-import { initialInspectorSections, inspectorSections, setInspectorSectionOpen } from '../inspector'
 import { ALMANAC_BUCKET_MS, initialSunState, loadActiveRegions, loadSunImage, refreshSunAlmanac, refreshSunEclipse, type SunIo, type SunState } from './sun'
 
 // Fake API whose responses are released by the test, in any order.
@@ -158,16 +157,4 @@ test('a failed source is reported apart from the others', async () => {
 	expect(state.regions.loading).toBe(false)
 	expect(state.image.loading).toBe(true)
 	expect(state.image.error).toBeUndefined()
-})
-
-test('only Position and Visibility start expanded, and a section keeps its state', () => {
-	const sections = initialInspectorSections()
-	expect(Object.entries(sections).filter(([, open]) => open)).toEqual([
-		['position', true],
-		['visibility', true],
-	])
-
-	setInspectorSectionOpen(inspectorSections, 'catalog', true)
-	expect(inspectorSections.catalog).toBe(true)
-	setInspectorSectionOpen(inspectorSections, 'catalog', false)
 })

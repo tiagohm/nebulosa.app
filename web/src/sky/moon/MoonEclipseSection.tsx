@@ -1,9 +1,9 @@
 import { useSnapshot } from 'valtio'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { navigate, routeState } from '../../shell/route'
 import { formatEclipseTime, utcDate } from '../../tools/eclipse/eclipse'
 import { ECLIPSE_TYPE_NAMES } from '../../tools/lunareclipse/lunareclipse'
 import { Button } from '../../ui/Button'
-import { CollapsibleSection } from '../CollapsibleSection'
 import { Datum, Note } from '../InspectorParts'
 import { moonState } from './moon'
 
@@ -18,7 +18,7 @@ export function MoonEclipseSection({ hasObserver, timeZone }: { readonly hasObse
 	const summary = eclipse ? `${ECLIPSE_TYPE_NAMES[eclipse.type]} · ${utcDate(eclipse.maximum)}` : loading ? 'Searching…' : undefined
 
 	return (
-		<CollapsibleSection id="eclipse" title="Next Lunar Eclipse" summary={summary}>
+		<CollapsibleSection id="sky.eclipse" title="Next Lunar Eclipse" summary={summary} defaultOpen={false}>
 			{eclipse ? (
 				<>
 					<Datum label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</Datum>

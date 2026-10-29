@@ -1,6 +1,6 @@
 import type { MoonApsisEvent } from 'api'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatEclipseTime } from '../../tools/eclipse/eclipse'
-import { CollapsibleSection } from '../CollapsibleSection'
 import { formatAngularSize } from '../format'
 import { Datum, Note } from '../InspectorParts'
 
@@ -18,7 +18,7 @@ export function formatKilometers(km: number) {
 // Perigee & Apogee section of the Moon Inspector.
 export function MoonApsidesSection({ apsides, timeZone }: { readonly apsides?: readonly MoonApsisEvent[]; readonly timeZone?: string }) {
 	return (
-		<CollapsibleSection id="lunarApsides" title="Perigee & Apogee" summary={apsides?.[0] && `Next: ${APSIS_NAMES[apsides[0].kind]}`}>
+		<CollapsibleSection id="sky.lunarApsides" title="Perigee & Apogee" summary={apsides?.[0] && `Next: ${APSIS_NAMES[apsides[0].kind]}`} defaultOpen={false}>
 			{apsides ? (
 				<>
 					{apsides.map((e) => (

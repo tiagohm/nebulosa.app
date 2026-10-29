@@ -12,7 +12,7 @@ import { FileExplorerModal } from '../files/FileExplorerModal'
 import { operationsState } from '../operations'
 import { activeProfile, exposureSettings, flatWizardSettings, profileState, setFlatWizardSettings } from '../profile/profile'
 import { type CameraIdentity, DEFAULT_FLAT_WIZARD_FILTER, FLAT_WIZARD_MAXIMUM_COUNT, FLAT_WIZARD_MAXIMUM_EXPOSURE, FLAT_WIZARD_MAXIMUM_FILTERS, FLAT_WIZARD_MAXIMUM_REJECTIONS, FLAT_WIZARD_MAXIMUM_TRIALS, type FlatWizardSettings } from '../profile/schema'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { IconButton } from '../ui/IconButton'
@@ -105,7 +105,7 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 
 	return (
 		<>
-			<PanelSection title="Equipment">
+			<CollapsibleSection id="images.flat-wizard.equipment" title="Equipment">
 				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 					<Row label="Camera">
 						<DeviceLink device={device} fallback="—" />
@@ -125,8 +125,8 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 				)}
 				{wheel === undefined && <Notice>The camera has no role in the equipment setup, so you change the filters and the light yourself and confirm each step; the cover is left as it is.</Notice>}
 				<Notice>Frames are FLAT frames taken with the camera settings of Camera Acquisition; the wizard searches their exposure. Levels are the original digital numbers (DN) of each file, not the stretched view.</Notice>
-			</PanelSection>
-			<PanelSection title="Settings">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.flat-wizard.settings" title="Settings">
 				<div className="flex items-end gap-1">
 					<TextInput label="Server Directory" className="flex-1" placeholder="~/Nebulosa/captures" value={shown.directory ?? ''} disabled={locked} onChange={(e) => update({ directory: e.target.value.trim() || undefined })} />
 					<IconButton icon="folder" label="Choose directory" className="size-[38px]" disabled={locked} onClick={() => setChoosingDirectory(true)} />
@@ -140,8 +140,8 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 					<NumberInput label="Rejections" value={shown.maximumRejections} min={0} max={FLAT_WIZARD_MAXIMUM_REJECTIONS} disabled={locked} onChange={(maximumRejections) => update({ maximumRejections })} />
 				</div>
 				<Notice>Trial frames search the exposure of each filter and are never saved; rejected frames are deleted, and a filter fails beyond these limits. Existing files are never replaced.</Notice>
-			</PanelSection>
-			<PanelSection title="Filters">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.flat-wizard.filters" title="Filters">
 				{shown.filters.map((filter, index) => (
 					<FilterForm
 						key={index}
@@ -161,10 +161,10 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 					</Button>
 				)}
 				<Notice>The target applies to the brightest plane of the frame; the other planes of a color sensor are only checked for clipping.</Notice>
-			</PanelSection>
+			</CollapsibleSection>
 			{session && <Progress session={session} pending={pending} />}
 			{session && <Results session={session} />}
-			<PanelSection title="Controls">
+			<CollapsibleSection id="images.flat-wizard.controls" title="Controls">
 				{running ? (
 					<Button variant="secondary" disabled={pending || session?.state === 'stopping'} onClick={() => void stopFlatWizard(flatWizardRuntime, session!)}>
 						Stop
@@ -177,7 +177,7 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 				{blocker && <Notice>{blocker}</Notice>}
 				{running && <Notice>Stopping aborts the exposure in flight; the frames already saved stay.</Notice>}
 				{error && <Notice error>{error}</Notice>}
-			</PanelSection>
+			</CollapsibleSection>
 			<FileExplorerModal
 				open={choosingDirectory}
 				mode="directory"
@@ -278,7 +278,7 @@ function Progress({ session, pending }: ProgressProps) {
 	const notes = attempt?.reasons.flatMap((reason) => FLAT_WIZARD_DIAGNOSTIC_LABELS[reason] ?? []) ?? []
 
 	return (
-		<PanelSection title="Progress">
+		<CollapsibleSection id="images.flat-wizard.progress" title="Progress">
 			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>{FLAT_WIZARD_STATE_LABELS[session.state]}</p>
 			{session.state === 'exposing' && <FrameProgress exposure={session.exposure} />}
 			{failed && session.error && <Notice error>{session.error}</Notice>}
@@ -304,14 +304,14 @@ function Progress({ session, pending }: ProgressProps) {
 			</dl>
 			{notes.length > 0 && <Notice>{notes.join(' ')}</Notice>}
 			{session.previewError && <Notice>{session.previewError}</Notice>}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
 // Outcome of every filter group: the exposure, the counts, the stability of the saved frames, and the cleanup.
 function Results({ session }: { readonly session: FlatWizardSessionSummary }) {
 	return (
-		<PanelSection title="Results">
+		<CollapsibleSection id="images.flat-wizard.results" title="Results">
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 				{session.filters.map((run, index) => (
 					<Row key={index} label={run.name}>
@@ -323,7 +323,7 @@ function Results({ session }: { readonly session: FlatWizardSessionSummary }) {
 				<FilterNotes key={index} run={run} />
 			))}
 			{session.cleanupWarning && <Notice error>{session.cleanupWarning}</Notice>}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 

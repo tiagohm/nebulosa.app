@@ -1,6 +1,6 @@
 import type { MoonPhaseEvent } from 'api'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatEclipseTime } from '../../tools/eclipse/eclipse'
-import { CollapsibleSection } from '../CollapsibleSection'
 import { Note } from '../InspectorParts'
 import { MOON_PHASE_NAMES } from './moon'
 
@@ -10,7 +10,7 @@ import { MOON_PHASE_NAMES } from './moon'
 // Lunar Phases section of the Moon Inspector.
 export function MoonPhasesSection({ phases, timeZone }: { readonly phases?: readonly MoonPhaseEvent[]; readonly timeZone?: string }) {
 	return (
-		<CollapsibleSection id="lunarPhases" title="Lunar Phases" summary={phases?.[0] && `Next: ${MOON_PHASE_NAMES[phases[0].kind]}`}>
+		<CollapsibleSection id="sky.lunarPhases" title="Lunar Phases" summary={phases?.[0] && `Next: ${MOON_PHASE_NAMES[phases[0].kind]}`} defaultOpen={false}>
 			{phases ? (
 				<>
 					<ul className="m-0 flex list-none flex-col gap-2 p-0">

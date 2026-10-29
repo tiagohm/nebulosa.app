@@ -8,7 +8,7 @@ import { isActive } from '../analysis'
 import { Actions, Notice } from '../equipment-control/parts'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { activeProfile, profileState, setStreakDetectionSettings, streakDetectionSettings } from '../profile/profile'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { useStarResult } from '../stars/useStarResult'
 import { CLASS_LABELS, cancelStreakDetection, clampStreakSettings, DEFAULT_STREAK_SETTINGS, maxOrientationTolerance, PLANE_LABELS, runStreakDetection, sameStreakRequest, STREAK_LIMITS, STREAK_PLANES, streakPlanes, streaksState } from '../streaks/streaks'
@@ -92,12 +92,12 @@ function StreakDetection({ documentKey, info, view, unavailable }: StreakDetecti
 
 	return (
 		<>
-			<PanelSection title="Detection Settings">
+			<CollapsibleSection id="images.streak-detection.detection-settings" title="Detection Settings" defaultOpen={false}>
 				<DetectionSettings settings={settings} cfa={cfa} onChange={edit} />
-			</PanelSection>
-			<PanelSection title="Advanced Settings">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.streak-detection.advanced-settings" title="Advanced Settings" defaultOpen={false}>
 				<AdvancedSettings settings={settings} planes={planes} onChange={edit} />
-			</PanelSection>
+			</CollapsibleSection>
 			<Analysis
 				documentKey={documentKey}
 				imageId={imageId}
@@ -116,11 +116,11 @@ function StreakDetection({ documentKey, info, view, unavailable }: StreakDetecti
 				</>
 			)}
 			{streaks && (
-				<PanelSection title="Visualization">
+				<CollapsibleSection id="images.streak-detection.visualization" title="Visualization">
 					<Checkbox label="Show streaks" checked={streaks.visible} onChange={(visible) => setStreakView(imagesState, documentKey, { visible })} />
 					<Checkbox label="Show labels" checked={streaks.labels} disabled={!streaks.visible} onChange={(labels) => setStreakView(imagesState, documentKey, { labels })} />
 					<Notice>Click a line in the image or a streak in the list to inspect it. Showing or hiding the lines never runs a detection.</Notice>
-				</PanelSection>
+				</CollapsibleSection>
 			)}
 		</>
 	)
@@ -157,33 +157,30 @@ function degrees(angle: number): number {
 	return Math.round(toDeg(angle) * 1000) / 1000
 }
 
-// Plane and algorithm settings of the detector, folded by default.
+// Plane and algorithm settings of the detector, in a section collapsed by default.
 function AdvancedSettings({ settings, planes, onChange }: SettingsProps & { readonly planes?: readonly StreakDetectorSettings['plane'][] }) {
 	const tolerance = degrees(maxOrientationTolerance(settings.angleStep))
 
 	return (
-		<details>
-			<summary className="cursor-pointer text-ink-200 select-none">Plane and algorithm</summary>
-			<div className="mt-2 flex flex-col gap-2">
-				<Select label="Analysis plane" options={STREAK_PLANES} value={settings.plane} format={(plane) => PLANE_LABELS[plane]} disabledReason={(plane) => (planes && !planes.includes(plane) ? 'Not a plane of this image.' : undefined)} onChange={(plane) => onChange({ plane })} />
-				<Notice>Automatic measures a mono image, the green channel of a color image, or the first green plane of a CFA mosaic, never a debayered or stretched copy.</Notice>
-				<NumberInput label="Background cell" value={settings.backgroundCellSize} min={STREAK_LIMITS.backgroundCellSize.min} max={1024} suffix="px" onChange={(backgroundCellSize) => onChange({ backgroundCellSize })} />
-				<NumberInput label="Signal threshold" value={settings.thresholdSigma} min={STREAK_LIMITS.thresholdSigma.min} max={STREAK_LIMITS.thresholdSigma.max} step={0.1} suffix="σ" onChange={(thresholdSigma) => onChange({ thresholdSigma })} />
-				<NumberInput label="Gradient threshold" value={settings.gradientSigma} min={STREAK_LIMITS.gradientSigma.min} max={STREAK_LIMITS.gradientSigma.max} step={0.1} suffix="σ" onChange={(gradientSigma) => onChange({ gradientSigma })} />
-				<NumberInput label="Min coherence" value={settings.minCoherence} min={STREAK_LIMITS.minCoherence.min} max={STREAK_LIMITS.minCoherence.max} step={0.05} onChange={(minCoherence) => onChange({ minCoherence })} />
-				<NumberInput label="Angle step" value={degrees(settings.angleStep)} min={degrees(STREAK_LIMITS.angleStep.min)} max={10} step={0.1} suffix="°" onChange={(angleStep) => onChange({ angleStep: deg(angleStep) })} />
-				<NumberInput label="Orientation tolerance" value={degrees(settings.orientationTolerance)} min={0} max={tolerance} step={0.1} suffix="°" onChange={(orientationTolerance) => onChange({ orientationTolerance: deg(orientationTolerance) })} />
-				<NumberInput label="Distance step" value={settings.distanceStep} min={STREAK_LIMITS.distanceStep.min} max={16} step={0.25} suffix="px" onChange={(distanceStep) => onChange({ distanceStep })} />
-				<NumberInput label="Max candidates" value={settings.maxCandidates} min={STREAK_LIMITS.maxCandidates.min} max={STREAK_LIMITS.maxCandidates.max} onChange={(maxCandidates) => onChange({ maxCandidates })} />
-				<NumberInput label="Merge angle" value={degrees(settings.mergeAngleTolerance)} min={0} max={degrees(STREAK_LIMITS.mergeAngleTolerance.max)} step={0.1} suffix="°" onChange={(mergeAngleTolerance) => onChange({ mergeAngleTolerance: deg(mergeAngleTolerance) })} />
-				<NumberInput label="Merge gap" value={settings.mergeGap} min={0} max={10000} suffix="px" onChange={(mergeGap) => onChange({ mergeGap })} />
-				<NumberInput label="Merge distance" value={settings.mergeDistance} min={0} max={1000} step={0.5} suffix="px" onChange={(mergeDistance) => onChange({ mergeDistance })} />
-				<Notice>
-					The background cell and the distance step are in pixels of the analysis plane, which are 2 image pixels apart on a CFA mosaic. Bright pixels whose gradients are less coherent than the min coherence (stars, hot pixels) are ignored, so a trail among many stars is still found; 0 keeps them, which a
-					dotted trail of very short dashes needs. The orientation tolerance is at most {tolerance}° with this angle step.
-				</Notice>
-			</div>
-		</details>
+		<>
+			<Select label="Analysis plane" options={STREAK_PLANES} value={settings.plane} format={(plane) => PLANE_LABELS[plane]} disabledReason={(plane) => (planes && !planes.includes(plane) ? 'Not a plane of this image.' : undefined)} onChange={(plane) => onChange({ plane })} />
+			<Notice>Automatic measures a mono image, the green channel of a color image, or the first green plane of a CFA mosaic, never a debayered or stretched copy.</Notice>
+			<NumberInput label="Background cell" value={settings.backgroundCellSize} min={STREAK_LIMITS.backgroundCellSize.min} max={1024} suffix="px" onChange={(backgroundCellSize) => onChange({ backgroundCellSize })} />
+			<NumberInput label="Signal threshold" value={settings.thresholdSigma} min={STREAK_LIMITS.thresholdSigma.min} max={STREAK_LIMITS.thresholdSigma.max} step={0.1} suffix="σ" onChange={(thresholdSigma) => onChange({ thresholdSigma })} />
+			<NumberInput label="Gradient threshold" value={settings.gradientSigma} min={STREAK_LIMITS.gradientSigma.min} max={STREAK_LIMITS.gradientSigma.max} step={0.1} suffix="σ" onChange={(gradientSigma) => onChange({ gradientSigma })} />
+			<NumberInput label="Min coherence" value={settings.minCoherence} min={STREAK_LIMITS.minCoherence.min} max={STREAK_LIMITS.minCoherence.max} step={0.05} onChange={(minCoherence) => onChange({ minCoherence })} />
+			<NumberInput label="Angle step" value={degrees(settings.angleStep)} min={degrees(STREAK_LIMITS.angleStep.min)} max={10} step={0.1} suffix="°" onChange={(angleStep) => onChange({ angleStep: deg(angleStep) })} />
+			<NumberInput label="Orientation tolerance" value={degrees(settings.orientationTolerance)} min={0} max={tolerance} step={0.1} suffix="°" onChange={(orientationTolerance) => onChange({ orientationTolerance: deg(orientationTolerance) })} />
+			<NumberInput label="Distance step" value={settings.distanceStep} min={STREAK_LIMITS.distanceStep.min} max={16} step={0.25} suffix="px" onChange={(distanceStep) => onChange({ distanceStep })} />
+			<NumberInput label="Max candidates" value={settings.maxCandidates} min={STREAK_LIMITS.maxCandidates.min} max={STREAK_LIMITS.maxCandidates.max} onChange={(maxCandidates) => onChange({ maxCandidates })} />
+			<NumberInput label="Merge angle" value={degrees(settings.mergeAngleTolerance)} min={0} max={degrees(STREAK_LIMITS.mergeAngleTolerance.max)} step={0.1} suffix="°" onChange={(mergeAngleTolerance) => onChange({ mergeAngleTolerance: deg(mergeAngleTolerance) })} />
+			<NumberInput label="Merge gap" value={settings.mergeGap} min={0} max={10000} suffix="px" onChange={(mergeGap) => onChange({ mergeGap })} />
+			<NumberInput label="Merge distance" value={settings.mergeDistance} min={0} max={1000} step={0.5} suffix="px" onChange={(mergeDistance) => onChange({ mergeDistance })} />
+			<Notice>
+				The background cell and the distance step are in pixels of the analysis plane, which are 2 image pixels apart on a CFA mosaic. Bright pixels whose gradients are less coherent than the min coherence (stars, hot pixels) are ignored, so a trail among many stars is still found; 0 keeps them, which a dotted
+				trail of very short dashes needs. The orientation tolerance is at most {tolerance}° with this angle step.
+			</Notice>
+		</>
 	)
 }
 
@@ -216,7 +213,7 @@ function Analysis({ documentKey, imageId, request, job, streaks, solutionAvailab
 	const changed = job && !sameStreakRequest(job.request, request)
 
 	return (
-		<PanelSection title="Analysis">
+		<CollapsibleSection id="images.streak-detection.analysis" title="Analysis">
 			{streaks && (
 				<>
 					<Checkbox label="Classify with the plate solution shown" checked={streaks.useSolution} disabled={!solutionAvailable} onChange={(useSolution) => setStreakView(imagesState, documentKey, { useSolution })} />
@@ -255,7 +252,7 @@ function Analysis({ documentKey, imageId, request, job, streaks, solutionAvailab
 			) : (
 				imageId !== undefined && <Notice>No detection of this image yet.</Notice>
 			)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -277,7 +274,7 @@ function Results({ job, result, resultError, selected, onSelect }: ResultsProps)
 	const summary = job?.summary
 
 	return (
-		<PanelSection title="Results">
+		<CollapsibleSection id="images.streak-detection.results" title="Results">
 			{summary ? (
 				<>
 					<Property label="Detected streaks">{summary.detectedCount}</Property>
@@ -298,7 +295,7 @@ function Results({ job, result, resultError, selected, onSelect }: ResultsProps)
 			) : (
 				<Notice>{job && isActive(job) ? 'Detecting…' : 'No results.'}</Notice>
 			)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -312,7 +309,7 @@ interface SelectedStreakProps {
 // Measurements and classification of the streak selected in the list or the viewer.
 function SelectedStreak({ streak, classification }: SelectedStreakProps) {
 	return (
-		<PanelSection title="Selected Streak">
+		<CollapsibleSection id="images.streak-detection.selected-streak" title="Selected Streak">
 			{streak ? (
 				<>
 					<Property label="Start">{formatPoint(streak.start)}</Property>
@@ -337,7 +334,7 @@ function SelectedStreak({ streak, classification }: SelectedStreakProps) {
 			) : (
 				<Notice>No streak selected.</Notice>
 			)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 

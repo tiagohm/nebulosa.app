@@ -1,8 +1,8 @@
 import type { CameraCapabilities, DeviceSummary } from 'api'
-import { type ReactNode, useState } from 'react'
+import type { ReactNode } from 'react'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import type { CameraExposureSettings } from '../profile/schema'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
@@ -35,7 +35,7 @@ interface ExposureSectionProps {
 // Exposure section: the exposure time of the camera and the range it supports.
 export function ExposureSection({ settings, capabilities, disabled, onChange, children }: ExposureSectionProps) {
 	return (
-		<PanelSection title="Exposure">
+		<CollapsibleSection id="images.camera-acquisition.exposure" title="Exposure">
 			<ExposureTimeInput value={settings.exposureTime} exposure={capabilities?.exposure} disabled={disabled} onChange={(exposureTime) => onChange({ exposureTime })} />
 			{capabilities?.exposure && (
 				<p className="m-0 text-xs leading-4 text-ink-300">
@@ -43,7 +43,7 @@ export function ExposureSection({ settings, capabilities, disabled, onChange, ch
 				</p>
 			)}
 			{children}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -60,10 +60,10 @@ interface CameraSettingsProps {
 	readonly onChange: (patch: Partial<CameraExposureSettings>) => void
 }
 
-// Settings changed less often, collapsed by default: gain, offset, binning, readout mode, and subframe, each
-// only when the camera reports it, and the sensor temperature and cooler state, under the camera's name.
+// Settings changed less often, in a section collapsed by default: gain, offset, binning, readout mode, and subframe,
+// each only when the camera reports it, and the sensor temperature and cooler state, under the camera's name. While
+// collapsed, the section summarizes the sensor state, or names the camera when it reports none.
 export function CameraSettings({ device, settings, capabilities, disabled, onChange }: CameraSettingsProps) {
-	const [open, setOpen] = useState(false)
 	const name = device && (
 		<p className="m-0 min-w-0 truncate">
 			<DeviceLink device={device} fallback="" />
@@ -72,63 +72,51 @@ export function CameraSettings({ device, settings, capabilities, disabled, onCha
 
 	if (!capabilities) {
 		return (
-			<PanelSection title="Camera">
+			<CollapsibleSection id="images.camera-acquisition.camera" title="Camera" summary={device?.name} defaultOpen={false}>
 				{name}
 				<p className="m-0 text-ink-300">Camera settings appear once the camera reports them.</p>
-			</PanelSection>
+			</CollapsibleSection>
 		)
 	}
 
 	const { gain, offset, bin, subframe, frameFormats, temperature, cooler } = capabilities
 	const formats = frameFormats.map((format) => format.name)
+	const sensor = [temperature !== undefined && `Sensor ${temperature.toFixed(1)} °C`, cooler && `Cooler ${cooler.enabled === false ? 'off' : `${Math.round(cooler.power)} %`}`].filter(Boolean).join(' · ')
 
 	return (
-		<PanelSection title="Camera">
+		<CollapsibleSection id="images.camera-acquisition.camera" title="Camera" summary={sensor || device?.name} defaultOpen={false}>
 			{name}
-			{(temperature !== undefined || cooler) && (
-				<p className="m-0 tabular-nums">
-					{temperature !== undefined && `Sensor ${temperature.toFixed(1)} °C`}
-					{temperature !== undefined && cooler && ' · '}
-					{cooler && `Cooler ${cooler.enabled === false ? 'off' : `${Math.round(cooler.power)} %`}`}
-				</p>
+			{sensor && <p className="m-0 tabular-nums">{sensor}</p>}
+			{gain && <NumberInput label="Gain" value={Math.min(gain.max, Math.max(gain.min, settings.gain))} min={gain.min} max={gain.max} disabled={disabled} onChange={(value) => onChange({ gain: value })} />}
+			{offset && <NumberInput label="Offset" value={Math.min(offset.max, Math.max(offset.min, settings.offset))} min={offset.min} max={offset.max} disabled={disabled} onChange={(value) => onChange({ offset: value })} />}
+			{bin && <NumberInput label="Binning" value={Math.min(bin.x, settings.binX)} min={1} max={Math.min(bin.x, bin.y)} disabled={disabled} onChange={(value) => onChange({ binX: value, binY: value })} />}
+			{formats.length > 0 && (
+				<Select
+					label="Readout Mode"
+					options={formats}
+					value={formats.includes(settings.frameFormat) ? settings.frameFormat : capabilities.frameFormat || formats[0]}
+					format={(name) => frameFormats.find((format) => format.name === name)?.label || name}
+					disabled={disabled}
+					onChange={(frameFormat) => onChange({ frameFormat })}
+				/>
 			)}
-			<Button variant="ghost" className="self-start px-1" onClick={() => setOpen(!open)}>
-				{open ? 'Hide settings' : 'Show settings'}
-			</Button>
-			{open && (
+			{subframe && (
 				<>
-					{gain && <NumberInput label="Gain" value={Math.min(gain.max, Math.max(gain.min, settings.gain))} min={gain.min} max={gain.max} disabled={disabled} onChange={(value) => onChange({ gain: value })} />}
-					{offset && <NumberInput label="Offset" value={Math.min(offset.max, Math.max(offset.min, settings.offset))} min={offset.min} max={offset.max} disabled={disabled} onChange={(value) => onChange({ offset: value })} />}
-					{bin && <NumberInput label="Binning" value={Math.min(bin.x, settings.binX)} min={1} max={Math.min(bin.x, bin.y)} disabled={disabled} onChange={(value) => onChange({ binX: value, binY: value })} />}
-					{formats.length > 0 && (
-						<Select
-							label="Readout Mode"
-							options={formats}
-							value={formats.includes(settings.frameFormat) ? settings.frameFormat : capabilities.frameFormat || formats[0]}
-							format={(name) => frameFormats.find((format) => format.name === name)?.label || name}
-							disabled={disabled}
-							onChange={(frameFormat) => onChange({ frameFormat })}
-						/>
+					<Checkbox label="Subframe (ROI)" checked={settings.subframe} disabled={disabled} onChange={(checked) => onChange({ subframe: checked, ...(checked && settings.width <= 0 && { x: 0, y: 0, width: subframe.width, height: subframe.height }) })} />
+					{settings.subframe && (
+						<div className="grid grid-cols-2 gap-2">
+							<NumberInput label="X" value={settings.x} min={0} max={subframe.width - 1} disabled={disabled} onChange={(x) => onChange({ x })} />
+							<NumberInput label="Y" value={settings.y} min={0} max={subframe.height - 1} disabled={disabled} onChange={(y) => onChange({ y })} />
+							<NumberInput label="Width" value={settings.width} min={1} max={subframe.width} disabled={disabled} onChange={(width) => onChange({ width })} />
+							<NumberInput label="Height" value={settings.height} min={1} max={subframe.height} disabled={disabled} onChange={(height) => onChange({ height })} />
+							<Button variant="secondary" className="col-span-2" disabled={disabled} onClick={() => onChange({ x: 0, y: 0, width: subframe.width, height: subframe.height })}>
+								Fullscreen
+							</Button>
+						</div>
 					)}
-					{subframe && (
-						<>
-							<Checkbox label="Subframe (ROI)" checked={settings.subframe} disabled={disabled} onChange={(checked) => onChange({ subframe: checked, ...(checked && settings.width <= 0 && { x: 0, y: 0, width: subframe.width, height: subframe.height }) })} />
-							{settings.subframe && (
-								<div className="grid grid-cols-2 gap-2">
-									<NumberInput label="X" value={settings.x} min={0} max={subframe.width - 1} disabled={disabled} onChange={(x) => onChange({ x })} />
-									<NumberInput label="Y" value={settings.y} min={0} max={subframe.height - 1} disabled={disabled} onChange={(y) => onChange({ y })} />
-									<NumberInput label="Width" value={settings.width} min={1} max={subframe.width} disabled={disabled} onChange={(width) => onChange({ width })} />
-									<NumberInput label="Height" value={settings.height} min={1} max={subframe.height} disabled={disabled} onChange={(height) => onChange({ height })} />
-									<Button variant="secondary" className="col-span-2" disabled={disabled} onClick={() => onChange({ x: 0, y: 0, width: subframe.width, height: subframe.height })}>
-										Fullscreen
-									</Button>
-								</div>
-							)}
-						</>
-					)}
-					{!gain && !offset && !bin && formats.length === 0 && !subframe && <p className="m-0 text-ink-300">The camera reports no adjustable settings.</p>}
 				</>
 			)}
-		</PanelSection>
+			{!gain && !offset && !bin && formats.length === 0 && !subframe && <p className="m-0 text-ink-300">The camera reports no adjustable settings.</p>}
+		</CollapsibleSection>
 	)
 }

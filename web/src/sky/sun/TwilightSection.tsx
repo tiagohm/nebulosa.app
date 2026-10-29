@@ -1,6 +1,6 @@
 import type { SolarDailyState, SolarTwilightCrossings, SunLocalDay } from 'api'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatDuration } from '../../tools/eclipse/eclipse'
-import { CollapsibleSection } from '../CollapsibleSection'
 import { formatLocalTime } from '../format'
 import { Datum, Note } from '../InspectorParts'
 
@@ -55,7 +55,7 @@ export function TwilightSection({ day, hasObserver, timeZone }: { readonly day?:
 	const summary = dusk !== undefined && day ? `Astronomical dusk ${formatLocalTime(dusk, day.start, undefined, timeZone)}` : undefined
 
 	return (
-		<CollapsibleSection id="twilight" title="Twilight" summary={summary}>
+		<CollapsibleSection id="sky.twilight" title="Twilight" summary={summary} defaultOpen={false}>
 			{!hasObserver ? (
 				<p className="m-0 text-ink-300">Twilight needs the observer&apos;s location.</p>
 			) : !day ? (

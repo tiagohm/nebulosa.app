@@ -5,7 +5,7 @@ import { useSnapshot } from 'valtio'
 import { isActive } from '../analysis'
 import { Actions, Notice } from '../equipment-control/parts'
 import { activeProfile, profileState, setStarDetectionSettings, starDetectionSettings } from '../profile/profile'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { AcceptanceControls, DetectorControls, DetectorSettingsControls, useAstapConfigured } from '../stars/StarRequestControls'
 import { cancelDetection, PROVIDER_LABELS, runDetection, sameRequest, starsState } from '../stars/stars'
@@ -72,15 +72,15 @@ function StarDetection({ documentKey, imageId, stars, unavailable }: StarDetecti
 
 	return (
 		<>
-			<PanelSection title="Detector">
+			<CollapsibleSection id="images.star-detection.detector" title="Detector">
 				<DetectorControls request={request} onChange={edit} />
-			</PanelSection>
-			<PanelSection title="Detection Settings">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.star-detection.detection-settings" title="Detection Settings" defaultOpen={false}>
 				<DetectorSettingsControls request={request} onChange={edit} />
-			</PanelSection>
-			<PanelSection title="Acceptance">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.star-detection.acceptance" title="Acceptance" defaultOpen={false}>
 				<AcceptanceControls request={request} onChange={edit} />
-			</PanelSection>
+			</CollapsibleSection>
 			<Analysis documentKey={documentKey} imageId={imageId} request={request} job={job} submitError={imageId === undefined ? undefined : submitErrors[imageId]} unavailable={unavailable} />
 			{imageId !== undefined && (
 				<>
@@ -89,11 +89,11 @@ function StarDetection({ documentKey, imageId, stars, unavailable }: StarDetecti
 				</>
 			)}
 			{stars && (
-				<PanelSection title="Visualization">
+				<CollapsibleSection id="images.star-detection.visualization" title="Visualization">
 					<Checkbox label="Show stars" checked={stars.visible} onChange={(visible) => setStarMarkers(imagesState, documentKey, { visible })} />
 					<Checkbox label="Accepted stars only" checked={stars.acceptedOnly} disabled={!stars.visible} onChange={(acceptedOnly) => setStarMarkers(imagesState, documentKey, { acceptedOnly })} />
 					<Notice>Click a star in the image to inspect it. Showing or hiding the markers never runs a detection.</Notice>
-				</PanelSection>
+				</CollapsibleSection>
 			)}
 		</>
 	)
@@ -122,7 +122,7 @@ function Analysis({ documentKey, imageId, request, job, submitError, unavailable
 	const changed = job && !sameRequest(job.request, request)
 
 	return (
-		<PanelSection title="Analysis">
+		<CollapsibleSection id="images.star-detection.analysis" title="Analysis">
 			<Actions>
 				<Button
 					disabled={active || !astapReady || imageId === undefined}
@@ -151,7 +151,7 @@ function Analysis({ documentKey, imageId, request, job, submitError, unavailable
 			) : (
 				imageId !== undefined && <Notice>No detection of this image yet.</Notice>
 			)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -169,7 +169,7 @@ function Results({ job, result, resultError }: ResultsProps) {
 	const summary = job?.summary
 
 	return (
-		<PanelSection title="Results">
+		<CollapsibleSection id="images.star-detection.results" title="Results">
 			{summary ? (
 				<>
 					<Property label="Detector">{PROVIDER_LABELS[job.request.detector.provider]}</Property>
@@ -187,14 +187,14 @@ function Results({ job, result, resultError }: ResultsProps) {
 			) : (
 				<Notice>{job && isActive(job) ? 'Detecting…' : 'No results.'}</Notice>
 			)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
 // Measurements of the star selected in the viewer.
 function SelectedStar({ star }: { readonly star?: DetectedStar }) {
 	return (
-		<PanelSection title="Selected Star">
+		<CollapsibleSection id="images.star-detection.selected-star" title="Selected Star">
 			{star ? (
 				<>
 					<Property label="X">{star.x.toFixed(2)} px</Property>
@@ -206,7 +206,7 @@ function SelectedStar({ star }: { readonly star?: DetectedStar }) {
 			) : (
 				<Notice>No star selected.</Notice>
 			)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 

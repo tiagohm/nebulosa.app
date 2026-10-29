@@ -11,7 +11,7 @@ import { type RoleDevice, useRoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
 import { activeProfile, autoFocusSettings, exposureSettings, profileState, setAutoFocusSettings, starDetectionSettings } from '../profile/profile'
 import type { AutoFocusSettings, CameraIdentity } from '../profile/schema'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { useAstapConfigured } from '../stars/StarRequestControls'
 import { PROVIDER_LABELS } from '../stars/stars'
 import { Button } from '../ui/Button'
@@ -89,7 +89,7 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 
 	return (
 		<>
-			<PanelSection title="Equipment">
+			<CollapsibleSection id="images.auto-focus.equipment" title="Equipment">
 				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 					<Row label="Camera">
 						<DeviceLink device={device} fallback="—" />
@@ -108,8 +108,8 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 						Equipment Setup
 					</Button>
 				)}
-			</PanelSection>
-			<PanelSection title="Focus Routine">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.auto-focus.focus-routine" title="Focus Routine">
 				{wheel.device && <p className="m-0 text-xs leading-4 text-ink-300">Filter: {filter ?? 'unknown'} — the Auto Focus measures through the current filter and never changes it.</p>}
 				<p className="m-0 text-xs leading-4 text-ink-300">Frames are LIGHT, taken with the exposure and camera settings of Camera Acquisition ({exposure.exposureTime} s).</p>
 				<p className="m-0 text-xs leading-4 text-ink-300">
@@ -122,18 +122,15 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 					The sweep starts {settings.initialOffsetSteps * stepSize} steps {settings.reversed ? 'inward' : 'outward'} and extends until both sides of the minimum have {settings.initialOffsetSteps} positions.
 				</p>
 				<Checkbox label="Return to the start position when stopped" checked={settings.restoreOnStop} disabled={locked} onChange={(restoreOnStop) => update({ restoreOnStop })} />
-				<details>
-					<summary className="cursor-pointer text-ink-200 select-none">Advanced settings</summary>
-					<div className="mt-2 flex flex-col gap-2">
-						<Checkbox label="Start the sweep inward" checked={settings.reversed} disabled={locked} onChange={(reversed) => update({ reversed })} />
-						<NumberInput label="Settle Time" value={settings.settleDelay} min={0} max={600} step={0.1} suffix="s" disabled={locked} onChange={(settleDelay) => update({ settleDelay })} />
-						<NumberInput label="Measurement Timeout" value={settings.measureTimeout} min={1} max={3600} suffix="s" disabled={locked} onChange={(measureTimeout) => update({ measureTimeout })} />
-						<NumberInput label="Max RMSD / HFD" value={settings.rmsdThreshold} min={0} max={10} step={0.01} disabled={locked} onChange={(rmsdThreshold) => update({ rmsdThreshold })} />
-						<Notice>A fitted curve whose error relative to its best HFD exceeds this is rejected; 0 accepts any fit. Backlash is compensated as saved for the focuser in Equipment Control.</Notice>
-					</div>
-				</details>
-			</PanelSection>
-			<PanelSection title="Current Session">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.auto-focus.advanced-settings" title="Advanced Settings" defaultOpen={false}>
+				<Checkbox label="Start the sweep inward" checked={settings.reversed} disabled={locked} onChange={(reversed) => update({ reversed })} />
+				<NumberInput label="Settle Time" value={settings.settleDelay} min={0} max={600} step={0.1} suffix="s" disabled={locked} onChange={(settleDelay) => update({ settleDelay })} />
+				<NumberInput label="Measurement Timeout" value={settings.measureTimeout} min={1} max={3600} suffix="s" disabled={locked} onChange={(measureTimeout) => update({ measureTimeout })} />
+				<NumberInput label="Max RMSD / HFD" value={settings.rmsdThreshold} min={0} max={10} step={0.01} disabled={locked} onChange={(rmsdThreshold) => update({ rmsdThreshold })} />
+				<Notice>A fitted curve whose error relative to its best HFD exceeds this is rejected; 0 accepts any fit. Backlash is compensated as saved for the focuser in Equipment Control.</Notice>
+			</CollapsibleSection>
+			<CollapsibleSection id="images.auto-focus.current-session" title="Current Session">
 				{session && <SessionState session={session} position={focuserState?.position.value} moving={focuserState?.moving} />}
 				{running ? (
 					<Button variant="secondary" disabled={pending || session!.state === 'stopping'} onClick={() => void stopAutoFocus(autoFocusRuntime, session!)}>
@@ -147,7 +144,7 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 				{blocker && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}</p>}
 				{running && <p className="m-0 text-xs leading-4 text-ink-300">{session!.request.restoreOnStop ? 'A stop moves the focuser back to the start position; a second stop leaves it where it stands.' : 'A stop leaves the focuser where it stands.'}</p>}
 				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
-			</PanelSection>
+			</CollapsibleSection>
 		</>
 	)
 }

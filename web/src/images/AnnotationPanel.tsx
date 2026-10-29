@@ -9,7 +9,7 @@ import { useAnnotationContext, useAnnotationResult } from '../annotations/useAnn
 import { Actions, Notice } from '../equipment-control/parts'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { activeProfile, profileState } from '../profile/profile'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { navigate, routeState } from '../shell/route'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { formatAngularSize, formatDeclination, formatDegrees, formatMagnitude, formatRightAscension } from '../sky/format'
@@ -135,7 +135,7 @@ function Annotation({ documentKey, info, annotation, selectedSolution, unavailab
 					onBodiesChange={(bodies) => edit({ bodies })}
 				/>
 			)}
-			<PanelSection title="Layers">
+			<CollapsibleSection id="images.annotation.layers" title="Layers" defaultOpen={false}>
 				<Checkbox label="Deep-sky objects" checked={annotation.layers.deepSky} onChange={(deepSky) => edit({ layers: { deepSky } })} />
 				<Checkbox label="Stars" checked={annotation.layers.stars} onChange={(stars) => edit({ layers: { stars } })} />
 				{BODY_LAYERS.map(([layer, toggle]) => (
@@ -144,15 +144,15 @@ function Annotation({ documentKey, info, annotation, selectedSolution, unavailab
 				<Checkbox label="Constellation lines" checked={annotation.layers.constellations} onChange={(constellations) => edit({ layers: { constellations } })} />
 				<Checkbox label="Constellation names" checked={annotation.layers.constellationLabels} onChange={(constellationLabels) => edit({ layers: { constellationLabels } })} />
 				<Notice>Showing or hiding a layer never runs an analysis.</Notice>
-			</PanelSection>
-			<PanelSection title="Appearance">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.annotation.appearance" title="Appearance" defaultOpen={false}>
 				<Checkbox label="Labels" checked={annotation.labels} onChange={(labels) => edit({ labels })} />
 				<SegmentedControl label="Label density" options={['minimal', 'balanced', 'detailed'] as const} value={annotation.density} format={(density) => DENSITY_LABELS[density]} disabled={!annotation.labels} onChange={(density) => edit({ density })} />
 				<Checkbox label="Outlines of extended objects" checked={annotation.outlines} onChange={(outlines) => edit({ outlines })} />
 				<Checkbox label="Motion during the exposure" checked={annotation.motion} onChange={(motion) => edit({ motion })} />
 				<NumberInput label="Magnitude limit" value={annotation.magnitudeLimit} min={-2} max={30} step={0.5} onChange={(magnitudeLimit) => edit({ magnitudeLimit })} />
 				<Notice>A lower limit hides fainter stars and deep-sky objects at once; a higher one applies to the next analysis. Deep-sky objects of the classic catalogs without a magnitude are always kept, and the limit never hides a solar-system or minor body.</Notice>
-			</PanelSection>
+			</CollapsibleSection>
 			{imageId !== undefined && (
 				<>
 					<Objects
@@ -203,7 +203,7 @@ function Analysis({ documentKey, imageId, request, context, job, wcsAvailable, s
 	const observation = context?.observation
 
 	return (
-		<PanelSection title="Source & Status">
+		<CollapsibleSection id="images.annotation.source-and-status" title="Source & Status">
 			<Property label="WCS">{request.plateSolveJobId !== undefined ? 'Plate solution shown' : wcsAvailable ? 'Image header' : 'None'}</Property>
 			<Property label="Observation (UTC)">{observation ? formatUtc(observation.time) : context ? TIME_ORIGIN_LABELS.now : MISSING}</Property>
 			{observation && <Property label="Time from">{`${TIME_ORIGIN_LABELS[observation.origin]}${observation.approximate ? ' (approximate)' : ''}`}</Property>}
@@ -238,7 +238,7 @@ function Analysis({ documentKey, imageId, request, context, job, wcsAvailable, s
 			) : (
 				imageId !== undefined && <Notice>No analysis of this image yet.</Notice>
 			)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -280,7 +280,7 @@ function SolarSystemBodies({ documentKey, imageId, request, context, job, result
 	const chosen = bodies.solarSystem || bodies.satellite || bodies.minorBody
 
 	return (
-		<PanelSection title="Solar System Bodies">
+		<CollapsibleSection id="images.annotation.solar-system-bodies" title="Solar System Bodies">
 			{BODY_LAYERS.map(([layer]) => (
 				<Checkbox key={layer} label={LAYER_LABELS[layer]} checked={bodies[layer]} onChange={(listed) => onBodiesChange({ [layer]: listed })} />
 			))}
@@ -321,7 +321,7 @@ function SolarSystemBodies({ documentKey, imageId, request, context, job, result
 					{resultError && <Notice error>{resultError}</Notice>}
 				</>
 			)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -364,7 +364,7 @@ function Objects({ job, objects, warnings, resultError, annotation, selected, on
 	const shown = objects.filter((object) => isAnnotationShown(annotation, object) && (!text || object.name.toLowerCase().includes(text) || object.designations.some((e) => e.toLowerCase().includes(text))))
 
 	return (
-		<PanelSection title="Objects in Field">
+		<CollapsibleSection id="images.annotation.objects-in-field" title="Objects in Field">
 			{summary || objects.length > 0 ? (
 				<>
 					{summary &&
@@ -389,7 +389,7 @@ function Objects({ job, objects, warnings, resultError, annotation, selected, on
 			) : (
 				<Notice>{job && isActive(job) ? 'Annotating…' : 'No results.'}</Notice>
 			)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -418,7 +418,7 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 	}
 
 	return (
-		<PanelSection title="Selected Object">
+		<CollapsibleSection id="images.annotation.selected-object" title="Selected Object">
 			{object ? (
 				<>
 					<Property label="Name">{object.name}</Property>
@@ -448,7 +448,7 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 			) : (
 				<Notice>Click a marker in the image or an object in the list to inspect it.</Notice>
 			)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 

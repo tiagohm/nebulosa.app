@@ -11,7 +11,7 @@ import type { RoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
 import { activeProfile, exposureSettings, guidingSettings, profileState, setGuidingSettings, starDetectionSettings } from '../profile/profile'
 import { type CameraIdentity, GUIDING_MAXIMUM_EXPOSURE, GUIDING_MAXIMUM_PULSE, GUIDING_MAXIMUM_SEARCH_REGION, GUIDING_MINIMUM_EXPOSURE, GUIDING_MINIMUM_PULSE, GUIDING_MINIMUM_SEARCH_REGION, type GuidingDitherMode, type GuidingSettings } from '../profile/schema'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { useAstapConfigured } from '../stars/StarRequestControls'
 import { PROVIDER_LABELS } from '../stars/stars'
 import { Button } from '../ui/Button'
@@ -138,7 +138,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 
 	return (
 		<>
-			<PanelSection title="Equipment">
+			<CollapsibleSection id="images.guiding.equipment" title="Equipment">
 				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 					<Row label="Camera">
 						<DeviceLink device={device} fallback="—" />
@@ -159,17 +159,17 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 					Stars are detected with the Star Detection settings (<span className="text-accent">{PROVIDER_LABELS[detection.provider]}</span> detector), chosen when looping starts; the guider accepts those of 5 sigma or more.
 					{detection.provider === 'astap' && ' ASTAP runs as a separate program on every frame, about half a second on a full frame.'}
 				</Notice>
-			</PanelSection>
+			</CollapsibleSection>
 			{session && <SessionState session={session} />}
 			{session?.star && <StarProfileSection star={session.star} pixelScale={session.pixelScale} frameId={session.frame?.frameId} />}
-			<PanelSection title="Exposure and Tracking">
+			<CollapsibleSection id="images.guiding.exposure-and-tracking" title="Exposure and Tracking">
 				<NumberInput label="Exposure" value={settings.exposureTime} min={GUIDING_MINIMUM_EXPOSURE} max={GUIDING_MAXIMUM_EXPOSURE} step={0.5} suffix="s" disabled={pending} onChange={changeExposure} />
 				<SegmentedControl label="Tracking" options={['singleStar', 'multiStar'] as const} value={settings.trackingMode} format={(mode) => TRACKING_LABELS[mode]} disabled={running || pending} onChange={(trackingMode) => update({ trackingMode })} />
 				<NumberInput label="Search Region" value={settings.searchRegion} min={GUIDING_MINIMUM_SEARCH_REGION} max={GUIDING_MAXIMUM_SEARCH_REGION} step={4} suffix="px" disabled={running || pending} onChange={(searchRegion) => update({ searchRegion: Math.round(searchRegion) })} />
 				<Checkbox label="Sticky lock position" checked={settings.stickyLockPosition} disabled={running || pending} onChange={(stickyLockPosition) => update({ stickyLockPosition })} />
 				<Notice>The guide star is searched in a square of this side around the lock. A sticky lock stays exactly where it is when the guider starts again, instead of moving to the star.</Notice>
-			</PanelSection>
-			<PanelSection title="Calibration">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.guiding.calibration" title="Calibration" defaultOpen={false}>
 				<Checkbox label="Calibrate again on every start" checked={settings.recalibrate} disabled={pending} onChange={(recalibrate) => update({ recalibrate })} />
 				<div className="flex items-end gap-2">
 					<NumberInput label="Calibration Step" value={settings.calibrationPulse} min={GUIDING_MINIMUM_PULSE} max={GUIDING_MAXIMUM_PULSE} step={50} suffix="ms" disabled={running || pending} onChange={(calibrationPulse) => update({ calibrationPulse })} className="flex-1" />
@@ -181,14 +181,14 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				<Notice>Calculate sizes the step to move the star about 25 px in 12 RA steps at the declination the mount points at; calibrate away from the pole.</Notice>
 				<Checkbox label="Reverse DEC output after a meridian flip" checked={settings.reverseDecOutputAfterMeridianFlip} disabled={running || pending} onChange={(reverseDecOutputAfterMeridianFlip) => update({ reverseDecOutputAfterMeridianFlip })} />
 				<Notice>Reversing the DEC output applies when the calibration is flipped for a meridian flip, which guiding does not do yet; leave it off for mounts that reverse it themselves.</Notice>
-			</PanelSection>
-			<PanelSection title="Corrections">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.guiding.corrections" title="Corrections" defaultOpen={false}>
 				<NumberInput label="RA Aggressiveness" value={settings.aggressivenessRA} min={0} max={1} step={0.05} disabled={running || pending} onChange={(aggressivenessRA) => update({ aggressivenessRA })} />
 				<NumberInput label="DEC Aggressiveness" value={settings.aggressivenessDEC} min={0} max={1} step={0.05} disabled={running || pending} onChange={(aggressivenessDEC) => update({ aggressivenessDEC })} />
 				<NumberInput label="RA Max Pulse" value={settings.maximumPulseRA} min={GUIDING_MINIMUM_PULSE} max={GUIDING_MAXIMUM_PULSE} step={100} suffix="ms" disabled={running || pending} onChange={(maximumPulseRA) => update({ maximumPulseRA })} />
 				<NumberInput label="DEC Max Pulse" value={settings.maximumPulseDEC} min={GUIDING_MINIMUM_PULSE} max={GUIDING_MAXIMUM_PULSE} step={100} suffix="ms" disabled={running || pending} onChange={(maximumPulseDEC) => update({ maximumPulseDEC })} />
-			</PanelSection>
-			<PanelSection title="Settle and Dither">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.guiding.settle-and-dither" title="Settle and Dither" defaultOpen={false}>
 				<NumberInput label="Settle Within" value={settings.settle.pixels} min={0.1} max={50} step={0.1} suffix="px" disabled={pending} onChange={(pixels) => update({ settle: { ...settings.settle, pixels } })} />
 				<NumberInput label="Settle For" value={settings.settle.time} min={0} max={600} step={1} suffix="s" disabled={pending} onChange={(time) => update({ settle: { ...settings.settle, time } })} />
 				<NumberInput label="Settle Timeout" value={settings.settle.timeout} min={1} max={3600} step={5} suffix="s" disabled={pending} onChange={(timeout) => update({ settle: { ...settings.settle, timeout } })} />
@@ -196,8 +196,8 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				<Select label="Dither Pattern" options={DITHER_MODES} value={settings.ditherMode} format={(mode) => DITHER_MODE_LABELS[mode]} disabled={running || pending} onChange={(ditherMode) => update({ ditherMode })} />
 				<Checkbox label="Dither in RA only" checked={settings.ditherRaOnly} disabled={pending} onChange={(ditherRaOnly) => update({ ditherRaOnly })} />
 				<Checkbox label="Fast recenter after calibration or dither" checked={settings.fastRecenter} disabled={running || pending} onChange={(fastRecenter) => update({ fastRecenter })} />
-			</PanelSection>
-			<PanelSection title="Controls">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.guiding.controls" title="Controls">
 				{session && running ? (
 					<SessionControls session={session} settings={settings} pending={pending} />
 				) : (
@@ -207,7 +207,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				)}
 				{blocker && <Notice>{blocker}</Notice>}
 				{error && <Notice error>{error}</Notice>}
-			</PanelSection>
+			</CollapsibleSection>
 		</>
 	)
 }
@@ -289,7 +289,7 @@ function SessionState({ session }: { readonly session: GuidingSessionSummary }) 
 	const { calibration, rms, command, pixelScale } = session
 
 	return (
-		<PanelSection title="Session">
+		<CollapsibleSection id="images.guiding.session" title="Session">
 			{session.active && <FrameProgress exposure={session.exposureProgress} />}
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 				<Row label="State">
@@ -322,7 +322,7 @@ function SessionState({ session }: { readonly session: GuidingSessionSummary }) 
 			{command?.state === 'failed' && command.error && <Notice error>{command.error}</Notice>}
 			{calibration && calibration.warnings.length > 0 && <Notice>{calibration.warnings.join(' ')}</Notice>}
 			{session.failure && <Notice error>{session.failure.error ?? `The session ended: ${session.failure.reason}.`}</Notice>}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 

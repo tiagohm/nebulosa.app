@@ -3,11 +3,11 @@ import { SUN_RADIUS_AU } from 'nebulosa/src/core/constants'
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import type { SkyObserverSettings } from '../../profile/schema'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { formatDuration } from '../../tools/eclipse/eclipse'
 import { Button } from '../../ui/Button'
 import { BROWSER_TIME_ZONE } from '../clock'
-import { CollapsibleSection } from '../CollapsibleSection'
 import { formatAngularSize, formatDeclination, formatDegrees, formatLocalTime, formatMagnitude } from '../format'
 import { Datum, Note, PositionSection } from '../InspectorParts'
 import { ObjectActions } from '../ObjectActions'
@@ -61,7 +61,7 @@ function VisibilitySection({ position, day, hasObserver, onSetObserver, timeZone
 	const summary = day?.daylightSeconds !== undefined ? `Daylight ${formatDuration(day.daylightSeconds)}` : day && daylightState(day)
 
 	return (
-		<CollapsibleSection id="visibility" title="Visibility" summary={summary}>
+		<CollapsibleSection id="sky.visibility" title="Visibility" summary={summary}>
 			{!hasObserver ? (
 				<>
 					<p className="m-0 text-ink-300">Altitude, azimuth, sunrise, and sunset need the observer&apos;s location.</p>

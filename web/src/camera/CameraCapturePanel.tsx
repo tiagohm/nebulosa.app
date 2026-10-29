@@ -8,7 +8,7 @@ import type { RoleAvailability } from '../equipment/availability'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { acquisitionSettings, activeProfile, exposureSettings, profileState, setAcquisitionSettings, setExposureSettings } from '../profile/profile'
 import type { CameraAcquisitionSettings, CameraExposureSettings, CameraIdentity } from '../profile/schema'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { NumberInput } from '../ui/NumberInput'
@@ -116,7 +116,7 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 			<ExposureSection settings={exposure} capabilities={capabilities} disabled={locked} onChange={updateExposure}>
 				<Select label="Frame Type" options={FRAME_TYPES} value={settings.frameType} disabled={locked} onChange={(frameType) => update({ frameType })} />
 			</ExposureSection>
-			<PanelSection title="Acquisition">
+			<CollapsibleSection id="images.camera-acquisition.acquisition" title="Acquisition">
 				<SegmentedControl label="Mode" options={EXPOSURE_MODES} value={settings.exposureMode} format={(mode) => EXPOSURE_MODE_LABELS[mode]} disabled={locked} onChange={(exposureMode) => update({ exposureMode })} />
 				{settings.exposureMode === 'fixed' && <NumberInput label="Frame Count" value={settings.count} min={1} max={MAX_FRAME_COUNT} disabled={locked} onChange={(count) => update({ count })} />}
 				{settings.exposureMode !== 'single' && (
@@ -137,10 +137,10 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 				/>
 				{availability.status !== 'ready' && !running && <p className="m-0 text-xs leading-4 text-ink-300">{availability.message}</p>}
 				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
-			</PanelSection>
+			</CollapsibleSection>
 			{session && <CaptureState session={session} />}
 			<CameraSettings device={device} settings={exposure} capabilities={capabilities} disabled={locked} onChange={updateExposure} />
-			<PanelSection title="Output">
+			<CollapsibleSection id="images.camera-acquisition.output" title="Output">
 				<SegmentedControl options={OUTPUT_MODES} value={settings.output.mode} format={(mode) => OUTPUT_MODE_LABELS[mode]} disabled={locked} onChange={(mode) => updateOutput({ mode })} />
 				{settings.output.mode === 'preview-save' && (
 					<>
@@ -165,7 +165,7 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 					</>
 				)}
 				{settings.output.mode === 'preview-only' && <p className="m-0 text-xs leading-4 text-ink-300">Frames are kept in memory for viewing only; nothing is written.</p>}
-			</PanelSection>
+			</CollapsibleSection>
 			{frame && <LastFrame frame={frame} />}
 			<FileExplorerModal
 				open={choosingDirectory}
@@ -239,7 +239,7 @@ function CaptureState({ session }: CaptureStateProps) {
 	const failed = session.phase === 'failed' || session.phase === 'aborted'
 
 	return (
-		<PanelSection title={running ? 'Acquisition Status' : 'Last Acquisition'}>
+		<CollapsibleSection id="images.camera-acquisition.status" title={running ? 'Acquisition Status' : 'Last Acquisition'}>
 			<p className={failed ? 'm-0 text-danger' : 'm-0 text-ink-100'}>{captureStatus(session)}</p>
 			{running && <div className="h-1 overflow-hidden rounded-full bg-base-300">{progress === undefined ? <div className="h-full w-1/3 animate-pulse bg-accent/60" /> : <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${Math.min(100, progress)}%` }} />}</div>}
 			<dl className="m-0 grid grid-cols-2 gap-x-3 gap-y-1">
@@ -254,7 +254,7 @@ function CaptureState({ session }: CaptureStateProps) {
 				</p>
 			)}
 			{session.previewError && <p className="m-0 text-xs leading-4 text-danger">{session.previewError}</p>}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -295,7 +295,7 @@ function LastFrame({ frame }: LastFrameProps) {
 	rows.push(['Acquired', formatTemporal(frame.time, undefined, true)])
 
 	return (
-		<PanelSection title="Last Frame">
+		<CollapsibleSection id="images.camera-acquisition.last-frame" title="Last Frame">
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 				{rows.map(([label, value, danger]) => (
 					<div key={label} className="contents">
@@ -309,6 +309,6 @@ function LastFrame({ frame }: LastFrameProps) {
 					{frame.path}
 				</p>
 			)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }

@@ -12,7 +12,7 @@ import { operationsState } from '../operations'
 import { AdvancedControls, HintControls, SolverControls, StrategyControls, useSolverConfigured } from '../platesolving/PlateSolveControls'
 import { cancelPlateSolve, completedJobs, loadHints, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolvingState, PROVIDER_LABELS, runPlateSolve, STAGE_LABELS } from '../platesolving/platesolving'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { formatDeclination, formatRightAscension } from '../sky/format'
 import { Button } from '../ui/Button'
@@ -58,9 +58,9 @@ export function PlateSolverPanel({ document, view, onOpen }: ImageToolPanelProps
 
 	if (!view) {
 		return (
-			<PanelSection title="Plate Solving">
+			<CollapsibleSection id="images.plate-solver.plate-solving" title="Plate Solving">
 				<p className="m-0 text-ink-300">{imageUnavailableReason(document) ?? 'The image is unavailable.'}</p>
-			</PanelSection>
+			</CollapsibleSection>
 		)
 	}
 
@@ -93,31 +93,32 @@ function PlateSolver({ documentKey, imageId, plateSolving, unavailable }: PlateS
 
 	return (
 		<>
-			<PanelSection title="Solver">
+			<CollapsibleSection id="images.plate-solver.solver" title="Solver">
 				<SolverControls request={request} onChange={edit} />
-			</PanelSection>
-			<PanelSection title="Solving Strategy">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.plate-solver.solving-strategy" title="Solving Strategy">
 				<StrategyControls request={request} onChange={edit} />
-			</PanelSection>
-			<PanelSection title="Solve Hints">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.plate-solver.solve-hints" title="Solve Hints" defaultOpen={false}>
 				<HintControls request={request} onChange={edit} offered={offered} />
-			</PanelSection>
-			<PanelSection title="Advanced Settings">
+			</CollapsibleSection>
+			<CollapsibleSection id="images.plate-solver.advanced-settings" title="Advanced Settings" defaultOpen={false}>
 				<AdvancedControls request={request} onChange={edit} />
-			</PanelSection>
+			</CollapsibleSection>
 			<Execution documentKey={documentKey} imageId={imageId} request={request} job={plateSolving.selected === 'header' ? undefined : job} submitError={imageId === undefined ? undefined : state.submitErrors[imageId]} unavailable={unavailable} />
 			{imageId !== undefined && (
 				<>
 					<Solution job={plateSolving.selected === 'header' ? undefined : job} result={result} solution={solution} fromHeader={plateSolving.selected === 'header'} resultError={resultError} />
+					{solution && result && <SolverDetails result={result} />}
 					{solution && <MountSync solution={solution} />}
 					<Solutions documentKey={documentKey} imageId={imageId} selected={plateSolving.selected} header={header} />
 				</>
 			)}
-			<PanelSection title="Visualization">
+			<CollapsibleSection id="images.plate-solver.visualization" title="Visualization">
 				<Checkbox label="Show WCS overlay" checked={plateSolving.overlay} onChange={(overlay) => setPlateSolveOverlay(imagesState, documentKey, { overlay })} />
 				<Checkbox label="RA/Dec grid" checked={plateSolving.grid} disabled={!plateSolving.overlay} onChange={(grid) => setPlateSolveOverlay(imagesState, documentKey, { grid })} />
 				<Notice>The overlay marks the solved centre and the north and east directions of the WCS. Showing it never solves again.</Notice>
-			</PanelSection>
+			</CollapsibleSection>
 		</>
 	)
 }
@@ -153,7 +154,7 @@ function Execution({ documentKey, imageId, request, job, submitError, unavailabl
 	}
 
 	return (
-		<PanelSection title="Execution">
+		<CollapsibleSection id="images.plate-solver.execution" title="Execution">
 			<Actions>
 				<Button disabled={active || !configured || imageId === undefined} onClick={() => void solve()}>
 					Solve Image
@@ -178,7 +179,7 @@ function Execution({ documentKey, imageId, request, job, submitError, unavailabl
 			) : (
 				imageId !== undefined && <Notice>No plate solve of this image yet.</Notice>
 			)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -195,12 +196,12 @@ interface SolutionProps {
 	readonly resultError?: string
 }
 
-// Centre, scale, orientation, and field of the solution shown, with what the solver used.
+// Centre, scale, orientation, and field of the solution shown.
 function Solution({ job, result, solution, fromHeader, resultError }: SolutionProps) {
 	const noSolution = job?.summary?.outcome === 'noSolution'
 
 	return (
-		<PanelSection title="Solution">
+		<CollapsibleSection id="images.plate-solver.solution" title="Solution">
 			{solution ? (
 				<>
 					<Property label="Source">{fromHeader ? 'Image header' : PROVIDER_LABELS[result?.request.provider ?? 'astap']}</Property>
@@ -213,35 +214,31 @@ function Solution({ job, result, solution, fromHeader, resultError }: SolutionPr
 						{toArcmin(solution.width).toFixed(1)}′ × {toArcmin(solution.height).toFixed(1)}′
 					</Property>
 					<Property label="Projection">{String(solution.CTYPE1 ?? MISSING).trim()}</Property>
-					{result && <SolverDetails result={result} />}
 				</>
 			) : (
 				<Notice error={!!resultError}>{resultError ?? (noSolution ? 'The search ended without a solution.' : job && isActive(job) ? 'Solving…' : 'No solution.')}</Notice>
 			)}
 			{noSolution && result?.warnings.map((warning) => <Notice key={warning}>{warning}</Notice>)}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
-// Hints, duration, and warnings of a result.
+// What the solver used for the solution shown: its hints, duration, and warnings, collapsed by default.
 function SolverDetails({ result }: { readonly result: PlateSolveResult }) {
 	const { hints } = result
 
 	return (
-		<details className="text-[13px] leading-5 text-ink-200">
-			<summary className="cursor-pointer text-[11px] font-medium tracking-[0.08em] text-ink-300 uppercase select-none">Solver Details</summary>
-			<div className="mt-2 flex flex-col gap-1">
-				<Property label="Strategy">{result.request.strategy === 'blind' ? 'Blind' : 'Assisted'}</Property>
-				<Property label="Center hint">{hints.rightAscension && hints.declination ? `${formatRightAscension(hints.rightAscension.value)} ${formatDeclination(hints.declination.value)} (${SOURCE_LABELS[hints.rightAscension.source]})` : 'None'}</Property>
-				<Property label="Radius hint">{hints.radius ? `${toDeg(hints.radius.value).toFixed(1)}° (${SOURCE_LABELS[hints.radius.source]})` : 'None'}</Property>
-				<Property label="Scale hint">{hints.scale ? `${toArcsec(hints.scale.value).toFixed(3)} ″/px (${SOURCE_LABELS[hints.scale.source]})` : 'None'}</Property>
-				<Property label="Duration">{formatSeconds(result.elapsed)}</Property>
-				<Property label="Waited">{formatSeconds(result.queueTime)}</Property>
-				{result.warnings.map((warning) => (
-					<Notice key={warning}>{warning}</Notice>
-				))}
-			</div>
-		</details>
+		<CollapsibleSection id="images.plate-solver.solver-details" title="Solver Details" summary={formatSeconds(result.elapsed)} defaultOpen={false}>
+			<Property label="Strategy">{result.request.strategy === 'blind' ? 'Blind' : 'Assisted'}</Property>
+			<Property label="Center hint">{hints.rightAscension && hints.declination ? `${formatRightAscension(hints.rightAscension.value)} ${formatDeclination(hints.declination.value)} (${SOURCE_LABELS[hints.rightAscension.source]})` : 'None'}</Property>
+			<Property label="Radius hint">{hints.radius ? `${toDeg(hints.radius.value).toFixed(1)}° (${SOURCE_LABELS[hints.radius.source]})` : 'None'}</Property>
+			<Property label="Scale hint">{hints.scale ? `${toArcsec(hints.scale.value).toFixed(3)} ″/px (${SOURCE_LABELS[hints.scale.source]})` : 'None'}</Property>
+			<Property label="Duration">{formatSeconds(result.elapsed)}</Property>
+			<Property label="Waited">{formatSeconds(result.queueTime)}</Property>
+			{result.warnings.map((warning) => (
+				<Notice key={warning}>{warning}</Notice>
+			))}
+		</CollapsibleSection>
 	)
 }
 
@@ -272,7 +269,7 @@ function MountSync({ solution }: MountSyncProps) {
 	}
 
 	return (
-		<PanelSection title="Mount">
+		<CollapsibleSection id="images.plate-solver.mount" title="Mount">
 			<Actions>
 				<ConfirmButton
 					title="Sync the mount?"
@@ -287,7 +284,7 @@ function MountSync({ solution }: MountSyncProps) {
 			{blocker && <Notice>{blocker}</Notice>}
 			{error && <Notice error>{error}</Notice>}
 			{synced === key && !error && <Notice>The mount was synced on this solution.</Notice>}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -317,10 +314,10 @@ function Solutions({ documentKey, imageId, selected, header }: SolutionsProps) {
 	}
 
 	return (
-		<PanelSection title="Solutions">
+		<CollapsibleSection id="images.plate-solver.solutions" title="Solutions">
 			<Select options={options} value={selected ?? 'latest'} format={label} onChange={(option) => selectPlateSolution(imagesState, documentKey, option === 'latest' ? undefined : option)} />
 			<Notice>A new solve never replaces the solution chosen here; the original file is never changed.</Notice>
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 

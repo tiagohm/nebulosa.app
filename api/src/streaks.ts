@@ -482,7 +482,7 @@ export function createStreakDetectionRoutes(service: StreakDetectionService) {
 		},
 		'/api/streaks/:jobId/cancel': {
 			// Cancels a waiting or running job; the end arrives as a streaks:updated event. 404 when it is neither.
-			POST: (req) => new Response(null, { status: service.cancel(req.params.jobId) ? 204 : 404 }),
+			POST: (req) => (service.cancel(req.params.jobId) ? new Response(null, { status: 204 }) : errorResponse('The streak detection is not waiting or running', 404, 'notFound')),
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>
 }

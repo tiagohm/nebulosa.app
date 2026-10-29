@@ -521,7 +521,7 @@ export function createImageProcessingRoutes(service: ImageProcessingService) {
 		'/api/image-processing/:jobId/cancel': {
 			// Cancels a waiting or running job; the end arrives as an imageProcessing:updated event. 404 when it is
 			// neither.
-			POST: (req) => new Response(null, { status: service.cancel(req.params.jobId) ? 204 : 404 }),
+			POST: (req) => (service.cancel(req.params.jobId) ? new Response(null, { status: 204 }) : errorResponse('The image processing is not waiting or running', 404, 'notFound')),
 		},
 		'/api/image-processing/:jobId/claim': {
 			// Hands the output document of a completed job to the client: responds with its ImageInfo, 404 notFound for

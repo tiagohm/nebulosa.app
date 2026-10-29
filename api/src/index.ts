@@ -18,6 +18,7 @@ import { DEFAULT_FOCUSERS_FILE, FocuserBacklashStore } from './focuserbacklash'
 import { createFocuserRoutes, FocuserCommands } from './focusers'
 import { createGuideOutputRoutes, GuideOutputCommands } from './guideoutputs'
 import { createGuidingRoutes, GuidingSessions } from './guiding'
+import { errorResponse } from './http'
 import { createImageProcessingRoutes, ImageProcessingService } from './imageprocessing'
 import { createImageRoutes, images } from './images'
 import { createIndiRoutes, IndiPropertyService } from './indi'
@@ -481,7 +482,7 @@ export const routes = {
 		// response itself.
 		GET: (req, server) => {
 			const client = new URL(req.url).searchParams.get('client') || undefined
-			return server.upgrade(req, { data: { client } satisfies WebSocketData }) ? undefined : new Response('WebSocket upgrade failed', { status: 400 })
+			return server.upgrade(req, { data: { client } satisfies WebSocketData }) ? undefined : errorResponse('WebSocket upgrade failed', 400, 'upgradeFailed')
 		},
 	},
 } as Readonly<Bun.Serve.Routes<WebSocketData, string>>

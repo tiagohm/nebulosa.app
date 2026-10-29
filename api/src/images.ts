@@ -712,7 +712,7 @@ export function createImageRoutes(images: ImageStore) {
 		},
 		'/api/images/:id': {
 			// Closes an image document; 404 when it is not open.
-			DELETE: (req) => new Response(null, { status: images.close(req.params.id) ? 204 : 404 }),
+			DELETE: (req) => (images.close(req.params.id) ? new Response(null, { status: 204 }) : errorResponse('Image not found', 404, 'notFound')),
 		},
 		'/api/images/:id/render': {
 			// Renders an image document with a RenderRequest: responds with the JPEG and its RenderResult in RENDER_HEADER,

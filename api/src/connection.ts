@@ -277,7 +277,7 @@ export function createConnectionRoutes(connections: ConnectionManager) {
 		},
 		'/api/connections/:id': {
 			// Closes the connection for every tab; 404 when it is not open.
-			DELETE: (req) => new Response(null, { status: connections.disconnect(req.params.id) ? 204 : 404 }),
+			DELETE: (req) => (connections.disconnect(req.params.id) ? new Response(null, { status: 204 }) : errorResponse('Connection not found', 404, 'notFound')),
 		},
 		'/api/connections/:id/devices': {
 			// The managed devices of an open connection; 404 when it is not open.

@@ -3,6 +3,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'f
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { readImageFromPath } from 'nebulosa/src/imaging/model/image'
+import type { ApiError } from './http'
 import { cfaPattern, type DisplaySettings, imageAcquisition, type ImageInfo, images, precisionOf, type RenderResult, type SaveRequest } from './images'
 import { routes } from './index'
 
@@ -117,7 +118,9 @@ describe('image documents', () => {
 
 		expect((await call('/api/images/:id', 'DELETE', { id })).status).toBe(204)
 		expect((await render(id, NEUTRAL)).status).toBe(404)
-		expect((await call('/api/images/:id', 'DELETE', { id })).status).toBe(404)
+		const closed = await call('/api/images/:id', 'DELETE', { id })
+		expect(closed.status).toBe(404)
+		expect(((await closed.json()) as ApiError).code).toBe('notFound')
 	})
 
 	test('renderings never modify the decoded image', async () => {

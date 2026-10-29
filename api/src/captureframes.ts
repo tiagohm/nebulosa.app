@@ -952,7 +952,7 @@ export function createCaptureFrameRoutes(registry: CaptureFrameRegistry) {
 		},
 		'/api/capture-frames/leases/:lease': {
 			// Releases a lease; 404 when it is unknown.
-			DELETE: (req) => new Response(null, { status: registry.release(req.params.lease) ? 204 : 404 }),
+			DELETE: (req) => (registry.release(req.params.lease) ? new Response(null, { status: 204 }) : errorResponse('Lease not found', 404, 'notFound')),
 		},
 		'/api/capture-frames/clients/:client/leases': {
 			// Reconciles the leases of a client (CaptureLeaseReconcileRequest) and answers the lost ones.

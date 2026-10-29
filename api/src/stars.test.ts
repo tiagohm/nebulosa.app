@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import { ExternalToolsStore } from './externaltools'
+import type { ApiError } from './http'
 import { ImageStore } from './images'
 import {
 	acceptStars,
@@ -435,6 +436,8 @@ describe('routes', () => {
 		expect(((await (await call(routes, '/api/stars', 'GET', {})).json()) as { jobs: StarDetectionJob[] }).jobs.map((job) => job.jobId)).toContain(job.jobId)
 		expect((await call(routes, '/api/images/:id/stars', 'POST', { id: 'unknown' }, BUILTIN)).status).toBe(404)
 		expect((await call(routes, '/api/stars/:jobId/result', 'GET', { jobId: 'unknown' })).status).toBe(404)
-		expect((await call(routes, '/api/stars/:jobId/cancel', 'POST', { jobId: job.jobId })).status).toBe(404)
+		const cancelled = await call(routes, '/api/stars/:jobId/cancel', 'POST', { jobId: job.jobId })
+		expect(cancelled.status).toBe(404)
+		expect(((await cancelled.json()) as ApiError).code).toBe('notFound')
 	})
 })

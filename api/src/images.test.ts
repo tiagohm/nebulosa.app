@@ -273,6 +273,44 @@ describe('derived images', () => {
 	})
 })
 
+describe('copies of any document', () => {
+	test('a file document is saved as the JPEG of its rendering and stays open as it was', async () => {
+		const info = await openFits(writeFits('copy-jpeg.fits', 16, 8, 3))
+		const brighter = settings({ brightness: 1.5 })
+		const target = join(root, 'copy.jpg')
+
+		const response = await save(info.id, { path: target, format: 'jpeg', settings: brighter })
+
+		expect(response.status).toBe(200)
+		expect(readFileSync(target)).toEqual(Buffer.from(await (await render(info.id, brighter)).arrayBuffer()))
+		expect(readFileSync(target).subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]))
+		images.close(info.id)
+	})
+
+	test('a JPEG whose settings cannot be applied is 422 and writes nothing', async () => {
+		const info = await openFits(writeFits('copy-unknown.fits', 16, 8, 1, ["BAYERPAT= 'XYZW    '"]))
+		const target = join(root, 'copy-unknown.jpg')
+
+		const response = await save(info.id, { path: target, format: 'jpeg', settings: settings({ debayer: { enabled: true, pattern: 'auto' } }) })
+
+		expect(response.status).toBe(422)
+		expect(await response.json()).toMatchObject({ code: 'invalidSettings' })
+		expect(readdirSync(root)).not.toContain('copy-unknown.jpg')
+		images.close(info.id)
+	})
+
+	test('a file document is downloaded under its name without a doubled extension', async () => {
+		const info = await openFits(writeFits('copy-download.fit', 16, 8))
+
+		const fits = await call('/api/images/:id/file', 'GET', { id: info.id }, undefined, '?format=fits')
+		const xisf = await call('/api/images/:id/file', 'GET', { id: info.id }, undefined, '?format=xisf')
+
+		expect(fits.headers.get('Content-Disposition')).toStartWith('attachment; filename="copy-download.fits";')
+		expect(xisf.headers.get('Content-Disposition')).toStartWith('attachment; filename="copy-download.xisf";')
+		images.close(info.id)
+	})
+})
+
 describe('precision', () => {
 	test('is 64 bits only for 32-bit integers and 64-bit floats', () => {
 		expect([8, 16, 32, 64, -32, -64].map(precisionOf)).toEqual([32, 32, 64, 32, 32, 64])

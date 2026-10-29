@@ -44,8 +44,6 @@ export interface ImageToolPanelProps {
 	readonly camera?: CameraOperationContext
 	// Opens the file chooser.
 	readonly onOpen: () => void
-	// Opens the Save As dialog of the active document.
-	readonly onSaveAs: () => void
 }
 
 // What running an image tool's operation produces: a new rendering of the document (display), a new temporary

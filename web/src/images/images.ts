@@ -1,4 +1,4 @@
-import type { AnnotationBodies, DisplaySettings, ImageFormat, ImageInfo, PlateSolveRequest, RenderRequest, RenderResult, SaveRequest, SaveResult, Stretch } from 'api'
+import type { AnnotationBodies, DisplaySettings, ImageFormat, ImageInfo, PlateSolveRequest, RenderRequest, RenderResult, SaveFormat, SaveRequest, SaveResult, Stretch } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { deviceState } from '../equipment/equipment'
@@ -35,8 +35,9 @@ import type { ImageToolId } from './tools'
 // document and sent only by Run Detection. Neither zoom, pan, display settings, nor the markers ever run a detection.
 //
 // A derived image, computed by an image processing pipeline (imageprocessing.ts), opens as a new document that is
-// unsaved until a save to a server file succeeds; the page asks before unloading while one exists, and closing one is
-// confirmed by the workspace.
+// unsaved until a save of its pixels (FITS or XISF) to a server file succeeds; the page asks before unloading while
+// one exists, and closing one is confirmed by the workspace. Saving or downloading any document writes a copy and
+// never renames it nor binds it to the new file.
 //
 // Camera tabs (cameratabs.ts) are documents too, whose image is the frame they show; this module only removes them
 // and renders their frames, with the primitives it exports for them.
@@ -61,7 +62,7 @@ export interface ImageRendering {
 export interface ImageDocument {
 	// Id of the document in the tab, assigned before the server opens the image.
 	readonly key: string
-	// Display name: the file name, or the name of a derived image until it is saved.
+	// Display name: the file name, the name of a derived image, or the name of a camera tab's camera.
 	name: string
 	// Origin of the image.
 	readonly source: ImageSource
@@ -73,7 +74,7 @@ export interface ImageDocument {
 	error?: string
 	// Whether the image exists only in memory: a derived image not saved yet, lost when it closes.
 	unsaved: boolean
-	// Absolute path of the server file a derived image was last saved to.
+	// Absolute path of the server file a derived image was last saved to as FITS or XISF.
 	savedPath?: string
 	// Frames of a camera tab; absent for any other document.
 	camera?: CameraTabState
@@ -296,14 +297,27 @@ export function hasUnsavedImages(state: { readonly documents: readonly Pick<Imag
 	return state.documents.some((d) => d.unsaved)
 }
 
-// Returns the format a file name designates by its extension: XISF for .xisf, FITS otherwise.
-export function formatOfFileName(name: string): ImageFormat {
-	return /\.xisf$/i.test(name) ? 'xisf' : 'fits'
+// Extensions of the files of each save format (lowercase, without the dot), the one a file name gets first.
+export const SAVE_EXTENSIONS: Readonly<Record<SaveFormat, readonly [string, ...string[]]>> = { fits: ['fits', 'fit', 'fts'], xisf: ['xisf'], jpeg: ['jpg', 'jpeg'] }
+
+// Returns a file name of a save format: name as it is when it already ends with an extension of the format, otherwise
+// name without the image extension it may have (FITS, XISF, or JPEG) plus the first extension of the format.
+export function saveFileName(name: string, format: SaveFormat): string {
+	const extension = /\.([^./\\]+)$/.exec(name)?.[1].toLowerCase()
+	if (extension && SAVE_EXTENSIONS[format].includes(extension)) return name
+	const base = extension && Object.values(SAVE_EXTENSIONS).some((extensions) => extensions.includes(extension)) ? name.slice(0, -extension.length - 1) : name
+	return `${base || 'image'}.${SAVE_EXTENSIONS[format][0]}`
 }
 
-// Returns the URL that downloads a document as a file of a format.
+// Returns the URL that downloads a copy of a document as a FITS or XISF file.
 export function downloadUrl(info: Pick<ImageInfo, 'id'>, format: ImageFormat): string {
 	return `/api/images/${encodeURIComponent(info.id)}/file?format=${format}`
+}
+
+// Returns the display settings of the rendering a view shows: the original ones during Show Original, the applied
+// ones otherwise; undefined before the first rendering. A JPEG saved with them has the bytes the viewer shows.
+export function shownDisplaySettings(view: Pick<ImageViewState, 'display'>): DisplaySettings | undefined {
+	return view.display.showOriginal && view.display.original ? ORIGINAL_DISPLAY_SETTINGS : view.display.applied
 }
 
 // Returns a plain deep copy of settings, detached from any proxy.
@@ -435,15 +449,19 @@ export async function openDerivedImage(state: ImagesState, info: ImageInfo, sour
 	await renderDisplay(state, key, initialDisplaySettings(info, io.loadDisplay(source)), io)
 }
 
-// Saves a document to a file of the server in a format. An existing file is only replaced with
-// overwrite. Once the server confirms the write, the document is saved: no longer unsaved, named after
-// the file, with the path remembered. A failure leaves the document as it was, so the save can be retried.
-export async function saveImage(state: ImagesState, key: string, path: string, format: ImageFormat, overwrite: boolean, io: ImagesIo = browserIo): Promise<SaveImageOutcome> {
+// Saves a copy of a document to a file of the server in a format: FITS or XISF of its pixels, or JPEG of the rendering
+// its view shows (shownDisplaySettings). An existing file is only replaced with overwrite. The document keeps its name
+// and source; only a derived document whose pixels (FITS or XISF) the server confirms written stops being unsaved and
+// remembers the path. A failure leaves the document as it was, so the save can be retried.
+export async function saveImage(state: ImagesState, key: string, path: string, format: SaveFormat, overwrite: boolean, io: ImagesIo = browserIo): Promise<SaveImageOutcome> {
 	const id = documentOf(state, key)?.info?.id
 	if (!id) return { status: 'failed', error: 'The image is not open' }
+	const view = state.views[key]
+	const settings = format === 'jpeg' && view ? shownDisplaySettings(view) : undefined
+	if (format === 'jpeg' && !settings) return { status: 'failed', error: 'The image is not rendered yet' }
 
 	try {
-		const request: SaveRequest = { path, format, overwrite }
+		const request: SaveRequest = { path, format, overwrite, ...(settings && { settings }) }
 		const response = await io.fetch(`/api/images/${encodeURIComponent(id)}/save`, jsonInit('POST', request))
 
 		if (response.status === 409) {
@@ -455,10 +473,9 @@ export async function saveImage(state: ImagesState, key: string, path: string, f
 		const { path: saved } = (await response.json()) as SaveResult
 		const document = documentOf(state, key)
 
-		if (document) {
+		if (document?.source.kind === 'derived' && format !== 'jpeg') {
 			document.unsaved = false
 			document.savedPath = saved
-			document.name = saved.split(/[\\/]/).at(-1) || saved
 		}
 
 		return { status: 'saved' }

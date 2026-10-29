@@ -1,3 +1,4 @@
+import type { SaveFormat } from 'api'
 import { cn } from 'cn'
 import { type KeyboardEvent, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -42,6 +43,7 @@ import { DisplayToolbar } from './DisplayToolbar'
 import { ImageInspector } from './ImageInspector'
 import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, isClosable, isMosaic, openImage, selectAnnotation, selectImage, selectImageTool, selectStar, selectStreak, setImageView, shownRendering, toggleOriginal } from './images'
 import { SaveImageModal } from './SaveImageModal'
+import { SaveImagePopover } from './SaveImagePopover'
 import { IMAGE_TOOL_DEFINITIONS, imageToolGroup, imageToolsFor, imageToolUnavailable } from './tools'
 
 // Images workspace: a permanent camera tab for each connected camera of the watched connection, showing the frames
@@ -55,11 +57,12 @@ import { IMAGE_TOOL_DEFINITIONS, imageToolGroup, imageToolsFor, imageToolUnavail
 // tab follows the latest frame of its camera until a saved frame is selected or a manual analysis holds the frame
 // shown, and Return to Latest follows it again.
 // The viewer toolbar switches a document between its adjusted rendering and its original one, and holds its display
-// controls (DisplayToolbar), whose popups close when another document is shown. The star
+// controls (DisplayToolbar), whose popups close when another document is shown, and its Save control
+// (SaveImagePopover), which downloads a copy of any document or writes one to a server file chosen in the file
+// explorer (SaveImageModal). The star
 // markers of the latest detection of the document's image are drawn over it while shown, and a click
 // selects a star while the Star Detection tool is open. Closing
-// an unsaved derived image asks first (cancel, discard, or Save As and then close), and Save As writes a
-// document to a server file chosen in the file explorer.
+// an unsaved derived image asks first (cancel, discard, or Save As FITS and then close).
 
 // Distance from the pointer a click looks for a star within, in screen pixels.
 const STAR_PICK_RADIUS = 8
@@ -83,8 +86,8 @@ export function ImagesWorkspace() {
 	const [reticles, setReticles] = useState<Readonly<Record<string, boolean>>>({})
 	// Unsaved document whose closing waits for a confirmation.
 	const [closing, setClosing] = useState<string>()
-	// Document being saved, and whether it closes once saved.
-	const [saving, setSaving] = useState<{ readonly key: string; readonly closeAfter: boolean }>()
+	// Document being saved, whether it closes once saved, and the format of its file.
+	const [saving, setSaving] = useState<{ readonly key: string; readonly closeAfter: boolean; readonly format: SaveFormat }>()
 	const document = activeDocument(state)
 	const view = activeView(state)
 	const shown = view && shownRendering(view)
@@ -132,13 +135,7 @@ export function ImagesWorkspace() {
 	const savingDocument = state.documents.find((d) => d.key === saving?.key)
 
 	return (
-		<WorkspaceLayout
-			workspace="images"
-			title="Images"
-			actions={openButton}
-			context={toolSelector}
-			panel={{ title: definition.panelTitle, content: <Panel key={document?.key} document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} onSaveAs={() => document && setSaving({ key: document.key, closeAfter: false })} /> }}
-		>
+		<WorkspaceLayout workspace="images" title="Images" actions={openButton} context={toolSelector} panel={{ title: definition.panelTitle, content: <Panel key={document?.key} document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} /> }}>
 			<div className="flex h-full flex-col">
 				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} onClose={requestClose} />}
 				<div className="min-h-0 flex-1">
@@ -155,6 +152,8 @@ export function ImagesWorkspace() {
 									<OriginalToggle documentKey={document.key} view={view} mosaic={!!document.info && isMosaic(document.info)} />
 									<span className="mx-1 h-5 w-px bg-line-100" />
 									<DisplayToolbar key={document.key} documentKey={document.key} info={document.info} view={view} />
+									<span className="mx-1 h-5 w-px bg-line-100" />
+									<SaveImagePopover document={document} view={view} onSaveToServer={(format) => setSaving({ key: document.key, closeAfter: false, format })} />
 									{document.camera && <CameraControls document={document} framesShown={framesShown} onToggleFrames={() => setFramesShown(!framesShown)} reticle={reticle} onToggleReticle={() => setReticles({ ...reticles, [document.key]: !reticle })} />}
 								</>
 							)
@@ -221,6 +220,7 @@ export function ImagesWorkspace() {
 			/>
 			<SaveImageModal
 				document={savingDocument}
+				format={saving?.format ?? 'fits'}
 				onClose={() => setSaving(undefined)}
 				onSaved={() => {
 					if (saving?.closeAfter) closeImage(imagesState, saving.key)
@@ -245,7 +245,7 @@ export function ImagesWorkspace() {
 					<Button
 						data-autofocus
 						onClick={() => {
-							if (closing) setSaving({ key: closing, closeAfter: true })
+							if (closing) setSaving({ key: closing, closeAfter: true, format: 'fits' })
 							setClosing(undefined)
 						}}
 					>

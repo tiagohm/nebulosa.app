@@ -21,11 +21,18 @@ import type { ImageProcessingStep } from './imageprocessing'
 //
 // A document can also be adopted from the result of an image processing pipeline (imageprocessing.ts) computed on a
 // copy of another document: the result is a new, independent document that lives only in memory until it is saved to a file of the
-// server or downloaded. Saving never replaces the file of an open document, nor an existing file
-// without overwrite, and writes through a temporary file so a failure leaves no partial file.
+// server or downloaded.
+//
+// Any document, whatever its origin, can be saved to a file of the server or downloaded as a copy: FITS or XISF in the
+// scale of its source, or JPEG of its rendering with given display settings. The document itself never changes.
+// Saving never replaces the file of an open document, nor an existing file without overwrite, and writes through a
+// temporary file so a failure leaves no partial file.
 
 // Formats an image document can be read from.
 export type ImageFormat = 'fits' | 'xisf'
+
+// Formats an image document can be saved or downloaded as: those it can be read from, or JPEG of a rendering.
+export type SaveFormat = ImageFormat | 'jpeg'
 
 // Source document and time of a derived image, whatever derived it.
 interface ProvenanceSource {
@@ -263,7 +270,9 @@ export interface SaveRequest {
 	// Absolute path of the file to write on the server.
 	readonly path: string
 	// Format to write.
-	readonly format: ImageFormat
+	readonly format: SaveFormat
+	// Display settings a JPEG file is rendered with; required for JPEG, ignored otherwise.
+	readonly settings?: DisplaySettings
 	// Whether an existing file may be replaced.
 	readonly overwrite?: boolean
 }
@@ -282,7 +291,7 @@ export type ImageWorkerRequest =
 	| { readonly type: 'open'; readonly id: number; readonly path: string }
 	| { readonly type: 'openCapture'; readonly id: number; readonly bytes: Uint8Array<ArrayBuffer>; readonly name: string; readonly capture: ImageCapture }
 	| { readonly type: 'render'; readonly id: number; readonly document: string; readonly request: RenderRequest }
-	| { readonly type: 'encode'; readonly id: number; readonly document: string; readonly format: ImageFormat; readonly omit?: readonly string[] }
+	| { readonly type: 'encode'; readonly id: number; readonly document: string; readonly format: SaveFormat; readonly settings?: DisplaySettings; readonly omit?: readonly string[] }
 	| { readonly type: 'detectionImage'; readonly id: number; readonly document: string }
 	| { readonly type: 'processingImage'; readonly id: number; readonly document: string }
 	| { readonly type: 'adopt'; readonly id: number; readonly image: Image; readonly provenance: ProcessingProvenance }
@@ -467,11 +476,12 @@ export class ImageStore {
 		}
 	}
 
-	// Encodes a document as a FITS or XISF file in the scale of its source. Resolves to undefined for an
-	// unknown id.
-	encode(id: string, format: ImageFormat): Promise<Uint8Array<ArrayBuffer> | undefined> {
+	// Encodes a document as a FITS or XISF file in the scale of its source, or as a JPEG file of its rendering with
+	// settings. Resolves to undefined for an unknown id. Throws DisplayError when a JPEG has no settings or settings
+	// that cannot be applied to the image.
+	encode(id: string, format: SaveFormat, settings?: DisplaySettings): Promise<Uint8Array<ArrayBuffer> | undefined> {
 		if (!this.#documents.has(id)) return Promise.resolve(undefined)
-		return this.#encode(id, format)
+		return this.#encode(id, format, settings)
 	}
 
 	// Encodes an open or retained document as a FITS file in the scale of its source, for a program that reads
@@ -479,7 +489,7 @@ export class ImageStore {
 	// must not use). The document itself is unchanged. Resolves to undefined when it is neither open nor retained.
 	detectionFile(id: string, omit?: readonly string[]): Promise<Uint8Array<ArrayBuffer> | undefined> {
 		if (!this.#documents.has(id) && !this.#retained.has(id)) return Promise.resolve(undefined)
-		return this.#encode(id, 'fits', omit)
+		return this.#encode(id, 'fits', undefined, omit)
 	}
 
 	// Returns the size, channels, CFA pattern, header, and acquisition data of an open or retained document, or
@@ -526,26 +536,29 @@ export class ImageStore {
 		return response.info
 	}
 
-	// Asks the worker to encode a document, without the header keywords named in omit.
-	async #encode(id: string, format: ImageFormat, omit?: readonly string[]): Promise<Uint8Array<ArrayBuffer> | undefined> {
-		const response = await this.#request({ type: 'encode', id: this.#id++, document: id, format, ...(omit?.length && { omit }) })
+	// Asks the worker to encode a document, a JPEG rendered with settings, without the header keywords named in omit.
+	// Throws DisplayError for a JPEG the settings cannot render.
+	async #encode(id: string, format: SaveFormat, settings?: DisplaySettings, omit?: readonly string[]): Promise<Uint8Array<ArrayBuffer> | undefined> {
+		const response = await this.#request({ type: 'encode', id: this.#id++, document: id, format, ...(settings && { settings }), ...(omit?.length && { omit }) })
 		if (response.status === 'encoded') return response.bytes
 		if (response.status === 'missing') return undefined
+		if (response.status === 'invalid') throw new DisplayError(response.error)
 		throw responseError(response)
 	}
 
 	// Writes a document to a file of the server. Never replaces the file of an open document, nor any
 	// existing file unless overwrite is set; the file appears only once completely written. Resolves to
 	// missing for an unknown id, original for the file of an open document, and exists for an existing
-	// file. Throws when the file cannot be written.
-	async save(id: string, { path, format, overwrite = false }: SaveRequest): Promise<SaveOutcome> {
+	// file. The document is left as it is. Throws DisplayError for a JPEG the settings cannot render, and any other
+	// error when the file cannot be written.
+	async save(id: string, { path, format, settings, overwrite = false }: SaveRequest): Promise<SaveOutcome> {
 		if (!this.#documents.has(id)) return { status: 'missing' }
 		const target = resolve(path)
 		const key = comparablePath(target)
 		for (const { path: source } of this.#documents.values()) if (source !== undefined && comparablePath(source) === key) return { status: 'original' }
 		if (!overwrite && (await Bun.file(target).exists())) return { status: 'exists' }
 
-		const bytes = await this.encode(id, format)
+		const bytes = await this.encode(id, format, settings)
 		if (!bytes) return { status: 'missing' }
 
 		const temporary = `${target}.${crypto.randomUUID()}.tmp`
@@ -671,6 +684,15 @@ export const images = new ImageStore()
 // Extensions of the files of each format.
 const FORMAT_EXTENSIONS: Readonly<Record<ImageFormat, string>> = { fits: 'fits', xisf: 'xisf' }
 
+// Extension of an image file a document name may end with (FITS, XISF, or JPEG), which a download name replaces.
+const IMAGE_EXTENSION = /\.(fits?|fts|xisf|jpe?g)$/i
+
+// Returns the name a document is downloaded under in a format: its name with the extension of the format instead of
+// the image extension it may already have.
+export function downloadName(name: string, format: ImageFormat): string {
+	return `${name.replace(IMAGE_EXTENSION, '') || 'image'}.${FORMAT_EXTENSIONS[format]}`
+}
+
 // Routes of the image documents.
 export function createImageRoutes(images: ImageStore) {
 	return {
@@ -705,9 +727,10 @@ export function createImageRoutes(images: ImageStore) {
 			},
 		},
 		'/api/images/:id/save': {
-			// Writes an image document to a file of the server with a SaveRequest: responds with the SaveResult once the
-			// file is written, 404 when the document is not open, 409 when the target is the file of an open document or
-			// exists without overwrite, and 500 when the file cannot be written.
+			// Writes a copy of an image document to a file of the server with a SaveRequest: responds with the SaveResult
+			// once the file is written, 404 when the document is not open, 409 when the target is the file of an open
+			// document or exists without overwrite, 422 when the settings of a JPEG cannot be applied to the image, and 500
+			// when the file cannot be written.
 			POST: async (req) => {
 				try {
 					const outcome = await images.save(req.params.id, (await req.json()) as SaveRequest)
@@ -716,18 +739,20 @@ export function createImageRoutes(images: ImageStore) {
 					if (outcome.status === 'exists') return errorResponse('The file already exists', 409, 'exists')
 					return Response.json({ path: outcome.path } satisfies SaveResult)
 				} catch (error) {
+					if (error instanceof DisplayError) return errorResponse(error.message, 422, 'invalidSettings')
 					return errorResponse(`Unable to write the file: ${Error.isError(error) ? error.message : String(error)}`, 500, 'writeFailed')
 				}
 			},
 		},
 		'/api/images/:id/file': {
-			// Downloads an image document (?format=fits|xisf) as an attachment named after it; 404 when it is not open.
+			// Downloads a copy of an image document (?format=fits|xisf) as an attachment named after it (downloadName); 404
+			// when it is not open.
 			GET: async (req) => {
 				const id = req.params.id
 				const format = (new URL(req.url).searchParams.get('format') ?? 'fits') as ImageFormat
 				const bytes = await images.encode(id, format)
 				if (!bytes) return errorResponse('Image not found', 404, 'notFound')
-				const name = `${images.name(id) ?? 'image'}.${FORMAT_EXTENSIONS[format]}`
+				const name = downloadName(images.name(id) ?? 'image', format)
 				// The plain filename keeps only ASCII for old clients; filename* carries the exact UTF-8 name.
 				const disposition = `attachment; filename="${name.replaceAll(/[^\u0020-\u007E]|["\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`
 				return new Response(bytes, { headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': disposition, 'Cache-Control': 'no-store' } })

@@ -13,12 +13,12 @@ import { Button } from '../ui/Button'
 import type { CameraFrameSelection } from './cameratabs'
 import { connectionLabel, frameUnavailableReason } from './captureframes'
 import { operationLabel, operationSummary } from './imageprocessing.catalog'
-import { documentPath, downloadUrl, type ImageDocument } from './images'
+import { documentPath, type ImageDocument } from './images'
 import type { ImageToolPanelProps } from './tools'
 
-// Image Inspector, the default contextual tool of the Images workspace: properties, the provenance and
-// save actions of a derived image, the camera, origin, session, and storage of the frame a camera tab shows (with the
-// focuser position of an Auto Focus frame when its session recorded it), the quality the measurements already made
+// Image Inspector, the default contextual tool of the Images workspace: properties, the provenance and save state of a
+// derived image (saved from the viewer toolbar), the camera, origin, session, and storage of the frame a camera tab
+// shows (with the focuser position of an Auto Focus frame when its session recorded it), the quality the measurements already made
 // on the image give (never measured here), acquisition data, the parameters of the current rendering, and the header
 // of the active document, with the statistics section still to come. The display settings are changed from the viewer
 // toolbar (DisplayToolbar).
@@ -46,7 +46,7 @@ const ACQUISITION_FIELDS: readonly (readonly [label: string, format: (acquisitio
 ]
 
 // Inspector of the active image document.
-export function ImageInspector({ document, view, onOpen, onSaveAs }: ImageToolPanelProps) {
+export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) {
 	if (!document) {
 		return (
 			<EmptyState
@@ -92,7 +92,7 @@ export function ImageInspector({ document, view, onOpen, onSaveAs }: ImageToolPa
 			</PanelSection>
 			{document.camera?.shown && <CapturedFrame frame={document.camera.shown.frame} selection={document.camera.selection.kind} />}
 			{info && <Quality imageId={info.id} />}
-			{info?.origin === 'derived' && <Derivation document={document} provenance={info.provenance} infoId={info.id} onSaveAs={onSaveAs} />}
+			{info?.origin === 'derived' && <Derivation document={document} provenance={info.provenance} />}
 			{info && <Acquisition info={info} />}
 			{view?.rendering && <AppliedDisplay result={view.rendering.result} />}
 			<PanelSection title="Histogram and Statistics">
@@ -287,15 +287,11 @@ interface DerivationProps {
 	readonly document: ImageDocument
 	// Where the image was derived from.
 	readonly provenance: ImageProvenance
-	// Server id of the document, for downloads.
-	readonly infoId: string
-	// Opens the Save As dialog.
-	readonly onSaveAs: () => void
 }
 
 // Provenance and persistence of a derived image: its source, when it was derived, the processing steps of the pipeline
-// that derived it, whether it is saved, and the Save As and download actions.
-function Derivation({ document, provenance, infoId, onSaveAs }: DerivationProps) {
+// that derived it, and whether it is saved (from the Save control of the viewer toolbar).
+function Derivation({ document, provenance }: DerivationProps) {
 	return (
 		<PanelSection title="Derived Image">
 			<Property label="Source">{provenance.sourceName}</Property>
@@ -312,15 +308,6 @@ function Derivation({ document, provenance, infoId, onSaveAs }: DerivationProps)
 				))}
 			</ol>
 			<Property label="State">{document.unsaved ? <span className="text-accent">Unsaved</span> : 'Saved'}</Property>
-			<div className="mt-1 flex flex-wrap items-center gap-2">
-				<Button onClick={onSaveAs}>Save As…</Button>
-				<a href={downloadUrl({ id: infoId }, 'fits')} download className="text-xs text-accent hover:underline">
-					Download FITS
-				</a>
-				<a href={downloadUrl({ id: infoId }, 'xisf')} download className="text-xs text-accent hover:underline">
-					Download XISF
-				</a>
-			</div>
 		</PanelSection>
 	)
 }

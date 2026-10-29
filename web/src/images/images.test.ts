@@ -9,8 +9,8 @@ import {
 	applyDisplay,
 	closeImage,
 	documentPath,
-	formatOfFileName,
 	hasUnsavedImages,
+	saveFileName,
 	saveImage,
 	defaultDisplaySettings,
 	type ImageSource,
@@ -329,7 +329,7 @@ describe('derived images', () => {
 		expect(documentPath(derived)).toBeUndefined()
 	})
 
-	test('saving marks the document saved, named after its file, only once the server confirms', async () => {
+	test('saving its pixels marks the document saved, keeping its name, only once the server confirms', async () => {
 		const state = newState()
 		const { io, calls } = fakeIo()
 		await openImage(state, '/data/m31.fits', io)
@@ -343,10 +343,35 @@ describe('derived images', () => {
 		expect(activeDocument(state)?.unsaved).toBeTrue()
 
 		expect(await saveImage(state, key, '/out/existing.xisf', 'xisf', true, io)).toEqual({ status: 'saved' })
-		expect(activeDocument(state)).toMatchObject({ unsaved: false, savedPath: '/out/existing.xisf', name: 'existing.xisf' })
+		expect(activeDocument(state)).toMatchObject({ unsaved: false, savedPath: '/out/existing.xisf', name: 'm31 — Processed' })
 		expect(calls.at(-1)).toMatchObject({ url: '/api/images/srv-2/save', body: { path: '/out/existing.xisf', format: 'xisf', overwrite: true } })
 		expect(hasUnsavedImages(state)).toBeFalse()
 		expect(documentPath(activeDocument(state)!)).toBe('/out/existing.xisf')
+	})
+
+	test('saving it as JPEG sends the shown settings and leaves it unsaved', async () => {
+		const state = newState()
+		const { io, calls } = fakeIo()
+		await openImage(state, '/data/m31.fits', io)
+		await openDerivedImage(state, DERIVED_INFO as never, 'm31.fits', true, io)
+		const key = state.activeKey!
+		const applied = activeView(state)?.display.applied
+
+		expect(await saveImage(state, key, '/out/m31.jpg', 'jpeg', false, io)).toEqual({ status: 'saved' })
+		expect(calls.at(-1)).toMatchObject({ url: '/api/images/srv-2/save', body: { path: '/out/m31.jpg', format: 'jpeg', overwrite: false, settings: applied } })
+		expect(activeDocument(state)).toMatchObject({ unsaved: true, name: 'm31 — Processed' })
+		expect(activeDocument(state)?.savedPath).toBeUndefined()
+	})
+
+	test('saving a file document writes a copy and leaves the document as it is', async () => {
+		const state = newState()
+		const { io } = fakeIo()
+		await openImage(state, '/data/m31.fits', io)
+		const before = snapshot(activeDocument(state)!)
+
+		expect(await saveImage(state, before.key, '/out/copy.xisf', 'xisf', false, io)).toEqual({ status: 'saved' })
+		expect(snapshot(activeDocument(state)!)).toEqual(before)
+		expect(documentPath(activeDocument(state)!)).toBe('/data/m31.fits')
 	})
 
 	test('closing one releases it on the server and revokes its rendering', async () => {
@@ -363,8 +388,10 @@ describe('derived images', () => {
 		expect(hasUnsavedImages(state)).toBeFalse()
 	})
 
-	test('the file name extension picks the format', () => {
-		expect(['a.xisf', 'b.XISF', 'c.fits', 'd.fit', 'e'].map(formatOfFileName)).toEqual(['xisf', 'xisf', 'fits', 'fits', 'fits'])
+	test('a save file name gets the extension of its format unless it already has one of it', () => {
+		expect(['a.fits', 'b.fit', 'c.FTS', 'd.xisf', 'e', 'f.jpg', 'Camera #3'].map((name) => saveFileName(name, 'fits'))).toEqual(['a.fits', 'b.fit', 'c.FTS', 'd.fits', 'e.fits', 'f.fits', 'Camera #3.fits'])
+		expect(['m31.fits', 'm31.JPEG', 'm31 — Processed', 'v1.2'].map((name) => saveFileName(name, 'jpeg'))).toEqual(['m31.jpg', 'm31.JPEG', 'm31 — Processed.jpg', 'v1.2.jpg'])
+		expect(saveFileName('/out/m31.fit', 'xisf')).toBe('/out/m31.xisf')
 	})
 })
 

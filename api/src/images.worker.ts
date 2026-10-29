@@ -14,11 +14,28 @@ import { Bitpix, type FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSource } from 'nebulosa/src/io/io'
 import type { Sink } from 'nebulosa/src/io/types'
 import { luminanceImage, readImageFrom } from './imagedecode'
-import { cfaPattern, DisplayError, type DisplaySettings, type ImageCapture, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageProvenance, type ImageWorkerRequest, type ImageWorkerResponse, type ProcessingProvenance, type RenderRequest, type RenderResult, type Stretch } from './images'
+import {
+	cfaPattern,
+	DisplayError,
+	type DisplaySettings,
+	type ImageCapture,
+	type ImageFormat,
+	imageAcquisition,
+	type ImageInfo,
+	ImageOpenError,
+	type ImageProvenance,
+	type ImageWorkerRequest,
+	type ImageWorkerResponse,
+	type ProcessingProvenance,
+	type RenderRequest,
+	type RenderResult,
+	type SaveFormat,
+	type Stretch,
+} from './images'
 
 // Worker thread that owns the decoded pixels of every open image document and does all the heavy
 // work on them: decoding FITS and XISF files and camera frames, the display pipeline, JPEG encoding, encoding
-// documents as files, preparing the grayscale
+// documents as FITS, XISF, or JPEG files, preparing the grayscale
 // copies star detections measure on their own worker (stars.worker.ts), and the full copies image processing
 // pipelines work on (imageprocessing.worker.ts), whose results come back to be adopted as documents. Keeping the
 // pixels here means they are never copied between threads, and the server event loop stays free while
@@ -287,8 +304,15 @@ class MemorySink implements Sink {
 }
 
 // Encodes a document as a FITS or XISF file in the scale of its source (sourceScale), leaving out the header
-// keywords named in omit; the document keeps its own header.
-async function encodeDocument(entry: DocumentEntry, format: ImageFormat, omit?: readonly string[]): Promise<Uint8Array<ArrayBuffer>> {
+// keywords named in omit (the document keeps its own header), or as a JPEG file of its rendering with settings: the
+// bytes a rendering with them sends, computed outside the render queue so that no rendering supersedes it. Throws
+// DisplayError for a JPEG without settings or with settings that cannot be applied to the image.
+async function encodeDocument(entry: DocumentEntry, format: SaveFormat, settings?: DisplaySettings, omit?: readonly string[]): Promise<Uint8Array<ArrayBuffer>> {
+	if (format === 'jpeg') {
+		if (!settings) throw new DisplayError('A JPEG file needs the display settings to render it with')
+		return renderImage(entry, { settings }).jpeg
+	}
+
 	const sink = new MemorySink()
 	const image = omit ? { ...entry.image, header: Object.fromEntries(Object.entries(entry.image.header).filter(([key]) => !omit.includes(key))) } : entry.image
 	if (format === 'fits') await writeImageToFits(image, sink, { sourceScale: true })
@@ -420,11 +444,12 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 				const image = processingImage(entry)
 				reply({ id: request.id, status: 'processingImage', image }, [image.raw.buffer])
 			} else {
-				const bytes = await encodeDocument(entry, request.format, request.omit)
+				const bytes = await encodeDocument(entry, request.format, request.settings, request.omit)
 				reply({ id: request.id, status: 'encoded', bytes }, [bytes.buffer])
 			}
 		} catch (error) {
-			reply({ id: request.id, status: 'failed', error: Error.isError(error) ? error.message : String(error) })
+			if (error instanceof DisplayError) reply({ id: request.id, status: 'invalid', error: error.message })
+			else reply({ id: request.id, status: 'failed', error: Error.isError(error) ? error.message : String(error) })
 		}
 
 		return

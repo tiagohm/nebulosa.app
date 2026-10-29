@@ -1,5 +1,6 @@
 import type { OperationKind, OperationRecord, ServerEvent } from 'api'
 import { proxy } from 'valtio'
+import { SnapshotRefreshes } from './refresh'
 import type { IconName } from './ui/Icon'
 
 // Device operations of the server as this tab knows them. The server owns every operation, whichever tab
@@ -54,8 +55,8 @@ const MAX_FINISHED = 32
 // Operations known to the tab.
 export const operationsState = proxy<OperationsState>({ operations: {} })
 
-// Counter of refreshes; a response is applied only if no later refresh started.
-let generation = 0
+// Refreshes of the running operations, ordered against the operation events applied meanwhile.
+const refreshes = new SnapshotRefreshes()
 
 // Drops the oldest finished operations beyond MAX_FINISHED.
 function pruneFinished(state: OperationsState) {
@@ -67,28 +68,33 @@ function pruneFinished(state: OperationsState) {
 export function handleOperationEvent(state: OperationsState, event: ServerEvent) {
 	if (event.type !== 'operation:updated') return
 	state.operations[event.operation.operationId] = event.operation
+	refreshes.updated(event.operation.operationId)
 	pruneFinished(state)
 }
 
 // Replaces the running operations with the server's list. An operation known as running that the server
-// no longer lists ended while the socket was closed; its outcome is unknown, so it is dropped. A response
-// is dropped when another refresh started meanwhile.
+// no longer lists ended while the socket was closed; its outcome is unknown, so it is dropped. An operation
+// whose event arrived during the request is left as the event set it, so one that ended meanwhile is never
+// shown running again and one that started meanwhile is never dropped. A response is dropped when another
+// refresh started meanwhile.
 export async function refreshOperations(state: OperationsState, request: typeof fetch = fetch) {
-	const current = ++generation
+	const token = refreshes.start()
 
 	try {
 		const response = await request('/api/operations')
-		if (!response.ok || current !== generation) return
+		if (!response.ok || !refreshes.current(token)) return
 		const running = (await response.json()) as OperationRecord[]
-		if (current !== generation) return
+		if (!refreshes.current(token)) return
 
 		for (const operation of Object.values(state.operations)) {
-			if (operation.state === 'running') delete state.operations[operation.operationId]
+			if (operation.state === 'running' && !refreshes.changed(operation.operationId)) delete state.operations[operation.operationId]
 		}
 
-		for (const operation of running) state.operations[operation.operationId] = operation
+		for (const operation of running) if (!refreshes.changed(operation.operationId)) state.operations[operation.operationId] = operation
 	} catch {
 		// The server is unreachable; the next socket open refreshes the list.
+	} finally {
+		refreshes.end(token)
 	}
 }
 

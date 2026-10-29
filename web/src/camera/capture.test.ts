@@ -76,6 +76,24 @@ test('a refresh replaces the sessions and frames with the server snapshot', asyn
 	expect(state.frames[cameraKey('c', 'cam')]?.imageId).toBe('i1')
 })
 
+test('a refresh never undoes the events that arrive while its request is in flight', async () => {
+	const state = newState()
+	const key = cameraKey('c', 'cam')
+	const other = cameraKey('c', 'guide')
+	const { promise, resolve } = Promise.withResolvers<Response>()
+	const refresh = refreshCaptures(state, (() => promise) as unknown as typeof fetch)
+
+	// The snapshot was taken while the capture exposed; it then ends with a new frame before the response arrives.
+	handleCaptureEvent(state, { type: 'capture:updated', session: session({ phase: 'completed', captured: 1, endedAt: 2000 }) })
+	handleCaptureEvent(state, { type: 'capture:frame', frame: frame({ imageId: 'i2', time: 20 }) })
+	resolve(Response.json({ sessions: [session(), session({ sessionId: 's2', deviceId: 'guide' })], frames: [frame()] }))
+	await refresh
+
+	expect(state.sessions[key]?.phase).toBe('completed')
+	expect(state.frames[key]?.imageId).toBe('i2')
+	expect(state.sessions[other]?.sessionId).toBe('s2')
+})
+
 test('starts a capture once, reports a refusal, and refreshes after a lost response', async () => {
 	const state = newState()
 	const key = cameraKey('c', 'cam')

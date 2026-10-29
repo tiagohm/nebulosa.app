@@ -44,6 +44,26 @@ test('a refresh replaces the running operations with the server list', async () 
 	expect(Object.keys(state.operations).toSorted()).toEqual(['done', 'other'])
 })
 
+test('a refresh never undoes the events that arrive while its request is in flight', async () => {
+	const state = newState()
+	handleOperationEvent(state, { type: 'operation:updated', operation: operation('slew') })
+	const { promise, resolve } = Promise.withResolvers<Response>()
+	const refresh = refreshOperations(state, (() => promise) as unknown as typeof fetch)
+
+	// The snapshot was taken while the slew ran; the slew then ends and a goto starts before the response arrives.
+	handleOperationEvent(state, { type: 'operation:updated', operation: operation('slew', 'succeeded') })
+	handleOperationEvent(state, { type: 'operation:updated', operation: operation('goto') })
+	resolve(Response.json([operation('slew')]))
+	await refresh
+
+	expect(state.operations.slew?.state).toBe('succeeded')
+	expect(state.operations.goto?.state).toBe('running')
+
+	// A later refresh applies its snapshot as usual.
+	await refreshOperations(state, (() => Promise.resolve(Response.json([]))) as unknown as typeof fetch)
+	expect(state.operations.goto).toBeUndefined()
+})
+
 test('a device is busy only while a running operation holds exactly it', () => {
 	const state = newState()
 	handleOperationEvent(state, { type: 'operation:updated', operation: operation('b', 'running', 'a', 'm1', 2) })

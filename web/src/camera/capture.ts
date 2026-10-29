@@ -4,6 +4,7 @@ import { proxy } from 'valtio'
 import type { EquipmentSetup } from '../equipment/roles'
 import { deviceUrl, jsonInit, responseError } from '../http'
 import type { CameraAcquisitionSettings, CameraExposureSettings } from '../profile/schema'
+import { SnapshotRefreshes } from '../refresh'
 
 // Camera captures as this tab knows them. The server owns every capture, whichever tab started it, so this
 // store only mirrors it: sessions and previewed frames are fed by capture:updated and capture:frame events
@@ -31,8 +32,9 @@ export interface CaptureRuntime {
 // Capture state of the tab.
 export const captureRuntime = proxy<CaptureRuntime>({ sessions: {}, frames: {}, pending: {}, errors: {} })
 
-// Counter of snapshot refreshes; a response is applied only if no later refresh started.
-let generation = 0
+// Refreshes of the snapshot, ordered against the session and frame events applied meanwhile, by camera key.
+const sessionRefreshes = new SnapshotRefreshes()
+const frameRefreshes = new SnapshotRefreshes()
 
 // Returns the key of a camera: its connection id and exact device id.
 export function cameraKey(connectionId: string, deviceId: string) {
@@ -49,33 +51,52 @@ export function captureRunning(session: Pick<CaptureSession, 'phase'> | undefine
 export function handleCaptureEvent(state: CaptureRuntime, event: ServerEvent) {
 	if (event.type === 'capture:updated') {
 		const { session } = event
-		state.sessions[cameraKey(session.connectionId, session.deviceId)] = session
+		const key = cameraKey(session.connectionId, session.deviceId)
+		state.sessions[key] = session
+		sessionRefreshes.updated(key)
 	} else if (event.type === 'capture:frame') {
 		const { frame } = event
 		const key = cameraKey(frame.connectionId, frame.deviceId)
 		const known = state.frames[key]
-		if (!known || known.imageId === frame.imageId || frame.time >= known.time) state.frames[key] = frame
+
+		if (!known || known.imageId === frame.imageId || frame.time >= known.time) {
+			state.frames[key] = frame
+			frameRefreshes.updated(key)
+		}
 	}
 }
 
 // Replaces the sessions and frames with the server's snapshot, which may have changed while the socket was
-// closed. A response is dropped when another refresh started meanwhile.
+// closed. The session or frame of a camera whose event arrived during the request is left as the event set it, so a
+// session that ended meanwhile is never shown running again. A response is dropped when another refresh started
+// meanwhile.
 export async function refreshCaptures(state: CaptureRuntime, request: typeof fetch = fetch) {
-	const current = ++generation
+	const sessionToken = sessionRefreshes.start()
+	const frameToken = frameRefreshes.start()
 
 	try {
 		const response = await request('/api/captures')
-		if (!response.ok || current !== generation) return
+		if (!response.ok || !sessionRefreshes.current(sessionToken)) return
 		const snapshot = (await response.json()) as CaptureSnapshot
-		if (current !== generation) return
+		if (!sessionRefreshes.current(sessionToken)) return
 
-		state.sessions = {}
-		for (const session of snapshot.sessions) state.sessions[cameraKey(session.connectionId, session.deviceId)] = session
-		state.frames = {}
-		for (const frame of snapshot.frames) state.frames[cameraKey(frame.connectionId, frame.deviceId)] = frame
+		state.sessions = replaced(state.sessions, snapshot.sessions, sessionRefreshes)
+		state.frames = replaced(state.frames, snapshot.frames, frameRefreshes)
 	} catch {
 		// The server is unreachable; the next socket open refreshes the captures.
+	} finally {
+		sessionRefreshes.end(sessionToken)
+		frameRefreshes.end(frameToken)
 	}
+}
+
+// Returns the records of a snapshot by camera key, keeping instead the known record of every camera an event changed
+// during the refresh, whether or not the snapshot lists it.
+function replaced<T extends { readonly connectionId: string; readonly deviceId: string }>(known: Readonly<Record<string, T>>, snapshot: readonly T[], refreshes: SnapshotRefreshes): Record<string, T> {
+	const records: Record<string, T> = {}
+	for (const record of snapshot) records[cameraKey(record.connectionId, record.deviceId)] = record
+	for (const key of Object.keys(known)) if (refreshes.changed(key)) records[key] = known[key]
+	return records
 }
 
 // Sends a command to a camera's capture route and records its failure. When the server cannot be reached,

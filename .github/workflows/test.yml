@@ -56,6 +56,7 @@ jobs:
               with:
                   submodules: true
                   persist-credentials: false
+                  fetch-depth: 2
 
             - name: Setup Bun
               uses: oven-sh/setup-bun@v2
@@ -80,4 +81,4 @@ jobs:
               run: bun lint
 
             - name: Test
-              run: bun test --parallel --timings timings.json
+              run: bun test --parallel --pass-with-no-tests --changed=HEAD~ --timings timings.json

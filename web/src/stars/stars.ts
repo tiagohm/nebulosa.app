@@ -1,5 +1,6 @@
 import type { AstapStarDetectionSettings, BuiltinStarDetectionSettings, ServerEvent, StarAcceptance, StarDetectionJob, StarDetectionRequest, StarDetectionResult, StarDetectionSettings, StarDetectionSnapshot, StarDetectorProvider } from 'api'
 import { proxy, ref } from 'valtio'
+import { latestOf, trackJob } from '../analysis'
 import { jsonInit, responseError } from '../http'
 import type { Point, Rect } from '../viewer/transform'
 
@@ -52,12 +53,6 @@ export const DEFAULT_STAR_REQUEST: StarDetectionRequest = { detector: DEFAULT_BU
 // Most stars the built-in detector returns (BUILTIN_STAR_LIMIT of the API).
 export const BUILTIN_STAR_LIMIT = 2000
 
-// Jobs kept at most; the oldest ended ones beyond it that are not the latest of an image are forgotten.
-const MAX_JOBS = 256
-
-// Fetched results kept at most beyond those of the latest job of an image.
-const MAX_RESULTS = 8
-
 // Mirror of the server's star detection jobs, shared by every component of the tab.
 export const starsState = proxy<StarsState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {} })
 
@@ -100,11 +95,6 @@ export function withAcceptance(request: StarDetectionRequest, patch: Partial<Sta
 	return { ...request, acceptance: { ...request.acceptance, ...patch } }
 }
 
-// Whether a job is waiting or running.
-export function isActive(job: Pick<StarDetectionJob, 'state'> | undefined): boolean {
-	return job?.state === 'queued' || job?.state === 'running'
-}
-
 // Whether two requests measure the same way.
 export function sameRequest(a: StarDetectionRequest, b: StarDetectionRequest): boolean {
 	return sameFields(a.detector, b.detector) && sameFields(a.acceptance, b.acceptance)
@@ -119,8 +109,7 @@ function sameFields<T extends object>(a: T, b: T): boolean {
 
 // Returns the latest job of an image.
 export function latestJob(state: Pick<StarsState, 'jobs' | 'latest'>, imageId: string): StarDetectionJob | undefined {
-	const jobId = state.latest[imageId]
-	return jobId === undefined ? undefined : state.jobs[jobId]
+	return latestOf(state, imageId)
 }
 
 // Returns the fetched result of the latest job of an image, when it completed.
@@ -129,40 +118,10 @@ export function latestResult(state: Pick<StarsState, 'jobs' | 'latest' | 'result
 	return job?.state === 'completed' ? state.results[job.jobId] : undefined
 }
 
-// Records a job. A job seen for the first time becomes the latest of its image unless a newer one is known;
-// a job already known never takes it back, so an update or a snapshot cannot undo a submission. submitted
-// makes the job the latest whatever its age, as the answer to a submission of this tab, which may be the
-// earlier completed job of an equivalent request.
+// Records a job as a job of its image (trackJob); submitted makes it the latest of its image, as the answer to a
+// submission of this tab, which may be the earlier completed job of an equivalent request.
 function track(state: StarsState, job: StarDetectionJob, submitted = false) {
-	const known = job.jobId in state.jobs
-	state.jobs[job.jobId] = job
-	const latest = latestJob(state, job.imageId)
-	if (submitted || !latest || (!known && latest.queuedAt <= job.queuedAt)) state.latest[job.imageId] = job.jobId
-	prune(state)
-}
-
-// Forgets the oldest ended jobs beyond MAX_JOBS and the oldest results beyond MAX_RESULTS, never those of the
-// latest job of an image.
-function prune(state: StarsState) {
-	const latest = new Set(Object.values(state.latest))
-	const ids = Object.keys(state.jobs)
-
-	if (ids.length > MAX_JOBS) {
-		const forgettable = ids.filter((id) => !latest.has(id) && !isActive(state.jobs[id])).sort((a, b) => state.jobs[a].queuedAt - state.jobs[b].queuedAt)
-
-		for (const id of forgettable.slice(0, ids.length - MAX_JOBS)) {
-			delete state.jobs[id]
-			delete state.results[id]
-			delete state.resultErrors[id]
-		}
-	}
-
-	const extra = Object.keys(state.results).filter((id) => !latest.has(id))
-
-	for (const id of extra.slice(0, Math.max(0, extra.length - MAX_RESULTS))) delete state.results[id]
-
-	// An image no longer known keeps no latest entry of a forgotten job.
-	for (const [imageId, jobId] of Object.entries(state.latest)) if (!state.jobs[jobId]) delete state.latest[imageId]
+	trackJob(state, job, job.imageId, submitted)
 }
 
 // Applies a server event to the store; other events are ignored.

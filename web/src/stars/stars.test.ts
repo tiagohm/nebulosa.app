@@ -79,6 +79,18 @@ describe('jobs', () => {
 		expect(stars.submitErrors['image-2']).toBe('ASTAP is not configured')
 	})
 
+	test('an answer or a snapshot arriving after the end of a job never takes it back', async () => {
+		const stars = state()
+		const { request } = fetcher({ '/api/images/image-1/stars': [202, job()], '/api/stars': [200, { jobs: [job({ state: 'running', startedAt: 1100 })] }] })
+		handleStarsEvent(stars, { type: 'stars:updated', job: job({ state: 'completed', startedAt: 1100, endedAt: 1200 }) })
+
+		await runDetection(stars, 'image-1', DEFAULT_STAR_REQUEST, request)
+		expect(latestJob(stars, 'image-1')?.state).toBe('completed')
+
+		await refreshStars(stars, request)
+		expect(latestJob(stars, 'image-1')?.state).toBe('completed')
+	})
+
 	test('a cached answer to a submission becomes the latest job again, even after a reconnection', async () => {
 		const stars = state()
 		const builtin = job({ state: 'completed' })

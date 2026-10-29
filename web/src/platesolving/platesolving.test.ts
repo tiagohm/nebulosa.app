@@ -51,6 +51,17 @@ describe('jobs', () => {
 		expect(latestJob(s, 'i1')?.jobId).toBe('j1')
 	})
 
+	test('a snapshot fetched before the end of a job never takes it back, while a running job takes its latest stage', async () => {
+		const s = state()
+		handlePlateSolvingEvent(s, { type: 'plateSolving:updated', job: job({ state: 'running', stage: 'preparing' }) })
+		handlePlateSolvingEvent(s, { type: 'plateSolving:updated', job: job({ state: 'running', stage: 'solving' }) })
+		expect(latestJob(s, 'i1')?.stage).toBe('solving')
+
+		handlePlateSolvingEvent(s, { type: 'plateSolving:updated', job: job({ state: 'completed' }) })
+		await refreshPlateSolving(s, fetcher({ '/api/plate-solving': [200, { jobs: [job({ state: 'running', stage: 'solving' })] }] }).request)
+		expect(latestJob(s, 'i1')?.state).toBe('completed')
+	})
+
 	test('a refused submission is kept per image', async () => {
 		const s = state()
 		await runPlateSolve(s, 'i1', { provider: 'nova', strategy: 'blind' }, fetcher({ '/api/images/i1/plate-solving': [422, { error: 'Not configured' }] }).request)

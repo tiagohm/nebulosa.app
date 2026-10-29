@@ -41,6 +41,7 @@ import { createWheelRoutes, WheelCommands } from './wheels'
 
 export type { AboutInfo } from './about'
 export { createAboutRoutes } from './about'
+export type { AnalysisJob, AnalysisJobState } from './analysis'
 export type { AutoFocusCaptureSettings, AutoFocusEvent, AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusStartResponse, AutoFocusState, AutoFocusVerification, FocusMeasurement } from './autofocus'
 export type { FocusCurve, FocusCurveHyperbola, FocusCurveParabola, FocusCurveSeries, FocusCurveSeriesKind, FocusCurveTrendLines } from './autofocus.curve'
 export type { CameraCoolerRequest, CameraTemperatureRequest } from './cameras'

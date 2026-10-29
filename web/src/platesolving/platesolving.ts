@@ -2,6 +2,7 @@ import type { MountCoordinate, MountState, PlateSolutions, PlateSolveJob, PlateS
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { normalizeAngle, toDeg, toHour } from 'nebulosa/src/math/units/angle'
 import { proxy, ref } from 'valtio'
+import { latestOf, trackJob } from '../analysis'
 import type { RoleAvailability } from '../equipment/availability'
 import { jsonInit, responseError } from '../http'
 
@@ -45,27 +46,15 @@ export const STAGE_LABELS: Readonly<Record<PlateSolveStage, string>> = { prepari
 // Request of a first solve: ASTAP around the pointing of the header.
 export const DEFAULT_PLATE_SOLVE_REQUEST: PlateSolveRequest = { provider: 'astap', strategy: 'assisted' }
 
-// Jobs kept at most; the oldest ended ones beyond it that are not the latest of an image are forgotten.
-const MAX_JOBS = 256
-
-// Fetched results kept at most beyond those of the latest job of an image.
-const MAX_RESULTS = 8
-
 // Mirror of the server's plate solving jobs, shared by every component of the tab.
 export const plateSolvingState = proxy<PlateSolvingState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {}, headers: {}, hints: {} })
 
 // Jobs whose result is being fetched, and images whose solutions or hints are.
 const fetching = new Set<string>()
 
-// Whether a job is waiting or running.
-export function isActive(job: Pick<PlateSolveJob, 'state'> | undefined): boolean {
-	return job?.state === 'queued' || job?.state === 'running'
-}
-
 // Returns the latest job of an image.
 export function latestJob(state: Pick<PlateSolvingState, 'jobs' | 'latest'>, imageId: string): PlateSolveJob | undefined {
-	const jobId = state.latest[imageId]
-	return jobId === undefined ? undefined : state.jobs[jobId]
+	return latestOf(state, imageId)
 }
 
 // Returns the completed jobs of an image this tab knows, newest first.
@@ -114,37 +103,10 @@ export function mountSyncBlocker(mount: RoleAvailability, state: Pick<MountState
 	return undefined
 }
 
-// Records a job. A job seen for the first time becomes the latest of its image unless a newer one is known; a job
-// already known never takes it back, so an update or a snapshot cannot undo a submission. submitted makes the job the
-// latest whatever its age, as the answer to a submission of this tab, which may be an equivalent earlier job.
+// Records a job as a job of its image (trackJob); submitted makes it the latest of its image, as the answer to a
+// submission of this tab, which may be an equivalent earlier job.
 function track(state: PlateSolvingState, job: PlateSolveJob, submitted = false) {
-	const known = job.jobId in state.jobs
-	state.jobs[job.jobId] = job
-	const latest = latestJob(state, job.imageId)
-	if (submitted || !latest || (!known && latest.queuedAt <= job.queuedAt)) state.latest[job.imageId] = job.jobId
-	prune(state)
-}
-
-// Forgets the oldest ended jobs beyond MAX_JOBS and the oldest results beyond MAX_RESULTS, never those of the latest
-// job of an image.
-function prune(state: PlateSolvingState) {
-	const latest = new Set(Object.values(state.latest))
-	const ids = Object.keys(state.jobs)
-
-	if (ids.length > MAX_JOBS) {
-		const forgettable = ids.filter((id) => !latest.has(id) && !isActive(state.jobs[id])).sort((a, b) => state.jobs[a].queuedAt - state.jobs[b].queuedAt)
-
-		for (const id of forgettable.slice(0, ids.length - MAX_JOBS)) {
-			delete state.jobs[id]
-			delete state.results[id]
-			delete state.resultErrors[id]
-		}
-	}
-
-	const extra = Object.keys(state.results).filter((id) => !latest.has(id))
-	for (const id of extra.slice(0, Math.max(0, extra.length - MAX_RESULTS))) delete state.results[id]
-
-	for (const [imageId, jobId] of Object.entries(state.latest)) if (!state.jobs[jobId]) delete state.latest[imageId]
+	trackJob(state, job, job.imageId, submitted)
 }
 
 // Applies a server event to the store; other events are ignored.

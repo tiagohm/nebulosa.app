@@ -876,10 +876,10 @@ describe('camera forms', () => {
 		const state = load(stores)
 		expect(imageAstrometrySettings(activeProfile(state).settings)).toEqual(DEFAULT_IMAGE_ASTROMETRY)
 
-		setImageAstrometrySettings(state, { grid: { mode: 'edgeTicks' }, orientation: 'center' })
+		setImageAstrometrySettings(state, { grid: { color: 'axes' }, orientation: 'center' })
 		setImageAstrometrySettings(state, { grid: { opacity: 0.8 }, coordinates: { format: 'decimal', precision: 3 } })
 		await Bun.sleep(0)
-		const expected = { ...DEFAULT_IMAGE_ASTROMETRY, coordinates: { format: 'decimal', precision: 3 }, grid: { ...DEFAULT_IMAGE_ASTROMETRY.grid, mode: 'edgeTicks', opacity: 0.8 }, orientation: 'center' } satisfies typeof DEFAULT_IMAGE_ASTROMETRY
+		const expected = { ...DEFAULT_IMAGE_ASTROMETRY, coordinates: { format: 'decimal', precision: 3 }, grid: { ...DEFAULT_IMAGE_ASTROMETRY.grid, color: 'axes', opacity: 0.8 }, orientation: 'center' } satisfies typeof DEFAULT_IMAGE_ASTROMETRY
 		expect(imageAstrometrySettings(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual(expected)
 
 		const invalid = newStores()

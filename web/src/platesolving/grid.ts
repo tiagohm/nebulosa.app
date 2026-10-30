@@ -110,7 +110,7 @@ export interface GridLine {
 	readonly axis: GridAxis
 	// Right ascension in [0, 2π) or declination of the line, radians.
 	readonly value: number
-	// Whether it is a major line, which gets labels and ticks.
+	// Whether it is a major line, which gets a label.
 	readonly major: boolean
 	// Pieces of the line inside the region, as polylines in viewer coordinates.
 	readonly paths: readonly (readonly Point[])[]
@@ -134,22 +134,14 @@ export interface GridGeometry {
 export interface GridLabel {
 	// Key of the line.
 	readonly key: string
+	// Axis of the line.
+	readonly axis: GridAxis
 	// Formatted value of the line.
 	readonly text: string
 	// Crossing of the boundary, in viewer coordinates.
 	readonly point: Point
 	// Side of the visible part of the image it crosses.
 	readonly edge: 'left' | 'right' | 'top' | 'bottom'
-}
-
-// Short piece of a line from where it crosses the boundary of the visible part of the image, inwards.
-export interface GridTick {
-	// Key of the line.
-	readonly key: string
-	// Whether the line is major.
-	readonly major: boolean
-	// Polyline of the tick, in viewer coordinates.
-	readonly points: readonly Point[]
 }
 
 // Geometry cached per solution, reused while the view stays inside its region and near its zoom.
@@ -213,13 +205,13 @@ export function gridGeometry(solution: FitsHeader, image: Size, view: OverlayVie
 	return { region, scale: view.scale, rightAscensionStep: rightAscension.step * rightAscension.unit, declinationStep: declination.step * declination.unit, lines }
 }
 
-// Returns the labels and ticks of the major lines of a grid where they cross the boundary of the visible part of an
-// image: declinations on the left side (else the right), right ascensions on the bottom (else the top), each at most
-// once, keeping on each side only labels that do not overlap one already kept, in order along the side, at most
-// budget labels. fontSize is the label size in screen pixels; ticks are tickLength screen pixels long.
-export function gridEdges(geometry: GridGeometry, image: Size, view: OverlayView, fontSize: number, tickLength: number, budget: number): { readonly labels: readonly GridLabel[]; readonly ticks: readonly GridTick[] } {
+// Returns the labels of the major lines of a grid where they cross the boundary of the visible part of an image:
+// declinations on the left side (else the right), right ascensions on the bottom (else the top), each at most once,
+// keeping on each side only labels that do not overlap one already kept, in order along the side, at most budget
+// labels. fontSize is the label size in screen pixels.
+export function gridLabels(geometry: GridGeometry, image: Size, view: OverlayView, fontSize: number, budget: number): readonly GridLabel[] {
 	const visible = intersect(view.visible, { x: 0, y: 0, ...image })
-	if (!visible) return { labels: [], ticks: [] }
+	if (!visible) return []
 
 	const epsilon = 1e-6 * Math.max(image.width, image.height)
 	const edgeOf = (point: Point): GridLabel['edge'] | undefined => {
@@ -231,30 +223,25 @@ export function gridEdges(geometry: GridGeometry, image: Size, view: OverlayView
 	}
 
 	const candidates: GridLabel[] = []
-	const ticks: GridTick[] = []
 
 	for (const line of geometry.lines) {
 		const preferred: readonly GridLabel['edge'][] = line.axis === 'declination' ? ['left', 'right', 'bottom', 'top'] : ['bottom', 'top', 'left', 'right']
 		const crossings: { readonly point: Point; readonly edge: GridLabel['edge'] }[] = []
 
+		if (!line.major) continue
+
 		for (const path of line.paths) {
 			for (const piece of clipPolyline(path, visible)) {
-				for (const [from, inwards] of [
-					[piece[0], piece],
-					[piece.at(-1)!, piece.toReversed()],
-				] as const) {
+				for (const from of [piece[0], piece.at(-1)!]) {
 					const edge = edgeOf(from)
-					if (!edge) continue
-					crossings.push({ point: from, edge })
-					ticks.push({ key: `${line.key}:${edge}:${crossings.length}`, major: line.major, points: head(inwards, tickLength / view.scale) })
+					if (edge) crossings.push({ point: from, edge })
 				}
 			}
 		}
 
-		if (!line.major) continue
 		const step = line.axis === 'declination' ? geometry.declinationStep : geometry.rightAscensionStep
 		const best = preferred.map((edge) => crossings.find((crossing) => crossing.edge === edge)).find((crossing) => crossing !== undefined)
-		if (best) candidates.push({ key: line.key, text: formatGridValue(line.axis, line.value, step), ...best })
+		if (best) candidates.push({ key: line.key, axis: line.axis, text: formatGridValue(line.axis, line.value, step), ...best })
 	}
 
 	const labels: GridLabel[] = []
@@ -275,7 +262,7 @@ export function gridEdges(geometry: GridGeometry, image: Size, view: OverlayView
 		}
 	}
 
-	return { labels, ticks }
+	return labels
 }
 
 // Returns the text of a grid line's value for a spacing, both radians: hours, minutes, and seconds of time for a right
@@ -365,28 +352,6 @@ function clipSegment(a: Point, b: Point, rect: Rect): readonly [Point, Point, bo
 // Returns the polylines of several paths clipped to a rectangle.
 function clipAll(paths: readonly (readonly Point[])[], rect: Rect): Point[][] {
 	return paths.flatMap((path) => clipPolyline(path, rect))
-}
-
-// Returns the start of a polyline up to a length along it, in its own units.
-function head(points: readonly Point[], length: number): Point[] {
-	const out = [points[0]]
-	let left = length
-
-	for (let i = 1; i < points.length && left > 0; i++) {
-		const a = points[i - 1]
-		const b = points[i]
-		const d = Math.hypot(b.x - a.x, b.y - a.y)
-
-		if (d >= left) {
-			out.push({ x: a.x + ((b.x - a.x) * left) / d, y: a.y + ((b.y - a.y) * left) / d })
-			break
-		}
-
-		out.push(b)
-		left -= d
-	}
-
-	return out
 }
 
 // Returns a line traced through sample over [from, to] as polylines in viewer coordinates: INITIAL_SEGMENTS segments,

@@ -11,7 +11,7 @@ import { useRoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
 import { AdvancedControls, HintControls, SolverControls, StrategyControls, useSolverConfigured } from '../platesolving/PlateSolveControls'
 import { cancelPlateSolve, completedJobs, loadHints, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolvingState, PROVIDER_LABELS, runPlateSolve, STAGE_LABELS } from '../platesolving/platesolving'
-import { type AstrometryGridSettings, COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, type CoordinateFormat, GRID_COLORS, GRID_MODES, GRID_OPACITY_RANGE, type GridColor, type GridMode, ORIENTATION_MODES, type OrientationMode } from '../platesolving/preferences'
+import { type AstrometryGridSettings, COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, type CoordinateFormat, GRID_COLORS, GRID_OPACITY_RANGE, type GridColor, ORIENTATION_MODES, type OrientationMode } from '../platesolving/preferences'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { wcsFrame } from '../platesolving/wcs'
 import { activeProfile, imageAstrometrySettings, profileState, setImageAstrometrySettings } from '../profile/profile'
@@ -424,7 +424,6 @@ function Visualization({ documentKey, plateSolving }: VisualizationProps) {
 		<CollapsibleSection id="images.plate-solver.visualization" title="Visualization">
 			<Checkbox label="Show solution centre" checked={plateSolving.overlay} onChange={(overlay) => setPlateSolveOverlay(imagesState, documentKey, { overlay })} />
 			<Checkbox label="RA/Dec grid" checked={plateSolving.grid} onChange={(shown) => setPlateSolveOverlay(imagesState, documentKey, { grid: shown })} />
-			<SegmentedControl label="Grid" options={GRID_MODES} value={grid.mode} format={(mode) => GRID_MODE_LABELS[mode]} onChange={(mode) => editGrid({ mode })} />
 			<Checkbox label="Grid labels" checked={grid.labels} onChange={(labels) => editGrid({ labels })} />
 			<Checkbox label="Minor grid lines" checked={grid.minor} onChange={(minor) => editGrid({ minor })} />
 			<Slider label="Grid opacity" value={grid.opacity} min={GRID_OPACITY_RANGE[0]} max={GRID_OPACITY_RANGE[1]} step={0.05} onChange={(opacity) => editGrid({ opacity })} />
@@ -445,11 +444,8 @@ function Visualization({ documentKey, plateSolving }: VisualizationProps) {
 	)
 }
 
-// Names of the grid modes.
-const GRID_MODE_LABELS: Readonly<Record<GridMode, string>> = { lines: 'Lines', edgeTicks: 'Edge ticks' }
-
 // Names of the grid colors.
-const GRID_COLOR_LABELS: Readonly<Record<GridColor, string>> = { neutral: 'Neutral', accent: 'Accent', success: 'Green' }
+const GRID_COLOR_LABELS: Readonly<Record<GridColor, string>> = { neutral: 'Neutral', accent: 'Accent', success: 'Green', axes: 'RA red, Dec blue' }
 
 // Names of the orientation modes.
 const ORIENTATION_LABELS: Readonly<Record<OrientationMode, string>> = { hidden: 'Hidden', corner: 'Corner', center: 'Centre' }

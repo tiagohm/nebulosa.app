@@ -55,6 +55,9 @@ export interface ImageViewerProps {
 	readonly onImageClick?: (point: Point, view: OverlayView) => void
 	// Tool that takes presses over the image; the viewer pans the presses it declines.
 	readonly interaction?: ViewerInteraction
+	// Whether the pointer over the image is a crosshair whatever the interaction, for an image whose every point is
+	// read, such as a solved one; Space held still shows the open hand of the pan.
+	readonly crosshair?: boolean
 	// Called on a context menu request over the image (a right click, or a long press on touch devices), with its image
 	// point, its client position in CSS pixels, and the current view; returns whether it was handled, which keeps the
 	// browser's own menu from opening.
@@ -75,7 +78,7 @@ const WHEEL_ZOOM_RATE = 0.0015
 const CLICK_TOLERANCE = 4
 
 // Image viewer.
-export function ImageViewer({ image, loading = false, error, empty, view, onViewChange, overlays, onImageClick, interaction, onImageContextMenu, status, toolbar }: ImageViewerProps) {
+export function ImageViewer({ image, loading = false, error, empty, view, onViewChange, overlays, onImageClick, interaction, crosshair = false, onImageContextMenu, status, toolbar }: ImageViewerProps) {
 	const viewportRef = useRef<HTMLDivElement>(null)
 	const [viewport, setViewport] = useState<Size>({ width: 0, height: 0 })
 	// Pointer position over the viewport, in viewport pixels; the pixel under it follows zoom and pan.
@@ -292,7 +295,7 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 	const pointed = image && cursor ? toImage(transform, cursor) : undefined
 	const pixel = pointed && pixelAt({ width, height }, pointed)
 	const viewerCursor: ViewerCursor | undefined = pointed && cursor && { image: pointed, ...(pixel && { pixel }), viewport: cursor }
-	const panning = !interaction || spaceHeld || interaction.cursor === 'grab'
+	const pointer = spaceHeld ? 'grab' : crosshair ? 'crosshair' : (interaction?.cursor ?? 'grab')
 	const fitted = view.kind === 'fit'
 
 	return (
@@ -320,7 +323,7 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 				onBlur={() => setSpaceHeld(false)}
 				className={
 					image
-						? cn('relative min-h-0 flex-1 touch-none overflow-hidden outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', panning ? 'cursor-grab active:cursor-grabbing' : interaction.cursor === 'crosshair' ? 'cursor-crosshair' : 'cursor-default')
+						? cn('relative min-h-0 flex-1 touch-none overflow-hidden outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', pointer === 'grab' ? 'cursor-grab active:cursor-grabbing' : pointer === 'crosshair' ? 'cursor-crosshair' : 'cursor-default')
 						: 'relative min-h-0 flex-1 overflow-hidden'
 				}
 			>

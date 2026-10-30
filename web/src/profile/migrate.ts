@@ -1,7 +1,7 @@
 import type { DisplaySettings, FlatWizardFilter, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import { CAMERA_ROLES, type DeviceAssignment, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
 import { CFA_PATTERNS, DISPLAY_RANGES, type DisplayRange, ORIGINAL_DISPLAY_SETTINGS, SCNR_CHANNELS, SCNR_METHODS } from '../images/display'
-import { COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, DEFAULT_IMAGE_ASTROMETRY, GRID_COLORS, GRID_MODES, GRID_OPACITY_RANGE, type ImageAstrometrySettings, ORIENTATION_MODES } from '../platesolving/preferences'
+import { COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, DEFAULT_IMAGE_ASTROMETRY, GRID_COLORS, GRID_OPACITY_RANGE, type ImageAstrometrySettings, ORIENTATION_MODES } from '../platesolving/preferences'
 import { WORKSPACE_IDS } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
 import type { OpticalPreset, SensorGeometry, TelescopeOptics } from '../sky/framing'
@@ -526,7 +526,6 @@ function normalizeImageAstrometry(value: unknown): ImageAstrometrySettings | und
 			precision: typeof precision === 'number' && Number.isInteger(precision) ? boundedNumber(precision, ...COORDINATE_PRECISION_RANGE, defaults.coordinates.precision) : defaults.coordinates.precision,
 		},
 		grid: {
-			mode: oneOf(grid.mode, GRID_MODES) ? grid.mode : defaults.grid.mode,
 			labels: typeof grid.labels === 'boolean' ? grid.labels : defaults.grid.labels,
 			minor: typeof grid.minor === 'boolean' ? grid.minor : defaults.grid.minor,
 			opacity: boundedNumber(grid.opacity, ...GRID_OPACITY_RANGE, defaults.grid.opacity),

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { deg, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import type { OverlayView } from '../viewer/transform'
-import { cachedGrid, clipPolyline, formatGridValue, gridEdges, gridGeometry } from './grid'
+import { cachedGrid, clipPolyline, formatGridValue, gridGeometry, gridLabels } from './grid'
 
 // A TAN solution of a 2000×1000 image centred at its CRPIX, s degrees per pixel, rotated by angle degrees.
 function solution(ra: number, dec: number, { angle = 0, s = 0.001 } = {}): FitsHeader {
@@ -110,11 +110,11 @@ describe('edges', () => {
 	test('label the major lines inside the visible part of the image', () => {
 		const shown = view(2)
 		const geometry = gridGeometry(solution(42, 17, { angle: 20 }), IMAGE, shown)!
-		const { labels, ticks } = gridEdges(geometry, IMAGE, shown, 11, 8, 48)
+		const labels = gridLabels(geometry, IMAGE, shown, 11, 48)
 		const { visible } = shown
 
 		expect(labels.length).toBeGreaterThan(0)
-		expect(ticks.length).toBeGreaterThanOrEqual(labels.length)
+		for (const label of labels) expect(label.key.startsWith(`${label.axis}:`)).toBe(true)
 		for (const label of labels) {
 			expect(label.point.x).toBeGreaterThanOrEqual(visible.x - 1e-6)
 			expect(label.point.x).toBeLessThanOrEqual(visible.x + visible.width + 1e-6)
@@ -128,7 +128,7 @@ describe('edges', () => {
 		const shown = view(0.5)
 		const geometry = gridGeometry(solution(42, 17), IMAGE, shown)!
 
-		expect(gridEdges(geometry, IMAGE, shown, 11, 8, 2).labels.length).toBeLessThanOrEqual(2)
+		expect(gridLabels(geometry, IMAGE, shown, 11, 2).length).toBeLessThanOrEqual(2)
 	})
 })
 

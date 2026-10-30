@@ -6,11 +6,17 @@
 // seconds of declination, or both in decimal degrees.
 export type CoordinateFormat = 'sexagesimal' | 'decimal'
 
-// How the grid is drawn: whole lines, or only ticks where the lines cross the boundary of the visible image.
-export type GridMode = 'lines' | 'edgeTicks'
+// Color of the grid: one theme color for both axes, or a color per axis, reddish meridians (right ascension) and
+// bluish parallels (declination).
+export type GridColor = 'neutral' | 'accent' | 'success' | 'axes'
 
-// Theme color of the grid.
-export type GridColor = 'neutral' | 'accent' | 'success'
+// Colors of the lines and labels of each axis of the grid, CSS colors.
+export interface GridAxisColors {
+	// Meridians, lines of constant right ascension.
+	readonly rightAscension: string
+	// Parallels, lines of constant declination.
+	readonly declination: string
+}
 
 // Where the north and east arrows are drawn: nowhere, in a corner of the visible image, or at the solved centre.
 export type OrientationMode = 'hidden' | 'corner' | 'center'
@@ -18,11 +24,8 @@ export type OrientationMode = 'hidden' | 'corner' | 'center'
 // Formats of the coordinates, in display order.
 export const COORDINATE_FORMATS: readonly CoordinateFormat[] = ['sexagesimal', 'decimal']
 
-// Grid modes, in display order.
-export const GRID_MODES: readonly GridMode[] = ['lines', 'edgeTicks']
-
 // Grid colors, in display order.
-export const GRID_COLORS: readonly GridColor[] = ['neutral', 'accent', 'success']
+export const GRID_COLORS: readonly GridColor[] = ['neutral', 'accent', 'success', 'axes']
 
 // Orientation modes, in display order.
 export const ORIENTATION_MODES: readonly OrientationMode[] = ['hidden', 'corner', 'center']
@@ -36,15 +39,13 @@ export const GRID_OPACITY_RANGE = [0.15, 1] as const
 
 // Appearance of the grid.
 export interface AstrometryGridSettings {
-	// Whole lines or edge ticks.
-	readonly mode: GridMode
 	// Whether the major lines are labelled.
 	readonly labels: boolean
 	// Whether minor lines are drawn between the major ones, when they are far enough apart.
 	readonly minor: boolean
 	// Opacity of the major lines, within GRID_OPACITY_RANGE.
 	readonly opacity: number
-	// Theme color of the lines and labels.
+	// Color of the lines and labels.
 	readonly color: GridColor
 }
 
@@ -65,11 +66,16 @@ export interface ImageAstrometrySettings {
 // Appearance of a profile that never changed it.
 export const DEFAULT_IMAGE_ASTROMETRY: ImageAstrometrySettings = {
 	coordinates: { format: 'sexagesimal', precision: 1 },
-	grid: { mode: 'lines', labels: true, minor: true, opacity: 0.45, color: 'neutral' },
+	grid: { labels: true, minor: true, opacity: 0.45, color: 'neutral' },
 	crosshair: false,
 	scaleBar: true,
 	orientation: 'corner',
 }
 
-// CSS color of each grid color.
-export const GRID_COLOR_VALUES: Readonly<Record<GridColor, string>> = { neutral: 'var(--color-ink-200)', accent: 'var(--color-accent)', success: 'var(--color-success)' }
+// Colors of the axes of each grid color; the axes one is a soft red and a soft blue, both readable over a dark sky.
+export const GRID_COLOR_VALUES: Readonly<Record<GridColor, GridAxisColors>> = {
+	neutral: { rightAscension: 'var(--color-ink-200)', declination: 'var(--color-ink-200)' },
+	accent: { rightAscension: 'var(--color-accent)', declination: 'var(--color-accent)' },
+	success: { rightAscension: 'var(--color-success)', declination: 'var(--color-success)' },
+	axes: { rightAscension: '#f07a6e', declination: '#6aa8f0' },
+}

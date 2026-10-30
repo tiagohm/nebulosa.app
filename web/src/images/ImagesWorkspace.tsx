@@ -16,6 +16,8 @@ import { GuidingOverlay, useGuidingOverlay } from '../camera/GuidingOverlay'
 import { TppaOverlay, useTppaOverlay } from '../camera/TppaOverlay'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../files/files'
+import { MOUNT_POINTING_STATE_LABELS, mountPointingRuntime } from '../mountpointing/mountpointing'
+import { PointingMapView } from '../mountpointing/PointingMapView'
 import { ASTROMETRY_MODES, type AstrometryMode } from '../platesolving/measurement'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { WcsAidsOverlay } from '../platesolving/WcsAidsOverlay'
@@ -430,15 +432,15 @@ function CaptureStatus({ connectionId, deviceId }: CaptureStatusProps) {
 	)
 }
 
-// View of the bottom area of a camera tab: the capture frames carousel, the Focus Curve of its camera's Auto Focus, or
-// the graph of its camera's guiding.
-type BottomView = 'frames' | 'curve' | 'guiding'
+// View of the bottom area of a camera tab: the capture frames carousel, the Focus Curve of its camera's Auto Focus, the
+// graph of its camera's guiding, or the Pointing Map of its camera's mount pointing session.
+type BottomView = 'frames' | 'curve' | 'guiding' | 'pointing'
 
 // Views of the bottom area, in display order.
-const BOTTOM_VIEWS: readonly BottomView[] = ['frames', 'curve', 'guiding']
+const BOTTOM_VIEWS: readonly BottomView[] = ['frames', 'curve', 'guiding', 'pointing']
 
 // Label of each view of the bottom area.
-const BOTTOM_VIEW_LABELS: Readonly<Record<BottomView, string>> = { frames: 'Captured Frames', curve: 'Focus Curve', guiding: 'Guiding Graph' }
+const BOTTOM_VIEW_LABELS: Readonly<Record<BottomView, string>> = { frames: 'Captured Frames', curve: 'Focus Curve', guiding: 'Guiding Graph', pointing: 'Pointing Map' }
 
 interface CameraBottomProps {
 	// Camera tab.
@@ -449,19 +451,21 @@ interface CameraBottomProps {
 	readonly onView: (view: BottomView) => void
 }
 
-// Bottom area of a camera tab: the capture frames carousel, and, once its camera has an Auto Focus or a guiding session,
-// a switch to the Focus Curve or the guiding graph of that session. They belong to the session, never to the frame
+// Bottom area of a camera tab: the capture frames carousel, and, once its camera has an Auto Focus, a guiding, or a mount
+// pointing session, a switch to the Focus Curve, the guiding graph, or the Pointing Map of that session. They belong to the session, never to the frame
 // selected, so they keep updating whatever frame or tool is shown; choosing a view never changes the selection. A view
 // whose session is gone shows the carousel.
 function CameraBottom({ document, view: chosen, onView }: CameraBottomProps) {
 	const autoFocus = useSnapshot(autoFocusRuntime)
 	const guidingState = useSnapshot(guidingRuntime)
+	const mountPointing = useSnapshot(mountPointingRuntime)
 	if (document.source.kind !== 'camera') return null
 
 	const key = cameraKey(document.source.connectionId, document.source.deviceId)
 	const session = autoFocus.sessions[key]
 	const guiding = guidingState.sessions[key]
-	const available = BOTTOM_VIEWS.filter((option) => option === 'frames' || (option === 'curve' && session) || (option === 'guiding' && guiding))
+	const pointing = mountPointing.sessions[key]
+	const available = BOTTOM_VIEWS.filter((option) => option === 'frames' || (option === 'curve' && session) || (option === 'guiding' && guiding) || (option === 'pointing' && pointing))
 	if (available.length === 1) return <CaptureFramesCarousel document={document} />
 	const view = available.includes(chosen) ? chosen : 'frames'
 
@@ -486,9 +490,17 @@ function CameraBottom({ document, view: chosen, onView }: CameraBottomProps) {
 		<div className="flex-none border-t border-line-100 bg-base-100">
 			<div className="flex items-center justify-between px-3 pt-1.5 font-mono text-[11px] tracking-wide text-ink-300 uppercase">
 				{views}
-				<span>{view === 'guiding' && guiding ? (guiding.active ? GUIDING_STATE_LABELS[guiding.state] : 'Stopped') : session && AUTO_FOCUS_STATE_LABELS[session.state]}</span>
+				<span>{view === 'pointing' && pointing ? MOUNT_POINTING_STATE_LABELS[pointing.state] : view === 'guiding' && guiding ? (guiding.active ? GUIDING_STATE_LABELS[guiding.state] : 'Stopped') : session && AUTO_FOCUS_STATE_LABELS[session.state]}</span>
 			</div>
-			<div className="px-2 pb-2">{view === 'guiding' && guiding ? <GuidingGraph session={guiding} telemetry={guidingState.telemetry[guiding.sessionId]} events={guidingState.events[guiding.sessionId]} /> : session && <FocusCurve summary={session} session={autoFocus.details[session.sessionId]} />}</div>
+			<div className="px-2 pb-2">
+				{view === 'pointing' && pointing ? (
+					<PointingMapView session={pointing} />
+				) : view === 'guiding' && guiding ? (
+					<GuidingGraph session={guiding} telemetry={guidingState.telemetry[guiding.sessionId]} events={guidingState.events[guiding.sessionId]} />
+				) : (
+					session && <FocusCurve summary={session} session={autoFocus.details[session.sessionId]} />
+				)}
+			</div>
 		</div>
 	)
 }

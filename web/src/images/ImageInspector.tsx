@@ -194,6 +194,13 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 						<Property label="Step">{role ? (role.point !== undefined ? `Point ${role.point}/3` : role.refinement ? 'Refinement' : 'Rejected candidate') : MISSING}</Property>
 					</>
 				)}
+				{frame.origin === 'mountPointing' && (
+					<Property label="Pointing session">
+						<span title={frame.sessionId} className="block truncate">
+							{frame.sessionId}
+						</span>
+					</Property>
+				)}
 				{frame.origin === 'darv' && (
 					<>
 						<Property label="DARV session">

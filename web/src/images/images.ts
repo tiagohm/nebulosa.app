@@ -210,6 +210,8 @@ export interface ImageViewState {
 	annotation: ImageAnnotationState
 	// Image processing pipeline being edited and the latest job it submitted.
 	processing: ImageProcessingDraft
+	// Whether every overlay of the image is kept off it, whatever each one's own setting; absent draws them.
+	overlaysHidden?: boolean
 }
 
 // Contextual tool of a document.
@@ -652,6 +654,13 @@ export function selectPlateSolution(state: ImagesState, key: string, selected: s
 export function setPlateSolveOverlay(state: ImagesState, key: string, patch: Partial<Pick<ImagePlateSolvingState, 'overlay' | 'grid'>>) {
 	const plateSolving = state.views[key]?.plateSolving
 	if (plateSolving) Object.assign(plateSolving, patch)
+}
+
+// Hides every overlay of a document, or draws them again as they were; changes none of their settings. Ignored for an
+// unknown key.
+export function toggleImageOverlays(state: ImagesState, key: string) {
+	const view = state.views[key]
+	if (view) view.overlaysHidden = !view.overlaysHidden
 }
 
 // Adds a measurement to a document under a new id and selects it; returns the id, or undefined for an unknown key.

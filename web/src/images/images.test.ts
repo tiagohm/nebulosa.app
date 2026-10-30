@@ -26,6 +26,7 @@ import {
 	selectStreak,
 	setImageView,
 	setPlateSolveOverlay,
+	toggleImageOverlays,
 	addMeasurement,
 	editAstrometryItem,
 	removeAstrometryItem,
@@ -546,6 +547,25 @@ describe('plate solving', () => {
 		expect(state.views[a]?.plateSolving).toEqual({ request: { provider: 'nova', strategy: 'blind', downsample: 4 }, selected: 'header', overlay: true, grid: true })
 		expect(state.views[b]?.plateSolving).toEqual({ request: { provider: 'astap', strategy: 'assisted' }, overlay: true, grid: false })
 		expect(calls.length).toBe(requests)
+	})
+
+	test('hides the overlays of one document and keeps their settings', async () => {
+		const state = newState()
+		const { io } = fakeIo()
+		await openImage(state, '/a.fits', io)
+		await openImage(state, '/b.fits', io)
+		const [a, b] = state.documents.map((d) => d.key)
+		setPlateSolveOverlay(state, a, { grid: true })
+
+		toggleImageOverlays(state, a)
+		expect(state.views[a]?.overlaysHidden).toBeTrue()
+		expect(state.views[b]?.overlaysHidden).toBeUndefined()
+		expect(state.views[a]?.plateSolving).toMatchObject({ overlay: true, grid: true })
+
+		toggleImageOverlays(state, a)
+		expect(state.views[a]?.overlaysHidden).toBeFalse()
+		toggleImageOverlays(state, 'unknown')
+		expect(state.views.unknown).toBeUndefined()
 	})
 })
 

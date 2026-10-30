@@ -22,8 +22,8 @@ import { CameraSettings, ExposureSection, formatSeconds } from './ExposureSettin
 // Contextual panel sections of Camera Acquisition, the camera operation of the Images camera tabs: the exposure, the acquisition mode with its start and stop commands, the state of the running or last capture, the
 // less frequent camera settings, the output with a server directory chooser, and the latest frame, whose own state
 // and file state are shown apart from the outcome of the capture that took it. The exposure and camera settings are
-// the physical camera's, shared with its Auto Focus, and the rest of the form is its Camera Acquisition form, both
-// kept in the profile; the capture it starts is the server's, run on the camera the panel targets when it starts, and
+// the physical camera's, whose camera settings its other operations share, and the rest of the form is its Camera
+// Acquisition form, both kept in the profile; the capture it starts is the server's, run on the camera the panel targets when it starts, and
 // shown here from the server state whichever tab started it. Controls that would change a running capture are
 // disabled; a control the camera does not support is not shown, and the values sent are fitted to the camera's
 // reported capabilities. Every capture snoops the devices of its target into its frame headers.

@@ -140,10 +140,10 @@ export interface SkyFramingSettings {
 	equipmentRotation?: number
 }
 
-// Exposure and camera settings of one physical camera, shared by every operation that takes its frames (Camera
-// Acquisition, Auto Focus); each operation fits them to the camera's capabilities when it starts and keeps that
-// snapshot while it runs, so editing them never changes a running operation. Exposure time in seconds; subframe in
-// pixels of the unbinned sensor.
+// Exposure and camera settings of one physical camera, edited in Camera Acquisition. The other operations that take
+// its frames share the camera settings, with an exposure time of their own or none; each operation fits them to the
+// camera's capabilities when it starts and keeps that snapshot while it runs, so editing them never changes a running
+// operation. Exposure time in seconds; subframe in pixels of the unbinned sensor.
 export type CameraExposureSettings = Pick<CaptureRequest, 'exposureTime' | 'gain' | 'offset' | 'binX' | 'binY' | 'subframe' | 'x' | 'y' | 'width' | 'height' | 'frameFormat'>
 
 // Exposure and camera settings of a camera that has none yet: a 1 s exposure at the driver's defaults, unbinned, on
@@ -188,9 +188,11 @@ export interface CameraIdentity {
 }
 
 // Auto Focus form of one physical camera: the routine the next session starts with. The frames are taken with the
-// exposure and camera settings of the camera and measured with the star detection request of the profile, which this
-// form never holds. Durations are in seconds, positions in focuser steps.
+// camera settings of the camera and measured with the star detection request of the profile, which this form never
+// holds. Durations are in seconds, positions in focuser steps.
 export interface AutoFocusSettings {
+	// Exposure of each frame, in seconds; > 0.
+	exposureTime: number
 	// Curve fitting that places the best focus.
 	fittingMode: AutoFocusRequest['fittingMode']
 	// Positions sampled on each side of the start, >= 1.
@@ -209,8 +211,9 @@ export interface AutoFocusSettings {
 	restoreOnStop: boolean
 }
 
-// Auto Focus form of a camera that has none yet: a hyperbolic fit over 4 positions on each side.
+// Auto Focus form of a camera that has none yet: 1 s frames and a hyperbolic fit over 4 positions on each side.
 export const DEFAULT_AUTO_FOCUS_SETTINGS: AutoFocusSettings = {
+	exposureTime: 1,
 	fittingMode: 'HYPERBOLIC',
 	initialOffsetSteps: 4,
 	reversed: false,
@@ -221,9 +224,11 @@ export const DEFAULT_AUTO_FOCUS_SETTINGS: AutoFocusSettings = {
 }
 
 // TPPA form of one physical camera: how the next three-point polar alignment moves the mount and solves its frames.
-// The frames are taken with the exposure and camera settings of the camera, which this form never holds. Angles are
-// in degrees and durations in seconds, as edited.
+// The frames are taken with the camera settings of the camera, which this form never holds. Angles are in degrees and
+// durations in seconds, as edited.
 export interface TppaSettings {
+	// Exposure of each frame, in seconds; > 0.
+	exposureTime: number
 	// Direction of the RA motions between the three poses.
 	direction: 'WEST' | 'EAST'
 	// Name of the slew-rate preset of the motions, checked again against the presets the mount announces when a
@@ -247,8 +252,10 @@ export const TPPA_MINIMUM_ROTATION = 6
 // Largest RA rotation of the TPPA form, in degrees: two steps stay within the 30° of total motion the server allows.
 export const TPPA_MAXIMUM_ROTATION = 15
 
-// TPPA form of a camera that has none yet: westward motions of 8° solved by ASTAP around the header pointing.
+// TPPA form of a camera that has none yet: 1 s frames and westward motions of 8° solved by ASTAP around the header
+// pointing.
 export const DEFAULT_TPPA_SETTINGS: TppaSettings = {
+	exposureTime: 1,
 	direction: 'WEST',
 	rotation: 8,
 	settleDelay: 2,

@@ -21,14 +21,15 @@ import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { cameraKey } from './capture'
+import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
 import { startTppa, startTppaRefinement, stopTppa, stopTppaRefinement, TPPA_DIRECTION_LABELS, TPPA_DIRECTIONS, TPPA_STATE_LABELS, tppaBlocker, tppaMountSupport, tppaRequest, tppaRunning, tppaRuntime, tppaSlewRate } from './tppa'
 
 // Contextual panel sections of TPPA, a camera operation of the Images camera tabs: the equipment it uses, the
-// alignment settings (RA direction, slew-rate preset of the mount, rotation between poses, settle and refinement
-// delays, plate solver), the three poses and their geometry, the polar error, and the Start, Refine, Pause, and Stop
-// commands. Frames are taken with the camera's exposure and camera settings, edited only in Camera Acquisition. The
-// camera is the panel's target and the mount the MOUNT of the active equipment setup; a missing or unsuitable mount
+// alignment settings (exposure time, RA direction, slew-rate preset of the mount, rotation between poses, settle and
+// refinement delays, plate solver), the three poses and their geometry, the polar error, and the Start, Refine, Pause,
+// and Stop commands. Frames are taken with the exposure time of this form and the camera's camera settings, edited
+// only in Camera Acquisition. The camera is the panel's target and the mount the MOUNT of the active equipment setup; a missing or unsuitable mount
 // says why. The forms are the camera's, kept in the profile, and stay locked showing the values applied while a
 // session runs; the session is the server's, shown here whichever tab started it, and keeps running when the panel
 // unmounts. Its frames are shown by the latest frame of the camera with the correction guide drawn over them.
@@ -94,7 +95,6 @@ export function TppaSections({ device, availability, mount, settings: identity }
 					<Row label="Mount">
 						<DeviceLink device={mount.device} fallback="Not assigned" />
 					</Row>
-					<Row label="Exposure">{`${exposure.exposureTime} s`}</Row>
 				</dl>
 				{!running && mountAvailability.status !== 'ready' && <p className="m-0 text-xs leading-4 text-ink-300">{mountAvailability.message}</p>}
 				{!running && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') && (
@@ -102,9 +102,10 @@ export function TppaSections({ device, availability, mount, settings: identity }
 						Equipment Setup
 					</Button>
 				)}
-				<p className="m-0 text-xs leading-4 text-ink-300">Frames are LIGHT, taken with the exposure and camera settings of Camera Acquisition, and shown as the latest frame of the camera; they are kept in memory only.</p>
+				<p className="m-0 text-xs leading-4 text-ink-300">Frames are LIGHT, taken with the exposure time of the Alignment Settings and the camera settings of Camera Acquisition, and shown as the latest frame of the camera; they are kept in memory only.</p>
 			</CollapsibleSection>
 			<CollapsibleSection id="images.tppa.alignment-settings" title="Alignment Settings">
+				<ExposureTimeInput value={shown.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
 				<SegmentedControl label="RA Direction" options={TPPA_DIRECTIONS} value={shown.direction} format={(direction) => TPPA_DIRECTION_LABELS[direction]} disabled={locked} onChange={(direction) => update({ direction })} />
 				{slewRates.length > 0 ? (
 					<Select label="Slew Rate" options={slewRates.map((rate) => rate.name)} value={slewRate ?? slewRates[0].name} format={(name) => slewRates.find((rate) => rate.name === name)?.label.trim() || name} disabled={locked} onChange={(name) => update({ slewRate: name })} />
@@ -159,7 +160,7 @@ export function TppaSections({ device, availability, mount, settings: identity }
 
 // The form values a running session applied, as the form shows them (the rotation in degrees).
 function appliedSettings({ request }: TppaSessionSummary): TppaSettings {
-	return { direction: request.direction, slewRate: request.slewRate, rotation: toDeg(request.rotation), settleDelay: request.settleDelay, refinementDelay: request.refinementDelay, stopTracking: request.stopTracking, solver: solverOf(request.solving) }
+	return { exposureTime: request.capture.exposureTime, direction: request.direction, slewRate: request.slewRate, rotation: toDeg(request.rotation), settleDelay: request.settleDelay, refinementDelay: request.refinementDelay, stopTracking: request.stopTracking, solver: solverOf(request.solving) }
 }
 
 // The plate solver fields the TPPA form keeps from a request.

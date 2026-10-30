@@ -691,6 +691,20 @@ describe('camera forms', () => {
 		expect(load(invalid).profiles[0].settings.cameras).toEqual({ c: { 'cam-main': { tppa: DEFAULT_TPPA_SETTINGS } } })
 	})
 
+	test('Auto Focus and TPPA forms saved without an exposure time keep the one of the camera they used', () => {
+		const stores = newStores()
+		const { exposureTime: _autoFocus, ...autoFocus } = DEFAULT_AUTO_FOCUS_SETTINGS
+		const { exposureTime: _tppa, ...tppa } = DEFAULT_TPPA_SETTINGS
+		const cameras = { c: { 'cam-main': { exposure: { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 30 }, autoFocus, tppa }, 'cam-guide': { autoFocus: { ...autoFocus, exposureTime: 4 }, tppa: { ...tppa, exposureTime: 6 } } } }
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 15, profiles: [{ id: 'a', name: 'A', settings: { cameras } }] }))
+		const settings = load(stores).profiles[0].settings
+
+		expect(autoFocusSettings(settings, MAIN).exposureTime).toBe(30)
+		expect(tppaSettings(settings, MAIN).exposureTime).toBe(30)
+		expect(autoFocusSettings(settings, GUIDE).exposureTime).toBe(4)
+		expect(tppaSettings(settings, GUIDE).exposureTime).toBe(6)
+	})
+
 	test('the DARV form is kept per camera, persisted, restored with defaults for invalid fields, and a version 5 document keeps its forms', async () => {
 		const stores = newStores()
 		const state = load(stores)

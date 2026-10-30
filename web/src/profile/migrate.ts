@@ -120,8 +120,8 @@ function normalizeCamera(value: unknown): CameraSettings | undefined {
 	if (!isRecord(value)) return undefined
 	const exposure = normalizeExposure(value.exposure)
 	const acquisition = normalizeAcquisition(value.acquisition)
-	const autoFocus = normalizeAutoFocus(value.autoFocus)
-	const tppa = normalizeTppa(value.tppa)
+	const autoFocus = normalizeAutoFocus(value.autoFocus, exposure?.exposureTime)
+	const tppa = normalizeTppa(value.tppa, exposure?.exposureTime)
 	const darv = normalizeDarv(value.darv)
 	const flatWizard = normalizeFlatWizard(value.flatWizard)
 	const guiding = normalizeGuiding(value.guiding)
@@ -251,14 +251,16 @@ const FITTING_MODES: ReadonlySet<string> = new Set<AutoFocusSettings['fittingMod
 
 // Restores a persisted Auto Focus form, filling every invalid field with its default; undefined for anything
 // that is not a record. A step size that is not valid is dropped, so the travel of the focuser sets it again, and the
-// frame settings and star detection of forms saved when the Auto Focus had its own are dropped too.
-function normalizeAutoFocus(value: unknown): AutoFocusSettings | undefined {
+// frame settings and star detection of forms saved when the Auto Focus had its own are dropped too. A form saved
+// before it held an exposure time keeps exposureTime, the one in seconds of the camera it was taken with.
+function normalizeAutoFocus(value: unknown, exposureTime = DEFAULT_AUTO_FOCUS_SETTINGS.exposureTime): AutoFocusSettings | undefined {
 	if (!isRecord(value)) return undefined
 
 	const defaults = DEFAULT_AUTO_FOCUS_SETTINGS
 	const stepSize = numberAtLeast(value.stepSize, 1, Number.NaN, true)
 
 	return {
+		exposureTime: numberAtLeast(value.exposureTime, Number.MIN_VALUE, exposureTime),
 		fittingMode: typeof value.fittingMode === 'string' && FITTING_MODES.has(value.fittingMode) ? (value.fittingMode as AutoFocusSettings['fittingMode']) : defaults.fittingMode,
 		initialOffsetSteps: numberAtLeast(value.initialOffsetSteps, 1, defaults.initialOffsetSteps, true),
 		...(Number.isFinite(stepSize) && { stepSize }),
@@ -275,8 +277,9 @@ function normalizeAutoFocus(value: unknown): AutoFocusSettings | undefined {
 const PLATE_SOLVERS: ReadonlySet<string> = new Set<TppaSettings['solver']['provider']>(['astap', 'astrometryLocal', 'nova'])
 
 // Restores a persisted TPPA form, filling every invalid field with its default; undefined for anything that is not a
-// record. A slew rate that is not a non-empty name and a downsampling that is not a positive integer are dropped.
-function normalizeTppa(value: unknown): TppaSettings | undefined {
+// record. A slew rate that is not a non-empty name and a downsampling that is not a positive integer are dropped. A
+// form saved before it held an exposure time keeps exposureTime, the one in seconds of the camera it was taken with.
+function normalizeTppa(value: unknown, exposureTime = DEFAULT_TPPA_SETTINGS.exposureTime): TppaSettings | undefined {
 	if (!isRecord(value)) return undefined
 
 	const defaults = DEFAULT_TPPA_SETTINGS
@@ -285,6 +288,7 @@ function normalizeTppa(value: unknown): TppaSettings | undefined {
 	const downsample = numberAtLeast(solver.downsample, 1, Number.NaN, true)
 
 	return {
+		exposureTime: numberAtLeast(value.exposureTime, Number.MIN_VALUE, exposureTime),
 		direction: value.direction === 'EAST' ? 'EAST' : 'WEST',
 		...(typeof value.slewRate === 'string' && value.slewRate && { slewRate: value.slewRate }),
 		rotation,

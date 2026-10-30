@@ -71,11 +71,11 @@ function fakeFetch(handler: (url: string, init?: RequestInit) => Response | Prom
 	return { request, requests }
 }
 
-test('the request sends the rotation in radians and the camera exposure, and the slew rate only when announced', () => {
-	const request = tppaRequest({ ...DEFAULT_TPPA_SETTINGS, rotation: 10, solver: { provider: 'nova', strategy: 'blind', downsample: 2 } }, DEFAULT_EXPOSURE_SETTINGS, MOUNT, 'SPEED_4')
+test('the request sends the rotation in radians and the exposure time of the form, and the slew rate only when announced', () => {
+	const request = tppaRequest({ ...DEFAULT_TPPA_SETTINGS, exposureTime: 7, rotation: 10, solver: { provider: 'nova', strategy: 'blind', downsample: 2 } }, DEFAULT_EXPOSURE_SETTINGS, MOUNT, 'SPEED_4')
 	expect(request.rotation).toBeCloseTo(deg(10), 12)
 	expect(request.solving).toEqual({ provider: 'nova', strategy: 'blind', downsample: 2 })
-	expect(request.capture.exposureTime).toBe(DEFAULT_EXPOSURE_SETTINGS.exposureTime)
+	expect(request.capture.exposureTime).toBe(7)
 
 	expect(tppaSlewRate({ slewRate: 'SPEED_4' }, mountState())).toBe('SPEED_4')
 	expect(tppaSlewRate({ slewRate: 'WARP' }, mountState())).toBe('SPEED_1')

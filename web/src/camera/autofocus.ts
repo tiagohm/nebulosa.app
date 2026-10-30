@@ -109,10 +109,11 @@ export function defaultStepSize(min: number, max: number) {
 	return Math.max(1, Math.round((max - min) / 200))
 }
 
-// Builds the start request of the Auto Focus form of a camera for a focuser. The frames take the exposure and camera
-// settings (gain, offset, binning, subframe, readout mode) of the camera, fitted to its capabilities as a capture is,
-// and snoop the mount, filter wheel, and rotator of snoop besides the focuser; they are measured with detection, the
-// star detection request of the profile. stepSize is the step size shown, in steps.
+// Builds the start request of the Auto Focus form of a camera for a focuser. The frames take the exposure time of the
+// form and the camera settings (gain, offset, binning, subframe, readout mode) of exposure, whose own exposure time is
+// never sent, fitted to the camera's capabilities as a capture is, and snoop the mount, filter wheel, and rotator of
+// snoop besides the focuser; they are measured with detection, the star detection request of the profile. stepSize is
+// the step size shown, in steps.
 export function autoFocusRequest(
 	settings: Readonly<AutoFocusSettings>,
 	detection: Readonly<StarDetectionRequest>,
@@ -126,7 +127,7 @@ export function autoFocusRequest(
 
 	return {
 		focuser,
-		capture: fitExposure(exposure, capabilities),
+		capture: fitExposure({ ...exposure, exposureTime: settings.exposureTime }, capabilities),
 		snoop: { mount: snoop.mount, wheel: snoop.wheel, rotator: snoop.rotator },
 		// The built-in detector always measures with a grown aperture, the profile's or the default one.
 		detection: { acceptance: { ...acceptance }, detector: detector.provider === 'builtin' ? { ...detector, maximumRadius: detector.maximumRadius ?? DEFAULT_APERTURE_RADIUS } : { ...detector } },

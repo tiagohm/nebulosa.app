@@ -3,11 +3,11 @@ import { useState } from 'react'
 import { NumberInput } from '../ui/NumberInput'
 import { RadioGroup } from '../ui/RadioGroup'
 
-// Exposure time field of the Camera Capture panel: a whole number of the unit chosen below it (minutes,
-// seconds, milliseconds, or microseconds), committed to the form in seconds. The unit opens as the largest
-// in which the exposure is a whole number, and a chosen unit in which the exposure is not one gives way to
-// that unit, so the field always shows the exposure that is sent. Choosing another unit keeps the duration,
-// rounded to a whole number of the new unit and never below one.
+// Exposure time field of the camera operations that set one (Camera Acquisition, Auto Focus, TPPA, Guiding), each
+// with its own value: a whole number of the unit chosen below it (minutes, seconds, milliseconds, or microseconds),
+// committed to the form in seconds. The unit opens as the largest in which the exposure is a whole number, and a
+// chosen unit in which the exposure is not one gives way to that unit, so the field always shows the exposure that is
+// sent. Choosing another unit keeps the duration, rounded to a whole number of the new unit and never below one.
 
 // Unit of the exposure time field.
 export type ExposureUnit = 'm' | 's' | 'ms' | 'μs'
@@ -44,7 +44,7 @@ export interface ExposureTimeInputProps {
 	readonly value: number
 	// Called with every exposure time entered or converted, in seconds.
 	readonly onChange: (value: number) => void
-	// Exposure range the camera reports, in seconds, when known.
+	// Exposure range accepted, in seconds, when known: the one the camera reports, or a narrower one of the operation.
 	readonly exposure?: CameraCapabilities['exposure']
 	readonly disabled?: boolean
 }

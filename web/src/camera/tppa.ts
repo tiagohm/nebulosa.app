@@ -88,14 +88,15 @@ export function tppaSlewRate(settings: Pick<TppaSettings, 'slewRate'>, state: Pi
 	return announced(settings.slewRate) ? settings.slewRate : announced(state?.slewRate) ? state?.slewRate : undefined
 }
 
-// Builds the start request of the TPPA form of a camera for a mount and slew rate. The frames take the exposure and
-// camera settings of the camera, fitted to its capabilities as a capture is; the rotation is sent in radians.
+// Builds the start request of the TPPA form of a camera for a mount and slew rate. The frames take the exposure time
+// of the form and the camera settings of exposure, whose own exposure time is never sent, fitted to the camera's
+// capabilities as a capture is; the rotation is sent in radians.
 export function tppaRequest(settings: Readonly<TppaSettings>, exposure: Readonly<CameraExposureSettings>, mount: { readonly connectionId: string; readonly deviceId: string }, slewRate: string, capabilities?: CameraCapabilities): Omit<TppaRequest, 'token'> {
 	const { provider, strategy, downsample } = settings.solver
 
 	return {
 		mount,
-		capture: fitExposure(exposure, capabilities),
+		capture: fitExposure({ ...exposure, exposureTime: settings.exposureTime }, capabilities),
 		solving: { provider, strategy, ...(downsample !== undefined && { downsample }) },
 		direction: settings.direction,
 		slewRate,

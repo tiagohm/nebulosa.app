@@ -9,10 +9,10 @@ import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { ExposureTimeInput } from './ExposureTimeInput'
 
-// Controls of the exposure and camera settings of a physical camera, the one block Camera Acquisition and Auto Focus
-// share: the exposure time with the range the camera supports, and the less frequent camera settings (gain, offset,
-// binning, readout mode, subframe). Editing them changes the next operation of either kind, never a running one,
-// which keeps the snapshot it started with. A control the camera does not report is not shown.
+// Controls of the exposure and camera settings of a physical camera, edited in Camera Acquisition: the exposure time
+// with the range the camera supports, and the less frequent camera settings (gain, offset, binning, readout mode,
+// subframe) the other camera operations share. Editing them changes the next operation, never a running one, which
+// keeps the snapshot it started with. A control the camera does not report is not shown.
 
 // Formats a duration in seconds without float noise, such as 0.0001 or 3600.
 export function formatSeconds(value: number) {

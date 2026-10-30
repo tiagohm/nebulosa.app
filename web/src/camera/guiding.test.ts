@@ -11,6 +11,7 @@ import {
 	guidingCalibrationBlocker,
 	guidingCalibrationPulse,
 	guidingDitherRequest,
+	guidingExposureRange,
 	guidingRequest,
 	guidingRunning,
 	type GuidingRuntime,
@@ -96,6 +97,12 @@ describe('requests', () => {
 		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, OUTPUT, {}, astap, undefined).detection).toEqual(astap)
 		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, OUTPUT, {}, DEFAULT_BUILTIN_SETTINGS, undefined).detection).toEqual(DEFAULT_BUILTIN_SETTINGS)
 		expect(guidingBlocker(READY, READY, DEFAULT_GUIDING_SETTINGS, true)).toBe('ASTAP is not configured.')
+	})
+
+	test('the guide exposure range is that of the form, within the range the camera reports', () => {
+		expect(guidingExposureRange(undefined)).toEqual({ min: 0.01, max: 60 })
+		expect(guidingExposureRange({ min: 0, max: 3600 })).toEqual({ min: 0.01, max: 60 })
+		expect(guidingExposureRange({ min: 0.1, max: 30 })).toEqual({ min: 0.1, max: 30 })
 	})
 
 	test('the start snoops the devices it is given', () => {

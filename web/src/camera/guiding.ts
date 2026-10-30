@@ -4,7 +4,7 @@ import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit, responseError } from '../http'
-import { type CameraExposureSettings, GUIDING_MAXIMUM_PULSE, GUIDING_MINIMUM_PULSE, type GuidingSettings } from '../profile/schema'
+import { type CameraExposureSettings, GUIDING_MAXIMUM_EXPOSURE, GUIDING_MAXIMUM_PULSE, GUIDING_MINIMUM_EXPOSURE, GUIDING_MINIMUM_PULSE, type GuidingSettings } from '../profile/schema'
 import type { TelescopeOptics } from '../sky/framing'
 import { cameraKey, fitExposure } from './capture'
 
@@ -78,6 +78,12 @@ export function guidingRunning(session: Pick<GuidingSessionSummary, 'active'> | 
 // Returns the session of a camera that a session id names, among the latest sessions known.
 function sessionById(state: GuidingRuntime, sessionId: string): GuidingSessionSummary | undefined {
 	return Object.values(state.sessions).find((session) => session.sessionId === sessionId)
+}
+
+// Returns the range of the guide exposure of a camera, in seconds: that of the guiding form, within the range the
+// camera reports (exposure, in seconds, when known).
+export function guidingExposureRange(exposure: CameraCapabilities['exposure'] | undefined): NonNullable<CameraCapabilities['exposure']> {
+	return { min: Math.max(GUIDING_MINIMUM_EXPOSURE, exposure?.min ?? 0), max: Math.min(GUIDING_MAXIMUM_EXPOSURE, exposure?.max ?? GUIDING_MAXIMUM_EXPOSURE) }
 }
 
 // Builds the start request of the guiding form of a camera: the guide exposures in milliseconds, the camera settings

@@ -21,14 +21,15 @@ import { Select } from '../ui/Select'
 import { useNow } from '../useNow'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusBlocker, autoFocusRequest, autoFocusRunning, autoFocusRuntime, defaultStepSize, FITTING_MODE_LABELS, FITTING_MODES, startAutoFocus, stopAutoFocus, VERIFICATION_LABELS } from './autofocus'
 import { cameraKey } from './capture'
+import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
 
 // Contextual panel sections of Auto Focus, a camera operation of the Images camera tabs: the equipment it uses, each
 // device linked to Equipment Control, the routine the server's
-// runner follows (fitting, step size, positions per side, and the advanced settings collapsed), and the state of the
-// running or last session with its Run and Stop commands. Frames are taken with the camera's exposure and camera
-// settings, edited only in Camera Acquisition, and measured with the profile's star detection request, edited in
-// Images → Star Detection. The camera is the panel's target and the focuser the one
+// runner follows (exposure time, fitting, step size, positions per side, and the advanced settings collapsed), and the
+// state of the running or last session with its Run and Stop commands. Frames are taken with the exposure time of this
+// form and the camera's camera settings, edited only in Camera Acquisition, and measured with the profile's star
+// detection request, edited in Images → Star Detection. The camera is the panel's target and the focuser the one
 // associated with it; a camera without a focuser says how to associate one. The filter wheel, when assigned, is
 // shown and never moved. The forms are the camera's, kept in the profile; the session is the server's, shown here
 // from the server state whichever tab started it, and keeps running when the panel unmounts. Its frames are shown by
@@ -111,10 +112,11 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 			</CollapsibleSection>
 			<CollapsibleSection id="images.auto-focus.focus-routine" title="Focus Routine">
 				{wheel.device && <p className="m-0 text-xs leading-4 text-ink-300">Filter: {filter ?? 'unknown'} — the Auto Focus measures through the current filter and never changes it.</p>}
-				<p className="m-0 text-xs leading-4 text-ink-300">Frames are LIGHT, taken with the exposure and camera settings of Camera Acquisition ({exposure.exposureTime} s).</p>
+				<p className="m-0 text-xs leading-4 text-ink-300">Frames are LIGHT, taken with the exposure time below and the camera settings of Camera Acquisition.</p>
 				<p className="m-0 text-xs leading-4 text-ink-300">
 					Each frame is measured by the median HFD of its accepted stars (Multi-Star) with the Star Detection settings (<span className="text-accent">{PROVIDER_LABELS[detection.detector.provider]}</span> detector) and shown as the latest frame of the camera; frames are kept in memory only.
 				</p>
+				<ExposureTimeInput value={settings.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
 				<Select label="Curve Fitting" options={FITTING_MODES} value={settings.fittingMode} format={(mode) => FITTING_MODE_LABELS[mode]} disabled={locked} onChange={(fittingMode) => update({ fittingMode })} />
 				<NumberInput label="Step Size" value={stepSize} min={1} max={focuserState ? Math.max(1, focuserState.position.max - focuserState.position.min) : undefined} suffix="steps" disabled={locked} onChange={(value) => update({ stepSize: value })} />
 				<NumberInput label="Positions per Side" value={settings.initialOffsetSteps} min={1} max={50} disabled={locked} onChange={(initialOffsetSteps) => update({ initialOffsetSteps })} />

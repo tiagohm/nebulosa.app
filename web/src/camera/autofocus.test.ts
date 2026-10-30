@@ -104,11 +104,11 @@ test('a start carries a fresh token and records a refusal; a stop names its sess
 	expect(state.errors[cameraKey('c', 'cam')]).toBeUndefined()
 })
 
-test('the request takes the exposure settings of the camera fitted to it, snoops the setup devices, and always grows the aperture of the built-in detector', () => {
+test('the request takes its exposure time and the camera settings fitted to the camera, snoops the setup devices, and always grows the aperture of the built-in detector', () => {
 	const capabilities = { exposure: { min: 0.001, max: 60 }, gain: { min: 0, max: 100 }, offset: { min: 0, max: 50 }, bin: { x: 2, y: 2 }, subframe: { width: 1000, height: 800 }, frameFormats: [{ name: 'RAW16', label: 'Raw 16' }], transferFormats: ['FITS'] } as unknown as CameraCapabilities
-	const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 120, gain: 300, offset: 20, binX: 4, binY: 4, subframe: true, x: 100, y: 50, width: 400, height: 300, frameFormat: 'RAW16' } as const
+	const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 5, gain: 300, offset: 20, binX: 4, binY: 4, subframe: true, x: 100, y: 50, width: 400, height: 300, frameFormat: 'RAW16' } as const
 	const detection = { ...DEFAULT_STAR_REQUEST, detector: { provider: 'builtin', maxStars: 100, minSNR: 0, searchRegion: 0 } } as const
-	const request = autoFocusRequest(DEFAULT_AUTO_FOCUS_SETTINGS, detection, exposure, FOCUSER, 250, { mount: 'm', focuser: 'f', wheel: 'w', rotator: 'r' }, capabilities)
+	const request = autoFocusRequest({ ...DEFAULT_AUTO_FOCUS_SETTINGS, exposureTime: 120 }, detection, exposure, FOCUSER, 250, { mount: 'm', focuser: 'f', wheel: 'w', rotator: 'r' }, capabilities)
 
 	expect(request.capture).toEqual({ exposureTime: 60, gain: 100, offset: 20, binX: 2, binY: 2, subframe: true, x: 100, y: 50, width: 400, height: 300, frameFormat: 'RAW16' })
 	expect(request.snoop).toEqual({ mount: 'm', wheel: 'w', rotator: 'r' })

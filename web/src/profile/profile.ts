@@ -28,6 +28,8 @@ import {
 	type SkyFramingSettings,
 	type SkyObserverSettings,
 	DEFAULT_TPPA_SETTINGS,
+	DEFAULT_POINTING_MODEL_SETTINGS,
+	type PointingModelSettings,
 	DEFAULT_CAMERA_PLATE_SOLVING,
 	type CameraPlateSolvingSettings,
 	type TppaSettings,
@@ -336,6 +338,16 @@ export function tppaSettings(settings: Pick<ProfileSettings, 'cameras'>, camera:
 // Replaces fields of the TPPA form of a camera in the active profile.
 export function setTppaSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<TppaSettings>) {
 	setCameraForm(state, camera, 'tppa', tppaSettings(activeProfile(state).settings, camera), patch)
+}
+
+// Returns the Pointing Model Builder form of a camera: the one edited last, or the defaults.
+export function pointingModelSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<PointingModelSettings> {
+	return cameraSettings(settings, camera)?.pointingModel ?? DEFAULT_POINTING_MODEL_SETTINGS
+}
+
+// Replaces fields of the Pointing Model Builder form of a camera in the active profile.
+export function setPointingModelSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<PointingModelSettings>) {
+	setCameraForm(state, camera, 'pointingModel', pointingModelSettings(activeProfile(state).settings, camera), patch)
 }
 
 // Returns the DARV form of a camera: the one edited last, or the defaults.

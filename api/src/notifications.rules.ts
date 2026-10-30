@@ -22,7 +22,7 @@ import type { ServerEvent } from './websocket'
 export type NotificationLevel = 'info' | 'success' | 'warning' | 'error'
 
 // Camera tool a notification can open, named as the Images workspace names it.
-export type NotificationCameraTool = 'camera-acquisition' | 'auto-focus' | 'guiding' | 'tppa' | 'darv' | 'flat-wizard'
+export type NotificationCameraTool = 'camera-acquisition' | 'auto-focus' | 'guiding' | 'tppa' | 'pointing-model-builder' | 'darv' | 'flat-wizard'
 
 // Context a notification can open in the UI; opening it never commands a device.
 export type NotificationTarget =
@@ -248,11 +248,12 @@ export class NotificationClassifier {
 	#mountPointing(session: MountPointingSessionSummary): NotificationDraft[] {
 		const { sessionId, operationId, camera, mount, mountName, state, reason, acceptedCount, plannedCount } = session
 		const source = this.#source('mountPointing', camera.connectionId, mount.deviceId, operationId, sessionId)
+		const target = cameraTool(camera.connectionId, camera.deviceId, 'pointing-model-builder')
 
-		if (state === 'blocked') return [{ key: `mountPointing.blocked:${sessionId}`, level: 'error', code: 'mountPointing.blocked', title: 'Mount not confirmed stopped', message: `${mountName} could not be confirmed stopped after its pointing session; check it before using it.`, source }]
+		if (state === 'blocked') return [{ key: `mountPointing.blocked:${sessionId}`, level: 'error', code: 'mountPointing.blocked', title: 'Mount not confirmed stopped', message: `${mountName} could not be confirmed stopped after its pointing session; check it before using it.`, source, target }]
 		if (state === 'paused' && reason !== undefined && reason !== 'aborted' && !this.#quiet(camera.connectionId, reason))
-			return [{ key: `mountPointing.paused:${sessionId}:${operationId}`, level: 'warning', code: 'mountPointing.paused', title: 'Pointing session paused', message: `The pointing session of ${mountName} paused: ${reasonText(reason)}.`, source }]
-		if (state === 'completed') return [{ key: `mountPointing.completed:${sessionId}`, level: 'info', code: 'mountPointing.completed', title: 'Pointing session completed', message: `${acceptedCount} of ${plannedCount} waypoints of ${mountName} were sampled.`, source }]
+			return [{ key: `mountPointing.paused:${sessionId}:${operationId}`, level: 'warning', code: 'mountPointing.paused', title: 'Pointing session paused', message: `The pointing session of ${mountName} paused: ${reasonText(reason)}.`, source, target }]
+		if (state === 'completed') return [{ key: `mountPointing.completed:${sessionId}`, level: 'info', code: 'mountPointing.completed', title: 'Pointing session completed', message: `${acceptedCount} of ${plannedCount} waypoints of ${mountName} were sampled.`, source, target }]
 		return []
 	}
 

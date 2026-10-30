@@ -48,6 +48,10 @@ import {
 	type GuidingDitherMode,
 	type GuidingSettings,
 	DEFAULT_TPPA_SETTINGS,
+	DEFAULT_POINTING_MODEL_SETTINGS,
+	POINTING_MODEL_MAXIMUM_POINTS,
+	POINTING_MODEL_MINIMUM_POINTS,
+	type PointingModelSettings,
 	DEFAULT_CAMERA_PLATE_SOLVING,
 	type CameraPlateSolvingSettings,
 	TPPA_MAXIMUM_ROTATION,
@@ -126,12 +130,24 @@ function normalizeCamera(value: unknown): CameraSettings | undefined {
 	const plateSolving = normalizePlateSolving(value.plateSolving ?? (isRecord(value.tppa) ? value.tppa.solver : undefined))
 	const autoFocus = normalizeAutoFocus(value.autoFocus, exposure?.exposureTime)
 	const tppa = normalizeTppa(value.tppa, exposure?.exposureTime)
+	const pointingModel = normalizePointingModel(value.pointingModel)
 	const darv = normalizeDarv(value.darv)
 	const flatWizard = normalizeFlatWizard(value.flatWizard)
 	const guiding = normalizeGuiding(value.guiding)
 	const display = normalizeDisplaySettings(value.display)
-	if (!exposure && !acquisition && !plateSolving && !autoFocus && !tppa && !darv && !flatWizard && !guiding && !display) return undefined
-	return { ...(exposure && { exposure }), ...(acquisition && { acquisition }), ...(plateSolving && { plateSolving }), ...(autoFocus && { autoFocus }), ...(tppa && { tppa }), ...(darv && { darv }), ...(flatWizard && { flatWizard }), ...(guiding && { guiding }), ...(display && { display }) }
+	if (!exposure && !acquisition && !plateSolving && !autoFocus && !tppa && !pointingModel && !darv && !flatWizard && !guiding && !display) return undefined
+	return {
+		...(exposure && { exposure }),
+		...(acquisition && { acquisition }),
+		...(plateSolving && { plateSolving }),
+		...(autoFocus && { autoFocus }),
+		...(tppa && { tppa }),
+		...(pointingModel && { pointingModel }),
+		...(darv && { darv }),
+		...(flatWizard && { flatWizard }),
+		...(guiding && { guiding }),
+		...(display && { display }),
+	}
 }
 
 // Returns a number within a display range, or the fallback for anything else.
@@ -313,6 +329,24 @@ function normalizeTppa(value: unknown, exposureTime = DEFAULT_TPPA_SETTINGS.expo
 		settleDelay: numberAtLeast(value.settleDelay, 0, defaults.settleDelay),
 		refinementDelay: numberAtLeast(value.refinementDelay, 0, defaults.refinementDelay),
 		// Forms saved before the option existed stop the tracking, its default.
+		stopTracking: value.stopTracking !== false,
+	}
+}
+
+// Restores a persisted Pointing Model Builder form, filling every invalid field with its default; undefined for anything
+// that is not a record.
+function normalizePointingModel(value: unknown): PointingModelSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = DEFAULT_POINTING_MODEL_SETTINGS
+
+	return {
+		exposureTime: numberAtLeast(value.exposureTime, Number.MIN_VALUE, defaults.exposureTime),
+		pattern: value.pattern === 'altAzGrid' ? 'altAzGrid' : 'goldenSpiral',
+		count: Number.isInteger(value.count) ? boundedNumber(value.count, POINTING_MODEL_MINIMUM_POINTS, POINTING_MODEL_MAXIMUM_POINTS, defaults.count) : defaults.count,
+		minimumAltitude: boundedNumber(value.minimumAltitude, 0, 85, defaults.minimumAltitude),
+		meridianAvoidance: boundedNumber(value.meridianAvoidance, 0, 90, defaults.meridianAvoidance),
+		settleDelay: numberAtLeast(value.settleDelay, 0, defaults.settleDelay),
 		stopTracking: value.stopTracking !== false,
 	}
 }

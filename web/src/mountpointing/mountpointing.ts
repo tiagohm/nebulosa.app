@@ -1,6 +1,14 @@
-import type { PointingFitModelRequest, PointingFitState, PointingModelDetail, PointingModelEvent, PointingModelExport, PointingModelPatch, PointingModelsSnapshot, PointingModelSummary, ServerEvent, UnavailablePointingModel } from 'api'
+// oxfmt-ignore
+import type { CameraCapabilities, MountPointingRequest, MountPointingSessionSummary, MountPointingSnapshot, MountPointingState, MountPointingStep, MountState, PointingFitModelRequest, PointingFitState, PointingModelDetail, PointingModelEvent, PointingModelExport, PointingModelPatch, PointingModelsSnapshot, PointingModelSummary, ServerEvent, UnavailablePointingModel } from 'api'
+import { nanoid } from 'nanoid'
+import { DEG2RAD } from 'nebulosa/src/core/constants'
+import type { PointingPlan } from 'nebulosa/src/observation/mount/pointing.plan'
 import { proxy } from 'valtio'
-import { jsonInit, responseError } from '../http'
+import { cameraKey, fitExposure } from '../camera/capture'
+import type { RoleAvailability } from '../equipment/availability'
+import type { CameraRole } from '../equipment/roles'
+import { deviceUrl, jsonInit, responseError } from '../http'
+import type { CameraExposureSettings, CameraPlateSolvingSettings, PointingModelSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 
 // Mount pointing models as this tab knows them. The server owns every model, fit, and activation, so this store only
@@ -20,21 +28,102 @@ export interface MountPointingRuntime {
 	fits: Record<string, PointingFitState>
 	// Complete record of the models opened, by model id.
 	details: Record<string, PointingModelDetail>
+	// Latest session of each camera, by camera key (cameraKey).
+	sessions: Record<string, MountPointingSessionSummary>
+	// Plan a camera previewed last, by camera key.
+	plans: Record<string, PointingPlan>
 	// Model the Tools page shows, which Images can hand over.
 	selectedModelId?: string
 	// Sequence of the latest event applied.
 	sequence: number
-	// Models with a command of this tab waiting for the server.
+	// Models and cameras with a command of this tab waiting for the server.
 	pending: Record<string, boolean>
-	// Why this tab's last command on a model failed, by model id; cleared by its next command.
+	// Why this tab's last command on a model or camera failed, by its key; cleared by its next command.
 	errors: Record<string, string>
 }
 
 // Mount pointing state of the tab.
-export const mountPointingRuntime = proxy<MountPointingRuntime>({ models: {}, unavailable: [], fits: {}, details: {}, sequence: 0, pending: {}, errors: {} })
+export const mountPointingRuntime = proxy<MountPointingRuntime>({ models: {}, unavailable: [], fits: {}, details: {}, sessions: {}, plans: {}, sequence: 0, pending: {}, errors: {} })
 
 // Refreshes of the models, ordered against the events applied meanwhile.
 const refreshes = new SnapshotRefreshes()
+
+// Refreshes of the sessions, ordered against the events applied meanwhile.
+const sessionRefreshes = new SnapshotRefreshes()
+
+// Label of each session state.
+export const MOUNT_POINTING_STATE_LABELS: Readonly<Record<MountPointingState, string>> = {
+	preparing: 'Preparing',
+	running: 'Running',
+	pausing: 'Pausing…',
+	paused: 'Paused',
+	stopping: 'Stopping…',
+	blocked: 'Mount Not Confirmed Stopped',
+	completed: 'Completed',
+	stopped: 'Stopped',
+}
+
+// Label of each step of a waypoint.
+export const MOUNT_POINTING_STEP_LABELS: Readonly<Record<MountPointingStep, string>> = { checking: 'Checking', slewing: 'Slewing', settling: 'Settling', exposing: 'Exposing', solving: 'Solving' }
+
+// Returns why the mount can never be sampled, from the state the server reports, or undefined when it can (or its state
+// is not known yet): an alt-az mount, no GoTo, or no abort. A mount that does not report its type asks the operator.
+export function mountPointingMountSupport(state: Pick<MountState, 'mountType' | 'canGoTo' | 'canAbort'> | undefined): string | undefined {
+	if (!state) return undefined
+	if (state.mountType === 'ALTAZ') return 'The mount is not equatorial; alt-az mounts are not supported.'
+	if (!state.canGoTo) return 'The mount cannot go to a target.'
+	if (!state.canAbort) return 'The mount cannot abort a motion, which a session needs to stop safely.'
+	return undefined
+}
+
+// Returns why no session can start now, or undefined when one can, from the availability of the camera and of the setup's
+// mount (unsupported per mountPointingMountSupport), the role of the camera, the mount's reported state (undefined while
+// unknown), whether the plate solver is configured, and whether the geometry of the mount is known or confirmed. A mount
+// that is not tracking is accepted when it can switch tracking, which the server starts. The server checks again.
+export function mountPointingBlocker(camera: RoleAvailability, mount: RoleAvailability, role: CameraRole | undefined, state: MountState | undefined, solverConfigured: boolean, equatorial: boolean): string | undefined {
+	if (role !== 'MAIN_CAMERA') return 'Assign this camera as the Main Camera, so the model belongs to one optical train.'
+	if (camera.status !== 'ready') return camera.message
+	if (mount.status !== 'ready') return mount.message
+	if (!state) return 'The mount state is not known yet.'
+	if (state.site.latitude === 0 && state.site.longitude === 0) return 'The mount reports no site; send it from Equipment Control.'
+	if (state.parked || state.parking) return 'The mount is parked.'
+	if (!state.tracking && !state.canTracking) return 'The mount is not tracking and cannot start tracking.'
+	if (!solverConfigured) return 'The plate solver is not configured.'
+	if (!equatorial) return 'The mount does not report its type; confirm that it is equatorial.'
+	return undefined
+}
+
+// Returns the sky of a form, with angles in radians.
+function planRequest({ pattern, count, minimumAltitude, meridianAvoidance }: Readonly<PointingModelSettings>): MountPointingRequest['plan'] {
+	return { pattern, count, minimumAltitude: minimumAltitude * DEG2RAD, meridianAvoidance: meridianAvoidance * DEG2RAD }
+}
+
+// Builds the start request of the Pointing Model Builder form of a camera. The frames take the exposure time of the form
+// and the camera settings of exposure, whose own exposure time is never sent, fitted to the camera's capabilities, and
+// are solved with the plate solving settings of the camera.
+export function mountPointingRequest(
+	settings: Readonly<PointingModelSettings>,
+	exposure: Readonly<CameraExposureSettings>,
+	solving: Readonly<CameraPlateSolvingSettings>,
+	mount: { readonly connectionId: string; readonly deviceId: string },
+	equatorialConfirmed: boolean,
+	capabilities?: CameraCapabilities,
+): Omit<MountPointingRequest, 'token'> {
+	return {
+		mount,
+		capture: fitExposure({ ...exposure, exposureTime: settings.exposureTime }, capabilities),
+		solving: { ...solving },
+		plan: planRequest(settings),
+		settleDelay: settings.settleDelay,
+		stopTracking: settings.stopTracking,
+		equatorialConfirmed,
+	}
+}
+
+// Returns whether a session has not ended, so its camera cannot start another.
+export function mountPointingRunning(session: Pick<MountPointingSessionSummary, 'endedAt'> | undefined): boolean {
+	return session !== undefined && session.endedAt === undefined
+}
 
 // URL of a model, or of one of its routes when action names it.
 function modelUrl(modelId: string, action?: string) {
@@ -87,15 +176,55 @@ function applyModelEvent(state: MountPointingRuntime, event: PointingModelEvent,
 	if (known && known.revision !== model.revision) void loadPointingModel(state, model.modelId, request)
 }
 
+// Applies a session event. A session older than the one known for its camera, or an earlier revision of the same one,
+// never replaces it.
+function applySessionEvent(state: MountPointingRuntime, session: MountPointingSessionSummary) {
+	const key = cameraKey(session.camera.connectionId, session.camera.deviceId)
+	const known = state.sessions[key]
+	if (known && known.sessionId !== session.sessionId && known.startedAt > session.startedAt) return
+	if (known?.sessionId === session.sessionId && known.revision >= session.revision) return
+	sessionRefreshes.updated(key)
+	state.sessions[key] = session
+}
+
 // Applies a mount pointing event; any other event is ignored.
 export function handleMountPointingEvent(state: MountPointingRuntime, event: ServerEvent, request: typeof fetch = fetch) {
-	if (event.type === 'mountPointing:modelUpdated' || event.type === 'mountPointing:modelRemoved') applyModelEvent(state, event, request)
+	if (event.type === 'mountPointing:updated') applySessionEvent(state, event.session)
+	else if (event.type === 'mountPointing:modelUpdated' || event.type === 'mountPointing:modelRemoved') applyModelEvent(state, event, request)
 }
 
 // Replaces the models with the server's snapshot, which may have changed while the socket was closed, and fetches the
 // complete records already open. A model an event changed during the request is left as the event set it, and a response
 // is dropped when another refresh started meanwhile.
 export async function refreshMountPointing(state: MountPointingRuntime, request: typeof fetch = fetch) {
+	await Promise.all([refreshModels(state, request), refreshSessions(state, request)])
+}
+
+// Replaces the sessions with the server's snapshot, leaving what an event changed during the request.
+async function refreshSessions(state: MountPointingRuntime, request: typeof fetch) {
+	const token = sessionRefreshes.start()
+
+	try {
+		const response = await request('/api/mount-pointing/sessions')
+		if (!response.ok || !sessionRefreshes.current(token)) return
+		const { sessions } = (await response.json()) as MountPointingSnapshot
+		if (!sessionRefreshes.current(token)) return
+
+		for (const key of Object.keys(state.sessions)) if (!sessionRefreshes.changed(key)) delete state.sessions[key]
+
+		for (const session of sessions) {
+			const key = cameraKey(session.camera.connectionId, session.camera.deviceId)
+			if (!sessionRefreshes.changed(key)) state.sessions[key] = session
+		}
+	} catch {
+		// The server is unreachable; the next socket open refreshes the sessions.
+	} finally {
+		sessionRefreshes.end(token)
+	}
+}
+
+// Replaces the models with the server's snapshot.
+async function refreshModels(state: MountPointingRuntime, request: typeof fetch) {
 	const token = refreshes.start()
 
 	try {
@@ -138,6 +267,44 @@ async function command(state: MountPointingRuntime, modelId: string, url: string
 		await refreshMountPointing(state, request)
 	} finally {
 		delete state.pending[modelId]
+	}
+}
+
+// Starts a pointing session with a camera; its progress arrives as events.
+export function startMountPointing(state: MountPointingRuntime, connectionId: string, deviceId: string, body: Omit<MountPointingRequest, 'token'>, request: typeof fetch = fetch) {
+	return command(state, cameraKey(connectionId, deviceId), deviceUrl(connectionId, 'camera', deviceId, 'mount-pointing'), jsonInit('POST', { ...body, token: nanoid() } satisfies MountPointingRequest), request)
+}
+
+// URL of a route of a session.
+function sessionUrl(sessionId: string, action: string) {
+	return `/api/mount-pointing/sessions/${encodeURIComponent(sessionId)}/${action}`
+}
+
+// Pauses a session, releasing its devices.
+export function pauseMountPointing(state: MountPointingRuntime, { sessionId, camera }: Pick<MountPointingSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+	return command(state, cameraKey(camera.connectionId, camera.deviceId), sessionUrl(sessionId, 'pause'), jsonInit('POST'), request)
+}
+
+// Resumes a paused session in a new operation; the token keeps a retried request from resuming it twice.
+export function resumeMountPointing(state: MountPointingRuntime, { sessionId, camera }: Pick<MountPointingSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+	return command(state, cameraKey(camera.connectionId, camera.deviceId), sessionUrl(sessionId, 'resume'), jsonInit('POST', { token: nanoid() }), request)
+}
+
+// Ends a session, keeping its samples.
+export function stopMountPointing(state: MountPointingRuntime, { sessionId, camera }: Pick<MountPointingSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+	return command(state, cameraKey(camera.connectionId, camera.deviceId), sessionUrl(sessionId, 'stop'), jsonInit('POST'), request)
+}
+
+// Asks the server for the plan a form would sample, which commands nothing, and keeps it for its camera.
+export async function previewMountPointingPlan(state: MountPointingRuntime, key: string, mount: { readonly connectionId: string; readonly deviceId: string }, settings: Readonly<PointingModelSettings>, request: typeof fetch = fetch) {
+	delete state.errors[key]
+
+	try {
+		const response = await request('/api/mount-pointing/plan', jsonInit('POST', { mount, plan: planRequest(settings) }))
+		if (response.ok) state.plans[key] = (await response.json()) as PointingPlan
+		else state.errors[key] = await responseError(response)
+	} catch {
+		state.errors[key] = 'Unable to reach the server.'
 	}
 }
 

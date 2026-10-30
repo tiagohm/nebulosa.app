@@ -22,7 +22,8 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // and version 14 the observatory code of the solar-system searches of Images → Annotation (annotation), removed since:
 // the searches use the site of the image header, and a stored code is ignored when read. Version 15 adds the appearance
 // of the astrometric aids of solved images (imageAstrometry). Version 16 moves the plate solver of the TPPA form
-// (tppa.solver) to the plate solving settings each camera shares between its operations (plateSolving).
+// (tppa.solver) to the plate solving settings each camera shares between its operations (plateSolving), and adds the
+// Pointing Model Builder form of each camera (pointingModel).
 export const PROFILES_VERSION = 16
 
 // Name of the profile created when none is stored.
@@ -179,6 +180,8 @@ export interface CameraSettings {
 	autoFocus?: AutoFocusSettings
 	// TPPA form.
 	tppa?: TppaSettings
+	// Pointing Model Builder form.
+	pointingModel?: PointingModelSettings
 	// DARV form.
 	darv?: DarvSettings
 	// Flat Wizard form.
@@ -270,6 +273,42 @@ export const DEFAULT_TPPA_SETTINGS: TppaSettings = {
 	refinementDelay: 1,
 	stopTracking: true,
 }
+
+// Pointing Model Builder form of one physical camera: the sky the next mount pointing session samples. The frames are taken
+// with the camera settings and solved with the plate solving settings of the camera, which this form never holds. Angles
+// are in degrees and durations in seconds, as edited.
+export interface PointingModelSettings {
+	// Exposure of each frame, in seconds; > 0.
+	exposureTime: number
+	// Pattern of the waypoints.
+	pattern: 'goldenSpiral' | 'altAzGrid'
+	// Number of waypoints asked for, in [POINTING_MODEL_MINIMUM_POINTS, POINTING_MODEL_MAXIMUM_POINTS].
+	count: number
+	// Lowest altitude of a waypoint, in degrees.
+	minimumAltitude: number
+	// Hour angle half width left free around the meridian, in degrees; >= 0.
+	meridianAvoidance: number
+	// Wait after the mount stopped and before each exposure, in seconds; >= 0.
+	settleDelay: number
+	// Whether the tracking the session starts on a mount that was not tracking is stopped when the session ends.
+	stopTracking: boolean
+}
+
+// Fewest waypoints of the Pointing Model Builder form.
+export const POINTING_MODEL_MINIMUM_POINTS = 6
+
+// Most waypoints of the Pointing Model Builder form.
+export const POINTING_MODEL_MAXIMUM_POINTS = 120
+
+// Starting points of the number of waypoints, not scientific guarantees.
+export const POINTING_MODEL_PRESETS = [
+	{ label: 'Quick', count: 15 },
+	{ label: 'Standard', count: 30 },
+	{ label: 'Advanced', count: 60 },
+] as const
+
+// Pointing Model Builder form of a camera that has none yet: 30 waypoints on a golden spiral above 25°.
+export const DEFAULT_POINTING_MODEL_SETTINGS: PointingModelSettings = { exposureTime: 5, pattern: 'goldenSpiral', count: 30, minimumAltitude: 25, meridianAvoidance: 5, settleDelay: 2, stopTracking: true }
 
 // DARV form of one physical camera: how the next drift alignment measurement moves the mount. The frame is taken
 // with the camera settings of the camera, which this form never holds, and with an exposure derived from the leg

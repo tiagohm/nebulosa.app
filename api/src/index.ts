@@ -439,6 +439,12 @@ const lunarEclipses = new LunarEclipseService()
 // Solar eclipse queries of the Solar Eclipse Map tool; their maps are computed on a worker.
 const solarEclipses = new SolarEclipseService()
 
+// Writes the changes the persisted stores still hold in memory, for a server about to stop. Resolves once they are
+// written or failed to be; never rejects.
+export async function flushStores() {
+	await Promise.all([captureFrames.flush(), notifications.flush()])
+}
+
 // Bun.serve routes under /api/.
 export const routes = {
 	'/api/health': {

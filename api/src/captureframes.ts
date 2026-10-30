@@ -34,8 +34,8 @@ import { errorCode, isRecord, writeAtomically } from './util'
 // by leases besides the latest frames.
 //
 // The metadata of the saved frames of at most MAX_SOURCES cameras is persisted in a versioned JSON file, written
-// at most every SAVE_DELAY after a change, so the frames of the last SAVE_DELAY may be lost in a crash. After a
-// restart no frame is in memory and no camera has a latest frame: a saved frame is available again when its file
+// at most every SAVE_DELAY after a change, so the frames of the last SAVE_DELAY may be lost in a crash; a server
+// stopped by a signal writes them first (flushStores). After a restart no frame is in memory and no camera has a latest frame: a saved frame is available again when its file
 // exists, with the origin it was recorded with (a frame of a version 1 or 2 file is a capture). A version 1 file, which
 // mixed previewed-only and saved frames, is read keeping its saved frames only. No directory is ever scanned.
 

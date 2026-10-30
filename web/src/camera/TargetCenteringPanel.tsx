@@ -29,7 +29,20 @@ import { CameraSummary, SummaryRow as Row } from './CameraSummary'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
-import { startTargetCentering, stopTargetCentering, TARGET_CENTERING_STATE_LABELS, TARGET_CENTERING_STEP_LABELS, targetCenteringBlocker, type TargetCenteringDraft, targetCenteringMountSupport, targetCenteringRequest, targetCenteringRunning, targetCenteringRuntime, targetCenteringVerdict } from './targetcentering'
+import {
+	startTargetCentering,
+	stopTargetCentering,
+	TARGET_CENTERING_GUIDING_LABELS,
+	TARGET_CENTERING_STATE_LABELS,
+	TARGET_CENTERING_STEP_LABELS,
+	targetCenteringBlocker,
+	type TargetCenteringDraft,
+	targetCenteringMountSupport,
+	targetCenteringRequest,
+	targetCenteringRunning,
+	targetCenteringRuntime,
+	targetCenteringVerdict,
+} from './targetcentering'
 import { TargetCenteringBullseye } from './TargetCenteringBullseye'
 
 // Contextual panel sections of Target Centering, a camera operation of the Images camera tabs: the target, the settings of
@@ -170,6 +183,7 @@ export function TargetCenteringSections({ device, availability, mount, settings:
 				<NumberInput label="Frames" value={shown.maximumFrames} min={FRAMES[0]} max={FRAMES[1]} step={1} disabled={locked} onChange={(maximumFrames) => update({ maximumFrames })} />
 				<NumberInput label="Retries Without a Solution" value={shown.noSolutionRetries} min={RETRIES[0]} max={RETRIES[1]} step={1} disabled={locked} onChange={(noSolutionRetries) => update({ noSolutionRetries })} />
 				<Checkbox label="Search the whole sky after an assisted solve finds nothing" checked={shown.blindRetry} disabled={locked} onChange={(blindRetry) => update({ blindRetry })} />
+				<Checkbox label="Stop guiding for the motion and restore it after, recalibrating" checked={shown.coordinateGuiding} disabled={locked} onChange={(coordinateGuiding) => update({ coordinateGuiding })} />
 			</CollapsibleSection>
 			<CollapsibleSection id="images.target-centering.equipment" title="Acquisition & Equipment">
 				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
@@ -233,13 +247,13 @@ function moveMessage(mountName: string, draft: TargetCenteringDraft | undefined,
 
 // The form values a running session applied, as the form shows them.
 function appliedSettings({ request }: Pick<TargetCenteringSessionSummary, 'request'>, settings: Readonly<TargetCenteringSettings>): TargetCenteringSettings {
-	const { capture, tolerance, maximumCorrections, noSolutionRetries, maximumFrames, settleDelay, maximumCorrection, blindRetry } = request
-	return { ...settings, exposureTime: capture.exposureTime, tolerance: toArcsec(tolerance), maximumCorrections, noSolutionRetries, maximumFrames, settleDelay, maximumCorrection: (maximumCorrection * 180) / Math.PI, blindRetry }
+	const { capture, tolerance, maximumCorrections, noSolutionRetries, maximumFrames, settleDelay, maximumCorrection, blindRetry, guiding } = request
+	return { ...settings, exposureTime: capture.exposureTime, tolerance: toArcsec(tolerance), maximumCorrections, noSolutionRetries, maximumFrames, settleDelay, maximumCorrection: (maximumCorrection * 180) / Math.PI, blindRetry, coordinateGuiding: guiding === 'coordinate' }
 }
 
 // State of the session, the attempt and its measured distance, the progress of the frame being exposed, and its outcome.
 function SessionState({ session }: { readonly session: TargetCenteringSessionSummary }) {
-	const { state, step, attempts, exposure, finalSeparation, positionVerified, readyForImaging, error, warnings, request } = session
+	const { state, step, attempts, exposure, finalSeparation, positionVerified, readyForImaging, guidingRestoration, error, warnings, request } = session
 	const failed = state === 'blocked' || state === 'failed'
 	const ended = state === 'completed' || state === 'failed'
 	const verdict = targetCenteringVerdict(session)
@@ -255,6 +269,7 @@ function SessionState({ session }: { readonly session: TargetCenteringSessionSum
 				<Row label="Distance">{finalSeparation === undefined ? MISSING : formatAngularSize(finalSeparation)}</Row>
 				{ended && verdict && <Row label="Latest Frame">{verdict === 'within' ? 'Within tolerance' : 'Outside tolerance'}</Row>}
 				{ended && <Row label="Position">{positionVerified ? 'Verified' : 'Not verified'}</Row>}
+				{guidingRestoration !== 'notNeeded' && <Row label="Guiding">{TARGET_CENTERING_GUIDING_LABELS[guidingRestoration]}</Row>}
 				{ended && <Row label="Ready for Imaging">{readyForImaging ? 'Yes' : 'No'}</Row>}
 			</dl>
 			{step === 'exposing' && <FrameProgress exposure={exposure} />}

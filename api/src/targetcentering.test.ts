@@ -8,7 +8,7 @@ import { equatorialToJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate
 import { geodeticLocation, localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { isDeviceQuiescent } from 'nebulosa/src/devices/orchestration/device.lifecycle'
-import { failedOperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import { failedOperationResult, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { arcmin, arcsec, deg, hour, normalizeAngle, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
@@ -16,6 +16,7 @@ import { applyPointingOffset } from 'nebulosa/src/observation/mount/pointing'
 import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures } from './captures'
 import { ConnectionManager } from './connection'
+import type { GuidingRestoration, GuidingSessionSummary, GuidingSuspension } from './guiding'
 import { ImageStore } from './images'
 import type { MountCorrectionPlan, MountCorrections } from './mountpointing.corrections'
 import { MountCommands } from './mounts'
@@ -91,6 +92,9 @@ async function setup(corrections?: Pick<MountCorrections, 'plan' | 'suspend' | '
 	disposables.push(manager)
 	const { id } = await manager.connect({ type: 'SIMULATOR' })
 	const client = manager.client(id)!
+	const devices = manager.devices.list(client)
+	const cameraId = devices.find((device) => device.type === 'camera')!.id
+	const mountId = devices.find((device) => device.type === 'mount')!.id
 	const operations = new OperationRegistry(manager.devices, () => {})
 	disposables.push(operations)
 	const images = new ImageStore()
@@ -118,11 +122,31 @@ async function setup(corrections?: Pick<MountCorrections, 'plan' | 'suspend' | '
 	disposables.push(mounts)
 	const { commander } = mounts
 	const solving = fakeSolver(images)
-	const guiding = { outputInUse: () => false, holds: 0, released: 0, hold: () => ({ [Symbol.dispose]: () => void guiding.released++ }) }
-	const hold = guiding.hold
-	guiding.hold = () => {
-		guiding.holds++
-		return hold()
+	const calls: string[] = []
+	const guiding = {
+		runs: [] as GuidingSessionSummary[],
+		holds: 0,
+		released: 0,
+		suspend: successfulOperationResult({ sessionId: 'g1', commandId: 'stop', settle: { pixels: 1, time: 1, timeout: 1 } }) as OperationResult<GuidingSuspension>,
+		restoration: 'restored' as GuidingRestoration,
+		restoring: undefined as Promise<void> | undefined,
+		signal: undefined as AbortSignal | undefined,
+		calls,
+		runsOn: () => guiding.runs,
+		hold: () => {
+			guiding.holds++
+			return { [Symbol.dispose]: () => void guiding.released++ }
+		},
+		suspendForMotion: () => {
+			calls.push(`suspend:${manager.devices.mount(client, mountId)!.slewing}`)
+			return Promise.resolve(guiding.suspend)
+		},
+		restoreAfterMotion: async (_: GuidingSuspension, signal: AbortSignal) => {
+			calls.push(`restore:${operations.available(manager.devices.mount(client, mountId)!)}:${guiding.released === guiding.holds}`)
+			guiding.signal = signal
+			await guiding.restoring
+			return guiding.restoration
+		},
 	}
 	const events: TargetCenteringEvent[] = []
 	const auxiliaryDir = mkdtempSync(join(root, 'auxiliary-'))
@@ -141,9 +165,6 @@ async function setup(corrections?: Pick<MountCorrections, 'plan' | 'suspend' | '
 		auxiliaryDir,
 	)
 
-	const devices = manager.devices.list(client)
-	const cameraId = devices.find((device) => device.type === 'camera')!.id
-	const mountId = devices.find((device) => device.type === 'mount')!.id
 	manager.devices.switch(client, cameraId, true)
 	manager.devices.switch(client, mountId, true)
 	const camera = manager.devices.camera(client, cameraId)!
@@ -180,6 +201,7 @@ async function setup(corrections?: Pick<MountCorrections, 'plan' | 'suspend' | '
 		settleDelay: 0,
 		maximumCorrection: deg(1),
 		blindRetry: false,
+		guiding: 'coordinate',
 		...patch,
 	})
 
@@ -411,14 +433,115 @@ describe('target centering sessions', () => {
 		expect((await sessions.start(id, cameraId, request())).status).toBe(422)
 	})
 
-	test('guiding that may pulse the mount refuses the start', async () => {
-		const { sessions, id, cameraId, request, guiding } = await setup()
-		guiding.outputInUse = () => true
-		const response = await sessions.start(id, cameraId, request())
+	const GUIDING = { sessionId: 'g1', state: 'guiding' } as GuidingSessionSummary
 
-		expect(response.status).toBe(409)
-		expect(((await response.json()) as { code: string }).code).toBe('guidingActive')
+	test('guiding that may pulse the mount refuses a session asked not to touch it, and a measurement, which moves nothing', async () => {
+		const { sessions, id, cameraId, request, guiding } = await setup()
+		guiding.runs = [GUIDING]
+
+		for (const body of [request({ guiding: 'requireIdle' }), request({ mode: 'verifyOnly' })]) {
+			const response = await sessions.start(id, cameraId, body)
+			expect(response.status).toBe(409)
+			expect(((await response.json()) as { code: string }).code).toBe('guidingActive')
+		}
+
 		expect(guiding.holds).toBe(0)
+		expect(guiding.calls).toBeEmpty()
+	})
+
+	test('guiding its owner paused, or that is calibrating, is never taken over', async () => {
+		const { sessions, id, cameraId, request, guiding } = await setup()
+
+		for (const state of ['paused', 'calibrating'] as const) {
+			guiding.runs = [{ ...GUIDING, state }]
+			expect((await sessions.start(id, cameraId, request())).status).toBe(409)
+		}
+
+		expect(guiding.calls).toBeEmpty()
+	})
+
+	test('guiding is stopped before the motion and restored after the mount was released', async () => {
+		const { start, request, ended, summary, guiding, events } = await setup()
+		guiding.runs = [GUIDING]
+		await start(request())
+
+		await ended()
+		expect(guiding.calls).toEqual(['suspend:false', 'restore:true:true'])
+		expect(summary()).toMatchObject({ state: 'completed', positionVerified: true, readyForImaging: true, guidingRestoration: 'restored' })
+		const steps = events.map((event) => event.session.step)
+		expect(steps.indexOf('stoppingGuiding')).toBeLessThan(steps.indexOf('slewing'))
+		expect(steps.lastIndexOf('restoringGuiding')).toBeGreaterThan(steps.lastIndexOf('solving'))
+	})
+
+	test('a position verified with guiding that did not come back is not ready for imaging', async () => {
+		for (const restoration of ['failed', 'externallyChanged'] as const) {
+			const { start, request, ended, summary, guiding } = await setup()
+			guiding.runs = [GUIDING]
+			guiding.restoration = restoration
+			await start(request())
+
+			await ended()
+			expect(summary()).toMatchObject({ state: 'completed', positionVerified: true, readyForImaging: false, guidingRestoration: restoration })
+			expect(summary().warnings).toHaveLength(1)
+		}
+	})
+
+	test('guiding that does not stop ends the session before the mount is taken', async () => {
+		const { start, request, ended, summary, guiding, commander } = await setup()
+		const goTo = spyOn(commander, 'goTo')
+		guiding.runs = [GUIDING]
+		guiding.suspend = failedOperationResult('unexpectedState', 'The guide output was not released')
+		await start(request())
+
+		await ended()
+		expect(summary()).toMatchObject({ state: 'failed', error: 'The guide output was not released', guidingRestoration: 'notNeeded' })
+		expect(goTo).not.toHaveBeenCalled()
+		expect(guiding.calls).toEqual(['suspend:false'])
+	})
+
+	test('guiding it stopped is restored after a failure and a stop too', async () => {
+		const { start, request, ended, summary, guiding, solving, sessions } = await setup()
+		guiding.runs = [GUIDING]
+		solving.control.stall = true
+		const { sessionId } = await start(request())
+
+		await waitUntil(() => summary().step === 'solving')
+		sessions.stop(sessionId)
+		await ended()
+		expect(summary()).toMatchObject({ state: 'cancelled', guidingRestoration: 'restored', readyForImaging: false })
+		expect(guiding.calls.at(-1)).toStartWith('restore:')
+	})
+
+	test('a stop during the restoration ends it, with guiding told apart', async () => {
+		const { start, request, ended, summary, guiding, sessions } = await setup()
+		guiding.runs = [GUIDING]
+		const { promise, resolve } = Promise.withResolvers<void>()
+		guiding.restoring = promise
+		guiding.restoration = 'failed'
+		const { sessionId } = await start(request())
+
+		await waitUntil(() => summary().step === 'restoringGuiding')
+		guiding.signal!.addEventListener('abort', () => resolve(), { once: true })
+		await waitUntil(() => guiding.signal !== undefined)
+		sessions.stop(sessionId)
+		await ended()
+		expect(guiding.signal!.aborted).toBeTrue()
+		expect(summary()).toMatchObject({ positionVerified: true, readyForImaging: false, guidingRestoration: 'failed' })
+	})
+
+	test('a blocked mount leaves guiding off', async () => {
+		const { start, request, summary, commander, mount, guiding } = await setup()
+		guiding.runs = [GUIDING]
+		spyOn(commander, 'goTo').mockImplementation(() => {
+			Object.assign(mount, { slewing: true })
+			return Promise.resolve(failedOperationResult('timeout', 'the mount did not stop'))
+		})
+		await start(request())
+
+		await waitUntil(() => summary().state === 'blocked')
+		expect(summary().guidingRestoration).toBe('failed')
+		expect(guiding.calls).toEqual(['suspend:false'])
+		Object.assign(mount, { slewing: false })
 	})
 
 	test('the guide outputs stay held until the operation ends', async () => {

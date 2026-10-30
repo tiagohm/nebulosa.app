@@ -7,6 +7,7 @@ import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
 import type { BlobEncoding } from 'nebulosa/src/devices/indi/types'
 import { failedOperationResult, type OperationFailureReason, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import { abortableDelay } from 'nebulosa/src/devices/orchestration/operation.wait'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
@@ -207,6 +208,20 @@ export interface GuidingRms {
 	readonly samples: number
 }
 
+// A guide run stopped for the motion of another service.
+export interface GuidingSuspension {
+	// Session whose run was stopped.
+	readonly sessionId: string
+	// Command that stopped it, the latest of the session until someone else commands it.
+	readonly commandId: string
+	// Settle guiding is restored with: the one it started with.
+	readonly settle: GuidingSettle
+}
+
+// What became of a guide run after a motion: guiding again, not restored, or left alone because the session is no longer as
+// the motion left it.
+export type GuidingRestoration = 'restored' | 'failed' | 'externallyChanged'
+
 // Session record published to clients.
 export interface GuidingSessionSummary {
 	readonly sessionId: string
@@ -375,6 +390,18 @@ const MAX_TELEMETRY = 2000
 // Durable command tokens a session remembers, so a repeated request answers its first command.
 const MAX_TOKENS = 64
 
+// Settle of guiding restored after a motion when the session never asked for one; provisional.
+const RESTORE_SETTLE: GuidingSettle = { pixels: 1.5, time: 10, timeout: 60 }
+
+// Guide frames awaited after a motion before a star is selected on them.
+const RESTORE_FRAMES = 2
+
+// Longest wait for those frames beyond their exposures, in milliseconds.
+const RESTORE_FRAMES_TIMEOUT = 30000
+
+// Interval between the checks for those frames, in milliseconds.
+const RESTORE_FRAMES_POLL = 100
+
 // Commands that let a guide output send pulses, refused while a hold keeps guiding off a mount.
 const HELD_COMMANDS: ReadonlySet<GuidingCommand> = new Set<GuidingCommand>(['startGuiding', 'resume', 'dither'])
 
@@ -489,6 +516,8 @@ interface Session {
 	readonly progress: DeviceHandler<Camera>
 	// Calibration settings of the request over the toolkit defaults, whose limits the calibration progress shows.
 	readonly calibrator: Readonly<GuidingCalibrationConfig>
+	// Settle of the latest Start Guiding, which guiding restored after a motion takes again.
+	settle?: GuidingSettle
 }
 
 // Returns the regions the built-in detection of a session's next frame is limited to, or undefined for the whole frame:
@@ -687,7 +716,10 @@ export class GuidingSessions implements Disposable {
 
 	// Starts calibrating or guiding the selected (or best) star. Responds 202 with the command id.
 	startGuiding(sessionId: string, { token, recalibrate, settle }: GuidingStartGuidingRequest): Response {
-		return this.#command(sessionId, token, 'startGuiding', (session) => session.interactive.startGuiding(this.operations.coordinator, this.operations.coordinator, { recalibrate, settle }))
+		return this.#command(sessionId, token, 'startGuiding', (session) => {
+			session.settle = settle
+			return session.interactive.startGuiding(this.operations.coordinator, this.operations.coordinator, { recalibrate, settle })
+		})
 	}
 
 	// Stops the corrections and keeps looping, freeing the guide output. Responds 202 with the command id.
@@ -753,11 +785,73 @@ export class GuidingSessions implements Disposable {
 		return stopped.ok ? new Response(null, { status: 204 }) : failureResponse(stopped, 'Stopping the guiding')
 	}
 
-	// Returns whether a session may send pulses through a guide output of a connection, which may be the mount itself or the ST4
+	// Returns the sessions that may send pulses through a guide output of a connection, which may be the mount itself or the ST4
 	// port of a camera wired to it; only the operator knows which mount that port moves, so any of the connection counts.
-	outputInUse(connectionId: string) {
-		for (const { summary } of this.#sessions.values()) if (summary.active && summary.guideOutputHeld && summary.guideOutput.connectionId === connectionId) return true
-		return false
+	runsOn(connectionId: string): readonly GuidingSessionSummary[] {
+		return Array.from(this.#sessions.values(), ({ summary }) => summary).filter(({ active, guideOutputHeld, guideOutput }) => active && guideOutputHeld && guideOutput.connectionId === connectionId)
+	}
+
+	// Stops the corrections of a session for a motion of another service, keeping its loop and calibration, and resolves once the
+	// guide output was released, with what restoreAfterMotion needs; a failure leaves the output as it stands.
+	async suspendForMotion(sessionId: string): Promise<OperationResult<GuidingSuspension>> {
+		const session = this.#find(sessionId)
+		if (!session?.summary.active) return failedOperationResult('unexpectedState', 'The guiding session ended')
+
+		const commandId = crypto.randomUUID()
+		this.#update(session, { command: { commandId, command: 'stopGuiding', state: 'running' } })
+
+		const stopped = await this.#settle(session, commandId, 'stopGuiding', session.interactive.stopGuiding(this.operations.coordinator))
+		if (!stopped.ok) return stopped
+		if (session.summary.guideOutputHeld) return failedOperationResult('unexpectedState', 'The guide output was not released')
+		return successfulOperationResult({ sessionId, commandId, settle: session.settle ?? RESTORE_SETTLE })
+	}
+
+	// Starts guiding again after a motion, if the session is as suspendForMotion left it: the lock pixel no longer means anything
+	// after a slew, and the calibration does not follow the declination, so the best star of a frame taken after the motion is
+	// selected and the guider recalibrates. Resolves how that went, without rejecting. An abort stops waiting and stops guiding.
+	async restoreAfterMotion({ sessionId, commandId, settle }: GuidingSuspension, signal: AbortSignal): Promise<GuidingRestoration> {
+		const session = this.#find(sessionId)
+		if (!session?.summary.active || session.summary.guideOutputHeld || session.summary.command?.commandId !== commandId) return 'externallyChanged'
+
+		const cleared = session.interactive.clearTarget()
+		this.#sync(session)
+		if (!cleared.ok || !(await this.#framesAfterMotion(session, signal))) return 'failed'
+
+		const selected = session.interactive.selectTarget()
+		this.#sync(session)
+		if (!selected.ok) return 'failed'
+
+		const restoring = crypto.randomUUID()
+		this.#update(session, { command: { commandId: restoring, command: 'startGuiding', state: 'running' } })
+		const started = this.#settle(session, restoring, 'startGuiding', session.interactive.startGuiding(this.operations.coordinator, this.operations.coordinator, { recalibrate: true, settle }))
+		const { promise: aborted, resolve } = Promise.withResolvers<undefined>()
+		signal.addEventListener('abort', () => resolve(undefined), { once: true })
+		if (signal.aborted) resolve(undefined)
+
+		const result = await Promise.race([started, aborted])
+
+		if (!result) {
+			await session.interactive.stopGuiding(this.operations.coordinator)
+			this.#sync(session)
+			return 'failed'
+		}
+
+		return result.ok ? 'restored' : 'failed'
+	}
+
+	// Waits for the frames that follow a motion: one more than the exposure in progress, which may have started before the mount
+	// stopped. Resolves whether they arrived, false when the session ended, the wait was aborted, or they took too long.
+	async #framesAfterMotion(session: Session, signal: AbortSignal) {
+		const first = session.summary.frame?.frameId ?? 0
+		const deadline = Date.now() + RESTORE_FRAMES_TIMEOUT + (RESTORE_FRAMES + 1) * session.summary.exposure
+
+		while ((session.summary.frame?.frameId ?? 0) < first + RESTORE_FRAMES) {
+			if (!session.summary.active || Date.now() > deadline) return false
+			const waited = await abortableDelay(RESTORE_FRAMES_POLL, signal)
+			if (!waited.ok) return false
+		}
+
+		return true
 	}
 
 	// Keeps every guide output of a connection from starting to guide until the result is disposed. Looping, which sends no
@@ -806,8 +900,8 @@ export class GuidingSessions implements Disposable {
 	}
 
 	// Records the outcome of a durable command once it settles, unless a newer command replaced it in the record.
-	async #settle(session: Session, commandId: string, command: GuidingCommand, running: Promise<OperationResult<unknown>>) {
-		let result: OperationResult<unknown>
+	async #settle<T>(session: Session, commandId: string, command: GuidingCommand, running: Promise<OperationResult<T>>): Promise<OperationResult<T>> {
+		let result: OperationResult<T>
 
 		try {
 			result = await running
@@ -816,8 +910,9 @@ export class GuidingSessions implements Disposable {
 		}
 
 		this.#sync(session)
-		if (session.summary.command?.commandId !== commandId) return
+		if (session.summary.command?.commandId !== commandId) return result
 		this.#update(session, { command: result.ok ? { commandId, command, state: 'succeeded' } : { commandId, command, state: 'failed', reason: result.reason, ...(result.error !== undefined && { error: result.error }) } })
+		return result
 	}
 
 	// Runs an immediate command of a living session and responds 204, or with its failure.

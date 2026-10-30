@@ -83,7 +83,8 @@ test('reports Auto Focus and TPPA transitions', () => {
 
 test('reports a blocked mount and the outcome of a centering, never a measurement out of tolerance or a stop', () => {
 	const classifier = new NotificationClassifier()
-	expect(classifier.classify(targetCentering({ state: 'completed', positionVerified: true }))[0]).toMatchObject({ key: 'targetCentering:c1', level: 'success', code: 'targetCentering.completed', target: { kind: 'cameraTool', tool: 'target-centering' } })
+	expect(classifier.classify(targetCentering({ state: 'completed', positionVerified: true, readyForImaging: true }))[0]).toMatchObject({ key: 'targetCentering:c1', level: 'success', code: 'targetCentering.completed', target: { kind: 'cameraTool', tool: 'target-centering' } })
+	expect(classifier.classify(targetCentering({ state: 'completed', positionVerified: true, readyForImaging: false }))[0]).toMatchObject({ level: 'warning', code: 'targetCentering.guidingNotRestored' })
 	expect(classifier.classify(targetCentering({ state: 'failed', reason: 'commandFailed', error: 'no plate solution' }))[0]).toMatchObject({ level: 'error', code: 'targetCentering.failed', message: 'Centering Mount failed: no plate solution.' })
 	expect(classifier.classify(targetCentering({ state: 'blocked' }))[0]).toMatchObject({ level: 'error', code: 'targetCentering.blocked' })
 	expect(classifier.classify(targetCentering({ state: 'completed', positionVerified: false }))).toEqual([])

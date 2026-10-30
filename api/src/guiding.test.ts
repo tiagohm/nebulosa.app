@@ -250,7 +250,7 @@ describe('guiding', () => {
 		const context = await setup()
 		const { sessionId } = await start(context)
 		expect(context.guiding.selectTarget(sessionId, { position: [128, 128] }).status).toBe(200)
-		expect(context.guiding.outputInUse(context.id)).toBeFalse()
+		expect(context.guiding.runsOn(context.id)).toBeEmpty()
 
 		const hold = context.guiding.hold(context.id)
 		const refused = context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE })
@@ -262,11 +262,60 @@ describe('guiding', () => {
 		hold[Symbol.dispose]()
 		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).status).toBe(202)
 		await waitUntil(() => context.summary()?.guideOutputHeld === true)
-		expect(context.guiding.outputInUse(context.id)).toBeTrue()
-		expect(context.guiding.outputInUse('another')).toBeFalse()
+		expect(context.guiding.runsOn(context.id).map((run) => run.sessionId)).toEqual([sessionId])
+		expect(context.guiding.runsOn('another')).toBeEmpty()
 
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
-		expect(context.guiding.outputInUse(context.id)).toBeFalse()
+		expect(context.guiding.runsOn(context.id)).toBeEmpty()
+	}, 60000)
+
+	test('a run suspended for a motion frees the mount and keeps looping, then starts again from a star of a new frame', async () => {
+		const context = await setup()
+		const { sessionId } = await start(context)
+		expect(context.guiding.selectTarget(sessionId, { position: [128, 128] }).status).toBe(200)
+		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+
+		const suspended = await context.guiding.suspendForMotion(sessionId)
+		expect(suspended).toMatchObject({ ok: true, value: { sessionId, settle: SETTLE } })
+		expect(context.summary()).toMatchObject({ guideOutputHeld: false, active: true })
+		await waitUntil(() => context.operations.available(context.mount))
+		if (!suspended.ok) return
+
+		const controller = new AbortController()
+		const frame = context.summary()?.frame?.frameId ?? 0
+		const restored = context.guiding.restoreAfterMotion(suspended.value, controller.signal)
+		// The old lock is dropped at once, and the next star comes from a frame taken after the motion.
+		expect(context.summary()?.lockPosition).toBeUndefined()
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+		expect((context.summary()?.frame?.frameId ?? 0) - frame).toBeGreaterThanOrEqual(2)
+		expect(context.summary()?.lockPosition).toBeDefined()
+		expect(context.summary()?.lockPosition).not.toEqual([128, 128])
+		expect(context.summary()?.command).toMatchObject({ command: 'startGuiding' })
+
+		// A stop during the restoration leaves it looping.
+		controller.abort()
+		expect(await restored).toBe('failed')
+		expect(context.summary()).toMatchObject({ guideOutputHeld: false, active: true })
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+	}, 60000)
+
+	test('a session changed during the motion is left as it is', async () => {
+		const context = await setup()
+		const { sessionId } = await start(context)
+		expect(context.guiding.selectTarget(sessionId, { position: [128, 128] }).status).toBe(200)
+		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+
+		const suspended = await context.guiding.suspendForMotion(sessionId)
+		if (!suspended.ok) throw new Error('not suspended')
+		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+
+		expect(await context.guiding.restoreAfterMotion(suspended.value, new AbortController().signal)).toBe('externallyChanged')
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+		expect(await context.guiding.restoreAfterMotion(suspended.value, new AbortController().signal)).toBe('externallyChanged')
+		expect(await context.guiding.suspendForMotion('unknown')).toMatchObject({ ok: false })
 	}, 60000)
 
 	test('commands of an ended or unknown session are refused', async () => {

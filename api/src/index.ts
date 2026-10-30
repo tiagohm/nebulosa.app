@@ -351,6 +351,7 @@ export type {
 	TargetCenteringAttempt,
 	TargetCenteringCaptureSettings,
 	TargetCenteringEvent,
+	TargetCenteringGuidingRestoration,
 	TargetCenteringMode,
 	TargetCenteringOutcome,
 	TargetCenteringRefusal,

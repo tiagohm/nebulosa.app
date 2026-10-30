@@ -1,4 +1,4 @@
-import type { CameraCapabilities, MountState, ServerEvent, TargetCenteringMode, TargetCenteringRequest, TargetCenteringSession, TargetCenteringSessionSummary, TargetCenteringSnapshot, TargetCenteringState, TargetCenteringStep } from 'api'
+import type { CameraCapabilities, MountState, ServerEvent, TargetCenteringGuidingRestoration, TargetCenteringMode, TargetCenteringRequest, TargetCenteringSession, TargetCenteringSessionSummary, TargetCenteringSnapshot, TargetCenteringState, TargetCenteringStep } from 'api'
 import { nanoid } from 'nanoid'
 import { ASEC2RAD, DEG2RAD } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
@@ -58,7 +58,7 @@ export const TARGET_CENTERING_STATE_LABELS: Readonly<Record<TargetCenteringState
 }
 
 // Label of each step of a running session.
-export const TARGET_CENTERING_STEP_LABELS: Readonly<Record<TargetCenteringStep, string>> = { slewing: 'Slewing', settling: 'Settling', exposing: 'Exposing', solving: 'Solving', correcting: 'Correcting' }
+export const TARGET_CENTERING_STEP_LABELS: Readonly<Record<TargetCenteringStep, string>> = { stoppingGuiding: 'Stopping guiding', slewing: 'Slewing', settling: 'Settling', exposing: 'Exposing', solving: 'Solving', correcting: 'Correcting', restoringGuiding: 'Restoring guiding' }
 
 // Returns why a mount can never move for a centering, from the state the server reports, or undefined when it can (or its
 // state is not known yet). Verify Only commands nothing, so this does not concern it.
@@ -106,7 +106,7 @@ export function targetCenteringRequest(
 	capabilities?: CameraCapabilities,
 ): Omit<TargetCenteringRequest, 'token'> {
 	const { rightAscension, declination, label } = target
-	const { framingId, exposureTime, tolerance, maximumCorrections, noSolutionRetries, maximumFrames, settleDelay, maximumCorrection, blindRetry } = settings
+	const { framingId, exposureTime, tolerance, maximumCorrections, noSolutionRetries, maximumFrames, settleDelay, maximumCorrection, blindRetry, coordinateGuiding } = settings
 
 	return {
 		mount,
@@ -121,8 +121,12 @@ export function targetCenteringRequest(
 		settleDelay,
 		maximumCorrection: maximumCorrection * DEG2RAD,
 		blindRetry,
+		guiding: coordinateGuiding ? 'coordinate' : 'requireIdle',
 	}
 }
+
+// Label of what became of guiding, when something did.
+export const TARGET_CENTERING_GUIDING_LABELS: Readonly<Record<Exclude<TargetCenteringGuidingRestoration, 'notNeeded'>, string>> = { restored: 'Restored', failed: 'Not restored', externallyChanged: 'Changed by someone else' }
 
 // Returns whether a session has not ended; a blocked one has not, until it is dismissed.
 export function targetCenteringRunning(session: Pick<TargetCenteringSessionSummary, 'endedAt'> | undefined): boolean {

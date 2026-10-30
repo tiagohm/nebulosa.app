@@ -334,6 +334,9 @@ export interface TargetCenteringSettings {
 	maximumCorrection: number
 	// Whether a frame an assisted solve left without a solution is searched again over the whole sky, with the same provider.
 	blindRetry: boolean
+	// Whether guiding that is correcting the mount is stopped for the session and restored after, recalibrating; otherwise it
+	// refuses the start.
+	coordinateGuiding: boolean
 	// Saved framing selected; absent when the target is not one.
 	framingId?: string
 }
@@ -342,7 +345,7 @@ export interface TargetCenteringSettings {
 export const TARGET_CENTERING_LIMITS = { tolerance: [1, 3600], maximumCorrections: [1, 10], noSolutionRetries: [0, 5], maximumFrames: [1, 30], settleDelay: [0, 120], maximumCorrection: [0.1, 10] } as const
 
 // Target Centering form of a camera that has none yet; the values are provisional starting points.
-export const DEFAULT_TARGET_CENTERING_SETTINGS: TargetCenteringSettings = { exposureTime: 3, tolerance: 30, maximumCorrections: 4, noSolutionRetries: 1, maximumFrames: 10, settleDelay: 2, maximumCorrection: 1, blindRetry: false }
+export const DEFAULT_TARGET_CENTERING_SETTINGS: TargetCenteringSettings = { exposureTime: 3, tolerance: 30, maximumCorrections: 4, noSolutionRetries: 1, maximumFrames: 10, settleDelay: 2, maximumCorrection: 1, blindRetry: false, coordinateGuiding: true }
 
 // Target saved to recover a framing. It is a definition, never a reference to an image, so it outlives any frame.
 export interface FramingReference {

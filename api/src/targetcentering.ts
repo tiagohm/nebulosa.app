@@ -20,7 +20,7 @@ import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureFrame, type CaptureSettings, exposureProgressListener } from './captures'
 import { busy, type ClientResolver, type CommandErrorCode, type CommandRequest, connectedDevice, notFound, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
-import type { GuidingSessions } from './guiding'
+import type { GuidingRestoration, GuidingSessions, GuidingSuspension } from './guiding'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import type { MountCommands } from './mounts'
@@ -37,9 +37,11 @@ import type { SkyObserver } from './sky/ephemeris'
 //
 // The operation's root holds the camera and a child of it the mount, both until the end, so nothing comes between an
 // exposure and its correction. Frames are auxiliary files deleted once solved, recorded as the latest frame of their camera
-// (origin targetCentering), never saved as captures. Guiding that may pulse the mount refuses the start, and the mount is
-// kept from being guided until the operation ends: a guide output on a camera's ST4 port shares no device with the mount, so
-// the arbiter alone would not tell. A session belongs to the server: it survives tab reloads and workspace changes, and ends
+// (origin targetCentering), never saved as captures. Guiding that may pulse the mount is stopped first, in the operation and
+// before the mount is taken, since it may hold the mount itself, and restored once the mount was released, recalibrating; only
+// what the session stopped is restored, and a failure there is told apart from the position, which stays verified. Guiding it
+// does not stop refuses the start, and the mount is kept from being guided until the operation ends: a guide output on a
+// camera's ST4 port shares no device with the mount, so the arbiter alone would not tell. A session belongs to the server: it survives tab reloads and workspace changes, and ends
 // with the process; sessions live in memory, the latest of each camera. Angles are radians, durations seconds, and instants
 // Unix milliseconds.
 
@@ -87,6 +89,9 @@ export interface TargetCenteringRequest extends CommandRequest {
 	readonly maximumCorrection: Angle
 	// Whether a frame an assisted solve left without a solution is searched again over the whole sky, with the same provider.
 	readonly blindRetry: boolean
+	// What to do with guiding: stop it for the session and restore it after, or refuse to start while it may pulse the mount.
+	// Verify Only never stops it, since it moves nothing.
+	readonly guiding: 'coordinate' | 'requireIdle'
 }
 
 // What a session is doing:
@@ -100,7 +105,7 @@ export interface TargetCenteringRequest extends CommandRequest {
 export type TargetCenteringState = 'preparing' | 'running' | 'stopping' | 'blocked' | 'completed' | 'failed' | 'cancelled'
 
 // Step of a running session.
-export type TargetCenteringStep = 'slewing' | CenteringStep
+export type TargetCenteringStep = 'stoppingGuiding' | 'slewing' | CenteringStep | 'restoringGuiding'
 
 // What became of a frame: solved, a search that ended without a solution, a solution that could not be accepted, a solve that
 // ran out of time, or a solver that failed.
@@ -114,6 +119,9 @@ export type TargetCenteringOutcome = 'solved' | 'noSolution' | 'invalid' | 'time
 // - parked: the mount was parked during the session.
 // - unsupported: the mount cannot go to a target.
 export type TargetCenteringRefusal = 'correctionRefused' | 'belowHorizon' | 'tooLarge' | 'pierSide' | 'parked' | 'unsupported'
+
+// What became of guiding: nothing to restore, or the outcome of restoring what the session stopped.
+export type TargetCenteringGuidingRestoration = 'notNeeded' | GuidingRestoration
 
 // One capture-and-solve iteration of a session.
 export interface TargetCenteringAttempt {
@@ -175,8 +183,10 @@ export interface TargetCenteringSessionSummary {
 	readonly exposure?: CameraCaptureTime
 	// Whether a solution taken after the last motion lies within tolerance; only this proves a position.
 	readonly positionVerified: boolean
-	// Whether the session leaves everything ready to go on acquiring, which takes a verified position.
+	// Whether the session leaves everything ready to go on acquiring: a verified position, and guiding as it found it.
 	readonly readyForImaging: boolean
+	// What became of guiding; notNeeded until a session stopped some.
+	readonly guidingRestoration: TargetCenteringGuidingRestoration
 	// Distance of the latest solution from the target, in radians; absent before one.
 	readonly finalSeparation?: Angle
 	// Problems meant for people, latest last.
@@ -259,6 +269,12 @@ interface Session {
 	pierSide: PierSide
 	// Keeps guiding from starting while the mount is the session's.
 	guidingHold?: Disposable
+	// Sessions of guiding to stop before taking the mount.
+	readonly guidingRuns: readonly string[]
+	// Guiding the session stopped, to restore.
+	readonly suspensions: GuidingSuspension[]
+	// Ends the restoration of guiding when the session is stopped during it.
+	restoring?: AbortController
 	// What the operator asked for the operation being cancelled.
 	intent?: 'stop'
 	// Operation holding the devices, while one runs.
@@ -266,7 +282,7 @@ interface Session {
 }
 
 // Guiding, as far as a session depends on it.
-export type TargetCenteringGuiding = Pick<GuidingSessions, 'outputInUse' | 'hold'>
+export type TargetCenteringGuiding = Pick<GuidingSessions, 'runsOn' | 'hold' | 'suspendForMotion' | 'restoreAfterMotion'>
 
 // Returns the site a mount reports, as an observer: degrees, longitude east positive, and meters.
 function observerOf({ geographicCoordinate: { latitude, longitude, elevation } }: Mount): SkyObserver {
@@ -379,12 +395,16 @@ export class TargetCenteringSessions {
 			if (below) return errorResponse(...below)
 		}
 
-		if (!this.operations.available(camera) || !this.operations.available(mount)) return busy()
+		// A run stopped by the session frees the mount, so a mount held by guiding alone is free enough here; anything else that
+		// took it meanwhile fails the session, which restores guiding all the same.
+		const runs = this.guiding.runsOn(request.mount.connectionId)
+		const stoppable = mode !== 'verifyOnly' && request.guiding === 'coordinate' && runs.every(({ state }) => state === 'guiding' || state === 'lostLock')
+		if (runs.length > 0 && !stoppable) return errorResponse(mode === 'verifyOnly' ? 'Guiding is correcting the mount; stop it before measuring' : 'Guiding is correcting the mount, or is paused or calibrating; stop it before centering', 409, 'guidingActive')
+		if (!this.operations.available(camera) || (runs.length === 0 && !this.operations.available(mount))) return busy()
 
 		const key = resourceKey(camera)
 		const previous = this.#sessions.get(key)
 		if (previous && previous.summary.endedAt === undefined) return errorResponse('The camera has a centering session that did not end', 409, 'busy')
-		if (this.guiding.outputInUse(request.mount.connectionId)) return errorResponse('Guiding is correcting the mount; stop it before centering', 409, 'guidingActive')
 
 		const { token, ...settings } = request
 		const session: Session = {
@@ -401,6 +421,7 @@ export class TargetCenteringSessions {
 				attempts: [],
 				positionVerified: false,
 				readyForImaging: false,
+				guidingRestoration: 'notNeeded',
 				warnings: mode === 'verifyOnly' && !mount.tracking ? [`${mount.name} is not tracking, so the frames may trail.`] : [],
 				startedAt: Date.now(),
 				revision: 0,
@@ -413,6 +434,8 @@ export class TargetCenteringSessions {
 			commanded: false,
 			pierSide: mount.pierSide,
 			guidingHold: this.guiding.hold(request.mount.connectionId),
+			guidingRuns: runs.map(({ sessionId }) => sessionId),
+			suspensions: [],
 		}
 
 		if (previous) this.#byOperation.delete(previous.summary.operationId)
@@ -441,17 +464,52 @@ export class TargetCenteringSessions {
 			session.intent = 'stop'
 			this.#update(session, { state: 'stopping', step: undefined, exposure: undefined })
 			void session.handle?.cancel('aborted')
+			session.restoring?.abort()
 		}
 
 		return new Response(null, { status: 202 })
 	}
 
-	// Runs a session: the root holds the camera, and its child the mount for all the work. Resolves whether the position was
-	// verified; a Verify Only that measured a position out of tolerance succeeds with false.
+	// Runs a session: the root holds the camera and stops guiding, and its child then holds the mount for all the work. Resolves
+	// whether the position was verified; a Verify Only that measured a position out of tolerance succeeds with false.
 	#run(session: Session): OperationHandle<boolean> {
 		const { camera, mount } = session
 
-		return this.operations.coordinator.start<boolean>('targetCenteringSession', [{ key: resourceKey(camera), device: camera }], async (root) => await root.start<boolean>('targetCenteringMotion', [{ key: resourceKey(mount), device: mount }], (context) => this.#work(session, context)).result)
+		return this.operations.coordinator.start<boolean>('targetCenteringSession', [{ key: resourceKey(camera), device: camera }], async (root) => {
+			const stopped = await this.#stopGuiding(session)
+			if (!stopped.ok) return stopped
+			return await root.start<boolean>('targetCenteringMotion', [{ key: resourceKey(mount), device: mount }], (context) => this.#work(session, context)).result
+		})
+	}
+
+	// Stops the guiding the session found, keeping what it stopped so it is restored whatever comes next.
+	async #stopGuiding(session: Session): Promise<OperationResult<void>> {
+		for (const sessionId of session.guidingRuns) {
+			this.#update(session, { state: 'running', step: 'stoppingGuiding' })
+			const stopped = await this.guiding.suspendForMotion(sessionId)
+			if (!stopped.ok) return stopped
+			session.suspensions.push(stopped.value)
+		}
+
+		return successfulOperationResult(undefined)
+	}
+
+	// Restores the guiding a session stopped, once the mount was released, and resolves the worst of what became of it.
+	async #restoreGuiding(session: Session) {
+		if (session.suspensions.length === 0) return
+
+		const restoring = new AbortController()
+		session.restoring = restoring
+		this.#update(session, { state: session.intent === 'stop' ? 'stopping' : 'running', step: 'restoringGuiding', exposure: undefined })
+
+		const outcomes: GuidingRestoration[] = []
+		for (const suspension of session.suspensions) outcomes.push(await this.guiding.restoreAfterMotion(suspension, restoring.signal))
+
+		session.restoring = undefined
+		const guidingRestoration = outcomes.find((outcome) => outcome === 'failed') ?? outcomes.find((outcome) => outcome === 'externallyChanged') ?? 'restored'
+		this.#update(session, { guidingRestoration })
+		if (guidingRestoration === 'failed') this.#warn(session, 'Guiding could not be restored; start it again in Images → Guiding.')
+		else if (guidingRestoration === 'externallyChanged') this.#warn(session, 'Guiding was changed during the session, so it was left as it is.')
 	}
 
 	// Does the work of a session holding both devices, in a temporary directory removed at the end.
@@ -648,16 +706,21 @@ export class TargetCenteringSessions {
 	// Ends a session once its operation ended. The tracking a session started stays on only for a position it reached, and a mount
 	// that cannot be confirmed stopped keeps the session blocked.
 	async #operationEnded(session: Session, result: OperationResult<boolean>) {
-		const { mount, intent } = session
+		const { mount } = session
 		session.handle = undefined
 		session.guidingHold?.[Symbol.dispose]()
 		session.guidingHold = undefined
 
+		if (!result.ok && mount.connected && !isDeviceQuiescent(mount)) {
+			const guidingRestoration = session.suspensions.length > 0 ? 'failed' : 'notNeeded'
+			return this.#update(session, { state: 'blocked', step: undefined, exposure: undefined, guidingRestoration, reason: result.reason, error: `${mount.name} could not be confirmed stopped` })
+		}
+
+		await this.#restoreGuiding(session)
+
 		if (result.ok) return this.#finish(session, 'completed', result.value)
 
 		const failure = { reason: result.reason, ...(result.error !== undefined && { error: result.error }) }
-
-		if (mount.connected && !isDeviceQuiescent(mount)) return this.#update(session, { state: 'blocked', step: undefined, exposure: undefined, reason: result.reason, error: `${mount.name} could not be confirmed stopped` })
 
 		if (session.summary.trackingStarted) {
 			const stopped = !mount.tracking || (mount.connected && this.operations.available(mount) && (await this.commander.setTracking(this.operations.coordinator, mount, false)).ok)
@@ -665,12 +728,14 @@ export class TargetCenteringSessions {
 			else this.#warn(session, `The tracking of ${mount.name} that the session started was left on.`)
 		}
 
-		return this.#finish(session, intent === 'stop' || result.reason === 'aborted' ? 'cancelled' : 'failed', false, failure)
+		return this.#finish(session, session.intent === 'stop' || result.reason === 'aborted' ? 'cancelled' : 'failed', false, failure)
 	}
 
 	// Ends a session in a state.
 	#finish(session: Session, state: Extract<TargetCenteringState, 'completed' | 'failed' | 'cancelled'>, positionVerified: boolean, failure?: Pick<TargetCenteringSessionSummary, 'reason' | 'error'>) {
-		this.#update(session, { state, step: undefined, exposure: undefined, positionVerified, readyForImaging: positionVerified, endedAt: Date.now(), ...failure })
+		const { guidingRestoration } = session.summary
+		const readyForImaging = positionVerified && (guidingRestoration === 'notNeeded' || guidingRestoration === 'restored')
+		this.#update(session, { state, step: undefined, exposure: undefined, positionVerified, readyForImaging, endedAt: Date.now(), ...failure })
 	}
 
 	// Returns the session of a token already used.

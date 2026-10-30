@@ -270,6 +270,8 @@ export class NotificationClassifier {
 
 		if (state === 'blocked') return [{ key: `targetCentering.blocked:${sessionId}`, level: 'error', code: 'targetCentering.blocked', title: 'Mount not confirmed stopped', message: `${mountName} could not be confirmed stopped after its centering; check it before using it.`, source, target }]
 		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ key: `targetCentering:${sessionId}`, level: 'error', code: 'targetCentering.failed', title: 'Target Centering failed', message: `Centering ${mountName} failed: ${session.error ?? reasonText(reason)}.`, source, target }]
+		if (state === 'completed' && positionVerified && !session.readyForImaging)
+			return [{ key: `targetCentering:${sessionId}`, level: 'warning', code: 'targetCentering.guidingNotRestored', title: 'Guiding not restored', message: `The position of ${mountName} was verified, but guiding was not restored.`, source, target }]
 		if (state === 'completed' && positionVerified) return [{ key: `targetCentering:${sessionId}`, level: 'success', code: 'targetCentering.completed', title: 'Target Centering completed', message: `The position of ${mountName} was verified.`, source, target }]
 		return []
 	}

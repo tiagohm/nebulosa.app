@@ -144,6 +144,7 @@ function normalizeTargetCentering(value: unknown): TargetCenteringSettings | und
 		settleDelay: boundedNumber(value.settleDelay, ...limits.settleDelay, defaults.settleDelay),
 		maximumCorrection: boundedNumber(value.maximumCorrection, ...limits.maximumCorrection, defaults.maximumCorrection),
 		blindRetry: value.blindRetry === true,
+		coordinateGuiding: value.coordinateGuiding !== false,
 		...(typeof value.framingId === 'string' && value.framingId && { framingId: value.framingId }),
 	}
 }

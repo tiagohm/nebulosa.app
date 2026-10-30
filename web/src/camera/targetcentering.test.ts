@@ -31,6 +31,7 @@ function summary(patch: Partial<TargetCenteringSessionSummary> = {}): TargetCent
 		attempts: [],
 		positionVerified: false,
 		readyForImaging: false,
+		guidingRestoration: 'notNeeded',
 		warnings: [],
 		startedAt: 1,
 		revision: 1,

@@ -42,7 +42,9 @@ import { isDeepSkyLabelVisible, isDeepSkyObjectVisible, isMovingBodyVisible, sta
 // Zoom factor where stars switch from sprites to vector circles; lower sharpens stars sooner.
 const VECTOR_STAR_ZOOM_THRESHOLD = 2.25
 
-// Largest number of projected stars drawn as vector circles; denser views fall back to sprites.
+// Largest number of stars drawn as vector circles, counting only those the view really shows (not every star of the
+// loaded catalog projected on the map, which would freeze their size as soon as the catalog is deep enough); denser
+// views fall back to sprites, which do not grow with zoom.
 const VECTOR_STAR_MAX_COUNT = 20000
 
 // Largest growth factor of vector star radii while zooming.
@@ -963,13 +965,21 @@ export class StarLayer extends InternalLayer {
 
 		this.ensureStyles(state)
 
-		if (state.transform.k >= VECTOR_STAR_ZOOM_THRESHOLD && catalog.visibleCount <= VECTOR_STAR_MAX_COUNT) {
+		if (this.isVectorView(state, catalog)) {
 			this.renderVectorStars(ctx, state, catalog)
 		} else {
 			this.renderSpriteStars(ctx, state, catalog)
 		}
 
 		this.renderStarLabels(ctx, state, catalog)
+	}
+
+	// Returns whether the view is zoomed in enough for vector circles and shows few enough stars to afford them.
+	private isVectorView(state: RenderState, catalog: StarCatalog) {
+		if (state.transform.k < VECTOR_STAR_ZOOM_THRESHOLD) return false
+
+		writeBaseViewportBounds(state.width, state.height, state.transform, 0, this.baseViewportBounds)
+		return catalog.countDrawn(starSymbolMagnitudeLimit(state), this.baseViewportBounds, VECTOR_STAR_MAX_COUNT) <= VECTOR_STAR_MAX_COUNT
 	}
 
 	// Draws stars in base coordinates as cached sprites, or single pixels for the smallest radii.

@@ -4,20 +4,24 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { DEC_TAN, RA_TAN } from 'nebulosa/src/astrometry/wcs/fits.wcs'
+import { geodeticLocation, localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
+import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { MountCommander } from 'nebulosa/src/devices/commanders/mount'
 import { isDeviceQuiescent } from 'nebulosa/src/devices/orchestration/device.lifecycle'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
-import { arcsec, deg, hour, toDeg } from 'nebulosa/src/math/units/angle'
+import { arcsec, deg, hour, normalizeAngle, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures } from './captures'
 import { ConnectionManager } from './connection'
 import { ImageStore } from './images'
 import { type PointingModelEvent, PointingModels } from './mountpointing'
+import { MountCorrections, PointingActivations } from './mountpointing.corrections'
 import { computePointingFit, type PointingFitRequest, type PointingFitResult } from './mountpointing.fit'
 import { type MountPointingEvent, type MountPointingRequest, MountPointingSessions, type MountPointingSessionSummary, type MountPointingStartResponse } from './mountpointing.sessions'
 import { PointingModelStore } from './mountpointing.store'
+import { MountCommands } from './mounts'
 import { OperationRegistry } from './operations'
 import type { PlateSolveOrigin, PlateSolvePreparation, PlateSolveRequest, PlateSolveResult } from './platesolving'
 
@@ -446,7 +450,7 @@ describe('mount pointing sessions', () => {
 	}, 60000)
 
 	test('a verification lands closer corrected than uncorrected, and only adds its result to the revision', async () => {
-		const { id, cameraId, sessions, mountDevice, summary, store, fits, fitting, camera, frames, released } = await setup()
+		const { id, cameraId, sessions, mountDevice, summary, store, fits, fitting, camera, frames, released, manager, operations, models, mount } = await setup()
 		fitting.real = true
 		const { modelId } = await start(sessions, id, cameraId, request(mountDevice, { plan: { pattern: 'goldenSpiral', count: 24, minimumAltitude: deg(30), meridianAvoidance: 0 } }))
 		await waitUntil(() => summary()?.endedAt !== undefined, 120000)
@@ -485,6 +489,38 @@ describe('mount pointing sessions', () => {
 		expect(result.uncorrectedRms).toBeGreaterThan(arcsec(70))
 		expect(result.correctedRms).toBeLessThan(arcsec(30))
 		expect(frames.snapshot().sources.length).toBeGreaterThan(0)
+
+		// From here on it is a real GoTo: the model is put in force, and the mount lands where the solver says the target is.
+		const corrections = new MountCorrections(manager.devices.mounts, () => {})
+		disposables.push(corrections)
+		const commands = new MountCommands(
+			manager.devices,
+			(connectionId) => manager.client(connectionId),
+			() => Promise.resolve(undefined),
+			operations,
+			() => {},
+			undefined,
+			corrections,
+		)
+		disposables.push(commands)
+		const activations = new PointingActivations(manager.devices, (connectionId) => manager.client(connectionId), corrections, models, operations)
+
+		const activate = { revisionId: revision.revisionId, mount: mountDevice, nativeModelAcknowledged: true }
+		expect((await activations.activate(modelId, activate)).status).toBe(200)
+		expect((await models.remove(modelId)).status).toBe(409)
+
+		const location = geodeticLocation(deg(-45), deg(-22), 0)
+		const rightAscension = normalizeAngle(localSiderealTime(timeUnix(Date.now() / 1000, true), location) - deg(30))
+		expect(commands.goToNow(id, mount, { type: 'JNOW', JNOW: { x: rightAscension, y: deg(-40) } }, { latitude: -22, longitude: -45, elevation: 800 })).toMatchObject({ ok: true })
+		await waitUntil(() => mount.slewing)
+		await waitUntil(released)
+
+		// The solver sees the mount 90″ north of where it reports, so a corrected mount reports about 90″ south of the target.
+		expect(toArcsec(deg(-40) - mount.equatorialCoordinate.declination)).toBeGreaterThan(60)
+		expect(toArcsec(deg(-40) - mount.equatorialCoordinate.declination)).toBeLessThan(120)
+
+		expect(activations.deactivate(id, mountDevice.deviceId).status).toBe(204)
+		expect(corrections.snapshot().activations).toEqual([])
 	}, 240000)
 
 	test('a revision that did not pass its offline quality is not verified, and neither is one of another mount', async () => {

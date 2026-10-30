@@ -5,6 +5,7 @@ import type { ConnectRequest, ConnectionStatus } from './connection'
 import type { DarvSessionSummary } from './darv'
 import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingEventRecord, GuidingSessionSummary } from './guiding'
+import type { MountPointingSessionSummary } from './mountpointing.sessions'
 import type { OperationDevice, OperationKind, OperationRecord } from './operations'
 import type { TppaSessionSummary } from './tppa'
 import type { ServerEvent } from './websocket'
@@ -166,6 +167,8 @@ export class NotificationClassifier {
 				return this.#autoFocus(event.session)
 			case 'tppa:updated':
 				return this.#tppa(event.session)
+			case 'mountPointing:updated':
+				return this.#mountPointing(event.session)
 			case 'flatWizard:updated':
 				return this.#flatWizard(event.session)
 			case 'guiding:updated':
@@ -237,6 +240,19 @@ export class NotificationClassifier {
 
 		if (state === 'readyToRefine') return [{ key: `tppa.ready:${sessionId}`, level: 'info', code: 'tppa.readyToRefine', title: 'TPPA ready to refine', message: `The polar error of ${mountName} was estimated; adjust the mount while TPPA refines it.`, source, target }]
 		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ key: `tppa:${sessionId}`, level: 'error', code: 'tppa.failed', title: 'TPPA failed', message: `TPPA with ${mountName} failed: ${reasonText(reason)}.`, source, target }]
+		return []
+	}
+
+	// Reports a pointing session that needs the operator: one the mount could not be confirmed stopped for, one that paused
+	// by itself, and the end of a run.
+	#mountPointing(session: MountPointingSessionSummary): NotificationDraft[] {
+		const { sessionId, operationId, camera, mount, mountName, state, reason, acceptedCount, plannedCount } = session
+		const source = this.#source('mountPointing', camera.connectionId, mount.deviceId, operationId, sessionId)
+
+		if (state === 'blocked') return [{ key: `mountPointing.blocked:${sessionId}`, level: 'error', code: 'mountPointing.blocked', title: 'Mount not confirmed stopped', message: `${mountName} could not be confirmed stopped after its pointing session; check it before using it.`, source }]
+		if (state === 'paused' && reason !== undefined && reason !== 'aborted' && !this.#quiet(camera.connectionId, reason))
+			return [{ key: `mountPointing.paused:${sessionId}:${operationId}`, level: 'warning', code: 'mountPointing.paused', title: 'Pointing session paused', message: `The pointing session of ${mountName} paused: ${reasonText(reason)}.`, source }]
+		if (state === 'completed') return [{ key: `mountPointing.completed:${sessionId}`, level: 'info', code: 'mountPointing.completed', title: 'Pointing session completed', message: `${acceptedCount} of ${plannedCount} waypoints of ${mountName} were sampled.`, source }]
 		return []
 	}
 

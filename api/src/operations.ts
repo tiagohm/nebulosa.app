@@ -39,6 +39,7 @@ export type OperationKind =
 	| 'camera.capture'
 	| 'focuser.autofocus'
 	| 'mount.tppa'
+	| 'mount.pointingModel'
 	| 'mount.darv'
 	| 'camera.flatWizard'
 	| 'camera.guiding'

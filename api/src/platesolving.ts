@@ -51,7 +51,7 @@ export interface PlateSolveRequest {
 	readonly downsample?: number
 }
 
-// Who asked for a plate solve: a person, in Images, or the solve of a TPPA frame.
+// Who asked for a plate solve: a person, in Images, or the solve of a TPPA or mount pointing frame.
 export type PlateSolveOrigin =
 	| { readonly kind: 'manual' }
 	| {
@@ -66,6 +66,17 @@ export type PlateSolveOrigin =
 			readonly frameId: string
 			// Pose being acquired (1, 2 or 3), absent for a refinement frame.
 			readonly point?: 1 | 2 | 3
+	  }
+	| {
+			readonly kind: 'mountPointing'
+			// Id of the mount pointing session.
+			readonly sessionId: string
+			// Id of the open connection that provides the camera.
+			readonly connectionId: string
+			// Exact id of the camera.
+			readonly deviceId: string
+			// Identity of the frame: the session id and the frame ordinal.
+			readonly frameId: string
 	  }
 
 // State of a job: waiting for its solver, running, or ended (completed, failed, or cancelled).

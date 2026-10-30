@@ -25,6 +25,7 @@ import { createIndiRoutes, IndiPropertyService } from './indi'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
 import { createPointingModelRoutes, PointingModels } from './mountpointing'
 import { PointingModelFitter } from './mountpointing.fit'
+import { createMountPointingRoutes, MountPointingSessions } from './mountpointing.sessions'
 import { PointingModelStore } from './mountpointing.store'
 import { createMountRemoteControlRoutes, MountRemoteControlService } from './mountremotecontrol'
 import { createMountRoutes, MountCommands } from './mounts'
@@ -328,6 +329,7 @@ export type {
 export type { PointingFitModelRequest, PointingFitState, PointingModelDetail, PointingModelEvent, PointingModelPatch, PointingModelsSnapshot } from './mountpointing'
 export type { PointingFitStrategy, PointingGate, PointingOfflineMetrics, PointingSampleResidual } from './mountpointing.fit'
 export type { EquatorialPosition, PointingSite } from './mountpointing.frames'
+export type { MountPointingCaptureSettings, MountPointingEvent, MountPointingPlanPreviewRequest, MountPointingPlanRequest, MountPointingRequest, MountPointingSessionSummary, MountPointingSnapshot, MountPointingStartResponse, MountPointingState, MountPointingStep } from './mountpointing.sessions'
 export type { PointingAcquisitionState, PointingModelExport, PointingModelFile, PointingModelSummary, PointingMountIdentity, PointingOpticsFingerprint, PointingPlanRecord, PointingRevision, PointingSampleRecord, PointingVerification, UnavailablePointingModel } from './mountpointing.store'
 export type { TppaAlignment, TppaAttempt, TppaCaptureSettings, TppaEvent, TppaGeometry, TppaOverlay, TppaPoint, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaStartResponse, TppaState } from './tppa'
 export type { GuidingProfileCut, GuidingStarProfile } from './guidingprofile'
@@ -430,6 +432,11 @@ const tppa = new TppaSessions(connections.devices, (id) => connections.client(id
 // Mount pointing models, persisted under the home of the server and fitted on a worker of their own.
 const pointingModels = new PointingModels(new PointingModelStore(), new PointingModelFitter(), publish)
 
+// Mount pointing sessions of the cameras of the open connections, slewing the mounts with the commander of the mount
+// commands, so no model corrects them, taking their frames with the capturer of the captures, and solving them with the
+// plate solving service.
+const mountPointing = new MountPointingSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, pointingModels, publish)
+
 // DARV sessions of the cameras of the open connections, moving the mounts with the commander of the mount commands,
 // taking their frames with the capturer of the captures, and analyzing them on a worker of their own.
 const darv = new DarvSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, new DarvAnalyzer(images), publish)
@@ -479,6 +486,7 @@ export const routes = {
 	...createAutoFocusRoutes(autoFocus),
 	...createTppaRoutes(tppa),
 	...createPointingModelRoutes(pointingModels),
+	...createMountPointingRoutes(mountPointing),
 	...createDarvRoutes(darv),
 	...createFlatWizardRoutes(flatWizard),
 	...createGuidingRoutes(guiding),

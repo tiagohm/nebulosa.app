@@ -26,6 +26,7 @@ export const OPERATION_LABELS: Readonly<Record<OperationKind, readonly [IconName
 	'mount.findHome': ['mount', 'Find home'],
 	'mount.nudge': ['mount', 'Nudge'],
 	'mount.remoteMove': ['mount', 'Remote mount motion'],
+	'mount.pointingModel': ['mount', 'Pointing model'],
 	'guideOutput.pulse': ['guideOutput', 'Pulse'],
 	'focuser.move': ['focuser', 'Move'],
 	'wheel.move': ['wheel', 'Change'],

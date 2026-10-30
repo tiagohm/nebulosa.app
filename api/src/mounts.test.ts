@@ -1,9 +1,13 @@
 import { afterEach, expect, spyOn, test } from 'bun:test'
-import { failedOperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
+import { timeNow } from 'nebulosa/src/astronomy/time/time'
+import type { Mount, MountTargetCoordinate, PierSide } from 'nebulosa/src/devices/indi/device'
+import { failedOperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
-import { deg } from 'nebulosa/src/math/units/angle'
+import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import type { CommandAccepted } from './commands'
 import { ConnectionManager } from './connection'
+import type { MountCorrectionPlan } from './mountpointing.corrections'
 import { DEFAULT_MOUNT_NUDGE_OPTIONS, MountCommands, type MountCoordinate, type MountNudgeDirection, type MountNudgeEvent, type MountNudgeOptions, type MountNudgeSession, type MountNudgeStartResponse, type MountSlewRequest, type MountSlewResponse } from './mounts'
 import { type OperationEvent, type OperationRecord, OperationRegistry } from './operations'
 import type { PositionRequest, SkyPosition } from './sky/ephemeris'
@@ -95,6 +99,94 @@ test('slews to an object resolved at the real current time and reports the real 
 	expect(events[1].operation).toEqual({ ...running, state: 'succeeded' })
 	expect(operations.running()).toBeEmpty()
 	expect(mount.equatorialCoordinate.rightAscension).toBeCloseTo(body.rightAscension, 2)
+}, 40000)
+
+// Commands over a fake model that answers plan, recording its calls.
+async function setupCorrected(plan: MountCorrectionPlan | ((target: MountTargetCoordinate<string | number>) => MountCorrectionPlan)) {
+	const manager = new ConnectionManager()
+	disposables.push(manager)
+	const { id } = await manager.connect({ type: 'SIMULATOR' })
+	const client = manager.client(id)!
+	const operations = new OperationRegistry(manager.devices, () => {})
+	disposables.push(operations)
+	const plans: MountTargetCoordinate<string | number>[] = []
+	const observed: PierSide[] = []
+	const corrections = {
+		plan: (_: Mount, target: MountTargetCoordinate<string | number>) => {
+			plans.push(target)
+			return typeof plan === 'function' ? plan(target) : plan
+		},
+		suspend: () => {},
+		observed: (_: Mount, expected: PierSide) => observed.push(expected),
+	}
+	const commands = new MountCommands(
+		manager.devices,
+		(connectionId) => manager.client(connectionId),
+		locator(0, deg(30)).locate,
+		operations,
+		() => {},
+		DEFAULT_MOUNT_NUDGE_OPTIONS,
+		corrections,
+	)
+	disposables.push(commands)
+	const mount = await connectMount(manager, client, manager.devices.list(client).find((d) => d.type === 'mount')!.id)
+	return { commands, operations, mount, plans, observed }
+}
+
+// Target inside a scope holding the mount, a few degrees from where it stands, above the horizon of its zenith.
+function zenithOf(mount: Mount) {
+	return {
+		observer: { latitude: toDeg(mount.equatorialCoordinate.declination), longitude: toDeg(mount.equatorialCoordinate.rightAscension - localSiderealTime(timeNow(true), 0)), elevation: 0 },
+		target: { type: 'JNOW', JNOW: { x: mount.equatorialCoordinate.rightAscension + deg(1), y: mount.equatorialCoordinate.declination } } as const,
+	}
+}
+
+test('a GoTo from inside an operation holding the mount is planned once and goes as corrected', async () => {
+	const { commands, operations, mount, plans, observed } = await setupCorrected((target) => ({ status: 'corrected', target: target as MountTargetCoordinate<number>, options: { tolerance: 0 }, pierSide: 'WEST', modelId: 'model', revisionId: 'revision' }))
+	const { target, observer } = zenithOf(mount)
+
+	const handle = operations.coordinator.start('holder', [{ key: resourceKey(mount), device: mount }], async (context) => {
+		expect(operations.available(mount)).toBeFalse()
+		const sent = await commands.goToWithin(context, mount, target, observer, { timeout: 30000 })
+		expect(sent).toMatchObject({ status: 'sent', result: { ok: true }, correction: { modelId: 'model', revisionId: 'revision' } })
+		return successfulOperationResult(undefined)
+	})
+
+	expect(await handle.result).toMatchObject({ ok: true })
+	expect(plans).toHaveLength(1)
+	await waitUntil(() => observed.length === 1)
+	expect(observed).toEqual(['WEST'])
+}, 40000)
+
+test('a GoTo from inside an operation refused by the model or the horizon commands nothing', async () => {
+	const { commands, operations, mount } = await setupCorrected({ status: 'refused', error: 'The target is too far from the samples of the pointing model' })
+	const { target, observer } = zenithOf(mount)
+	const goTo = spyOn(commands.commander, 'goTo')
+	disposables.push({ [Symbol.dispose]: () => goTo.mockRestore() })
+
+	const handle = operations.coordinator.start('holder', [{ key: resourceKey(mount), device: mount }], async (context) => {
+		expect(await commands.goToWithin(context, mount, target, observer)).toEqual({ status: 'refused', error: 'The target is too far from the samples of the pointing model', code: 'correctionRefused' })
+		const below = { ...observer, longitude: observer.longitude + 180 }
+		expect(await commands.goToWithin(context, mount, target, below)).toMatchObject({ status: 'refused', code: 'invalidParameter' })
+		return successfulOperationResult(undefined)
+	})
+
+	expect(await handle.result).toMatchObject({ ok: true })
+	expect(goTo).not.toHaveBeenCalled()
+})
+
+test('a GoTo without a model in force goes as asked from inside an operation', async () => {
+	const { commands, operations, mount } = await setupCorrected((target) => ({ status: 'uncorrected', target }))
+	const { target, observer } = zenithOf(mount)
+
+	const handle = operations.coordinator.start('holder', [{ key: resourceKey(mount), device: mount }], async (context) => {
+		const sent = await commands.goToWithin(context, mount, target, observer, { timeout: 30000 })
+		expect(sent).toMatchObject({ status: 'sent', result: { ok: true } })
+		expect('correction' in sent).toBeFalse()
+		return successfulOperationResult(undefined)
+	})
+
+	expect(await handle.result).toMatchObject({ ok: true })
 }, 40000)
 
 test('refuses a target below the horizon', async () => {

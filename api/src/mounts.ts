@@ -1,10 +1,10 @@
 import { equatorialToHorizontal } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { timeNow } from 'nebulosa/src/astronomy/time/time'
-import { MountCommander, type MountMoveDirection } from 'nebulosa/src/devices/commanders/mount'
+import { type MountCommandOptions, MountCommander, type MountMoveDirection, type MountSlewResult } from 'nebulosa/src/devices/commanders/mount'
 import type { Client, Mount, MountTargetCoordinate, MountTargetCoordinateType, TrackMode } from 'nebulosa/src/devices/indi/device'
 import { mountTargetEquatorial } from 'nebulosa/src/devices/indi/manager/mount'
-import type { OperationContext, OperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import type { OperationContext, OperationResult, OperationScope } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { deg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
@@ -25,7 +25,8 @@ import type { SkyObjectRef } from './sky/types'
 // positions, site, and clock set. Motions run as operations through the shared command contract of
 // commands.ts and are answered 202 with their operation id; settings are answered once applied. Mount Remote
 // Control (mountremotecontrol.ts) starts gotos and syncs without a request through goToNow and syncNow, which
-// refuse them exactly as the goto and sync routes do.
+// refuse them exactly as the goto and sync routes do. An operation that holds the mount itself, such as Target Centering,
+// sends its own GoTo through goToWithin, with the same refusals and correction.
 //
 // A slew to an object resolves the object at the server's real current time, never at a simulated
 // instant, refuses targets below the observer's horizon, and runs
@@ -42,6 +43,11 @@ import type { SkyObjectRef } from './sky/types'
 // direction of each axis inside the same session and is rolled back as a whole when the second axis
 // cannot start. The STOP of a nudge only ends its own session; it never cancels a slew or any other
 // operation of the mount, which is what the emergency stop endpoint is for.
+
+// What became of a GoTo sent from inside an operation (MountCommands.goToWithin):
+// - refused: nothing was commanded, for this reason.
+// - sent: the mount was commanded; result is the outcome of the slew, and correction the model that corrected it, if any.
+export type MountGoToWithin = { readonly status: 'refused'; readonly error: string; readonly code: CommandErrorCode } | { readonly status: 'sent'; readonly result: OperationResult<MountSlewResult>; readonly correction?: { readonly modelId: string; readonly revisionId: string } }
 
 // Body of POST /api/connections/:id/mounts/:deviceId/slew.
 export interface MountSlewRequest {
@@ -547,12 +553,35 @@ export class MountCommands implements Disposable {
 		return this.corrections?.plan(mount, target) ?? { status: 'uncorrected', target }
 	}
 
-	// Sends a GoTo as planned, once. A corrected one goes exactly, however close the mount stands, and its pier side is compared
-	// with the one it was corrected for.
-	#goTo(mount: Mount, planned: Exclude<MountCorrectionPlan, { readonly status: 'refused' }>) {
-		if (planned.status === 'uncorrected') return this.#commander.goTo(this.operations.coordinator, mount, planned.target)
+	// Returns why a connected mount cannot go to a target seen by an observer, with the status to respond with, or undefined
+	// when it can. A caller that sends its own motions checks each one against the same refusals as the goto route.
+	refusal(mount: Mount, target: MountTargetCoordinate<string | number>, observer: SkyObserver) {
+		return slewRefusal('mount.goto', mount, target, observer)
+	}
 
-		const result = this.#commander.goTo(this.operations.coordinator, mount, planned.target, planned.options)
+	// Sends a mount to a target from inside an operation that already holds it, where the goto route would find it busy: the same
+	// refusals, once, and the same single correction of the model in force. Resolves what became of the GoTo; a refusal commands
+	// nothing. options bounds the slew, in milliseconds.
+	async goToWithin(scope: OperationScope, mount: Mount, target: MountTargetCoordinate<string | number>, observer: SkyObserver, options?: Pick<MountCommandOptions, 'timeout' | 'settleTimeout'>): Promise<MountGoToWithin> {
+		const refusal = this.refusal(mount, target, observer)
+		if (refusal) return { status: 'refused', error: refusal[0], code: refusal[2] }
+
+		const planned = this.#planned(mount, target)
+		if (planned.status === 'refused') return { status: 'refused', error: planned.error, code: 'correctionRefused' }
+
+		const below = planned.status === 'corrected' ? this.refusal(mount, planned.target, observer) : undefined
+		if (below) return { status: 'refused', error: below[0], code: below[2] }
+
+		const correction = planned.status === 'corrected' ? { modelId: planned.modelId, revisionId: planned.revisionId } : undefined
+		return { status: 'sent', result: await this.#goTo(mount, planned, scope, options), ...(correction && { correction }) }
+	}
+
+	// Sends a GoTo as planned, once, under the coordinator unless a scope is given. A corrected one goes exactly, however close the
+	// mount stands, and its pier side is compared with the one it was corrected for.
+	#goTo(mount: Mount, planned: Exclude<MountCorrectionPlan, { readonly status: 'refused' }>, scope: OperationScope = this.operations.coordinator, options?: Pick<MountCommandOptions, 'timeout' | 'settleTimeout'>) {
+		if (planned.status === 'uncorrected') return this.#commander.goTo(scope, mount, planned.target, options)
+
+		const result = this.#commander.goTo(scope, mount, planned.target, { ...options, ...planned.options })
 
 		void result.then((outcome) => {
 			if (outcome.ok) this.corrections?.observed(mount, planned.pierSide, outcome.value.pierSide)

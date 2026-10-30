@@ -126,7 +126,7 @@ export type PointingActivationListener = (event: PointingActivationEvent) => voi
 // - refused: do not go, since a model in force cannot speak for this target.
 export type MountCorrectionPlan =
 	| { readonly status: 'uncorrected'; readonly target: MountTargetCoordinate<string | number> }
-	| { readonly status: 'corrected'; readonly target: MountTargetCoordinate<number>; readonly options: { readonly tolerance: 0 }; readonly pierSide: PierSide }
+	| { readonly status: 'corrected'; readonly target: MountTargetCoordinate<number>; readonly options: { readonly tolerance: 0 }; readonly pierSide: PierSide; readonly modelId: string; readonly revisionId: string }
 	| { readonly status: 'refused'; readonly error: string }
 
 // Hour angle half width around the meridian where the side a mount takes cannot be told, in radians (1°); provisional.
@@ -267,7 +267,8 @@ export class MountCorrections implements DeviceHandler<Mount>, Disposable {
 
 		const { command } = corrected
 		this.#audit(active, { time, requested, command })
-		return { status: 'corrected', target: { type: 'JNOW', JNOW: { x: command.rightAscension, y: command.declination } }, options: { tolerance: 0 }, pierSide }
+		const { modelId, revisionId } = active.record
+		return { status: 'corrected', target: { type: 'JNOW', JNOW: { x: command.rightAscension, y: command.declination } }, options: { tolerance: 0 }, pierSide, modelId, revisionId }
 	}
 
 	// Records the pier side a corrected GoTo ended on, when it is not the one it was corrected for.

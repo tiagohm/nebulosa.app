@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
-import { deg, toDeg } from 'nebulosa/src/math/units/angle'
-import { fitsToViewer, pointAt, skyAt, skyDirections, viewerToFits, wcsGeometry } from './wcs'
+import { arcsec, deg, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
+import { fitsToViewer, pixelScaleAt, pointAt, skyAt, skyDirections, skyOffset, viewerToFits, wcsFrame, wcsGeometry } from './wcs'
 
 // A TAN solution of a 200×100 image centred at its CRPIX, scale s degrees per pixel, rotated by angle (degrees) and
 // mirrored when flipped. Standard orientation (angle 0, not flipped) has east towards -X and north towards +Y.
@@ -101,5 +101,116 @@ describe('grid', () => {
 				expect(+y).toBeLessThanOrEqual(100)
 			}
 		}
+	})
+})
+
+// The solution of solution(...) with a second-order SIP distortion that stretches the right of the image.
+function sip(ra: number, dec: number): FitsHeader {
+	return { ...solution(ra, dec), CTYPE1: 'RA---TAN-SIP', CTYPE2: 'DEC--TAN-SIP', A_ORDER: 2, B_ORDER: 2, A_2_0: 2e-3, A_1_1: 0, A_0_2: 0, B_2_0: 0, B_1_1: 0, B_0_2: 0 }
+}
+
+describe('subpixel convention', () => {
+	test.each([
+		[0, 0],
+		[0.25, 99.75],
+		[199.999, 0.001],
+		[123.456, 78.9],
+	])('round trips the viewer point (%p, %p)', (x, y) => {
+		const header = solution(42, -17, { angle: 23 })
+		const [ra, dec] = skyAt(header, { x, y })!
+		const point = pointAt(header, ra, dec)!
+
+		expect(point.x).toBeCloseTo(x, 6)
+		expect(point.y).toBeCloseTo(y, 6)
+	})
+})
+
+describe('frame', () => {
+	test.each([
+		[{}, 'ICRS'],
+		[{ RADESYS: 'ICRS' }, 'ICRS'],
+		[{ RADESYS: 'FK5 ', EQUINOX: 2000 }, 'FK5 J2000'],
+		[{ RADESYS: 'FK5' }, 'FK5 J2000'],
+		[{ EQUINOX: 2000 }, 'FK5 J2000'],
+	] as const)('of %p is %s', (keywords, frame) => {
+		expect(wcsFrame({ ...solution(42, -17), ...keywords })).toBe(frame)
+	})
+})
+
+describe('pixel scale', () => {
+	test('is the CD scale of a TAN solution', () => {
+		expect(toArcsec(pixelScaleAt(solution(42, -17, { angle: 61, flipped: true }), { x: 100, y: 50 })!)).toBeCloseTo(3.6, 4)
+	})
+
+	test('follows the SIP distortion', () => {
+		const header = sip(42, -17)
+		const left = pixelScaleAt(header, { x: 20, y: 50 })!
+		const right = pixelScaleAt(header, { x: 180, y: 50 })!
+
+		expect(right).toBeGreaterThan(left * 1.1)
+	})
+})
+
+describe('sky offset', () => {
+	const a = [deg(10), deg(20)] as const
+
+	test('is zero without a position angle for coincident positions', () => {
+		const offset = skyOffset(a, a)
+
+		expect(offset.separation).toBe(0)
+		expect(offset.positionAngle).toBeUndefined()
+		expect(offset.east).toBe(0)
+		expect(offset.north).toBe(0)
+	})
+
+	test('keeps a tiny separation and its position angle', () => {
+		const offset = skyOffset(a, [a[0], a[1] + 1e-10])
+
+		expect(offset.separation).toBeCloseTo(1e-10, 16)
+		expect(offset.positionAngle!).toBeCloseTo(0, 6)
+	})
+
+	test('has no position angle nor tangent offset for antipodal positions', () => {
+		const offset = skyOffset(a, [a[0] + Math.PI, -a[1]])
+
+		expect(offset.separation).toBeCloseTo(Math.PI, 12)
+		expect(offset.positionAngle).toBeUndefined()
+		expect(offset.east).toBeUndefined()
+		expect(offset.north).toBeUndefined()
+	})
+
+	test('measures the position angle from north through east', () => {
+		expect(toDeg(skyOffset(a, [a[0], a[1] + arcsec(10)]).positionAngle!)).toBeCloseTo(0, 6)
+		expect(toDeg(skyOffset(a, [a[0] + arcsec(10), a[1]]).positionAngle!)).toBeCloseTo(90, 3)
+		expect(toDeg(skyOffset(a, [a[0], a[1] - arcsec(10)]).positionAngle!)).toBeCloseTo(180, 6)
+		expect(toDeg(skyOffset(a, [a[0] - arcsec(10), a[1]]).positionAngle!)).toBeCloseTo(270, 3)
+	})
+
+	test('gives the right ascension difference across 0h', () => {
+		const offset = skyOffset([deg(359.9), 0], [deg(0.1), 0])
+
+		expect(toDeg(offset.rightAscension)).toBeCloseTo(0.2, 9)
+		expect(toDeg(offset.separation)).toBeCloseTo(0.2, 9)
+		expect(offset.east!).toBeCloseTo(Math.tan(deg(0.2)), 12)
+		expect(offset.north!).toBeCloseTo(0, 12)
+	})
+
+	test('separates the right ascension difference from the angle on the sky', () => {
+		const offset = skyOffset([0, deg(60)], [deg(1), deg(60)])
+
+		expect(toDeg(offset.rightAscension)).toBeCloseTo(1, 9)
+		expect(toDeg(offset.separation)).toBeCloseTo(0.5, 3)
+		expect(toDeg(offset.east!)).toBeCloseTo(0.5, 3)
+	})
+
+	test('agrees with the separation of points the SIP solution unprojects', () => {
+		const header = sip(42, -17)
+		const from = skyAt(header, { x: 10, y: 10 })!
+		const to = skyAt(header, { x: 190, y: 90 })!
+		const offset = skyOffset(from, to)
+		const cos = Math.sin(from[1]) * Math.sin(to[1]) + Math.cos(from[1]) * Math.cos(to[1]) * Math.cos(to[0] - from[0])
+
+		expect(offset.separation).toBeCloseTo(Math.acos(cos), 12)
+		expect(Math.hypot(offset.east!, offset.north!)).toBeCloseTo(Math.tan(offset.separation), 12)
 	})
 })

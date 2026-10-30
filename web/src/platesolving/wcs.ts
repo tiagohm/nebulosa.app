@@ -1,6 +1,7 @@
 import { tanProject, tanUnproject } from 'nebulosa/src/astrometry/wcs/fits.wcs'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
-import { deg, normalizeAngle } from 'nebulosa/src/math/units/angle'
+import { sphericalPositionAngle, sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
+import { deg, normalizeAngle, normalizePI } from 'nebulosa/src/math/units/angle'
 import type { Point } from '../viewer/transform'
 
 // Geometry of a plate solution on the shared image viewer, computed once per solution with the toolkit's TAN/TAN-SIP
@@ -9,7 +10,8 @@ import type { Point } from '../viewer/transform'
 // pixel, +X right and +Y down along the rows as stored, so a FITS pixel (x, y) is the viewer point (x - 0.5, y - 0.5).
 // That offset is applied here and nowhere else. Directions are found by projecting sky offsets, so they follow the
 // rotation, parity, and distortion of the solution; right ascension is unwrapped around the image centre, so a field
-// across 0h is continuous, and a celestial pole inside the field widens the grid to every right ascension.
+// across 0h is continuous, and a celestial pole inside the field widens the grid to every right ascension. Sky
+// positions are in the frame of the solution (ICRS, or FK5 J2000 for a header that says so), never of date.
 
 // Directions of the sky at a point of the image, as unit vectors in viewer coordinates.
 export interface SkyDirections {
@@ -32,6 +34,35 @@ export interface WcsGeometry extends SkyDirections {
 	// Spacing of the meridians, radians.
 	readonly rightAscensionStep: number
 }
+
+// Reference frame of the sky positions of a solution: the ICRS, or the FK5 at the J2000 equinox, which the toolkit
+// accepts as an approximation of the ICRS (within 0.03″) but which is labelled apart.
+export type WcsFrame = 'ICRS' | 'FK5 J2000'
+
+// Offset from one sky position to another, every angle in radians.
+export interface SkyOffset {
+	// Great-circle separation, [0, π].
+	readonly separation: number
+	// Position angle of the second position seen from the first, from north through east, [0, 2π); absent when it is
+	// undefined (coincident or antipodal positions).
+	readonly positionAngle?: number
+	// Difference of right ascension, second minus first, (-π, π]; not an angle on the sky.
+	readonly rightAscension: number
+	// Difference of declination, second minus first.
+	readonly declination: number
+	// Standard coordinate ξ of the second position on the plane tangent at the first, towards east; absent when the
+	// second position is on the far hemisphere.
+	readonly east?: number
+	// Standard coordinate η of the second position on the plane tangent at the first, towards north; absent when the
+	// second position is on the far hemisphere.
+	readonly north?: number
+}
+
+// Separation below which a position angle is undefined, radians.
+const COINCIDENT = 1e-12
+
+// Distance from π within which two positions are antipodal and their position angle undefined, radians.
+const ANTIPODAL = 1e-9
 
 // Grid spacings a field may get, radians: from 1′ to 30°.
 const GRID_STEPS = [1 / 60, 2 / 60, 5 / 60, 10 / 60, 15 / 60, 0.5, 1, 2, 5, 10, 15, 30].map(deg)
@@ -65,11 +96,35 @@ export function pointAt(solution: FitsHeader, rightAscension: number, declinatio
 	return pixel && fitsToViewer(pixel[0], pixel[1])
 }
 
+// Returns the reference frame of the sky positions of a solution, from RADESYS, else EQUINOX (FITS WCS Paper II):
+// FK5 J2000 when it names the FK5 or, without RADESYS, gives an equinox; the ICRS otherwise.
+export function wcsFrame(solution: FitsHeader): WcsFrame {
+	const system = typeof solution.RADESYS === 'string' ? solution.RADESYS.trim().toUpperCase() : ''
+	if (system === 'FK5') return 'FK5 J2000'
+	if (system === 'ICRS') return 'ICRS'
+	return solution.EQUINOX === undefined ? 'ICRS' : 'FK5 J2000'
+}
+
+// Returns the offset from one sky position to another, [right ascension, declination] in radians each: the
+// separation and position angle from the toolkit's atan2 formulas, which keep tiny and near-antipodal separations, the
+// differences of the coordinates, and the gnomonic standard coordinates of the second position around the first.
+export function skyOffset(from: readonly [number, number], to: readonly [number, number]): SkyOffset {
+	const [ra0, dec0] = from
+	const [ra, dec] = to
+	const separation = sphericalSeparation(ra0, dec0, ra, dec)
+	const positionAngle = separation >= COINCIDENT && Math.PI - separation >= ANTIPODAL ? sphericalPositionAngle(ra0, dec0, ra, dec) : undefined
+	const dRa = normalizePI(ra - ra0)
+	const cosDec = Math.cos(dec)
+	const cosC = Math.sin(dec0) * Math.sin(dec) + Math.cos(dec0) * cosDec * Math.cos(dRa)
+	const tangent = cosC > 0 ? { east: (cosDec * Math.sin(dRa)) / cosC, north: (Math.cos(dec0) * Math.sin(dec) - Math.sin(dec0) * cosDec * Math.cos(dRa)) / cosC } : undefined
+	return { separation, ...(positionAngle !== undefined && { positionAngle }), rightAscension: dRa, declination: dec - dec0, ...tangent }
+}
+
 // Returns the north and east directions at a viewer point: the projections of small offsets in declination and right
 // ascension of its sky position, about ten pixels long, normalized.
 export function skyDirections(solution: FitsHeader, point: Point): SkyDirections {
 	const sky = skyAt(solution, point)
-	const step = pixelAngle(solution, point)
+	const step = pixelScaleAt(solution, point)
 	if (!sky || !step) return {}
 
 	const [ra, dec] = sky
@@ -139,21 +194,16 @@ export function wcsGeometry(solution: FitsHeader, width: number, height: number)
 	return { center, ...directions, parallels, meridians, declinationStep, rightAscensionStep }
 }
 
-// Returns the angle one pixel spans at a viewer point, radians, from the separation of its neighbours; undefined when
-// they cannot be unprojected.
-function pixelAngle(solution: FitsHeader, point: Point): number | undefined {
+// Returns the angle one image pixel spans at a viewer point, radians per pixel: the mean separation of its neighbours
+// one pixel to the right and one below, so it follows the local distortion of the solution; undefined when they cannot
+// be unprojected.
+export function pixelScaleAt(solution: FitsHeader, point: Point): number | undefined {
 	const a = skyAt(solution, point)
 	const b = skyAt(solution, { x: point.x + 1, y: point.y })
 	const c = skyAt(solution, { x: point.x, y: point.y + 1 })
 	if (!a || !b || !c) return undefined
-	const step = (separation(a, b) + separation(a, c)) / 2
+	const step = (sphericalSeparation(a[0], a[1], b[0], b[1]) + sphericalSeparation(a[0], a[1], c[0], c[1])) / 2
 	return step > 0 ? step : undefined
-}
-
-// Returns the great-circle separation of two sky positions, radians, by the haversine formula.
-function separation([ra1, dec1]: readonly [number, number], [ra2, dec2]: readonly [number, number]): number {
-	const h = Math.sin((dec2 - dec1) / 2) ** 2 + Math.cos(dec1) * Math.cos(dec2) * Math.sin((ra2 - ra1) / 2) ** 2
-	return 2 * Math.asin(Math.min(1, Math.sqrt(h)))
 }
 
 // Returns the unit vector from a point towards another one, times sign; undefined when there is none.

@@ -12,6 +12,7 @@ import { operationsState } from '../operations'
 import { AdvancedControls, HintControls, SolverControls, StrategyControls, useSolverConfigured } from '../platesolving/PlateSolveControls'
 import { cancelPlateSolve, completedJobs, loadHints, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolvingState, PROVIDER_LABELS, runPlateSolve, STAGE_LABELS } from '../platesolving/platesolving'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
+import { wcsFrame } from '../platesolving/wcs'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { formatDeclination, formatRightAscension } from '../sky/format'
@@ -24,7 +25,7 @@ import { type ImagePlateSolvingState, imagesState, imageUnavailableReason, selec
 import type { ImageToolPanelProps } from './tools'
 
 // Plate Solver tool of the Images workspace: solves the active document on the server with ASTAP, Astrometry.net Local,
-// or Astrometry.net Online, and shows the solution (ICRS centre, scale, rotation, parity, field of view), the hints it
+// or Astrometry.net Online, and shows the solution (centre in the frame of its WCS, scale, rotation, parity, field of view), the hints it
 // used with their origins, and its overlay. Settings are edited as the document's pending request and sent only by
 // Solve Image; zoom, pan, stretch, or the overlay never solve. The settings are editable before the document has an
 // image (a camera tab waiting for its first frame), with Solve Image disabled until it has one. A job stays bound to the image it solved, so switching
@@ -205,8 +206,8 @@ function Solution({ job, result, solution, fromHeader, resultError }: SolutionPr
 			{solution ? (
 				<>
 					<Property label="Source">{fromHeader ? 'Image header' : PROVIDER_LABELS[result?.request.provider ?? 'astap']}</Property>
-					<Property label="RA (ICRS)">{formatRightAscension(solution.rightAscension)}</Property>
-					<Property label="Dec (ICRS)">{formatDeclination(solution.declination)}</Property>
+					<Property label={`RA (${wcsFrame(solution)})`}>{formatRightAscension(solution.rightAscension)}</Property>
+					<Property label={`Dec (${wcsFrame(solution)})`}>{formatDeclination(solution.declination)}</Property>
 					<Property label="Pixel Scale">{toArcsec(solution.scale).toFixed(3)} ″/px</Property>
 					<Property label="Rotation">{toDeg(solution.orientation).toFixed(2)}°</Property>
 					<Property label="Parity">{solution.parity === 'NORMAL' ? 'Normal' : 'Flipped'}</Property>

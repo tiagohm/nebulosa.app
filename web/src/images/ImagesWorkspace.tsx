@@ -193,7 +193,7 @@ export function ImagesWorkspace() {
 									<span className="mx-1 h-5 w-px bg-line-100" />
 									<SaveImagePopover document={document} view={view} onSaveToServer={(format) => setSaving({ key: document.key, closeAfter: false, format })} />
 									<span className="mx-1 h-5 w-px bg-line-100" />
-									<Select options={ASTROMETRY_MODES} value={mode} format={(option) => MODE_LABELS[option]} disabled={!solution || !!picking} onChange={(next) => setModes((current) => ({ ...current, [document.key]: next }))} className="w-36 max-sm:w-28" />
+									{solution && <Select options={ASTROMETRY_MODES} value={mode} format={(option) => MODE_LABELS[option]} disabled={!!picking} onChange={(next) => setModes((current) => ({ ...current, [document.key]: next }))} className="w-36 max-sm:w-28" />}
 									{document.camera && <CameraControls document={document} framesShown={framesShown} onToggleFrames={() => setFramesShown(!framesShown)} reticle={reticle} onToggleReticle={() => setReticles({ ...reticles, [document.key]: !reticle })} />}
 								</>
 							)

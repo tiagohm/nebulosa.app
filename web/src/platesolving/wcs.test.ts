@@ -63,11 +63,42 @@ describe('directions', () => {
 		expect(east!.x).toBeCloseTo(-1, 6)
 	})
 
-	test('have no east at a pole', () => {
-		const { north, east } = skyDirections(solution(0, 90), { x: 100, y: 50 })
+	// A point `pixels` from a pole along the rows, so a step along its parallel would wrap around the pole.
+	test.each([
+		[1000, 90],
+		[6.7, 90],
+		[3.2, 90],
+		[1.6, 90],
+		[0.1, 90],
+		[0.01, 90],
+		[0, 90],
+		[6.7, -90],
+		[0, -90],
+	])('stay perpendicular and both exist %p pixels from the pole of declination %p', (pixels, dec) => {
+		const { north, east } = skyDirections(solution(40, dec, { angle: 31 }), { x: 100 + pixels, y: 50 })
 
-		expect(east).toBeUndefined()
-		expect(north).toBeDefined()
+		expect(north!.x * east!.x + north!.y * east!.y).toBeCloseTo(0, 5)
+		expect(Math.hypot(north!.x, north!.y)).toBeCloseTo(1, 9)
+		expect(Math.hypot(east!.x, east!.y)).toBeCloseTo(1, 9)
+	})
+
+	test('north points to the pole beside it', () => {
+		const header = solution(40, 90, { angle: 31 })
+		const pole = pointAt(header, 0, deg(90))!
+		const point = { x: pole.x + 3, y: pole.y }
+		const { north } = skyDirections(header, point)
+
+		expect(north!.x).toBeCloseTo(-1, 3)
+		expect(north!.y).toBeCloseTo(0, 3)
+	})
+
+	test('keep the handedness of the image at a pole', () => {
+		const handedness = (flipped: boolean) => {
+			const { north, east } = skyDirections(solution(40, 90, { flipped }), { x: 100, y: 50 })
+			return Math.sign(north!.x * east!.y - north!.y * east!.x)
+		}
+
+		expect(handedness(true)).toBe(-handedness(false))
 	})
 })
 

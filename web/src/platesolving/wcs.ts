@@ -1,7 +1,7 @@
 import { tanProject, tanUnproject } from 'nebulosa/src/astrometry/wcs/fits.wcs'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { sphericalPositionAngle, sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
-import { normalizeAngle, normalizePI } from 'nebulosa/src/math/units/angle'
+import { normalizePI } from 'nebulosa/src/math/units/angle'
 import type { Point } from '../viewer/transform'
 
 // Geometry of a plate solution on the shared image viewer with the toolkit's TAN/TAN-SIP transforms (tanProject,
@@ -13,11 +13,14 @@ import type { Point } from '../viewer/transform'
 // rotation, parity, and distortion of the solution. Sky positions are in the frame of the solution (ICRS, or FK5 J2000
 // for a header that says so), never of date.
 
+// Equatorial unit vector.
+type UnitVector = readonly [number, number, number]
+
 // Directions of the sky at a point of the image, as unit vectors in viewer coordinates.
 export interface SkyDirections {
-	// Towards increasing declination; absent at a pole or when it cannot be projected.
+	// Towards increasing declination; absent when it cannot be projected.
 	readonly north?: Point
-	// Towards increasing right ascension; absent at a pole or when it cannot be projected.
+	// Towards increasing right ascension; absent when it cannot be projected.
 	readonly east?: Point
 }
 
@@ -97,8 +100,11 @@ export function skyOffset(from: readonly [number, number], to: readonly [number,
 	return { separation, ...(positionAngle !== undefined && { positionAngle }), rightAscension: dRa, declination: dec - dec0, ...tangent }
 }
 
-// Returns the north and east directions at a viewer point: the projections of small offsets in declination and right
-// ascension of its sky position, about ten pixels long, normalized.
+// Returns the north and east directions at a viewer point: the projections of offsets about ten pixels long along the
+// great circles that leave its sky position towards north and towards east, normalized. A step along a parallel would
+// follow its curvature, which near a pole bends east towards north and wraps around the pole within a few pixels of it,
+// while the great circles keep the true tangent directions at any declination, a pole included, where they are those
+// of the meridian of the right ascension the solution gives there.
 export function skyDirections(solution: FitsHeader, point: Point): SkyDirections {
 	const sky = skyAt(solution, point)
 	const step = pixelScaleAt(solution, point)
@@ -106,12 +112,25 @@ export function skyDirections(solution: FitsHeader, point: Point): SkyDirections
 
 	const [ra, dec] = sky
 	const delta = 10 * step
+	const cosRa = Math.cos(ra)
+	const sinRa = Math.sin(ra)
 	const cosDec = Math.cos(dec)
-	// Towards a pole closer than the offset, the offset is taken backwards and the direction reversed.
-	const sign = dec + delta < Math.PI / 2 ? 1 : -1
-	const north = direction(point, pointAt(solution, ra, dec + sign * delta), sign)
-	const east = cosDec > 1e-6 ? direction(point, pointAt(solution, normalizeAngle(ra + delta / cosDec), dec), 1) : undefined
+	const sinDec = Math.sin(dec)
+	const position = [cosDec * cosRa, cosDec * sinRa, sinDec] as const
+	const north = direction(point, pointAlong(solution, position, [-sinDec * cosRa, -sinDec * sinRa, cosDec], delta))
+	const east = direction(point, pointAlong(solution, position, [-sinRa, cosRa, 0], delta))
 	return { ...(north && { north }), ...(east && { east }) }
+}
+
+// Returns the viewer point `angle` radians along the great circle that leaves a sky position (an equatorial unit vector)
+// along a unit vector tangent to the sphere there, or undefined behind the tangent plane.
+function pointAlong(solution: FitsHeader, position: UnitVector, tangent: UnitVector, angle: number): Point | undefined {
+	const cos = Math.cos(angle)
+	const sin = Math.sin(angle)
+	const x = position[0] * cos + tangent[0] * sin
+	const y = position[1] * cos + tangent[1] * sin
+	const z = position[2] * cos + tangent[2] * sin
+	return pointAt(solution, Math.atan2(y, x), Math.atan2(z, Math.hypot(x, y)))
 }
 
 // Returns the angle one image pixel spans at a viewer point, radians per pixel: the mean separation of its neighbours
@@ -126,11 +145,11 @@ export function pixelScaleAt(solution: FitsHeader, point: Point): number | undef
 	return step > 0 ? step : undefined
 }
 
-// Returns the unit vector from a point towards another one, times sign; undefined when there is none.
-function direction(from: Point, to: Point | undefined, sign: number): Point | undefined {
+// Returns the unit vector from a point towards another one; undefined when there is none.
+function direction(from: Point, to: Point | undefined): Point | undefined {
 	if (!to) return undefined
-	const dx = (to.x - from.x) * sign
-	const dy = (to.y - from.y) * sign
+	const dx = to.x - from.x
+	const dy = to.y - from.y
 	const length = Math.hypot(dx, dy)
 	return length > 0 ? { x: dx / length, y: dy / length } : undefined
 }

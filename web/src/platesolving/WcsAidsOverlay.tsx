@@ -8,7 +8,7 @@ import { skyDirections } from './wcs'
 
 // Passive astrometric aids of the solution of the image shown, over the shared image viewer: a crosshair through the
 // pointer, the compact north and east arrows in the top-right corner of the visible image, from the WCS at that point
-// (an arrow that is undefined there, at a pole, is left out), and the angular scale bar near the bottom-left corner,
+// (an arrow that cannot be projected there is left out), and the angular scale bar near the bottom-left corner,
 // measured through the WCS where it is drawn (aids.ts). Everything keeps its size on screen and takes no pointer events.
 
 // Distance of the compact arrows from the top-right corner of the visible image, in screen pixels.

@@ -46,7 +46,9 @@ function defineString(value?: string) {
 await build({
 	entrypoints: [join(import.meta.dir, 'src/main.ts'), IMAGE_WORKER, IMAGE_PROCESSING_WORKER, STAR_WORKER, STREAK_WORKER, DARV_WORKER, FLATWIZARD_WORKER, GUIDING_WORKER, SOLARECLIPSE_WORKER],
 	root: ROOT,
-	minify: true,
+	// Syntax minification stays off: together with the React Compiler it drops the constants it inlines into the
+	// template literals of components and hooks, so `${MARGIN} ${width}` becomes `${width}` in the executable only.
+	minify: { whitespace: true, identifiers: true, syntax: false },
 	sourcemap: false,
 	target: 'bun',
 	env: 'APP_*',

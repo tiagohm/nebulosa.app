@@ -3,7 +3,8 @@ import { build } from 'bun'
 import { author, description, version } from './package.json'
 import bunTailwindPlugin from './tailwind.plugin'
 
-// Repository root, the common ancestor of every entry point and so the root of the embedded files.
+// Repository root, passed to the build as the root of the embedded files; without it the root is the working
+// directory of the build (app/), and the workers are embedded outside of it, under a path nothing finds.
 const ROOT = join(import.meta.dir, '..')
 
 // Image, image processing, star detection, streak detection, DARV analysis, Flat Wizard measurement, guide frame, and solar eclipse map workers, bundled as extra entry points so
@@ -44,6 +45,7 @@ function defineString(value?: string) {
 
 await build({
 	entrypoints: [join(import.meta.dir, 'src/main.ts'), IMAGE_WORKER, IMAGE_PROCESSING_WORKER, STAR_WORKER, STREAK_WORKER, DARV_WORKER, FLATWIZARD_WORKER, GUIDING_WORKER, SOLARECLIPSE_WORKER],
+	root: ROOT,
 	minify: true,
 	sourcemap: false,
 	target: 'bun',

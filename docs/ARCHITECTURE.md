@@ -552,7 +552,7 @@ The appearance of the astrometric aids of solved images (version 15) is kept in 
 Run before every delivery. CI (`.github/workflows/test.yml`) installs with `--frozen-lockfile`, writes an empty catalog with `bun make:catalog --empty` and placeholder Moon assets with `bun make:moon --empty`, then runs the first three:
 
 - `bun fmt --check`, `bun lint` (type-aware and type-checking), `bun test --parallel`; locally also `git diff --check`.
-- `bun compile` and a smoke test when `app/`, bundling, or HTML entry points change.
+- `bun compile` and a smoke test when `app/`, bundling, or HTML entry points change, run from a directory outside the repository: from its root, a worker the executable fails to embed is still found among the sources.
 - `api` tests use the `SIMULATOR` connection for devices and fakes only for network services (`mounts.test.ts`, `operations.test.ts`); the INDI property service runs against a fake `indiserver` over TCP that writes the protocol XML, the simulator, and an Alpaca server of the toolkit (`indi.test.ts`).
 - `web` tests are pure store and logic tests with injectable `fetch` and `MemoryStorage`.
 - Hardware tests with real motion are run separately and only with explicit authorization.

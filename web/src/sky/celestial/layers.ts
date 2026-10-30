@@ -39,16 +39,21 @@ import { isDeepSkyLabelVisible, isDeepSkyObjectVisible, isMovingBodyVisible, sta
 // shapes, and the hover/selection overlay. Layers redraw only when dirty and cache projected geometry in
 // base coordinates keyed on the render state's projected geometry revision, so pan and zoom only re-stroke.
 
-// Zoom factor where stars switch from sprites to vector circles; lower sharpens stars sooner.
-const VECTOR_STAR_ZOOM_THRESHOLD = 2.25
+// Zoom factor from which star radii grow with zoom; lower enlarges stars sooner.
+const STAR_GROWTH_ZOOM = 2.25
 
-// Largest number of stars drawn as vector circles, counting only those the view really shows (not every star of the
-// loaded catalog projected on the map, which would freeze their size as soon as the catalog is deep enough); denser
-// views fall back to sprites, which do not grow with zoom.
-const VECTOR_STAR_MAX_COUNT = 20000
+// Largest growth factor of star radii while zooming.
+const STAR_MAX_RADIUS_SCALE = 3
 
-// Largest growth factor of vector star radii while zooming.
-const VECTOR_STAR_MAX_RADIUS_SCALE = 3
+// Smallest radius in pixels of a star grown with zoom, so the faintest stay visible.
+const STAR_GROWN_MIN_RADIUS = 0.75
+
+// Largest radius in pixels of a grown star drawn as a square of the same area instead of a sprite; higher is faster
+// until the corners show.
+const STAR_SQUARE_MAX_RADIUS = 1.25
+
+// Side of a square per unit of radius of the disc of the same area, √π.
+const SQRT_PI = Math.sqrt(Math.PI)
 
 // Minimum screen distance in pixels between star labels; higher reduces overlap but shows fewer labels.
 const STAR_LABEL_MIN_SPACING = 36
@@ -84,6 +89,10 @@ interface StarStyle {
 	readonly sprite: CanvasImage
 	// Half the sprite size in pixels.
 	readonly halfSize: number
+	// Disc rendered at the largest growth in device pixels, so growing it only ever scales it down and it stays sharp.
+	readonly grownSprite: CanvasImage
+	// Half the size of the grown sprite per pixel of radius drawn.
+	readonly grownHalfSize: number
 }
 
 // Edge where a grid line meets the visible area: the projection disk or a viewport side.
@@ -908,7 +917,7 @@ function bvToColor(bv: number) {
 }
 
 // Builds one sprite style per star style bucket, ordered as StarCatalog style buckets.
-function buildStarStyles(theme: ThemeOptions, starOptions: Required<StarLayerOptions>): StarStyle[] {
+function buildStarStyles(theme: ThemeOptions, starOptions: Required<StarLayerOptions>, dpr: number): StarStyle[] {
 	const styles: StarStyle[] = []
 
 	for (let colorBucket = 0; colorBucket < STAR_COLOR_BUCKETS; colorBucket++) {
@@ -916,15 +925,15 @@ function buildStarStyles(theme: ThemeOptions, starOptions: Required<StarLayerOpt
 
 		for (let radiusBucket = 0; radiusBucket < STAR_RADIUS_BUCKETS; radiusBucket++) {
 			const radius = theme.stars.minRadius + (radiusBucket / (STAR_RADIUS_BUCKETS - 1)) * (theme.stars.maxRadius - theme.stars.minRadius)
-			styles.push(createStarStyle(color, radius))
+			styles.push(createStarStyle(color, radius, dpr))
 		}
 	}
 
 	return styles
 }
 
-// Renders the sprite of a star disc of `radius` pixels.
-function createStarStyle(color: string, radius: number): StarStyle {
+// Returns a square sprite holding a disc of `radius` pixels, and its size in pixels.
+function createDiscSprite(color: string, radius: number) {
 	const size = Math.max(3, Math.ceil(radius * 2 + 2))
 	const sprite = createScratchCanvas(size, size)
 	const ctx = sprite.getContext('2d')
@@ -937,12 +946,22 @@ function createStarStyle(color: string, radius: number): StarStyle {
 		ctx.fill()
 	}
 
-	return { color, radius, sprite, halfSize: size / 2 }
+	return { sprite, size }
 }
 
-// Star symbols and labels, drawn per style bucket as sprites or, when zoomed in, as vector circles.
+// Renders the sprites of a star disc of `radius` pixels for a device pixel ratio.
+function createStarStyle(color: string, radius: number, dpr: number): StarStyle {
+	const { sprite, size } = createDiscSprite(color, radius)
+	const grownRadius = radius * STAR_MAX_RADIUS_SCALE * dpr
+	const grown = createDiscSprite(color, grownRadius)
+	return { color, radius, sprite, halfSize: size / 2, grownSprite: grown.sprite, grownHalfSize: grown.size / (2 * grownRadius) }
+}
+
+// Star symbols and labels, drawn per style bucket as cached sprites, which grow when zoomed in. Sprites replaced vector
+// circles because a GPU-backed canvas rasterizes thousands of arcs two to three times slower than it draws the same
+// discs as images (measured at 2 to 8 times the base zoom), which is what stalls a zoom gesture on a deep catalog.
 export class StarLayer extends InternalLayer {
-	private styles = buildStarStyles(DEFAULT_THEME, DEFAULT_STAR_OPTIONS)
+	private styles = buildStarStyles(DEFAULT_THEME, DEFAULT_STAR_OPTIONS, 1)
 	// Theme and option values the styles were built from.
 	private styleSignature = ''
 	private readonly point = new Float32Array(2)
@@ -965,28 +984,18 @@ export class StarLayer extends InternalLayer {
 
 		this.ensureStyles(state)
 
-		if (this.isVectorView(state, catalog)) {
-			this.renderVectorStars(ctx, state, catalog)
-		} else {
-			this.renderSpriteStars(ctx, state, catalog)
-		}
-
+		this.renderStars(ctx, state, catalog)
 		this.renderStarLabels(ctx, state, catalog)
 	}
 
-	// Returns whether the view is zoomed in enough for vector circles and shows few enough stars to afford them.
-	private isVectorView(state: RenderState, catalog: StarCatalog) {
-		if (state.transform.k < VECTOR_STAR_ZOOM_THRESHOLD) return false
-
-		writeBaseViewportBounds(state.width, state.height, state.transform, 0, this.baseViewportBounds)
-		return catalog.countDrawn(starSymbolMagnitudeLimit(state), this.baseViewportBounds, VECTOR_STAR_MAX_COUNT) <= VECTOR_STAR_MAX_COUNT
-	}
-
-	// Draws stars in base coordinates as cached sprites, or single pixels for the smallest radii.
-	private renderSpriteStars(ctx: CanvasRenderingContext2D, state: RenderState, catalog: StarCatalog) {
+	// Draws stars in base coordinates as cached sprites, or single pixels for the smallest radii of an ungrown view.
+	// Radii grow with the square root of the zoom from STAR_GROWTH_ZOOM on.
+	private renderStars(ctx: CanvasRenderingContext2D, state: RenderState, catalog: StarCatalog) {
 		const { transform, width, height } = state
 		const maxMagnitude = starSymbolMagnitudeLimit(state)
 		const inverseScale = 1 / transform.k
+		const grown = transform.k >= STAR_GROWTH_ZOOM
+		const radiusScale = Math.min(Math.sqrt(transform.k), STAR_MAX_RADIUS_SCALE)
 
 		ctx.save()
 		applyBasePathTransform(ctx, state)
@@ -1002,10 +1011,15 @@ export class StarLayer extends InternalLayer {
 			}
 
 			const style = this.styles[bucket]
-			const margin = Math.max(2, style.halfSize + 2)
+			const radius = grown ? Math.max(STAR_GROWN_MIN_RADIUS, style.radius * radiusScale) : style.radius
+			const screenHalfSize = grown ? style.grownHalfSize * radius : style.halfSize
+			const margin = Math.max(2, screenHalfSize + 2)
 			writeBaseViewportBounds(width, height, transform, margin, this.baseViewportBounds)
 
-			if (style.radius <= 0.8) {
+			if (radius <= (grown ? STAR_SQUARE_MAX_RADIUS : 0.8)) {
+				// A disc this small reads the same as an antialiased square of its area, which is far cheaper to fill.
+				const side = (grown ? radius * SQRT_PI : 1) * inverseScale
+				const offset = grown ? side / 2 : 0
 				ctx.fillStyle = style.color
 
 				for (let i = start; i < end; i++) {
@@ -1022,13 +1036,12 @@ export class StarLayer extends InternalLayer {
 						continue
 					}
 
-					ctx.fillRect(x, y, inverseScale, inverseScale)
+					ctx.fillRect(x - offset, y - offset, side, side)
 				}
 			} else {
-				const sprite = style.sprite
-				const halfSize = style.halfSize * inverseScale
-				const spriteWidth = sprite.width * inverseScale
-				const spriteHeight = sprite.height * inverseScale
+				const sprite = grown ? style.grownSprite : style.sprite
+				const halfSize = screenHalfSize * inverseScale
+				const spriteSize = 2 * halfSize
 
 				for (let i = start; i < end; i++) {
 					const index = indices[i]
@@ -1044,60 +1057,12 @@ export class StarLayer extends InternalLayer {
 						continue
 					}
 
-					ctx.drawImage(sprite, x - halfSize, y - halfSize, spriteWidth, spriteHeight)
+					ctx.drawImage(sprite, x - halfSize, y - halfSize, spriteSize, spriteSize)
 				}
 			}
 		}
 
 		ctx.restore()
-	}
-
-	// Draws stars as vector circles in screen coordinates, with radii growing with zoom.
-	private renderVectorStars(ctx: CanvasRenderingContext2D, state: RenderState, catalog: StarCatalog) {
-		const transform = state.transform
-		const width = state.width
-		const height = state.height
-		const maxMagnitude = starSymbolMagnitudeLimit(state)
-		const radiusScale = Math.min(Math.sqrt(transform.k), VECTOR_STAR_MAX_RADIUS_SCALE)
-		const margin = state.theme.stars.maxRadius * VECTOR_STAR_MAX_RADIUS_SCALE + 2
-		writeBaseViewportBounds(width, height, transform, margin, this.baseViewportBounds)
-
-		const indices = catalog.getBucketedVisibleIndices()
-
-		for (let bucket = 0; bucket < STAR_STYLE_BUCKETS; bucket++) {
-			const start = catalog.getBucketStart(bucket)
-			const end = catalog.getBucketEnd(bucket)
-
-			if (end <= start) {
-				continue
-			}
-
-			const style = this.styles[bucket]
-			const radius = Math.max(0.75, style.radius * radiusScale)
-			ctx.fillStyle = style.color
-			ctx.beginPath()
-
-			for (let i = start; i < end; i++) {
-				const index = indices[i]
-
-				if (catalog.mag[index] > maxMagnitude) {
-					continue
-				}
-
-				const x = catalog.screenX[index]
-				const y = catalog.screenY[index]
-
-				if (x < this.baseViewportBounds[0] || x > this.baseViewportBounds[1] || y < this.baseViewportBounds[2] || y > this.baseViewportBounds[3]) {
-					continue
-				}
-
-				applyViewTransform(x, y, width, height, transform, this.point)
-				ctx.moveTo(this.point[0] + radius, this.point[1])
-				ctx.arc(this.point[0], this.point[1], radius, 0, TAU)
-			}
-
-			ctx.fill()
-		}
 	}
 
 	// Labels bright enough named stars in the viewport, skipping labels too close to drawn ones.
@@ -1192,11 +1157,11 @@ export class StarLayer extends InternalLayer {
 
 	// Rebuilds the sprite styles when the theme or star options they depend on changed.
 	private ensureStyles(state: RenderState) {
-		const signature = `${state.stars.colorByBV}|${state.theme.stars.baseColor}|${state.theme.stars.minRadius}|${state.theme.stars.maxRadius}`
+		const signature = `${state.stars.colorByBV}|${state.theme.stars.baseColor}|${state.theme.stars.minRadius}|${state.theme.stars.maxRadius}|${state.dpr}`
 
 		if (signature === this.styleSignature) return
 
-		this.styles = buildStarStyles(state.theme, state.stars)
+		this.styles = buildStarStyles(state.theme, state.stars, state.dpr)
 		this.styleSignature = signature
 	}
 }

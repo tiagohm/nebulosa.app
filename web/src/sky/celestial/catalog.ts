@@ -211,29 +211,6 @@ export class StarCatalog {
 		}
 	}
 
-	// Returns how many projected stars of at most maxMagnitude fall inside bounds, the base screen rectangle
-	// [minX, maxX, minY, maxY] in pixels of writeBaseViewportBounds, and so are drawn; stops counting past `limit`,
-	// which is returned as limit + 1.
-	countDrawn(maxMagnitude: number, bounds: NumberArray, limit: number) {
-		let drawn = 0
-
-		for (let i = 0; i < this.visibleCount; i++) {
-			const index = this.visibleIndices[i]
-			const x = this.screenX[index]
-			const y = this.screenY[index]
-
-			if (this.mag[index] > maxMagnitude || x < bounds[0] || x > bounds[1] || y < bounds[2] || y > bounds[3]) {
-				continue
-			}
-
-			if (++drawn > limit) {
-				break
-			}
-		}
-
-		return drawn
-	}
-
 	// Returns the picked-object payload of a star.
 	getObject(index: number): CelestialObject {
 		return {

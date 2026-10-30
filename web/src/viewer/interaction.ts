@@ -10,8 +10,9 @@ import type { OverlayView, Point } from './transform'
 // Interaction of a tool with the viewer, in image coordinates and the current view. The viewer stays unaware of what
 // the tool does: it only hands it the presses it takes, and keeps zoom and pan otherwise.
 export interface ViewerInteraction {
-	// Pointer shown over the image while the interaction is active and Space is not held.
-	readonly cursor: 'crosshair' | 'default'
+	// Pointer shown over the image while the interaction is active and Space is not held: a crosshair to draw, the
+	// arrow, or the open hand of the pan for a tool that takes only some presses and leaves the rest to the pan.
+	readonly cursor: 'crosshair' | 'default' | 'grab'
 	// Called on the first pointer of a press; returns whether the tool takes the gesture, otherwise the viewer pans.
 	readonly onPointerDown: (point: Point, view: OverlayView) => boolean
 	// Called as the pointer moves during a gesture the tool took, and as a mouse hovers without any button pressed.

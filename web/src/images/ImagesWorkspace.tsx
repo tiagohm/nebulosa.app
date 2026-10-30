@@ -16,6 +16,7 @@ import { GuidingOverlay, useGuidingOverlay } from '../camera/GuidingOverlay'
 import { TppaOverlay, useTppaOverlay } from '../camera/TppaOverlay'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../files/files'
+import { ASTROMETRY_MODES, type AstrometryMode } from '../platesolving/measurement'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { WcsAidsOverlay } from '../platesolving/WcsAidsOverlay'
 import { WcsCursorStatus } from '../platesolving/WcsCursorStatus'
@@ -38,6 +39,7 @@ import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
 import { Reticle } from '../viewer/Reticle'
 import { FIT_VIEW } from '../viewer/transform'
+import { useAstrometryTool } from './astrometryTool'
 import { useCameraOperationContext } from './cameracontext'
 import { selectCameraFrame } from './cameratabs'
 import { captureFramesState, frameSourceKey } from './captureframes'
@@ -45,6 +47,7 @@ import { CaptureFramesCarousel } from './CaptureFramesCarousel'
 import { DisplayToolbar } from './DisplayToolbar'
 import { ImageInspector } from './ImageInspector'
 import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, isClosable, isMosaic, openImage, selectAnnotation, selectImage, selectImageTool, selectStar, selectStreak, setImageView, shownRendering, toggleOriginal } from './images'
+import { MeasurementOverlay } from './MeasurementOverlay'
 import { SaveImageModal } from './SaveImageModal'
 import { SaveImagePopover } from './SaveImagePopover'
 import { IMAGE_TOOL_DEFINITIONS, imageToolGroup, imageToolsFor, imageToolUnavailable } from './tools'
@@ -66,6 +69,11 @@ import { IMAGE_TOOL_DEFINITIONS, imageToolGroup, imageToolsFor, imageToolUnavail
 // markers of the latest detection of the document's image are drawn over it while shown, and a click
 // selects a star while the Star Detection tool is open. Closing
 // an unsaved derived image asks first (cancel, discard, or Save As FITS and then close).
+// With a solution of the image shown, its grid, centre, passive aids (crosshair, orientation, scale bar), and the
+// coordinates under the pointer are drawn from that solution, and the measure mode of the toolbar draws measurements
+// (astrometryTool.ts). Clicks go to the first owner of: a Guiding star pick (which disables the measure modes), a measure
+// mode, the Plate Solver tool (selecting and editing measurements), then Star Detection, Streak Detection, and
+// Annotation.
 
 // Distance from the pointer a click looks for a star within, in screen pixels.
 const STAR_PICK_RADIUS = 8
@@ -75,6 +83,9 @@ const STREAK_PICK_RADIUS = 8
 
 // Distance from the pointer a click looks for an annotation marker within, in screen pixels.
 const ANNOTATION_PICK_RADIUS = 8
+
+// Names of the measure modes of the viewer toolbar.
+const MODE_LABELS: Readonly<Record<AstrometryMode, string>> = { pan: 'No measure', distance: 'Distance' }
 
 // Images workspace.
 export function ImagesWorkspace() {
@@ -91,6 +102,8 @@ export function ImagesWorkspace() {
 	const [closing, setClosing] = useState<string>()
 	// Document being saved, whether it closes once saved, and the format of its file.
 	const [saving, setSaving] = useState<{ readonly key: string; readonly closeAfter: boolean; readonly format: SaveFormat }>()
+	// Measure mode of each document, by document key; Pan when absent. A presentation choice of the tab only.
+	const [modes, setModes] = useState<Readonly<Record<string, AstrometryMode>>>({})
 	const document = activeDocument(state)
 	const view = activeView(state)
 	const shown = view && shownRendering(view)
@@ -125,6 +138,16 @@ export function ImagesWorkspace() {
 	const guiding = useGuidingOverlay(document)
 	// A star is picked only on the session's current frame, and only while the guide output is not held.
 	const picking = tool === 'guiding' && guiding && !guiding.session.guideOutputHeld ? guiding.session : undefined
+	const mode = (document && modes[document.key]) ?? 'pan'
+	const astrometryTool = useAstrometryTool({
+		documentKey: document?.key,
+		imageId: document?.info?.id,
+		astrometry: view?.astrometry,
+		mode,
+		onModeChange: (next) => document && setModes((current) => ({ ...current, [document.key]: next })),
+		enabled: !!solution && !picking,
+		editable: tool === 'plate-solver',
+	})
 	const toolSelector = <Select options={imageToolsFor(document)} value={tool} disabled={!document} format={(t) => IMAGE_TOOL_DEFINITIONS[t].label} group={imageToolGroup} disabledReason={imageToolUnavailable} onChange={(t) => document && selectImageTool(imagesState, document.key, t)} className="w-52 max-sm:w-40" />
 	const openButton = <IconButton icon="folder" onClick={() => setChoosing(true)} label="Open file" />
 	const waiting = document?.camera && !document.info
@@ -159,6 +182,8 @@ export function ImagesWorkspace() {
 									<DisplayToolbar key={document.key} documentKey={document.key} info={document.info} view={view} />
 									<span className="mx-1 h-5 w-px bg-line-100" />
 									<SaveImagePopover document={document} view={view} onSaveToServer={(format) => setSaving({ key: document.key, closeAfter: false, format })} />
+									<span className="mx-1 h-5 w-px bg-line-100" />
+									<Select options={ASTROMETRY_MODES} value={mode} format={(option) => MODE_LABELS[option]} disabled={!solution || !!picking} onChange={(next) => setModes((current) => ({ ...current, [document.key]: next }))} className="w-36 max-sm:w-28" />
 									{document.camera && <CameraControls document={document} framesShown={framesShown} onToggleFrames={() => setFramesShown(!framesShown)} reticle={reticle} onToggleReticle={() => setReticles({ ...reticles, [document.key]: !reticle })} />}
 								</>
 							)
@@ -176,32 +201,35 @@ export function ImagesWorkspace() {
 											{guiding && <GuidingOverlay overlay={guiding.overlay} view={overlay} />}
 											{lines && <StreakOverlay result={lines} view={overlay} labels={view.streaks.labels} selected={selectedStreak} />}
 											{markers && <StarOverlay result={markers} view={overlay} acceptedOnly={view.stars.acceptedOnly} selected={view.stars.selected?.jobId === markers.jobId ? view.stars.selected.index : undefined} />}
+											{solution && document?.info && <MeasurementOverlay solution={solution} imageId={document.info.id} image={size} view={overlay} astrometry={view.astrometry} />}
 											{solution && <WcsAidsOverlay solution={solution} image={size} view={overlay} cursor={cursor} crosshair={astrometry.crosshair} corner={astrometry.orientation === 'corner'} scaleBar={astrometry.scaleBar} />}
 										</>
 									)
 								: undefined
 						}
 						status={solution ? (cursor) => <WcsCursorStatus solution={solution} cursor={cursor} style={astrometry.coordinates} /> : undefined}
+						interaction={astrometryTool.interaction}
 						onImageClick={
 							picking
 								? (point) => void selectGuidingTarget(guidingRuntime, picking, [point.x - 0.5, point.y - 0.5])
-								: markers && view && document && tool === 'star-detection'
-									? (point, overlay) => {
-											const index = pickStar(markers, point, STAR_PICK_RADIUS / overlay.scale, view.stars.acceptedOnly)
-											selectStar(imagesState, document.key, index === undefined ? undefined : { jobId: markers.jobId, index })
-										}
-									: lines && document && tool === 'streak-detection'
+								: (astrometryTool.select ??
+									(markers && view && document && tool === 'star-detection'
 										? (point, overlay) => {
-												const index = pickStreak(lines, point, STREAK_PICK_RADIUS / overlay.scale, selectedStreak)
-												selectStreak(imagesState, document.key, index === undefined ? undefined : { jobId: lines.jobId, index })
+												const index = pickStar(markers, point, STAR_PICK_RADIUS / overlay.scale, view.stars.acceptedOnly)
+												selectStar(imagesState, document.key, index === undefined ? undefined : { jobId: markers.jobId, index })
 											}
-										: annotation && view && document && tool === 'annotation'
+										: lines && document && tool === 'streak-detection'
 											? (point, overlay) => {
-													const id = pickAnnotation(shownAnnotations(annotation, view.annotation), point, ANNOTATION_PICK_RADIUS / overlay.scale)
-													const owner = id === undefined ? undefined : annotationResults.find((result) => result?.objects.some((object) => object.id === id))
-													selectAnnotation(imagesState, document.key, owner && id !== undefined ? { jobId: owner.jobId, id } : undefined)
+													const index = pickStreak(lines, point, STREAK_PICK_RADIUS / overlay.scale, selectedStreak)
+													selectStreak(imagesState, document.key, index === undefined ? undefined : { jobId: lines.jobId, index })
 												}
-											: undefined
+											: annotation && view && document && tool === 'annotation'
+												? (point, overlay) => {
+														const id = pickAnnotation(shownAnnotations(annotation, view.annotation), point, ANNOTATION_PICK_RADIUS / overlay.scale)
+														const owner = id === undefined ? undefined : annotationResults.find((result) => result?.objects.some((object) => object.id === id))
+														selectAnnotation(imagesState, document.key, owner && id !== undefined ? { jobId: owner.jobId, id } : undefined)
+													}
+												: undefined))
 						}
 						empty={
 							waiting ? (

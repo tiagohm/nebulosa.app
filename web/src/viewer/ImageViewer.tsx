@@ -292,7 +292,7 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 	const pointed = image && cursor ? toImage(transform, cursor) : undefined
 	const pixel = pointed && pixelAt({ width, height }, pointed)
 	const viewerCursor: ViewerCursor | undefined = pointed && cursor && { image: pointed, ...(pixel && { pixel }), viewport: cursor }
-	const panning = !interaction || spaceHeld
+	const panning = !interaction || spaceHeld || interaction.cursor === 'grab'
 	const fitted = view.kind === 'fit'
 
 	return (

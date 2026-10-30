@@ -252,6 +252,7 @@ export async function showCameraFrame(state: ImagesState, key: string, frameId: 
 	committed.streaks.selected = undefined
 	committed.annotation.selected = undefined
 	committed.plateSolving.selected = undefined
+	committed.astrometry = { measurements: [] }
 	if (previous) releaseLease(previous, io)
 }
 

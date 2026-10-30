@@ -5,7 +5,7 @@ import { cameraTabKey, connectionCameraTab, handleCapturedFrame, holdCameraFrame
 import { type CaptureFramesState, frameLabel, frameUnavailableReason, handleCaptureFramesEvent, loadRecentFrames, refreshCaptureFrames } from './captureframes'
 import { ORIGINAL_DISPLAY_SETTINGS } from './display'
 import { addStep } from './imageprocessing'
-import { applyDisplay, closeImage, type ImageSource, type ImagesIo, type ImagesState, isClosable, setImageView } from './images'
+import { addMeasurement, applyDisplay, closeImage, type ImageSource, type ImagesIo, type ImagesState, isClosable, setImageView } from './images'
 
 interface Call {
 	readonly url: string
@@ -258,6 +258,7 @@ describe('following the latest frame', () => {
 		const rendering = state.views[KEY].rendering
 		state.views[KEY].stars.selected = { jobId: 'job', index: 0 }
 		state.views[KEY].streaks.selected = { jobId: 'streak-job', index: 1 }
+		addMeasurement(state, KEY, { kind: 'distance', a: { x: 1, y: 1 }, b: { x: 9, y: 9 }, visible: true })
 		gated.set('img-2', () => undefined)
 
 		handleCapturedFrame(state, event(frame(2)), io, 'page')
@@ -266,12 +267,15 @@ describe('following the latest frame', () => {
 		expect(state.views[KEY].rendering).toEqual(rendering)
 		expect(state.views[KEY].stars.selected).toEqual({ jobId: 'job', index: 0 })
 		expect(state.views[KEY].streaks.selected).toEqual({ jobId: 'streak-job', index: 1 })
+		expect(state.views[KEY].astrometry.measurements).toHaveLength(1)
 
 		release('img-2')
 		await Bun.sleep(10)
 		expect(tab(state)).toMatchObject({ info: { id: 'img-2' }, camera: { requested: undefined, shown: { frame: { frameId: 's:2' } } } })
 		expect(state.views[KEY].stars.selected).toBeUndefined()
 		expect(state.views[KEY].streaks.selected).toBeUndefined()
+		// Measurements are pixels of the frame they were drawn on, never moved to another one.
+		expect(state.views[KEY].astrometry).toEqual({ measurements: [] })
 	})
 
 	test('a frame that cannot be opened or rendered keeps the frame shown', async () => {

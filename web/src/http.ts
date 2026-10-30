@@ -25,7 +25,7 @@ export function deviceUrl(connectionId: string, type: ManagedDeviceType, deviceI
 }
 
 // Returns the init of a request sending body as JSON with a method; an undefined body sends none. signal aborts it.
-export function jsonInit(method: 'POST' | 'PUT', body?: unknown, signal?: AbortSignal): RequestInit {
+export function jsonInit(method: 'POST' | 'PUT' | 'PATCH', body?: unknown, signal?: AbortSignal): RequestInit {
 	return { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal }
 }
 

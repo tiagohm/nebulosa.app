@@ -22,6 +22,7 @@ import { handleCapturedFrame, reconcileCameraTabs, reconcileCapturedFrames, rele
 import { captureFramesState, handleCaptureFramesEvent, refreshCaptureFrames } from './images/captureframes'
 import { handleImageProcessingEvent, imageProcessingState, refreshImageProcessing } from './images/imageprocessing'
 import { confirmUnsavedOnUnload, imagesState } from './images/images'
+import { handleMountPointingEvent, mountPointingRuntime, refreshMountPointing } from './mountpointing/mountpointing'
 import { handleNotificationEvent, notificationsState, refreshNotifications, setServerLink } from './notifications/notifications'
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
 import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from './platesolving/platesolving'
@@ -80,6 +81,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleMountRemoteControlEvent(mountRemoteControlState, event), refresh: () => refreshMountRemoteControl(mountRemoteControlState) },
 	{ handle: (event) => handleAutoFocusEvent(autoFocusRuntime, event), refresh: () => refreshAutoFocus(autoFocusRuntime) },
 	{ handle: (event) => handleTppaEvent(tppaRuntime, event), refresh: () => refreshTppa(tppaRuntime) },
+	{ handle: (event) => handleMountPointingEvent(mountPointingRuntime, event), refresh: () => refreshMountPointing(mountPointingRuntime) },
 	{ handle: (event) => handleDarvEvent(darvRuntime, event), refresh: () => refreshDarv(darvRuntime) },
 	{ handle: (event) => handleFlatWizardEvent(flatWizardRuntime, event), refresh: () => refreshFlatWizard(flatWizardRuntime) },
 	{ handle: (event) => handleGuidingEvent(guidingRuntime, event), refresh: () => refreshGuiding(guidingRuntime) },

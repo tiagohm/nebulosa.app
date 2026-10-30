@@ -12,6 +12,7 @@ import type { FocuserBacklashEvent } from './focusers'
 import type { GuidingServerEvent } from './guiding'
 import type { ImageProcessingEvent } from './imageprocessing'
 import type { IndiClientMessage, IndiServerEvent } from './indi'
+import type { PointingModelEvent } from './mountpointing'
 import type { MountRemoteControlEvent } from './mountremotecontrol'
 import type { MountNudgeEvent } from './mounts'
 import type { NotificationCreatedEvent } from './notifications'
@@ -29,7 +30,7 @@ import type { TppaEvent } from './tppa'
 // the socket itself, never by its client id, so what a socket asked for ends with it.
 
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the operation events
-// of the operation registry, the events of the capture, Auto Focus, TPPA, mount nudge, mount remote control, and dome manual rotation services,
+// of the operation registry, the events of the capture, Auto Focus, TPPA, mount pointing, mount nudge, mount remote control, and dome manual rotation services,
 // the captured frames of the frame registry, the guiding sessions, the changes of the external program settings and of the focuser backlash
 // compensations, the star detection, streak detection, plate solving, annotation, and image processing jobs, the created notifications, and the INDI device directory
 // and property streams.
@@ -40,6 +41,7 @@ export type ServerEvent =
 	| CaptureFrameEvent
 	| AutoFocusEvent
 	| TppaEvent
+	| PointingModelEvent
 	| DarvEvent
 	| FlatWizardEvent
 	| MountNudgeEvent

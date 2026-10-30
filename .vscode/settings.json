@@ -21,7 +21,7 @@
 		"core/**": true
 	},
 	"tailwindCSS.classAttributes": ["class", "className", "classNames"],
-	"tailwindCSS.rootFontSize": 14.5,
+	"tailwindCSS.rootFontSize": 14,
 	"tailwindCSS.classFunctions": ["tv"],
 	"editor.codeActionsOnSave": {
 		"source.removeUnusedImports": "explicit",

@@ -10,7 +10,7 @@ import { IconButton } from '../ui/IconButton'
 import type { CoordinateSystem } from './celestial/celestial'
 import { skyClock } from './clock'
 import { DisplayPanel } from './DisplayPanel'
-import { clearImageFootprint, clearSkyCoordinate, skyImageState } from './footprint'
+import { clearImageFootprint, clearSkyCoordinate, skyImageState, toggleImageFootprint } from './footprint'
 import { equipmentOptics } from './framing'
 import { FramingPanel } from './FramingPanel'
 import { HoverTooltip } from './HoverTooltip'
@@ -32,7 +32,8 @@ import { TimeController } from './TimeController'
 // observer, display (layers), and framing (field of view of custom optical presets or of the Equipment
 // Setup, drawn around the selection) settings. With an observer the map is the observer's local sky; without one it is an
 // equatorial chart of the whole sky. A solved image can send its footprint, drawn while its document shows that image,
-// and a coordinate to mark; the view is only panned to them, never reprojected, and the toolbar hides them.
+// and a coordinate to mark; the view is only panned to them, never reprojected, and the toolbar toggles the footprint
+// and clears the mark.
 
 // Observer the selection's position was last computed for; undefined before the workspace is first shown.
 let appliedObserver: string | undefined
@@ -83,8 +84,9 @@ export function SkyWorkspace() {
 		map.syncFraming(frameSource, framing?.visible ?? false, selectionCenter)
 	}, [map, frameSource, framing?.visible, selectionCenter?.rightAscension, selectionCenter?.declination])
 
-	// Draws the footprint of a solved image while its document still shows that image, and drops it otherwise (the
-	// document closed, or its camera tab shows another frame); marks and pans to a coordinate sent from an image.
+	// Draws the footprint of a solved image, unless hidden from the toolbar, while its document still shows that image,
+	// and drops it otherwise (the document closed, or its camera tab shows another frame); marks and pans to a coordinate
+	// sent from an image.
 	const handoffs = useSnapshot(skyImageState)
 	const documents = useSnapshot(imagesState).documents
 	const sent = handoffs.footprint
@@ -95,8 +97,8 @@ export function SkyWorkspace() {
 	}, [sent, footprint])
 
 	useEffect(() => {
-		map.syncImageFootprint(footprint)
-	}, [map, footprint])
+		map.syncImageFootprint(handoffs.footprintHidden ? undefined : footprint)
+	}, [map, footprint, handoffs.footprintHidden])
 
 	useEffect(() => {
 		map.syncImageCoordinate(handoffs.intent)
@@ -158,7 +160,7 @@ export function SkyWorkspace() {
 								if (mountRuntime.following && mountCenter) map.centerOn(mountCenter)
 							}}
 						/>
-						{footprint && <IconButton icon="images" label={`Hide the footprint of ${footprint.name}`} onClick={() => clearImageFootprint(skyImageState)} />}
+						{footprint && <IconButton icon="images" label={`${handoffs.footprintHidden ? 'Show' : 'Hide'} the footprint of ${footprint.name}`} pressed={!handoffs.footprintHidden} onClick={() => toggleImageFootprint(skyImageState)} />}
 						{handoffs.intent?.mark && <IconButton icon="pin" label={`Clear the mark of ${handoffs.intent.label}`} onClick={() => clearSkyCoordinate(skyImageState)} />}
 						<IconButton icon="clock" label="Time Bar" pressed={settings.timeBar === true} onClick={() => setSkyTimeBarVisible(profileState, settings.timeBar !== true)} />
 						<IconButton icon="frame" label="Framing" pressed={sky.panel === 'framing'} onClick={() => togglePanel('framing')} />

@@ -6,7 +6,7 @@ import { sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
 import { deg, normalizeAngle, toArcmin } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
 import { skyAt } from '../platesolving/wcs'
-import { clearImageFootprint, clearSkyCoordinate, imageFootprint, ofDateMatrix, showCoordinateInSky, showFootprintInSky, type SkyImageState, toDate } from './footprint'
+import { clearImageFootprint, clearSkyCoordinate, imageFootprint, ofDateMatrix, showCoordinateInSky, showFootprintInSky, type SkyImageState, toDate, toggleImageFootprint } from './footprint'
 
 // A TAN solution of a 2000×1000 image, 0.001° per pixel.
 const SOLUTION: FitsHeader = { CTYPE1: 'RA---TAN', CTYPE2: 'DEC--TAN', CRPIX1: 1000.5, CRPIX2: 500.5, CRVAL1: 83.8, CRVAL2: -5.4, CD1_1: -0.001, CD1_2: 0, CD2_1: 0, CD2_2: 0.001, NAXIS1: 2000, NAXIS2: 1000 }
@@ -70,7 +70,17 @@ describe('handoffs', () => {
 
 		showCoordinateInSky(state, [2, 0], 'B')
 		clearSkyCoordinate(state)
+		toggleImageFootprint(state)
+		expect(state.footprintHidden).toBeTrue()
+		expect(state.footprint).toEqual(footprint)
+		toggleImageFootprint(state)
+		expect(state.footprintHidden).toBeFalse()
+		toggleImageFootprint(state)
+		showFootprintInSky(state, footprint)
+		expect(state.footprintHidden).toBeUndefined()
+
+		toggleImageFootprint(state)
 		clearImageFootprint(state)
-		expect(state).toEqual({ intent: { seq: 3, rightAscension: 2, declination: 0, label: 'B', mark: false }, footprint: undefined })
+		expect(state).toEqual({ intent: { seq: 4, rightAscension: footprint.center[0], declination: footprint.center[1], label: 'M42', mark: false }, footprint: undefined })
 	})
 })

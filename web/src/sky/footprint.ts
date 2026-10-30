@@ -15,7 +15,8 @@ import type { Size } from '../viewer/transform'
 // the toolkit as the catalogs of api/src/sky/catalog.ts, so they line up with the stars drawn: the matrix is computed
 // once per map data, never per tick, and no request is made. The map is only panned onto a coordinate, never
 // reprojected around it. A footprint belongs to the image it was taken from and is dropped when that image is no
-// longer shown by its document; the coordinate stays until cleared or replaced. Tab memory only.
+// longer shown by its document, and until then it can be hidden and shown again; the coordinate stays until cleared
+// or replaced. Tab memory only.
 
 // Points sampled along each border of an image for its footprint.
 const FOOTPRINT_EDGE_SAMPLES = 24
@@ -58,8 +59,10 @@ export interface ImageFootprint {
 export interface SkyImageState {
 	// Coordinate requested last.
 	intent?: SkyCoordinateIntent
-	// Footprint shown.
+	// Footprint sent to the map.
 	footprint?: ImageFootprint
+	// Whether the footprint sent is kept off the map; sending another one shows it.
+	footprintHidden?: boolean
 }
 
 // Handoffs of the tab to the Sky map.
@@ -73,12 +76,19 @@ export function showCoordinateInSky(state: SkyImageState, [rightAscension, decli
 // Shows the footprint of an image on the Sky map, replacing the previous one, and pans to its centre.
 export function showFootprintInSky(state: SkyImageState, footprint: ImageFootprint) {
 	state.footprint = footprint
+	state.footprintHidden = undefined
 	showCoordinateInSky(state, footprint.center, footprint.name, false)
 }
 
-// Hides the footprint.
+// Hides the footprint, or shows it again in place, without moving the view.
+export function toggleImageFootprint(state: SkyImageState) {
+	state.footprintHidden = !state.footprintHidden
+}
+
+// Drops the footprint.
 export function clearImageFootprint(state: SkyImageState) {
 	state.footprint = undefined
+	state.footprintHidden = undefined
 }
 
 // Removes the mark of the coordinate requested last.

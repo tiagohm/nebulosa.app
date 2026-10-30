@@ -22,7 +22,7 @@ const VECTOR_LABELS: Readonly<Record<PointingMapVectors, string>> = { raw: 'Raw 
 
 // Pointing Map of a session.
 export function PointingMapView({ session }: { readonly session: MountPointingSessionSummary }) {
-	const { modelId, waypoint } = session
+	const { modelId, kind, waypoint } = session
 	const runtime = useSnapshot(mountPointingRuntime)
 	const model = runtime.details[modelId]
 	const [vectors, setVectors] = useState<PointingMapVectors>('raw')
@@ -37,7 +37,8 @@ export function PointingMapView({ session }: { readonly session: MountPointingSe
 
 	const revision = shownRevision(model)
 	const sample = model.samples.find((each) => each.id === selected)
-	const map = <PointingMap model={model} residuals={revision?.residuals} vectors={vectors} current={waypoint} selected={selected} onSelect={setSelected} />
+	// A verification counts its own targets, which are not waypoints of the plan drawn.
+	const map = <PointingMap model={model} residuals={revision?.residuals} vectors={vectors} current={kind === 'acquisition' ? waypoint : undefined} selected={selected} onSelect={setSelected} />
 
 	return (
 		<div className="flex h-64 min-h-0 gap-3 max-sm:h-auto max-sm:flex-col">

@@ -1,26 +1,31 @@
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
-import type { Point } from '../viewer/transform'
-import { type SkyOffset, skyAt, skyOffset } from './wcs'
+import { sphericalDestination, sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
+import type { Point, Size } from '../viewer/transform'
+import { pointAt, type SkyOffset, skyAt, skyOffset } from './wcs'
 
-// Astrometric measurements drawn over a solved image, kept as points in viewer coordinates (image pixels, origin at the
-// top-left corner of the first pixel), never as sky positions: their sky values are computed again from whichever
-// solution is selected, so changing it keeps what was pointed at and never shows a stale value. A point the selected
-// solution cannot unproject makes the values unavailable, never 0. This module holds the pure parts: the values, the
-// hit tests of handles and lines in screen-constant radii, and the reducer of the drawing and editing gestures, which
-// the image viewer routes to it while a measurement mode or the Plate Solver tool owns them.
+// Astrometric measurements and markers drawn over a solved image, kept as points in viewer coordinates (image pixels,
+// origin at the top-left corner of the first pixel), never as sky positions: their sky values are computed again from
+// whichever solution is selected, so changing it keeps what was pointed at and never shows a stale value. A point the
+// selected solution cannot unproject makes the values unavailable, never 0. Each kind has an explicit geometric meaning:
+// a distance is the great circle between two points; a rectangle is axis-aligned in image pixels (not in right
+// ascension and declination), measured along its sides, centre lines, and diagonals; a circle has a constant angular
+// radius on the sky around its centre, so its outline is projected through the WCS and may look elliptical. This module
+// holds the pure parts: the values, the outlines, the hit tests in screen-constant radii, and the reducer of the
+// drawing and editing gestures, which the image viewer routes to it while a mode or the Plate Solver tool owns them.
 
-// Kind of measurement: an angular distance between two points.
-export type MeasurementKind = 'distance'
+// Kind of measurement: an angular distance, a rectangle of the image, or a circle on the sky.
+export type MeasurementKind = 'distance' | 'rectangle' | 'circle'
 
-// Measurement of an image, in viewer coordinates.
-export interface DistanceMeasurement {
+// Measurement of an image, defined by two points in viewer coordinates: the ends of a distance, opposite corners of a
+// rectangle, or the centre (a) and a point of the rim (b) of a circle.
+export interface Measurement {
 	// Stable identity.
 	readonly id: string
 	// Kind of measurement.
-	readonly kind: 'distance'
-	// Start, in viewer coordinates.
+	readonly kind: MeasurementKind
+	// First point, in viewer coordinates.
 	readonly a: Point
-	// End, in viewer coordinates.
+	// Second point, in viewer coordinates.
 	readonly b: Point
 	// Name given by the operator; absent for the default one.
 	readonly label?: string
@@ -28,43 +33,60 @@ export interface DistanceMeasurement {
 	readonly visible: boolean
 }
 
-// Measurement of an image.
-export type Measurement = DistanceMeasurement
+// Fixed point of an image.
+export interface AstrometricMarker {
+	// Stable identity.
+	readonly id: string
+	// Point, in viewer coordinates.
+	readonly point: Point
+	// Name given by the operator; absent for the default one.
+	readonly label?: string
+	// Whether it is drawn.
+	readonly visible: boolean
+}
 
-// What a gesture creates while it owns the pointer: nothing (the viewer pans) or a measurement of a kind.
-export type AstrometryMode = 'pan' | MeasurementKind
+// What a gesture creates while it owns the pointer: nothing (the viewer pans), a measurement of a kind, or a marker.
+export type AstrometryMode = 'pan' | MeasurementKind | 'marker'
 
 // Modes, in display order.
-export const ASTROMETRY_MODES: readonly AstrometryMode[] = ['pan', 'distance']
+export const ASTROMETRY_MODES: readonly AstrometryMode[] = ['pan', 'distance', 'rectangle', 'circle', 'marker']
 
 // Item of the astrometry of an image that can be selected.
 export interface AstrometrySelection {
 	// Kind of item.
-	readonly kind: 'measurement'
+	readonly kind: 'measurement' | 'marker'
 	// Its id.
 	readonly id: string
 }
 
-// Handle of a measurement that can be dragged: an end of a distance.
-export type HandleName = 'a' | 'b'
+// Handle of an item that can be dragged: the points of a distance or circle, the corners and edges of a rectangle, or
+// the point of a marker.
+export type HandleName = 'a' | 'b' | 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w' | 'point'
 
 // Handle under the pointer.
-export interface HandleHit {
-	// Id of the measurement.
-	readonly id: string
+export interface HandleHit extends AstrometrySelection {
 	// Which handle.
 	readonly handle: HandleName
 }
 
 // Gesture in progress of the astrometric tool of an image.
 export type Draft =
-	// A distance being drawn from an anchor to the pointer: by a drag (pressed) or by a second click (not pressed).
+	// A measurement being drawn from an anchor to the pointer: by a drag (pressed) or by a second click (not pressed).
 	| { readonly type: 'create'; readonly imageId: string; readonly kind: MeasurementKind; readonly anchor: Point; readonly current: Point; readonly pressed: boolean }
-	// A handle of a measurement being dragged; measurement is its edited copy.
-	| { readonly type: 'edit'; readonly imageId: string; readonly handle: HandleName; readonly measurement: Measurement }
+	// A marker being placed where the press is released.
+	| { readonly type: 'marker'; readonly imageId: string; readonly point: Point }
+	// A handle of a measurement being dragged: original is the measurement before the gesture, measurement its copy.
+	| { readonly type: 'edit'; readonly imageId: string; readonly handle: HandleName; readonly original: Measurement; readonly measurement: Measurement }
+	// A marker being dragged.
+	| { readonly type: 'move'; readonly imageId: string; readonly marker: AstrometricMarker }
 
-// What the store does when a gesture ends: add a measurement, replace one by its edited copy, or nothing.
-export type DraftCommit = { readonly type: 'add'; readonly measurement: Omit<Measurement, 'id'> } | { readonly type: 'update'; readonly measurement: Measurement } | undefined
+// What the store does when a gesture ends: add or replace a measurement or a marker, or nothing.
+export type DraftCommit =
+	| { readonly type: 'addMeasurement'; readonly measurement: Omit<Measurement, 'id'> }
+	| { readonly type: 'updateMeasurement'; readonly measurement: Measurement }
+	| { readonly type: 'addMarker'; readonly marker: Omit<AstrometricMarker, 'id'> }
+	| { readonly type: 'updateMarker'; readonly marker: AstrometricMarker }
+	| undefined
 
 // Values of a distance from the selected solution.
 export interface DistanceValues {
@@ -74,64 +96,213 @@ export interface DistanceValues {
 	readonly offset?: SkyOffset
 }
 
-// Distance below which two ends of a distance are the same point, in image pixels.
+// Values of a rectangle from the selected solution, every angle in radians; the angles are absent when a corner or an
+// edge midpoint cannot be unprojected.
+export interface RectangleValues {
+	// Width and height in image pixels.
+	readonly pixels: { readonly width: number; readonly height: number }
+	// Angles along the sides, top, bottom, left, and right, between their corners.
+	readonly sides?: { readonly top: number; readonly bottom: number; readonly left: number; readonly right: number }
+	// Angles between the midpoints of opposite sides: across (left to right) and down (top to bottom).
+	readonly centerLines?: { readonly width: number; readonly height: number }
+	// Angles of the diagonals, top-left to bottom-right and top-right to bottom-left.
+	readonly diagonals?: readonly [number, number]
+}
+
+// Values of a circle from the selected solution, angles in radians; the sky values are absent when its centre or rim
+// cannot be unprojected.
+export interface CircleValues {
+	// Distance from the centre to the rim point, in image pixels.
+	readonly pixels: number
+	// Sky position of the centre, [right ascension, declination].
+	readonly center?: readonly [number, number]
+	// Angular radius on the sky.
+	readonly radius?: number
+}
+
+// Distance below which two points of a measurement are the same, in image pixels.
 const COINCIDENT_PIXELS = 1e-6
 
+// Fewest and most vertices of the outline of a circle.
+const CIRCLE_VERTICES = [48, 360] as const
+
+// Length of an edge of the outline of a circle on screen, about, in screen pixels.
+const CIRCLE_EDGE = 6
+
 // Returns the values of a distance with a solution: its length in pixels and the sky offset of its ends.
-export function distanceValues(solution: FitsHeader, measurement: DistanceMeasurement): DistanceValues {
+export function distanceValues(solution: FitsHeader, measurement: Measurement): DistanceValues {
 	const pixels = Math.hypot(measurement.b.x - measurement.a.x, measurement.b.y - measurement.a.y)
 	const a = skyAt(solution, measurement.a)
 	const b = skyAt(solution, measurement.b)
 	return { pixels, ...(a && b && { offset: skyOffset(a, b) }) }
 }
 
-// Returns the handles of a measurement and their points.
+// Returns the values of a rectangle with a solution: its size in pixels and the great-circle angles along its sides,
+// centre lines, and diagonals, which differ from each other wherever the projection or distortion does.
+export function rectangleValues(solution: FitsHeader, measurement: Measurement): RectangleValues {
+	const { left, top, right, bottom } = bounds(measurement)
+	const pixels = { width: right - left, height: bottom - top }
+	const middleX = (left + right) / 2
+	const middleY = (top + bottom) / 2
+	const points = [
+		{ x: left, y: top },
+		{ x: right, y: top },
+		{ x: left, y: bottom },
+		{ x: right, y: bottom },
+		{ x: left, y: middleY },
+		{ x: right, y: middleY },
+		{ x: middleX, y: top },
+		{ x: middleX, y: bottom },
+	].map((point) => skyAt(solution, point))
+	if (points.some((point) => point === undefined)) return { pixels }
+
+	const [nw, ne, sw, se, w, e, n, s] = points as (readonly [number, number])[]
+	const angle = (p: readonly [number, number], q: readonly [number, number]) => sphericalSeparation(p[0], p[1], q[0], q[1])
+	return { pixels, sides: { top: angle(nw, ne), bottom: angle(sw, se), left: angle(nw, sw), right: angle(ne, se) }, centerLines: { width: angle(w, e), height: angle(n, s) }, diagonals: [angle(nw, se), angle(ne, sw)] }
+}
+
+// Returns the values of a circle with a solution: its pixel radius, and the sky position of its centre and its angular
+// radius, the separation of its rim point from its centre.
+export function circleValues(solution: FitsHeader, measurement: Measurement): CircleValues {
+	const pixels = Math.hypot(measurement.b.x - measurement.a.x, measurement.b.y - measurement.a.y)
+	const center = skyAt(solution, measurement.a)
+	const rim = skyAt(solution, measurement.b)
+	return { pixels, ...(center && rim && { center, radius: sphericalSeparation(center[0], center[1], rim[0], rim[1]) }) }
+}
+
+// Returns the outline of a circle of constant angular radius through a solution, as polylines in viewer coordinates:
+// points at that separation from its centre, at every position angle, projected through the WCS and broken where they
+// cannot be; about one vertex every CIRCLE_EDGE screen pixels at a zoom (viewport pixels per image pixel), within
+// CIRCLE_VERTICES. Undefined when its centre or rim cannot be unprojected or its radius is 0.
+export function circleOutline(solution: FitsHeader, measurement: Measurement, scale: number): Point[][] | undefined {
+	const { center, radius, pixels } = circleValues(solution, measurement)
+	if (!center || !radius) return undefined
+
+	const vertices = Math.round(Math.min(CIRCLE_VERTICES[1], Math.max(CIRCLE_VERTICES[0], (2 * Math.PI * pixels * scale) / CIRCLE_EDGE)))
+	const paths: Point[][] = []
+	let path: Point[] = []
+
+	for (let i = 0; i <= vertices; i++) {
+		const [ra, dec] = sphericalDestination(center[0], center[1], (2 * Math.PI * i) / vertices, radius)
+		const point = pointAt(solution, ra, dec)
+
+		if (point) {
+			path.push(point)
+		} else if (path.length > 0) {
+			if (path.length > 1) paths.push(path)
+			path = []
+		}
+	}
+
+	if (path.length > 1) paths.push(path)
+	return paths
+}
+
+// Returns the left, top, right, and bottom of a rectangle, in viewer coordinates.
+export function bounds(measurement: Measurement): { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number } {
+	const { a, b } = measurement
+	return { left: Math.min(a.x, b.x), top: Math.min(a.y, b.y), right: Math.max(a.x, b.x), bottom: Math.max(a.y, b.y) }
+}
+
+// Returns the handles of a measurement and their points: the two points of a distance or circle, the corners and
+// edge midpoints of a rectangle.
 export function handlesOf(measurement: Measurement): readonly (readonly [HandleName, Point])[] {
+	if (measurement.kind !== 'rectangle') {
+		return [
+			['a', measurement.a],
+			['b', measurement.b],
+		]
+	}
+
+	const { left, top, right, bottom } = bounds(measurement)
+	const x = (left + right) / 2
+	const y = (top + bottom) / 2
 	return [
-		['a', measurement.a],
-		['b', measurement.b],
+		['nw', { x: left, y: top }],
+		['ne', { x: right, y: top }],
+		['sw', { x: left, y: bottom }],
+		['se', { x: right, y: bottom }],
+		['n', { x, y: top }],
+		['s', { x, y: bottom }],
+		['w', { x: left, y }],
+		['e', { x: right, y }],
 	]
 }
 
-// Returns a measurement with a handle moved to a point.
+// Returns a measurement with a handle moved to a point. A rectangle keeps the sides the handle does not move, and is
+// stored with a at its top-left and b at its bottom-right corner, whichever way it was dragged.
 export function moveHandle(measurement: Measurement, handle: HandleName, point: Point): Measurement {
-	return { ...measurement, [handle]: { x: point.x, y: point.y } }
+	if (handle === 'a' || handle === 'b') return { ...measurement, [handle]: { x: point.x, y: point.y } }
+
+	let { left, top, right, bottom } = bounds(measurement)
+	if (handle.includes('w')) left = point.x
+	if (handle.includes('e')) right = point.x
+	if (handle.includes('n')) top = point.y
+	if (handle.includes('s')) bottom = point.y
+	return { ...measurement, a: { x: Math.min(left, right), y: Math.min(top, bottom) }, b: { x: Math.max(left, right), y: Math.max(top, bottom) } }
 }
 
-// Returns the handle of the visible measurements nearest a point within radius (image pixels), the selected
-// measurement first, later measurements before earlier ones; undefined when none is that close.
-export function hitHandle(measurements: readonly Measurement[], point: Point, radius: number, selected?: string): HandleHit | undefined {
-	const ordered = measurements.filter((measurement) => measurement.visible).toSorted((a, b) => +(b.id === selected) - +(a.id === selected))
+// Returns the handle of the visible items nearest a point within radius (image pixels): the selected item first, then
+// later items before earlier ones, markers before measurements; undefined when none is that close.
+export function hitHandle(measurements: readonly Measurement[], markers: readonly AstrometricMarker[], point: Point, radius: number, selected?: AstrometrySelection): HandleHit | undefined {
+	const candidates: (readonly [AstrometrySelection, HandleName, Point])[] = []
+	for (const measurement of measurements) if (measurement.visible) for (const [handle, at] of handlesOf(measurement)) candidates.push([{ kind: 'measurement', id: measurement.id }, handle, at])
+	for (const marker of markers) if (marker.visible) candidates.push([{ kind: 'marker', id: marker.id }, 'point', marker.point])
+
+	const isSelected = (item: AstrometrySelection) => item.kind === selected?.kind && item.id === selected.id
 	let best: HandleHit | undefined
-	let bestDistance = radius
+	let bestScore = Infinity
 
-	for (const measurement of ordered.toReversed()) {
-		for (const [handle, at] of handlesOf(measurement)) {
-			const distance = Math.hypot(point.x - at.x, point.y - at.y)
+	for (const [index, [item, handle, at]] of candidates.entries()) {
+		const distance = Math.hypot(point.x - at.x, point.y - at.y)
+		if (distance > radius) continue
+		// Selected first, then the nearest, then the latest.
+		const score = (isSelected(item) ? 0 : 2 * radius) + distance - index * 1e-9
 
-			if (distance <= bestDistance) {
-				best = { id: measurement.id, handle }
-				bestDistance = distance
-			}
+		if (score < bestScore) {
+			best = { ...item, handle }
+			bestScore = score
 		}
 	}
 
 	return best
 }
 
-// Returns the id of the visible measurement whose line passes within radius (image pixels) of a point, the nearest one;
-// undefined when none does.
-export function hitMeasurement(measurements: readonly Measurement[], point: Point, radius: number): string | undefined {
-	let best: string | undefined
+// Returns the visible item under a click within radius (image pixels) of its outline: a marker, the line of a distance,
+// the sides of a rectangle, or the outline of a circle through a solution at a zoom; the nearest one, undefined when
+// none is that close.
+export function hitItem(solution: FitsHeader, measurements: readonly Measurement[], markers: readonly AstrometricMarker[], point: Point, radius: number, scale: number): AstrometrySelection | undefined {
+	let best: AstrometrySelection | undefined
 	let bestDistance = radius
+
+	const consider = (item: AstrometrySelection, distance: number) => {
+		if (distance <= bestDistance) {
+			best = item
+			bestDistance = distance
+		}
+	}
+
+	for (const marker of markers) if (marker.visible) consider({ kind: 'marker', id: marker.id }, Math.hypot(point.x - marker.point.x, point.y - marker.point.y))
 
 	for (const measurement of measurements) {
 		if (!measurement.visible) continue
-		const distance = segmentDistance(point, measurement.a, measurement.b)
+		const item = { kind: 'measurement', id: measurement.id } as const
 
-		if (distance <= bestDistance) {
-			best = measurement.id
-			bestDistance = distance
+		if (measurement.kind === 'distance') {
+			consider(item, segmentDistance(point, measurement.a, measurement.b))
+		} else if (measurement.kind === 'rectangle') {
+			const { left, top, right, bottom } = bounds(measurement)
+			const corners = [
+				{ x: left, y: top },
+				{ x: right, y: top },
+				{ x: right, y: bottom },
+				{ x: left, y: bottom },
+			]
+			consider(item, Math.min(...corners.map((corner, i) => segmentDistance(point, corner, corners[(i + 1) % 4]))))
+		} else {
+			const outline = circleOutline(solution, measurement, scale)
+			const distances = (outline ?? []).flatMap((path) => path.slice(1).map((vertex, i) => segmentDistance(point, path[i], vertex)))
+			if (distances.length > 0) consider(item, Math.min(...distances))
 		}
 	}
 
@@ -146,43 +317,62 @@ export interface DraftContext {
 	readonly mode: AstrometryMode
 	// Measurements of the document.
 	readonly measurements: readonly Measurement[]
-	// Selected measurement of the document.
-	readonly selected?: string
+	// Markers of the document.
+	readonly markers: readonly AstrometricMarker[]
+	// Selected item of the document.
+	readonly selected?: AstrometrySelection
 	// Radius of the handles, in image pixels.
 	readonly radius: number
 }
 
 // Returns the draft after a press at a point and whether the tool takes the press: a handle under it is dragged in any
-// mode, a press in a measurement mode starts a measurement (or ends one drawn by clicks), and otherwise the viewer pans.
+// mode, a press in a measurement mode starts a measurement (or ends one drawn by clicks), a press in the marker mode
+// places a marker, and otherwise the viewer pans.
 export function pressDraft(draft: Draft | undefined, point: Point, context: DraftContext): { readonly draft?: Draft; readonly take: boolean } {
-	const current = draft?.imageId === context.imageId ? draft : undefined
+	const { imageId, mode } = context
+	const current = draft?.imageId === imageId ? draft : undefined
 
 	if (current?.type === 'create') return { draft: { ...current, current: point, pressed: true }, take: true }
 
-	const hit = hitHandle(context.measurements, point, context.radius, context.selected)
-	const measurement = hit && context.measurements.find((m) => m.id === hit.id)
-	if (hit && measurement) return { draft: { type: 'edit', imageId: context.imageId, handle: hit.handle, measurement }, take: true }
+	const hit = hitHandle(context.measurements, context.markers, point, context.radius, context.selected)
 
-	if (context.mode === 'pan') return { draft: undefined, take: false }
-	return { draft: { type: 'create', imageId: context.imageId, kind: context.mode, anchor: point, current: point, pressed: true }, take: true }
+	if (hit?.kind === 'measurement') {
+		const measurement = context.measurements.find((m) => m.id === hit.id)
+		if (measurement) return { draft: { type: 'edit', imageId, handle: hit.handle, original: measurement, measurement }, take: true }
+	} else if (hit?.kind === 'marker') {
+		const marker = context.markers.find((m) => m.id === hit.id)
+		if (marker) return { draft: { type: 'move', imageId, marker }, take: true }
+	}
+
+	if (mode === 'pan') return { draft: undefined, take: false }
+	if (mode === 'marker') return { draft: { type: 'marker', imageId, point }, take: true }
+	return { draft: { type: 'create', imageId, kind: mode, anchor: point, current: point, pressed: true }, take: true }
 }
 
 // Returns the draft after the pointer moves to a point, pressed or hovering.
 export function moveDraft(draft: Draft | undefined, point: Point): Draft | undefined {
 	if (!draft) return undefined
 	if (draft.type === 'create') return { ...draft, current: point }
-	return { ...draft, measurement: moveHandle(draft.measurement, draft.handle, point) }
+	if (draft.type === 'marker') return { ...draft, point }
+	if (draft.type === 'move') return { ...draft, marker: { ...draft.marker, point: { x: point.x, y: point.y } } }
+	return { ...draft, measurement: moveHandle(draft.original, draft.handle, point) }
 }
 
 // Returns the draft after the press is released at a point and what the store does: a drag that moved draws the
-// measurement, a click without moving waits for a second click, a second click ends it, and a dragged handle is kept.
-// radius (image pixels) tells a click from a drag.
+// measurement, a click without moving waits for a second click, a second click ends it, a marker is placed, and a
+// dragged handle or marker is kept. radius (image pixels) tells a click from a drag.
 export function releaseDraft(draft: Draft | undefined, point: Point, radius: number): { readonly draft?: Draft; readonly commit: DraftCommit } {
 	if (!draft) return { draft: undefined, commit: undefined }
-	if (draft.type === 'edit') return { draft: undefined, commit: { type: 'update', measurement: moveHandle(draft.measurement, draft.handle, point) } }
+	const at = { x: point.x, y: point.y }
+	if (draft.type === 'edit') return { draft: undefined, commit: { type: 'updateMeasurement', measurement: moveHandle(draft.original, draft.handle, at) } }
+	if (draft.type === 'move') return { draft: undefined, commit: { type: 'updateMarker', marker: { ...draft.marker, point: at } } }
+	if (draft.type === 'marker') return { draft: undefined, commit: { type: 'addMarker', marker: { point: at, visible: true } } }
 
-	if (Math.hypot(point.x - draft.anchor.x, point.y - draft.anchor.y) <= Math.max(radius, COINCIDENT_PIXELS)) return { draft: { ...draft, current: point, pressed: false }, commit: undefined }
-	return { draft: undefined, commit: { type: 'add', measurement: { kind: draft.kind, a: draft.anchor, b: { x: point.x, y: point.y }, visible: true } } }
+	if (Math.hypot(point.x - draft.anchor.x, point.y - draft.anchor.y) <= Math.max(radius, COINCIDENT_PIXELS)) return { draft: { ...draft, current: at, pressed: false }, commit: undefined }
+	const created = { kind: draft.kind, a: draft.anchor, b: at, visible: true }
+	if (draft.kind !== 'rectangle') return { draft: undefined, commit: { type: 'addMeasurement', measurement: created } }
+	const { left, top, right, bottom } = bounds({ ...created, id: '' })
+	return { draft: undefined, commit: { type: 'addMeasurement', measurement: { ...created, a: { x: left, y: top }, b: { x: right, y: bottom } } } }
 }
 
 // Returns the draft of a distance from an anchor to the pointer, waiting for the click at its end (Measure From Here).
@@ -190,10 +380,16 @@ export function draftFrom(imageId: string, anchor: Point): Draft {
 	return { type: 'create', imageId, kind: 'distance', anchor, current: anchor, pressed: false }
 }
 
-// Returns the measurement a draft shows while it is in progress: the distance being drawn, or the edited copy.
-export function draftMeasurement(draft: Draft): Measurement {
+// Returns the measurement a draft shows while it is in progress, or undefined for a marker draft.
+export function draftMeasurement(draft: Draft): Measurement | undefined {
 	if (draft.type === 'edit') return draft.measurement
-	return { id: '', kind: draft.kind, a: draft.anchor, b: draft.current, visible: true }
+	if (draft.type === 'create') return { id: '', kind: draft.kind, a: draft.anchor, b: draft.current, visible: true }
+	return undefined
+}
+
+// Returns a point inside an image of a size, in viewer coordinates.
+export function clampToImage(point: Point, image: Size): Point {
+	return { x: Math.min(image.width, Math.max(0, point.x)), y: Math.min(image.height, Math.max(0, point.y)) }
 }
 
 // Returns the distance from a point to a segment, in their units.

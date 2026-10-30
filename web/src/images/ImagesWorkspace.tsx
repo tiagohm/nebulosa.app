@@ -85,7 +85,7 @@ const STREAK_PICK_RADIUS = 8
 const ANNOTATION_PICK_RADIUS = 8
 
 // Names of the measure modes of the viewer toolbar.
-const MODE_LABELS: Readonly<Record<AstrometryMode, string>> = { pan: 'No measure', distance: 'Distance' }
+const MODE_LABELS: Readonly<Record<AstrometryMode, string>> = { pan: 'No measure', distance: 'Distance', rectangle: 'Rectangle', circle: 'Circle', marker: 'Marker' }
 
 // Images workspace.
 export function ImagesWorkspace() {
@@ -142,6 +142,8 @@ export function ImagesWorkspace() {
 	const astrometryTool = useAstrometryTool({
 		documentKey: document?.key,
 		imageId: document?.info?.id,
+		image: document?.info,
+		solution,
 		astrometry: view?.astrometry,
 		mode,
 		onModeChange: (next) => document && setModes((current) => ({ ...current, [document.key]: next })),

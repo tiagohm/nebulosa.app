@@ -27,7 +27,7 @@ import { Slider } from '../ui/Slider'
 import { useNow } from '../useNow'
 import { holdCameraFrame } from './cameratabs'
 import { type ImageAstrometryState, type ImagePlateSolvingState, imagesState, imageUnavailableReason, selectPlateSolution, setPlateSolveOverlay, setPlateSolveRequest } from './images'
-import { MeasurementsSection } from './MeasurementsSection'
+import { MarkersSection, MeasurementsSection } from './MeasurementsSection'
 import type { ImageToolPanelProps } from './tools'
 
 // Plate Solver tool of the Images workspace: solves the active document on the server with ASTAP, Astrometry.net Local,
@@ -71,7 +71,7 @@ export function PlateSolverPanel({ document, view, onOpen }: ImageToolPanelProps
 		)
 	}
 
-	return <PlateSolver documentKey={document.key} imageId={document.info?.id} plateSolving={view.plateSolving} astrometry={view.astrometry} unavailable={imageUnavailableReason(document)} />
+	return <PlateSolver documentKey={document.key} imageId={document.info?.id} image={document.info} plateSolving={view.plateSolving} astrometry={view.astrometry} unavailable={imageUnavailableReason(document)} />
 }
 
 interface PlateSolverProps {
@@ -79,6 +79,8 @@ interface PlateSolverProps {
 	readonly documentKey: string
 	// Server id of its image; absent until it has one.
 	readonly imageId?: string
+	// Size of its image, in pixels; absent until it has one.
+	readonly image?: { readonly width: number; readonly height: number }
 	// Plate solving request, solution shown, and overlay of the document.
 	readonly plateSolving: ImagePlateSolvingState
 	// Astrometric measurements of the document.
@@ -89,8 +91,10 @@ interface PlateSolverProps {
 
 // Sections of the Plate Solver panel of a document: the settings always, the execution, the solutions, and the
 // measurements once it has an image.
-function PlateSolver({ documentKey, imageId, plateSolving, astrometry, unavailable }: PlateSolverProps) {
+function PlateSolver({ documentKey, imageId, image, plateSolving, astrometry, unavailable }: PlateSolverProps) {
 	const state = useSnapshot(plateSolvingState)
+	const profiles = useSnapshot(profileState)
+	const { coordinates } = imageAstrometrySettings(activeProfile(profiles).settings)
 	const { job, result, solution, header, resultError } = usePlateSolution(imageId, plateSolving.selected)
 	const { request } = plateSolving
 	const edit = (next: PlateSolveRequest) => setPlateSolveRequest(imagesState, documentKey, next)
@@ -121,7 +125,8 @@ function PlateSolver({ documentKey, imageId, plateSolving, astrometry, unavailab
 					{solution && result && <SolverDetails result={result} />}
 					{solution && <MountSync solution={solution} />}
 					<Solutions documentKey={documentKey} imageId={imageId} selected={plateSolving.selected} header={header} />
-					<MeasurementsSection documentKey={documentKey} solution={solution} astrometry={astrometry} />
+					<MeasurementsSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
+					<MarkersSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
 				</>
 			)}
 			<Visualization documentKey={documentKey} plateSolving={plateSolving} />

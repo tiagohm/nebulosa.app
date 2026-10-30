@@ -275,7 +275,7 @@ describe('following the latest frame', () => {
 		expect(state.views[KEY].stars.selected).toBeUndefined()
 		expect(state.views[KEY].streaks.selected).toBeUndefined()
 		// Measurements are pixels of the frame they were drawn on, never moved to another one.
-		expect(state.views[KEY].astrometry).toEqual({ measurements: [] })
+		expect(state.views[KEY].astrometry).toEqual({ measurements: [], markers: [] })
 	})
 
 	test('a frame that cannot be opened or rendered keeps the frame shown', async () => {

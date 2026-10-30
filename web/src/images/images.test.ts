@@ -27,9 +27,11 @@ import {
 	setImageView,
 	setPlateSolveOverlay,
 	addMeasurement,
-	clearMeasurements,
-	editMeasurement,
-	removeMeasurement,
+	editAstrometryItem,
+	removeAstrometryItem,
+	addMarker,
+	updateMarker,
+	clearAstrometryItems,
 	selectAstrometryItem,
 	updateMeasurement,
 	setPlateSolveRequest,
@@ -547,33 +549,43 @@ describe('plate solving', () => {
 })
 
 describe('astrometry', () => {
-	test('measurements of one document are added, selected, edited, removed, and cleared', async () => {
+	test('measurements and markers of one document are added, selected, edited, removed, and cleared', async () => {
 		const state = newState()
 		const { io } = fakeIo()
 		await openImage(state, '/a.fits', io)
 		await openImage(state, '/b.fits', io)
 		const [a, b] = state.documents.map((d) => d.key)
 
-		expect(state.views[a]?.astrometry).toEqual({ measurements: [] })
+		expect(state.views[a]?.astrometry).toEqual({ measurements: [], markers: [] })
 		const first = addMeasurement(state, a, { kind: 'distance', a: { x: 1, y: 2 }, b: { x: 30, y: 40 }, visible: true })!
 		const second = addMeasurement(state, a, { kind: 'distance', a: { x: 5, y: 5 }, b: { x: 6, y: 9 }, visible: true })!
 		expect(state.views[a]?.astrometry.selected).toEqual({ kind: 'measurement', id: second })
 
-		editMeasurement(state, a, first, { label: '  Gap  ', visible: false })
+		editAstrometryItem(state, a, { kind: 'measurement', id: first }, { label: '  Gap  ', visible: false })
 		updateMeasurement(state, a, { id: second, kind: 'distance', a: { x: 0, y: 0 }, b: { x: 10, y: 0 }, visible: true })
 		expect(state.views[a]?.astrometry.measurements).toEqual([
 			{ id: first, kind: 'distance', a: { x: 1, y: 2 }, b: { x: 30, y: 40 }, visible: false, label: 'Gap' },
 			{ id: second, kind: 'distance', a: { x: 0, y: 0 }, b: { x: 10, y: 0 }, visible: true },
 		])
 
-		editMeasurement(state, a, first, { label: ' ' })
+		editAstrometryItem(state, a, { kind: 'measurement', id: first }, { label: ' ' })
 		expect(state.views[a]?.astrometry.measurements[0].label).toBeUndefined()
-		removeMeasurement(state, a, second)
+		removeAstrometryItem(state, a, { kind: 'measurement', id: second })
 		expect(state.views[a]?.astrometry.selected).toBeUndefined()
 		selectAstrometryItem(state, a, { kind: 'measurement', id: first })
-		clearMeasurements(state, a)
-		expect(state.views[a]?.astrometry).toEqual({ measurements: [], selected: undefined })
-		expect(state.views[b]?.astrometry).toEqual({ measurements: [] })
+		const placed = addMarker(state, a, { point: { x: 7, y: 8 }, visible: true })!
+		expect(state.views[a]?.astrometry.selected).toEqual({ kind: 'marker', id: placed })
+		updateMarker(state, a, { id: placed, point: { x: 9, y: 9 }, visible: true })
+		editAstrometryItem(state, a, { kind: 'marker', id: placed }, { label: 'Target' })
+		expect(state.views[a]?.astrometry.markers).toEqual([{ id: placed, point: { x: 9, y: 9 }, visible: true, label: 'Target' }])
+
+		// Clearing the measurements keeps the markers and the selection of a marker.
+		clearAstrometryItems(state, a, 'measurement')
+		expect(state.views[a]?.astrometry.measurements).toEqual([])
+		expect(state.views[a]?.astrometry.selected).toEqual({ kind: 'marker', id: placed })
+		clearAstrometryItems(state, a, 'marker')
+		expect(state.views[a]?.astrometry).toEqual({ measurements: [], markers: [], selected: undefined })
+		expect(state.views[b]?.astrometry).toEqual({ measurements: [], markers: [] })
 		expect(addMeasurement(state, 'unknown', { kind: 'distance', a: { x: 0, y: 0 }, b: { x: 1, y: 1 }, visible: true })).toBeUndefined()
 	})
 })

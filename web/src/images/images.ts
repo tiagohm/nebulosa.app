@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { deviceState } from '../equipment/equipment'
 import { jsonInit, responseError } from '../http'
-import type { AstrometrySelection, Measurement } from '../platesolving/measurement'
+import type { AstrometricMarker, AstrometrySelection, Measurement } from '../platesolving/measurement'
 import { DEFAULT_PLATE_SOLVE_REQUEST } from '../platesolving/platesolving'
 import { activeProfile, imageDisplaySettings, profileCamera, profileState, setImageDisplaySettings } from '../profile/profile'
 import { FIT_VIEW, type ViewerView } from '../viewer/transform'
@@ -172,12 +172,14 @@ export interface ImagePlateSolvingState {
 	grid: boolean
 }
 
-// Astrometric measurements of a document, in its image pixels, never sky positions: their values are computed from the
+// Astrometric measurements and markers of a document, in its image pixels, never sky positions: their values are computed from the
 // solution shown, so choosing another solution keeps them. They live with the document in tab memory; a camera tab
 // clears them when it shows another frame, so they never move to unrelated pixels.
 export interface ImageAstrometryState {
 	// Measurements in drawing order.
 	measurements: readonly Measurement[]
+	// Markers in placing order.
+	markers: readonly AstrometricMarker[]
 	// Selected item; absent when none is.
 	selected?: AstrometrySelection
 }
@@ -430,7 +432,7 @@ export function newView(): ImageViewState {
 		stars: { visible: true, acceptedOnly: false },
 		streaks: { visible: true, labels: true, useSolution: true, useStars: true },
 		plateSolving: { request: { ...DEFAULT_PLATE_SOLVE_REQUEST }, overlay: true, grid: false },
-		astrometry: { measurements: [] },
+		astrometry: { measurements: [], markers: [] },
 		annotation: {
 			layers: { stars: true, deepSky: true, solarSystem: true, satellites: true, minorBodies: true, constellations: true, constellationLabels: false },
 			labels: true,
@@ -660,36 +662,61 @@ export function addMeasurement(state: ImagesState, key: string, measurement: Omi
 	return id
 }
 
+// Adds a marker to a document under a new id and selects it; returns the id, or undefined for an unknown key.
+export function addMarker(state: ImagesState, key: string, marker: Omit<AstrometricMarker, 'id'>): string | undefined {
+	const astrometry = state.views[key]?.astrometry
+	if (!astrometry) return undefined
+	const id = nanoid()
+	astrometry.markers = [...astrometry.markers, { ...marker, id }]
+	astrometry.selected = { kind: 'marker', id }
+	return id
+}
+
 // Replaces a measurement of a document by its edited copy, matched by id. Ignored for an unknown key or id.
 export function updateMeasurement(state: ImagesState, key: string, measurement: Measurement) {
 	const astrometry = state.views[key]?.astrometry
 	if (astrometry?.measurements.some((m) => m.id === measurement.id)) astrometry.measurements = astrometry.measurements.map((m) => (m.id === measurement.id ? measurement : m))
 }
 
-// Renames a measurement of a document (an empty label restores the default name) or shows or hides it. Ignored for an
-// unknown key or id.
-export function editMeasurement(state: ImagesState, key: string, id: string, patch: { readonly label?: string; readonly visible?: boolean }) {
-	const measurement = state.views[key]?.astrometry.measurements.find((m) => m.id === id)
-	if (!measurement) return
+// Replaces a marker of a document by its edited copy, matched by id. Ignored for an unknown key or id.
+export function updateMarker(state: ImagesState, key: string, marker: AstrometricMarker) {
+	const astrometry = state.views[key]?.astrometry
+	if (astrometry?.markers.some((m) => m.id === marker.id)) astrometry.markers = astrometry.markers.map((m) => (m.id === marker.id ? marker : m))
+}
+
+// Renames a measurement or marker of a document (an empty label restores the default name) or shows or hides it.
+// Ignored for an unknown key or item.
+export function editAstrometryItem(state: ImagesState, key: string, item: AstrometrySelection, patch: { readonly label?: string; readonly visible?: boolean }) {
+	const astrometry = state.views[key]?.astrometry
+	if (!astrometry) return
 	const { label, ...rest } = patch
-	const edited = { ...measurement, ...rest, ...(label !== undefined && { label: label.trim() || undefined }) }
-	updateMeasurement(state, key, edited)
+	const edit = <T extends { readonly label?: string }>(value: T): T => ({ ...value, ...rest, ...(label !== undefined && { label: label.trim() || undefined }) })
+
+	if (item.kind === 'measurement') {
+		const measurement = astrometry.measurements.find((m) => m.id === item.id)
+		if (measurement) updateMeasurement(state, key, edit(measurement))
+	} else {
+		const marker = astrometry.markers.find((m) => m.id === item.id)
+		if (marker) updateMarker(state, key, edit(marker))
+	}
 }
 
-// Removes a measurement of a document, clearing its selection. Ignored for an unknown key or id.
-export function removeMeasurement(state: ImagesState, key: string, id: string) {
+// Removes a measurement or marker of a document, clearing its selection. Ignored for an unknown key or item.
+export function removeAstrometryItem(state: ImagesState, key: string, item: AstrometrySelection) {
 	const astrometry = state.views[key]?.astrometry
 	if (!astrometry) return
-	astrometry.measurements = astrometry.measurements.filter((m) => m.id !== id)
-	if (astrometry.selected?.id === id) astrometry.selected = undefined
+	if (item.kind === 'measurement') astrometry.measurements = astrometry.measurements.filter((m) => m.id !== item.id)
+	else astrometry.markers = astrometry.markers.filter((m) => m.id !== item.id)
+	if (astrometry.selected?.kind === item.kind && astrometry.selected.id === item.id) astrometry.selected = undefined
 }
 
-// Removes every measurement of a document. Ignored for an unknown key.
-export function clearMeasurements(state: ImagesState, key: string) {
+// Removes every measurement, or every marker, of a document, and the selection among them. Ignored for an unknown key.
+export function clearAstrometryItems(state: ImagesState, key: string, kind: AstrometrySelection['kind']) {
 	const astrometry = state.views[key]?.astrometry
 	if (!astrometry) return
-	astrometry.measurements = []
-	astrometry.selected = undefined
+	if (kind === 'measurement') astrometry.measurements = []
+	else astrometry.markers = []
+	if (astrometry.selected?.kind === kind) astrometry.selected = undefined
 }
 
 // Selects an astrometric item of a document, or clears the selection. Ignored for an unknown key.

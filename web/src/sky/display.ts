@@ -61,7 +61,7 @@ export const SKY_LAYER_IDS: ReadonlySet<string> = new Set(SKY_LAYERS.map((layer)
 
 // Faintest star magnitude downloaded for the map, and so the faintest that can be drawn; fainter stars
 // are still found by search.
-export const MAP_STAR_MAGNITUDE_LIMIT = 7
+export const MAP_STAR_MAGNITUDE_LIMIT = 8
 
 // Brightest choice of the faintest star magnitude drawn.
 export const MIN_MAGNITUDE_LIMIT = 1

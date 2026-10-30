@@ -7,6 +7,7 @@ import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingEventRecord, GuidingSessionSummary } from './guiding'
 import type { MountPointingSessionSummary } from './mountpointing.sessions'
 import type { OperationDevice, OperationKind, OperationRecord } from './operations'
+import type { TargetCenteringSessionSummary } from './targetcentering'
 import type { TppaSessionSummary } from './tppa'
 import type { ServerEvent } from './websocket'
 
@@ -22,7 +23,7 @@ import type { ServerEvent } from './websocket'
 export type NotificationLevel = 'info' | 'success' | 'warning' | 'error'
 
 // Camera tool a notification can open, named as the Images workspace names it.
-export type NotificationCameraTool = 'camera-acquisition' | 'auto-focus' | 'guiding' | 'tppa' | 'pointing-model-builder' | 'darv' | 'flat-wizard'
+export type NotificationCameraTool = 'camera-acquisition' | 'auto-focus' | 'guiding' | 'tppa' | 'pointing-model-builder' | 'target-centering' | 'darv' | 'flat-wizard'
 
 // Context a notification can open in the UI; opening it never commands a device.
 export type NotificationTarget =
@@ -169,6 +170,8 @@ export class NotificationClassifier {
 				return this.#tppa(event.session)
 			case 'mountPointing:updated':
 				return this.#mountPointing(event.session)
+			case 'targetCentering:updated':
+				return this.#targetCentering(event.session)
 			case 'flatWizard:updated':
 				return this.#flatWizard(event.session)
 			case 'guiding:updated':
@@ -255,6 +258,19 @@ export class NotificationClassifier {
 			return [{ key: `mountPointing.paused:${sessionId}:${operationId}`, level: 'warning', code: 'mountPointing.paused', title: 'Pointing session paused', message: `The pointing session of ${mountName} paused: ${reasonText(reason)}.`, source, target }]
 		if (session.kind === 'verification') return []
 		if (state === 'completed') return [{ key: `mountPointing.completed:${sessionId}`, level: 'info', code: 'mountPointing.completed', title: 'Pointing session completed', message: `${acceptedCount} of ${plannedCount} waypoints of ${mountName} were sampled.`, source, target }]
+		return []
+	}
+
+	// Reports a centering that needs the operator and its outcome; a cancelled one is quiet, and a measurement out of tolerance is
+	// a result, not a failure.
+	#targetCentering(session: TargetCenteringSessionSummary): NotificationDraft[] {
+		const { sessionId, operationId, camera, mount, mountName, state, reason, positionVerified } = session
+		const source = this.#source('targetCentering', camera.connectionId, mount.deviceId, operationId, sessionId)
+		const target = cameraTool(camera.connectionId, camera.deviceId, 'target-centering')
+
+		if (state === 'blocked') return [{ key: `targetCentering.blocked:${sessionId}`, level: 'error', code: 'targetCentering.blocked', title: 'Mount not confirmed stopped', message: `${mountName} could not be confirmed stopped after its centering; check it before using it.`, source, target }]
+		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ key: `targetCentering:${sessionId}`, level: 'error', code: 'targetCentering.failed', title: 'Target Centering failed', message: `Centering ${mountName} failed: ${session.error ?? reasonText(reason)}.`, source, target }]
+		if (state === 'completed' && positionVerified) return [{ key: `targetCentering:${sessionId}`, level: 'success', code: 'targetCentering.completed', title: 'Target Centering completed', message: `The position of ${mountName} was verified.`, source, target }]
 		return []
 	}
 

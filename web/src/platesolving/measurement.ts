@@ -1,5 +1,6 @@
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { sphericalDestination, sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
+import type { SkySelection } from '../sky/sky'
 import type { Point, Size } from '../viewer/transform'
 import { pointAt, type SkyOffset, skyAt, skyOffset } from './wcs'
 
@@ -51,6 +52,14 @@ export interface AstrometricMarker {
 // position, at epoch J2000.0, without proper motion). Moving bodies are not targets: their position depends on the
 // time and place of the observation.
 export type AstrometryTarget = { readonly source: 'marker'; readonly markerId: string } | { readonly source: 'manual'; readonly rightAscension: number; readonly declination: number } | { readonly source: 'sky'; readonly name: string; readonly rightAscension: number; readonly declination: number }
+
+// Returns the target of the Sky selection, or why it cannot be one: only a catalog object has a fixed J2000 position.
+export function catalogTarget(selection: Pick<SkySelection, 'ref' | 'name' | 'catalog'> | undefined): AstrometryTarget | string {
+	if (!selection) return 'Select a star or a deep-sky object in Sky first.'
+	if (selection.ref.kind !== 'catalog') return 'Only stars and deep-sky objects of the catalog have a fixed J2000 position; solar-system bodies, minor bodies, constellations, and the mount cannot be targets.'
+	if (!selection.catalog) return 'The catalog position of the selection is loading.'
+	return { source: 'sky', name: selection.name, rightAscension: selection.catalog.rightAscension, declination: selection.catalog.declination }
+}
 
 // Offset of a target from the solved centre of an image.
 export interface TargetOffsetValues {

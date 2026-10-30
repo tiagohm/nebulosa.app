@@ -14,6 +14,7 @@ import { PlateSolverPanel } from './PlateSolverPanel'
 import { PointingModelBuilderTool } from './PointingModelBuilderTool'
 import { StarDetectionPanel } from './StarDetectionPanel'
 import { StreakDetectionPanel } from './StreakDetectionPanel'
+import { TargetCenteringTool } from './TargetCenteringTool'
 import { TppaTool } from './TppaTool'
 
 // Static registry of the contextual tools of the Images workspace, in two categories: image tools, which work on the
@@ -24,7 +25,7 @@ import { TppaTool } from './TppaTool'
 // a tool never starts or stops an operation. This registry is the only place Images tools are declared.
 
 // Contextual tools of the Images workspace, in selector order: the image tools, then the camera operations.
-export const IMAGE_TOOLS = ['inspector', 'plate-solver', 'star-detection', 'streak-detection', 'annotation', 'image-processing', 'camera-acquisition', 'auto-focus', 'mount-nudge', 'guiding', 'darv', 'tppa', 'pointing-model-builder', 'flat-wizard'] as const
+export const IMAGE_TOOLS = ['inspector', 'plate-solver', 'star-detection', 'streak-detection', 'annotation', 'image-processing', 'camera-acquisition', 'auto-focus', 'mount-nudge', 'guiding', 'darv', 'tppa', 'pointing-model-builder', 'target-centering', 'flat-wizard'] as const
 
 // Identifier of an Images contextual tool.
 export type ImageToolId = (typeof IMAGE_TOOLS)[number]
@@ -96,6 +97,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	darv: { id: 'darv', label: 'DARV', panelTitle: 'DARV', category: 'camera', panel: DarvTool },
 	tppa: { id: 'tppa', label: 'TPPA', panelTitle: 'TPPA', category: 'camera', panel: TppaTool },
 	'pointing-model-builder': { id: 'pointing-model-builder', label: 'Pointing Model Builder', panelTitle: 'Pointing Model Builder', category: 'camera', panel: PointingModelBuilderTool },
+	'target-centering': { id: 'target-centering', label: 'Target Centering', panelTitle: 'Target Centering', category: 'camera', panel: TargetCenteringTool },
 	'flat-wizard': { id: 'flat-wizard', label: 'Flat Wizard', panelTitle: 'Flat Wizard', category: 'camera', panel: FlatWizardTool },
 }
 

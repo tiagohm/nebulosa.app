@@ -3,11 +3,11 @@ import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { Actions, Notice } from '../equipment-control/parts'
 import { type CoordinateStyle, formatAngularSize, formatDeclinationAs, formatPositionAngle, formatRightAscensionAs, formatSignedAngle, MISSING } from '../platesolving/coordinates'
-import { type AstrometricMarker, type AstrometryTarget, targetOffset, targetPosition } from '../platesolving/measurement'
+import { type AstrometricMarker, type AstrometryTarget, catalogTarget, targetOffset, targetPosition } from '../platesolving/measurement'
 import { AngleField } from '../platesolving/PlateSolveControls'
 import { wcsFrame } from '../platesolving/wcs'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
-import { type SkySelection, skyState } from '../sky/sky'
+import { skyState } from '../sky/sky'
 import { Button } from '../ui/Button'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
@@ -105,14 +105,6 @@ export function TargetOffsetSection({ documentKey, solution, image, astrometry, 
 			<Notice>Measured from the solved centre of the image, from north through east; east and north are offsets on the plane tangent at the centre. Read only: nothing is sent to the mount.</Notice>
 		</CollapsibleSection>
 	)
-}
-
-// Returns the target of the Sky selection, or why it cannot be one.
-function catalogTarget(selection: SkySelection | undefined): AstrometryTarget | string {
-	if (!selection) return 'Select a star or a deep-sky object in Sky first.'
-	if (selection.ref.kind !== 'catalog') return 'Only stars and deep-sky objects of the catalog have a fixed J2000 position; solar-system bodies, minor bodies, constellations, and the mount cannot be targets.'
-	if (!selection.catalog) return 'The catalog position of the selection is loading.'
-	return { source: 'sky', name: selection.name, rightAscension: selection.catalog.rightAscension, declination: selection.catalog.declination }
 }
 
 // Returns the name of a marker of a list by id: its label, or M and its number.

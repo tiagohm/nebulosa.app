@@ -57,6 +57,11 @@ import {
 	TPPA_MAXIMUM_ROTATION,
 	TPPA_MINIMUM_ROTATION,
 	type TppaSettings,
+	DEFAULT_TARGET_CENTERING_SETTINGS,
+	FRAMING_REFERENCES_MAXIMUM,
+	type FramingReference,
+	TARGET_CENTERING_LIMITS,
+	type TargetCenteringSettings,
 } from './schema'
 
 // Reading of persisted profiles: every version of the format (see PROFILES_VERSION) is restored into the current one,
@@ -121,6 +126,54 @@ function normalizeAcquisition(value: unknown): CameraAcquisitionSettings | undef
 	}
 }
 
+// Restores a persisted Target Centering form, filling every invalid field with its default; undefined for anything that is
+// not a record.
+function normalizeTargetCentering(value: unknown): TargetCenteringSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = DEFAULT_TARGET_CENTERING_SETTINGS
+	const limits = TARGET_CENTERING_LIMITS
+	const whole = (field: unknown, [minimum, maximum]: readonly [number, number], fallback: number) => (Number.isInteger(field) ? boundedNumber(field, minimum, maximum, fallback) : fallback)
+
+	return {
+		exposureTime: numberAtLeast(value.exposureTime, Number.MIN_VALUE, defaults.exposureTime),
+		tolerance: boundedNumber(value.tolerance, ...limits.tolerance, defaults.tolerance),
+		maximumCorrections: whole(value.maximumCorrections, limits.maximumCorrections, defaults.maximumCorrections),
+		noSolutionRetries: whole(value.noSolutionRetries, limits.noSolutionRetries, defaults.noSolutionRetries),
+		maximumFrames: whole(value.maximumFrames, limits.maximumFrames, defaults.maximumFrames),
+		settleDelay: boundedNumber(value.settleDelay, ...limits.settleDelay, defaults.settleDelay),
+		maximumCorrection: boundedNumber(value.maximumCorrection, ...limits.maximumCorrection, defaults.maximumCorrection),
+		blindRetry: value.blindRetry === true,
+		...(typeof value.framingId === 'string' && value.framingId && { framingId: value.framingId }),
+	}
+}
+
+// Restores a persisted framing; undefined for one without a name, an id, or valid coordinates, which cannot be recovered.
+function normalizeFramingReference(value: unknown): FramingReference | undefined {
+	if (!isRecord(value) || typeof value.id !== 'string' || !value.id || typeof value.name !== 'string' || !value.name.trim()) return undefined
+
+	const { id, name, rightAscension, declination, createdAt, updatedAt } = value
+	if (typeof rightAscension !== 'number' || !(rightAscension >= 0 && rightAscension < 2 * Math.PI)) return undefined
+	if (typeof declination !== 'number' || !(Math.abs(declination) <= Math.PI / 2)) return undefined
+
+	return { id, name, rightAscension, declination, source: value.source === 'sky' ? 'sky' : 'manual', createdAt: numberAtLeast(createdAt, 0, 0), updatedAt: numberAtLeast(updatedAt, 0, 0) }
+}
+
+// Restores persisted framings, keeping the first of each id and at most FRAMING_REFERENCES_MAXIMUM; undefined for anything
+// that is not a list.
+function normalizeFramingReferences(value: unknown): FramingReference[] | undefined {
+	if (!Array.isArray(value)) return undefined
+
+	const framings = new Map<string, FramingReference>()
+
+	for (const each of value) {
+		const framing = normalizeFramingReference(each)
+		if (framing && !framings.has(framing.id)) framings.set(framing.id, framing)
+	}
+
+	return Array.from(framings.values()).slice(0, FRAMING_REFERENCES_MAXIMUM)
+}
+
 // Restores the persisted forms of one camera, keeping only the valid ones; undefined when none is.
 function normalizeCamera(value: unknown): CameraSettings | undefined {
 	if (!isRecord(value)) return undefined
@@ -131,11 +184,12 @@ function normalizeCamera(value: unknown): CameraSettings | undefined {
 	const autoFocus = normalizeAutoFocus(value.autoFocus, exposure?.exposureTime)
 	const tppa = normalizeTppa(value.tppa, exposure?.exposureTime)
 	const pointingModel = normalizePointingModel(value.pointingModel)
+	const targetCentering = normalizeTargetCentering(value.targetCentering)
 	const darv = normalizeDarv(value.darv)
 	const flatWizard = normalizeFlatWizard(value.flatWizard)
 	const guiding = normalizeGuiding(value.guiding)
 	const display = normalizeDisplaySettings(value.display)
-	if (!exposure && !acquisition && !plateSolving && !autoFocus && !tppa && !pointingModel && !darv && !flatWizard && !guiding && !display) return undefined
+	if (!exposure && !acquisition && !plateSolving && !autoFocus && !tppa && !pointingModel && !targetCentering && !darv && !flatWizard && !guiding && !display) return undefined
 	return {
 		...(exposure && { exposure }),
 		...(acquisition && { acquisition }),
@@ -143,6 +197,7 @@ function normalizeCamera(value: unknown): CameraSettings | undefined {
 		...(autoFocus && { autoFocus }),
 		...(tppa && { tppa }),
 		...(pointingModel && { pointingModel }),
+		...(targetCentering && { targetCentering }),
 		...(darv && { darv }),
 		...(flatWizard && { flatWizard }),
 		...(guiding && { guiding }),
@@ -593,6 +648,9 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	const settings = defaultSettings()
 	if (!isRecord(value)) return settings
 
+	const framingReferences = normalizeFramingReferences(value.framingReferences)
+	if (framingReferences) settings.framingReferences = framingReferences
+
 	if (isRecord(value.panels)) {
 		for (const workspace of WORKSPACE_IDS) {
 			const open = value.panels[workspace]
@@ -765,7 +823,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 13:
 		case 14:
 		case 15:
-		case 16: {
+		case 16:
+		case 17: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

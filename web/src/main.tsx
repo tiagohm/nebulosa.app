@@ -10,6 +10,7 @@ import { darvRuntime, handleDarvEvent, refreshDarv } from './camera/darv'
 import { flatWizardRuntime, handleFlatWizardEvent, refreshFlatWizard } from './camera/flatwizard'
 import { guidingRuntime, handleGuidingEvent, refreshGuiding } from './camera/guiding'
 import { handleNudgeEvent, nudgeRuntime, refreshNudges } from './camera/nudge'
+import { handleTargetCenteringEvent, refreshTargetCentering, targetCenteringRuntime } from './camera/targetcentering'
 import { handleTppaEvent, refreshTppa, tppaRuntime } from './camera/tppa'
 import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
 import { controlRuntime, handleControlEvent, refreshStates } from './equipment-control/control'
@@ -82,6 +83,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleAutoFocusEvent(autoFocusRuntime, event), refresh: () => refreshAutoFocus(autoFocusRuntime) },
 	{ handle: (event) => handleTppaEvent(tppaRuntime, event), refresh: () => refreshTppa(tppaRuntime) },
 	{ handle: (event) => handleMountPointingEvent(mountPointingRuntime, event), refresh: () => refreshMountPointing(mountPointingRuntime) },
+	{ handle: (event) => handleTargetCenteringEvent(targetCenteringRuntime, event), refresh: () => refreshTargetCentering(targetCenteringRuntime) },
 	{ handle: (event) => handleDarvEvent(darvRuntime, event), refresh: () => refreshDarv(darvRuntime) },
 	{ handle: (event) => handleFlatWizardEvent(flatWizardRuntime, event), refresh: () => refreshFlatWizard(flatWizardRuntime) },
 	{ handle: (event) => handleGuidingEvent(guidingRuntime, event), refresh: () => refreshGuiding(guidingRuntime) },

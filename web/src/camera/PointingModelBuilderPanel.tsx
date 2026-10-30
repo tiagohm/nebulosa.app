@@ -1,7 +1,7 @@
-import type { CameraCapabilities, DeviceSummary, MountPointingSessionSummary, MountState, PointingModelSummary } from 'api'
+import type { DeviceSummary, MountPointingSessionSummary, MountState, PointingModelSummary } from 'api'
 import { cn } from 'cn'
 import { toArcsec } from 'nebulosa/src/math/units/angle'
-import { type ReactNode, useState } from 'react'
+import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
@@ -33,13 +33,14 @@ import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
 import { useSolverConfigured } from '../platesolving/PlateSolveControls'
 import { activeProfile, cameraPlateSolving, exposureSettings, pointingModelSettings, profileState, setPointingModelSettings } from '../profile/profile'
-import { type CameraExposureSettings, type CameraIdentity, POINTING_MODEL_PRESETS, type PointingModelSettings } from '../profile/schema'
+import { type CameraIdentity, POINTING_MODEL_PRESETS, type PointingModelSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
+import { CameraSummary, SummaryRow as Row } from './CameraSummary'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
@@ -232,28 +233,6 @@ function formatSite(state: MountState | undefined) {
 	return `${((state.site.latitude * 180) / Math.PI).toFixed(2)}°, ${((state.site.longitude * 180) / Math.PI).toFixed(2)}°`
 }
 
-interface CameraSummaryProps {
-	// Camera settings applied.
-	readonly exposure: Omit<CameraExposureSettings, 'exposureTime'>
-	// What the camera reports.
-	readonly capabilities?: CameraCapabilities
-}
-
-// The camera settings Camera Acquisition owns, shown only.
-function CameraSummary({ exposure: { gain, offset, binX, binY, subframe, width, height, frameFormat }, capabilities }: CameraSummaryProps) {
-	const format = capabilities?.frameFormats.find((each) => each.name === frameFormat)?.label ?? (frameFormat || 'Default')
-
-	return (
-		<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-			<Row label="Gain">{gain}</Row>
-			<Row label="Offset">{offset}</Row>
-			<Row label="Binning">{`${binX} × ${binY}`}</Row>
-			<Row label="Frame">{subframe ? `${width} × ${height}` : 'Full sensor'}</Row>
-			<Row label="Format">{format}</Row>
-		</dl>
-	)
-}
-
 // Step of the session, its counts, the progress of the frame being exposed, and why it stopped.
 function SessionState({ session }: { readonly session: MountPointingSessionSummary }) {
 	const { state, step, waypoint, plannedCount, acceptedCount, rejectedCount, skippedCount, exposure, error, warnings } = session
@@ -331,16 +310,6 @@ function Results({ model, verifying, locked, onVerify }: ResultsProps) {
 				Open Mount Pointing Model
 			</Button>
 		</CollapsibleSection>
-	)
-}
-
-// Label and value of a row.
-function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-	return (
-		<div className="contents">
-			<dt className="text-ink-300">{label}</dt>
-			<dd className="m-0 min-w-0 truncate text-right tabular-nums">{children}</dd>
-		</div>
 	)
 }
 

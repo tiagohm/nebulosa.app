@@ -6,6 +6,7 @@ import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingSessionSummary } from './guiding'
 import { NotificationClassifier } from './notifications.rules'
 import type { OperationRecord } from './operations'
+import type { TargetCenteringSessionSummary } from './targetcentering'
 import type { TppaSessionSummary } from './tppa'
 import type { ServerEvent } from './websocket'
 
@@ -22,6 +23,10 @@ function autoFocus(session: Partial<AutoFocusSessionSummary>): ServerEvent {
 
 function tppa(session: Partial<TppaSessionSummary>): ServerEvent {
 	return { type: 'tppa:updated', session: { sessionId: 't1', operationId: 'o3', camera, cameraName: 'CCD', mount, mountName: 'Mount', state: 'capturing', ...session } as TppaSessionSummary }
+}
+
+function targetCentering(session: Partial<TargetCenteringSessionSummary>): ServerEvent {
+	return { type: 'targetCentering:updated', session: { sessionId: 'c1', operationId: 'o6', camera, cameraName: 'CCD', mount, mountName: 'Mount', state: 'running', positionVerified: false, ...session } as TargetCenteringSessionSummary }
 }
 
 function flatWizard(session: Partial<FlatWizardSessionSummary>): ServerEvent {
@@ -74,6 +79,16 @@ test('reports Auto Focus and TPPA transitions', () => {
 	expect(classifier.classify(tppa({ state: 'refinementPaused' }))).toEqual([])
 	expect(classifier.classify(tppa({ state: 'completed' }))).toEqual([])
 	expect(classifier.classify(tppa({ state: 'failed', reason: 'timeout' }))[0]).toMatchObject({ key: 'tppa:t1', code: 'tppa.failed' })
+})
+
+test('reports a blocked mount and the outcome of a centering, never a measurement out of tolerance or a stop', () => {
+	const classifier = new NotificationClassifier()
+	expect(classifier.classify(targetCentering({ state: 'completed', positionVerified: true }))[0]).toMatchObject({ key: 'targetCentering:c1', level: 'success', code: 'targetCentering.completed', target: { kind: 'cameraTool', tool: 'target-centering' } })
+	expect(classifier.classify(targetCentering({ state: 'failed', reason: 'commandFailed', error: 'no plate solution' }))[0]).toMatchObject({ level: 'error', code: 'targetCentering.failed', message: 'Centering Mount failed: no plate solution.' })
+	expect(classifier.classify(targetCentering({ state: 'blocked' }))[0]).toMatchObject({ level: 'error', code: 'targetCentering.blocked' })
+	expect(classifier.classify(targetCentering({ state: 'completed', positionVerified: false }))).toEqual([])
+	expect(classifier.classify(targetCentering({ state: 'cancelled', reason: 'aborted' }))).toEqual([])
+	expect(classifier.classify(targetCentering({ state: 'failed', reason: 'aborted' }))).toEqual([])
 })
 
 test('reports each manual step of the Flat Wizard by its id, cleanup warnings, and outcomes', () => {

@@ -23,8 +23,9 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // the searches use the site of the image header, and a stored code is ignored when read. Version 15 adds the appearance
 // of the astrometric aids of solved images (imageAstrometry). Version 16 moves the plate solver of the TPPA form
 // (tppa.solver) to the plate solving settings each camera shares between its operations (plateSolving), and adds the
-// Pointing Model Builder form of each camera (pointingModel).
-export const PROFILES_VERSION = 16
+// Pointing Model Builder form of each camera (pointingModel). Version 17 adds the Target Centering form of each camera
+// (targetCentering) and the saved framings of the profile (framingReferences).
+export const PROFILES_VERSION = 17
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -40,6 +41,8 @@ export interface ProfileSettings {
 	lastImageDirectory?: string
 	// Forms of each physical camera edited so far, by saved connection id, then device id.
 	cameras: Record<string, Record<string, CameraSettings>>
+	// Targets saved to recover a framing, at most FRAMING_REFERENCES_MAXIMUM; absent until one is saved.
+	framingReferences?: readonly FramingReference[]
 	// Star detection request edited in Images → Star Detection, shared by every document and by the frames of Auto
 	// Focus; absent until edited, and then DEFAULT_STAR_REQUEST holds.
 	starDetection?: StarDetectionRequest
@@ -182,6 +185,8 @@ export interface CameraSettings {
 	tppa?: TppaSettings
 	// Pointing Model Builder form.
 	pointingModel?: PointingModelSettings
+	// Target Centering form; absent until edited, and then DEFAULT_TARGET_CENTERING_SETTINGS holds.
+	targetCentering?: TargetCenteringSettings
 	// DARV form.
 	darv?: DarvSettings
 	// Flat Wizard form.
@@ -309,6 +314,56 @@ export const POINTING_MODEL_PRESETS = [
 
 // Pointing Model Builder form of a camera that has none yet: 30 waypoints on a golden spiral above 25°.
 export const DEFAULT_POINTING_MODEL_SETTINGS: PointingModelSettings = { exposureTime: 5, pattern: 'goldenSpiral', count: 30, minimumAltitude: 25, meridianAvoidance: 5, settleDelay: 2, stopTracking: true }
+
+// Target Centering form of one physical camera. The frames take the camera settings of the camera, which this form never
+// holds, and its solver settings; the target being edited is tab memory, and only a saved framing lasts.
+export interface TargetCenteringSettings {
+	// Exposure of each frame, in seconds; > 0.
+	exposureTime: number
+	// Accepted distance between the solved center and the target, in arcseconds.
+	tolerance: number
+	// Corrections allowed.
+	maximumCorrections: number
+	// Exposures repeated at one position after a frame without a solution.
+	noSolutionRetries: number
+	// Frames allowed, failed solves included.
+	maximumFrames: number
+	// Wait after each motion and before the next exposure, in seconds.
+	settleDelay: number
+	// Largest correction a session makes by itself, in degrees.
+	maximumCorrection: number
+	// Whether a frame an assisted solve left without a solution is searched again over the whole sky, with the same provider.
+	blindRetry: boolean
+	// Saved framing selected; absent when the target is not one.
+	framingId?: string
+}
+
+// Bounds of the Target Centering form, [minimum, maximum], in the units of each field.
+export const TARGET_CENTERING_LIMITS = { tolerance: [1, 3600], maximumCorrections: [1, 10], noSolutionRetries: [0, 5], maximumFrames: [1, 30], settleDelay: [0, 120], maximumCorrection: [0.1, 10] } as const
+
+// Target Centering form of a camera that has none yet; the values are provisional starting points.
+export const DEFAULT_TARGET_CENTERING_SETTINGS: TargetCenteringSettings = { exposureTime: 3, tolerance: 30, maximumCorrections: 4, noSolutionRetries: 1, maximumFrames: 10, settleDelay: 2, maximumCorrection: 1, blindRetry: false }
+
+// Target saved to recover a framing. It is a definition, never a reference to an image, so it outlives any frame.
+export interface FramingReference {
+	// Id of the framing, unique in the profile.
+	id: string
+	// Name of the framing, not blank.
+	name: string
+	// Right ascension, J2000, in radians, in [0, 2π).
+	rightAscension: number
+	// Declination, J2000, in radians, in [−π/2, π/2].
+	declination: number
+	// Where the coordinates came from: typed, or a catalog object of Sky.
+	source: 'manual' | 'sky'
+	// When it was saved, Unix milliseconds.
+	createdAt: number
+	// When it was last changed, Unix milliseconds.
+	updatedAt: number
+}
+
+// Most framings a profile keeps.
+export const FRAMING_REFERENCES_MAXIMUM = 128
 
 // DARV form of one physical camera: how the next drift alignment measurement moves the mount. The frame is taken
 // with the camera settings of the camera, which this form never holds, and with an exposure derived from the leg

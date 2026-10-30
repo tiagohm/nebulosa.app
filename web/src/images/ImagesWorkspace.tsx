@@ -13,6 +13,7 @@ import { FocusCurve } from '../camera/FocusCurve'
 import { GUIDING_STATE_LABELS, guidingRuntime, selectGuidingTarget } from '../camera/guiding'
 import { GuidingGraph } from '../camera/GuidingGraph'
 import { GuidingOverlay, useGuidingOverlay } from '../camera/GuidingOverlay'
+import { useTargetCenteringOverlay } from '../camera/targetcentering.overlay'
 import { TppaOverlay, useTppaOverlay } from '../camera/TppaOverlay'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../files/files'
@@ -166,6 +167,7 @@ export function ImagesWorkspace() {
 	const grid = view?.plateSolving.grid ? solution : undefined
 	const camera = useCameraOperationContext(document)
 	const guide = useTppaOverlay(document)
+	const centering = useTargetCenteringOverlay(document)
 	const trails = useDarvOverlay(document)
 	const guiding = useGuidingOverlay(document)
 	// A star is picked only on the session's current frame, and only while the guide output is not held.
@@ -173,7 +175,7 @@ export function ImagesWorkspace() {
 	const mode = (document && modes[document.key]) ?? 'pan'
 	const imageInfo = document?.info
 	const reticle = !!document?.camera && reticles[document.key] === true
-	const hasOverlays = [markers, lines, solution, annotation, reticle, guide, trails, guiding].some(Boolean)
+	const hasOverlays = [markers, lines, solution, annotation, reticle, guide, centering, trails, guiding].some(Boolean)
 	const overlaysHidden = view?.overlaysHidden === true
 	const astrometryTool = useAstrometryTool({
 		documentKey: document?.key,
@@ -241,6 +243,7 @@ export function ImagesWorkspace() {
 											{markers && <StarOverlay result={markers} view={overlay} acceptedOnly={view.stars.acceptedOnly} selected={view.stars.selected?.jobId === markers.jobId ? view.stars.selected.index : undefined} />}
 											{solution && document?.info && <MeasurementOverlay solution={solution} imageId={document.info.id} image={size} view={overlay} astrometry={view.astrometry} />}
 											{solution && view.astrometry.target && <TargetOffsetOverlay solution={solution} image={size} view={overlay} target={view.astrometry.target} markers={view.astrometry.markers} />}
+											{centering && <TargetOffsetOverlay solution={centering.solution} image={size} view={overlay} target={centering.target} markers={[]} />}
 											{solution && <WcsAidsOverlay solution={solution} image={size} view={overlay} cursor={cursor} crosshair={astrometry.crosshair} corner={astrometry.orientation === 'corner'} scaleBar={astrometry.scaleBar} />}
 										</>
 									)

@@ -42,6 +42,10 @@ import {
 	DEFAULT_MOUNT_REMOTE_BINDINGS,
 	type MountRemoteBinding,
 	MAX_NOTIFICATION_IDS,
+	DEFAULT_TARGET_CENTERING_SETTINGS,
+	FRAMING_REFERENCES_MAXIMUM,
+	type FramingReference,
+	type TargetCenteringSettings,
 } from './schema'
 
 // Profiles of the browser and the profile active in this tab, and the actions that change them. Profiles are a
@@ -348,6 +352,51 @@ export function pointingModelSettings(settings: Pick<ProfileSettings, 'cameras'>
 // Replaces fields of the Pointing Model Builder form of a camera in the active profile.
 export function setPointingModelSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<PointingModelSettings>) {
 	setCameraForm(state, camera, 'pointingModel', pointingModelSettings(activeProfile(state).settings, camera), patch)
+}
+
+// Returns the Target Centering form of a camera: the one edited last, or the defaults.
+export function targetCenteringSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<TargetCenteringSettings> {
+	return cameraSettings(settings, camera)?.targetCentering ?? DEFAULT_TARGET_CENTERING_SETTINGS
+}
+
+// Replaces fields of the Target Centering form of a camera in the active profile.
+export function setTargetCenteringSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<TargetCenteringSettings>) {
+	setCameraForm(state, camera, 'targetCentering', targetCenteringSettings(activeProfile(state).settings, camera), patch)
+}
+
+// Returns the framings saved in a profile.
+export function framingReferences(settings: Pick<ProfileSettings, 'framingReferences'>): readonly Readonly<FramingReference>[] {
+	return settings.framingReferences ?? []
+}
+
+// Saves a framing in the active profile. Returns it, or undefined for a blank name or a full library.
+export function saveFramingReference(state: ProfileState, framing: Pick<FramingReference, 'name' | 'rightAscension' | 'declination' | 'source'>, now = Date.now()): FramingReference | undefined {
+	const profile = activeProfile(state)
+	const name = framing.name.trim()
+	const saved = profile.settings.framingReferences ?? []
+	if (!name || saved.length >= FRAMING_REFERENCES_MAXIMUM) return undefined
+	const reference: FramingReference = { ...framing, id: nanoid(), name, createdAt: now, updatedAt: now }
+	profile.settings.framingReferences = [...saved, reference]
+	touch(profile)
+	return reference
+}
+
+// Renames a framing of the active profile. Returns whether it exists and the name is not blank.
+export function renameFramingReference(state: ProfileState, id: string, name: string, now = Date.now()): boolean {
+	const profile = activeProfile(state)
+	const trimmed = name.trim()
+	if (!trimmed || !profile.settings.framingReferences?.some((framing) => framing.id === id)) return false
+	profile.settings.framingReferences = profile.settings.framingReferences.map((framing) => (framing.id === id ? { ...framing, name: trimmed, updatedAt: now } : framing))
+	touch(profile)
+	return true
+}
+
+// Deletes a framing of the active profile. A camera that had it selected keeps its form, which then selects nothing.
+export function deleteFramingReference(state: ProfileState, id: string) {
+	const profile = activeProfile(state)
+	if (!profile.settings.framingReferences?.some((framing) => framing.id === id)) return
+	profile.settings.framingReferences = profile.settings.framingReferences.filter((framing) => framing.id !== id)
+	touch(profile)
 }
 
 // Returns the DARV form of a camera: the one edited last, or the defaults.

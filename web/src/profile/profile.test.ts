@@ -3,7 +3,7 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DARV_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, DEFAULT_GUIDING_SETTINGS, DEFAULT_MOUNT_REMOTE_BINDINGS, DEFAULT_TPPA_SETTINGS } from './schema'
+import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DARV_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, DEFAULT_GUIDING_SETTINGS, DEFAULT_MOUNT_REMOTE_BINDINGS, DEFAULT_TPPA_SETTINGS, DEFAULT_TARGET_CENTERING_SETTINGS, FRAMING_REFERENCES_MAXIMUM, type FramingReference, PROFILES_VERSION } from './schema'
 import type { DisplaySettings } from 'api'
 import { ORIGINAL_DISPLAY_SETTINGS } from '../images/display'
 import { DEFAULT_IMAGE_ASTROMETRY } from '../platesolving/preferences'
@@ -77,6 +77,12 @@ import {
 	dismissNotification,
 	markNotificationsRead,
 	pruneNotificationPreferences,
+	deleteFramingReference,
+	framingReferences,
+	renameFramingReference,
+	saveFramingReference,
+	setTargetCenteringSettings,
+	targetCenteringSettings,
 } from './profile'
 
 function dev(id: string) {
@@ -111,7 +117,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 16, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: PROFILES_VERSION, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -846,8 +852,57 @@ describe('camera forms', () => {
 		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
 
 		const newer = newStores()
-		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 17, profiles: [{ id: 'a', name: 'A' }] }))
+		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: PROFILES_VERSION + 1, profiles: [{ id: 'a', name: 'A' }] }))
 		expect(load(newer).profiles.map((profile) => profile.id)).not.toContain('a')
+	})
+
+	const CAMERA = { connectionId: 'c', deviceId: 'cam' }
+
+	test('saved framings survive a reload, unchanged by anything but their own actions', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		const first = saveFramingReference(state, { name: ' M 42 ', rightAscension: 1.46, declination: -0.09, source: 'sky' }, 100)!
+		const second = saveFramingReference(state, { name: 'Field', rightAscension: 2, declination: 0.5, source: 'manual' }, 200)!
+
+		expect(first).toMatchObject({ name: 'M 42', createdAt: 100, updatedAt: 100 })
+		expect(saveFramingReference(state, { name: '  ', rightAscension: 0, declination: 0, source: 'manual' })).toBeUndefined()
+		expect(renameFramingReference(state, first.id, 'Orion', 300)).toBeTrue()
+		expect(renameFramingReference(state, first.id, ' ')).toBeFalse()
+		expect(renameFramingReference(state, 'unknown', 'x')).toBeFalse()
+		deleteFramingReference(state, second.id)
+		deleteFramingReference(state, 'unknown')
+		setTargetCenteringSettings(state, CAMERA, { tolerance: 10, framingId: first.id })
+
+		await Bun.sleep(0)
+		const reloaded = load({ local: stores.local, session: new MemoryStorage() })
+		expect(framingReferences(reloaded.profiles[0].settings)).toEqual([{ ...first, name: 'Orion', updatedAt: 300 }])
+		expect(targetCenteringSettings(reloaded.profiles[0].settings, CAMERA)).toEqual({ ...DEFAULT_TARGET_CENTERING_SETTINGS, tolerance: 10, framingId: first.id })
+	})
+
+	test('a framing library holds a bounded number of framings', () => {
+		const state = load(newStores())
+		for (let i = 0; i < FRAMING_REFERENCES_MAXIMUM; i++) expect(saveFramingReference(state, { name: `F${i}`, rightAscension: 0, declination: 0, source: 'manual' })).toBeDefined()
+		expect(saveFramingReference(state, { name: 'One too many', rightAscension: 0, declination: 0, source: 'manual' })).toBeUndefined()
+	})
+
+	test('a version 16 document reads without the new forms, and invalid ones are repaired or dropped alone', () => {
+		const older = newStores()
+		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 16, profiles: [{ id: 'a', name: 'A', settings: { cameras: { c: { cam: { tppa: DEFAULT_TPPA_SETTINGS } } } } }] }))
+		const read = load(older).profiles[0].settings
+		expect(read.framingReferences).toBeUndefined()
+		expect(targetCenteringSettings(read, CAMERA)).toEqual(DEFAULT_TARGET_CENTERING_SETTINGS)
+		expect(read.cameras.c.cam.tppa).toBeDefined()
+
+		const valid = { id: 'f', name: 'Good', rightAscension: 1, declination: 1, source: 'sky', createdAt: 1, updatedAt: 2 }
+		const invalid = [valid, { ...valid, name: 'Same id' }, { ...valid, id: 'g', rightAscension: -1 }, { ...valid, id: 'h', declination: 2 }, { ...valid, id: 'i', rightAscension: 'x' }, { ...valid, id: '', name: 'No id' }, { ...valid, id: 'j', name: ' ' }, 'nothing']
+		const form = { exposureTime: -1, tolerance: 1e6, maximumCorrections: 2.5, noSolutionRetries: 9, maximumFrames: 0, settleDelay: -1, maximumCorrection: 90, blindRetry: 'yes', framingId: 7 }
+		const broken = newStores()
+		broken.local.setItem(PROFILES_KEY, JSON.stringify({ version: PROFILES_VERSION, profiles: [{ id: 'a', name: 'A', settings: { framingReferences: invalid, cameras: { c: { cam: { targetCentering: form, tppa: DEFAULT_TPPA_SETTINGS } } } } }] }))
+		const repaired = load(broken).profiles[0].settings
+
+		expect(repaired.framingReferences).toEqual([valid as FramingReference])
+		expect(targetCenteringSettings(repaired, CAMERA)).toEqual(DEFAULT_TARGET_CENTERING_SETTINGS)
+		expect(repaired.cameras.c.cam.tppa).toBeDefined()
 	})
 
 	test('the star detection request is the profile one, persisted and restored with defaults for invalid fields', async () => {

@@ -2,7 +2,23 @@ import { describe, expect, test } from 'bun:test'
 import type { PlateSolveJob, PlateSolveResult } from 'api'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { proxy } from 'valtio'
-import { completedJobs, handlePlateSolvingEvent, latestJob, loadPlateSolveResult, loadSolutions, mountSyncBlocker, mountSyncSupport, mountSyncTarget, type PlateSolvingState, refreshPlateSolving, runPlateSolve, selectedJob, selectedSolution } from './platesolving'
+import { completedJobs, effectivePlateSolveRequest, handlePlateSolvingEvent, latestJob, loadPlateSolveResult, loadSolutions, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolveSettings, type PlateSolvingState, refreshPlateSolving, runPlateSolve, selectedJob, selectedSolution } from './platesolving'
+
+test('a camera tab solves with the settings of its camera and the hints of its document', () => {
+	const hints = { rightAscension: 1, declination: 0.5 }
+	const camera = { provider: 'nova', strategy: 'blind', downsample: 2, scaleTolerance: 0.3 } as const
+	expect(effectivePlateSolveRequest({ provider: 'astap', strategy: 'assisted', downsample: 4, hints }, camera)).toEqual({ ...camera, hints })
+	expect(effectivePlateSolveRequest({ provider: 'astap', strategy: 'assisted' }, camera)).toEqual(camera)
+})
+
+test('any other document keeps its own request', () => {
+	const request = { provider: 'astap', strategy: 'assisted', downsample: 4 } as const
+	expect(effectivePlateSolveRequest(request, undefined)).toBe(request)
+})
+
+test('the settings of a request leave its hints out', () => {
+	expect(plateSolveSettings({ provider: 'nova', strategy: 'blind', scaleTolerance: 0.3, hints: { rightAscension: 1 } })).toEqual({ provider: 'nova', strategy: 'blind', scaleTolerance: 0.3 })
+})
 
 function state(): PlateSolvingState {
 	return proxy<PlateSolvingState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {}, headers: {}, hints: {} })

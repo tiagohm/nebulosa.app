@@ -10,11 +10,12 @@ import { roleAvailability } from '../equipment/availability'
 import { useRoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
 import { AdvancedControls, HintControls, SolverControls, StrategyControls, useSolverConfigured } from '../platesolving/PlateSolveControls'
-import { cancelPlateSolve, completedJobs, loadHints, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolvingState, PROVIDER_LABELS, runPlateSolve, STAGE_LABELS } from '../platesolving/platesolving'
+import { cancelPlateSolve, completedJobs, effectivePlateSolveRequest, loadHints, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolveSettings, plateSolvingState, PROVIDER_LABELS, runPlateSolve, STAGE_LABELS } from '../platesolving/platesolving'
 import { type AstrometryGridSettings, COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, type CoordinateFormat, GRID_COLORS, GRID_OPACITY_RANGE, type GridColor, ORIENTATION_MODES, type OrientationMode } from '../platesolving/preferences'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { wcsFrame } from '../platesolving/wcs'
-import { activeProfile, imageAstrometrySettings, profileState, setImageAstrometrySettings } from '../profile/profile'
+import { activeProfile, cameraPlateSolving, imageAstrometrySettings, profileState, setCameraPlateSolving, setImageAstrometrySettings } from '../profile/profile'
+import type { CameraIdentity } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { navigate, routeState } from '../shell/route'
 import { EmptyState } from '../shell/WorkspaceLayout'
@@ -36,7 +37,8 @@ import type { ImageToolPanelProps } from './tools'
 // Plate Solver tool of the Images workspace: solves the active document on the server with ASTAP, Astrometry.net Local,
 // or Astrometry.net Online, and shows the solution (centre in the frame of its WCS, scale, rotation, parity, field of view), the hints it
 // used with their origins, and its overlay. Settings are edited as the document's pending request and sent only by
-// Solve Image; zoom, pan, stretch, or the overlay never solve. The settings are editable before the document has an
+// Solve Image; zoom, pan, stretch, or the overlay never solve. A camera tab edits the plate solving settings of its
+// camera instead, which the operations of that camera share, and keeps only its hints in the document. The settings are editable before the document has an
 // image (a camera tab waiting for its first frame), with Solve Image disabled until it has one. A job stays bound to the image it solved, so switching
 // documents never shows its solution on another one, and a job that ends never replaces the solution chosen. Solvers
 // are configured in Settings → External Tools, which the solver section links to. Sync Mount, after a confirmation,
@@ -52,7 +54,7 @@ const STATE_LABELS: Readonly<Record<PlateSolveJob['state'], string>> = { queued:
 const SOURCE_LABELS: Readonly<Record<PlateSolveHint['source'], string>> = { user: 'request', header: 'header', optics: 'optics', default: 'default' }
 
 // Plate Solver panel of the active document.
-export function PlateSolverPanel({ document, view, onOpen }: ImageToolPanelProps) {
+export function PlateSolverPanel({ document, view, camera, onOpen }: ImageToolPanelProps) {
 	if (!document) {
 		return (
 			<EmptyState
@@ -74,7 +76,7 @@ export function PlateSolverPanel({ document, view, onOpen }: ImageToolPanelProps
 		)
 	}
 
-	return <PlateSolver documentKey={document.key} imageId={document.info?.id} image={document.info} name={document.name} plateSolving={view.plateSolving} astrometry={view.astrometry} unavailable={imageUnavailableReason(document)} />
+	return <PlateSolver documentKey={document.key} imageId={document.info?.id} image={document.info} name={document.name} plateSolving={view.plateSolving} astrometry={view.astrometry} unavailable={imageUnavailableReason(document)} camera={camera?.settings} />
 }
 
 interface PlateSolverProps {
@@ -92,17 +94,26 @@ interface PlateSolverProps {
 	readonly astrometry: ImageAstrometryState
 	// Why the document has no image yet.
 	readonly unavailable?: string
+	// Physical camera of a camera tab, whose settings the panel edits; absent for any other document.
+	readonly camera?: CameraIdentity
 }
 
 // Sections of the Plate Solver panel of a document: the settings always, the execution, the solutions, and the
 // measurements once it has an image.
-function PlateSolver({ documentKey, imageId, image, name, plateSolving, astrometry, unavailable }: PlateSolverProps) {
+function PlateSolver({ documentKey, imageId, image, name, plateSolving, astrometry, unavailable, camera }: PlateSolverProps) {
 	const state = useSnapshot(plateSolvingState)
 	const profiles = useSnapshot(profileState)
-	const { coordinates } = imageAstrometrySettings(activeProfile(profiles).settings)
+	const { settings } = activeProfile(profiles)
+	const { coordinates } = imageAstrometrySettings(settings)
 	const { job, result, solution, header, resultError } = usePlateSolution(imageId, plateSolving.selected)
-	const { request } = plateSolving
-	const edit = (next: PlateSolveRequest) => setPlateSolveRequest(imagesState, documentKey, next)
+	const request = effectivePlateSolveRequest(plateSolving.request, camera && cameraPlateSolving(settings, camera))
+
+	// Keeps the hints in the document; a camera tab also keeps the settings with its camera.
+	function edit(next: PlateSolveRequest) {
+		if (camera) setCameraPlateSolving(profileState, camera, plateSolveSettings(next))
+		setPlateSolveRequest(imagesState, documentKey, next)
+	}
+
 	const offered = imageId === undefined ? undefined : state.hints[imageId]
 
 	useEffect(() => {

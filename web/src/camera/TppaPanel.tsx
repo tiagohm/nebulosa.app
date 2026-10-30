@@ -1,4 +1,4 @@
-import type { DeviceSummary, PlateSolveRequest, TppaAlignment, TppaSession, TppaSessionSummary } from 'api'
+import type { DeviceSummary, TppaAlignment, TppaSession, TppaSessionSummary } from 'api'
 import { cn } from 'cn'
 import { toArcmin, toDeg } from 'nebulosa/src/math/units/angle'
 import type { ReactNode } from 'react'
@@ -10,9 +10,9 @@ import { type RoleAvailability, roleAvailability } from '../equipment/availabili
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
-import { AdvancedControls, SolverControls, StrategyControls, useSolverConfigured } from '../platesolving/PlateSolveControls'
-import { PROVIDER_LABELS } from '../platesolving/platesolving'
-import { activeProfile, exposureSettings, profileState, setTppaSettings, tppaSettings } from '../profile/profile'
+import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
+import { useSolverConfigured } from '../platesolving/PlateSolveControls'
+import { activeProfile, cameraPlateSolving, exposureSettings, profileState, setTppaSettings, tppaSettings } from '../profile/profile'
 import { type CameraIdentity, TPPA_MAXIMUM_ROTATION, TPPA_MINIMUM_ROTATION, type TppaSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
@@ -27,9 +27,10 @@ import { startTppa, startTppaRefinement, stopTppa, stopTppaRefinement, TPPA_DIRE
 
 // Contextual panel sections of TPPA, a camera operation of the Images camera tabs: the equipment it uses, the
 // alignment settings (exposure time, RA direction, slew-rate preset of the mount, rotation between poses, settle and
-// refinement delays, plate solver), the three poses and their geometry, the polar error, and the Start, Refine, Pause,
-// and Stop commands. Frames are taken with the exposure time of this form and the camera's camera settings, edited
-// only in Camera Acquisition. The camera is the panel's target and the mount the MOUNT of the active equipment setup; a missing or unsuitable mount
+// refinement delays), the plate solving settings it applies, the three poses and their geometry, the polar error, and
+// the Start, Refine, Pause, and Stop commands. Frames are taken with the exposure time of this form and the camera's
+// camera settings, edited only in Camera Acquisition, and solved with the camera's plate solving settings, edited only
+// in Images → Plate Solver. The camera is the panel's target and the mount the MOUNT of the active equipment setup; a missing or unsuitable mount
 // says why. The forms are the camera's, kept in the profile, and stay locked showing the values applied while a
 // session runs; the session is the server's, shown here whichever tab started it, and keeps running when the panel
 // unmounts. Its frames are shown by the latest frame of the camera with the correction guide drawn over them.
@@ -56,7 +57,8 @@ export function TppaSections({ device, availability, mount, settings: identity }
 	const profile = activeProfile(profiles)
 	const settings = tppaSettings(profile.settings, identity)
 	const exposure = exposureSettings(profile.settings, identity)
-	const configured = useSolverConfigured(settings.solver.provider)
+	const solving = cameraPlateSolving(profile.settings, identity)
+	const configured = useSolverConfigured(solving.provider)
 	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
 	const details = session ? runtime.details[session.sessionId] : undefined
@@ -80,10 +82,8 @@ export function TppaSections({ device, availability, mount, settings: identity }
 
 	function start() {
 		if (!device || !mount.device || slewRate === undefined) return
-		void startTppa(tppaRuntime, device.connectionId, device.id, tppaRequest(settings, exposure, { connectionId: mount.device.connectionId, deviceId: mount.device.id }, slewRate, capabilities))
+		void startTppa(tppaRuntime, device.connectionId, device.id, tppaRequest(settings, exposure, solving, { connectionId: mount.device.connectionId, deviceId: mount.device.id }, slewRate, capabilities))
 	}
-
-	const solver: PlateSolveRequest = { ...shown.solver }
 
 	return (
 		<>
@@ -120,11 +120,7 @@ export function TppaSections({ device, availability, mount, settings: identity }
 					The mount rotates in RA only, towards the {TPPA_DIRECTION_LABELS[shown.direction].toLowerCase()}, about {2 * shown.rotation}° in all; make sure it is clear to move. Rotation is measured by plate solving, never assumed from the motion time.
 				</Notice>
 			</CollapsibleSection>
-			<CollapsibleSection id="images.tppa.plate-solver" title="Plate Solver" summary={PROVIDER_LABELS[solver.provider]} defaultOpen={false}>
-				<SolverControls request={solver} disabled={locked} onChange={(next) => update({ solver: solverOf(next) })} />
-				<StrategyControls request={solver} disabled={locked} onChange={(next) => update({ solver: solverOf(next) })} />
-				<AdvancedControls request={solver} disabled={locked} onChange={(next) => update({ solver: solverOf(next) })} />
-			</CollapsibleSection>
+			<CameraPlateSolvingSection id="images.tppa.plate-solver" device={device} solving={running && session ? session.request.solving : solving} />
 			{session && <Measurements session={session} details={details} />}
 			{session?.alignment && <PolarError alignment={session.alignment} details={details} />}
 			<CollapsibleSection id="images.tppa.controls" title="Controls">
@@ -160,12 +156,7 @@ export function TppaSections({ device, availability, mount, settings: identity }
 
 // The form values a running session applied, as the form shows them (the rotation in degrees).
 function appliedSettings({ request }: TppaSessionSummary): TppaSettings {
-	return { exposureTime: request.capture.exposureTime, direction: request.direction, slewRate: request.slewRate, rotation: toDeg(request.rotation), settleDelay: request.settleDelay, refinementDelay: request.refinementDelay, stopTracking: request.stopTracking, solver: solverOf(request.solving) }
-}
-
-// The plate solver fields the TPPA form keeps from a request.
-function solverOf({ provider, strategy, downsample }: PlateSolveRequest): TppaSettings['solver'] {
-	return { provider, strategy, ...(downsample !== undefined && { downsample }) }
+	return { exposureTime: request.capture.exposureTime, direction: request.direction, slewRate: request.slewRate, rotation: toDeg(request.rotation), settleDelay: request.settleDelay, refinementDelay: request.refinementDelay, stopTracking: request.stopTracking }
 }
 
 interface MeasurementsProps {

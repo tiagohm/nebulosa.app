@@ -21,8 +21,9 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // detector settings of Images (streakDetection), version 13 the notifications the profile read or dismissed (notifications),
 // and version 14 the observatory code of the solar-system searches of Images → Annotation (annotation), removed since:
 // the searches use the site of the image header, and a stored code is ignored when read. Version 15 adds the appearance
-// of the astrometric aids of solved images (imageAstrometry).
-export const PROFILES_VERSION = 15
+// of the astrometric aids of solved images (imageAstrometry). Version 16 moves the plate solver of the TPPA form
+// (tppa.solver) to the plate solving settings each camera shares between its operations (plateSolving).
+export const PROFILES_VERSION = 16
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -158,12 +159,22 @@ export type CameraAcquisitionSettings = Pick<CaptureRequest, 'exposureMode' | 'c
 // directory with the server's default names, as FITS.
 export const DEFAULT_ACQUISITION_SETTINGS: CameraAcquisitionSettings = { exposureMode: 'single', count: 10, delay: 0, frameType: 'LIGHT', output: { mode: 'preview-save', format: 'FITS' } }
 
+// Plate solving settings of one physical camera, shared by Images → Plate Solver on its camera tab and by the operations
+// that solve its frames. They hold how to solve, never where: positional hints stay with each image or come from the
+// operation. Scale tolerance is a fraction of the scale, which only nova takes.
+export type CameraPlateSolvingSettings = Pick<PlateSolveRequest, 'provider' | 'strategy' | 'downsample' | 'scaleTolerance'>
+
+// Plate solving settings of a camera that has none yet: ASTAP around the header pointing.
+export const DEFAULT_CAMERA_PLATE_SOLVING: CameraPlateSolvingSettings = { provider: 'astap', strategy: 'assisted' }
+
 // Forms of one physical camera; a form not edited yet is absent and its defaults apply.
 export interface CameraSettings {
 	// Exposure and camera settings shared by the operations of the camera.
 	exposure?: CameraExposureSettings
 	// Camera Acquisition form.
 	acquisition?: CameraAcquisitionSettings
+	// Plate solving settings shared by the operations of the camera.
+	plateSolving?: CameraPlateSolvingSettings
 	// Auto Focus form.
 	autoFocus?: AutoFocusSettings
 	// TPPA form.
@@ -223,9 +234,9 @@ export const DEFAULT_AUTO_FOCUS_SETTINGS: AutoFocusSettings = {
 	restoreOnStop: true,
 }
 
-// TPPA form of one physical camera: how the next three-point polar alignment moves the mount and solves its frames.
-// The frames are taken with the camera settings of the camera, which this form never holds. Angles are in degrees and
-// durations in seconds, as edited.
+// TPPA form of one physical camera: how the next three-point polar alignment moves the mount. The frames are taken with
+// the camera settings and solved with the plate solving settings of the camera, which this form never holds. Angles are
+// in degrees and durations in seconds, as edited.
 export interface TppaSettings {
 	// Exposure of each frame, in seconds; > 0.
 	exposureTime: number
@@ -240,8 +251,6 @@ export interface TppaSettings {
 	settleDelay: number
 	// Wait before each refinement exposure, in seconds; >= 0.
 	refinementDelay: number
-	// Plate solver of the frames, its strategy, and its downsampling.
-	solver: Pick<PlateSolveRequest, 'provider' | 'strategy' | 'downsample'>
 	// Whether the tracking the session starts on a mount that was not tracking is stopped when the session ends.
 	stopTracking: boolean
 }
@@ -252,15 +261,13 @@ export const TPPA_MINIMUM_ROTATION = 6
 // Largest RA rotation of the TPPA form, in degrees: two steps stay within the 30° of total motion the server allows.
 export const TPPA_MAXIMUM_ROTATION = 15
 
-// TPPA form of a camera that has none yet: 1 s frames and westward motions of 8° solved by ASTAP around the header
-// pointing.
+// TPPA form of a camera that has none yet: 1 s frames and westward motions of 8°.
 export const DEFAULT_TPPA_SETTINGS: TppaSettings = {
 	exposureTime: 1,
 	direction: 'WEST',
 	rotation: 8,
 	settleDelay: 2,
 	refinementDelay: 1,
-	solver: { provider: 'astap', strategy: 'assisted' },
 	stopTracking: true,
 }
 

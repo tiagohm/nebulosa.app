@@ -3,7 +3,7 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DARV_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, DEFAULT_GUIDING_SETTINGS, DEFAULT_MOUNT_REMOTE_BINDINGS, DEFAULT_TPPA_SETTINGS } from './schema'
+import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DARV_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, DEFAULT_GUIDING_SETTINGS, DEFAULT_MOUNT_REMOTE_BINDINGS, DEFAULT_TPPA_SETTINGS } from './schema'
 import type { DisplaySettings } from 'api'
 import { ORIGINAL_DISPLAY_SETTINGS } from '../images/display'
 import { DEFAULT_IMAGE_ASTROMETRY } from '../platesolving/preferences'
@@ -23,6 +23,8 @@ import {
 	setAutoFocusSettings,
 	setExposureSettings,
 	setTppaSettings,
+	cameraPlateSolving,
+	setCameraPlateSolving,
 	tppaSettings,
 	darvSettings,
 	flatWizardSettings,
@@ -109,7 +111,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 15, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: 16, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -678,17 +680,44 @@ describe('camera forms', () => {
 		const state = load(stores)
 		expect(tppaSettings(activeProfile(state).settings, MAIN)).toEqual(DEFAULT_TPPA_SETTINGS)
 
-		setTppaSettings(state, MAIN, { direction: 'EAST', slewRate: 'SPEED_4', rotation: 10, solver: { provider: 'nova', strategy: 'blind', downsample: 2 } })
+		setTppaSettings(state, MAIN, { direction: 'EAST', slewRate: 'SPEED_4', rotation: 10 })
 		expect(tppaSettings(activeProfile(state).settings, GUIDE)).toEqual(DEFAULT_TPPA_SETTINGS)
 		await Bun.sleep(0)
 
 		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
-		expect(tppaSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_TPPA_SETTINGS, direction: 'EAST', slewRate: 'SPEED_4', rotation: 10, solver: { provider: 'nova', strategy: 'blind', downsample: 2 } })
+		expect(tppaSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_TPPA_SETTINGS, direction: 'EAST', slewRate: 'SPEED_4', rotation: 10 })
 
 		const invalid = newStores()
-		const cameras = { c: { 'cam-main': { tppa: { direction: 'NORTH', slewRate: '', rotation: 40, settleDelay: -1, refinementDelay: 'x', solver: { provider: 'gaia', strategy: 'x', downsample: 0 } } } } }
+		const cameras = { c: { 'cam-main': { tppa: { direction: 'NORTH', slewRate: '', rotation: 40, settleDelay: -1, refinementDelay: 'x' } } } }
 		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 4, profiles: [{ id: 'a', name: 'A', settings: { cameras } }] }))
 		expect(load(invalid).profiles[0].settings.cameras).toEqual({ c: { 'cam-main': { tppa: DEFAULT_TPPA_SETTINGS } } })
+	})
+
+	test('the plate solver of a TPPA form becomes the plate solving settings of its camera', () => {
+		const stores = newStores()
+		const cameras = { c: { 'cam-main': { tppa: { ...DEFAULT_TPPA_SETTINGS, solver: { provider: 'nova', strategy: 'blind', downsample: 2 } } }, 'cam-guide': { tppa: { ...DEFAULT_TPPA_SETTINGS, solver: { provider: 'gaia', strategy: 'x', downsample: 0 } } } } }
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 15, profiles: [{ id: 'a', name: 'A', settings: { cameras } }] }))
+
+		const settings = load(stores).profiles[0].settings
+		expect(cameraPlateSolving(settings, MAIN)).toEqual({ provider: 'nova', strategy: 'blind', downsample: 2 })
+		expect(cameraPlateSolving(settings, GUIDE)).toEqual(DEFAULT_CAMERA_PLATE_SOLVING)
+		expect(tppaSettings(settings, MAIN)).toEqual(DEFAULT_TPPA_SETTINGS)
+	})
+
+	test('the plate solving settings belong to the camera and keep the scale tolerance', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		setCameraPlateSolving(state, MAIN, { provider: 'nova', strategy: 'assisted', scaleTolerance: 0.3 })
+		expect(cameraPlateSolving(activeProfile(state).settings, GUIDE)).toEqual(DEFAULT_CAMERA_PLATE_SOLVING)
+		await Bun.sleep(0)
+
+		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
+		expect(cameraPlateSolving(reloaded, MAIN)).toEqual({ provider: 'nova', strategy: 'assisted', scaleTolerance: 0.3 })
+
+		const invalid = newStores()
+		const cameras = { c: { 'cam-main': { plateSolving: { provider: 'gaia', strategy: 'x', downsample: 0, scaleTolerance: 2 } } } }
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 16, profiles: [{ id: 'a', name: 'A', settings: { cameras } }] }))
+		expect(load(invalid).profiles[0].settings.cameras).toEqual({ c: { 'cam-main': { plateSolving: DEFAULT_CAMERA_PLATE_SOLVING } } })
 	})
 
 	test('Auto Focus and TPPA forms saved without an exposure time keep the one of the camera they used', () => {
@@ -817,7 +846,7 @@ describe('camera forms', () => {
 		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
 
 		const newer = newStores()
-		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 16, profiles: [{ id: 'a', name: 'A' }] }))
+		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 17, profiles: [{ id: 'a', name: 'A' }] }))
 		expect(load(newer).profiles.map((profile) => profile.id)).not.toContain('a')
 	})
 

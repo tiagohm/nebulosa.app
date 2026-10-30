@@ -48,6 +48,8 @@ import {
 	type GuidingDitherMode,
 	type GuidingSettings,
 	DEFAULT_TPPA_SETTINGS,
+	DEFAULT_CAMERA_PLATE_SOLVING,
+	type CameraPlateSolvingSettings,
 	TPPA_MAXIMUM_ROTATION,
 	TPPA_MINIMUM_ROTATION,
 	type TppaSettings,
@@ -120,14 +122,16 @@ function normalizeCamera(value: unknown): CameraSettings | undefined {
 	if (!isRecord(value)) return undefined
 	const exposure = normalizeExposure(value.exposure)
 	const acquisition = normalizeAcquisition(value.acquisition)
+	// Before version 16 the plate solver was a field of the TPPA form.
+	const plateSolving = normalizePlateSolving(value.plateSolving ?? (isRecord(value.tppa) ? value.tppa.solver : undefined))
 	const autoFocus = normalizeAutoFocus(value.autoFocus, exposure?.exposureTime)
 	const tppa = normalizeTppa(value.tppa, exposure?.exposureTime)
 	const darv = normalizeDarv(value.darv)
 	const flatWizard = normalizeFlatWizard(value.flatWizard)
 	const guiding = normalizeGuiding(value.guiding)
 	const display = normalizeDisplaySettings(value.display)
-	if (!exposure && !acquisition && !autoFocus && !tppa && !darv && !flatWizard && !guiding && !display) return undefined
-	return { ...(exposure && { exposure }), ...(acquisition && { acquisition }), ...(autoFocus && { autoFocus }), ...(tppa && { tppa }), ...(darv && { darv }), ...(flatWizard && { flatWizard }), ...(guiding && { guiding }), ...(display && { display }) }
+	if (!exposure && !acquisition && !plateSolving && !autoFocus && !tppa && !darv && !flatWizard && !guiding && !display) return undefined
+	return { ...(exposure && { exposure }), ...(acquisition && { acquisition }), ...(plateSolving && { plateSolving }), ...(autoFocus && { autoFocus }), ...(tppa && { tppa }), ...(darv && { darv }), ...(flatWizard && { flatWizard }), ...(guiding && { guiding }), ...(display && { display }) }
 }
 
 // Returns a number within a display range, or the fallback for anything else.
@@ -273,19 +277,33 @@ function normalizeAutoFocus(value: unknown, exposureTime = DEFAULT_AUTO_FOCUS_SE
 	}
 }
 
-// Plate solvers of the TPPA form.
-const PLATE_SOLVERS: ReadonlySet<string> = new Set<TppaSettings['solver']['provider']>(['astap', 'astrometryLocal', 'nova'])
+// Plate solvers of the plate solving settings of a camera.
+const PLATE_SOLVERS: ReadonlySet<string> = new Set<CameraPlateSolvingSettings['provider']>(['astap', 'astrometryLocal', 'nova'])
+
+// Restores the persisted plate solving settings of a camera, filling every invalid field with its default; undefined
+// for anything that is not a record. A downsampling that is not a positive integer and a scale tolerance outside (0, 1)
+// are dropped.
+function normalizePlateSolving(value: unknown): CameraPlateSolvingSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const downsample = numberAtLeast(value.downsample, 1, Number.NaN, true)
+	const { scaleTolerance } = value
+
+	return {
+		provider: typeof value.provider === 'string' && PLATE_SOLVERS.has(value.provider) ? (value.provider as CameraPlateSolvingSettings['provider']) : DEFAULT_CAMERA_PLATE_SOLVING.provider,
+		strategy: value.strategy === 'blind' ? 'blind' : 'assisted',
+		...(Number.isFinite(downsample) && { downsample }),
+		...(typeof scaleTolerance === 'number' && scaleTolerance > 0 && scaleTolerance < 1 && { scaleTolerance }),
+	}
+}
 
 // Restores a persisted TPPA form, filling every invalid field with its default; undefined for anything that is not a
-// record. A slew rate that is not a non-empty name and a downsampling that is not a positive integer are dropped. A
-// form saved before it held an exposure time keeps exposureTime, the one in seconds of the camera it was taken with.
+// record. A slew rate that is not a non-empty name is dropped. A form saved before it held an exposure time keeps exposureTime, the one in seconds of the camera it was taken with.
 function normalizeTppa(value: unknown, exposureTime = DEFAULT_TPPA_SETTINGS.exposureTime): TppaSettings | undefined {
 	if (!isRecord(value)) return undefined
 
 	const defaults = DEFAULT_TPPA_SETTINGS
-	const solver = isRecord(value.solver) ? value.solver : {}
 	const rotation = typeof value.rotation === 'number' && value.rotation >= TPPA_MINIMUM_ROTATION && value.rotation <= TPPA_MAXIMUM_ROTATION ? value.rotation : defaults.rotation
-	const downsample = numberAtLeast(solver.downsample, 1, Number.NaN, true)
 
 	return {
 		exposureTime: numberAtLeast(value.exposureTime, Number.MIN_VALUE, exposureTime),
@@ -294,11 +312,6 @@ function normalizeTppa(value: unknown, exposureTime = DEFAULT_TPPA_SETTINGS.expo
 		rotation,
 		settleDelay: numberAtLeast(value.settleDelay, 0, defaults.settleDelay),
 		refinementDelay: numberAtLeast(value.refinementDelay, 0, defaults.refinementDelay),
-		solver: {
-			provider: typeof solver.provider === 'string' && PLATE_SOLVERS.has(solver.provider) ? (solver.provider as TppaSettings['solver']['provider']) : defaults.solver.provider,
-			strategy: solver.strategy === 'blind' ? 'blind' : 'assisted',
-			...(Number.isFinite(downsample) && { downsample }),
-		},
 		// Forms saved before the option existed stop the tracking, its default.
 		stopTracking: value.stopTracking !== false,
 	}
@@ -717,7 +730,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 12:
 		case 13:
 		case 14:
-		case 15: {
+		case 15:
+		case 16: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

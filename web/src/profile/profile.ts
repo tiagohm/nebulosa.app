@@ -28,6 +28,8 @@ import {
 	type SkyFramingSettings,
 	type SkyObserverSettings,
 	DEFAULT_TPPA_SETTINGS,
+	DEFAULT_CAMERA_PLATE_SOLVING,
+	type CameraPlateSolvingSettings,
 	type TppaSettings,
 	DEFAULT_DARV_SETTINGS,
 	type DarvSettings,
@@ -306,6 +308,16 @@ export function setAcquisitionSettings(state: ProfileState, camera: CameraIdenti
 	setCameraForm(state, camera, 'acquisition', acquisitionSettings(activeProfile(state).settings, camera), patch)
 }
 
+// Returns the plate solving settings of a camera: the ones edited last, or the defaults.
+export function cameraPlateSolving(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<CameraPlateSolvingSettings> {
+	return cameraSettings(settings, camera)?.plateSolving ?? DEFAULT_CAMERA_PLATE_SOLVING
+}
+
+// Replaces the plate solving settings of a camera in the active profile as a whole, so a field left out is dropped.
+export function setCameraPlateSolving(state: ProfileState, camera: CameraIdentity | undefined, plateSolving: Readonly<CameraPlateSolvingSettings>) {
+	setCameraForm(state, camera, 'plateSolving', plateSolving, {})
+}
+
 // Returns the Auto Focus form of a camera: the one edited last, or the defaults.
 export function autoFocusSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<AutoFocusSettings> {
 	return cameraSettings(settings, camera)?.autoFocus ?? DEFAULT_AUTO_FOCUS_SETTINGS
@@ -321,7 +333,7 @@ export function tppaSettings(settings: Pick<ProfileSettings, 'cameras'>, camera:
 	return cameraSettings(settings, camera)?.tppa ?? DEFAULT_TPPA_SETTINGS
 }
 
-// Replaces fields of the TPPA form of a camera in the active profile. The solver is replaced as a whole when given.
+// Replaces fields of the TPPA form of a camera in the active profile.
 export function setTppaSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<TppaSettings>) {
 	setCameraForm(state, camera, 'tppa', tppaSettings(activeProfile(state).settings, camera), patch)
 }

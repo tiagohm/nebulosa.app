@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { MountState, TppaSession, TppaSessionSummary } from 'api'
 import { deg } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
-import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_TPPA_SETTINGS } from '../profile/schema'
+import { DEFAULT_CAMERA_PLATE_SOLVING, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_TPPA_SETTINGS } from '../profile/schema'
 import { cameraKey } from './capture'
 import { handleTppaEvent, refreshTppa, startTppa, stopTppaRefinement, tppaBlocker, tppaFrameRole, tppaMountSupport, tppaRequest, type TppaRuntime, tppaSlewRate } from './tppa'
 
@@ -44,7 +44,7 @@ function summary(patch: Partial<TppaSessionSummary> = {}): TppaSessionSummary {
 		cameraName: 'Camera',
 		mount: MOUNT,
 		mountName: 'Mount',
-		request: tppaRequest(DEFAULT_TPPA_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, MOUNT, 'SPEED_4'),
+		request: tppaRequest(DEFAULT_TPPA_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, MOUNT, 'SPEED_4'),
 		provider: 'astap',
 		state: 'capturing',
 		frameCount: 1,
@@ -72,9 +72,9 @@ function fakeFetch(handler: (url: string, init?: RequestInit) => Response | Prom
 }
 
 test('the request sends the rotation in radians and the exposure time of the form, and the slew rate only when announced', () => {
-	const request = tppaRequest({ ...DEFAULT_TPPA_SETTINGS, exposureTime: 7, rotation: 10, solver: { provider: 'nova', strategy: 'blind', downsample: 2 } }, DEFAULT_EXPOSURE_SETTINGS, MOUNT, 'SPEED_4')
+	const request = tppaRequest({ ...DEFAULT_TPPA_SETTINGS, exposureTime: 7, rotation: 10 }, DEFAULT_EXPOSURE_SETTINGS, { provider: 'nova', strategy: 'blind', downsample: 2, scaleTolerance: 0.3 }, MOUNT, 'SPEED_4')
 	expect(request.rotation).toBeCloseTo(deg(10), 12)
-	expect(request.solving).toEqual({ provider: 'nova', strategy: 'blind', downsample: 2 })
+	expect(request.solving).toEqual({ provider: 'nova', strategy: 'blind', downsample: 2, scaleTolerance: 0.3 })
 	expect(request.capture.exposureTime).toBe(7)
 
 	expect(tppaSlewRate({ slewRate: 'SPEED_4' }, mountState())).toBe('SPEED_4')

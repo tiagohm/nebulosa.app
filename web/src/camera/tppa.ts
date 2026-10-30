@@ -4,7 +4,7 @@ import { DEG2RAD } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit, responseError } from '../http'
-import type { CameraExposureSettings, TppaSettings } from '../profile/schema'
+import type { CameraExposureSettings, CameraPlateSolvingSettings, TppaSettings } from '../profile/schema'
 import { cameraKey, fitExposure } from './capture'
 
 // TPPA sessions as this tab knows them. The server owns every session, whichever tab started it, and every motion,
@@ -90,14 +90,13 @@ export function tppaSlewRate(settings: Pick<TppaSettings, 'slewRate'>, state: Pi
 
 // Builds the start request of the TPPA form of a camera for a mount and slew rate. The frames take the exposure time
 // of the form and the camera settings of exposure, whose own exposure time is never sent, fitted to the camera's
-// capabilities as a capture is; the rotation is sent in radians.
-export function tppaRequest(settings: Readonly<TppaSettings>, exposure: Readonly<CameraExposureSettings>, mount: { readonly connectionId: string; readonly deviceId: string }, slewRate: string, capabilities?: CameraCapabilities): Omit<TppaRequest, 'token'> {
-	const { provider, strategy, downsample } = settings.solver
-
+// capabilities as a capture is, and are solved with the plate solving settings of the camera; the rotation is sent in
+// radians.
+export function tppaRequest(settings: Readonly<TppaSettings>, exposure: Readonly<CameraExposureSettings>, solving: Readonly<CameraPlateSolvingSettings>, mount: { readonly connectionId: string; readonly deviceId: string }, slewRate: string, capabilities?: CameraCapabilities): Omit<TppaRequest, 'token'> {
 	return {
 		mount,
 		capture: fitExposure({ ...exposure, exposureTime: settings.exposureTime }, capabilities),
-		solving: { provider, strategy, ...(downsample !== undefined && { downsample }) },
+		solving: { ...solving },
 		direction: settings.direction,
 		slewRate,
 		rotation: settings.rotation * DEG2RAD,

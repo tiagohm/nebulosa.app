@@ -35,7 +35,7 @@ export interface PointingMapProps {
 }
 
 // Fill of each status of a waypoint.
-const STATUS_CLASSES: Readonly<Record<MapWaypoint['status'], string>> = { planned: 'fill-transparent stroke-ink-300', current: 'fill-accent stroke-accent', accepted: 'fill-success stroke-success', rejected: 'fill-danger stroke-danger' }
+const STATUS_CLASSES: Readonly<Record<MapWaypoint['status'], string>> = { planned: 'fill-transparent stroke-ink-300', current: 'fill-info stroke-info', accepted: 'fill-success stroke-success', rejected: 'fill-danger stroke-danger' }
 
 // Name of each status of a waypoint.
 const STATUS_LABELS: Readonly<Record<MapWaypoint['status'], string>> = { planned: 'Planned', current: 'Current', accepted: 'Accepted', rejected: 'Rejected' }

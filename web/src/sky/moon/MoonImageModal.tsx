@@ -157,7 +157,7 @@ export function MoonImageModal({ open, onClose, almanac }: { readonly open: bool
 				<div className="flex flex-wrap gap-2 items-center">
 					{appearance.parallacticAngle !== undefined && <SegmentedControl options={['zenith', 'north'] as const} value={up} format={(e) => UP_NAMES[e]} onChange={(e) => setMoonViewUp(moonState, e)} className="w-56" />}
 					<Select options={FILTERS} value={explorer.category} format={filterName} onChange={(e) => (moonState.explorer.category = e)} className="w-52" />
-					<Checkbox label="Names" checked={explorer.labels} onChange={(e) => (moonState.explorer.labels = e)} className="h-[38px]" />
+					<Checkbox label="Names" checked={explorer.labels} onChange={(e) => (moonState.explorer.labels = e)} />
 					<IconButton icon="fit" label="Whole Moon" disabled={transform === CENTERED} onClick={() => setTransform(CENTERED)} />
 				</div>
 				<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto md:flex-row md:overflow-visible">

@@ -29,7 +29,7 @@ export function NumberInput({ label, value, onChange, min, max, step = 1, classN
 
 	return (
 		<Field label={label} className={className}>
-			<div className="flex h-[38px] items-stretch">
+			<div className="flex h-9.5 items-stretch">
 				<button type="button" tabIndex={-1} disabled={disabled || (min !== undefined && value <= min)} onClick={() => commit(value - step)} className={cn(stepButtonClassName, 'rounded-l-sm border-r-0')}>
 					−
 				</button>

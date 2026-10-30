@@ -35,7 +35,7 @@ const RATE_OPTIONS = [...SKY_TIME_RATES.toReversed().map((rate) => `${-rate}`), 
 const REDRAW_MS = { playing: 250, idle: 1_000 } as const
 
 // Classes of the native date and time inputs.
-const inputClass = 'box-border h-8 rounded-sm border border-line-200 bg-base-200 px-2 font-mono text-xs text-ink-100 [color-scheme:dark] hover:border-ink-300 focus:border-accent focus:outline-none'
+const inputClass = 'box-border h-9.5 rounded-sm border border-line-200 bg-base-200 px-2 font-mono text-xs text-ink-100 [color-scheme:dark] hover:border-ink-300 focus:border-accent focus:outline-none'
 
 // Formats a speed option: "1 min/s", "−1 h/s", "1×".
 function formatRate(option: RateOption) {

@@ -181,7 +181,7 @@ export function SkySearch({ onSelect }: SkySearchProps) {
 				onFocus={() => setOpen(true)}
 				onBlur={() => setOpen(false)}
 				onKeyDown={handleKeyDown}
-				className={cn(inputClassName, 'h-8 py-1 font-sans text-[13px]')}
+				className={cn(inputClassName, 'h-9.5 py-1 font-sans text-[13px]')}
 			/>
 			{showList && (
 				<div onMouseDown={(e) => e.preventDefault()} className="absolute top-full right-0 left-0 z-30 mt-1 max-h-[min(28rem,70vh)] overflow-y-auto rounded-sm border border-line-100 bg-base-200 py-1 shadow-[0_8px_32px_rgb(0_0_0/0.5)]">

@@ -23,7 +23,7 @@ export interface SegmentedControlProps<T extends string> {
 export function SegmentedControl<T extends string>({ label, options, value, onChange, format = String, disabled = false, className }: SegmentedControlProps<T>) {
 	return (
 		<Field label={label} className={className}>
-			<div className="flex h-[38px] items-stretch">
+			<div className="flex h-9.5 items-stretch">
 				{options.map((option) => (
 					<button
 						key={option}

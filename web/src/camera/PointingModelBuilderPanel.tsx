@@ -23,6 +23,7 @@ import {
 	pauseMountPointing,
 	previewMountPointingPlan,
 	resumeMountPointing,
+	selectPointingModel,
 	startMountPointing,
 	stopMountPointing,
 } from '../mountpointing/mountpointing'
@@ -32,6 +33,7 @@ import { useSolverConfigured } from '../platesolving/PlateSolveControls'
 import { activeProfile, cameraPlateSolving, exposureSettings, pointingModelSettings, profileState, setPointingModelSettings } from '../profile/profile'
 import { type CameraExposureSettings, type CameraIdentity, POINTING_MODEL_PRESETS, type PointingModelSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
+import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { NumberInput } from '../ui/NumberInput'
@@ -285,6 +287,16 @@ function Results({ model }: { readonly model: PointingModelSummary }) {
 				<Row label="Offline Quality">{latest ? (latest.gate === 'passed' ? 'Passed' : latest.gate === 'failed' ? 'Failed' : 'Unusable') : 'Not fitted'}</Row>
 			</dl>
 			<Notice>The fit residual says little about the rest of the sky; the withheld RMS comes from samples the fit never saw.</Notice>
+			<Button
+				variant="secondary"
+				className="self-start"
+				onClick={() => {
+					selectPointingModel(mountPointingRuntime, model.modelId)
+					navigate(routeState, { workspace: 'tools', tool: 'mount-pointing-model' })
+				}}
+			>
+				Open Mount Pointing Model
+			</Button>
 		</CollapsibleSection>
 	)
 }

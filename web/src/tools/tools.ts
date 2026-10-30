@@ -3,6 +3,7 @@ import type { ToolId } from '../shell/route'
 import type { IconName } from '../ui/Icon'
 import { Calculator } from './calculator/Calculator'
 import { LunarEclipseMap } from './lunareclipse/LunarEclipseMap'
+import { MountPointingModel } from './mountpointing/MountPointingModel'
 import { MountRemoteControl } from './mountremotecontrol/MountRemoteControl'
 import { SolarEclipseMap } from './solareclipse/SolarEclipseMap'
 
@@ -35,6 +36,7 @@ export const TOOL_DEFINITIONS: Readonly<Record<ToolId, ToolDefinition>> = {
 	'solar-eclipse-map': { id: 'solar-eclipse-map', label: 'Solar Eclipse Map', description: 'Path and local circumstances of solar eclipses.', icon: 'sun', view: SolarEclipseMap },
 	'lunar-eclipse-map': { id: 'lunar-eclipse-map', label: 'Lunar Eclipse Map', description: 'Visibility and local circumstances of lunar eclipses.', icon: 'moon', view: LunarEclipseMap },
 	'mount-remote-control': { id: 'mount-remote-control', label: 'Mount Remote Control', description: 'Lets planetarium programs drive the mount over the LX200 and Stellarium protocols.', icon: 'mount', view: MountRemoteControl },
+	'mount-pointing-model': { id: 'mount-pointing-model', label: 'Mount Pointing Model', description: 'Inspects, refits, and validates the pointing models of the mount.', icon: 'mount', view: MountPointingModel },
 	'alpaca-server': { id: 'alpaca-server', label: 'Alpaca Server', description: 'Publishes selected devices to ASCOM Alpaca clients on the network.', icon: 'server' },
 }
 

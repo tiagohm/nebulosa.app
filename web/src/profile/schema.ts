@@ -302,7 +302,7 @@ export const POINTING_MODEL_MAXIMUM_POINTS = 120
 
 // Starting points of the number of waypoints, not scientific guarantees.
 export const POINTING_MODEL_PRESETS = [
-	{ label: 'Quick', count: 15 },
+	{ label: 'Quick', count: 20 },
 	{ label: 'Standard', count: 30 },
 	{ label: 'Advanced', count: 60 },
 ] as const

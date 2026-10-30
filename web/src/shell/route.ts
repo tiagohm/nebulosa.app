@@ -16,7 +16,7 @@ export const WORKSPACE_IDS = ['images', 'sky', 'tools'] as const
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number]
 
 // Standalone tools of the Tools workspace; also the second path segment of a Tools route.
-export const TOOL_IDS = ['calculator', 'solar-eclipse-map', 'lunar-eclipse-map', 'mount-remote-control', 'alpaca-server'] as const
+export const TOOL_IDS = ['calculator', 'solar-eclipse-map', 'lunar-eclipse-map', 'mount-remote-control', 'mount-pointing-model', 'alpaca-server'] as const
 
 // Identifier of a standalone tool.
 export type ToolId = (typeof TOOL_IDS)[number]

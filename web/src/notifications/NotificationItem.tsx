@@ -11,7 +11,7 @@ import { notificationAge } from './notifications'
 
 // Text color of the icon of each severity.
 export const LEVEL_ICON_CLASS: Readonly<Record<NotificationLevel, string>> = {
-	info: 'text-ink-200',
+	info: 'text-info',
 	success: 'text-success',
 	warning: 'text-accent',
 	error: 'text-danger',

@@ -1,5 +1,5 @@
 // oxfmt-ignore
-import type { CameraCapabilities, MountPointingRequest, MountPointingSessionSummary, MountPointingSnapshot, MountPointingState, MountPointingStep, MountState, PointingFitModelRequest, PointingFitState, PointingModelDetail, PointingModelEvent, PointingModelExport, PointingModelPatch, PointingModelsSnapshot, PointingModelSummary, ServerEvent, UnavailablePointingModel } from 'api'
+import type { CameraCapabilities, MountPointingVerifyRequest, MountPointingRequest, MountPointingSessionSummary, MountPointingSnapshot, MountPointingState, MountPointingStep, MountState, PointingFitModelRequest, PointingFitState, PointingModelDetail, PointingModelEvent, PointingModelExport, PointingModelPatch, PointingModelsSnapshot, PointingModelSummary, ServerEvent, UnavailablePointingModel } from 'api'
 import { nanoid } from 'nanoid'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
 import type { PointingPlan } from 'nebulosa/src/observation/mount/pointing.plan'
@@ -118,6 +118,22 @@ export function mountPointingRequest(
 		stopTracking: settings.stopTracking,
 		equatorialConfirmed,
 	}
+}
+
+// Targets a verification tests.
+const VERIFICATION_TARGETS = 6
+
+// Builds the request of a verification of a revision with the Pointing Model Builder form of a camera.
+export function mountPointingVerifyRequest(
+	revisionId: string,
+	camera: { readonly connectionId: string; readonly deviceId: string },
+	settings: Readonly<PointingModelSettings>,
+	exposure: Readonly<CameraExposureSettings>,
+	solving: Readonly<CameraPlateSolvingSettings>,
+	mount: { readonly connectionId: string; readonly deviceId: string },
+	capabilities?: CameraCapabilities,
+): Omit<MountPointingVerifyRequest, 'token'> {
+	return { revisionId, camera, mount, capture: fitExposure({ ...exposure, exposureTime: settings.exposureTime }, capabilities), solving: { ...solving }, settleDelay: settings.settleDelay, count: VERIFICATION_TARGETS }
 }
 
 // Returns whether a session has not ended, so its camera cannot start another.
@@ -293,6 +309,11 @@ export function resumeMountPointing(state: MountPointingRuntime, { sessionId, ca
 // Ends a session, keeping its samples.
 export function stopMountPointing(state: MountPointingRuntime, { sessionId, camera }: Pick<MountPointingSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
 	return command(state, cameraKey(camera.connectionId, camera.deviceId), sessionUrl(sessionId, 'stop'), jsonInit('POST'), request)
+}
+
+// Tests the latest revision of a model on the sky with a camera, without activating it; its progress arrives as events.
+export function verifyMountPointing(state: MountPointingRuntime, modelId: string, body: Omit<MountPointingVerifyRequest, 'token'>, request: typeof fetch = fetch) {
+	return command(state, cameraKey(body.camera.connectionId, body.camera.deviceId), modelUrl(modelId, 'verify'), jsonInit('POST', { ...body, token: nanoid() } satisfies MountPointingVerifyRequest), request)
 }
 
 // Asks the server for the plan a form would sample, which commands nothing, and keeps it for its camera.

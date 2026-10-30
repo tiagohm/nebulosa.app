@@ -18,6 +18,8 @@ import {
 	mountPointingBlocker,
 	mountPointingMountSupport,
 	mountPointingRequest,
+	mountPointingVerifyRequest,
+	verifyMountPointing,
 	mountPointingRunning,
 	mountPointingRuntime,
 	pauseMountPointing,
@@ -114,6 +116,11 @@ export function PointingModelBuilderSections({ device, availability, role, mount
 		void startMountPointing(mountPointingRuntime, device.connectionId, device.id, mountPointingRequest(settings, exposure, solving, mountDevice, confirmed, capabilities))
 	}
 
+	function verify(revisionId: string, modelId: string) {
+		if (!device || !mountDevice) return
+		void verifyMountPointing(mountPointingRuntime, modelId, mountPointingVerifyRequest(revisionId, { connectionId: device.connectionId, deviceId: device.id }, settings, exposure, solving, mountDevice, capabilities))
+	}
+
 	function preview() {
 		if (!device || !mountDevice) return
 		void previewMountPointingPlan(mountPointingRuntime, cameraKey(device.connectionId, device.id), mountDevice, settings)
@@ -208,7 +215,7 @@ export function PointingModelBuilderSections({ device, availability, role, mount
 				{blocker && <Notice>{blocker}</Notice>}
 				{error && <Notice error>{error}</Notice>}
 			</CollapsibleSection>
-			{model && <Results model={model} />}
+			{model && <Results model={model} verifying={running && session?.kind === 'verification'} locked={locked || blocker !== undefined} onVerify={verify} />}
 		</>
 	)
 }
@@ -271,9 +278,21 @@ function SessionState({ session }: { readonly session: MountPointingSessionSumma
 	)
 }
 
-// What the latest fit of a model measured, with the measure on samples the fit never saw told apart. A measure that does
-// not exist is a dash, never a zero.
-function Results({ model }: { readonly model: PointingModelSummary }) {
+interface ResultsProps {
+	// Model of the session.
+	readonly model: PointingModelSummary
+	// Whether a verification runs.
+	readonly verifying: boolean
+	// Whether a verification cannot start now.
+	readonly locked: boolean
+	// Tests a revision of the model on the sky.
+	readonly onVerify: (revisionId: string, modelId: string) => void
+}
+
+// What the latest fit of a model measured, with the measure on samples the fit never saw told apart, and the test of a
+// revision on the sky, which only a revision that passed offline can take. A measure that does not exist is a dash, never
+// a zero.
+function Results({ model, verifying, locked, onVerify }: ResultsProps) {
 	const { latest } = model
 	const offline = latest?.offline
 
@@ -285,8 +304,22 @@ function Results({ model }: { readonly model: PointingModelSummary }) {
 				<Row label="Leave-One-Out RMS">{formatArcsec(offline?.looRms)}</Row>
 				<Row label="Withheld RMS">{formatArcsec(offline?.heldOutRms)}</Row>
 				<Row label="Offline Quality">{latest ? (latest.gate === 'passed' ? 'Passed' : latest.gate === 'failed' ? 'Failed' : 'Unusable') : 'Not fitted'}</Row>
+				<Row label="Verified on the Sky">{latest?.verified ? 'Yes' : 'No'}</Row>
 			</dl>
 			<Notice>The fit residual says little about the rest of the sky; the withheld RMS comes from samples the fit never saw.</Notice>
+			{latest?.gate === 'passed' && (
+				<ConfirmButton
+					variant="secondary"
+					className="self-start"
+					disabled={locked || verifying}
+					title="Verify on the sky"
+					confirmLabel="Verify"
+					onConfirm={() => onVerify(latest.revisionId, model.modelId)}
+					message="The mount will slew to independent targets, each one uncorrected and then corrected by this revision, to measure the difference. Nothing is activated, and nothing is synced. Make sure it is clear to move."
+				>
+					{latest.verified ? 'Verify Again' : 'Verify on the Sky'}
+				</ConfirmButton>
+			)}
 			<Button
 				variant="secondary"
 				className="self-start"

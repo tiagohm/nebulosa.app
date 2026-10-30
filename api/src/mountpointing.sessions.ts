@@ -7,7 +7,7 @@ import { geodeticLocation, localSiderealTime } from 'nebulosa/src/astronomy/obse
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
 import type { MountCommander } from 'nebulosa/src/devices/commanders/mount'
-import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
+import { type Camera, expectedPierSide, type Mount } from 'nebulosa/src/devices/indi/device'
 import { isDeviceQuiescent } from 'nebulosa/src/devices/orchestration/device.lifecycle'
 import { failedOperationResult, type OperationContext, type OperationFailureReason, type OperationHandle, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { abortableDelay, awaitCooperativeJob } from 'nebulosa/src/devices/orchestration/operation.wait'
@@ -19,7 +19,7 @@ import { toMeter } from 'nebulosa/src/math/units/distance'
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureTime, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
 import { type CenteringCaptureOptions, centeringCaptureRequest, exposureMidpoint, solveResult } from 'nebulosa/src/observation/mount/centering'
-import { computePointingError } from 'nebulosa/src/observation/mount/pointing'
+import { computePointingError, type FittedPointingModel } from 'nebulosa/src/observation/mount/pointing'
 import { type PointingPlan, type PointingPlanPattern, planPointingWaypoints, type PointingWaypoint } from 'nebulosa/src/observation/mount/pointing.plan'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureFrame, type CaptureSettings, exposureProgressListener } from './captures'
@@ -28,8 +28,9 @@ import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import type { PointingModels } from './mountpointing'
+import { CORRECTION_REFUSALS, correctedCommand } from './mountpointing.corrections'
 import { apparentFromIcrs, type EquatorialPosition, type PointingSite } from './mountpointing.frames'
-import type { PointingAcquisitionState, PointingModelFile, PointingMountIdentity, PointingOpticsFingerprint, PointingSampleRecord } from './mountpointing.store'
+import type { PointingAcquisitionState, PointingModelFile, PointingMountIdentity, PointingOpticsFingerprint, PointingSampleRecord, PointingVerification } from './mountpointing.store'
 import type { OperationDevice, OperationRegistry } from './operations'
 import type { PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, PlateSolvingService } from './platesolving'
 
@@ -48,6 +49,11 @@ import type { PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, Pla
 // server: it survives tab reloads and workspace changes. Sessions live in memory, the latest of each camera; a restart
 // leaves their model interrupted, and a new session can continue it. Angles are radians, durations seconds, and instants
 // Unix milliseconds.
+//
+// A verification is a session of its own kind, which tests one revision without activating it: at each independent target it
+// sends the mount to the target as it stands, and then corrected by that revision alone, and solves both. It runs under its
+// own mount.pointingVerification operation, cannot be paused, and adds only its result to the revision. This is the one
+// place a corrected command goes out outside MountCommands, and it is the candidate's, not an active model's.
 
 // Settings of the frames of a session; the exposure in seconds. The frame type is always LIGHT.
 export type MountPointingCaptureSettings = Pick<CaptureSettings, 'exposureTime' | 'gain' | 'offset' | 'binX' | 'binY' | 'subframe' | 'x' | 'y' | 'width' | 'height' | 'frameFormat'>
@@ -86,6 +92,24 @@ export interface MountPointingRequest extends CommandRequest {
 	readonly modelId?: string
 }
 
+// Body of POST /api/mount-pointing/models/:modelId/verify.
+export interface MountPointingVerifyRequest extends CommandRequest {
+	// Revision to test.
+	readonly revisionId: string
+	// Camera taking the frames, by its exact connection and device ids.
+	readonly camera: OperationDevice
+	// Mount to test, by its exact connection and device ids.
+	readonly mount: OperationDevice
+	// Camera settings of every frame.
+	readonly capture: MountPointingCaptureSettings
+	// Plate solver of every frame.
+	readonly solving: PlateSolveRequest
+	// Wait after the mount stopped and before each exposure, in seconds.
+	readonly settleDelay: number
+	// Independent targets to test.
+	readonly count: number
+}
+
 // Body of POST /api/mount-pointing/plan.
 export interface MountPointingPlanPreviewRequest {
 	// Mount whose site the plan is made for.
@@ -112,6 +136,10 @@ export type MountPointingStep = 'checking' | 'slewing' | 'settling' | 'exposing'
 export interface MountPointingSessionSummary {
 	// Id of the session.
 	readonly sessionId: string
+	// Whether the session gathers samples or tests a revision.
+	readonly kind: 'acquisition' | 'verification'
+	// Revision being tested, by a verification.
+	readonly revisionId?: string
 	// Model receiving the samples.
 	readonly modelId: string
 	// Id of the latest operation holding the camera and the mount.
@@ -222,6 +250,9 @@ const SITE_TOLERANCE = 0.001 * DEG2RAD
 // Warnings kept per session.
 const MAXIMUM_WARNINGS = 20
 
+// Fewest targets a verification must measure to say anything.
+const MINIMUM_VERIFICATION_TARGETS = 3
+
 // A session while its service knows it.
 interface Session {
 	summary: MountPointingSessionSummary
@@ -243,6 +274,8 @@ interface Session {
 	readonly scales: number[]
 	// Waypoints given up on in a row.
 	failures: number
+	// What a verification tests and has measured.
+	readonly verification?: { readonly fitted: FittedPointingModel; readonly uncorrected: number[]; readonly corrected: number[] }
 	// What the operator asked for the operation being cancelled.
 	intent?: 'pause' | 'stop'
 	// Operation holding the devices, while one runs.
@@ -406,6 +439,7 @@ export class MountPointingSessions {
 		const session: Session = {
 			summary: {
 				sessionId,
+				kind: 'acquisition',
 				modelId: model.modelId,
 				operationId: '',
 				camera: { connectionId, deviceId },
@@ -439,6 +473,87 @@ export class MountPointingSessions {
 		this.#sessions.set(key, session)
 		this.#begin(session, token)
 		void this.#saveAcquisition(session, 'running')
+		return this.#accepted(session)
+	}
+
+	// Tests a revision of a model on the sky, without activating it. Responds 202 with MountPointingStartResponse (a repeated
+	// token answers its first verification); 404 for an unknown camera, mount, model, or revision; 409 when a device is
+	// disconnected or held, the camera has a session that did not end, or the model belongs to another mount or site; and 422
+	// when the plate solver is not configured, the mount cannot be sampled, or the revision did not pass its offline gate.
+	async verify(modelId: string, request: MountPointingVerifyRequest): Promise<Response> {
+		const repeated = this.#repeated(request.token)
+		if (repeated) return this.#accepted(repeated)
+
+		const model = await this.models.store.get(modelId)
+		if (!model) return notFound('Model')
+		const revision = model.revisions.find((each) => each.revisionId === request.revisionId)
+		if (!revision) return notFound('Revision')
+		if (revision.gate !== 'passed') return unsupported('The revision did not pass its offline quality')
+
+		const preparation = await this.plateSolving.prepare(request.solving)
+		if (!preparation) return unsupported('The plate solver is not configured; set it up in Settings → External Tools')
+
+		const camera = connectedDevice(this, request.camera.connectionId, 'camera', request.camera.deviceId, 'Camera')
+		if (camera instanceof Response) return camera
+		const mount = connectedDevice(this, request.mount.connectionId, 'mount', request.mount.deviceId, 'Mount')
+		if (mount instanceof Response) return mount
+		const refused = mountRefusal(mount, true)
+		if (refused) return unsupported(refused)
+		if (model.mount.hardwareId !== resourceKey(mount)) return errorResponse('The model belongs to another mount', 409, 'incompatible')
+
+		const site = siteOf(mount)
+		if (!sameSite(model.site, site)) return errorResponse('The model was measured at another site', 409, 'incompatible')
+		if (!this.operations.available(camera) || !this.operations.available(mount)) return busy()
+
+		const key = resourceKey(camera)
+		const previous = this.#sessions.get(key)
+		if (previous && previous.summary.endedAt === undefined) return errorResponse('The camera has a pointing session that did not end', 409, 'busy')
+		if (this.#holds(modelId)) return errorResponse('The model is in use', 409, 'busy')
+
+		// The other pattern, so the targets are not the waypoints the model was fitted on.
+		const { minimumAltitude, meridianAvoidance } = model.plan
+		const plan = { pattern: model.plan.pattern === 'altAzGrid' ? 'goldenSpiral' : 'altAzGrid', count: request.count, minimumAltitude, meridianAvoidance } as const
+		const { waypoints } = pointingPlan(plan, site.latitude)
+		const { token, camera: cameraDevice, mount: mountDevice, capture, solving, settleDelay, revisionId } = request
+
+		const session: Session = {
+			summary: {
+				sessionId: crypto.randomUUID(),
+				kind: 'verification',
+				revisionId,
+				modelId,
+				operationId: '',
+				camera: cameraDevice,
+				cameraName: camera.name,
+				mount: mountDevice,
+				mountName: mount.name,
+				request: { mount: mountDevice, capture, solving, plan, settleDelay, stopTracking: true, equatorialConfirmed: true },
+				provider: solving.provider,
+				state: 'preparing',
+				plannedCount: waypoints.length,
+				acceptedCount: 0,
+				rejectedCount: 0,
+				skippedCount: 0,
+				frameCount: 0,
+				warnings: [],
+				startedAt: Date.now(),
+				revision: 0,
+			},
+			camera,
+			mount,
+			preparation,
+			site,
+			waypoints,
+			visited: new Set(),
+			attempts: new Map(),
+			scales: [],
+			failures: 0,
+			verification: { fitted: revision.fitted, uncorrected: [], corrected: [] },
+		}
+
+		if (previous) this.#byOperation.delete(previous.summary.operationId)
+		this.#sessions.set(key, session)
+		this.#begin(session, token)
 		return this.#accepted(session)
 	}
 
@@ -487,6 +602,7 @@ export class MountPointingSessions {
 		if (!session || session.summary.endedAt !== undefined) return notFound('Session')
 		const { state } = session.summary
 		if (state !== 'running' && state !== 'preparing') return errorResponse('The session is not running', 409, 'busy')
+		if (session.verification) return errorResponse('A verification cannot be paused', 409, 'busy')
 
 		session.intent = 'pause'
 		this.#update(session, { state: 'pausing', step: undefined, exposure: undefined })
@@ -538,7 +654,7 @@ export class MountPointingSessions {
 	#begin(session: Session, token: string) {
 		const { camera, mount } = session.summary
 
-		const record = this.operations.run('mount.pointingModel', [camera, mount], token, () => {
+		const record = this.operations.run(session.verification ? 'mount.pointingVerification' : 'mount.pointingModel', [camera, mount], token, () => {
 			const handle = this.#run(session)
 			session.handle = handle
 			return handle.result
@@ -570,7 +686,7 @@ export class MountPointingSessions {
 
 				for (const waypoint of session.waypoints) {
 					if (session.visited.has(waypoint.index)) continue
-					const measured = await this.#sample(session, context, waypoint, directory)
+					const measured = session.verification ? await this.#verifyTarget(session, session.verification, context, waypoint, directory) : await this.#sample(session, context, waypoint, directory)
 					if (!measured.ok) return measured
 				}
 
@@ -615,6 +731,66 @@ export class MountPointingSessions {
 		}
 
 		return await this.#giveUp(session, waypoint, commandedAt, command, slewed.value.pierSide, 'No plate solution')
+	}
+
+	// Measures one target of a verification, uncorrected and then corrected by the revision. A target the revision refuses, or
+	// that does not solve, is skipped: it says nothing either way.
+	async #verifyTarget(session: Session, verification: NonNullable<Session['verification']>, context: OperationContext, waypoint: PointingWaypoint, directory: string): Promise<OperationResult<void>> {
+		const { mount, site } = session
+		this.#update(session, { state: 'running', waypoint: waypoint.index, step: 'checking' })
+		session.visited.add(waypoint.index)
+
+		// The target stands where the waypoint is at an instant, in the frame of the model.
+		const targetAt = (time: number) => {
+			const instant = timeUnix(time / 1000, true)
+			const lst = localSiderealTime(instant, geodeticLocation(site.longitude, site.latitude, 0))
+			return { lst, target: { rightAscension: normalizeAngle(lst - waypoint.hourAngle), declination: waypoint.declination } }
+		}
+
+		// Sends the mount by a command for a target and answers how far from it the frame landed.
+		const measure = async (commandFor: (target: EquatorialPosition, time: number, lst: number) => EquatorialPosition | undefined): Promise<OperationResult<number | undefined>> => {
+			const commandedAt = Date.now()
+			const { lst, target } = targetAt(commandedAt)
+			const command = commandFor(target, commandedAt, lst)
+			if (!command) return successfulOperationResult(undefined)
+
+			this.#update(session, { step: 'slewing' })
+			const slewed = await this.commander.goTo(context, mount, { type: 'JNOW', JNOW: { x: command.rightAscension, y: command.declination } }, { tolerance: 0, timeout: SLEW_TIMEOUT })
+			if (!slewed.ok) return slewed
+
+			this.#update(session, { step: 'settling' })
+			const settled = await abortableDelay(session.summary.request.settleDelay * 1000, context.signal)
+			if (!settled.ok) return settled
+
+			const solved = await this.#exposeAndSolve(session, context, command, directory)
+			if (!solved.ok) return solved
+			if (!solved.value) return successfulOperationResult(undefined)
+
+			const reached = apparentFromIcrs(solved.value.solution, solved.value.observedAt, site)
+			return successfulOperationResult(computePointingError(target.rightAscension, target.declination, reached.rightAscension, reached.declination).angularSeparation)
+		}
+
+		const uncorrected = await measure((target) => target)
+		if (!uncorrected.ok) return uncorrected
+
+		const corrected = await measure((target, time, lst) => {
+			const result = correctedCommand(verification.fitted, target, { time, site, pierSide: expectedPierSide(target.rightAscension, target.declination, lst) })
+			if (result.ok) return result.command
+			this.#warn(session, `Target ${waypoint.index + 1}: ${CORRECTION_REFUSALS[result.reason]}.`)
+			return undefined
+		})
+
+		if (!corrected.ok) return corrected
+
+		if (uncorrected.value === undefined || corrected.value === undefined) {
+			this.#update(session, { skippedCount: session.summary.skippedCount + 1 })
+			return successfulOperationResult(undefined)
+		}
+
+		verification.uncorrected.push(uncorrected.value)
+		verification.corrected.push(corrected.value)
+		this.#update(session, { acceptedCount: session.summary.acceptedCount + 1 })
+		return successfulOperationResult(undefined)
 	}
 
 	// Takes one frame at a waypoint and solves it. Resolves the solution and the middle of the exposure, undefined when the
@@ -798,11 +974,12 @@ export class MountPointingSessions {
 		if (result.ok) return await this.#finish(session, 'completed')
 
 		if (mount.connected && !isDeviceQuiescent(mount)) {
-			await this.#saveAcquisition(session, 'paused')
+			if (!session.verification) await this.#saveAcquisition(session, 'paused')
 			return this.#update(session, { state: 'blocked', step: undefined, exposure: undefined, reason: result.reason, error: `${mount.name} could not be confirmed stopped` })
 		}
 
 		if (intent === 'stop') return await this.#finish(session, 'stopped')
+		if (session.verification) return await this.#finish(session, 'stopped', result)
 
 		const failure = intent === 'pause' ? {} : { reason: result.reason, ...(result.error !== undefined && { error: result.error }) }
 		const warnings = intent === 'pause' ? session.summary.warnings : appendWarning(session.summary.warnings, result.reason === 'aborted' ? 'The session was stopped from outside and paused.' : `The session paused: ${result.error ?? result.reason}.`)
@@ -813,7 +990,7 @@ export class MountPointingSessions {
 	// Ends a session, keeping its samples: stops the tracking it started unless the request leaves it on, and fits a run with
 	// enough samples. The operation released the mount, so that stop takes it again for itself; another operation that took
 	// it first, or a disconnection, leaves the mount as the session left it.
-	async #finish(session: Session, state: Extract<MountPointingState, 'completed' | 'stopped'>) {
+	async #finish(session: Session, state: Extract<MountPointingState, 'completed' | 'stopped'>, failure?: OperationResult<void>) {
 		const { mount } = session
 
 		if (session.summary.trackingStarted && session.summary.request.stopTracking) {
@@ -822,9 +999,32 @@ export class MountPointingSessions {
 			else this.#update(session, { trackingStopped: false, warnings: appendWarning(session.summary.warnings, `The tracking of ${mount.name} that the session started was left on.`) })
 		}
 
+		if (session.verification) {
+			if (state === 'completed') await this.#saveVerification(session, session.verification)
+			const details = failure && !failure.ok ? { reason: failure.reason, ...(failure.error !== undefined && { error: failure.error }) } : {}
+			return this.#update(session, { state, step: undefined, waypoint: undefined, exposure: undefined, endedAt: Date.now(), ...details })
+		}
+
 		const model = await this.#saveAcquisition(session, state)
 		this.#update(session, { state, step: undefined, waypoint: undefined, exposure: undefined, endedAt: Date.now() })
 		if (model) this.models.fitAfterRun(model)
+	}
+
+	// Adds the result of a verification to its revision. Too few targets, or a corrected GoTo no closer, is a failed result.
+	async #saveVerification(session: Session, { uncorrected, corrected }: NonNullable<Session['verification']>) {
+		const { modelId, revisionId } = session.summary
+		const rootMeanSquare = (errors: readonly number[]) => Math.sqrt(errors.reduce((sum, error) => sum + error * error, 0) / Math.max(1, errors.length))
+		const uncorrectedRms = rootMeanSquare(uncorrected)
+		const correctedRms = rootMeanSquare(corrected)
+		const passed = corrected.length >= MINIMUM_VERIFICATION_TARGETS && correctedRms < uncorrectedRms
+		const verification: PointingVerification = { verificationId: crypto.randomUUID(), createdAt: Date.now(), count: corrected.length, uncorrectedRms, correctedRms, passed }
+
+		try {
+			const saved = await this.models.store.update(modelId, (model) => ({ ...model, revisions: model.revisions.map((each) => (each.revisionId === revisionId ? { ...each, verifications: [...each.verifications, verification] } : each)) }))
+			if (saved.status === 'saved') this.models.published(saved.model)
+		} catch (error) {
+			this.#warn(session, `The verification could not be saved: ${Error.isError(error) ? error.message : String(error)}`)
+		}
 	}
 
 	// Returns the session of a token already used.
@@ -878,6 +1078,10 @@ export function createMountPointingRoutes(sessions: MountPointingSessions) {
 		'/api/mount-pointing/sessions/:sessionId/stop': {
 			// Ends a pointing session, keeping its samples.
 			POST: (req) => sessions.stop(req.params.sessionId),
+		},
+		'/api/mount-pointing/models/:modelId/verify': {
+			// Tests a revision of a model on the sky, without activating it.
+			POST: async (req) => sessions.verify(req.params.modelId, (await req.json()) as MountPointingVerifyRequest),
 		},
 		'/api/mount-pointing/plan': {
 			// The waypoints a session would visit, which commands nothing.

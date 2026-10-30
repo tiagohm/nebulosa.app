@@ -15,7 +15,7 @@ import { CameraCaptures } from './captures'
 import { ConnectionManager } from './connection'
 import { ImageStore } from './images'
 import { type PointingModelEvent, PointingModels } from './mountpointing'
-import type { PointingFitRequest, PointingFitResult } from './mountpointing.fit'
+import { computePointingFit, type PointingFitRequest, type PointingFitResult } from './mountpointing.fit'
 import { type MountPointingEvent, type MountPointingRequest, MountPointingSessions, type MountPointingSessionSummary, type MountPointingStartResponse } from './mountpointing.sessions'
 import { PointingModelStore } from './mountpointing.store'
 import { OperationRegistry } from './operations'
@@ -119,11 +119,13 @@ async function setup() {
 	disposables.push(commander)
 	const solving = fakeSolver(images)
 	const fits: PointingFitRequest[] = []
+	const fitting = { real: false }
 	const store = new PointingModelStore(mkdtempSync(join(root, 'models-')))
 	const modelEvents: PointingModelEvent[] = []
 	const fitter = {
 		fit: (fit: PointingFitRequest) => {
 			fits.push(fit)
+			if (fitting.real) return Promise.resolve(computePointingFit(fit))
 			return Promise.resolve({ fitted: { strategy: 'hybrid', usable: true }, residuals: [], offline: { heldOutCount: 0, perSide: { EAST: 0, WEST: 0, NEITHER: 0 } }, gate: 'failed' } as unknown as PointingFitResult)
 		},
 	}
@@ -163,7 +165,7 @@ async function setup() {
 	const summary = (): MountPointingSessionSummary | undefined => events.at(-1)?.session
 	const released = () => operations.available(camera) && operations.available(mount)
 
-	return { id, client, manager, operations, frames, commander, solving, sessions, store, models, modelEvents, fits, events, auxiliaryDir, camera, cameraId, mount, mountDevice: { connectionId: id, deviceId: mountId }, summary, released }
+	return { id, client, manager, operations, frames, commander, solving, sessions, store, models, fitting, modelEvents, fits, events, auxiliaryDir, camera, cameraId, mount, mountDevice: { connectionId: id, deviceId: mountId }, summary, released }
 }
 
 // Starts a session and returns its ids.
@@ -442,6 +444,65 @@ describe('mount pointing sessions', () => {
 		mount.geographicCoordinate.longitude = 0
 		expect((await sessions.start(id, cameraId, request(mountDevice))).status).toBe(422)
 	}, 60000)
+
+	test('a verification lands closer corrected than uncorrected, and only adds its result to the revision', async () => {
+		const { id, cameraId, sessions, mountDevice, summary, store, fits, fitting, camera, frames, released } = await setup()
+		fitting.real = true
+		const { modelId } = await start(sessions, id, cameraId, request(mountDevice, { plan: { pattern: 'goldenSpiral', count: 24, minimumAltitude: deg(30), meridianAvoidance: 0 } }))
+		await waitUntil(() => summary()?.endedAt !== undefined, 120000)
+		await waitUntil(() => fits.length === 1)
+
+		let model = (await store.get(modelId))!
+
+		while (model.revisions.length === 0) {
+			await Bun.sleep(5)
+			model = (await store.get(modelId))!
+		}
+
+		const [revision] = model.revisions
+		expect({ gate: revision.gate, strategy: revision.fitted.strategy, usable: revision.fitted.usable, offline: revision.offline }).toMatchObject({ gate: 'passed' })
+
+		const capture = request(mountDevice).capture
+		const body = { token: `token-${tokens++}`, revisionId: revision.revisionId, camera: { connectionId: id, deviceId: camera.id }, mount: mountDevice, capture, solving: { provider: 'astap', strategy: 'assisted' }, settleDelay: 0, count: 4 } as const
+		const response = await sessions.verify(modelId, body)
+		expect(response.status).toBe(202)
+		const { sessionId } = (await response.json()) as MountPointingStartResponse
+
+		await waitUntil(() => summary()?.sessionId === sessionId && summary()?.endedAt !== undefined, 120000)
+		expect(summary()).toMatchObject({ kind: 'verification', state: 'completed' })
+		await waitUntil(released)
+
+		const verified = (await store.get(modelId))!
+		const [{ verifications, fitted }] = verified.revisions
+		expect(fitted).toEqual(revision.fitted)
+		expect(verified.samples).toEqual(model.samples)
+		expect(verified.acquisition).toEqual(model.acquisition)
+		expect(verifications).toHaveLength(1)
+
+		const [result] = verifications
+		expect(result.passed).toBeTrue()
+		expect(result.count).toBeGreaterThanOrEqual(3)
+		expect(result.uncorrectedRms).toBeGreaterThan(arcsec(70))
+		expect(result.correctedRms).toBeLessThan(arcsec(30))
+		expect(frames.snapshot().sources.length).toBeGreaterThan(0)
+	}, 240000)
+
+	test('a revision that did not pass its offline quality is not verified, and neither is one of another mount', async () => {
+		const { id, cameraId, sessions, mountDevice, summary, store, camera } = await setup()
+		const { modelId } = await start(sessions, id, cameraId, request(mountDevice))
+		await waitUntil(() => summary()?.endedAt !== undefined)
+
+		const revision = { revisionId: 'r', createdAt: 1, request: 'auto', sampleIds: [], heldOutIds: [], fitted: {}, residuals: [], offline: { heldOutCount: 0, perSide: { EAST: 0, WEST: 0, NEITHER: 0 } }, gate: 'failed', verifications: [] } as never
+		await store.update(modelId, (model) => ({ ...model, revisions: [revision] }))
+
+		const body = { token: `token-${tokens++}`, revisionId: 'r', camera: { connectionId: id, deviceId: camera.id }, mount: mountDevice, capture: request(mountDevice).capture, solving: { provider: 'astap', strategy: 'assisted' }, settleDelay: 0, count: 4 } as const
+		expect((await sessions.verify(modelId, body)).status).toBe(422)
+		expect((await sessions.verify(modelId, { ...body, revisionId: 'gone' })).status).toBe(404)
+		expect((await sessions.verify('gone', body)).status).toBe(404)
+
+		await store.update(modelId, (model) => ({ ...model, mount: { ...model.mount, hardwareId: 'other' }, revisions: [{ ...model.revisions[0], gate: 'passed' }] }))
+		expect((await sessions.verify(modelId, { ...body, token: `token-${tokens++}` })).status).toBe(409)
+	}, 120000)
 
 	test('a preview commands nothing and answers the plan of the site of the mount', async () => {
 		const { sessions, mountDevice, mount, released, events } = await setup()

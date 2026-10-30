@@ -253,6 +253,7 @@ export class NotificationClassifier {
 		if (state === 'blocked') return [{ key: `mountPointing.blocked:${sessionId}`, level: 'error', code: 'mountPointing.blocked', title: 'Mount not confirmed stopped', message: `${mountName} could not be confirmed stopped after its pointing session; check it before using it.`, source, target }]
 		if (state === 'paused' && reason !== undefined && reason !== 'aborted' && !this.#quiet(camera.connectionId, reason))
 			return [{ key: `mountPointing.paused:${sessionId}:${operationId}`, level: 'warning', code: 'mountPointing.paused', title: 'Pointing session paused', message: `The pointing session of ${mountName} paused: ${reasonText(reason)}.`, source, target }]
+		if (session.kind === 'verification') return []
 		if (state === 'completed') return [{ key: `mountPointing.completed:${sessionId}`, level: 'info', code: 'mountPointing.completed', title: 'Pointing session completed', message: `${acceptedCount} of ${plannedCount} waypoints of ${mountName} were sampled.`, source, target }]
 		return []
 	}

@@ -329,7 +329,19 @@ export type {
 export type { PointingFitModelRequest, PointingFitState, PointingModelDetail, PointingModelEvent, PointingModelPatch, PointingModelsSnapshot } from './mountpointing'
 export type { PointingFitStrategy, PointingGate, PointingOfflineMetrics, PointingSampleResidual } from './mountpointing.fit'
 export type { EquatorialPosition, PointingSite } from './mountpointing.frames'
-export type { MountPointingCaptureSettings, MountPointingEvent, MountPointingPlanPreviewRequest, MountPointingPlanRequest, MountPointingRequest, MountPointingSessionSummary, MountPointingSnapshot, MountPointingStartResponse, MountPointingState, MountPointingStep } from './mountpointing.sessions'
+export type {
+	MountPointingVerifyRequest,
+	MountPointingCaptureSettings,
+	MountPointingEvent,
+	MountPointingPlanPreviewRequest,
+	MountPointingPlanRequest,
+	MountPointingRequest,
+	MountPointingSessionSummary,
+	MountPointingSnapshot,
+	MountPointingStartResponse,
+	MountPointingState,
+	MountPointingStep,
+} from './mountpointing.sessions'
 export type { PointingAcquisitionState, PointingModelExport, PointingModelFile, PointingModelSummary, PointingMountIdentity, PointingOpticsFingerprint, PointingPlanRecord, PointingRevision, PointingSampleRecord, PointingVerification, UnavailablePointingModel } from './mountpointing.store'
 export type { TppaAlignment, TppaAttempt, TppaCaptureSettings, TppaEvent, TppaGeometry, TppaOverlay, TppaPoint, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaStartResponse, TppaState } from './tppa'
 export type { GuidingProfileCut, GuidingStarProfile } from './guidingprofile'

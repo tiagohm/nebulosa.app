@@ -40,6 +40,7 @@ export type OperationKind =
 	| 'focuser.autofocus'
 	| 'mount.tppa'
 	| 'mount.pointingModel'
+	| 'mount.pointingVerification'
 	| 'mount.darv'
 	| 'camera.flatWizard'
 	| 'camera.guiding'

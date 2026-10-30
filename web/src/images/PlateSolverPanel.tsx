@@ -10,7 +10,7 @@ import { roleAvailability } from '../equipment/availability'
 import { useRoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
 import { AdvancedControls, HintControls, SolverControls, StrategyControls, useSolverConfigured } from '../platesolving/PlateSolveControls'
-import { cancelPlateSolve, completedJobs, effectivePlateSolveRequest, loadHints, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolveSettings, plateSolvingState, PROVIDER_LABELS, runPlateSolve, STAGE_LABELS } from '../platesolving/platesolving'
+import { cancelPlateSolve, effectivePlateSolveRequest, loadHints, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolveSettings, plateSolvingState, PROVIDER_LABELS, runPlateSolve, solutionOptions, STAGE_LABELS } from '../platesolving/platesolving'
 import { type AstrometryGridSettings, COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, type CoordinateFormat, GRID_COLORS, GRID_OPACITY_RANGE, type GridColor, ORIENTATION_MODES, type OrientationMode } from '../platesolving/preferences'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { wcsFrame } from '../platesolving/wcs'
@@ -105,7 +105,7 @@ function PlateSolver({ documentKey, imageId, image, name, plateSolving, astromet
 	const profiles = useSnapshot(profileState)
 	const { settings } = activeProfile(profiles)
 	const { coordinates } = imageAstrometrySettings(settings)
-	const { job, result, solution, header, resultError } = usePlateSolution(imageId, plateSolving.selected)
+	const { job, result, solution, resultError } = usePlateSolution(imageId, plateSolving.selected)
 	const request = effectivePlateSolveRequest(plateSolving.request, camera && cameraPlateSolving(settings, camera))
 
 	// Keeps the hints in the document; a camera tab also keeps the settings with its camera.
@@ -141,7 +141,7 @@ function PlateSolver({ documentKey, imageId, image, name, plateSolving, astromet
 					{solution && result && <SolverDetails result={result} />}
 					{solution && <MountSync solution={solution} />}
 					{solution && image && <SkyFootprint documentKey={documentKey} imageId={imageId} name={name} image={image} solution={solution} />}
-					<Solutions documentKey={documentKey} imageId={imageId} selected={plateSolving.selected} header={header} />
+					<Solutions documentKey={documentKey} imageId={imageId} selected={plateSolving.selected} />
 					<MeasurementsSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
 					<MarkersSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
 					<TargetOffsetSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
@@ -324,17 +324,14 @@ interface SolutionsProps {
 	readonly imageId: string
 	// Solution chosen.
 	readonly selected?: string
-	// Solution of the header, when it has one.
-	readonly header?: PlateSolution
 }
 
 // Choice of the solution shown among the completed jobs of the image and its header.
-function Solutions({ documentKey, imageId, selected, header }: SolutionsProps) {
+function Solutions({ documentKey, imageId, selected }: SolutionsProps) {
 	const state = useSnapshot(plateSolvingState)
-	const jobs = completedJobs(state, imageId)
-	if (jobs.length + (header ? 1 : 0) < 2) return null
+	const options = solutionOptions(state, imageId)
+	if (options.length === 0) return null
 
-	const options = ['latest', ...(header ? ['header'] : []), ...jobs.map((job) => job.jobId)]
 	const label = (option: string) => {
 		if (option === 'latest') return 'Latest solve'
 		if (option === 'header') return 'Image header'

@@ -2,7 +2,24 @@ import { describe, expect, test } from 'bun:test'
 import type { PlateSolveJob, PlateSolveResult } from 'api'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { proxy } from 'valtio'
-import { completedJobs, effectivePlateSolveRequest, handlePlateSolvingEvent, latestJob, loadPlateSolveResult, loadSolutions, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolveSettings, type PlateSolvingState, refreshPlateSolving, runPlateSolve, selectedJob, selectedSolution } from './platesolving'
+import {
+	completedJobs,
+	effectivePlateSolveRequest,
+	handlePlateSolvingEvent,
+	latestJob,
+	loadPlateSolveResult,
+	loadSolutions,
+	mountSyncBlocker,
+	mountSyncSupport,
+	mountSyncTarget,
+	plateSolveSettings,
+	type PlateSolvingState,
+	refreshPlateSolving,
+	runPlateSolve,
+	selectedJob,
+	selectedSolution,
+	solutionOptions,
+} from './platesolving'
 
 test('a camera tab solves with the settings of its camera and the hints of its document', () => {
 	const hints = { rightAscension: 1, declination: 0.5 }
@@ -128,6 +145,28 @@ describe('solutions', () => {
 		expect(urls).toHaveLength(1)
 		expect(selectedSolution(s, 'i1', 'header')).toEqual(SOLUTION)
 		expect(completedJobs(s, 'i1').map((known) => known.jobId)).toEqual(['old'])
+	})
+
+	test('a header solution can be chosen before any solve', async () => {
+		const s = state()
+		await loadSolutions(s, 'i1', fetcher({ '/api/images/i1/plate-solutions': [200, { header: SOLUTION, jobs: [] }] }).request)
+
+		expect(selectedSolution(s, 'i1', undefined)).toBeUndefined()
+		expect(solutionOptions(s, 'i1')).toEqual(['latest', 'header'])
+	})
+
+	test('solves are offered beside the header, newest first, and a single solve alone offers nothing', () => {
+		const s = state()
+		expect(solutionOptions(s, 'i1')).toEqual([])
+
+		handlePlateSolvingEvent(s, { type: 'plateSolving:updated', job: job({ state: 'completed' }) })
+		expect(solutionOptions(s, 'i1')).toEqual([])
+
+		handlePlateSolvingEvent(s, { type: 'plateSolving:updated', job: job({ jobId: 'j2', queuedAt: 2000, state: 'completed' }) })
+		expect(solutionOptions(s, 'i1')).toEqual(['latest', 'j2', 'j1'])
+
+		s.headers.i1 = SOLUTION
+		expect(solutionOptions(s, 'i1')).toEqual(['latest', 'header', 'j2', 'j1'])
 	})
 
 	test('an image without a header solution is remembered', async () => {

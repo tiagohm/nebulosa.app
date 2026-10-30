@@ -75,6 +75,16 @@ export function completedJobs(state: Pick<PlateSolvingState, 'jobs'>, imageId: s
 		.sort((a, b) => b.queuedAt - a.queuedAt)
 }
 
+// Returns the solutions an image offers to choose from: 'latest', 'header' when its header has one, and the ids of its
+// completed jobs, newest first; empty when there is nothing to choose, which is an image without a header solution and
+// with at most one completed job. A header solution alone is offered, because it is never shown unless chosen.
+export function solutionOptions(state: Pick<PlateSolvingState, 'jobs' | 'headers'>, imageId: string): string[] {
+	const jobs = completedJobs(state, imageId).map((job) => job.jobId)
+	const header = !!state.headers[imageId]
+	if (!header && jobs.length < 2) return []
+	return ['latest', ...(header ? ['header'] : []), ...jobs]
+}
+
 // Returns the job a selection names for an image: the job selected, when it is a known job of that image, otherwise the
 // latest job of the image. 'header' names the solution of the header and gives no job.
 export function selectedJob(state: Pick<PlateSolvingState, 'jobs' | 'latest'>, imageId: string, selected: string | undefined): PlateSolveJob | undefined {

@@ -12,6 +12,7 @@ import { type CommandErrorCode, type CommandRequest, disconnected, failureCode, 
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import { DEFAULT_LEASE_OPTIONS, type LeasedMotion, LeasedMotions, type LeasedPhase, type LeasedSession, type LeasedStartResponse, type LeaseOptions, leasedFailureStatus } from './leases'
+import type { MountCorrectionPlan, MountCorrections } from './mountpointing.corrections'
 import type { OperationRegistry } from './operations'
 import { EphemerisUnavailableError, HorizonsEphemerisError, type SkyObserver, type SkyPosition } from './sky/ephemeris'
 import type { SkyLocator } from './sky/routes'
@@ -225,7 +226,9 @@ export class MountCommands implements Disposable {
 
 	// Creates the commands over the device registry. client resolves an open connection id to its client,
 	// locate resolves sky objects, operations runs and publishes every mount operation, listener receives
-	// every nudge event synchronously, and nudge sets the lease timing of the nudge sessions.
+	// every nudge event synchronously, nudge sets the lease timing of the nudge sessions, and corrections, when given, decides
+	// what a GoTo does with its target. Every GoTo a person or a client asks for goes through it, once, here; the sessions that
+	// measure a mount use the commander directly, so no model is in their way.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: (connectionId: string) => Client | undefined,
@@ -233,6 +236,7 @@ export class MountCommands implements Disposable {
 		readonly operations: OperationRegistry,
 		readonly listener: MountNudgeListener,
 		readonly nudge: MountNudgeOptions = DEFAULT_MOUNT_NUDGE_OPTIONS,
+		readonly corrections?: Pick<MountCorrections, 'plan' | 'suspend' | 'observed'>,
 	) {
 		this.#commander = new MountCommander(devices.mounts)
 		this.#nudges = new LeasedMotions<MountNudgeSession>(operations, 'mount.nudge', 'mountNudge', { motion: 'nudge', device: 'mount' }, (session) => listener({ type: 'mount:nudge', session }), nudge)
@@ -332,7 +336,12 @@ export class MountCommands implements Disposable {
 		if (azimuth === undefined || altitude === undefined) return errorResponse('An observer is required', 422, 'invalidParameter')
 		if (altitude < 0) return errorResponse('The target is below the horizon', 422, 'invalidParameter')
 
-		const result = this.#commander.goTo(this.operations.coordinator, mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
+		const planned = this.#planned(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
+		if (planned.status === 'refused') return errorResponse(planned.error, 422, 'correctionRefused')
+		const below = planned.status === 'corrected' ? slewRefusal('mount.goto', mount, planned.target, observer) : undefined
+		if (below) return errorResponse(...below)
+
+		const result = this.#goTo(mount, planned)
 		const { operationId } = this.operations.track('mount.slew', [{ connectionId, deviceId: mount.id }], result)
 
 		return Response.json({ operationId, time, rightAscension, declination, azimuth, altitude } satisfies MountSlewResponse, { status: 202 })
@@ -372,6 +381,8 @@ export class MountCommands implements Disposable {
 		const coordinate = targetCoordinate(target)
 		if (!mountTargetEquatorial(mount, coordinate).every(Number.isFinite)) return errorResponse('The target is not a valid coordinate', 422, 'invalidParameter')
 
+		// A Sync moves what the mount calls a position, so a model fitted before it no longer speaks for the mount.
+		this.corrections?.suspend(mount, 'The mount was synced')
 		return await settle(this.#commander.sync(this.operations.coordinator, mount, coordinate), 'The sync')
 	}
 
@@ -460,6 +471,8 @@ export class MountCommands implements Disposable {
 	async setTime(connectionId: string, deviceId: string, { utc, offset }: MountTimeRequest): Promise<Response> {
 		const mount = this.#connected(connectionId, deviceId)
 		if (mount instanceof Response) return mount
+		// The clock of the mount moves its sense of the sky, like a Sync.
+		this.corrections?.suspend(mount, 'The clock of the mount was changed')
 		return await settle(this.#commander.setTime(this.operations.coordinator, mount, { utc, offset }), 'Sending the time')
 	}
 
@@ -481,7 +494,12 @@ export class MountCommands implements Disposable {
 		if (refusal) return refused(refusal)
 		if (!this.operations.available(mount)) return refused(['The mount is busy', 409, 'busy'])
 
-		const { operationId } = this.operations.track('mount.goto', [{ connectionId, deviceId: mount.id }], this.#commander.goTo(this.operations.coordinator, mount, target))
+		const planned = this.#planned(mount, target)
+		if (planned.status === 'refused') return refused([planned.error, 422, 'correctionRefused'])
+		const below = planned.status === 'corrected' ? slewRefusal('mount.goto', mount, planned.target, observer) : undefined
+		if (below) return refused(below)
+
+		const { operationId } = this.operations.track('mount.goto', [{ connectionId, deviceId: mount.id }], this.#goTo(mount, planned))
 		return { ok: true, operationId }
 	}
 
@@ -494,6 +512,7 @@ export class MountCommands implements Disposable {
 		if (!mountTargetEquatorial(mount, target).every(Number.isFinite)) return refused(['The target is not a valid coordinate', 422, 'invalidParameter'])
 		if (!this.operations.available(mount)) return refused(['The mount is busy', 409, 'busy'])
 
+		this.corrections?.suspend(mount, 'The mount was synced')
 		void this.#commander.sync(this.operations.coordinator, mount, target).then((result) => {
 			if (!result.ok) console.warn('mount: the sync failed', result.reason, result.error)
 		})
@@ -511,7 +530,35 @@ export class MountCommands implements Disposable {
 		if (refusal) return errorResponse(...refusal)
 
 		const { coordinator } = this.operations
-		return startCommand(this.operations, kind, connectionId, mount, request, () => (kind === 'mount.goto' ? this.#commander.goTo(coordinator, mount, coordinate) : this.#commander.flip(coordinator, mount, coordinate)))
+
+		// A flip is never corrected: its transition between pier sides was not proven safe, so it goes as asked.
+		if (kind === 'mount.flip') return startCommand(this.operations, kind, connectionId, mount, request, () => this.#commander.flip(coordinator, mount, coordinate))
+
+		const planned = this.#planned(mount, coordinate)
+		if (planned.status === 'refused') return errorResponse(planned.error, 422, 'correctionRefused')
+		const below = planned.status === 'corrected' ? slewRefusal(kind, mount, planned.target, request.observer) : undefined
+		if (below) return errorResponse(...below)
+
+		return startCommand(this.operations, kind, connectionId, mount, request, () => this.#goTo(mount, planned))
+	}
+
+	// Asks what a GoTo does with its target.
+	#planned(mount: Mount, target: MountTargetCoordinate<string | number>): MountCorrectionPlan {
+		return this.corrections?.plan(mount, target) ?? { status: 'uncorrected', target }
+	}
+
+	// Sends a GoTo as planned, once. A corrected one goes exactly, however close the mount stands, and its pier side is compared
+	// with the one it was corrected for.
+	#goTo(mount: Mount, planned: Exclude<MountCorrectionPlan, { readonly status: 'refused' }>) {
+		if (planned.status === 'uncorrected') return this.#commander.goTo(this.operations.coordinator, mount, planned.target)
+
+		const result = this.#commander.goTo(this.operations.coordinator, mount, planned.target, planned.options)
+
+		void result.then((outcome) => {
+			if (outcome.ok) this.corrections?.observed(mount, planned.pierSide, outcome.value.pierSide)
+		})
+
+		return result
 	}
 
 	// Runs the motion of a nudge: commands every axis of the direction through a nested manual motion, which

@@ -24,6 +24,7 @@ import { createImageRoutes, images } from './images'
 import { createIndiRoutes, IndiPropertyService } from './indi'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
 import { createPointingModelRoutes, PointingModels } from './mountpointing'
+import { createPointingActivationRoutes, MountCorrections, PointingActivations } from './mountpointing.corrections'
 import { PointingModelFitter } from './mountpointing.fit'
 import { createMountPointingRoutes, MountPointingSessions } from './mountpointing.sessions'
 import { PointingModelStore } from './mountpointing.store'
@@ -328,6 +329,7 @@ export type {
 } from './guiding'
 export type { PointingFitModelRequest, PointingFitState, PointingModelDetail, PointingModelEvent, PointingModelPatch, PointingModelsSnapshot } from './mountpointing'
 export type { PointingFitStrategy, PointingGate, PointingOfflineMetrics, PointingSampleResidual } from './mountpointing.fit'
+export type { CorrectionRefusal, PointingActivateRequest, PointingActivation, PointingActivationEvent, PointingActivationsSnapshot, PointingCorrectionAudit } from './mountpointing.corrections'
 export type { EquatorialPosition, PointingSite } from './mountpointing.frames'
 export type {
 	MountPointingVerifyRequest,
@@ -369,8 +371,11 @@ connections.listen(publish)
 // Device operations of the process, published to every tab.
 const operations = new OperationRegistry(connections.devices, publish)
 
-// Mount commands and nudge sessions over the devices of the open connections.
-const mounts = new MountCommands(connections.devices, (id) => connections.client(id), skyLocator, operations, broadcast)
+// Pointing models in force on the mounts of the open connections, which suspend when a mount stops matching them.
+const corrections = new MountCorrections(connections.devices.mounts, (event) => publish(event))
+
+// Mount commands and nudge sessions over the devices of the open connections, whose GoTos a model in force corrects.
+const mounts = new MountCommands(connections.devices, (id) => connections.client(id), skyLocator, operations, broadcast, undefined, corrections)
 
 // LX200 and Stellarium listeners exposing the mounts of the open connections to planetarium programs, commanding them
 // through the shared commander of the mount commands; a listener stops with its mount or connection.
@@ -399,7 +404,7 @@ const cameras = new CameraCommands(connections.devices, (id) => connections.clie
 
 // Directory and property streams of the INDI devices of the open connections; a stream reaches only the
 // sockets that subscribed to it.
-const indi = new IndiPropertyService(connections.devices, (id) => connections.client(id), operations, broadcast)
+const indi = new IndiPropertyService(connections.devices, (id) => connections.client(id), operations, broadcast, undefined, corrections)
 listenSockets(indi)
 
 // Settings of the external programs, such as ASTAP, read by the services that run them.
@@ -448,6 +453,9 @@ const pointingModels = new PointingModels(new PointingModelStore(), new Pointing
 // commands, so no model corrects them, taking their frames with the capturer of the captures, and solving them with the
 // plate solving service.
 const mountPointing = new MountPointingSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, pointingModels, publish)
+
+// Activation of the models: the checks of the moment, and the routes of the models in force.
+const pointingActivations = new PointingActivations(connections.devices, (id) => connections.client(id), corrections, pointingModels, operations)
 
 // DARV sessions of the cameras of the open connections, moving the mounts with the commander of the mount commands,
 // taking their frames with the capturer of the captures, and analyzing them on a worker of their own.
@@ -499,6 +507,7 @@ export const routes = {
 	...createTppaRoutes(tppa),
 	...createPointingModelRoutes(pointingModels),
 	...createMountPointingRoutes(mountPointing),
+	...createPointingActivationRoutes(pointingActivations),
 	...createDarvRoutes(darv),
 	...createFlatWizardRoutes(flatWizard),
 	...createGuidingRoutes(guiding),

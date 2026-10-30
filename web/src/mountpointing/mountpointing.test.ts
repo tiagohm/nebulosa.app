@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import type { MountPointingSessionSummary, MountState, PointingFitState, PointingModelDetail, PointingModelSummary, PointingModelsSnapshot, ServerEvent } from 'api'
+import type { MountPointingSessionSummary, MountState, PointingActivation, PointingFitState, PointingModelDetail, PointingModelSummary, PointingModelsSnapshot, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { DEFAULT_CAMERA_PLATE_SOLVING, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_POINTING_MODEL_SETTINGS } from '../profile/schema'
@@ -22,7 +22,7 @@ import {
 } from './mountpointing'
 
 function runtime(): MountPointingRuntime {
-	return proxy<MountPointingRuntime>({ models: {}, unavailable: [], fits: {}, details: {}, sessions: {}, plans: {}, sequence: 0, pending: {}, errors: {} })
+	return proxy<MountPointingRuntime>({ models: {}, unavailable: [], fits: {}, details: {}, activations: {}, activationSequence: 0, sessions: {}, plans: {}, sequence: 0, pending: {}, errors: {} })
 }
 
 function summary(patch: Partial<PointingModelSummary> = {}): PointingModelSummary {
@@ -145,6 +145,7 @@ test('a server out of reach is reported and the snapshot is asked for again', as
 	expect(urls).toContain('/api/mount-pointing/models/m1')
 	expect(urls).toContain('/api/mount-pointing/models')
 	expect(urls).toContain('/api/mount-pointing/sessions')
+	expect(urls).toContain('/api/mount-pointing/activations')
 })
 
 test('selecting a model loads it', async () => {
@@ -256,6 +257,21 @@ test('a start and a resume carry a token, and a refusal stays with the camera', 
 
 	expect(bodies.map((body) => typeof body.token)).toEqual(['string', 'string'])
 	expect(state.errors['c:cam']).toBe('The device is busy')
+})
+
+test('the models in force follow their sequence, and a restart of the server leaves none', async () => {
+	const state = runtime()
+	const activation = { hardwareId: 'h', modelId: 'm1', state: 'active' } as PointingActivation
+
+	handleMountPointingEvent(state, { type: 'mountPointing:activation', hardwareId: 'h', activation, sequence: 2 }, ignore)
+	handleMountPointingEvent(state, { type: 'mountPointing:activation', hardwareId: 'h', sequence: 1 }, ignore)
+	expect(state.activations.h.state).toBe('active')
+
+	handleMountPointingEvent(state, { type: 'mountPointing:activation', hardwareId: 'h', activation: { ...activation, state: 'suspended', reason: 'synced' }, sequence: 3 }, ignore)
+	expect(state.activations.h.reason).toBe('synced')
+
+	await refreshMountPointing(state, ((url: string) => (url.endsWith('/activations') ? json({ activations: [], sequence: 0 }) : json(snapshot({ sessions: [] } as never)))) as unknown as typeof fetch)
+	expect(state.activations).toEqual({})
 })
 
 test('a preview keeps the plan of its camera and reports a refusal', async () => {

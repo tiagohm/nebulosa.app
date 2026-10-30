@@ -1,5 +1,5 @@
 // oxfmt-ignore
-import type { CameraCapabilities, MountPointingVerifyRequest, MountPointingRequest, MountPointingSessionSummary, MountPointingSnapshot, MountPointingState, MountPointingStep, MountState, PointingFitModelRequest, PointingFitState, PointingModelDetail, PointingModelEvent, PointingModelExport, PointingModelPatch, PointingModelsSnapshot, PointingModelSummary, ServerEvent, UnavailablePointingModel } from 'api'
+import type { CameraCapabilities, MountPointingVerifyRequest, PointingActivateRequest, PointingActivation, PointingActivationsSnapshot, MountPointingRequest, MountPointingSessionSummary, MountPointingSnapshot, MountPointingState, MountPointingStep, MountState, PointingFitModelRequest, PointingFitState, PointingModelDetail, PointingModelEvent, PointingModelExport, PointingModelPatch, PointingModelsSnapshot, PointingModelSummary, ServerEvent, UnavailablePointingModel } from 'api'
 import { nanoid } from 'nanoid'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
 import type { PointingPlan } from 'nebulosa/src/observation/mount/pointing.plan'
@@ -28,6 +28,10 @@ export interface MountPointingRuntime {
 	fits: Record<string, PointingFitState>
 	// Complete record of the models opened, by model id.
 	details: Record<string, PointingModelDetail>
+	// Model in force on each mount, by hardware id.
+	activations: Record<string, PointingActivation>
+	// Sequence of the latest activation event applied.
+	activationSequence: number
 	// Latest session of each camera, by camera key (cameraKey).
 	sessions: Record<string, MountPointingSessionSummary>
 	// Plan a camera previewed last, by camera key.
@@ -43,7 +47,7 @@ export interface MountPointingRuntime {
 }
 
 // Mount pointing state of the tab.
-export const mountPointingRuntime = proxy<MountPointingRuntime>({ models: {}, unavailable: [], fits: {}, details: {}, sessions: {}, plans: {}, sequence: 0, pending: {}, errors: {} })
+export const mountPointingRuntime = proxy<MountPointingRuntime>({ models: {}, unavailable: [], fits: {}, details: {}, activations: {}, activationSequence: 0, sessions: {}, plans: {}, sequence: 0, pending: {}, errors: {} })
 
 // Refreshes of the models, ordered against the events applied meanwhile.
 const refreshes = new SnapshotRefreshes()
@@ -203,9 +207,19 @@ function applySessionEvent(state: MountPointingRuntime, session: MountPointingSe
 	state.sessions[key] = session
 }
 
+// Applies an activation event; an older one is dropped. The sequence is the server's, so a restart that starts it over is
+// followed by the snapshot of the reconnection, which replaces everything.
+function applyActivationEvent(state: MountPointingRuntime, { hardwareId, activation, sequence }: Extract<ServerEvent, { readonly type: 'mountPointing:activation' }>) {
+	if (sequence <= state.activationSequence) return
+	state.activationSequence = sequence
+	if (activation) state.activations[hardwareId] = activation
+	else delete state.activations[hardwareId]
+}
+
 // Applies a mount pointing event; any other event is ignored.
 export function handleMountPointingEvent(state: MountPointingRuntime, event: ServerEvent, request: typeof fetch = fetch) {
 	if (event.type === 'mountPointing:updated') applySessionEvent(state, event.session)
+	else if (event.type === 'mountPointing:activation') applyActivationEvent(state, event)
 	else if (event.type === 'mountPointing:modelUpdated' || event.type === 'mountPointing:modelRemoved') applyModelEvent(state, event, request)
 }
 
@@ -213,7 +227,24 @@ export function handleMountPointingEvent(state: MountPointingRuntime, event: Ser
 // complete records already open. A model an event changed during the request is left as the event set it, and a response
 // is dropped when another refresh started meanwhile.
 export async function refreshMountPointing(state: MountPointingRuntime, request: typeof fetch = fetch) {
-	await Promise.all([refreshModels(state, request), refreshSessions(state, request)])
+	await Promise.all([refreshModels(state, request), refreshSessions(state, request), refreshActivations(state, request)])
+}
+
+// Replaces the models in force with the server's, which holds none after a restart. A snapshot older than an event applied
+// meanwhile is dropped.
+async function refreshActivations(state: MountPointingRuntime, request: typeof fetch) {
+	const started = state.activationSequence
+
+	try {
+		const response = await request('/api/mount-pointing/activations')
+		if (!response.ok) return
+		const { activations, sequence } = (await response.json()) as PointingActivationsSnapshot
+		if (state.activationSequence !== started) return
+		state.activations = Object.fromEntries(activations.map((activation) => [activation.hardwareId, activation]))
+		state.activationSequence = sequence
+	} catch {
+		// The server is unreachable; the next socket open refreshes the models in force.
+	}
 }
 
 // Replaces the sessions with the server's snapshot, leaving what an event changed during the request.
@@ -348,6 +379,16 @@ export function patchPointingModel(state: MountPointingRuntime, modelId: string,
 // Deletes a model.
 export function deletePointingModel(state: MountPointingRuntime, modelId: string, request: typeof fetch = fetch) {
 	return command(state, modelId, modelUrl(modelId), { method: 'DELETE' }, request)
+}
+
+// Puts a revision of a model in force on a mount.
+export function activatePointingModel(state: MountPointingRuntime, modelId: string, body: PointingActivateRequest, request: typeof fetch = fetch) {
+	return command(state, modelId, modelUrl(modelId, 'activate'), jsonInit('POST', body), request)
+}
+
+// Takes the model of a mount out of force.
+export function deactivatePointingModel(state: MountPointingRuntime, modelId: string, mount: { readonly connectionId: string; readonly deviceId: string }, request: typeof fetch = fetch) {
+	return command(state, modelId, `/api/mount-pointing/mounts/${encodeURIComponent(mount.connectionId)}/${encodeURIComponent(mount.deviceId)}/deactivate`, jsonInit('POST'), request)
 }
 
 // Sends an exchange document to the server, which fits it again from its samples. Resolves why it was refused, if it was.

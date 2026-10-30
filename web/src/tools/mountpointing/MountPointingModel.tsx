@@ -6,7 +6,7 @@ import { DeviceLink } from '../../equipment-control/DeviceLink'
 import { Actions, ConfirmButton, Notice } from '../../equipment-control/parts'
 import { useRoleDevice } from '../../equipment/useEquipment'
 import { imagesState, selectImage, selectImageTool } from '../../images/images'
-import { deletePointingModel, fitPointingModel, importPointingModel, mountPointingRuntime, patchPointingModel, pointingModelExportUrl, selectPointingModel } from '../../mountpointing/mountpointing'
+import { activatePointingModel, deactivatePointingModel, deletePointingModel, fitPointingModel, importPointingModel, mountPointingRuntime, patchPointingModel, pointingModelExportUrl, selectPointingModel } from '../../mountpointing/mountpointing'
 import { formatArcsec, PointingDiagnostics, PointingMeasures, PointingSampleInspector } from '../../mountpointing/PointingDiagnostics'
 import { PointingMap, type PointingMapVectors } from '../../mountpointing/PointingMap'
 import { shownRevision } from '../../mountpointing/skymap'
@@ -246,9 +246,75 @@ function ModelPanel({ summary }: { readonly summary: PointingModelSummary }) {
 				)}
 				<Notice>Offline quality comes from samples the fit never saw. It is not a measure of a corrected GoTo.</Notice>
 			</CollapsibleSection>
-			<CollapsibleSection id="tools.mount-pointing-model.software-correction" title="Software Correction" summary="Inactive">
-				<Notice>No model corrects a GoTo yet.</Notice>
-			</CollapsibleSection>
+			<SoftwareCorrection summary={summary} revision={revision} pending={pending} />
 		</>
+	)
+}
+
+interface SoftwareCorrectionProps {
+	// Model shown.
+	readonly summary: PointingModelSummary
+	// Revision shown.
+	readonly revision?: PointingRevision
+	// Whether a command of the model waits for the server.
+	readonly pending: boolean
+}
+
+// What corrects the GoTos of the mount, and the explicit steps to change it. A revision is offered only once it passed on the
+// sky; the server checks everything again with the values of that moment.
+function SoftwareCorrection({ summary, revision, pending }: SoftwareCorrectionProps) {
+	const mount = useRoleDevice('MOUNT')
+	const runtime = useSnapshot(mountPointingRuntime)
+	const [acknowledged, setAcknowledged] = useState(false)
+	const { device } = mount
+	const activation = device ? runtime.activations[device.hardwareId] : undefined
+	const own = activation?.modelId === summary.modelId
+	const shownActive = own && activation?.revisionId === revision?.revisionId
+	const mine = device?.hardwareId === summary.mount.hardwareId
+	const verified = revision?.verifications.at(-1)?.passed === true
+	const blocker = !mine ? 'This model belongs to another mount.' : revision?.gate !== 'passed' ? 'The revision did not pass its offline quality.' : !verified ? 'Verify the revision on the sky from the Pointing Model Builder first.' : undefined
+	const mountDevice = device && { connectionId: device.connectionId, deviceId: device.id }
+
+	return (
+		<CollapsibleSection id="tools.mount-pointing-model.software-correction" title="Software Correction" summary={activation ? (activation.state === 'active' ? 'Active' : 'Suspended') : 'Inactive'}>
+			{activation ? (
+				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+					<dt className="text-ink-300">State</dt>
+					<dd className={cn('m-0 text-right', activation.state === 'active' ? 'text-success' : 'text-danger')}>{activation.state === 'active' ? 'Correcting GoTos' : 'Suspended'}</dd>
+					<dt className="text-ink-300">Model</dt>
+					<dd className="m-0 truncate text-right">{activation.label}</dd>
+					{activation.last && (
+						<>
+							<dt className="text-ink-300">Latest GoTo</dt>
+							<dd className="m-0 text-right">{activation.last.refused ? 'Refused' : 'Corrected'}</dd>
+						</>
+					)}
+				</dl>
+			) : (
+				<Notice>No model corrects the GoTos of this mount.</Notice>
+			)}
+			{activation?.reason && <Notice error>{`${activation.reason}. GoTos go uncorrected until a model is activated again.`}</Notice>}
+			{activation?.last?.pierSideMismatch && <Notice error>The mount took another pier side than the one the latest correction was made for.</Notice>}
+			{!shownActive && !blocker && <Checkbox label="No native pointing model corrects the same error, and this mount is equatorial" checked={acknowledged} onChange={setAcknowledged} />}
+			{!shownActive && (
+				<ConfirmButton
+					variant="primary"
+					disabled={blocker !== undefined || !acknowledged || pending || !mountDevice || !revision}
+					title="Activate the model"
+					confirmLabel="Activate"
+					onConfirm={() => revision && mountDevice && void activatePointingModel(mountPointingRuntime, summary.modelId, { revisionId: revision.revisionId, mount: mountDevice, nativeModelAcknowledged: acknowledged })}
+					message={`Every GoTo Nebulosa sends to ${summary.mount.name} will be corrected by this revision, until it is deactivated, suspended, or the server restarts. Programs talking to the driver directly are not corrected.`}
+				>
+					Activate
+				</ConfirmButton>
+			)}
+			{activation && own && mountDevice && (
+				<Button variant="secondary" disabled={pending} onClick={() => void deactivatePointingModel(mountPointingRuntime, summary.modelId, mountDevice)}>
+					Deactivate
+				</Button>
+			)}
+			{blocker && !shownActive && <Notice>{blocker}</Notice>}
+			<Notice>A correction applies to the GoTos of Nebulosa, Mount Remote Control included. It never changes tracking, Sync, or manual motion, and a restart leaves it inactive.</Notice>
+		</CollapsibleSection>
 	)
 }

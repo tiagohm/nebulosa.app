@@ -97,8 +97,10 @@ export class PointingModels {
 	readonly #fits = new Map<string, PointingFitState>()
 	// Sequence of the latest event.
 	#sequence = 0
-	// Tests of whether a model is in use by a session or an activation, which keeps it from being fitted or removed.
+	// Tests of whether a session owns a model, which keeps it from being fitted or removed.
 	readonly #inUse: ((modelId: string) => boolean)[] = []
+	// Tests of whether a model is in force, which keeps it from being removed; a refit adds a revision and changes nothing.
+	readonly #removalGuards: ((modelId: string) => boolean)[] = []
 
 	// Creates the library. store persists the models, fitter fits them, and listener receives every change synchronously.
 	constructor(
@@ -110,6 +112,11 @@ export class PointingModels {
 	// Adds a test of whether a model is in use, from a service that holds models.
 	protectWith(inUse: (modelId: string) => boolean) {
 		this.#inUse.push(inUse)
+	}
+
+	// Adds a test of whether a model is in force, from a service that holds revisions.
+	protectFromRemoval(inForce: (modelId: string) => boolean) {
+		this.#removalGuards.push(inForce)
 	}
 
 	// Returns whether something holds a model.
@@ -176,7 +183,7 @@ export class PointingModels {
 
 	// Deletes a model. Responds 204, 404, or 409 while a session or an activation holds it.
 	async remove(modelId: string): Promise<Response> {
-		if (this.#isInUse(modelId)) return errorResponse('The model is in use', 409, 'busy')
+		if (this.#isInUse(modelId) || this.#removalGuards.some((inForce) => inForce(modelId))) return errorResponse('The model is in use', 409, 'busy')
 		if (!(await this.store.delete(modelId))) return notFound('Model')
 
 		this.#fits.delete(modelId)

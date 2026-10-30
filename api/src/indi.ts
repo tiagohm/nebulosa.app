@@ -6,6 +6,7 @@ import { failedOperationResult, type OperationFailureReason, type OperationResul
 import { busy, type ClientResolver, type CommandAccepted, type CommandErrorCode, type CommandRequest, notFound, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
+import type { MountCorrections } from './mountpointing.corrections'
 import type { OperationRegistry } from './operations'
 import type { EventSocket, ServerEvent, SocketListener } from './websocket'
 
@@ -252,6 +253,9 @@ interface Stream {
 }
 
 // Publishes the directory and the property streams of the devices of every open connection.
+// Vectors of a mount whose write may invalidate the pointing model in force on it.
+const MODEL_SENSITIVE_VECTORS: ReadonlySet<string> = new Set(['ON_COORD_SET', 'EQUATORIAL_EOD_COORD', 'GEOGRAPHIC_COORD', 'TIME_UTC'])
+
 export class IndiPropertyService implements SocketListener, Disposable {
 	// Streams with subscribers, by key.
 	readonly #streams = new Map<string, Stream>()
@@ -294,6 +298,7 @@ export class IndiPropertyService implements SocketListener, Disposable {
 		readonly operations: OperationRegistry,
 		readonly broadcast: (event: ServerEvent) => void,
 		options?: IndiPropertyServiceOptions,
+		readonly corrections?: Pick<MountCorrections, 'suspendHardware'>,
 	) {
 		this.#valueInterval = options?.valueInterval ?? VALUE_INTERVAL
 		this.#maxBufferedAmount = options?.maxBufferedAmount ?? MAX_BUFFERED_AMOUNT
@@ -323,6 +328,9 @@ export class IndiPropertyService implements SocketListener, Disposable {
 
 		const elements = writtenElements(property, request.elements)
 		if (typeof elements === 'string') return errorResponse(elements, 422, 'invalidParameter')
+
+		// A vector written by hand can sync a mount, or send it a site, without anything here seeing it.
+		if (MODEL_SENSITIVE_VECTORS.has(name)) this.corrections?.suspendHardware(hardwareId, `${name} was written by hand`)
 
 		// The managed interface of the physical device, when one exists, ties the hold to its lifecycle.
 		const managed: Device | undefined = this.devices.get(client, device.hardwareId)

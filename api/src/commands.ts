@@ -28,7 +28,7 @@ import type { OperationKind, OperationProgressReporter, OperationRegistry } from
 // - connectionLost: the device disappeared while commanded.
 // - unknownResult: the command could not be confirmed as sent; the device may or may not have received it.
 // - serviceUnavailable: a service the command depends on, such as an ephemeris provider, failed or is absent.
-export type CommandErrorCode = 'notFound' | 'disconnected' | 'busy' | 'unsupported' | 'invalidParameter' | 'timeout' | 'rejected' | 'deviceError' | 'connectionLost' | 'unknownResult' | 'serviceUnavailable'
+export type CommandErrorCode = 'notFound' | 'disconnected' | 'busy' | 'unsupported' | 'invalidParameter' | 'timeout' | 'rejected' | 'deviceError' | 'connectionLost' | 'unknownResult' | 'serviceUnavailable' | 'correctionRefused'
 
 // Body of an error response of a command.
 export type CommandError = ApiError<CommandErrorCode>

@@ -13,6 +13,7 @@ import type { GuidingServerEvent } from './guiding'
 import type { ImageProcessingEvent } from './imageprocessing'
 import type { IndiClientMessage, IndiServerEvent } from './indi'
 import type { PointingModelEvent } from './mountpointing'
+import type { PointingActivationEvent } from './mountpointing.corrections'
 import type { MountPointingEvent } from './mountpointing.sessions'
 import type { MountRemoteControlEvent } from './mountremotecontrol'
 import type { MountNudgeEvent } from './mounts'
@@ -44,6 +45,7 @@ export type ServerEvent =
 	| TppaEvent
 	| PointingModelEvent
 	| MountPointingEvent
+	| PointingActivationEvent
 	| DarvEvent
 	| FlatWizardEvent
 	| MountNudgeEvent

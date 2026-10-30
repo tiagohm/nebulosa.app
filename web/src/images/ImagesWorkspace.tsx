@@ -1,6 +1,6 @@
 import type { SaveFormat } from 'api'
 import { cn } from 'cn'
-import { type KeyboardEvent, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, useCallback, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { AnnotationOverlay, shownAnnotations } from '../annotations/AnnotationOverlay'
 import { annotationMatchesWcs, annotationPlateSolveJobId } from '../annotations/annotations'
@@ -38,7 +38,7 @@ import { moveIndex } from '../ui/navigation'
 import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
 import { Reticle } from '../viewer/Reticle'
-import { FIT_VIEW } from '../viewer/transform'
+import { FIT_VIEW, pixelAt, type Point } from '../viewer/transform'
 import { useAstrometryTool } from './astrometryTool'
 import { useCameraOperationContext } from './cameracontext'
 import { selectCameraFrame } from './cameratabs'
@@ -46,7 +46,8 @@ import { captureFramesState, frameSourceKey } from './captureframes'
 import { CaptureFramesCarousel } from './CaptureFramesCarousel'
 import { DisplayToolbar } from './DisplayToolbar'
 import { ImageInspector } from './ImageInspector'
-import { activeDocument, activeTool, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, isClosable, isMosaic, openImage, selectAnnotation, selectImage, selectImageTool, selectStar, selectStreak, setImageView, shownRendering, toggleOriginal } from './images'
+import { ImageMenu } from './ImageMenu'
+import { activeDocument, activeTool, addMarker, activeView, closeImage, documentPath, type ImageDocument, type ImageViewState, imagesState, isClosable, isMosaic, openImage, selectAnnotation, selectImage, selectImageTool, selectStar, selectStreak, setImageView, shownRendering, toggleOriginal } from './images'
 import { MeasurementOverlay } from './MeasurementOverlay'
 import { SaveImageModal } from './SaveImageModal'
 import { SaveImagePopover } from './SaveImagePopover'
@@ -102,6 +103,11 @@ export function ImagesWorkspace() {
 	const [closing, setClosing] = useState<string>()
 	// Document being saved, whether it closes once saved, and the format of its file.
 	const [saving, setSaving] = useState<{ readonly key: string; readonly closeAfter: boolean; readonly format: SaveFormat }>()
+	// Context menu of the image shown: the document, the image point, and the client point it opened at.
+	const [menu, setMenu] = useState<{ readonly key: string; readonly point: Point; readonly client: Point }>()
+	// Why the latest action of the context menu failed.
+	const [menuStatus, setMenuStatus] = useState<string>()
+	const closeMenu = useCallback(() => setMenu(undefined), [])
 	// Measure mode of each document, by document key; Pan when absent. A presentation choice of the tab only.
 	const [modes, setModes] = useState<Readonly<Record<string, AstrometryMode>>>({})
 	const document = activeDocument(state)
@@ -139,6 +145,7 @@ export function ImagesWorkspace() {
 	// A star is picked only on the session's current frame, and only while the guide output is not held.
 	const picking = tool === 'guiding' && guiding && !guiding.session.guideOutputHeld ? guiding.session : undefined
 	const mode = (document && modes[document.key]) ?? 'pan'
+	const imageInfo = document?.info
 	const astrometryTool = useAstrometryTool({
 		documentKey: document?.key,
 		imageId: document?.info?.id,
@@ -211,6 +218,16 @@ export function ImagesWorkspace() {
 						}
 						status={solution ? (cursor) => <WcsCursorStatus solution={solution} cursor={cursor} style={astrometry.coordinates} /> : undefined}
 						interaction={astrometryTool.interaction}
+						onImageContextMenu={
+							solution && document && imageInfo
+								? (point, client) => {
+										if (!pixelAt(imageInfo, point)) return false
+										setMenu({ key: document.key, point, client })
+										setMenuStatus(undefined)
+										return true
+									}
+								: undefined
+						}
 						onImageClick={
 							picking
 								? (point) => void selectGuidingTarget(guidingRuntime, picking, [point.x - 0.5, point.y - 0.5])
@@ -244,6 +261,21 @@ export function ImagesWorkspace() {
 				</div>
 				{document?.camera && framesShown && <CameraBottom document={document} view={bottomViews[document.key] ?? 'frames'} onView={(next) => setBottomViews({ ...bottomViews, [document.key]: next })} />}
 			</div>
+			{menu && solution && document?.info && menu.key === document.key && (
+				<ImageMenu
+					point={menu.point}
+					client={menu.client}
+					solution={solution}
+					image={document.info}
+					style={astrometry.coordinates}
+					status={menuStatus}
+					onStatus={setMenuStatus}
+					onClose={closeMenu}
+					unavailable={picking ? 'Guiding is picking a guide star.' : undefined}
+					onAddMarker={(point) => addMarker(imagesState, document.key, { point, visible: true })}
+					onMeasureFrom={astrometryTool.measureFrom}
+				/>
+			)}
 			<FileExplorerModal
 				open={choosing}
 				title="Open Image"

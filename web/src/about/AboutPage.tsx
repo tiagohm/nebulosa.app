@@ -1,6 +1,7 @@
 import type { AboutInfo } from 'api'
 import { type ReactNode, useEffect, useState } from 'react'
 import logo from '../../assets/nebulosa.ico'
+import { copyText } from '../clipboard'
 import { Button } from '../ui/Button'
 import { APP_REPOSITORY_URL, aboutFields, browserAboutIo, CORE_REPOSITORY_URL, fetchAbout, LICENSE_URL, NOT_AVAILABLE, versionInfoText } from './about'
 
@@ -43,14 +44,7 @@ export function AboutPage() {
 	}
 
 	async function copyVersionInfo(info: AboutInfo) {
-		try {
-			// The clipboard is missing outside a secure context, such as the server opened over plain HTTP on the LAN.
-			if (!navigator.clipboard) throw new Error('Clipboard unavailable')
-			await navigator.clipboard.writeText(versionInfoText(info))
-			setCopy('copied')
-		} catch {
-			setCopy('failed')
-		}
+		setCopy((await copyText(versionInfoText(info))) ? 'copied' : 'failed')
 	}
 
 	const info = load.kind === 'loaded' ? load.info : undefined

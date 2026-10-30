@@ -11,14 +11,18 @@ import { useRoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
 import { AdvancedControls, HintControls, SolverControls, StrategyControls, useSolverConfigured } from '../platesolving/PlateSolveControls'
 import { cancelPlateSolve, completedJobs, loadHints, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolvingState, PROVIDER_LABELS, runPlateSolve, STAGE_LABELS } from '../platesolving/platesolving'
+import { type AstrometryGridSettings, GRID_COLORS, GRID_MODES, GRID_OPACITY_RANGE, type GridColor, type GridMode } from '../platesolving/preferences'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { wcsFrame } from '../platesolving/wcs'
+import { activeProfile, imageAstrometrySettings, profileState, setImageAstrometrySettings } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { formatDeclination, formatRightAscension } from '../sky/format'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
+import { Slider } from '../ui/Slider'
 import { useNow } from '../useNow'
 import { holdCameraFrame } from './cameratabs'
 import { type ImagePlateSolvingState, imagesState, imageUnavailableReason, selectPlateSolution, setPlateSolveOverlay, setPlateSolveRequest } from './images'
@@ -115,11 +119,7 @@ function PlateSolver({ documentKey, imageId, plateSolving, unavailable }: PlateS
 					<Solutions documentKey={documentKey} imageId={imageId} selected={plateSolving.selected} header={header} />
 				</>
 			)}
-			<CollapsibleSection id="images.plate-solver.visualization" title="Visualization">
-				<Checkbox label="Show WCS overlay" checked={plateSolving.overlay} onChange={(overlay) => setPlateSolveOverlay(imagesState, documentKey, { overlay })} />
-				<Checkbox label="RA/Dec grid" checked={plateSolving.grid} disabled={!plateSolving.overlay} onChange={(grid) => setPlateSolveOverlay(imagesState, documentKey, { grid })} />
-				<Notice>The overlay marks the solved centre and the north and east directions of the WCS. Showing it never solves again.</Notice>
-			</CollapsibleSection>
+			<Visualization documentKey={documentKey} plateSolving={plateSolving} />
 		</>
 	)
 }
@@ -351,3 +351,37 @@ function formatSeconds(milliseconds: number): string {
 	const seconds = milliseconds / 1000
 	return `${seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)} s`
 }
+
+interface VisualizationProps {
+	// Key of the document.
+	readonly documentKey: string
+	// Plate solving state of the document, whose overlay toggles are its own.
+	readonly plateSolving: ImagePlateSolvingState
+}
+
+// What is drawn over a solved image: the solved centre and the grid, per document, and the appearance of the grid,
+// per profile. Showing or changing any of them never solves again.
+function Visualization({ documentKey, plateSolving }: VisualizationProps) {
+	const profiles = useSnapshot(profileState)
+	const { grid } = imageAstrometrySettings(activeProfile(profiles).settings)
+	const editGrid = (patch: Partial<AstrometryGridSettings>) => setImageAstrometrySettings(profileState, { grid: patch })
+
+	return (
+		<CollapsibleSection id="images.plate-solver.visualization" title="Visualization">
+			<Checkbox label="Show solution centre" checked={plateSolving.overlay} onChange={(overlay) => setPlateSolveOverlay(imagesState, documentKey, { overlay })} />
+			<Checkbox label="RA/Dec grid" checked={plateSolving.grid} onChange={(shown) => setPlateSolveOverlay(imagesState, documentKey, { grid: shown })} />
+			<SegmentedControl label="Grid" options={GRID_MODES} value={grid.mode} format={(mode) => GRID_MODE_LABELS[mode]} onChange={(mode) => editGrid({ mode })} />
+			<Checkbox label="Grid labels" checked={grid.labels} onChange={(labels) => editGrid({ labels })} />
+			<Checkbox label="Minor grid lines" checked={grid.minor} onChange={(minor) => editGrid({ minor })} />
+			<Slider label="Grid opacity" value={grid.opacity} min={GRID_OPACITY_RANGE[0]} max={GRID_OPACITY_RANGE[1]} step={0.05} onChange={(opacity) => editGrid({ opacity })} />
+			<Select label="Grid color" options={GRID_COLORS} value={grid.color} format={(color) => GRID_COLOR_LABELS[color]} onChange={(color) => editGrid({ color })} />
+			<Notice>The centre marks the solved centre and the north and east directions of the WCS. The grid follows the part of the image on screen. Showing them never solves again.</Notice>
+		</CollapsibleSection>
+	)
+}
+
+// Names of the grid modes.
+const GRID_MODE_LABELS: Readonly<Record<GridMode, string>> = { lines: 'Lines', edgeTicks: 'Edge ticks' }
+
+// Names of the grid colors.
+const GRID_COLOR_LABELS: Readonly<Record<GridColor, string>> = { neutral: 'Neutral', accent: 'Accent', success: 'Green' }

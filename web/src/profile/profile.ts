@@ -2,6 +2,7 @@ import type { DisplaySettings, MountRemoteProtocol, StarDetectionRequest, Streak
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
 import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
+import { type AstrometryGridSettings, DEFAULT_IMAGE_ASTROMETRY, type ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, type SkyLayerId } from '../sky/display'
 import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
@@ -398,6 +399,20 @@ export function streakDetectionSettings(settings: Pick<ProfileSettings, 'streakD
 export function setStreakDetectionSettings(state: ProfileState, settings: StreakDetectorSettings) {
 	const profile = activeProfile(state)
 	profile.settings.streakDetection = { ...settings }
+	touch(profile)
+}
+
+// Returns the appearance of the astrometric aids of solved images of a profile: the one edited last, or the default.
+export function imageAstrometrySettings(settings: Pick<ProfileSettings, 'imageAstrometry'>): ImageAstrometrySettings {
+	return settings.imageAstrometry ?? DEFAULT_IMAGE_ASTROMETRY
+}
+
+// Changes the appearance of the astrometric aids of solved images of the active profile: the coordinates, grid, and
+// other fields given replace their current values, a grid patch merging into the current grid.
+export function setImageAstrometrySettings(state: ProfileState, patch: Partial<Omit<ImageAstrometrySettings, 'grid'>> & { readonly grid?: Partial<AstrometryGridSettings> }) {
+	const profile = activeProfile(state)
+	const current = imageAstrometrySettings(profile.settings)
+	profile.settings.imageAstrometry = { ...current, ...patch, coordinates: { ...current.coordinates, ...patch.coordinates }, grid: { ...current.grid, ...patch.grid } }
 	touch(profile)
 }
 

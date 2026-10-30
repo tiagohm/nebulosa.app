@@ -6,6 +6,7 @@ import { MemoryStorage } from '../storage.memory'
 import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DARV_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, DEFAULT_GUIDING_SETTINGS, DEFAULT_MOUNT_REMOTE_BINDINGS, DEFAULT_TPPA_SETTINGS } from './schema'
 import type { DisplaySettings } from 'api'
 import { ORIGINAL_DISPLAY_SETTINGS } from '../images/display'
+import { DEFAULT_IMAGE_ASTROMETRY } from '../platesolving/preferences'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
 import {
@@ -62,6 +63,8 @@ import {
 	setSkyObserver,
 	setStarDetectionSettings,
 	setStreakDetectionSettings,
+	setImageAstrometrySettings,
+	imageAstrometrySettings,
 	setGuideTelescopeOptics,
 	setTelescopeOptics,
 	starDetectionSettings,
@@ -106,7 +109,7 @@ describe('load', () => {
 		expect(state.profiles[0]).toMatchObject({ name: 'Default', equipment: {}, settings: {} })
 		expect(state.profiles[0].connectionId).toBeUndefined()
 		expect(state.activeId).toBe(state.profiles[0].id)
-		expect(stored(stores)).toEqual({ version: 14, profiles: [expect.objectContaining({ name: 'Default' })] })
+		expect(stored(stores)).toEqual({ version: 15, profiles: [expect.objectContaining({ name: 'Default' })] })
 	})
 
 	test('invalid JSON falls back to Default without overwriting the stored data', () => {
@@ -800,7 +803,7 @@ describe('camera forms', () => {
 		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
 
 		const newer = newStores()
-		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 15, profiles: [{ id: 'a', name: 'A' }] }))
+		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: 16, profiles: [{ id: 'a', name: 'A' }] }))
 		expect(load(newer).profiles.map((profile) => profile.id)).not.toContain('a')
 	})
 
@@ -866,6 +869,23 @@ describe('camera forms', () => {
 		const invalid = newStores()
 		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 13, profiles: [{ id: 'a', name: 'A', settings: { notifications: { readIds: ['x', 1, '', 'x', 'y'], dismissedIds: 'z' } } }] }))
 		expect(load(invalid).profiles[0].settings.notifications).toEqual({ readIds: ['x', 'y'], dismissedIds: [] })
+	})
+
+	test('the appearance of the astrometric aids is kept, merging partial changes, and restored with defaults for invalid fields', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		expect(imageAstrometrySettings(activeProfile(state).settings)).toEqual(DEFAULT_IMAGE_ASTROMETRY)
+
+		setImageAstrometrySettings(state, { grid: { mode: 'edgeTicks' }, orientation: 'center' })
+		setImageAstrometrySettings(state, { grid: { opacity: 0.8 }, coordinates: { format: 'decimal', precision: 3 } })
+		await Bun.sleep(0)
+		const expected = { ...DEFAULT_IMAGE_ASTROMETRY, coordinates: { format: 'decimal', precision: 3 }, grid: { ...DEFAULT_IMAGE_ASTROMETRY.grid, mode: 'edgeTicks', opacity: 0.8 }, orientation: 'center' } satisfies typeof DEFAULT_IMAGE_ASTROMETRY
+		expect(imageAstrometrySettings(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual(expected)
+
+		const invalid = newStores()
+		const stored = { coordinates: { format: 'roman', precision: 1.5 }, grid: { mode: 'dots', labels: 'yes', minor: false, opacity: 4, color: 'accent' }, crosshair: true, scaleBar: 1, orientation: 'up' }
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 15, profiles: [{ id: 'a', name: 'A', settings: { imageAstrometry: stored } }] }))
+		expect(imageAstrometrySettings(load(invalid).profiles[0].settings)).toEqual({ ...DEFAULT_IMAGE_ASTROMETRY, grid: { ...DEFAULT_IMAGE_ASTROMETRY.grid, minor: false, color: 'accent' }, crosshair: true })
 	})
 
 	test('a version 14 document keeps its preferences and ignores the observatory code it stored', () => {

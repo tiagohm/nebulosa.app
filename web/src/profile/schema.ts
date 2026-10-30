@@ -1,5 +1,6 @@
 import type { AutoFocusRequest, CaptureRequest, DisplaySettings, FlatWizardFilter, GuidingClientSettings, GuidingStartRequest, MountRemoteProtocol, MountRemoteStartRequest, PlateSolveRequest, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
+import type { ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
 import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } from '../sky/framing'
@@ -19,8 +20,9 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // in Images, to the frames of each camera (display) and to every other image (imageDisplay). Version 12 adds the streak
 // detector settings of Images (streakDetection), version 13 the notifications the profile read or dismissed (notifications),
 // and version 14 the observatory code of the solar-system searches of Images → Annotation (annotation), removed since:
-// the searches use the site of the image header, and a stored code is ignored when read.
-export const PROFILES_VERSION = 14
+// the searches use the site of the image header, and a stored code is ignored when read. Version 15 adds the appearance
+// of the astrometric aids of solved images (imageAstrometry).
+export const PROFILES_VERSION = 15
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -60,6 +62,9 @@ export interface ProfileSettings {
 	// Notifications of the server history the profile read or dismissed; absent until the first one is read. The server
 	// keeps one history for every browser, so these states are the profile's own and are never sent back.
 	notifications?: NotificationPreferences
+	// Appearance of the astrometric aids of solved images in Images (coordinates, grid, crosshair, scale bar, orientation);
+	// absent until edited, and then DEFAULT_IMAGE_ASTROMETRY holds. Whether a document shows its grid is the document's.
+	imageAstrometry?: ImageAstrometrySettings
 }
 
 // Notifications of the server history a profile read or dismissed, by notification id. Ids the history no longer

@@ -17,8 +17,9 @@ import { TppaOverlay, useTppaOverlay } from '../camera/TppaOverlay'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../files/files'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
+import { WcsGridOverlay } from '../platesolving/WcsGridOverlay'
 import { WcsOverlay } from '../platesolving/WcsOverlay'
-import { activeProfile, profileState, setLastImageDirectory } from '../profile/profile'
+import { activeProfile, imageAstrometrySettings, profileState, setLastImageDirectory } from '../profile/profile'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { StarOverlay } from '../stars/StarOverlay'
 import { pickStar } from '../stars/stars'
@@ -114,6 +115,8 @@ export function ImagesWorkspace() {
 	const annotation = useMemo(() => mergeProjections(localShown ? localProjection : undefined, minorShown ? minorProjection : undefined), [localShown, localProjection, minorShown, minorProjection])
 	const selectedAnnotation = annotationResults.some((result) => result?.jobId === view?.annotation.selected?.jobId) ? view?.annotation.selected?.id : undefined
 	const wcs = view?.plateSolving.overlay ? solution : undefined
+	const grid = view?.plateSolving.grid ? solution : undefined
+	const astrometry = imageAstrometrySettings(activeProfile(profiles).settings)
 	const camera = useCameraOperationContext(document)
 	const guide = useTppaOverlay(document)
 	const trails = useDarvOverlay(document)
@@ -159,11 +162,12 @@ export function ImagesWorkspace() {
 							)
 						}
 						overlays={
-							(markers || lines || wcs || annotation || reticle || guide || trails || guiding) && view
+							(markers || lines || wcs || grid || annotation || reticle || guide || trails || guiding) && view
 								? (size, overlay) => (
 										<>
 											{reticle && <Reticle {...size} />}
-											{wcs && <WcsOverlay solution={wcs} image={size} view={overlay} grid={view.plateSolving.grid} />}
+											{grid && <WcsGridOverlay solution={grid} image={size} view={overlay} settings={astrometry.grid} />}
+											{wcs && <WcsOverlay solution={wcs} image={size} view={overlay} />}
 											{annotation && <AnnotationOverlay projection={annotation} view={overlay} state={view.annotation} selected={selectedAnnotation} />}
 											{guide && <TppaOverlay geometry={guide} view={overlay} />}
 											{trails && <DarvOverlay trails={trails} view={overlay} />}

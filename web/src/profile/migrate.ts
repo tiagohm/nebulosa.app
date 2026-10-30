@@ -1,6 +1,7 @@
 import type { DisplaySettings, FlatWizardFilter, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import { CAMERA_ROLES, type DeviceAssignment, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
 import { CFA_PATTERNS, DISPLAY_RANGES, type DisplayRange, ORIGINAL_DISPLAY_SETTINGS, SCNR_CHANNELS, SCNR_METHODS } from '../images/display'
+import { COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, DEFAULT_IMAGE_ASTROMETRY, GRID_COLORS, GRID_MODES, GRID_OPACITY_RANGE, type ImageAstrometrySettings, ORIENTATION_MODES } from '../platesolving/preferences'
 import { WORKSPACE_IDS } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
 import type { OpticalPreset, SensorGeometry, TelescopeOptics } from '../sky/framing'
@@ -509,6 +510,34 @@ function normalizeSky(value: unknown, sky: SkySettings) {
 	if (framing) sky.framing = framing
 }
 
+// Restores the persisted appearance of the astrometric aids of solved images (version 15), filling every invalid field
+// with its value in DEFAULT_IMAGE_ASTROMETRY; undefined for anything that is not a record.
+function normalizeImageAstrometry(value: unknown): ImageAstrometrySettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const coordinates = isRecord(value.coordinates) ? value.coordinates : {}
+	const grid = isRecord(value.grid) ? value.grid : {}
+	const defaults = DEFAULT_IMAGE_ASTROMETRY
+	const precision = coordinates.precision
+
+	return {
+		coordinates: {
+			format: oneOf(coordinates.format, COORDINATE_FORMATS) ? coordinates.format : defaults.coordinates.format,
+			precision: typeof precision === 'number' && Number.isInteger(precision) ? boundedNumber(precision, ...COORDINATE_PRECISION_RANGE, defaults.coordinates.precision) : defaults.coordinates.precision,
+		},
+		grid: {
+			mode: oneOf(grid.mode, GRID_MODES) ? grid.mode : defaults.grid.mode,
+			labels: typeof grid.labels === 'boolean' ? grid.labels : defaults.grid.labels,
+			minor: typeof grid.minor === 'boolean' ? grid.minor : defaults.grid.minor,
+			opacity: boundedNumber(grid.opacity, ...GRID_OPACITY_RANGE, defaults.grid.opacity),
+			color: oneOf(grid.color, GRID_COLORS) ? grid.color : defaults.grid.color,
+		},
+		crosshair: typeof value.crosshair === 'boolean' ? value.crosshair : defaults.crosshair,
+		scaleBar: typeof value.scaleBar === 'boolean' ? value.scaleBar : defaults.scaleBar,
+		orientation: oneOf(value.orientation, ORIENTATION_MODES) ? value.orientation : defaults.orientation,
+	}
+}
+
 // Restores persisted preferences, falling back to the default of every missing or invalid preference.
 function normalizeSettings(value: unknown): ProfileSettings {
 	const settings = defaultSettings()
@@ -539,6 +568,8 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	if (mountRemoteControl) settings.mountRemoteControl = mountRemoteControl
 	const notifications = normalizeNotificationPreferences(value.notifications)
 	if (notifications) settings.notifications = notifications
+	const imageAstrometry = normalizeImageAstrometry(value.imageAstrometry)
+	if (imageAstrometry) settings.imageAstrometry = imageAstrometry
 
 	return settings
 }
@@ -682,7 +713,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 11:
 		case 12:
 		case 13:
-		case 14: {
+		case 14:
+		case 15: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

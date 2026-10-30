@@ -1,13 +1,14 @@
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { useMemo } from 'react'
 import type { OverlayView, Point, Size } from '../viewer/transform'
-import { wcsGeometry } from './wcs'
+import { skyDirections } from './wcs'
 
-// Astrometric overlay of a plate solution over the shared image viewer, used by the Images workspace and Camera
-// Capture alike: a marker at the solved centre of the image, arrows towards north and east from the WCS (so they follow
-// its rotation and parity), and an optional right ascension and declination grid. The geometry is computed once per
-// solution (wcs.ts); zoom and pan only change sizes kept constant on screen. It draws in image pixel coordinates and
-// is a pure function of the solution and the image shown, which the caller guarantees is the image it solved.
+// Solved centre of a plate solution over the shared image viewer, used by the Images workspace for files and camera
+// frames alike: a marker at the centre of the image and arrows towards north and east from the WCS there (so they follow
+// its rotation and parity). The directions are computed once per solution; zoom and pan only change sizes kept constant
+// on screen. The grid is drawn apart (WcsGridOverlay), so it shows whether or not the centre does. It draws in image
+// pixel coordinates and is a pure function of the solution and the image shown, which the caller guarantees is the
+// image it solved.
 
 // Length of the direction arrows, in screen pixels.
 const ARROW_LENGTH = 56
@@ -22,9 +23,6 @@ const LABEL_SIZE = 12
 // shrink with the image instead of staying constant on screen; their strokes keep their width.
 const MAX_ARROW_FRACTION = 0.25
 
-// Width of the grid lines, in screen pixels.
-const GRID_STROKE = 1
-
 // Width of the marker and arrow strokes, in screen pixels.
 const SYMBOL_STROKE = 1.5
 
@@ -35,26 +33,17 @@ export interface WcsOverlayProps {
 	readonly image: Size
 	// Zoom and visible region of the viewer.
 	readonly view: OverlayView
-	// Whether the grid is drawn.
-	readonly grid: boolean
 }
 
-// Overlay of a plate solution.
-export function WcsOverlay({ solution, image, view, grid }: WcsOverlayProps) {
-	const geometry = useMemo(() => wcsGeometry(solution, image.width, image.height), [solution, image.width, image.height])
-	const { center, north, east } = geometry
+// Centre and directions of a plate solution.
+export function WcsOverlay({ solution, image, view }: WcsOverlayProps) {
+	const center = useMemo(() => ({ x: image.width / 2, y: image.height / 2 }), [image.width, image.height])
+	const { north, east } = useMemo(() => skyDirections(solution, center), [solution, center])
 	// Image pixels per screen pixel, capped so the arrows fit the image.
 	const unit = Math.min(1 / view.scale, (MAX_ARROW_FRACTION * Math.min(image.width, image.height)) / ARROW_LENGTH)
 
 	return (
 		<g fill="none">
-			{grid && (
-				<g stroke="var(--color-ink-200)" strokeOpacity={0.45} strokeWidth={GRID_STROKE}>
-					{[...geometry.parallels, ...geometry.meridians].map((path) => (
-						<path key={path} d={path} vectorEffect="non-scaling-stroke" />
-					))}
-				</g>
-			)}
 			<g stroke="var(--color-success)" strokeWidth={SYMBOL_STROKE}>
 				<line x1={center.x - MARKER_SIZE * unit} y1={center.y} x2={center.x + MARKER_SIZE * unit} y2={center.y} vectorEffect="non-scaling-stroke" />
 				<line x1={center.x} y1={center.y - MARKER_SIZE * unit} x2={center.x} y2={center.y + MARKER_SIZE * unit} vectorEffect="non-scaling-stroke" />

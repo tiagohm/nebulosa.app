@@ -117,7 +117,7 @@ export function AdvancedControls({ request, onChange, disabled }: PlateSolveCont
 	)
 }
 
-interface AngleFieldProps {
+export interface AngleFieldProps {
 	// Label of the field.
 	readonly label: string
 	// Whether the angle is typed in hours.
@@ -132,8 +132,9 @@ interface AngleFieldProps {
 	readonly onChange: (value: number | undefined) => void
 }
 
-// Text field of an angle, parsed when it loses the focus; an unreadable text is kept and reported.
-function AngleField({ label, hour = false, value, placeholder, disabled, onChange }: AngleFieldProps) {
+// Text field of an angle, parsed when it loses the focus; an unreadable text is kept and reported. Used by the solve
+// hints and by the manual target of Target Offset.
+export function AngleField({ label, hour = false, value, placeholder, disabled, onChange }: AngleFieldProps) {
 	const [text, setText] = useState(() => formatHint(value, hour))
 	const [invalid, setInvalid] = useState(false)
 

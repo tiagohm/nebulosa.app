@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { deviceState } from '../equipment/equipment'
 import { jsonInit, responseError } from '../http'
-import type { AstrometricMarker, AstrometrySelection, Measurement } from '../platesolving/measurement'
+import type { AstrometricMarker, AstrometrySelection, AstrometryTarget, Measurement } from '../platesolving/measurement'
 import { DEFAULT_PLATE_SOLVE_REQUEST } from '../platesolving/platesolving'
 import { activeProfile, imageDisplaySettings, profileCamera, profileState, setImageDisplaySettings } from '../profile/profile'
 import { FIT_VIEW, type ViewerView } from '../viewer/transform'
@@ -172,7 +172,7 @@ export interface ImagePlateSolvingState {
 	grid: boolean
 }
 
-// Astrometric measurements and markers of a document, in its image pixels, never sky positions: their values are computed from the
+// Astrometric measurements, markers, and target of a document, in its image pixels, never sky positions: their values are computed from the
 // solution shown, so choosing another solution keeps them. They live with the document in tab memory; a camera tab
 // clears them when it shows another frame, so they never move to unrelated pixels.
 export interface ImageAstrometryState {
@@ -182,6 +182,8 @@ export interface ImageAstrometryState {
 	markers: readonly AstrometricMarker[]
 	// Selected item; absent when none is.
 	selected?: AstrometrySelection
+	// Target of Target Offset; absent when none is chosen.
+	target?: AstrometryTarget
 }
 
 // How a document is shown: its own zoom, pan, display settings, and rendering.
@@ -707,6 +709,7 @@ export function removeAstrometryItem(state: ImagesState, key: string, item: Astr
 	if (!astrometry) return
 	if (item.kind === 'measurement') astrometry.measurements = astrometry.measurements.filter((m) => m.id !== item.id)
 	else astrometry.markers = astrometry.markers.filter((m) => m.id !== item.id)
+	if (item.kind === 'marker' && astrometry.target?.source === 'marker' && astrometry.target.markerId === item.id) astrometry.target = undefined
 	if (astrometry.selected?.kind === item.kind && astrometry.selected.id === item.id) astrometry.selected = undefined
 }
 
@@ -716,7 +719,14 @@ export function clearAstrometryItems(state: ImagesState, key: string, kind: Astr
 	if (!astrometry) return
 	if (kind === 'measurement') astrometry.measurements = []
 	else astrometry.markers = []
+	if (kind === 'marker' && astrometry.target?.source === 'marker') astrometry.target = undefined
 	if (astrometry.selected?.kind === kind) astrometry.selected = undefined
+}
+
+// Chooses the target of Target Offset of a document, or clears it. Ignored for an unknown key.
+export function setAstrometryTarget(state: ImagesState, key: string, target?: AstrometryTarget) {
+	const astrometry = state.views[key]?.astrometry
+	if (astrometry) astrometry.target = target
 }
 
 // Selects an astrometric item of a document, or clears the selection. Ignored for an unknown key.

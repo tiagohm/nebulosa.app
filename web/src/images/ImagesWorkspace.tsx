@@ -51,6 +51,7 @@ import { activeDocument, activeTool, addMarker, activeView, closeImage, document
 import { MeasurementOverlay } from './MeasurementOverlay'
 import { SaveImageModal } from './SaveImageModal'
 import { SaveImagePopover } from './SaveImagePopover'
+import { TargetOffsetOverlay } from './TargetOffsetOverlay'
 import { IMAGE_TOOL_DEFINITIONS, imageToolGroup, imageToolsFor, imageToolUnavailable } from './tools'
 
 // Images workspace: a permanent camera tab for each connected camera of the watched connection, showing the frames
@@ -211,6 +212,7 @@ export function ImagesWorkspace() {
 											{lines && <StreakOverlay result={lines} view={overlay} labels={view.streaks.labels} selected={selectedStreak} />}
 											{markers && <StarOverlay result={markers} view={overlay} acceptedOnly={view.stars.acceptedOnly} selected={view.stars.selected?.jobId === markers.jobId ? view.stars.selected.index : undefined} />}
 											{solution && document?.info && <MeasurementOverlay solution={solution} imageId={document.info.id} image={size} view={overlay} astrometry={view.astrometry} />}
+											{solution && view.astrometry.target && <TargetOffsetOverlay solution={solution} image={size} view={overlay} target={view.astrometry.target} markers={view.astrometry.markers} />}
 											{solution && <WcsAidsOverlay solution={solution} image={size} view={overlay} cursor={cursor} crosshair={astrometry.crosshair} corner={astrometry.orientation === 'corner'} scaleBar={astrometry.scaleBar} />}
 										</>
 									)

@@ -30,6 +30,7 @@ import {
 	editAstrometryItem,
 	removeAstrometryItem,
 	addMarker,
+	setAstrometryTarget,
 	updateMarker,
 	clearAstrometryItems,
 	selectAstrometryItem,
@@ -579,12 +580,18 @@ describe('astrometry', () => {
 		editAstrometryItem(state, a, { kind: 'marker', id: placed }, { label: 'Target' })
 		expect(state.views[a]?.astrometry.markers).toEqual([{ id: placed, point: { x: 9, y: 9 }, visible: true, label: 'Target' }])
 
+		// A marker target goes with its marker.
+		setAstrometryTarget(state, a, { source: 'marker', markerId: placed })
+		expect(state.views[a]?.astrometry.target).toEqual({ source: 'marker', markerId: placed })
+
 		// Clearing the measurements keeps the markers and the selection of a marker.
 		clearAstrometryItems(state, a, 'measurement')
 		expect(state.views[a]?.astrometry.measurements).toEqual([])
 		expect(state.views[a]?.astrometry.selected).toEqual({ kind: 'marker', id: placed })
 		clearAstrometryItems(state, a, 'marker')
-		expect(state.views[a]?.astrometry).toEqual({ measurements: [], markers: [], selected: undefined })
+		expect(state.views[a]?.astrometry).toEqual({ measurements: [], markers: [], selected: undefined, target: undefined })
+		setAstrometryTarget(state, a, { source: 'manual', rightAscension: 1, declination: 0.5 })
+		expect(state.views[a]?.astrometry.target).toEqual({ source: 'manual', rightAscension: 1, declination: 0.5 })
 		expect(state.views[b]?.astrometry).toEqual({ measurements: [], markers: [] })
 		expect(addMeasurement(state, 'unknown', { kind: 'distance', a: { x: 0, y: 0 }, b: { x: 1, y: 1 }, visible: true })).toBeUndefined()
 	})

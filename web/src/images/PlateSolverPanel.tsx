@@ -30,6 +30,7 @@ import { useNow } from '../useNow'
 import { holdCameraFrame } from './cameratabs'
 import { type ImageAstrometryState, type ImagePlateSolvingState, imagesState, imageUnavailableReason, selectPlateSolution, setPlateSolveOverlay, setPlateSolveRequest } from './images'
 import { MarkersSection, MeasurementsSection } from './MeasurementsSection'
+import { TargetOffsetSection } from './TargetOffsetSection'
 import type { ImageToolPanelProps } from './tools'
 
 // Plate Solver tool of the Images workspace: solves the active document on the server with ASTAP, Astrometry.net Local,
@@ -132,6 +133,7 @@ function PlateSolver({ documentKey, imageId, image, name, plateSolving, astromet
 					<Solutions documentKey={documentKey} imageId={imageId} selected={plateSolving.selected} header={header} />
 					<MeasurementsSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
 					<MarkersSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
+					<TargetOffsetSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
 				</>
 			)}
 			<Visualization documentKey={documentKey} plateSolving={plateSolving} />

@@ -9,7 +9,8 @@ import { pointAt, type SkyOffset, skyAt, skyOffset } from './wcs'
 // selected solution cannot unproject makes the values unavailable, never 0. Each kind has an explicit geometric meaning:
 // a distance is the great circle between two points; a rectangle is axis-aligned in image pixels (not in right
 // ascension and declination), measured along its sides, centre lines, and diagonals; a circle has a constant angular
-// radius on the sky around its centre, so its outline is projected through the WCS and may look elliptical. This module
+// radius on the sky around its centre, so its outline is projected through the WCS and may look elliptical. A target's
+// offset is measured from the solved centre of the image along the great circle towards it. This module
 // holds the pure parts: the values, the outlines, the hit tests in screen-constant radii, and the reducer of the
 // drawing and editing gestures, which the image viewer routes to it while a mode or the Plate Solver tool owns them.
 
@@ -43,6 +44,56 @@ export interface AstrometricMarker {
 	readonly label?: string
 	// Whether it is drawn.
 	readonly visible: boolean
+}
+
+// Target whose offset from the solved centre of an image is shown: a marker of the image (located with the selected
+// solution), a position typed in the frame of the solution, or a catalog object selected in Sky (its J2000 catalog
+// position, at epoch J2000.0, without proper motion). Moving bodies are not targets: their position depends on the
+// time and place of the observation.
+export type AstrometryTarget = { readonly source: 'marker'; readonly markerId: string } | { readonly source: 'manual'; readonly rightAscension: number; readonly declination: number } | { readonly source: 'sky'; readonly name: string; readonly rightAscension: number; readonly declination: number }
+
+// Offset of a target from the solved centre of an image.
+export interface TargetOffsetValues {
+	// Sky position of the centre of the image, [right ascension, declination] in radians.
+	readonly center: readonly [number, number]
+	// Offset from the centre to the target: separation, position angle, and east and north standard coordinates.
+	readonly offset: SkyOffset
+	// Position of the target in viewer coordinates; absent when it is outside the image or cannot be projected.
+	readonly pixel?: Point
+	// Unit direction in viewer coordinates from the centre towards a target outside the image, the projection of the
+	// start of the great circle towards it; absent when the target is inside the image or the direction is undefined.
+	readonly direction?: Point
+}
+
+// Returns the J2000 position of a target in radians, in the frame of the solution: a marker located with the solution,
+// or the position it holds; undefined without a target, or when its marker is gone or cannot be located.
+export function targetPosition(target: AstrometryTarget | undefined, markers: readonly AstrometricMarker[], solution: FitsHeader | undefined): readonly [number, number] | undefined {
+	if (!target) return undefined
+	if (target.source !== 'marker') return [target.rightAscension, target.declination]
+	const marker = markers.find((m) => m.id === target.markerId)
+	return marker && solution ? skyAt(solution, marker.point) : undefined
+}
+
+// Separation of the point projected to find the direction of a target outside the image, radians (about 20″).
+const DIRECTION_STEP = 1e-4
+
+// Returns the offset of a target (radians) from the centre of an image of a size through a solution; undefined when the
+// solution cannot unproject the centre. The target is placed on the image only when it projects inside it; otherwise
+// only the direction towards it is given, never a position off the image.
+export function targetOffset(solution: FitsHeader, image: Size, target: readonly [number, number]): TargetOffsetValues | undefined {
+	const middle = { x: image.width / 2, y: image.height / 2 }
+	const center = skyAt(solution, middle)
+	if (!center) return undefined
+
+	const offset = skyOffset(center, target)
+	const projected = offset.east !== undefined ? pointAt(solution, target[0], target[1]) : undefined
+	if (projected && projected.x >= 0 && projected.x <= image.width && projected.y >= 0 && projected.y <= image.height) return { center, offset, pixel: projected }
+	if (offset.positionAngle === undefined) return { center, offset }
+
+	const [ra, dec] = sphericalDestination(center[0], center[1], offset.positionAngle, Math.min(DIRECTION_STEP, offset.separation / 2))
+	const toward = pointAt(solution, ra, dec)
+	const length = toward && Math.hypot(toward.x - middle.x, toward.y - middle.y)
+	return { center, offset, ...(toward && length && { direction: { x: (toward.x - middle.x) / length, y: (toward.y - middle.y) / length } }) }
 }
 
 // What a gesture creates while it owns the pointer: nothing (the viewer pans), a measurement of a kind, or a marker.

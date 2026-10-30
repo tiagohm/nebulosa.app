@@ -252,7 +252,9 @@ export async function showCameraFrame(state: ImagesState, key: string, frameId: 
 	committed.streaks.selected = undefined
 	committed.annotation.selected = undefined
 	committed.plateSolving.selected = undefined
-	committed.astrometry = { measurements: [], markers: [] }
+	// Measurements and markers are pixels of the previous frame; a target typed or chosen in Sky is not, and stays.
+	const { target } = committed.astrometry
+	committed.astrometry = { measurements: [], markers: [], ...(target && target.source !== 'marker' && { target }) }
 	if (previous) releaseLease(previous, io)
 }
 

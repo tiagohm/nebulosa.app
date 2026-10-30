@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
 import { deg } from 'nebulosa/src/math/units/angle'
-import { type AstrometricMarker, circleOutline, circleValues, clampToImage, type DraftContext, distanceValues, draftFrom, hitHandle, hitItem, type Measurement, type MeasurementKind, moveDraft, moveHandle, pressDraft, rectangleValues, releaseDraft } from './measurement'
-import { skyAt } from './wcs'
+import { type AstrometricMarker, circleOutline, circleValues, clampToImage, type DraftContext, distanceValues, draftFrom, hitHandle, hitItem, type Measurement, type MeasurementKind, moveDraft, moveHandle, pressDraft, rectangleValues, releaseDraft, targetOffset, targetPosition } from './measurement'
+import { pointAt, skyAt } from './wcs'
 
 // A TAN-SIP solution of a 2000×1000 image whose right side is stretched.
 const SIP: FitsHeader = { CTYPE1: 'RA---TAN-SIP', CTYPE2: 'DEC--TAN-SIP', CRPIX1: 1000.5, CRPIX2: 500.5, CRVAL1: 42, CRVAL2: -17, CD1_1: -0.0005, CD1_2: 0, CD2_1: 0, CD2_2: 0.0005, NAXIS1: 2000, NAXIS2: 1000, A_ORDER: 2, B_ORDER: 2, A_2_0: 2e-5, A_1_1: 0, A_0_2: 0, B_2_0: 0, B_1_1: 0, B_0_2: 0 }
@@ -182,4 +182,48 @@ describe('drafts', () => {
 
 test('points are kept inside the image', () => {
 	expect(clampToImage({ x: -3, y: 1200 }, { width: 2000, height: 1000 })).toEqual({ x: 0, y: 1000 })
+})
+
+describe('target offset', () => {
+	const image = { width: 2000, height: 1000 }
+
+	test('agrees with an independent spherical calculation from the solved centre', () => {
+		const center = skyAt(TAN, { x: 1000, y: 500 })!
+		const target = [center[0] + deg(0.2), center[1] + deg(0.1)] as const
+		const values = targetOffset(TAN, image, target)!
+		const cosC = Math.sin(center[1]) * Math.sin(target[1]) + Math.cos(center[1]) * Math.cos(target[1]) * Math.cos(target[0] - center[0])
+
+		expect(values.center).toEqual(center)
+		expect(values.offset.separation).toBeCloseTo(sphericalSeparation(center[0], center[1], target[0], target[1]), 14)
+		expect(values.offset.east!).toBeCloseTo((Math.cos(target[1]) * Math.sin(target[0] - center[0])) / cosC, 14)
+		expect(values.pixel!.x).toBeCloseTo(pointAt(TAN, target[0], target[1])!.x, 9)
+		expect(values.direction).toBeUndefined()
+	})
+
+	test('gives only a direction for a target outside the image, along the projected great circle', () => {
+		const center = skyAt(TAN, { x: 1000, y: 500 })!
+		// 5° north of the centre: north is +Y on this image.
+		const values = targetOffset(TAN, image, [center[0], center[1] + deg(5)])!
+
+		expect(values.pixel).toBeUndefined()
+		expect(values.direction!.x).toBeCloseTo(0, 6)
+		expect(values.direction!.y).toBeCloseTo(1, 6)
+	})
+
+	test('has neither position nor direction for the antipode', () => {
+		const center = skyAt(TAN, { x: 1000, y: 500 })!
+		const values = targetOffset(TAN, image, [center[0] + Math.PI, -center[1]])!
+
+		expect(values.pixel).toBeUndefined()
+		expect(values.direction).toBeUndefined()
+		expect(values.offset.positionAngle).toBeUndefined()
+	})
+
+	test('locates a marker target with the solution and a typed one as given', () => {
+		const markers = [marker('m', 100, 200)]
+
+		expect(targetPosition({ source: 'marker', markerId: 'm' }, markers, TAN)).toEqual(skyAt(TAN, { x: 100, y: 200 }))
+		expect(targetPosition({ source: 'marker', markerId: 'gone' }, markers, TAN)).toBeUndefined()
+		expect(targetPosition({ source: 'manual', rightAscension: 1, declination: 0.5 }, markers, undefined)).toEqual([1, 0.5])
+	})
 })

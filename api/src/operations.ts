@@ -41,6 +41,7 @@ export type OperationKind =
 	| 'mount.tppa'
 	| 'mount.pointingModel'
 	| 'mount.pointingVerification'
+	| 'mount.targetCentering'
 	| 'mount.darv'
 	| 'camera.flatWizard'
 	| 'camera.guiding'

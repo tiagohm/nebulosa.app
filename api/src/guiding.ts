@@ -375,6 +375,9 @@ const MAX_TELEMETRY = 2000
 // Durable command tokens a session remembers, so a repeated request answers its first command.
 const MAX_TOKENS = 64
 
+// Commands that let a guide output send pulses, refused while a hold keeps guiding off a mount.
+const HELD_COMMANDS: ReadonlySet<GuidingCommand> = new Set<GuidingCommand>(['startGuiding', 'resume', 'dither'])
+
 // Guide steps the RMS is computed over.
 export const GUIDING_RMS_WINDOW = 50
 
@@ -511,6 +514,8 @@ export function guidingRegions(session: Pick<Session, 'builtin' | 'tracker' | 's
 export class GuidingSessions implements Disposable {
 	// Latest session of each guide camera, by camera resource key.
 	readonly #sessions = new Map<string, Session>()
+	// Holds that keep the guide outputs of a connection from starting, by connection id.
+	readonly #holds = new Map<string, number>()
 	// Session of each operation a start token started, so a repeated start answers it.
 	readonly #byOperation = new Map<string, Session>()
 
@@ -748,6 +753,30 @@ export class GuidingSessions implements Disposable {
 		return stopped.ok ? new Response(null, { status: 204 }) : failureResponse(stopped, 'Stopping the guiding')
 	}
 
+	// Returns whether a session may send pulses through a guide output of a connection, which may be the mount itself or the ST4
+	// port of a camera wired to it; only the operator knows which mount that port moves, so any of the connection counts.
+	outputInUse(connectionId: string) {
+		for (const { summary } of this.#sessions.values()) if (summary.active && summary.guideOutputHeld && summary.guideOutput.connectionId === connectionId) return true
+		return false
+	}
+
+	// Keeps every guide output of a connection from starting to guide until the result is disposed. Looping, which sends no
+	// pulse, goes on. Disposing twice releases once.
+	hold(connectionId: string): Disposable {
+		this.#holds.set(connectionId, (this.#holds.get(connectionId) ?? 0) + 1)
+		let held = true
+
+		return {
+			[Symbol.dispose]: () => {
+				if (!held) return
+				held = false
+				const count = this.#holds.get(connectionId)! - 1
+				if (count === 0) this.#holds.delete(connectionId)
+				else this.#holds.set(connectionId, count)
+			},
+		}
+	}
+
 	// Stops every session.
 	[Symbol.dispose]() {
 		for (const session of this.#sessions.values()) {
@@ -761,6 +790,7 @@ export class GuidingSessions implements Disposable {
 	#command(sessionId: string, token: string, command: GuidingCommand, run: (session: Session) => Promise<OperationResult<unknown>>): Response {
 		const session = this.#active(sessionId)
 		if (session instanceof Response) return session
+		if (HELD_COMMANDS.has(command) && this.#holds.has(session.summary.guideOutput.connectionId)) return errorResponse('Target Centering is moving the mount', 409, 'busy')
 
 		const known = session.tokens.get(token)
 		if (known) return Response.json({ commandId: known } satisfies GuidingCommandAccepted, { status: 202 })

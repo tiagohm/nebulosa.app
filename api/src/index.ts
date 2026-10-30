@@ -39,6 +39,7 @@ import { annotationSky, skyLocator, skyRoutes } from './sky'
 import { createSolarEclipseRoutes, SolarEclipseService } from './solareclipses'
 import { createStarDetectionRoutes, StarDetectionService } from './stars'
 import { createStreakDetectionRoutes, StreakDetectionService } from './streaks'
+import { createTargetCenteringRoutes, TargetCenteringSessions } from './targetcentering'
 import { createTppaRoutes, TppaSessions } from './tppa'
 import { broadcast, listenClients, listenSockets, type ServerEvent, type WebSocketData, websocket } from './websocket'
 import { createWheelRoutes, WheelCommands } from './wheels'
@@ -346,6 +347,22 @@ export type {
 } from './mountpointing.sessions'
 export type { PointingAcquisitionState, PointingModelExport, PointingModelFile, PointingModelSummary, PointingMountIdentity, PointingOpticsFingerprint, PointingPlanRecord, PointingRevision, PointingSampleRecord, PointingVerification, UnavailablePointingModel } from './mountpointing.store'
 export type { TppaAlignment, TppaAttempt, TppaCaptureSettings, TppaEvent, TppaGeometry, TppaOverlay, TppaPoint, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaStartResponse, TppaState } from './tppa'
+export type {
+	TargetCenteringAttempt,
+	TargetCenteringCaptureSettings,
+	TargetCenteringEvent,
+	TargetCenteringMode,
+	TargetCenteringOutcome,
+	TargetCenteringRefusal,
+	TargetCenteringRequest,
+	TargetCenteringSession,
+	TargetCenteringSessionSummary,
+	TargetCenteringSnapshot,
+	TargetCenteringStartResponse,
+	TargetCenteringState,
+	TargetCenteringStep,
+	TargetCenteringTarget,
+} from './targetcentering'
 export type { GuidingProfileCut, GuidingStarProfile } from './guidingprofile'
 export type { NotificationCreatedEvent, NotificationRecord, NotificationSnapshot } from './notifications'
 export type { NotificationCameraTool, NotificationLevel, NotificationSource, NotificationTarget } from './notifications.rules'
@@ -470,6 +487,11 @@ const flatWizard = new FlatWizardSessions(connections.devices, (id) => connectio
 // guide output commands and previewing their frames in the image store and the capture frame registry.
 const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, publish)
 
+// Target Centering sessions of the cameras of the open connections, sending the first slew through the mount commands, so a
+// model in force corrects it once, correcting with their commander from what the plate solving service measures, and taking
+// their frames with the capturer of the captures.
+const targetCentering = new TargetCenteringSessions(connections.devices, (id) => connections.client(id), operations, mounts, mounts.commander, captures.capturer, images, captureFrames, plateSolving, guiding, publish)
+
 // Lunar eclipse queries of the Lunar Eclipse Map tool.
 const lunarEclipses = new LunarEclipseService()
 
@@ -511,6 +533,7 @@ export const routes = {
 	...createDarvRoutes(darv),
 	...createFlatWizardRoutes(flatWizard),
 	...createGuidingRoutes(guiding),
+	...createTargetCenteringRoutes(targetCentering),
 	...createFileRoutes(),
 	...createImageRoutes(images),
 	...createImageProcessingRoutes(imageProcessing),

@@ -73,10 +73,11 @@ export type CaptureFrameAvailability = 'memory' | 'file' | 'saving' | 'unavailab
 // - autofocus: an Auto Focus session, sampled or verifying; never saved.
 // - tppa: a TPPA session, a pose or a refinement frame; never saved.
 // - mountPointing: a mount pointing session, one frame per attempt at a waypoint; never saved.
+// - targetCentering: a Target Centering session, one frame per measurement; never saved.
 // - darv: a DARV measurement, one frame per measurement; never saved.
 // - flatWizard: a Flat Wizard session, a trial or a final frame; saved once its final frame was accepted and published.
 // - guiding: a guiding session, the newest guide frame previewed; never saved.
-export type CaptureFrameOrigin = 'capture' | 'autofocus' | 'tppa' | 'mountPointing' | 'darv' | 'flatWizard' | 'guiding'
+export type CaptureFrameOrigin = 'capture' | 'autofocus' | 'tppa' | 'mountPointing' | 'targetCentering' | 'darv' | 'flatWizard' | 'guiding'
 
 // Origins a frame read from the file can have: the operations whose frames are saved.
 const SAVED_ORIGINS: ReadonlySet<string> = new Set<CaptureFrameOrigin>(['capture', 'flatWizard'])

@@ -246,6 +246,29 @@ describe('guiding', () => {
 		expect(context.operations.available(context.camera)).toBeTrue()
 	}, 60000)
 
+	test('a hold keeps guiding from starting, and its guide output in use is seen by the connection', async () => {
+		const context = await setup()
+		const { sessionId } = await start(context)
+		expect(context.guiding.selectTarget(sessionId, { position: [128, 128] }).status).toBe(200)
+		expect(context.guiding.outputInUse(context.id)).toBeFalse()
+
+		const hold = context.guiding.hold(context.id)
+		const refused = context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE })
+		expect(refused.status).toBe(409)
+		expect(((await refused.json()) as { code: string }).code).toBe('busy')
+		expect(context.summary()?.active).toBeTrue()
+
+		hold[Symbol.dispose]()
+		hold[Symbol.dispose]()
+		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+		expect(context.guiding.outputInUse(context.id)).toBeTrue()
+		expect(context.guiding.outputInUse('another')).toBeFalse()
+
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+		expect(context.guiding.outputInUse(context.id)).toBeFalse()
+	}, 60000)
+
 	test('commands of an ended or unknown session are refused', async () => {
 		const context = await setup()
 		const { sessionId } = await start(context)

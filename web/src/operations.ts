@@ -28,6 +28,7 @@ export const OPERATION_LABELS: Readonly<Record<OperationKind, readonly [IconName
 	'mount.remoteMove': ['mount', 'Remote mount motion'],
 	'mount.pointingModel': ['mount', 'Pointing model'],
 	'mount.pointingVerification': ['mount', 'Pointing verification'],
+	'mount.targetCentering': ['mount', 'Target Centering'],
 	'guideOutput.pulse': ['guideOutput', 'Pulse'],
 	'focuser.move': ['focuser', 'Move'],
 	'wheel.move': ['wheel', 'Change'],

@@ -5,6 +5,7 @@ import type { SkyObserverSettings } from '../profile/schema'
 import { Celestial, type CelestialObject, type CelestialOptions, type ConstellationLine, type CoordinateSystem, type MovingBody, type MovingBodyType, type RenderState, type SelectionTarget } from './celestial/celestial'
 import { SKY_REALTIME_TICK_MS, type SkyClockMode, skyClock, skyTime } from './clock'
 import { applySkyDisplay, MAP_STAR_MAGNITUDE_LIMIT, type SkyDisplaySettings } from './display'
+import { type ImageFootprint, ofDateMatrix, type SkyCoordinateIntent, type SkyPoint, toDate } from './footprint'
 import { formatAngularSize } from './format'
 import { type FramePoint, framePolygon, isFraming, type OpticalConfiguration, resolveFraming } from './framing'
 import { type MountPoint, mountRuntime } from './mount'
@@ -24,7 +25,9 @@ import { apiObserver, browserSkyIo, fetchSkyBodies, fetchSkyPosition, loadSkyMap
 // drawn as a selectable marker while the clock shows the real time, and the view can be centered on it
 // or follow it until the user pans. Selected objects the map data lacks (minor bodies, and catalog
 // objects fainter than it) are remembered for the tab (./remembered) and stay drawn and selectable, the
-// minor bodies moved at every update.
+// minor bodies moved at every update. The footprint of a solved image and a coordinate sent from an image
+// (./footprint) are drawn in the frame of the loaded catalogs, so they line up with the stars, and the view is only
+// panned to such a coordinate (as to the mount), keeping its zoom and its projection on the observer's sky.
 
 // Interval of the map's updates in milliseconds while the clock plays.
 const PLAYING_INTERVAL_MS = 250
@@ -65,6 +68,21 @@ const FRAMING_EDGE_SAMPLES = 16
 
 // Smallest on-screen size of the field of view in pixels for which its label is drawn.
 const FRAMING_LABEL_MIN_PX = 60
+
+// Id of the custom shape drawing the footprint of a solved image.
+const FOOTPRINT_SHAPE_ID = 'image-footprint'
+
+// Color of the footprint of a solved image, distinct from the field of view of the framing.
+const FOOTPRINT_COLOR = '#f2b84b'
+
+// Id of the custom shape marking a coordinate sent from an image.
+const COORDINATE_SHAPE_ID = 'image-coordinate'
+
+// Color of the mark of a coordinate sent from an image.
+const COORDINATE_COLOR = '#f2b84b'
+
+// Half length of the arms of the mark of a coordinate, in pixels.
+const COORDINATE_MARK = 8
 
 // Id of the custom shape marking the mount's position.
 const MOUNT_MARKER_ID = 'mount-marker'
@@ -164,6 +182,78 @@ function drawFraming(ctx: CanvasRenderingContext2D, state: RenderState, outline:
 	}
 }
 
+// Strokes the footprint of a solved image (points of date in radians, undefined where its WCS could not unproject),
+// dashed, breaking it where a point is missing or cannot be projected, with a cross at its centre and its name when it
+// is large enough on screen.
+function drawImageFootprint(ctx: CanvasRenderingContext2D, state: RenderState, center: { readonly x: number; readonly y: number }, outline: readonly (FramePoint | undefined)[], name: string) {
+	const point = new Float64Array(2)
+	let open = false
+	let minX = Infinity
+	let maxX = -Infinity
+	let minY = Infinity
+
+	ctx.save()
+	ctx.beginPath()
+
+	for (const vertex of outline) {
+		if (!vertex || !state.projectEquatorialToScreen(vertex.rightAscension, vertex.declination, point)) {
+			open = false
+			continue
+		}
+
+		if (open) ctx.lineTo(point[0], point[1])
+		else ctx.moveTo(point[0], point[1])
+		open = true
+		minX = Math.min(minX, point[0])
+		maxX = Math.max(maxX, point[0])
+		minY = Math.min(minY, point[1])
+	}
+
+	ctx.moveTo(center.x - 5, center.y)
+	ctx.lineTo(center.x + 5, center.y)
+	ctx.moveTo(center.x, center.y - 5)
+	ctx.lineTo(center.x, center.y + 5)
+	ctx.strokeStyle = FOOTPRINT_COLOR
+	ctx.lineWidth = 1.5
+	ctx.setLineDash([6, 4])
+	ctx.stroke()
+	ctx.restore()
+
+	if (maxX - minX >= FRAMING_LABEL_MIN_PX) {
+		ctx.fillStyle = FOOTPRINT_COLOR
+		ctx.font = '11px ui-monospace, monospace'
+		ctx.textAlign = 'left'
+		ctx.textBaseline = 'bottom'
+		ctx.fillText(name, minX, minY - 4)
+	}
+}
+
+// Returns a sky position [right ascension, declination] in radians as a point of the map.
+function framePoint([rightAscension, declination]: SkyPoint): FramePoint {
+	return { rightAscension, declination }
+}
+
+// Draws the mark of a coordinate sent from an image at a screen point (pixels): an open cross with its label.
+function drawCoordinateMark(ctx: CanvasRenderingContext2D, x: number, y: number, label: string) {
+	ctx.strokeStyle = COORDINATE_COLOR
+	ctx.lineWidth = 1.5
+	ctx.beginPath()
+	ctx.moveTo(x - COORDINATE_MARK, y)
+	ctx.lineTo(x - 3, y)
+	ctx.moveTo(x + 3, y)
+	ctx.lineTo(x + COORDINATE_MARK, y)
+	ctx.moveTo(x, y - COORDINATE_MARK)
+	ctx.lineTo(x, y - 3)
+	ctx.moveTo(x, y + 3)
+	ctx.lineTo(x, y + COORDINATE_MARK)
+	ctx.stroke()
+	ctx.fillStyle = COORDINATE_COLOR
+	ctx.font = '11px ui-monospace, monospace'
+	ctx.textAlign = 'left'
+	ctx.textBaseline = 'middle'
+	ctx.fillText(label, x + COORDINATE_MARK + 4, y)
+}
+
 // Map symbol and name of each major body, by Horizons command.
 const BODY_TYPES: readonly (readonly [string, MovingBodyType, string])[] = [
 	['10', 'sun', 'Sun'],
@@ -184,6 +274,9 @@ export interface PlanetariumState {
 	status: 'loading' | 'ready' | 'error'
 	// Why the map data failed to load.
 	error?: string
+	// Whether the coordinate requested last from an image cannot be projected (below the local horizon at the instant
+	// shown, or outside the part of the sky the chart projects), so the view could not be panned to it.
+	coordinateHidden?: boolean
 }
 
 // Loading state of the map data of the current map.
@@ -247,6 +340,11 @@ export class Planetarium {
 	readonly #rememberedShapes = new Set<string>()
 	// Whether the field of view shape is on the map.
 	#framing = false
+	// Footprint of a solved image to draw; absent when none is shown.
+	#footprint?: ImageFootprint
+	// Coordinate requested last from an image, and the request number already applied.
+	#coordinate?: SkyCoordinateIntent
+	#coordinateSeq = 0
 	// Mount marker on the map, whose coordinate is moved in place as the mount moves; absent while not drawn.
 	#mountMarker?: { readonly coordinate: { rightAscension: number; declination: number }; readonly data: MountMarkerData }
 	#resizeObserver?: ResizeObserver
@@ -348,6 +446,7 @@ export class Planetarium {
 				this.celestial.loadConstellations({ lines: constellations.lines as ConstellationLine[], boundaries: constellations.boundaries as ConstellationLine[], labels: constellations.labels.map(({ name, rightAscension, declination }) => ({ name, rightAscension, declination })) })
 				planetariumState.status = 'ready'
 				this.syncSelection()
+				this.#drawImageShapes()
 			},
 			(error: unknown) => {
 				if (this.#destroyed || !request.current()) return
@@ -380,6 +479,48 @@ export class Planetarium {
 		const label = `${source.name} · ${formatAngularSize(framing.width)} × ${formatAngularSize(framing.height)} · PA ${source.optics.rotation.toFixed(1)}°`
 		this.#framing = true
 		this.celestial.addShape({ id: FRAMING_SHAPE_ID, coordinate: { ...center }, selectable: false, render: (_, ctx, state) => drawFraming(ctx, state.state, outline, label) })
+	}
+
+	// Draws the footprint of a solved image (J2000 points), or removes it when absent. It is converted to the frame of
+	// the map data once loaded, so it lines up with the stars drawn.
+	syncImageFootprint(footprint: ImageFootprint | undefined) {
+		this.#footprint = footprint
+		this.#drawImageShapes()
+	}
+
+	// Applies a coordinate requested from an image once: marks it when asked and pans the view to it (keeping the zoom
+	// and the projection; a point the map cannot project, below the local horizon or outside the chart, leaves the
+	// view unchanged, which coordinateHidden of planetariumState reports). The mark of an earlier request is redrawn or removed as it changes.
+	syncImageCoordinate(intent: SkyCoordinateIntent | undefined) {
+		this.#coordinate = intent
+		this.#drawImageShapes()
+	}
+
+	// Draws the footprint and the coordinate from images in the frame of the loaded map data, and pans to a coordinate
+	// requested since the last time; waits for the data when it is not loaded yet.
+	#drawImageShapes() {
+		if (this.#dataTime === undefined) return
+		const matrix = ofDateMatrix(this.#dataTime)
+		const footprint = this.#footprint
+		const coordinate = this.#coordinate
+
+		if (footprint) {
+			const outline = footprint.outline.map((point) => (point ? framePoint(toDate(matrix, point)) : undefined))
+			const center = framePoint(toDate(matrix, footprint.center))
+			this.celestial.addShape({ id: FOOTPRINT_SHAPE_ID, coordinate: center, selectable: false, render: (_, ctx, state) => drawImageFootprint(ctx, state.state, state, outline, footprint.name) })
+		} else {
+			this.celestial.removeShape(FOOTPRINT_SHAPE_ID)
+		}
+
+		const point = coordinate && framePoint(toDate(matrix, [coordinate.rightAscension, coordinate.declination]))
+		if (coordinate?.mark && point) this.celestial.addShape({ id: COORDINATE_SHAPE_ID, coordinate: point, selectable: false, render: (_, ctx, state) => drawCoordinateMark(ctx, state.x, state.y, coordinate.label) })
+		else this.celestial.removeShape(COORDINATE_SHAPE_ID)
+
+		if (coordinate && point && coordinate.seq !== this.#coordinateSeq) {
+			this.#coordinateSeq = coordinate.seq
+			mountRuntime.following = false
+			planetariumState.coordinateHidden = !this.celestial.centerOnCoordinate(point.rightAscension, point.declination)
+		}
 	}
 
 	// Draws the mount marker at a point of date (radians), moving the existing marker in place so a

@@ -4,10 +4,12 @@ import { type CoordinateStyle, formatDeclinationAs, formatPixel, formatRightAsce
 import { skyAt, wcsFrame } from '../platesolving/wcs'
 import { ContextMenu, type ContextMenuItem } from '../ui/ContextMenu'
 import { pixelAt, type Point, type Size } from '../viewer/transform'
+import { openInSky } from './skyHandoff'
 
 // Context menu of a point of a solved image in the Images workspace: copy its sky position (named by the frame of the
-// selected solution) or its zero-based pixel, add a marker there, or measure a distance from it. Every action uses the
-// point the menu was opened on, never where the pointer is later. A copy that fails keeps the menu open and says so.
+// selected solution) or its zero-based pixel, mark it on the Sky map, add a marker there, or measure a distance from
+// it. Every action uses the point the menu was opened on, never where the pointer is later. A copy that fails keeps the
+// menu open and says so.
 
 // Text shown when a copy fails.
 const COPY_FAILED = 'Could not copy to the clipboard.'
@@ -53,6 +55,7 @@ export function ImageMenu({ point, client, solution, image, style, status, onSta
 	const items: ContextMenuItem[] = [
 		{ label: `Copy RA/Dec (${frame})`, disabledReason: sky ? undefined : 'The solution cannot locate this point.', onSelect: () => (sky ? copy(formatSkyPosition(sky, frame, style)) : false) },
 		{ label: 'Copy Pixel Coordinates (x, y from 0)', disabledReason: pixel ? undefined : 'The point is outside the image.', onSelect: () => (pixel ? copy(formatPixel(pixel)) : false) },
+		{ label: 'Open Coordinates in Sky', disabledReason: sky ? undefined : 'The solution cannot locate this point.', onSelect: () => sky && openInSky(sky, `${formatRightAscensionAs(sky[0], style)} ${formatDeclinationAs(sky[1], style)}`) },
 		{ label: 'Add Marker Here', disabledReason: unavailable, onSelect: () => onAddMarker(point) },
 		{ label: 'Measure From Here', disabledReason: unavailable, onSelect: () => onMeasureFrom(point) },
 	]

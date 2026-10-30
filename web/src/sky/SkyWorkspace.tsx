@@ -2,6 +2,7 @@ import type { MinorBody, SkySearchResult } from 'api'
 import { type ReactNode, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
+import { imagesState } from '../images/images'
 import { activeProfile, profileState, setPanelOpen, setSkyTimeBarVisible } from '../profile/profile'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
@@ -9,6 +10,7 @@ import { IconButton } from '../ui/IconButton'
 import type { CoordinateSystem } from './celestial/celestial'
 import { skyClock } from './clock'
 import { DisplayPanel } from './DisplayPanel'
+import { clearImageFootprint, clearSkyCoordinate, skyImageState } from './footprint'
 import { equipmentOptics } from './framing'
 import { FramingPanel } from './FramingPanel'
 import { HoverTooltip } from './HoverTooltip'
@@ -29,7 +31,8 @@ import { TimeController } from './TimeController'
 // profile preference). The contextual panel also holds the
 // observer, display (layers), and framing (field of view of custom optical presets or of the Equipment
 // Setup, drawn around the selection) settings. With an observer the map is the observer's local sky; without one it is an
-// equatorial chart of the whole sky.
+// equatorial chart of the whole sky. A solved image can send its footprint, drawn while its document shows that image,
+// and a coordinate to mark; the view is only panned to them, never reprojected, and the toolbar hides them.
 
 // Observer the selection's position was last computed for; undefined before the workspace is first shown.
 let appliedObserver: string | undefined
@@ -41,7 +44,7 @@ export function SkyWorkspace() {
 	const { observer, display, framing } = settings
 	const sky = useSnapshot(skyState)
 	const clock = useSnapshot(skyClock)
-	const { status, error } = useSnapshot(planetariumState)
+	const { status, error, coordinateHidden } = useSnapshot(planetariumState)
 	const coordinateSystem: CoordinateSystem = observer ? 'horizontal' : 'equatorial'
 	const key = observerKey(observer)
 	const map = useMemo(() => planetarium(coordinateSystem, activeProfile(profileState).settings.sky.observer), [coordinateSystem])
@@ -79,6 +82,25 @@ export function SkyWorkspace() {
 	useEffect(() => {
 		map.syncFraming(frameSource, framing?.visible ?? false, selectionCenter)
 	}, [map, frameSource, framing?.visible, selectionCenter?.rightAscension, selectionCenter?.declination])
+
+	// Draws the footprint of a solved image while its document still shows that image, and drops it otherwise (the
+	// document closed, or its camera tab shows another frame); marks and pans to a coordinate sent from an image.
+	const handoffs = useSnapshot(skyImageState)
+	const documents = useSnapshot(imagesState).documents
+	const sent = handoffs.footprint
+	const footprint = sent && documents.some((document) => document.key === sent.documentKey && document.info?.id === sent.imageId) ? sent : undefined
+
+	useEffect(() => {
+		if (sent && !footprint) clearImageFootprint(skyImageState)
+	}, [sent, footprint])
+
+	useEffect(() => {
+		map.syncImageFootprint(footprint)
+	}, [map, footprint])
+
+	useEffect(() => {
+		map.syncImageCoordinate(handoffs.intent)
+	}, [map, handoffs.intent])
 
 	// Draws the mount marker at the mount's reported position while the clock shows the real time.
 	useEffect(() => {
@@ -136,6 +158,8 @@ export function SkyWorkspace() {
 								if (mountRuntime.following && mountCenter) map.centerOn(mountCenter)
 							}}
 						/>
+						{footprint && <IconButton icon="images" label={`Hide the footprint of ${footprint.name}`} onClick={() => clearImageFootprint(skyImageState)} />}
+						{handoffs.intent?.mark && <IconButton icon="pin" label={`Clear the mark of ${handoffs.intent.label}`} onClick={() => clearSkyCoordinate(skyImageState)} />}
 						<IconButton icon="clock" label="Time Bar" pressed={settings.timeBar === true} onClick={() => setSkyTimeBarVisible(profileState, settings.timeBar !== true)} />
 						<IconButton icon="frame" label="Framing" pressed={sky.panel === 'framing'} onClick={() => togglePanel('framing')} />
 						<IconButton icon="layers" label="Display" pressed={sky.panel === 'display'} onClick={() => togglePanel('display')} />
@@ -148,6 +172,11 @@ export function SkyWorkspace() {
 					<SkyView planetarium={map} />
 					<HoverTooltip celestial={map.celestial} names={() => map.names} />
 					{status === 'loading' && <p className="pointer-events-none absolute bottom-3 left-3 m-0 text-xs text-ink-300">Loading the sky catalog…</p>}
+					{handoffs.intent && coordinateHidden && (
+						<p className="pointer-events-none absolute top-3 left-3 m-0 text-xs text-ink-200">
+							{handoffs.intent.label} {coordinateSystem === 'horizontal' ? 'is below the horizon at the time shown' : 'is outside the part of the sky this chart projects'}; the view was not moved.
+						</p>
+					)}
 					{status === 'error' && (
 						<div className="absolute inset-0 bg-base-000/80">
 							<EmptyState

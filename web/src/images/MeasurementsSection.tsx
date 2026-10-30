@@ -10,6 +10,7 @@ import { List, ListItem } from '../ui/List'
 import { TextInput } from '../ui/TextInput'
 import { pixelAt } from '../viewer/transform'
 import { clearAstrometryItems, editAstrometryItem, type ImageAstrometryState, imagesState, removeAstrometryItem, selectAstrometryItem } from './images'
+import { openInSky } from './skyHandoff'
 
 // Measurements and Markers sections of the Plate Solver panel: the measurements and markers of the document with their
 // values from the selected solution, the details of the selected one, and renaming, hiding, deleting, and clearing
@@ -95,7 +96,7 @@ export function MarkersSection({ documentKey, solution, image, astrometry, style
 			</List>
 			{current && (
 				<ItemDetails documentKey={documentKey} item={{ kind: 'marker', id: current.id }} label={current.label} placeholder={markerName({ ...current, label: undefined }, markers.indexOf(current))} visible={current.visible}>
-					<MarkerValues solution={solution} marker={current} image={image} style={style} />
+					<MarkerValues solution={solution} marker={current} image={image} style={style} name={markerName(current, markers.indexOf(current))} />
 				</ItemDetails>
 			)}
 			{markers.length > 0 && (
@@ -212,10 +213,12 @@ interface MarkerValuesProps {
 	readonly image?: { readonly width: number; readonly height: number }
 	// How coordinates are written.
 	readonly style: CoordinateStyle
+	// Name of the marker.
+	readonly name: string
 }
 
-// Sky position and pixel of a marker.
-function MarkerValues({ solution, marker, image, style }: MarkerValuesProps) {
+// Sky position and pixel of a marker, and its link to the Sky map.
+function MarkerValues({ solution, marker, image, style, name }: MarkerValuesProps) {
 	const sky = solution && skyAt(solution, marker.point)
 	const frame = solution ? ` (${wcsFrame(solution)})` : ''
 	const pixel = image && pixelAt(image, marker.point)
@@ -225,6 +228,11 @@ function MarkerValues({ solution, marker, image, style }: MarkerValuesProps) {
 			<Property label={`RA${frame}`}>{sky ? formatRightAscensionAs(sky[0], style) : MISSING}</Property>
 			<Property label={`Dec${frame}`}>{sky ? formatDeclinationAs(sky[1], style) : MISSING}</Property>
 			<Property label="Pixel (x, y from 0)">{pixel ? formatPixel(pixel) : MISSING}</Property>
+			<Actions>
+				<Button variant="secondary" disabled={!sky} title={sky ? undefined : 'The solution cannot locate this marker.'} onClick={() => sky && openInSky(sky, name)}>
+					Open in Sky
+				</Button>
+			</Actions>
 		</>
 	)
 }

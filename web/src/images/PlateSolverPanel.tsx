@@ -16,7 +16,9 @@ import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { wcsFrame } from '../platesolving/wcs'
 import { activeProfile, imageAstrometrySettings, profileState, setImageAstrometrySettings } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
+import { navigate, routeState } from '../shell/route'
 import { EmptyState } from '../shell/WorkspaceLayout'
+import { imageFootprint, showFootprintInSky, skyImageState } from '../sky/footprint'
 import { formatDeclination, formatRightAscension } from '../sky/format'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
@@ -71,7 +73,7 @@ export function PlateSolverPanel({ document, view, onOpen }: ImageToolPanelProps
 		)
 	}
 
-	return <PlateSolver documentKey={document.key} imageId={document.info?.id} image={document.info} plateSolving={view.plateSolving} astrometry={view.astrometry} unavailable={imageUnavailableReason(document)} />
+	return <PlateSolver documentKey={document.key} imageId={document.info?.id} image={document.info} name={document.name} plateSolving={view.plateSolving} astrometry={view.astrometry} unavailable={imageUnavailableReason(document)} />
 }
 
 interface PlateSolverProps {
@@ -81,6 +83,8 @@ interface PlateSolverProps {
 	readonly imageId?: string
 	// Size of its image, in pixels; absent until it has one.
 	readonly image?: { readonly width: number; readonly height: number }
+	// Name of the document.
+	readonly name: string
 	// Plate solving request, solution shown, and overlay of the document.
 	readonly plateSolving: ImagePlateSolvingState
 	// Astrometric measurements of the document.
@@ -91,7 +95,7 @@ interface PlateSolverProps {
 
 // Sections of the Plate Solver panel of a document: the settings always, the execution, the solutions, and the
 // measurements once it has an image.
-function PlateSolver({ documentKey, imageId, image, plateSolving, astrometry, unavailable }: PlateSolverProps) {
+function PlateSolver({ documentKey, imageId, image, name, plateSolving, astrometry, unavailable }: PlateSolverProps) {
 	const state = useSnapshot(plateSolvingState)
 	const profiles = useSnapshot(profileState)
 	const { coordinates } = imageAstrometrySettings(activeProfile(profiles).settings)
@@ -124,6 +128,7 @@ function PlateSolver({ documentKey, imageId, image, plateSolving, astrometry, un
 					<Solution job={plateSolving.selected === 'header' ? undefined : job} result={result} solution={solution} fromHeader={plateSolving.selected === 'header'} resultError={resultError} />
 					{solution && result && <SolverDetails result={result} />}
 					{solution && <MountSync solution={solution} />}
+					{solution && image && <SkyFootprint documentKey={documentKey} imageId={imageId} name={name} image={image} solution={solution} />}
 					<Solutions documentKey={documentKey} imageId={imageId} selected={plateSolving.selected} header={header} />
 					<MeasurementsSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
 					<MarkersSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
@@ -360,6 +365,43 @@ function elapsedOf(job: PlateSolveJob, now: number): number {
 function formatSeconds(milliseconds: number): string {
 	const seconds = milliseconds / 1000
 	return `${seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)} s`
+}
+
+interface SkyFootprintProps {
+	// Key of the document.
+	readonly documentKey: string
+	// Server id of its image.
+	readonly imageId: string
+	// Name of the document.
+	readonly name: string
+	// Size of its image, in pixels.
+	readonly image: { readonly width: number; readonly height: number }
+	// Solution shown.
+	readonly solution: PlateSolution
+}
+
+// Show Footprint in Sky: draws the outline the solution shown gives to the borders of the image on the Sky map, in
+// the frame of its stars, and opens Sky panned to its centre. It replaces an earlier footprint and is dropped once the
+// document stops showing this image; nothing is solved or sent to a device.
+function SkyFootprint({ documentKey, imageId, name, image, solution }: SkyFootprintProps) {
+	const footprint = imageFootprint(solution, wcsFrame(solution), image, documentKey, imageId, name)
+
+	function show() {
+		if (!footprint) return
+		showFootprintInSky(skyImageState, footprint)
+		navigate(routeState, { workspace: 'sky' })
+	}
+
+	return (
+		<CollapsibleSection id="images.plate-solver.sky" title="Sky">
+			<Actions>
+				<Button variant="secondary" disabled={!footprint} title={footprint ? undefined : 'The solution cannot locate the centre of the image.'} onClick={show}>
+					Show Footprint in Sky
+				</Button>
+			</Actions>
+			<Notice>The outline of the image borders through its solution, drawn over the stars of the Sky map at the time shown, beside the framing of the selection.</Notice>
+		</CollapsibleSection>
+	)
 }
 
 interface VisualizationProps {

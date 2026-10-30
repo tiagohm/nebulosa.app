@@ -49,8 +49,10 @@ export function WorkspaceLayout({ workspace, title, context, actions, panel, tab
 		else setDrawerOpen(value)
 	}
 
+	// Clips rather than hides its overflow: a hidden box can still be scrolled by script or by focus, and the closed
+	// drawer waiting beside it would then pull the workspace sideways.
 	const frame = (
-		<section className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+		<section className="relative flex min-h-0 min-w-0 flex-1 overflow-clip">
 			<div className="flex min-w-0 flex-1 flex-col">
 				<header className="flex h-12 flex-none items-center gap-3 border-b border-line-100 bg-base-100 px-4">
 					<h1 className="m-0 flex-none text-sm font-semibold text-ink-100">{title}</h1>

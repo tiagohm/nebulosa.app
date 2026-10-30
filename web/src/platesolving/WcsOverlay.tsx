@@ -4,7 +4,8 @@ import type { OverlayView, Point, Size } from '../viewer/transform'
 import { skyDirections } from './wcs'
 
 // Solved centre of a plate solution over the shared image viewer, used by the Images workspace for files and camera
-// frames alike: a marker at the centre of the image and arrows towards north and east from the WCS there (so they follow
+// frames alike: a marker at the centre of the image and, when the orientation is drawn at the centre, arrows towards
+// north and east from the WCS there (so they follow
 // its rotation and parity). The directions are computed once per solution; zoom and pan only change sizes kept constant
 // on screen. The grid is drawn apart (WcsGridOverlay), so it shows whether or not the centre does. It draws in image
 // pixel coordinates and is a pure function of the solution and the image shown, which the caller guarantees is the
@@ -33,10 +34,14 @@ export interface WcsOverlayProps {
 	readonly image: Size
 	// Zoom and visible region of the viewer.
 	readonly view: OverlayView
+	// Whether the centre marker is drawn.
+	readonly marker: boolean
+	// Whether the north and east arrows are drawn from the centre.
+	readonly arrows: boolean
 }
 
 // Centre and directions of a plate solution.
-export function WcsOverlay({ solution, image, view }: WcsOverlayProps) {
+export function WcsOverlay({ solution, image, view, marker, arrows }: WcsOverlayProps) {
 	const center = useMemo(() => ({ x: image.width / 2, y: image.height / 2 }), [image.width, image.height])
 	const { north, east } = useMemo(() => skyDirections(solution, center), [solution, center])
 	// Image pixels per screen pixel, capped so the arrows fit the image.
@@ -44,12 +49,14 @@ export function WcsOverlay({ solution, image, view }: WcsOverlayProps) {
 
 	return (
 		<g fill="none">
-			<g stroke="var(--color-success)" strokeWidth={SYMBOL_STROKE}>
-				<line x1={center.x - MARKER_SIZE * unit} y1={center.y} x2={center.x + MARKER_SIZE * unit} y2={center.y} vectorEffect="non-scaling-stroke" />
-				<line x1={center.x} y1={center.y - MARKER_SIZE * unit} x2={center.x} y2={center.y + MARKER_SIZE * unit} vectorEffect="non-scaling-stroke" />
-			</g>
-			{north && <Arrow from={center} direction={north} unit={unit} label="N" color="var(--color-accent)" />}
-			{east && <Arrow from={center} direction={east} unit={unit} label="E" color="var(--color-ink-100)" />}
+			{marker && (
+				<g stroke="var(--color-success)" strokeWidth={SYMBOL_STROKE}>
+					<line x1={center.x - MARKER_SIZE * unit} y1={center.y} x2={center.x + MARKER_SIZE * unit} y2={center.y} vectorEffect="non-scaling-stroke" />
+					<line x1={center.x} y1={center.y - MARKER_SIZE * unit} x2={center.x} y2={center.y + MARKER_SIZE * unit} vectorEffect="non-scaling-stroke" />
+				</g>
+			)}
+			{arrows && north && <Arrow from={center} direction={north} unit={unit} label="N" color="var(--color-accent)" />}
+			{arrows && east && <Arrow from={center} direction={east} unit={unit} label="E" color="var(--color-ink-100)" />}
 		</g>
 	)
 }

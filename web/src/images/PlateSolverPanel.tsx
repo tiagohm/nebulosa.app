@@ -11,7 +11,7 @@ import { useRoleDevice } from '../equipment/useEquipment'
 import { operationsState } from '../operations'
 import { AdvancedControls, HintControls, SolverControls, StrategyControls, useSolverConfigured } from '../platesolving/PlateSolveControls'
 import { cancelPlateSolve, completedJobs, loadHints, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolvingState, PROVIDER_LABELS, runPlateSolve, STAGE_LABELS } from '../platesolving/platesolving'
-import { type AstrometryGridSettings, GRID_COLORS, GRID_MODES, GRID_OPACITY_RANGE, type GridColor, type GridMode } from '../platesolving/preferences'
+import { type AstrometryGridSettings, COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, type CoordinateFormat, GRID_COLORS, GRID_MODES, GRID_OPACITY_RANGE, type GridColor, type GridMode, ORIENTATION_MODES, type OrientationMode } from '../platesolving/preferences'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { wcsFrame } from '../platesolving/wcs'
 import { activeProfile, imageAstrometrySettings, profileState, setImageAstrometrySettings } from '../profile/profile'
@@ -20,6 +20,7 @@ import { EmptyState } from '../shell/WorkspaceLayout'
 import { formatDeclination, formatRightAscension } from '../sky/format'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { Slider } from '../ui/Slider'
@@ -360,10 +361,10 @@ interface VisualizationProps {
 }
 
 // What is drawn over a solved image: the solved centre and the grid, per document, and the appearance of the grid,
-// per profile. Showing or changing any of them never solves again.
+// orientation, scale bar, crosshair, and coordinates, per profile. Showing or changing any of them never solves again.
 function Visualization({ documentKey, plateSolving }: VisualizationProps) {
 	const profiles = useSnapshot(profileState)
-	const { grid } = imageAstrometrySettings(activeProfile(profiles).settings)
+	const { grid, coordinates, crosshair, scaleBar, orientation } = imageAstrometrySettings(activeProfile(profiles).settings)
 	const editGrid = (patch: Partial<AstrometryGridSettings>) => setImageAstrometrySettings(profileState, { grid: patch })
 
 	return (
@@ -375,7 +376,18 @@ function Visualization({ documentKey, plateSolving }: VisualizationProps) {
 			<Checkbox label="Minor grid lines" checked={grid.minor} onChange={(minor) => editGrid({ minor })} />
 			<Slider label="Grid opacity" value={grid.opacity} min={GRID_OPACITY_RANGE[0]} max={GRID_OPACITY_RANGE[1]} step={0.05} onChange={(opacity) => editGrid({ opacity })} />
 			<Select label="Grid color" options={GRID_COLORS} value={grid.color} format={(color) => GRID_COLOR_LABELS[color]} onChange={(color) => editGrid({ color })} />
-			<Notice>The centre marks the solved centre and the north and east directions of the WCS. The grid follows the part of the image on screen. Showing them never solves again.</Notice>
+			<SegmentedControl label="Orientation" options={ORIENTATION_MODES} value={orientation} format={(mode) => ORIENTATION_LABELS[mode]} onChange={(next) => setImageAstrometrySettings(profileState, { orientation: next })} />
+			<Checkbox label="Scale bar" checked={scaleBar} onChange={(shown) => setImageAstrometrySettings(profileState, { scaleBar: shown })} />
+			<Checkbox label="Crosshair" checked={crosshair} onChange={(shown) => setImageAstrometrySettings(profileState, { crosshair: shown })} />
+			<SegmentedControl label="Coordinates" options={COORDINATE_FORMATS} value={coordinates.format} format={(format) => COORDINATE_FORMAT_LABELS[format]} onChange={(format) => setImageAstrometrySettings(profileState, { coordinates: { ...coordinates, format } })} />
+			<NumberInput
+				label="Decimals"
+				value={coordinates.precision}
+				min={COORDINATE_PRECISION_RANGE[0]}
+				max={COORDINATE_PRECISION_RANGE[1]}
+				onChange={(precision) => setImageAstrometrySettings(profileState, { coordinates: { ...coordinates, precision: Math.round(Math.min(COORDINATE_PRECISION_RANGE[1], Math.max(COORDINATE_PRECISION_RANGE[0], precision))) } })}
+			/>
+			<Notice>The centre marks the solved centre. The grid, orientation, scale bar, and the coordinates under the pointer follow the selected solution and the part of the image on screen; decimals are a display choice, not an accuracy. Showing them never solves again.</Notice>
 		</CollapsibleSection>
 	)
 }
@@ -385,3 +397,9 @@ const GRID_MODE_LABELS: Readonly<Record<GridMode, string>> = { lines: 'Lines', e
 
 // Names of the grid colors.
 const GRID_COLOR_LABELS: Readonly<Record<GridColor, string>> = { neutral: 'Neutral', accent: 'Accent', success: 'Green' }
+
+// Names of the orientation modes.
+const ORIENTATION_LABELS: Readonly<Record<OrientationMode, string>> = { hidden: 'Hidden', corner: 'Corner', center: 'Centre' }
+
+// Names of the coordinate formats.
+const COORDINATE_FORMAT_LABELS: Readonly<Record<CoordinateFormat, string>> = { sexagesimal: 'Sexagesimal', decimal: 'Decimal' }

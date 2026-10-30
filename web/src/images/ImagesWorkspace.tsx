@@ -17,6 +17,8 @@ import { TppaOverlay, useTppaOverlay } from '../camera/TppaOverlay'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../files/files'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
+import { WcsAidsOverlay } from '../platesolving/WcsAidsOverlay'
+import { WcsCursorStatus } from '../platesolving/WcsCursorStatus'
 import { WcsGridOverlay } from '../platesolving/WcsGridOverlay'
 import { WcsOverlay } from '../platesolving/WcsOverlay'
 import { activeProfile, imageAstrometrySettings, profileState, setLastImageDirectory } from '../profile/profile'
@@ -114,9 +116,9 @@ export function ImagesWorkspace() {
 	const minorShown = searched !== undefined && annotationResults.includes(searched)
 	const annotation = useMemo(() => mergeProjections(localShown ? localProjection : undefined, minorShown ? minorProjection : undefined), [localShown, localProjection, minorShown, minorProjection])
 	const selectedAnnotation = annotationResults.some((result) => result?.jobId === view?.annotation.selected?.jobId) ? view?.annotation.selected?.id : undefined
-	const wcs = view?.plateSolving.overlay ? solution : undefined
-	const grid = view?.plateSolving.grid ? solution : undefined
 	const astrometry = imageAstrometrySettings(activeProfile(profiles).settings)
+	const centered = solution && (view?.plateSolving.overlay || astrometry.orientation === 'center') ? solution : undefined
+	const grid = view?.plateSolving.grid ? solution : undefined
 	const camera = useCameraOperationContext(document)
 	const guide = useTppaOverlay(document)
 	const trails = useDarvOverlay(document)
@@ -162,22 +164,24 @@ export function ImagesWorkspace() {
 							)
 						}
 						overlays={
-							(markers || lines || wcs || grid || annotation || reticle || guide || trails || guiding) && view
-								? (size, overlay) => (
+							(markers || lines || solution || annotation || reticle || guide || trails || guiding) && view
+								? (size, overlay, cursor) => (
 										<>
 											{reticle && <Reticle {...size} />}
 											{grid && <WcsGridOverlay solution={grid} image={size} view={overlay} settings={astrometry.grid} />}
-											{wcs && <WcsOverlay solution={wcs} image={size} view={overlay} />}
+											{centered && <WcsOverlay solution={centered} image={size} view={overlay} marker={view.plateSolving.overlay} arrows={astrometry.orientation === 'center'} />}
 											{annotation && <AnnotationOverlay projection={annotation} view={overlay} state={view.annotation} selected={selectedAnnotation} />}
 											{guide && <TppaOverlay geometry={guide} view={overlay} />}
 											{trails && <DarvOverlay trails={trails} view={overlay} />}
 											{guiding && <GuidingOverlay overlay={guiding.overlay} view={overlay} />}
 											{lines && <StreakOverlay result={lines} view={overlay} labels={view.streaks.labels} selected={selectedStreak} />}
 											{markers && <StarOverlay result={markers} view={overlay} acceptedOnly={view.stars.acceptedOnly} selected={view.stars.selected?.jobId === markers.jobId ? view.stars.selected.index : undefined} />}
+											{solution && <WcsAidsOverlay solution={solution} image={size} view={overlay} cursor={cursor} crosshair={astrometry.crosshair} corner={astrometry.orientation === 'corner'} scaleBar={astrometry.scaleBar} />}
 										</>
 									)
 								: undefined
 						}
+						status={solution ? (cursor) => <WcsCursorStatus solution={solution} cursor={cursor} style={astrometry.coordinates} /> : undefined}
 						onImageClick={
 							picking
 								? (point) => void selectGuidingTarget(guidingRuntime, picking, [point.x - 0.5, point.y - 0.5])

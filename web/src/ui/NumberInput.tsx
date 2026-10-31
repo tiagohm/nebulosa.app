@@ -1,7 +1,7 @@
 import { cn } from 'cn'
 import { useState } from 'react'
 import { Field, InputSuffix, inputClassName, suffixPadding } from './Field'
-import { snapToStep } from './numberinput.step'
+import { displayValue, snapToStep } from './numberinput.step'
 
 export interface NumberInputProps {
 	readonly label?: string
@@ -41,7 +41,7 @@ export function NumberInput({ label, value, onChange, min, max, step = 1, classN
 						min={min}
 						max={max}
 						step={step}
-						value={draft ?? value}
+						value={draft ?? displayValue(value, step, min, max)}
 						onChange={(e) => {
 							const text = e.target.value
 							setDraft(text)

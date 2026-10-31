@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { snapToStep, stepFractionDigits } from './numberinput.step'
+import { displayValue, snapToStep, stepFractionDigits } from './numberinput.step'
 
 describe('stepFractionDigits', () => {
 	test('counts the decimal places of the step as written', () => {
@@ -11,6 +11,27 @@ describe('stepFractionDigits', () => {
 		expect(stepFractionDigits(1e-7)).toBe(7)
 		expect(stepFractionDigits(2.5e-7)).toBe(8)
 		expect(stepFractionDigits(1e21)).toBe(0)
+	})
+
+	test('ignores the residue of a computed step', () => {
+		expect(stepFractionDigits(0.1 + 0.2)).toBe(1)
+	})
+})
+
+describe('displayValue', () => {
+	test('drops the residue of a value converted from another unit', () => {
+		expect(displayValue(1.3000000000000003, 0.1)).toBe(1.3)
+		expect(displayValue(0.1 + 0.2, 0.1)).toBe(0.3)
+	})
+
+	test('rounds a value set from outside the field to the precision of the step', () => {
+		expect(displayValue(1.2345678, 0.01)).toBe(1.23)
+		expect(displayValue(1200, 1)).toBe(1200)
+	})
+
+	test('keeps a bound finer than the step, even one that carries a residue', () => {
+		expect(displayValue(0.005, 0.01, 0.005, 10)).toBe(0.005)
+		expect(displayValue(0.1 + 0.2, 0.5, 0.1 + 0.2)).toBe(0.3)
 	})
 })
 

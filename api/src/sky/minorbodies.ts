@@ -1,8 +1,9 @@
 // oxfmt-ignore
 import { assertSupportedSignature, SBD_BASE_URL, SEARCH_PATH, type SmallBodySearch, type SmallBodySearchFound, type SmallBodySearchModelParameter, type SmallBodySearchOrbit, type SmallBodySearchOrbitElement, type SmallBodySearchPhyscalParameter } from 'nebulosa/src/adapters/orbits/sbd'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
+import { LruCache } from '../lrucache'
 import { SsdBusyError, SsdRequestQueue, SsdThrottledError, SsdTimeoutError } from '../ssd'
-import { LruCache, type MinorBodyElements } from './ephemeris'
+import type { MinorBodyElements } from './ephemeris'
 import type { MinorBody, MinorBodyDetails, MinorBodyDetailsResponse, MinorBodyOrbitDetails, MinorBodyPublishedValue, MinorBodySearchResponse } from './types'
 
 // Asteroid and comet lookup in the JPL Small-Body Database (SBDB): search by name or designation, the

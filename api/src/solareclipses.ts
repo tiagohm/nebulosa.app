@@ -17,7 +17,7 @@ import { timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { type EclipseDirection, type EclipseLocation, eclipseNotFound, locationParams, yieldEventLoop } from './eclipses'
 import { errorResponse } from './http'
-import { LruCache } from './sky/ephemeris'
+import { LruCache } from './lrucache'
 import { findSolarEclipse, resolveSolarEclipse, type SolarEclipseMap, type SolarEclipseSummary, solarEclipseElements, solarEclipseId, solarEclipseSummary } from './solareclipses.map'
 
 // Solar eclipses for the Solar Eclipse Map tool: stateless, read-only queries over the toolkit's solar eclipse

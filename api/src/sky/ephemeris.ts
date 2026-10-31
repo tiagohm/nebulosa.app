@@ -16,6 +16,7 @@ import { AU_KM, DEG2RAD, GM_SUN_PITJEVA_2005, J2000, SPEED_OF_LIGHT } from 'nebu
 import { type MutVec3, type Vec3, vecAngle, vecLength, vecPlus } from 'nebulosa/src/math/linear-algebra/vec3'
 import { deg, normalizeAngle, normalizePI } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
+import { LruCache } from '../lrucache'
 import { SsdBusyError, SsdRequestQueue, SsdThrottledError } from '../ssd'
 import { solarSystemBody, type SolarSystemBodyKind } from './bodies'
 import type { SolarSystemBodyCode } from './types'
@@ -261,40 +262,6 @@ class HorizonsCircuitBreaker {
 		if (++this.#failures >= HORIZONS_BREAKER_FAILURE_THRESHOLD && this.#openUntil === 0) {
 			this.#openUntil = this.now() + HORIZONS_BREAKER_OPEN_MS
 		}
-	}
-}
-
-// Least-recently-used map with a fixed number of entries.
-export class LruCache<T> {
-	readonly #entries = new Map<string, T>()
-
-	// Creates the cache holding at most `limit` entries.
-	constructor(private readonly limit: number) {}
-
-	// Returns an entry and marks it most recently used.
-	get(key: string): T | undefined {
-		const value = this.#entries.get(key)
-		if (value === undefined) return undefined
-		this.#entries.delete(key)
-		this.#entries.set(key, value)
-		return value
-	}
-
-	// Stores an entry, evicting the least recently used ones beyond the limit.
-	set(key: string, value: T) {
-		this.#entries.delete(key)
-		this.#entries.set(key, value)
-
-		while (this.#entries.size > this.limit) {
-			const oldest = this.#entries.keys().next().value
-			if (oldest === undefined) break
-			this.#entries.delete(oldest)
-		}
-	}
-
-	// Removes an entry.
-	delete(key: string) {
-		this.#entries.delete(key)
 	}
 }
 

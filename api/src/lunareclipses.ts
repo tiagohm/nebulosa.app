@@ -15,7 +15,7 @@ import { timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { DEGREE_PLANE, type EclipseDirection, type EclipseLocation, eclipseNotFound, ID_SEARCH_MARGIN, locationParams, MAP_PRECISION, yieldEventLoop } from './eclipses'
 import { errorResponse } from './http'
-import { LruCache } from './sky/ephemeris'
+import { LruCache } from './lrucache'
 
 // Lunar eclipses for the Lunar Eclipse Map tool: stateless, read-only queries over the toolkit's lunar eclipse
 // engine (core/src/astronomy/events/eclipse/lunar), answered under /api/eclipses/lunar with the conventions of

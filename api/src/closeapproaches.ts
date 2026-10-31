@@ -2,7 +2,7 @@
 import { type CloseApproachBody, type CloseApproachCatalogQuery, type CloseApproachObjectQuery, type CloseApproachPage, type CloseApproachQuery, type CloseApproachRow, type CloseApproachSort, closeApproachesUrl, parseCloseApproaches, SmallBodyResponseError } from 'nebulosa/src/adapters/orbits/sbd'
 import { time, Timescale, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { errorResponse } from './http'
-import { LruCache } from './sky/ephemeris'
+import { LruCache } from './lrucache'
 import { type MinorBodies, SbdbUnavailableError } from './sky/minorbodies'
 import { SsdBusyError, type SsdRequestQueue, SsdThrottledError, SsdTimeoutError } from './ssd'
 

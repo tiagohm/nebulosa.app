@@ -10,7 +10,8 @@ import { type Time, time as julianTime, timeShift, timeToUnixMillis, timeUnix, t
 import { TAU } from 'nebulosa/src/core/constants'
 import { vecMinus } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizePI } from 'nebulosa/src/math/units/angle'
-import { geographic, LruCache, type SkyObserver } from './ephemeris'
+import { LruCache } from '../lrucache'
+import { geographic, type SkyObserver } from './ephemeris'
 
 // Solar almanac of the Sun Inspector: the Sun's day for an observer's civil date in an IANA time zone
 // (sunrise, transit, sunset, daylight, civil, nautical, and astronomical twilight, astronomical night),

@@ -1,12 +1,13 @@
 import { SBD_BASE_URL, SEARCH_PATH, type SmallBodySearch, type SmallBodySearchFound, type SmallBodySearchOrbitElement, type SmallBodySearchPhyscalParameter } from 'nebulosa/src/adapters/orbits/sbd'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
+import { SsdBusyError, SsdRequestQueue, SsdThrottledError, SsdTimeoutError } from '../ssd'
 import type { MinorBodyElements } from './ephemeris'
 import type { MinorBody, MinorBodySearchResponse } from './types'
 
 // Asteroid and comet lookup in the JPL Small-Body Database (SBDB): search by name or designation, the
 // identity, classification, orbit, and physical parameters of a body, and its osculating elements for
 // the local ephemeris model. Bodies are cached by SPK-ID so positions do not query SBDB again. The
-// service is remote, so every request has a timeout and may be aborted.
+// service is remote, so every request goes through the JPL queue, has a timeout, and may be aborted.
 
 // Budget of one SBDB request in milliseconds.
 export const SBDB_TIMEOUT_MS = 8_000
@@ -23,13 +24,19 @@ export class SbdbUnavailableError extends Error {
 	}
 }
 
-// Fetches an SBDB lookup; tests pass a mock.
-export type SbdbFetch = (text: string, signal: AbortSignal) => Promise<SmallBodySearch>
+// SBDB selector of a lookup: `sstr` searches names and designations and may match several bodies, `des` names one
+// designation or IAU number.
+export type SbdbSelector = 'sstr' | 'des'
 
-// Fetches the SBDB lookup of `text` with the adapter's endpoint and parameters, honoring `signal`.
-async function fetchSbdb(text: string, signal: AbortSignal): Promise<SmallBodySearch> {
-	const response = await fetch(`${SBD_BASE_URL}${SEARCH_PATH}&sstr=${encodeURIComponent(text)}`, { signal })
-	if (!response.ok && response.status !== 300 && response.status !== 404) throw new SbdbUnavailableError(`SBDB answered ${response.status}`)
+// Fetches an SBDB lookup; tests pass a mock. Runs in a turn of the JPL queue.
+export type SbdbFetch = (text: string, signal: AbortSignal, selector: SbdbSelector) => Promise<SmallBodySearch>
+
+// Fetches the SBDB lookup of `text` with the adapter's endpoint and parameters, honoring `signal`. A designation SBDB
+// cannot read is answered 400, which for `des` means it names no body.
+async function fetchSbdb(queue: SsdRequestQueue, text: string, signal: AbortSignal, selector: SbdbSelector): Promise<SmallBodySearch> {
+	const response = await queue.fetch(`${SBD_BASE_URL}${SEARCH_PATH}&${selector}=${encodeURIComponent(text)}`, signal)
+	const known = response.ok || response.status === 300 || response.status === 404 || (selector === 'des' && response.status === 400)
+	if (!known) throw new SbdbUnavailableError(`SBDB answered ${response.status}`)
 	return (await response.json()) as SmallBodySearch
 }
 
@@ -130,13 +137,16 @@ function resolve(result: SmallBodySearchFound): ResolvedMinorBody {
 
 // SBDB lookups with a cache of the bodies found, by SPK-ID.
 export class MinorBodies {
+	readonly #queue: SsdRequestQueue
 	readonly #fetch: SbdbFetch
 	readonly #timeoutMs: number
 	readonly #bodies = new Map<string, ResolvedMinorBody>()
 
-	// Creates the service; options replace the SBDB client and its budget.
-	constructor(options: { readonly fetch?: SbdbFetch; readonly timeoutMs?: number } = {}) {
-		this.#fetch = options.fetch ?? fetchSbdb
+	// Creates the service; options replace the JPL queue, the SBDB client, and its budget.
+	constructor(options: { readonly queue?: SsdRequestQueue; readonly fetch?: SbdbFetch; readonly timeoutMs?: number } = {}) {
+		const queue = options.queue ?? new SsdRequestQueue()
+		this.#queue = queue
+		this.#fetch = options.fetch ?? ((text, signal, selector) => fetchSbdb(queue, text, signal, selector))
 		this.#timeoutMs = options.timeoutMs ?? SBDB_TIMEOUT_MS
 	}
 
@@ -178,17 +188,16 @@ export class MinorBodies {
 		while (this.#bodies.size > MINOR_BODY_CACHE_LIMIT) this.#bodies.delete(this.#bodies.keys().next().value!)
 	}
 
-	// Runs one SBDB lookup within the budget, also aborted by `signal`.
-	async #lookup(text: string, signal?: AbortSignal): Promise<SmallBodySearch> {
-		const timeout = AbortSignal.timeout(this.#timeoutMs)
-		const combined = signal ? AbortSignal.any([signal, timeout]) : timeout
-
+	// Runs one SBDB lookup in a turn of the JPL queue, within the budget, also aborted by `signal`.
+	async #lookup(text: string, signal?: AbortSignal, selector: SbdbSelector = 'sstr'): Promise<SmallBodySearch> {
 		try {
-			return await this.#fetch(text, combined)
+			return await this.#queue.run((taskSignal) => this.#fetch(text, taskSignal, selector), { timeoutMs: this.#timeoutMs, signal, key: `sbdb:${selector}:${text}` })
 		} catch (error) {
 			if (signal?.aborted) throw error
 			if (error instanceof SbdbUnavailableError) throw error
-			throw new SbdbUnavailableError(timeout.aborted ? 'SBDB did not answer in time' : 'SBDB cannot be reached', { cause: error })
+			if (error instanceof SsdTimeoutError) throw new SbdbUnavailableError('SBDB did not answer in time', { cause: error })
+			if (error instanceof SsdBusyError || error instanceof SsdThrottledError) throw new SbdbUnavailableError(error.message, { cause: error })
+			throw new SbdbUnavailableError('SBDB cannot be reached', { cause: error })
 		}
 	}
 }

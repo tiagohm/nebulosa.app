@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
+import { SsdRequestQueue } from '../ssd'
 import { EphemerisUnavailableError, findEvents, HorizonsEphemerisError, type HorizonsObserver, SkyEphemeris } from './ephemeris'
 
 const observer = { latitude: -23.5, longitude: -46.6, elevation: 760 }
@@ -93,6 +94,44 @@ test('Horizons timeouts fall back to the local model', async () => {
 	expect(position.source).toBe('local')
 	expect(position.fallbackReason).toBe('timeout')
 	expect(position.magnitude).toBe(-26.74)
+})
+
+test('a refusal of the JPL queue falls back without counting against Horizons', async () => {
+	let now = TIME
+	const queue = new SsdRequestQueue({ now: () => now })
+	const { observe, calls } = horizons(MARS_ROW)
+	const ephemeris = new SkyEphemeris({ queue, observer: observe, now: () => now })
+	queue.pause(60_000)
+
+	for (let i = 0; i < 4; i++) {
+		const position = await ephemeris.position({ type: 'body', code: '599' }, { time: TIME + i * 3_600_000, observer })
+		expect(position.source).toBe('local')
+		expect(position.fallbackReason).toBe('timeout')
+	}
+
+	now += 60_000
+	expect((await ephemeris.position({ type: 'body', code: '599' }, { time: TIME, observer })).source).toBe('horizons')
+	expect(calls).toHaveLength(1)
+})
+
+test('Horizons is asked in a turn of the JPL queue, with the identity of the client', async () => {
+	const queue = new SsdRequestQueue()
+	queue.identify('1.2.3')
+	const running = Promise.withResolvers<number>()
+	void queue.run(() => running.promise, { timeoutMs: 1000 })
+	let headers: HeadersInit | undefined
+	const { observe, calls } = horizons(MARS_ROW)
+	const identified = ((...args: Parameters<HorizonsObserver>) => {
+		headers = args[6]?.headers
+		return observe(...args)
+	}) as HorizonsObserver
+	const position = new SkyEphemeris({ queue, observer: identified }).position({ type: 'body', code: '499' }, { time: TIME, observer })
+
+	await Bun.sleep(0)
+	expect(calls).toBeEmpty()
+	running.resolve(1)
+	expect((await position).source).toBe('horizons')
+	expect(headers).toEqual({ 'User-Agent': 'Nebulosa/1.2.3 (+https://github.com/tiagohm/nebulosa.app)' })
 })
 
 test('semantic Horizons failures are reported', async () => {

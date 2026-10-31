@@ -37,7 +37,7 @@ import { NotificationClassifier } from './notifications.rules'
 import { createOperationRoutes, OperationRegistry } from './operations'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { createRotatorRoutes, RotatorCommands } from './rotators'
-import { annotationSky, skyLocator, skyRoutes } from './sky'
+import { annotationSky, skyLocator, skyRoutes, ssdRequests } from './sky'
 import { createSolarEclipseRoutes, SolarEclipseService } from './solareclipses'
 import { createStarProfileRoutes, StarProfileService } from './starprofile'
 import { createStarDetectionRoutes, StarDetectionService } from './stars'
@@ -522,6 +522,12 @@ const astronomicalTime = new AstronomicalTimeService(earthOrientation)
 export async function startEarthOrientation() {
 	await earthOrientation.prepare()
 	installEarthOrientation(earthOrientation)
+}
+
+// Names the running version to JPL, as its fair-use policy asks of automated clients. Called by the app before it serves,
+// since this package does not know the version of the distribution.
+export function identifyJplClient(version: string) {
+	ssdRequests.identify(version)
 }
 
 // Writes the changes the persisted stores still hold in memory, for a server about to stop. Resolves once they are

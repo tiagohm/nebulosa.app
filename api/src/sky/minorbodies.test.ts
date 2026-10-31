@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { SmallBodySearch, SmallBodySearchFound } from 'nebulosa/src/adapters/orbits/sbd'
 import { toDeg } from 'nebulosa/src/math/units/angle'
+import { SsdRequestQueue, SsdThrottledError } from '../ssd'
 import { elementsOf, MinorBodies, SbdbUnavailableError } from './minorbodies'
 
 // Minimal SBDB answer for Ceres with the fields the service reads.
@@ -69,6 +70,30 @@ test('search outcomes', async () => {
 	// A body found by a search is cached by SPK-ID.
 	expect((await bodies.body('20000001'))?.elements?.ec).toBe(0.0795)
 	expect(queries).toEqual(['ceres', 'halley', 'xyzzy'])
+})
+
+test('lookups go through the JPL queue, identified', async () => {
+	const urls: string[] = []
+	const agents: (string | null)[] = []
+	const fetch = ((url: string, init: RequestInit) => {
+		urls.push(url)
+		agents.push(new Headers(init.headers).get('User-Agent'))
+		return Promise.resolve(Response.json(CERES))
+	}) as unknown as typeof globalThis.fetch
+	const queue = new SsdRequestQueue({ fetch })
+	queue.identify('1.2.3')
+
+	expect((await new MinorBodies({ queue }).search('ceres')).kind).toBe('found')
+	expect(new URL(urls[0]).searchParams.get('sstr')).toBe('ceres')
+	expect(agents[0]).toBe('Nebulosa/1.2.3 (+https://github.com/tiagohm/nebulosa.app)')
+})
+
+test('a throttling answer of SBDB is unavailable, keeping its cause', async () => {
+	const queue = new SsdRequestQueue({ fetch: (() => Promise.resolve(new Response('', { status: 429 }))) as unknown as typeof fetch })
+	const error = (await new MinorBodies({ queue }).search('ceres').catch((e: unknown) => e)) as SbdbUnavailableError
+
+	expect(error).toBeInstanceOf(SbdbUnavailableError)
+	expect(error.cause).toBeInstanceOf(SsdThrottledError)
 })
 
 test('unreachable or slow SBDB', async () => {

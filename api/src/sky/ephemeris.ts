@@ -16,6 +16,7 @@ import { AU_KM, DEG2RAD, GM_SUN_PITJEVA_2005, J2000, SPEED_OF_LIGHT } from 'nebu
 import { type MutVec3, type Vec3, vecAngle, vecLength, vecPlus } from 'nebulosa/src/math/linear-algebra/vec3'
 import { deg, normalizeAngle, normalizePI } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
+import { SsdBusyError, SsdRequestQueue, SsdThrottledError } from '../ssd'
 import { solarSystemBody, type SolarSystemBodyKind } from './bodies'
 import type { SolarSystemBodyCode } from './types'
 
@@ -24,8 +25,9 @@ import type { SolarSystemBodyCode } from './types'
 // and set. Accurate positions come from JPL Horizons, falling back to the local models (VSOP87E,
 // ELPMPP02, Pluto, Kepler orbits, and catalog astrometry) when Horizons times out or is unreachable,
 // with the source and the reason stated in the result. Fast positions, used to draw the map, are always
-// local. Events are always computed locally, so they never wait on the network. Angles are radians,
-// times Unix milliseconds (UTC), and distances AU.
+// local. Events are always computed locally, so they never wait on the network. Horizons requests go
+// through the JPL queue, so an accurate position may wait behind another JPL request, within the limit
+// of the queue. Angles are radians, times Unix milliseconds (UTC), and distances AU.
 
 // Budget of one Horizons request in milliseconds.
 export const HORIZONS_TIMEOUT_MS = 8_000
@@ -185,21 +187,14 @@ export type HorizonsObserver = typeof horizonsObserver
 
 // Construction options of SkyEphemeris.
 export interface SkyEphemerisOptions {
+	// JPL queue; one of its own by default.
+	readonly queue?: SsdRequestQueue
 	// Horizons client; the nebulosa adapter by default.
 	readonly observer?: HorizonsObserver
 	// Horizons request budget in milliseconds; HORIZONS_TIMEOUT_MS by default.
 	readonly timeoutMs?: number
 	// Clock of the circuit breaker; Date.now by default.
 	readonly now?: () => number
-}
-
-// Horizons did not answer within the budget.
-export class HorizonsTimeoutError extends Error {
-	// Creates the error.
-	constructor() {
-		super('Horizons did not answer in time')
-		this.name = 'HorizonsTimeoutError'
-	}
 }
 
 // Horizons answered without an ephemeris (unknown target or invalid request). Not retried locally:
@@ -221,11 +216,16 @@ export class EphemerisUnavailableError extends Error {
 	}
 }
 
+// Whether the JPL queue refused the request, which says nothing about Horizons.
+function isQueueRefusal(error: unknown) {
+	return error instanceof SsdBusyError || error instanceof SsdThrottledError
+}
+
 // Returns why a Horizons failure is transient (and may fall back to a local model), or undefined for a
 // semantic failure that must be reported as is.
 function transientReason(error: unknown): EphemerisFallbackReason | undefined {
-	if (error instanceof HorizonsTimeoutError) return 'timeout'
 	if (error instanceof HorizonsEphemerisError) return undefined
+	if (isQueueRefusal(error)) return 'timeout'
 	if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) return 'timeout'
 	if (error instanceof TypeError) return 'network'
 	if (error instanceof Error && 'code' in error) return 'network'
@@ -620,20 +620,6 @@ function observerKey(observer?: SkyObserver) {
 	return observer ? `${observer.latitude.toFixed(4)},${observer.longitude.toFixed(4)},${observer.elevation.toFixed(0)}` : 'geo'
 }
 
-// Rejects with HorizonsTimeoutError when `promise` does not settle within `ms`.
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-	let timer: Timer | undefined
-	const timeout = new Promise<never>((_, reject) => {
-		timer = setTimeout(() => reject(new HorizonsTimeoutError()), ms)
-	})
-
-	try {
-		return await Promise.race([promise, timeout])
-	} finally {
-		clearTimeout(timer)
-	}
-}
-
 // Rejects with the abort reason as soon as `signal` aborts, without cancelling `promise`.
 async function untilAborted<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
 	if (!signal) return await promise
@@ -654,6 +640,7 @@ async function untilAborted<T>(promise: Promise<T>, signal?: AbortSignal): Promi
 
 // Ephemeris service with its Horizons cache, circuit breaker, Kepler orbit cache, and event cache.
 export class SkyEphemeris {
+	readonly #queue: SsdRequestQueue
 	readonly #observer: HorizonsObserver
 	readonly #timeoutMs: number
 	readonly #breaker: HorizonsCircuitBreaker
@@ -661,8 +648,9 @@ export class SkyEphemeris {
 	readonly #orbits = new LruCache<KeplerOrbit>(HORIZONS_CACHE_LIMIT)
 	readonly #events = new LruCache<SkyEvents>(EVENTS_CACHE_LIMIT)
 
-	// Creates the service; options replace the Horizons client, its budget, and the breaker clock.
+	// Creates the service; options replace the JPL queue, the Horizons client, its budget, and the breaker clock.
 	constructor(options: SkyEphemerisOptions = {}) {
+		this.#queue = options.queue ?? new SsdRequestQueue()
 		this.#observer = options.observer ?? horizonsObserver
 		this.#timeoutMs = options.timeoutMs ?? HORIZONS_TIMEOUT_MS
 		this.#breaker = new HorizonsCircuitBreaker(options.now ?? Date.now)
@@ -761,19 +749,19 @@ export class SkyEphemeris {
 		return promise
 	}
 
-	// Requests and parses one Horizons table, recording the outcome in the circuit breaker.
+	// Requests and parses one Horizons table in a turn of the JPL queue, recording the outcome in the circuit breaker. A
+	// refusal of the queue is not a failure of Horizons, so it never counts.
 	async #fetchTable(command: string, start: number, end: number, observer?: SkyObserver): Promise<readonly HorizonsSample[]> {
-		const signal = AbortSignal.timeout(this.#timeoutMs)
 		const site = observer ? geographic(observer) : undefined
-		const pending = this.#observer(command, site ? 'coord' : 'geo', site ? [site.longitude, site.latitude, site.elevation] : undefined, start, end, HORIZONS_QUANTITIES, { stepSize: SAMPLE_STEP_MS / 60_000, stepSizeUnit: 'm', refractionCorrection: false }, signal)
+		const options = { stepSize: SAMPLE_STEP_MS / 60_000, stepSizeUnit: 'm', refractionCorrection: false, headers: this.#queue.headers } as const
 
 		try {
-			const rows = await withTimeout(pending, this.#timeoutMs)
+			const rows = await this.#queue.run((signal) => this.#observer(command, site ? 'coord' : 'geo', site ? [site.longitude, site.latitude, site.elevation] : undefined, start, end, HORIZONS_QUANTITIES, options, signal), { timeoutMs: this.#timeoutMs })
 			this.#breaker.recordSuccess()
 			if (rows.length === 0) throw new HorizonsEphemerisError(`Horizons returned no ephemeris for ${command}`)
 			return rows.map((row, i) => parseHorizonsRow(row, start + i * SAMPLE_STEP_MS))
 		} catch (error) {
-			if (transientReason(error)) this.#breaker.recordFailure()
+			if (!isQueueRefusal(error) && transientReason(error)) this.#breaker.recordFailure()
 			throw error
 		}
 	}

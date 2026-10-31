@@ -4,6 +4,7 @@ import labels from '../../data/constellation.labels.json'
 import lines from '../../data/constellation.lines.json'
 import catalog from '../../data/sky.catalog.db' with { embed: 'true', type: 'sqlite' }
 import type { AnnotationSky } from '../annotations'
+import { SsdRequestQueue } from '../ssd'
 import { createActiveRegionRoutes, SolarActiveRegions } from './activeregions'
 import { type ConstellationSource, catalogStars, fieldConstellations, fieldObjects } from './catalog'
 import { SkyEphemeris } from './ephemeris'
@@ -23,8 +24,14 @@ assertSkyCatalogSchema(catalog)
 // J2000 constellation figures, boundaries, and labels.
 const constellations: ConstellationSource = { lines, labels, boundaries }
 
+// Queue of every request of the process to JPL.
+export const ssdRequests = new SsdRequestQueue()
+
+// Minor body lookups of the process, with their cache.
+export const minorBodies = new MinorBodies({ queue: ssdRequests })
+
 // Services shared by the sky routes and the sky locator.
-const services: SkyServices = { catalog, constellations, ephemeris: new SkyEphemeris(), minorBodies: new MinorBodies() }
+const services: SkyServices = { catalog, constellations, ephemeris: new SkyEphemeris({ queue: ssdRequests }), minorBodies }
 
 // Sky data of the image annotation: the J2000 objects and figures of a field.
 export const annotationSky: AnnotationSky = {

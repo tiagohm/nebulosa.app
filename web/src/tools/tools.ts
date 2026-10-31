@@ -3,6 +3,7 @@ import type { ToolId } from '../shell/route'
 import type { IconName } from '../ui/Icon'
 import { AstronomicalTimeConverter } from './astronomicaltime/AstronomicalTimeConverter'
 import { Calculator } from './calculator/Calculator'
+import { CloseApproaches } from './closeapproaches/CloseApproachesView'
 import { LunarEclipseMap } from './lunareclipse/LunarEclipseMap'
 import { MountPointingModel } from './mountpointing/MountPointingModel'
 import { MountRemoteControl } from './mountremotecontrol/MountRemoteControl'
@@ -37,6 +38,7 @@ export const TOOL_DEFINITIONS: Readonly<Record<ToolId, ToolDefinition>> = {
 	'astronomical-time-converter': { id: 'astronomical-time-converter', label: 'Astronomical Time Converter', description: 'Civil time, Julian dates, timescales, sidereal time, and epochs of any instant.', icon: 'clock', view: AstronomicalTimeConverter },
 	'solar-eclipse-map': { id: 'solar-eclipse-map', label: 'Solar Eclipse Map', description: 'Path and local circumstances of solar eclipses.', icon: 'sun', view: SolarEclipseMap },
 	'lunar-eclipse-map': { id: 'lunar-eclipse-map', label: 'Lunar Eclipse Map', description: 'Visibility and local circumstances of lunar eclipses.', icon: 'moon', view: LunarEclipseMap },
+	'close-approaches': { id: 'close-approaches', label: 'Close Approaches', description: 'Close encounters of asteroids and comets published by JPL, with the object behind each one.', icon: 'orbit', view: CloseApproaches },
 	'mount-remote-control': { id: 'mount-remote-control', label: 'Mount Remote Control', description: 'Lets planetarium programs drive the mount over the LX200 and Stellarium protocols.', icon: 'mount', view: MountRemoteControl },
 	'mount-pointing-model': { id: 'mount-pointing-model', label: 'Mount Pointing Model', description: 'Inspects, refits, and validates the pointing models of the mount.', icon: 'mount', view: MountPointingModel },
 	'alpaca-server': { id: 'alpaca-server', label: 'Alpaca Server', description: 'Publishes selected devices to ASCOM Alpaca clients on the network.', icon: 'server' },

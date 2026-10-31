@@ -54,6 +54,7 @@ export const ICONS = {
 	skipToEnd: 'M5 6l6 6l-6 6M11 6l6 6l-6 6M19 5v14',
 	save: 'M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6',
 	clock: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7v5l3 2',
+	orbit: 'M9.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M3 12c0-2.5 4-4.5 9-4.5s9 2 9 4.5s-4 4.5-9 4.5s-9-2-9-4.5',
 	layers: 'M12 4l9 5l-9 5l-9-5zM3 14l9 5l9-5',
 	frame: 'M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M9 9h6v6H9z',
 	pin: 'M9 4h6l-1 6l3 3H7l3-3zM12 13v7',

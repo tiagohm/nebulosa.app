@@ -26,8 +26,8 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 // (tppa.solver) to the plate solving settings each camera shares between its operations (plateSolving), and adds the
 // Pointing Model Builder form of each camera (pointingModel). Version 17 adds the Target Centering form of each camera
 // (targetCentering) and the saved framings of the profile (framingReferences). Version 18 adds the settings of the Star
-// Profile Inspector (starProfile).
-export const PROFILES_VERSION = 18
+// Profile Inspector (starProfile), and version 19 the preferences of the status bar (statusBar).
+export const PROFILES_VERSION = 19
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -75,7 +75,37 @@ export interface ProfileSettings {
 	// Appearance of the astrometric aids of solved images in Images (coordinates, grid, crosshair, scale bar, orientation);
 	// absent until edited, and then DEFAULT_IMAGE_ASTROMETRY holds. Whether a document shows its grid is the document's.
 	imageAstrometry?: ImageAstrometrySettings
+	// Preferences of the status bar; absent until edited, and then DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES holds.
+	statusBar?: StatusBarPreferences
 }
+
+// Readings the status bar clock can show: local apparent and mean sidereal time, Julian and Modified Julian Date in UTC,
+// and the UTC and local civil time. All of them are the real current time, never the Sky simulation clock.
+export const ASTRONOMICAL_CLOCK_READINGS = ['last', 'lmst', 'jd', 'mjd', 'utc', 'local'] as const
+
+// Reading of the status bar clock.
+export type AstronomicalClockReading = (typeof ASTRONOMICAL_CLOCK_READINGS)[number]
+
+// What the status bar clock shows.
+export interface AstronomicalClockPreferences {
+	// Whether the clock is shown.
+	readonly enabled: boolean
+	// Reading shown first.
+	readonly primary: AstronomicalClockReading
+	// Reading shown after it when room is left, never the primary one.
+	readonly secondary: AstronomicalClockReading | 'none'
+	// Whether time-of-day readings show seconds.
+	readonly showSeconds: boolean
+}
+
+// Preferences of the status bar.
+export interface StatusBarPreferences {
+	// What the clock shows.
+	readonly astronomicalClock: AstronomicalClockPreferences
+}
+
+// Clock of a profile that has not edited it: the local apparent sidereal time, with seconds.
+export const DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES: AstronomicalClockPreferences = { enabled: true, primary: 'last', secondary: 'none', showSeconds: true }
 
 // Notifications of the server history a profile read or dismissed, by notification id. Ids the history no longer
 // retains are dropped, so each list holds at most MAX_NOTIFICATION_IDS ids.

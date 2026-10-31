@@ -6,6 +6,7 @@ import {
 	activeGuiding,
 	cameraChip,
 	captureValue,
+	fitClocks,
 	fitItems,
 	connectionLabel,
 	coverChip,
@@ -325,6 +326,63 @@ describe('fitting chips', () => {
 	test('no room shows no chip', () => {
 		expect(fitItems(items, 0, 10, 0).visible.size).toBe(0)
 		expect(fitItems([], 0, 10, 0)).toEqual({ visible: new Set(), nameOthers: false, hidden: 0 })
+	})
+
+	describe('the clock', () => {
+		const clocks = [
+			{ id: 'last', width: 100 },
+			{ id: 'utc', width: 60 },
+		]
+		// The chips and their gaps take 330 px.
+		const CHIPS = 330
+
+		function fit(room: number, otherOperations: number = 0, summaryWidth: number = 0) {
+			const fitted = fitItems(items, room, 10, otherOperations)
+			return { fitted, shown: fitClocks(clocks, items, fitted, room, 10, otherOperations, summaryWidth) }
+		}
+
+		test('takes the room left after every chip, primary first', () => {
+			expect(fit(CHIPS + 180).shown).toEqual(new Set(['last', 'utc']))
+			expect(fit(CHIPS + 179).shown).toEqual(new Set(['last']))
+			expect(fit(CHIPS + 110).shown).toEqual(new Set(['last']))
+			expect(fit(CHIPS + 109).shown).toEqual(new Set())
+		})
+
+		test('the secondary never shows without the primary, even when it alone would fit', () => {
+			expect(fitClocks([{ id: 'last', width: 500 }, clocks[1]], items, fitItems(items, 1000, 10, 0), CHIPS + 100, 10, 0, 0)).toEqual(new Set())
+		})
+
+		test('never shows beside a chip that was left out', () => {
+			const narrow = fit(200)
+			expect(narrow.fitted.hidden).toBe(2)
+			expect(narrow.shown).toEqual(new Set())
+			expect(fitClocks([{ id: 'last', width: 1 }], items, fitItems(items, 200, 10, 0), 200, 10, 0, 0)).toEqual(new Set())
+		})
+
+		test('leaves the other operations their whole width', () => {
+			expect(fit(CHIPS + 300, 2, 180).shown).toEqual(new Set(['last']))
+			expect(fit(CHIPS + 299, 2, 190).shown).toEqual(new Set())
+		})
+
+		test('never shows while the other operations could only be counted', () => {
+			const { fitted, shown } = fit(340, 2)
+			expect(fitted.nameOthers).toBeFalse()
+			expect(shown).toEqual(new Set())
+		})
+
+		test('changes nothing fitItems decided, and is never counted', () => {
+			for (const [room, others] of [
+				[1000, 2],
+				[340, 2],
+				[200, 0],
+				[100, 1],
+				[0, 0],
+			]) {
+				const before = fitItems(items, room, 10, others)
+				const { fitted } = fit(room, others, 50)
+				expect(fitted).toEqual(before)
+			}
+		})
 	})
 })
 

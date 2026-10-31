@@ -15,6 +15,8 @@ import {
 	acquisitionSettings,
 	ACTIVE_PROFILE_KEY,
 	activeProfile,
+	astronomicalClockPreferences,
+	setAstronomicalClockPreferences,
 	activeSetup,
 	assignDevice,
 	autoFocusSettings,
@@ -91,6 +93,7 @@ import {
 	DEFAULT_CAMERA_PLATE_SOLVING,
 	DEFAULT_EXPOSURE_SETTINGS,
 	DEFAULT_ACQUISITION_SETTINGS,
+	DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES,
 	DEFAULT_DARV_SETTINGS,
 	DEFAULT_FLAT_WIZARD_FILTER,
 	DEFAULT_FLAT_WIZARD_SETTINGS,
@@ -1020,6 +1023,42 @@ describe('camera forms', () => {
 		const stored = { coordinates: { format: 'roman', precision: 1.5 }, grid: { mode: 'dots', labels: 'yes', minor: false, opacity: 4, color: 'accent' }, crosshair: true, scaleBar: 1, orientation: 'up' }
 		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 15, profiles: [{ id: 'a', name: 'A', settings: { imageAstrometry: stored } }] }))
 		expect(imageAstrometrySettings(load(invalid).profiles[0].settings)).toEqual({ ...DEFAULT_IMAGE_ASTROMETRY, grid: { ...DEFAULT_IMAGE_ASTROMETRY.grid, minor: false, color: 'accent' }, crosshair: true })
+	})
+
+	test('the status bar clock defaults to the apparent sidereal time, is kept per profile, and never repeats a reading', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		expect(astronomicalClockPreferences(activeProfile(state).settings)).toEqual(DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES)
+
+		setAstronomicalClockPreferences(state, { primary: 'jd', secondary: 'utc', showSeconds: false })
+		await Bun.sleep(0)
+		const expected = { enabled: true, primary: 'jd', secondary: 'utc', showSeconds: false }
+		expect(astronomicalClockPreferences(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual(expected as typeof DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES)
+
+		setAstronomicalClockPreferences(state, { primary: 'utc' })
+		expect(astronomicalClockPreferences(activeProfile(state).settings).secondary).toBe('none')
+	})
+
+	test('a version 18 document gets the default clock and keeps its other preferences', () => {
+		const stores = newStores()
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 18, profiles: [{ id: 'a', name: 'A', settings: { sky: { timeBar: true }, lastImageDirectory: '/data' } }] }))
+		const { settings } = load(stores).profiles[0]
+		expect(settings.statusBar).toBeUndefined()
+		expect(settings.sky.timeBar).toBeTrue()
+		expect(settings.lastImageDirectory).toBe('/data')
+		expect(astronomicalClockPreferences(settings)).toEqual(DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES)
+	})
+
+	test('an invalid status bar is restored field by field', () => {
+		const stored = (astronomicalClock: unknown) => {
+			const stores = newStores()
+			stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 19, profiles: [{ id: 'a', name: 'A', settings: { statusBar: { astronomicalClock } } }] }))
+			return astronomicalClockPreferences(load(stores).profiles[0].settings)
+		}
+
+		expect(stored({ enabled: 'no', primary: 'bogus', secondary: 7, showSeconds: 1 })).toEqual(DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES)
+		expect(stored({ enabled: false, primary: 'mjd', secondary: 'mjd', showSeconds: false })).toEqual({ enabled: false, primary: 'mjd', secondary: 'none', showSeconds: false })
+		expect(stored('x')).toEqual(DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES)
 	})
 
 	test('a version 14 document keeps its preferences and ignores the observatory code it stored', () => {

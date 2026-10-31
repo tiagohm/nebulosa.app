@@ -16,17 +16,21 @@ import { notificationsState } from '../../notifications/notifications'
 import { openNotificationTarget, targetAvailable } from '../../notifications/target'
 import { OPERATION_LABELS, operationsState } from '../../operations'
 import { activeProfile, activeSetup, profileState } from '../../profile/profile'
+import { BROWSER_TIME_ZONE } from '../../sky/clock'
+import { openAstronomicalTimeConverter, qualityNotes } from '../../tools/astronomicaltime/astronomicaltime'
 import { Icon, type IconName } from '../../ui/Icon'
 import { useNow } from '../../useNow'
 import { routeState } from '../route'
+import { astronomicalClockRuntime, clockApproximate, clockFreshness, clockReadingText, liveClock } from './astronomicalclock'
+import { useMonotonicNow } from './AstronomicalClockChip'
 import { activeCapture, activeGuiding, connectionLabel, formatElapsed, guidingValue, otherOperations, progressText, roleDetailValue, scopedDeviceErrors, scopedRunningOperations, type ScopedDevice, serverLinkLabel, sessionOperationIds } from './selectors'
 import { TONE_CLASSES } from './StatusItems'
 
 // Details of the status bar: a button at its right end, showing how many items the bar left out, that opens a panel
 // above itself with everything the bar summarizes for the active profile's server connection — the server link and
 // the selected connection, every role with its device and what it reports, the running capture and guiding
-// sessions, every other running operation with its devices, elapsed time, and reported progress, and the device
-// failures. The panel is placed in the viewport (fixed), so the clipping bar never cuts it, and closes when the
+// sessions, every other running operation with its devices, elapsed time, and reported progress, the device
+// failures, and the real-time clock, even when the bar has no room for it. The panel is placed in the viewport (fixed), so the clipping bar never cuts it, and closes when the
 // button is pressed again, on a press outside both, on Escape (returning the focus to the button), when the window
 // resizes, and after it opened a device or a camera tab. It only shows and navigates: closing it, or anything it
 // opens, never stops a session or an operation.
@@ -186,7 +190,55 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 					))}
 				</Section>
 			)}
+			<AstronomicalTimeSection onNavigate={onClose} />
 		</div>
+	)
+}
+
+interface AstronomicalTimeSectionProps {
+	// Called after the converter was opened.
+	readonly onNavigate: () => void
+}
+
+// Real current time in every form the clock shows, with the site, its accuracy, and the way to the converter.
+function AstronomicalTimeSection({ onNavigate }: AstronomicalTimeSectionProps) {
+	const now = useMonotonicNow()
+	const profiles = useSnapshot(profileState)
+	const { sample } = useSnapshot(astronomicalClockRuntime)
+	const observer = activeProfile(profiles).settings.sky.observer
+	const timeZone = observer?.timeZone ?? BROWSER_TIME_ZONE
+	const freshness = clockFreshness(sample, now)
+	const live = sample && freshness !== 'expired' ? liveClock(sample, now) : undefined
+	const approximate = clockApproximate(sample)
+	const readings = (['utc', 'local', 'jd', 'mjd', ...(observer ? (['last', 'lmst'] as const) : [])] as const).map((reading) => clockReadingText(reading, live, timeZone, true, approximate))
+
+	return (
+		<Section title="Astronomical Time">
+			{readings.map(({ label, value }) => (
+				<Row key={label} label={label}>
+					<span className="tabular-nums">{value}</span>
+					{label === 'Local' && ` · ${timeZone}`}
+				</Row>
+			))}
+			{observer ? <Row label="Site">{observer.name ?? `${observer.latitude.toFixed(4)}°, ${observer.longitude.toFixed(4)}°`}</Row> : <p className="m-0 text-ink-300">Sidereal times need a Sky observer in this profile.</p>}
+			{freshness === 'stale' && <p className="m-0 text-ink-300">Not updated recently: the server is not answering.</p>}
+			{sample &&
+				qualityNotes(sample.reference.quality).map((note) => (
+					<p key={note} className="m-0 text-ink-300">
+						{note}
+					</p>
+				))}
+			<button
+				type="button"
+				onClick={() => {
+					openAstronomicalTimeConverter()
+					onNavigate()
+				}}
+				className="cursor-pointer self-start border-0 bg-transparent p-0 text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+			>
+				Open Astronomical Time Converter
+			</button>
+		</Section>
 	)
 }
 

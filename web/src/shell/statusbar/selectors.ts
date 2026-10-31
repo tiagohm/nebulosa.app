@@ -398,6 +398,34 @@ export function fitItems(items: readonly BarItem[], room: number, gap: number, o
 	return { visible, nameOthers, hidden: items.length - visible.size + (nameOthers ? 0 : otherOperations) }
 }
 
+// Reading of the clock as the fitting sees it.
+export interface BarClock {
+	// Id of the reading.
+	readonly id: string
+	// Width of the reading as rendered, in CSS pixels.
+	readonly width: number
+}
+
+// Returns the readings of the clock that fit, in order, a later one only if the one before it fit. The clock is opportunistic:
+// it takes no room fitItems gave out, so it is shown only when nothing else is left out, in the room left after every chip and
+// after the measured width of the summary of the other operations. Never counted on the details button, which always lists it.
+// Widths and room are in CSS pixels, as for fitItems.
+export function fitClocks(clocks: readonly BarClock[], items: readonly BarItem[], { visible, nameOthers }: Pick<FittedItems, 'visible' | 'nameOthers'>, room: number, gap: number, otherOperations: number, summaryWidth: number): Set<string> {
+	const shown = new Set<string>()
+	if (visible.size !== items.length || (otherOperations > 0 && !nameOthers)) return shown
+
+	let left = room - items.reduce((sum, item) => sum + item.width + gap, 0) - (nameOthers ? summaryWidth + gap : 0)
+
+	for (const clock of clocks) {
+		const cost = clock.width + gap
+		if (cost > left) break
+		shown.add(clock.id)
+		left -= cost
+	}
+
+	return shown
+}
+
 // Returns the value of a role's device for the details panel: the role status while it is not connected, otherwise
 // the full reading of its chip (see roleChip), in the active tone while it moves.
 export function roleDetailValue(role: EquipmentRole, status: RoleStatus, device: Pick<DeviceSummary, 'id' | 'connectionId' | 'connected'> | undefined, control: Pick<ControlRuntime, 'watched' | 'states'>, guiding?: GuidingSessionSummary): StatusValue {

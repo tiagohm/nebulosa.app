@@ -2,13 +2,14 @@ import { useSnapshot } from 'valtio'
 import { navigate, routeState, SETTINGS_SECTION_IDS, type SettingsSectionId, settingsSection } from '../shell/route'
 import { Select } from '../ui/Select'
 import { ExternalToolsActions, ExternalToolsSettings } from './ExternalToolsSettings'
+import { StatusBarSettings } from './StatusBarSettings'
 
 // Settings page (the gear button of the top bar): a selector of its sections in the header, like the Images tool
 // selector, with the actions of the section shown beside it, and the section below. The section shown is part of
-// the URL. External Tools is the only section for now.
+// the URL. External Tools belongs to the server instance, Status Bar to the active profile.
 
 // Display name of each section.
-const SECTION_LABELS: Readonly<Record<SettingsSectionId, string>> = { 'external-tools': 'External Tools' }
+const SECTION_LABELS: Readonly<Record<SettingsSectionId, string>> = { 'external-tools': 'External Tools', 'status-bar': 'Status Bar' }
 
 // Settings page.
 export function SettingsPage() {
@@ -24,6 +25,7 @@ export function SettingsPage() {
 				<div className="ml-auto flex flex-none items-center gap-2">{section === 'external-tools' && <ExternalToolsActions />}</div>
 			</header>
 			{section === 'external-tools' && <ExternalToolsSettings tool={tool} />}
+			{section === 'status-bar' && <StatusBarSettings />}
 		</section>
 	)
 }

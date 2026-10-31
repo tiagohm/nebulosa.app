@@ -10,11 +10,13 @@ import { DEFAULT_APERTURE_RADIUS, DEFAULT_ASTAP_SETTINGS, DEFAULT_BUILTIN_SETTIN
 import { isRecord } from '../storage'
 import { clampStreakSettings, DEFAULT_STREAK_SETTINGS, STREAK_LIMITS, STREAK_PLANES, type StreakNumericSetting } from '../streaks/streaks'
 import {
+	ASTRONOMICAL_CLOCK_READINGS,
 	type AutoFocusSettings,
 	type CameraAcquisitionSettings,
 	type CameraExposureSettings,
 	type CameraSettings,
 	DEFAULT_ACQUISITION_SETTINGS,
+	DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES,
 	DEFAULT_AUTO_FOCUS_SETTINGS,
 	DEFAULT_EXPOSURE_SETTINGS,
 	defaultSettings,
@@ -27,6 +29,7 @@ import {
 	type SkyFramingSettings,
 	type SkyObserverSettings,
 	type SkySettings,
+	type StatusBarPreferences,
 	DARV_MAXIMUM_LEG_DURATION,
 	DARV_MINIMUM_LEG_DURATION,
 	type DarvSettings,
@@ -664,6 +667,19 @@ function normalizeImageAstrometry(value: unknown): ImageAstrometrySettings | und
 	}
 }
 
+// Restores the persisted preferences of the status bar (version 19), filling every invalid field with its default; a
+// secondary reading equal to the primary one is none. Undefined for anything that is not a record.
+function normalizeStatusBar(value: unknown): StatusBarPreferences | undefined {
+	if (!isRecord(value)) return undefined
+
+	const clock = isRecord(value.astronomicalClock) ? value.astronomicalClock : {}
+	const defaults = DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES
+	const primary = oneOf(clock.primary, ASTRONOMICAL_CLOCK_READINGS) ? clock.primary : defaults.primary
+	const secondary = oneOf(clock.secondary, ASTRONOMICAL_CLOCK_READINGS) && clock.secondary !== primary ? clock.secondary : 'none'
+
+	return { astronomicalClock: { enabled: typeof clock.enabled === 'boolean' ? clock.enabled : defaults.enabled, primary, secondary, showSeconds: typeof clock.showSeconds === 'boolean' ? clock.showSeconds : defaults.showSeconds } }
+}
+
 // Restores persisted preferences, falling back to the default of every missing or invalid preference.
 function normalizeSettings(value: unknown): ProfileSettings {
 	const settings = defaultSettings()
@@ -702,6 +718,8 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	if (notifications) settings.notifications = notifications
 	const imageAstrometry = normalizeImageAstrometry(value.imageAstrometry)
 	if (imageAstrometry) settings.imageAstrometry = imageAstrometry
+	const statusBar = normalizeStatusBar(value.statusBar)
+	if (statusBar) settings.statusBar = statusBar
 
 	return settings
 }
@@ -849,7 +867,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 15:
 		case 16:
 		case 17:
-		case 18: {
+		case 18:
+		case 19: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

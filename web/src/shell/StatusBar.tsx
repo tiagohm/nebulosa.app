@@ -1,5 +1,5 @@
 import { cn } from 'cn'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { captureRuntime } from '../camera/capture'
 import { guidingRuntime } from '../camera/guiding'
@@ -10,11 +10,14 @@ import { roleDefinition } from '../equipment/roles'
 import { useActiveServerId, useWatchedDevices } from '../equipment/useEquipment'
 import { notificationsState } from '../notifications/notifications'
 import { operationsState } from '../operations'
-import { activeProfile, activeSetup, profileState } from '../profile/profile'
+import { activeProfile, activeSetup, astronomicalClockPreferences, profileState } from '../profile/profile'
+import { BROWSER_TIME_ZONE } from '../sky/clock'
 import { Icon, type IconName } from '../ui/Icon'
 import { abortProfileMount } from './statusbar/abort'
+import { astronomicalClockRuntime, effectiveReadings, watchAstronomicalClock } from './statusbar/astronomicalclock'
+import { AstronomicalClockChip } from './statusbar/AstronomicalClockChip'
 // oxfmt-ignore
-import { activeCapture, activeGuiding, captureValue, CHIP_ROLES, type ChipRole, type ChipValue, fitItems, type FittedItems, mountAbortTarget, mountMoving, operationsSummary, otherOperations, roleChip, type ScopedDevice, scopedDeviceErrors, scopedRunningOperations, sessionOperationIds } from './statusbar/selectors'
+import { activeCapture, activeGuiding, captureValue, CHIP_ROLES, type ChipRole, type ChipValue, fitClocks, fitItems, type FittedItems, mountAbortTarget, mountMoving, operationsSummary, otherOperations, roleChip, type ScopedDevice, scopedDeviceErrors, scopedRunningOperations, sessionOperationIds } from './statusbar/selectors'
 import { StatusDetails } from './statusbar/StatusDetailsPanel'
 import { ServerLinkItem, StatusChip } from './statusbar/StatusItems'
 
@@ -25,7 +28,8 @@ import { ServerLinkItem, StatusChip } from './statusbar/StatusItems'
 // no chip. A narrower bar shows fewer chips, by priority, and counts the others on the details button; the server
 // link, the failures, and the Abort are never left out. While the mount of the profile moves, the bar offers an Abort
 // of that mount alone, through the same stop command as the Equipment Control page; nothing here stops any other
-// device.
+// device. In the room all of that leaves, the bar shows the real-time clock the profile asks for, which opens the
+// Astronomical Time Converter; it never takes room from anything else, and is never the Sky simulation clock.
 
 // Gap between the items of the bar, in CSS pixels (gap-3).
 const ITEM_GAP = 12
@@ -47,6 +51,14 @@ const CHIP_ICONS: Readonly<Record<ChipRole, IconName>> = {
 	DOME: 'dome',
 	COVER: 'cover',
 	FLAT_PANEL: 'flatPanel',
+}
+
+// Id of the hidden copy of the summary of the other operations, measured so a clock leaves it its room.
+const SUMMARY_ID = 'summary'
+
+// Returns whether two sets hold the same ids.
+function sameIds(a: ReadonlySet<string>, b: ReadonlySet<string>) {
+	return a.size === b.size && [...a].every((id) => b.has(id))
 }
 
 // Chip of the bar: its id, icon, name, reading, and device.
@@ -72,6 +84,7 @@ export function StatusBar() {
 	const groupRef = useRef<HTMLSpanElement>(null)
 	const measureRef = useRef<HTMLDivElement>(null)
 	const [fitted, setFitted] = useState<FittedItems>()
+	const [fittedClocks, setFittedClocks] = useState<ReadonlySet<string>>()
 	const [, setFooterWidth] = useState(0)
 	const serverId = useActiveServerId()
 	const profiles = useSnapshot(profileState)
@@ -81,7 +94,13 @@ export function StatusBar() {
 	const captures = useSnapshot(captureRuntime)
 	const guiding = useSnapshot(guidingRuntime)
 	const devices = useWatchedDevices()
-	const setup = activeSetup(activeProfile(profiles))
+	const profile = activeProfile(profiles)
+	const setup = activeSetup(profile)
+	const observer = profile.settings.sky.observer
+	const clock = astronomicalClockPreferences(profile.settings)
+	const readings = effectiveReadings(clock, observer !== undefined)
+	const timeZone = observer?.timeZone ?? BROWSER_TIME_ZONE
+	const site = observer && (observer.name ?? `${observer.latitude.toFixed(4)}°, ${observer.longitude.toFixed(4)}°`)
 	const mount = roleDevice(setup, 'MOUNT', devices)
 	const mainCamera = roleDevice(setup, 'MAIN_CAMERA', devices)
 	const running = scopedRunningOperations(operations, serverId)
@@ -110,6 +129,17 @@ export function StatusBar() {
 		}
 	}
 
+	const summary = others.length > 0 ? operationsSummary(others) : undefined
+	const [latitude, longitude, elevation] = [observer?.latitude, observer?.longitude, observer?.elevation]
+	const clockShown = clock.enabled
+
+	// Keeps the sample of the clock current while it is shown, for the observer of the profile; a socket that comes back
+	// starts it again, since a server that was away may have restarted.
+	useEffect(() => {
+		if (!clockShown) return
+		return watchAstronomicalClock(astronomicalClockRuntime, latitude === undefined || longitude === undefined || elevation === undefined ? undefined : { latitude, longitude, elevation })
+	}, [clockShown, latitude, longitude, elevation, link])
+
 	// Re-renders when the bar or a chip changes size, so the chips are fitted again.
 	useLayoutEffect(() => {
 		const footer = footerRef.current
@@ -132,13 +162,19 @@ export function StatusBar() {
 		const fixed = Array.from(group.querySelectorAll<HTMLElement>('[data-fixed]'))
 		const groupWidth = GROUP_INSET + fixed.reduce((sum, element) => sum + element.offsetWidth, 0) + ITEM_GAP * Math.max(0, fixed.length - 1)
 		const room = footer.clientWidth - BAR_PADDING - (serverRef.current?.offsetWidth ?? 0) - ITEM_GAP - groupWidth
-		const next = fitItems(
-			chips.map((chip) => ({ id: chip.id, moving: chip.value.moving, active: chip.active, width: widths.get(chip.id) ?? 0 })),
+		const items = chips.map((chip) => ({ id: chip.id, moving: chip.value.moving, active: chip.active, width: widths.get(chip.id) ?? 0 }))
+		const next = fitItems(items, room, ITEM_GAP, others.length)
+		setFitted((current) => (current && current.hidden === next.hidden && current.nameOthers === next.nameOthers && sameIds(current.visible, next.visible) ? current : next))
+		const clocks = fitClocks(
+			readings.map((reading) => ({ id: reading, width: widths.get(reading) ?? 0 })),
+			items,
+			next,
 			room,
 			ITEM_GAP,
 			others.length,
+			widths.get(SUMMARY_ID) ?? 0,
 		)
-		setFitted((current) => (current && current.hidden === next.hidden && current.nameOthers === next.nameOthers && current.visible.size === next.visible.size && [...next.visible].every((id) => current.visible.has(id)) ? current : next))
+		setFittedClocks((current) => (current && sameIds(current, clocks) ? current : clocks))
 	})
 
 	const visible = fitted?.visible
@@ -153,15 +189,22 @@ export function StatusBar() {
 						<StatusChip icon={chip.icon} label={chip.label} value={chip.value} />
 					</span>
 				))}
+				{summary && <span data-chip={SUMMARY_ID}>{summary}</span>}
+				{readings.map((reading) => (
+					<span key={reading} data-chip={reading} className="flex">
+						<AstronomicalClockChip reading={reading} timeZone={timeZone} showSeconds={clock.showSeconds} site={site} measure />
+					</span>
+				))}
 			</div>
 			<ServerLinkItem ref={serverRef} />
 			{chips.map((chip) => (!visible || visible.has(chip.id)) && <StatusChip key={chip.id} icon={chip.icon} label={chip.label} value={chip.value} device={chip.device} />)}
 			<span ref={groupRef} className="ml-auto flex min-w-0 items-center gap-3 border-l border-line-100 pl-3">
 				{nameOthers && (
 					<span title={online ? undefined : 'Server offline: last known operations'} className={cn('min-w-0 truncate', online ? 'text-accent' : 'text-ink-300')}>
-						{operationsSummary(others)}
+						{summary}
 					</span>
 				)}
+				{readings.map((reading) => fittedClocks?.has(reading) && <AstronomicalClockChip key={reading} reading={reading} timeZone={timeZone} showSeconds={clock.showSeconds} site={site} />)}
 				{errors.length > 0 && (
 					<span data-fixed title={errors.map((error) => `${error.name}: ${error.message}`).join('\n')} className="flex flex-none items-center gap-1 text-danger">
 						<Icon name="error" className="size-3.5" />

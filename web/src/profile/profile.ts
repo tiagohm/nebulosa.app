@@ -12,12 +12,14 @@ import { parseJson, readText, type Stores, writeText } from '../storage'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
 import { migrate, normalizeDegrees, normalizeSkyObserver } from './migrate'
 import {
+	type AstronomicalClockPreferences,
 	type AutoFocusSettings,
 	type CameraAcquisitionSettings,
 	type CameraExposureSettings,
 	type CameraIdentity,
 	type CameraSettings,
 	DEFAULT_ACQUISITION_SETTINGS,
+	DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES,
 	DEFAULT_AUTO_FOCUS_SETTINGS,
 	DEFAULT_EXPOSURE_SETTINGS,
 	DEFAULT_PROFILE_NAME,
@@ -490,6 +492,20 @@ export function starProfileSettings(settings: Pick<ProfileSettings, 'starProfile
 export function setStarProfileSettings(state: ProfileState, patch: Partial<StarProfileSettings>) {
 	const profile = activeProfile(state)
 	profile.settings.starProfile = { ...starProfileSettings(profile.settings), ...patch }
+	touch(profile)
+}
+
+// Returns what the status bar clock of a profile shows.
+export function astronomicalClockPreferences(settings: Pick<ProfileSettings, 'statusBar'>): AstronomicalClockPreferences {
+	return settings.statusBar?.astronomicalClock ?? DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES
+}
+
+// Changes what the status bar clock of the active profile shows; a secondary reading left equal to the primary one
+// becomes none.
+export function setAstronomicalClockPreferences(state: ProfileState, patch: Partial<AstronomicalClockPreferences>) {
+	const profile = activeProfile(state)
+	const clock = { ...astronomicalClockPreferences(profile.settings), ...patch }
+	profile.settings.statusBar = { astronomicalClock: clock.secondary === clock.primary ? { ...clock, secondary: 'none' } : clock }
 	touch(profile)
 }
 

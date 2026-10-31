@@ -48,7 +48,7 @@ describe('inspectStar', () => {
 	test('asks for the star near the point and keeps the answer', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const done = inspectStar(images, KEY, IMAGE, POINT, undefined, DEFAULT_STAR_PROFILE_SETTINGS, request)
 
 		expect(images.views[KEY].starProfile).toMatchObject({ imageId: IMAGE, status: 'measuring' })
 		expect(calls[0].url).toBe('/api/images/image/star-profile')
@@ -64,9 +64,9 @@ describe('inspectStar', () => {
 	test('says when a detection already found the star', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const done = inspectStar(images, KEY, IMAGE, POINT, true, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const done = inspectStar(images, KEY, IMAGE, POINT, 3.2, DEFAULT_STAR_PROFILE_SETTINGS, request)
 
-		expect(calls[0].body.detected).toBeTrue()
+		expect(calls[0].body.detectedHfd).toBe(3.2)
 		calls[0].answer(MEASURED)
 		await done
 	})
@@ -74,7 +74,7 @@ describe('inspectStar', () => {
 	test('keeps why no star was found, with no measured star', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const done = inspectStar(images, KEY, IMAGE, POINT, undefined, DEFAULT_STAR_PROFILE_SETTINGS, request)
 		calls[0].answer(NO_STAR)
 		await done
 
@@ -85,8 +85,8 @@ describe('inspectStar', () => {
 	test('a newer measurement aborts the one before it, and a late answer of that one is dropped', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const first = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
-		const second = inspectStar(images, KEY, IMAGE, { x: 50, y: 60 }, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const first = inspectStar(images, KEY, IMAGE, POINT, undefined, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const second = inspectStar(images, KEY, IMAGE, { x: 50, y: 60 }, undefined, DEFAULT_STAR_PROFILE_SETTINGS, request)
 
 		expect(calls[0].signal.aborted).toBeTrue()
 		expect(calls[1].signal.aborted).toBeFalse()
@@ -102,7 +102,7 @@ describe('inspectStar', () => {
 	test('an answer arriving after the state was cleared never comes back', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const done = inspectStar(images, KEY, IMAGE, POINT, undefined, DEFAULT_STAR_PROFILE_SETTINGS, request)
 
 		clearStarProfile(images.views[KEY])
 		expect(calls[0].signal.aborted).toBeTrue()
@@ -115,7 +115,7 @@ describe('inspectStar', () => {
 	test('an answer for a document closed meanwhile is dropped', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const done = inspectStar(images, KEY, IMAGE, POINT, undefined, DEFAULT_STAR_PROFILE_SETTINGS, request)
 
 		delete images.views[KEY]
 		calls[0].answer(MEASURED)
@@ -126,7 +126,7 @@ describe('inspectStar', () => {
 	test('a failure is kept with its message', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const done = inspectStar(images, KEY, IMAGE, POINT, undefined, DEFAULT_STAR_PROFILE_SETTINGS, request)
 		calls[0].fail(new Error('unreachable'))
 		await done
 
@@ -136,7 +136,7 @@ describe('inspectStar', () => {
 	test('a failed response keeps the message of the API', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const done = inspectStar(images, KEY, IMAGE, POINT, undefined, DEFAULT_STAR_PROFILE_SETTINGS, request)
 		calls[0].answer({ error: 'Image not found', code: 'notFound' } as unknown as StarProfileResult, 404)
 		await done
 
@@ -148,12 +148,12 @@ describe('reinspectStar', () => {
 	test('measures the same point with new settings, keeping how the star was found', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const first = inspectStar(images, KEY, IMAGE, POINT, true, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const first = inspectStar(images, KEY, IMAGE, POINT, 3.2, DEFAULT_STAR_PROFILE_SETTINGS, request)
 		calls[0].answer(MEASURED)
 		await first
 
 		const again = reinspectStar(images, KEY, { ...DEFAULT_STAR_PROFILE_SETTINGS, model: 'moments', minSNR: 3 }, request)
-		expect(calls[1].body).toEqual({ x: 10.5, y: 20.5, detected: true, model: 'moments', searchRadius: 8, maximumRadius: 32, minSNR: 3 })
+		expect(calls[1].body).toEqual({ x: 10.5, y: 20.5, detectedHfd: 3.2, model: 'moments', searchRadius: 8, maximumRadius: 32, minSNR: 3 })
 		calls[1].answer(MEASURED)
 		await again
 	})

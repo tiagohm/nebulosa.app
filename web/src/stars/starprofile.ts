@@ -14,11 +14,11 @@ import type { StarProfileMeasurementSettings } from './starprofile.settings'
 // Token of the latest measurement started in the tab.
 let token = 0
 
-// Measures the star near a point of the image of a document, replacing what the document shows. detected says that a
-// star detection already found a star at the point. Ignored for an unknown key.
-export function inspectStar(state: ImagesState, key: string, imageId: string, point: Point, detected: boolean, settings: StarProfileMeasurementSettings, request: typeof fetch = fetch) {
+// Measures the star near a point of the image of a document, replacing what the document shows. detectedHfd is the HFD a
+// star detection measured for a star at the point, in pixels, if it found one. Ignored for an unknown key.
+export function inspectStar(state: ImagesState, key: string, imageId: string, point: Point, detectedHfd: number | undefined, settings: StarProfileMeasurementSettings, request: typeof fetch = fetch) {
 	const { model, searchRadius, maximumRadius, minSNR } = settings
-	const body: StarProfileRequest = { x: point.x, y: point.y, ...(detected && { detected }), model, searchRadius, maximumRadius, minSNR }
+	const body: StarProfileRequest = { x: point.x, y: point.y, ...(detectedHfd !== undefined && { detectedHfd }), model, searchRadius, maximumRadius, minSNR }
 	return measure(state, key, imageId, body, request)
 }
 

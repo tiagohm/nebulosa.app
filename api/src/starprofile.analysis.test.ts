@@ -15,11 +15,11 @@ const REQUEST: StarProfileRequest = { x: 0, y: 0, model: 'moments', searchRadius
 // A star at (x, y), with a peak and a width in pixels: the sigma of a Gaussian, or the alpha of a Moffat of a given beta.
 type Star = readonly [x: number, y: number, peak: number, width?: number, beta?: number]
 
-// A sky of 0.1 with low noise, and stars, as a 16-bit image of size pixels.
-function field(stars: readonly Star[], size = SIZE, seed = 11): Image {
+// A sky of 0.1 with noise of a given peak-to-peak range, and stars, as a 16-bit image of size pixels.
+function field(stars: readonly Star[], size = SIZE, seed = 11, noise = 0.002): Image {
 	const raw = new Float32Array(size * size).fill(0.1)
 	const random = mulberry32(seed)
-	for (let i = 0; i < raw.length; i++) raw[i] += (random() - 0.5) * 0.002
+	for (let i = 0; i < raw.length; i++) raw[i] += (random() - 0.5) * noise
 
 	for (const [sx, sy, peak, width = 1.5, beta] of stars) {
 		for (let y = 0; y < size; y++) {
@@ -92,13 +92,19 @@ test('the nearest star wins over a brighter one, and two equally near are ambigu
 	expect(inspect(image, 128, 120, { searchRadius: 10 })).toMatchObject({ status: 'noStar', reason: 'ambiguous' })
 })
 
-test('a centroid pulled away to a brighter neighbor is ambiguous, not that neighbor', () => {
+test('a faint star beside a brighter one is measured, not that neighbor', () => {
 	const image = field([
 		[120, 120, 0.1],
 		[132, 120, 0.8],
 	])
 
-	expect(inspect(image, 123, 120)).toMatchObject({ status: 'noStar', reason: 'ambiguous' })
+	expect(measured(inspect(image, 123, 120)).profile.x).toBeCloseTo(120, 0)
+})
+
+test('a centroid carried away from where it started is ambiguous, not what carried it', () => {
+	const image = field([[132, 120, 0.8]])
+
+	expect(inspect(image, 123, 120, { detectedHfd: 6 })).toMatchObject({ status: 'noStar', reason: 'ambiguous' })
 })
 
 test('a faint star beside much brighter ones is found', () => {
@@ -127,7 +133,30 @@ test('the sky where the detector cannot look finds no star', () => {
 
 test('a star a detection already found skips the search', () => {
 	const image = field([[120.3, 90.6, 0.4]])
-	expect(measured(inspect(image, 120.3, 90.6, { detected: true })).profile.x).toBeCloseTo(120.3, 1)
+	expect(measured(inspect(image, 120.3, 90.6, { detectedHfd: 3.5 })).profile.x).toBeCloseTo(120.3, 1)
+})
+
+test('a faint star on a real sky keeps its aperture, its size, and its place among its neighbors', () => {
+	// Sky noise that keeps the positive samples of an outer band above 1% of the flux, which grew the aperture to its limit.
+	const image = field(
+		[
+			[120, 120, 0.05],
+			[150, 112, 0.4],
+			[96, 141, 0.3],
+			[141, 150, 0.6],
+			[92, 96, 0.5],
+		],
+		SIZE,
+		11,
+		0.01,
+	)
+
+	const { profile } = measured(inspect(image, 121.5, 119))
+
+	expect(Math.hypot(profile.x - 120, profile.y - 120)).toBeLessThan(0.5)
+	// A Gaussian of sigma 1.5 px has an HFD of about 3.5 px.
+	expect(profile.hfd!).toBeLessThan(5)
+	expect(profile.valid).toBeTrue()
 })
 
 test('saturation is flagged against the full scale, and unknown after a rescale', () => {

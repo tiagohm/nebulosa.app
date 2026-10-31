@@ -287,7 +287,7 @@ export function ImagesWorkspace() {
 														const star = index === undefined ? undefined : stars?.stars[index]
 														// A frame the camera would replace stays shown while its star is looked at.
 														holdCameraFrame(imagesState, document.key)
-														void inspectStar(imagesState, document.key, imageInfo.id, star ? { x: star.x, y: star.y } : { x: point.x - 0.5, y: point.y - 0.5 }, !!star, profileSettings)
+														void inspectStar(imagesState, document.key, imageInfo.id, star ? { x: star.x, y: star.y } : { x: point.x - 0.5, y: point.y - 0.5 }, star?.hfd, profileSettings)
 													}
 												: lines && document && tool === 'streak-detection'
 													? (point, overlay) => {

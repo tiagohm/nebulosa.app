@@ -1,4 +1,4 @@
-import { detectStars } from 'nebulosa/src/imaging/stars/detector'
+import { detectStars, STAR_SIGNAL_RADIUS } from 'nebulosa/src/imaging/stars/detector'
 import { measureStarProfile, type StarProfile, type StarProfileModel } from 'nebulosa/src/imaging/stars/profile'
 import { moffatProfileValue, type MoffatProfileFit } from 'nebulosa/src/imaging/stars/profile.moffat'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
@@ -16,6 +16,20 @@ import type { DocumentSize, ImageRect, ImageRegion, SampleConversion } from './i
 
 // Pixels from the edge of an image inside which detectStars finds no candidate: its margin of 4 pixels plus its kernel.
 const DETECTION_EDGE = 8
+
+// Radius of the signal aperture of a star, in HFDs: about twice its FWHM, which holds all but its faint wings. The size
+// comes from the detector because the profile cannot find it on a real sky: it grows an aperture until the positive
+// samples of its outer band fall below 1% of the flux, which their noise alone keeps above that on all but bright stars,
+// so the aperture would reach its limit, take in the neighbors, and carry the centroid away.
+const APERTURE_HFDS = 2
+
+// Radius of the signal aperture of a star measured where the detector cannot look, in pixels: nothing says how large it
+// is, and it is cut by the frame edge anyway.
+const EDGE_APERTURE_RADIUS = 8
+
+// Passes of the profile over the aperture: the first one recentres it on the star, the second one measures it there. Any
+// more only walk the centroid towards what is brighter around it.
+const MEASUREMENT_PASSES = 2
 
 // Signal of the brightest sample of a star measured where the detector cannot look, in background deviations: well
 // above the noise peak of an aperture of any size, whose flux-based SNR grows with the aperture and proves nothing.
@@ -46,14 +60,14 @@ export interface StarProfileRequest {
 	readonly x: number
 	// Row of the point, in pixels of the image.
 	readonly y: number
-	// Whether a star detection already found a star at the point, so the search for one is skipped; it is measured all
-	// the same.
-	readonly detected?: boolean
+	// HFD a star detection measured for a star at the point, in pixels, so the search for one is skipped; it is measured
+	// all the same.
+	readonly detectedHfd?: number
 	// Requested model; a Moffat fit that is rejected falls back to the moments.
 	readonly model: StarProfileModel
 	// Distance from the point a star is looked for within, in pixels.
 	readonly searchRadius: number
-	// Largest signal-aperture radius, in pixels.
+	// Largest signal-aperture radius, in pixels; both the detector and the aperture of the star stop there.
 	readonly maximumRadius: number
 	// Minimum SNR of a candidate star and of a valid profile.
 	readonly minSNR: number
@@ -162,6 +176,17 @@ export function regionAround({ x, y }: Readonly<Point>, halfSize: number, { widt
 	return { left, top, width: right - left + 1, height: bottom - top + 1 }
 }
 
+// Star found near a point: where it is, in pixels of the region, and its HFD, in pixels.
+interface Candidate extends Readonly<Point> {
+	readonly hfd: number
+}
+
+// Returns the radius of the aperture that measures a star of a given HFD, or one found nowhere, in pixels.
+function apertureRadius(candidate: Candidate | undefined, maximumRadius: number): number {
+	const radius = candidate ? Math.max(STAR_SIGNAL_RADIUS, Math.ceil(APERTURE_HFDS * candidate.hfd)) : EDGE_APERTURE_RADIUS
+	return Math.min(radius, maximumRadius)
+}
+
 // Returns an image the detector can read: itself, or a copy with its non-finite samples set to 0, since the running sums
 // of the detector would carry one of them over every star after it. The profile still measures the samples as they are.
 function finiteImage(image: ImageRegion['image']): ImageRegion['image'] {
@@ -170,7 +195,7 @@ function finiteImage(image: ImageRegion['image']): ImageRegion['image'] {
 
 // Returns the detected star nearest a point of a region and within searchRadius, undefined when there is none, or
 // ambiguous when another one is about as near.
-function nearestCandidate(image: ImageRegion['image'], point: Readonly<Point>, { searchRadius, maximumRadius, minSNR }: StarProfileRequest): Readonly<Point> | 'ambiguous' | undefined {
+function nearestCandidate(image: ImageRegion['image'], point: Readonly<Point>, { searchRadius, maximumRadius, minSNR }: StarProfileRequest): Candidate | 'ambiguous' | undefined {
 	const stars = detectStars(finiteImage(image), { minSNR, maximumRadius, scoreGapTrim: false })
 	const near = stars.map((star) => ({ star, distance: Math.hypot(star.x - point.x, star.y - point.y) })).filter(({ distance }) => distance <= searchRadius)
 	near.sort((a, b) => a.distance - b.distance)
@@ -194,22 +219,24 @@ function fitInImage(fit: MoffatProfileFit | undefined, left: number, top: number
 }
 
 // Measures the star nearest a point of an image on a region of it around that point (regionAround with regionHalfSize),
-// whose rect and image size locate it. A star that detectStars finds is measured; one nearer the frame edge than it can
-// look is measured at the point itself and kept only if it stands out (isEdgeStar). A measured centroid that wandered
+// whose rect and image size locate it. A star that detectStars finds is measured in an aperture of the size it found
+// (apertureRadius); one nearer the frame edge than it can look is measured at the point itself and kept only if it
+// stands out (isEdgeStar). A measured centroid that wandered
 // more than searchRadius from where it started followed something else, and is reported as ambiguous, which is also what
 // keeps it inside the region. Saturation is judged against the full scale, unless the read rescaled the image.
 export function inspectStarRegion(imageId: string, { image, conversion }: ImageRegion, rect: ImageRect, size: DocumentSize, request: StarProfileRequest): StarProfileResult {
-	const { model, maximumRadius, minSNR, searchRadius } = request
+	const { model, maximumRadius, minSNR, searchRadius, detectedHfd } = request
 	const seed = { x: request.x, y: request.y }
 	const point = { x: seed.x - rect.left, y: seed.y - rect.top }
-	const candidate = request.detected ? point : nearestCandidate(image, point, request)
+	const candidate = detectedHfd === undefined ? nearestCandidate(image, point, request) : { ...point, hfd: detectedHfd }
 
 	if (candidate === 'ambiguous') return { status: 'noStar', imageId, seed, reason: 'ambiguous' }
 	if (!candidate && !nearFrameEdge(seed, size, searchRadius)) return { status: 'noStar', imageId, seed, reason: 'noPeak' }
 
 	const start = candidate ?? point
 	const saturationKnown = !conversion.rescaled
-	const { sourceIndex: _, ...profile } = measureStarProfile(image, start, { model, maximumRadius, minSNR, saturationLevel: saturationKnown ? SATURATION_LEVEL : Number.MAX_VALUE })
+	const radius = apertureRadius(candidate, maximumRadius)
+	const { sourceIndex: _, ...profile } = measureStarProfile(image, start, { model, initialRadius: radius, maximumRadius: radius, maxIterations: MEASUREMENT_PASSES, minSNR, saturationLevel: saturationKnown ? SATURATION_LEVEL : Number.MAX_VALUE })
 
 	if (profile.hfd === undefined || (!candidate && !isEdgeStar(profile))) return { status: 'noStar', imageId, seed, reason: 'noPeak' }
 	if (Math.hypot(profile.x - start.x, profile.y - start.y) > searchRadius) return { status: 'noStar', imageId, seed, reason: 'ambiguous' }

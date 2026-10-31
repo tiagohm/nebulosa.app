@@ -405,7 +405,7 @@ describe('ASTAP detection', () => {
 		await configureAstap(tools, fakeAstap([], 0, 1))
 		const failed = await submit(service, info.id, { ...ASTAP, detector: { ...DEFAULT_ASTAP_SETTINGS, minSNR: 2 } })
 		expect(await ended(events, failed.jobId)).toMatchObject({ state: 'failed', code: 'astapFailed' })
-	}, 30000)
+	})
 
 	test('a job keeps the settings it was submitted with', async () => {
 		const { images, tools, service, events } = setup()
@@ -415,7 +415,7 @@ describe('ASTAP detection', () => {
 		await configureAstap(tools, join(root, 'missing', 'astap'))
 
 		expect((await ended(events, job.jobId)).state).toBe('completed')
-	}, 15000)
+	})
 })
 
 describe('routes', () => {

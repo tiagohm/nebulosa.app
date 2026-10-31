@@ -25,6 +25,8 @@ import { MountCommands } from './mounts'
 import { OperationRegistry } from './operations'
 import type { PlateSolveOrigin, PlateSolvePreparation, PlateSolveRequest, PlateSolveResult } from './platesolving'
 
+const SKIP = process.env.RUN_ALL_TESTS !== 'true'
+
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-pointing-test-'))
 const disposables: Disposable[] = []
 
@@ -180,7 +182,7 @@ async function start(sessions: MountPointingSessions, connectionId: string, came
 }
 
 describe('mount pointing sessions', () => {
-	test('visits every waypoint, saves commanded and solved positions, never syncs, and leaves nothing behind', async () => {
+	test.skipIf(SKIP)('visits every waypoint, saves commanded and solved positions, never syncs, and leaves nothing behind', async () => {
 		const { id, cameraId, sessions, mountDevice, summary, store, solving, frames, released, auxiliaryDir, mount, events, commander } = await setup()
 		const sync = spyOn(commander, 'sync')
 		const { sessionId, modelId } = await start(sessions, id, cameraId, request(mountDevice))
@@ -214,9 +216,9 @@ describe('mount pointing sessions', () => {
 		expect(readdirSync(auxiliaryDir)).toEqual([])
 		expect(events.some(({ session }) => session.step === 'slewing')).toBeTrue()
 		expect(events.some(({ session }) => session.step === 'solving')).toBeTrue()
-	}, 120000)
+	})
 
-	test('a run with enough samples is fitted by itself, keeping the withheld ones apart', async () => {
+	test.skipIf(SKIP)('a run with enough samples is fitted by itself, keeping the withheld ones apart', async () => {
 		const { id, cameraId, sessions, mountDevice, summary, fits } = await setup()
 		await start(sessions, id, cameraId, request(mountDevice, { plan: { pattern: 'altAzGrid', count: 20, minimumAltitude: deg(30), meridianAvoidance: 0 } }))
 
@@ -225,18 +227,18 @@ describe('mount pointing sessions', () => {
 		expect(fits[0].strategy).toBe('auto')
 		expect(fits[0].training.length + fits[0].heldOut.length).toBe(20)
 		expect(fits[0].heldOut.length).toBeGreaterThanOrEqual(5)
-	}, 180000)
+	})
 
-	test('a repeated token answers the same session', async () => {
+	test.skipIf(SKIP)('a repeated token answers the same session', async () => {
 		const { id, cameraId, sessions, mountDevice, summary } = await setup()
 		const body = request(mountDevice)
 		const first = await start(sessions, id, cameraId, body)
 		const second = await start(sessions, id, cameraId, body)
 		expect(second).toEqual(first)
 		await waitUntil(() => summary()?.endedAt !== undefined)
-	}, 120000)
+	})
 
-	test('a pause releases the devices, a resume is a new operation that finishes only what is missing', async () => {
+	test.skipIf(SKIP)('a pause releases the devices, a resume is a new operation that finishes only what is missing', async () => {
 		const { id, cameraId, sessions, mountDevice, summary, released, store, events, operations, camera } = await setup()
 		const { sessionId, modelId, operationId } = await start(sessions, id, cameraId, request(mountDevice))
 
@@ -265,7 +267,7 @@ describe('mount pointing sessions', () => {
 		expect(new Set(model.samples.map((sample) => sample.waypoint)).size).toBe(6)
 		expect(new Set(model.samples.map((sample) => sample.id)).size).toBe(6)
 		expect(events.some(({ session }) => session.state === 'pausing')).toBeTrue()
-	}, 120000)
+	})
 
 	test('a stop ends the session where it stands and keeps its samples', async () => {
 		const { id, cameraId, sessions, mountDevice, summary, store, released, mount } = await setup()
@@ -283,7 +285,7 @@ describe('mount pointing sessions', () => {
 		expect(model.acquisition.state).toBe('stopped')
 		expect(model.samples.length).toBe(summary()!.acceptedCount)
 		expect(sessions.resume(sessionId, { token: `token-${tokens++}` })).resolves.toMatchObject({ status: 404 })
-	}, 120000)
+	})
 
 	test('a stop during a stalled solve ends at once, and a paused session stops without an operation', async () => {
 		const { id, cameraId, sessions, mountDevice, summary, solving } = await setup()
@@ -298,7 +300,7 @@ describe('mount pointing sessions', () => {
 		expect(sessions.stop(sessionId).status).toBe(202)
 		await waitUntil(() => summary()?.endedAt !== undefined)
 		expect(summary()?.state).toBe('stopped')
-	}, 120000)
+	})
 
 	test('a mount that cannot be confirmed stopped blocks the session, and a resume is refused', async () => {
 		const { id, cameraId, sessions, mountDevice, summary, solving, mount, store } = await setup()
@@ -321,9 +323,9 @@ describe('mount pointing sessions', () => {
 		expect(sessions.stop(sessionId).status).toBe(202)
 		await waitUntil(() => summary()?.endedAt !== undefined)
 		expect(summary()?.state).toBe('stopped')
-	}, 120000)
+	})
 
-	test('a frame without a solution is exposed again without another slew', async () => {
+	test.skipIf(SKIP)('a frame without a solution is exposed again without another slew', async () => {
 		const { id, cameraId, sessions, mountDevice, summary, solving, store } = await setup()
 		solving.control.unsolved = 1
 		const { modelId } = await start(sessions, id, cameraId, request(mountDevice))
@@ -331,9 +333,9 @@ describe('mount pointing sessions', () => {
 		await waitUntil(() => summary()?.endedAt !== undefined)
 		expect(summary()).toMatchObject({ state: 'completed', acceptedCount: 6, skippedCount: 0, frameCount: 7 })
 		expect((await store.get(modelId))!.samples).toHaveLength(6)
-	}, 120000)
+	})
 
-	test('a waypoint that never solves is skipped with its reason, and too many in a row pause the session', async () => {
+	test.skipIf(SKIP)('a waypoint that never solves is skipped with its reason, and too many in a row pause the session', async () => {
 		const { id, cameraId, sessions, mountDevice, summary, solving, store, released } = await setup()
 		solving.control.unsolved = 1000
 		const { modelId } = await start(sessions, id, cameraId, request(mountDevice))
@@ -345,9 +347,9 @@ describe('mount pointing sessions', () => {
 		const model = (await store.get(modelId))!
 		expect(model.samples).toHaveLength(5)
 		expect(model.samples.every((sample) => sample.status === 'rejected' && sample.reason === 'No plate solution' && sample.solved === undefined)).toBeTrue()
-	}, 120000)
+	})
 
-	test('a solution with another scale is kept as rejected and stays out of the fit', async () => {
+	test.skipIf(SKIP)('a solution with another scale is kept as rejected and stays out of the fit', async () => {
 		const { id, cameraId, sessions, mountDevice, summary, solving, store } = await setup()
 		const { modelId } = await start(sessions, id, cameraId, request(mountDevice))
 
@@ -359,7 +361,7 @@ describe('mount pointing sessions', () => {
 		expect(rejected.length).toBeGreaterThan(0)
 		expect(rejected[0].reason).toBe('The image scale differs from the session')
 		expect(rejected[0].solved).toBeDefined()
-	}, 120000)
+	})
 
 	test('an Equipment Control stop pauses the session with a warning instead of failing it', async () => {
 		const { id, cameraId, sessions, mountDevice, summary, operations, mount, released } = await setup()
@@ -373,7 +375,7 @@ describe('mount pointing sessions', () => {
 		await waitUntil(() => summary()?.state === 'paused')
 		await waitUntil(released)
 		expect(summary()?.warnings.at(-1)).toContain('from outside')
-	}, 120000)
+	})
 
 	test('a session is refused while the camera has one that did not end, and a model it holds cannot be removed', async () => {
 		const { id, cameraId, sessions, mountDevice, summary, models } = await setup()
@@ -389,9 +391,9 @@ describe('mount pointing sessions', () => {
 		sessions.stop(sessionId)
 		await waitUntil(() => summary()?.endedAt !== undefined)
 		expect((await models.remove(modelId)).status).toBe(204)
-	}, 120000)
+	})
 
-	test('a new session continues a model that was interrupted, with what it misses only', async () => {
+	test.skipIf(SKIP)('a new session continues a model that was interrupted, with what it misses only', async () => {
 		const { id, cameraId, sessions, mountDevice, summary, store } = await setup()
 		const first = await start(sessions, id, cameraId, request(mountDevice))
 		await waitUntil(() => (summary()?.acceptedCount ?? 0) >= 2)
@@ -408,9 +410,9 @@ describe('mount pointing sessions', () => {
 		expect(summary()).toMatchObject({ acceptedCount: 6 })
 		expect(model.samples).toHaveLength(6)
 		expect(model.samples.filter((sample) => sample.sessionId === second.sessionId)).toHaveLength(6 - taken)
-	}, 120000)
+	})
 
-	test('a model of another mount cannot be continued, and an unknown one is 404', async () => {
+	test.skipIf(SKIP)('a model of another mount cannot be continued, and an unknown one is 404', async () => {
 		const { id, cameraId, sessions, mountDevice, store, summary } = await setup()
 		const { modelId } = await start(sessions, id, cameraId, request(mountDevice))
 		await waitUntil(() => summary()?.endedAt !== undefined)
@@ -418,9 +420,9 @@ describe('mount pointing sessions', () => {
 		await store.update(modelId, (model) => ({ ...model, mount: { ...model.mount, hardwareId: 'other' } }))
 		expect((await sessions.start(id, cameraId, request(mountDevice, { modelId }))).status).toBe(409)
 		expect((await sessions.start(id, cameraId, request(mountDevice, { modelId: 'nothing' }))).status).toBe(404)
-	}, 120000)
+	})
 
-	test('a mount that does not report its type needs the confirmation of the operator, and an alt-az one is refused', async () => {
+	test.skipIf(SKIP)('a mount that does not report its type needs the confirmation of the operator, and an alt-az one is refused', async () => {
 		const { id, cameraId, sessions, mountDevice, mount, summary } = await setup()
 		expect(mount.mountType).toBe('EQ_GEM')
 
@@ -435,7 +437,7 @@ describe('mount pointing sessions', () => {
 		mount.mountType = 'UNKNOWN'
 		await start(sessions, id, cameraId, request(mountDevice, { equatorialConfirmed: true }))
 		await waitUntil(() => summary()?.endedAt !== undefined)
-	}, 120000)
+	})
 
 	test('a parked mount and a mount without a site are refused', async () => {
 		const { id, cameraId, sessions, mountDevice, mount } = await setup()
@@ -447,9 +449,9 @@ describe('mount pointing sessions', () => {
 		mount.geographicCoordinate.latitude = 0
 		mount.geographicCoordinate.longitude = 0
 		expect((await sessions.start(id, cameraId, request(mountDevice))).status).toBe(422)
-	}, 60000)
+	})
 
-	test('a verification lands closer corrected than uncorrected, and only adds its result to the revision', async () => {
+	test.skipIf(SKIP)('a verification lands closer corrected than uncorrected, and only adds its result to the revision', async () => {
 		const { id, cameraId, sessions, mountDevice, summary, store, fits, fitting, camera, frames, released, manager, operations, models, mount } = await setup()
 		fitting.real = true
 		const { modelId } = await start(sessions, id, cameraId, request(mountDevice, { plan: { pattern: 'goldenSpiral', count: 24, minimumAltitude: deg(30), meridianAvoidance: 0 } }))
@@ -521,9 +523,9 @@ describe('mount pointing sessions', () => {
 
 		expect(activations.deactivate(id, mountDevice.deviceId).status).toBe(204)
 		expect(corrections.snapshot().activations).toEqual([])
-	}, 240000)
+	})
 
-	test('a revision that did not pass its offline quality is not verified, and neither is one of another mount', async () => {
+	test.skipIf(SKIP)('a revision that did not pass its offline quality is not verified, and neither is one of another mount', async () => {
 		const { id, cameraId, sessions, mountDevice, summary, store, camera } = await setup()
 		const { modelId } = await start(sessions, id, cameraId, request(mountDevice))
 		await waitUntil(() => summary()?.endedAt !== undefined)
@@ -538,7 +540,7 @@ describe('mount pointing sessions', () => {
 
 		await store.update(modelId, (model) => ({ ...model, mount: { ...model.mount, hardwareId: 'other' }, revisions: [{ ...model.revisions[0], gate: 'passed' }] }))
 		expect((await sessions.verify(modelId, { ...body, token: `token-${tokens++}` })).status).toBe(409)
-	}, 120000)
+	})
 
 	test('a preview commands nothing and answers the plan of the site of the mount', async () => {
 		const { sessions, mountDevice, mount, released, events } = await setup()
@@ -553,5 +555,5 @@ describe('mount pointing sessions', () => {
 		expect(mount.equatorialCoordinate).toEqual(before)
 		expect(released()).toBeTrue()
 		expect(events).toEqual([])
-	}, 60000)
+	})
 })

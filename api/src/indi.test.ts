@@ -574,7 +574,7 @@ describe('other connections', () => {
 		const a = fakeSocket()
 		service.subscribe(a.socket, { type: 'indi:subscribe', connectionId: alpaca.id, hardwareId: device.hardwareId })
 		expect((a.events[0] as IndiSnapshotEvent).vectors.map((vector) => vector.name)).toContain('ABS_FOCUS_POSITION')
-	}, 20000)
+	})
 })
 
 describe('websocket', () => {

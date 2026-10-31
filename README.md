@@ -14,14 +14,14 @@ bun run make:catalog --force
 bun run make:moon --force
 ```
 
-| Command       | Description                                        |
-| ------------- | -------------------------------------------------- |
-| `bun dev`     | Starts the server with hot reload and frontend HMR |
-| `bun start`   | Starts the server in production mode               |
-| `bun compile` | Builds the standalone executable into `.dist/`     |
-| `bun lint`    | Type-checks and Lints the project                  |
-| `bun fmt`     | Formats the project                                |
-| `bun test`    | Runs the tests                                     |
+| Command                               | Description                                        |
+| ------------------------------------- | -------------------------------------------------- |
+| `bun dev`                             | Starts the server with hot reload and frontend HMR |
+| `bun start`                           | Starts the server in production mode               |
+| `bun compile`                         | Builds the standalone executable into `.dist/`     |
+| `bun lint`                            | Type-checks and Lints the project                  |
+| `bun fmt`                             | Formats the project                                |
+| `bun test --parallel --timeout 30000` | Runs the tests                                     |
 
 Workspaces:
 

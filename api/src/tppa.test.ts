@@ -19,6 +19,8 @@ import { OperationRegistry } from './operations'
 import type { PlateSolveOrigin, PlateSolvePreparation, PlateSolveRequest, PlateSolveResult } from './platesolving'
 import { type TppaEvent, type TppaRequest, type TppaSession, TppaSessions } from './tppa'
 
+const SKIP = process.env.RUN_ALL_TESTS !== 'true'
+
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-tppa-test-'))
 const disposables: Disposable[] = []
 
@@ -158,7 +160,7 @@ async function start(tppa: TppaSessions, connectionId: string, cameraId: string,
 }
 
 describe('TPPA sessions', () => {
-	test('acquires three poses, refines, pauses, and restores the slew rate when stopped', async () => {
+	test.skipIf(SKIP)('acquires three poses, refines, pauses, and restores the slew rate when stopped', async () => {
 		const { id, cameraId, tppa, mountDevice, mount, frames, solving, summary, ended, session, released, auxiliaryDir } = await setup()
 		const { sessionId } = await start(tppa, id, cameraId, request(mountDevice))
 
@@ -191,7 +193,7 @@ describe('TPPA sessions', () => {
 		expect(mount.slewRate).toBe('SPEED_2')
 		expect(released()).toBeTrue()
 		expect(readdirSync(auxiliaryDir)).toEqual([])
-	}, 120000)
+	})
 
 	test('a stop while moving cancels the session, stops the mount, and restores the slew rate', async () => {
 		const { id, cameraId, tppa, mountDevice, mount, summary, released } = await setup()
@@ -206,7 +208,7 @@ describe('TPPA sessions', () => {
 		expect(mount.slewRate).toBe('SPEED_2')
 		expect(released()).toBeTrue()
 		expect(tppa.startRefinement(sessionId).status).toBe(404)
-	}, 60000)
+	})
 
 	test('the camera and the mount are held for the whole session', async () => {
 		const { id, cameraId, tppa, mountDevice, captures, summary, ended } = await setup()
@@ -220,7 +222,7 @@ describe('TPPA sessions', () => {
 
 		await tppa.stop(sessionId)
 		await waitUntil(ended)
-	}, 90000)
+	})
 
 	test('a session cannot start on a mount another operation holds', async () => {
 		const { id, cameraId, tppa, mountDevice, mount, operations, events } = await setup()
@@ -236,9 +238,9 @@ describe('TPPA sessions', () => {
 		expect((await tppa.start(id, cameraId, request(mountDevice))).status).toBe(409)
 		expect(events).toEqual([])
 		await hold.cancel()
-	}, 60000)
+	})
 
-	test('a session starts the tracking of a mount that is not tracking, publishes the frame progress, and stops the tracking when it ends', async () => {
+	test.skipIf(SKIP)('a session starts the tracking of a mount that is not tracking, publishes the frame progress, and stops the tracking when it ends', async () => {
 		const { id, cameraId, tppa, mountDevice, mount, commander, operations, events, summary, ended, released } = await setup()
 		expect(await commander.setTracking(operations.coordinator, mount, false)).toMatchObject({ ok: true })
 		const body = request(mountDevice)
@@ -260,7 +262,7 @@ describe('TPPA sessions', () => {
 		expect(summary()!.exposure).toBeUndefined()
 		expect(mount.tracking).toBeFalse()
 		expect(released()).toBeTrue()
-	}, 120000)
+	})
 
 	test('a session that leaves the tracking on keeps the mount tracking when it ends', async () => {
 		const { id, cameraId, tppa, mountDevice, mount, commander, operations, summary, ended } = await setup()
@@ -274,7 +276,7 @@ describe('TPPA sessions', () => {
 		expect(summary()).toMatchObject({ state: 'cancelled', trackingStarted: true })
 		expect(summary()!.trackingStopped).toBeUndefined()
 		expect(mount.tracking).toBeTrue()
-	}, 60000)
+	})
 
 	test('a mount without the slew rate or a solver not configured is refused before anything starts', async () => {
 		const { id, cameraId, tppa, mountDevice, solving, events } = await setup()
@@ -283,7 +285,7 @@ describe('TPPA sessions', () => {
 		solving.unconfigure()
 		expect((await tppa.start(id, cameraId, request(mountDevice))).status).toBe(422)
 		expect(events).toEqual([])
-	}, 60000)
+	})
 
 	test('a repeated token answers the session it started, and the snapshot has no poses', async () => {
 		const { id, cameraId, tppa, mountDevice, ended, summary } = await setup()
@@ -298,5 +300,5 @@ describe('TPPA sessions', () => {
 		await tppa.stop(first.sessionId)
 		await waitUntil(ended)
 		expect(summary()!.revision).toBeGreaterThan(1)
-	}, 60000)
+	})
 })

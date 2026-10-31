@@ -176,7 +176,7 @@ describe('start', () => {
 
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
 		expect(context.summary()?.exposureProgress).toBeUndefined()
-	}, 60000)
+	})
 
 	test('loops under one camera.guiding operation, snoops the devices of the request, and previews the frames as guiding frames of the camera', async () => {
 		const context = await setup()
@@ -244,7 +244,7 @@ describe('guiding', () => {
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
 		expect(context.operations.available(context.mount)).toBeTrue()
 		expect(context.operations.available(context.camera)).toBeTrue()
-	}, 60000)
+	})
 
 	test('a hold keeps guiding from starting, and its guide output in use is seen by the connection', async () => {
 		const context = await setup()
@@ -267,7 +267,7 @@ describe('guiding', () => {
 
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
 		expect(context.guiding.runsOn(context.id)).toBeEmpty()
-	}, 60000)
+	})
 
 	test('a run suspended for a motion frees the mount and keeps looping, then starts again from a star of a new frame', async () => {
 		const context = await setup()
@@ -298,7 +298,7 @@ describe('guiding', () => {
 		expect(await restored).toBe('failed')
 		expect(context.summary()).toMatchObject({ guideOutputHeld: false, active: true })
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
-	}, 60000)
+	})
 
 	test('a session changed during the motion is left as it is', async () => {
 		const context = await setup()
@@ -316,7 +316,7 @@ describe('guiding', () => {
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
 		expect(await context.guiding.restoreAfterMotion(suspended.value, new AbortController().signal)).toBe('externallyChanged')
 		expect(await context.guiding.suspendForMotion('unknown')).toMatchObject({ ok: false })
-	}, 60000)
+	})
 
 	test('commands of an ended or unknown session are refused', async () => {
 		const context = await setup()
@@ -342,7 +342,7 @@ describe('guiding', () => {
 		const finished = context.operationEvents.findLast((event) => event.operation.operationId === operationId)!.operation
 		expect(finished).toMatchObject({ state: 'failed', reason: 'disconnected' })
 		await waitUntil(() => context.operations.available(context.camera))
-	}, 60000)
+	})
 })
 
 describe('detection regions', () => {

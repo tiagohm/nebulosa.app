@@ -78,7 +78,7 @@ Run every command from the repository root.
 - Lint with fixes: `bun lint --fix`
 - Format: `bun fmt`, or `bun fmt <explicit paths>` for touched files
 - Check formatting: `bun fmt --check`
-- Tests: `bun test --parallel`, or `bun test <file>` for one file
+- Tests: `bun test --parallel --timeout 30000`, or `bun test --timeout 30000 <file>` for one file
 
 Runtime and build notes:
 

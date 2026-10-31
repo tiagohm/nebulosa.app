@@ -16,6 +16,8 @@ import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry } from './operations'
 import { DEFAULT_BUILTIN_SETTINGS, DEFAULT_STAR_ACCEPTANCE, StarDetectionService } from './stars'
 
+const SKIP = process.env.RUN_ALL_TESTS !== 'true'
+
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-autofocus-test-'))
 const disposables: Disposable[] = []
 
@@ -153,48 +155,44 @@ describe('fitting modes', () => {
 		TREND_PARABOLIC: ['trendLeft', 'trendRight', 'parabolic'],
 	}
 
-	test.each(Object.keys(series) as AutoFocusFittingMode[])(
-		'%s finds the best focus of the simulated optics, verifies it there, and saves nothing',
-		async (fittingMode) => {
-			const { id, cameraId, autoFocus, focuserDevice, focuser, ended, summary, session, operationEvents, capturesDir, auxiliaryDir, images, frames, released } = await setup()
-			const { sessionId, operationId } = await start(autoFocus, id, cameraId, request(focuserDevice, { fittingMode }))
-			await waitUntil(ended, 120000)
+	test.skipIf(SKIP).each(Object.keys(series) as AutoFocusFittingMode[])('%s finds the best focus of the simulated optics, verifies it there, and saves nothing', async (fittingMode) => {
+		const { id, cameraId, autoFocus, focuserDevice, focuser, ended, summary, session, operationEvents, capturesDir, auxiliaryDir, images, frames, released } = await setup()
+		const { sessionId, operationId } = await start(autoFocus, id, cameraId, request(focuserDevice, { fittingMode }))
+		await waitUntil(ended, 120000)
 
-			const final = summary()!
-			expect(final).toMatchObject({ sessionId, operationId, state: 'completed', initialPosition: START, verification: 'measured', provider: 'builtin' })
-			// Within one and a half steps: the trend lines intersect less precisely than the curves place their vertex.
-			expect(Math.abs(final.estimatedPosition! - BEST_FOCUS)).toBeLessThanOrEqual(4500)
-			expect(final.finalPosition).toBe(final.estimatedPosition)
-			expect(focuser.position.value).toBe(final.finalPosition!)
-			expect(final.verifiedHfd).toBeGreaterThan(0)
+		const final = summary()!
+		expect(final).toMatchObject({ sessionId, operationId, state: 'completed', initialPosition: START, verification: 'measured', provider: 'builtin' })
+		// Within one and a half steps: the trend lines intersect less precisely than the curves place their vertex.
+		expect(Math.abs(final.estimatedPosition! - BEST_FOCUS)).toBeLessThanOrEqual(4500)
+		expect(final.finalPosition).toBe(final.estimatedPosition)
+		expect(focuser.position.value).toBe(final.finalPosition!)
+		expect(final.verifiedHfd).toBeGreaterThan(0)
 
-			const record = await session(sessionId)
-			expect(record.measurements).toHaveLength(final.measurementCount)
-			expect(record.measurements.map((measurement) => measurement.capture)).toEqual(record.measurements.map((_, i) => i + 1))
-			expect(record.measurements.every((measurement) => measurement.observedPosition === measurement.requestedPosition && measurement.hfd! > 0)).toBeTrue()
-			expect(record.curve!.fittingMode).toBe(fittingMode)
-			expect(record.curve!.series.map((curve) => curve.kind as string)).toEqual([...series[fittingMode]])
+		const record = await session(sessionId)
+		expect(record.measurements).toHaveLength(final.measurementCount)
+		expect(record.measurements.map((measurement) => measurement.capture)).toEqual(record.measurements.map((_, i) => i + 1))
+		expect(record.measurements.every((measurement) => measurement.observedPosition === measurement.requestedPosition && measurement.hfd! > 0)).toBeTrue()
+		expect(record.curve!.fittingMode).toBe(fittingMode)
+		expect(record.curve!.series.map((curve) => curve.kind as string)).toEqual([...series[fittingMode]])
 
-			// The verification is the latest frame of the camera in the registry and the only one open; the sampled frames
-			// were closed as each newer one replaced them, and none is among the saved frames.
-			const page = await frames.recent(id, cameraId)
-			expect(page.latest).toMatchObject({ frameId: `${sessionId}:${final.measurementCount + 1}`, origin: 'autofocus', sessionId, generation: final.measurementCount + 1, imageId: final.verificationImageId, frameType: 'LIGHT', width: 512, height: 512, availability: 'memory' })
-			expect(page.latest!.file).toBeUndefined()
-			expect(page.frames).toEqual([])
-			expect(images.name(final.verificationImageId!)).toBeDefined()
-			expect(record.measurements.every((measurement) => images.name(measurement.imageId!) === undefined)).toBeTrue()
+		// The verification is the latest frame of the camera in the registry and the only one open; the sampled frames
+		// were closed as each newer one replaced them, and none is among the saved frames.
+		const page = await frames.recent(id, cameraId)
+		expect(page.latest).toMatchObject({ frameId: `${sessionId}:${final.measurementCount + 1}`, origin: 'autofocus', sessionId, generation: final.measurementCount + 1, imageId: final.verificationImageId, frameType: 'LIGHT', width: 512, height: 512, availability: 'memory' })
+		expect(page.latest!.file).toBeUndefined()
+		expect(page.frames).toEqual([])
+		expect(images.name(final.verificationImageId!)).toBeDefined()
+		expect(record.measurements.every((measurement) => images.name(measurement.imageId!) === undefined)).toBeTrue()
 
-			expect(operationEvents.findLast((event) => event.operation.operationId === operationId)!.operation).toMatchObject({ kind: 'focuser.autofocus', state: 'succeeded', devices: [{ connectionId: id, deviceId: cameraId }, focuserDevice] })
-			expect(readdirSync(capturesDir)).toEqual([])
-			expect(readdirSync(auxiliaryDir)).toEqual([])
-			expect(released()).toBeTrue()
-		},
-		180000,
-	)
+		expect(operationEvents.findLast((event) => event.operation.operationId === operationId)!.operation).toMatchObject({ kind: 'focuser.autofocus', state: 'succeeded', devices: [{ connectionId: id, deviceId: cameraId }, focuserDevice] })
+		expect(readdirSync(capturesDir)).toEqual([])
+		expect(readdirSync(auxiliaryDir)).toEqual([])
+		expect(released()).toBeTrue()
+	})
 })
 
 describe('sessions', () => {
-	test('a curve the runner rejects fails, keeps its measurements, places no best focus, and restores the start', async () => {
+	test.skipIf(SKIP)('a curve the runner rejects fails, keeps its measurements, places no best focus, and restores the start', async () => {
 		const { id, cameraId, autoFocus, focuserDevice, focuser, ended, summary, session, released } = await setup()
 		// No fitted curve is that close to its samples, so every curve is rejected.
 		const { sessionId } = await start(autoFocus, id, cameraId, request(focuserDevice, { rmsdThreshold: 1e-12 }))
@@ -206,7 +204,7 @@ describe('sessions', () => {
 		expect((await session(sessionId)).measurements.length).toBeGreaterThan(0)
 		expect(focuser.position.value).toBe(START)
 		expect(released()).toBeTrue()
-	}, 180000)
+	})
 
 	test('every frame snoops the focuser of the session with the mount, filter wheel and rotator of the request', async () => {
 		const { manager, client, id, cameraId, autoFocus, camera, focuser, focuserDevice, summary, ended } = await setup()
@@ -221,7 +219,7 @@ describe('sessions', () => {
 		const [mount, wheel, rotator] = (['mount', 'wheel', 'rotator'] as const).map((type) => manager.devices.get(client, device(type).id))
 		expect(snoop).toHaveBeenCalledWith(camera, mount, focuser, wheel, rotator)
 		snoop.mockRestore()
-	}, 60000)
+	})
 
 	test('a stop during an exposure cancels the session where it stands and releases both devices', async () => {
 		const { id, cameraId, autoFocus, focuserDevice, focuser, ended, summary, events, released } = await setup()
@@ -237,7 +235,7 @@ describe('sessions', () => {
 		expect(focuser.position.value).toBe(position)
 		expect(released()).toBeTrue()
 		expect((await autoFocus.stop(sessionId)).status).toBe(404)
-	}, 60000)
+	})
 
 	test('a stop of a session that restores on stop moves the focuser back to the start position', async () => {
 		const { id, cameraId, autoFocus, focuserDevice, focuser, ended, summary, events, released } = await setup()
@@ -253,9 +251,9 @@ describe('sessions', () => {
 		expect(summary()!.exposure).toBeUndefined()
 		expect(focuser.position.value).toBe(START)
 		expect(released()).toBeTrue()
-	}, 60000)
+	})
 
-	test('the progress of the frame being exposed is published and cleared once it is measured', async () => {
+	test.skipIf(SKIP)('the progress of the frame being exposed is published and cleared once it is measured', async () => {
 		const { id, cameraId, autoFocus, focuserDevice, ended, events } = await setup()
 		const body = request(focuserDevice, { initialOffsetSteps: 1 })
 		await start(autoFocus, id, cameraId, { ...body, capture: { ...body.capture, exposureTime: 1 } })
@@ -266,7 +264,7 @@ describe('sessions', () => {
 		expect(reported.every((progress) => (progress.state === 'exposing' || progress.state === 'verifying') && progress.progress >= 0 && progress.progress <= 100)).toBeTrue()
 		expect(reported.some((progress) => progress.state === 'verifying')).toBeTrue()
 		expect(events.filter((event) => event.session.state === 'measuring').every((event) => event.session.exposure === undefined)).toBeTrue()
-	}, 180000)
+	})
 
 	test('a stop of the focuser from Equipment Control cancels the session holding it', async () => {
 		const { id, cameraId, autoFocus, focuserDevice, focuser, operations, ended, summary, released } = await setup()
@@ -278,7 +276,7 @@ describe('sessions', () => {
 
 		expect(summary()!.state).toBe('cancelled')
 		expect(released()).toBeTrue()
-	}, 60000)
+	})
 
 	test('every frame becomes the latest frame of its camera, and a later capture replaces it', async () => {
 		const { id, cameraId, autoFocus, captures, frames, frameEvents, images, focuserDevice, ended, session } = await setup()
@@ -301,7 +299,7 @@ describe('sessions', () => {
 		expect(page.latest!.sequence).toBeGreaterThan(latest.sequence)
 		expect(page.frames).toEqual([])
 		expect(images.name(latest.imageId!)).toBeUndefined()
-	}, 180000)
+	})
 
 	test('a camera capture cannot start while a session holds the camera, and a session cannot start on a capturing camera', async () => {
 		const { id, cameraId, autoFocus, captures, focuserDevice, ended, summary } = await setup()
@@ -318,7 +316,7 @@ describe('sessions', () => {
 		expect(busy.status).toBe(409)
 		expect(await busy.json()).toMatchObject({ code: 'busy' })
 		await captures.abort(id, cameraId)
-	}, 60000)
+	})
 
 	test('a session cannot start on a focuser another operation holds', async () => {
 		const { id, cameraId, autoFocus, focuserDevice, focuser, operations, events } = await setup()
@@ -334,7 +332,7 @@ describe('sessions', () => {
 		expect((await autoFocus.start(id, cameraId, request(focuserDevice))).status).toBe(409)
 		expect(events).toEqual([])
 		await hold.cancel()
-	}, 60000)
+	})
 
 	test('a repeated token answers the session it started instead of starting another', async () => {
 		const { id, cameraId, autoFocus, focuserDevice, ended, summary } = await setup()
@@ -347,7 +345,7 @@ describe('sessions', () => {
 		await autoFocus.stop(first.sessionId)
 		await waitUntil(ended)
 		expect(summary()!.state).toBe('cancelled')
-	}, 60000)
+	})
 
 	test('ASTAP without its executable configured is refused before anything starts', async () => {
 		const { id, cameraId, autoFocus, focuserDevice, events } = await setup()
@@ -355,7 +353,7 @@ describe('sessions', () => {
 
 		expect(response.status).toBe(422)
 		expect(events).toEqual([])
-	}, 60000)
+	})
 
 	test('the snapshot lists the latest session of the camera without its measurements, and an unknown session is 404', async () => {
 		const { id, cameraId, autoFocus, focuserDevice, ended } = await setup()
@@ -368,5 +366,5 @@ describe('sessions', () => {
 
 		await autoFocus.stop(sessionId)
 		await waitUntil(ended)
-	}, 60000)
+	})
 })

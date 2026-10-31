@@ -219,7 +219,7 @@ describe('Flat Wizard sessions', () => {
 		expect(page.frames.map((frame) => [frame.frameId, frame.origin, frame.fileName, frame.availability])).toEqual(run.files.toReversed().map((file, i) => [`${sessionId}:${5 - i}`, 'flatWizard', file, i === 0 ? 'memory' : 'file']))
 		expect(summary()!.previewError).toBeUndefined()
 		expect(released()).toBeTrue()
-	}, 120000)
+	})
 
 	test('a wheel and a panel select each filter and its brightness, and the light the session switched on is switched off', async () => {
 		const { id, cameraId, flatWizard, wheel, wheelDevice, panel, panelDevice, directory, summary, ended, released } = await setup((context) => (context.illumination?.brightness === 80 ? 50000 : 100000))
@@ -245,7 +245,7 @@ describe('Flat Wizard sessions', () => {
 		expect(panel.enabled).toBeFalse()
 		expect(readdirSync(directory)).toHaveLength(2)
 		expect(released()).toBeTrue()
-	}, 120000)
+	})
 
 	test('an assigned cover is closed before the first frame and opened once the session ended', async () => {
 		const { id, cameraId, flatWizard, wheelDevice, panel, panelDevice, cover, coverDevice, directory, summary, ended, released, events } = await setup()
@@ -262,7 +262,7 @@ describe('Flat Wizard sessions', () => {
 		expect(cover.parked).toBeFalse()
 		expect(panel.enabled).toBeFalse()
 		expect(released()).toBeTrue()
-	}, 120000)
+	})
 
 	test('a cover closed before the session stays closed, and one it closed is opened after a stop', async () => {
 		const { id, cameraId, flatWizard, operations, cover, coverDevice, covers, directory, summary, ended } = await setup()
@@ -282,7 +282,7 @@ describe('Flat Wizard sessions', () => {
 		expect((await flatWizard.stop(sessionId)).status).toBe(204)
 		expect(summary()).toMatchObject({ state: 'cancelled' })
 		expect(cover.parked).toBeFalse()
-	}, 120000)
+	})
 
 	test('the progress of the frame being exposed is published and cleared once it was read', async () => {
 		const { id, cameraId, flatWizard, wheelDevice, panelDevice, directory, summary, ended, events } = await setup(() => 20000)
@@ -295,7 +295,7 @@ describe('Flat Wizard sessions', () => {
 		expect(reported.some((progress) => progress.elapsedTime > 0)).toBeTrue()
 		expect(events.filter((event) => event.session.state === 'measuring').every((event) => event.session.exposure === undefined)).toBeTrue()
 		expect(summary()!.exposure).toBeUndefined()
-	}, 120000)
+	})
 
 	test('a stop while waiting for the operator cancels the session and releases the devices', async () => {
 		const { id, cameraId, flatWizard, directory, summary, released } = await setup()
@@ -311,7 +311,7 @@ describe('Flat Wizard sessions', () => {
 		expect(released()).toBeTrue()
 		expect(flatWizard.continue(sessionId, { stepId }).status).toBe(409)
 		expect((await flatWizard.stop(sessionId)).status).toBe(409)
-	}, 60000)
+	})
 
 	test('a stop during an exposure keeps the published frames and switches the light off', async () => {
 		const { id, cameraId, flatWizard, panel, panelDevice, directory, summary, ended, released } = await setup()
@@ -331,7 +331,7 @@ describe('Flat Wizard sessions', () => {
 		expect(readdirSync(directory).toSorted()).toEqual(run.files.toSorted())
 		expect(panel.enabled).toBeFalse()
 		expect(released()).toBeTrue()
-	}, 120000)
+	})
 
 	test('a light too bright for the minimum exposure fails with an explanation', async () => {
 		const { id, cameraId, flatWizard, directory, summary, ended, released } = await setup(() => 10_000_000)
@@ -347,7 +347,7 @@ describe('Flat Wizard sessions', () => {
 		expect(summary()!.filters[0].state).toBe('failed')
 		expect(readdirSync(directory)).toEqual([])
 		expect(released()).toBeTrue()
-	}, 60000)
+	})
 
 	test('too many rejected final frames fail the group without publishing them', async () => {
 		const { id, cameraId, flatWizard, directory, summary, ended } = await setup(undefined, () => ({ nonFinite: true }))
@@ -362,7 +362,7 @@ describe('Flat Wizard sessions', () => {
 		expect(summary()!.lastAttempt).toMatchObject({ kind: 'final', verdict: 'rejected' })
 		expect(summary()!.lastAttempt!.reasons).toContain('nonFiniteSamples')
 		expect(readdirSync(directory)).toEqual([])
-	}, 60000)
+	})
 
 	test('an unknown clipping limit accepts frames inside the target and reports the missing evidence', async () => {
 		const { id, cameraId, flatWizard, directory, summary, ended } = await setup()
@@ -376,7 +376,7 @@ describe('Flat Wizard sessions', () => {
 		expect(summary()!.lastAttempt).toMatchObject({ kind: 'final', verdict: 'accepted' })
 		expect(summary()!.lastAttempt!.reasons).toContain('effectiveClipUnknown')
 		expect(summary()!.lastAttempt!.planes[0].upperClipping).toBe('unknown')
-	}, 60000)
+	})
 
 	test('a busy device, a running session, and a repeated token never start a second session', async () => {
 		const { id, cameraId, flatWizard, operations, wheel, wheelDevice, directory, summary, events, cover, coverDevice } = await setup()
@@ -406,7 +406,7 @@ describe('Flat Wizard sessions', () => {
 
 		await waitUntil(() => summary()?.pending !== undefined)
 		expect((await flatWizard.stop(first.sessionId)).status).toBe(204)
-	}, 60000)
+	})
 })
 
 describe('Flat Wizard frames', () => {

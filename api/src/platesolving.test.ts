@@ -304,7 +304,7 @@ describe('ASTAP', () => {
 		await ended(events, job.jobId)
 		expect(await service.submit(info.id, ASSISTED)).toMatchObject({ status: 'cached', job: { jobId: job.jobId } })
 		expect((await service.submit(info.id, { ...ASSISTED, strategy: 'blind' })).status).toBe('accepted')
-	}, 20000)
+	})
 
 	test('completes without a solution', async () => {
 		const { images, tools, service, events } = setup()
@@ -353,7 +353,7 @@ describe('ASTAP', () => {
 		expect(service.cancel(job.jobId)).toBeTrue()
 
 		expect(await ended(events, job.jobId)).toMatchObject({ state: 'cancelled', code: 'cancelled' })
-	}, 20000)
+	})
 
 	test('a blind solve reads a copy without the header pointing', async () => {
 		const { images } = setup()
@@ -413,7 +413,7 @@ describe('awaited solve', () => {
 		expect(await rejection(service.solve(info.id, ASSISTED))).toMatchObject({ code: 'failed' })
 		expect(await rejection(service.solve('missing', ASSISTED))).toMatchObject({ code: 'expired' })
 		expect(await rejection(service.solve(info.id, { ...ASSISTED, strategy: 'blind' }, AbortSignal.abort()))).toMatchObject({ code: 'cancelled' })
-	}, 20000)
+	})
 
 	test('refuses a provider that is not configured', async () => {
 		const { images, service } = setup()

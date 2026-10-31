@@ -11,12 +11,13 @@ import type { SkySelection } from './sky'
 // Description of each fallback reason.
 const FALLBACK_REASONS = { timeout: 'Horizons did not answer in time', network: 'Horizons cannot be reached', breakerOpen: 'Horizons failed repeatedly and is paused' } as const
 
-// Label and value of one datum.
+// Label and value of one datum, on one line while both fit; a value that does not fit goes below its label, and a label
+// wider than the panel, such as an SBDB title, wraps.
 export function Datum({ label, children }: { readonly label: string; readonly children: ReactNode }) {
 	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="flex-none text-ink-300">{label}</span>
-			<span className="min-w-0 text-right font-mono text-[13px] wrap-break-word text-ink-100">{children}</span>
+		<div className="flex flex-wrap items-baseline justify-between gap-x-3">
+			<span className="min-w-0 text-ink-300">{label}</span>
+			<span className="ml-auto min-w-0 text-right font-mono text-[13px] wrap-break-word text-ink-100">{children}</span>
 		</div>
 	)
 }

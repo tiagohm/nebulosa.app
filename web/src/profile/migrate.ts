@@ -17,6 +17,12 @@ import {
 	type CameraSettings,
 	DEFAULT_ACQUISITION_SETTINGS,
 	DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES,
+	DEFAULT_STATUS_CHIPS,
+	type AstronomicalClockPreferences,
+	STATUS_CHIP_FIELDS,
+	type StatusChipField,
+	type StatusChipPreferences,
+	type StatusChipRole,
 	DEFAULT_AUTO_FOCUS_SETTINGS,
 	DEFAULT_EXPOSURE_SETTINGS,
 	defaultSettings,
@@ -676,6 +682,27 @@ function normalizeImageAstrometry(value: unknown): ImageAstrometrySettings | und
 	}
 }
 
+// Restores what the status bar shows for each role (version 22), keeping the valid readings of a role and filling
+// anything invalid with its default; a role that is not a record keeps its default, and is left out. Undefined when
+// no role is left.
+function normalizeStatusChips(value: unknown): Partial<Record<StatusChipRole, StatusChipPreferences>> | undefined {
+	if (!isRecord(value)) return undefined
+
+	const chips: Partial<Record<StatusChipRole, StatusChipPreferences>> = {}
+
+	for (const role of Object.keys(STATUS_CHIP_FIELDS) as StatusChipRole[]) {
+		const chip = value[role]
+		if (!isRecord(chip)) continue
+
+		const defaults = DEFAULT_STATUS_CHIPS[role]
+		const { fields } = chip
+		const valid = Array.isArray(fields) ? (STATUS_CHIP_FIELDS[role] as readonly StatusChipField[]).filter((field) => fields.includes(field)) : defaults.fields
+		chips[role] = { visible: typeof chip.visible === 'boolean' ? chip.visible : defaults.visible, fields: valid }
+	}
+
+	return Object.keys(chips).length > 0 ? chips : undefined
+}
+
 // Restores the persisted preferences of the status bar (version 19), filling every invalid field with its default; a
 // secondary reading equal to the primary one is none. Undefined for anything that is not a record.
 function normalizeStatusBar(value: unknown): StatusBarPreferences | undefined {
@@ -686,7 +713,9 @@ function normalizeStatusBar(value: unknown): StatusBarPreferences | undefined {
 	const primary = oneOf(clock.primary, ASTRONOMICAL_CLOCK_READINGS) ? clock.primary : defaults.primary
 	const secondary = oneOf(clock.secondary, ASTRONOMICAL_CLOCK_READINGS) && clock.secondary !== primary ? clock.secondary : 'none'
 
-	return { astronomicalClock: { enabled: typeof clock.enabled === 'boolean' ? clock.enabled : defaults.enabled, primary, secondary, showSeconds: typeof clock.showSeconds === 'boolean' ? clock.showSeconds : defaults.showSeconds } }
+	const astronomicalClock: AstronomicalClockPreferences = { enabled: typeof clock.enabled === 'boolean' ? clock.enabled : defaults.enabled, primary, secondary, showSeconds: typeof clock.showSeconds === 'boolean' ? clock.showSeconds : defaults.showSeconds }
+	const chips = normalizeStatusChips(value.chips)
+	return chips ? { astronomicalClock, chips } : { astronomicalClock }
 }
 
 // Restores the persisted preferences of the Close Approaches tool (version 20), filling every invalid field with its
@@ -907,7 +936,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 18:
 		case 19:
 		case 20:
-		case 21: {
+		case 21:
+		case 22: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

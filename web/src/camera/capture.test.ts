@@ -30,6 +30,7 @@ const CAPABILITIES: CameraCapabilities = {
 	bin: { x: 4, y: 4 },
 	subframe: { width: 1000, height: 800 },
 	canAbort: true,
+	exposing: false,
 	frameFormats: [{ name: 'MONO', label: 'Mono' }],
 	frameFormat: 'MONO',
 	transferFormats: ['FITS'],

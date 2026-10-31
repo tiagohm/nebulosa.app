@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import type { DeviceSummary, MountState } from 'api'
+import type { CameraCapabilities, DeviceSummary, FocuserState, MountState, OperationRecord } from 'api'
+import type { CaptureRuntime } from '../../camera/capture'
 import { newControlRuntime } from '../../equipment-control/control'
 import { newProfile } from '../../profile/profile'
 import type { Profile } from '../../profile/schema'
-import { abortProfileMount, type MountAbortStores } from './abort'
+import { abortOperation, abortProfileMount, type MountAbortStores, type OperationAbortStores } from './abort'
+import { MOUNT_MOTION_ID } from './selectors'
 
 function mount(id: string, connectionId: string): DeviceSummary {
 	return { id, type: 'mount', name: `Mount ${id}`, connected: true, connectionId, hardwareId: id, interfaces: ['mount'], driver: { executable: '', version: '' } }
@@ -87,5 +89,78 @@ describe('abort of the profile mount', () => {
 		const { request } = recorder(409, { error: 'The mount did not stop' })
 		expect(await abortProfileMount(state, request)).toBe(false)
 		expect(state.control.errors.m1).toBe('The mount did not stop')
+	})
+})
+
+describe('abort of an operation', () => {
+	function operationStores(): OperationAbortStores {
+		const tool = (sessions: object = {}) => ({ sessions, details: {}, pending: {}, errors: {} }) as never
+		const running = (operationId: string, kind: OperationRecord['kind'], deviceId: string, connectionId = 'A'): OperationRecord => ({ operationId, kind, devices: [{ connectionId, deviceId }], state: 'running', startedAt: 0 })
+		const control = stores().control
+		control.states.focuser.f1 = { id: 'f1', connectionId: 'A', connected: true, canAbort: true } as FocuserState
+		const session = { sessionId: 's', operationId: 'tppa', camera: { connectionId: 'A', deviceId: 'c1' } }
+
+		return {
+			...stores(),
+			control,
+			operations: {
+				operations: { slew: running('slew', 'mount.slew', 'm1'), focus: running('focus', 'focuser.move', 'f1'), capture: running('capture', 'camera.capture', 'c1'), tppa: running('tppa', 'mount.tppa', 'c1'), wheel: running('wheel', 'wheel.move', 'w1'), other: running('other', 'focuser.move', 'f1', 'B') },
+			},
+			captures: { sessions: { 'A:c1': { operationId: 'capture', connectionId: 'A', deviceId: 'c1' } }, pending: {}, errors: {} } as unknown as CaptureRuntime,
+			guiding: tool(),
+			autoFocus: tool(),
+			tppa: tool({ 'A:c1': session }),
+			darv: tool(),
+			flatWizard: tool(),
+			targetCentering: tool(),
+			mountPointing: tool(),
+		}
+	}
+
+	test('each operation is interrupted through its own command, and only it', async () => {
+		for (const [id, url] of [
+			['slew', '/api/connections/A/mounts/m1/stop'],
+			['focus', '/api/connections/A/focusers/f1/stop'],
+			['capture', '/api/connections/A/cameras/c1/capture/stop'],
+			['tppa', '/api/tppa/s/stop'],
+		] as const) {
+			const { calls, request } = recorder()
+			expect(await abortOperation(id, operationStores(), request)).toBe(true)
+			expect(calls.map((call) => call.url)).toEqual([url])
+		}
+	})
+
+	test('a capture aborts its exposure when the camera can', async () => {
+		const state = operationStores()
+		state.control.states.camera.c1 = { id: 'c1', connectionId: 'A', canAbort: true } as CameraCapabilities
+		const { calls, request } = recorder()
+		await abortOperation('capture', state, request)
+		expect(calls.map((call) => call.url)).toEqual(['/api/connections/A/cameras/c1/capture/abort'])
+	})
+
+	test('sends nothing for an operation that ended, cannot be interrupted, or belongs to another connection', async () => {
+		const state = operationStores()
+		state.operations.operations.focus = { ...state.operations.operations.focus, state: 'succeeded' }
+		const { calls, request } = recorder()
+		expect(await abortOperation('focus', state, request)).toBe(false)
+		expect(await abortOperation('wheel', state, request)).toBe(false)
+		expect(await abortOperation('other', state, request)).toBe(false)
+		expect(await abortOperation('unknown', state, request)).toBe(false)
+		expect(calls).toEqual([])
+	})
+
+	test('a refused interruption shows as a failure of the device', async () => {
+		const state = operationStores()
+		const { request } = recorder(409, { error: 'The capture cannot stop' })
+		expect(await abortOperation('capture', state, request)).toBe(false)
+		expect(state.control.errors.c1).toBe('The capture cannot stop')
+	})
+
+	test('a motion no operation holds stops the mount of the profile', async () => {
+		const { calls, request } = recorder()
+		const state = operationStores()
+		state.operations.operations = {}
+		expect(await abortOperation(MOUNT_MOTION_ID, state, request)).toBe(true)
+		expect(calls).toEqual([{ url: '/api/connections/A/mounts/m1/stop', method: 'POST' }])
 	})
 })

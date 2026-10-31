@@ -20,6 +20,11 @@ import {
 	type CameraSettings,
 	DEFAULT_ACQUISITION_SETTINGS,
 	DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES,
+	DEFAULT_STATUS_CHIPS,
+	STATUS_CHIP_FIELDS,
+	type StatusChipField,
+	type StatusChipPreferences,
+	type StatusChipRole,
 	DEFAULT_AUTO_FOCUS_SETTINGS,
 	DEFAULT_EXPOSURE_SETTINGS,
 	DEFAULT_PROFILE_NAME,
@@ -509,7 +514,22 @@ export function astronomicalClockPreferences(settings: Pick<ProfileSettings, 'st
 export function setAstronomicalClockPreferences(state: ProfileState, patch: Partial<AstronomicalClockPreferences>) {
 	const profile = activeProfile(state)
 	const clock = { ...astronomicalClockPreferences(profile.settings), ...patch }
-	profile.settings.statusBar = { astronomicalClock: clock.secondary === clock.primary ? { ...clock, secondary: 'none' } : clock }
+	profile.settings.statusBar = { ...profile.settings.statusBar, astronomicalClock: clock.secondary === clock.primary ? { ...clock, secondary: 'none' } : clock }
+	touch(profile)
+}
+
+// Returns what the status bar shows for the device of a role of a profile.
+export function statusChipPreferences(settings: Pick<ProfileSettings, 'statusBar'>, role: StatusChipRole): StatusChipPreferences {
+	return settings.statusBar?.chips?.[role] ?? DEFAULT_STATUS_CHIPS[role]
+}
+
+// Changes what the status bar of the active profile shows for the device of a role; its readings are kept in display
+// order.
+export function setStatusChipPreferences(state: ProfileState, role: StatusChipRole, patch: Partial<StatusChipPreferences>) {
+	const profile = activeProfile(state)
+	const chip = { ...statusChipPreferences(profile.settings, role), ...patch }
+	const fields = (STATUS_CHIP_FIELDS[role] as readonly StatusChipField[]).filter((field) => chip.fields.includes(field))
+	profile.settings.statusBar = { astronomicalClock: astronomicalClockPreferences(profile.settings), chips: { ...profile.settings.statusBar?.chips, [role]: { ...chip, fields } } }
 	touch(profile)
 }
 

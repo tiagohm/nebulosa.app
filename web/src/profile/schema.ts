@@ -27,8 +27,9 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 // Pointing Model Builder form of each camera (pointingModel). Version 17 adds the Target Centering form of each camera
 // (targetCentering) and the saved framings of the profile (framingReferences). Version 18 adds the settings of the Star
 // Profile Inspector (starProfile), version 19 the preferences of the status bar (statusBar), version 20 those of the
-// Close Approaches tool (closeApproaches), and version 21 those of the Astro Weather tool (astroWeather).
-export const PROFILES_VERSION = 21
+// Close Approaches tool (closeApproaches), version 21 those of the Astro Weather tool (astroWeather), and version 22
+// what each device shows in the status bar (statusBar.chips).
+export const PROFILES_VERSION = 22
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -76,7 +77,8 @@ export interface ProfileSettings {
 	// Appearance of the astrometric aids of solved images in Images (coordinates, grid, crosshair, scale bar, orientation);
 	// absent until edited, and then DEFAULT_IMAGE_ASTROMETRY holds. Whether a document shows its grid is the document's.
 	imageAstrometry?: ImageAstrometrySettings
-	// Preferences of the status bar; absent until edited, and then DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES holds.
+	// Preferences of the status bar; absent until edited, and then DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES and
+	// DEFAULT_STATUS_CHIPS hold.
 	statusBar?: StatusBarPreferences
 	// Preferences of the Close Approaches tool; absent until edited, and then DEFAULT_CLOSE_APPROACH_PREFERENCES holds. The
 	// results, the selection, and the dates of a search are never stored.
@@ -155,10 +157,53 @@ export interface AstronomicalClockPreferences {
 	readonly showSeconds: boolean
 }
 
+// Readings the status bar can show for the device of each role, in the order they are shown. The status is what the
+// device is doing, such as Slewing, Tracking, or Exposing; the other ones are its measurements.
+export const STATUS_CHIP_FIELDS = {
+	MAIN_CAMERA: ['status', 'temperature', 'cooler'],
+	FILTER_WHEEL: ['status', 'filter'],
+	FOCUSER: ['status', 'position', 'temperature'],
+	ROTATOR: ['status', 'angle'],
+	MOUNT: ['status', 'coordinates'],
+	GUIDE_CAMERA: ['status', 'temperature'],
+	DOME: ['status', 'shutter', 'azimuth'],
+	COVER: ['status'],
+	FLAT_PANEL: ['status', 'brightness'],
+} as const
+
+// Role with a device chip in the status bar.
+export type StatusChipRole = keyof typeof STATUS_CHIP_FIELDS
+
+// Reading of a device chip.
+export type StatusChipField = (typeof STATUS_CHIP_FIELDS)[StatusChipRole][number]
+
+// What the status bar shows for the device of a role.
+export interface StatusChipPreferences {
+	// Whether the device has a chip at all.
+	readonly visible: boolean
+	// Readings shown after the icon; none shows the icon alone.
+	readonly fields: readonly StatusChipField[]
+}
+
+// Chips of a profile that has not edited them: every device, with its status and main measurement.
+export const DEFAULT_STATUS_CHIPS: Readonly<Record<StatusChipRole, StatusChipPreferences>> = {
+	MAIN_CAMERA: { visible: true, fields: ['status', 'temperature'] },
+	FILTER_WHEEL: { visible: true, fields: ['status', 'filter'] },
+	FOCUSER: { visible: true, fields: ['status', 'position'] },
+	ROTATOR: { visible: true, fields: ['status', 'angle'] },
+	MOUNT: { visible: true, fields: ['status'] },
+	GUIDE_CAMERA: { visible: true, fields: ['status'] },
+	DOME: { visible: true, fields: ['status', 'shutter'] },
+	COVER: { visible: true, fields: ['status'] },
+	FLAT_PANEL: { visible: true, fields: ['status'] },
+}
+
 // Preferences of the status bar.
 export interface StatusBarPreferences {
 	// What the clock shows.
 	readonly astronomicalClock: AstronomicalClockPreferences
+	// What each role shows; a role absent here has its DEFAULT_STATUS_CHIPS.
+	readonly chips?: Readonly<Partial<Record<StatusChipRole, StatusChipPreferences>>>
 }
 
 // Clock of a profile that has not edited it: the local apparent sidereal time, with seconds.

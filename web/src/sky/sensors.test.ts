@@ -7,7 +7,7 @@ import { liveSensors, type SensorRuntime, watchSensors } from './sensors'
 const SENSOR = { width: 6000, height: 4000, pixelSize: 3.76 }
 
 function camera(id: string, sensor = SENSOR): CameraCapabilities {
-	return { connectionId: 'a', id, name: id, connected: true, sensor, canAbort: true, frameFormats: [], frameFormat: '', transferFormats: [], canSetTemperature: false }
+	return { connectionId: 'a', id, name: id, connected: true, sensor, canAbort: true, exposing: false, frameFormats: [], frameFormat: '', transferFormats: [], canSetTemperature: false }
 }
 
 test('reads the sensors of the role cameras on the watched connection only', () => {

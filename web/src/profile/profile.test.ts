@@ -21,6 +21,8 @@ import {
 	setAstroWeatherPreferences,
 	setCloseApproachPreferences,
 	setAstronomicalClockPreferences,
+	setStatusChipPreferences,
+	statusChipPreferences,
 	activeSetup,
 	assignDevice,
 	autoFocusSettings,
@@ -99,6 +101,7 @@ import {
 	DEFAULT_ACQUISITION_SETTINGS,
 	DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES,
 	DEFAULT_DARV_SETTINGS,
+	DEFAULT_STATUS_CHIPS,
 	DEFAULT_FLAT_WIZARD_FILTER,
 	DEFAULT_FLAT_WIZARD_SETTINGS,
 	DEFAULT_GUIDING_SETTINGS,
@@ -1075,6 +1078,38 @@ describe('camera forms', () => {
 		setCloseApproachPreferences(state, { distanceDisplay: 'km', body: 'Moon', distanceMax: 2 })
 		await Bun.sleep(0)
 		expect(closeApproachPreferences(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual({ ...DEFAULT_CLOSE_APPROACH_PREFERENCES, distanceDisplay: 'km', body: 'Moon', distanceMax: 2 })
+	})
+
+	test('what the status bar shows for a device is kept per profile and in display order', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		expect(statusChipPreferences(activeProfile(state).settings, 'FOCUSER')).toEqual(DEFAULT_STATUS_CHIPS.FOCUSER)
+
+		setStatusChipPreferences(state, 'FOCUSER', { fields: ['temperature', 'status'] })
+		setStatusChipPreferences(state, 'COVER', { visible: false })
+		setAstronomicalClockPreferences(state, { primary: 'jd' })
+		await Bun.sleep(0)
+
+		const { settings } = load(stores).profiles[0]
+		expect(statusChipPreferences(settings, 'FOCUSER')).toEqual({ visible: true, fields: ['status', 'temperature'] })
+		expect(statusChipPreferences(settings, 'COVER')).toEqual({ visible: false, fields: ['status'] })
+		expect(statusChipPreferences(settings, 'MOUNT')).toEqual(DEFAULT_STATUS_CHIPS.MOUNT)
+		expect(astronomicalClockPreferences(settings).primary).toBe('jd')
+	})
+
+	test('a version 21 document gets the default chips and keeps its clock', () => {
+		const stores = newStores()
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 21, profiles: [{ id: 'a', name: 'A', settings: { statusBar: { astronomicalClock: { primary: 'jd' } } } }] }))
+		const { settings } = load(stores).profiles[0]
+		expect(settings.statusBar?.chips).toBeUndefined()
+		expect(astronomicalClockPreferences(settings).primary).toBe('jd')
+	})
+
+	test('invalid chips are restored field by field', () => {
+		const stores = newStores()
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 22, profiles: [{ id: 'a', name: 'A', settings: { statusBar: { chips: { FOCUSER: { visible: 'no', fields: ['azimuth', 'position'] }, MOUNT: { visible: false, fields: 1 }, COVER: 3, BOGUS: {} } } } }] }))
+		const { settings } = load(stores).profiles[0]
+		expect(settings.statusBar?.chips).toEqual({ FOCUSER: { visible: true, fields: ['position'] }, MOUNT: { visible: false, fields: DEFAULT_STATUS_CHIPS.MOUNT.fields } })
 	})
 
 	test('a version 19 document gets the default preferences of Close Approaches and keeps its others', () => {

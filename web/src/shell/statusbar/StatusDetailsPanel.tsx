@@ -1,4 +1,4 @@
-import type { GuidingSessionSummary, NotificationTarget, OperationRecord } from 'api'
+import type { NotificationTarget, OperationRecord } from 'api'
 import { cn } from 'cn'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -23,17 +23,17 @@ import { useNow } from '../../useNow'
 import { routeState } from '../route'
 import { astronomicalClockRuntime, clockApproximate, clockFreshness, clockReadingText, liveClock } from './astronomicalclock'
 import { useMonotonicNow } from './AstronomicalClockChip'
-import { activeCapture, activeGuiding, connectionLabel, formatElapsed, guidingValue, otherOperations, progressText, roleDetailValue, scopedDeviceErrors, scopedRunningOperations, type ScopedDevice, serverLinkLabel, sessionOperationIds } from './selectors'
-import { TONE_CLASSES } from './StatusItems'
+import { activeCapture, activeGuiding, capturePercent, type ChipSessions, connectionLabel, formatElapsed, guidingValue, otherOperations, progressText, roleDetailValue, scopedDeviceErrors, scopedRunningOperations, type ScopedDevice, serverLinkLabel, sessionOperationIds } from './selectors'
+import { AbortButton, TONE_CLASSES, useOperationAbortable } from './StatusItems'
 
 // Details of the status bar: a button at its right end, showing how many items the bar left out, that opens a panel
 // above itself with everything the bar summarizes for the active profile's server connection — the server link and
 // the selected connection, every role with its device and what it reports, the running capture and guiding
-// sessions, every other running operation with its devices, elapsed time, and reported progress, the device
-// failures, and the real-time clock, even when the bar has no room for it. The panel is placed in the viewport (fixed), so the clipping bar never cuts it, and closes when the
-// button is pressed again, on a press outside both, on Escape (returning the focus to the button), when the window
-// resizes, and after it opened a device or a camera tab. It only shows and navigates: closing it, or anything it
-// opens, never stops a session or an operation.
+// sessions, every other running operation with its devices, elapsed time, and reported progress, each with its Abort,
+// the device failures, and the real-time clock, even when the bar has no room for it. The panel is placed in the
+// viewport (fixed), so the clipping bar never cuts it, and closes when the button is pressed again, on a press outside
+// both, on Escape (returning the focus to the button), when the window resizes, and after it opened a device or a
+// camera tab. Closing it, or anything it opens, never stops a session or an operation; only an Abort does.
 
 // Width of the panel, in CSS pixels, when the viewport has room for it.
 const PANEL_WIDTH = 380
@@ -136,6 +136,7 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 	const control = useSnapshot(controlRuntime)
 	const captures = useSnapshot(captureRuntime)
 	const guiding = useSnapshot(guidingRuntime)
+	const abortable = useOperationAbortable()
 	const { documents } = useSnapshot(imagesState)
 	const devices = useWatchedDevices()
 	const mainCamera = useRoleDevice('MAIN_CAMERA').device
@@ -143,6 +144,9 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 	const capture = activeCapture(captures.sessions, mainCamera)
 	const session = activeGuiding(guiding.sessions, guideCamera)
 	const others = otherOperations(scopedRunningOperations(operations, serverId), sessionOperationIds(capture, session))
+	const percent = capture && capturePercent(capture)
+	const captureOperation = capture && operations[capture.operationId]
+	const guidingOperation = session && operations[session.operationId]
 	const errors = scopedDeviceErrors({ serverId, devices, control })
 
 	// Opens the camera tab of a session with one of its tools, when the tab is open.
@@ -161,14 +165,16 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 				<Row label="Equipment">{connectionLabel(connection?.name, status)}</Row>
 			</Section>
 			<Section title="Equipment">
-				<EquipmentRows devices={devices} onNavigate={onClose} guiding={session} />
+				<EquipmentRows devices={devices} onNavigate={onClose} sessions={{ capture, guiding: session }} />
 			</Section>
 			{(capture !== undefined || session !== undefined) && (
 				<Section title="Sessions">
 					{capture && (
 						<Row label="Capture">
 							<span className="text-accent">{capture.stopping ? 'Stopping' : captureStatus(capture)}</span> · {captureCount(capture)}
+							{percent !== undefined && ` · ${percent}%`}
 							{targetAvailable(captureTarget, { documents, devices: devices.devices }) && <OpenButton onClick={() => openCamera(captureTarget)} />}
+							{captureOperation && abortable(captureOperation) && <RowAbort id={captureOperation.operationId} label="Capture" />}
 						</Row>
 					)}
 					{session && (
@@ -176,11 +182,14 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 							<span className={TONE_CLASSES[guidingValue(session).tone]}>{GUIDING_STATE_LABELS[session.state]}</span>
 							{guidingValue(session).text !== GUIDING_STATE_LABELS[session.state] && ` · ${guidingValue(session).text}`}
 							{targetAvailable(guidingTarget, { documents, devices: devices.devices }) && <OpenButton onClick={() => openCamera(guidingTarget)} />}
+							{guidingOperation && abortable(guidingOperation) && <RowAbort id={guidingOperation.operationId} label="Guiding" />}
 						</Row>
 					)}
 				</Section>
 			)}
-			<Section title={`Operations · ${others.length}`}>{others.length > 0 ? others.map((operation) => <OperationRow key={operation.operationId} operation={operation} devices={devices.devices} now={now} />) : <p className="m-0 text-ink-300">No other operation running.</p>}</Section>
+			<Section title={`Operations · ${others.length}`}>
+				{others.length > 0 ? others.map((operation) => <OperationRow key={operation.operationId} operation={operation} devices={devices.devices} now={now} abortable={abortable(operation)} />) : <p className="m-0 text-ink-300">No other operation running.</p>}
+			</Section>
 			{errors.length > 0 && (
 				<Section title="Failures">
 					{errors.map((error) => (
@@ -247,12 +256,12 @@ interface EquipmentRowsProps {
 	readonly devices: ReturnType<typeof useWatchedDevices>
 	// Called after a device was opened.
 	readonly onNavigate: () => void
-	// Running guiding session of the guide camera, read by its row.
-	readonly guiding?: GuidingSessionSummary
+	// Running sessions of the main and guide cameras, read by their rows.
+	readonly sessions: ChipSessions
 }
 
 // Every role of the active profile with its device, status, and what the device reports.
-function EquipmentRows({ devices, onNavigate, guiding }: EquipmentRowsProps) {
+function EquipmentRows({ devices, onNavigate, sessions }: EquipmentRowsProps) {
 	const profiles = useSnapshot(profileState)
 	const control = useSnapshot(controlRuntime)
 	const setup = activeSetup(activeProfile(profiles))
@@ -260,7 +269,7 @@ function EquipmentRows({ devices, onNavigate, guiding }: EquipmentRowsProps) {
 	return ROLES.map(({ role, label }) => {
 		const device = roleDevice(setup, role, devices)
 		const status = roleStatus(setup, role, devices)
-		const value = roleDetailValue(role, status, device, control, guiding)
+		const value = roleDetailValue(role, status, device, control, sessions)
 
 		return (
 			<Row key={role} label={label}>
@@ -283,10 +292,12 @@ interface OperationRowProps {
 	readonly devices: readonly ScopedDevice[]
 	// Current time in Unix milliseconds.
 	readonly now: number
+	// Whether the operation can be interrupted.
+	readonly abortable: boolean
 }
 
-// Kind, devices, elapsed time, and reported progress of a running operation.
-function OperationRow({ operation, devices, now }: OperationRowProps) {
+// Kind, devices, elapsed time, reported progress, and Abort of a running operation.
+function OperationRow({ operation, devices, now, abortable }: OperationRowProps) {
 	const names = operation.devices.map((ref) => devices.find((d) => d.id === ref.deviceId && d.connectionId === ref.connectionId)?.name ?? 'Unknown device').join(', ')
 	const progress = progressText(operation.progress)
 	const [icon, label] = OPERATION_LABELS[operation.kind]
@@ -295,7 +306,24 @@ function OperationRow({ operation, devices, now }: OperationRowProps) {
 		<Row icon={icon} label={label}>
 			{names} · <span className="tabular-nums">{formatElapsed(operation.startedAt, now)}</span>
 			{progress && <span className="text-accent"> · {progress}</span>}
+			{abortable && <RowAbort id={operation.operationId} label={label} />}
 		</Row>
+	)
+}
+
+interface RowAbortProps {
+	// Id of the operation.
+	readonly id: string
+	// Name of the operation.
+	readonly label: string
+}
+
+// Abort at the end of a row.
+function RowAbort({ id, label }: RowAbortProps) {
+	return (
+		<span className="ml-2 inline-flex">
+			<AbortButton id={id} label={label} />
+		</span>
 	)
 }
 

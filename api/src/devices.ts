@@ -219,6 +219,8 @@ export interface CameraCapabilities extends DeviceStateBase {
 	readonly subframe?: { readonly width: number; readonly height: number }
 	// Whether an exposure in progress can be aborted.
 	readonly canAbort: boolean
+	// Whether the camera is exposing a frame, for whichever operation or tool asked for it.
+	readonly exposing: boolean
 	// Readout modes, such as MONO or RGB; empty when the driver has none.
 	readonly frameFormats: readonly NameAndLabel[]
 	// Selected readout mode; empty when the driver has none.
@@ -527,6 +529,7 @@ const MOUNT_FIELDS: ReadonlySet<string> = new Set([
 // changes are published only when the capabilities themselves differ.
 const CAMERA_CAPABILITY_FIELDS: ReadonlySet<string> = new Set([
 	'connected',
+	'exposuring',
 	'exposure',
 	'gain',
 	'offset',
@@ -624,6 +627,7 @@ export function cameraCapabilities(camera: Camera, connectionId: string): Camera
 		sensor: cameraSensor(camera),
 		subframe: camera.canSubFrame && camera.frame.width.max > 0 && camera.frame.height.max > 0 ? { width: camera.frame.width.max, height: camera.frame.height.max } : undefined,
 		canAbort: camera.canAbort,
+		exposing: camera.exposuring,
 		frameFormats: camera.frameFormats,
 		frameFormat: camera.frameFormat,
 		transferFormats: camera.transferFormats,

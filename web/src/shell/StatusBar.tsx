@@ -1,35 +1,33 @@
-import { cn } from 'cn'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { captureRuntime } from '../camera/capture'
 import { guidingRuntime } from '../camera/guiding'
-import { connectionState } from '../connection/connection'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
-import { deviceState, roleDevice } from '../equipment/equipment'
+import { roleDevice } from '../equipment/equipment'
 import { roleDefinition } from '../equipment/roles'
 import { useActiveServerId, useWatchedDevices } from '../equipment/useEquipment'
 import { notificationsState } from '../notifications/notifications'
 import { operationsState } from '../operations'
-import { activeProfile, activeSetup, astronomicalClockPreferences, profileState } from '../profile/profile'
+import { activeProfile, activeSetup, astronomicalClockPreferences, profileState, statusChipPreferences } from '../profile/profile'
 import { BROWSER_TIME_ZONE } from '../sky/clock'
 import { Icon, type IconName } from '../ui/Icon'
-import { abortProfileMount } from './statusbar/abort'
 import { astronomicalClockRuntime, effectiveReadings, watchAstronomicalClock } from './statusbar/astronomicalclock'
 import { AstronomicalClockChip } from './statusbar/AstronomicalClockChip'
 // oxfmt-ignore
-import { activeCapture, activeGuiding, captureValue, CHIP_ROLES, type ChipRole, type ChipValue, fitClocks, fitItems, type FittedItems, mountAbortTarget, mountMoving, operationsSummary, otherOperations, roleChip, type ScopedDevice, scopedDeviceErrors, scopedRunningOperations, sessionOperationIds } from './statusbar/selectors'
+import { activeCapture, activeGuiding, type BarOperation, barOperations, CHIP_ROLES, type ChipRole, type ChipValue, fitClocks, fitItems, fitOperations, MOUNT_MOTION_ID, mountAbortTarget, mountChip, mountMotionRunning, mountMoving, roleChip, type ScopedDevice, scopedDeviceErrors, scopedRunningOperations } from './statusbar/selectors'
 import { StatusDetails } from './statusbar/StatusDetailsPanel'
-import { ServerLinkItem, StatusChip } from './statusbar/StatusItems'
+import { OperationItem, ServerLinkItem, StatusChip, useOperationAbortable } from './statusbar/StatusItems'
 
 // Compact bar at the bottom of the window, visible from every workspace, showing everything the active profile has in
 // as little room as it can: the tab's link to the application server, a chip per connected device of the profile's
-// roles and for the main camera's running capture, the other device operations running on the profile's server
-// connection, its device failures, and the details button that lists all of it. A device that is not connected shows
-// no chip. A narrower bar shows fewer chips, by priority, and counts the others on the details button; the server
-// link, the failures, and the Abort are never left out. While the mount of the profile moves, the bar offers an Abort
-// of that mount alone, through the same stop command as the Equipment Control page; nothing here stops any other
-// device. In the room all of that leaves, the bar shows the real-time clock the profile asks for, which opens the
-// Astronomical Time Converter; it never takes room from anything else, and is never the Sky simulation clock.
+// roles with what the profile asks of it, the device operations running on the profile's server connection, each with
+// its Abort, its device failures, and the details button that lists all of it. A device that is not connected shows no
+// chip. A narrower bar shows fewer chips, by priority, and fewer operations, and counts the others on the details
+// button; the server link, the failures, and the first operation are never left out. Every operation has its own Abort,
+// through the same command as the page that started it, and it interrupts that operation alone; a motion of the mount
+// of the profile that no operation holds has one too. In the room all of that leaves, the bar shows the real-time clock
+// the profile asks for, which opens the Astronomical Time Converter; it never takes room from anything else, and is
+// never the Sky simulation clock.
 
 // Gap between the items of the bar, in CSS pixels (gap-3).
 const ITEM_GAP = 12
@@ -53,18 +51,25 @@ const CHIP_ICONS: Readonly<Record<ChipRole, IconName>> = {
 	FLAT_PANEL: 'flatPanel',
 }
 
-// Id of the hidden copy of the summary of the other operations, measured so a clock leaves it its room.
-const SUMMARY_ID = 'summary'
-
 // Returns whether two sets hold the same ids.
 function sameIds(a: ReadonlySet<string>, b: ReadonlySet<string>) {
 	return a.size === b.size && [...a].every((id) => b.has(id))
 }
 
-// Chip of the bar: its id, icon, name, reading, and device.
+// What the fitting decided for the bar.
+interface FittedBar {
+	// Roles of the chips shown.
+	readonly chips: ReadonlySet<string>
+	// Ids of the operations shown.
+	readonly operations: ReadonlySet<string>
+	// Chips and operations left out.
+	readonly hidden: number
+}
+
+// Chip of the bar: its role, icon, name, reading, and device.
 interface BarChip {
-	// Role of the chip, or "capture".
-	readonly id: ChipRole | 'capture'
+	// Role of the chip.
+	readonly id: ChipRole
 	// Icon of the chip.
 	readonly icon: IconName
 	// Name of the chip.
@@ -74,7 +79,7 @@ interface BarChip {
 	// Whether the chip shows a running session.
 	readonly active: boolean
 	// Device the chip opens in Equipment Control.
-	readonly device?: ScopedDevice
+	readonly device: ScopedDevice
 }
 
 // Status bar of the application.
@@ -83,16 +88,17 @@ export function StatusBar() {
 	const serverRef = useRef<HTMLSpanElement>(null)
 	const groupRef = useRef<HTMLSpanElement>(null)
 	const measureRef = useRef<HTMLDivElement>(null)
-	const [fitted, setFitted] = useState<FittedItems>()
+	const [fitted, setFitted] = useState<FittedBar>()
 	const [fittedClocks, setFittedClocks] = useState<ReadonlySet<string>>()
 	const [, setFooterWidth] = useState(0)
 	const serverId = useActiveServerId()
 	const profiles = useSnapshot(profileState)
 	const { server: link } = useSnapshot(notificationsState)
-	const { operations } = useSnapshot(operationsState)
+	const { operations: known } = useSnapshot(operationsState)
 	const control = useSnapshot(controlRuntime)
 	const captures = useSnapshot(captureRuntime)
 	const guiding = useSnapshot(guidingRuntime)
+	const abortable = useOperationAbortable()
 	const devices = useWatchedDevices()
 	const profile = activeProfile(profiles)
 	const setup = activeSetup(profile)
@@ -103,33 +109,33 @@ export function StatusBar() {
 	const site = observer && (observer.name ?? `${observer.latitude.toFixed(4)}°, ${observer.longitude.toFixed(4)}°`)
 	const mount = roleDevice(setup, 'MOUNT', devices)
 	const mainCamera = roleDevice(setup, 'MAIN_CAMERA', devices)
-	const running = scopedRunningOperations(operations, serverId)
+	const running = scopedRunningOperations(known, serverId)
 	const mountState = watchedDeviceState(control, 'mount', mount)
 	const capture = activeCapture(captures.sessions, mainCamera)
 	const session = activeGuiding(guiding.sessions, roleDevice(setup, 'GUIDE_CAMERA', devices))
-	const others = otherOperations(running, sessionOperationIds(capture, session))
 	const errors = scopedDeviceErrors({ serverId, devices, control })
 	const abort = mountAbortTarget({ link, serverId, watched: control.watched, mount, state: mountState, operations: running })
 	const online = link === 'online'
-
 	const chips: BarChip[] = []
 
 	for (const role of CHIP_ROLES) {
 		const device = roleDevice(setup, role, devices)
-		const value = roleChip(role, device, control, role === 'GUIDE_CAMERA' ? session : undefined)
-		if (!value) continue
-		// A mount moved by an operation the driver does not report yet still shows the motion dots.
-		const moving = role === 'MOUNT' && device ? value.moving || mountMoving(mountState, running, device) : value.moving
-		chips.push({ id: role, icon: CHIP_ICONS[role], label: roleDefinition(role).label, value: { ...value, moving }, active: role === 'GUIDE_CAMERA' && !!session, device })
-
-		if (role === 'MAIN_CAMERA' && capture) {
-			const count = captureValue(capture)
-			const title = `${capture.count === undefined ? `${capture.captured} frames (loop)` : `${capture.captured} of ${capture.count} frames`}${capture.stopping ? ', stopping' : ''}`
-			chips.push({ id: 'capture', icon: 'frame', label: 'Capture', value: { text: count.text, tone: count.tone, moving: false, title }, active: true })
-		}
+		const preferences = statusChipPreferences(profile.settings, role)
+		const value = preferences.visible ? roleChip(role, device, control, { capture: role === 'MAIN_CAMERA' ? capture : undefined, guiding: role === 'GUIDE_CAMERA' ? session : undefined }, preferences.fields) : undefined
+		if (!value || !device) continue
+		// A mount moved by an operation the driver does not report yet is moving too.
+		const moving = role === 'MOUNT' ? value.moving || mountMoving(mountState, running, device) : value.moving
+		chips.push({ id: role, icon: CHIP_ICONS[role], label: roleDefinition(role).label, value: { ...value, moving }, active: (role === 'GUIDE_CAMERA' && !!session) || (role === 'MAIN_CAMERA' && !!capture), device })
 	}
 
-	const summary = others.length > 0 ? operationsSummary(others) : undefined
+	const operations: BarOperation[] = barOperations(running, { captures: captures.sessions, guiding: guiding.sessions }, abortable)
+
+	// A motion of the mount no operation holds, as from a hand controller, can be aborted just the same.
+	if (abort && mount && !mountMotionRunning(running, mount)) {
+		const motion = mountChip(mountState, ['status']).text
+		operations.unshift({ id: MOUNT_MOTION_ID, icon: 'mount', label: motion, title: `${abort.name}: ${motion}`, abortable: true })
+	}
+
 	const [latitude, longitude, elevation] = [observer?.latitude, observer?.longitude, observer?.elevation]
 	const clockShown = clock.enabled
 
@@ -151,8 +157,8 @@ export function StatusBar() {
 		return () => observer.disconnect()
 	}, [])
 
-	// Fits the chips, measured on their hidden copies, in the room the server link and the right group leave, before
-	// the browser paints.
+	// Fits the operations and then the chips, measured on their hidden copies, in the room the server link and the
+	// always-shown part of the right group leave, before the browser paints.
 	useLayoutEffect(() => {
 		const footer = footerRef.current
 		const measure = measureRef.current
@@ -162,24 +168,26 @@ export function StatusBar() {
 		const fixed = Array.from(group.querySelectorAll<HTMLElement>('[data-fixed]'))
 		const groupWidth = GROUP_INSET + fixed.reduce((sum, element) => sum + element.offsetWidth, 0) + ITEM_GAP * Math.max(0, fixed.length - 1)
 		const room = footer.clientWidth - BAR_PADDING - (serverRef.current?.offsetWidth ?? 0) - ITEM_GAP - groupWidth
+		const shown = fitOperations(
+			operations.map(({ id }) => ({ id, width: widths.get(id) ?? 0 })),
+			room,
+			ITEM_GAP,
+		)
 		const items = chips.map((chip) => ({ id: chip.id, moving: chip.value.moving, active: chip.active, width: widths.get(chip.id) ?? 0 }))
-		const next = fitItems(items, room, ITEM_GAP, others.length)
-		setFitted((current) => (current && current.hidden === next.hidden && current.nameOthers === next.nameOthers && sameIds(current.visible, next.visible) ? current : next))
+		const left = room - shown.width
+		const next = fitItems(items, left, ITEM_GAP, operations.length - shown.visible.size)
+		setFitted((current) => (current && current.hidden === next.hidden && sameIds(current.chips, next.visible) && sameIds(current.operations, shown.visible) ? current : { chips: next.visible, operations: shown.visible, hidden: next.hidden }))
 		const clocks = fitClocks(
 			readings.map((reading) => ({ id: reading, width: widths.get(reading) ?? 0 })),
 			items,
 			next,
-			room,
+			left,
 			ITEM_GAP,
-			others.length,
-			widths.get(SUMMARY_ID) ?? 0,
 		)
 		setFittedClocks((current) => (current && sameIds(current, clocks) ? current : clocks))
 	})
 
-	const visible = fitted?.visible
 	const hidden = fitted?.hidden ?? 0
-	const nameOthers = fitted?.nameOthers ?? false
 
 	return (
 		<footer ref={footerRef} className="relative flex h-7 flex-none items-center gap-3 overflow-hidden border-t border-line-100 bg-base-000 px-4 text-[11px] leading-4 whitespace-nowrap text-ink-200">
@@ -189,7 +197,11 @@ export function StatusBar() {
 						<StatusChip icon={chip.icon} label={chip.label} value={chip.value} />
 					</span>
 				))}
-				{summary && <span data-chip={SUMMARY_ID}>{summary}</span>}
+				{operations.map((operation) => (
+					<span key={operation.id} data-chip={operation.id} className="flex">
+						<OperationItem operation={operation} online={online} />
+					</span>
+				))}
 				{readings.map((reading) => (
 					<span key={reading} data-chip={reading} className="flex">
 						<AstronomicalClockChip reading={reading} timeZone={timeZone} showSeconds={clock.showSeconds} site={site} measure />
@@ -197,30 +209,15 @@ export function StatusBar() {
 				))}
 			</div>
 			<ServerLinkItem ref={serverRef} />
-			{chips.map((chip) => (!visible || visible.has(chip.id)) && <StatusChip key={chip.id} icon={chip.icon} label={chip.label} value={chip.value} device={chip.device} />)}
+			{chips.map((chip) => (!fitted || fitted.chips.has(chip.id)) && <StatusChip key={chip.id} icon={chip.icon} label={chip.label} value={chip.value} device={chip.device} />)}
 			<span ref={groupRef} className="ml-auto flex min-w-0 items-center gap-3 border-l border-line-100 pl-3">
-				{nameOthers && (
-					<span title={online ? undefined : 'Server offline: last known operations'} className={cn('min-w-0 truncate', online ? 'text-accent' : 'text-ink-300')}>
-						{summary}
-					</span>
-				)}
+				{operations.map((operation) => (!fitted || fitted.operations.has(operation.id)) && <OperationItem key={operation.id} operation={operation} online={online} />)}
 				{readings.map((reading) => fittedClocks?.has(reading) && <AstronomicalClockChip key={reading} reading={reading} timeZone={timeZone} showSeconds={clock.showSeconds} site={site} />)}
 				{errors.length > 0 && (
 					<span data-fixed title={errors.map((error) => `${error.name}: ${error.message}`).join('\n')} className="flex flex-none items-center gap-1 text-danger">
 						<Icon name="error" className="size-3.5" />
 						{errors.length}
 					</span>
-				)}
-				{abort && (
-					<button
-						data-fixed
-						type="button"
-						title={`Abort the motion of ${abort.name}`}
-						onClick={() => void abortProfileMount({ connections: connectionState, profiles: profileState, devices: deviceState, control: controlRuntime, operations: operationsState, notifications: notificationsState })}
-						className="flex-none cursor-pointer rounded-sm border border-danger bg-transparent px-1.5 py-0 font-mono text-[11px] leading-4 text-danger transition-colors duration-150 hover:bg-danger hover:text-base-000 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
-					>
-						Abort
-					</button>
 				)}
 				<StatusDetails hidden={hidden} />
 			</span>

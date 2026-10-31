@@ -88,7 +88,7 @@ test('camera sensor is published with the capabilities and looked up by exact co
 	expect(registry.mount(clients[1], registry.list(clients[0]).find((d) => d.type === 'mount')!.id)).toBeUndefined()
 })
 
-test('camera capabilities are published when they change, not on exposure progress', async () => {
+test('camera capabilities are published when an exposure starts and ends, not on its progress', async () => {
 	const { registry, events, clients } = setup('a')
 	const camera = registry.list(clients[0]).find((d) => d.type === 'camera')!
 	registry.switch(clients[0], camera.id, true)
@@ -104,7 +104,8 @@ test('camera capabilities are published when they change, not on exposure progre
 	registry.cameras.startExposure(device, 0.5)
 	await waitUntil(() => device.exposuring)
 	await waitUntil(() => !device.exposuring)
-	expect(events.filter((event) => event.type === 'camera:capabilities').length).toBe(before)
+	const published = events.filter((event) => event.type === 'camera:capabilities').slice(before)
+	expect(published.map(({ capabilities }) => capabilities.exposing)).toEqual([true, false])
 })
 
 // Registry with one simulator client providing a focuser, a filter wheel, and a cover.

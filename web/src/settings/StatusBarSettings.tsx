@@ -1,16 +1,18 @@
 import { useSnapshot } from 'valtio'
-import { activeProfile, astronomicalClockPreferences, profileState, setAstronomicalClockPreferences } from '../profile/profile'
-import { ASTRONOMICAL_CLOCK_READINGS, type AstronomicalClockReading } from '../profile/schema'
+import { roleDefinition } from '../equipment/roles'
+import { activeProfile, astronomicalClockPreferences, profileState, setAstronomicalClockPreferences, setStatusChipPreferences, statusChipPreferences } from '../profile/profile'
+import { ASTRONOMICAL_CLOCK_READINGS, type AstronomicalClockReading, STATUS_CHIP_FIELDS, type StatusChipField, type StatusChipRole } from '../profile/schema'
 import { navigate, routeState } from '../shell/route'
 import { ASTRONOMICAL_CLOCK_READING_LABELS } from '../shell/statusbar/astronomicalclock'
+import { CHIP_ROLES } from '../shell/statusbar/selectors'
 import { skyState } from '../sky/sky'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { Select } from '../ui/Select'
 
-// Status Bar section of the Settings page: what the status bar of the active profile shows besides its equipment. A
-// change applies at once and belongs to the profile, so the bar itself shows the result. The time zone of the clock is
-// the Sky observer's, or the browser's; it has none of its own.
+// Status Bar section of the Settings page: what the status bar of the active profile shows for each device and in its
+// clock. A change applies at once and belongs to the profile, so the bar itself shows the result. The time zone of the
+// clock is the Sky observer's, or the browser's; it has none of its own.
 
 // Options of the secondary reading, in display order.
 const SECONDARY_READINGS: readonly (AstronomicalClockReading | 'none')[] = ['none', ...ASTRONOMICAL_CLOCK_READINGS]
@@ -18,6 +20,43 @@ const SECONDARY_READINGS: readonly (AstronomicalClockReading | 'none')[] = ['non
 // Returns the name of an option of the secondary reading.
 function secondaryLabel(reading: AstronomicalClockReading | 'none') {
 	return reading === 'none' ? 'None' : ASTRONOMICAL_CLOCK_READING_LABELS[reading]
+}
+
+// Name of each reading of a device.
+const CHIP_FIELD_LABELS: Readonly<Record<StatusChipField, string>> = {
+	status: 'Status',
+	temperature: 'Temperature',
+	cooler: 'Cooler power',
+	filter: 'Filter',
+	position: 'Position',
+	angle: 'Angle',
+	coordinates: 'Coordinates',
+	shutter: 'Shutter',
+	azimuth: 'Azimuth',
+	brightness: 'Brightness',
+}
+
+interface DeviceChipSettingsProps {
+	// Role of the device.
+	readonly role: StatusChipRole
+	// Settings of the active profile.
+	readonly settings: Parameters<typeof statusChipPreferences>[0]
+}
+
+// Whether a device shows in the bar, and which of its readings.
+function DeviceChipSettings({ role, settings }: DeviceChipSettingsProps) {
+	const { visible, fields } = statusChipPreferences(settings, role)
+
+	return (
+		<div className="flex flex-col gap-2">
+			<Checkbox label={roleDefinition(role).label} checked={visible} onChange={(value) => setStatusChipPreferences(profileState, role, { visible: value })} />
+			<div className="flex flex-wrap gap-x-4 gap-y-2 pl-5.5">
+				{STATUS_CHIP_FIELDS[role].map((field: StatusChipField) => (
+					<Checkbox key={field} label={CHIP_FIELD_LABELS[field]} disabled={!visible} checked={fields.includes(field)} onChange={(value) => setStatusChipPreferences(profileState, role, { fields: value ? [...fields, field] : fields.filter((other) => other !== field) })} />
+				))}
+			</div>
+		</div>
+	)
 }
 
 // Content of the Status Bar section.
@@ -28,7 +67,14 @@ export function StatusBarSettings() {
 	const sidereal = primary === 'last' || primary === 'lmst'
 
 	return (
-		<div className="min-h-0 flex-1 overflow-y-auto p-4">
+		<div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
+			<section className="flex max-w-md flex-col gap-3">
+				<h2 className="m-0 text-[11px] font-medium tracking-[0.08em] text-ink-300 uppercase">Devices</h2>
+				{CHIP_ROLES.map((role) => (
+					<DeviceChipSettings key={role} role={role} settings={settings} />
+				))}
+				<p className="m-0 text-xs leading-4 text-ink-300">A device shows only while it is connected. A chip without any reading shows its icon alone, and its title always has the full reading.</p>
+			</section>
 			<section className="flex max-w-md flex-col gap-3">
 				<h2 className="m-0 text-[11px] font-medium tracking-[0.08em] text-ink-300 uppercase">Astronomical Clock</h2>
 				<Checkbox label="Show the clock in the status bar" checked={enabled} onChange={(value) => setAstronomicalClockPreferences(profileState, { enabled: value })} />

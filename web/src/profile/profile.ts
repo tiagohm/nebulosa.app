@@ -284,6 +284,14 @@ export function setLastImageDirectory(state: ProfileState, directory: string) {
 	touch(profile)
 }
 
+// Remembers in the active profile the server directory an image was saved to.
+export function setLastSaveDirectory(state: ProfileState, directory: string) {
+	const profile = activeProfile(state)
+	if (profile.settings.lastSaveDirectory === directory) return
+	profile.settings.lastSaveDirectory = directory
+	touch(profile)
+}
+
 // Returns the identity of a camera of a profile's saved connection, or undefined when the profile has no connection
 // selected or there is no camera.
 export function profileCamera(profile: Pick<Profile, 'connectionId'>, deviceId: string | undefined): CameraIdentity | undefined {

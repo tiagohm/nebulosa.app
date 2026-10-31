@@ -758,6 +758,7 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	}
 
 	if (typeof value.lastImageDirectory === 'string' && value.lastImageDirectory) settings.lastImageDirectory = value.lastImageDirectory
+	if (typeof value.lastSaveDirectory === 'string' && value.lastSaveDirectory) settings.lastSaveDirectory = value.lastSaveDirectory
 
 	settings.cameras = normalizeCameras(value.cameras)
 	const starDetection = normalizeStarRequest(value.starDetection)
@@ -937,7 +938,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 19:
 		case 20:
 		case 21:
-		case 22: {
+		case 22:
+		case 23: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

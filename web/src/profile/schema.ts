@@ -27,9 +27,10 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 // Pointing Model Builder form of each camera (pointingModel). Version 17 adds the Target Centering form of each camera
 // (targetCentering) and the saved framings of the profile (framingReferences). Version 18 adds the settings of the Star
 // Profile Inspector (starProfile), version 19 the preferences of the status bar (statusBar), version 20 those of the
-// Close Approaches tool (closeApproaches), version 21 those of the Astro Weather tool (astroWeather), and version 22
-// what each device shows in the status bar (statusBar.chips).
-export const PROFILES_VERSION = 22
+// Close Approaches tool (closeApproaches), version 21 those of the Astro Weather tool (astroWeather), version 22 what
+// each device shows in the status bar (statusBar.chips), and version 23 the directory Images saved to last
+// (lastSaveDirectory).
+export const PROFILES_VERSION = 23
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -43,6 +44,8 @@ export interface ProfileSettings {
 	// Server directory an image was opened from last, where the file explorer starts; absent before the
 	// first image is opened.
 	lastImageDirectory?: string
+	// Server directory an image of Images was saved to last, where the save dialog starts; absent before the first save.
+	lastSaveDirectory?: string
 	// Forms of each physical camera edited so far, by saved connection id, then device id.
 	cameras: Record<string, Record<string, CameraSettings>>
 	// Targets saved to recover a framing, at most FRAMING_REFERENCES_MAXIMUM; absent until one is saved.

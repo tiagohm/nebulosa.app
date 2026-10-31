@@ -64,6 +64,7 @@ import {
 	setFramingSource,
 	setFramingVisible,
 	setLastImageDirectory,
+	setLastSaveDirectory,
 	setManualSensor,
 	setPanelOpen,
 	setSensorSource,
@@ -399,6 +400,32 @@ describe('settings', () => {
 		const state = load(newStores())
 		setLastImageDirectory(state, '/data/m31')
 		expect(state.profiles[0].settings.lastImageDirectory).toBe('/data/m31')
+	})
+
+	test('remembers the last save directory per profile, apart from the one images are opened from', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		setLastImageDirectory(state, '/data/m31')
+		setLastSaveDirectory(state, '/out/processed')
+		await Bun.sleep(0)
+
+		const { settings } = load({ local: stores.local, session: new MemoryStorage() }).profiles[0]
+		expect(settings.lastSaveDirectory).toBe('/out/processed')
+		expect(settings.lastImageDirectory).toBe('/data/m31')
+		expect(createProfile(state, 'Other')?.settings.lastSaveDirectory).toBeUndefined()
+	})
+
+	test('a version 22 document has no save directory, and an invalid one is dropped', () => {
+		const stored = (lastSaveDirectory: unknown, version: number) => {
+			const stores = newStores()
+			stores.local.setItem(PROFILES_KEY, JSON.stringify({ version, profiles: [{ id: 'a', name: 'A', settings: { lastSaveDirectory } }] }))
+			return load(stores).profiles[0].settings.lastSaveDirectory
+		}
+
+		expect(stored(undefined, 22)).toBeUndefined()
+		expect(stored(3, 23)).toBeUndefined()
+		expect(stored('', 23)).toBeUndefined()
+		expect(stored('/out', 23)).toBe('/out')
 	})
 })
 

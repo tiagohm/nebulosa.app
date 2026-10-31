@@ -2,7 +2,7 @@ import type { SaveFormat } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { FileExplorerModal } from '../files/FileExplorerModal'
-import { activeProfile, profileState } from '../profile/profile'
+import { activeProfile, profileState, setLastSaveDirectory } from '../profile/profile'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { documentPath, type ImageDocument, imagesState, SAVE_EXTENSIONS, saveFileName, saveImage } from './images'
@@ -10,7 +10,9 @@ import { documentPath, type ImageDocument, imagesState, SAVE_EXTENSIONS, saveFil
 // Save of a copy of an image document to a file of the server in a format chosen beforehand: a file chooser in save
 // mode listing the files of that format, whose chosen name gets the format's extension unless it already has one of
 // it, then a confirmation before replacing an existing file. The dialog stays open with the failure when the save
-// fails, so it can be retried; it reports success only once the server confirms the write.
+// fails, so it can be retried; it reports success only once the server confirms the write. It starts in the folder the
+// profile saved to last, which only a confirmed write changes, then that of the document, then the one images were
+// opened from last.
 
 // Returns the folder of a server path, or undefined when it has none.
 function directoryOf(path: string | undefined): string | undefined {
@@ -33,16 +35,24 @@ export interface SaveImageModalProps {
 	readonly onSaved: () => void
 }
 
+// Existing file waiting for the confirmation to replace it.
+interface ReplacedFile {
+	// Path of the file.
+	readonly path: string
+	// Folder it was chosen in.
+	readonly directory: string
+}
+
 // Save dialog of a document.
 export function SaveImageModal({ document, format, onClose, onSaved }: SaveImageModalProps) {
 	const profiles = useSnapshot(profileState)
 	const [busy, setBusy] = useState(false)
 	const [message, setMessage] = useState<string>()
-	// Path waiting for the confirmation to replace the existing file there.
-	const [replacing, setReplacing] = useState<string>()
+	const [replacing, setReplacing] = useState<ReplacedFile>()
+	const { lastSaveDirectory, lastImageDirectory } = activeProfile(profiles).settings
 
-	// Saves the document to path, replacing an existing file only with overwrite.
-	async function save(path: string, overwrite: boolean) {
+	// Saves the document to path, chosen in directory, replacing an existing file only with overwrite.
+	async function save(path: string, directory: string, overwrite: boolean) {
 		if (!document) return
 		const target = saveFileName(path, format)
 		setBusy(true)
@@ -50,9 +60,12 @@ export function SaveImageModal({ document, format, onClose, onSaved }: SaveImage
 		const outcome = await saveImage(imagesState, document.key, target, format, overwrite)
 		setBusy(false)
 
-		if (outcome.status === 'exists') setReplacing(target)
+		if (outcome.status === 'exists') setReplacing({ path: target, directory })
 		else if (outcome.status === 'failed') setMessage(outcome.error)
-		else onSaved()
+		else {
+			setLastSaveDirectory(profileState, directory)
+			onSaved()
+		}
 	}
 
 	function close() {
@@ -68,15 +81,15 @@ export function SaveImageModal({ document, format, onClose, onSaved }: SaveImage
 				mode="save"
 				title={document ? `Save ${document.name} as ${FORMAT_LABELS[format]}` : 'Save Image'}
 				defaultName={document ? saveFileName(document.name, format) : ''}
-				initialPath={directoryOf(document && documentPath(document)) ?? activeProfile(profiles).settings.lastImageDirectory}
+				initialPath={lastSaveDirectory ?? directoryOf(document && documentPath(document)) ?? lastImageDirectory}
 				extensions={SAVE_EXTENSIONS[format]}
 				busy={busy}
 				message={message}
 				onClose={close}
-				onChoose={(path) => void save(path, false)}
+				onChoose={(path, directory) => void save(path, directory, false)}
 			/>
 			<Modal open={!!replacing} onClose={() => setReplacing(undefined)} title="Replace file?" className="max-w-md">
-				<p className="m-0 text-[13px] break-all">{replacing} already exists. Replacing it overwrites its contents.</p>
+				<p className="m-0 text-[13px] break-all">{replacing?.path} already exists. Replacing it overwrites its contents.</p>
 				<div className="mt-5 flex justify-end gap-2">
 					<Button variant="secondary" onClick={() => setReplacing(undefined)}>
 						Cancel
@@ -84,9 +97,8 @@ export function SaveImageModal({ document, format, onClose, onSaved }: SaveImage
 					<Button
 						disabled={busy}
 						onClick={() => {
-							const path = replacing
 							setReplacing(undefined)
-							if (path) void save(path, true)
+							if (replacing) void save(replacing.path, replacing.directory, true)
 						}}
 					>
 						Replace

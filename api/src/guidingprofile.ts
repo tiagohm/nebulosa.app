@@ -42,25 +42,26 @@ export function guideStarProfile(image: Image, frameId: number, position: readon
 	const cx = clampPixel(profile.x, width)
 	const cy = clampPixel(profile.y, height)
 
-	// Samples of a cut along one axis through the centre pixel, clipped to the frame.
-	function cut(center: number, size: number, sample: (index: number) => number): GuidingProfileCut {
-		const first = Math.max(0, center - GUIDING_PROFILE_HALF_WIDTH)
-		const last = Math.min(size - 1, center + GUIDING_PROFILE_HALF_WIDTH)
-		const values: number[] = []
-		for (let index = first; index <= last; index++) values.push(sample(index) - background)
-		return { from: first - center, values }
-	}
-
 	return {
 		...profile,
 		frameId,
 		adu: bitpix > 0 ? 2 ** bitpix - 1 : 1,
-		horizontal: cut(cx, width, (x) => image.raw[cy * stride + x]),
-		vertical: cut(cy, height, (y) => image.raw[y * stride + cx]),
+		horizontal: profileCut(cx, width, GUIDING_PROFILE_HALF_WIDTH, background, (x) => image.raw[cy * stride + x]),
+		vertical: profileCut(cy, height, GUIDING_PROFILE_HALF_WIDTH, background, (y) => image.raw[y * stride + cx]),
 	}
 }
 
+// Returns a cut along one axis of size pixels through the pixel center, halfWidth samples on either side, clipped to
+// the image, with sample reading the sample at a position along the axis and background taken from each one.
+export function profileCut(center: number, size: number, halfWidth: number, background: number, sample: (index: number) => number): GuidingProfileCut {
+	const first = Math.max(0, center - halfWidth)
+	const last = Math.min(size - 1, center + halfWidth)
+	const values: number[] = []
+	for (let index = first; index <= last; index++) values.push(sample(index) - background)
+	return { from: first - center, values }
+}
+
 // Returns the pixel holding a coordinate, within [0, size).
-function clampPixel(coordinate: number, size: number) {
+export function clampPixel(coordinate: number, size: number) {
 	return Math.min(size - 1, Math.max(0, Math.round(Number.isFinite(coordinate) ? coordinate : 0)))
 }

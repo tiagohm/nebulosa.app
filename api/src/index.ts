@@ -37,6 +37,7 @@ import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { createRotatorRoutes, RotatorCommands } from './rotators'
 import { annotationSky, skyLocator, skyRoutes } from './sky'
 import { createSolarEclipseRoutes, SolarEclipseService } from './solareclipses'
+import { createStarProfileRoutes, StarProfileService } from './starprofile'
 import { createStarDetectionRoutes, StarDetectionService } from './stars'
 import { createStreakDetectionRoutes, StreakDetectionService } from './streaks'
 import { createTargetCenteringRoutes, TargetCenteringSessions } from './targetcentering'
@@ -226,6 +227,8 @@ export type {
 	StarDetectorProvider,
 	StarMeasurement,
 } from './stars'
+export type { StarProfileCut, StarProfileMeasured, StarProfileMeasurement, StarProfileNoStar, StarProfileNoStarReason, StarProfilePreview, StarProfileRequest, StarProfileResult } from './starprofile.analysis'
+export type { StarProfileErrorCode } from './starprofile'
 export type {
 	AnnotationBodies,
 	AnnotationBodyLayer,
@@ -261,7 +264,7 @@ export type { LunarFeatureCategory, LunarFeatureRow, MoonFeatureCatalog, MoonFea
 export type { SunImageChannel, SunImageErrorCode, SunImageSize } from './sky/sdo'
 export type { SolarAstronomicalNight, SolarDailyState, SolarSeasonEvent, SolarSeasonKind, SolarTwilightCrossings, SunAlmanacRequest, SunAlmanacResponse, SunLocalDay, SunPhysicalData } from './sky/sun'
 export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
-export type { Binning, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageCapture, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, ProcessingProvenance, RenderRequest, RenderResult, SaveFormat, SaveRequest, SaveResult, Stretch } from './images'
+export type { Binning, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageCapture, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, ProcessingProvenance, RenderRequest, RenderResult, SampleConversion, SaveFormat, SaveRequest, SaveResult, Stretch } from './images'
 export type {
 	ArcsinhStretchOperation,
 	BackgroundExtractionOperation,
@@ -432,6 +435,9 @@ const externalTools = new ExternalToolsStore(DEFAULT_SETTINGS_FILE, broadcast)
 const stars = new StarDetectionService(images, externalTools, broadcast)
 const plateSolving = new PlateSolvingService(images, externalTools, broadcast)
 
+// Measurements of the stars a person points at in the image documents.
+const starProfiles = new StarProfileService(images)
+
 // Streak detection of the image documents, classified with the solutions and stars already found for each image.
 const streaks = new StreakDetectionService(images, plateSolving, stars, broadcast)
 
@@ -540,6 +546,7 @@ export const routes = {
 	...createImageProcessingRoutes(imageProcessing),
 	...createExternalToolsRoutes(externalTools),
 	...createStarDetectionRoutes(stars),
+	...createStarProfileRoutes(starProfiles),
 	...createPlateSolvingRoutes(plateSolving),
 	...createStreakDetectionRoutes(streaks),
 	...createAnnotationRoutes(annotations),

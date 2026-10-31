@@ -1,4 +1,5 @@
 import { AnnotationService, createAnnotationRoutes } from './annotations'
+import { AstronomicalTimeService, createAstronomicalTimeRoutes } from './astronomicaltime'
 import { AutoFocusSessions, createAutoFocusRoutes } from './autofocus'
 import { CameraCommands, createCameraRoutes } from './cameras'
 import { CaptureFrameRegistry, createCaptureFrameRoutes, DEFAULT_CAPTURE_FRAMES_FILE } from './captureframes'
@@ -50,6 +51,8 @@ import { createWheelRoutes, WheelCommands } from './wheels'
 export type { AboutInfo } from './about'
 export { createAboutRoutes } from './about'
 export type { AnalysisJob, AnalysisJobState } from './analysis'
+export type { AstronomicalTimeErrorCode, AstronomicalTimeInput, AstronomicalTimeQuality, AstronomicalTimeReference, AstronomicalTimeReferenceRequest, AstronomicalTimeRequest, AstronomicalTimeResult, CalendarReference, LeapSecondStatus, TimeScaleName, TimeScaleReading } from './astronomicaltime'
+export type { EarthOrientationCoverage, EarthOrientationSource, EarthOrientationStatus } from './astronomicaltime.eop'
 export type { AutoFocusCaptureSettings, AutoFocusEvent, AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusStartResponse, AutoFocusState, AutoFocusVerification, FocusMeasurement } from './autofocus'
 export type { FocusCurve, FocusCurveHyperbola, FocusCurveParabola, FocusCurveSeries, FocusCurveSeriesKind, FocusCurveTrendLines } from './autofocus.curve'
 export type { CameraCoolerRequest, CameraTemperatureRequest } from './cameras'
@@ -505,6 +508,9 @@ const lunarEclipses = new LunarEclipseService()
 // Solar eclipse queries of the Solar Eclipse Map tool; their maps are computed on a worker.
 const solarEclipses = new SolarEclipseService()
 
+// Conversions of the Astronomical Time Converter and the real-time reference of the status bar clock.
+const astronomicalTime = new AstronomicalTimeService()
+
 // Writes the changes the persisted stores still hold in memory, for a server about to stop. Resolves once they are
 // written or failed to be; never rejects.
 export async function flushStores() {
@@ -554,6 +560,7 @@ export const routes = {
 	...skyRoutes,
 	...createLunarEclipseRoutes(lunarEclipses),
 	...createSolarEclipseRoutes(solarEclipses),
+	...createAstronomicalTimeRoutes(astronomicalTime),
 	'/api/ws': {
 		// Upgrades to the event WebSocket, attaching the client id the tab names itself with; Bun sends the handshake
 		// response itself.

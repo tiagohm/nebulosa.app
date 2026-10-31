@@ -176,7 +176,7 @@ function wallParts(time: number, timeZone: string) {
 }
 
 // Returns the offset of a time zone from UTC at an instant, in milliseconds (east positive).
-function zoneOffset(time: number, timeZone: string) {
+export function zoneOffset(time: number, timeZone: string) {
 	const whole = Math.floor(time / 1000) * 1000
 	const { year, month, day, hour, minute, second } = wallParts(whole, timeZone)
 	return Date.UTC(year, month - 1, day, hour, minute, second) - whole

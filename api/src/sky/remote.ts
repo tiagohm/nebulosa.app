@@ -19,6 +19,9 @@ export class UpstreamUnavailableError extends Error {
 	status?: number
 }
 
+// A source answered, but with something that cannot be read.
+export class UpstreamInvalidError extends UpstreamUnavailableError {}
+
 // Body of an upstream response.
 export interface UpstreamBody {
 	// Bytes of the body.

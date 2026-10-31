@@ -1,6 +1,7 @@
 import { AnnotationService, createAnnotationRoutes } from './annotations'
 import { AstronomicalTimeService, createAstronomicalTimeRoutes } from './astronomicaltime'
 import { EarthOrientationData, installEarthOrientation } from './astronomicaltime.eop'
+import { AstroWeatherService, createAstroWeatherRoutes } from './astroweather'
 import { AutoFocusSessions, createAutoFocusRoutes } from './autofocus'
 import { CameraCommands, createCameraRoutes } from './cameras'
 import { CaptureFrameRegistry, createCaptureFrameRoutes, DEFAULT_CAPTURE_FRAMES_FILE } from './captureframes'
@@ -54,6 +55,10 @@ export type { AboutInfo } from './about'
 export { createAboutRoutes } from './about'
 export type { AnalysisJob, AnalysisJobState } from './analysis'
 export type { AstronomicalTimeErrorCode, AstronomicalTimeInput, AstronomicalTimeQuality, AstronomicalTimeReference, AstronomicalTimeReferenceRequest, AstronomicalTimeRequest, AstronomicalTimeResult, CalendarReference, LeapSecondStatus, TimeScaleName, TimeScaleReading } from './astronomicaltime'
+export type { AstroWeatherAstronomy, AstroWeatherErrorCode, AstroWeatherForecast, AstroWeatherMeteorology, AstroWeatherProvider, AstroWeatherSource, AstroWeatherSourceState } from './astroweather'
+export type { AstroWeatherMoon, AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
+export type { MeteorologyGrid, MeteorologySample } from './astroweather.openmeteo'
+export type { AstronomicalSample, SevenTimerClass } from './astroweather.seventimer'
 export type { EarthOrientationCoverage, EarthOrientationSource, EarthOrientationStatus } from './astronomicaltime.eop'
 export type { AutoFocusCaptureSettings, AutoFocusEvent, AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusStartResponse, AutoFocusState, AutoFocusVerification, FocusMeasurement } from './autofocus'
 export type { FocusCurve, FocusCurveHyperbola, FocusCurveParabola, FocusCurveSeries, FocusCurveSeriesKind, FocusCurveTrendLines } from './autofocus.curve'
@@ -269,7 +274,7 @@ export type { SolarActiveRegion, SunActiveRegionsErrorCode, SunActiveRegionsResp
 export type { MoonAlmanacRequest, MoonAlmanacResponse, MoonApsisEvent, MoonAppearance, MoonPhaseEvent, MoonPhaseName, MoonPrincipalPhase, MoonSurfacePoint } from './sky/moon'
 export type { LunarFeatureCategory, LunarFeatureRow, MoonFeatureCatalog, MoonFeatureCatalogSource } from './sky/moon.features'
 export type { SunImageChannel, SunImageErrorCode, SunImageSize } from './sky/sdo'
-export type { SolarAstronomicalNight, SolarDailyState, SolarSeasonEvent, SolarSeasonKind, SolarTwilightCrossings, SunAlmanacRequest, SunAlmanacResponse, SunLocalDay, SunPhysicalData } from './sky/sun'
+export type { SolarAstronomicalNight, SolarDailyState, SolarSeasonEvent, SolarSeasonKind, SolarTwilightCrossings, SunAlmanacRequest, SunAlmanacResponse, SunLocalDay, SunLocalNight, SunPhysicalData, TimeSpan } from './sky/sun'
 export type {
 	MinorBody,
 	MinorBodyAlternateOrbit,
@@ -541,6 +546,9 @@ const solarEclipses = new SolarEclipseService()
 // Close approach queries of the Close Approaches tool, over the minor bodies and the JPL queue of the Sky.
 const closeApproaches = new CloseApproachesService(minorBodies, ssdRequests)
 
+// Forecasts of the Astro Weather tool, read from their public services and cached for every tab.
+const astroWeather = new AstroWeatherService()
+
 // Earth orientation tables of the process, shared by the converter and, once installed, by every Time of the server.
 const earthOrientation = new EarthOrientationData()
 
@@ -612,6 +620,7 @@ export const routes = {
 	...createLunarEclipseRoutes(lunarEclipses),
 	...createSolarEclipseRoutes(solarEclipses),
 	...createCloseApproachRoutes(closeApproaches),
+	...createAstroWeatherRoutes(astroWeather),
 	...createAstronomicalTimeRoutes(astronomicalTime),
 	'/api/ws': {
 		// Upgrades to the event WebSocket, attaching the client id the tab names itself with; Bun sends the handshake

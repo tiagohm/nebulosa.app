@@ -8,8 +8,8 @@ import { DEG2RAD } from 'nebulosa/src/core/constants'
 import { type Mat3, matMulVec, matTransposeMulVec } from 'nebulosa/src/math/linear-algebra/mat3'
 import type { Vec3 } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizePI } from 'nebulosa/src/math/units/angle'
-import { makeTime } from './ephemeris'
-import { createMoonAlmanacRoutes, MoonAlmanac, moonAppearance, moonCalendar, moonPhaseName } from './moon'
+import { makeTime, SkyEphemeris } from './ephemeris'
+import { createMoonAlmanacRoutes, MoonAlmanac, moonAboveHorizon, moonAppearance, moonCalendar, moonPhaseName } from './moon'
 
 const SAO_PAULO = { latitude: -23.5505, longitude: -46.6333, elevation: 760 }
 const LONDON = { latitude: 51.5074, longitude: -0.1278, elevation: 11 }
@@ -207,4 +207,34 @@ test('the route answers the almanac of the request', async () => {
 	expect(body.appearance.bodyToCamera).toHaveLength(9)
 	expect(body.phases).toHaveLength(4)
 	expect(body.apsides).toHaveLength(2)
+})
+
+describe('Moon above the horizon', () => {
+	const START = Date.UTC(2026, 9, 30, 15)
+	const END = START + DAY
+
+	test('agrees with the rise and set of the ephemeris across midnight', () => {
+		const intervals = moonAboveHorizon(SAO_PAULO, START, END)
+		const midnight = Date.UTC(2026, 9, 31, 3)
+		const events = new SkyEphemeris().events({ type: 'body', code: '301' }, midnight, SAO_PAULO, 'moon')!
+		const up = intervals.find((e) => e.end > midnight)!
+		expect(Math.abs(up.start - events.rise!)).toBeLessThan(2 * 60_000)
+		expect(up.start).toBeLessThan(midnight)
+		expect(up.end).toBeGreaterThan(midnight)
+	})
+
+	test('intervals are clipped to the instants and ordered', () => {
+		const intervals = moonAboveHorizon(SAO_PAULO, START, END)
+		expect(intervals.length).toBeGreaterThan(0)
+		expect(intervals[0].start).toBeGreaterThanOrEqual(START)
+		expect(intervals.at(-1)!.end).toBeLessThanOrEqual(END)
+		for (const { start, end } of intervals) expect(end).toBeGreaterThan(start)
+	})
+
+	test('a Moon that never rises gives none', () => {
+		const pole = { latitude: -89.9, longitude: 0, elevation: 0 }
+		const days = Array.from({ length: 10 }, (_, i) => moonAboveHorizon(pole, START + 3 * i * DAY, START + (3 * i + 1) * DAY))
+		expect(days.some((e) => e.length === 0)).toBeTrue()
+		expect(days.some((e) => e.length === 1 && e[0].end - e[0].start >= DAY - 1000)).toBeTrue()
+	})
 })

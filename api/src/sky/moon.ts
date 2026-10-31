@@ -3,17 +3,20 @@ import { MOON_ROTATION, bodyFixedMatrix, positionAngleOfPole, subObserverPoint, 
 import { cirsToObserved, icrsToCirs, lightTime, parallacticAngle, topocentricDirection } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import * as elpmpp02 from 'nebulosa/src/astronomy/ephemeris/models/analytical/elpmpp02'
 import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
+import { searchIntervals } from 'nebulosa/src/astronomy/events/search'
 import { precessionNutationMatrix, type Time, timeShift, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, ECLIPTIC_J2000_MATRIX, TAU } from 'nebulosa/src/core/constants'
 import { type Mat3, matMul, matMulVec, matTranspose } from 'nebulosa/src/math/linear-algebra/mat3'
 import { type MutVec3, type Vec3, vecAngle, vecCross, vecLength, vecMinus, vecNegate, vecNormalize } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle, normalizePI } from 'nebulosa/src/math/units/angle'
-import { bodyModel, makeTime, observerBarycentric, type SkyObserver } from './ephemeris'
+import { bodyModel, makeTime, moonHorizonMargin, observerBarycentric, type SkyObserver } from './ephemeris'
+import type { TimeSpan } from './sun'
 
 // Lunar almanac of the Moon Inspector: the Moon's appearance at an instant (phase, illuminated
 // fraction, age, apparent size, optical and physical libration, the orientation of its pole and bright
 // limb, and the rotation that draws its surface as the observer sees it), the next four principal
-// phases, and the next perigee and apogee. Everything is computed locally from the toolkit (ELPMPP02 for
+// phases, and the next perigee and apogee; and when the Moon is above an observer's horizon, which
+// Astro Weather reads. Everything is computed locally from the toolkit (ELPMPP02 for
 // the Moon, VSOP87E for the Earth and the Sun, the IAU rotation model of the Moon, Meeus' phase and
 // apsis series), never from the network, so it may differ slightly from the Horizons position of the
 // Sky selection. The appearance is topocentric with an observer and geocentric without one; the phases
@@ -35,6 +38,10 @@ const LIGHT_TIME_ITERATIONS = 2
 
 // Calendars kept in memory: one per validity interval, a few per tab moving through time.
 const CALENDAR_CACHE_LIMIT = 8
+
+// Coarse step of the search for the Moon's rises and sets in days (15 minutes): each sample costs a full reduction to
+// the observed place, and only a grazing pass near a polar latitude is shorter than this, which the search may miss.
+const HORIZON_SEARCH_STEP = 15 / 1440
 
 // Name of the Moon's phase for people: a principal phase within PRINCIPAL_PHASE_HALF_WIDTH of its
 // instant, otherwise the crescent or gibbous Moon between them.
@@ -258,6 +265,14 @@ export function moonAppearance(time: number, observer?: SkyObserver): MoonAppear
 		bodyToCamera,
 		sunDirection,
 	}
+}
+
+// Returns the intervals in which the Moon is above the horizon of an observer between two instants (Unix milliseconds),
+// however many rises and sets fall between them, clipped to the instants; empty when it stays below.
+export function moonAboveHorizon(observer: SkyObserver, start: number, end: number): TimeSpan[] {
+	const margin = moonHorizonMargin(observer)
+	const intervals = searchIntervals([(time) => margin(timeToUnixMillis(time))], makeTime(start), makeTime(end), { step: HORIZON_SEARCH_STEP })
+	return intervals.map((interval) => ({ start: timeToUnixMillis(interval.start), end: timeToUnixMillis(interval.end) }))
 }
 
 // Returns the first event a toolkit search finds strictly after an instant (Unix milliseconds), with its

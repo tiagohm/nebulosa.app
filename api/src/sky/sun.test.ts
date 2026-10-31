@@ -1,5 +1,6 @@
-import { expect, test } from 'bun:test'
-import { createSunAlmanacRoutes, nextSeasons, SunAlmanac, sunPhysicalData, zonedDay } from './sun'
+import { describe, expect, test } from 'bun:test'
+import { geographic } from './ephemeris'
+import { createSunAlmanacRoutes, nextSeasons, SunAlmanac, sunNightAt, sunPhysicalData, zonedDay } from './sun'
 
 const MINUTE = 60_000
 
@@ -126,4 +127,89 @@ test('the almanac route answers without an observer', async () => {
 	expect(body.localDay).toBeUndefined()
 	expect(body.seasons).toHaveLength(4)
 	expect(body.physical.source).toBe('local')
+})
+
+describe('nights', () => {
+	function night(time: number, observer: typeof london, timeZone: string) {
+		return sunNightAt(geographic(observer), time, timeZone)
+	}
+
+	test('a night runs from one transit to the next, with its crossings in order', () => {
+		const result = night(Date.UTC(2026, 9, 31, 23), saoPaulo, 'America/Sao_Paulo')
+		expect(result.localDate).toBe('2026-10-31')
+		expect(result.daylight).toBe('normal')
+		expect(result.start).toBeLessThan(result.sunset!)
+		expect(result.sunset!).toBeLessThan(result.civil.dusk!)
+		expect(result.civil.dusk!).toBeLessThan(result.nautical.dusk!)
+		expect(result.nautical.dusk!).toBeLessThan(result.astronomical.dusk!)
+		expect(result.astronomical.dawn!).toBeLessThan(result.nautical.dawn!)
+		expect(result.nautical.dawn!).toBeLessThan(result.civil.dawn!)
+		expect(result.civil.dawn!).toBeLessThan(result.sunrise!)
+		expect(result.sunrise!).toBeLessThan(result.end)
+		expect(result.darkness).toHaveLength(1)
+		expectNear(result.darkness[0].start, result.astronomical.dusk!, 1000)
+		expectNear(result.darkness[0].end, result.astronomical.dawn!, 1000)
+	})
+
+	test('the small hours belong to the evening before', () => {
+		expect(night(Date.UTC(2026, 10, 1, 5), saoPaulo, 'America/Sao_Paulo').localDate).toBe('2026-10-31')
+		expect(night(Date.UTC(2026, 10, 1, 17), saoPaulo, 'America/Sao_Paulo').localDate).toBe('2026-11-01')
+	})
+
+	test('steps from a night reach the next and the previous one', () => {
+		const result = night(Date.UTC(2026, 9, 31, 23), saoPaulo, 'America/Sao_Paulo')
+		expect(night(result.end, saoPaulo, 'America/Sao_Paulo').localDate).toBe('2026-11-01')
+		expect(night(result.start - 1, saoPaulo, 'America/Sao_Paulo').localDate).toBe('2026-10-30')
+	})
+
+	test('UTC still gives a far site one whole night', () => {
+		const sydney = { latitude: -33.87, longitude: 151.21, elevation: 0 }
+		const result = night(Date.UTC(2026, 9, 31, 14), sydney, 'UTC')
+		expect(result.start).toBeLessThan(result.sunset!)
+		expect(result.sunset!).toBeLessThan(result.sunrise!)
+		expect(result.sunrise!).toBeLessThan(result.end)
+		expect(result.end - result.start).toBeCloseTo(86_400_000, -5)
+	})
+
+	test('a fractional zone keeps the evening of its own date', () => {
+		const kathmandu = { latitude: 27.72, longitude: 85.32, elevation: 0 }
+		const result = night(Date.UTC(2026, 9, 31, 16), kathmandu, 'Asia/Kathmandu')
+		expect(result.localDate).toBe('2026-10-31')
+		expect(result.sunset!).toBeLessThan(Date.UTC(2026, 9, 31, 16))
+	})
+
+	test('a night the clocks change on is a real interval', () => {
+		const newYork = { latitude: 40.71, longitude: -74.01, elevation: 0 }
+		const result = night(Date.UTC(2026, 10, 1, 4), newYork, 'America/New_York')
+		expect(result.localDate).toBe('2026-10-31')
+		expect(result.end - result.start).toBeCloseTo(86_400_000, -5)
+		expect(result.sunrise!).toBeGreaterThan(result.sunset!)
+	})
+
+	test('polar day and polar night have no crossings', () => {
+		const day = night(Date.UTC(2026, 5, 21, 20), tromso, 'Europe/Oslo')
+		expect(day.daylight).toBe('continuousAbove')
+		expect(day.sunset).toBeUndefined()
+		expect(day.sunrise).toBeUndefined()
+		expect(day.astronomical.state).toBe('continuousAbove')
+		expect(day.darkness).toEqual([])
+
+		const dark = night(Date.UTC(2026, 11, 21, 20), tromso, 'Europe/Oslo')
+		expect(dark.daylight).toBe('continuousBelow')
+		expect(dark.sunset).toBeUndefined()
+		expect(dark.civil.state).toBe('normal')
+		expect(dark.darkness).toHaveLength(1)
+
+		const pole = night(Date.UTC(2026, 11, 21, 20), { latitude: -89.9, longitude: 0, elevation: 0 }, 'UTC')
+		expect(pole.daylight).toBe('continuousAbove')
+		expect(pole.darkness).toEqual([])
+	})
+
+	test('a summer night without darkness has none', () => {
+		const result = night(Date.UTC(2026, 5, 21, 22), london, 'Europe/London')
+		expect(result.daylight).toBe('normal')
+		expect(result.astronomical.state).toBe('continuousAbove')
+		expect(result.astronomical.dusk).toBeUndefined()
+		expect(result.darkness).toEqual([])
+	})
 })

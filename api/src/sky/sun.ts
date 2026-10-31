@@ -15,7 +15,8 @@ import { geographic, type SkyObserver } from './ephemeris'
 
 // Solar almanac of the Sun Inspector: the Sun's day for an observer's civil date in an IANA time zone
 // (sunrise, transit, sunset, daylight, civil, nautical, and astronomical twilight, astronomical night),
-// the next four equinoxes and solstices, and the equation of time and Carrington rotation at an instant.
+// the next four equinoxes and solstices, and the equation of time and Carrington rotation at an instant,
+// plus the Sun's night from one transit to the next, which Astro Weather reads.
 // Everything is computed locally from the toolkit, never from the network. Rise and set and the
 // twilight limits use the toolkit's almanac convention: the geometric, geocentric altitude of the
 // Sun's center against SUN_HORIZON (−50′: the upper limb with standard refraction) and −6°, −12°, and
@@ -95,6 +96,35 @@ export interface SunLocalDay {
 	readonly astronomical: SolarTwilightCrossings
 	// Astronomical night beginning that evening.
 	readonly astronomicalNight: SolarAstronomicalNight
+}
+
+// Interval of time.
+export interface TimeSpan {
+	// First instant, Unix milliseconds.
+	readonly start: number
+	// Last instant, Unix milliseconds.
+	readonly end: number
+}
+
+// The Sun over one night of an observer, from the upper transit of a civil date to the next one, with the crossings in
+// the order the evening and the morning meet them.
+export interface SunLocalNight extends TimeSpan {
+	// Civil date of the evening, YYYY-MM-DD.
+	readonly localDate: string
+	// Sunset, Unix milliseconds; absent when the Sun does not set that evening.
+	readonly sunset?: number
+	// Sunrise, Unix milliseconds; absent when the Sun does not rise that morning.
+	readonly sunrise?: number
+	// Relation of the Sun to the sunrise threshold over the night.
+	readonly daylight: SolarDailyState
+	// Civil twilight (−6°).
+	readonly civil: SolarTwilightCrossings
+	// Nautical twilight (−12°).
+	readonly nautical: SolarTwilightCrossings
+	// Astronomical twilight (−18°).
+	readonly astronomical: SolarTwilightCrossings
+	// Time the Sun stays below −18°; empty when it never does.
+	readonly darkness: readonly TimeSpan[]
 }
 
 // An equinox or solstice, named by its month so the name holds in both hemispheres.
@@ -316,6 +346,64 @@ export function sunLocalDay(location: GeographicPosition, day: ZonedDay): SunLoc
 		nautical: twilight(altitude, NAUTICAL_TWILIGHT, start, stop, middle),
 		astronomical,
 		astronomicalNight: astronomicalNight(altitude, astronomical),
+	}
+}
+
+// Returns the upper transit of the Sun nearest the civil noon of a date, Unix milliseconds: within 12 hours of it, or
+// the civil noon itself when the Sun has no maximum there, as at a pole near an equinox.
+function solarTransit(altitude: (time: Time) => number, day: ZonedDay) {
+	const noon = (day.start + day.end) / 2
+	let transit = noon
+	let height: number | undefined
+
+	for (const extremum of searchExtrema(altitude, toolkitTime(noon - DAY_MS / 2), toolkitTime(noon + DAY_MS / 2), { step: SEARCH_STEP })) {
+		if (extremum.kind === 'maximum' && (height === undefined || extremum.value > height)) {
+			transit = timeToUnixMillis(extremum.time)
+			height = extremum.value
+		}
+	}
+
+	return transit
+}
+
+// Computes the night containing an instant (Unix milliseconds): every crossing between two consecutive upper transits of
+// the Sun, so dawn and sunrise need no second day, and the time the Sun spends below −18°. An instant before the transit of
+// its civil date belongs to the evening before, and any time zone, even UTC for a site far from Greenwich, gives every
+// night exactly one evening. The evening's civil date names the night.
+export function sunNightAt(location: GeographicPosition, time: number, timeZone: string): SunLocalNight {
+	const altitude = sunAltitude(location)
+	let day = zonedDay(time, timeZone)
+	let startMillis = solarTransit(altitude, day)
+	let next = zonedDay(day.end, timeZone)
+	let endMillis = solarTransit(altitude, next)
+
+	if (time < startMillis) {
+		next = day
+		endMillis = startMillis
+		day = zonedDay(day.start - 1, timeZone)
+		startMillis = solarTransit(altitude, day)
+	} else if (time >= endMillis) {
+		day = next
+		startMillis = endMillis
+		endMillis = solarTransit(altitude, zonedDay(day.end, timeZone))
+	}
+
+	const start = toolkitTime(startMillis)
+	const stop = toolkitTime(endMillis)
+	const sun = twilight(altitude, SUN_HORIZON, start, stop, start)
+	const darkness = searchIntervals([(instant) => ASTRONOMICAL_TWILIGHT - altitude(instant)], start, stop, { step: SEARCH_STEP }).map((interval) => ({ start: timeToUnixMillis(interval.start), end: timeToUnixMillis(interval.end) }))
+
+	return {
+		localDate: day.localDate,
+		start: startMillis,
+		end: endMillis,
+		sunset: sun.dusk,
+		sunrise: sun.dawn,
+		daylight: sun.state,
+		civil: twilight(altitude, CIVIL_TWILIGHT, start, stop, start),
+		nautical: twilight(altitude, NAUTICAL_TWILIGHT, start, stop, start),
+		astronomical: twilight(altitude, ASTRONOMICAL_TWILIGHT, start, stop, start),
+		darkness,
 	}
 }
 

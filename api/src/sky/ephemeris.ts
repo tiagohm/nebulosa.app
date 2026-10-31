@@ -552,6 +552,14 @@ function solarSystemAltitudeModel(model: SolarSystemModel, observer: SkyObserver
 	}
 }
 
+// Height in radians of the Moon's upper limb above the refracted horizon of an observer, over Unix milliseconds: positive
+// while the Moon is up, with the rise and set convention of SkyEphemeris.events.
+export function moonHorizonMargin(observer: SkyObserver) {
+	const altitude = solarSystemAltitudeModel({ state: bodyModel('301'), magnitude: () => undefined }, observer)
+	const threshold = RISE_SET_ALTITUDE.moon!
+	return (time: number) => altitude(time) - threshold
+}
+
 // Local position of a solar-system target: light-time corrected direction from the observer, apparent
 // place, magnitude, illumination, and elongation.
 function solarSystemPosition(model: SolarSystemModel, time: Time, isSun: boolean): Omit<SkyPosition, 'source' | 'fallbackReason' | 'time'> {
